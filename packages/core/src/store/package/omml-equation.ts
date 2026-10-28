@@ -65,8 +65,11 @@ export type EquationExpression =
   | {
       readonly kind: 'text';
       readonly value: string;
+      /** Size inherited from uniform default properties that compact replacement preserves. */
+      readonly fontSizePt?: number;
       readonly format?: {
         readonly fontFamily?: string;
+        readonly fontSizePt?: number;
         readonly bold?: boolean;
         readonly italic?: boolean;
         readonly literal?: boolean;
@@ -112,7 +115,8 @@ export interface OmmlEquationProjection {
   readonly visitedNodes: number;
   /**
    * The font size, in points, that every run of the equation shares through default run
-   * properties (`w:sz`). Absent, the equation takes the size of the surrounding text.
+   * properties (`w:sz`). Individual run sizes remain on their text expressions. Without a
+   * shared size, structural spacing takes the size of the surrounding text.
    */
   readonly fontSizePt?: number;
 }
@@ -359,14 +363,22 @@ function projectNode(node: OoxmlNode, state: ProjectionState, depth: number): Eq
   }
   if (node.localName === 'r') {
     if (!isSupportedExpressionNode(node)) return fallbackOf(node, state, depth + 1);
-    // Default run properties draw like none, and replacement writes them back.
-    const format = state.defaultRuns ? {} : equationRunFormat(node)!;
+    // Default properties stay reversible because replacement writes them back. Their size
+    // still belongs to each run, including inside a display with differently sized equations.
+    const sourceFormat = equationRunFormat(node)!;
+    const format = state.defaultRuns ? {} : sourceFormat;
     return frozenRow(
       namedChildren(node, 't').map((text) => {
         const projected = projectContainer(text, state, depth + 1);
         const formatted = (value: EquationExpression): EquationExpression =>
           value.kind === 'text'
-            ? Object.freeze({ ...value, ...(Object.keys(format).length ? { format } : {}) })
+            ? Object.freeze({
+                ...value,
+                ...(!state.defaultRuns || sourceFormat.fontSizePt === undefined
+                  ? {}
+                  : { fontSizePt: sourceFormat.fontSizePt }),
+                ...(Object.keys(format).length ? { format } : {}),
+              })
             : value;
         return projected.kind === 'row'
           ? frozenRow(projected.items.map(formatted))

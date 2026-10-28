@@ -203,6 +203,21 @@ function pick<T>(section: T | undefined, document: T | undefined, fallback: T): 
   return section !== undefined ? section : document !== undefined ? document : fallback;
 }
 
+/**
+ * A section's note number format. Word numbers a section that authors note properties of its own in the default
+ * format unless that section names one: the document-wide format (settings.xml) applies only to a section with none.
+ * A document whose settings say `chicago` for a title-page star note, while the body's sectPr states only
+ * `numRestart`, prints the body's notes 1, 2, 3 in Word, not ‡, §, **.
+ */
+function sectionFormat(
+  section: AuthoredNoteProperties | undefined,
+  document: AuthoredNoteProperties | undefined,
+  fallback: string
+): string {
+  if (section !== undefined) return section.numFmt ?? fallback;
+  return document?.numFmt ?? fallback;
+}
+
 function resolveRestart(raw: string | undefined, fallback: NoteNumRestart): NoteNumRestart {
   if (raw !== undefined && NUM_RESTART.has(raw)) return raw as NoteNumRestart;
   return fallback;
@@ -222,7 +237,7 @@ export function resolveFootnoteProperties(
     : DEFAULT_FOOTNOTE_PROPERTIES.pos;
   return {
     pos,
-    numFmt: pick(section?.numFmt, document?.numFmt, DEFAULT_FOOTNOTE_PROPERTIES.numFmt),
+    numFmt: sectionFormat(section, document, DEFAULT_FOOTNOTE_PROPERTIES.numFmt),
     numStart: pick(section?.numStart, document?.numStart, DEFAULT_FOOTNOTE_PROPERTIES.numStart),
     numRestart: resolveRestart(
       pick(section?.numRestart, document?.numRestart, DEFAULT_FOOTNOTE_PROPERTIES.numRestart),
@@ -245,7 +260,7 @@ export function resolveEndnoteProperties(
     : DEFAULT_ENDNOTE_PROPERTIES.pos;
   return {
     pos,
-    numFmt: pick(section?.numFmt, document?.numFmt, DEFAULT_ENDNOTE_PROPERTIES.numFmt),
+    numFmt: sectionFormat(section, document, DEFAULT_ENDNOTE_PROPERTIES.numFmt),
     numStart: pick(section?.numStart, document?.numStart, DEFAULT_ENDNOTE_PROPERTIES.numStart),
     numRestart: resolveRestart(
       pick(section?.numRestart, document?.numRestart, DEFAULT_ENDNOTE_PROPERTIES.numRestart),

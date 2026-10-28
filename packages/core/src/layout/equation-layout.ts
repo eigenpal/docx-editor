@@ -10,11 +10,24 @@ const NARY_OPERATOR_SCALE = 1.25;
 /** The synthetic face Core layout uses for every OMML equation. @internal */
 export const EQUATION_FONT_FAMILY = 'Cambria Math';
 
+// The atomic span keeps its math face. Normal-text children still need the
+// paragraph face that supplied this memoized derivation.
+const equationTextStyles = new WeakMap<ResolvedRunStyle, ResolvedRunStyle>();
+const equationMathStyles = new WeakMap<ResolvedRunStyle, ResolvedRunStyle>();
+
 /** Use Word's math face when installed while retaining the measurer's safe fallback stack. */
 export function equationRunStyle(style: ResolvedRunStyle): ResolvedRunStyle {
-  // The shared memoized derivation: measurers amortize font resolution over style object
-  // identity, and a fresh object per call would defeat their caches.
-  return withFontFamily(style, EQUATION_FONT_FAMILY);
+  const cached = equationMathStyles.get(style);
+  if (cached) return cached;
+  const resolved = withFontFamily(style, EQUATION_FONT_FAMILY);
+  if (resolved === style) return style;
+  // The shared helper derives the face. Only equation context gets this wrapper
+  // to retain its paragraph face, distinct from an ordinary explicit math style.
+  // One immutable wrapper per source style preserves measurer cache identity.
+  const derived = Object.freeze({ ...resolved });
+  equationMathStyles.set(style, derived);
+  equationTextStyles.set(derived, style);
+  return derived;
 }
 
 interface EquationGeometryBase {
@@ -101,9 +114,10 @@ function shifted<T extends EquationGeometry>(node: T, x: number, y: number): T {
 }
 
 interface EquationLayoutCache {
+  readonly textStyle: ResolvedRunStyle;
   readonly formats: WeakMap<
     object,
-    { readonly style: ResolvedRunStyle; readonly cache: EquationLayoutCache }
+    Map<boolean, { readonly style: ResolvedRunStyle; readonly cache: EquationLayoutCache }>
   >;
   readonly styles: Map<number, ResolvedRunStyle>;
   readonly metrics: Map<number, ReturnType<TextMeasurer['lineMetrics']>>;
@@ -121,6 +135,7 @@ function geometryStyleToken(style: ResolvedRunStyle): string {
   const resolved = equationRunStyle(style);
   return [
     resolved.fontFamily ?? '',
+    (equationTextStyles.get(style) ?? style).fontFamily ?? '',
     resolved.fontSizePt,
     resolved.bold ? 1 : 0,
     resolved.italic ? 1 : 0,
@@ -255,35 +270,69 @@ function layoutExpression(
   switch (expression.kind) {
     case 'text': {
       const authoredFamily = expression.format?.fontFamily;
+      const textFace = authoredFamily && authoredFamily.trim().toLowerCase() !== 'cambria math';
+      const digitParts =
+        textFace && !expression.format?.normalText && expression.format?.mathStyle !== 'p'
+          ? expression.value.match(/(?:[0-9]\p{M}*)+|[^0-9]+/gu)
+          : null;
+      if (digitParts && digitParts.length > 1) {
+        return rowGeometry(
+          digitParts.map((value) =>
+            layoutExpression({ ...expression, value }, measurer, style, scale, cache)
+          ),
+          metricsAt(measurer, style, scale, cache)
+        );
+      }
       const display = equationDisplayText(expression, authoredFamily ?? style.fontFamily);
       const familyStyle =
         authoredFamily && !display.mathematicalGlyphs
           ? withFontFamily(style, authoredFamily)
-          : style;
+          : expression.format?.normalText
+            ? cache.textStyle
+            : style;
       const formatKey = expression.format ?? expression;
-      let formatted = cache.formats.get(formatKey);
+      const digits = Boolean(textFace && display.mathStyle && !display.mathematicalGlyphs);
+      let formats = cache.formats.get(formatKey);
+      let formatted = formats?.get(digits);
       if (!formatted) {
         const face = Object.freeze({
           ...familyStyle,
+          fontSizePt:
+            expression.format?.fontSizePt ?? expression.fontSizePt ?? familyStyle.fontSizePt,
           // Mathematical alphanumeric glyphs already carry their style in this
           // regular face. Do not request a second italic or bold font program.
           bold:
             display.mathStyle === null
               ? (expression.format?.bold ?? familyStyle.bold)
               : !display.mathematicalGlyphs &&
-                (display.mathStyle === 'b' || display.mathStyle === 'bi'),
+                (digits && expression.format?.bold !== undefined
+                  ? expression.format.bold
+                  : display.mathStyle === 'b' || display.mathStyle === 'bi'),
           italic:
-            display.mathStyle === null
+            display.mathStyle === null || digits
               ? (expression.format?.italic ??
-                (expression.format?.normalText ? false : familyStyle.italic))
+                (digits
+                  ? display.mathStyle === 'i' || display.mathStyle === 'bi'
+                  : expression.format?.normalText
+                    ? false
+                    : familyStyle.italic))
               : !display.mathematicalGlyphs &&
                 (display.mathStyle === 'i' || display.mathStyle === 'bi'),
         });
         formatted = {
           style: face,
-          cache: { styles: new Map(), metrics: new Map(), formats: new WeakMap() },
+          cache: {
+            textStyle: cache.textStyle,
+            styles: new Map(),
+            metrics: new Map(),
+            formats: new WeakMap(),
+          },
         };
-        cache.formats.set(formatKey, formatted);
+        if (!formats) {
+          formats = new Map();
+          cache.formats.set(formatKey, formats);
+        }
+        formats.set(digits, formatted);
       }
       return textGeometry('text', display.text, measurer, formatted.style, scale, formatted.cache);
     }
@@ -465,6 +514,7 @@ export function layoutEquation(
 ): EquationSpanRecord {
   const mathStyle = equationRunStyle(style);
   const cache: EquationLayoutCache = {
+    textStyle: equationTextStyles.get(style) ?? style,
     styles: new Map(),
     metrics: new Map(),
     formats: new WeakMap(),

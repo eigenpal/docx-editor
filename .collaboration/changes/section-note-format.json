@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A section whose footnotePr or endnotePr omitted numFmt resolved its format from settings.xml, and the final section's own body-level w:sectPr was never read by the notes layout or NOTEREF numbering, so a chicago document-wide format numbered the body's notes in symbols.",
+  "after": "A section with its own note properties resolves an omitted numFmt to the default, and the final section reads its body-level w:sectPr, as the note properties state already did.",
+  "reason": "Only how resolved note properties are read changes. The authored properties, shared state, operations, snapshots and protocol messages are untouched.",
+  "tests": [
+    "packages/core/src/store/package/__tests__/note-properties-format.test.ts",
+    "packages/core/src/layout/__tests__/final-section-note-format.test.ts"
+  ],
+  "changeset": "section-note-format",
+  "migration": null
+}

@@ -1,5 +1,16 @@
 ## ADDED Requirements
 
+### Requirement: Distributed paragraph final lines
+
+The layout engine SHALL stretch the final line of a paragraph with `w:jc` set to `distribute`. It SHALL apply this rule in table cells and each passage beside a floating object. Ordinary justified paragraphs SHALL retain their existing final-line policy.
+
+#### Scenario: Distributed paragraph ends beside a float
+
+- **GIVEN** a distributed paragraph whose final line holds text in two passages beside a floating object
+- **WHEN** layout aligns that line
+- **THEN** text fills each passage without crossing the floating object
+- **AND** the source text, formatting, and source positions remain unchanged
+
 ### Requirement: Native semantic layout records
 
 The semantic layout engine SHALL produce revision-tagged page, paragraph-fragment, line, and style-span records directly from the committed canonical tree and derived style resources.

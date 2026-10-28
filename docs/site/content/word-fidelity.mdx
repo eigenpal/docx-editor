@@ -83,11 +83,19 @@ Raised and lowered text contributes to automatic and minimum line heights. This 
 
 #### Equation source formatting
 
-Latin and Greek letters in equations use mathematical italic glyphs from the math font, unless `m:sty` specifies plain, bold, or bold italic. Run fonts, bold, and italic do not change these letters. Plain-style runs keep the run font, and a font other than Cambria Math also keeps run bold and italic. Normal-text runs keep their original characters and run formatting. Measurement and paint use the same display string; saved OMML retains the original text.
+Latin and Greek letters in equations use mathematical italic glyphs from the math font, unless `m:sty` specifies plain, bold, or bold italic. Run fonts, bold, and italic do not change these letters. ASCII digits in authored text fonts use that font with the mathematical style and run bold or italic. For example, Arial digits use italic by default and bold italic with `w:b`. Mathematical letters and symbols beside those digits keep the math font.
+
+Plain-style runs keep the run font, and a font other than Cambria Math also keeps run bold and italic. Normal-text runs keep their original characters and run formatting. Without a run font, normal text uses the paragraph font. Measurement and paint use the same display string; saved OMML retains the original text.
 
 Equations retain their canonical Office Math source when you save the document. Literal text and normal text project within fractions, radicals, scripts, and other supported structures. Upper and lower bars also project as math. Bars, fractions, radicals, scripts, and n-ary operators project when their properties carry control properties (`m:ctrlPr`). The control properties can hold run fonts, bold, and italic, directly or inside a tracked insertion or deletion. They can also hold default formatting, which this section describes later. Operator glyphs and rules keep the default math formatting, and the control properties remain unchanged on save. Other content in control properties retains the text fallback.
 
-Control properties hold default formatting when their run properties contain only the Cambria Math font, italic, one font size, and a language. If every control property in an equation holds the same default formatting, compact equation replacement is available. The replacement writes the same control properties on each fraction, radical, script, and n-ary operator that it creates. Run properties (`w:rPr`) on equation runs follow the same rule. If every run in an equation holds the same default formatting and no math run properties (`m:rPr`), compact equation replacement is available. The replacement writes the same run properties on each run that it creates. If the runs share one font size, the equation lays out at that size. Otherwise, it takes the size of the surrounding text. A display equation takes a run size only when all of its equations share it. Compact equation replacement is disabled when it cannot preserve run formatting, bars, or other control properties, including tracked ones. You can remove the equation and edit ordinary text beside it. This restriction applies to the equation, not the document. Unsupported source properties retain the text fallback and remain unchanged on save.
+Control properties hold default formatting when their run properties contain only the Cambria Math font, italic, one font size, and a language. If every control property in an equation holds the same default formatting, compact equation replacement is available. The replacement writes the same control properties on each fraction, radical, script, and n-ary operator that it creates. Run properties (`w:rPr`) on equation runs follow the same rule. If every run in an equation holds the same default formatting and no math run properties (`m:rPr`), compact equation replacement is available. The replacement writes the same run properties on each run that it creates.
+
+Each supported equation run uses its authored `w:sz`, including runs inside display equations. An unsized run takes the surrounding text size. Script and fraction text scales from each run's own size. The equation bounds include the largest run, so automatic line spacing can accommodate it. Exact line spacing keeps its authored height.
+
+Supported sizes are positive integer half-points from 1 through 9999. A matching `w:szCs` is preserved; it does not set the math size alone. Conflicting size values retain the text fallback.
+
+Compact equation replacement is disabled when it cannot preserve run formatting, bars, or other control properties, including tracked ones. Mixed source sizes retain this restriction. You can remove the equation and edit ordinary text beside it. This restriction applies to the equation, not the document. Unsupported source properties retain the text fallback and remain unchanged on save.
 
 ### Paragraphs and styles
 
@@ -118,6 +126,10 @@ This support applies to single-column sections. Frames containing unsupported dr
 Headers also support bounded page-anchored text frames with numeric positions and widths. Adjacent paragraphs with identical direct frame properties share one frame. These frames retain paragraph borders and auto or minimum heights. They do not increase the header height that positions body text. Ordinary header content, including inline images, keeps its flow position.
 
 This subset requires a separate ordinary paragraph and clear space around the frame. Headers with fields or revisions retain ordinary flow for this subset. Frames with exact heights, negative positions, overlapping content, or unsupported properties also retain ordinary flow. The editor preserves source paragraphs and their text positions.
+
+#### Distributed alignment
+
+Distributed paragraphs (`w:jc` with `distribute`) stretch their final line. This also applies inside table cells and each passage beside a floating object. Ordinary justified paragraphs keep their final line at its natural width.
 
 ### Lists and numbering
 

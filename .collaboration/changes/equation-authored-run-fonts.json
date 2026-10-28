@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Equation digits used the math font. Normal text without run fonts also used the math font.",
+  "after": "Digits use authored text fonts. Normal text without run fonts uses the paragraph font.",
+  "reason": "Only local equation geometry and font selection change. Canonical OMML, offsets, operations, and collaboration data remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/equation-authored-run-font.test.ts",
+    "packages/core/src/output/__tests__/equation-authored-run-font-paint.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-equation-authored-run-fonts.test.ts"
+  ],
+  "changeset": "equation-authored-run-fonts",
+  "migration": null
+}

@@ -56,6 +56,15 @@ export function equationDisplayText(
     const mathFace = fontFamily?.trim().toLowerCase() === 'cambria math';
     return { text: expression.value, mathStyle: mathFace ? 'p' : null, mathematicalGlyphs: false };
   }
+  // Text faces supply ordinary digits and their styled font programs. Mathematical
+  // alphanumeric letters still use the math face, including beside these digits.
+  if (
+    fontFamily &&
+    fontFamily.trim().toLowerCase() !== 'cambria math' &&
+    /^(?:[0-9]\p{M}*)+$/u.test(expression.value)
+  ) {
+    return { text: expression.value, mathStyle, mathematicalGlyphs: false };
+  }
   // Styled letters become mathematical alphanumerics for every run face. The
   // caller draws them in the math face, because text faces lack these glyphs.
   const mathematicalGlyphs = true;

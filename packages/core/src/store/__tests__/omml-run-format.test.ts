@@ -58,6 +58,41 @@ test('uses italic for an empty math style and retains the normal-text override',
   });
 });
 
+test.each(['1', '16', '48', '9999'])('reads bounded half-point size %s', (value) => {
+  const node = run(`<w:rPr><w:sz w:val="${value}"/><w:szCs w:val="${value}"/><w:b/></w:rPr>`);
+  const before = JSON.stringify(node);
+  expect(equationRunFormat(node)).toEqual({ fontSizePt: Number(value) / 2, bold: true });
+  expect(JSON.stringify(node)).toBe(before);
+});
+
+test('keeps the size when default language and italic properties use the default reader', () => {
+  const node = run('<w:rPr><w:iCs/><w:sz w:val="48"/><w:lang w:val="en-US"/></w:rPr>');
+  expect(equationRunFormat(node)).toEqual({ fontFamily: 'Cambria Math', fontSizePt: 24 });
+});
+
+test('does not use a complex-script-only size for math text', () => {
+  expect(equationRunFormat(run('<w:rPr><w:szCs w:val="48"/></w:rPr>'))).toEqual({
+    fontFamily: 'Cambria Math',
+  });
+});
+
+test.each([
+  '<w:sz w:val="0"/>',
+  '<w:sz w:val="-1"/>',
+  '<w:sz w:val="1.5"/>',
+  '<w:sz w:val="10000"/>',
+  '<w:sz w:val="Infinity"/>',
+  '<w:sz w:val=" 24"/>',
+  '<w:sz/>',
+  '<w:sz m:val="24"/>',
+  '<w:sz w:val="24"><w:b/></w:sz>',
+  '<w:sz w:val="24"/><w:sz w:val="24"/>',
+  '<w:sz w:val="24"/><w:szCs w:val="48"/>',
+  '<w:szCs w:val="48"/><w:sz w:val="24"/>',
+])('rejects invalid or conflicting size properties %s', (properties) => {
+  expect(equationRunFormat(run(`<w:rPr>${properties}</w:rPr>`))).toBeNull();
+});
+
 test.each([
   '<w:rPr><w:rFonts w:ascii="Face A" w:hAnsi="Face B"/></w:rPr>',
   '<w:rPr><w:rFonts w:asciiTheme="minorHAnsi"/></w:rPr>',

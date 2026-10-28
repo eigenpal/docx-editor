@@ -55,10 +55,7 @@ function geometry(projection: OmmlEquationProjection) {
 test.each([
   ['the math font', `<w:rPr>${FONT}</w:rPr>`],
   ['the math font and italic', `<w:rPr>${FONT}<w:i/><w:iCs/></w:rPr>`],
-  [
-    'every default property',
-    `<w:rPr>${FONT}<w:i/><w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="en-US"/></w:rPr>`,
-  ],
+  ['default properties without a size', `<w:rPr>${FONT}<w:i/><w:lang w:val="en-US"/></w:rPr>`],
 ])('default run properties with %s lay out like runs without them', (_name, properties) => {
   const plain = projectOmmlEquation(equationOf(body('')))!;
   const formatted = projectOmmlEquation(equationOf(body(properties)))!;
@@ -66,14 +63,17 @@ test.each([
   expect(geometry(formatted)).toEqual(geometry(plain));
 });
 
-// Runs whose default properties differ stay read-only, but they draw like runs without them.
-test('runs with different default sizes lay out like runs without properties', () => {
+// Runs whose default properties differ stay read-only and keep their own sizes.
+test('runs with different default sizes keep those sizes', () => {
   const sized = (size: string) => `<w:rPr>${FONT}<w:sz w:val="${size}"/></w:rPr>`;
   const mixed = `<m:r>${sized('24')}<m:t>x+1</m:t></m:r><m:r>${sized('28')}<m:t>y</m:t></m:r>`;
-  const plain = '<m:r><m:t>x+1</m:t></m:r><m:r><m:t>y</m:t></m:r>';
   const formatted = projectOmmlEquation(equationOf(mixed))!;
   expect(JSON.stringify(formatted.expression)).toContain('format');
-  expect(geometry(formatted)).toEqual(geometry(projectOmmlEquation(equationOf(plain))!));
+  const result = geometry(formatted);
+  if (result.kind !== 'row') throw new Error('missing row');
+  expect(result.items.map((item) => (item.kind === 'text' ? item.fontSizePt : undefined))).toEqual([
+    12, 14,
+  ]);
 });
 
 // The run format that the projection carried before default run properties were recognized.
@@ -147,11 +147,12 @@ describe('the shared size of default run properties', () => {
     expect(lay(display(properties(16)), 22)).toEqual(lay(display(properties()), 16));
   });
 
-  test('runs without one shared size keep the size of the text', () => {
+  test('runs without one shared size differ from unsized text', () => {
     const run = (runProperties: string, text: string) =>
       `<m:r>${runProperties}<m:t>${text}</m:t></m:r>`;
     const mixed = `<m:oMath>${run(properties(40), 'x')}${run(properties(28), 'y')}</m:oMath>`;
     const plain = `<m:oMath>${run('', 'x')}${run('', 'y')}</m:oMath>`;
-    expect(lay(mixed, 22)).toEqual(lay(plain, 22));
+    expect(lay(mixed, 22)).not.toEqual(lay(plain, 22));
+    expect(lay(mixed, 22)[0]![1]).toBeCloseTo(23, 8);
   });
 });

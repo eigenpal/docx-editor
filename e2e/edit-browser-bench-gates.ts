@@ -102,21 +102,31 @@ const TIMING_P95_FLOOR_MS = 50;
 
 /**
  * `EDIT_BROWSER_BENCH_TIMING_TAILS=warn` downgrades the single-sample tail gates —
- * p95-vs-median and the sustained max-sample ceilings — to console warnings. On a
- * shared CI runner one scheduler stall is enough to trip them, and the CI benchmark
- * job treats wall clock as advisory. Everything median-based or structural (work
+ * p95-vs-median, sustained max-sample ceilings, and burst frame gaps — to console
+ * warnings. One scheduler stall can trip these gates on shared CI runners. The CI
+ * benchmark job treats wall clock as advisory. Everything median-based or structural (work
  * counters, median growth, heap, DOM size) stays a hard assertion in every mode.
  */
 const TIMING_TAILS_WARN = process.env.EDIT_BROWSER_BENCH_TIMING_TAILS === 'warn';
 
-function expectTailCeiling(actual: number, ceiling: number, label: string): void {
+function expectTailCeiling(
+  actual: number,
+  ceiling: number,
+  label: string,
+  limit: 'inclusive' | 'exclusive' = 'inclusive'
+): void {
   if (TIMING_TAILS_WARN) {
-    if (actual > ceiling) {
-      console.warn(`[timing-tail warn-only] ${label}: ${actual} ms exceeds ${ceiling} ms`);
+    if (limit === 'exclusive' ? actual >= ceiling : actual > ceiling) {
+      const comparison = limit === 'exclusive' ? 'reaches or exceeds' : 'exceeds';
+      console.warn(`[timing-tail warn-only] ${label}: ${actual} ms ${comparison} ${ceiling} ms`);
     }
     return;
   }
-  expect(actual, label).toBeLessThanOrEqual(ceiling);
+  if (limit === 'exclusive') {
+    expect(actual, label).toBeLessThan(ceiling);
+  } else {
+    expect(actual, label).toBeLessThanOrEqual(ceiling);
+  }
 }
 
 /** Engine layout/paint/selection combined should stay within 5× input-task median (generous for React/review rail). */
@@ -313,11 +323,18 @@ export function assertBurstLatencyGates(report: BurstReport): void {
       NAVIGATION_HANDLER_MEDIAN_CEILING_MS
     );
   }
-  expect(report.handler.p95Ms, `${report.name} handler p95`).toBeLessThanOrEqual(
+  expectTailCeiling(
+    report.handler.p95Ms,
     Math.max(
       report.handler.medianMs * BURST_HANDLER_P95_FACTOR,
       report.handler.medianMs + BURST_HANDLER_P95_FLOOR_MS
-    )
+    ),
+    `${report.name} handler p95`
   );
-  expect(report.maxFrameGapMs, `${report.name} max frame gap`).toBeLessThan(BURST_MAX_FRAME_GAP_MS);
+  expectTailCeiling(
+    report.maxFrameGapMs,
+    BURST_MAX_FRAME_GAP_MS,
+    `${report.name} max frame gap`,
+    'exclusive'
+  );
 }

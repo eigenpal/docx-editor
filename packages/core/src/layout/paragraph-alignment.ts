@@ -368,6 +368,12 @@ export function setsLikeLastLine(
     readonly pageBreakLinesStretch?: true;
   }
 ): boolean {
+  let distributed = false;
+  for (const property of props) {
+    if (property.localName === 'jc') distributed = property.attributes?.val === 'distribute';
+  }
+  // Distributed paragraphs stretch their final line and every passage beside a float.
+  if (distributed) return false;
   if (isLastLine) return true;
   const pageBreakSetsLast =
     (line.pageBreakAfter === true || line.columnBreakAfter === true) &&
@@ -375,11 +381,7 @@ export function setsLikeLastLine(
   const manualBreakSetsLast =
     line.manualBreakAfter === true && compatibility?.unstretchedManualBreakLines === true;
   if (!pageBreakSetsLast && !manualBreakSetsLast) return false;
-  let distributed = false;
-  for (const property of props) {
-    if (property.localName === 'jc') distributed = property.attributes?.val === 'distribute';
-  }
-  return !distributed;
+  return true;
 }
 
 /**
@@ -394,7 +396,7 @@ export function boxLineSetsLikeLastLine(
   isLastLine: boolean,
   compatibility?: Parameters<typeof setsLikeLastLine>[3]
 ): boolean {
-  if (isLastLine) return true;
+  if (isLastLine) return setsLikeLastLine(props, line, true, compatibility);
   // A line that no break closes aligns as an inner line.
   if (line.pageBreakAfter !== true && line.manualBreakAfter !== true) return false;
   const closing = {

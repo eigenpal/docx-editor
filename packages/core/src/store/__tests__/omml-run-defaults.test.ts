@@ -96,13 +96,14 @@ test.each([
 test('projects default run properties as an editable equation', () => {
   for (const body of [source(rPr(FONT)), source(DEFAULT), source(DEFAULT, DEFAULT, CONTROL)]) {
     const projection = projectOmmlEquation(equationOf(read(body)))!;
+    const size = body.includes('<w:sz ') ? { fontSizePt: 11 } : {};
     expect(projection.expression).toEqual({
       kind: 'fraction',
-      numerator: { kind: 'text', value: 'a' },
+      numerator: { kind: 'text', value: 'a', ...size },
       denominator: {
         kind: 'script',
-        base: { kind: 'text', value: 'b' },
-        superscript: { kind: 'text', value: '2' },
+        base: { kind: 'text', value: 'b', ...size },
+        superscript: { kind: 'text', value: '2', ...size },
       },
     });
     expect(equationExpressionToLinearMath(projection.expression)).toBe('{a}/{b^{2}}');

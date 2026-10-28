@@ -4,6 +4,7 @@ import { WML_NAMESPACE_URI, XML_NAMESPACE_URI } from './ooxml-shared.ts';
 import {
   EQUATION_DEFAULT_MATH_FONT,
   equationControlPropertiesAreDefault,
+  equationDefaultRunSizePt,
   equationRunPropertiesAreDefault,
 } from './omml-control-defaults.ts';
 import type { OoxmlElement, OoxmlGenericElementNode, OoxmlNode } from './ooxml-tree.ts';
@@ -12,6 +13,7 @@ const MATH = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
 
 export interface EquationRunFormat {
   readonly fontFamily?: string;
+  readonly fontSizePt?: number;
   readonly bold?: boolean;
   readonly italic?: boolean;
   readonly literal?: boolean;
@@ -42,6 +44,7 @@ function readRunProperties(child: OoxmlElement, word: boolean, format: MutableRu
   if (child.attributes.length !== 0) return false;
   const namespace = word ? WML_NAMESPACE_URI : MATH;
   const properties = new Set<string>();
+  let size: number | undefined;
   for (const property of child.children) {
     if (
       property.kind === 'textValue' ||
@@ -71,6 +74,20 @@ function readRunProperties(child: OoxmlElement, word: boolean, format: MutableRu
         family = attr.value;
       }
       if (family !== undefined) format.fontFamily = family;
+    } else if (word && (property.localName === 'sz' || property.localName === 'szCs')) {
+      const attribute = property.attributes[0];
+      if (
+        property.children.length !== 0 ||
+        property.attributes.length !== 1 ||
+        attribute?.namespaceUri !== namespace ||
+        attribute.localName !== 'val' ||
+        !/^[1-9][0-9]{0,3}$/.test(attribute.value)
+      )
+        return false;
+      const points = Number(attribute.value) / 2;
+      if (size !== undefined && size !== points) return false;
+      size = points;
+      if (property.localName === 'sz') format.fontSizePt = points;
     } else if (!word && property.localName === 'sty') {
       if (property.children.length !== 0 || property.attributes.length > 1) return false;
       const attribute = property.attributes[0];
@@ -97,11 +114,12 @@ function readRunProperties(child: OoxmlElement, word: boolean, format: MutableRu
       format[key] = value;
     }
   }
-  return true;
+  // An unrepresented complex-script-only size still needs the default-source marker.
+  return !properties.has('szCs') || properties.has('sz');
 }
 
-// Default run properties that hold a size or language draw in the math face, like a run
-// without them. The face is the format: it marks the run as formatted source.
+// The face marks default properties as formatted source when runs differ. Keep the size
+// separately when the default reader accepts properties outside the typography allowlist.
 const DEFAULT_RUN_FORMAT: EquationRunFormat = Object.freeze({
   fontFamily: EQUATION_DEFAULT_MATH_FONT,
 });
@@ -113,7 +131,14 @@ const DEFAULT_RUN_FORMAT: EquationRunFormat = Object.freeze({
 export function equationRunFormat(run: OoxmlElement): EquationRunFormat | null {
   const format = readRunFormat(run);
   if (format !== null || !equationRunPropertiesAreDefault(run)) return format;
-  return DEFAULT_RUN_FORMAT;
+  const properties = run.children.find((child) => element(child, WML_NAMESPACE_URI, 'rPr'));
+  const fontSizePt =
+    properties && properties.kind !== 'textValue'
+      ? equationDefaultRunSizePt(properties)
+      : undefined;
+  return fontSizePt === undefined
+    ? DEFAULT_RUN_FORMAT
+    : Object.freeze({ ...DEFAULT_RUN_FORMAT, fontSizePt });
 }
 
 function readRunFormat(run: OoxmlElement): EquationRunFormat | null {

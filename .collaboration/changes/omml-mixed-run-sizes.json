@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Equation runs with different font sizes draw at the surrounding text size.",
+  "after": "Each supported equation run draws at its authored size. The largest run sets the line height.",
+  "reason": "Only local projection and geometry change. Canonical OMML, tree operations, source formatting, and shared state retain their meaning. Compact replacement remains unavailable for mixed source formatting.",
+  "tests": [
+    "packages/core/src/layout/__tests__/equation-mixed-run-size.test.ts",
+    "packages/core/src/store/__tests__/omml-run-format.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-equation-mixed-run-size.test.ts"
+  ],
+  "changeset": "omml-mixed-run-sizes",
+  "migration": null
+}

@@ -38,6 +38,18 @@ The engine SHALL publish equation geometry from DOM-free layout. Paint SHALL use
 - **WHEN** OMML text contains markup-like attacker-controlled characters
 - **THEN** paint writes them through text nodes and creates no HTML from the string
 
+#### Scenario: Authored text fonts in equation runs
+
+- **WHEN** an equation run specifies a text font and contains ASCII digits
+- **THEN** the digits use that font with the run's mathematical and Word style
+- **AND** mathematical letters and symbols retain the math face
+
+#### Scenario: Normal text without a run font
+
+- **WHEN** an equation run specifies `m:nor` without `w:rFonts`
+- **THEN** layout and paint use the paragraph font for that run
+- **AND** the equation remains one atom with unchanged source OMML
+
 ### Requirement: Atomic equation interaction
 
 The editor SHALL treat each inline equation as one selectable model atom.

@@ -129,16 +129,16 @@ describe('incremental layout of sized equations', () => {
 });
 
 describe('equation displays', () => {
-  test('display: mixed sizes fall back, shared sizes apply', () => {
+  test('display: mixed sizes remain distinct and shared sizes apply', () => {
     const display = (a: string, b: string) => para(`<m:oMathPara>${eq(a)}${eq(b)}</m:oMathPara>`);
     const mixed = cold(load(display(rPr(40), rPr(16))));
     const plain = cold(load(display(rPr(), rPr())));
-    expect(mixed).toEqual(plain);
+    expect(mixed).not.toEqual(plain);
     const shared = cold(load(display(rPr(40), rPr(40))));
     expect(shared[0]!.spans.find((s) => s.eq)!.size).toBe(20);
-    // One sized, one bare equation: sizes differ → fallback.
+    // A bare equation inherits the paragraph size beside an explicitly sized equation.
     const half = cold(load(display(rPr(40), rPr())));
-    expect(half).toEqual(plain);
+    expect(half).not.toEqual(plain);
   });
 });
 

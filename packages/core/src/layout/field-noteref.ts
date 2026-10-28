@@ -54,7 +54,11 @@ import {
 } from './field-instruction.ts';
 import { walkStoryParagraphs } from './list-resolve.ts';
 import { deriveNoteDisplayMarksResolved, type NoteReferenceSite } from './note-numbering.ts';
-import { enumerateDocumentSectionsFromBlocks, paragraphSectionNode } from './section-properties.ts';
+import {
+  bodySectionNode,
+  enumerateDocumentSectionsFromBlocks,
+  paragraphSectionNode,
+} from './section-properties.ts';
 
 /** Ceiling on note reference sites one story contributes; sites past it resolve to cache. */
 const MAX_NOTEREF_SITES = 4096;
@@ -117,9 +121,8 @@ export function noteRefNumberingFromNotes(
 /**
  * The save-refresh path's numbering input, rebuilt from the package the way the surface
  * builds its notes input (settings-level `w:footnotePr`/`w:endnotePr`, then each section's
- * paragraph-level `w:sectPr` override), so a refreshed NOTEREF result carries the value the
- * pages paint. The final section's body-level `w:sectPr` resolves to the document defaults
- * here exactly as it does there.
+ * own `w:sectPr` override — a paragraph's, or the body-level one for the final section), so a
+ * refreshed NOTEREF result carries the value the pages paint.
  */
 export function noteRefNumberingForPart(
   pkg: OoxmlPackage,
@@ -132,22 +135,29 @@ export function noteRefNumberingForPart(
   const documentFootnoteProps = resolveFootnoteProperties(undefined, docFnAuthored);
   const documentEndnoteProps = resolveEndnoteProperties(undefined, docEnAuthored);
   const sections = enumerateDocumentSectionsFromBlocks(part, blocks).sections;
-  const sectPrOf = (section: NoteRefSectionRange): OoxmlElement | undefined => {
-    if (section.blockStart === section.blockEndExclusive) return undefined;
-    const block = blocks[section.blockEndExclusive - 1];
-    return block?.kind === 'paragraph' ? paragraphSectionNode(block) : undefined;
+  // The last section's properties are the body's own w:sectPr, not a paragraph's.
+  const body = bodySectionNode(part);
+  const final =
+    body !== undefined && body.kind !== 'textValue' ? (body as OoxmlElement) : undefined;
+  const sectPrOf = (section: NoteRefSectionRange, index: number): OoxmlElement | undefined => {
+    const block =
+      section.blockStart < section.blockEndExclusive
+        ? blocks[section.blockEndExclusive - 1]
+        : undefined;
+    const own = block?.kind === 'paragraph' ? paragraphSectionNode(block) : undefined;
+    return own ?? (index === sections.length - 1 ? final : undefined);
   };
   return {
     sections,
-    footnotePropsBySection: sections.map((section) =>
+    footnotePropsBySection: sections.map((section, index) =>
       resolveFootnoteProperties(
-        authoredFootnotePropertiesFromSectPr(sectPrOf(section)),
+        authoredFootnotePropertiesFromSectPr(sectPrOf(section, index)),
         docFnAuthored
       )
     ),
-    endnotePropsBySection: sections.map((section) =>
+    endnotePropsBySection: sections.map((section, index) =>
       resolveEndnoteProperties(
-        authoredEndnotePropertiesFromSectPr(sectPrOf(section)),
+        authoredEndnotePropertiesFromSectPr(sectPrOf(section, index)),
         docEnAuthored
       )
     ),

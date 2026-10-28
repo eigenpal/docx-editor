@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A distributed paragraph keeps its final line at its natural width.",
+  "after": "A distributed paragraph stretches its final line in each available passage.",
+  "reason": "Only layout geometry changes. Canonical OOXML, source positions, operations, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/distributed-last-line.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-distributed-last-line.test.ts"
+  ],
+  "changeset": "distributed-last-line",
+  "migration": null
+}
