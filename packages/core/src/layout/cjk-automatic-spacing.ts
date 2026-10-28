@@ -114,6 +114,9 @@ export function automaticTextGap(
         : true
   )
     return 0;
+  const eastAsianSide = left === 'eastAsian' ? before.style : after.style;
+  if (policy.automaticSpacingNeedsEastAsianFont && eastAsianSide.eastAsianFontAuthored !== true)
+    return 0;
   if (left === 'eastAsian') {
     const size = before.style.fontSizePt;
     return Number.isFinite(size) && size > 0 ? size / 4 : 0;

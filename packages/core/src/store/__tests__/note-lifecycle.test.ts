@@ -29,9 +29,11 @@ import { TreePackageStore } from '../store/tree-package-store.ts';
 import { paragraphTextOf } from '../store/tree-ops.ts';
 import {
   authoredDocumentFootnoteProperties,
+  authoredFootnotePropertiesFromSectPr,
   resolveFootnoteProperties,
   settingsPartOf,
 } from '../package/note-properties.ts';
+import { collectSectionPropertyNodes } from '../package/hf-references.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -621,7 +623,7 @@ describe('setNoteProperties', () => {
     ).toBe(false);
   });
 
-  test('document scope writes settings footnotePr', () => {
+  test('document scope writes settings footnotePr and the section footnotePr', () => {
     const store = openStore(build({}));
     const result = store.applyLifecycleOp({
       op: 'setNoteProperties',
@@ -640,7 +642,11 @@ describe('setNoteProperties', () => {
     const authored = authoredDocumentFootnoteProperties(settings);
     expect(authored?.numFmt).toBe('lowerRoman');
     expect(authored?.numStart).toBe(2);
-    expect(resolveFootnoteProperties(undefined, authored).numFmt).toBe('lowerRoman');
+    // Numbering resolves from the section, so the write reaches the section too.
+    const sectPr = collectSectionPropertyNodes(mainPartOf(store.currentPackage()).root)[0];
+    const section = authoredFootnotePropertiesFromSectPr(sectPr);
+    expect(resolveFootnoteProperties(section).numFmt).toBe('lowerRoman');
+    expect(resolveFootnoteProperties(section).numStart).toBe(2);
   });
 });
 

@@ -175,9 +175,10 @@ export const DocxEditorNotePropertiesDialog = defineComponent({
 
     return () => {
       const state = engineState.value;
-      const footnoteInherited =
-        !state?.footnote.documentAuthored && !state?.footnote.sectionAuthored;
-      const endnoteInherited = !state?.endnote.documentAuthored && !state?.endnote.sectionAuthored;
+      // Numbering comes from the section alone; the document only supplies the endnote position.
+      const footnoteInherited = !state?.footnote.sectionAuthored;
+      const endnoteInherited =
+        !state?.endnote.sectionAuthored && state?.endnote.documentAuthored?.pos === undefined;
 
       return (
         <div

@@ -1,9 +1,18 @@
 // Measure a terminal row before admitting it or changing a completed page fragment.
 import { canProbeBorderRows, hasTableMerge } from './table-border-probe.ts';
+import {
+  closingRowDeps,
+  exactTerminalBorderPt,
+  repeatYieldsToTerminalRule,
+} from './table-exact-terminal-border.ts';
 import { lastRowContentDeps } from './table-fragment-content-insets.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 import { readOnlyBreakCache } from './paragraph-cache-peek.ts';
-import { layoutRowFragment, type TableFlowDeps } from './semantic-table-layout.ts';
+import {
+  layoutRowFragment,
+  measureRowHeight,
+  type TableFlowDeps,
+} from './semantic-table-layout.ts';
 import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import {
   MAX_TABLE_COLUMNS,
@@ -66,6 +75,8 @@ export function closingEdgePt(
 ): number {
   const room = at.bottom - at.top - naturalHeight;
   if (room < -0.001 || room > CLOSING_EDGE_BAND_PT) return 0;
+  if (at.row.height.rule === 'exact')
+    return exactClosingRulePt(at, naturalHeight, room, next, nextDeps, heightOf);
   const measured = measureTerminalRow(at.structure, at.row, at.left, at.top, at.bottom, at.deps);
   if (!measured?.overflows) return 0;
   const below = at.top + naturalHeight;
@@ -73,6 +84,60 @@ export function closingEdgePt(
     heightOf(row, below)
   );
   return follows ? 0 : Math.max(0, measured.plan.height - naturalHeight);
+}
+
+/**
+ * An exact row keeps its authored height, so the closing rule of a row that ends the page sits
+ * below that height and needs its own room (`closingRowDeps`). The table's last row reserves
+ * its rule elsewhere (`ruleRoomPt`). At the top of a page moving cannot give the rule more room,
+ * so the row stays and its rule crosses the bottom margin.
+ */
+function exactClosingRulePt(
+  at: TerminalRowAt,
+  naturalHeight: number,
+  room: number,
+  next: SemanticTableRow | undefined,
+  nextDeps: TableFlowDeps,
+  heightOf: (row: SemanticTableRow, top: number) => number
+): number {
+  if (!next || at.deps.rowAtPageStart) return 0;
+  const rule = exactTerminalBorderPt(at.row, closingRowDeps(at.structure, at.row, at.deps));
+  if (rule <= room + 0.001) return 0;
+  const below = at.top + naturalHeight;
+  const follows = rowFollowsBelow(
+    next,
+    at.structure,
+    at.left,
+    below,
+    at.bottom,
+    nextDeps,
+    (row) => heightOf(row, below) + exactTerminalBorderPt(row, nextDeps)
+  );
+  return follows ? 0 : rule;
+}
+
+/**
+ * Whether a repeated header group yields to `row` placed at `bodyTop` below it
+ * (`repeatYieldsToTerminalRule`): the table's last exact row, or another exact row that would
+ * end the page there and close it with the table's bottom rule.
+ */
+export function repeatYieldsToClosingRule(
+  structure: SemanticTableStructure,
+  row: SemanticTableRow,
+  left: number,
+  bodyTop: number,
+  bottom: number,
+  deps: TableFlowDeps
+): boolean {
+  if (repeatYieldsToTerminalRule(row, bodyTop, bottom, deps)) return true;
+  const closing = closingRowDeps(structure, row, deps);
+  if (closing === deps || !repeatYieldsToTerminalRule(row, bodyTop, bottom, closing)) return false;
+  if (row.height.rule !== 'exact') return false;
+  const below = bodyTop + row.height.valuePt;
+  const next = structure.rows[structure.rows.indexOf(row) + 1];
+  return !rowFollowsBelow(next, structure, left, below, bottom, deps, (candidate) =>
+    measureRowHeight(candidate, structure.columnWidthsPt, left, 0, deps, structure.cellSpacingPt)
+  );
 }
 
 function measureTerminalRow(

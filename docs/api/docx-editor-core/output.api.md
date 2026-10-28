@@ -49,6 +49,43 @@ export interface DrawingSupportIssue {
 // @public
 export type FieldShadingMode = 'never' | 'when-selected' | 'always';
 
+// @internal
+export function followingGapPaint(span: GapSpan, next: GapSpan): 'wordSpacing' | 'letterSpacing' | null;
+
+// @internal
+export interface GapSpan {
+    // (undocumented)
+    readonly equation?: unknown;
+    // (undocumented)
+    readonly fieldAtom?: {
+        readonly resultStart?: number;
+    };
+    // (undocumented)
+    readonly glyphOffsetPt?: number;
+    // (undocumented)
+    readonly link?: {
+        readonly id: string;
+    };
+    // (undocumented)
+    readonly projected?: boolean;
+    // (undocumented)
+    readonly range: {
+        readonly end: number;
+        readonly paragraphId: string;
+        readonly start: number;
+    };
+    // (undocumented)
+    readonly style: {
+        readonly horizontalScalePercent: number;
+    };
+    // (undocumented)
+    readonly text: string;
+    // (undocumented)
+    readonly unsupported?: unknown;
+    // (undocumented)
+    readonly wrapAdvanceBefore?: number;
+}
+
 // @public
 export interface LumTransfer {
     // (undocumented)

@@ -197,7 +197,9 @@ test('paint and caret use the published automatic gap without a source space', (
   paintSemanticLayout(host, value, { scale: 1 });
   const painted = [...host.querySelectorAll<HTMLElement>('.docx-line [data-start]')];
   expect(painted.map((s) => s.textContent).join('')).toBe('1汉');
-  expect(parseFloat(painted[1]!.style.marginLeft)).toBeCloseTo(2.75, 8);
+  // The gap paints as letter spacing on the digit, not as a margin on the ideograph.
+  expect(painted[1]!.style.marginLeft).toBe('');
+  expect(parseFloat(painted[0]!.style.letterSpacing)).toBeCloseTo(2.75, 8);
 });
 
 test('layout and paint leave the original OOXML serialization unchanged', () => {

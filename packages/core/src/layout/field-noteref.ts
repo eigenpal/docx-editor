@@ -37,7 +37,6 @@ import {
 } from '../store/package/ooxml-shared.ts';
 import {
   authoredDocumentEndnoteProperties,
-  authoredDocumentFootnoteProperties,
   authoredEndnotePropertiesFromSectPr,
   authoredFootnotePropertiesFromSectPr,
   resolveEndnoteProperties,
@@ -55,9 +54,8 @@ import {
 import { walkStoryParagraphs } from './list-resolve.ts';
 import { deriveNoteDisplayMarksResolved, type NoteReferenceSite } from './note-numbering.ts';
 import {
-  bodySectionNode,
   enumerateDocumentSectionsFromBlocks,
-  paragraphSectionNode,
+  sectionPropertiesNodes,
 } from './section-properties.ts';
 
 /** Ceiling on note reference sites one story contributes; sites past it resolve to cache. */
@@ -120,8 +118,8 @@ export function noteRefNumberingFromNotes(
 
 /**
  * The save-refresh path's numbering input, rebuilt from the package the way the surface
- * builds its notes input (settings-level `w:footnotePr`/`w:endnotePr`, then each section's
- * own `w:sectPr` override — a paragraph's, or the body-level one for the final section), so a
+ * builds its notes input (each section's own `w:sectPr` — a paragraph's, or the body-level one
+ * for the final section — with only the endnote position falling back to settings.xml), so a
  * refreshed NOTEREF result carries the value the pages paint.
  */
 export function noteRefNumberingForPart(
@@ -129,37 +127,19 @@ export function noteRefNumberingForPart(
   part: OoxmlPart,
   blocks: readonly OoxmlElement[]
 ): NoteRefNumberingInput {
-  const settings = settingsPartOf(pkg);
-  const docFnAuthored = authoredDocumentFootnoteProperties(settings);
-  const docEnAuthored = authoredDocumentEndnoteProperties(settings);
-  const documentFootnoteProps = resolveFootnoteProperties(undefined, docFnAuthored);
+  // settings.xml contributes only the endnote position; numbering is per section.
+  const docEnAuthored = authoredDocumentEndnoteProperties(settingsPartOf(pkg));
+  const documentFootnoteProps = resolveFootnoteProperties();
   const documentEndnoteProps = resolveEndnoteProperties(undefined, docEnAuthored);
   const sections = enumerateDocumentSectionsFromBlocks(part, blocks).sections;
-  // The last section's properties are the body's own w:sectPr, not a paragraph's.
-  const body = bodySectionNode(part);
-  const final =
-    body !== undefined && body.kind !== 'textValue' ? (body as OoxmlElement) : undefined;
-  const sectPrOf = (section: NoteRefSectionRange, index: number): OoxmlElement | undefined => {
-    const block =
-      section.blockStart < section.blockEndExclusive
-        ? blocks[section.blockEndExclusive - 1]
-        : undefined;
-    const own = block?.kind === 'paragraph' ? paragraphSectionNode(block) : undefined;
-    return own ?? (index === sections.length - 1 ? final : undefined);
-  };
+  const sectPrs = sectionPropertiesNodes(part, blocks, sections);
   return {
     sections,
-    footnotePropsBySection: sections.map((section, index) =>
-      resolveFootnoteProperties(
-        authoredFootnotePropertiesFromSectPr(sectPrOf(section, index)),
-        docFnAuthored
-      )
+    footnotePropsBySection: sectPrs.map((sectPr) =>
+      resolveFootnoteProperties(authoredFootnotePropertiesFromSectPr(sectPr))
     ),
-    endnotePropsBySection: sections.map((section, index) =>
-      resolveEndnoteProperties(
-        authoredEndnotePropertiesFromSectPr(sectPrOf(section, index)),
-        docEnAuthored
-      )
+    endnotePropsBySection: sectPrs.map((sectPr) =>
+      resolveEndnoteProperties(authoredEndnotePropertiesFromSectPr(sectPr), docEnAuthored)
     ),
     documentFootnoteProps,
     documentEndnoteProps,

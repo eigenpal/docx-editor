@@ -36,7 +36,9 @@ test('CJK justification paints every gap and maps each caret to the same geometr
   paintSemanticLayout(container, layout, { scale: 1 });
   const painted = container.querySelectorAll<HTMLElement>('.docx-line:first-child [data-start]');
   expect(painted.length).toBe(4);
-  expect([...painted].map((span) => span.style.marginLeft)).toEqual(['', '2px', '2px', '2px']);
+  // Each gap paints as letter spacing on the character before it, so decorations run on.
+  expect([...painted].map((span) => span.style.marginLeft)).toEqual(['', '', '', '']);
+  expect([...painted].map((span) => span.style.letterSpacing)).toEqual(['2px', '2px', '2px', '']);
   for (const span of first.spans) {
     const caret = caretAt(
       layout,

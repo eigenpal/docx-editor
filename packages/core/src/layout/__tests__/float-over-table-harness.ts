@@ -24,6 +24,7 @@ import type { InlineDrawingLayoutContext } from '../drawing-layout.ts';
 import { readOoxmlPart, type OoxmlPart } from '../../store/package/ooxml-tree.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import type { PageGeometry, SemanticLayout } from '../semantic-records.ts';
+import type { SemanticLayoutOptions } from '../semantic-layout-options.ts';
 
 export const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -108,9 +109,11 @@ const DRAWING_CONTEXT: InlineDrawingLayoutContext = {
 export function layoutUnderFloat(
   part: OoxmlPart,
   zonesByPage: ReadonlyMap<number, readonly ExclusionZone[]>,
-  geometry: PageGeometry = TINY_PAGE
+  geometry: PageGeometry = TINY_PAGE,
+  options: Pick<SemanticLayoutOptions, 'styleCascade'> = {}
 ): SemanticLayout {
   return layoutSemanticDocument(part, 0, {
+    ...options,
     measurer: createFixedMeasurer(),
     geometry,
     inlineDrawingLayout: DRAWING_CONTEXT,
