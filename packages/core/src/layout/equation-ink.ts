@@ -1,6 +1,8 @@
 // Ink extents of equation geometry. Script and bar placement keep clearances between drawn
 // glyphs, not between font boxes, because a font box reaches far above and below its glyphs.
 import type { EquationGeometry } from './equation-layout.ts';
+import { segmentGraphemes } from './grapheme.ts';
+import type { ResolvedRunStyle } from './run-style.ts';
 import type { LayoutBox, TextMeasurer } from './semantic-records.ts';
 
 /** Distances, in points, from a geometry's baseline to its highest and lowest ink. */
@@ -41,20 +43,91 @@ function rule(node: EquationGeometry): LayoutBox | null {
     : null;
 }
 
+// Ink of one grapheme in one face, per measurer. Equations repeat a small set of letters,
+// digits, and operators, so most reads hit. The bound keeps hostile documents finite.
+const MAX_GRAPHEME_INK_ENTRIES = 8192;
+const graphemeInkByMeasurer = new WeakMap<TextMeasurer, Map<string, EquationInk | null>>();
+// Ink is relative to a node's baseline, so a shifted copy shares its source's entry.
+const nodeInk = new WeakMap<EquationGeometry, EquationInk>();
+
+function faceKey(style: ResolvedRunStyle): string {
+  return [
+    style.fontFamily ?? '',
+    style.fontFamilyEastAsia ?? '',
+    style.fontSizePt,
+    style.bold ? 1 : 0,
+    style.italic ? 1 : 0,
+    style.caps ? 1 : 0,
+    style.smallCaps ? 1 : 0,
+    style.verticalAlign,
+    style.horizontalScalePercent,
+  ].join('|');
+}
+
+function graphemeInk(
+  grapheme: string,
+  style: ResolvedRunStyle,
+  measurer: TextMeasurer
+): EquationInk | null {
+  let cache = graphemeInkByMeasurer.get(measurer);
+  if (!cache) {
+    cache = new Map();
+    graphemeInkByMeasurer.set(measurer, cache);
+  }
+  const key = `${faceKey(style)}|${grapheme}`;
+  const hit = cache.get(key);
+  if (hit !== undefined) return hit;
+  const ink = measurer.textOutline?.(grapheme, style)?.ink;
+  const result = ink ? Object.freeze({ ascent: -ink.top, descent: ink.bottom }) : null;
+  if (cache.size >= MAX_GRAPHEME_INK_ENTRIES) cache.clear();
+  cache.set(key, result);
+  return result;
+}
+
+/** Vertical ink of a text run: the union of its graphemes, or null when one has no ink. */
+function textInk(
+  text: string,
+  style: ResolvedRunStyle,
+  measurer: TextMeasurer
+): EquationInk | null {
+  if (!measurer.textOutline) return null;
+  let ascent = Number.NEGATIVE_INFINITY;
+  let descent = Number.NEGATIVE_INFINITY;
+  for (const segment of segmentGraphemes(text)) {
+    const ink = graphemeInk(segment.text, style, measurer);
+    if (!ink) return null;
+    ascent = Math.max(ascent, ink.ascent);
+    descent = Math.max(descent, ink.descent);
+  }
+  return Number.isFinite(ascent) && Number.isFinite(descent) ? { ascent, descent } : null;
+}
+
+/** Give a shifted copy of `from` the ink already measured for `from`. */
+export function inheritEquationInk(from: EquationGeometry, to: EquationGeometry): void {
+  const ink = nodeInk.get(from);
+  if (ink) nodeInk.set(to, ink);
+}
+
 /**
  * The ink extents of `node`, measured from its baseline.
  *
- * Text uses the glyph ink that the measurer reports through `textOutline`. A measurer that
- * cannot report ink gives the font box instead, so clearances stay conservative. Child
- * positions and rules (fraction, radical, and bar strokes) are included.
+ * Text uses the glyph ink that the measurer reports through `textOutline`, read once per
+ * grapheme and face. A measurer that cannot report ink gives the font box instead, so
+ * clearances stay conservative. Child positions and rules (fraction, radical, and bar strokes)
+ * are included. Each node is measured once; geometry belongs to the measurer that laid it out.
  */
 export function equationInk(node: EquationGeometry, measurer: TextMeasurer): EquationInk {
+  const cached = nodeInk.get(node);
+  if (cached) return cached;
+  const ink = Object.freeze(measureInk(node, measurer));
+  nodeInk.set(node, ink);
+  return ink;
+}
+
+function measureInk(node: EquationGeometry, measurer: TextMeasurer): EquationInk {
   if (node.kind === 'text' || node.kind === 'fallback') {
-    const ink =
-      node.text && node.runStyle ? measurer.textOutline?.(node.text, node.runStyle)?.ink : null;
-    return ink
-      ? { ascent: -ink.top, descent: ink.bottom }
-      : { ascent: node.baseline, descent: node.box.height - node.baseline };
+    const ink = node.text && node.runStyle ? textInk(node.text, node.runStyle, measurer) : null;
+    return ink ?? { ascent: node.baseline, descent: node.box.height - node.baseline };
   }
   let top = Number.POSITIVE_INFINITY;
   let bottom = Number.NEGATIVE_INFINITY;
@@ -73,8 +146,35 @@ export function equationInk(node: EquationGeometry, measurer: TextMeasurer): Equ
   return { ascent: node.baseline - top, descent: bottom - node.baseline };
 }
 
-/** The largest text size, in points, in `node`. Zero when it holds no text. */
-export function equationNominalSizePt(node: EquationGeometry): number {
-  if (node.kind === 'text' || node.kind === 'fallback') return node.fontSizePt;
-  return children(node).reduce((size, child) => Math.max(size, equationNominalSizePt(child)), 0);
+/** The top of lowercase letters, in ems of their size. */
+const LOWERCASE_HEIGHT = 976 / 2048;
+
+/**
+ * The highest top of lowercase text in `node`, in points above its baseline.
+ *
+ * Text gives the lowercase height of its size, whatever its glyphs, so an ascender does not
+ * raise it. A structure gives the highest top among the parts above its baseline: the base and
+ * superscript of a script, the radicand of a radical, the operator, body, and upper limit of an
+ * n-ary operator, and every part of other structures.
+ */
+export function equationLowercaseTop(node: EquationGeometry): number {
+  if (node.kind === 'text' || node.kind === 'fallback') return LOWERCASE_HEIGHT * node.fontSizePt;
+  const parts =
+    node.kind === 'script'
+      ? [node.base, node.superscript]
+      : node.kind === 'radical'
+        ? [node.radicand]
+        : node.kind === 'nary'
+          ? [node.operator, node.body, node.upperLimit]
+          : children(node);
+  return parts.reduce(
+    (top: number, child) =>
+      child
+        ? Math.max(
+            top,
+            node.baseline - (child.box.y + child.baseline) + equationLowercaseTop(child)
+          )
+        : top,
+    0
+  );
 }

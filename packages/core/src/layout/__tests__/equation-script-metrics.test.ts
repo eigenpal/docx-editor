@@ -109,6 +109,100 @@ test('a superscript on a larger base stays near the top of its lowercase letters
   );
 });
 
+/** How far the baseline of `part`, nested at any depth in `whole`, sits above `whole`'s baseline. */
+function riseOf(whole: EquationGeometry, path: (node: EquationGeometry) => EquationGeometry[]) {
+  let y = 0;
+  let node = whole;
+  for (const step of path(whole)) {
+    y += step.box.y;
+    node = step;
+  }
+  return whole.baseline - (y + node.baseline);
+}
+
+test.each([
+  [
+    'a fraction',
+    `<m:f><m:num>${run('a')}</m:num><m:den>${run('c')}</m:den></m:f>`,
+    (base: EquationGeometry) => (base.kind === 'fraction' ? [base.numerator] : []),
+  ],
+  [
+    'a radical over a fraction',
+    `<m:rad><m:radPr><m:degHide m:val="1"/></m:radPr><m:deg/><m:e>` +
+      `<m:f><m:num>${run('a')}</m:num><m:den>${run('c')}</m:den></m:f></m:e></m:rad>`,
+    (base: EquationGeometry) =>
+      base.kind === 'radical' && base.radicand.kind === 'fraction'
+        ? [base.radicand, base.radicand.numerator]
+        : [],
+  ],
+  [
+    'an n-ary operator',
+    `<m:nary><m:sup>${run('n')}</m:sup><m:e>${run('x')}</m:e></m:nary>`,
+    (base: EquationGeometry) => (base.kind === 'nary' ? [base.upperLimit!] : []),
+  ],
+  [
+    'a script',
+    `<m:sSup><m:e>${run('x')}</m:e><m:sup>${run('n')}</m:sup></m:sSup>`,
+    (base: EquationGeometry) => (base.kind === 'script' ? [base.superscript!] : []),
+  ],
+] as const)(
+  'a superscript on %s rises from the top of its highest lowercase text',
+  (_name, baseXml, highest) => {
+    const size = 24;
+    const geometry = script(
+      layout(`<m:sSup><m:e>${baseXml}</m:e><m:sup>${run('2')}</m:sup></m:sSup>`, size)
+    );
+    const base = geometry.base;
+    const path = highest(base);
+    const inner = path.at(-1)!;
+    const innerRise = riseOf(base, highest);
+    const expected = innerRise + (976 / 2048) * text(firstText(inner)).fontSizePt;
+    expect(rise(geometry, geometry.superscript!)).toBeCloseTo(
+      Math.max((750 / 2048) * size, expected - (460 / 2048) * size),
+      6
+    );
+    // The superscript sits above the highest text of the base, not inside it.
+    expect(rise(geometry, geometry.superscript!)).toBeGreaterThan(innerRise);
+  }
+);
+
+function firstText(node: EquationGeometry): EquationGeometry {
+  if (node.kind === 'text') return node;
+  if (node.kind === 'row') return firstText(node.items[0]!);
+  throw new Error(`expected text, got ${node.kind}`);
+}
+
+test.each([
+  [24, 17.5, 14],
+  [12, 8.5, 7],
+])('a script inside a %d pt script draws at 60 percent of the structure', (size, first, second) => {
+  const geometry = script(
+    layout(
+      `<m:sSup><m:e>${run('x')}</m:e><m:sup><m:sSup><m:e>${run('y')}</m:e>` +
+        `<m:sup><m:sSup><m:e>${run('z')}</m:e><m:sup>${run('2')}</m:sup></m:sSup></m:sup>` +
+        `</m:sSup></m:sup></m:sSup>`,
+      size
+    )
+  );
+  const level1 = script(geometry.superscript!);
+  const level2 = script(level1.superscript!);
+  expect(text(level1.base).fontSizePt).toBe(first);
+  expect(text(level2.base).fontSizePt).toBe(second);
+  expect(text(level2.superscript).fontSizePt).toBe(second);
+});
+
+test('a script inside a fraction part draws at 60 percent', () => {
+  const geometry = layout(
+    `<m:f><m:num><m:sSup><m:e>${run('a')}</m:e><m:sup>${run('2')}</m:sup></m:sSup></m:num>` +
+      `<m:den>${run('c')}</m:den></m:f>`,
+    24
+  );
+  if (geometry.kind !== 'fraction') throw new Error('expected a fraction');
+  const numerator = script(geometry.numerator);
+  expect(text(numerator.base).fontSizePt).toBe(17.5);
+  expect(text(numerator.superscript).fontSizePt).toBe(14);
+});
+
 test('the superscript size does not change its rise', () => {
   const small = script(
     layout(`<m:sSup><m:e>${run('y', 24)}</m:e><m:sup>${run('n', 16)}</m:sup></m:sSup>`, 12)
@@ -203,4 +297,27 @@ test('a bar beyond the font box reserves one more stroke of space outside it', (
     (345 / 2048) * size,
     6
   );
+});
+
+test('nested bars and scripts read the ink of each grapheme once', () => {
+  const calls = new Map<string, number>();
+  const counting: TextMeasurer = {
+    ...inked,
+    textOutline: (value, style) => {
+      calls.set(value, (calls.get(value) ?? 0) + 1);
+      return inked.textOutline!(value, style);
+    },
+  };
+  const top = (body: string) =>
+    `<m:bar><m:barPr><m:pos m:val="top"/></m:barPr><m:e>${body}</m:e></m:bar>`;
+  const nested = (body: string) =>
+    `<m:sSubSup><m:e>${top(body + run('ab'))}</m:e><m:sub>${top(run('k'))}</m:sub>` +
+    `<m:sup>${top(run('n'))}</m:sup></m:sSubSup>`;
+  layout(nested(nested(nested(run('x')))), 14, counting);
+  expect(calls.size).toBeGreaterThan(0);
+  for (const [grapheme, count] of calls) {
+    expect([...grapheme]).toHaveLength(1);
+    // One read per grapheme and face; the three nesting levels draw at three sizes.
+    expect(count).toBeLessThanOrEqual(3);
+  }
 });

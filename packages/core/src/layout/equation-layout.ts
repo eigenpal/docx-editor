@@ -4,18 +4,18 @@ import type { EquationExpression, OmmlEquationProjection } from '@docx-editor.de
 import { measureDisplayText, withFontFamily, type ResolvedRunStyle } from './run-style.ts';
 import type { LayoutBox, TextMeasurer } from './semantic-records.ts';
 import { equationDisplayText } from './equation-display-text.ts';
-import { equationInk, equationNominalSizePt } from './equation-ink.ts';
+import { equationInk, equationLowercaseTop, inheritEquationInk } from './equation-ink.ts';
 
 // Script and stack metrics in ems of the structure size, from the math constants of the
 // default math face (2048 font units to the em).
 /** Scripts, fraction parts, and limits draw at 73% of their base size. */
 const SCRIPT_SCALE = 0.73;
+/** A script inside a script, fraction part, or limit draws at 60%, at every deeper level too. */
+const SCRIPT_SCRIPT_SCALE = 0.6;
 /** The least superscript baseline rise. */
 const SUPERSCRIPT_SHIFT_UP = 750 / 2048;
 /** How far a superscript baseline may sit below the top of a lowercase base. */
 const SUPERSCRIPT_BASELINE_DROP_MAX = 460 / 2048;
-/** The top of a lowercase base, in ems of the base size. */
-const BASE_LOWERCASE_HEIGHT = 976 / 2048;
 /** The least ink gap between a superscript and a subscript of one base. */
 const SUB_SUPERSCRIPT_GAP_MIN = 300 / 2048;
 /** How high a superscript bottom may rise to open the gap above a subscript. */
@@ -127,10 +127,12 @@ function box(x: number, y: number, width: number, height: number): LayoutBox {
 }
 
 function shifted<T extends EquationGeometry>(node: T, x: number, y: number): T {
-  return Object.freeze({
+  const moved = Object.freeze({
     ...node,
     box: box(x, y, node.box.width, node.box.height),
   }) as unknown as T;
+  inheritEquationInk(node, moved);
+  return moved;
 }
 
 interface EquationLayoutCache {
@@ -198,6 +200,11 @@ function sharedEquationLayouts(
   };
   producers.set(producer, created);
   return created;
+}
+
+/** The size factor of a script level below a structure drawn at `scale`. */
+function scriptScale(scale: number): number {
+  return scale >= 1 ? scale * SCRIPT_SCALE : Math.min(scale, SCRIPT_SCRIPT_SCALE);
 }
 
 function scaledStyle(
@@ -373,14 +380,14 @@ function layoutExpression(
         expression.numerator,
         measurer,
         style,
-        scale * SCRIPT_SCALE,
+        scriptScale(scale),
         cache
       );
       const denominator = layoutExpression(
         expression.denominator,
         measurer,
         style,
-        scale * SCRIPT_SCALE,
+        scriptScale(scale),
         cache
       );
       const pad = Math.max(0.75, resolved.fontSizePt * 0.08);
@@ -459,21 +466,22 @@ function layoutExpression(
       const resolved = scaledStyle(style, scale, cache);
       const base = layoutExpression(expression.base, measurer, style, scale, cache);
       const subscript = expression.subscript
-        ? layoutExpression(expression.subscript, measurer, style, scale * SCRIPT_SCALE, cache)
+        ? layoutExpression(expression.subscript, measurer, style, scriptScale(scale), cache)
         : undefined;
       const superscript = expression.superscript
-        ? layoutExpression(expression.superscript, measurer, style, scale * SCRIPT_SCALE, cache)
+        ? layoutExpression(expression.superscript, measurer, style, scriptScale(scale), cache)
         : undefined;
       const gap = Math.max(0.4, resolved.fontSizePt * 0.04);
       const scriptX = base.box.width + gap;
       const em = resolved.fontSizePt;
       // The superscript baseline rises at least a fixed share of the structure size, and
-      // never sits lower than a fixed drop below the top of a lowercase base. The base's
-      // own glyphs do not move it, so an ascender in the base keeps the same rise.
+      // never sits lower than a fixed drop below the top of the base's lowercase text. A
+      // text base gives its lowercase height, so an ascender keeps the same rise; a
+      // structured base gives the highest lowercase top of its text, such as a numerator.
       let rise = superscript
         ? Math.max(
             SUPERSCRIPT_SHIFT_UP * em,
-            BASE_LOWERCASE_HEIGHT * equationNominalSizePt(base) - SUPERSCRIPT_BASELINE_DROP_MAX * em
+            equationLowercaseTop(base) - SUPERSCRIPT_BASELINE_DROP_MAX * em
           )
         : 0;
       // The subscript's own baseline sits a fifth of an em below the base baseline.
@@ -526,10 +534,10 @@ function layoutExpression(
       );
       const body = layoutExpression(expression.body, measurer, style, scale, cache);
       const lower = expression.lowerLimit
-        ? layoutExpression(expression.lowerLimit, measurer, style, scale * SCRIPT_SCALE, cache)
+        ? layoutExpression(expression.lowerLimit, measurer, style, scriptScale(scale), cache)
         : undefined;
       const upper = expression.upperLimit
-        ? layoutExpression(expression.upperLimit, measurer, style, scale * SCRIPT_SCALE, cache)
+        ? layoutExpression(expression.upperLimit, measurer, style, scriptScale(scale), cache)
         : undefined;
       const gap = Math.max(0.5, resolved.fontSizePt * 0.05);
       const operatorWidth = Math.max(

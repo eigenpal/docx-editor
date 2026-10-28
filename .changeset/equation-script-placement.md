@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Equation superscripts sit at their standard height, and scripts and fraction parts draw at the standard reduced size.
+Equation scripts draw at 73 percent of the run size in whole half points, or 60 percent inside another script, and superscripts rise a fixed share of the size above the top of the base.

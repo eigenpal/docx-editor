@@ -37,7 +37,9 @@ The engine SHALL publish equation geometry from DOM-free layout. Paint SHALL use
 
 - **WHEN** an equation contains `m:sSup`, `m:sSub`, or `m:sSubSup`
 - **THEN** each script draws at 73 percent of its run size, rounded down to a whole half point
-- **AND** the superscript baseline rises at least 750/2048 em of the structure size, and the subscript baseline sits 0.2 em below the base baseline
+- **AND** a script inside a script, fraction part, or limit draws at 60 percent of its run size, at every deeper level too
+- **AND** the superscript baseline rises at least 750/2048 em of the structure size, and at least to 460/2048 em below the top of the lowercase text of its base, including text inside a structured base
+- **AND** the subscript baseline sits 0.2 em below the base baseline
 - **AND** the two scripts of one base keep a 300/2048 em gap between their glyphs
 
 #### Scenario: Bar placement

@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Equation overline and underline bars use the standard stroke and keep the standard gap from the glyphs they cover.
+An equation overline or underline keeps a fixed gap from the glyphs that it covers, and its stroke follows the rule thickness of the math font.
