@@ -419,10 +419,11 @@ export function DocxEditorNotePropertiesDialog(
     setEndnotePosition(engineState.endnote.resolved.pos);
   }, [engineState]);
 
-  const footnoteInherited =
-    !engineState?.footnote.documentAuthored && !engineState?.footnote.sectionAuthored;
+  // Numbering comes from the section alone; the document only supplies the endnote position.
+  const footnoteInherited = !engineState?.footnote.sectionAuthored;
   const endnoteInherited =
-    !engineState?.endnote.documentAuthored && !engineState?.endnote.sectionAuthored;
+    !engineState?.endnote.sectionAuthored &&
+    engineState?.endnote.documentAuthored?.pos === undefined;
 
   return (
     <div

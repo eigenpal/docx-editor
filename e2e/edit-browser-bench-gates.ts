@@ -102,12 +102,15 @@ const TIMING_P95_FLOOR_MS = 50;
 
 /**
  * `EDIT_BROWSER_BENCH_TIMING_TAILS=warn` downgrades the single-sample tail gates —
- * p95-vs-median, sustained max-sample ceilings, and burst frame gaps — to console
- * warnings. One scheduler stall can trip these gates on shared CI runners. The CI
- * benchmark job treats wall clock as advisory. Everything median-based or structural (work
- * counters, median growth, heap, DOM size) stays a hard assertion in every mode.
+ * p95-vs-median, sustained max-sample ceilings, burst handler p95, and burst frame
+ * gaps — to console warnings. One scheduler stall can trip these gates on shared CI
+ * runners. The CI benchmark job treats wall clock as advisory. Everything median-based or
+ * structural (work counters, median growth, heap, DOM size) stays a hard assertion in
+ * every mode. The mode is read at each gate, so a test can switch it without reloading.
  */
-const TIMING_TAILS_WARN = process.env.EDIT_BROWSER_BENCH_TIMING_TAILS === 'warn';
+function timingTailsWarn(): boolean {
+  return process.env.EDIT_BROWSER_BENCH_TIMING_TAILS === 'warn';
+}
 
 function expectTailCeiling(
   actual: number,
@@ -115,7 +118,7 @@ function expectTailCeiling(
   label: string,
   limit: 'inclusive' | 'exclusive' = 'inclusive'
 ): void {
-  if (TIMING_TAILS_WARN) {
+  if (timingTailsWarn()) {
     if (limit === 'exclusive' ? actual >= ceiling : actual > ceiling) {
       const comparison = limit === 'exclusive' ? 'reaches or exceeds' : 'exceeds';
       console.warn(`[timing-tail warn-only] ${label}: ${actual} ms ${comparison} ${ceiling} ms`);

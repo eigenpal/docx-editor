@@ -834,7 +834,8 @@ function* layoutBlocksPass(
               preparedParagraph,
               measurer,
               styleCascade,
-              options.inlineDrawingLayout
+              options.inlineDrawingLayout,
+              options.compatibilityMode
             )
           : undefined;
       if (frame)
@@ -2666,7 +2667,7 @@ function* layoutBlocksPass(
         box: { ...span.box, x: span.box.x + penX, y: cursorY },
       }));
       // Word aligns inside the passage a float leaves the line, not the page margins.
-      const measure = lineAlignmentMeasure(pendingLine, columnX, lineIndent, lineAvailableWidth);
+      const measure = lineAlignmentMeasure(pendingLine, penX, lineIndent, lineAvailableWidth);
       const placedDrawings = pendingLine.drawings.map((drawing) =>
         Object.freeze({ ...shiftInlineDrawingRecord(drawing, penX, cursorY), paragraphId })
       );
