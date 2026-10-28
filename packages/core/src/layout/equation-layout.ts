@@ -26,6 +26,18 @@ const BAR_RULE_THICKNESS = 133 / 2048;
 const BAR_VERTICAL_GAP = 345 / 2048;
 /** The space a bar reserves on its outer side. */
 const BAR_EXTRA_SPACE = 133 / 2048;
+/** The height of the math axis, where fraction rules and operators centre. */
+const MATH_AXIS_HEIGHT = 585 / 2048;
+/** The stroke of a fraction rule. */
+const FRACTION_RULE_THICKNESS = 133 / 2048;
+/** The least numerator baseline rise of an inline fraction. */
+const FRACTION_NUMERATOR_SHIFT_UP = 1200 / 2048;
+/** The least denominator baseline drop of an inline fraction. */
+const FRACTION_DENOMINATOR_SHIFT_DOWN = 1030 / 2048;
+/** The least ink gap between the numerator and the rule. */
+const FRACTION_NUMERATOR_GAP_MIN = 133 / 2048;
+/** The least ink gap between the rule and the denominator. */
+const FRACTION_DENOMINATOR_GAP_MIN = 133 / 2048;
 const NARY_OPERATOR_SCALE = 1.25;
 /** The synthetic face Core layout uses for every OMML equation. @internal */
 export const EQUATION_FONT_FAMILY = 'Cambria Math';
@@ -291,6 +303,42 @@ function rowGeometry(
   });
 }
 
+/** The typographic ascender and descender of the default math face, in ems. */
+const MATH_FACE_TYPO_ASCENT = 1593 / 2048;
+const MATH_FACE_TYPO_DESCENT = 455 / 2048;
+
+/**
+ * One part of a stacked structure, with its text boxes trimmed to the typographic ascender
+ * and descender of the math face, without the line gap that its font box adds above. Text in
+ * another face and other structures keep their boxes. Glyphs keep their baselines.
+ */
+function stackPart(node: EquationGeometry): EquationGeometry {
+  if (node.kind === 'text') {
+    if (node.runStyle?.fontFamily?.trim().toLowerCase() !== EQUATION_FONT_FAMILY.toLowerCase())
+      return node;
+    const ascent = Math.min(node.baseline, MATH_FACE_TYPO_ASCENT * node.fontSizePt);
+    const descent = Math.min(
+      node.box.height - node.baseline,
+      MATH_FACE_TYPO_DESCENT * node.fontSizePt
+    );
+    return Object.freeze({
+      ...node,
+      box: box(node.box.x, node.box.y, node.box.width, ascent + descent),
+      baseline: ascent,
+    });
+  }
+  if (node.kind !== 'row' || node.items.length === 0) return node;
+  const items = node.items.map(stackPart);
+  const baseline = Math.max(...items.map((item) => item.baseline));
+  const descent = Math.max(...items.map((item) => item.box.height - item.baseline));
+  return Object.freeze({
+    ...node,
+    items: Object.freeze(items.map((item) => shifted(item, item.box.x, baseline - item.baseline))),
+    box: box(node.box.x, node.box.y, node.box.width, baseline + descent),
+    baseline,
+  });
+}
+
 function layoutExpression(
   expression: EquationExpression,
   measurer: TextMeasurer,
@@ -376,33 +424,53 @@ function layoutExpression(
       );
     case 'fraction': {
       const resolved = scaledStyle(style, scale, cache);
-      const numerator = layoutExpression(
-        expression.numerator,
-        measurer,
-        style,
-        scriptScale(scale),
-        cache
+      const numerator = stackPart(
+        layoutExpression(expression.numerator, measurer, style, scriptScale(scale), cache)
       );
-      const denominator = layoutExpression(
-        expression.denominator,
-        measurer,
-        style,
-        scriptScale(scale),
-        cache
+      const denominator = stackPart(
+        layoutExpression(expression.denominator, measurer, style, scriptScale(scale), cache)
       );
-      const pad = Math.max(0.75, resolved.fontSizePt * 0.08);
-      const gap = Math.max(0.75, resolved.fontSizePt * 0.08);
-      const thickness = Math.max(0.6, resolved.fontSizePt * 0.055);
-      const width = Math.max(numerator.box.width, denominator.box.width) + pad * 2;
-      const barY = numerator.box.height + gap;
-      const denominatorY = barY + thickness + gap;
-      const height = denominatorY + denominator.box.height;
-      const baseline = Math.min(height, barY + thickness / 2 + resolved.fontSizePt * 0.22);
+      // The rule is centred on the math axis. Each part sits at least a fixed shift from the
+      // baseline, and further when its ink would come closer to the rule than the minimum gap.
+      // The parts reach their typographic extents, and the rule spans the wider part.
+      const em = resolved.fontSizePt;
+      const axis = MATH_AXIS_HEIGHT * em;
+      const thickness = FRACTION_RULE_THICKNESS * em;
+      const numeratorShift = Math.max(
+        FRACTION_NUMERATOR_SHIFT_UP * em,
+        axis +
+          thickness / 2 +
+          FRACTION_NUMERATOR_GAP_MIN * em +
+          equationInk(numerator, measurer).descent
+      );
+      const denominatorShift = Math.max(
+        FRACTION_DENOMINATOR_SHIFT_DOWN * em,
+        FRACTION_DENOMINATOR_GAP_MIN * em +
+          thickness / 2 -
+          axis +
+          equationInk(denominator, measurer).ascent
+      );
+      const baseline = Math.max(numeratorShift + numerator.baseline, axis + thickness / 2);
+      const height =
+        baseline +
+        Math.max(
+          denominatorShift + denominator.box.height - denominator.baseline,
+          thickness / 2 - axis
+        );
+      const width = Math.max(numerator.box.width, denominator.box.width);
       return Object.freeze({
         kind: 'fraction',
-        numerator: shifted(numerator, (width - numerator.box.width) / 2, 0),
-        denominator: shifted(denominator, (width - denominator.box.width) / 2, denominatorY),
-        bar: box(pad / 2, barY, width - pad, thickness),
+        numerator: shifted(
+          numerator,
+          (width - numerator.box.width) / 2,
+          baseline - numeratorShift - numerator.baseline
+        ),
+        denominator: shifted(
+          denominator,
+          (width - denominator.box.width) / 2,
+          baseline + denominatorShift - denominator.baseline
+        ),
+        bar: box(0, baseline - axis - thickness / 2, width, thickness),
         box: box(0, 0, width, height),
         baseline,
       });
