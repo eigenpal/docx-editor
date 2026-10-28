@@ -34,8 +34,60 @@ type AlignPart = (
   isLastPart: boolean
 ) => readonly StyleSpanRecord[];
 
+/**
+ * A span of plain spaces that the pen carried over a float, followed by the next part's text.
+ * A space split off from the word before it, as a right-to-left word's space is, belongs to the
+ * end of the passage before the float, where it hangs like a space inside the word's own span.
+ */
+function strandedBoundarySpace(spans: readonly StyleSpanRecord[], index: number): boolean {
+  const span = spans[index]!;
+  const previous = spans[index - 1];
+  const next = spans[index + 1];
+  return (
+    previous !== undefined &&
+    next !== undefined &&
+    (span.wrapAdvanceBefore ?? 0) > 0.001 &&
+    !next.wrapAdvanceBefore &&
+    /^ +$/.test(span.text) &&
+    !/ $/.test(previous.text)
+  );
+}
+
+/** Move each stranded boundary space back to the passage before the float. */
+function withBoundarySpacesBefore(spans: readonly StyleSpanRecord[]): StyleSpanRecord[] {
+  const moved = [...spans];
+  for (let index = 1; index < moved.length - 1; index += 1) {
+    if (!strandedBoundarySpace(moved, index)) continue;
+    const span = moved[index]!;
+    // Right-to-left spans before it can stand in visual order, so the part ends at its
+    // rightmost edge rather than at the edge of the span before it.
+    let end = -Infinity;
+    for (let before = 0; before < index; before += 1)
+      end = Math.max(end, moved[before]!.box.x + moved[before]!.box.width);
+    const { wrapAdvanceBefore: jump, ...own } = span;
+    moved[index] = { ...own, box: { ...own.box, x: end } };
+    // The next span opens the later passage and takes the jump over the float.
+    const next = moved[index + 1]!;
+    const shift = next.box.x - span.box.x;
+    const follows = (item: StyleSpanRecord) => ({
+      ...item,
+      box: { ...item.box, x: item.box.x - shift },
+    });
+    moved[index + 1] = { ...follows(next), wrapAdvanceBefore: (jump ?? 0) + span.box.width };
+    // The rest of the later passage moves back by the space it no longer holds.
+    for (
+      let after = index + 2;
+      after < moved.length && !moved[after]!.wrapAdvanceBefore;
+      after += 1
+    )
+      moved[after] = follows(moved[after]!);
+  }
+  return moved;
+}
+
 /** A line's parts: a float's real jump starts a new one, and that span loses its jump. */
-function passageParts(spans: readonly StyleSpanRecord[]): StyleSpanRecord[][] {
+function passageParts(source: readonly StyleSpanRecord[]): StyleSpanRecord[][] {
+  const spans = withBoundarySpacesBefore(source);
   const parts: StyleSpanRecord[][] = [];
   for (const [index, span] of spans.entries()) {
     const previous = spans[index - 1];
