@@ -5,6 +5,7 @@ import { markUnsupportedElement } from './unsupported-elements.ts';
 import type {
   EquationGeometry,
   EquationSpanRecord,
+  EquationTextGeometry,
   ResolvedRunStyle,
   StyleSpanRecord,
 } from '@docx-editor.dev/core/layout';
@@ -52,6 +53,83 @@ function rule(
   element.style.backgroundColor = 'currentColor';
   element.style.pointerEvents = 'none';
   return element;
+}
+
+/** Text atoms that one span can draw: one face and size on one line box, left to right. */
+function continuesTextRun(previous: EquationGeometry, next: EquationGeometry): boolean {
+  return (
+    previous.kind === 'text' &&
+    next.kind === 'text' &&
+    previous.runStyle !== undefined &&
+    previous.runStyle === next.runStyle &&
+    previous.fontSizePt === next.fontSizePt &&
+    previous.box.y === next.box.y &&
+    previous.box.height === next.box.height &&
+    previous.baseline === next.baseline &&
+    next.box.x >= previous.box.x + previous.box.width - 1e-9
+  );
+}
+
+/** How many row items from `start` one span can draw. */
+function textRunAt(items: readonly EquationGeometry[], start: number): number {
+  let end = start + 1;
+  while (end < items.length && continuesTextRun(items[end - 1]!, items[end]!)) end++;
+  return end - start;
+}
+
+/**
+ * Draw the text atoms of one source run as one span. Operator spacing splits a run into
+ * atoms at their own positions; only an atom with a gap before it takes its own inline span,
+ * with the gap as its start margin. The geometry stays as layout placed it.
+ */
+function paintTextRun(
+  document: Document,
+  host: DocumentFragment | HTMLElement,
+  atoms: readonly EquationGeometry[],
+  scale: number,
+  parentX: number,
+  parentY: number,
+  ancestors: readonly string[],
+  applyFace?: (element: HTMLElement, style: ResolvedRunStyle) => void
+): void {
+  const first = atoms[0] as EquationTextGeometry;
+  const last = atoms[atoms.length - 1]!;
+  const element = document.createElement('span');
+  element.className = [
+    'docx-equation-node',
+    ...[...ancestors, 'text'].map((kind) => `docx-equation-${kind}`),
+  ].join(' ');
+  place(
+    element,
+    {
+      x: parentX + first.box.x,
+      y: parentY + first.box.y,
+      width: last.box.x + last.box.width - first.box.x,
+      height: first.box.height,
+    },
+    scale
+  );
+  element.style.display = 'block';
+  if (first.runStyle && applyFace) {
+    element.style.fontWeight = first.runStyle.bold ? 'bold' : 'normal';
+    element.style.fontStyle = first.runStyle.italic ? 'italic' : 'normal';
+    applyFace(element, first.runStyle);
+  }
+  element.style.fontSize = `${first.fontSizePt * scale}px`;
+  element.style.lineHeight = `${first.box.height * scale}px`;
+  element.style.whiteSpace = 'pre';
+  let end = first.box.x;
+  for (const atom of atoms as readonly EquationTextGeometry[]) {
+    const gap = atom.box.x - end;
+    if (gap > 1e-9) {
+      const spaced = document.createElement('span');
+      spaced.style.marginLeft = `${gap * scale}px`;
+      spaced.textContent = atom.text;
+      element.append(spaced);
+    } else element.append(document.createTextNode(atom.text));
+    end = atom.box.x + atom.box.width;
+  }
+  host.append(element);
 }
 
 function paintNode(
@@ -120,11 +198,26 @@ function paintNode(
       break;
     }
     case 'row':
-      for (const [index, child] of node.items.entries())
+      for (let index = 0; index < node.items.length; index++) {
+        const run = textRunAt(node.items, index);
+        if (run > 1) {
+          paintTextRun(
+            document,
+            host,
+            node.items.slice(index, index + run),
+            scale,
+            x,
+            y,
+            classes,
+            applyFace
+          );
+          index += run - 1;
+          continue;
+        }
         paintNode(
           document,
           host,
-          child,
+          node.items[index]!,
           equation,
           scale,
           x,
@@ -133,6 +226,7 @@ function paintNode(
           `${path}.${index}`,
           applyFace
         );
+      }
       break;
     case 'fraction':
       paintNode(
