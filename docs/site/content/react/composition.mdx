@@ -27,6 +27,8 @@ Use your own React components and TSX for toolbars, menus, and panels. Connect t
 | Editor stylesheet | Every composed editor | Styles the viewport and packaged controls |
 | `.docx-editor` wrapper | Custom controls that use editor styles | Supplies scoped styles and tokens |
 | Container height | Every composed editor | Gives the viewport room to render |
+| Flex column to the viewport | When chrome shares the container height | Gives the viewport the height that the chrome does not use |
+| Popovers | When you use links, content controls, equations, or the context menu | Mounts the popovers that `<DocxEditor>` mounts for you |
 | Remount `key` | When you change modules | Loads the new modules |
 | Positioned workspace row | When you place the navigation pane beside the viewport | Anchors the navigation pane |
 | Pro review module | When you use Pro review chrome | Enables comments, tracked changes, and custom-node review chrome |
@@ -64,6 +66,33 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
 `Root` does not render a DOM element. The rendered pages in `Content` form the editable surface.
 
 You can place optional chrome anywhere inside `Root`. Optional chrome includes the toolbar, menu, rulers, navigation pane, hyperlink popover, and context menu.
+
+### Popovers
+
+`Root` does not mount popovers. `<DocxEditor>` mounts four popovers for you: `HyperLink`, `ContentControl`, `Equation`, and `ContextMenu`. In a composed editor, mount the popovers that you use. Without `HyperLink`, the link button and Ctrl+K do not open a panel. Without `ContextMenu`, a right-click opens the browser menu.
+
+To mount them, pass them to `Root` in the `popups` prop. Wrap each component with `definePopup`:
+
+```tsx
+import { DocxEditor, definePopup } from '@docx-editor.dev/react';
+
+const popups = {
+  hyperlink: definePopup(DocxEditor.HyperLink),
+  contentControl: definePopup(DocxEditor.ContentControl),
+  equation: definePopup(DocxEditor.Equation),
+  contextMenu: definePopup(DocxEditor.ContextMenu),
+};
+
+export function Editor({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor.Root document={bytes} popups={popups}>
+      {/* Toolbar, viewport, and content */}
+    </DocxEditor.Root>
+  );
+}
+```
+
+To customize a popover, pass your own component to `definePopup`. Define that component outside the parent component, so that it keeps its state when the parent renders again.
 
 ### Root props
 
@@ -721,6 +750,21 @@ For more information, see [Pop-out windows and iframes](/docs/2.x/guides/pop-out
 ## Layout constraints
 
 Import the stylesheet once and give the editor container a height. Use a flex column when chrome shares that height. Packaged controls and the viewport apply their own `.docx-editor` scope. The wrapper in [Primitives](#primitives) also makes editor styles and tokens available to custom controls.
+
+`Root` does not render a DOM element, so the chrome and the viewport are children of the flex column. Give the viewport `flex: 1` and `min-height: 0`. The viewport then takes the height that the chrome does not use, and the pages scroll inside it:
+
+```tsx
+<div className="docx-editor" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+  <DocxEditor.Root document={bytes} popups={popups}>
+    <DocxEditor.Toolbar />
+    <DocxEditor.Viewport style={{ flex: 1, minHeight: 0 }}>
+      <DocxEditor.Content />
+    </DocxEditor.Viewport>
+  </DocxEditor.Root>
+</div>
+```
+
+If you put an element between the container and the viewport, give that element the same `flex: 1` and `min-height: 0`, and make it a flex column too.
 
 Inside `DocxEditor.Viewport`, the navigation pane is sticky and needs no positioning context. If you place the pane beside the viewport instead, put both in a row with `position: relative`. Beside the viewport, the pane uses absolute positioning over the document gutter, and without that row it enters normal flow and moves the page.
 
