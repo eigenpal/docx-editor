@@ -48,7 +48,8 @@ function snapshot(editor: Editor) {
   expect(textFaces(equation.equation!.geometry)).toEqual([
     ['𝑥', 'Cambria Math', false, false],
     ['12', 'Arial', true, true],
-    ['+𝛼', 'Cambria Math', false, false],
+    ['+', 'Cambria Math', false, false],
+    ['𝛼', 'Cambria Math', false, false],
     ['normal', 'Paragraph Face', false, false],
   ]);
   const before = caretAt(layout, {

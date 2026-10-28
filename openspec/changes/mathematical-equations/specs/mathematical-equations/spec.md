@@ -42,6 +42,17 @@ The engine SHALL publish equation geometry from DOM-free layout. Paint SHALL use
 - **AND** the subscript baseline sits 0.2 em below the base baseline
 - **AND** the two scripts of one base keep a 300/2048 em gap between their glyphs
 
+#### Scenario: Operator spacing
+
+- **WHEN** an argument at its base size contains relations, binary operators, or punctuation
+- **THEN** a relation takes 5/18 em on each side that has a neighbour, and a binary operator takes 4/18 em
+- **AND** punctuation takes 3/18 em after it, except a comma or period between digits
+- **AND** a fraction or an ellipsis takes 3/18 em beside an ordinary neighbour, and an n-ary structure takes 3/18 em beside its neighbours
+- **AND** a binary operator at the start of an argument or after an operator, an opening bracket, or punctuation is a sign and takes no space
+- **AND** a binary operator before a relation, a closing bracket, or punctuation takes no space, and the relation takes no space on that side
+- **AND** each space takes the size of the neighbour that is not the spaced operator
+- **AND** scripts, limits, fraction parts, and normal text take no operator spacing
+
 #### Scenario: Bar placement
 
 - **WHEN** an equation contains `m:bar` with an upper or lower position

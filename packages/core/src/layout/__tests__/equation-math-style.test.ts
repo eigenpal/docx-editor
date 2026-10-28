@@ -156,7 +156,7 @@ test('keeps punctuation, combining marks, source supplementary letters, and othe
   const { projection } = project(run('h\u0301 + 𝑄甲😀'));
   expect(
     texts(layoutEquation(projection, createFixedMeasurer(), resolveRunStyle([])).geometry)
-  ).toEqual(['ℎ\u0301 + 𝑄甲😀']);
+  ).toEqual(['ℎ\u0301 ', '+', ' 𝑄甲😀']);
 });
 
 test('maps Greek letters and variant symbols without using an italic font program', () => {

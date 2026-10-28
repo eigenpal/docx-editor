@@ -5,6 +5,14 @@ import { measureDisplayText, withFontFamily, type ResolvedRunStyle } from './run
 import type { LayoutBox, TextMeasurer } from './semantic-records.ts';
 import { equationDisplayText } from './equation-display-text.ts';
 import { equationInk, equationLowercaseTop, inheritEquationInk } from './equation-ink.ts';
+import {
+  equationAtomSpaces,
+  equationTextAtoms,
+  equationTextHasOperators,
+  type EquationAtomClass,
+  type EquationSpacingAtom,
+  type EquationTextAtom,
+} from './equation-spacing.ts';
 
 // Script and stack metrics in ems of the structure size, from the math constants of the
 // default math face (2048 font units to the em).
@@ -265,7 +273,9 @@ function textGeometry(
 
 function rowGeometry(
   items: readonly EquationGeometry[],
-  fallbackMetrics: { readonly height: number; readonly baseline: number }
+  fallbackMetrics: { readonly height: number; readonly baseline: number },
+  /** The space, in points, before each item. */
+  spaces?: readonly number[]
 ): EquationRowGeometry {
   if (items.length === 0) {
     return Object.freeze({
@@ -278,7 +288,8 @@ function rowGeometry(
   const baseline = Math.max(...items.map((child) => child.baseline));
   const descent = Math.max(...items.map((child) => child.box.height - child.baseline));
   let x = 0;
-  const placed = items.map((child) => {
+  const placed = items.map((child, index) => {
+    x += spaces?.[index] ?? 0;
     const result = shifted(child, x, baseline - child.baseline);
     x += child.box.width;
     return result;
@@ -291,6 +302,156 @@ function rowGeometry(
   });
 }
 
+type TextExpression = Extract<EquationExpression, { readonly kind: 'text' }>;
+
+function layoutText(
+  expression: TextExpression,
+  measurer: TextMeasurer,
+  style: ResolvedRunStyle,
+  scale: number,
+  cache: EquationLayoutCache,
+  // A part of a split run shares the faces derived for the whole run.
+  source: object = expression
+): EquationGeometry {
+  const authoredFamily = expression.format?.fontFamily;
+  const textFace = authoredFamily && authoredFamily.trim().toLowerCase() !== 'cambria math';
+  const digitParts =
+    textFace && !expression.format?.normalText && (expression.format?.mathStyle ?? 'i') === 'i'
+      ? expression.value.match(/(?:[0-9]\p{M}*)+|[^0-9]+/gu)
+      : null;
+  if (digitParts && digitParts.length > 1) {
+    return rowGeometry(
+      digitParts.map((value) =>
+        layoutText({ ...expression, value }, measurer, style, scale, cache, source)
+      ),
+      metricsAt(measurer, style, scale, cache)
+    );
+  }
+  const display = equationDisplayText(expression, authoredFamily ?? style.fontFamily);
+  const familyStyle =
+    authoredFamily && !display.mathematicalGlyphs
+      ? withFontFamily(style, authoredFamily)
+      : expression.format?.normalText
+        ? cache.textStyle
+        : style;
+  const formatKey = expression.format ?? source;
+  const digits = Boolean(textFace && display.mathStyle && !display.mathematicalGlyphs);
+  let formats = cache.formats.get(formatKey);
+  let formatted = formats?.get(digits);
+  if (!formatted) {
+    const face = Object.freeze({
+      ...familyStyle,
+      fontSizePt: textSizePt(expression, familyStyle),
+      // Mathematical alphanumeric glyphs already carry their style in this
+      // regular face. Do not request a second italic or bold font program.
+      bold:
+        display.mathStyle === null
+          ? (expression.format?.bold ?? familyStyle.bold)
+          : !display.mathematicalGlyphs &&
+            (digits && expression.format?.bold !== undefined
+              ? expression.format.bold
+              : display.mathStyle === 'b' || display.mathStyle === 'bi'),
+      italic:
+        display.mathStyle === null || digits
+          ? (expression.format?.italic ??
+            (digits
+              ? display.mathStyle === 'i' || display.mathStyle === 'bi'
+              : expression.format?.normalText
+                ? false
+                : familyStyle.italic))
+          : !display.mathematicalGlyphs &&
+            (display.mathStyle === 'i' || display.mathStyle === 'bi'),
+    });
+    formatted = {
+      style: face,
+      cache: {
+        textStyle: cache.textStyle,
+        styles: new Map(),
+        metrics: new Map(),
+        formats: new WeakMap(),
+      },
+    };
+    if (!formats) {
+      formats = new Map();
+      cache.formats.set(formatKey, formats);
+    }
+    formats.set(digits, formatted);
+  }
+  return textGeometry('text', display.text, measurer, formatted.style, scale, formatted.cache);
+}
+
+function textSizePt(expression: TextExpression, style: ResolvedRunStyle): number {
+  return expression.format?.fontSizePt ?? expression.fontSizePt ?? style.fontSizePt;
+}
+
+function collectLeaves(items: readonly EquationExpression[], leaves: EquationExpression[]): void {
+  for (const item of items) {
+    if (item.kind === 'row') collectLeaves(item.items, leaves);
+    else leaves.push(item);
+  }
+}
+
+function structureClass(expression: EquationExpression): EquationAtomClass {
+  return expression.kind === 'fraction' ? 'inner' : expression.kind === 'nary' ? 'op' : 'ord';
+}
+
+/**
+ * Lay out one argument at its base size with the space between its atoms. Runs inside the
+ * argument are one sequence, so an operator in its own run is spaced like one inside a
+ * longer run.
+ */
+function layoutArgument(
+  items: readonly EquationExpression[],
+  measurer: TextMeasurer,
+  style: ResolvedRunStyle,
+  cache: EquationLayoutCache
+): EquationGeometry {
+  const leaves: EquationExpression[] = [];
+  collectLeaves(items, leaves);
+  const atoms: EquationSpacingAtom[] = [];
+  const parts: (readonly EquationTextAtom[] | null)[] = [];
+  for (const leaf of leaves) {
+    if (leaf.kind === 'text') {
+      // Normal text is one ordinary atom. Its operators take no space.
+      const textAtoms = leaf.format?.normalText ? null : equationTextAtoms(leaf.value);
+      const sizePt = textSizePt(leaf, leaf.format?.normalText ? cache.textStyle : style);
+      parts.push(textAtoms);
+      if (!textAtoms) {
+        atoms.push({ atomClass: 'ord', sizePt, text: leaf.value });
+        continue;
+      }
+      for (const atom of textAtoms)
+        atoms.push({ atomClass: atom.atomClass, sizePt, text: atom.text });
+      continue;
+    }
+    parts.push(null);
+    atoms.push({ atomClass: structureClass(leaf), sizePt: style.fontSizePt });
+  }
+  const spaces = equationAtomSpaces(atoms);
+  if (spaces.every((space) => space === 0)) {
+    // Keep the source rows. A text item needs no second scan for operators.
+    const plain = (item: EquationExpression) =>
+      item.kind === 'text'
+        ? layoutText(item, measurer, style, 1, cache)
+        : layoutExpression(item, measurer, style, 1, cache);
+    return items.length === 1
+      ? plain(items[0]!)
+      : rowGeometry(items.map(plain), metricsAt(measurer, style, 1, cache));
+  }
+  const geometries: EquationGeometry[] = [];
+  leaves.forEach((leaf, index) => {
+    const textAtoms = parts[index];
+    if (leaf.kind === 'text' && textAtoms) {
+      for (const atom of textAtoms) {
+        geometries.push(layoutText({ ...leaf, value: atom.text }, measurer, style, 1, cache, leaf));
+      }
+    } else {
+      geometries.push(layoutExpression(leaf, measurer, style, 1, cache));
+    }
+  });
+  return rowGeometry(geometries, metricsAt(measurer, style, 1, cache), spaces);
+}
+
 function layoutExpression(
   expression: EquationExpression,
   measurer: TextMeasurer,
@@ -300,80 +461,25 @@ function layoutExpression(
 ): EquationGeometry {
   switch (expression.kind) {
     case 'text': {
-      const authoredFamily = expression.format?.fontFamily;
-      const textFace = authoredFamily && authoredFamily.trim().toLowerCase() !== 'cambria math';
-      const digitParts =
-        textFace && !expression.format?.normalText && (expression.format?.mathStyle ?? 'i') === 'i'
-          ? expression.value.match(/(?:[0-9]\p{M}*)+|[^0-9]+/gu)
-          : null;
-      if (digitParts && digitParts.length > 1) {
-        return rowGeometry(
-          digitParts.map((value) =>
-            layoutExpression({ ...expression, value }, measurer, style, scale, cache)
-          ),
-          metricsAt(measurer, style, scale, cache)
-        );
+      // Operator spacing applies only at the base size, not in scripts, limits, or fractions.
+      if (
+        scale === 1 &&
+        !expression.format?.normalText &&
+        equationTextHasOperators(expression.value)
+      ) {
+        return layoutArgument([expression], measurer, style, cache);
       }
-      const display = equationDisplayText(expression, authoredFamily ?? style.fontFamily);
-      const familyStyle =
-        authoredFamily && !display.mathematicalGlyphs
-          ? withFontFamily(style, authoredFamily)
-          : expression.format?.normalText
-            ? cache.textStyle
-            : style;
-      const formatKey = expression.format ?? expression;
-      const digits = Boolean(textFace && display.mathStyle && !display.mathematicalGlyphs);
-      let formats = cache.formats.get(formatKey);
-      let formatted = formats?.get(digits);
-      if (!formatted) {
-        const face = Object.freeze({
-          ...familyStyle,
-          fontSizePt:
-            expression.format?.fontSizePt ?? expression.fontSizePt ?? familyStyle.fontSizePt,
-          // Mathematical alphanumeric glyphs already carry their style in this
-          // regular face. Do not request a second italic or bold font program.
-          bold:
-            display.mathStyle === null
-              ? (expression.format?.bold ?? familyStyle.bold)
-              : !display.mathematicalGlyphs &&
-                (digits && expression.format?.bold !== undefined
-                  ? expression.format.bold
-                  : display.mathStyle === 'b' || display.mathStyle === 'bi'),
-          italic:
-            display.mathStyle === null || digits
-              ? (expression.format?.italic ??
-                (digits
-                  ? display.mathStyle === 'i' || display.mathStyle === 'bi'
-                  : expression.format?.normalText
-                    ? false
-                    : familyStyle.italic))
-              : !display.mathematicalGlyphs &&
-                (display.mathStyle === 'i' || display.mathStyle === 'bi'),
-        });
-        formatted = {
-          style: face,
-          cache: {
-            textStyle: cache.textStyle,
-            styles: new Map(),
-            metrics: new Map(),
-            formats: new WeakMap(),
-          },
-        };
-        if (!formats) {
-          formats = new Map();
-          cache.formats.set(formatKey, formats);
-        }
-        formats.set(digits, formatted);
-      }
-      return textGeometry('text', display.text, measurer, formatted.style, scale, formatted.cache);
+      return layoutText(expression, measurer, style, scale, cache);
     }
     case 'fallback':
       return textGeometry('fallback', expression.text || '…', measurer, style, scale, cache);
-    case 'row':
+    case 'row': {
+      if (scale === 1) return layoutArgument(expression.items, measurer, style, cache);
       return rowGeometry(
         expression.items.map((child) => layoutExpression(child, measurer, style, scale, cache)),
         metricsAt(measurer, style, scale, cache)
       );
+    }
     case 'fraction': {
       const resolved = scaledStyle(style, scale, cache);
       const numerator = layoutExpression(

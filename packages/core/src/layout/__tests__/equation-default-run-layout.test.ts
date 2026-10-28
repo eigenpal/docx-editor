@@ -72,7 +72,7 @@ test('runs with different default sizes keep those sizes', () => {
   const result = geometry(formatted);
   if (result.kind !== 'row') throw new Error('missing row');
   expect(result.items.map((item) => (item.kind === 'text' ? item.fontSizePt : undefined))).toEqual([
-    12, 14,
+    12, 12, 12, 14,
   ]);
 });
 

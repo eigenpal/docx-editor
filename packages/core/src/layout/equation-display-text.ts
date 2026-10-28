@@ -17,7 +17,20 @@ const GREEK_SYMBOLS = new Map([
   [0x3d6, 57],
 ]);
 
+// The math face draws a hyphen-minus as the minus sign and an asterisk as the asterisk
+// operator, so both have the width and height of the other binary operators.
+const MATH_OPERATOR_GLYPHS = new Map([
+  [0x2d, 0x2212],
+  [0x2a, 0x2217],
+]);
+
+function mathOperatorText(value: string): string {
+  return value.replace(/[-*]/g, (character) => (character === '-' ? '−' : '∗'));
+}
+
 function styledCodePoint(code: number, style: Exclude<MathStyle, 'p'>): number {
+  const operator = MATH_OPERATOR_GLYPHS.get(code);
+  if (operator !== undefined) return operator;
   const latin = style === 'b' ? 0x1d400 : style === 'i' ? 0x1d434 : 0x1d468;
   if (code >= 0x41 && code <= 0x5a) return latin + code - 0x41;
   if (code >= 0x61 && code <= 0x7a) {
@@ -54,7 +67,9 @@ export function equationDisplayText(
     // Plain math keeps the authored face. The math face has no bold or italic
     // face, so only another family takes run bold and italic.
     const mathFace = fontFamily?.trim().toLowerCase() === 'cambria math';
-    return { text: expression.value, mathStyle: mathFace ? 'p' : null, mathematicalGlyphs: false };
+    return mathFace
+      ? { text: mathOperatorText(expression.value), mathStyle: 'p', mathematicalGlyphs: false }
+      : { text: expression.value, mathStyle: null, mathematicalGlyphs: false };
   }
   // Text faces supply ordinary digits and their styled font programs in the
   // default italic style. Mathematical alphanumeric letters still use the math

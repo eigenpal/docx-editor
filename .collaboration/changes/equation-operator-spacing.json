@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Equation operators sat directly beside their operands, with no math spacing.",
+  "after": "Equation operators take thick, medium, or thin math spacing by operator class at the base size, and signs take none.",
+  "reason": "Only local equation geometry and display glyphs change. Canonical OMML, offsets, operations, and collaboration data remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/equation-operator-spacing.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-equation-operator-spacing.test.ts"
+  ],
+  "changeset": "equation-operator-spacing",
+  "migration": null
+}

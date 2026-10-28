@@ -120,12 +120,13 @@ test('keeps mathematical letters and symbols in the math face beside authored-fa
   ).toEqual([
     ['𝑥', 'Cambria Math', false, false],
     ['12', 'Arial', true, true],
-    ['+𝛼', 'Cambria Math', false, false],
+    ['+', 'Cambria Math', false, false],
+    ['𝛼', 'Cambria Math', false, false],
   ]);
 });
 
 test.each([
-  ['x12\u0305+α3\u0301', ['𝑥', '12\u0305', '+𝛼', '3\u0301']],
+  ['x12\u0305+α3\u0301', ['𝑥', '12\u0305', '+', '𝛼', '3\u0301']],
   ['𝟙2\u0301', ['𝟙', '2\u0301']],
 ] as const)('keeps combining marks attached to authored-face digits in %s', (source, expected) => {
   const { part, projection } = project(run(source, face('Arial')));

@@ -254,7 +254,7 @@ describe('document layout and preserved source', () => {
     expect(equationExpressionToLinearMath(projected.expression)).toBe('3+4');
     expect(
       glyphs(layoutEquation(projected, measurer, style()).geometry).map((item) => item.fontSizePt)
-    ).toEqual([24]);
+    ).toEqual([24, 24, 24]);
   });
 
   test('complex-script-only size differences still prevent compact replacement', () => {
