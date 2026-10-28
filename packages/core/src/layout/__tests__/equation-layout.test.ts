@@ -330,6 +330,29 @@ describe('script placement', () => {
     expect(drop / sizePt).toBeCloseTo(0.2, 5);
   });
 
+  const fraction = (numerator: string, denominator: string) =>
+    `<m:f><m:num>${numerator}</m:num><m:den>${denominator}</m:den></m:f>`;
+  const tall = fraction(fraction(run('a'), run('b')), run('c'));
+
+  test('a tall subscript stays clear of a superscript', () => {
+    const geometry = script(
+      `<m:sSubSup><m:e>${run('x')}</m:e><m:sub>${tall}</m:sub><m:sup>${run('2')}</m:sup></m:sSubSup>`
+    );
+    expect(geometry.kind).toBe('script');
+    if (geometry.kind !== 'script') return;
+    const sup = geometry.superscript!;
+    expect(geometry.subscript!.box.y).toBeGreaterThan(sup.box.y + sup.box.height);
+    assertFiniteGeometry(geometry);
+  });
+
+  test('a tall subscript without a superscript starts inside the script box', () => {
+    const geometry = script(`<m:sSub><m:e>${run('x')}</m:e><m:sub>${tall}</m:sub></m:sSub>`);
+    expect(geometry.kind).toBe('script');
+    if (geometry.kind !== 'script') return;
+    expect(geometry.subscript!.box.y).toBeGreaterThanOrEqual(0);
+    assertFiniteGeometry(geometry);
+  });
+
   test('a subscript stays clear of a superscript', () => {
     const geometry = script(
       `<m:sSubSup><m:e>${run('x')}</m:e><m:sub>${run('i')}</m:sub><m:sup>${run('2')}</m:sup></m:sSubSup>`

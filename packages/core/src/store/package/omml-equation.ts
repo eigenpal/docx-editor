@@ -69,18 +69,19 @@ export type EquationExpression =
        * Authored font size of the run, in points. The source is the `w:sz` value of the
        * run properties (`w:rPr`), which counts half-points.
        *
-       * Set only when every run of the equation holds the same default math formatting.
-       * Such an equation has no `format`, so the compact equation editor can replace it and
-       * writes the same run properties back. Otherwise the size is in `format.fontSizePt`.
-       * When neither field is set, the text takes the size of the surrounding text. To read
-       * the size of any text expression, use `format?.fontSizePt ?? fontSizePt`.
+       * Set only when every run of the equation holds the same default math formatting: the
+       * Cambria Math font, italic, one size, and at most a language. Such runs have no
+       * `format`, so compact replacement stays available and writes the same `w:rPr` back.
+       * Otherwise the size is in `format.fontSizePt`. When neither field is set, the text
+       * takes the size of the surrounding text. To read the size of any text expression,
+       * use `format?.fontSizePt ?? fontSizePt`.
        */
       readonly fontSizePt?: number;
       /**
-       * Source formatting of the run. Present when the run carries formatting other than
-       * the default math formatting, or when the runs of the equation differ in formatting.
-       * The compact equation editor refuses to replace an equation that contains a text
-       * expression with a `format`, because it cannot write that formatting back.
+       * Source formatting of the run. Set when the run has its own supported formatting and
+       * the equation does not use the uniform default math formatting. Compact replacement
+       * refuses an equation that has a text expression with a `format`, because it cannot
+       * write that formatting back.
        */
       readonly format?: {
         readonly fontFamily?: string;

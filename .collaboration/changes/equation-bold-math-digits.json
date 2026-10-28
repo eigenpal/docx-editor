@@ -8,6 +8,6 @@
     "packages/core/src/layout/__tests__/equation-authored-run-font.test.ts",
     "packages/pro/src/collaboration/__tests__/document-equation-authored-run-fonts.test.ts"
   ],
-  "changeset": "equation-bold-math-digits",
+  "changeset": "equation-authored-run-fonts",
   "migration": null
 }
