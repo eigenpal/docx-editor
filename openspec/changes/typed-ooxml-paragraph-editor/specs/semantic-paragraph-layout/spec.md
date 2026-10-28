@@ -597,6 +597,17 @@ Semantic layout SHALL place a supported terminal exact row's simple bottom rule 
 - **THEN** the repeated header group is omitted on that page
 - **AND** the row starts at the top of the page
 
+#### Scenario: An exact row that ends a page closes it with the table bottom rule
+
+- **WHEN** a supported exact row that is not the table's last row ends a page fragment because the next row does not start below it
+- **THEN** the table's bottom rule, not the inside rule, sits below its authored height
+- **AND** page admission, repeated header omission, and the top-of-page exception treat it as a terminal exact row
+
+#### Scenario: An exact row that opens a continuation page
+
+- **WHEN** a supported exact row other than the table's first row opens a later page fragment of its table
+- **THEN** the row grows above its authored height by the width its top rule there exceeds the inside rule it reserved
+
 #### Scenario: Cell text uses the authored bottom
 
 - **WHEN** a terminal exact-row cell has center or bottom alignment

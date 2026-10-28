@@ -30,6 +30,8 @@ interface ReferenceCase {
   tightPage?: boolean;
   /** Compatibility mode 15 with a 31pt terminal row: the repeated header yields to its rule. */
   headerYields?: boolean;
+  /** Three rows on a 54pt band: the middle row ends page 1 and the last row opens page 2. */
+  pageEdge?: boolean;
 }
 const SETTINGS = 'application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml';
 const settingsPackage = {
@@ -43,16 +45,19 @@ const settingsPackage = {
 };
 function documentBody(options: ReferenceCase) {
   const borders = ['top', 'bottom', 'left', 'right']
-    .map((s) => `<w:${s} w:val="single" w:sz="${s === 'top' ? 4 : options.width * 8}"/>`)
+    .map(
+      (s) =>
+        `<w:${s} w:val="single" w:sz="${s === 'top' && !options.pageEdge ? 4 : options.width * 8}"/>`
+    )
     .join('');
-  const rows = ['First', 'Terminal']
+  const rows = (options.pageEdge ? ['First', 'Middle', 'Terminal'] : ['First', 'Terminal'])
     .map(
       (text, index) =>
-        `<w:tr><w:trPr>${index === 0 ? '<w:tblHeader/>' : ''}<w:trHeight w:val="${index === 1 && options.headerYields ? 620 : 397}" w:hRule="exact"/></w:trPr><w:tc><w:tcPr><w:vAlign w:val="${options.align}"/></w:tcPr>${paragraph(text)}</w:tc></w:tr>`
+        `<w:tr><w:trPr>${index === 0 && !options.pageEdge ? '<w:tblHeader/>' : ''}<w:trHeight w:val="${index === 1 && options.headerYields ? 620 : 397}" w:hRule="exact"/></w:trPr><w:tc><w:tcPr><w:vAlign w:val="${options.align}"/></w:tcPr>${paragraph(text)}</w:tc></w:tr>`
     )
     .join('');
   const section = options.tightPage
-    ? '<w:pgSz w:w="10000" w:h="1760"/><w:pgMar w:top="360" w:right="360" w:bottom="360" w:left="360"/>'
+    ? `<w:pgSz w:w="10000" w:h="${options.pageEdge ? 1800 : 1760}"/><w:pgMar w:top="360" w:right="360" w:bottom="360" w:left="360"/>`
     : '';
   return `${paragraph('CASE')}<w:tbl><w:tblPr><w:tblW w:w="3600" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders>${borders}<w:insideH w:val="single" w:sz="4"/></w:tblBorders><w:tblCellMar>${['top', 'bottom', 'left', 'right'].map((s) => `<w:${s} w:w="0" w:type="dxa"/>`).join('')}</w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="3600"/></w:tblGrid>${rows}</w:tbl>${paragraph('AFTER')}<w:sectPr>${section}</w:sectPr>`;
 }
@@ -68,6 +73,19 @@ function geometry(editor: Editor, options: ReferenceCase) {
     .find(
       (f) => f.kind === 'paragraph' && f.lines.some((l) => l.spans.some((s) => s.text === 'AFTER'))
     );
+  if (options.pageEdge) {
+    // Page 1: 12pt + 19.85pt + 19.85pt, and the middle row's 1.5pt closing rule below it.
+    const first = tables[0]![0]!;
+    const middle = first.kind === 'table' ? first.rows.at(-1) : undefined;
+    expect(middle?.box.height).toBeCloseTo(19.85 + options.width, 6);
+    expect(middle!.cells[0]!.blocks[0]!.box.y - middle!.box.y).toBeCloseTo(7.85, 6);
+    // Page 2: the 1.5pt top rule replaces the 0.5pt inside rule. 1pt sits above the row.
+    expect(tables[1]).toEqual([table]);
+    const last = table.rows[0]!;
+    expect(last.box.height).toBeCloseTo(1 + 19.85 + options.width, 6);
+    expect(last.cells[0]!.blocks[0]!.box.y - last.box.y).toBeCloseTo(8.85, 6);
+    return { middle: middle!.box, rows: table.rows.map((r) => r.box), after: after?.box };
+  }
   if (options.headerYields) {
     // Page 2: 19.85pt + 31pt fits the 52pt band, but 1.5pt more does not. The repeat is
     // omitted, so the terminal row starts the page and its rule fits there.
@@ -112,8 +130,9 @@ for (const options of [
   { align: 'center', width: 0.625 },
   { align: 'bottom', width: 1.5, tightPage: true },
   { align: 'bottom', width: 1.5, tightPage: true, headerYields: true },
+  { align: 'bottom', width: 1.5, tightPage: true, pageEdge: true },
 ] satisfies ReferenceCase[])
-  test(`the ${options.align} terminal rule${options.headerYields ? ' that omits a repeated header' : ''} converges through edits and cold reopen`, async () => {
+  test(`the ${options.align} terminal rule${options.headerYields ? ' that omits a repeated header' : options.pageEdge ? ' at a page edge' : ''} converges through edits and cold reopen`, async () => {
     const source = documentBody(options);
     const peers = await harness.pair(
       options.headerYields ? zipDocument(source, settingsPackage) : zipDocument(source)

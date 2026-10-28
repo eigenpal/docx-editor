@@ -4,7 +4,11 @@ import { reuseSingleLineAtWidth } from './paragraph-cache-width-reuse.ts';
 import { cellParagraphInputs, cellParagraphBreakInputs } from './cell-paragraph-inputs.ts';
 import { adjustedBreakIndex, paragraphKeeps } from './pagination-keeps.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
-import { endRowInsets, exactTerminalBorderPt } from './table-exact-terminal-border.ts';
+import {
+  endRowInsets,
+  exactOpeningExtensionPt,
+  exactTerminalBorderPt,
+} from './table-exact-terminal-border.ts';
 import { cellContextualSpacing, contextualCellNeighbours } from './contextual-paragraph-spacing.ts';
 import { emitNestedTable } from './nested-table-layout.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
@@ -204,6 +208,8 @@ export interface HostedStoryFlowDeps {
 export interface TableFlowDeps {
   /** Layout-only outer extent; the authored content and clip heights remain unchanged. */
   readonly exactTerminalBorder?: { readonly row: SemanticTableRow; readonly widthPt: number };
+  /** Height an exact row gains above its authored box when it opens a continuation fragment. */
+  readonly exactOpeningExtension?: { readonly row: SemanticTableRow; readonly pt: number };
   /** The current row already has the full page band (possibly below repeated headers). */
   readonly rowAtPageStart?: boolean;
   readonly paragraphLineUnitPt?: number;
@@ -1288,7 +1294,10 @@ export function layoutRowFragmentBounded(
   const gap = cellSpacingGeometry(cols, cellSpacingPt);
   const defaultLineHeight = deps.measurer.lineMetrics(DEFAULT_RUN_STYLE).height;
   const heightRule = row.height;
-  const exactHeightPt = heightRule.rule === 'exact' ? heightRule.valuePt : undefined;
+  const exactHeightPt =
+    heightRule.rule === 'exact'
+      ? heightRule.valuePt + exactOpeningExtensionPt(row, deps)
+      : undefined;
   const atLeastHeightPt = heightRule.rule === 'atLeast' ? heightRule.valuePt : undefined;
   const terminalBorderPt =
     !isHeaderRepeat && !isContinuation && depth === 0 && cellSpacingPt === 0

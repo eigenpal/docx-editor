@@ -98,7 +98,9 @@ test('an authored last row that fits only without its closing rule moves to the 
   expect(second!.page).toBe(1);
   const last = second!.table.rows.at(-1)!;
   expect(last.box.y).toBe(0);
-  expect(last.box.height).toBeCloseTo(19.85 + 1.5, 6);
+  // On the new page the 1.5pt top rule replaces the 0.5pt inside rule; the 1pt difference
+  // sits above the authored height, and the closing rule below it.
+  expect(last.box.height).toBeCloseTo(1 + 19.85 + 1.5, 6);
   expect(pageOf(result, 'AFTER')).toBe(1);
   expect(serializeOoxmlPart(part)).toBe(source);
 });
@@ -184,7 +186,8 @@ for (const [authoredBottom, moves] of [
     const placed = tablesOnPages(result);
     const lastPage = placed.at(-1)!;
     const last = lastPage.table.rows.at(-1)!;
-    expect(last.box.height).toBeCloseTo(lastTwips / 20 + 1.5, 6);
+    // A moved row opens page 2, where its 1.5pt top rule takes 1pt more than the inside rule.
+    expect(last.box.height).toBeCloseTo((moves ? 1 : 0) + lastTwips / 20 + 1.5, 6);
     if (moves) {
       // The row with its rule ends past 648pt, so it starts page 2 instead.
       expect(placed.map((entry) => entry.table.rows.length)).toEqual([1, 1]);
@@ -245,7 +248,8 @@ for (const headers of [1, 2]) {
     expect(rest).toHaveLength(0);
     expect(last!.isHeaderRepeat).toBeFalsy();
     expect(last!.box.y).toBe(0);
-    expect(last!.box.height).toBeCloseTo(rows.at(-1)! / 20 + 1.5, 6);
+    // 1pt of top rule above the authored height, the closing rule below it.
+    expect(last!.box.height).toBeCloseTo(1 + rows.at(-1)! / 20 + 1.5, 6);
     expect(pageOf(result, 'AFTER')).toBe(1);
     expect(serializeOoxmlPart(part)).toBe(source);
   });

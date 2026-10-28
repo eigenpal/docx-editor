@@ -1,5 +1,6 @@
 // A new fragment has no preceding cell. Do not carry a shared border from the previous page.
 import { effectiveBorderSide } from './table-border-cascade.ts';
+import { withExactOpeningExtension } from './table-exact-terminal-border.ts';
 import { borderContentInset, cellContentInsets, simpleBandWidthPt } from './table-cell-geometry.ts';
 import type { SemanticTableRow, SemanticTableStructure } from './semantic-table.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
@@ -22,21 +23,22 @@ export function firstRowContentDeps(
   let band = 0;
   for (const [index, cell] of row.cells.entries())
     band = Math.max(band, own[index]! - cell.margins.top);
+  let extension = 0;
   for (const [index, cell] of row.cells.entries()) {
     const top = Math.max(own[index]!, cell.margins.top + band);
-    insets.set(cell.id, {
-      ...(insets.get(cell.id) ?? cellContentInsets(cell, true)),
-      // There is no cell above a fragment's first row to share this stroke.
-      top,
-    });
+    const before = insets.get(cell.id) ?? cellContentInsets(cell, true);
+    extension = Math.max(extension, top - before.top);
+    // There is no cell above a fragment's first row to share this stroke.
+    insets.set(cell.id, { ...before, top });
     const minimum = minimumInsets.get(cell.id) ?? cell.minimumContentInsets;
     if (minimum) minimumInsets.set(cell.id, { ...minimum, top });
   }
-  return {
+  const opened = {
     ...deps,
     cellContentInsets: insets,
     ...(minimumInsets.size ? { cellMinimumContentInsets: minimumInsets } : {}),
   };
+  return withExactOpeningExtension(structure, row, opened, extension);
 }
 
 /** The last row uses its own outer edge, without the next page's neighbor. */

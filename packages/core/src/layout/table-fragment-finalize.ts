@@ -8,7 +8,7 @@
 // because a row cannot know its merged neighbour's box until every row of the span is down.
 
 import { shiftInlineDrawingRecord } from './drawing-layout.ts';
-import { exactTerminalBorderPt } from './table-exact-terminal-border.ts';
+import { exactOpeningExtensionPt, exactTerminalBorderPt } from './table-exact-terminal-border.ts';
 import { rememberMovableCopy } from './table-row-geometry-reuse.ts';
 import { relayOutMergedBottomToTop } from './table-cell-text-direction.ts';
 import { republishAnchoredParagraphsInBlocks } from './table-anchor-republish.ts';
@@ -217,7 +217,9 @@ export function finalizeTableRows(
               terminalHeight?.rule === 'exact' &&
               Math.abs(
                 terminalRow.box.height -
-                  (terminalHeight.valuePt + exactTerminalBorderPt(terminalSource, anchorDeps))
+                  (terminalHeight.valuePt +
+                    exactOpeningExtensionPt(terminalSource, anchorDeps) +
+                    exactTerminalBorderPt(terminalSource, anchorDeps))
               ) < 0.001
                 ? exactTerminalBorderPt(terminalSource, anchorDeps)
                 : 0;

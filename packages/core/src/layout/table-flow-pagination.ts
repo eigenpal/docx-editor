@@ -1,4 +1,4 @@
-import { isSettledPreviousRow, takePreviousRows } from './table-row-placement-reuse.ts';
+import { takePreviousRows } from './table-row-placement-reuse.ts';
 import { createRowProbeReuse } from './table-row-probe-reuse.ts';
 import { clippedExactRow, overheightRowError } from './table-exact-row-clip.ts';
 // Placing ONE top-level table into the body flow, row by row, across page breaks.
@@ -17,7 +17,6 @@ import { positionedTableOriginX } from './table-origin.ts';
 import * as terminal from './table-exact-terminal-border.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import {
-  finalizeTableRows,
   initialCellCursors,
   layoutRowFragment,
   layoutRowFragmentBounded,
@@ -58,13 +57,12 @@ import {
   createVMergeFragmentCarry,
   type VMergeFragmentCarry,
 } from './table-vmerge-fragment-carry.ts';
-import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { tableOriginX, type SemanticTableRow } from './semantic-table.ts';
 import { readFlowTable } from './table-flow-structure.ts';
 import * as textTable from './table-text-float-break.ts';
 import { tableFloatOriginY } from './table-float-position.ts';
-import { shiftTableFragment, splitHead } from './table-fragment-finalize.ts';
-import { budgetsHaveHeadroom, withBudgetProof } from './table-budget-proof.ts';
+import { splitHead } from './table-fragment-finalize.ts';
+import { closeTableFragmentRows } from './table-fragment-close.ts';
 import { planOutOfCellFloats } from './table-out-of-cell-floats.ts';
 import { tableFloatClearance } from './table-float-collision.ts';
 import type { TableRowFragmentRecord } from './semantic-records.ts';
@@ -72,11 +70,7 @@ import { TABLE_ROWS_PER_STEP, type LayoutSteps } from './layout-steps.ts';
 
 import type { TableFlowCursor, TableFlowPlacementResult } from './table-flow-cursor.ts';
 export type { TableFlowCursor, TableFlowPlacementResult } from './table-flow-cursor.ts';
-import {
-  cachedRowHeights,
-  refreshTerminalRow,
-  POSITIONED_TABLE_LAYOUT_BOTTOM_PT,
-} from './table-flow-row-state.ts';
+import { cachedRowHeights, POSITIONED_TABLE_LAYOUT_BOTTOM_PT } from './table-flow-row-state.ts';
 
 /**
  * Lay out one top-level table with OOXML-aligned row pagination.
@@ -240,72 +234,28 @@ export function* paginateTableInFlowSteps(
       floats?.end();
       return;
     }
-    const terminalDelta = refreshTerminalRow(
+    const closed = closeTableFragmentRows({
       structure,
+      tableId: table.id,
+      fragmentIndex,
       rows,
       sourceRows,
       completeSourceRows,
       occurrenceInsets,
-      tableLeft,
-      contentHeight(),
-      tableDeps
-    );
-    if (terminalDelta !== undefined) flow.cursorY += terminalDelta;
-    if (fragmentCarry.current)
-      ({ rows, sources: sourceRows } = fragmentCarry.current.publish(
-        rows,
-        sourceRows,
-        occurrenceInsets,
-        tableLeft
-      ));
-    ({ rows, sources: sourceRows } = carry.publish(rows, sourceRows, occurrenceInsets));
-    let finalized = carry.finish(
-      finalizeTableRows(
-        rows,
-        structure,
-        sourceRows,
-        tableDeps.borderOwnershipBudget,
-        tableDeps.vMergeResolveBudget,
-        undefined,
-        shiftAnchor,
-        tableDeps,
-        occurrenceInsets,
-        new Set(rows.filter(isSettledPreviousRow))
-      )
-    );
-    if (fragmentCarry.current) finalized = fragmentCarry.current.finish(finalized);
-    const last = finalized[finalized.length - 1]!;
-    const fragment = annotateTableFragmentGeometry(
-      {
-        kind: 'table',
-        ...(outOfFlow ? { outOfFlow: true as const } : {}),
-        id: `${table.id}#f${fragmentIndex}`,
-        tableId: table.id,
-        fragmentIndex,
-        rows: finalized,
-        box: {
-          x: tableLeft,
-          y: fragmentTop,
-          width: structure.columnWidthsPt.reduce((sum, columnWidth) => sum + columnWidth, 0),
-          height: last.box.y + last.box.height - fragmentTop,
-        },
-      },
-      structure.columnWidthsPt,
-      0,
-      rowOrdinals
-    );
-    // A positioned table's alignment needs its final height, so it moves once complete.
-    const positionedFragment =
-      outOfFlow && structure.float && verticalFrames && flow.stackTop === undefined
-        ? shiftTableFragment(
-            fragment,
-            tableFloatOriginY(structure.float, fragment.box.height, verticalFrames) -
-              fragment.box.y,
-            shiftAnchor
-          )
-        : fragment;
-    const published = withBudgetProof(positionedFragment, budgetsHaveHeadroom(tableDeps));
-    publishFragment(published, wrapsBeside);
+      left: tableLeft,
+      top: fragmentTop,
+      bottom: contentHeight(),
+      deps: tableDeps,
+      carry,
+      fragmentCarry: fragmentCarry.current,
+      rowOrdinals,
+      shiftAnchor,
+      outOfFlow,
+      verticalFrames,
+      stackTop: flow.stackTop,
+    });
+    flow.cursorY += closed.cursorDelta;
+    publishFragment(closed.fragment, wrapsBeside);
     floats?.end();
     fragmentIndex += 1;
     rows = [];

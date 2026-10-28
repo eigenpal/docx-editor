@@ -1,4 +1,7 @@
-// Reserve the supported terminal exact row's outer rule outside its authored content box.
+// Reserve the outer rule of an exact row that closes a page fragment outside its authored
+// content box. The table's last row always closes its fragment. Any other exact row closes one
+// when the next row does not follow it on the page: it then ends the page with the table's
+// bottom rule (not the inside rule), and that rule needs room below the authored height too.
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { canProbeBorderRows } from './table-border-probe.ts';
 import { effectiveBorderSide } from './table-border-cascade.ts';
@@ -17,6 +20,7 @@ interface TerminalBorderBudget {
 
 // Resolved structures are immutable. Keep refused shapes cached as well as supported ones.
 const budgets = new WeakMap<SemanticTableStructure, TerminalBorderBudget | null>();
+const closingBudgets = new WeakMap<SemanticTableRow, TerminalBorderBudget | null>();
 
 // `deps` is the table's resolved flow deps: float-band deps, or the cell deps from the reader.
 export function tableTerminalDeps(
@@ -32,17 +36,56 @@ export function tableTerminalDeps(
   return budget ? { ...deps, exactTerminalBorder: budget } : deps;
 }
 
-function readTerminalBudget(structure: SemanticTableStructure): TerminalBorderBudget | null {
-  const row = structure.rows.at(-1);
+/**
+ * Deps in which `row`, an exact row other than the table's last, closes its page fragment with
+ * the table's bottom rule below its authored height. `deps` itself for any other row or shape.
+ * Only the occurrence that ends a fragment takes these deps.
+ */
+export function closingRowDeps(
+  structure: SemanticTableStructure,
+  row: SemanticTableRow,
+  deps: TableFlowDeps
+): TableFlowDeps {
+  if (deps.tableNestingOffset || deps.textBoxStory || deps.exactTerminalBorder?.row === row)
+    return deps;
+  let budget = closingBudgets.get(row);
+  if (budget === undefined) {
+    budget = readClosingBudget(structure, row);
+    closingBudgets.set(row, budget);
+  }
+  return budget ? { ...deps, exactTerminalBorder: budget } : deps;
+}
+
+function exactShape(structure: SemanticTableStructure, row: SemanticTableRow): boolean {
+  return (
+    row.height.rule === 'exact' &&
+    Number.isFinite(row.height.valuePt) &&
+    row.height.valuePt > 0 &&
+    structure.cellSpacingPt === 0 &&
+    !structure.float
+  );
+}
+
+// A merge across the break carries its cell to the next page. That shape keeps its rule inside.
+function readClosingBudget(
+  structure: SemanticTableStructure,
+  row: SemanticTableRow
+): TerminalBorderBudget | null {
+  const next = structure.rows[structure.rows.indexOf(row) + 1];
   if (
-    !row ||
-    row.height.rule !== 'exact' ||
-    !Number.isFinite(row.height.valuePt) ||
-    row.height.valuePt <= 0 ||
-    structure.cellSpacingPt !== 0 ||
-    structure.float
+    !next ||
+    !exactShape(structure, row) ||
+    row.cells.some((cell) => cell.headsVerticalMerge || cell.vMergeContinue) ||
+    next.cells.some((cell) => cell.vMergeContinue) ||
+    !canProbeBorderRows([row], structure.columnWidthsPt.length)
   )
     return null;
+  return closingBudget(structure, row);
+}
+
+function readTerminalBudget(structure: SemanticTableStructure): TerminalBorderBudget | null {
+  const row = structure.rows.at(-1);
+  if (!row || !exactShape(structure, row)) return null;
 
   // Merge continuations still have bounded content. Only this eligibility view clears them.
   const probeRows = structure.rows.map((source) =>
@@ -56,8 +99,14 @@ function readTerminalBudget(structure: SemanticTableStructure): TerminalBorderBu
       : source
   );
   if (!canProbeBorderRows(probeRows, structure.columnWidthsPt.length)) return null;
+  return closingBudget(structure, row);
+}
 
-  // The terminal rule owns this extent. The table's top rule does not constrain it.
+// The closing rule owns this extent. The table's top rule does not constrain it.
+function closingBudget(
+  structure: SemanticTableStructure,
+  row: SemanticTableRow
+): TerminalBorderBudget | null {
   let width: number | undefined;
   for (const cell of row.cells) {
     const edge = effectiveBorderSide(
@@ -76,6 +125,31 @@ function readTerminalBudget(structure: SemanticTableStructure): TerminalBorderBu
     width = edge.widthPt;
   }
   return width && width > 0 ? { row, widthPt: width } : null;
+}
+
+/**
+ * Deps in which the exact `row`, opening a continuation fragment, grows by `extensionPt` above
+ * its authored box. The fragment's top rule replaces the narrower inside rule the row reserved
+ * below the row above it, and only that difference is new. The table's first row already
+ * reserves the top rule, so it gains nothing.
+ */
+export function withExactOpeningExtension(
+  structure: SemanticTableStructure,
+  row: SemanticTableRow,
+  deps: TableFlowDeps,
+  extensionPt: number
+): TableFlowDeps {
+  return extensionPt > 0.001 &&
+    row !== structure.rows[0] &&
+    exactShape(structure, row) &&
+    !deps.tableNestingOffset &&
+    !deps.textBoxStory
+    ? { ...deps, exactOpeningExtension: { row, pt: extensionPt } }
+    : deps;
+}
+
+export function exactOpeningExtensionPt(row: SemanticTableRow, deps: TableFlowDeps): number {
+  return deps.exactOpeningExtension?.row === row ? deps.exactOpeningExtension.pt : 0;
 }
 
 export function exactTerminalBorderPt(row: SemanticTableRow, deps: TableFlowDeps): number {
