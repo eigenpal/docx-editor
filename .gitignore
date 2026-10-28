@@ -14,6 +14,8 @@ Thumbs.db
 # Claude Code (local-only files)
 .claude/settings.local.json
 .claude/worktrees/
+.claude/handoffs/
+.claude/scheduled_tasks.lock
 .worktrees/
 
 # Local workspace instructions and notes
