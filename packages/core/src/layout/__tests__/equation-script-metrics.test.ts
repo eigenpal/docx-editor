@@ -17,18 +17,24 @@ import { resolveRunStyle } from '../run-style.ts';
 import type { TextMeasurer } from '../semantic-records.ts';
 
 const fixed = createFixedMeasurer(6, 14);
-/** Reports glyph ink: lowercase-height letters and digits, with a descender for g, j, y. */
+/**
+ * Reports glyph ink: lowercase-height letters and digits, with a descender for g, j, y. Spaces
+ * and invisible operators have no outline, and `Ø` stands for a glyph the face lacks.
+ */
 const inked: TextMeasurer = {
   ...fixed,
-  textOutline: (text, style) => ({
-    path: null,
-    ink: {
-      left: 0,
-      top: -style.fontSizePt * (/[0-9bdhkl]/u.test(text.normalize('NFKD')) ? 0.7 : 0.48),
-      right: fixed.measure(text, style),
-      bottom: style.fontSizePt * (/[gjy]/u.test(text.normalize('NFKD')) ? 0.21 : 0),
-    },
-  }),
+  textOutline: (text, style) =>
+    /^[\s\u2061-\u2064\u200b]+$/u.test(text) || text === 'Ø'
+      ? undefined
+      : {
+          path: null,
+          ink: {
+            left: 0,
+            top: -style.fontSizePt * (/[0-9bdhkl]/u.test(text.normalize('NFKD')) ? 0.7 : 0.48),
+            right: fixed.measure(text, style),
+            bottom: style.fontSizePt * (/[gjy]/u.test(text.normalize('NFKD')) ? 0.21 : 0),
+          },
+        },
 };
 
 const run = (text: string, halfPoints?: number) =>
@@ -320,4 +326,24 @@ test('nested bars and scripts read the ink of each grapheme once', () => {
     // One read per grapheme and face; the three nesting levels draw at three sizes.
     expect(count).toBeLessThanOrEqual(3);
   }
+});
+
+test.each([
+  ['a space', 'x a'],
+  ['a function application', 'sin\u2061x'],
+  ['a zero-width space', 'x\u200ba'],
+  ['a no-break space', 'x\u00a0a'],
+])('a bar over text with %s keeps its gap from the ink of the letters', (_name, body) => {
+  const size = 12;
+  const geometry = barred('top', body, size);
+  const ink = equationInk(geometry.body, inked);
+  expect(ink.ascent).toBeCloseTo(0.48 * size, 6);
+  const inkTop = geometry.baseline - ink.ascent;
+  expect((inkTop - (geometry.bar.y + geometry.bar.height)) / size).toBeCloseTo(345 / 2048, 6);
+});
+
+test('a visible glyph without ink keeps the font box of its text', () => {
+  const geometry = barred('top', 'xØ', 12);
+  const body = geometry.body.kind === 'row' ? geometry.body.items[0]! : geometry.body;
+  expect(equationInk(geometry.body, inked).ascent).toBeCloseTo(body.baseline, 6);
 });

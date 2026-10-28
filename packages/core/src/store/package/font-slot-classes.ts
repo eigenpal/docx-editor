@@ -1,7 +1,12 @@
 // The w:rFonts slot and shaping script of each code point. Layout itemizes text with it, and
 // the equation lane picks the face of a math run with it, so both read one table.
 
-/** Which `w:rFonts` slot a character resolves its face through. */
+/**
+ * Which `w:rFonts` slot a character resolves its face through.
+ *
+ * OOXML gives a run up to four faces and picks between them by SCRIPT, so one run of mixed Latin
+ * and CJK text uses two different fonts without saying so anywhere in its properties.
+ */
 export type FontSlot = 'ascii' | 'hAnsi' | 'eastAsia' | 'cs';
 
 /** The slot and the shaping script of one strong code point. */
