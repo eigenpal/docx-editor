@@ -207,3 +207,19 @@ test('hostile level rules stay bounded and escaped', () => {
   expect(markup).toContain('<w:lvlText w:val="&lt;b&gt;&amp;&quot;%2"/>');
   expect(markup).toContain('w:hanging="31680"');
 });
+
+test('a marker-free item with a level rule starts from the rule, not from its list element', () => {
+  // Clipboard HTML that states a level rule numbers from `mso-level-start-at`, or from 1, and the
+  // `<ol start>` around the item does not move it. The clipboard writes both from one level, so
+  // they disagree only in HTML from elsewhere, and the rule is the level definition.
+  const projected = project(
+    wordHtml(
+      '@list l0:level1 {mso-level-tab-stop:none;text-indent:-18.0pt;}\n' +
+        '@list l1:level1 {mso-level-start-at:4;text-indent:-18.0pt;}',
+      '<ol start=3 type=1><li style="mso-list:l0 level1 lfo1">plain</li></ol>' +
+        '<ol start=2 type=1><li style="mso-list:l1 level1 lfo2">stated</li></ol>'
+    )
+  );
+  expect(levelOf(projected, 'plain')).toContain('<w:start w:val="1"/>');
+  expect(levelOf(projected, 'stated')).toContain('<w:start w:val="4"/>');
+});
