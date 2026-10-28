@@ -226,6 +226,8 @@ If settings enable `w:noColumnBalance` in a document saved in compatibility mode
 
 A floating object in a table cell can turn off the **Layout in table cell** option. Word honors that setting only in compatibility mode 14 or earlier, or when the document declares no mode. The object is then placed against the page, unless it is positioned against its own character or line. If the object wraps text, intersecting table rows move below it. The object keeps its position. In compatibility mode 15 and later, Word ignores the setting and keeps the object in its cell.
 
+A right-to-left line beside a floating object fills the passage to the right of the object first, then the passage to its left. Each part aligns inside its own passage, with its start edge on the right. A first-line indent narrows only the first passage. Square wrapping on the largest side keeps text on the left when both sides are equal. A left-to-right line that contains right-to-left text also aligns each part inside its own passage. Text never reorders across the object.
+
 Two other placement rules depend on the compatibility mode or the object options. Before compatibility mode 15, ordinary header and footer text ignores wrapping objects in the same header or footer. If an object must not overlap another object, Word moves it beside that object at the same height. The object moves down only when neither side has room.
 
 ### Page layout, headers, and footers

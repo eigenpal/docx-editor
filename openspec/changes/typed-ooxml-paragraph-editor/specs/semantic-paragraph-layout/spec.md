@@ -11,6 +11,28 @@ The layout engine SHALL stretch the final line of a paragraph with `w:jc` set to
 - **THEN** text fills each passage without crossing the floating object
 - **AND** the source text, formatting, and source positions remain unchanged
 
+### Requirement: Right-to-left lines beside floating objects
+
+The layout engine SHALL fill the passages that a floating object leaves a right-to-left line from right to left. Each part of a bidirectional line SHALL align inside its own passage, and bidirectional reordering SHALL stay inside that passage.
+
+#### Scenario: Centered right-to-left text beside a float
+
+- **GIVEN** a centered right-to-left paragraph beside a floating object in the middle of the line
+- **WHEN** layout breaks and aligns its lines
+- **THEN** the first words of each line fill the passage to the right of the object
+- **AND** the text continues in the passage to the left of the object
+- **AND** each part is centered in its own passage without crossing the object
+- **AND** a single centered word is centered in the passage to the right of the object
+- **AND** carets and hit testing resolve to positions inside the passages
+- **AND** the source text, formatting, and source positions remain unchanged
+
+#### Scenario: Wrap sides beside a right-to-left line
+
+- **GIVEN** a right-to-left paragraph beside a floating object with a one-sided wrap or wrap distance
+- **WHEN** layout breaks its lines
+- **THEN** the wrap side and the wrap distance keep their physical sides
+- **AND** square wrapping on the largest side keeps text on the left when both sides are equal
+
 ### Requirement: Native semantic layout records
 
 The semantic layout engine SHALL produce revision-tagged page, paragraph-fragment, line, and style-span records directly from the committed canonical tree and derived style resources.
