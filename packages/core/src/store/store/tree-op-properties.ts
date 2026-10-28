@@ -8,6 +8,7 @@
 // an op states the properties it names, and everything it cannot name survives untouched.
 
 import { WML_NAMESPACE_URI, type OoxmlNode } from '../package/ooxml-tree.ts';
+import { CT_PPR_SEQUENCE, CT_RPR_SEQUENCE } from '../package/ooxml-property-order.ts';
 import {
   ACCEPTED_PARAGRAPH_PROPERTIES,
   ACCEPTED_RUN_PROPERTIES,
@@ -15,100 +16,7 @@ import {
   type OoxmlProperty,
 } from './tree-op-types.ts';
 
-/**
- * `CT_PPr`'s child sequence (ECMA-376 17.3.1.26). A `w:pPr` whose children are out of this
- * order is not merely untidy — Word reports the file as unreadable — and the flat property
- * list an op carries has no order of its own, so the merge imposes this one.
- */
-export const CT_PPR_SEQUENCE: readonly string[] = [
-  'pStyle',
-  'keepNext',
-  'keepLines',
-  'pageBreakBefore',
-  'framePr',
-  'widowControl',
-  'numPr',
-  'suppressLineNumbers',
-  'pBdr',
-  'shd',
-  'tabs',
-  'suppressAutoHyphens',
-  'kinsoku',
-  'wordWrap',
-  'overflowPunct',
-  'topLinePunct',
-  'autoSpaceDE',
-  'autoSpaceDN',
-  'bidi',
-  'adjustRightInd',
-  'snapToGrid',
-  'spacing',
-  'ind',
-  'contextualSpacing',
-  'mirrorIndents',
-  'suppressOverlap',
-  'jc',
-  'textDirection',
-  'textAlignment',
-  'textboxTightWrap',
-  'outlineLvl',
-  'divId',
-  'cnfStyle',
-  'rPr',
-  'sectPr',
-  'pPrChange',
-];
-
-/**
- * `CT_RPr` (17.3.2.28), with `CT_ParaRPr`'s leading revision marks in front so the paragraph
- * mark's own run properties order by the same table.
- */
-const CT_RPR_SEQUENCE: readonly string[] = [
-  'ins',
-  'del',
-  'moveFrom',
-  'moveTo',
-  'rStyle',
-  'rFonts',
-  'b',
-  'bCs',
-  'i',
-  'iCs',
-  'caps',
-  'smallCaps',
-  'strike',
-  'dstrike',
-  'outline',
-  'shadow',
-  'emboss',
-  'imprint',
-  'noProof',
-  'snapToGrid',
-  'vanish',
-  'webHidden',
-  'color',
-  'spacing',
-  'w',
-  'kern',
-  'position',
-  'sz',
-  'szCs',
-  'highlight',
-  'u',
-  'effect',
-  'bdr',
-  'shd',
-  'fitText',
-  'vertAlign',
-  'rtl',
-  'cs',
-  'em',
-  'lang',
-  'eastAsianLayout',
-  'specVanish',
-  'oMath',
-  'rPrChange',
-];
+export { CT_PPR_SEQUENCE };
 
 /** What one container's merge is allowed to author, and the order it must emit. */
 export interface PropertyVocabulary {

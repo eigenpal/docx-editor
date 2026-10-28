@@ -202,10 +202,10 @@ describe('skipped tracked changes', () => {
 
   test('a marker where content cannot be reports misplaced-marker, not the generic reason', () => {
     const { events, module } = observe();
-    // An insertion marker inside a run, where only run content can be.
+    // A deletion marker inside a run, where only run content can be.
     const body =
-      `<w:p><w:r><w:ins w:id="5" w:author="${SECRET_PART}">` +
-      `<w:t>${SECRET_TEXT}</w:t></w:ins></w:r></w:p>`;
+      `<w:p><w:r><w:del w:id="5" w:author="${SECRET_PART}">` +
+      `<w:delText>${SECRET_TEXT}</w:delText></w:del></w:r></w:p>`;
     const editor = createDocxEditor({
       container: mount(),
       document: docx(body),

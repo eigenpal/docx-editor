@@ -5,6 +5,7 @@
 // in ECMA schema order so normalized serialization stays Word-readable.
 
 import { type OoxmlElement, type OoxmlNode } from '../package/ooxml-tree.ts';
+import { CT_TBLPR_SEQUENCE } from '../package/ooxml-property-order.ts';
 import {
   WML_NAMESPACE_URI,
   expandedNameMatches,
@@ -12,27 +13,7 @@ import {
   isWmlGridCol,
 } from './tree-op-table-shared.ts';
 
-/** `CT_TblPrBase` child sequence (ECMA-376 17.4.78), plus trailing `tblPrChange`. */
-export const CT_TBLPR_SEQUENCE: readonly string[] = [
-  'tblStyle',
-  'tblpPr',
-  'tblOverlap',
-  'bidiVisual',
-  'tblStyleRowBandSize',
-  'tblStyleColBandSize',
-  'tblW',
-  'jc',
-  'tblCellSpacing',
-  'tblInd',
-  'tblBorders',
-  'shd',
-  'tblLayout',
-  'tblCellMar',
-  'tblLook',
-  'tblCaption',
-  'tblDescription',
-  'tblPrChange',
-];
+export { CT_TBLPR_SEQUENCE };
 
 /** `CT_TrPrBase` choice order (17.4.80), plus trailing `trPrChange`. */
 export const CT_TRPR_SEQUENCE: readonly string[] = [

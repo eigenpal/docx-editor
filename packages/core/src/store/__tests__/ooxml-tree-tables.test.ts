@@ -100,24 +100,25 @@ describe('typed table vocabulary round-trips through both D9 oracles', () => {
   }
 });
 
-describe('malformed table shapes demote to generic and still round-trip', () => {
+describe('malformed table shapes stay lossless and round-trip', () => {
   const doc = (body: string) => `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`;
   const CELL = '<w:tc><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc>';
 
-  test('a w:tbl carrying w:val demotes but its rows stay typed', () => {
+  test('a w:tbl carrying w:val stays typed and keeps the attribute', () => {
+    // A stray w:val means nothing on a table, which still shows.
     const part = loadPart(doc(`<w:tbl w:val="nope"><w:tr>${CELL}</w:tr></w:tbl>`));
-    expect(collectByKind(part.root, 'table')).toHaveLength(0);
+    expect(collectByKind(part.root, 'table')).toHaveLength(1);
     expect(collectByKind(part.root, 'tableRow')).toHaveLength(1);
-    // Body accepts the generic child, so the document stays typed.
     expect(part.root.kind).toBe('document');
+    expect(serializeOoxmlPart(part)).toContain('<w:tbl w:val="nope">');
     const reopened = loadPart(serializeOoxmlPart(part));
     expect(canonicalOoxmlFingerprint(reopened)).toBe(canonicalOoxmlFingerprint(part));
   });
 
-  test('two w:tblPr children demote the table', () => {
+  test('two w:tblPr children merge into one and the table stays typed', () => {
     const part = loadPart(doc(`<w:tbl><w:tblPr/><w:tblPr/><w:tr>${CELL}</w:tr></w:tbl>`));
-    expect(collectByKind(part.root, 'table')).toHaveLength(0);
-    expect(collectByKind(part.root, 'tableProperties')).toHaveLength(2);
+    expect(collectByKind(part.root, 'table')).toHaveLength(1);
+    expect(collectByKind(part.root, 'tableProperties')).toHaveLength(1);
     const reopened = loadPart(serializeOoxmlPart(part));
     expect(canonicalOoxmlFingerprint(reopened)).toBe(canonicalOoxmlFingerprint(part));
   });

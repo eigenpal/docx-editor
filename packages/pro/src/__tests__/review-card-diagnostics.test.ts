@@ -83,10 +83,10 @@ test('a review card accept the engine cannot resolve reports the change kind and
 
 test('a review card accept keeps the misplaced-marker cause apart from unaddressed', () => {
   const events: EditorDiagnostic[] = [];
-  // An insertion marker inside a run, where only run content can be.
+  // A deletion marker inside a run, where only run content can be.
   const body =
-    `<w:p><w:r><w:ins w:id="5" w:author="${SECRET_AUTHOR}" w:date="2026-01-01T00:00:00Z">` +
-    `<w:t>${SECRET_TEXT}</w:t></w:ins></w:r></w:p>`;
+    `<w:p><w:r><w:del w:id="5" w:author="${SECRET_AUTHOR}" w:date="2026-01-01T00:00:00Z">` +
+    `<w:delText>${SECRET_TEXT}</w:delText></w:del></w:r></w:p>`;
   const editor = createDocxEditor({
     container: document.createElement('div'),
     document: source(body),

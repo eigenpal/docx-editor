@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Files whose run, paragraph or table shape is broken in ways that still show text seeded those runs, paragraphs or tables as generic nodes, so no participant showed or edited their text. Examples: a w:rPr after a saved w:lastRenderedPageBreak or after text, a second w:rPr, a w:pPr after content, a stray w:val, a w:t holding a w:br, two w:tblPr, a paragraph written straight into a row.",
+  "after": "The read rebuilds those shapes before it types them, so they seed as typed runs, paragraphs and tables in a valid shape: properties first, split runs, merged table properties, a stray paragraph moved into the next cell.",
+  "reason": "The change is in the file read that seeds a room. Shared state stores node kinds, and participants decode them without reading the file again. Every rebuilt node is a shape released participants already read and edit. Rooms seeded earlier keep their stored shape on every version.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-rebuilt-structure.test.ts",
+    "packages/core/src/store/__tests__/ooxml-structure-repair.test.ts"
+  ],
+  "changeset": "broken-shape-text",
+  "migration": null
+}

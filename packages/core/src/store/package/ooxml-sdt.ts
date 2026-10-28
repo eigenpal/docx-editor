@@ -105,8 +105,23 @@ const SDT_W14_ELEMENTS: Readonly<Record<string, string>> = {
   checkbox: 'contentControlCheckbox',
 };
 
+/**
+ * Content containers a stray `w:val` means nothing on. It is kept as written, and the container
+ * stays typed, so its text still shows.
+ */
+const KINDS_IGNORING_WML_VAL = new Set([
+  'paragraph',
+  'run',
+  'text',
+  'deletedText',
+  'hyperlink',
+  'table',
+  'tableRow',
+  'tableCell',
+]);
+
 export function knownKindAllowsWmlVal(kind: string): boolean {
-  return KINDS_ALLOWING_WML_VAL.has(kind);
+  return KINDS_ALLOWING_WML_VAL.has(kind) || KINDS_IGNORING_WML_VAL.has(kind);
 }
 
 /**
