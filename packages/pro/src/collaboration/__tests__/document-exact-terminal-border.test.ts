@@ -129,8 +129,10 @@ function geometry(editor: Editor, options: ReferenceCase) {
     expect(only.box.y).toBe(table.box.y);
     expect(only.box.height).toBeCloseTo(31 + options.width, 6);
     expect(only.cells[0]!.blocks[0]!.box.y - only.box.y).toBeCloseTo(19, 6);
-    expect(layout.pages[1]!.fragments).toContain(after!);
-    expect(after?.box.y).toBeCloseTo(table.box.y + table.box.height, 6);
+    // The table's last page left out the repeat, so the paragraph after it starts page 3
+    // although it fits below the row (`omittedRepeatEndsPage`).
+    expect(layout.pages[2]!.fragments[0]).toBe(after!);
+    expect(after?.box.y).toBe(0);
     return { box: table.box, rows: table.rows.map((r) => r.box), after: after?.box };
   }
   expect(table.box.height).toBeCloseTo(39.7 + options.width, 6);

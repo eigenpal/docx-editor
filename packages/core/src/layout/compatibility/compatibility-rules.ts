@@ -139,6 +139,10 @@ export const MODE_RULES = {
     'A page- or margin-positioned table that breaks ends its first fragment at the bottom margin, not the page edge',
     'ECMA-376 Part 1 §17.4.57 tblpPr'
   ),
+  omittedRepeatEndsPage: modern(
+    'Content after a table whose last page leaves out the repeated header rows starts on the next page',
+    'ECMA-376 Part 1 §17.4.49 tblHeader'
+  ),
   pageBreakBeforeKeepsSpace: legacy(
     'A paragraph with a page break before keeps its space before at the top of the new page. In modern modes only the first block of a section keeps it',
     'ECMA-376 Part 1 §17.3.1.23 pageBreakBefore'
@@ -146,6 +150,10 @@ export const MODE_RULES = {
   pageBreakLinesStretch: legacy(
     'A justified line that ends in a page or column break stretches to the measure, unless it is the last line of its paragraph',
     'ECMA-376 Part 1 §17.3.3.1 br'
+  ),
+  repeatBoundaryUsesHeaderRule: legacy(
+    "A complete body row directly below a repeated header row reserves the wider of its own top border and the header row's bottom border; modern modes keep the band of the row it follows in the table",
+    'ECMA-376 Part 1 §17.4.49 tblHeader'
   ),
   repeatKeepsWholeRow: legacy(
     'Repeated header rows stay above a row that cannot split and does not fit below them; the row runs past the bottom margin',
