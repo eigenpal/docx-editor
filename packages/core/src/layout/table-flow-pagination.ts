@@ -220,6 +220,8 @@ export function* paginateTableInFlowSteps(
   };
   const laterLayout = hasCompatibilityRule(flow.compatibilityMode, 'headerRowsKeepWithBody');
   const repeatKeepsWholeRow = hasCompatibilityRule(flow.compatibilityMode, 'repeatKeepsWholeRow');
+  // The open continuation fragment left out its repeated header rows.
+  let repeatOmitted = false;
   let repeatedPlan: RepeatedHeaderBorderPlan | undefined;
   let prepareRepeat: (() => RepeatedHeaderBorderPlan | null | undefined) | undefined;
   const rememberInsets = (record: TableRowFragmentRecord, deps: TableFlowDeps): void => {
@@ -360,6 +362,8 @@ export function* paginateTableInFlowSteps(
     fragmentTop = flow.cursorY;
     clearance?.clearPending(repeat && headerRows.length > 0 ? headerGroupHeight : 0);
     if (repeat) placeHeaderGroup(true, admitsBodyAfter);
+    // A fragment opens with only its repeat, so no rows here means the repeat was left out.
+    repeatOmitted = repeatsEnabled && headerRows.length > 0 && rows.length === 0;
   };
 
   /** Whole band of a fresh page: a note reserve yields to a kept row. */
@@ -958,5 +962,9 @@ export function* paginateTableInFlowSteps(
   if (outOfFlow) flow.cursorY = bodyCursorY;
   else if (broken)
     flow.cursorY = textTable.resumeAfterBreak(structure, flow, wrapsBeside, fragmentTop);
+  // From mode 15, content after a table whose last page left out the repeated header rows
+  // starts on the next page, even where it fits (`omittedRepeatEndsPage`).
+  else if (repeatOmitted && hasCompatibilityRule(flow.compatibilityMode, 'omittedRepeatEndsPage'))
+    flow.cursorY = flow.contentHeight();
   return { outOfFlow };
 }

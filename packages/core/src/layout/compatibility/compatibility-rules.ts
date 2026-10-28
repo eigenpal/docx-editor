@@ -139,6 +139,10 @@ export const MODE_RULES = {
     'A page- or margin-positioned table that breaks ends its first fragment at the bottom margin, not the page edge',
     'ECMA-376 Part 1 §17.4.57 tblpPr'
   ),
+  omittedRepeatEndsPage: modern(
+    'Content after a table whose last page leaves out the repeated header rows starts on the next page',
+    'ECMA-376 Part 1 §17.4.49 tblHeader'
+  ),
   pageBreakBeforeKeepsSpace: legacy(
     'A paragraph with a page break before keeps its space before at the top of the new page. In modern modes only the first block of a section keeps it',
     'ECMA-376 Part 1 §17.3.1.23 pageBreakBefore'

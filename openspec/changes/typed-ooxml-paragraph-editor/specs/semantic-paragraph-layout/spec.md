@@ -622,6 +622,13 @@ Semantic layout SHALL place a supported terminal exact row's simple bottom rule 
 - **AND** in compatibility mode 15 and later, the row reserves the rule it shares with the row above it in the table
 - **AND** the shared border plan and the ordinary repeat path reserve the same band
 
+#### Scenario: Content after a table whose last page omits the repeat starts a page
+
+- **WHEN** compatibility mode is 15 or later
+- **AND** the last page of a table leaves out its repeated header rows
+- **THEN** the content after the table starts on the next page, also when it fits below the last row
+- **AND** a table whose last page keeps its repeated header rows leaves that content on the page
+
 #### Scenario: Cell text uses the authored bottom
 
 - **WHEN** a terminal exact-row cell has center or bottom alignment

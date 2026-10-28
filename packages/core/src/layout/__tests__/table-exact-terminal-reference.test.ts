@@ -250,7 +250,9 @@ for (const headers of [1, 2]) {
     expect(last!.box.y).toBe(0);
     // 1pt of top rule above the authored height, the closing rule below it.
     expect(last!.box.height).toBeCloseTo(1 + rows.at(-1)! / 20 + 1.5, 6);
-    expect(pageOf(result, 'AFTER')).toBe(1);
+    // The table's last page left out the repeat, so the paragraph after it starts page 3
+    // (`omittedRepeatEndsPage`).
+    expect(pageOf(result, 'AFTER')).toBe(2);
     expect(serializeOoxmlPart(part)).toBe(source);
   });
 }

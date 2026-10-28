@@ -38,6 +38,7 @@ const MODE_MATRIX = {
   noteTableCellKeeps: 'modern',
   oversizedRowKeepGroupReleases: 'legacy',
   positionedTableBreaksAtMargin: 'modern',
+  omittedRepeatEndsPage: 'modern',
   pageBreakBeforeKeepsSpace: 'legacy',
   pageBreakLinesStretch: 'legacy',
   repeatBoundaryUsesHeaderRule: 'legacy',
