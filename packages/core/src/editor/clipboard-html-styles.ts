@@ -827,7 +827,11 @@ export function applyParaCss(para: HtmlParaProps, style: ReadonlyMap<string, str
   if (marginRightPt !== null && marginRightPt >= 0) {
     para.indRightTwips = clamp(Math.round(marginRightPt * 20), 0, 31_680);
   }
-  const indentPt = parseCssLengthPt(style.get('text-indent') ?? '');
+  // A right-aligned Word list number writes `text-indent` as `-margin-left` for browsers;
+  // `mso-text-indent-alt` is the hang Word itself reads back.
+  const indentPt =
+    parseCssLengthPt(style.get('mso-text-indent-alt') ?? '') ??
+    parseCssLengthPt(style.get('text-indent') ?? '');
   if (indentPt !== null && indentPt !== 0) {
     const twips = clamp(Math.round(indentPt * 20), -31_680, 31_680);
     if (twips !== 0) para.firstLineTwips = twips;
