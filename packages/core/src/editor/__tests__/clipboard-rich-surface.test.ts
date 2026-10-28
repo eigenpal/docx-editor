@@ -402,6 +402,33 @@ describe('rich paste', () => {
     expect(markup.match(/<w:numPr>/g)).toHaveLength(2);
   });
 
+  test('a pasted right-aligned Word number sits in its hanging slot, not left of the margin', () => {
+    const target = mount(paragraph(''));
+    putCaret(target.surface, 0);
+    const item = (level: number, alt: string, marker: string, text: string): string =>
+      `<p style="margin-left:${level * 36}pt;text-indent:${alt ? -level * 36 : -18}pt;` +
+      `${alt}mso-list:l0 level${level} lfo2"><span style="mso-list:Ignore">` +
+      `${alt ? '<span>&nbsp;&nbsp;&nbsp;&nbsp;</span>' : ''}${marker}` +
+      `<span>&nbsp;&nbsp;</span></span>${text}</p>`;
+    target.surface.pasteRich(
+      'Some\nNested\nIndented\nOn',
+      item(1, '', '1.', 'Some') +
+        item(2, '', 'a.', 'Nested') +
+        item(3, 'mso-text-indent-alt:-18.0pt;', 'i.', 'Indented') +
+        item(2, '', 'b.', 'On')
+    );
+
+    const roman = target.surface
+      .layout()
+      .pages.flatMap((page) => page.fragments)
+      .find((fragment) => fragment.kind === 'paragraph' && fragment.marker?.text === 'i.');
+    expect(roman?.kind).toBe('paragraph');
+    if (roman?.kind !== 'paragraph') return;
+    const marker = roman.marker!;
+    // lvlJc=right: the number ENDS at `left - hanging`, 18pt short of the 108pt text.
+    expect(marker.box.x + marker.box.width).toBeCloseTo(roman.box.x - 18, 3);
+  });
+
   test('external Word footnotes land as referenced note parts', () => {
     const target = mount(paragraph(''));
     putCaret(target.surface, 0);
