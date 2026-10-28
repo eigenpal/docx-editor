@@ -259,7 +259,7 @@ export function breakParagraph(
   );
   const layoutEquation = createEquationLayouter(measurer, flow?.equationCacheToken);
   const equationLayoutOf = (piece: FieldAwarePiece) =>
-    piece.equation ? layoutEquation(piece.equation, piece.style) : null;
+    piece.equation ? layoutEquation(piece.equation, piece.style, piece.equationLayout) : null;
   if (pieces.length === 0 && flow?.suppressEmptyPlaceholderLine) {
     return [];
   }

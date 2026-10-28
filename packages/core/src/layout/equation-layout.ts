@@ -155,8 +155,20 @@ function shifted<T extends EquationGeometry>(node: T, x: number, y: number): T {
   return moved;
 }
 
+/**
+ * Layout inputs that an equation piece carries beside its projection. An inline and a display
+ * equation can share one projection, so these inputs also key the geometry cache.
+ * @internal
+ */
+export interface EquationLayoutInput {
+  /** The equation is a display equation (`m:oMathPara`). */
+  readonly display?: boolean;
+}
+
 interface EquationLayoutCache {
   readonly textStyle: ResolvedRunStyle;
+  /** The equation is a display equation, so its fractions keep the padded placement. */
+  readonly display: boolean;
   readonly formats: WeakMap<
     object,
     Map<boolean, { readonly style: ResolvedRunStyle; readonly cache: EquationLayoutCache }>
@@ -378,6 +390,7 @@ function layoutText(
       style: face,
       cache: {
         textStyle: cache.textStyle,
+        display: cache.display,
         styles: new Map(),
         metrics: new Map(),
         formats: new WeakMap(),
@@ -475,6 +488,7 @@ const MATH_FACE_TYPO_DESCENT = 455 / 2048;
  */
 function stackPart(node: EquationGeometry): EquationGeometry {
   if (node.kind === 'text') {
+    // The requested family, not the drawn face: a substitute keeps the trim, which only shrinks.
     if (node.runStyle?.fontFamily?.trim().toLowerCase() !== EQUATION_FONT_FAMILY.toLowerCase())
       return node;
     const ascent = Math.min(node.baseline, MATH_FACE_TYPO_ASCENT * node.fontSizePt);
@@ -497,6 +511,34 @@ function stackPart(node: EquationGeometry): EquationGeometry {
     items: Object.freeze(items.map((item) => shifted(item, item.box.x, baseline - item.baseline))),
     box: box(node.box.x, node.box.y, node.box.width, baseline + descent),
     baseline,
+  });
+}
+
+/**
+ * A fraction in a display equation. Display style is not modelled yet: its parts take the
+ * inline part size, and the fraction keeps the earlier padded placement, with full font boxes
+ * for the parts and fixed gaps around the rule. The inline typographic trim would make a
+ * display fraction shorter still, so it waits for display style.
+ */
+function displayFraction(
+  numerator: EquationGeometry,
+  denominator: EquationGeometry,
+  em: number
+): EquationFractionGeometry {
+  const pad = Math.max(0.75, em * 0.08);
+  const gap = Math.max(0.75, em * 0.08);
+  const thickness = Math.max(0.6, em * 0.055);
+  const width = Math.max(numerator.box.width, denominator.box.width) + pad * 2;
+  const barY = numerator.box.height + gap;
+  const denominatorY = barY + thickness + gap;
+  const height = denominatorY + denominator.box.height;
+  return Object.freeze({
+    kind: 'fraction',
+    numerator: shifted(numerator, (width - numerator.box.width) / 2, 0),
+    denominator: shifted(denominator, (width - denominator.box.width) / 2, denominatorY),
+    bar: box(pad / 2, barY, width - pad, thickness),
+    box: box(0, 0, width, height),
+    baseline: Math.min(height, barY + thickness / 2 + em * 0.22),
   });
 }
 
@@ -530,6 +572,13 @@ function layoutExpression(
     }
     case 'fraction': {
       const resolved = scaledStyle(style, scale, cache);
+      if (cache.display) {
+        return displayFraction(
+          layoutExpression(expression.numerator, measurer, style, scriptScale(scale), cache),
+          layoutExpression(expression.denominator, measurer, style, scriptScale(scale), cache),
+          resolved.fontSizePt
+        );
+      }
       const numerator = stackPart(
         layoutExpression(expression.numerator, measurer, style, scriptScale(scale), cache)
       );
@@ -759,9 +808,19 @@ export function layoutEquation(
   measurer: TextMeasurer,
   style: ResolvedRunStyle
 ): EquationSpanRecord {
+  return layoutEquationWith(projection, measurer, style, {});
+}
+
+function layoutEquationWith(
+  projection: OmmlEquationProjection,
+  measurer: TextMeasurer,
+  style: ResolvedRunStyle,
+  input: EquationLayoutInput
+): EquationSpanRecord {
   const mathStyle = equationRunStyle(style);
   const cache: EquationLayoutCache = {
     textStyle: equationTextStyles.get(style) ?? style,
+    display: input.display === true,
     styles: new Map(),
     metrics: new Map(),
     formats: new WeakMap(),
@@ -778,10 +837,14 @@ export function layoutEquation(
 export function createEquationLayouter(
   measurer: TextMeasurer,
   producer?: string
-): (projection: OmmlEquationProjection, style: ResolvedRunStyle) => EquationSpanRecord {
+): (
+  projection: OmmlEquationProjection,
+  style: ResolvedRunStyle,
+  input?: EquationLayoutInput
+) => EquationSpanRecord {
   const layouts = sharedEquationLayouts(measurer, producer);
-  return (projection, style) => {
-    const token = geometryStyleToken(style);
+  return (projection, style, input = {}) => {
+    const token = `${geometryStyleToken(style)}|${input.display ? 'display' : 'inline'}`;
     let styles = layouts.projections.get(projection);
     const cached = styles?.get(token);
     if (cached && styles) {
@@ -789,7 +852,7 @@ export function createEquationLayouter(
       styles.set(token, cached);
       return cached;
     }
-    const layout = layoutEquation(projection, measurer, style);
+    const layout = layoutEquationWith(projection, measurer, style, input);
     if (!styles) {
       styles = new Map();
       layouts.projections.set(projection, styles);
