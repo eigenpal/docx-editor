@@ -39,10 +39,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Hosted runners are free for this public repository. The macOS and Windows wheels
+        # set the wall clock, so a faster paid Linux runner buys nothing here.
         include:
-          - os: blacksmith-4vcpu-ubuntu-2404
+          - os: ubuntu-24.04
             tag: linux-x64
-          - os: blacksmith-4vcpu-ubuntu-2404-arm
+          - os: ubuntu-24.04-arm
             tag: linux-arm64
           - os: macos-15
             tag: macos-arm64
@@ -172,7 +174,7 @@ jobs:
     # Nothing reached PyPI: no wheel built, or the upload itself failed.
     if: always() && github.event_name == 'workflow_dispatch' && inputs.publish && needs.publish.result == 'failure'
     needs: [wheel, publish]
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}
     steps:

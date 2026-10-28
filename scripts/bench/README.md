@@ -87,7 +87,7 @@ Types into one story only, and you measure nothing: each story part counts its o
 
 ### CI performance-benchmark comment
 
-`.github/workflows/bench.yml` runs two benchmarks on every PR that changes more than documentation, changesets, or specs, each twice: once on the PR merge ref (the PR merged into current `main`) and once on the `main` tip that merge ref was built against (using that commit's own copy of the scripts, in a separate worktree), so the delta isolates exactly what merging the PR changes:
+`.github/workflows/bench.yml` runs two benchmarks on every PR that changes shipped package source, the `examples/vite` benchmark host, the benchmark fixtures, or the benchmark scripts. Test-only and documentation-only PRs skip it. Each benchmark runs twice: once on the PR merge ref (the PR merged into current `main`) and once on the `main` tip that merge ref was built against (using that commit's own copy of the scripts, in a separate worktree), so the delta isolates exactly what merging the PR changes:
 
 - the browser typing-latency test from `e2e/edit-browser.bench.spec.ts` — keystroke handler and frame latency through the real adapter, review rail, and paginated DOM: the number a typing user feels;
 - `bench:edit --runs 10` — the headless engine pipeline with deterministic work counters.
@@ -95,6 +95,8 @@ Types into one story only, and you measure nothing: each story part counts its o
 The two sides run INTERLEAVED (head, base, base, head): a whole benchmark run inherits the machine's momentary state, so back-to-back one-shot runs systematically favor one side. `scripts/bench/edit-bench-comment.mjs` aggregates each side's runs (mean of medians), renders all reports into a single sticky PR comment — the typing-latency table first, the engine table below it, plus any work-counter changes — and refuses to color a delta smaller than the observed same-side spread, so the comment measures its own noise instead of reporting it as a result. Comparability is guarded per report by the fixture SHA-256: if the fixture changed on the PR, or the baseline predates a benchmark, that section degrades to head-only numbers.
 
 Timings in that comment are informational: shared runners are noisy, so the job never fails on a head-vs-base wall-clock delta, and the single-sample timing tails run warn-only there (`EDIT_BROWSER_BENCH_TIMING_TAILS=warn` — one scheduler stall on a shared runner trips a max-sample gate). Deterministic gates still apply — `edit-bench-gates.test.ts` pins the engine work counters inside `bun run test`, and the browser spec's structural and median-based gates fail the job when the HEAD browser run trips them; a failing BASELINE browser run only degrades the comment to head-only numbers. Fork PRs cannot receive comments (read-only token); their reports are in the `edit-bench-report` workflow artifact.
+
+On `main`, the same workflow runs once each night instead of on every merge. It compares `main` with `main` 24 hours earlier, adds twelve engine rounds, and keeps the reports in the `edit-bench-report` artifact. A night without merges skips the run.
 
 ### Browser editing benchmark
 

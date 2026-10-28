@@ -12,7 +12,11 @@
 // `document.querySelector`. Shorter AND stricter.
 //
 //   node scripts/test/run-parallel.mjs [--jobs N] [--shard INDEX/TOTAL] [--fail-fast]
-//     [-- <args passed to every `bun test`>]
+//     [--exclude PATH_PREFIX]... [-- <args passed to every `bun test`>]
+//
+// `--exclude` drops files whose repository-relative path starts with the prefix, after shards
+// are assigned, so a shard holds the same files with or without it and CI duration caches stay
+// valid across both. Pull request CI uses it to leave the seeded collaboration scenarios to main.
 //
 // Slowest-first, from a duration cache written on every run, so the long poles start immediately
 // instead of landing last and leaving the pool half-idle.
@@ -264,6 +268,7 @@ function parseArguments(argv) {
   let jobs = 0;
   let shard = '1/1';
   let failFast = false;
+  const exclude = [];
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === '--') {
@@ -281,11 +286,20 @@ function parseArguments(argv) {
       index += 1;
     } else if (argument.startsWith('--jobs=')) {
       jobs = Number(argument.slice('--jobs='.length));
+    } else if (argument === '--exclude') {
+      exclude.push(argv[++index] ?? '');
+    } else if (argument.startsWith('--exclude=')) {
+      exclude.push(argument.slice('--exclude='.length));
     } else {
       passthrough.push(argument);
     }
   }
-  return { jobs, passthrough, shard, failFast };
+  // An empty prefix would match every file and turn a typo into a green, empty run.
+  if (exclude.some((prefix) => prefix === '')) {
+    console.error('--exclude needs a non-empty path prefix');
+    process.exit(1);
+  }
+  return { jobs, passthrough, shard, failFast, exclude };
 }
 
 /** The child's current resident set in bytes, or 0 when it cannot be read. */
@@ -372,12 +386,12 @@ function runFile(file, passthrough, failFast, onRss) {
 }
 
 async function main() {
-  const { jobs, passthrough, shard, failFast } = parseArguments(process.argv.slice(2));
+  const { jobs, passthrough, shard, failFast, exclude } = parseArguments(process.argv.slice(2));
   if (failFast) passthrough.push('--bail=1');
   const queue = selectShard(
     SEARCH_ROOTS.flatMap((searchRoot) => discover(searchRoot)),
     shard
-  );
+  ).filter((file) => !exclude.some((prefix) => file.startsWith(prefix)));
   if (queue.length === 0) {
     console.error(`no test files found for shard ${shard}`);
     process.exit(1);

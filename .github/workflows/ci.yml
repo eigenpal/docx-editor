@@ -4,6 +4,17 @@ name: CI
 # Each matrix entry is one named check. A failure cancels its siblings;
 # the stable test gate requires every verification lane to pass.
 #
+# Pull requests skip the seeded collaboration scenarios and replays in
+# benchmarks/collaboration-server. They are about half of the unit test time
+# and rarely fail on a change that the rest of the suite passes. Every push to
+# main runs the complete suite, and the Release workflow runs it again before
+# it publishes, so a scenario failure stops the next release.
+#
+# Every job uses a standard GitHub-hosted runner, which is free for a public
+# repository. Do not switch to larger runners (`*-cores` labels): those are
+# billed even here. Unit tests use six shards because the hosted cores are
+# slower than paid ones and a shard costs nothing.
+#
 # Dependabot PRs are handled by dependabot-lockfile.yml (which refreshes
 # bun.lock first and then runs the same checks inline), so we skip them
 # here. GitHub treats skipped required checks as passing since 2022, so
@@ -31,25 +42,28 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          # Setup-bound checks finish in under a minute on the smaller runner.
           - check: shipped-advisories
-            runner: blacksmith-2vcpu-ubuntu-2404
           - check: api-changeset
-            runner: blacksmith-2vcpu-ubuntu-2404
           - check: lint
           - check: typecheck
+          # Two browser lanes of about four minutes each, so neither one sets the wall clock.
           - check: browser
+          - check: acceptance
           - check: build
           - check: unit
-            shard: 1/4
+            shard: 1/6
           - check: unit
-            shard: 2/4
+            shard: 2/6
           - check: unit
-            shard: 3/4
+            shard: 3/6
           - check: unit
-            shard: 4/4
+            shard: 4/6
+          - check: unit
+            shard: 5/6
+          - check: unit
+            shard: 6/6
     name: "${{ matrix.check == 'unit' && format('unit ({0})', matrix.shard) || matrix.check }}"
-    runs-on: ${{ matrix.runner || 'blacksmith-4vcpu-ubuntu-2404' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -96,11 +110,35 @@ jobs:
       - name: CLA logic tests
         if: "matrix.check == 'typecheck'"
         run: bash .github/cla/cla.test.sh
+      # Per-file durations let the runner start the slowest files first. Pushes to main
+      # save them; pull requests restore main's copy. Shard membership does not depend on
+      # --exclude, so one cache serves both. A miss only costs ordering.
+      - name: Restore test durations
+        if: "matrix.check == 'unit'"
+        uses: actions/cache/restore@v6
+        with:
+          path: node_modules/.cache/docx-editor/test-durations.json
+          key: test-durations-${{ matrix.shard }}-${{ github.run_id }}
+          restore-keys: test-durations-${{ matrix.shard }}-
       - name: Run unit test shard
         if: "matrix.check == 'unit'"
         env:
           TEST_SHARD: '${{ matrix.shard }}'
-        run: 'bun run test --shard "$TEST_SHARD" --fail-fast'
+          EVENT_NAME: '${{ github.event_name }}'
+        run: |
+          if [ "$EVENT_NAME" = pull_request ]; then
+            bun run test --shard "$TEST_SHARD" --fail-fast \
+              --exclude benchmarks/collaboration-server/collaboration-scenarios- \
+              --exclude benchmarks/collaboration-server/collaboration-replays-
+          else
+            bun run test --shard "$TEST_SHARD" --fail-fast
+          fi
+      - name: Save test durations
+        if: "matrix.check == 'unit' && github.event_name == 'push'"
+        uses: actions/cache/save@v6
+        with:
+          path: node_modules/.cache/docx-editor/test-durations.json
+          key: test-durations-${{ matrix.shard }}-${{ github.run_id }}
       # Exercise the deployed source build without prebuilding the demo packages.
       # Package artifacts and declarations are verified separately in the build lane.
       - name: Demo deployment build
@@ -111,8 +149,8 @@ jobs:
           # with Node's default heap.
           NODE_OPTIONS: '--max-old-space-size=2048'
       # Skips the slow apt step unless Chromium cannot start; see the script header.
-      - name: Install Chromium for Markdown preview checks
-        if: "matrix.check == 'browser'"
+      - name: Install Chromium for browser checks
+        if: "matrix.check == 'browser' || matrix.check == 'acceptance'"
         run: bash scripts/install-ci-chromium.sh
       - name: Build the PDF server package for export checks
         if: "matrix.check == 'browser'"
@@ -129,13 +167,13 @@ jobs:
         if: "matrix.check == 'browser'"
         run: bun run check:border-patterns
       - name: Editor acceptance tests (React and Vue)
-        if: "matrix.check == 'browser'"
+        if: "matrix.check == 'acceptance'"
         run: bun run test:e2e:acceptance
       - name: Save editor browser failure evidence
-        if: "failure() && matrix.check == 'browser'"
+        if: "failure() && (matrix.check == 'browser' || matrix.check == 'acceptance')"
         uses: actions/upload-artifact@v7
         with:
-          name: editor-browser-failures
+          name: editor-${{ matrix.check }}-failures
           path: test-results/
           retention-days: 7
       - name: Build packages
@@ -272,7 +310,7 @@ jobs:
       fail-fast: false
       matrix:
         shard: ['1/4', '2/4', '3/4', '4/4']
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -301,7 +339,7 @@ jobs:
 
   office-js-compatibility:
     if: github.actor != 'dependabot[bot]'
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     continue-on-error: true
     steps:
@@ -334,7 +372,7 @@ jobs:
   test:
     if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
     needs: [checks, collaboration]
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Require all verification lanes to pass
@@ -345,7 +383,7 @@ jobs:
 
   package-size:
     if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: checks
     permissions:
@@ -419,7 +457,7 @@ jobs:
     name: Security report
     if: "${{ !cancelled() && github.actor != 'dependabot[bot]' }}"
     needs: checks
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     continue-on-error: true
     permissions:

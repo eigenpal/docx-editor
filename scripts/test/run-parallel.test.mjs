@@ -47,6 +47,21 @@ test('fail-fast stops dispatch after the first failure; normal mode reports both
     expect(shard.stdout).not.toContain('FAIL packages/first.test.ts');
     expect(shard.stdout).toContain('FAIL packages/second.test.ts');
 
+    const excluded = run('--exclude', 'packages/first');
+    expect(excluded.status).toBe(1);
+    expect(excluded.stdout).toContain('Running 1 test files');
+    expect(excluded.stdout).not.toContain('FAIL packages/first.test.ts');
+    expect(excluded.stdout).toContain('FAIL packages/second.test.ts');
+
+    // Shards are assigned before exclusion, so shard 2/2 keeps its file.
+    const excludedShard = run('--shard', '2/2', '--exclude', 'packages/first');
+    expect(excludedShard.status).toBe(1);
+    expect(excludedShard.stdout).toContain('FAIL packages/second.test.ts');
+
+    const emptyExclude = run('--exclude=');
+    expect(emptyExclude.status).toBe(1);
+    expect(emptyExclude.stderr).toContain('non-empty path prefix');
+
     const invalid = run('--shard', '0/2');
     expect(invalid.status).toBe(1);
     expect(invalid.stderr).toContain('Invalid shard');
