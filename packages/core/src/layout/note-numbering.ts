@@ -48,10 +48,14 @@ type ResolvedNoteProperties = ResolvedFootnoteProperties | ResolvedEndnoteProper
 /**
  * Derive display marks for references of one note kind in document order.
  *
- * Restart rules:
- * - `continuous` — single sequence across the document from `numStart`
- * - `eachSect` — restart at `numStart` when `sectionIndex` changes
- * - `eachPage` — restart when `pageIndex` changes (falls back to continuous if unknown)
+ * A note's number is its section's `numStart` plus the note's index in its numbering domain:
+ * - `continuous` — the domain is the whole document, so the index counts every earlier
+ *   numbered note, in any section
+ * - `eachSect` — the domain is the reference's section
+ * - `eachPage` — the domain is the reference's page (continuous when the page is unknown)
+ *
+ * So a later section that sets only `numStart` 10, after two notes, numbers its notes 12 and
+ * 13, and a section without its own `numStart` continues from 1 plus the index.
  *
  * IDs are stable; only display numbers change. Non-mutating.
  */
@@ -65,7 +69,8 @@ export function deriveNoteDisplayMarks(
 
 /**
  * Derive marks using per-reference-section resolved properties (`numFmt` / `numStart` /
- * `numRestart`). Restart rules consult each site's own section props.
+ * `numRestart`). Each site uses its own section's properties: the format, the start value, and
+ * the restart rule that picks its numbering domain (see {@link deriveNoteDisplayMarks}).
  */
 export function deriveNoteDisplayMarksResolved(
   _noteKind: NoteKind,
@@ -73,9 +78,12 @@ export function deriveNoteDisplayMarksResolved(
   resolveProps: (sectionIndex: number) => ResolvedNoteProperties
 ): readonly NoteDisplayMark[] {
   const marks: NoteDisplayMark[] = [];
-  let next: number | null = null;
-  let lastSection = -1;
-  let lastPage = -1;
+  // Numbered notes so far: in the document, in the current section, on the current page.
+  let inDocument = 0;
+  let inSection = 0;
+  let inPage = 0;
+  let lastSection: number | null = null;
+  let lastPage: number | null = null;
 
   for (const site of references) {
     const properties = resolveProps(site.sectionIndex);
@@ -83,29 +91,26 @@ export function deriveNoteDisplayMarksResolved(
       marks.push({ noteId: site.noteId, mark: null });
       continue;
     }
-
-    if (next === null) {
-      next = properties.numStart;
+    if (site.sectionIndex !== lastSection) {
       lastSection = site.sectionIndex;
-      lastPage = site.pageIndex ?? -1;
-    } else if (properties.numRestart === 'eachSect' && site.sectionIndex !== lastSection) {
-      next = properties.numStart;
-      lastSection = site.sectionIndex;
-    } else if (
-      properties.numRestart === 'eachPage' &&
-      site.pageIndex !== undefined &&
-      site.pageIndex !== lastPage
-    ) {
-      next = properties.numStart;
-      lastPage = site.pageIndex;
-    } else if (properties.numRestart === 'eachSect') {
-      lastSection = site.sectionIndex;
-    } else if (properties.numRestart === 'eachPage' && site.pageIndex !== undefined) {
-      lastPage = site.pageIndex;
+      inSection = 0;
+    }
+    const page = site.pageIndex ?? null;
+    if (page !== lastPage) {
+      lastPage = page;
+      inPage = 0;
     }
 
-    const displayNumber = next;
-    next += 1;
+    const index =
+      properties.numRestart === 'eachSect'
+        ? inSection
+        : properties.numRestart === 'eachPage' && site.pageIndex !== undefined
+          ? inPage
+          : inDocument;
+    const displayNumber = properties.numStart + index;
+    inDocument += 1;
+    inSection += 1;
+    inPage += 1;
     marks.push({
       noteId: site.noteId,
       mark: formatNumFmt(properties.numFmt, displayNumber),

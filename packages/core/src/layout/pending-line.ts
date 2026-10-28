@@ -83,8 +83,9 @@ export interface PendingLine {
    */
   wrapSegment?: WrapSegment;
   /**
-   * The float passages a line that steps over a float holds content in, left to right, in
-   * paragraph-local coordinates. The first starts where the line's content begins.
+   * The float passages a line that steps over a float holds content in, in the order its pen
+   * met them, in paragraph-local coordinates (mirrored when {@link wrapMirrored}). The first
+   * starts where the line's content begins.
    *
    * Each part of such a line aligns INSIDE its own passage: centred text is centred beside the
    * float on each side, and right-aligned text ends at each passage's right edge. Aligning the
@@ -92,6 +93,12 @@ export interface PendingLine {
    * one passage holds whole, which {@link wrapSegment} describes.
    */
   wrapPassages?: readonly { readonly start: number; readonly end: number }[];
+  /**
+   * The line broke in x mirrored about its paragraph's measure, as a right-to-left line does
+   * beside a float (`wrap-break-space.ts`): it fills the rightmost passage first. Its spans,
+   * {@link wrapSegment} and {@link wrapPassages} are then in that mirrored x, in break order.
+   */
+  wrapMirrored?: true;
   /** Tracked anchored-drawing attributions on this line; see {@link LineRecord.anchorRevisions}. */
   anchorRevisions?: readonly RevisionAttribution[];
   /** Revisions a resolved view answered on this line; see {@link LineRecord.changeSites}. */
@@ -288,6 +295,7 @@ const SPAN_DECORATIONS: Record<Exclude<keyof StyleSpanRecord, 'range' | 'text' |
   caretEdges: true,
   tabLeader: true,
   tabLeaderAdvancePt: true,
+  tabAlignment: true,
   link: true,
   wrapAdvanceBefore: true,
   revisions: true,
@@ -477,6 +485,7 @@ export function frozenLine(line: PendingLine): PendingLine {
     ...(line.wrapPassages
       ? { wrapPassages: Object.freeze(line.wrapPassages.map((passage) => Object.freeze(passage))) }
       : {}),
+    ...(line.wrapMirrored ? { wrapMirrored: true } : {}),
     ...(line.anchorRevisions ? { anchorRevisions: Object.freeze(line.anchorRevisions) } : {}),
     ...(line.changeSites ? { changeSites: Object.freeze(line.changeSites) } : {}),
   }) as PendingLine;

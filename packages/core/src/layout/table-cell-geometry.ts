@@ -95,9 +95,8 @@ export function cellContentInsets(
  * authored it: a narrower authored top under a wider bottom reserves the wider rule, and a
  * `w:val="nil"` on either side does not suppress a rule the other side still paints.
  *
- * A repeated header row is not the row the body row was authored under, so there
- * (`ownEdgeWins`) a body row's own authored top reserves its own width, whatever the
- * header's bottom paints.
+ * Below a repeated header, `repeatBoundaryBandPt` passes the header row's bottom rule as
+ * `bandPt` before mode 15, and the row keeps this authored band from mode 15.
  *
  * `bandPt` is the resolved band's painted width and `tableSide` what an inherited edge falls
  * back to. A vMerge seam paints nothing yet still reserves its inherited rule, which is why
@@ -106,10 +105,8 @@ export function cellContentInsets(
 export function ownTopBandWidthPt(
   own: TableBorderSide,
   tableSide: TableBorderSide,
-  bandPt = 0,
-  ownEdgeWins = false
+  bandPt = 0
 ): number {
-  if (ownEdgeWins && own.state === 'edge') return simpleBandWidthPt(own);
   return Math.max(simpleBandWidthPt(effectiveBorderSide(own, tableSide)), bandPt);
 }
 

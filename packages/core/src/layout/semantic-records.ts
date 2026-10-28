@@ -20,7 +20,7 @@ import type {
   ParagraphBorderSide,
   ParagraphSpacing,
 } from './paragraph-style.ts';
-import type { ResolvedTabStops, TabLeader } from './paragraph-tabs.ts';
+import type { ResolvedTabStops, TabAlignment, TabLeader } from './paragraph-tabs.ts';
 import type { FieldAtomMarker, ModelRange } from './field-pieces.ts';
 import type { InlineDrawingRecord, AnchoredDrawingRecord } from './drawing-layout.ts';
 import type { ImageResourceState } from '../store/package/image-resources.ts';
@@ -239,6 +239,13 @@ export interface StyleSpanRecord {
    * typed there would be — which is what Word draws.
    */
   readonly tabLeaderAdvancePt?: number;
+  /**
+   * Alignment of the stop a `\t` span advanced to, when it is not `left`. A distributed
+   * line stretches the text after its last tab only when that tab reached a left stop.
+   *
+   * @internal
+   */
+  readonly tabAlignment?: Exclude<TabAlignment, 'left'>;
   /**
    * The hyperlink this span belongs to, or absent for ordinary text.
    *

@@ -1,6 +1,8 @@
 import { styleSeparatorMembersOf } from './style-separator-group.ts';
 import { applicationParagraphDefaults } from './application-paragraph-defaults.ts';
 import { applicationRunDefaults } from './application-run-defaults.ts';
+import { readDistributedSpacing } from './distributed-spacing.ts';
+import { themeCacheMaterial } from './theme-cache-material.ts';
 import { applyLigatureCompatibility } from './run-ligatures.ts';
 import { numberingParagraphProperties } from './numbering-paragraph-properties.ts';
 import { numberingLevelRank } from './numbering-level-tier.ts';
@@ -33,7 +35,7 @@ import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { stableHash } from '../store/comparators/canonical.ts';
 import {
   cjkTypographyFromSettings,
-  defaultsSelectEastAsianFace,
+  defaultsTypography,
   type CjkTypographySettings,
 } from './cjk-typography.ts';
 import {
@@ -96,6 +98,12 @@ export interface StyleCascadeTable {
   readonly doNotBreakWrappedTables?: true;
   /** Legacy or explicitly disabled optional OpenType substitutions. */
   readonly disableOptionalLigatures?: true;
+  /**
+   * How distributed paragraphs spread their lines when the document selects character
+   * distribution (`DistributedSpacing` in `distributed-spacing.ts`); absent for `'spaces'`.
+   * @internal
+   */
+  readonly distributedSpacing?: 'characters' | 'legacyCharacters';
   /** Legacy noExtraLineSpacing behavior, included in the producer fingerprint. */
   readonly preserveExactLineBaseline?: true;
   /** `w:adjustLineHeightInTable`: cell paragraphs snap to the section line grid too. */
@@ -435,29 +443,6 @@ export function tableCellStyleFormatting(
 }
 
 /**
- * The theme as cache-key material: every face present, `null` when the theme has none.
- *
- * `ThemeFonts` leaves the East Asian, complex-script, and supplemental faces optional,
- * and a producer that reads a theme with no such scheme hands over `undefined` for
- * them. The comparator behind `stableHash` refuses `undefined` by design, so a key built
- * from the raw object failed layout for any document whose theme lacked one of those
- * faces.
- */
-function themeCacheMaterial(themeFonts: ThemeFonts): Record<string, unknown> {
-  return {
-    major: themeFonts.major ?? null,
-    minor: themeFonts.minor ?? null,
-    majorEastAsia: themeFonts.majorEastAsia ?? null,
-    minorEastAsia: themeFonts.minorEastAsia ?? null,
-    majorBidi: themeFonts.majorBidi ?? null,
-    minorBidi: themeFonts.minorBidi ?? null,
-    majorSupplemental: themeFonts.majorSupplemental ?? null,
-    minorSupplemental: themeFonts.minorSupplemental ?? null,
-    chineseFontTableFaces: themeFonts.chineseFontTableFaces ?? null,
-  };
-}
-
-/**
  * Build a cascade table from a styles part root.
  *
  * Only direct `w:style` children of the root participate (bounded count). Duplicate
@@ -476,6 +461,8 @@ export function buildStyleCascadeTable(
   const ligatureCompatibility = ligaturesEnabled ? {} : { disableOptionalLigatures: true as const };
   const strictTableHierarchy = compatibility.has('strictTableStyleHierarchy');
   const settingsCompatibility = cascadeCompatibility(compatibility);
+  const spacing = readDistributedSpacing(stylesRoot, compatibility);
+  const distribution = spacing ? { distributedSpacing: spacing } : {};
   const styles = new Map<string, StyleDefinition>();
   const theme = themeCacheMaterial(themeFonts);
   if (!stylesRoot) {
@@ -493,9 +480,11 @@ export function buildStyleCascadeTable(
         typography,
         strictTableHierarchy,
         ...settingsCompatibility,
+        ...distribution,
       }),
       ...settingsCompatibility,
       ...ligatureCompatibility,
+      ...distribution,
       strictTableStyleHierarchy: strictTableHierarchy,
       typography,
       docDefaultsRun: runDefaults,
@@ -510,8 +499,10 @@ export function buildStyleCascadeTable(
   }
 
   const authoredDefaults = readDocDefaults(stylesRoot);
-  const sourceEastAsianFont = defaultsSelectEastAsianFace(authoredDefaults.run, themeFonts);
-  typography = Object.freeze({ ...typography, sourceEastAsianFont });
+  typography = Object.freeze({
+    ...typography,
+    ...defaultsTypography(stylesRoot, authoredDefaults.run, themeFonts),
+  });
   const defaults = {
     ...authoredDefaults,
     run: [...applicationRunDefaults(stylesRoot, ligaturesEnabled), ...authoredDefaults.run],
@@ -546,6 +537,7 @@ export function buildStyleCascadeTable(
   const cacheToken = stableHash({
     ...settingsCompatibility,
     ...ligatureCompatibility,
+    ...distribution,
     strictTableHierarchy,
     typography,
     dR: propertiesFingerprint(defaults.run),
@@ -577,6 +569,7 @@ export function buildStyleCascadeTable(
     cacheToken,
     ...settingsCompatibility,
     ...ligatureCompatibility,
+    ...distribution,
     strictTableStyleHierarchy: strictTableHierarchy,
     typography,
     docDefaultsRun: defaults.run,

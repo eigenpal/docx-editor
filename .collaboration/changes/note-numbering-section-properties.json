@@ -1,0 +1,18 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Note numbering fell back to the settings.xml w:footnotePr and w:endnotePr for format, start, restart, and footnote position, a section endnote position overrode settings.xml, a document-scope setNoteProperties wrote only settings.xml and replaced each element with new nodes, so two concurrent writes left two copies in a parent, and a join copied the surviving w:sectPr with new ids, so a concurrent edit to it was lost.",
+  "after": "Numbering and the footnote position resolve from each section's own w:sectPr and the defaults, and the endnote position from settings.xml only. A write merges the named fields in place, keeping node ids, and collapses repeated w:footnotePr/w:endnotePr elements and fields in the containers it visits into the first copy. Save writes only the first copy. A join moves the surviving w:sectPr with its ids.",
+  "reason": "The setNoteProperties operation shape, the collaboration schema, the protocol, and the materialization rules do not change: every replica, released or not, shows the same structure for the same shared state. The writes, the collapse of repeated copies, and the join move are ordinary node, attribute, and child-array edits that released replicas apply. Two peers that each add the element a container lacked at the same moment still leave two copies in shared state; every reader uses the first, the saved file keeps only the first, and the next note properties write by any peer removes the extra copy. A peer on an older release still resolves numbering from settings.xml where a section has no note properties of its own, so two peers on different releases can paint different note numbers for the same shared state until both upgrade. bun run collaboration:test --all was not run, because it needs a package build.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-note-properties.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-concurrent-joins.test.ts",
+    "packages/core/src/store/__tests__/note-properties-document-write.test.ts",
+    "packages/core/src/editor/__tests__/note-properties-document-scope.test.ts",
+    "packages/core/src/layout/__tests__/note-properties-settings-layout.test.ts",
+    "packages/core/src/layout/__tests__/final-section-note-format.test.ts",
+    "packages/core/src/editor/__tests__/note-properties-section.test.ts"
+  ],
+  "changeset": "note-numbering-section-properties",
+  "migration": null
+}

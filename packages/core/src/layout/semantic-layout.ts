@@ -60,12 +60,11 @@ import {
   withDrawingContext,
 } from './layout-cache.ts';
 import {
-  alignSpans,
   lineAlignmentMeasure,
   pendingLineFlowExtentAtPlacement,
   type PendingLine,
 } from './paragraph-flow.ts';
-import { lineAlignOffset, setsLikeLastLine } from './paragraph-alignment.ts';
+import { alignBodyLineSpans, lineAlignOffset } from './paragraph-alignment.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   markRevisionFields,
@@ -834,7 +833,8 @@ function* layoutBlocksPass(
               preparedParagraph,
               measurer,
               styleCascade,
-              options.inlineDrawingLayout
+              options.inlineDrawingLayout,
+              options.compatibilityMode
             )
           : undefined;
       if (frame)
@@ -2666,7 +2666,7 @@ function* layoutBlocksPass(
         box: { ...span.box, x: span.box.x + penX, y: cursorY },
       }));
       // Word aligns inside the passage a float leaves the line, not the page margins.
-      const measure = lineAlignmentMeasure(pendingLine, columnX, lineIndent, lineAvailableWidth);
+      const measure = lineAlignmentMeasure(pendingLine, penX, lineIndent, lineAvailableWidth);
       const placedDrawings = pendingLine.drawings.map((drawing) =>
         Object.freeze({ ...shiftInlineDrawingRecord(drawing, penX, cursorY), paragraphId })
       );
@@ -2675,18 +2675,16 @@ function* layoutBlocksPass(
         placedDrawings,
         rtl,
         (spans) =>
-          alignSpans(
+          alignBodyLineSpans(
             spans,
             measurer,
-            measure.indent,
-            measure.available,
+            measure,
             alignment,
-            setsLikeLastLine(entry.props, pendingLine, isLastLine, styleCascade),
-            alignment === 'center' || alignment === 'right' ? measure.used : undefined,
-            rtl,
-            false,
-            pendingLine.spaceShrink === true,
-            measure.passages
+            entry.props,
+            pendingLine,
+            isLastLine,
+            styleCascade,
+            rtl
           ),
         (aligned) =>
           lineAlignOffset(placedSpans, aligned, alignment, measure.available, measure.used)

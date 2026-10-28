@@ -1,11 +1,7 @@
 // Read-only note-property state for adapter chrome — no tree mutation.
 
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import {
-  bodySectionNode,
-  enumerateDocumentSections,
-  paragraphSectionNode,
-} from '../layout/section-properties.ts';
+import { enumerateDocumentSections, sectionPropertiesNodes } from '../layout/section-properties.ts';
 import { sectionIndexForCaret } from './section-scope.ts';
 import { storyScopeOfNodeId } from './surface-scope.ts';
 import { storyBlocks } from '../layout/story-roots.ts';
@@ -31,7 +27,7 @@ import {
 } from '../store/package/note-nodes.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import { paragraphTextOf } from '@docx-editor.dev/core/store';
-import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
+import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import {
   layoutProjectionOf,
@@ -61,20 +57,7 @@ function sectionSectPrNodes(
   authorFilter?: RevisionAuthorFilter
 ): readonly (import('../store/package/ooxml-tree.ts').OoxmlElement | undefined)[] {
   const part = session.part();
-  const blocks = storyBlocks(part, displayMode, authorFilter);
-  const body = bodySectionNode(part);
-  return sections.map((section, index) => {
-    const closing =
-      section.blockStart < section.blockEndExclusive
-        ? blocks[section.blockEndExclusive - 1]
-        : undefined;
-    const paragraphSectPr =
-      closing?.kind === 'paragraph' ? paragraphSectionNode(closing) : undefined;
-    if (paragraphSectPr) return paragraphSectPr;
-    return index === sections.length - 1 && body?.kind !== 'textValue'
-      ? (body as OoxmlElement)
-      : undefined;
-  });
+  return sectionPropertiesNodes(part, storyBlocks(part, displayMode, authorFilter), sections);
 }
 
 export function notePropertiesStateOf(
@@ -104,7 +87,8 @@ export function notePropertiesStateOf(
   const sectionFnAuthored = authoredFootnotePropertiesFromSectPr(sectPrBySection[sectionIndex]);
   const sectionEnAuthored = authoredEndnotePropertiesFromSectPr(sectPrBySection[sectionIndex]);
 
-  const footnoteResolved = resolveFootnoteProperties(sectionFnAuthored, docFnAuthored);
+  // Footnote numbering and position ignore settings.xml; only the endnote position reads it.
+  const footnoteResolved = resolveFootnoteProperties(sectionFnAuthored);
   const endnoteResolved = resolveEndnoteProperties(sectionEnAuthored, docEnAuthored);
 
   return {

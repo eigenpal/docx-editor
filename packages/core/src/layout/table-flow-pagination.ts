@@ -1,4 +1,4 @@
-import { isSettledPreviousRow, takePreviousRows } from './table-row-placement-reuse.ts';
+import { takePreviousRows } from './table-row-placement-reuse.ts';
 import { createRowProbeReuse } from './table-row-probe-reuse.ts';
 import { clippedExactRow, overheightRowError } from './table-exact-row-clip.ts';
 // Placing ONE top-level table into the body flow, row by row, across page breaks.
@@ -14,9 +14,9 @@ import { clippedExactRow, overheightRowError } from './table-exact-row-clip.ts';
 // story loop keeps ownership of the cursor and this module keeps the row rules.
 
 import { positionedTableOriginX } from './table-origin.ts';
+import * as terminal from './table-exact-terminal-border.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import {
-  finalizeTableRows,
   initialCellCursors,
   layoutRowFragment,
   layoutRowFragmentBounded,
@@ -36,9 +36,9 @@ import { fragmentRowContentDeps } from './table-fragment-content-insets.ts';
 import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import { bottomToTopTextKeepsRowWhole } from './table-cell-text-direction.ts';
 import {
+  headerGroupMoves,
   keptRowGroupMoves,
-  onlyTopHeaderRows,
-  rowsOpening,
+  onlyRepeatedHeaderRows,
   rowStartsPage,
   tableKeptRowSource,
 } from './table-row-keeps.ts';
@@ -57,13 +57,12 @@ import {
   createVMergeFragmentCarry,
   type VMergeFragmentCarry,
 } from './table-vmerge-fragment-carry.ts';
-import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { tableOriginX, type SemanticTableRow } from './semantic-table.ts';
 import { readFlowTable } from './table-flow-structure.ts';
 import * as textTable from './table-text-float-break.ts';
 import { tableFloatOriginY } from './table-float-position.ts';
-import { shiftTableFragment, splitHead } from './table-fragment-finalize.ts';
-import { budgetsHaveHeadroom, withBudgetProof } from './table-budget-proof.ts';
+import { splitHead } from './table-fragment-finalize.ts';
+import { closeTableFragmentRows } from './table-fragment-close.ts';
 import { planOutOfCellFloats } from './table-out-of-cell-floats.ts';
 import { tableFloatClearance } from './table-float-collision.ts';
 import type { TableRowFragmentRecord } from './semantic-records.ts';
@@ -71,11 +70,7 @@ import { TABLE_ROWS_PER_STEP, type LayoutSteps } from './layout-steps.ts';
 
 import type { TableFlowCursor, TableFlowPlacementResult } from './table-flow-cursor.ts';
 export type { TableFlowCursor, TableFlowPlacementResult } from './table-flow-cursor.ts';
-import {
-  cachedRowHeights,
-  refreshTerminalRow,
-  POSITIONED_TABLE_LAYOUT_BOTTOM_PT,
-} from './table-flow-row-state.ts';
+import { cachedRowHeights, POSITIONED_TABLE_LAYOUT_BOTTOM_PT } from './table-flow-row-state.ts';
 
 /**
  * Lay out one top-level table with OOXML-aligned row pagination.
@@ -149,12 +144,9 @@ export function* paginateTableInFlowSteps(
     structure.cellSpacingPt,
     takePreviousRows(table, flowDeps)
   );
-  /** One row's natural height at the current table origin. */
-  const rowHeightOf = (
-    probeRow: SemanticTableRow,
-    top = flow.cursorY,
-    deps?: TableFlowDeps
-  ): number => rowProbes.measure(probeRow, tableLeft, top, deps ?? tableDeps);
+  /** One row's natural height at the current table origin, without the terminal rule. */
+  const rowHeightOf = (row: SemanticTableRow, top = flow.cursorY, deps = tableDeps): number =>
+    rowProbes.measure(row, tableLeft, top, deps) - terminal.exactTerminalBorderPt(row, deps);
   // Out-of-cell floats (`layoutInCell="0"` before mode 15) keep the place the unpushed table
   // gives them and push the rows that touch them; see `table-out-of-cell-floats.ts`. Only
   // an in-flow table's first fragment is pushed: after a break the rows are on another sheet.
@@ -162,7 +154,7 @@ export function* paginateTableInFlowSteps(
     outOfFlow || structure.float
       ? null
       : planOutOfCellFloats(structure, table.id, tableLeft, flow.cursorY, flowDeps);
-  const tableDeps = floats?.deps ?? cellDeps;
+  const tableDeps = terminal.tableTerminalDeps(structure, floats?.deps ?? cellDeps);
   const headerRows: SemanticTableRow[] = [];
   for (const row of structure.rows) {
     if (row.isHeader) headerRows.push(row);
@@ -227,6 +219,10 @@ export function* paginateTableInFlowSteps(
     clearance?.clear(clearance.fragment(headerRows.length, fits, groupAt));
   };
   const laterLayout = hasCompatibilityRule(flow.compatibilityMode, 'headerRowsKeepWithBody');
+  const repeatKeepsWholeRow = hasCompatibilityRule(flow.compatibilityMode, 'repeatKeepsWholeRow');
+  const tallRowStaysWhole = hasCompatibilityRule(flow.compatibilityMode, 'tallRowStaysWhole');
+  // The open continuation fragment left out its repeated header rows.
+  let repeatOmitted = false;
   let repeatedPlan: RepeatedHeaderBorderPlan | undefined;
   let prepareRepeat: (() => RepeatedHeaderBorderPlan | null | undefined) | undefined;
   const rememberInsets = (record: TableRowFragmentRecord, deps: TableFlowDeps): void => {
@@ -242,72 +238,28 @@ export function* paginateTableInFlowSteps(
       floats?.end();
       return;
     }
-    const terminalDelta = refreshTerminalRow(
+    const closed = closeTableFragmentRows({
       structure,
+      tableId: table.id,
+      fragmentIndex,
       rows,
       sourceRows,
       completeSourceRows,
       occurrenceInsets,
-      tableLeft,
-      contentHeight(),
-      tableDeps
-    );
-    if (terminalDelta !== undefined) flow.cursorY += terminalDelta;
-    if (fragmentCarry.current)
-      ({ rows, sources: sourceRows } = fragmentCarry.current.publish(
-        rows,
-        sourceRows,
-        occurrenceInsets,
-        tableLeft
-      ));
-    ({ rows, sources: sourceRows } = carry.publish(rows, sourceRows, occurrenceInsets));
-    let finalized = carry.finish(
-      finalizeTableRows(
-        rows,
-        structure,
-        sourceRows,
-        tableDeps.borderOwnershipBudget,
-        tableDeps.vMergeResolveBudget,
-        undefined,
-        shiftAnchor,
-        tableDeps,
-        occurrenceInsets,
-        new Set(rows.filter(isSettledPreviousRow))
-      )
-    );
-    if (fragmentCarry.current) finalized = fragmentCarry.current.finish(finalized);
-    const last = finalized[finalized.length - 1]!;
-    const fragment = annotateTableFragmentGeometry(
-      {
-        kind: 'table',
-        ...(outOfFlow ? { outOfFlow: true as const } : {}),
-        id: `${table.id}#f${fragmentIndex}`,
-        tableId: table.id,
-        fragmentIndex,
-        rows: finalized,
-        box: {
-          x: tableLeft,
-          y: fragmentTop,
-          width: structure.columnWidthsPt.reduce((sum, columnWidth) => sum + columnWidth, 0),
-          height: last.box.y + last.box.height - fragmentTop,
-        },
-      },
-      structure.columnWidthsPt,
-      0,
-      rowOrdinals
-    );
-    // A positioned table's alignment needs its final height, so it moves once complete.
-    const positionedFragment =
-      outOfFlow && structure.float && verticalFrames && flow.stackTop === undefined
-        ? shiftTableFragment(
-            fragment,
-            tableFloatOriginY(structure.float, fragment.box.height, verticalFrames) -
-              fragment.box.y,
-            shiftAnchor
-          )
-        : fragment;
-    const published = withBudgetProof(positionedFragment, budgetsHaveHeadroom(tableDeps));
-    publishFragment(published, wrapsBeside);
+      left: tableLeft,
+      top: fragmentTop,
+      bottom: contentHeight(),
+      deps: tableDeps,
+      carry,
+      fragmentCarry: fragmentCarry.current,
+      rowOrdinals,
+      shiftAnchor,
+      outOfFlow,
+      verticalFrames,
+      stackTop: flow.stackTop,
+    });
+    flow.cursorY += closed.cursorDelta;
+    publishFragment(closed.fragment, wrapsBeside);
     floats?.end();
     fragmentIndex += 1;
     rows = [];
@@ -396,9 +348,11 @@ export function* paginateTableInFlowSteps(
     repeatedPlan = candidate;
   };
 
+  /** Start the next fragment; `repeat` false leaves out the header repeat on that page. */
   const breakForContinuation = (
     admitsBodyAfter?: (bodyTop: number) => boolean,
-    newPage = false
+    newPage = false,
+    repeat = repeatsEnabled
   ): void => {
     closeTableFragment();
     if (newPage) flow.advancePage();
@@ -407,15 +361,19 @@ export function* paginateTableInFlowSteps(
     // See placeHeaderGroup: the new fragment opens at the advanced cursor, which is the
     // column region top on a shared sheet and 0 only when a fresh page was opened.
     fragmentTop = flow.cursorY;
-    clearance?.clearPending(repeatsEnabled && headerRows.length > 0 ? headerGroupHeight : 0);
-    if (repeatsEnabled) placeHeaderGroup(true, admitsBodyAfter);
+    clearance?.clearPending(repeat && headerRows.length > 0 ? headerGroupHeight : 0);
+    if (repeat) placeHeaderGroup(true, admitsBodyAfter);
+    // A fragment opens with only its repeat, so no rows here means the repeat was left out.
+    repeatOmitted = repeatsEnabled && headerRows.length > 0 && rows.length === 0;
   };
 
+  /** Whole band of a fresh page: a note reserve yields to a kept row. */
+  const pageBand = () => Math.max(contentHeight(), flow.unreservedContentHeight?.() ?? 0);
   /** Kept-row pricing over `candidates` (`table-row-keeps.ts`); `first` overrides one row's height. */
   const keptSource = (
     candidates: readonly SemanticTableRow[],
     first?: [number, number],
-    pageHeight = Math.max(contentHeight(), flow.unreservedContentHeight?.() ?? 0)
+    pageHeight = pageBand()
   ) =>
     tableKeptRowSource({
       structure,
@@ -423,15 +381,16 @@ export function* paginateTableInFlowSteps(
       left: tableLeft,
       deps: tableDeps,
       pageHeight,
-      heightOf: cachedRowHeights(candidates, rowHeightOf, first),
+      fullPageHeight: pageBand(),
+      heightOf: cachedRowHeights(candidates, terminal.withRule(rowHeightOf, tableDeps), first),
       following: (room) => flow.followingKeepOpening?.(room),
     });
   const headerFollowsContent = flow.regionHoldsContent(fragmentTop);
   if (!initialHeaderGroupDegraded && headerRows.length > 0) clearAuthoredHeader();
 
-  // Word 2013 and later: header rows keep with the body rows' opening. When both do not fit
-  // below content already on the page but do fit a page of their own, the table starts on the
-  // next one. Earlier layout leaves the header rows and repeats them above the body rows.
+  // Mode 15 and later: header rows keep with the body rows' opening (`headerGroupMoves`).
+  // When both do not fit below content already on the page, the table starts on the next one.
+  // Earlier layout leaves the header rows and repeats them above the body rows.
   if (
     laterLayout &&
     breaksPages &&
@@ -442,8 +401,7 @@ export function* paginateTableInFlowSteps(
   ) {
     const fresh = contentHeight() - headerGroupHeight;
     const body = keptSource(structure.rows.slice(headerRows.length), undefined, fresh);
-    const opens = (room: number) => (rowsOpening(body, 0, room) ?? 0) <= room + 0.001;
-    if (!opens(contentHeight() - flow.cursorY - headerGroupHeight) && opens(fresh)) {
+    if (headerGroupMoves(body, contentHeight() - flow.cursorY - headerGroupHeight, fresh)) {
       closeTableFragment();
       advanceColumn();
       tableLeft = originX();
@@ -548,27 +506,28 @@ export function* paginateTableInFlowSteps(
         flow.cursorY <= 0.001 ||
         (rows.length > 0 && rows.every((placed) => placed.isHeaderRepeat)),
     });
-    prepareRepeat = () =>
-      isContinuation
-        ? undefined
-        : prepareRepeatedHeaderBorderPlan(
-            structure,
-            headerRows,
-            row,
-            tableLeft,
-            flow.cursorY,
-            contentHeight(),
-            headerGroupHeight,
-            baselineBodyHeight,
-            tableDeps
-          );
+    // A plan refuses a body row that does not fit below the repeat. A row that overflows
+    // there instead (`overflowsBelowRepeat`) takes the ordinary repeat path.
+    prepareRepeat = () => {
+      if (isContinuation) return undefined;
+      const plan = prepareRepeatedHeaderBorderPlan(
+        structure,
+        headerRows,
+        row,
+        tableLeft,
+        flow.cursorY,
+        contentHeight(),
+        headerGroupHeight,
+        baselineBodyHeight,
+        tableDeps
+      );
+      return plan === null && overflowsBelowRepeat() ? undefined : plan;
+    };
 
     // `w:cantSplit` keeps a row whole only when a page can hold it. The full band counts,
     // because a note reserve yields to a kept row. A wrapping float still reduces that band.
     // A taller row starts on a fresh page and then splits like an ordinary row.
-    const pageHoldsRow = (): boolean =>
-      naturalHeight <=
-      Math.max(contentHeight(), flow.unreservedContentHeight?.() ?? 0) - bandTop + 0.001;
+    const pageHoldsRow = (): boolean => naturalHeight <= pageBand() - bandTop + 0.001;
     // `btLr` text takes its line length from the whole row, so such a row also moves whole to
     // a page that can hold it when its authored minimum does not fit the room below `top`
     // (`bottomToTopTextKeepsRowWhole`).
@@ -582,6 +541,10 @@ export function* paginateTableInFlowSteps(
           cellContentInsets(cell, structure.cellSpacingPt === 0),
         tableDeps.cellMinimumContentInsets
       );
+    // Before mode 15, repeated header rows stay above a row that cannot split, fits a fresh
+    // page, and does not fit below them. The row then stays whole there and runs past the margin.
+    const overflowsBelowRepeat = (top = flow.cursorY): boolean =>
+      repeatKeepsWholeRow && pageHoldsRow() && (row.height.rule === 'exact' || keepsWholeAt(top));
 
     // A row an accepted span covers below its head, a nested head row included, does not
     // take the whole-row MOVE: alone among the breaks below, that one is an optimization
@@ -615,7 +578,8 @@ export function* paginateTableInFlowSteps(
         !isContinuation &&
         (row.height.rule === 'exact' || (!clearingFloat && keepsWholeAt(bodyTop) && pageHoldsRow()))
       ) {
-        return false;
+        // Before mode 15 the repeat stays, and the row runs past the margin below it.
+        return !clearingFloat && overflowsBelowRepeat(bodyTop);
       }
       return probeRowFragmentProgress(
         row,
@@ -697,9 +661,7 @@ export function* paginateTableInFlowSteps(
             keptSource(bodyRows, [bodyRowIndex, naturalHeight]),
             bodyRowIndex,
             contentHeight() - flow.cursorY,
-            Math.max(contentHeight(), flow.unreservedContentHeight?.() ?? 0) -
-              (flow.columnTop?.() ?? 0) -
-              (repeatsEnabled ? headerGroupHeight : 0),
+            pageBand() - (flow.columnTop?.() ?? 0) - (repeatsEnabled ? headerGroupHeight : 0),
             flow.compatibilityMode,
             rows.length > 0 && rows.every((placed) => placed.isHeaderRow)
           )
@@ -743,7 +705,7 @@ export function* paginateTableInFlowSteps(
           top: flow.cursorY,
           columnTop: flow.columnTop?.() ?? 0,
           bottom: contentHeight(),
-          band: Math.max(contentHeight(), flow.unreservedContentHeight?.() ?? 0),
+          band: pageBand(),
           repeat: repeatsEnabled && !laterLayout ? headerGroupHeight : 0,
           belowBandOnly:
             bandTop > 0 &&
@@ -752,7 +714,8 @@ export function* paginateTableInFlowSteps(
         })) ||
       (!heldByOpenSpan &&
         naturalHeight <= contentHeight() + 0.001 &&
-        flow.cursorY + naturalHeight + closingEdge > contentHeight() + 0.001 &&
+        flow.cursorY + naturalHeight + closingEdge + terminal.ruleRoomPt(row, tableDeps, rowDeps) >
+          contentHeight() + 0.001 &&
         flow.cursorY > bandTop &&
         (keepsWholeAt(flow.cursorY) ||
           row.height.rule === 'exact' ||
@@ -822,7 +785,9 @@ export function* paginateTableInFlowSteps(
             contentHeight()
           );
         placed = fragmentCarry.current.adjustPlacement(bodyRowIndex, placed, contentHeight());
-        if (placed.bottom > contentHeight() + 0.001) {
+        // A row admitted at a page start keeps its page. Only its outer closing rule can overflow.
+        const terminalExtent = terminal.exactTerminalBorderPt(row, placementDeps);
+        if (placed.bottom > contentHeight() + terminalExtent + 0.001) {
           throw new TablePaginationError(
             'table-row-overheight',
             `Table row ${row.id} overflowed the page content box after placement`
@@ -858,13 +823,25 @@ export function* paginateTableInFlowSteps(
       // `cursorY === 0` — a fresh page the row was just moved to — and aborts a layout
       // nothing in `core` catches, on a path the module comment calls a recovery.
       if (!isContinuation && (row.cantSplit || row.height.rule === 'exact')) {
-        const splitsAnyway = row.height.rule !== 'exact' && !pageHoldsRow();
-        // A row that splits anyway gains no room by leaving header rows that already open
-        // the page: repeats, or the authored group at the page top. Moving would strand them
-        // above an empty band. Header rows that start lower, below a float's band too, move.
-        const belowTopHeadersOnly = onlyTopHeaderRows(rows, fragmentTop);
-        if (flow.cursorY > bandTop && !movedToFreshPage && !(splitsAnyway && belowTopHeadersOnly)) {
-          breakForContinuation(admitsRepeatedHeaders);
+        // No page holds this row. Before mode 15 it stays whole on its fresh page and runs past
+        // the bottom margin (`tallRowStaysWhole`); later modes split it there.
+        const tall = row.height.rule !== 'exact' && !pageHoldsRow();
+        const staysWhole =
+          tall &&
+          tallRowStaysWhole &&
+          breaksPages &&
+          !pinnedBreak &&
+          vMerge === undefined &&
+          bandTop === 0 &&
+          !tableDeps.pageExclusionZones?.().length &&
+          row.cells.every((cell) => cell.blocks.every((block) => block.kind === 'paragraph'));
+        const splitsAnyway = tall && !staysWhole;
+        // A tall row stays below repeated header rows only, and leaves authored ones. From
+        // mode 15 it opens its fresh page without a repeat (`onlyRepeatedHeaderRows`).
+        const belowRepeatsOnly = onlyRepeatedHeaderRows(rows);
+        if (flow.cursorY > bandTop && !movedToFreshPage && !(tall && belowRepeatsOnly)) {
+          const repeat = repeatsEnabled && !(splitsAnyway && laterLayout);
+          breakForContinuation(admitsRepeatedHeaders, false, repeat);
           movedToFreshPage = true;
           // Re-offered like every other break that retries this row: a merge starting on a
           // `w:cantSplit` row that did not fit the band it was offered in may fit the fresh
@@ -879,10 +856,13 @@ export function* paginateTableInFlowSteps(
         // the throw below rejects the entire document for one row+reserve collision.
         const fullBand = flow.unreservedContentHeight?.() ?? contentHeight();
         // An exact row no band holds fills the rest of this one (`table-exact-row-clip.ts`).
+        // A row kept below repeated headers only runs past the margin (`overflowsBelowRepeat`).
         const offer =
-          fullBand > contentHeight() + 0.001 && naturalHeight <= fullBand - flow.cursorY + 0.001
-            ? { row, band: fullBand }
-            : clippedExactRow(row, contentHeight(), flow.cursorY);
+          (belowRepeatsOnly && overflowsBelowRepeat()) || staysWhole
+            ? { row, band: POSITIONED_TABLE_LAYOUT_BOTTOM_PT }
+            : fullBand > contentHeight() + 0.001 && naturalHeight <= fullBand - flow.cursorY + 0.001
+              ? { row, band: fullBand }
+              : clippedExactRow(row, contentHeight(), flow.cursorY);
         if (offer) {
           const placementDeps = rowDeps();
           let placed = layoutRowFragment(
@@ -995,5 +975,9 @@ export function* paginateTableInFlowSteps(
   if (outOfFlow) flow.cursorY = bodyCursorY;
   else if (broken)
     flow.cursorY = textTable.resumeAfterBreak(structure, flow, wrapsBeside, fragmentTop);
+  // From mode 15, content after a table whose last page left out the repeated header rows
+  // starts on the next page, even where it fits (`omittedRepeatEndsPage`).
+  else if (repeatOmitted && hasCompatibilityRule(flow.compatibilityMode, 'omittedRepeatEndsPage'))
+    flow.cursorY = flow.contentHeight();
   return { outOfFlow };
 }

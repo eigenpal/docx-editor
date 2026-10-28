@@ -40,6 +40,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `anchorOnlyParagraphSeeding` | `modern` | Seeds the pages of consecutive anchor-only paragraphs first |
 | `anchorOnlyParagraphWrapExclusion` | `modern` | An anchor-only paragraph wraps around its own anchors |
 | `anchorsLayOutInCell` | `modern` | Every anchored object in a table cell lays out in its cell |
+| `distributedLinesSpreadCharacters` | `legacy` | A distributed paragraph spreads every line after every character, kerned runs included; a space first takes up to the face average character width less its own advance |
 | `fixedTableContentEdgeOrigin` | `legacy` | A fixed left table aligns its first content edge with the text column |
 | `floatingTableContentOrigin` | `legacy` | A floating table with a numeric text anchor or a right alignment positions its cell content |
 | `floatingTableOverlapMovesLeft` | `modern` | A floating table that may not overlap tries the left side before it moves down |
@@ -55,9 +56,14 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `openingColumnBreakTakesNoLine` | `legacy` | A column break that opens a paragraph leaves no line in the column it ends |
 | `oversizedRowKeepGroupReleases` | `legacy` | Oversized kept row groups release before placement, except below authored headers |
 | `positionedTableBreaksAtMargin` | `modern` | A breaking page- or margin-positioned table ends its first fragment at the bottom margin; legacy modes run it to the page edge |
+| `omittedRepeatEndsPage` | `modern` | Content after a table whose last page leaves out the repeated header rows starts on the next page |
 | `pageBreakBeforeKeepsSpace` | `legacy` | A paragraph with `w:pageBreakBefore` keeps its space before at the top of the new page. In `modern` modes only the first block of a section keeps it |
 | `pageBreakLinesStretch` | `legacy` | A justified line before a page or column break stretches, unless it ends its paragraph |
+| `repeatBoundaryUsesHeaderRule` | `legacy` | A complete body row directly below a repeated header row reserves the wider of its own top border and the header row's bottom border. In `modern` modes it keeps the band of the row it follows in the table |
+| `repeatKeepsWholeRow` | `legacy` | Repeated header rows stay above a row that cannot split and does not fit below them; the row runs past the bottom margin |
+| `repeatedHeaderYieldsToTerminalRule` | `modern` | Repeated header rows yield when the last fixed-height row fits below them only without its bottom rule |
 | `rowPageBreakYieldsToKeep` | `modern` | A row with a page break follows a row that keeps with it |
+| `tallRowStaysWhole` | `legacy` | A row that cannot split and is taller than a page stays whole on its page and runs past the bottom margin |
 | `tableParagraphWidowControl` | `modern` | Paragraphs that split in table cells apply widow control |
 | `vMergeTextMovesPastHeadRow` | `modern` | Merged cell text moves whole past a head row that cannot hold it |
 | `wrappedAnchorsStayBelowTopMargin` | `modern` | A wrapping object positioned from its paragraph never starts above the top margin |

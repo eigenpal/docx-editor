@@ -9,7 +9,8 @@
 // beside it the opening of what follows: the whole next row when that row cannot split
 // (`w:cantSplit`, an exact height), otherwise the first lines of every cell under the cell
 // paragraphs' own widow and `w:keepLines` rules; after the last row, the opening of the
-// next body paragraph. When the group and that opening do not fit below the content already
+// next body paragraph. A `w:cantSplit` row taller than a page opens only on a fresh page,
+// so it is priced whole. When the group and that opening do not fit below the content already
 // on the page, the group moves to the next page. Legacy layout releases a group that cannot
 // fit a fresh page; modern layout moves it once before releasing that impossible keep.
 // Before Word 2013 layout, a row that starts a new page (`w:pageBreakBefore`) ends the group
@@ -135,6 +136,11 @@ export interface KeptRowSource {
   readonly mergedHeights?: (start: number, end: number) => readonly number[] | null;
   /** Whether the row must place whole: `w:cantSplit`, an exact height, bottom-to-top text. */
   readonly placesWhole: (index: number) => boolean;
+  /**
+   * Whether the row moves to a fresh page from below other content and then splits there:
+   * a `w:cantSplit` row without an exact height that is taller than a page.
+   */
+  readonly movesToFreshPage?: (index: number) => boolean;
   /** Smallest height that starts every cell of a row that may split. */
   readonly openingOf: (index: number) => number;
   /** Whether `height` starts every cell of a row that may split: one probe, no search. */
@@ -159,6 +165,8 @@ export interface KeptRowGroup {
    * next kept row whole as the successor, so the height is a lower bound on what it needs.
    */
   readonly truncated?: true;
+  /** The next row moves to a fresh page and splits there ({@link KeptRowSource.movesToFreshPage}). */
+  readonly successorStartsFreshPage?: true;
 }
 
 /**
@@ -216,7 +224,10 @@ export function keptRowGroup(
     successor = source.following(room - kept);
     if (successor === undefined) return null;
   }
-  return successor === null ? null : { end, kept, successor };
+  if (successor === null) return null;
+  return next < rows.length && !source.breaksAt(next) && source.movesToFreshPage?.(next)
+    ? { end, kept, successor, successorStartsFreshPage: true }
+    : { end, kept, successor };
 }
 
 /** Whether a kept group moves out of the current column. */
@@ -230,6 +241,8 @@ export function keptRowGroupMoves(
 ): boolean {
   const group = keptRowGroup(source, start, room);
   if (!group || group.kept + group.successor <= room + 0.001) return false;
+  // The next row leaves this page in every mode, so the kept rows go with it.
+  if (group.successorStartsFreshPage) return true;
   // Authored headers keep their own page before the body group retries below a repeat.
   if (
     belowAuthoredHeaders ||
@@ -270,6 +283,22 @@ export function rowsOpening(
 }
 
 /**
+ * Whether header rows that keep with the body rows' opening move to the next page: that
+ * opening does not fit `room` below them here, but fits `freshRoom` on a page of their own, or
+ * the first body row, or the row after a kept group that opens the body, moves to a fresh page
+ * anyway ({@link KeptRowSource.movesToFreshPage}).
+ */
+export function headerGroupMoves(body: KeptRowSource, room: number, freshRoom: number): boolean {
+  const opens = (space: number) => (rowsOpening(body, 0, space) ?? 0) <= space + 0.001;
+  if (opens(room)) return false;
+  return (
+    opens(freshRoom) ||
+    body.movesToFreshPage?.(0) === true ||
+    keptRowGroup(body, 0, room)?.successorStartsFreshPage === true
+  );
+}
+
+/**
  * Smallest height in `[0, whole]` for which `opens` holds, to within 1/65536 of `whole`.
  *
  * `opens` must be monotone: a row that starts every cell in some height starts them in any
@@ -294,8 +323,14 @@ export interface KeptRowMeasure {
   readonly rows: readonly SemanticTableRow[];
   readonly left: number;
   readonly deps: TableFlowDeps;
-  /** Band of a fresh page: a `w:cantSplit` row taller than this splits anyway. */
+  /** Band of a fresh page that the rows are priced against. */
   readonly pageHeight: number;
+  /**
+   * Height a `w:cantSplit` row must exceed to move to a fresh page and split there
+   * ({@link KeptRowSource.movesToFreshPage}): the whole band of a fresh page. Defaults to
+   * {@link pageHeight}.
+   */
+  readonly fullPageHeight?: number;
   readonly heightOf: (index: number) => number;
   readonly following: (room: number) => number | null | undefined;
 }
@@ -352,10 +387,16 @@ export function tableKeptRowSource(measure: KeptRowMeasure): KeptRowSource {
     heightOf,
     mergedHeights: (start, end) =>
       measureKeptMergeRows(structure, rows, start, end, left, deps, heightOf),
-    placesWhole: (index) => {
+    // A `w:cantSplit` row taller than a page still starts only on a fresh page, so a keep
+    // beside it needs its whole height and cannot fit: the kept content moves once.
+    placesWhole: (index) => rows[index]!.height.rule === 'exact' || rows[index]!.cantSplit,
+    movesToFreshPage: (index) => {
       const row = rows[index]!;
-      if (row.height.rule === 'exact') return true;
-      return row.cantSplit && heightOf(index) <= measure.pageHeight + 0.001;
+      return (
+        row.height.rule !== 'exact' &&
+        row.cantSplit &&
+        heightOf(index) > (measure.fullPageHeight ?? measure.pageHeight) + 0.001
+      );
     },
     openingOf: (index) => smallestOpening(heightOf(index), (height) => opensWithin(index, height)),
     opensWithin,
@@ -408,7 +449,8 @@ const openingsByPass = new WeakMap<TableFlowDeps, WeakMap<OoxmlElement, OpeningM
 /**
  * What a `w:keepNext` paragraph before `table` needs beside it: the header rows, planned as
  * placement plans them (`planHeaderGroup`), then the opening of the body rows
- * ({@link rowsOpening}). Null for a positioned table and a header group taller than a page.
+ * ({@link rowsOpening}). Null for a positioned table. A header group taller than a page is
+ * priced as body rows, as placement lays it out.
  *
  * When the kept rows run from the first body row to the table's end, `throughHeight` is the
  * header and those rows: the chain goes on with the content after the table. A first row that
@@ -465,7 +507,7 @@ function measureTableKeepOpening(
     if (!row.isHeader) break;
     headerRows.push(row);
   }
-  const header = planHeaderGroup(
+  let header = planHeaderGroup(
     structure,
     headerRows,
     () => 0,
@@ -473,7 +515,11 @@ function measureTableKeepOpening(
     deps,
     (row, _top, rowDeps) => measure(row, rowDeps)
   ).heightPt;
-  if (header > pageHeight + 0.001) return null;
+  // A header group taller than a page places as ordinary rows, so it is priced as body rows.
+  if (header > pageHeight + 0.001) {
+    headerRows.length = 0;
+    header = 0;
+  }
   // Before Word 2013, header rows do not keep with the body rows, so the chain ends there.
   const laterLayout = hasCompatibilityRule(at.compatibilityMode, 'headerRowsKeepWithBody');
   if (headerRows.length > 0 && !laterLayout) return { height: header };
@@ -547,16 +593,9 @@ export function tableKeepFlow(
 }
 
 /**
- * Whether a fragment holds only header rows that open its page: repeats, or the authored group
- * at the page top. A keep-together row that splits anyway gains no room by leaving them.
+ * Whether a fragment holds only repeated header rows. A keep-together row that splits anyway
+ * gains no room by leaving them, because the next page repeats them as well.
  */
-export function onlyTopHeaderRows(
-  rows: readonly TableRowFragmentRecord[],
-  fragmentTop: number
-): boolean {
-  return (
-    rows.length > 0 &&
-    rows.every((placed) => placed.isHeaderRow) &&
-    (fragmentTop <= 0.001 || rows.every((placed) => placed.isHeaderRepeat))
-  );
+export function onlyRepeatedHeaderRows(rows: readonly TableRowFragmentRecord[]): boolean {
+  return rows.length > 0 && rows.every((placed) => placed.isHeaderRepeat);
 }

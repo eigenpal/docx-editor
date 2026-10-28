@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A distributed line stretches only its spaces, and a line with nothing to stretch stays at its start edge.",
+  "after": "In a legacy compatibility mode, or in a modern mode with a w:rPrDefault element in the styles part, each line of a left-to-right distributed paragraph spreads its slack after every character once its spaces have taken their share. In a modern mode, a run with pair kerning on (w:kern not 0 and at most its size) keeps its letters together and stretches only at its spaces and East Asian characters. Otherwise it stretches its spaces, and a line with nothing to stretch is centered. Tabs and float advances keep their reserved positions.",
+  "reason": "Only layout geometry and paint change. Canonical OOXML, source positions, operations, and collaboration formats remain unchanged. Every peer derives the same geometry from the same styles and settings parts.",
+  "tests": [
+    "packages/core/src/layout/__tests__/distributed-last-line.test.ts",
+    "packages/core/src/layout/__tests__/distributed-character-spacing.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-distributed-last-line.test.ts"
+  ],
+  "changeset": "distributed-single-word",
+  "migration": null
+}

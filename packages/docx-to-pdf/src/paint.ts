@@ -4,6 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { collectPageChangeBars } from '@docx-editor.dev/core/output';
+import { ownedGapAfter } from './owned-gap.ts';
 import { DEFAULT_REVISION_MARKUP, type ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
 import {
   indexRowRevisions,
@@ -38,6 +39,7 @@ import {
   Work,
   Commands,
   rect,
+  widenToGridEdge,
 } from './context.ts';
 import { cellDiagonalCommands } from './table-cell-diagonals.ts';
 import { TextWriter } from './text.ts';
@@ -727,10 +729,16 @@ export async function paint(
       markup && markup.background !== 'none'
         ? markupBackground(markup.background, authorSlots.get(markup.author) ?? 0)
         : (HIGHLIGHTS[visit.span.style.highlight ?? ''] ?? visit.span.style.shading);
-    if (fill)
+    if (fill) {
+      // The band runs on across the gap the span owns, as screen paint draws it.
+      const band = text.bandBox(visit);
+      const gap = ownedGapAfter(visit);
+      const owned =
+        gap > 0 ? widenToGridEdge(band, -visit.page.box.x, band.x + band.width + gap) : band;
       out.push(
-        `${color(fill)} rg ${rect(text.bandBox(visit), -visit.page.box.x, -visit.page.box.y, pageHeight(page), true)} f`
+        `${color(fill)} rg ${rect(owned, -visit.page.box.x, -visit.page.box.y, pageHeight(page), true)} f`
       );
+    }
     const clipping = visit.paragraph.clipToBox;
     if (clipping)
       out.push(

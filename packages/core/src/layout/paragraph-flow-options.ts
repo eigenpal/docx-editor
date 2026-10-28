@@ -19,6 +19,8 @@ export interface ParagraphFlowOptions {
   readonly leftTabsPastMargin?: boolean;
   /** An inline object opening its line stays on it beside a float, however wide. */
   readonly inlineObjectsBesideFloats?: boolean;
+  /** Square wrapping on the largest side breaks a tie to the physical left (mode 15 and later). */
+  readonly largestWrapTieLeft?: boolean;
   /** A body paragraph, where a column break ends its column. */
   readonly columnBreaksEndColumns?: boolean;
   /** The paragraph mark after a closing page break takes a line on the next page. */

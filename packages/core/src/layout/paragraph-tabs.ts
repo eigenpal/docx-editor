@@ -59,6 +59,30 @@ export const TAB_LEADER_GLYPH: ReadonlyMap<TabLeader, string> = new Map([
   ['middleDot', '\u00B7'],
 ]);
 
+/**
+ * The fields a `\t` span takes from the stop it reached: the stop's leader, with one leader
+ * glyph measured by `measure` in the run's face, and the stop's alignment when it is not
+ * `left`.
+ */
+export function tabStopSpanFields(
+  destination: { readonly alignment: TabAlignment; readonly leader?: TabLeader },
+  measure: (glyph: string) => number
+): {
+  readonly tabLeader?: TabLeader;
+  readonly tabLeaderAdvancePt?: number;
+  readonly tabAlignment?: Exclude<TabAlignment, 'left'>;
+} {
+  return {
+    ...(destination.leader
+      ? {
+          tabLeader: destination.leader,
+          tabLeaderAdvancePt: measure(TAB_LEADER_GLYPH.get(destination.leader) ?? '.'),
+        }
+      : {}),
+    ...(destination.alignment !== 'left' ? { tabAlignment: destination.alignment } : {}),
+  };
+}
+
 /** One authored `w:tab`: where it sits, how it aligns, and what fills the gap. */
 export interface TabStop {
   /** Position from the paragraph content origin, in points. */

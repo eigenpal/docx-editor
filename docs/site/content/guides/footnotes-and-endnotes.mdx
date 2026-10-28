@@ -39,6 +39,16 @@ The Editing API can enumerate, read, navigate, and delete notes. Use `document.f
 
 The editor supports Word note positions such as page bottom, beneath text, section end, and document end.
 
+### Numbering and position
+
+Each section numbers its notes from its own note properties: the number format, start value, restart rule, and footnote position. If a section leaves a value unset, it uses the default. Footnotes use decimal numbers and endnotes use lowercase Roman numerals, both start at 1 and number continuously, and footnotes go at the page bottom. The document-wide note properties in `settings.xml` do not change numbering.
+
+The endnote position applies to the whole document. If you change it for one section, the change applies to every section.
+
+If you apply note properties to the whole document, the editor writes them to every section and to `settings.xml`. Values that you do not change keep their current values in each section.
+
+A note number is the start value of its section plus the position of the note in its numbering sequence. With continuous numbering, the sequence covers the whole document, so a section that starts at 10 after two earlier notes numbers its notes 12 and 13.
+
 ### References in body paragraphs
 
 A footnote starts with its reference line when enough note text fits below it. The note can continue on the next page even when it fits whole on a fresh page. Note paragraphs respect keep-lines (`w:keepLines`) and widow-control (`w:widowControl`) settings. Without widow control, one note line can start below the reference.
