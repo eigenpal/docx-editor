@@ -11,6 +11,34 @@ The layout engine SHALL stretch the final line of a paragraph with `w:jc` set to
 - **THEN** text fills each passage without crossing the floating object
 - **AND** the source text, formatting, and source positions remain unchanged
 
+### Requirement: Keeps beside a row taller than a page
+
+A `w:keepNext` paragraph, a chain of them, or a kept row before a `w:cantSplit` table row taller than a page SHALL move to the next page once, and the row SHALL start on the page after it. Content that already starts its page SHALL stay there. This rule SHALL apply in compatibility modes 14 and 15, for tables with one row or more.
+
+#### Scenario: A caption before a one-row table with a tall row
+
+- **GIVEN** a `w:keepNext` paragraph below other content, before a table whose only row has `w:cantSplit` and is taller than a page
+- **WHEN** layout paginates the body
+- **THEN** the paragraph starts the next page by itself
+- **AND** the row starts on the page after the paragraph and splits there
+
+#### Scenario: A caption at the top of a page before a tall row
+
+- **GIVEN** a `w:keepNext` paragraph at the top of a page, before a `w:cantSplit` row taller than a page
+- **WHEN** layout paginates the body
+- **THEN** the paragraph stays on its page and the row starts on the next page
+
+### Requirement: Header rows above a row taller than a page
+
+Authored header rows SHALL NOT hold a `w:cantSplit` body row taller than a page on their page, even at the page top. Only repeated header rows SHALL hold it. In compatibility mode 15 and later, authored header rows below other content SHALL move to the next page before that row. A header row group taller than a page SHALL place and keep as body rows.
+
+#### Scenario: Authored header rows above a tall row
+
+- **GIVEN** a table whose authored header row opens a page, followed by a `w:cantSplit` body row taller than a page
+- **WHEN** layout paginates the body
+- **THEN** the header row stays alone on its page
+- **AND** the body row starts below the repeated header row on the next page
+
 ### Requirement: Native semantic layout records
 
 The semantic layout engine SHALL produce revision-tagged page, paragraph-fragment, line, and style-span records directly from the committed canonical tree and derived style resources.

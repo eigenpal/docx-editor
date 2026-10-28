@@ -148,15 +148,16 @@ test('repeated header rows precede every page of an oversized cantSplit row', ()
   expect(body).toEqual(Array.from({ length: 12 }, (_, index) => `x${index}`));
 });
 
-test('an oversized cantSplit row does not strand the header rows above it', () => {
+test('an oversized cantSplit row leaves authored header rows at the page top', () => {
   const layout = layoutSemanticDocument(
     source(table(row(p('head'), '<w:tblHeader/>') + row(lines('x', 12), '<w:cantSplit/>'))),
     0,
     options
   );
+  // Page 1 keeps the authored header row alone; the row starts below its repeat on page 2.
   const fragments = tables(layout);
-  expect(fragments[0]!.rows.map((tableRow) => tableRow.rowIndex)).toEqual([0, 1]);
-  expect(pageOfLines(layout).get('x0')).toBe(1);
+  expect(fragments[0]!.rows.map((tableRow) => tableRow.rowIndex)).toEqual([0]);
+  expect(pageOfLines(layout).get('x0')).toBe(2);
   for (const fragment of fragments.slice(1)) expect(fragment.rows[0]!.isHeaderRepeat).toBe(true);
   expectInsideContentBox(layout);
 });
