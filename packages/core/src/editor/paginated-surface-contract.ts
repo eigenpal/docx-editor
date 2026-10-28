@@ -11,6 +11,7 @@ import type {
   TrackedChangeFilterMode,
   TrackedChangePredicate,
   ViewScope,
+  TableInteractionLabelKey,
 } from '../contracts/editor.ts';
 import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
 import type { RevisionStyles } from '../output/revision-presentation.ts';
@@ -827,9 +828,7 @@ export interface PaginatedSurface {
    *
    * @public
    */
-  setTableInteractionLabel(
-    resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string
-  ): void;
+  setTableInteractionLabel(resolver: (key: TableInteractionLabelKey) => string): void;
   /**
    * Move the painted pages into `container`, which may belong to another document: a pop-out
    * window or an iframe. The session, undo history, selection and collaboration replica stay

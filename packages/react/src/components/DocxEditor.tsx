@@ -14,7 +14,7 @@ import { createPackagedPopups } from '../editor/popup-config';
 import { DocxEditorTextFormFieldDialog } from '../editor/DocxEditorTextFormFieldDialog';
 import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ForwardRefExoticComponent, RefAttributes } from 'react';
-import type { Editor } from '@docx-editor.dev/core/contracts/editor';
+import type { Editor, TableInteractionLabelKey } from '@docx-editor.dev/core/contracts/editor';
 import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../lib/colorMode';
 import { useDocxEditor } from '../editor/context';
 import { DocxEditorContent } from '../editor/DocxEditorContent';
@@ -443,7 +443,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
     );
 
     const tableInteractionLabel = useCallback(
-      (key: 'table.insertRowBelow' | 'table.insertColumnRight') => translate(key),
+      (key: TableInteractionLabelKey) => translate(key),
       [translate]
     );
 

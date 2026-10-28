@@ -5,10 +5,12 @@
 import {
   htmlListKindAndStart,
   htmlListStartFromMarker,
+  semanticHtmlListKind,
+  semanticHtmlListStart,
   type HtmlListAllocation as ListAllocation,
-  type HtmlListKind,
+  type HtmlListLevel,
 } from './clipboard-html-numbering.ts';
-import { isElement, isMsoListIgnoreMarker } from './clipboard-html-styles.ts';
+import { isElement, isMsoListIgnoreMarker, tagOf } from './clipboard-html-styles.ts';
 import type { FlowContext, Projection } from './clipboard-html-projection.ts';
 
 type ParaProps = FlowContext['para'];
@@ -16,18 +18,17 @@ type ParaProps = FlowContext['para'];
 export function allocateList(
   p: Projection,
   key: string,
-  kind: HtmlListKind,
-  start = 1,
+  observed: HtmlListLevel,
   level = 0
 ): string {
   const existing = p.lists.get(key);
   if (existing) {
     // First observation per level wins; other levels stay open for later markers.
-    if (!existing.levels.has(level)) existing.levels.set(level, { kind, start });
+    if (!existing.levels.has(level)) existing.levels.set(level, observed);
     return existing.numId;
   }
   const numId = String(1001 + p.lists.size);
-  const allocation: ListAllocation = { numId, levels: new Map([[level, { kind, start }]]) };
+  const allocation: ListAllocation = { numId, levels: new Map([[level, observed]]) };
   p.lists.set(key, allocation);
   p.listsByNumId.set(numId, allocation);
   return numId;
@@ -55,19 +56,33 @@ export function msoListNumPr(
     (lfoMatch !== null
       ? p.listDefinitions.get(`l${match[1]}:level${match[2]}:lfo${lfoMatch[1]}`)
       : undefined) ?? p.listDefinitions.get(`l${match[1]}:level${match[2]}`);
-  let kind: HtmlListKind;
-  let start: number;
-  if (definition !== undefined) {
-    kind = definition.kind;
-    start = htmlListStartFromMarker(marker, kind) ?? definition.start ?? 1;
-  } else {
-    ({ kind, start } = htmlListKindAndStart(marker));
-  }
+  const observed: HtmlListLevel =
+    definition !== undefined
+      ? {
+          kind: definition.kind,
+          start: htmlListStartFromMarker(marker, definition.kind) ?? definition.start ?? 1,
+          ...(definition.align ? { align: definition.align } : {}),
+        }
+      : marker.trim().length > 0
+        ? htmlListKindAndStart(marker)
+        : enclosingListLevel(element);
   // A note body's list must not seed the body list's first-observation state — the
   // notes project first, and their markers would pin the body's start values.
   const scope = noteBody === undefined ? '' : `${noteBody.kind}${noteBody.id}:`;
   const key = `mso:${scope}l${match[1]}${lfoMatch ? `:lfo${lfoMatch[1]}` : ''}`;
-  return { numId: allocateList(p, key, kind, start, ilvl), ilvl };
+  return { numId: allocateList(p, key, observed, ilvl), ilvl };
+}
+
+/**
+ * A Word `<li>` with no `@list` level rule (Word omits an all-default level) and no marker
+ * span: its `<ol>`/`<ul>` is the only statement of its format left.
+ */
+function enclosingListLevel(element: Element): HtmlListLevel {
+  const list = element.parentElement;
+  if (list === null || (tagOf(list) !== 'ol' && tagOf(list) !== 'ul')) {
+    return { kind: 'bullet', start: 1 };
+  }
+  return { kind: semanticHtmlListKind(list), start: semanticHtmlListStart(list) };
 }
 
 /** The text of the `mso-list:Ignore` marker span, for number-vs-bullet detection. */

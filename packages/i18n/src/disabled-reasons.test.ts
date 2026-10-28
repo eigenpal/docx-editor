@@ -85,3 +85,15 @@ test('the content-lock formatting refusal is translatable', () => {
   const reason = 'this content is locked';
   expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);
 });
+
+test.each([
+  [
+    'suggesting cannot delete a whole table; stop suggesting to delete it, or delete its rows one at a time',
+    'tableDeleteSuggesting',
+  ],
+  ['suggesting cannot move a table; stop suggesting to move it', 'tableMoveSuggesting'],
+  ['selecting a table row is not supported yet', 'selectTableRowUnsupported'],
+  ['selecting a table column is not supported yet', 'selectTableColumnUnsupported'],
+] as const)('the table refusal %s is translatable', (reason, key) => {
+  expect(localizeDisabledReason(reason, createT(en))).toBe(en.disabledReason[key]);
+});

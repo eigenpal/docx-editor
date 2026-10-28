@@ -224,6 +224,7 @@ export {
   ContextMenuInsertColumnRight,
   ContextMenuMergeCells,
   ContextMenuSplitCell,
+  ContextMenuSelectTable,
   ContextMenuInsertRowAbove,
   ContextMenuInsertRowBelow,
   ContextMenuRefreshToc,

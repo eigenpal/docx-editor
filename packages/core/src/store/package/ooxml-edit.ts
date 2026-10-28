@@ -29,6 +29,7 @@ import {
 import { isCanonicalPrimitiveCaptureActive } from './canonical-primitive-capture.ts';
 import {
   captureInsertChildren,
+  captureMoveChild,
   captureRemoveNode,
   captureReplaceChildren,
   captureReplaceNode,
@@ -680,6 +681,42 @@ export function insertChildren(
   const knownIds = knownIdsIfCapturing(part, children);
   const result = finish(rebuild(part, nodeId, withChildren(target, next)), options);
   if (result.ok) captureInsertChildren(target, at, children, knownIds);
+  return result;
+}
+
+/**
+ * Move a child before one of its siblings, keeping its identity.
+ *
+ * Journaled as ONE move. A child-list rewrite would journal it as an insert and a later
+ * delete, and between those two steps the shared list holds the child twice: a peer that
+ * hides the duplicate maps the delete onto the next sibling and drops it.
+ */
+export function moveChild(
+  part: OoxmlPart,
+  parentId: string,
+  childId: string,
+  beforeId: string,
+  options?: EditOptions
+): OoxmlEditResult {
+  const target = findNode(part, parentId);
+  const child =
+    target && target.kind !== 'textValue'
+      ? target.children.find((candidate) => candidate.id === childId)
+      : undefined;
+  const rest =
+    target && target.kind !== 'textValue'
+      ? target.children.filter((candidate) => candidate.id !== childId)
+      : [];
+  const at = rest.findIndex((candidate) => candidate.id === beforeId);
+  if (!target || target.kind === 'textValue' || !child || at < 0) {
+    return {
+      ok: false,
+      issues: [{ code: 'known-node-invariant', path: parentId, nodeId: childId }],
+    };
+  }
+  const next = [...rest.slice(0, at), child, ...rest.slice(at)];
+  const result = finish(rebuild(part, parentId, withChildren(target, next)), options);
+  if (result.ok) captureMoveChild(parentId, childId, at);
   return result;
 }
 

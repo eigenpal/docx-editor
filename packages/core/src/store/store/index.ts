@@ -205,6 +205,7 @@ export {
   type SetLegacyCheckboxOp,
 } from './legacy-checkbox-fields.ts';
 export { type InsertBuildingBlockOp } from './building-block-insert.ts';
+export { type InsertTableOp, type MoveTableOp } from './table-placement-op-types.ts';
 export {
   enclosedBookmarkDeletions,
   withoutBookmarkInPart,

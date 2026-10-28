@@ -49,6 +49,7 @@ export const TREE_DOC_OP_KINDS = [
   'removeRepeatingSectionItem',
   'deleteBlock',
   'insertTable',
+  'moveTable',
   'insertTableRow',
   'deleteTableRow',
   'insertTableColumn',

@@ -1646,7 +1646,7 @@ export interface DocxEditorConfig {
     reviewDisplayMode?: ReviewDisplayMode;
     revisionMarkup?: RevisionMarkupOptions;
     revisionStyles?: RevisionStyles;
-    tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
+    tableInteractionLabel?: (key: TableInteractionLabelKey) => string;
     translate?: (key: string, params?: Record<string, string | number>) => string;
     unsupportedElementRules?: readonly UnsupportedElementRule[];
     zoom?: number;
@@ -1890,7 +1890,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
     setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null, options?: {
         readonly formattingKinds?: readonly string[];
     }): void;
-    setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
+    setTableInteractionLabel(resolver: (key: TableInteractionLabelKey) => string): void;
     setTrackedChangesFilter(predicate: TrackedChangePredicate | null, mode?: TrackedChangeFilterMode): void;
     setZoom(zoom: number): ExecResult;
     setZoomMode(mode: ZoomMode | 'auto'): ExecResult;
@@ -4199,6 +4199,9 @@ export interface TableContext {
     // (undocumented)
     readonly rows: number;
 }
+
+// @public
+export type TableInteractionLabelKey = 'table.insertRowBelow' | 'table.insertColumnRight' | 'table.selectTable';
 
 // @public
 export interface TableRightEdgeResizeTarget {
