@@ -684,7 +684,9 @@ function deleteHiddenCopies(
  */
 export function deleteCopiesOfRemoved(
   registry: DocumentRegistry,
-  removed: readonly LogicalId[]
+  removed: readonly LogicalId[],
+  /** Paragraphs inside a removed row, cell, or table (`removed-descendants.ts`). */
+  inside: ReadonlySet<LogicalId> = new Set()
 ): {
   readonly held: HeldOriginals;
   readonly shown: ReadonlyMap<LogicalId, readonly string[]>;
@@ -695,9 +697,9 @@ export function deleteCopiesOfRemoved(
   const shownBy = new Map<LogicalId, string[]>();
   /** The records removed paragraphs embedded and showed: they go with the paragraph. */
   const embeds = new Set<string>();
-  for (const id of removed) {
+  for (const id of [...removed, ...inside]) {
     const text = registry.inline.textOf(id);
-    if (!text || !registry.isTombstoned(id)) continue;
+    if (!text || (!registry.isTombstoned(id) && !inside.has(id))) continue;
     const shown = registry.inline.viewOf(id).shown(text);
     let position = 0;
     for (const op of text.toDelta() as { insert: unknown }[]) {

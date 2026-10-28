@@ -165,6 +165,11 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
   { config: 'reorder', delivery: 'peer', seed: 12 },
   { config: 'reorderUndo', delivery: 'server', seed: 25 },
   { config: 'reorderEverything', delivery: 'server', seed: 52 },
+  // Two replicas deleted one row or table at once and one undid its delete: the text the other
+  // deleted showed again.
+  { config: 'reorderUndo', delivery: 'server', seed: 40 },
+  { config: 'reorderUndo', delivery: 'server', seed: 1005 },
+  { config: 'reorderEverything', delivery: 'server', seed: 1045 },
 ];
 
 /**
@@ -178,26 +183,6 @@ const OPEN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number;
     // were shrunk before the fuzzer moved tables with `moveTable`; they still fail, with the
     // same kinds of defects and a join that refuses a later delete (`invalid-bound`).
     //
-    // An undo after concurrent row or block deletes beside moved blocks shows text again that
-    // another replica deleted.
-    {
-      config: 'reorderUndo',
-      delivery: 'server',
-      seed: 40,
-      case: 'undo-after-row-deletes-beside-moved-blocks-restores-deleted-text.json',
-    },
-    {
-      config: 'reorderUndo',
-      delivery: 'server',
-      seed: 1005,
-      case: 'undo-after-row-and-block-deletes-restores-deleted-text.json',
-    },
-    {
-      config: 'reorderEverything',
-      delivery: 'server',
-      seed: 1045,
-      case: 'undo-after-table-move-and-row-deletes-restores-deleted-text.json',
-    },
     // An undo beside moved tables removes text that another replica typed.
     {
       config: 'reorderUndo',

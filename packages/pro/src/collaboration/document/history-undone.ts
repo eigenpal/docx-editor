@@ -21,6 +21,7 @@ import { isElementRecord, isNodeMap, NODE_UNDONE_FIELD } from './schema.ts';
 import { textDeletionsOf, type DeletedRun } from './paragraph-text-deletions.ts';
 import { deleteSetRuns, structAt } from './yjs-items.ts';
 import { textMarksOf } from './paragraph-text-marks.ts';
+import { INLINE_FIELD } from './paragraph-text.ts';
 
 /**
  * The part members a part always lists. Numbering definitions are not among them: concurrent
@@ -220,6 +221,14 @@ function hasShownCopy(
   return false;
 }
 
+/** Whether `item` is a character or inline element of a paragraph's shared text. */
+function isParagraphCharacter(item: Y.Item): boolean {
+  if (!(item.content instanceof Y.ContentString) && !(item.content instanceof Y.ContentEmbed)) {
+    return false;
+  }
+  return item.parent instanceof Y.Text && item.parent._item?.parentSub === INLINE_FIELD;
+}
+
 /** How many steps lie at or below the topmost group step under the top one, or 0. */
 function aboveLastGroupStep(stack: readonly StackItemShape[]): number {
   for (let index = stack.length - 2; index >= 0; index -= 1) {
@@ -235,7 +244,8 @@ function changesOf(step: StackItemShape): number {
 }
 
 /**
- * The characters a step typed whose copies show, and those an earlier undo of it hid.
+ * The characters a step typed whose copies show, those it typed that are still in place,
+ * and those an earlier undo of it hid.
  *
  * Walked by item, not by character: a move deletes whole spans of a step's characters at
  * once. A span already deleted, with a copy of any of its characters, is recorded whole; its
@@ -264,13 +274,19 @@ function copiesOf(registry: DocumentRegistry, step: StackItemShape | undefined):
       // counts only once deleted.
       if (item?.deleted || (item && !marks.origin('restore', run.client, clock))) {
         const spans = identitySpans(marks, run.client, clock, end);
-        // Spans first, characters only where an index run holds a copy: an undo of a long
-        // paste reads its marks once per insert, not once per character.
-        const shown = spans.some(
-          (span) =>
-            follow.holdsCopyIn(span.client, span.from, span.to) &&
-            hasShownCopy(follow, span.client, span.from, span.to)
-        );
+        // A peer can copy typed text this undo removes at the same time, as a join of its
+        // paragraph does. The copy reaches this replica later, so the undo records every
+        // character it wrote and removes, and that copy stays hidden too. A copy the step
+        // wrote of another character records only its own item, which names nothing else.
+        // Otherwise spans first, characters only where an index run holds a copy: an undo
+        // of a long paste reads its marks once per insert, not once per character.
+        const shown =
+          (!!item && !item.deleted && isParagraphCharacter(item)) ||
+          spans.some(
+            (span) =>
+              follow.holdsCopyIn(span.client, span.from, span.to) &&
+              hasShownCopy(follow, span.client, span.from, span.to)
+          );
         if (shown) for (const span of spans) add(span.client, span.from, span.to);
       }
       clock = end;
