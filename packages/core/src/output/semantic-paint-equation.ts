@@ -24,6 +24,9 @@ function place(
   scale: number
 ): void {
   element.style.position = 'absolute';
+  // The host is the only hit target. A later, larger run can paint its box past the host,
+  // which claims only the run's glyphs on the line, so the box must not take presses there.
+  element.style.pointerEvents = 'none';
   element.style.left = `${geometry.x * scale}px`;
   element.style.top = `${geometry.y * scale}px`;
   element.style.width = `${geometry.width * scale}px`;
@@ -173,6 +176,8 @@ function paintNode(
       element.style.lineHeight = `${node.box.height * scale}px`;
       element.style.whiteSpace = 'pre';
       if (node.kind === 'fallback') {
+        // A text fallback is an unsupported element whose slot takes its own presses.
+        element.style.pointerEvents = 'auto';
         const fallback = document.createElement('span');
         fallback.textContent = node.text;
         element.textContent = '';

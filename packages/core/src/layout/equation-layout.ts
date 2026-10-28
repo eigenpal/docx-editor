@@ -844,10 +844,11 @@ function layoutEquationWith(
   collectLeaves([projection.expression], leaves);
   const first = leaves[0];
   // A first structure leads with its own size: its `m:ctrlPr` size or the surrounding size.
+  // This walk and the geometry walk in `fitEquationLineExtent` both flatten rows and skip
+  // nothing, so they find the same first leaf.
+  const firstControl = first && 'controlFontSizePt' in first ? first : {};
   const leadingSizePt =
-    first && first.kind !== 'text'
-      ? structureSizePt('controlFontSizePt' in first ? first : {}, 1, cache)
-      : mathStyle.fontSizePt;
+    first && first.kind !== 'text' ? structureSizePt(firstControl, 1, cache) : mathStyle.fontSizePt;
   return Object.freeze({
     sourceNodeId: projection.sourceNodeId,
     geometry: fitEquationLineExtent(

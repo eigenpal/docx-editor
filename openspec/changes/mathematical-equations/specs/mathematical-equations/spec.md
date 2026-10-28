@@ -90,6 +90,7 @@ The engine SHALL publish equation geometry from DOM-free layout. Paint SHALL use
 - **WHEN** a later text atom of an equation has a larger font box than the first atom
 - **THEN** the first atom claims its full font box on the line
 - **AND** a later text atom claims its glyph ink, with 300/2048 em of the first atom size above the ink, and never more than its own font box
+- **AND** a later text atom that draws no ink, such as a run of spaces, claims no height
 - **AND** a first structure takes the leading from its `m:ctrlPr` size, or from the size of the text around the equation
 - **AND** later structures and text without measured ink keep their boxes, so an equation whose runs share one size and face keeps its extent
 

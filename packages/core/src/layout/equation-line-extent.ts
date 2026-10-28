@@ -1,6 +1,6 @@
 // The vertical extent that an equation claims on its line when its runs differ in size.
 import type { EquationGeometry, EquationRowGeometry } from './equation-layout.ts';
-import { equationInk } from './equation-ink.ts';
+import { equationInk, isInvisibleEquationText } from './equation-ink.ts';
 import { box, shifted } from './equation-scripts.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 
@@ -19,8 +19,9 @@ function collectAtoms(node: EquationGeometry, atoms: EquationGeometry[]): void {
  * its glyph ink, plus the math leading of the first atom's size above the ink, and never
  * more than its own font box. So a larger run after a smaller one raises the line by its
  * ink, not by its font box, and a larger run without descending glyphs does not deepen it.
- * Structures keep their boxes. Rows align every atom on one baseline, so the atoms of
- * nested rows take part too. A text atom without measured ink keeps its font box.
+ * Later text that draws nothing, such as a space, claims no height. Structures keep their
+ * boxes. Rows align every atom on one baseline, so the atoms of nested rows take part too.
+ * A text atom without measured ink keeps its font box.
  *
  * `structureSizePt` is the leading size when the first atom is a structure. The result is
  * `root` itself when the extent does not change, which holds for every equation whose
@@ -41,9 +42,12 @@ export function fitEquationLineExtent(
   let descent = first.box.height - first.baseline;
   for (let index = 1; index < atoms.length; index += 1) {
     const atom = atoms[index]!;
+    // Later text that draws nothing, such as a larger space, claims no height.
+    if (atom.kind === 'text' && isInvisibleEquationText(atom.text)) continue;
     let atomAscent = atom.baseline;
     let atomDescent = atom.box.height - atom.baseline;
-    if (atom.kind === 'text') {
+    // Ink can only lower a claim, so read it only for a box that reaches past the extent.
+    if (atom.kind === 'text' && (atomAscent > ascent || atomDescent > descent)) {
       const ink = equationInk(atom, measurer);
       if (!ink.fromFontBox) {
         atomAscent = Math.min(atomAscent, ink.ascent + leading);

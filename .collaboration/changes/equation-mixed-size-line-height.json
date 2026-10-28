@@ -2,11 +2,12 @@
   "impact": "no-impact",
   "fields": [],
   "before": "Every run of an equation claimed its whole font box on the line, so a later, larger run made the line as tall as its font box.",
-  "after": "The first atom of an equation claims its font box. A later text atom claims its glyph ink, with the math leading of the first atom size above it, and never more than its font box.",
+  "after": "The first atom of an equation claims its font box. A later text atom claims its glyph ink, with the math leading of the first atom size above it, and never more than its font box. A later text atom that draws nothing claims no height. Painted equation parts take no pointer input; the equation host does.",
   "reason": "Only local equation geometry and line height change. Canonical OMML, offsets, operations, and collaboration data remain unchanged.",
   "tests": [
     "packages/core/src/layout/__tests__/equation-line-extent.test.ts",
     "packages/core/src/layout/__tests__/equation-mixed-run-size.test.ts",
+    "packages/core/src/output/__tests__/equation-line-extent-paint.test.ts",
     "packages/pro/src/collaboration/__tests__/document-equation-mixed-run-size.test.ts"
   ],
   "changeset": "equation-mixed-size-line-height",

@@ -125,6 +125,14 @@ test('places later glyphs above a fitted row when their font box reaches past it
   expect(later!.box.y).toBeLessThan(0);
 });
 
+test('a larger later run that draws nothing claims no height', () => {
+  for (const measurer of [inked, fontBox]) {
+    const geometry = layout(run('x', 12) + run(' ', 48) + run('x', 12), measurer);
+    expect(ascent(geometry)).toBeCloseTo(12 * ASCENT, 8);
+    expect(descent(geometry)).toBeCloseTo(12 * DESCENT, 8);
+  }
+});
+
 test('a first structure leads with its control size', () => {
   const geometry = layout(fraction(run('a', 12), run('b', 12), 12) + run('x', 48));
   expect(ascent(geometry)).toBeCloseTo(48 * INK.x!.top + 12 * LEADING, 8);

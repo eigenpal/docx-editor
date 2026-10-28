@@ -90,6 +90,11 @@ function graphemeInk(
 // Spaces, invisible operators (U+2061 to U+2064), and format characters draw no ink.
 const INVISIBLE = /^[\p{White_Space}\p{Default_Ignorable_Code_Point}]+$/u;
 
+/** The text draws no ink: it holds only spaces, invisible operators, and format characters. */
+export function isInvisibleEquationText(text: string): boolean {
+  return INVISIBLE.test(text);
+}
+
 /**
  * Vertical ink of a text run: the union of its graphemes. Invisible graphemes add nothing.
  * Null when no grapheme has ink, or when a visible grapheme has none (a missing glyph).
