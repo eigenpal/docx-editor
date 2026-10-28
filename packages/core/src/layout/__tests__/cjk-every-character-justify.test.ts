@@ -111,7 +111,9 @@ test('the slack beyond the automatic gap goes in equal steps to the East Asian s
 });
 
 test('character distribution doubles an automatic gap before it spreads the characters', () => {
-  const [line] = lines(paragraph('漢字ab', 'distribute'), CHARACTERS);
+  // The run names an East Asian font, so the empty run defaults keep its automatic gap.
+  const named = `<w:p><w:pPr><w:jc w:val="distribute"/></w:pPr><w:r><w:rPr><w:rFonts w:eastAsia="MS Mincho"/><w:sz w:val="22"/></w:rPr><w:t>漢字ab</w:t></w:r></w:p>`;
+  const [line] = lines(named, CHARACTERS);
   // Three character gaps share the slack the doubled automatic gap leaves.
   const step = (100 - 40 - 2 * AUTOMATIC_GAP) / 3;
   const xs = placed(line!);
@@ -119,6 +121,9 @@ test('character distribution doubles an automatic gap before it spreads the char
   expect(xs[1]![1]).toBeCloseTo(10 + step, 4);
   expect(xs[2]![1]).toBeCloseTo(20 + 2 * step + 2 * AUTOMATIC_GAP, 4);
   expect(xs[3]![1]).toBeCloseTo(90, 4);
+  // A run that resolves no East Asian font opens no automatic gap: three equal steps.
+  const [plain] = lines(paragraph('漢字ab', 'distribute'), CHARACTERS);
+  expect(placed(plain!).map(([, x]) => x)).toEqual([0, 30, 60, 90]);
 });
 
 /** Each visible span's x against its natural x, from its source offset on the line. */

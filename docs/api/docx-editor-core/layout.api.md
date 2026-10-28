@@ -384,6 +384,8 @@ export interface CjkTypographySettings {
     readonly after: Readonly<Record<string, string>>;
     readonly before: Readonly<Record<string, string>>;
     readonly compression: 'doNotCompress' | 'compressPunctuation' | 'compressPunctuationAndJapaneseKana';
+    // @internal
+    readonly eastAsianSpacing?: false;
     readonly punctuationKerning?: boolean;
     readonly sourceEastAsianFont?: boolean;
     readonly strict: boolean;
@@ -3169,6 +3171,8 @@ export interface ResolvedRunStyle {
     };
     // (undocumented)
     readonly doubleStrike: boolean;
+    // @internal
+    readonly eastAsianFontAuthored?: true;
     // (undocumented)
     readonly fontFamily: string | null;
     readonly fontFamilyEastAsia: string | null;
