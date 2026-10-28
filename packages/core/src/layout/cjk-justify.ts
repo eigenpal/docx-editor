@@ -25,6 +25,9 @@ import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 /** Characters that join their neighbours: no slot opens next to them. */
 const JOINERS = /[\u00a0\u202f\u2060\ufeff]/u;
 
+/** The placeholder character of an inline object, such as an inline picture. */
+const INLINE_OBJECT = 0xfffc;
+
 /**
  * Whether two adjacent code points are Korean syllables or jamo. Only a distributed line
  * opens a gap between them; a justified Korean line stretches its spaces.
@@ -112,8 +115,12 @@ export function justifyCjkSpans(
       JOINERS.test(previous.text.slice(-1) + current.text[0])
     )
       continue;
-    const eastAsianBefore = isCjk(before) || previous.fontSlot === 'eastAsia';
-    const eastAsianAfter = isCjk(after) || current.fontSlot === 'eastAsia';
+    // An inline object (U+FFFC, such as an inline picture) takes the gaps of an East Asian
+    // character beside East Asian text.
+    const eastAsianBefore =
+      isCjk(before) || before === INLINE_OBJECT || previous.fontSlot === 'eastAsia';
+    const eastAsianAfter =
+      isCjk(after) || after === INLINE_OBJECT || current.fontSlot === 'eastAsia';
     let capacity = 0;
     if (endsWithSpaceSlot(previous.text)) {
       const own = measureDisplayText(
