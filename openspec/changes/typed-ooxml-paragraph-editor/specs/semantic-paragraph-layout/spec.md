@@ -618,9 +618,17 @@ Semantic layout SHALL place a supported terminal exact row's simple bottom rule 
 #### Scenario: A text row that cannot split stays whole before mode 15
 
 - **WHEN** compatibility mode is 14 or earlier, or absent
-- **AND** a text-only row that cannot split is taller than a page
+- **AND** a text-only row that cannot split, without a vertical merge, is taller than a page
+- **AND** that page holds no wrapping picture, including one in the header or footer
 - **THEN** the row starts on a fresh page and keeps all its lines there, past the bottom margin
 - **AND** the next row or block starts on the following page
+
+#### Scenario: A tall row splits before mode 15 outside the text-only case
+
+- **WHEN** compatibility mode is 14 or earlier, or absent
+- **AND** a row that cannot split is taller than a page
+- **AND** the row holds a vertical merge or a nested table, or its page holds a wrapping picture, including one in the header or footer
+- **THEN** the row starts on a fresh page and splits there
 
 #### Scenario: Cell text uses the authored bottom
 
