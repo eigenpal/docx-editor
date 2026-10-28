@@ -40,7 +40,7 @@ function center(cell: TableCellFragmentRecord, side: 'top' | 'bottom'): number {
   return cell.box.y + (side === 'top' ? edge.widthPt / 2 : cell.box.height - edge.widthPt / 2);
 }
 
-// Independent WPS PDF stroke centers: 2 × 19.85pt and 8 × 19.85pt exact row pitch.
+// Independent reference stroke centers: 2 × 19.85pt and 8 × 19.85pt exact row pitch.
 // The mixed prefix uses authored minima of 23.85pt and 24.85pt, then six exact rows.
 for (const [name, options, pitch] of [
   ['half-point', { width: 0.5 }, 39.7],
@@ -54,7 +54,7 @@ for (const [name, options, pitch] of [
     169.8,
   ],
 ] satisfies [string, ExactTerminalOptions, number][]) {
-  test(`terminal exact rule preserves the WPS row pitch: ${name}`, () => {
+  test(`terminal exact rule preserves the authored row pitch: ${name}`, () => {
     const part = exactTerminalFixture(options);
     const before = serializeOoxmlPart(part);
     const context = { measurer: createFixedMeasurer(5, 12), session: createLayoutSession() };

@@ -105,9 +105,12 @@ test('an authored last row that fits only without its closing rule moves to the 
 
 // Letter page, 1in margins: a 648pt band. A 12pt line and one 19.85pt row come first.
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const line = (text: string) =>
-  `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="exact"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
-function letterTable(rows: readonly number[], options: { lead?: boolean; header?: boolean } = {}) {
+const line = (text: string, keepNext = false) =>
+  `<w:p><w:pPr>${keepNext ? '<w:keepNext/>' : ''}<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="exact"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+function letterTable(
+  rows: readonly number[],
+  options: { lead?: boolean; header?: boolean; keepFirst?: boolean } = {}
+) {
   const side = (name: string, size: number) => `<w:${name} w:val="single" w:sz="${size}"/>`;
   const borders = ['top', 'bottom', 'left', 'right'].map((name) => side(name, 12)).join('');
   const margins = ['top', 'bottom', 'left', 'right']
@@ -122,7 +125,7 @@ function letterTable(rows: readonly number[], options: { lead?: boolean; header?
     const header = options.header && index === 0 ? '<w:tblHeader/>' : '';
     table += `<w:tr><w:trPr><w:cantSplit/>${header}<w:trHeight w:val="${twips}" w:hRule="exact"/></w:trPr>`;
     for (const column of [0, 1])
-      table += `<w:tc><w:tcPr><w:tcW w:w="1800" w:type="dxa"/></w:tcPr>${line(`R${index}C${column}`)}</w:tc>`;
+      table += `<w:tc><w:tcPr><w:tcW w:w="1800" w:type="dxa"/></w:tcPr>${line(`R${index}C${column}`, options.keepFirst && index === 0)}</w:tc>`;
     table += '</w:tr>';
   });
   const section =
@@ -156,13 +159,13 @@ function pageOf(result: ReturnType<typeof layoutSemanticDocument>, text: string)
 const layOut = (part: ReturnType<typeof letterTable>) =>
   layoutSemanticDocument(part, 0, { measurer: createFixedMeasurer(5, 12) });
 
-for (const [authoredBottom, movesPt] of [
+for (const [authoredBottom, moves] of [
   [646.5, false],
   [647, true],
   [647.5, true],
   [648, true],
 ] as const) {
-  test(`a last row with its authored bottom at ${authoredBottom}pt ${movesPt ? 'moves' : 'stays'}`, () => {
+  test(`a last row with its authored bottom at ${authoredBottom}pt ${moves ? 'moves' : 'stays'}`, () => {
     const lastTwips = Math.round(authoredBottom * 20) - 240 - 397;
     const part = letterTable([397, lastTwips]);
     const source = serializeOoxmlPart(part);
@@ -171,7 +174,7 @@ for (const [authoredBottom, movesPt] of [
     const lastPage = placed.at(-1)!;
     const last = lastPage.table.rows.at(-1)!;
     expect(last.box.height).toBeCloseTo(lastTwips / 20 + 1.5, 6);
-    if (movesPt) {
+    if (moves) {
       // The row with its rule ends past 648pt, so it starts page 2 instead.
       expect(placed.map((entry) => entry.table.rows.length)).toEqual([1, 1]);
       expect(lastPage.page).toBe(1);
@@ -211,5 +214,16 @@ test('a last row directly below repeated header rows stays on its continuation p
   // Authored bottom 647.5pt: the row stays below the headers and its rule ends at 649pt.
   expect(last!.box.y + last!.box.height).toBeCloseTo(649, 6);
   expect(pageOf(result, 'AFTER')).toBe(2);
+  expect(serializeOoxmlPart(part)).toBe(source);
+});
+
+test('a row kept with the last row moves with it when only the rule overflows', () => {
+  // Authored bottom 647.5pt: both rows fit the band, but the last row's rule does not.
+  const part = letterTable([397, Math.round(647.5 * 20) - 240 - 397], { keepFirst: true });
+  const source = serializeOoxmlPart(part);
+  const result = layOut(part);
+  const placed = tablesOnPages(result);
+  expect(placed.map((entry) => [entry.page, entry.table.rows.length])).toEqual([[1, 2]]);
+  expect(pageOf(result, 'LEAD')).toBe(0);
   expect(serializeOoxmlPart(part)).toBe(source);
 });

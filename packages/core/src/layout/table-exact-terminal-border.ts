@@ -81,6 +81,14 @@ export function exactTerminalBorderPt(row: SemanticTableRow, deps: TableFlowDeps
   return deps.exactTerminalBorder?.row === row ? deps.exactTerminalBorder.widthPt : 0;
 }
 
+/** `heightOf` plus the terminal rule, for pricing rows that must also hold the rule. */
+export function withRule(
+  heightOf: (row: SemanticTableRow) => number,
+  tableDeps: TableFlowDeps
+): (row: SemanticTableRow) => number {
+  return (row) => heightOf(row) + exactTerminalBorderPt(row, tableDeps);
+}
+
 // The room the terminal rule needs when deciding whether the row starts here. A row that does
 // not fit with its rule moves to the next page. At a page start (or below repeated headers
 // only) moving cannot help, so the row stays and its rule crosses the bottom margin. Only the

@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Place supported fixed-height terminal row borders outside the authored height and preserve cell text alignment. A fixed-height last row that does not fit with its bottom border moves to the next page.
+A fixed-height last table row keeps its authored height, with its bottom border placed below it and cell text aligned to the authored bottom. If the row does not fit with its border, it moves to the next page unless it starts the page or sits directly below repeated header rows.

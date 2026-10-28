@@ -150,7 +150,7 @@ export function* paginateTableInFlowSteps(
     structure.cellSpacingPt,
     takePreviousRows(table, flowDeps)
   );
-  /** One row's natural height at the current table origin. */
+  /** One row's natural height at the current table origin, without the terminal rule. */
   const rowHeightOf = (row: SemanticTableRow, top = flow.cursorY, deps = tableDeps): number =>
     rowProbes.measure(row, tableLeft, top, deps) - terminal.exactTerminalBorderPt(row, deps);
   // Out-of-cell floats (`layoutInCell="0"` before mode 15) keep the place the unpushed table
@@ -421,7 +421,7 @@ export function* paginateTableInFlowSteps(
       left: tableLeft,
       deps: tableDeps,
       pageHeight,
-      heightOf: cachedRowHeights(candidates, rowHeightOf, first),
+      heightOf: cachedRowHeights(candidates, terminal.withRule(rowHeightOf, tableDeps), first),
       following: (room) => flow.followingKeepOpening?.(room),
     });
   const headerFollowsContent = flow.regionHoldsContent(fragmentTop);
