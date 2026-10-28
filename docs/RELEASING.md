@@ -176,7 +176,6 @@ Release finishes without waiting for npm metadata propagation. The post-release 
 | **Site update (docx-editor.dev)** | Requests the documentation update and waits for that site's sync run to finish. |
 | **Site update (docx-to-markdown.com)** | Requests the Markdown site update and waits for its sync run. |
 | **Site update (docx-to-pdf.dev)** | Requests the PDF site update and waits for its sync run. |
-| **Site update (docx-editor-mcp-app)** | Requests the MCP plugin update and waits for its sync run. The run moves the plugin to the same version and tags a draft release. A person publishes that release after host acceptance. |
 | **Capture collaboration catalog** | Opens the generated collaboration baseline PR. |
 | **Merge verified catalog** | Waits for the PR's checks, approves the tested commit, and merges it. |
 | **Release comments and roadmap** | Comments on the shipped PRs and issues and updates the roadmap board. |
