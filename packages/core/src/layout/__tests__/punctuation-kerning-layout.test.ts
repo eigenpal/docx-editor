@@ -116,7 +116,7 @@ describe('real DOCX fixture punctuation layout', () => {
     expect(decorated.width).toBe(108 + underlined.box.width);
   });
 
-  test('kana keeps natural advances on a non-full line', () => {
+  test('kana keeps natural advances on fitting and overflowing lines', () => {
     const result = loadFixture({ text: 'アイ', compression: 'compressPunctuationAndJapaneseKana' });
     expect(result.width).toBe(48);
     const full = loadFixture({
@@ -124,8 +124,12 @@ describe('real DOCX fixture punctuation layout', () => {
       available: 45,
       compression: 'compressPunctuationAndJapaneseKana',
     });
-    expect(full.lines).toHaveLength(1);
-    expect(full.width).toBe(42);
+    expect(full.lines).toHaveLength(2);
+    expect(full.lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
+      'ア',
+      'イ',
+    ]);
+    expect(full.width).toBe(24);
   });
 
   test('disabled false values and raw package save/reopen retain source properties', () => {

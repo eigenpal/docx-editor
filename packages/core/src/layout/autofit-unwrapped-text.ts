@@ -34,11 +34,7 @@ export function cjkAutofitBreaks(
   // This qualification selects the East Asian analysis, whose decisions ignore text context.
   // Ordinary cross-run dash cuts remain the caller's paragraphWordCuts, for both min and max.
   const breaks = cjkParagraphBreaks(visible, policy)!;
-  const seams = punctuationSeams(
-    visible,
-    compressCjkPieces(visible, policy, measurer, undefined, Infinity),
-    measurer
-  );
+  const seams = punctuationSeams(visible, compressCjkPieces(visible, policy, measurer), measurer);
   // A seam whose mark ends the candidate waits for the next candidate in the same segment.
   let pending = 0;
   return {
