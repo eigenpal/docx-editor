@@ -228,61 +228,199 @@ function containerWith(
   nextId: () => string,
   insertIndex: (children: readonly OoxmlNode[], name: PropsName) => number
 ): OoxmlElement | null {
-  const children = [...container.children];
+  let children = [...container.children];
   let changed = false;
   for (const [name, side] of [
     ['footnotePr', op.footnote],
     ['endnotePr', op.endnote],
   ] as const) {
-    if (!side) continue;
-    const index = children.findIndex((child) => isW(child, name));
-    const prior = index >= 0 ? (children[index] as OoxmlElement) : undefined;
-    const next = mergedProps(prior, name, side, nextId);
-    if (!next || next === prior) continue;
+    const at: number[] = [];
+    children.forEach((child, index) => {
+      if (isW(child, name)) at.push(index);
+    });
+    const first = at.length > 0 ? (children[at[0]!] as OoxmlElement) : undefined;
+    // Copies the schema allows once (two peers that each added the element at the same time)
+    // collapse into the first, which is the copy every reader uses. This runs whether or not
+    // the write names this kind, so any write heals the container it visits.
+    const prior = first
+      ? collapseCopies(at.map((index) => children[index] as OoxmlElement))
+      : undefined;
+    let next = prior;
+    if (side)
+      next = prior ? fieldsWritten(prior, name, side, nextId) : addedProps(name, side, nextId);
+    if (at.length > 1) {
+      const extra = new Set(at.slice(1));
+      children = children.filter((_, index) => !extra.has(index));
+      changed = true;
+    }
+    if (!next || next === first) continue;
     changed = true;
-    if (index >= 0) children[index] = next;
+    if (first) children[at[0]!] = next;
     else children.splice(insertIndex(children, name), 0, next);
   }
   return changed ? ({ ...container, children } as OoxmlElement) : null;
 }
 
 /**
- * `prior` with the side's fields merged in, keeping its id and the ids of the field children
- * it already has. Returns `prior` itself when nothing changes, and undefined when there is no
- * prior and every named value is the default.
+ * One `w:footnotePr`/`w:endnotePr` from the copies a container holds: the first copy, keeping
+ * its node id and its first copy of each field. A field that only a later copy has moves to it.
+ * Returns the first copy itself when it is the only one and repeats no field.
  */
-function mergedProps(
-  prior: OoxmlElement | undefined,
+function collapseCopies(copies: readonly OoxmlElement[]): OoxmlElement {
+  const first = copies[0]!;
+  const seen = new Set<string>();
+  let changed = copies.length > 1;
+  const kept: OoxmlNode[] = [];
+  for (const child of first.children) {
+    if (isField(child)) {
+      if (seen.has(child.localName)) {
+        changed = true;
+        continue;
+      }
+      seen.add(child.localName);
+    }
+    kept.push(child);
+  }
+  for (const copy of copies.slice(1)) {
+    for (const child of copy.children) {
+      if (!isField(child) || seen.has(child.localName)) continue;
+      seen.add(child.localName);
+      kept.push(child);
+    }
+  }
+  if (!changed) return first;
+  return { ...first, children: inFieldOrder(kept) } as OoxmlElement;
+}
+
+/** A new element for a container that has none, or undefined when every value is the default. */
+function addedProps(
   name: PropsName,
   side: NotePropertiesWrite,
   nextId: () => string
 ): OoxmlElement | undefined {
-  const fields: OoxmlNode[] = [];
+  const empty = element('', name, []);
+  const written = fieldsWritten(empty, name, side, nextId);
+  if (written === empty) return undefined;
+  return { ...written, id: nextId() } as OoxmlElement;
+}
+
+/**
+ * `prior` with the side's fields merged in, keeping its id and the ids of the field children
+ * it already has. A field the side does not name keeps its value; a field `prior` does not
+ * author is added only when its value is not the default. Returns `prior` when nothing changes.
+ */
+function fieldsWritten(
+  prior: OoxmlElement,
+  name: PropsName,
+  side: NotePropertiesWrite,
+  nextId: () => string
+): OoxmlElement {
+  const children = [...prior.children];
   let changed = false;
   for (const [field, key] of FIELDS) {
     const raw = side[key];
-    const value = raw === undefined ? undefined : String(raw);
-    const existing = prior?.children.find((child) => isW(child, field)) as OoxmlElement | undefined;
-    if (existing) {
-      if (value === undefined || valOf(existing) === value) fields.push(existing);
-      else {
-        fields.push(withVal(existing, value));
-        changed = true;
-      }
-    } else if (value !== undefined && value !== DEFAULTS[name][field]) {
-      fields.push(element(nextId(), field, [wmlVal(value)]));
+    if (raw === undefined) continue;
+    const value = String(raw);
+    const index = children.findIndex((child) => isW(child, field));
+    if (index >= 0) {
+      const existing = children[index] as OoxmlElement;
+      if (valOf(existing) === value) continue;
+      children[index] = withVal(existing, value);
+      changed = true;
+    } else if (value !== DEFAULTS[name][field]) {
+      children.push(element(nextId(), field, [wmlVal(value)]));
       changed = true;
     }
   }
   if (!changed) return prior;
-  // Children other than the four fields (settings.xml lists separator references here) stay,
-  // after the fields, as `CT_FtnDocProps` orders them.
-  const others = (prior?.children ?? []).filter(
-    (child) =>
-      !(child.kind !== 'textValue' && child.namespaceUri === W && FIELD_NAMES.has(child.localName))
-  );
-  const children = [...fields, ...others];
-  return prior ? ({ ...prior, children } as OoxmlElement) : element(nextId(), name, [], children);
+  return { ...prior, children: inFieldOrder(children) } as OoxmlElement;
+}
+
+function isField(child: OoxmlNode): child is OoxmlElement {
+  return child.kind !== 'textValue' && child.namespaceUri === W && FIELD_NAMES.has(child.localName);
+}
+
+/**
+ * The four fields first, in `CT_FtnProps` order; other children (settings.xml lists separator
+ * references here) follow, as `CT_FtnDocProps` orders them.
+ */
+function inFieldOrder(children: readonly OoxmlNode[]): OoxmlNode[] {
+  const rank = (child: OoxmlNode) =>
+    isField(child) ? FIELDS.findIndex(([field]) => field === child.localName) : FIELDS.length;
+  return children
+    .map((child, index) => ({ child, index }))
+    .sort((left, right) => rank(left.child) - rank(right.child) || left.index - right.index)
+    .map((entry) => entry.child);
+}
+
+/**
+ * The package with every `w:sectPr` and the settings root holding at most one
+ * `w:footnotePr`/`w:endnotePr`, and at most one of each field in them, keeping the first copy,
+ * which is the one every reader uses. Returns `pkg` itself when nothing repeats. Save runs it on
+ * the package it exports; the document state does not change.
+ */
+export function withoutDuplicateNoteProperties(pkg: OoxmlPackage): OoxmlPackage {
+  const dedupe: SetNotePropertiesOp = { op: 'setNoteProperties', scope: 'document' };
+  const noNewNodes = (): string => {
+    throw new Error('a duplicate collapse adds no node');
+  };
+  let next = pkg;
+  const main = pkg.parts.get(pkg.mainDocumentPart);
+  if (main) {
+    const replacements = new Map<string, OoxmlElement>();
+    for (const sectPr of collectSectionPropertyNodes(main.root)) {
+      if (!sectPr || !repeats(sectPr)) continue;
+      const updated = containerWith(sectPr, dedupe, noNewNodes, sectPrInsertIndex);
+      if (updated) replacements.set(sectPr.id, updated);
+    }
+    if (replacements.size > 0) {
+      const root = replacedById(main.root, replacements) as OoxmlElement;
+      next = withPart(next, { ...main, root });
+    }
+  }
+  const settings = settingsPartOf(next);
+  if (settings && repeats(settings.root)) {
+    const root = containerWith(settings.root, dedupe, noNewNodes, settingsInsertIndex);
+    if (root) next = withPart(next, { ...settings, root });
+  }
+  return next;
+}
+
+/**
+ * `node` with the listed descendants replaced, copying only their ancestors. A plain copy, not
+ * an edit primitive: save must not touch the live tree's node index.
+ */
+function replacedById(node: OoxmlNode, replacements: ReadonlyMap<string, OoxmlElement>): OoxmlNode {
+  const replacement = replacements.get(node.id);
+  if (replacement) return replacement;
+  if (node.kind === 'textValue') return node;
+  let children: OoxmlNode[] | null = null;
+  node.children.forEach((child, index) => {
+    const next = replacedById(child, replacements);
+    if (next === child) return;
+    children ??= [...node.children];
+    children[index] = next;
+  });
+  return children ? ({ ...node, children } as OoxmlNode) : node;
+}
+
+/** A cheap check before any rebuild: a repeated note properties element, or field in one. */
+function repeats(container: OoxmlElement): boolean {
+  let footnote = 0;
+  let endnote = 0;
+  for (const child of container.children) {
+    if (isW(child, 'footnotePr')) footnote += 1;
+    else if (isW(child, 'endnotePr')) endnote += 1;
+    else continue;
+    if (footnote > 1 || endnote > 1) return true;
+    const fields = new Set<string>();
+    for (const field of (child as OoxmlElement).children) {
+      if (!isField(field)) continue;
+      if (fields.has(field.localName)) return true;
+      fields.add(field.localName);
+    }
+  }
+  return false;
 }
 
 /** `CT_SectPr`: note properties follow the header/footer references, footnotes first. */

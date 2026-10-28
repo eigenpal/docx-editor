@@ -19,7 +19,6 @@ import {
   MERGED_KINDS,
   sharedChildShell,
   singletonLayout,
-  singletonParentKind,
   type ChildShell,
 } from './singleton-children.ts';
 import { PACKAGE_NODES_KEY, NODE_TEXT_FIELD, makeTextRecord, type SharedRecord } from './schema.ts';
@@ -403,7 +402,7 @@ export function projectJournalToShared(
       base.push(index);
     });
     const layout = singletonLayout(
-      singletonParentKind(kindOf(parentId), () => shellOf(parentId)),
+      kindOf(parentId),
       base.map((index) => children[index]!),
       shellOf
     );

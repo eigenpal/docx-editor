@@ -188,7 +188,8 @@ Semantic layout SHALL implement the D8 paragraph property boundary and the secti
 - **WHEN** `setNoteProperties` runs with `scope: 'document'`
 - **THEN** the write merges the named fields into every section's `w:sectPr` and into settings.xml, in place and in schema order, keeping each field it does not name, adding no default value where nothing authors the field, and minting a body-level `w:sectPr` for an implicit final section only when it adds a value
 - **AND** the endnote position goes to settings.xml only, in either scope
-- **AND** two concurrent writes leave one `w:footnotePr` and one `w:endnotePr` in each parent, and one of each field in them, and a concurrent paragraph join keeps the write in the section it keeps
+- **AND** a write collapses repeated `w:footnotePr`/`w:endnotePr` elements and fields in every container it visits into the first copy, and save writes only the first copy, so the one case in-place merging cannot prevent (two peers adding the element at once) lasts in shared state only until the next write
+- **AND** a concurrent paragraph join keeps the write in the section it keeps
 - **AND** one undo restores the sections and settings.xml together, and the write converges on every collaborating peer
 
 #### Scenario: Page-furniture PAGE and NUMPAGES project per sheet

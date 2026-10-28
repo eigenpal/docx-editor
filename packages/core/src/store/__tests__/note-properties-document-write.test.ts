@@ -6,6 +6,7 @@ import { strToU8, zipSync } from 'fflate';
 import {
   readOoxmlPackage,
   serializeOoxmlPart,
+  writeOoxmlPackage,
   type OoxmlPackage,
   type TreeDocOp,
 } from '../package/index.ts';
@@ -141,5 +142,42 @@ describe('a section-scope endnote position write', () => {
     const before = settingsXml(store.currentPackage());
     apply(store, { scope: 'section', sectionIndex: 0, endnote: { numFmt: 'decimal' } });
     expect(settingsXml(store.currentPackage())).toBe(before);
+  });
+});
+
+// Two peers that each add the element a section lacked leave two copies in shared state.
+// Every reader uses the first; the next write and every save collapse them into it.
+describe('repeated note properties', () => {
+  const REPEATED =
+    '<w:p><w:pPr><w:sectPr>' +
+    '<w:footnotePr><w:numFmt w:val="lowerRoman"/><w:numFmt w:val="upperRoman"/></w:footnotePr>' +
+    '<w:footnotePr><w:numFmt w:val="chicago"/><w:numStart w:val="4"/></w:footnotePr>' +
+    '<w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:pPr></w:p>' +
+    '<w:p><w:r><w:t>Last</w:t></w:r></w:p><w:sectPr/>';
+  const ONE = '<w:footnotePr><w:numFmt w:val="lowerRoman"/><w:numStart w:val="4"/></w:footnotePr>';
+  const mainXml = (pkg: OoxmlPackage) => serializeOoxmlPart(pkg.parts.get(pkg.mainDocumentPart)!);
+
+  test('collapse into the first copy on save, without changing the document', () => {
+    const store = open(
+      REPEATED,
+      '<w:footnotePr/><w:footnotePr><w:pos w:val="beneathText"/></w:footnotePr>'
+    );
+    const before = mainXml(store.currentPackage());
+    const reread = readOoxmlPackage(writeOoxmlPackage(store.currentPackage()));
+    if (!reread.ok) throw new Error(reread.reason);
+    expect(mainXml(reread.package)).toContain(`<w:sectPr>${ONE}<w:pgSz`);
+    expect(settingsXml(reread.package)).toContain(
+      '<w:footnotePr><w:pos w:val="beneathText"/></w:footnotePr></w:settings>'
+    );
+    expect(mainXml(store.currentPackage())).toBe(before);
+  });
+
+  test('collapse into the first copy on the next write', () => {
+    const store = open(REPEATED, '');
+    apply(store, { scope: 'document', footnote: { numRestart: 'eachSect' } });
+    expect(mainXml(store.currentPackage())).toContain(
+      '<w:sectPr><w:footnotePr><w:numFmt w:val="lowerRoman"/><w:numStart w:val="4"/>' +
+        '<w:numRestart w:val="eachSect"/></w:footnotePr><w:pgSz'
+    );
   });
 });
