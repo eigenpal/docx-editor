@@ -482,3 +482,16 @@ test('a legacy package spreads kerned runs too', () => {
     expect(placed(line!).map(([, x]) => x)).toEqual([0, 30, 60, 90]);
   }
 });
+
+test('a kerned space opens no gap before itself, even after an East Asian character', () => {
+  const xs = (cascade: Cascade) =>
+    placed(linesOf(layout(paragraph(run('가나 다라')), cascade))[0]!).map(([, x]) => x);
+  // Kerned: gaps open between 가 and 나, after the space, and between 다 and 라.
+  const kernedStep = (50 - SPACE_SHARE_LIMIT * 10) / 3;
+  const kernedXs = xs(styles(runDefaults('<w:kern w:val="2"/>')));
+  expect(kernedXs[1]).toBeCloseTo(10 + kernedStep, 6);
+  expect(kernedXs[3]).toBeCloseTo(30 + 2 * kernedStep + SPACE_SHARE_LIMIT * 10, 6);
+  // Unkerned: the boundary before the space opens a gap too.
+  const step = (50 - SPACE_SHARE_LIMIT * 10) / 4;
+  expect(xs(WITH_RUN_DEFAULTS['an empty rPrDefault'])[1]).toBeCloseTo(10 + step, 6);
+});
