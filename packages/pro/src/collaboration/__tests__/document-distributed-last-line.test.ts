@@ -15,27 +15,41 @@ import { createPeerHarness, REL, W, zipDocument, type Peer } from './document-pe
 
 const initial = 'aa bb cc dd ee ff gg hh ii';
 const measurer = createFixedMeasurer();
-// A styles part with a `w:rPrDefault` spreads the closing line per character; without one the
-// line stretches its spaces.
-const STYLES_RELS = `<Relationships xmlns="${REL}"><Relationship Id="rIdS" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
-const STYLES_OVERRIDE =
-  '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>';
+// In a modern package, a styles part with a `w:rPrDefault` spreads a distributed line per
+// character and one without stretches its spaces. A legacy package (no settings part) spreads
+// characters whatever its defaults.
+const PART = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const CONTENT = 'application/vnd.openxmlformats-officedocument.wordprocessingml';
+const STYLES = `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault/></w:docDefaults></w:styles>`;
+const SETTINGS = `<w:settings xmlns:w="${W}"><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`;
 const KINDS = {
-  'stretched spaces': undefined,
-  'spread characters': `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault/></w:docDefaults></w:styles>`,
+  'stretched spaces': { styles: false, settings: true, spreads: false },
+  'spread characters': { styles: true, settings: true, spreads: true },
+  'legacy spread characters': { styles: false, settings: false, spreads: true },
 } as const;
 type Kind = keyof typeof KINDS;
 const source = (kind: Kind) => {
-  const styles = KINDS[kind];
+  const { styles, settings } = KINDS[kind];
+  const parts = [
+    ...(styles ? [['styles', STYLES] as const] : []),
+    ...(settings ? [['settings', SETTINGS] as const] : []),
+  ];
   return zipDocument(
     `<w:p><w:pPr><w:jc w:val="distribute"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${initial}</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="2400" w:h="6000"/><w:pgMar w:top="200" w:right="200" w:bottom="200" w:left="200"/></w:sectPr>`,
-    styles
-      ? {
-          overrides: STYLES_OVERRIDE,
-          documentRels: STYLES_RELS,
-          extraXml: { 'word/styles.xml': styles },
-        }
-      : undefined
+    {
+      overrides: parts
+        .map(
+          ([name]) =>
+            `<Override PartName="/word/${name}.xml" ContentType="${CONTENT}.${name}+xml"/>`
+        )
+        .join(''),
+      documentRels: `<Relationships xmlns="${REL}">${parts
+        .map(
+          ([name]) => `<Relationship Id="rId${name}" Type="${PART}/${name}" Target="${name}.xml"/>`
+        )
+        .join('')}</Relationships>`,
+      extraXml: Object.fromEntries(parts.map(([name, xml]) => [`word/${name}.xml`, xml])),
+    }
   );
 };
 interface View {
@@ -76,8 +90,9 @@ function stretches(view: View, kind: Kind) {
   const line = linesOf(view.surface.layout()).at(-1)!;
   expect(line.spans.map((s) => s.text).join('')).toContain(' ');
   const visible = line.spans.filter((s) => s.text.trim().length > 0);
-  // Spread characters each take a span of their own; stretched spaces keep whole words.
-  expect(visible.every((s) => s.text.length === 1)).toBe(kind === 'spread characters');
+  // Stretched spaces keep whole words. Spread characters each take a span of their own, unless
+  // the spaces take the whole slack (checked on the opening text below).
+  if (!KINDS[kind].spreads) expect(visible.every((s) => s.text.length === 1)).toBe(false);
   const last = visible.at(-1)!;
   expect(last.box.x + measurer.measure(last.text.trimEnd(), last.style)).toBeCloseTo(100, 7);
   expect(xml(view)).toContain('w:val="distribute"');
@@ -104,6 +119,10 @@ for (const kind of Object.keys(KINDS) as Kind[])
         stretches(right, kind);
       };
       same(initial);
+      const opening = linesOf(left.surface.layout())
+        .at(-1)!
+        .spans.filter((s) => s.text.trim().length > 0);
+      expect(opening.every((s) => s.text.length === 1)).toBe(KINDS[kind].spreads);
       select(left, initial.length - 2, initial.length);
       applyAwarenessUpdate(
         peers.bob.awareness,

@@ -32,9 +32,13 @@ export function splitSpanParts(
   parts: readonly SpanPart[],
   measurer: TextMeasurer
 ): StyleSpanRecord[] {
+  // Published caret edges already hold each boundary's advance; measure only without them.
+  const edges = span.caretEdges?.length === span.text.length + 1 ? span.caretEdges : undefined;
   const style = styleForFontSlot(span.style, span.fontSlot);
   const widths = parts.map((part) =>
-    measureDisplayText(span.text.slice(part.from, part.to), style, measurer)
+    edges
+      ? edges[part.to]! - edges[part.from]!
+      : measureDisplayText(span.text.slice(part.from, part.to), style, measurer)
   );
   const total = widths.reduce((sum, value) => sum + value, 0);
   const { caretEdges: _edges, ...rest } = span;

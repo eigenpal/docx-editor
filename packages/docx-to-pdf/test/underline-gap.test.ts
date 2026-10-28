@@ -113,3 +113,36 @@ test('an underlined tab draws its underline across the tab', async () => {
   expect(rects[1]![2]).toBeCloseTo(36, 0);
   expect(rects[2]![2]).toBeCloseTo(36, 0);
 });
+
+test('a distributed underlined word draws one continuous underline across its letters', async () => {
+  const { exportPdf } = await import('../src/index.ts');
+  const { docx } = await import('./fixture.ts');
+  const { PDFDocument, PDFRawStream, decodePDFRawStream } = await import('pdf-lib');
+  // No settings part: a legacy package, which spreads a distributed word per character.
+  const source = docx(
+    '<w:p><w:pPr><w:jc w:val="distribute"/></w:pPr><w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>Text</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="3000" w:h="6000"/><w:pgMar w:left="500" w:right="500" w:top="500" w:bottom="500"/></w:sectPr>'
+  );
+  const result = await exportPdf(source, { useSystemFonts: false });
+  expect(result.diagnostics).toEqual([]);
+  const pdf = await PDFDocument.load(result.bytes);
+  const commands = pdf.context
+    .enumerateIndirectObjects()
+    .flatMap(([, obj]) =>
+      obj instanceof PDFRawStream
+        ? [new TextDecoder().decode(decodePDFRawStream(obj).decode())]
+        : []
+    )
+    .filter((s) => s.includes(' Tm '))
+    .join('\n');
+  const rects = [...commands.matchAll(/rg ([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) re f/g)].map(
+    (m) => m.slice(1).map(Number)
+  );
+  expect(rects).toHaveLength(4);
+  for (let index = 1; index < rects.length; index++) {
+    expect(rects[index]![1]).toBeCloseTo(rects[0]![1]!, 5);
+    expect(rects[index - 1]![0]! + rects[index - 1]![2]!).toBeCloseTo(rects[index]![0]!, 5);
+  }
+  // The rule runs from the left margin across the 100pt measure (2000 twips).
+  const last = rects.at(-1)!;
+  expect(last[0]! + last[2]! - rects[0]![0]!).toBeGreaterThan(95);
+});

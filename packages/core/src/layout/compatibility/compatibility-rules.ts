@@ -67,6 +67,10 @@ export const MODE_RULES = {
     'Every anchored object in a table cell lays out in its cell; none is out of cell',
     'ECMA-376 Part 1 §20.4.2.3 anchor (layoutInCell)'
   ),
+  distributedLinesSpreadCharacters: legacy(
+    'A distributed paragraph spreads the slack of every line after every character, whatever the document defaults. A space first takes up to its face average character width less its own advance',
+    'ECMA-376 Part 1 §17.18.44 ST_Jc'
+  ),
   fixedTableContentEdgeOrigin: legacy(
     'A collapsed fixed left table aligns its leading cell content edge with the text column',
     'ECMA-376 Part 1 §17.4.52 tblLayout'

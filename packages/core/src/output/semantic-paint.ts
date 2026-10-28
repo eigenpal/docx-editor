@@ -1,3 +1,4 @@
+import { absorbsLetterGap, letterGapSpacing } from './semantic-paint-letter-gap.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { paintUnsupportedContent } from './unsupported-elements.ts';
 import {
@@ -1253,6 +1254,10 @@ function paintLine(
     const gapAfter = bidi ? 0 : interSpanGapBefore(line, spanIndex + 1, rankOf);
     previousSpanAbsorbedGap = gapAfter > 0 && next !== undefined && absorbsFollowingGap(span, next);
     if (previousSpanAbsorbedGap) painted.style.wordSpacing = `${gapAfter * scale}px`;
+    else if (gapAfter > 0 && next && sharesAnchor(span, next) && absorbsLetterGap(span, next)) {
+      painted.style.letterSpacing = letterGapSpacing(span, gapAfter, scale);
+      previousSpanAbsorbedGap = true;
+    }
     pendingGap = gapAfter;
     const link = span.link;
     if (!link) {

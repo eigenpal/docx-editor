@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { readOoxmlPart, serializeOoxmlPart } from '../../store/index.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
+import { NO_THEME_FONTS } from '../run-style.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { caretAt } from '../semantic-interaction.ts';
 import { hitTestSemantic } from '../semantic-point-queries.ts';
@@ -17,32 +18,53 @@ const run = (text: string, rPr = RUN) => `<w:r>${rPr}<w:t xml:space="preserve">$
 const paragraph = (content: string, pPr = '<w:jc w:val="distribute"/>') =>
   `<w:p><w:pPr>${pPr}</w:pPr>${content}</w:p>`;
 
-function styles(docDefaults: string) {
-  const xml = `<w:styles xmlns:w="${W}">${docDefaults}<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style></w:styles>`;
-  const result = readOoxmlPart(xml, { name: '/word/styles.xml', contentType: 'application/xml' });
+function root(xml: string) {
+  const result = readOoxmlPart(xml, { name: '/word/part.xml', contentType: 'application/xml' });
   if (!result.ok) throw new Error(result.reason);
-  return buildStyleCascadeTable(result.part.root);
+  return result.part.root;
 }
+const settings = (mode: number) =>
+  root(
+    `<w:settings xmlns:w="${W}"><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${mode}"/></w:compat></w:settings>`
+  );
+/** A cascade for `docDefaults` (null: no styles part) under `mode` (null: no settings part). */
+function styles(docDefaults: string | null, mode: number | null = 15) {
+  const stylesRoot =
+    docDefaults === null
+      ? null
+      : root(
+          `<w:styles xmlns:w="${W}">${docDefaults}<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style></w:styles>`
+        );
+  return buildStyleCascadeTable(stylesRoot, NO_THEME_FONTS, mode === null ? null : settings(mode));
+}
+type Cascade = ReturnType<typeof styles>;
 
-/** Styles parts that author a `w:rPrDefault`, even an empty one. */
+/** Modern-mode packages whose styles part authors a `w:rPrDefault`, even an empty one. */
 const WITH_RUN_DEFAULTS = {
   'an empty rPrDefault': styles('<w:docDefaults><w:rPrDefault/></w:docDefaults>'),
   'an rPrDefault with properties': styles(
-    '<w:docDefaults><w:rPrDefault><w:rPr><w:lang w:val="en-US"/></w:rPr></w:rPrDefault></w:docDefaults>'
+    '<w:docDefaults><w:rPrDefault><w:rPr><w:lang w:eastAsia="ja-JP"/></w:rPr></w:rPrDefault></w:docDefaults>'
   ),
 };
-/** Packages whose styles leave the run defaults to the application. */
+/** Modern-mode packages that leave the run defaults to the application. */
 const WITHOUT_RUN_DEFAULTS = {
-  'no styles part': undefined,
+  'no styles part': styles(null),
   'an empty docDefaults': styles('<w:docDefaults/>'),
   'only a pPrDefault': styles('<w:docDefaults><w:pPrDefault/></w:docDefaults>'),
 };
+/** Legacy packages spread characters whatever their defaults. */
+const LEGACY = {
+  'no settings part and no styles part': styles(null, null),
+  'no settings part and an empty docDefaults': styles('<w:docDefaults/>', null),
+  'mode 14 with only a pPrDefault': styles('<w:docDefaults><w:pPrDefault/></w:docDefaults>', 14),
+  'mode 14 with an empty rPrDefault': styles('<w:docDefaults><w:rPrDefault/></w:docDefaults>', 14),
+};
 
-function layout(body: string, styleCascade: ReturnType<typeof styles> | undefined) {
+function layout(body: string, styleCascade: Cascade | undefined, using = measurer) {
   const source = loadBody(body);
   const before = serializeOoxmlPart(source);
   const result = layoutSemanticDocument(source, 0, {
-    measurer,
+    measurer: using,
     geometry,
     ...(styleCascade ? { styleCascade } : {}),
   });
@@ -91,19 +113,20 @@ test('spaces take their share of the slack first, the rest goes after every char
 });
 
 test('a line with less slack than its spaces can take stretches only its spaces', () => {
-  const [line] = linesOf(
-    layout(paragraph(run('a b c d e')), WITH_RUN_DEFAULTS['an empty rPrDefault'])
-  );
-  // 10pt of slack, less than four spaces can take (18pt): each space takes 2.5pt.
-  expect(placed(line!)).toEqual([
+  const cascade = WITH_RUN_DEFAULTS['an empty rPrDefault'];
+  const [line] = linesOf(layout(paragraph(run('a b c d e')), cascade));
+  // 10pt of slack, less than four spaces can take (18pt): each space takes 2.5pt, and the
+  // line is not split into characters.
+  expect(line!.spans.some((span) => span.text.length > 1)).toBe(true);
+  const letters = (value: LineRecord) =>
+    value.spans
+      .filter((span) => span.text.trim() !== '')
+      .map((span) => [span.text.trim(), Number(span.box.x.toFixed(6))]);
+  expect(letters(line!)).toEqual([
     ['a', 0],
-    [' ', 10],
     ['b', 22.5],
-    [' ', 32.5],
     ['c', 45],
-    [' ', 55],
     ['d', 67.5],
-    [' ', 77.5],
     ['e', 90],
   ]);
 });
@@ -124,26 +147,33 @@ test('leading spaces keep their advance and trailing spaces hang', () => {
   ]);
 });
 
-test('inner distributed lines stretch their spaces; the final line spreads characters', () => {
+test('an inner line whose spaces absorb its slack sets as a justified line', () => {
   const cascade = WITH_RUN_DEFAULTS['an empty rPrDefault'];
-  const text = 'aa bb cc dd ee ff gg hh ii';
+  // The first line holds `a b c d e`: 10pt of slack, less than four spaces can take (18pt).
+  const text = 'a b c d e f g h i j k';
   const distributed = linesOf(layout(paragraph(run(text)), cascade));
   const justified = linesOf(layout(paragraph(run(text), '<w:jc w:val="both"/>'), cascade));
   expect(distributed.length).toBeGreaterThan(1);
-  for (let index = 0; index < distributed.length - 1; index++) {
-    expect(placed(distributed[index]!)).toEqual(placed(justified[index]!));
-  }
-  const last = placed(distributed.at(-1)!);
-  expect(last.filter(([value]) => value !== ' ').map(([value]) => value)).toEqual([
-    'g',
-    'g',
-    'h',
-    'h',
-    'i',
-    'i',
-  ]);
-  expect(last[0]![1]).toBe(0);
-  expect(last.at(-1)![1]).toBeCloseTo(90, 6);
+  const join = (line: LineRecord) => line.spans.map((span) => span.text).join('');
+  expect(join(distributed[0]!)).toBe(join(justified[0]!));
+  const visible = (line: LineRecord) =>
+    placed(line)
+      .filter(([value]) => value.trim() !== '')
+      .map(([value, x]) => [value.trim(), x]);
+  expect(visible(distributed[0]!)).toEqual(visible(justified[0]!));
+});
+
+test('an inner line with more slack than its spaces take spreads its characters', () => {
+  const cascade = WITH_RUN_DEFAULTS['an empty rPrDefault'];
+  // The first line holds `aa bb cc`: 20pt of slack, two spaces take 9pt, seven gaps share 11pt.
+  const lines = linesOf(layout(paragraph(run('aa bb cc dd')), cascade));
+  expect(lines.length).toBe(2);
+  const first = placed(lines[0]!).filter(([value]) => value.trim() !== '');
+  const step = (20 - 2 * SPACE_SHARE_LIMIT * 10) / 7;
+  expect(first.map(([value]) => value)).toEqual(['a', 'a', 'b', 'b', 'c', 'c']);
+  expect(first[1]![1]).toBeCloseTo(10 + step, 6);
+  expect(first[2]![1]).toBeCloseTo(30 + 3 * step + SPACE_SHARE_LIMIT * 10, 6);
+  expect(first.at(-1)![1]).toBeCloseTo(90, 6);
 });
 
 test('a line before a manual line break spreads its characters', () => {
@@ -223,7 +253,7 @@ test('a distributed single word spreads its letters in a table cell', () => {
   expect(placed(line!).map(([, x]) => x)).toEqual([0, 30, 60, 90]);
 });
 
-test('the last passage beside a float spreads its characters inside the passage', () => {
+test('the passages beside a float spread their characters inside each passage', () => {
   const source = loadBody(paragraph(run('aa bb cc dd ee ff gg hh ii jj kk ll mm nn')));
   const target = source.root.children
     .flatMap((child) => ('children' in child ? child.children : []))
@@ -241,12 +271,16 @@ test('the last passage beside a float spreads its characters inside the passage'
   const last = linesOf(result).at(-1)!;
   const jump = last.spans.findIndex((span) => (span.wrapAdvanceBefore ?? 0) > 0.001);
   expect(jump).toBeGreaterThan(0);
-  // The part before the float keeps whole words; the part after it is split per character.
-  expect(last.spans.slice(0, jump).some((span) => span.text.trim().length > 1)).toBe(true);
-  const after = last.spans.slice(jump).filter((span) => span.text.trim() !== '');
-  expect(after.every((span) => span.text.length === 1)).toBe(true);
-  const end = after.at(-1)!;
-  expect(end.box.x + end.box.width).toBeCloseTo(180, 6);
+  // Each part spreads inside its own passage and keeps the float's jump between them.
+  for (const [part, edge] of [
+    [last.spans.slice(0, jump), 60],
+    [last.spans.slice(jump), 180],
+  ] as const) {
+    const visible = part.filter((span) => span.text.trim() !== '');
+    expect(visible.every((span) => span.text.length === 1)).toBe(true);
+    const end = visible.at(-1)!;
+    expect(end.box.x + end.box.width).toBeCloseTo(edge, 6);
+  }
 });
 
 test('the caret and hit testing follow the spread letters', () => {
@@ -281,9 +315,79 @@ test('paint draws each spread letter at its layout position', () => {
   const element = host.querySelector<HTMLElement>('.docx-line')!;
   const runs = Array.from(element.querySelectorAll<HTMLElement>('.layout-run-text'));
   expect(runs.map((painted) => painted.textContent)).toEqual(['T', 'e', 'x', 't']);
-  // The gap before each letter is painted as its margin, so the letters land on the layout.
-  const margins = runs.map((painted) => parseFloat(painted.style.marginLeft || '0'));
-  expect(margins).toEqual([0, 20, 20, 20]);
+  // Each gap is letter spacing on the letter before it, so underline and highlight run on.
+  expect(runs.map((painted) => painted.style.marginLeft)).toEqual(['', '', '', '']);
+  expect(runs.map((painted) => painted.style.letterSpacing)).toEqual(['20px', '20px', '20px', '']);
+});
+
+test('paint keeps underline and highlight on the gaps of split East Asian and spread lines', () => {
+  const marked =
+    '<w:rPr><w:u w:val="single"/><w:highlight w:val="yellow"/><w:sz w:val="22"/></w:rPr>';
+  for (const [body, cascade] of [
+    [paragraph(run('Text', marked)), WITH_RUN_DEFAULTS['an empty rPrDefault']],
+    // A justified East Asian line splits per character in every document: at 10.5pt, ten
+    // characters leave 4.5pt of slack.
+    [
+      paragraph(
+        run('甲乙丙丁戊己庚辛壬癸子丑', marked.replace('"22"', '"21"')),
+        '<w:jc w:val="both"/>'
+      ),
+      undefined,
+    ],
+  ] as const) {
+    const result = layout(body, cascade);
+    const host = document.createElement('div');
+    paintSemanticLayout(host, result, { scale: 1 });
+    const runs = Array.from(
+      host
+        .querySelector<HTMLElement>('.docx-line')!
+        .querySelectorAll<HTMLElement>('.layout-run-text')
+    );
+    const line = linesOf(result)[0]!;
+    expect(runs.length).toBe(line.spans.length);
+    expect(runs.length).toBeGreaterThan(1);
+    for (const [index, painted] of runs.entries()) {
+      expect(painted.style.marginLeft).toBe('');
+      const span = line.spans[index]!;
+      const next = line.spans[index + 1];
+      const gap = next ? next.box.x - (span.box.x + span.box.width) : 0;
+      if (gap > 0.001) expect(parseFloat(painted.style.letterSpacing)).toBeCloseTo(gap, 6);
+    }
+    expect(runs.some((painted) => painted.style.letterSpacing !== '')).toBe(true);
+  }
+});
+
+for (const [kind, cascade] of Object.entries(LEGACY)) {
+  test(`a legacy package spreads characters whatever its defaults: ${kind}`, () => {
+    const [word] = linesOf(layout(paragraph(run('Text')), cascade));
+    expect(placed(word!)).toEqual([
+      ['T', 0],
+      ['e', 30],
+      ['x', 60],
+      ['t', 90],
+    ]);
+    // An inner line spreads too.
+    const [inner] = linesOf(layout(paragraph(run('aa bb cc dd')), cascade));
+    expect(placed(inner!).filter(([value]) => value.trim() !== '').length).toBe(6);
+  });
+}
+
+test('in a legacy package a space takes its face average width less its own advance', () => {
+  // 4pt per character at 11pt, so `ab cd` leaves 80pt of slack. Times New Roman averages
+  // 821/2048 em, 4.4097pt at 11pt, so the space takes 0.4097pt and four gaps share the rest.
+  const narrow = createFixedMeasurer(4, 14);
+  const tnr =
+    '<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="22"/></w:rPr>';
+  const xs = (cascade: Cascade) =>
+    placed(linesOf(layout(paragraph(run('ab cd', tnr)), cascade, narrow))[0]!).map(([, x]) => x);
+  const capacity = (821 / 2048) * 11 - 4;
+  const legacyStep = (80 - capacity) / 4;
+  const legacy = xs(LEGACY['mode 14 with an empty rPrDefault']);
+  expect(legacy[1]).toBeCloseTo(4 + legacyStep, 6);
+  expect(legacy[3]).toBeCloseTo(12 + 3 * legacyStep + capacity, 6);
+  // A modern package gives the same space 45 percent of its own advance.
+  const modern = xs(WITH_RUN_DEFAULTS['an empty rPrDefault']);
+  expect(modern[1]).toBeCloseTo(4 + (80 - SPACE_SHARE_LIMIT * 4) / 4, 6);
 });
 
 test('distributeLineCharacters reports a line with no character gap', () => {

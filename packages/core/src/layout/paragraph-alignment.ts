@@ -5,7 +5,8 @@ import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import { justifyCjkSpans } from './cjk-justify.ts';
-import { distributeLineCharacters } from './distributed-character-spacing.ts';
+import { distributeLineCharacters, spacesAbsorbSlack } from './distributed-character-spacing.ts';
+import type { DistributedSpacing } from './distributed-spacing.ts';
 import {
   endsWithSpaceSlot,
   withoutLineEndWhitespace,
@@ -329,9 +330,15 @@ function alignLogicalSpans(
     const centers = distributed !== undefined && !reserved;
     const centered = (): readonly StyleSpanRecord[] =>
       spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + slack / 2 } }));
-    if (centers && distributed === 'characters' && !paragraphRtl)
-      return distributeLineCharacters(spans, measurer, slack, slotEnd) ?? centered();
-    const justified = justifyCjkSpans(spans, measurer, slack);
+    // Character distribution, unless the spaces can take all the slack: the line then sets
+    // as a justified line, and only its spaces stretch.
+    let spacesOnly = false;
+    if (centers && distributed !== undefined && distributed !== 'spaces' && !paragraphRtl) {
+      spacesOnly = spacesAbsorbSlack(spans, measurer, slack, slotEnd, distributed);
+      if (!spacesOnly)
+        return distributeLineCharacters(spans, measurer, slack, slotEnd, distributed) ?? centered();
+    }
+    const justified = spacesOnly ? null : justifyCjkSpans(spans, measurer, slack);
     if (justified) return justified === spans && centers ? centered() : justified;
     // Only boundaries after an expandable space receive slack — the same slots paint stretches
     // with `word-spacing`. A uniform step across every span pair invented gaps before tabs and
@@ -408,43 +415,15 @@ export function isDistributedAlignment(props: readonly OoxmlProperty[]): boolean
 }
 
 /**
- * How a distributed line spreads its slack:
- *
- * - `'spaces'`: over its spaces, or by East Asian character rules; a line with nothing to
- *   stretch is centered.
- * - `'characters'`: after every character ({@link distributeLineCharacters}).
+ * The {@link DistributedSpacing} of a paragraph's lines, or undefined when it is not
+ * distributed. `document` is the style cascade, which carries the document's choice.
  */
-export type DistributedSpacing = 'spaces' | 'characters';
-
-/** The document property that selects character distribution. */
-export interface DocumentDistribution {
-  /**
-   * The styles part authors a `w:rPrDefault`, even an empty one. A distributed paragraph then
-   * spreads the slack of a line that closes it, or that a break closes, after every character.
-   */
-  readonly distributeEveryCharacter?: true;
-}
-
-/**
- * The {@link DistributedSpacing} of one line, or undefined when the paragraph is not
- * distributed. Lines that wrap inside the paragraph stretch their spaces; the last line and
- * every line a manual, page, or column break closes distribute characters when `document`
- * selects it. A caller in a table cell, where page breaks do not close lines, leaves them out
- * of `line`.
- */
-export function distributedSpacing(
+export function paragraphDistributedSpacing(
   props: readonly OoxmlProperty[],
-  line: Parameters<typeof setsLikeLastLine>[1],
-  isLastLine: boolean,
-  document: DocumentDistribution | undefined
+  document: { readonly distributedSpacing?: DistributedSpacing } | undefined
 ): DistributedSpacing | undefined {
   if (!isDistributedAlignment(props)) return undefined;
-  const closes =
-    isLastLine ||
-    line.manualBreakAfter === true ||
-    line.pageBreakAfter === true ||
-    line.columnBreakAfter === true;
-  return closes && document?.distributeEveryCharacter === true ? 'characters' : 'spaces';
+  return document?.distributedSpacing ?? 'spaces';
 }
 
 /**
@@ -506,8 +485,7 @@ export function alignSpans(
         false,
         pageBreaksIgnored,
         lastLineShrinks,
-        // Only the last part closes the line; a part a float ends was wrapped there.
-        distributed === 'characters' && !isLastPart ? 'spaces' : distributed
+        distributed
       )
     );
     if (aligned) return reorderBidiSpans(aligned, false, pageBreaksIgnored);
@@ -563,7 +541,9 @@ export function alignBodyLineSpans(
   line: Parameters<typeof setsLikeLastLine>[1] & { readonly spaceShrink?: boolean },
   isLastLine: boolean,
   compatibility:
-    | (NonNullable<Parameters<typeof setsLikeLastLine>[3]> & DocumentDistribution)
+    | (NonNullable<Parameters<typeof setsLikeLastLine>[3]> & {
+        readonly distributedSpacing?: DistributedSpacing;
+      })
     | undefined,
   rtl: boolean
 ): readonly StyleSpanRecord[] {
@@ -579,7 +559,7 @@ export function alignBodyLineSpans(
     false,
     line.spaceShrink === true,
     measure.passages,
-    distributedSpacing(props, line, isLastLine, compatibility)
+    paragraphDistributedSpacing(props, compatibility)
   );
 }
 

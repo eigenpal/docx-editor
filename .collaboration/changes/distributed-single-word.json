@@ -1,9 +1,9 @@
 {
   "impact": "no-impact",
   "fields": [],
-  "before": "A distributed line that closes its paragraph stretches only its spaces, and a line with nothing to stretch stays at its start edge.",
-  "after": "With a w:rPrDefault element in the styles part, a left-to-right distributed line that closes its paragraph or a break spreads its slack after every character. Otherwise it stretches its spaces, and a line with nothing to stretch is centered. Tabs and float advances keep their reserved positions.",
-  "reason": "Only layout geometry changes. Canonical OOXML, source positions, operations, and collaboration formats remain unchanged. Every peer derives the same geometry from the same styles part.",
+  "before": "A distributed line stretches only its spaces, and a line with nothing to stretch stays at its start edge.",
+  "after": "In a legacy compatibility mode, or in a modern mode with a w:rPrDefault element in the styles part, each line of a left-to-right distributed paragraph spreads its slack after every character once its spaces have taken their share. Otherwise it stretches its spaces, and a line with nothing to stretch is centered. Tabs and float advances keep their reserved positions.",
+  "reason": "Only layout geometry and paint change. Canonical OOXML, source positions, operations, and collaboration formats remain unchanged. Every peer derives the same geometry from the same styles and settings parts.",
   "tests": [
     "packages/core/src/layout/__tests__/distributed-last-line.test.ts",
     "packages/core/src/layout/__tests__/distributed-character-spacing.test.ts",

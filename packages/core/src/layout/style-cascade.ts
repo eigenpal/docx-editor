@@ -1,6 +1,7 @@
 import { styleSeparatorMembersOf } from './style-separator-group.ts';
 import { applicationParagraphDefaults } from './application-paragraph-defaults.ts';
-import { applicationRunDefaults, documentDistribution } from './application-run-defaults.ts';
+import { applicationRunDefaults } from './application-run-defaults.ts';
+import { readDistributedSpacing } from './distributed-spacing.ts';
 import { themeCacheMaterial } from './theme-cache-material.ts';
 import { applyLigatureCompatibility } from './run-ligatures.ts';
 import { numberingParagraphProperties } from './numbering-paragraph-properties.ts';
@@ -98,11 +99,11 @@ export interface StyleCascadeTable {
   /** Legacy or explicitly disabled optional OpenType substitutions. */
   readonly disableOptionalLigatures?: true;
   /**
-   * The styles part authors a `w:rPrDefault`: distributed lines that close a paragraph spread
-   * their slack after every character (`DocumentDistribution` in `paragraph-alignment.ts`).
+   * How distributed paragraphs spread their lines when the document selects character
+   * distribution (`DistributedSpacing` in `distributed-spacing.ts`); absent for `'spaces'`.
    * @internal
    */
-  readonly distributeEveryCharacter?: true;
+  readonly distributedSpacing?: 'characters' | 'legacyCharacters';
   /** Legacy noExtraLineSpacing behavior, included in the producer fingerprint. */
   readonly preserveExactLineBaseline?: true;
   /** `w:adjustLineHeightInTable`: cell paragraphs snap to the section line grid too. */
@@ -460,6 +461,8 @@ export function buildStyleCascadeTable(
   const ligatureCompatibility = ligaturesEnabled ? {} : { disableOptionalLigatures: true as const };
   const strictTableHierarchy = compatibility.has('strictTableStyleHierarchy');
   const settingsCompatibility = cascadeCompatibility(compatibility);
+  const spacing = readDistributedSpacing(stylesRoot, compatibility);
+  const distribution = spacing ? { distributedSpacing: spacing } : {};
   const styles = new Map<string, StyleDefinition>();
   const theme = themeCacheMaterial(themeFonts);
   if (!stylesRoot) {
@@ -477,9 +480,11 @@ export function buildStyleCascadeTable(
         typography,
         strictTableHierarchy,
         ...settingsCompatibility,
+        ...distribution,
       }),
       ...settingsCompatibility,
       ...ligatureCompatibility,
+      ...distribution,
       strictTableStyleHierarchy: strictTableHierarchy,
       typography,
       docDefaultsRun: runDefaults,
@@ -494,7 +499,6 @@ export function buildStyleCascadeTable(
   }
 
   const authoredDefaults = readDocDefaults(stylesRoot);
-  const distribution = documentDistribution(stylesRoot);
   const sourceEastAsianFont = defaultsSelectEastAsianFace(authoredDefaults.run, themeFonts);
   typography = Object.freeze({ ...typography, sourceEastAsianFont });
   const defaults = {

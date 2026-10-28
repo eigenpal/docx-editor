@@ -24,6 +24,7 @@ const MODE_MATRIX = {
   anchorOnlyParagraphSeeding: 'modern',
   anchorOnlyParagraphWrapExclusion: 'modern',
   anchorsLayOutInCell: 'modern',
+  distributedLinesSpreadCharacters: 'legacy',
   fixedTableContentEdgeOrigin: 'legacy',
   floatingTableContentOrigin: 'legacy',
   floatingTableOverlapMovesLeft: 'modern',

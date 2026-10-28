@@ -13,17 +13,17 @@ The layout engine SHALL stretch the final line of a paragraph with `w:jc` set to
 
 #### Scenario: Distributed line spreads its characters
 
-- **GIVEN** a left-to-right distributed paragraph in a package whose styles part has a `w:rPrDefault` element, even an empty one
-- **WHEN** layout aligns the paragraph's last line, or a line that a manual, page, or column break closes
-- **THEN** each space between the first and last character takes up to 45 percent of its own advance from the slack
+- **GIVEN** a left-to-right distributed paragraph in a package with a legacy compatibility mode or no mode, or in a modern-mode package whose styles part has a `w:rPrDefault` element, even an empty one
+- **WHEN** layout aligns any line of the paragraph
+- **THEN** each space between the first and last character first takes a share of the slack: up to 45 percent of its own advance in a modern mode, and up to its face's average character width less its own advance in a legacy mode
 - **AND** the rest of the slack goes in equal steps after every character, so a single word reaches both edges
+- **AND** a line whose spaces can take all its slack sets as a justified line
 - **AND** a single character, or a single right-to-left word, is centered
-- **AND** lines that wrap inside the paragraph stretch only their spaces, as justified lines do
-- **AND** caret placement and hit testing follow the spread characters
+- **AND** caret placement, hit testing, and painted underline and highlight follow the spread characters
 
 #### Scenario: Distributed line has nothing to stretch
 
-- **GIVEN** a distributed paragraph in a package with no `w:rPrDefault` element, or in a right-to-left paragraph
+- **GIVEN** a distributed paragraph in a modern-mode package with no `w:rPrDefault` element, or a right-to-left distributed paragraph
 - **WHEN** layout aligns a line that holds a single word or a single character
 - **THEN** the line is centered in its measure
 - **AND** spaces before the line's first character are not stretched

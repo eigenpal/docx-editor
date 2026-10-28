@@ -3,11 +3,17 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-import { styleForFontSlot, type SemanticSpanVisit } from '@docx-editor.dev/core/layout';
+import {
+  segmentGraphemes,
+  styleForFontSlot,
+  type SemanticSpanVisit,
+} from '@docx-editor.dev/core/layout';
 
 /** Adapted from PR #707's underline absorption plan (2ce89f6e7).
- * Extend a single underline over published inter-word justification, not arbitrary gaps.
- * Core retains every glyph position; only the underline fill grows.
+ * Extend a single underline over published justification, not arbitrary gaps: the stretch
+ * after an inter-word space, and the gap between two characters that alignment split from one
+ * run (distributed and East Asian justified lines). Core retains every glyph position; only
+ * the underline fill grows.
  */
 export function underlineGap(visit: Pick<SemanticSpanVisit, 'line' | 'span'>): number {
   const { line, span } = visit;
@@ -19,7 +25,12 @@ export function underlineGap(visit: Pick<SemanticSpanVisit, 'line' | 'span'>): n
   let end = span.text.length;
   while (end > 0 && span.text.charCodeAt(end - 1) === 0x200b) end -= 1;
   const text = span.text.slice(0, end);
-  if (!text.endsWith(' ') || /\s/u.test(text.slice(0, -1))) return 0;
+  const afterSpace = text.endsWith(' ') && !/\s/u.test(text.slice(0, -1));
+  const betweenCharacters =
+    span.range.end === next.range.start &&
+    text.trim() !== '' &&
+    segmentGraphemes(span.text).length === 1;
+  if (!afterSpace && !betweenCharacters) return 0;
   if ((next.wrapAdvanceBefore ?? 0) > 0.001 || span.link !== next.link) return 0;
   if (span.range.paragraphId !== next.range.paragraphId) return 0;
   if (span.revisions?.length || next.revisions?.length) return 0;

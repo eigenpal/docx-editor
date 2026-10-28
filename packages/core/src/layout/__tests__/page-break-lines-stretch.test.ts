@@ -87,7 +87,8 @@ function firstLine(part: ReturnType<typeof body>, mode: number | undefined) {
   const styleCascade = cascadeOf(mode);
   return linesOf(
     layoutSemanticDocument(part, 0, { measurer, compatibilityMode: mode, styleCascade })
-  ).find((line) => line.spans.some((span) => /aaa|אבג/.test(span.text)))!;
+    // A distributed line in a legacy mode splits per character, so match the line's text.
+  ).find((line) => /aaa|אבג/.test(line.spans.map((span) => span.text).join('')))!;
 }
 const naturalWidth = (text: string) =>
   measurer.measure(text, firstLine(body('aaa'), 15).spans[0]!.style);

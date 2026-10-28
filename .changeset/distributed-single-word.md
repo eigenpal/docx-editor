@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Distributed paragraphs spread a closing line across every character when the styles part defines run defaults, and center a line that has nothing to stretch.
+Distributed paragraphs spread their lines across every character in legacy compatibility modes and when the styles part defines run defaults, and center a line that has nothing to stretch.

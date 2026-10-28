@@ -4452,7 +4452,7 @@ export interface StyleCascadeTable {
     readonly defaultTableStyleId: string | null;
     readonly disableOptionalLigatures?: true;
     // @internal
-    readonly distributeEveryCharacter?: true;
+    readonly distributedSpacing?: 'characters' | 'legacyCharacters';
     // (undocumented)
     readonly docDefaultsParagraph: readonly OoxmlProperty[];
     // (undocumented)

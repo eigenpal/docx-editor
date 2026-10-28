@@ -9,7 +9,7 @@ import { alignLineWithPictures } from './line-picture-alignment.ts';
 import {
   alignSpans,
   boxLineSetsLikeLastLine,
-  distributedSpacing,
+  paragraphDistributedSpacing,
   lineAlignmentMeasure,
   lineAlignOffset,
   type Alignment,
@@ -67,13 +67,7 @@ export function alignCellLine(
         shared.inTableCell,
         pendingLine.spaceShrink === true,
         measure.passages,
-        distributedSpacing(
-          shared.props,
-          // A table cell ignores its page breaks, so only a manual break closes a line there.
-          shared.inTableCell ? { manualBreakAfter: pendingLine.manualBreakAfter } : pendingLine,
-          isLastLine,
-          shared.styleCascade
-        )
+        paragraphDistributedSpacing(shared.props, shared.styleCascade)
       ),
     (aligned) => lineAlignOffset(placedSpans, aligned, alignment, measure.available, measure.used)
   );
