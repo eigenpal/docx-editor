@@ -27,9 +27,9 @@ afterEach(() => {
   harness.cleanup();
 });
 
-function fixture(shared = false) {
+function fixture(shared = false, textRPr = '') {
   const reference = (kind: string) =>
-    '<w:p><w:r><w:t>Text</w:t></w:r><w:r>' +
+    `<w:p><w:r>${textRPr}<w:t>Text</w:t></w:r><w:r>` +
     `<w:rPr><w:rStyle w:val="${kind}Reference"/><w:vertAlign w:val="superscript"/></w:rPr>` +
     `<w:${kind}Reference w:id="1"/>${shared ? '<w:t>tail</w:t>' : ''}</w:r></w:p>`;
   const notes = (kind: string) =>
@@ -243,3 +243,78 @@ test('explicit caret formatting after a reference applies to new text only', asy
   expect(alice.surface!.formatting().bold).toBe(true);
   ordinaryTypedRuns(alice);
 });
+
+function typedFaces(editor: DocxEditorInstance, index: number): string[][] {
+  const faces: string[][] = [];
+  const walk = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return;
+    if (node.kind === 'run') {
+      const typed = node.children.some(
+        (child) =>
+          child.kind === 'text' &&
+          child.children.some((value) => value.kind === 'textValue' && /[AB]/.test(value.value))
+      );
+      const properties = node.children.find((child) => child.kind === 'runProperties');
+      if (typed) {
+        faces.push(
+          properties?.kind === 'runProperties'
+            ? properties.children.map((child) => child.localName)
+            : []
+        );
+      }
+      return;
+    }
+    for (const child of node.children) walk(child);
+  };
+  walk(paragraph(editor, index).node);
+  return faces;
+}
+
+for (const tracked of [false, true]) {
+  test(`${tracked ? 'tracked' : 'plain'} typing after a reference takes the text face on both editors`, async () => {
+    const peers = await harness.pair(fixture(false, '<w:rPr><w:i/></w:rPr>'));
+    const alice = mount(peers.alice, 'Alice', tracked);
+    const bob = mount(peers.bob, 'Bob', tracked);
+    const sync = () => {
+      peers.alice.room.session.flushPendingJournals();
+      peers.bob.room.session.flushPendingJournals();
+      const a = alice.surface!.session.currentPackage(),
+        b = bob.surface!.session.currentPackage();
+      expect(packageFingerprint(a)).toBe(packageFingerprint(b));
+      expect(saveReopenDigest(a)).toEqual(saveReopenDigest(b));
+    };
+    for (const editor of [alice, bob]) {
+      select(editor, 0, 5);
+      expect(editor.surface!.formatting().italic).toBe(true);
+      expect(editor.surface!.formatting().superscript).toBe(false);
+    }
+    peers.pause();
+    select(alice, 0, 5);
+    expect(alice.exec({ type: 'insertText', text: 'A' }).ok).toBe(true);
+    select(bob, 0, 5);
+    expect(bob.exec({ type: 'insertText', text: 'B' }).ok).toBe(true);
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+    peers.resume();
+    sync();
+    expect(text(alice, 0)).toMatch(/^Text\uFFFC(?:AB|BA)$/);
+    for (const editor of [alice, bob]) {
+      const faces = typedFaces(editor, 0);
+      expect(faces.length).toBeGreaterThan(0);
+      for (const face of faces) expect(face).toEqual(['i']);
+    }
+    expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+    sync();
+    expect(text(bob, 0)).toBe('Text\uFFFCB');
+    expect(alice.exec({ type: 'redo' }).ok).toBe(true);
+    sync();
+    const saved = await alice.save();
+    const restored = createDocxEditor({
+      container: document.createElement('div'),
+      document: saved,
+      modules: [reviewModule()],
+    });
+    editors.push(restored);
+    for (const face of typedFaces(restored, 0)) expect(face).toEqual(['i']);
+  });
+}

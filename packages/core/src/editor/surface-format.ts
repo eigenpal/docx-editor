@@ -33,7 +33,10 @@ import { formattableRanges } from '@docx-editor.dev/core/store';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { isEastAsianFontFamily } from '../store/package/default-font-faces.ts';
 import { formattingRangeBesideRestrictedControl } from '../store/store/direct-properties.ts';
-import { noteReferenceEndingAt } from '../store/store/note-typing-boundary.ts';
+import {
+  noteReferenceEndingAt,
+  noteTypingSourceRange,
+} from '../store/store/note-typing-boundary.ts';
 import type {
   FormattingDisplayMode,
   FormattingRevisionAuthorFilter,
@@ -135,21 +138,33 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   const storyPart = () => session.partFor(deps.storyScope()) ?? session.part();
   // A caret beside a control that typing cannot enter reads the run that typing will copy,
   // outside the control, rather than the control's own run; or no run, when typing copies none.
+  // After a note reference it reads the run whose face typing takes, never the reference run;
+  // with no such run, typing takes the paragraph mark's face, which `markFace` carries.
   const formattingSelection = (
     selection: SemanticSelection
-  ): { readonly selection: SemanticSelection; readonly caretSpan: boolean } => {
+  ): {
+    readonly selection: SemanticSelection;
+    readonly caretSpan: boolean;
+    readonly markFace?: readonly SurfaceProperty[];
+  } => {
     const { anchor, head } = selection;
     if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) {
       return { selection, caretSpan: true };
     }
     const paragraph = findNode(storyPart(), head.paragraphId);
-    if (paragraph?.kind === 'paragraph' && noteReferenceEndingAt(paragraph, head.offset)) {
-      return { selection, caretSpan: false };
-    }
-    const run = paragraph
-      ? formattingRangeBesideRestrictedControl(paragraph, head.offset)
-      : undefined;
+    const afterNote =
+      paragraph?.kind === 'paragraph' && noteReferenceEndingAt(paragraph, head.offset);
+    const run =
+      paragraph?.kind !== 'paragraph'
+        ? undefined
+        : afterNote
+          ? noteTypingSourceRange(paragraph, head.offset)
+          : formattingRangeBesideRestrictedControl(paragraph, head.offset);
     if (run === undefined) return { selection, caretSpan: true };
+    if (run === null && afterNote) {
+      const markFace = directParagraphMarkProperties(storyPart(), head.paragraphId);
+      return { selection, caretSpan: false, markFace };
+    }
     if (run === null) return { selection, caretSpan: false };
     const start = run.end <= head.offset ? run.end - 1 : run.start;
     return {
@@ -513,7 +528,8 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
           deps.defaultFontFamily?.() ?? null,
           read.caretSpan
         ),
-        deps.pendingFormats()
+        // The mark's face first, so an armed format still answers over it.
+        mergedProperties(read.markFace ?? [], deps.pendingFormats() ?? [])
       );
     },
 
@@ -525,18 +541,23 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       // enumeration rather than a boolean: `w:vertAlign` carries superscript AND subscript,
       // so "is it on" is only answerable against the value being toggled.
       const value = attributes?.val;
+      // The document answers from the same selection the toolbar reads, so a press after a
+      // note reference toggles the face typing takes there, not the reference's face.
+      const read = formattingSelection(selectionNow.value);
+      const documentActive = read.caretSpan
+        ? isRunPropertyActive(
+            currentLayout.value,
+            read.selection,
+            localName,
+            cells,
+            value,
+            deps.paragraphOrder()
+          )
+        : pendingPropertyState(read.markFace ?? null, localName, value) === true;
       // A pending entry answers for the toggle state ahead of the document — pressing Bold
       // twice at a caret must cancel, not double-arm.
       const active =
-        pendingPropertyState(deps.pendingFormats(), localName, value) ??
-        isRunPropertyActive(
-          currentLayout.value,
-          selectionNow.value,
-          localName,
-          cells,
-          value,
-          deps.paragraphOrder()
-        );
+        pendingPropertyState(deps.pendingFormats(), localName, value) ?? documentActive;
       // Toggling OFF sends an explicit off value rather than dropping the element: the
       // property may be inherited from a style, and removing the local override would let the
       // inherited value come back. Two of these are closed enumerations, not booleans, and
@@ -556,14 +577,6 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         // rather than arming an explicit override: Bold pressed twice must leave nothing
         // pending, or typing would split the run to write a redundant `b val="0"`.
         const pending = deps.pendingFormats() ?? [];
-        const documentActive = isRunPropertyActive(
-          currentLayout.value,
-          selectionNow.value,
-          localName,
-          undefined,
-          value,
-          deps.paragraphOrder()
-        );
         if (!active === documentActive) {
           const kept = pending.filter((property) => property.localName !== localName);
           deps.setPendingFormats(kept.length > 0 ? kept : null);

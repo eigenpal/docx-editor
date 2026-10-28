@@ -414,7 +414,7 @@ function applyTrackedInsertion(
   const fieldLeftRun = fieldLeftRunId ? findNode(part, fieldLeftRunId) : null;
   const fieldProperties = () =>
     afterNote
-      ? noteTypingProperties(paragraph, mint)
+      ? noteTypingProperties(paragraph, offset, mint)
       : fieldLeftRun
         ? insertedRunProperties(mint, fieldLeftRun)
         : [];
@@ -582,7 +582,7 @@ function applyTrackedInsertion(
         if (fieldSite?.kind === 'atRunIndex' && node.id === fieldSite.run.id) {
           const children = childrenOf(node);
           const properties = () =>
-            afterNote ? noteTypingProperties(paragraph, mint) : insertedRunProperties(mint, node);
+            afterNote ? fieldProperties() : insertedRunProperties(mint, node);
           const head = runOf(mint, children.slice(0, fieldSite.index));
           const tail = runOf(mint, [
             ...children.filter(isRunProperties).map((child) => copy(mint, child)),

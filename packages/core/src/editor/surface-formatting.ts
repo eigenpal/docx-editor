@@ -219,9 +219,12 @@ export function authoredRunPropertiesAt(
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
   // Beside a control that typing cannot enter, with no text run to copy, typing writes none.
-  if (noteReferenceEndingAt(paragraph, offset))
-    return directParagraphMarkProperties(part, paragraphId);
-  if (formattingRangeBesideRestrictedControl(paragraph, offset) === null) return [];
+  // After a note reference the note rule in `formattingRunAt` decides instead, as in the store.
+  if (
+    !noteReferenceEndingAt(paragraph, offset) &&
+    formattingRangeBesideRestrictedControl(paragraph, offset) === null
+  )
+    return [];
   // Share the revision-filtered caret owner with complex-script lane selection.
   const owner = formattingRunAt(paragraph, offset, displayMode, authorFilter);
   if (owner) {
