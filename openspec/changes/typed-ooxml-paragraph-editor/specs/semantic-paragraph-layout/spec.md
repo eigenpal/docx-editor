@@ -40,6 +40,28 @@ Authored header rows SHALL NOT hold a `w:cantSplit` body row taller than a page 
 - **AND** the body row starts on the next page, below a repeated header row in compatibility mode 14 and earlier
 - **AND** in compatibility mode 15 and later, the body row takes that whole page and the header row repeats on the page after it
 
+### Requirement: Right-to-left lines beside floating objects
+
+The layout engine SHALL fill the passages that a floating object leaves a right-to-left line from right to left. Each part of a bidirectional line SHALL align inside its own passage, and bidirectional reordering SHALL stay inside that passage.
+
+#### Scenario: Centered right-to-left text beside a float
+
+- **GIVEN** a centered right-to-left paragraph beside a floating object in the middle of the line
+- **WHEN** layout breaks and aligns its lines
+- **THEN** the first words of each line fill the passage to the right of the object
+- **AND** the text continues in the passage to the left of the object
+- **AND** each part is centered in its own passage without crossing the object
+- **AND** a single centered word is centered in the passage to the right of the object
+- **AND** carets and hit testing resolve to positions inside the passages
+- **AND** the source text, formatting, and source positions remain unchanged
+
+#### Scenario: Wrap sides beside a right-to-left line
+
+- **GIVEN** a right-to-left paragraph beside a floating object with a one-sided wrap or wrap distance
+- **WHEN** layout breaks its lines
+- **THEN** the wrap side and the wrap distance keep their physical sides
+- **AND** square wrapping on the largest side with equal sides keeps text on the physical left in compatibility mode 15 and later, and on the physical right in earlier modes, in either paragraph direction
+
 ### Requirement: Native semantic layout records
 
 The semantic layout engine SHALL produce revision-tagged page, paragraph-fragment, line, and style-span records directly from the committed canonical tree and derived style resources.
@@ -200,6 +222,26 @@ Semantic layout SHALL implement the D8 paragraph property boundary and the secti
 
 - **WHEN** a body story contains multiple sections ended by paragraph-level or body `w:sectPr` with distinct geometry and read-only header/footer references
 - **THEN** layout paginates each section against its own page size/margins, starts non-continuous sections on a new page, and attaches the correct per-section furniture including `titlePage` inheritance
+
+#### Scenario: Note numbering resolves from the section only
+
+- **WHEN** settings.xml declares `w:footnotePr` or `w:endnotePr` and a section's own `w:sectPr` declares none, or only some, of `w:numFmt`, `w:numStart`, `w:numRestart`, and footnote `w:pos`
+- **THEN** that section's notes, the painted note marks, and refreshed NOTEREF results use the section's own values and the defaults (decimal footnotes, lowerRoman endnotes, start 1, continuous, footnotes at the page bottom) for the rest, never the settings.xml values
+- **AND** the endnote position resolves from settings.xml `w:pos`, else `docEnd`, for every section, and a section's own endnote `w:pos` does not apply
+
+#### Scenario: A note number adds the section start to the note index
+
+- **WHEN** a section's resolved `numStart` is S and a numbered note is the note at index N (from 0) of its numbering domain, which is the whole document for `continuous`, the section for `eachSect`, and the page for `eachPage`
+- **THEN** the painted mark and a refreshed NOTEREF result show S + N in the section's `numFmt`, so a section starting at 10 after two continuous notes shows 12 and 13
+
+#### Scenario: A document-scope note properties write reaches every section
+
+- **WHEN** `setNoteProperties` runs with `scope: 'document'`
+- **THEN** the write merges the named fields into every section's `w:sectPr` and into settings.xml, in place and in schema order, keeping each field it does not name, adding no default value where nothing authors the field, and minting a body-level `w:sectPr` for an implicit final section only when it adds a value
+- **AND** the endnote position goes to settings.xml only, in either scope
+- **AND** a write collapses repeated `w:footnotePr`/`w:endnotePr` elements and fields in every container it visits into the first copy, and save writes only the first copy, so the one case in-place merging cannot prevent (two peers adding the element at once) lasts in shared state only until the next write
+- **AND** a concurrent paragraph join keeps the write in the section it keeps
+- **AND** one undo restores the sections and settings.xml together, and the write converges on every collaborating peer
 
 #### Scenario: Page-furniture PAGE and NUMPAGES project per sheet
 

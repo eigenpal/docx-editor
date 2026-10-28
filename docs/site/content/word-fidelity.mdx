@@ -226,6 +226,10 @@ If settings enable `w:noColumnBalance` in a document saved in compatibility mode
 
 A floating object in a table cell can turn off the **Layout in table cell** option. Word honors that setting only in compatibility mode 14 or earlier, or when the document declares no mode. The object is then placed against the page, unless it is positioned against its own character or line. If the object wraps text, intersecting table rows move below it. The object keeps its position. In compatibility mode 15 and later, Word ignores the setting and keeps the object in its cell.
 
+A right-to-left line beside a floating object fills the passage to the right of the object first, then the passage to its left. Each part aligns inside its own passage, with its start edge on the right. A first-line indent narrows only the first passage. Wrap sides and wrap distances keep their physical sides. A left-to-right line that contains right-to-left text also aligns each part inside its own passage. Text never reorders across the object.
+
+Square wrapping on the largest side keeps text on the wider side of the object. When both sides are equal, the text keeps the left side in compatibility mode 15 and later. In earlier modes, or when the document declares no mode, it keeps the right side. This applies in both paragraph directions.
+
 Two other placement rules depend on the compatibility mode or the object options. Before compatibility mode 15, ordinary header and footer text ignores wrapping objects in the same header or footer. If an object must not overlap another object, Word moves it beside that object at the same height. The object moves down only when neither side has room.
 
 ### Page layout, headers, and footers
@@ -305,6 +309,14 @@ An empty paragraph that ends a section ignores its own page break before, from d
 
 An empty paragraph that ends a section also stays on the page when its line does not fit the space left. It takes no space from a footnote area on that page. If the next section starts on a new page, that paragraph does not draw its borders or shading, and it does not start a page of its own.
 
+### Note numbering
+
+Each section numbers its footnotes and endnotes from its own note properties (`w:footnotePr` and `w:endnotePr` in `w:sectPr`). These properties set the number format, start value, restart rule, and footnote position. A value that the section leaves unset takes the default: decimal footnotes, lowercase Roman endnotes, a start value of 1, continuous numbering, and footnotes at the page bottom.
+
+The note properties in `settings.xml` do not change numbering or the footnote position. The endnote position is the exception. It applies to the whole document and comes from `settings.xml` only, so an endnote position in a section has no effect.
+
+A note number is the start value of its section plus the index of the note in its numbering domain. With continuous numbering, the domain is the whole document. For example, a section that starts at 10 after two earlier notes numbers its notes 12 and 13. With numbering that restarts in each section or on each page, the domain is that section or page.
+
 ### Table rows and merged cells
 
 Bottom-to-top cell text does not make its row taller. The text wraps at the final row height, or along the full merged cell height. The cell width clips overflowing text.
@@ -320,6 +332,12 @@ Supported fixed-height rows that end a table, or end a page of a table, place th
 This adjustment applies to top-level tables with collapsed borders and complete horizontal-text rows. The bottom rules must be equal-width single rules, no wider than 12pt. Repeated headers and merged cells use the same rule. The top rule can have a different width. Eighth-point widths, including 0.625pt, retain their authored size. A row that ends a page inside a vertical merge keeps its rule inside the authored height.
 
 If such a row does not fit the page together with its bottom rule, it moves to the next page. A row whose bottom rule ends exactly at the bottom margin fits. A row that starts at the top of a page stays, and its bottom rule can then extend past the bottom margin. In compatibility mode 15 and later, repeated header rows are omitted on a page where the row fits below them only without its bottom rule, and the row starts that page. In earlier modes, the row stays directly below the repeated header rows, and its bottom rule can extend past the bottom margin. Floating tables, nested content, supported bottom-to-top cells, compound bottom rules, unequal bottom-cell rules, and cell spacing retain their existing geometry.
+
+Supported terminal fixed-height rows place their bottom rule outside the authored content height. Following text starts below that rule. Center-aligned and bottom-aligned cell text uses the authored bottom and cell margins. The outer rule reserves no space inside that content box.
+
+This adjustment applies to top-level tables with collapsed borders and complete horizontal-text rows. The bottom rules must be equal-width single rules, no wider than 12pt. Repeated headers and merged cells use the same rule. The top rule can have a different width. Eighth-point widths, including 0.625pt, retain their authored size.
+
+If the row does not fit the page together with its bottom rule, it moves to the next page. A row whose bottom rule ends exactly at the bottom margin fits. A row that starts at the top of a page stays, and its bottom rule can then extend past the bottom margin. In compatibility mode 15 and later, repeated header rows are omitted on a page where the row fits below them only without its bottom rule, and the row starts that page. In earlier modes, the row stays directly below the repeated header rows, and its bottom rule can extend past the bottom margin. Floating tables, nested content, supported bottom-to-top cells, compound bottom rules, unequal bottom-cell rules, and cell spacing retain their existing geometry.
 
 A row with an exact height taller than the page content starts on a fresh page and does not split. It fills the rest of that page, and its border and content stop at the bottom margin. The row does not paint past the margin, with or without `w:cantSplit`. The next block starts on the next page.
 

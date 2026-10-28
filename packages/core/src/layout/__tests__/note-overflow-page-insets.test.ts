@@ -236,7 +236,7 @@ describe('note overflow sheets at a section boundary', () => {
     if (!loaded.ok) throw new Error(loaded.reason);
     const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
     const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
-    const sectEnd = resolveEndnoteProperties({ pos: 'sectEnd' });
+    const sectEnd = resolveEndnoteProperties(undefined, { pos: 'sectEnd' });
     const notes: NotesLayoutInput = {
       footnotesPart: null,
       endnotesPart: resolveNotesPart(loaded.package, 'endnote'),
@@ -556,7 +556,7 @@ describe('note overflow across several runs', () => {
     if (!loaded.ok) throw new Error(loaded.reason);
     const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
     const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
-    const sectEndProps = resolveEndnoteProperties({ pos: 'sectEnd' });
+    const sectEndProps = resolveEndnoteProperties(undefined, { pos: 'sectEnd' });
     const docEndProps = resolveEndnoteProperties({ pos: 'docEnd' });
     const sections = enumerateDocumentSections(part);
     const bySection = resolveHeaderFooterPartsBySection(loaded.package);
@@ -735,7 +735,7 @@ describe('drain sheets behind a later insertion', () => {
     if (!loaded.ok) throw new Error(loaded.reason);
     const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
     const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
-    const sectEndProps = resolveEndnoteProperties({ pos: 'sectEnd' });
+    const sectEndProps = resolveEndnoteProperties(undefined, { pos: 'sectEnd' });
     const docEndProps = resolveEndnoteProperties({ pos: 'docEnd' });
     const sections = enumerateDocumentSections(part);
     const bySection = resolveHeaderFooterPartsBySection(loaded.package);
@@ -938,7 +938,7 @@ describe('sheet order in a last section that both drains and overflows', () => {
     if (!loaded.ok) throw new Error(loaded.reason);
     const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
     const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
-    const sectEnd = resolveEndnoteProperties({ pos: 'sectEnd' });
+    const sectEnd = resolveEndnoteProperties(undefined, { pos: 'sectEnd' });
     const layout = layoutSemanticDocument(part, 1, {
       measurer,
       producer: 'order',

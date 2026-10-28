@@ -41,7 +41,7 @@ concurrency:
 
 jobs:
   check-drift:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     # No pull-requests: write — every `gh pr` call and the push below use the
     # release-pal App token, which carries its own installation permissions.
@@ -63,7 +63,9 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
+          # Downloading the binary takes seconds; caching it only fills the cache.
+          no-cache: true
 
       # HUSKY=0 for the same reason dependabot-lockfile.yml sets it: the root
       # `prepare` script points core.hooksPath at .husky, and the adopt step
@@ -73,7 +75,7 @@ jobs:
         working-directory: .
         env:
           HUSKY: 0
-        run: bun install --frozen-lockfile
+        run: bash scripts/ci/install-dependencies.sh
 
       - name: Check for upstream @types/office-js drift
         id: drift
