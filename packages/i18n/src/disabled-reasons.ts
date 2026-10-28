@@ -51,6 +51,16 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'the cells have a tracked change; accept or reject it first': 'disabledReason.cellHasRevision',
   'suggesting cannot merge or split cells; stop suggesting to change the table structure':
     'disabledReason.cellStructureSuggesting',
+  // Keyed on `SUGGESTING_TABLE_DELETE_REFUSAL` and `SUGGESTING_TABLE_MOVE_REFUSAL` in the
+  // engine's `surface-suggesting-structure.ts`; the sentences must stay the same.
+  'suggesting cannot delete a whole table; stop suggesting to delete it, or delete its rows one at a time':
+    'disabledReason.tableDeleteSuggesting',
+  'suggesting cannot move a table; stop suggesting to move it':
+    'disabledReason.tableMoveSuggesting',
+  // Keyed on the `selectTableRegion` refusals in the engine's `table-select-plan.ts` and
+  // `docx-editor-support.ts`, which name the region they refuse.
+  'selecting a table row is not supported yet': 'disabledReason.selectTableRowUnsupported',
+  'selecting a table column is not supported yet': 'disabledReason.selectTableColumnUnsupported',
   'this table uses a legacy horizontal merge the editor cannot change':
     'disabledReason.legacyMerge',
   'this table has a cell the editor cannot place in the grid':
