@@ -13,6 +13,7 @@
 //
 //   node scripts/test/run-parallel.mjs [--jobs N] [--shard INDEX/TOTAL] [--fail-fast]
 //     [--exclude PATH_PREFIX]... [--balance] [--durations-out FILE] [--retry-failed]
+//     [--only LIST_FILE]
 //     [-- <args passed to every `bun test`>]
 //
 // `--exclude` drops files whose repository-relative path starts with the prefix, after shards
@@ -24,6 +25,9 @@
 // `--durations-out` writes this run's own measurements, which CI merges into the shared cache.
 // `--retry-failed` runs a failed file once more before reporting it. A file that passes on the
 // retry is listed as FLAKY at the end, so the timing problem stays visible without stopping CI.
+// `--only` runs just the test files named in LIST_FILE, one repository-relative path per line;
+// `bun run test:changed` uses it. Paths are never passed to `bun test`, which would forward them
+// to every file instead of selecting files.
 //
 // Slowest-first, from a duration cache written on every run, so the long poles start immediately
 // instead of landing last and leaving the pool half-idle.
@@ -277,6 +281,7 @@ function parseArguments(argv) {
   let failFast = false;
   let balance = false;
   let retryFailed = false;
+  let only = '';
   let durationsOut = '';
   const exclude = [];
   for (let index = 0; index < argv.length; index += 1) {
@@ -300,6 +305,8 @@ function parseArguments(argv) {
       balance = true;
     } else if (argument === '--retry-failed') {
       retryFailed = true;
+    } else if (argument === '--only') {
+      only = argv[++index] ?? '';
     } else if (argument === '--durations-out') {
       durationsOut = argv[++index] ?? '';
     } else if (argument.startsWith('--durations-out=')) {
@@ -317,7 +324,11 @@ function parseArguments(argv) {
     console.error('--exclude needs a non-empty path prefix');
     process.exit(1);
   }
-  return { jobs, passthrough, shard, failFast, exclude, balance, durationsOut, retryFailed };
+  if (only === '' && argv.includes('--only')) {
+    console.error('--only needs a file that lists test paths');
+    process.exit(1);
+  }
+  return { jobs, passthrough, shard, failFast, exclude, balance, durationsOut, retryFailed, only };
 }
 
 /** The child's current resident set in bytes, or 0 when it cannot be read. */
@@ -410,8 +421,16 @@ function runFile(file, passthrough, failFast, onRss) {
 }
 
 async function main() {
-  const { jobs, passthrough, shard, failFast, exclude, balance, durationsOut, retryFailed } =
+  const { jobs, passthrough, shard, failFast, exclude, balance, durationsOut, retryFailed, only } =
     parseArguments(process.argv.slice(2));
+  const selected = only
+    ? new Set(
+        readFileSync(only, 'utf8')
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+      )
+    : null;
   if (failFast) passthrough.push('--bail=1');
   const durations = readDurations();
   const weights = balance
@@ -421,7 +440,10 @@ async function main() {
     SEARCH_ROOTS.flatMap((searchRoot) => discover(searchRoot)),
     shard,
     weights
-  ).filter((file) => !exclude.some((prefix) => file.startsWith(prefix)));
+  ).filter(
+    (file) =>
+      !exclude.some((prefix) => file.startsWith(prefix)) && (!selected || selected.has(file))
+  );
   if (queue.length === 0) {
     console.error(`no test files found for shard ${shard}`);
     process.exit(1);

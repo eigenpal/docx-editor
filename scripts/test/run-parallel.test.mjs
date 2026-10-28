@@ -91,6 +91,14 @@ test('fail-fast stops dispatch after the first failure; normal mode reports both
     expect(stillFailing.stdout).toContain('FAIL packages/first.test.ts');
     rmSync(join(root, 'packages', 'flaky.test.ts'));
 
+    // --only runs just the listed files, never forwarding the paths to `bun test`.
+    const list = join(root, 'only.txt');
+    writeFileSync(list, 'packages/second.test.ts\n');
+    const onlyRun = run('--only', list);
+    expect(onlyRun.stdout).toContain('Running 1 test files');
+    expect(onlyRun.stdout).toContain('FAIL packages/second.test.ts');
+    expect(onlyRun.stdout).not.toContain('FAIL packages/first.test.ts');
+
     const emptyExclude = run('--exclude=');
     expect(emptyExclude.status).toBe(1);
     expect(emptyExclude.stderr).toContain('non-empty path prefix');
