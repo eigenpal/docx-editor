@@ -33,6 +33,13 @@ The engine SHALL publish equation geometry from DOM-free layout. Paint SHALL use
 - **WHEN** an equation contains `m:sSup` or `m:nary`
 - **THEN** paint places scripts and limits around the projected base or operator
 
+#### Scenario: Script size and placement
+
+- **WHEN** an equation contains `m:sSup`, `m:sSub`, or `m:sSubSup`
+- **THEN** each script draws at 73 percent of its run size, rounded down to a whole half point
+- **AND** the superscript baseline rises at least 750/2048 em of the structure size, and the subscript baseline sits 0.2 em below the base baseline
+- **AND** the two scripts of one base keep a 300/2048 em gap between their glyphs
+
 #### Scenario: Safe paint
 
 - **WHEN** OMML text contains markup-like attacker-controlled characters

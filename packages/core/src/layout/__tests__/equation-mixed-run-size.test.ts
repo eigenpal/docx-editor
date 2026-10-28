@@ -137,7 +137,7 @@ test('scales each script and fraction run from its own authored size', () => {
     `<m:sup>${run('3', 20)}</m:sup></m:sSubSup>` +
     `<m:f><m:num>${run('4', 30)}</m:num><m:den>${run('5', 10)}</m:den></m:f>`;
   const sizes = glyphs(geometry(equation(content))).map((node) => node.fontSizePt);
-  expect(sizes).toEqual([24, 7, 14, 21, 7]);
+  expect(sizes).toEqual([24, 7, 14.5, 21.5, 7]);
 });
 
 test.each(['top', 'bottom'] as const)(

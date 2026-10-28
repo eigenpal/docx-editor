@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Equation scripts drew at 70 percent of their base size, and a superscript rose by its own height above the base.",
+  "after": "Scripts draw at 73 percent in whole half points, a superscript rises by a share of the structure size, and the scripts of one base keep an ink gap.",
+  "reason": "Only local equation geometry changes. Canonical OMML, offsets, operations, and collaboration data remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/equation-script-metrics.test.ts",
+    "packages/core/src/layout/__tests__/equation-mixed-run-size.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-equation-mixed-run-size.test.ts"
+  ],
+  "changeset": "equation-script-placement",
+  "migration": null
+}
