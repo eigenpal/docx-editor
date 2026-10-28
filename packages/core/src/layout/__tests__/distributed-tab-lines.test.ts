@@ -102,6 +102,34 @@ for (const alignment of ['right', 'center', 'decimal']) {
   });
 }
 
+test('kerned text after a left tab keeps its letters together', () => {
+  const kerned = buildStyleCascadeTable(
+    root(
+      `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
+    ),
+    NO_THEME_FONTS,
+    root(
+      `<w:settings xmlns:w="${W}"><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`
+    )
+  );
+  // One kerned word has nothing to stretch: the whole line centers, Cd ending at 56pt.
+  expect(placed(firstLine(paragraph('Ab\tCd'), kerned))).toEqual([
+    ['A', 22],
+    ['b', 32],
+    ['C', 58],
+    ['d', 68],
+  ]);
+  // Kerned words after the tab stretch only at their space.
+  expect(placed(firstLine(paragraph('Ab\tCd Ef'), kerned))).toEqual([
+    ['A', 0],
+    ['b', 10],
+    ['C', 36],
+    ['d', 46],
+    ['E', 80],
+    ['f', 90],
+  ]);
+});
+
 test('a line with nothing to stretch after its last left tab centers', () => {
   for (const styleCascade of [CHARACTERS, SPACES]) {
     // One character after the tab ends at 46pt.

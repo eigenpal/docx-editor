@@ -17,21 +17,24 @@ const initial = 'aa bb cc dd ee ff gg hh ii';
 const measurer = createFixedMeasurer();
 // In a modern package, a styles part with a `w:rPrDefault` spreads a distributed line per
 // character and one without stretches its spaces. A legacy package (no settings part) spreads
-// characters whatever its defaults.
+// characters whatever its defaults. Pair kerning in the run defaults keeps a modern package's
+// words whole, so the line stretches its spaces.
 const PART = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const CONTENT = 'application/vnd.openxmlformats-officedocument.wordprocessingml';
 const STYLES = `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault/></w:docDefaults></w:styles>`;
+const KERNED_STYLES = `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`;
 const SETTINGS = `<w:settings xmlns:w="${W}"><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`;
 const KINDS = {
-  'stretched spaces': { styles: false, settings: true, spreads: false },
-  'spread characters': { styles: true, settings: true, spreads: true },
-  'legacy spread characters': { styles: false, settings: false, spreads: true },
+  'stretched spaces': { styles: null, settings: true, spreads: false },
+  'spread characters': { styles: STYLES, settings: true, spreads: true },
+  'kerned whole words': { styles: KERNED_STYLES, settings: true, spreads: false },
+  'legacy spread characters': { styles: null, settings: false, spreads: true },
 } as const;
 type Kind = keyof typeof KINDS;
 const source = (kind: Kind) => {
   const { styles, settings } = KINDS[kind];
   const parts = [
-    ...(styles ? [['styles', STYLES] as const] : []),
+    ...(styles ? [['styles', styles] as const] : []),
     ...(settings ? [['settings', SETTINGS] as const] : []),
   ];
   return zipDocument(

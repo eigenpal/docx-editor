@@ -5,12 +5,14 @@
 // natural size. The rest goes in equal steps to every slot: each boundary between two East
 // Asian characters (punctuation and brackets included, whatever the line-break rules allow
 // there), each boundary that holds an automatic inter-script gap, and each boundary after a
-// space. Text of other scripts keeps its letters together. Inter-character justification uses
+// space. A character is East Asian by its code point or by its East Asian font slot, so a
+// symbol hinted to the East Asian face counts. Text of other scripts keeps its letters
+// together, and so do Korean syllables, except on a distributed line. Inter-character justification uses
 // real span geometry. Paint and exporters already consume the gaps between spans; no
 // browser-only text-justify rule may move the caret.
 import { endsWithSpaceSlot, withoutTrailingZeroWidthSpaces } from './trailing-spaces.ts';
 import { segmentGraphemes } from './grapheme.ts';
-import { hasCjkText, isCjk } from './cjk-paragraph-breaks.ts';
+import { hasCjkText, isCjk, isHangul } from './cjk-paragraph-breaks.ts';
 import { lastCodePointOf } from './cjk-line-break.ts';
 import { automaticTextSpacingBefore } from './cjk-automatic-spacing.ts';
 import { spaceSlackCapacity } from './distributed-character-spacing.ts';
@@ -21,23 +23,37 @@ import { isSplittableSpan, splitSpanParts, type SpanPart } from './span-parts.ts
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 
 /** Characters that join their neighbours: no slot opens next to them. */
-const JOINERS = /[  ⁠﻿]/u;
+const JOINERS = /[\u00a0\u202f\u2060\ufeff]/u;
 
 /**
- * Split a span where justification may open a gap: next to each East Asian character, and
- * after each run of U+0020 spaces. Right-to-left text keeps its spaces whole.
+ * Whether two adjacent code points are Korean syllables or jamo. Only a distributed line
+ * opens a gap between them; a justified Korean line stretches its spaces.
  */
-function slotParts(span: StyleSpanRecord): SpanPart[] {
+function koreanPair(before: number, after: number): boolean {
+  return isHangul(before) && isHangul(after);
+}
+
+/**
+ * Split a span where justification may open a gap: next to each East Asian character (every
+ * character of a span in the East Asian font slot), and after each run of U+0020 spaces.
+ * Right-to-left text keeps its spaces whole, and Korean words stay whole unless `distributed`.
+ */
+function slotParts(span: StyleSpanRecord, distributed: boolean): SpanPart[] {
   const clusters = segmentGraphemes(span.text);
   const rtl = span.style.shaping?.direction === 'rtl';
+  const eastAsianSlot = span.fontSlot === 'eastAsia';
   const parts: SpanPart[] = [];
   let from = 0;
   for (let index = 1; index < clusters.length; index++) {
     const previous = clusters[index - 1]!.text;
     const current = clusters[index]!.text;
+    const before = lastCodePointOf(previous)!;
+    const after = current.codePointAt(0)!;
+    if (!distributed && koreanPair(before, after)) continue;
     if (
-      isCjk(lastCodePointOf(previous)!) ||
-      isCjk(current.codePointAt(0)!) ||
+      eastAsianSlot ||
+      isCjk(before) ||
+      isCjk(after) ||
       (!rtl && previous === ' ' && current !== ' ')
     ) {
       parts.push({ from, to: clusters[index]!.utf16From });
@@ -61,7 +77,7 @@ function trailingSpaceCount(text: string): number {
  * East Asian text, the spans unchanged when it has no slot (the caller then sets it as it
  * would a line with nothing to stretch), and otherwise the spans with the gaps applied.
  * `spacing` selects the space share, as for a distributed line; ordinary justified lines
- * take the `'characters'` share.
+ * (`spacing` undefined) take the `'characters'` share and keep Korean words whole.
  */
 export function justifyCjkSpans(
   spans: readonly StyleSpanRecord[],
@@ -75,7 +91,7 @@ export function justifyCjkSpans(
   const share = spacing === 'legacyCharacters' ? 'legacyCharacters' : 'characters';
   const split: StyleSpanRecord[] = [];
   for (const span of spans) {
-    const parts = isSplittableSpan(span) ? slotParts(span) : [];
+    const parts = isSplittableSpan(span) ? slotParts(span, spacing !== undefined) : [];
     if (parts.length < 2) split.push(span);
     else split.push(...splitSpanParts(span, parts, measurer));
   }
@@ -96,6 +112,8 @@ export function justifyCjkSpans(
       JOINERS.test(previous.text.slice(-1) + current.text[0])
     )
       continue;
+    const eastAsianBefore = isCjk(before) || previous.fontSlot === 'eastAsia';
+    const eastAsianAfter = isCjk(after) || current.fontSlot === 'eastAsia';
     let capacity = 0;
     if (endsWithSpaceSlot(previous.text)) {
       const own = measureDisplayText(
@@ -108,9 +126,11 @@ export function justifyCjkSpans(
     } else if (current.text.startsWith(' ')) {
       // The space itself is the slot; the boundary before it opens nothing.
       continue;
-    } else if (!(isCjk(before) && isCjk(after))) {
+    } else if (spacing === undefined && koreanPair(before, after)) {
+      continue;
+    } else if (!(eastAsianBefore && eastAsianAfter)) {
       // Between an East Asian character and other text, only an automatic gap stretches.
-      const gap = isCjk(before) || isCjk(after) ? automaticTextSpacingBefore(current) : 0;
+      const gap = eastAsianBefore || eastAsianAfter ? automaticTextSpacingBefore(current) : 0;
       if (gap <= 0) continue;
       capacity = gap;
     }
