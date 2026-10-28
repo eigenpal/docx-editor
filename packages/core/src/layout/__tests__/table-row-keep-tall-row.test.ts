@@ -6,9 +6,11 @@
 // after it. That holds for one row or several, for a header row that is taller than a page,
 // and in compatibility modes 14 and 15. Content that already opens its page stays there.
 //
-// Authored header rows above such a row do not hold it: the row starts below their repeat
-// on the next page, also when they open the page. In compatibility mode 15, header rows keep
-// with the first body row, so header rows below other content move to the next page first.
+// Authored header rows above such a row do not hold it, also when they open the page: the
+// row starts on the next page. Compatibility mode 14 repeats the header rows above it there;
+// mode 15 gives the row that whole page and repeats them on the page after. In mode 15,
+// header rows keep with the first body row (and a kept group that opens the body), so header
+// rows below other content move to the next page first.
 //
 // The page shapes come from captured probes. The fixture page holds twelve 14pt lines; a
 // 14-line row is taller than it.
@@ -104,10 +106,28 @@ describe('authored header rows before a cantSplit row taller than a page', () =>
   const HEAD = row('H', { header: true });
   const HEADER = 'Hc1-1 Hc2-1';
 
-  test('mode 15: the header rows move to the next page, and the row starts after them', () => {
+  test('mode 15: the header rows move, and the row opens the next page without a repeat', () => {
     const placed = pages(lay(load(P8 + table([HEAD, tall('R1')]) + TAIL), 15));
     expect(placed[0]).toBe('P1 P2 P3 P4 P5 P6 P7 P8');
     expect(placed[1]).toBe(HEADER);
+    expect(placed[2]!.startsWith('R1c1-1')).toBe(true);
+    // The repeat returns on the page where the row continues.
+    expect(placed[3]!.startsWith(`${HEADER} R1c1-`)).toBe(true);
+  });
+
+  test('mode 15: the header rows and a kept first body row move before the tall row', () => {
+    const body = P8 + table([HEAD, row('K', { keep: [true, true] }), tall('R1')]) + TAIL;
+    const placed = pages(lay(load(body), 15));
+    expect(placed[0]).toBe('P1 P2 P3 P4 P5 P6 P7 P8');
+    expect(placed[1]).toBe(`${HEADER} Kc1-1 Kc2-1`);
+    expect(placed[2]!.startsWith('R1c1-1')).toBe(true);
+  });
+
+  test('mode 14: header rows and a kept first body row stay, and the kept row moves', () => {
+    const body = P8 + table([HEAD, row('K', { keep: [true, true] }), tall('R1')]) + TAIL;
+    const placed = pages(lay(load(body), 14));
+    expect(placed[0]).toBe(`P1 P2 P3 P4 P5 P6 P7 P8 ${HEADER}`);
+    expect(placed[1]).toBe(`${HEADER} Kc1-1 Kc2-1`);
     expect(placed[2]!.startsWith(`${HEADER} R1c1-1`)).toBe(true);
   });
 
@@ -121,7 +141,8 @@ describe('authored header rows before a cantSplit row taller than a page', () =>
     test(`mode ${mode}: header rows at the page top stay there alone`, () => {
       const placed = pages(lay(load(table([HEAD, tall('R1')]) + TAIL), mode));
       expect(placed[0]).toBe(HEADER);
-      expect(placed[1]!.startsWith(`${HEADER} R1c1-1`)).toBe(true);
+      // Mode 14 repeats the header rows above the row; mode 15 gives the row the whole page.
+      expect(placed[1]!.startsWith(mode === 14 ? `${HEADER} R1c1-1` : 'R1c1-1')).toBe(true);
     });
   }
 

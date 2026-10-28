@@ -411,11 +411,13 @@ export function* paginateTableInFlowSteps(
     if (repeatsEnabled) placeHeaderGroup(true, admitsBodyAfter);
   };
 
+  /** Whole band of a fresh page: a note reserve yields to a kept row. */
+  const pageBand = () => Math.max(contentHeight(), flow.unreservedContentHeight?.() ?? 0);
   /** Kept-row pricing over `candidates` (`table-row-keeps.ts`); `first` overrides one row's height. */
   const keptSource = (
     candidates: readonly SemanticTableRow[],
     first?: [number, number],
-    pageHeight = Math.max(contentHeight(), flow.unreservedContentHeight?.() ?? 0)
+    pageHeight = pageBand()
   ) =>
     tableKeptRowSource({
       structure,
@@ -423,7 +425,7 @@ export function* paginateTableInFlowSteps(
       left: tableLeft,
       deps: tableDeps,
       pageHeight,
-      fullPageHeight: Math.max(contentHeight(), flow.unreservedContentHeight?.() ?? 0),
+      fullPageHeight: pageBand(),
       heightOf: cachedRowHeights(candidates, rowHeightOf, first),
       following: (room) => flow.followingKeepOpening?.(room),
     });
@@ -566,9 +568,7 @@ export function* paginateTableInFlowSteps(
     // `w:cantSplit` keeps a row whole only when a page can hold it. The full band counts,
     // because a note reserve yields to a kept row. A wrapping float still reduces that band.
     // A taller row starts on a fresh page and then splits like an ordinary row.
-    const pageHoldsRow = (): boolean =>
-      naturalHeight <=
-      Math.max(contentHeight(), flow.unreservedContentHeight?.() ?? 0) - bandTop + 0.001;
+    const pageHoldsRow = (): boolean => naturalHeight <= pageBand() - bandTop + 0.001;
     // `btLr` text takes its line length from the whole row, so such a row also moves whole to
     // a page that can hold it when its authored minimum does not fit the room below `top`
     // (`bottomToTopTextKeepsRowWhole`).
@@ -697,9 +697,7 @@ export function* paginateTableInFlowSteps(
             keptSource(bodyRows, [bodyRowIndex, naturalHeight]),
             bodyRowIndex,
             contentHeight() - flow.cursorY,
-            Math.max(contentHeight(), flow.unreservedContentHeight?.() ?? 0) -
-              (flow.columnTop?.() ?? 0) -
-              (repeatsEnabled ? headerGroupHeight : 0),
+            pageBand() - (flow.columnTop?.() ?? 0) - (repeatsEnabled ? headerGroupHeight : 0),
             flow.compatibilityMode,
             rows.length > 0 && rows.every((placed) => placed.isHeaderRow)
           )
@@ -743,7 +741,7 @@ export function* paginateTableInFlowSteps(
           top: flow.cursorY,
           columnTop: flow.columnTop?.() ?? 0,
           bottom: contentHeight(),
-          band: Math.max(contentHeight(), flow.unreservedContentHeight?.() ?? 0),
+          band: pageBand(),
           repeat: repeatsEnabled && !laterLayout ? headerGroupHeight : 0,
           belowBandOnly:
             bandTop > 0 &&
@@ -859,12 +857,14 @@ export function* paginateTableInFlowSteps(
       // nothing in `core` catches, on a path the module comment calls a recovery.
       if (!isContinuation && (row.cantSplit || row.height.rule === 'exact')) {
         const splitsAnyway = row.height.rule !== 'exact' && !pageHoldsRow();
-        // A row that splits anyway gains no room by leaving repeated header rows: the next
-        // page repeats them too. It leaves authored header rows, also at the page top, and
-        // starts below their repeat on the next page (`onlyRepeatedHeaderRows`).
+        // A row that splits anyway stays below repeated header rows only, and leaves authored
+        // ones. From mode 15 it opens its fresh page without a repeat (`onlyRepeatedHeaderRows`).
         const belowRepeatsOnly = onlyRepeatedHeaderRows(rows);
         if (flow.cursorY > bandTop && !movedToFreshPage && !(splitsAnyway && belowRepeatsOnly)) {
+          const repeats = repeatsEnabled;
+          repeatsEnabled &&= !(splitsAnyway && laterLayout);
           breakForContinuation(admitsRepeatedHeaders);
+          repeatsEnabled = repeats;
           movedToFreshPage = true;
           // Re-offered like every other break that retries this row: a merge starting on a
           // `w:cantSplit` row that did not fit the band it was offered in may fit the fresh

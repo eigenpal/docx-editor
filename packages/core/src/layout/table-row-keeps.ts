@@ -166,7 +166,7 @@ export interface KeptRowGroup {
    */
   readonly truncated?: true;
   /** The next row moves to a fresh page and splits there ({@link KeptRowSource.movesToFreshPage}). */
-  readonly successorMovesOn?: true;
+  readonly successorStartsFreshPage?: true;
 }
 
 /**
@@ -225,8 +225,8 @@ export function keptRowGroup(
     if (successor === undefined) return null;
   }
   if (successor === null) return null;
-  return next < rows.length && source.movesToFreshPage?.(next)
-    ? { end, kept, successor, successorMovesOn: true }
+  return next < rows.length && !source.breaksAt(next) && source.movesToFreshPage?.(next)
+    ? { end, kept, successor, successorStartsFreshPage: true }
     : { end, kept, successor };
 }
 
@@ -242,7 +242,7 @@ export function keptRowGroupMoves(
   const group = keptRowGroup(source, start, room);
   if (!group || group.kept + group.successor <= room + 0.001) return false;
   // The next row leaves this page in every mode, so the kept rows go with it.
-  if (group.successorMovesOn) return true;
+  if (group.successorStartsFreshPage) return true;
   // Authored headers keep their own page before the body group retries below a repeat.
   if (
     belowAuthoredHeaders ||
@@ -285,11 +285,17 @@ export function rowsOpening(
 /**
  * Whether header rows that keep with the body rows' opening move to the next page: that
  * opening does not fit `room` below them here, but fits `freshRoom` on a page of their own, or
- * the first body row moves to a fresh page anyway ({@link KeptRowSource.movesToFreshPage}).
+ * the first body row, or the row after a kept group that opens the body, moves to a fresh page
+ * anyway ({@link KeptRowSource.movesToFreshPage}).
  */
 export function headerGroupMoves(body: KeptRowSource, room: number, freshRoom: number): boolean {
   const opens = (space: number) => (rowsOpening(body, 0, space) ?? 0) <= space + 0.001;
-  return !opens(room) && (opens(freshRoom) || body.movesToFreshPage?.(0) === true);
+  if (opens(room)) return false;
+  return (
+    opens(freshRoom) ||
+    body.movesToFreshPage?.(0) === true ||
+    keptRowGroup(body, 0, room)?.successorStartsFreshPage === true
+  );
 }
 
 /**
@@ -317,11 +323,12 @@ export interface KeptRowMeasure {
   readonly rows: readonly SemanticTableRow[];
   readonly left: number;
   readonly deps: TableFlowDeps;
-  /** Band of a fresh page for the rows, below any header rows that repeat there. */
+  /** Band of a fresh page that the rows are priced against. */
   readonly pageHeight: number;
   /**
-   * Whole band of a fresh page: a `w:cantSplit` row taller than this moves to a fresh page and
-   * splits there. {@link pageHeight} by default.
+   * Height a `w:cantSplit` row must exceed to move to a fresh page and split there
+   * ({@link KeptRowSource.movesToFreshPage}): the whole band of a fresh page. Defaults to
+   * {@link pageHeight}.
    */
   readonly fullPageHeight?: number;
   readonly heightOf: (index: number) => number;
