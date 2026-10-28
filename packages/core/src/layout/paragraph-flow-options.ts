@@ -15,6 +15,12 @@ import type { LayoutBox } from './semantic-records.ts';
 export interface ParagraphFlowOptions {
   readonly paragraphRtl?: boolean;
   readonly justifySpaceShrink?: boolean;
+  /**
+   * With `justifySpaceShrink`, a word whose half-width final mark may hang joins the line when
+   * its spaces fit the text before the mark, and the mark hangs (`w:jc` `both`). Without it,
+   * as in a distributed paragraph, such a word joins only when its mark fits inside too.
+   */
+  readonly spaceShrinkHangsMarks?: boolean;
   /** A left tab stop past the margin is honoured, and its text may run past the margin. */
   readonly leftTabsPastMargin?: boolean;
   /** An inline object opening its line stays on it beside a float, however wide. */

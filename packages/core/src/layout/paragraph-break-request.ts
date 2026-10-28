@@ -254,6 +254,9 @@ function breakPreparedParagraphLines(request: ParagraphBreakRequest): readonly P
       justifySpaceShrink:
         hasCompatibilityRule(request.compatibilityMode, 'justifiedSpaceShrink') &&
         paragraphAlignment(formatting.props) === 'both',
+      spaceShrinkHangsMarks:
+        formatting.props.filter((prop) => prop.localName === 'jc').at(-1)?.attributes?.val ===
+        'both',
       leftTabsPastMargin: hasCompatibilityRule(request.compatibilityMode, 'leftTabStopsPastMargin'),
       inlineObjectsBesideFloats: hasCompatibilityRule(
         request.compatibilityMode,

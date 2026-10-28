@@ -669,6 +669,28 @@ With no compatibility mode, or in mode 11, 12, or 14, line-end punctuation SHALL
 - **WHEN** a line fits only when its punctuation compresses or hangs
 - **THEN** the line wraps instead
 
+### Requirement: Space shrinking before hanging punctuation
+
+In compatibility mode 15 and later, a justified or distributed line SHALL shrink its inter-word spaces before a half-width line-end mark hangs. The mark SHALL stay inside the margin when the space-shrink rule admits the word with the mark inside the measure, also for a paragraph-final word. Full-width marks and legacy modes SHALL keep their hanging behavior.
+
+#### Scenario: A comma stays inside a justified line
+
+- **GIVEN** a justified mode 15 line of English words in a run whose East Asian language is Chinese or Japanese
+- **WHEN** the line overflows by less than its spaces can give up, and the text before a final `,` fits at its natural width
+- **THEN** the spaces shrink and the comma ends at the margin
+- **AND** in mode 14 the comma hangs past the margin with natural spacing
+
+### Requirement: Hanging a mark beside shrunk spaces
+
+When the spaces reach their shrink floor before the mark fits, a justified line SHALL hang the mark if the space-shrink rule admits the word and the spaces make room for the text before the mark. A distributed line SHALL wrap the word instead.
+
+#### Scenario: A comma hangs beside spaces at their floor
+
+- **GIVEN** the same line, where the spaces at their floor make room for the text before the comma but not for the comma
+- **WHEN** the paragraph is justified
+- **THEN** the comma hangs past the margin and the text before it fills the measure
+- **AND** a distributed paragraph moves the word to the next line
+
 ### Requirement: Language-specific hanging punctuation
 
 When a justified paragraph enables hanging punctuation, the punctuation run's language SHALL select its hanging characters. Japanese `〕》〉！？：；・`, ASCII `! ? : ; ) ] }`, `％`, and `°`, Simplified Chinese `．`, and Korean punctuation SHALL NOT hang, except that a Korean paragraph-final mark other than `。` or `、` SHALL hang. Korean overflow punctuation SHALL start the next line.
