@@ -358,6 +358,21 @@ describe('copying equations to other applications', () => {
     expect(html).toContain('<math xmlns="http://www.w3.org/1998/Math/MathML" display="block">');
   });
 
+  test('an n-ary without m:chr copies as the integral it draws', () => {
+    const source = mount(
+      `<w:p xmlns:m="${M}"><m:oMath><m:nary><m:naryPr/><m:sub><m:r><m:t>a</m:t></m:r></m:sub>` +
+        '<m:sup><m:r><m:t>b</m:t></m:r></m:sup><m:e><m:r><m:t>y</m:t></m:r></m:e></m:nary>' +
+        '</m:oMath></w:p>'
+    );
+    putCaret(source.surface, 0);
+    source.surface.selectAll();
+    const flavours = source.surface.copyFlavours();
+    source.container.remove();
+    expect(flavours.text).toBe('∫aby');
+    expect(flavours.html).toContain('<munderover><mo>∫</mo>');
+    expect(flavours.html).not.toContain('∑');
+  });
+
   test('the HTML alone pastes back as the same equations without duplicates', () => {
     const html = copied();
     const visible = /<div[^>]*>([\s\S]*)<\/div>/.exec(html)![1]!;

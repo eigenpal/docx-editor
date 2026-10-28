@@ -41,6 +41,13 @@ The engine SHALL publish equation geometry from DOM-free layout. Paint SHALL use
 - **AND** an `m:oMath` that is the only visible content of its paragraph is a display equation, so its operator draws enlarged with display limits and its fractions take the display placement
 - **AND** an `m:limLoc` of `subSup` projects as math, keeps its source on save, and refuses compact replacement
 
+#### Scenario: N-ary operator without a character
+
+- **WHEN** an `m:nary` has no `m:chr`
+- **THEN** it draws an integral and places its limits as an integral does
+- **AND** copied plain text and MathML carry the integral, and save keeps the source without `m:chr`
+- **AND** it offers no compact linear text, because compact syntax spells only the sum; a sum written from compact text names `m:chr`
+
 #### Scenario: Script size and placement
 
 - **WHEN** an equation contains `m:sSup`, `m:sSub`, or `m:sSubSup`

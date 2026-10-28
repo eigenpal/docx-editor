@@ -348,3 +348,44 @@ test('two editors keep an equation read-only when its default run properties dif
     close();
   }
 });
+
+test('two editors keep an n-ary without m:chr as an integral through replace and undo', async () => {
+  const { left, right, equationXml, select, pause, resume, close } = await openPair(
+    'n-ary without operator',
+    '<m:nary><m:naryPr/><m:sub><m:r><m:t>a</m:t></m:r></m:sub>' +
+      '<m:sup><m:r><m:t>b</m:t></m:r></m:sup><m:e><m:r><m:t>y</m:t></m:r></m:e></m:nary>'
+  );
+  try {
+    const original = equationXml(await left.save());
+    expect(original[0]).not.toContain(':chr');
+    select(left, 4);
+    const equation = left.surface!.equations.equationAtCaret()!;
+    for (const editor of [left, right]) {
+      const part = editor.surface!.session.partFor({ kind: 'body' })!;
+      const projected = projectOmmlEquation(findNode(part, equation.id)!);
+      expect(projected?.expression).toMatchObject({ kind: 'nary', operator: '∫' });
+    }
+    // The compact syntax spells only the sum, so it offers no text for the integral.
+    expect(equation.linear).toBe('');
+
+    pause();
+    expect(left.surface!.equations.applyEquation(equation.id, '∑[i]{x}')).toBe(true);
+    select(right, 0);
+    expect(right.exec({ type: 'pasteWithoutFormatting', text: 'Bob ' }).ok).toBe(true);
+    resume();
+
+    // A sum written from the compact syntax names its operator, so it stays a sum.
+    const replaced = equationXml(await left.save());
+    expect(equationXml(await right.save())).toEqual(replaced);
+    expect(replaced[0]).toMatch(/<m:chr m:val="∑"\/>/);
+    expect(right.surface!.session.bodyText()).toBe('Bob Left￼Right');
+
+    expect(left.exec({ type: 'undo' }).ok).toBe(true);
+    expect(equationXml(await left.save())).toEqual(original);
+    expect(equationXml(await right.save())).toEqual(original);
+    expect(left.exec({ type: 'redo' }).ok).toBe(true);
+    expect(equationXml(await right.save())).toEqual(replaced);
+  } finally {
+    close();
+  }
+});

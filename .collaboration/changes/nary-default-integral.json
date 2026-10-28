@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "An m:nary without m:chr projected, drew, and copied as a sum, and its compact linear text spelled a sum.",
+  "after": "An m:nary without m:chr projects, draws, and copies as an integral, offers no compact linear text, and keeps its source without m:chr. Copied plain text includes the drawn operator of every n-ary structure.",
+  "reason": "Only the read-only projection of preserved source changes. Canonical OMML, offsets, operations, and collaboration data remain unchanged, and compact replacement still writes m:chr for each sum it creates.",
+  "tests": [
+    "packages/core/src/layout/__tests__/equation-nary-limits.test.ts",
+    "packages/core/src/editor/__tests__/clipboard-html-equations.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-equation-source-editors.test.ts"
+  ],
+  "changeset": "nary-default-integral",
+  "migration": null
+}

@@ -40,6 +40,9 @@ export const DEFAULT_OMML_LIMITS = Object.freeze({
   maxTextLength: 512,
 });
 
+/** The operator of an `m:nary` that names no `m:chr`. */
+const DEFAULT_NARY_OPERATOR = '\u222b';
+
 /** Shared work limits for untrusted OMML and linear-math input. */
 export interface OmmlLimits {
   readonly maxDepth?: number;
@@ -132,6 +135,7 @@ export type EquationExpression =
     } & EquationControlSource)
   | ({
       readonly kind: 'nary';
+      /** The operator character from `m:chr`, or `∫` when the source names none. */
       readonly operator: string;
       readonly body: EquationExpression;
       readonly lowerLimit?: EquationExpression;
@@ -264,12 +268,28 @@ function fallbackOf(node: OoxmlNode, state: ProjectionState, depth: number): Equ
   return Object.freeze({ kind: 'fallback', text: text || (state.truncated ? '…' : '') });
 }
 
+/** The `m:val` of one `m:naryPr` property of an `m:nary`, when present. */
+function naryProperty(node: OoxmlGenericElementNode, name: string): string | undefined {
+  const property = namedChild(node, 'naryPr');
+  return (property ? namedChild(property, name) : null)?.attributes.find(
+    (attribute) =>
+      attribute.namespaceUri === OFFICE_MATH_NAMESPACE_URI && attribute.localName === 'val'
+  )?.value;
+}
+
+/** The operator an `m:nary` draws. Without `m:chr` it stands for an integral. */
+function naryOperator(node: OoxmlGenericElementNode): string {
+  return naryProperty(node, 'chr') ?? DEFAULT_NARY_OPERATOR;
+}
+
 function collectFallbackText(node: OoxmlNode, state: ProjectionState, depth: number): void {
   if (!enterProjectionNode(state, depth)) return;
   if (node.kind === 'textValue') {
     appendProjectionText(state, node.value);
     return;
   }
+  // The operator of an n-ary structure is a property, not text, but it is drawn.
+  if (isMathElement(node, 'nary')) appendProjectionText(state, naryOperator(node));
   for (const child of childrenOf(node)) {
     collectFallbackText(child, state, depth + 1);
     if (state.truncated && state.text.length >= state.limits.maxTextLength) return;
@@ -372,17 +392,10 @@ function projectStructured(
     if (!body) return null;
     const lower = namedChild(node, 'sub');
     const upper = namedChild(node, 'sup');
-    const property = namedChild(node, 'naryPr');
-    const mathValue = (name: string) =>
-      (property ? namedChild(property, name) : null)?.attributes.find(
-        (attribute) =>
-          attribute.namespaceUri === OFFICE_MATH_NAMESPACE_URI && attribute.localName === 'val'
-      )?.value;
-    const operator = mathValue('chr') ?? '∑';
-    const limitLocation = mathValue('limLoc');
+    const limitLocation = naryProperty(node, 'limLoc');
     return Object.freeze({
       kind: 'nary',
-      operator: appendProjectionText(state, operator),
+      operator: appendProjectionText(state, naryOperator(node)),
       body: projectContainer(body, state, depth + 1),
       ...(lower && childrenOf(lower).length > 0
         ? { lowerLimit: projectContainer(lower, state, depth + 1) }
