@@ -131,6 +131,7 @@ function expressionNeedsSourcePreservation(expression: EquationExpression): bool
       );
     case 'nary':
       return (
+        expression.limitLocation === 'subSup' ||
         expressionNeedsSourcePreservation(expression.body) ||
         (expression.lowerLimit !== undefined &&
           expressionNeedsSourcePreservation(expression.lowerLimit)) ||

@@ -4,7 +4,8 @@ import type { EquationExpression, OmmlEquationProjection } from '@docx-editor.de
 import { measureDisplayText, withFontFamily, type ResolvedRunStyle } from './run-style.ts';
 import type { LayoutBox, TextMeasurer } from './semantic-records.ts';
 import { equationDisplayText } from './equation-display-text.ts';
-import { equationInk, equationLowercaseTop, inheritEquationInk } from './equation-ink.ts';
+import { equationInk } from './equation-ink.ts';
+import { attachScripts, box, naryLimitsBeside, shifted } from './equation-scripts.ts';
 import {
   equationAtomSpaces,
   equationTextAtoms,
@@ -20,16 +21,6 @@ import {
 const SCRIPT_SCALE = 0.73;
 /** A script inside a script, fraction part, or limit draws at 60%, at every deeper level too. */
 const SCRIPT_SCRIPT_SCALE = 0.6;
-/** The least superscript baseline rise. */
-const SUPERSCRIPT_SHIFT_UP = 750 / 2048;
-/** How far a superscript baseline may sit below the top of a lowercase base. */
-const SUPERSCRIPT_BASELINE_DROP_MAX = 460 / 2048;
-/** The least ink gap between a superscript and a subscript of one base. */
-const SUB_SUPERSCRIPT_GAP_MIN = 300 / 2048;
-/** How high the top of a subscript's ink may reach above the base baseline. */
-const SUBSCRIPT_TOP_MAX = 760 / 2048;
-/** How high a superscript bottom may rise to open the gap above a subscript. */
-const SUPERSCRIPT_BOTTOM_MAX_WITH_SUBSCRIPT = 765 / 2048;
 /** The stroke of an upper or lower bar. */
 const BAR_RULE_THICKNESS = 133 / 2048;
 /** The gap between a bar and the ink of its body. */
@@ -142,19 +133,6 @@ export interface EquationSpanRecord {
   readonly geometry: EquationGeometry;
   readonly fallbackText: string;
   readonly truncated: boolean;
-}
-
-function box(x: number, y: number, width: number, height: number): LayoutBox {
-  return Object.freeze({ x, y, width, height });
-}
-
-function shifted<T extends EquationGeometry>(node: T, x: number, y: number): T {
-  const moved = Object.freeze({
-    ...node,
-    box: box(x, y, node.box.width, node.box.height),
-  }) as unknown as T;
-  inheritEquationInk(node, moved);
-  return moved;
 }
 
 /**
@@ -724,68 +702,18 @@ function layoutExpression(
         : undefined;
       // Offsets take the structure size, not the size of the runs inside it.
       const em = structureSizePt(expression, scale, cache);
-      const gap = Math.max(0.4, em * 0.04);
-      const scriptX = base.box.width + gap;
-      // The superscript baseline rises at least a fixed share of the structure size, and
-      // never sits lower than a fixed drop below the top of the base's lowercase text. A
-      // text base gives its lowercase height, so an ascender keeps the same rise; a
-      // structured base gives the highest lowercase top of its text, such as a numerator.
-      let rise = superscript
-        ? Math.max(
-            SUPERSCRIPT_SHIFT_UP * em,
-            equationLowercaseTop(base) - SUPERSCRIPT_BASELINE_DROP_MAX * em
-          )
-        : 0;
-      // The subscript's own baseline sits a fifth of an em below the base baseline, and lower
-      // when the top of its ink would rise past a fixed height, as a tall subscript does.
-      // A font box standing in for missing glyph ink reaches far above the glyphs, so it
-      // says nothing about the limit.
-      const subInk = subscript ? equationInk(subscript, measurer) : null;
-      const inkTop = subInk && !subInk.fromFontBox ? subInk.ascent : 0;
-      let drop = Math.max(em * 0.2, inkTop - SUBSCRIPT_TOP_MAX * em);
-      if (superscript && subInk) {
-        // Keep an ink gap between the scripts. The superscript rises first, up to a limit,
-        // and the subscript drops for the rest.
-        const supInk = equationInk(superscript, measurer);
-        const missing =
-          SUB_SUPERSCRIPT_GAP_MIN * em - (rise - supInk.descent - (subInk.ascent - drop));
-        if (missing > 0) {
-          const raised = Math.min(
-            missing,
-            Math.max(0, SUPERSCRIPT_BOTTOM_MAX_WITH_SUBSCRIPT * em - (rise - supInk.descent))
-          );
-          rise += raised;
-          drop += missing - raised;
-        }
-      }
-      const baseY = superscript ? Math.max(0, superscript.baseline + rise - base.baseline) : 0;
-      const baseline = baseY + base.baseline;
-      const superscriptY = superscript ? baseline - rise - superscript.baseline : 0;
-      const subscriptY = subscript ? Math.max(0, baseline + drop - subscript.baseline) : baseline;
-      const width =
-        scriptX + Math.max(subscript?.box.width ?? 0, superscript?.box.width ?? 0, -gap);
-      const height = Math.max(
-        baseY + base.box.height,
-        superscript ? superscriptY + superscript.box.height : 0,
-        subscript ? subscriptY + subscript.box.height : 0
-      );
-      return Object.freeze({
-        kind: 'script',
-        base: shifted(base, 0, baseY),
-        ...(subscript ? { subscript: shifted(subscript, scriptX, subscriptY) } : {}),
-        ...(superscript ? { superscript: shifted(superscript, scriptX, superscriptY) } : {}),
-        box: box(0, 0, width, height),
-        baseline,
-      });
+      return attachScripts(base, subscript, superscript, em, measurer);
     }
     case 'nary': {
       const resolved = scaledStyle(style, scale, cache);
+      const besideLimits = naryLimitsBeside(expression, cache.display);
+      // Display style is not modelled, so only a display operator draws enlarged.
       const operator = textGeometry(
         'text',
         expression.operator,
         measurer,
         style,
-        scale * NARY_OPERATOR_SCALE,
+        cache.display ? scale * NARY_OPERATOR_SCALE : scale,
         cache
       );
       const body = layoutExpression(expression.body, measurer, style, scale, cache);
@@ -796,6 +724,47 @@ function layoutExpression(
         ? layoutExpression(expression.upperLimit, measurer, style, scriptScale(scale), cache)
         : undefined;
       const gap = Math.max(0.5, resolved.fontSizePt * 0.05);
+      if (besideLimits) {
+        // The limits attach to the operator exactly as a subscript and a superscript do.
+        const em = structureSizePt(expression, scale, cache);
+        const scripted = attachScripts(operator, lower, upper, em, measurer);
+        const bodyX = scripted.box.width + gap;
+        const top = Math.max(scripted.baseline, body.baseline);
+        const bottom = Math.max(
+          scripted.box.height - scripted.baseline,
+          body.box.height - body.baseline
+        );
+        const y = top - scripted.baseline;
+        return Object.freeze({
+          kind: 'nary',
+          operator: shifted(
+            scripted.base as EquationTextGeometry,
+            scripted.base.box.x,
+            scripted.base.box.y + y
+          ),
+          body: shifted(body, bodyX, top - body.baseline),
+          ...(scripted.subscript
+            ? {
+                lowerLimit: shifted(
+                  scripted.subscript,
+                  scripted.subscript.box.x,
+                  scripted.subscript.box.y + y
+                ),
+              }
+            : {}),
+          ...(scripted.superscript
+            ? {
+                upperLimit: shifted(
+                  scripted.superscript,
+                  scripted.superscript.box.x,
+                  scripted.superscript.box.y + y
+                ),
+              }
+            : {}),
+          box: box(0, 0, bodyX + body.box.width, top + bottom),
+          baseline: top,
+        });
+      }
       const operatorWidth = Math.max(
         operator.box.width,
         lower?.box.width ?? 0,

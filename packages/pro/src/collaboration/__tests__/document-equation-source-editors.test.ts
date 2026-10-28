@@ -41,6 +41,10 @@ const controlled =
   '<m:sub/><m:sup/><m:e><m:f><m:fPr><m:ctrlPr><w:ins w:id="9" w:author="Public Author">' +
   '<w:rPr><w:i/></w:rPr></w:ins></m:ctrlPr></m:fPr><m:num><m:r><m:t>a</m:t></m:r></m:num>' +
   '<m:den><m:r><m:t>b</m:t></m:r></m:den></m:f></m:e></m:nary>';
+const besideLimits =
+  '<m:nary><m:naryPr><m:chr m:val="∑"/><m:limLoc m:val="subSup"/></m:naryPr>' +
+  '<m:sub><m:r><m:t>i</m:t></m:r></m:sub><m:sup><m:r><m:t>n</m:t></m:r></m:sup>' +
+  '<m:e><m:r><m:t>x</m:t></m:r></m:e></m:nary>';
 const mathStyles =
   '<m:r><m:t>Q</m:t></m:r>' +
   '<m:r><m:rPr><m:sty m:val="bi"/></m:rPr><m:t>N</m:t></m:r>' +
@@ -145,6 +149,7 @@ for (const [name, source] of [
   ['bar', barred],
   ['math styles', mathStyles],
   ['control properties', controlled],
+  ['limits beside the operator', besideLimits],
 ] as const) {
   test(`two editors preserve ${name} through edits, undo, removal, and save`, async () => {
     const { left, right, equationXml, select, close } = await openPair(name, source);
@@ -177,14 +182,15 @@ for (const [name, source] of [
       }
       select(left, 4);
       const equation = left.surface!.equations.equationAtCaret()!;
-      if (name === 'control properties') {
+      if (name === 'control properties' || name === 'limits beside the operator') {
         // The equation lays out as math, not as the text fallback, in both editors.
         for (const editor of [left, right]) {
           const part = editor.surface!.session.partFor({ kind: 'body' })!;
           const source = findNode(part, equation.id);
           expect(source && projectOmmlEquation(source)?.expression.kind).toBe('nary');
         }
-        expect(original[0]!.match(/:ctrlPr>/g)).toHaveLength(4);
+        if (name === 'control properties') expect(original[0]!.match(/:ctrlPr>/g)).toHaveLength(4);
+        else expect(original[0]).toMatch(/:limLoc \w+:val="subSup"\/>/);
       }
       expect(left.surface!.equations.applyEquation(equation.id, 'R')).toBe(false);
       expect(equationXml(await left.save())).toEqual(original);

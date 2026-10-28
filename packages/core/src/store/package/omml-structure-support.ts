@@ -89,7 +89,7 @@ function containersSupported(node: OoxmlGenericElementNode, names: readonly stri
 const BAR_POSITIONS: ReadonlySet<string> = new Set(['top', 'bot']);
 const FRACTION_TYPES: ReadonlySet<string> = new Set(['bar']);
 const TRUE_VALUES: ReadonlySet<string> = new Set(['1', 'true', 'on']);
-const NARY_LIMIT_LOCATIONS: ReadonlySet<string> = new Set(['undOvr']);
+const NARY_LIMIT_LOCATIONS: ReadonlySet<string> = new Set(['undOvr', 'subSup']);
 
 /** True when every node belongs to the projected Office Math subset. */
 export function isSupportedExpressionNode(node: OoxmlNode): boolean {

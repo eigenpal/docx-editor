@@ -162,13 +162,17 @@ function mathml(expression: EquationExpression, depth: number): string {
       const operator = `<mo>${escapeXml(expression.operator)}</mo>`;
       const lower = expression.lowerLimit ? row(expression.lowerLimit) : '';
       const upper = expression.upperLimit ? row(expression.upperLimit) : '';
+      const [both, under, over] =
+        expression.limitLocation === 'subSup'
+          ? ['msubsup', 'msub', 'msup']
+          : ['munderover', 'munder', 'mover'];
       const scripted =
         lower && upper
-          ? `<munderover>${operator}${lower}${upper}</munderover>`
+          ? `<${both}>${operator}${lower}${upper}</${both}>`
           : lower
-            ? `<munder>${operator}${lower}</munder>`
+            ? `<${under}>${operator}${lower}</${under}>`
             : upper
-              ? `<mover>${operator}${upper}</mover>`
+              ? `<${over}>${operator}${upper}</${over}>`
               : operator;
       return `<mrow>${scripted}${row(expression.body)}</mrow>`;
     }

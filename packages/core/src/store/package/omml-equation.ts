@@ -65,8 +65,8 @@ export interface EquationControlSource {
    *
    * Layout sizes script offsets and bar strokes and gaps from this size, not from the size of
    * the runs inside the structure. When it is not set, those use the size of the text around
-   * the equation. Set whether or not the control properties are default. Fractions, radicals,
-   * and n-ary operators do not use it yet.
+   * the equation. Set whether or not the control properties are default. Fractions, radicals, and
+   * n-ary operators with limits below and above do not use it yet.
    */
   readonly controlFontSizePt?: number;
 }
@@ -136,6 +136,12 @@ export type EquationExpression =
       readonly body: EquationExpression;
       readonly lowerLimit?: EquationExpression;
       readonly upperLimit?: EquationExpression;
+      /**
+       * Where the limits sit, from `m:limLoc`: `undOvr` below and above the operator, `subSup`
+       * to its right as a subscript and superscript. Not set when the source names none.
+       * Inline equations place the limits to the right either way.
+       */
+      readonly limitLocation?: 'undOvr' | 'subSup';
     } & EquationControlSource)
   | { readonly kind: 'fallback'; readonly text: string };
 
@@ -366,12 +372,13 @@ function projectStructured(
     const lower = namedChild(node, 'sub');
     const upper = namedChild(node, 'sup');
     const property = namedChild(node, 'naryPr');
-    const operatorNode = property ? namedChild(property, 'chr') : null;
-    const operator =
-      operatorNode?.attributes.find(
+    const mathValue = (name: string) =>
+      (property ? namedChild(property, name) : null)?.attributes.find(
         (attribute) =>
           attribute.namespaceUri === OFFICE_MATH_NAMESPACE_URI && attribute.localName === 'val'
-      )?.value ?? '∑';
+      )?.value;
+    const operator = mathValue('chr') ?? '∑';
+    const limitLocation = mathValue('limLoc');
     return Object.freeze({
       kind: 'nary',
       operator: appendProjectionText(state, operator),
@@ -382,6 +389,7 @@ function projectStructured(
       ...(upper && childrenOf(upper).length > 0
         ? { upperLimit: projectContainer(upper, state, depth + 1) }
         : {}),
+      ...(limitLocation === 'undOvr' || limitLocation === 'subSup' ? { limitLocation } : {}),
       ...controlSource(node, 'naryPr', state),
     });
   }

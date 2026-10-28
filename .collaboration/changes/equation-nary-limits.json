@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "N-ary limits sat below and above the operator in every equation, and an m:limLoc of subSup kept the text fallback.",
+  "after": "Inline n-ary limits sit to the right of the operator as scripts; display equations follow m:limLoc. An m:limLoc of subSup projects as math, keeps its source, and refuses compact replacement.",
+  "reason": "The projection gains a read-only limit location read from preserved source, and only local equation geometry changes. Canonical OMML, offsets, operations, and collaboration data remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/equation-nary-limits.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-equation-source-editors.test.ts"
+  ],
+  "changeset": "equation-nary-limits",
+  "migration": null
+}

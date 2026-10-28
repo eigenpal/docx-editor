@@ -1640,6 +1640,7 @@ export type EquationExpression = {
 } & EquationControlSource) | ({
     readonly body: EquationExpression;
     readonly kind: 'nary';
+    readonly limitLocation?: 'undOvr' | 'subSup';
     readonly lowerLimit?: EquationExpression;
     readonly operator: string;
     readonly upperLimit?: EquationExpression;

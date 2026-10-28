@@ -24,6 +24,8 @@ function reversible(value: EquationExpression): boolean {
     case 'nary':
       return (
         value.operator === '∑' &&
+        // Compact syntax writes limits below and above, so it has no spelling for `subSup`.
+        value.limitLocation !== 'subSup' &&
         reversible(value.body) &&
         (!value.lowerLimit || reversible(value.lowerLimit)) &&
         (!value.upperLimit || reversible(value.upperLimit))
