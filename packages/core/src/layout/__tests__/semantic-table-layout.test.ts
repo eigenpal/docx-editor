@@ -581,11 +581,12 @@ const TINY: PageGeometry = {
   margin: { top: 10, right: 10, bottom: 10, left: 10 },
 };
 
-function layoutTiny(part: OoxmlPart, styleCascade?: StyleCascadeTable) {
+function layoutTiny(part: OoxmlPart, styleCascade?: StyleCascadeTable, compatibilityMode?: number) {
   return layoutSemanticDocument(part, 0, {
     measurer: createFixedMeasurer(),
     geometry: TINY,
     styleCascade,
+    compatibilityMode,
   });
 }
 
@@ -838,7 +839,8 @@ describe('table row pagination (tiny page)', () => {
       '<w:trPr><w:trHeight w:val="1300" w:hRule="exact"/></w:trPr>'
     );
     const part = loadPart(`<w:tbl>${header}${tr(tc(p('first')))}${atomic}</w:tbl>`);
-    const result = layoutTiny(part);
+    // Before mode 15 the repeat stays and the row runs past the margin (`repeatKeepsWholeRow`).
+    const result = layoutTiny(part, undefined, 15);
     assertNoContentOverflow(result);
     expect(result.pages).toHaveLength(2);
     const rows = allTableFragments(result).flatMap((fragment) => fragment.rows);

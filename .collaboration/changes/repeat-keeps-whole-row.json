@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Before compatibility mode 15, a continuation page omits its repeated header rows when the next row cannot split and does not fit below them.",
+  "after": "Before compatibility mode 15, a continuation page keeps its repeated header rows above such a row when a fresh page holds it, and the row stays whole below them and runs past the bottom margin.",
+  "reason": "Only local layout geometry changes. Canonical XML, replicated operations, and saved rooms remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-repeat-keeps-whole-row.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-exact-terminal-border.test.ts"
+  ],
+  "changeset": "repeat-keeps-whole-row",
+  "migration": null
+}

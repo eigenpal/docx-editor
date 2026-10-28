@@ -219,6 +219,7 @@ export function* paginateTableInFlowSteps(
     clearance?.clear(clearance.fragment(headerRows.length, fits, groupAt));
   };
   const laterLayout = hasCompatibilityRule(flow.compatibilityMode, 'headerRowsKeepWithBody');
+  const repeatKeepsWholeRow = hasCompatibilityRule(flow.compatibilityMode, 'repeatKeepsWholeRow');
   let repeatedPlan: RepeatedHeaderBorderPlan | undefined;
   let prepareRepeat: (() => RepeatedHeaderBorderPlan | null | undefined) | undefined;
   const rememberInsets = (record: TableRowFragmentRecord, deps: TableFlowDeps): void => {
@@ -500,20 +501,23 @@ export function* paginateTableInFlowSteps(
         flow.cursorY <= 0.001 ||
         (rows.length > 0 && rows.every((placed) => placed.isHeaderRepeat)),
     });
-    prepareRepeat = () =>
-      isContinuation
-        ? undefined
-        : prepareRepeatedHeaderBorderPlan(
-            structure,
-            headerRows,
-            row,
-            tableLeft,
-            flow.cursorY,
-            contentHeight(),
-            headerGroupHeight,
-            baselineBodyHeight,
-            tableDeps
-          );
+    // A plan refuses a body row that does not fit below the repeat. A row that overflows
+    // there instead (`overflowsBelowRepeat`) takes the ordinary repeat path.
+    prepareRepeat = () => {
+      if (isContinuation) return undefined;
+      const plan = prepareRepeatedHeaderBorderPlan(
+        structure,
+        headerRows,
+        row,
+        tableLeft,
+        flow.cursorY,
+        contentHeight(),
+        headerGroupHeight,
+        baselineBodyHeight,
+        tableDeps
+      );
+      return plan === null && overflowsBelowRepeat() ? undefined : plan;
+    };
 
     // `w:cantSplit` keeps a row whole only when a page can hold it. The full band counts,
     // because a note reserve yields to a kept row. A wrapping float still reduces that band.
@@ -532,6 +536,10 @@ export function* paginateTableInFlowSteps(
           cellContentInsets(cell, structure.cellSpacingPt === 0),
         tableDeps.cellMinimumContentInsets
       );
+    // Before mode 15, repeated header rows stay above a row that cannot split, fits a fresh
+    // page, and does not fit below them. The row then stays whole there and runs past the margin.
+    const overflowsBelowRepeat = (top = flow.cursorY): boolean =>
+      repeatKeepsWholeRow && pageHoldsRow() && (row.height.rule === 'exact' || keepsWholeAt(top));
 
     // A row an accepted span covers below its head, a nested head row included, does not
     // take the whole-row MOVE: alone among the breaks below, that one is an optimization
@@ -565,7 +573,8 @@ export function* paginateTableInFlowSteps(
         !isContinuation &&
         (row.height.rule === 'exact' || (!clearingFloat && keepsWholeAt(bodyTop) && pageHoldsRow()))
       ) {
-        return false;
+        // Before mode 15 the repeat stays, and the row runs past the margin below it.
+        return !clearingFloat && overflowsBelowRepeat(bodyTop);
       }
       return probeRowFragmentProgress(
         row,
@@ -830,10 +839,13 @@ export function* paginateTableInFlowSteps(
         // the throw below rejects the entire document for one row+reserve collision.
         const fullBand = flow.unreservedContentHeight?.() ?? contentHeight();
         // An exact row no band holds fills the rest of this one (`table-exact-row-clip.ts`).
+        // A row kept below repeated headers only runs past the margin (`overflowsBelowRepeat`).
         const offer =
-          fullBand > contentHeight() + 0.001 && naturalHeight <= fullBand - flow.cursorY + 0.001
-            ? { row, band: fullBand }
-            : clippedExactRow(row, contentHeight(), flow.cursorY);
+          onlyRepeatedHeaderRows(rows) && overflowsBelowRepeat()
+            ? { row, band: POSITIONED_TABLE_LAYOUT_BOTTOM_PT }
+            : fullBand > contentHeight() + 0.001 && naturalHeight <= fullBand - flow.cursorY + 0.001
+              ? { row, band: fullBand }
+              : clippedExactRow(row, contentHeight(), flow.cursorY);
         if (offer) {
           const placementDeps = rowDeps();
           let placed = layoutRowFragment(

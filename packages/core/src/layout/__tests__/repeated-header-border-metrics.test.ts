@@ -64,8 +64,12 @@ function fixture(
 }
 const geometry = { width: 200, height: 100, margin: { top: 10, right: 10, bottom: 10, left: 10 } };
 const measurer = createFixedMeasurer(5, 12);
-function layout(part: ReturnType<typeof fixture>, height = 100) {
-  return layoutSemanticDocument(part, 0, { geometry: { ...geometry, height }, measurer });
+function layout(part: ReturnType<typeof fixture>, height = 100, compatibilityMode?: number) {
+  return layoutSemanticDocument(part, 0, {
+    geometry: { ...geometry, height },
+    measurer,
+    compatibilityMode,
+  });
 }
 function fragments(result: ReturnType<typeof layout>): TableFragmentRecord[] {
   return result.pages.flatMap((page) =>
@@ -268,7 +272,8 @@ describe('repeated-header shared horizontal border measurement', () => {
     test(`joint preflight omits a repeat when ${headerBottom}/${bodyTop} leaves no complete body room`, () => {
       // 44 less two 10pt margins leaves 24pt, under the 25pt a repeat plus one complete body
       // row now needs. The old half-model needed 26.75pt and fitted in the 26 this had.
-      const result = layout(fixture({ headerBottom, bodyTop }), 44);
+      // Before mode 15 the repeat stays above a row that cannot split (`repeatKeepsWholeRow`).
+      const result = layout(fixture({ headerBottom, bodyTop }), 44, 15);
       expect(fragments(result).length).toBeGreaterThan(1);
       expect(repeated(result)).toHaveLength(0);
       for (const fragment of fragments(result).slice(1)) {
@@ -513,7 +518,8 @@ describe('repeated-header shared horizontal border measurement', () => {
       row(cell('first')) +
       row(cell('large'), '<w:trHeight w:val="1360" w:hRule="exact"/>') +
       Array.from({ length: 10 }, (_, index) => row(cell(`B${index}`))).join('');
-    const result = layout(fixture({ body }));
+    // Before mode 15 the repeat stays above the exact row (`repeatKeepsWholeRow`).
+    const result = layout(fixture({ body }), 100, 15);
     const tables = fragments(result);
     expect(tables[1]!.rows[0]!.isHeaderRepeat).toBe(false);
     expect(band(tables[1]!.rows[0]!.cells[0]!).top).toBeCloseTo(0.5, 6);

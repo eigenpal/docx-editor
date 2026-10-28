@@ -608,6 +608,13 @@ Semantic layout SHALL place a supported terminal exact row's simple bottom rule 
 - **WHEN** a supported exact row other than the table's first row opens a later page fragment of its table
 - **THEN** the row grows above its authored height by the width its top rule there exceeds the inside rule it reserved
 
+#### Scenario: Repeated headers stay above a row that cannot split before mode 15
+
+- **WHEN** compatibility mode is 14 or earlier, or absent
+- **AND** a continuation page cannot hold the repeated header group and a row that cannot split, but a fresh page holds the row
+- **THEN** the repeated header group stays on that page
+- **AND** the row stays whole below it and runs past the bottom margin
+
 #### Scenario: Cell text uses the authored bottom
 
 - **WHEN** a terminal exact-row cell has center or bottom alignment
