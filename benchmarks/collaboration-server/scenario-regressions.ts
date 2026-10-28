@@ -182,7 +182,7 @@ const OPEN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number;
       case: 'concurrent-row-deletes-then-undo-restore-deleted-text.json',
     },
     // A join copies the second paragraph's text, so an undo of typing the joining replica had
-    // not received yet leaves the copy. It fails the same way with no block moves.
+    // not received yet leaves the copy.
     {
       config: 'reorderUndo',
       delivery: 'server',

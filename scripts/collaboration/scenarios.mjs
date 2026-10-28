@@ -252,3 +252,56 @@ export async function basicSplitScenario(oldDirectory, candidateDirectory, fixtu
     await Promise.allSettled(peers.map((peer) => peer.close()));
   }
 }
+
+/** `blocks` with the block at `from` moved to `to`. */
+function movedBlocks(blocks, from, to) {
+  const next = [...blocks];
+  const [block] = next.splice(from, 1);
+  next.splice(to, 0, block);
+  return next;
+}
+
+export async function blockReorderScenario(oldDirectory, candidateDirectory, fixture, trace) {
+  const peers = [
+    new Peer(oldDirectory, 'reorder-release-writer', trace),
+    new Peer(candidateDirectory, 'reorder-candidate-writer', trace),
+  ];
+  const [released, candidate] = peers;
+  try {
+    const info = await released.request('info');
+    await released.request('open', {
+      roomId: BODY,
+      actor: 'reorder-old',
+      document: fixture.document,
+    });
+    await candidate.request('open', {
+      roomId: BODY,
+      actor: 'reorder-new',
+      state: await released.request('state'),
+    });
+    const original = await released.request('blocks');
+    assert.ok(original.length >= 4, 'The fixture needs four body blocks to move one up by two');
+    // The fixed writer moves a block up by two; the released reader shows the same order.
+    // A writer that inserted before it removed dropped the block after the old place.
+    const from = original.length - 1;
+    await candidate.request('reorder', { from, to: from - 2 });
+    await synchronize(peers, info.format, 2180);
+    const expected = movedBlocks(original, from, from - 2);
+    for (const peer of peers)
+      assert.deepEqual(await peer.request('blocks'), expected, `${peer.label}: block order`);
+    await converged(peers, TEXT);
+    // Both versions move the same block at once. The room converges and keeps every block
+    // once. The released writer moves it down, which its own lowering already wrote correctly;
+    // a released move toward the start keeps the released behavior until that peer upgrades.
+    await released.request('reorder', { from: from - 2, to: from });
+    await candidate.request('reorder', { from: from - 2, to: 0 });
+    await synchronize(peers, info.format, 2180);
+    const [left, right] = [await released.request('blocks'), await candidate.request('blocks')];
+    assert.deepEqual(right, left, 'Replicas show different block orders');
+    assert.deepEqual([...left].sort(), [...original].sort(), 'A block was lost or repeated');
+    const snapshots = [await released.request('snapshot'), await candidate.request('snapshot')];
+    assert.deepEqual(snapshots[1], snapshots[0], 'Replica content differs');
+  } finally {
+    await Promise.allSettled(peers.map((peer) => peer.close()));
+  }
+}

@@ -11,6 +11,9 @@ import {
   TreePackageStore,
   canonicalOoxmlFingerprint,
   semanticDigest,
+  findNode,
+  replaceChildren,
+  withPart,
 } from '@docx-editor.dev/core/store';
 import { createCollaborationDocumentPort } from '@docx-editor.dev/core/collaboration/replication';
 import {
@@ -69,6 +72,18 @@ function nodes(root) {
 function packageOf() {
   return store.currentPackage();
 }
+function bodyNode() {
+  return nodes(store.bodyStore().part.root).find(
+    (n) => n.kind !== 'textValue' && n.localName === 'body'
+  );
+}
+const textOf = (node) =>
+  nodes(node)
+    .filter((n) => n.kind === 'textValue')
+    .map((n) => n.value)
+    .join('');
+const isBlock = (node) =>
+  node.kind === 'paragraph' || node.kind === 'table' || node.localName === 'sdt';
 function resultOf(bytes) {
   const pkg = load(bytes);
   const parts = [...pkg.parts.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -134,6 +149,31 @@ async function command(input) {
       const refusal = room.session.gateOperations([op], scope);
       if (refusal) throw new Error(`Operation refused: ${refusal}`);
       const result = store.transact(scope, (context) => context.apply(op));
+      if (!result.ok) throw new Error(result.detail ?? result.reason);
+      port.flushPendingJournals();
+      return true;
+    }
+    case 'blocks':
+      return bodyNode().children.filter(isBlock).map(textOf);
+    case 'reorder': {
+      // One transaction moves the body block at `from` to `to`, as a table drag does: a
+      // single child-list replacement in which every block keeps its id.
+      const body = bodyNode();
+      const scope = { kind: 'body' };
+      const result = store.transact(scope, (context) =>
+        context.applyPackage((pkg) => {
+          const part = pkg.parts.get(pkg.mainDocumentPart);
+          const parent = findNode(part, body.id);
+          const children = [...parent.children];
+          const blocks = children.flatMap((child, at) => (isBlock(child) ? [at] : []));
+          const [moved] = children.splice(blocks[input.from], 1);
+          const rest = children.flatMap((child, at) => (isBlock(child) ? [at] : []));
+          children.splice(rest[input.to] ?? rest.at(-1) + 1, 0, moved);
+          const edited = replaceChildren(part, parent.id, children);
+          if (!edited.ok) throw new Error(`Reorder refused: ${edited.issues[0]?.code}`);
+          return withPart(pkg, edited.part);
+        })
+      );
       if (!result.ok) throw new Error(result.detail ?? result.reason);
       port.flushPendingJournals();
       return true;

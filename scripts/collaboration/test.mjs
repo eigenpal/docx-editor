@@ -11,7 +11,12 @@ import {
   install,
 } from './installation.mjs';
 import { Peer } from './peer.mjs';
-import { mixedScenario, savedRoomScenario, basicSplitScenario } from './scenarios.mjs';
+import {
+  mixedScenario,
+  savedRoomScenario,
+  basicSplitScenario,
+  blockReorderScenario,
+} from './scenarios.mjs';
 
 import { TEST_HELP, testOptions } from './arguments.mjs';
 
@@ -84,6 +89,9 @@ try {
         context.phase = 'basic-split';
         trace.length = 0;
         await basicSplitScenario(directory, candidate, fixture, trace);
+        context.phase = 'block-reorder';
+        trace.length = 0;
+        await blockReorderScenario(directory, candidate, fixture, trace);
         for (const seed of seeds)
           for (const candidateCreates of [false, true]) {
             context = {
