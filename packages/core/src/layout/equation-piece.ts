@@ -5,7 +5,7 @@ import {
   type OmmlEquationProjection,
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
-import { equationStyleForText, type EquationLayoutInput } from './equation-layout.ts';
+import { equationRunStyle, type EquationLayoutInput } from './equation-layout.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 
 /** An equation atom: its run style and the fields its layout piece carries. */
@@ -22,15 +22,21 @@ export interface EquationAtom {
  * that share one default `w:sz` size the equation; otherwise it takes the text size.
  * Structures without a control size take the text size either way. The inputs that do not
  * live on the shared projection travel as data on the piece, so a piece whose style is
- * rebuilt keeps them.
+ * rebuilt, as bidi resolution does, keeps them.
  */
 export function equationAtom(
   node: OoxmlNode,
   equation: OmmlEquationProjection,
   text: ResolvedRunStyle
 ): EquationAtom {
+  const { fontSizePt } = equation;
+  const equationLayout: EquationLayoutInput = Object.freeze({
+    display: isOmmlDisplay(node),
+    surroundingSizePt: text.fontSizePt,
+    textFontFamily: text.fontFamily,
+  });
   return {
-    style: equationStyleForText(text, equation.fontSizePt),
-    extras: { equation, equationLayout: Object.freeze({ display: isOmmlDisplay(node) }) },
+    style: equationRunStyle(fontSizePt === undefined ? text : { ...text, fontSizePt }),
+    extras: { equation, equationLayout },
   };
 }

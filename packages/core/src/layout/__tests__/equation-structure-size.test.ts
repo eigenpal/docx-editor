@@ -9,6 +9,7 @@ import {
 import { layoutEquation, type EquationGeometry } from '../equation-layout.ts';
 import { equationLowercaseTop } from '../equation-ink.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
+import { buildStyleCascadeTable, layoutSemanticDocument, linesOf } from '../index.ts';
 import { resolveRunStyle } from '../run-style.ts';
 import type { TextMeasurer } from '../semantic-records.ts';
 
@@ -145,4 +146,60 @@ test('a script level reduces the control size like a run size', () => {
     Math.max(em(750) * 17.5, equationLowercaseTop(inner.base) - em(460) * 17.5),
     9
   );
+});
+
+// Document defaults give the text around the equation 12 pt Arial.
+const styles = readOoxmlPart(
+  `<w:styles xmlns:w="${WML_NAMESPACE_URI}"><w:docDefaults><w:rPrDefault><w:rPr>` +
+    '<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:sz w:val="24"/>' +
+    '<w:szCs w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>',
+  { name: '/word/styles.xml', contentType: 'app/xml' }
+);
+if (!styles.ok) throw new Error(styles.reason);
+const styleCascade = buildStyleCascadeTable(styles.part.root);
+
+/** The equation span of a one-paragraph document laid out in full. */
+function equationInParagraph(paragraph: string) {
+  const read = readOoxmlPart(
+    `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:m="${OFFICE_MATH_NAMESPACE_URI}">` +
+      `<w:body>${paragraph}</w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!read.ok) throw new Error(read.reason);
+  const spans = linesOf(
+    layoutSemanticDocument(read.part, 1, { measurer: fixed, styleCascade })
+  ).flatMap((line) => line.spans);
+  const equation = spans.find((span) => span.equation)?.equation;
+  if (!equation) throw new Error('missing equation span');
+  return equation.geometry;
+}
+
+const text = (value: string, rtl = false) =>
+  `<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>${rtl ? '<w:rtl/>' : ''}` +
+  `<w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t xml:space="preserve">${value}</w:t></w:r>`;
+const bidi = '<w:pPr><w:bidi/></w:pPr>';
+
+test('a bidi paragraph keeps the size of the text around the equation', () => {
+  // Runs share 24 pt in 12 pt text, so the superscript rises from 12 pt in every direction.
+  // Bidi resolution rebuilds the piece style, so only the shaping of the runs differs.
+  const math = `<m:oMath>${superscript(48)}</m:oMath>`;
+  const ltr = equationInParagraph(`<w:p>${text('A ')}${math}</w:p>`);
+  expect(rise(ltr)).toBeCloseTo(equationLowercaseTop(script(ltr).base) - em(460) * 12, 9);
+  for (const paragraph of [
+    `<w:p>${bidi}${text('A ')}${math}</w:p>`,
+    `<w:p>${bidi}${text('\u05d0 ', true)}${math}</w:p>`,
+  ]) {
+    const geometry = equationInParagraph(paragraph);
+    expect(geometry.box).toEqual(ltr.box);
+    expect(rise(geometry)).toBeCloseTo(rise(ltr), 9);
+  }
+});
+
+test('normal text in a bidi paragraph keeps the paragraph font', () => {
+  const math = '<m:oMath><m:r><m:rPr><m:nor/></m:rPr><m:t>if</m:t></m:r></m:oMath>';
+  const family = (geometry: EquationGeometry): string | null | undefined =>
+    geometry.kind === 'text' ? geometry.runStyle?.fontFamily : undefined;
+  const ltr = equationInParagraph(`<w:p>${text('A ')}${math}</w:p>`);
+  expect(family(ltr)).toBe('Arial');
+  expect(family(equationInParagraph(`<w:p>${bidi}${text('A ')}${math}</w:p>`))).toBe('Arial');
 });

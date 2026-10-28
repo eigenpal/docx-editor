@@ -57,25 +57,6 @@ export const EQUATION_FONT_FAMILY = 'Cambria Math';
 const equationTextStyles = new WeakMap<ResolvedRunStyle, ResolvedRunStyle>();
 const equationMathStyles = new WeakMap<ResolvedRunStyle, ResolvedRunStyle>();
 
-// The size of the text around an equation whose style takes the size its runs share.
-const surroundingSizes = new WeakMap<ResolvedRunStyle, number>();
-
-/**
- * The equation style for the text around an equation. Runs that share one default size give
- * the style that size. Structures without a control size keep the size of `text`.
- * @internal
- */
-export function equationStyleForText(
-  text: ResolvedRunStyle,
-  sharedSizePt: number | undefined
-): ResolvedRunStyle {
-  const style = equationRunStyle(
-    sharedSizePt === undefined ? text : Object.freeze({ ...text, fontSizePt: sharedSizePt })
-  );
-  if (style.fontSizePt !== text.fontSizePt) surroundingSizes.set(style, text.fontSizePt);
-  return style;
-}
-
 /** Use Word's math face when installed while retaining the measurer's safe fallback stack. */
 export function equationRunStyle(style: ResolvedRunStyle): ResolvedRunStyle {
   const cached = equationMathStyles.get(style);
@@ -184,6 +165,17 @@ function shifted<T extends EquationGeometry>(node: T, x: number, y: number): T {
 export interface EquationLayoutInput {
   /** The equation is a display equation (`m:oMathPara`). */
   readonly display?: boolean;
+  /**
+   * The font size, in points, of the text around the equation. A structure without a size in
+   * its `m:ctrlPr` sizes its offsets and rules from it. Defaults to the size of the style.
+   */
+  readonly surroundingSizePt?: number;
+  /**
+   * The font family of the text around the equation, which normal text (`m:nor`) without a
+   * run font uses; `null` for the default face. Defaults to the family that the style was
+   * derived from.
+   */
+  readonly textFontFamily?: string | null;
 }
 
 interface EquationLayoutCache {
@@ -214,7 +206,6 @@ function geometryStyleToken(style: ResolvedRunStyle): string {
     resolved.fontFamily ?? '',
     (equationTextStyles.get(style) ?? style).fontFamily ?? '',
     resolved.fontSizePt,
-    surroundingSizes.get(style) ?? '',
     resolved.bold ? 1 : 0,
     resolved.italic ? 1 : 0,
     resolved.verticalAlign,
@@ -844,6 +835,15 @@ function layoutExpression(
   }
 }
 
+/** The style of the text around the equation, which normal text without a run font uses. */
+function surroundingTextStyle(style: ResolvedRunStyle, input: EquationLayoutInput) {
+  const family = input.textFontFamily;
+  if (family === undefined) return equationTextStyles.get(style) ?? style;
+  return family === null
+    ? Object.freeze({ ...style, fontFamily: null })
+    : withFontFamily(style, family);
+}
+
 /** Compose one bounded OMML projection into paint-ready point geometry. */
 export function layoutEquation(
   projection: OmmlEquationProjection,
@@ -861,8 +861,8 @@ function layoutEquationWith(
 ): EquationSpanRecord {
   const mathStyle = equationRunStyle(style);
   const cache: EquationLayoutCache = {
-    textStyle: equationTextStyles.get(style) ?? style,
-    surroundingSizePt: surroundingSizes.get(style) ?? style.fontSizePt,
+    textStyle: surroundingTextStyle(style, input),
+    surroundingSizePt: input.surroundingSizePt ?? style.fontSizePt,
     display: input.display === true,
     styles: new Map(),
     metrics: new Map(),
@@ -887,7 +887,12 @@ export function createEquationLayouter(
 ) => EquationSpanRecord {
   const layouts = sharedEquationLayouts(measurer, producer);
   return (projection, style, input = {}) => {
-    const token = `${geometryStyleToken(style)}|${input.display ? 'display' : 'inline'}`;
+    const token = [
+      geometryStyleToken(style),
+      input.display ? 'display' : 'inline',
+      input.surroundingSizePt ?? '',
+      input.textFontFamily === undefined ? '' : `${input.textFontFamily}`,
+    ].join('|');
     let styles = layouts.projections.get(projection);
     const cached = styles?.get(token);
     if (cached && styles) {
