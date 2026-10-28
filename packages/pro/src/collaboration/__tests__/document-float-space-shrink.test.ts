@@ -82,6 +82,43 @@ function outsidePicture(view: View) {
   }
 }
 
+test('a remote right-to-left word keeps passage compression in its left-to-right paragraph', async () => {
+  const harness = createPeerHarness('float-space-shrink-rtl', { offlineEditing: true });
+  const views: View[] = [];
+  try {
+    const peers = await harness.pair(floatSpacePackage());
+    const left = open(peers.alice.room.document, peers.alice);
+    const right = open(peers.bob.room.document, peers.bob);
+    views.push(left, right);
+    const same = (expected: string) => {
+      peers.alice.room.session.flushPendingJournals();
+      peers.bob.room.session.flushPendingJournals();
+      expect(text(left)).toBe(expected);
+      expect(text(right)).toBe(expected);
+      expect(xml(left)).toBe(xml(right));
+      expect(geometry(left)).toEqual(geometry(right));
+      outsidePicture(left);
+      outsidePicture(right);
+    };
+    select(right, floatSpaceText.length);
+    right.surface.type(' אב');
+    same(`${floatSpaceText} אב`);
+    // The Hebrew word sits on a later line, and the first passage still compresses.
+    expect(passage(left)).toBe('hh ii jj');
+    right.surface.undo();
+    same(floatSpaceText);
+    right.surface.redo();
+    same(`${floatSpaceText} אב`);
+    const reopened = open(left.surface.save());
+    views.push(reopened);
+    expect(geometry(reopened)).toEqual(geometry(left));
+    expect(passage(reopened)).toBe('hh ii jj');
+  } finally {
+    for (const view of views) destroy(view);
+    harness.cleanup();
+  }
+}, 10000);
+
 test('picture passage compression converges through concurrent edits, history, deletion, and reopen', async () => {
   const harness = createPeerHarness('float-space-shrink', { offlineEditing: true });
   const views: View[] = [];

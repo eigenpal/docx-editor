@@ -182,18 +182,39 @@ test('three passages each use their own compression slots', () => {
   outsideFloat(lines[0]!, 224, 316);
 });
 
-test('bidi paragraphs keep their existing float admission behavior', () => {
+test('right-to-left paragraphs keep their existing float admission behavior', () => {
   const ranges = (lines: readonly LineRecord[]) =>
     lines.map((line) => [line.range.start, line.range.end]);
-  for (const options of [{ rtl: true, text: 'aa bb cc dd ee' }, { text: 'aa bb cc dd ee אב' }]) {
-    const lines = layout({ ...options, compatibilityMode: 15 });
-    expect(
-      lines
-        .flatMap((line) => line.spans)
-        .every((span) => (span.style.shaping?.wordSpacingPt ?? 0) >= 0)
-    ).toBe(true);
-    // Compression stays off, so the lines break where legacy mode breaks them.
-    expect(ranges(lines)).toEqual(ranges(layout({ ...options, compatibilityMode: 14 })));
+  const options = { rtl: true, text: 'aa bb cc dd ee' };
+  const lines = layout({ ...options, compatibilityMode: 15 });
+  expect(
+    lines
+      .flatMap((line) => line.spans)
+      .every((span) => (span.style.shaping?.wordSpacingPt ?? 0) >= 0)
+  ).toBe(true);
+  // Compression stays off, so the lines break where legacy mode breaks them.
+  expect(ranges(lines)).toEqual(ranges(layout({ ...options, compatibilityMode: 14 })));
+});
+
+test('a right-to-left run leaves compression on in its left-to-right paragraph', () => {
+  // On a later line, in the compressed passage itself, and in the line's last word.
+  for (const [source, passage] of [
+    ['aa bb cc dd ee אב', 'bb cc dd'],
+    ['aa bb אב dd ee', 'bb אב dd'],
+    ['aa bb cc אב ee', 'bb cc אב'],
+  ] as const) {
+    const lines = layout({ text: source, compatibilityMode: 15 });
+    expect(text(lines[0]!, 114)).toBe(passage);
+    // Its two spaces each lend 1pt, wherever the run boundaries fall.
+    const right = lines[0]!.spans.filter((span) => span.box.x >= 114);
+    const shrink = right.map((span) => span.style.shaping?.wordSpacingPt ?? 0);
+    expect(shrink.reduce((sum, value) => sum + value, 0)).toBeCloseTo(-2, 6);
+    expect(shrink.filter((value) => value !== 0)).toEqual([-1, -1]);
+    outsideFloat(lines[0]!, 22, 114);
+    // Legacy modes do not compress, so the passage keeps only two words.
+    expect(text(layout({ text: source, compatibilityMode: 14 })[0]!, 114)).toBe(
+      passage.split(' ').slice(0, 2).join(' ')
+    );
   }
 });
 

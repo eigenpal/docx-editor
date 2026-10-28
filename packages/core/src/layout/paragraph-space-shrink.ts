@@ -36,23 +36,22 @@ export function endsAtHyphenBreak(candidate: string): boolean {
   return /\p{L}[-‐]$/u.test(candidate);
 }
 
-/** Probe the current LTR passage without borrowing spaces across a float. */
+/**
+ * Probe the current passage of a left-to-right paragraph without borrowing spaces across a
+ * float. Right-to-left runs inside the paragraph do not change the passage; only a
+ * right-to-left paragraph keeps its existing alignment path across floats.
+ */
 export function createShrinkProbe<Zone>(
   zones: () => readonly Zone[],
   intervals: (
     zones: readonly Zone[]
   ) => readonly { readonly start: number; readonly end: number }[],
-  pieces: readonly FieldAwarePiece[],
   paragraphRtl: boolean
 ): (penX: number) => number | undefined {
-  let supportsPassages: boolean | undefined;
   return (penX) => {
     const active = zones();
     if (active.length === 0) return undefined;
-    // Preserve the existing bidi alignment path across floats.
-    supportsPassages ??=
-      !paragraphRtl && !pieces.some((piece) => piece.style.shaping?.direction === 'rtl');
-    if (!supportsPassages) return Infinity;
+    if (paragraphRtl) return Infinity;
     return (
       intervals(active).find(
         (interval) => penX >= interval.start - 0.001 && penX <= interval.end + 0.001

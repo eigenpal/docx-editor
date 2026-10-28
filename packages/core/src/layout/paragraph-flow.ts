@@ -537,7 +537,7 @@ export function breakParagraph(
     initialMetrics: measurer.lineMetrics(lineStartStyle),
   });
   const availableIntervals = exclusionProbe.intervals;
-  const probeX = createShrinkProbe(activeExclusionZones, availableIntervals, pieces, paragraphRtl);
+  const probeX = createShrinkProbe(activeExclusionZones, availableIntervals, paragraphRtl);
 
   /**
    * First usable x at or after the pen, with the first-line indent preserved.

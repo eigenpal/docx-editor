@@ -468,7 +468,7 @@ Row and column insertion, deletion, and column resize commits SHALL publish `flo
 
 ### Requirement: Passage-local justified space compression
 
-For modern left-to-right justified text beside floating objects, the layout engine SHALL test complete words against the current passage. It SHALL apply the existing compression floor and compression-versus-expansion rule to that passage's eligible spaces. It SHALL NOT borrow space capacity across a floating object. Right-to-left and mixed-direction passages SHALL retain their existing behavior.
+For modern left-to-right justified text beside floating objects, the layout engine SHALL test complete words against the current passage. It SHALL apply the existing compression floor and compression-versus-expansion rule to that passage's eligible spaces. It SHALL NOT borrow space capacity across a floating object. A left-to-right paragraph that contains right-to-left runs SHALL compress in the same way. Right-to-left paragraphs SHALL retain their existing behavior.
 
 #### Scenario: A narrow passage keeps one more word
 
@@ -485,6 +485,13 @@ For modern left-to-right justified text beside floating objects, the layout engi
 - **AND** an earlier passage has spare compression capacity
 - **WHEN** the layout engine tests the later passage's next word
 - **THEN** that word wraps instead of borrowing capacity across the floating object
+
+#### Scenario: A right-to-left run keeps compression in its left-to-right paragraph
+
+- **GIVEN** a justified left-to-right paragraph beside a floating object in compatibility mode 15 or later
+- **AND** the paragraph contains a right-to-left run
+- **WHEN** a passage can keep one more word by compressing its spaces
+- **THEN** the passage keeps that word, also when the right-to-left run is on that line
 
 #### Scenario: A compressed passage ends at the floating object
 

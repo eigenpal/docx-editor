@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "In compatibility mode 15 and later, one right-to-left run turned off space compression beside floating objects for its whole left-to-right paragraph.",
+  "after": "Those paragraphs compress their spaces in each passage beside a floating object, as paragraphs without right-to-left runs do. Right-to-left paragraphs keep their existing behavior.",
+  "reason": "Only local line breaks and span geometry change. Canonical OOXML, offsets, operations, and collaboration data remain unchanged, and every peer derives the same layout from the same document.",
+  "tests": [
+    "packages/core/src/layout/__tests__/paragraph-float-space-shrink.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-float-space-shrink.test.ts"
+  ],
+  "changeset": "rtl-run-float-space-shrink",
+  "migration": null
+}
