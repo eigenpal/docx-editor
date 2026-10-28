@@ -847,7 +847,7 @@ describe('note layout + pagination', () => {
     if (!loaded.ok) throw new Error(loaded.reason);
     const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
     const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
-    const sectEnd = resolveEndnoteProperties({ pos: 'sectEnd' });
+    const sectEnd = resolveEndnoteProperties(undefined, { pos: 'sectEnd' });
     const notes: NotesLayoutInput = {
       footnotesPart: null,
       endnotesPart: resolveNotesPart(loaded.package, 'endnote'),

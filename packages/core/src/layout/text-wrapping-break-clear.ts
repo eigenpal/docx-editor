@@ -142,6 +142,11 @@ export function zonesClearedByBreak(
 /** Own clearing bands built without the sheet's frames, whose X is only a stand-in. */
 const horizontallyUnresolved = new WeakSet<ExclusionZone>();
 
+/** Give `copy`, such as a zone's mirror image, the horizontal resolution of `source`. */
+export function carryHorizontalResolution(source: ExclusionZone, copy: ExclusionZone): void {
+  if (horizontallyUnresolved.has(source)) horizontallyUnresolved.add(copy);
+}
+
 /** Choose the zones a break clears on its own line; the result picks them from a later list. */
 export function breakClearSelector(
   clear: TextWrappingBreakClear,

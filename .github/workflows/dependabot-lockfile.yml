@@ -28,7 +28,7 @@ permissions:
 jobs:
   refresh-and-verify:
     if: github.actor == 'dependabot[bot]'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout PR branch
@@ -48,7 +48,9 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
+          # Downloading the binary takes seconds; caching it only fills the cache.
+          no-cache: true
 
       - name: Refresh bun.lock
         env:
