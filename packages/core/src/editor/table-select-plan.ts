@@ -35,7 +35,7 @@ export function planSelectTableRegion(
 }
 
 /**
- * Word: Backspace on a whole-table selection deletes the table; Delete only empties it.
+ * Backspace on a whole-table selection deletes the table; Delete only empties its cells.
  * Suggesting keeps the tracked strike of the cell text, because deleting a table has no tracked form.
  */
 export function wholeTableDeletionPlan(

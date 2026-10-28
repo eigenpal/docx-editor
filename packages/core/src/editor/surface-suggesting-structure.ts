@@ -41,7 +41,8 @@ export function suggestingStructureRefusal(
   const restructuresCells = (op: TreeDocOp) =>
     op.op === 'mergeTableCells' || op.op === 'splitTableCell';
   if (ops.some(restructuresCells)) return SUGGESTING_CELL_STRUCTURE_REFUSAL;
-  // Word marks every row deleted, but the store refuses a tracked deletion of the last live row.
+  // A tracked table deletion would mark every row deleted, but the store refuses a tracked
+  // deletion of the last live row, so a whole-table deletion has no tracked form.
   if (ops.some((op) => op.op === 'deleteBlock' && isTable(op.blockId))) {
     return SUGGESTING_TABLE_DELETE_REFUSAL;
   }

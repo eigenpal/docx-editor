@@ -10,7 +10,7 @@ export interface InsertTableOp {
    * table: a `w:tbl` is not a valid final child of a story container, and two tables
    * that end up adjacent merge into one when the file is reopened. When the anchor's
    * previous sibling is already a table, a separating empty paragraph is authored with
-   * it, which is what Word does for the same reason.
+   * it for the same reason.
    */
   readonly op: 'insertTable';
   readonly beforeParagraphId: string;

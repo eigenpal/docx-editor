@@ -1,4 +1,4 @@
-// The handle at a table's top-left corner that selects the whole table, as in Word.
+// The handle at a table's top-left corner that selects the whole table.
 //
 // Its own sheet, not the table furniture's: that layer is cleared on every hover change, and
 // this handle has to outlive those while the caret is in the table.
