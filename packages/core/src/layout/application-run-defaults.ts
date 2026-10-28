@@ -1,4 +1,6 @@
 import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
+import type { DocumentDistribution } from './paragraph-alignment.ts';
+import { WML_NAMESPACE_URI } from '../store/package/ooxml-tree.ts';
 import {
   APPLICATION_RUN_PROPERTIES,
   omittedDocDefaults,
@@ -63,4 +65,19 @@ export function applicationRunDefaults(
 ): readonly OoxmlProperty[] {
   if (!omittedDocDefaults(styles).run) return FORMAT_RUN;
   return optionalLigatures ? APPLICATION_MODERN_RUN : APPLICATION_RUN;
+}
+
+const DISTRIBUTE_EVERY_CHARACTER: DocumentDistribution = Object.freeze({
+  distributeEveryCharacter: true,
+});
+
+/**
+ * The distribution an authored `w:rPrDefault` selects, even an empty one: distributed lines
+ * that close a paragraph spread their slack after every character. Without one, they stretch
+ * their spaces (`paragraph-alignment.ts`). Read once per styles part, like the run defaults.
+ */
+export function documentDistribution(styles: OoxmlElement): DocumentDistribution {
+  // A root outside the WordprocessingML namespace is not a styles part and authors nothing.
+  if (styles.namespaceUri !== WML_NAMESPACE_URI || omittedDocDefaults(styles).run) return {};
+  return DISTRIBUTE_EVERY_CHARACTER;
 }

@@ -129,7 +129,9 @@ This subset requires a separate ordinary paragraph and clear space around the fr
 
 #### Distributed alignment
 
-Distributed paragraphs (`w:jc` with `distribute`) stretch their final line. This also applies inside table cells and each passage beside a floating object. A distributed line with no space or character gap to stretch, such as a single word, is centered. Ordinary justified paragraphs keep their final line at its natural width.
+Distributed paragraphs (`w:jc` with `distribute`) stretch their final line. This also applies inside table cells and each passage beside a floating object. Ordinary justified paragraphs keep their final line at its natural width.
+
+If the styles part has a `w:rPrDefault` element, even an empty one, a left-to-right distributed paragraph spreads its final line across the measure character by character. This also applies to each line that a break closes. Spaces take part of the slack first, and the rest goes after every character, so a single word reaches both margins. Lines that wrap inside the paragraph stretch only their spaces. Without a `w:rPrDefault` element, and in right-to-left paragraphs, a distributed line stretches only its spaces. A line with nothing to stretch, such as a single character, is centered. Lines with tabs keep their tab positions.
 
 ### Lists and numbering
 

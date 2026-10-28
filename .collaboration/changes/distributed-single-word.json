@@ -1,11 +1,12 @@
 {
   "impact": "no-impact",
   "fields": [],
-  "before": "A distributed line with nothing to stretch stays at its start edge.",
-  "after": "A distributed line with nothing to stretch, such as a single word, is centered. A line with a tab or a float advance keeps its reserved positions.",
-  "reason": "Only layout geometry changes. Canonical OOXML, source positions, operations, and collaboration formats remain unchanged.",
+  "before": "A distributed line that closes its paragraph stretches only its spaces, and a line with nothing to stretch stays at its start edge.",
+  "after": "With a w:rPrDefault element in the styles part, a left-to-right distributed line that closes its paragraph or a break spreads its slack after every character. Otherwise it stretches its spaces, and a line with nothing to stretch is centered. Tabs and float advances keep their reserved positions.",
+  "reason": "Only layout geometry changes. Canonical OOXML, source positions, operations, and collaboration formats remain unchanged. Every peer derives the same geometry from the same styles part.",
   "tests": [
     "packages/core/src/layout/__tests__/distributed-last-line.test.ts",
+    "packages/core/src/layout/__tests__/distributed-character-spacing.test.ts",
     "packages/pro/src/collaboration/__tests__/document-distributed-last-line.test.ts"
   ],
   "changeset": "distributed-single-word",

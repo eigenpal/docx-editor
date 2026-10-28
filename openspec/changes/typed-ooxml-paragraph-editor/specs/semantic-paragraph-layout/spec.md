@@ -11,11 +11,22 @@ The layout engine SHALL stretch the final line of a paragraph with `w:jc` set to
 - **THEN** text fills each passage without crossing the floating object
 - **AND** the source text, formatting, and source positions remain unchanged
 
+#### Scenario: Distributed line spreads its characters
+
+- **GIVEN** a left-to-right distributed paragraph in a package whose styles part has a `w:rPrDefault` element, even an empty one
+- **WHEN** layout aligns the paragraph's last line, or a line that a manual, page, or column break closes
+- **THEN** each space between the first and last character takes up to 45 percent of its own advance from the slack
+- **AND** the rest of the slack goes in equal steps after every character, so a single word reaches both edges
+- **AND** a single character, or a single right-to-left word, is centered
+- **AND** lines that wrap inside the paragraph stretch only their spaces, as justified lines do
+- **AND** caret placement and hit testing follow the spread characters
+
 #### Scenario: Distributed line has nothing to stretch
 
-- **GIVEN** a distributed paragraph whose line holds a single word or a single character
-- **WHEN** layout aligns that line
+- **GIVEN** a distributed paragraph in a package with no `w:rPrDefault` element, or in a right-to-left paragraph
+- **WHEN** layout aligns a line that holds a single word or a single character
 - **THEN** the line is centered in its measure
+- **AND** spaces before the line's first character are not stretched
 - **AND** a justified paragraph with the same line keeps it at its start edge
 - **AND** a distributed line with a tab or a float advance keeps its reserved positions
 

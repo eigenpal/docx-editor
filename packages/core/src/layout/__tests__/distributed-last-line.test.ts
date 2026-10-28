@@ -117,12 +117,12 @@ const bidiParagraph = (text: string) =>
   `<w:p><w:pPr><w:bidi/><w:jc w:val="distribute"/></w:pPr><w:r><w:rPr><w:rtl/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
 
 for (const [name, body, width] of [
-  ['a single word', paragraph('distribute', 'Word'), 40],
+  ['a single word', paragraph('distribute', 'Text'), 40],
   ['a single character', paragraph('distribute', 'X'), 10],
   ['a single CJK character', paragraph('distribute', '名'), 10],
   [
     'one word before a manual line break',
-    `<w:p><w:pPr><w:jc w:val="distribute"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>Word</w:t><w:br/><w:t>aa bb</w:t></w:r></w:p>`,
+    `<w:p><w:pPr><w:jc w:val="distribute"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>Text</w:t><w:br/><w:t>aa bb</w:t></w:r></w:p>`,
     40,
   ],
   ['a single right-to-left word', bidiParagraph('שלום'), 40],
@@ -156,7 +156,7 @@ for (const [name, before, after] of [
 }
 
 test('a justified single word stays at its start edge', () => {
-  const [line] = layout(paragraph('both', 'Word'));
+  const [line] = layout(paragraph('both', 'Text'));
   expect(start(line!.spans)).toBeCloseTo(0, 7);
 });
 

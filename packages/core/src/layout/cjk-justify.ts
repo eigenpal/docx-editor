@@ -5,8 +5,7 @@ import { segmentGraphemes } from './grapheme.ts';
 import { cjkParagraphBreaks, hasCjkText, isCjk } from './cjk-paragraph-breaks.ts';
 import { DEFAULT_CJK_TYPOGRAPHY } from './cjk-typography.ts';
 import { cjkCutAllowedBetween, lastCodePointOf } from './cjk-line-break.ts';
-import { measureDisplayText } from './run-style.ts';
-import { styleForFontSlot } from './script-itemization.ts';
+import { isSplittableSpan, splitSpanParts, type SpanPart } from './span-parts.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 
 export function justifyCjkSpans(
@@ -19,17 +18,12 @@ export function justifyCjkSpans(
   if (spans.some((span) => span.text.includes('\t') || span.wrapAdvanceBefore)) return spans;
   const split: StyleSpanRecord[] = [];
   for (const span of spans) {
-    if (
-      span.projected ||
-      span.equation ||
-      span.range.end - span.range.start !== span.text.length ||
-      !hasCjkText(span.text)
-    ) {
+    if (!isSplittableSpan(span) || !hasCjkText(span.text)) {
       split.push(span);
       continue;
     }
     const clusters = segmentGraphemes(span.text);
-    const parts: { from: number; to: number }[] = [];
+    const parts: SpanPart[] = [];
     let from = 0;
     for (let index = 1; index < clusters.length; index++) {
       if (
@@ -41,32 +35,8 @@ export function justifyCjkSpans(
       }
     }
     parts.push({ from, to: span.text.length });
-    if (parts.length === 1) {
-      split.push(span);
-      continue;
-    }
-    const style = styleForFontSlot(span.style, span.fontSlot);
-    const widths = parts.map((part) =>
-      measureDisplayText(span.text.slice(part.from, part.to), style, measurer)
-    );
-    const total = widths.reduce((sum, value) => sum + value, 0);
-    let x = span.box.x;
-    for (let index = 0; index < parts.length; index++) {
-      const part = parts[index]!;
-      const width = total > 0 ? (widths[index]! * span.box.width) / total : 0;
-      const { caretEdges: _edges, ...rest } = span;
-      split.push({
-        ...rest,
-        text: span.text.slice(part.from, part.to),
-        range: {
-          ...span.range,
-          start: span.range.start + part.from,
-          end: span.range.start + part.to,
-        },
-        box: { ...span.box, x, width },
-      });
-      x += width;
-    }
+    if (parts.length === 1) split.push(span);
+    else split.push(...splitSpanParts(span, parts, measurer));
   }
   const gaps = new Set<number>();
   const pieces = split.map((span) => ({

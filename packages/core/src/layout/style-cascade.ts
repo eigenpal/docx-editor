@@ -1,6 +1,7 @@
 import { styleSeparatorMembersOf } from './style-separator-group.ts';
 import { applicationParagraphDefaults } from './application-paragraph-defaults.ts';
-import { applicationRunDefaults } from './application-run-defaults.ts';
+import { applicationRunDefaults, documentDistribution } from './application-run-defaults.ts';
+import { themeCacheMaterial } from './theme-cache-material.ts';
 import { applyLigatureCompatibility } from './run-ligatures.ts';
 import { numberingParagraphProperties } from './numbering-paragraph-properties.ts';
 import { numberingLevelRank } from './numbering-level-tier.ts';
@@ -96,6 +97,12 @@ export interface StyleCascadeTable {
   readonly doNotBreakWrappedTables?: true;
   /** Legacy or explicitly disabled optional OpenType substitutions. */
   readonly disableOptionalLigatures?: true;
+  /**
+   * The styles part authors a `w:rPrDefault`: distributed lines that close a paragraph spread
+   * their slack after every character (`DocumentDistribution` in `paragraph-alignment.ts`).
+   * @internal
+   */
+  readonly distributeEveryCharacter?: true;
   /** Legacy noExtraLineSpacing behavior, included in the producer fingerprint. */
   readonly preserveExactLineBaseline?: true;
   /** `w:adjustLineHeightInTable`: cell paragraphs snap to the section line grid too. */
@@ -435,29 +442,6 @@ export function tableCellStyleFormatting(
 }
 
 /**
- * The theme as cache-key material: every face present, `null` when the theme has none.
- *
- * `ThemeFonts` leaves the East Asian, complex-script, and supplemental faces optional,
- * and a producer that reads a theme with no such scheme hands over `undefined` for
- * them. The comparator behind `stableHash` refuses `undefined` by design, so a key built
- * from the raw object failed layout for any document whose theme lacked one of those
- * faces.
- */
-function themeCacheMaterial(themeFonts: ThemeFonts): Record<string, unknown> {
-  return {
-    major: themeFonts.major ?? null,
-    minor: themeFonts.minor ?? null,
-    majorEastAsia: themeFonts.majorEastAsia ?? null,
-    minorEastAsia: themeFonts.minorEastAsia ?? null,
-    majorBidi: themeFonts.majorBidi ?? null,
-    minorBidi: themeFonts.minorBidi ?? null,
-    majorSupplemental: themeFonts.majorSupplemental ?? null,
-    minorSupplemental: themeFonts.minorSupplemental ?? null,
-    chineseFontTableFaces: themeFonts.chineseFontTableFaces ?? null,
-  };
-}
-
-/**
  * Build a cascade table from a styles part root.
  *
  * Only direct `w:style` children of the root participate (bounded count). Duplicate
@@ -510,6 +494,7 @@ export function buildStyleCascadeTable(
   }
 
   const authoredDefaults = readDocDefaults(stylesRoot);
+  const distribution = documentDistribution(stylesRoot);
   const sourceEastAsianFont = defaultsSelectEastAsianFace(authoredDefaults.run, themeFonts);
   typography = Object.freeze({ ...typography, sourceEastAsianFont });
   const defaults = {
@@ -546,6 +531,7 @@ export function buildStyleCascadeTable(
   const cacheToken = stableHash({
     ...settingsCompatibility,
     ...ligatureCompatibility,
+    ...distribution,
     strictTableHierarchy,
     typography,
     dR: propertiesFingerprint(defaults.run),
@@ -577,6 +563,7 @@ export function buildStyleCascadeTable(
     cacheToken,
     ...settingsCompatibility,
     ...ligatureCompatibility,
+    ...distribution,
     strictTableStyleHierarchy: strictTableHierarchy,
     typography,
     docDefaultsRun: defaults.run,
