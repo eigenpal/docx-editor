@@ -145,3 +145,66 @@ describe('deleting text that two concurrent joins copied', () => {
     });
   }
 });
+
+// A join keeps the section mark of the paragraph it takes in by moving that `w:sectPr`, with
+// its node ids, onto the survivor. A peer that changes that section's page setup meanwhile,
+// or undoes such a change, edits the node the survivor holds, so the change is kept.
+describe('section properties a peer edits while a join moves them', () => {
+  const PG_MAR = (left: number) =>
+    `<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="${left}" w:header="720" w:footer="720" w:gutter="0"/>`;
+  const twoSections = () =>
+    zipDocument(
+      `<w:p><w:pPr><w:sectPr>${PG_MAR(1440)}</w:sectPr></w:pPr><w:r><w:t>One</w:t></w:r></w:p>` +
+        `<w:p><w:pPr><w:sectPr>${PG_MAR(1440)}</w:sectPr></w:pPr><w:r><w:t>Two</w:t></w:r></w:p>` +
+        `<w:p><w:r><w:t>Three</w:t></w:r></w:p><w:sectPr>${PG_MAR(1440)}</w:sectPr>`
+    );
+
+  /** The left margin of each section, from its `w:sectPr` in document order. */
+  function leftMargins(peer: Peer): string[] {
+    const margins: string[] = [];
+    walk(peer.store.bodyStore().part.root, (node) => {
+      if (node.kind === 'textValue' || node.localName !== 'pgMar') return;
+      margins.push(node.attributes.find((a) => a.localName === 'left')?.value ?? '');
+    });
+    return margins;
+  }
+
+  const setLeft = (peer: Peer, paragraph: number, left: number): TreeDocOp => ({
+    op: 'setSectionProperties',
+    marginLeftTwips: left,
+    anchorParagraphId: harness.paragraphIdAt(peer, paragraph),
+  });
+
+  test('a concurrent page setup change to the moved section survives the join', async () => {
+    const { alice, bob, pause, resume } = await harness.pair(twoSections());
+    pause();
+    harness.apply(alice, [join(alice, 0)]);
+    harness.apply(bob, [setLeft(bob, 1, 2000)]);
+    resume();
+    alice.port.flushPendingJournals();
+    bob.port.flushPendingJournals();
+    harness.expectConverged(alice, bob);
+    for (const peer of [alice, bob]) {
+      expect(paragraphTexts(peer)).toEqual(['OneTwo', 'Three']);
+      expect(leftMargins(peer)).toEqual(['2000', '1440']);
+    }
+  });
+
+  test('a concurrent undo of a page setup change to the moved section survives the join', async () => {
+    const { alice, bob, pause, resume } = await harness.pair(twoSections());
+    harness.apply(bob, [setLeft(bob, 1, 2000)]);
+    harness.expectConverged(alice, bob);
+    pause();
+    harness.apply(alice, [join(alice, 0)]);
+    expect(bob.room.session.undo()).toBe(true);
+    bob.port.flushPendingJournals();
+    resume();
+    alice.port.flushPendingJournals();
+    bob.port.flushPendingJournals();
+    harness.expectConverged(alice, bob);
+    for (const peer of [alice, bob]) {
+      expect(paragraphTexts(peer)).toEqual(['OneTwo', 'Three']);
+      expect(leftMargins(peer)).toEqual(['1440', '1440']);
+    }
+  });
+});

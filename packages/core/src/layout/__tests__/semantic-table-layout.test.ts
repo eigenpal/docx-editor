@@ -581,11 +581,12 @@ const TINY: PageGeometry = {
   margin: { top: 10, right: 10, bottom: 10, left: 10 },
 };
 
-function layoutTiny(part: OoxmlPart, styleCascade?: StyleCascadeTable) {
+function layoutTiny(part: OoxmlPart, styleCascade?: StyleCascadeTable, compatibilityMode?: number) {
   return layoutSemanticDocument(part, 0, {
     measurer: createFixedMeasurer(),
     geometry: TINY,
     styleCascade,
+    compatibilityMode,
   });
 }
 
@@ -646,7 +647,8 @@ describe('table row pagination (tiny page)', () => {
   test('w:cantSplit taller than a page splits instead of overflowing', () => {
     const paras = Array.from({ length: 30 }, (_, i) => p(`X${i}`)).join('');
     const part = loadPart(`<w:tbl>${tr(tc(paras), '<w:trPr><w:cantSplit/></w:trPr>')}</w:tbl>`);
-    const result = layoutTiny(part);
+    // Mode 15 splits it. Earlier modes keep it whole past the margin (`tallRowStaysWhole`).
+    const result = layoutTiny(part, undefined, 15);
     expect(result.pages.length).toBeGreaterThan(1);
     assertNoContentOverflow(result);
     const bodyRows = allTableFragments(result).flatMap((fragment) => fragment.rows);
@@ -828,22 +830,26 @@ describe('table row pagination (tiny page)', () => {
     expect(rows.some((row) => row.isHeaderRepeat)).toBe(false);
   });
 
+  const atomicAfterRepeat = () =>
+    loadPart(
+      `<w:tbl>${tr(tc(p('HEAD')), '<w:trPr><w:tblHeader/><w:trHeight w:val="400" w:hRule="exact"/></w:trPr>')}` +
+        `${tr(tc(p('first')))}${tr(tc(p('atomic')), '<w:trPr><w:trHeight w:val="1300" w:hRule="exact"/></w:trPr>')}</w:tbl>`
+    );
   test('a later atomic row suppresses a repeat that would leave it no usable page', () => {
-    const header = tr(
-      tc(p('HEAD')),
-      '<w:trPr><w:tblHeader/><w:trHeight w:val="400" w:hRule="exact"/></w:trPr>'
-    );
-    const atomic = tr(
-      tc(p('atomic')),
-      '<w:trPr><w:trHeight w:val="1300" w:hRule="exact"/></w:trPr>'
-    );
-    const part = loadPart(`<w:tbl>${header}${tr(tc(p('first')))}${atomic}</w:tbl>`);
-    const result = layoutTiny(part);
+    const result = layoutTiny(atomicAfterRepeat(), undefined, 15);
     assertNoContentOverflow(result);
     expect(result.pages).toHaveLength(2);
     const rows = allTableFragments(result).flatMap((fragment) => fragment.rows);
     expect(rows.map(rowCellText)).toEqual(['HEAD', 'first', 'atomic']);
     expect(rows.some((row) => row.isHeaderRepeat)).toBe(false);
+  });
+  test('before mode 15, a later atomic row keeps the repeat and runs past the margin', () => {
+    const result = layoutTiny(atomicAfterRepeat(), undefined, 14);
+    const second = allTableFragments(result)[1]!;
+    expect([result.pages.length, ...second.rows.map(rowCellText)]).toEqual([2, 'HEAD', 'atomic']);
+    expect(second.rows[0]!.isHeaderRepeat).toBe(true);
+    // The 20pt repeat and the whole 65pt exact row end at 85, past the 80pt content box.
+    expect(second.rows[1]!.box.y + second.rows[1]!.box.height).toBeCloseTo(85, 6);
   });
 
   test('a nested block can suppress one repeat without disabling later useful repeats', () => {

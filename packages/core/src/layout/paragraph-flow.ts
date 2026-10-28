@@ -7,7 +7,6 @@ import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-borde
 import {
   clipLineDrawingsAtTop,
   growPendingLineDrawingExtent,
-  lineContentEdges,
   lineHoldsContent,
   markPendingLineWrapAdvances,
   placeLeadingIgnoredBreaks,
@@ -34,7 +33,8 @@ export {
   type Alignment,
 } from './paragraph-alignment.ts';
 import { bidiPieces, paragraphIsRtl } from './rtl-paragraph.ts';
-import { lineWrapPassages } from './line-wrap-passages.ts';
+import { recordLineWrapPassages } from './line-wrap-passages.ts';
+import { wrapBreakSpace } from './wrap-break-space.ts';
 
 import { PAGE_BREAK_CHAR, type OoxmlNode, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import {
@@ -296,6 +296,13 @@ export function breakParagraph(
   // The right-to-left line's leading (right) indent, from the paragraph's full measure.
   const rtlLeadingIndent = Math.max(0, (flow?.marginExtent?.right ?? rightEdge) - rightEdge);
   const wrapRight = Math.min(contentRight, contentOriginX + rightEdge);
+  // A right-to-left line fills a float's passages from the right; see `wrap-break-space.ts`.
+  const breakSpace = wrapBreakSpace(paragraphRtl, contentOriginX + indentLeft, available, {
+    firstLineOffset,
+    contentLeft,
+    wrapRight,
+    largestTieLeft: flow?.largestWrapTieLeft === true,
+  });
   const lines: PendingLine[] = [];
   let previousLineCut = false; // The last line closed inside a word the oversized cut split.
   let alignedTabRight = 0;
@@ -414,7 +421,7 @@ export function breakParagraph(
           })
         : Object.freeze([]);
     const synthesized = anchorsWrap ? ownTopAndBottomZones() : emptyExclusionZones;
-    return Object.freeze([...pageZones, ...synthesizedWrap, ...synthesized]);
+    return breakSpace.zones(Object.freeze([...pageZones, ...synthesizedWrap, ...synthesized]));
   };
 
   // Whether the line being built takes the first-line slot: the first line, or the first
@@ -469,8 +476,8 @@ export function breakParagraph(
     top: currentLineTopY,
     spaceAbove: () => (lines.length === 0 ? (flow?.paragraphSpaceBefore ?? 0) : 0),
     zones: activeExclusionZones,
-    left: () => Math.max(contentLeft, lineOrigin()),
-    right: wrapRight,
+    left: () => Math.max(breakSpace.left, lineOrigin()),
+    right: breakSpace.right,
     clearOwnEmptyAnchor: flow?.anchorCellBox == null,
     emptyStyle: lineStartStyle,
     measurer,
@@ -507,12 +514,13 @@ export function breakParagraph(
   /** The floats a `w:br w:clear` on the line being built clears, chosen where the pen stands. */
   const breakClearOnLine = (clear: TextWrappingBreakClear) =>
     clear === 'all'
-      ? (zones: readonly ExclusionZone[]) => withOwnClearZones(zones, ownClearZones())
-      : breakClearSelector(clear, activeExclusionZones(), {
+      ? (zones: readonly ExclusionZone[]) =>
+          withOwnClearZones(zones, breakSpace.zones(ownClearZones()))
+      : breakClearSelector(breakSpace.clearSide(clear), activeExclusionZones(), {
           y: currentLineTopY() + (line.exclusionSkipBefore ?? 0),
           height: line.height,
-          left: Math.max(contentLeft, lineOrigin()),
-          right: wrapRight,
+          left: Math.max(breakSpace.left, lineOrigin()),
+          right: breakSpace.right,
           penX: lineOrigin() + line.width,
         });
 
@@ -523,8 +531,8 @@ export function breakParagraph(
   const exclusionProbe = createLineExclusionProbe({
     line: () => line,
     top: currentLineTopY,
-    left: contentLeft,
-    right: wrapRight,
+    left: breakSpace.left,
+    right: breakSpace.right,
     lineSpacing,
     initialMetrics: measurer.lineMetrics(lineStartStyle),
   });
@@ -587,23 +595,11 @@ export function breakParagraph(
   /** Room left ahead of the pen on the current line. */
   const remainingLineWidth = (): number => Math.max(0, lineAvailable() - line.width);
 
-  /** Record the float passages this line aligns inside; see {@link lineWrapPassages}. */
+  /** Record the float passages this line aligns inside; see {@link recordLineWrapPassages}. */
   const recordWrapSegment = (): void => {
-    // Placement mirrors an RTL line's spans, so its first span is not its left edge.
-    if (flow?.paragraphRtl) return;
     const zones = activeExclusionZones();
-    if (zones.length === 0) return;
-    const penEnd = lineOrigin() + line.width;
-    const edges = lineContentEdges(line.spans, line.drawings);
-    const contentStart = edges?.left ?? Math.max(contentLeft, lineOrigin());
-    const passages = lineWrapPassages(
-      availableIntervals(zones),
-      contentStart,
-      Math.min(penEnd, edges?.right ?? penEnd),
-      penEnd,
-      { start: contentLeft, end: wrapRight }
-    );
-    if (passages) Object.assign(line, passages);
+    if (zones.length > 0)
+      recordLineWrapPassages(line, availableIntervals(zones), lineOrigin(), breakSpace);
   };
 
   const tryAdvanceToNextPassage = (): boolean => {
@@ -947,7 +943,7 @@ export function breakParagraph(
     // where a float anchored earlier is; one anchored on this line moves with it, so clearing
     // it again on every region would leave the line no region to fit.
     const select = breakClearOnLine(restartClear);
-    const placed = new Set(flow?.pageExclusionZones ?? []);
+    const placed = new Set(breakSpace.zones(flow?.pageExclusionZones ?? []));
     applyBreakClearance((zones) =>
       select(zones).filter((zone) => zone.anchorParagraphId !== paragraphId || placed.has(zone))
     );

@@ -48,6 +48,11 @@ function docx(
     `<w:${kind} w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:${kind}>` +
     `<w:${kind} w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:${kind}>` +
     `<w:${kind} w:id="1">${text}</w:${kind}></w:${kind}s>`;
+  // The endnote position is document-wide and settings.xml carries it; a section's own copy
+  // does not move its endnotes, so a body that asks for section-end endnotes sets it here.
+  const endnotePosition = body.includes('<w:pos w:val="sectEnd"/>')
+    ? '<w:endnotePr><w:pos w:val="sectEnd"/></w:endnotePr>'
+    : '';
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
@@ -74,7 +79,9 @@ function docx(
         '</Relationships>'
     ),
     'word/styles.xml': strToU8(`<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}</w:styles>`),
-    'word/settings.xml': strToU8(`<w:settings xmlns:w="${W}">${evenAndOddHeaders}</w:settings>`),
+    'word/settings.xml': strToU8(
+      `<w:settings xmlns:w="${W}">${evenAndOddHeaders}${endnotePosition}</w:settings>`
+    ),
     'word/header1.xml': strToU8(`<w:hdr xmlns:w="${W}">${p('ODD')}</w:hdr>`),
     'word/header2.xml': strToU8(`<w:hdr xmlns:w="${W}">${p('EVEN')}</w:hdr>`),
     'word/footnotes.xml': strToU8(noteBody('footnote', notes.footnote ?? p('Note'))),

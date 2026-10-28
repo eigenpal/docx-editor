@@ -3,6 +3,8 @@ import type { SemanticTableRow, SemanticTableStructure } from './semantic-table.
 import type { TableRowFragmentRecord } from './semantic-records.ts';
 import type { CellContentInsets } from './table-cell-geometry.ts';
 import { prepareTerminalBorderPlan, sameTerminalContent } from './table-terminal-border-plan.ts';
+import { closingRowDeps, exactTerminalBorderPt } from './table-exact-terminal-border.ts';
+import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 
 /** Enough vertical room to lay a positioned table as one visual object on its anchor sheet. */
 export const POSITIONED_TABLE_LAYOUT_BOTTOM_PT = Number.MAX_SAFE_INTEGER / 1024;
@@ -26,6 +28,27 @@ export function cachedRowHeights(
   };
 }
 
+/**
+ * The table deps a closing fragment is corrected and finalized with: its last row closes it
+ * (`closingRowDeps`), and an exact body row that opens it keeps its opening extension.
+ */
+export function fragmentCloseDeps(
+  structure: SemanticTableStructure,
+  rows: readonly TableRowFragmentRecord[],
+  sourceRows: readonly SemanticTableRow[],
+  tableDeps: TableFlowDeps
+): TableFlowDeps {
+  const last = sourceRows.at(-1);
+  if (!last || rows.at(-1)!.isContinuation) return tableDeps;
+  const closing = closingRowDeps(structure, last, tableDeps);
+  const first = rows[0]!;
+  const opening =
+    first.isHeaderRepeat || first.isContinuation
+      ? undefined
+      : firstRowContentDeps(structure, sourceRows[0]!, tableDeps).exactOpeningExtension;
+  return opening ? { ...closing, exactOpeningExtension: opening } : closing;
+}
+
 /** Correct only the complete terminal row; a split row keeps its consumed content. */
 export function refreshTerminalRow(
   structure: SemanticTableStructure,
@@ -47,7 +70,17 @@ export function refreshTerminalRow(
     ...currentDeps,
     cellContentInsets: occurrenceInsets.get(record) ?? currentDeps.cellContentInsets,
   };
-  const terminal = prepareTerminalBorderPlan(structure, source, left, record.box.y, bottom, deps);
+  // At the top of its page an exact row cannot move, so its closing rule crosses the margin.
+  const atPageTop =
+    record.box.y <= 0.001 || (index > 0 && rows.slice(0, index).every((row) => row.isHeaderRepeat));
+  const terminal = prepareTerminalBorderPlan(
+    structure,
+    source,
+    left,
+    record.box.y,
+    bottom + (atPageTop ? exactTerminalBorderPt(source, deps) : 0),
+    deps
+  );
   if (!terminal || !sameTerminalContent(record, terminal.probe)) return undefined;
   const corrected = {
     ...record,

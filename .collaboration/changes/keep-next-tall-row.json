@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A keep-with-next paragraph or kept row before a cantSplit row taller than a page stays beside earlier content, and authored header rows at the top of a page hold such a row beside them.",
+  "after": "That kept content moves to the next page once, and the row starts on the page after it. Only repeated header rows hold such a row on their page. In mode 15 the page where such a row starts after a move carries no header repeat.",
+  "reason": "Only body pagination changes. Canonical OOXML, source positions, operations, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-row-keep-tall-row.test.ts",
+    "packages/core/src/layout/__tests__/table-cantsplit-oversized.test.ts"
+  ],
+  "changeset": "keep-next-tall-row",
+  "migration": null
+}

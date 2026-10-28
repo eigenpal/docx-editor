@@ -826,3 +826,126 @@ describe('rows that take the row band but do not move', () => {
     expect(band.evictable).toBe(false);
   });
 });
+
+describe('a whole row taller than the page before mode 15', () => {
+  // Row 3 has w:cantSplit and 16 lines (224pt), so it stays whole on a fresh page and runs
+  // past the 170pt body (`tallRowStaysWhole`). No reserve can make room below it. The page
+  // keeps the first line of the first note the row references, at the page bottom over the
+  // row; the rest of that note and every later note continue on the next page.
+  const tall = (second: string) =>
+    rows(5, new Map(), (n, spec) =>
+      n === 3 ? { ...spec, trPr: '<w:cantSplit/>', first: para('R3a', 16), second } : spec
+    );
+  const notesOn = (layout: SemanticLayout, index: number) =>
+    (layout.pages[index]?.footnotes?.notes ?? []).map(
+      (note) => `${note.noteId}${note.continuation ? 'c' : ''}:${note.mark ?? '-'}`
+    );
+  const rowPage = (layout: SemanticLayout) =>
+    pages(layout).findIndex((text) => text.includes('R3a1'));
+
+  test('the first note keeps its first line; a later note opens on the next page', () => {
+    // Note 1 sits on the row's first line, note 2 on its fifteenth line, past the margin.
+    const second = cite('R3b', 1) + para('R3c', 13) + cite('R3d', 2);
+    for (const mode of [undefined, 14]) {
+      const laid = layoutProbe(
+        INTRO + tbl(tall(second)) + TAIL,
+        new Map([
+          [1, 3],
+          [2, 1],
+        ]),
+        undefined,
+        1,
+        mode
+      );
+      const at = rowPage(laid.layout);
+      expect(notesOn(laid.layout, at)).toEqual(['1:1']);
+      expect(noteLines(laid.layout, at, 1)).toBe(1);
+      // The note area sits at the page bottom, over the row that runs past it.
+      const page = laid.layout.pages[at]!;
+      const area = page.footnotes!;
+      expect(area.box.y + area.box.height).toBeCloseTo(
+        page.contentBox.y + page.contentBox.height,
+        3
+      );
+      expect(area.fallbackReason).toBeUndefined();
+      // Note 1 continues without a mark; note 2 opens with its own mark.
+      expect(notesOn(laid.layout, at + 1)).toEqual(['1c:-', '2:2']);
+      expect(noteLines(laid.layout, at + 1, 1)).toBe(2);
+      expect(laid.fixedPoint).toBe(true);
+    }
+  });
+
+  test('a row that ends past the margin below repeated header rows keeps no note line', () => {
+    // A 2-line header row (28pt) repeats above row 3: 11 lines (154pt) with w:cantSplit. The
+    // row fits a fresh page, but not below the repeat, and stays whole past the margin there
+    // (`repeatKeepsWholeRow`). It is not taller than the page, so its 3-line note moves whole,
+    // with its mark, to the next page.
+    const body = rows(5, new Map(), (n, spec) =>
+      n === 1
+        ? { ...spec, trPr: '<w:tblHeader/>', first: para('R1a', 2) }
+        : n === 3
+          ? {
+              ...spec,
+              trPr: '<w:cantSplit/>',
+              first: para('R3a', 11),
+              second: para('R3c', 4) + cite('R3d', 1),
+            }
+          : spec
+    );
+    const laid = layoutProbe(INTRO + tbl(body) + TAIL, new Map([[1, 3]]), undefined, 1, 14);
+    const at = rowPage(laid.layout);
+    const table = laid.layout.pages[at]!.fragments.find(
+      (f): f is TableFragmentRecord => f.kind === 'table'
+    )!;
+    expect(table.rows[0]?.isHeaderRepeat).toBe(true);
+    expect(bandOf(laid, 1).band.rowOverflowsPage).toBeUndefined();
+    // The row page has no footnote area; the next page opens the whole note with its mark.
+    expect(laid.layout.pages[at]!.footnotes).toBeUndefined();
+    expect(notesOn(laid.layout, at + 1)).toEqual(['1:1']);
+    expect(noteLines(laid.layout, at + 1, 1)).toBe(3);
+    expect(laid.fixedPoint).toBe(true);
+  });
+
+  test('a note carried from the page before keeps the row notes behind it', () => {
+    // Note 1 has 40 lines and continues for pages. The tall row opens page 2, where the
+    // carried rest of note 1 finds no room. Note 2 of the row must not start before note 1
+    // ends: it keeps no line on the row page and opens after note 1's last line.
+    const second = cite('R3b', 2) + para('R3c', 14);
+    const laid = layoutProbe(
+      cite('INTRO', 1) + tbl(tall(second)) + TAIL,
+      new Map([
+        [1, 40],
+        [2, 3],
+      ]),
+      undefined,
+      1,
+      14
+    );
+    const at = rowPage(laid.layout);
+    const opened = (id: number) =>
+      laid.layout.pages.findIndex((page) =>
+        (page.footnotes?.notes ?? []).some((n) => n.noteId === id && !n.continuation)
+      );
+    const lastOf = (id: number) =>
+      laid.layout.pages.findLastIndex((page) =>
+        (page.footnotes?.notes ?? []).some((n) => n.noteId === id)
+      );
+    expect(at).toBeGreaterThan(0);
+    // The row page paints no separator without notes, and note 2 opens, with its mark, only
+    // on the page where note 1 ends.
+    expect(laid.layout.pages[at]!.footnotes).toBeUndefined();
+    expect(opened(2)).toBe(lastOf(1));
+    expect(notesOn(laid.layout, opened(2))).toEqual(['1c:-', '2:2']);
+    expect(noteLines(laid.layout, opened(2), 2)).toBe(3);
+    expect(laid.fixedPoint).toBe(true);
+  });
+
+  test('a single note referenced past the bottom margin stays on the row page', () => {
+    const second = para('R3c', 14) + cite('R3d', 1);
+    const laid = layoutProbe(INTRO + tbl(tall(second)) + TAIL, new Map([[1, 1]]), undefined, 1, 14);
+    const at = rowPage(laid.layout);
+    expect(notesOn(laid.layout, at)).toEqual(['1:1']);
+    expect(notesOn(laid.layout, at + 1)).toEqual([]);
+    expect(laid.fixedPoint).toBe(true);
+  });
+});

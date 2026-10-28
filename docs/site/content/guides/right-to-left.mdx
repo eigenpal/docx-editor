@@ -173,6 +173,8 @@ A space inside a `w:rtl` run belongs to the RTL text. In a left-to-right paragra
 
 An inline picture reads in the direction of the text on both sides of it. Between text of different directions, or before the first text of a paragraph, it reads in the paragraph's direction. After the last text of a paragraph, it reads in the direction of that text. In an RTL paragraph, a picture before the text stands at the right, and a picture after left-to-right text stands to the right of that text.
 
+A right-to-left line beside a floating picture starts in the passage to the right of the picture and continues to the left of it. Each part aligns inside its own passage, and wrap sides and wrap distances keep their physical sides.
+
 Floating pictures, shapes, symbols (`w:sym`), and equations do not change the order of the text around them. Arabic letters on both sides of such an object stay joined to their own word.
 
 In a `w:rtl` run whose language is written in Arabic script, a slash between digits separates the numbers. For example, `17/08/96` reads `96/08/17`. In a Hebrew run, and in a run without `w:rtl`, the date stays one number.

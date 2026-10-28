@@ -10,6 +10,11 @@ import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-re
 /** The one fallback splitting itself can raise; the pagination reason union includes it. */
 type NoteSplitFallbackReason = 'note-line-exceeds-page';
 
+/** Where a note split records its fallback: structurally any list whose element type includes it. */
+export interface NoteSplitReasons {
+  push(reason: NoteSplitFallbackReason): unknown;
+}
+
 /**
  * Split one paragraph fragment at a line boundary so the head fits under `availableBottom`
  * (story-relative). Empty head means no line fits — caller must defer the fragment.
@@ -129,8 +134,7 @@ export function splitNoteFragments(
   availableHeight: number,
   options?: {
     readonly fullContentHeight?: number;
-    /** Structurally any list whose element type includes the split fallback. */
-    readonly reasons?: { push(reason: NoteSplitFallbackReason): unknown };
+    readonly reasons?: NoteSplitReasons;
   }
 ): {
   readonly head: readonly BlockFragmentRecord[];

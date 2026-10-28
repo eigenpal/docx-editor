@@ -1,3 +1,6 @@
+import { lineContentEdges, type PendingLine } from './pending-line.ts';
+import type { WrapBreakSpace } from './wrap-break-space.ts';
+
 /** A horizontal run of x a float leaves free on one line, in paragraph-local coordinates. */
 export interface WrapInterval {
   readonly start: number;
@@ -56,4 +59,30 @@ export function lineWrapPassages(
   return {
     wrapSegment: { start: contentStart, end: segment.end, ...(stepped ? { contentEnd } : {}) },
   };
+}
+
+/**
+ * Record on `line` the float passages it aligns inside, from the `intervals` its pen saw on
+ * this line. A line in a mirrored break space records them in that space and is marked
+ * `wrapMirrored`, so alignment can map each part back to its physical passage.
+ */
+export function recordLineWrapPassages(
+  line: PendingLine,
+  intervals: readonly WrapInterval[],
+  lineOrigin: number,
+  space: Pick<WrapBreakSpace, 'left' | 'right' | 'mirrored'>
+): void {
+  const penEnd = lineOrigin + line.width;
+  const edges = lineContentEdges(line.spans, line.drawings);
+  const contentStart = edges?.left ?? Math.max(space.left, lineOrigin);
+  const passages = lineWrapPassages(
+    intervals,
+    contentStart,
+    Math.min(penEnd, edges?.right ?? penEnd),
+    penEnd,
+    { start: space.left, end: space.right }
+  );
+  if (!passages) return;
+  Object.assign(line, passages);
+  if (space.mirrored) line.wrapMirrored = true;
 }

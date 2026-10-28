@@ -3109,11 +3109,9 @@ export type NoteKind = 'footnote' | 'endnote';
 
 // @public
 export interface NotePropertiesSide {
-    // (undocumented)
     readonly documentAuthored?: AuthoredNoteNumbering;
     // (undocumented)
     readonly resolved: ResolvedNoteNumbering;
-    // (undocumented)
     readonly sectionAuthored?: AuthoredNoteNumbering;
 }
 

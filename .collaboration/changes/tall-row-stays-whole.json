@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A text-only row that cannot split and is taller than a page starts on a fresh page and splits there in every compatibility mode.",
+  "after": "Before compatibility mode 15, such a row stays whole on its fresh page and runs past the bottom margin, and the next content starts on the following page. Mode 15 and later still split it.",
+  "reason": "Only local layout geometry changes. Canonical XML, replicated operations, and saved rooms remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-tall-row-stays-whole.test.ts",
+    "packages/core/src/layout/__tests__/table-cantsplit-oversized.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-exact-terminal-border.test.ts"
+  ],
+  "changeset": "tall-row-stays-whole",
+  "migration": null
+}

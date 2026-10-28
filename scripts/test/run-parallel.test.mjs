@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -46,6 +46,62 @@ test('fail-fast stops dispatch after the first failure; normal mode reports both
     expect(shard.status).toBe(1);
     expect(shard.stdout).not.toContain('FAIL packages/first.test.ts');
     expect(shard.stdout).toContain('FAIL packages/second.test.ts');
+
+    const excluded = run('--exclude', 'packages/first');
+    expect(excluded.status).toBe(1);
+    expect(excluded.stdout).toContain('Running 1 test files');
+    expect(excluded.stdout).not.toContain('FAIL packages/first.test.ts');
+    expect(excluded.stdout).toContain('FAIL packages/second.test.ts');
+
+    // Shards are assigned before exclusion, so shard 2/2 keeps its file.
+    const excludedShard = run('--shard', '2/2', '--exclude', 'packages/first');
+    expect(excludedShard.status).toBe(1);
+    expect(excludedShard.stdout).toContain('FAIL packages/second.test.ts');
+
+    // A balanced shard still runs its files, and --durations-out lists only what this run ran.
+    const out = join(root, 'durations-out.json');
+    const balanced = run('--balance', '--exclude', 'packages/first', '--durations-out', out);
+    expect(balanced.stdout).toContain('FAIL packages/second.test.ts');
+    expect(Object.keys(JSON.parse(readFileSync(out, 'utf8')))).toEqual(['packages/second.test.ts']);
+
+    // --retry-failed: a file that fails only on its first run passes and is reported as FLAKY;
+    // a file that fails every time still fails.
+    const marker = join(root, 'flaky-ran-once');
+    writeFileSync(
+      join(root, 'packages', 'flaky.test.ts'),
+      `import { test, expect } from 'bun:test';
+       import { existsSync, writeFileSync } from 'node:fs';
+       test('fails only on the first run', () => {
+         const first = !existsSync(${JSON.stringify(marker)});
+         writeFileSync(${JSON.stringify(marker)}, '');
+         expect(first).toBe(false);
+       });`
+    );
+    const retried = run(
+      '--retry-failed',
+      '--exclude',
+      'packages/first',
+      '--exclude',
+      'packages/second'
+    );
+    expect(retried.status).toBe(0);
+    expect(retried.stdout).toContain('FLAKY packages/flaky.test.ts');
+    const stillFailing = run('--retry-failed', '--exclude', 'packages/flaky');
+    expect(stillFailing.status).toBe(1);
+    expect(stillFailing.stdout).toContain('FAIL packages/first.test.ts');
+    rmSync(join(root, 'packages', 'flaky.test.ts'));
+
+    // --only runs just the listed files, never forwarding the paths to `bun test`.
+    const list = join(root, 'only.txt');
+    writeFileSync(list, 'packages/second.test.ts\n');
+    const onlyRun = run('--only', list);
+    expect(onlyRun.stdout).toContain('Running 1 test files');
+    expect(onlyRun.stdout).toContain('FAIL packages/second.test.ts');
+    expect(onlyRun.stdout).not.toContain('FAIL packages/first.test.ts');
+
+    const emptyExclude = run('--exclude=');
+    expect(emptyExclude.status).toBe(1);
+    expect(emptyExclude.stderr).toContain('non-empty path prefix');
 
     const invalid = run('--shard', '0/2');
     expect(invalid.status).toBe(1);

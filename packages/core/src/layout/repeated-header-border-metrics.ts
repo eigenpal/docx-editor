@@ -1,4 +1,4 @@
-import { firstRowContentDeps } from './table-fragment-content-insets.ts';
+import { firstRowContentDeps, repeatBoundaryBandPt } from './table-fragment-content-insets.ts';
 // A repeated header and its first complete body row share one measured boundary.
 // These insets belong to one page occurrence. The authored borders never change.
 
@@ -6,12 +6,12 @@ import { resolveTableCellBorderGrid, type ResolvedTableBorderEdge } from './tabl
 import {
   borderContentInset,
   cellContentInsets,
-  ownTopBandWidthPt,
   simpleBandWidthPt,
   type CellContentInsets,
 } from './table-cell-geometry.ts';
 import { canProbeBorderRows, hasTableMerge, physicalCells } from './table-border-probe.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
+import { repeatYieldsToClosingRule } from './table-terminal-border-plan.ts';
 import { readOnlyBreakCache } from './paragraph-cache-peek.ts';
 import { layoutRowFragment, type TableFlowDeps } from './semantic-table-layout.ts';
 import {
@@ -30,7 +30,8 @@ export interface RepeatedHeaderBorderPlan {
 }
 
 /**
- * Undefined retains the existing complex-row path. Null omits this repeat.
+ * Undefined retains the existing complex-row path. Null omits this repeat, also when the
+ * exact row that would end the page below it fits there only without its bottom rule.
  * A plan guarantees that the complete candidate fits before any live placement.
  */
 export function prepareRepeatedHeaderBorderPlan(
@@ -44,6 +45,8 @@ export function prepareRepeatedHeaderBorderPlan(
   baselineBodyHeight: number,
   deps: TableFlowDeps
 ): RepeatedHeaderBorderPlan | null | undefined {
+  if (repeatYieldsToClosingRule(structure, body, left, top + baselineHeaderHeight, bottom, deps))
+    return null;
   if (
     structure.cellSpacingPt > 0 ||
     structure.float ||
@@ -78,9 +81,8 @@ export function prepareRepeatedHeaderBorderPlan(
   )[0]!;
   const insets = new Map<string, CellContentInsets>();
   const intervals: { start: number; end: number; edge: ResolvedTableBorderEdge }[] = [];
-  // One shared boundary, charged by the captured band rule: the body row reserves its OWN
-  // top rule at full width and the header reserves nothing. Compound strokes keep their own
-  // extent geometry on both sides.
+  // One shared boundary, charged entirely to the body row: the header reserves nothing.
+  // Compound strokes keep their own extent geometry on both sides.
   for (let index = 0; index < headerCells.length; index += 1) {
     for (const segment of resolved[index]!.edgeSegments ?? []) {
       if (segment.side !== 'bottom') continue;
@@ -101,30 +103,16 @@ export function prepareRepeatedHeaderBorderPlan(
   // `canProbeBorderRows` already refused sparse ownership, so one header cell covers each
   // body column.
   let intervalIndex = 0;
-  // One boundary carries one content band: the widest reserve in the body row sets it.
-  let widestOwnPt = 0;
-  for (const cell of bodyCells)
-    for (const above of headerCells) {
-      if (above.gridColumn + above.gridSpan <= cell.gridColumn) continue;
-      if (above.gridColumn >= cell.gridColumn + cell.gridSpan) continue;
-      let band = 0;
-      for (const interval of intervals) {
-        if (interval.end <= above.gridColumn || interval.start >= above.gridColumn + above.gridSpan)
-          continue;
-        band = Math.max(band, simpleBandWidthPt(interval.edge));
-      }
-      widestOwnPt = Math.max(
-        widestOwnPt,
-        ownTopBandWidthPt(
-          cell.borders.top,
-          (cell.rowTableBorders ?? structure.tableBorders).insideH,
-          band,
-          true
-        )
-      );
-    }
+  // One boundary carries one content band: the widest reserve in the body row sets it. Before
+  // mode 15 the row meets the repeated header's bottom rule; from mode 15 it keeps the band
+  // of the row it was authored under. The ordinary repeat path applies the same rule.
+  const headerBand = repeatBoundaryBandPt(structure, body, deps);
+  let widestPt = headerBand ?? 0;
+  if (headerBand === undefined)
+    for (const cell of bodyCells)
+      widestPt = Math.max(widestPt, cellContentInsets(cell, true).top - cell.margins.top);
   for (const cell of bodyCells) {
-    let inset = cell.margins.top + widestOwnPt;
+    let inset = cell.margins.top + widestPt;
     const end = cell.gridColumn + cell.gridSpan;
     while (intervalIndex < intervals.length && intervals[intervalIndex]!.end <= cell.gridColumn)
       intervalIndex++;
