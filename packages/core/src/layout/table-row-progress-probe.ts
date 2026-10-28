@@ -5,7 +5,7 @@ import {
   type CellPlaceCursor,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
-import type { SemanticTableRow } from './semantic-table.ts';
+import type { SemanticTableRow, SemanticTableStructure } from './semantic-table.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 import { readOnlyBreakCache } from './paragraph-cache-peek.ts';
 
@@ -69,5 +69,37 @@ export function probeRowFragmentProgress(
         (cell, index) =>
           cell.vMergeContinue || row.cells[index]!.blocks.length === 0 || cell.blocks.length > 0
       ))
+  );
+}
+
+/**
+ * Whether the next fragment of a body row makes progress at `top` on a page that ends at
+ * `bottom`, without the row's page-start allowance. A new row that fits a page must start
+ * every cell there. A taller or continued row needs only one.
+ * @internal
+ */
+export function probeBodyRowStart(
+  structure: SemanticTableStructure,
+  row: SemanticTableRow,
+  left: number,
+  top: number,
+  bottom: number,
+  naturalHeight: number,
+  isContinuation: boolean,
+  deps: TableFlowDeps,
+  cursors: readonly CellPlaceCursor[]
+): boolean {
+  return probeRowFragmentProgress(
+    row,
+    structure.columnWidthsPt,
+    left,
+    top,
+    bottom,
+    isContinuation,
+    0,
+    { ...deps, rowAtPageStart: false },
+    cursors,
+    structure.cellSpacingPt,
+    { requireEveryCell: !isContinuation && naturalHeight <= bottom + 0.001 }
   );
 }

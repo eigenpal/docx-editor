@@ -33,7 +33,7 @@ import {
   type TerminalRowAt,
 } from './table-terminal-border-plan.ts';
 import { fragmentRowContentDeps } from './table-fragment-content-insets.ts';
-import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
+import { probeBodyRowStart, probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import { bottomToTopTextKeepsRowWhole } from './table-cell-text-direction.ts';
 import {
   headerGroupMoves,
@@ -507,7 +507,7 @@ export function* paginateTableInFlowSteps(
         (rows.length > 0 && rows.every((placed) => placed.isHeaderRepeat)),
     });
     // A plan refuses a body row that does not fit below the repeat. A row that overflows
-    // there instead (`overflowsBelowRepeat`) takes the ordinary repeat path.
+    // there instead takes the ordinary repeat path.
     prepareRepeat = () => {
       if (isContinuation) return undefined;
       const plan = prepareRepeatedHeaderBorderPlan(
@@ -521,7 +521,10 @@ export function* paginateTableInFlowSteps(
         baselineBodyHeight,
         tableDeps
       );
-      return plan === null && overflowsBelowRepeat() ? undefined : plan;
+      const below = flow.cursorY + headerGroupHeight;
+      return plan === null && (overflowsBelowRepeat() || startMissesBelowRepeat(below))
+        ? undefined
+        : plan;
     };
 
     // `w:cantSplit` keeps a row whole only when a page can hold it. The full band counts,
@@ -545,6 +548,30 @@ export function* paginateTableInFlowSteps(
     // page, and does not fit below them. The row then stays whole there and runs past the margin.
     const overflowsBelowRepeat = (top = flow.cursorY): boolean =>
       repeatKeepsWholeRow && pageHoldsRow() && (row.height.rule === 'exact' || keepsWholeAt(top));
+    const progressesAt = (top: number): boolean =>
+      probeBodyRowStart(
+        structure,
+        row,
+        tableLeft,
+        top,
+        contentHeight(),
+        naturalHeight,
+        isContinuation,
+        tableDeps,
+        cursors
+      );
+    // Before mode 15, repeated header rows also stay above a row that can split when the first
+    // line of a cell does not fit below them. The row then stays whole there, past the margin or
+    // the page edge. Cells ignore widow control in these modes (`tableParagraphWidowControl`).
+    const startMissesBelowRepeat = (top: number): boolean =>
+      repeatKeepsWholeRow &&
+      !isContinuation &&
+      naturalHeight > contentHeight() - top + 0.001 &&
+      vMerge === undefined &&
+      row.height.rule !== 'exact' &&
+      !keepsWholeAt(top) &&
+      row.cells.every((cell) => cell.blocks.every((block) => block.kind === 'paragraph')) &&
+      !progressesAt(top);
 
     // A row an accepted span covers below its head, a nested head row included, does not
     // take the whole-row MOVE: alone among the breaks below, that one is an optimization
@@ -581,21 +608,9 @@ export function* paginateTableInFlowSteps(
         // Before mode 15 the repeat stays, and the row runs past the margin below it.
         return !clearingFloat && overflowsBelowRepeat(bodyTop);
       }
-      return probeRowFragmentProgress(
-        row,
-        structure.columnWidthsPt,
-        tableLeft,
-        bodyTop,
-        pageBottom,
-        isContinuation,
-        0,
-        // The header is optional: first ask whether the paragraph can honor its
-        // widow rule below it. If not, omit the repeat and offer the full page.
-        { ...tableDeps, rowAtPageStart: false },
-        cursors,
-        structure.cellSpacingPt,
-        { requireEveryCell: !isContinuation && naturalHeight <= pageBottom + 0.001 }
-      );
+      // The header is optional: the probe asks whether the paragraph can honor its widow rule
+      // below it. If not, omit the repeat and offer the full page.
+      return progressesAt(bodyTop) || (!clearingFloat && startMissesBelowRepeat(bodyTop));
     };
 
     if (clearance) {
@@ -822,7 +837,8 @@ export function* paginateTableInFlowSteps(
       // was made and lost an iteration ago. Re-taking it here reaches the throw below with
       // `cursorY === 0` — a fresh page the row was just moved to — and aborts a layout
       // nothing in `core` catches, on a path the module comment calls a recovery.
-      if (!isContinuation && (row.cantSplit || row.height.rule === 'exact')) {
+      const splitStartMisses = onlyRepeatedHeaderRows(rows) && startMissesBelowRepeat(flow.cursorY);
+      if (!isContinuation && (row.cantSplit || row.height.rule === 'exact' || splitStartMisses)) {
         // No page holds this row. Before mode 15 it stays whole on its fresh page and runs past
         // the bottom margin (`tallRowStaysWhole`); later modes split it there.
         const tall = row.height.rule !== 'exact' && !pageHoldsRow();
@@ -858,7 +874,7 @@ export function* paginateTableInFlowSteps(
         // An exact row no band holds fills the rest of this one (`table-exact-row-clip.ts`).
         // A row kept below repeated headers only runs past the margin (`overflowsBelowRepeat`).
         const offer =
-          (belowRepeatsOnly && overflowsBelowRepeat()) || staysWhole
+          (belowRepeatsOnly && overflowsBelowRepeat()) || staysWhole || splitStartMisses
             ? { row, band: POSITIONED_TABLE_LAYOUT_BOTTOM_PT }
             : fullBand > contentHeight() + 0.001 && naturalHeight <= fullBand - flow.cursorY + 0.001
               ? { row, band: fullBand }
@@ -889,7 +905,7 @@ export function* paginateTableInFlowSteps(
         // `w:cantSplit` cannot keep a row whole when no page can hold it. The row is now
         // on a fresh page or below header rows only, so it splits from here like an
         // ordinary row instead of discarding the document. An exact height cannot split.
-        if (!splitsAnyway) throw overheightRowError(row);
+        if (!splitsAnyway && !splitStartMisses) throw overheightRowError(row);
       }
 
       const part = cutPart(structure, row, rowDeps(), contentHeight(), isContinuation, pinnedBreak);

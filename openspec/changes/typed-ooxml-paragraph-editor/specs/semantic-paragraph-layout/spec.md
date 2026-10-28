@@ -735,6 +735,15 @@ Semantic layout SHALL place a supported terminal exact row's simple bottom rule 
 - **THEN** the page of the row keeps no line of the footnotes that the row references
 - **AND** each of those footnotes starts on the next page with its own mark
 
+#### Scenario: A repeated header stays above a splittable row whose first line does not fit
+
+- **WHEN** compatibility mode is 14 or earlier, or absent
+- **AND** the next row on a continuation page can split, holds only paragraphs, and has no vertical merge
+- **AND** the first line of one of its cells does not fit below the repeated header rows
+- **THEN** the header rows repeat, and the row stays whole below them and runs past the bottom margin, or past the bottom edge of the page
+- **AND** the content after the row starts on the next page
+- **AND** in compatibility mode 15 and later the repeat is omitted and the row starts the page
+
 #### Scenario: A tall row splits before mode 15 outside the text-only case
 
 - **WHEN** compatibility mode is 14 or earlier, or absent

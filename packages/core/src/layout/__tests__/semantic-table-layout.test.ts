@@ -808,7 +808,8 @@ describe('table row pagination (tiny page)', () => {
       '<w:trPr><w:tblHeader/><w:trHeight w:val="1350" w:hRule="exact"/></w:trPr>'
     );
     const part = loadPart(`<w:tbl>${header}${tr(tc(p('body')))}</w:tbl>`);
-    const result = layoutTiny(part);
+    // Mode 15: before it the repeat stays (`table-repeat-splittable-row.test.ts`).
+    const result = layoutTiny(part, undefined, 15);
     assertNoContentOverflow(result);
     expect(result.pages).toHaveLength(2);
     const rows = allTableFragments(result).flatMap((fragment) => fragment.rows);

@@ -4,7 +4,7 @@ import { layoutSemanticDocument, linesOf } from '../index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const paragraph = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
-function layout(rowProperties = '', header = false, extraCell = '') {
+function layout(rowProperties = '', header = false, extraCell = '', compatibilityMode?: number) {
   const row = (content: string, properties = '') =>
     `<w:tr><w:trPr>${properties}</w:trPr><w:tc>${content}</w:tc>${properties.includes('tblHeader') ? '' : extraCell}</w:tr>`;
   const xml = `<w:document xmlns:w="${W}"><w:body>${paragraph('prefix 1')}${paragraph('prefix 2')}${paragraph('prefix 3')}
@@ -21,6 +21,7 @@ function layout(rowProperties = '', header = false, extraCell = '') {
       measure: (text) => text.length * 4,
       lineMetrics: () => ({ height: 10, baseline: 8 }),
     },
+    compatibilityMode,
   });
   expect(serializeOoxmlPart(parsed.part)).toBe(before);
   return result;
@@ -103,15 +104,24 @@ test('a row moves when the remaining band cannot start every cell', () => {
   ]);
 });
 
+const tallCell =
+  '<w:tc><w:p><w:pPr><w:spacing w:line="1300" w:lineRule="exact"/></w:pPr><w:r><w:t>Tall</w:t></w:r></w:p></w:tc>';
+
 test('a repeated header is omitted when it prevents one cell from starting', () => {
-  const result = layout(
-    '',
-    true,
-    '<w:tc><w:p><w:pPr><w:spacing w:line="1300" w:lineRule="exact"/></w:pPr><w:r><w:t>Tall</w:t></w:r></w:p></w:tc>'
-  );
+  const result = layout('', true, tallCell, 15);
   expect(result.pages).toHaveLength(2);
   const rows = result.pages[1]!.fragments.flatMap((f) => (f.kind === 'table' ? f.rows : []));
   expect(rows).toHaveLength(1);
   expect(rows[0]!.isHeaderRepeat).not.toBe(true);
   expect(rows[0]!.cells.every((cell) => cell.blocks.length > 0)).toBe(true);
+});
+
+test('before mode 15, a repeated header stays when it prevents one cell from starting', () => {
+  const result = layout('', true, tallCell, 14);
+  expect(result.pages).toHaveLength(2);
+  const rows = result.pages[1]!.fragments.flatMap((f) => (f.kind === 'table' ? f.rows : []));
+  expect(rows.map((row) => row.isHeaderRepeat === true)).toEqual([true, false]);
+  // The whole row sits below the 10pt repeat: its 65pt line ends past the 70pt page.
+  expect(rows[1]!.hasContinuation).toBeFalsy();
+  expect(rows[1]!.box.y + rows[1]!.box.height).toBeGreaterThan(70);
 });
