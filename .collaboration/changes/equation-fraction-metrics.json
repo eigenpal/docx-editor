@@ -2,7 +2,7 @@
   "impact": "no-impact",
   "fields": [],
   "before": "A fraction placed its parts with fixed em gaps and padding, below a rule 0.22 em under its centre.",
-  "after": "A fraction centres its rule on the math axis and places its parts by the math constants of the default math face.",
+  "after": "An inline fraction centres its rule on the math axis and places its parts by the math constants of the default math face. A display fraction keeps the padded placement.",
   "reason": "Only local equation geometry changes. Canonical OMML, offsets, operations, and collaboration data remain unchanged.",
   "tests": [
     "packages/core/src/layout/__tests__/equation-fraction-metrics.test.ts",

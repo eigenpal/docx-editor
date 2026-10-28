@@ -44,6 +44,8 @@ const RELATION_RANGES: readonly (readonly [number, number])[] = [
   [0x2900, 0x297f],
 ];
 
+// The dagger and double dagger (U+2020, U+2021) are relations in the Unicode math class data
+// (MathClass.txt), so they take relation spacing.
 const RELATIONS = new Set([0x3c, 0x3d, 0x3e, 0x2020, 0x2021]);
 const BINARY_OPERATORS = new Set([
   0x2a, 0x2b, 0x2d, 0xb1, 0xb7, 0xd7, 0xf7, 0x2212, 0x2213, 0x2214, 0x2215, 0x2216, 0x2217, 0x2218,

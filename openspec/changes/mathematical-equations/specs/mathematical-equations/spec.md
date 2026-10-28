@@ -56,11 +56,18 @@ The engine SHALL publish equation geometry from DOM-free layout. Paint SHALL use
 
 #### Scenario: Fraction placement
 
-- **WHEN** an equation contains an inline `m:f` bar fraction
+- **WHEN** an inline equation (`m:oMath`) contains an `m:f` bar fraction
 - **THEN** the rule strokes 133/2048 em of the fraction size and centres on the math axis, 585/2048 em above the baseline
 - **AND** the numerator baseline rises at least 1200/2048 em, and further to keep a 133/2048 em gap between its ink and the rule
 - **AND** the denominator baseline drops at least 1030/2048 em, and further to keep a 133/2048 em gap between the rule and its ink
 - **AND** the fraction is as wide as its wider part, and its text parts reach the typographic ascender and descender of the math face
+
+#### Scenario: Display fraction placement
+
+- **WHEN** a display equation (`m:oMathPara`) contains an `m:f` bar fraction
+- **THEN** its parts draw at the inline part size, with their full font boxes
+- **AND** the rule strokes 0.055 em of the fraction size, inset 0.04 em on each side, with a 0.08 em gap above and below it
+- **AND** the fraction is as wide as its wider part plus 0.08 em on each side
 
 #### Scenario: Run language
 
