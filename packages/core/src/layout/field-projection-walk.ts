@@ -24,6 +24,7 @@ import {
   type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
 import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../store/package/ooxml-shared.ts';
+import { isOmmlDisplay, soleParagraphEquation } from '../store/package/omml-display.ts';
 import {
   consumeScanNode,
   createFieldParseState,
@@ -140,6 +141,7 @@ export function unmergedPiecesOfParagraphForDisplay(
 
   const spans = fieldProjectionSpansOf(paragraph);
   const { atomBeginIds, editableResultBeginIds, coveredIds } = spans;
+  const soleEquation = soleParagraphEquation(paragraph); // Alone, it is a display equation.
 
   const field = createFieldParseState();
   const budget = createScanBudget();
@@ -927,7 +929,8 @@ export function unmergedPiecesOfParagraphForDisplay(
       if (revisionsAreDeletion(revisions) && deletedRanges)
         appendModelRange(deletedRanges, start, offset);
       const text = resolveRunStyle(inheritedRunProperties, themeFonts);
-      const { style, extras: atom } = equationAtom(child, equation, text);
+      const display = isOmmlDisplay(child) || soleEquation;
+      const { style, extras: atom } = equationAtom(equation, text, display);
       if (!style.hidden && !revisionsVisible(revisions, displayMode, authorFilter)) {
         recordRemoved(start, offset, revisions);
       }

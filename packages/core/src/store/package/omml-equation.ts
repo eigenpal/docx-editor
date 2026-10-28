@@ -139,7 +139,8 @@ export type EquationExpression =
       /**
        * Where the limits sit, from `m:limLoc`: `undOvr` below and above the operator, `subSup`
        * to its right as a subscript and superscript. Not set when the source names none.
-       * Inline equations place the limits to the right either way.
+       * Inline equations place the limits to the right either way. An `m:oMath` alone in its
+       * paragraph is a display equation, as an `m:oMathPara` is, and follows this location.
        */
       readonly limitLocation?: 'undOvr' | 'subSup';
     } & EquationControlSource)

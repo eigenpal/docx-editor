@@ -85,18 +85,18 @@ function isEmptyRun(node: OoxmlNode): boolean {
 }
 
 /**
- * The physical justification of a paragraph whose only visible content is display math.
- * `m:oMathParaPr/m:jc` sets it; the default `centerGroup` centers the display. Returns null
- * when the paragraph also holds text or other content, which keeps the paragraph `w:jc`.
+ * The one equation atom (`m:oMath` or `m:oMathPara`) that is the only visible content of
+ * `paragraph`, or null when the paragraph holds text, other content, or more than one
+ * equation. Properties, empty runs, and bookmarks are not visible content.
  */
-export function displayMathAlignment(paragraph: {
+function soleEquationAtom(paragraph: {
   readonly children: readonly OoxmlNode[];
-}): 'left' | 'center' | 'right' | null {
-  let display: OoxmlGenericElementNode | null = null;
+}): OoxmlGenericElementNode | null {
+  let atom: OoxmlGenericElementNode | null = null;
   for (const child of paragraph.children) {
-    if (isOmmlDisplay(child)) {
-      if (display !== null) return null;
-      display = child;
+    if (isOmmlEquationAtom(child)) {
+      if (atom !== null) return null;
+      atom = child;
       continue;
     }
     if (child.kind === 'textValue') continue;
@@ -104,7 +104,30 @@ export function displayMathAlignment(paragraph: {
     if (child.kind === 'bookmarkStart' || child.kind === 'bookmarkEnd') continue;
     return null;
   }
-  if (display === null) return null;
+  return atom;
+}
+
+/**
+ * True when the only visible content of `paragraph` is one equation. Such an equation is a
+ * display equation even as a bare `m:oMath` without `m:oMathPara`: its n-ary operators
+ * enlarge and follow the display limit rule, and its fractions take the display placement.
+ */
+export function soleParagraphEquation(paragraph: {
+  readonly children: readonly OoxmlNode[];
+}): boolean {
+  return soleEquationAtom(paragraph) !== null;
+}
+
+/**
+ * The physical justification of a paragraph whose only visible content is display math.
+ * `m:oMathParaPr/m:jc` sets it; the default `centerGroup` centers the display. Returns null
+ * when the paragraph also holds text or other content, which keeps the paragraph `w:jc`.
+ */
+export function displayMathAlignment(paragraph: {
+  readonly children: readonly OoxmlNode[];
+}): 'left' | 'center' | 'right' | null {
+  const display = soleEquationAtom(paragraph);
+  if (display === null || !isOmmlDisplay(display)) return null;
   const properties = display.children.find((child) => isMath(child, 'oMathParaPr'));
   const jc =
     properties && isMath(properties, 'oMathParaPr')

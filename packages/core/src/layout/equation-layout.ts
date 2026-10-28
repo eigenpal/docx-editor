@@ -807,6 +807,8 @@ function layoutExpression(
 /** The style of the text around the equation, which normal text without a run font uses. */
 function surroundingTextStyle(style: ResolvedRunStyle, input: EquationLayoutInput) {
   const family = input.textFontFamily;
+  // Layout pieces always set `textFontFamily`. Only direct `layoutEquation` and
+  // `createEquationLayouter` callers omit it; they get the face the math style came from.
   if (family === undefined) return equationTextStyles.get(style) ?? style;
   return family === null
     ? Object.freeze({ ...style, fontFamily: null })

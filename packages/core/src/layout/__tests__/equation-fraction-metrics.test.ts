@@ -144,8 +144,14 @@ test('keeps the padded placement for a fraction in a display equation', () => {
   expect(display.denominator.box.y).toBeCloseTo(part.height + 1.92 + 1.32 + 1.92, 9);
   expect(display.box.height).toBeCloseTo(2 * part.height + 1.92 + 1.32 + 1.92, 9);
   expect(display.baseline).toBeCloseTo(part.height + 1.92 + 0.66 + 24 * 0.22, 9);
-  // The same fraction inline takes the typographic placement.
-  const inline = stack(layoutInParagraph(`<m:oMath>${fraction(run('2'), run('3'))}</m:oMath>`));
+  // An equation alone in its paragraph is a display equation without m:oMathPara too.
+  expect(stack(layoutInParagraph(`<m:oMath>${fraction(run('2'), run('3'))}</m:oMath>`))).toEqual(
+    display
+  );
+  // The same fraction after text is inline and takes the typographic placement.
+  const inline = stack(
+    layoutInParagraph(`<w:r><w:t>A</w:t></w:r><m:oMath>${fraction(run('2'), run('3'))}</m:oMath>`)
+  );
   expect(inline.bar.height).toBeCloseTo(em(133) * 24, 9);
   expect(inline.box.width).toBeCloseTo(part.width, 9);
 });

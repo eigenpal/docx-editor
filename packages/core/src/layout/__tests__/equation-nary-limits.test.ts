@@ -56,9 +56,14 @@ function inline(body: string): EquationGeometry {
 
 /** The equation of a display paragraph, laid out in full. */
 function display(body: string): EquationGeometry {
+  return inParagraph(`<m:oMathPara><m:oMath>${body}</m:oMath></m:oMathPara>`);
+}
+
+/** The equation of a one-paragraph document with the content `content`, laid out in full. */
+function inParagraph(content: string): EquationGeometry {
   const read = readOoxmlPart(
     `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:m="${OFFICE_MATH_NAMESPACE_URI}"><w:body>` +
-      `<w:p><m:oMathPara><m:oMath>${body}</m:oMath></m:oMathPara></w:p></w:body></w:document>`,
+      `<w:p>${content}</w:p></w:body></w:document>`,
     { name: '/word/document.xml', contentType: 'app/xml' }
   );
   if (!read.ok) throw new Error(read.reason);
@@ -139,6 +144,29 @@ test('display limits follow m:limLoc, and without it sit beside integrals only',
   expect(stacked.lowerLimit!.box.y).toBeGreaterThanOrEqual(
     stacked.operator.box.y + stacked.operator.box.height
   );
+});
+
+test('a bare m:oMath alone in its paragraph is a display equation', () => {
+  // No m:oMathPara: the paragraph holds the equation and nothing else that is visible.
+  const alone = inParagraph(
+    `<w:pPr/><w:bookmarkStart w:id="0" w:name="b"/><m:oMath>${nary('∑')}</m:oMath>`
+  );
+  expect(beside(alone)).toBe(false);
+  expect(operatorOf(alone).operator.fontSizePt).toBe(30);
+  expect(alone).toEqual(display(nary('∑')));
+  expect(beside(inParagraph(`<m:oMath>${nary('∫')}</m:oMath>`))).toBe(true);
+});
+
+test('a bare m:oMath beside text keeps its limits beside the operator', () => {
+  for (const content of [
+    `<w:r><w:t>A</w:t></w:r><m:oMath>${nary('∑')}</m:oMath>`,
+    `<m:oMath>${nary('∑')}</m:oMath><w:r><w:t>A</w:t></w:r>`,
+    `<m:oMath>${nary('∑')}</m:oMath><m:oMath>${run('y')}</m:oMath>`,
+  ]) {
+    const geometry = inParagraph(content);
+    expect(beside(geometry)).toBe(true);
+    expect(operatorOf(geometry).operator.fontSizePt).toBe(24);
+  }
 });
 
 test('an n-ary with m:limLoc subSup projects its location and keeps its source', () => {

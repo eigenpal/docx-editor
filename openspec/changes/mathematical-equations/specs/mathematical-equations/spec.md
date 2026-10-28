@@ -35,9 +35,10 @@ The engine SHALL publish equation geometry from DOM-free layout. Paint SHALL use
 
 #### Scenario: N-ary limit location
 
-- **WHEN** an inline equation (`m:oMath`) contains an `m:nary` with limits
+- **WHEN** an inline equation (`m:oMath` beside other visible content of its paragraph) contains an `m:nary` with limits
 - **THEN** the operator draws at its run size, and the limits sit to its right with the subscript and superscript offsets of an `m:sSubSup`, whatever `m:limLoc` says
 - **AND** in a display equation (`m:oMathPara`) the limits follow `m:limLoc`, and without it sit beside an integral and below and above other operators
+- **AND** an `m:oMath` that is the only visible content of its paragraph is a display equation, so its operator draws enlarged with display limits and its fractions take the display placement
 - **AND** an `m:limLoc` of `subSup` projects as math, keeps its source on save, and refuses compact replacement
 
 #### Scenario: Script size and placement
