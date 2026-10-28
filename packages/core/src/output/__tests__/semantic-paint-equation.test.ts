@@ -136,3 +136,44 @@ test('draws the spaced atoms of one run as one span at the laid-out positions', 
     expect(margin).toBeCloseTo(gaps.filter((gap) => gap > 0)[index]!, 6)
   );
 });
+
+test('draws each atom after the first as an inline-block so no shaping crosses an atom join', () => {
+  const { container, layout } = layoutAndPaint(
+    '<w:p><m:oMath><m:r><m:t>f(x),y</m:t></m:r></m:oMath></w:p>'
+  );
+  const geometry = linesOf(layout)[0]!.spans.find((span) => span.equation)!.equation!.geometry;
+  if (geometry.kind !== 'row') throw new Error('expected a row');
+  const atoms = geometry.items;
+  expect(atoms.map((atom) => (atom.kind === 'text' ? atom.text : atom.kind))).toEqual([
+    '𝑓',
+    '(',
+    '𝑥',
+    ')',
+    ',',
+    '𝑦',
+  ]);
+  const spans = Array.from(container.querySelectorAll<HTMLElement>('.docx-equation-text'));
+  expect(spans).toHaveLength(1);
+  const span = spans[0]!;
+  // The first atom is the run's own text; every later atom is an atomic inline of its own.
+  expect(span.firstChild?.nodeType).toBe(3);
+  expect(span.firstChild?.textContent).toBe('𝑓');
+  const children = Array.from(span.children) as HTMLElement[];
+  expect(span.childNodes).toHaveLength(atoms.length);
+  expect(children).toHaveLength(atoms.length - 1);
+  expect(children.map((child) => child.textContent)).toEqual(['(', '𝑥', ')', ',', '𝑦']);
+  for (const child of children) {
+    expect(child.style.display).toBe('inline-block');
+    // The face comes from the run span, so a child sets no face of its own.
+    expect(child.style.fontFamily).toBe('');
+    expect(child.style.fontSize).toBe('');
+  }
+  // Only a positive gap becomes a start margin.
+  children.forEach((child, index) => {
+    const previous = atoms[index]!;
+    const gap = atoms[index + 1]!.box.x - (previous.box.x + previous.box.width);
+    if (gap > 1e-9) expect(Number.parseFloat(child.style.marginLeft)).toBeCloseTo(gap, 6);
+    else expect(child.style.marginLeft).toBe('');
+  });
+  expect(children.some((child) => child.style.marginLeft === '')).toBe(true);
+});

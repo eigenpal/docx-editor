@@ -66,6 +66,7 @@ function continuesTextRun(previous: EquationGeometry, next: EquationGeometry): b
     previous.box.y === next.box.y &&
     previous.box.height === next.box.height &&
     previous.baseline === next.baseline &&
+    // A negative gap (an overlap) cannot be a margin, so it ends the run.
     next.box.x >= previous.box.x + previous.box.width - 1e-9
   );
 }
@@ -79,8 +80,8 @@ function textRunAt(items: readonly EquationGeometry[], start: number): number {
 
 /**
  * Draw the text atoms of one source run as one span. Operator spacing splits a run into
- * atoms at their own positions; only an atom with a gap before it takes its own inline span,
- * with the gap as its start margin. The geometry stays as layout placed it.
+ * atoms at their own positions; each atom after the first takes its own inline-block, so no
+ * shaping or kerning crosses an atom join. A positive gap before an atom is its start margin.
  */
 function paintTextRun(
   document: Document,
@@ -118,15 +119,17 @@ function paintTextRun(
   element.style.fontSize = `${first.fontSizePt * scale}px`;
   element.style.lineHeight = `${first.box.height * scale}px`;
   element.style.whiteSpace = 'pre';
-  let end = first.box.x;
-  for (const atom of atoms as readonly EquationTextGeometry[]) {
+  element.append(document.createTextNode(first.text));
+  let end = first.box.x + first.box.width;
+  for (const atom of atoms.slice(1) as readonly EquationTextGeometry[]) {
+    // An inline-block is an atomic inline, so the browser shapes and kerns each atom alone,
+    // as layout measured it. The face is inherited from the run span.
+    const child = document.createElement('span');
+    child.style.display = 'inline-block';
     const gap = atom.box.x - end;
-    if (gap > 1e-9) {
-      const spaced = document.createElement('span');
-      spaced.style.marginLeft = `${gap * scale}px`;
-      spaced.textContent = atom.text;
-      element.append(spaced);
-    } else element.append(document.createTextNode(atom.text));
+    if (gap > 1e-9) child.style.marginLeft = `${gap * scale}px`;
+    child.textContent = atom.text;
+    element.append(child);
     end = atom.box.x + atom.box.width;
   }
   host.append(element);
