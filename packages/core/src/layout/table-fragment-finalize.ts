@@ -8,6 +8,7 @@
 // because a row cannot know its merged neighbour's box until every row of the span is down.
 
 import { shiftInlineDrawingRecord } from './drawing-layout.ts';
+import { exactOpeningExtensionPt, exactTerminalBorderPt } from './table-exact-terminal-border.ts';
 import { rememberMovableCopy } from './table-row-geometry-reuse.ts';
 import { relayOutMergedBottomToTop } from './table-cell-text-direction.ts';
 import { republishAnchoredParagraphsInBlocks } from './table-anchor-republish.ts';
@@ -204,6 +205,24 @@ export function finalizeTableRows(
               height = last.box.y + last.box.height - cell.box.y;
             }
             const authored = authoredById.get(cell.id);
+            const terminalIndex = rowIndex + span - 1;
+            const terminalSource = sourceRows[terminalIndex];
+            const terminalRow = rows[terminalIndex]!;
+            const terminalHeight = terminalSource?.height;
+            const terminalBudget =
+              anchorDeps &&
+              terminalSource &&
+              !terminalRow.isHeaderRepeat &&
+              !terminalRow.isContinuation &&
+              terminalHeight?.rule === 'exact' &&
+              Math.abs(
+                terminalRow.box.height -
+                  (terminalHeight.valuePt +
+                    exactOpeningExtensionPt(terminalSource, anchorDeps) +
+                    exactTerminalBorderPt(terminalSource, anchorDeps))
+              ) < 0.001
+                ? exactTerminalBorderPt(terminalSource, anchorDeps)
+                : 0;
             // A merged `btLr` head lays its text along the rows its merge covers in this fragment.
             let blocks =
               (span > 1 && relayOutMergedBottomToTop(cell.blocks, height)) || cell.blocks;
@@ -223,7 +242,10 @@ export function finalizeTableRows(
                 const available =
                   (vertical
                     ? cell.box.width - insets.left - insets.right
-                    : height - insets.top - insets.bottom) -
+                    : height -
+                      terminalBudget -
+                      insets.top -
+                      (terminalBudget > 0 ? authored.margins.bottom : insets.bottom)) -
                   (contentBottom - contentTop);
                 // Reset any per-row shift by measuring from cell top + inset.
                 const desiredTop =

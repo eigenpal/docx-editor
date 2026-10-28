@@ -9,7 +9,7 @@ import './dom-setup.ts';
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
-import { zipSync, strToU8 } from 'fflate';
+import { zipSync, strToU8, strFromU8, unzipSync } from 'fflate';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
@@ -26,7 +26,7 @@ const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
-function footnoteDoc(noteText = 'Note text'): Uint8Array {
+function footnoteDoc(noteText = 'Note text', settings?: string): Uint8Array {
   const body =
     `<w:p><w:r><w:t>Body</w:t></w:r>` +
     `<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr>` +
@@ -41,14 +41,24 @@ function footnoteDoc(noteText = 'Note text'): Uint8Array {
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
         '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+        (settings === undefined
+          ? ''
+          : '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>') +
         '</Types>'
     ),
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
     ),
     'word/_rels/document.xml.rels': strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/>` +
+        (settings === undefined
+          ? ''
+          : `<Relationship Id="rIdSet" Type="${R}/settings" Target="settings.xml"/>`) +
+        '</Relationships>'
     ),
+    ...(settings === undefined
+      ? {}
+      : { 'word/settings.xml': strToU8(`<w:settings xmlns:w="${W}">${settings}</w:settings>`) }),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}<w:sectPr/></w:body></w:document>`
     ),
@@ -437,6 +447,41 @@ describe('DocxEditor.NotesChrome', () => {
     ).toBe(true);
   });
 
+  test('properties dialog marks values inherited unless the section authors them', async () => {
+    // settings.xml numbering does not apply, so it does not count as an authored value.
+    const { view, editor } = mountChrome(
+      footnoteDoc('Note text', '<w:footnotePr><w:numFmt w:val="chicago"/></w:footnotePr>')
+    );
+    await enterFootnote(editor());
+    await act(async () => {
+      fireEvent.click(view.getByTestId('docx-notes-options'));
+    });
+    await act(async () => {
+      fireEvent.click(view.getByTestId('docx-notes-properties'));
+    });
+    const dialog = view.getByTestId('docx-notes-properties-dialog');
+    expect(dialog.querySelectorAll('.docx-note-properties__badge')).toHaveLength(2);
+    expect(editor().getNotePropertiesState()!.footnote.resolved.numFmt).toBe('decimal');
+  });
+
+  test('properties dialog Apply with nothing changed leaves the document as it was', async () => {
+    const { view, editor } = mountChrome(footnoteDoc());
+    const before = unzipSync(new Uint8Array(await editor().save()));
+    await enterFootnote(editor());
+    await act(async () => {
+      fireEvent.click(view.getByTestId('docx-notes-options'));
+    });
+    await act(async () => {
+      fireEvent.click(view.getByTestId('docx-notes-properties'));
+    });
+    await act(async () => {
+      fireEvent.click(view.getByTestId('docx-notes-properties-apply'));
+    });
+    const after = unzipSync(new Uint8Array(await editor().save()));
+    expect(strFromU8(after['word/document.xml']!)).toBe(strFromU8(before['word/document.xml']!));
+    expect(after['word/settings.xml']).toBeUndefined();
+  });
+
   test('engine refuses endnote pageBottom for setNoteProperties', () => {
     const { editor } = mountChrome(footnoteDoc());
     const refused = editor().can({
@@ -466,7 +511,7 @@ describe('DocxEditor.NotesChrome', () => {
     expect(first).toBe(second);
   });
 
-  test('useNotePropertiesState updates when documentAuthored appears with same resolved values', async () => {
+  test('useNotePropertiesState updates when documentAuthored appears', async () => {
     const { editor } = mountChrome(footnoteDoc(), <PropertiesProbe />);
     const first = (globalThis as unknown as { __notePropsProbe?: NotePropertiesState | null })
       .__notePropsProbe;
@@ -477,15 +522,15 @@ describe('DocxEditor.NotesChrome', () => {
       editor().exec({
         type: 'setNoteProperties',
         scope: 'document',
-        footnote: { numFmt: 'decimal' },
+        footnote: { numFmt: 'upperRoman' },
       });
     });
 
     const second = (globalThis as unknown as { __notePropsProbe?: NotePropertiesState | null })
       .__notePropsProbe;
     expect(second).not.toBe(first);
-    expect(second!.footnote.documentAuthored?.numFmt).toBe('decimal');
-    expect(second!.footnote.resolved.numFmt).toBe('decimal');
+    expect(second!.footnote.documentAuthored?.numFmt).toBe('upperRoman');
+    expect(second!.footnote.resolved.numFmt).toBe('upperRoman');
   });
 
   test('useNotePropertiesState updates when resolved numStart changes', async () => {

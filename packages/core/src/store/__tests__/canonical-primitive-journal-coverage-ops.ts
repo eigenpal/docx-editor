@@ -636,7 +636,8 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
     lifecycle('setNoteProperties', plainDoc(), () => ({
       op: 'setNoteProperties',
       scope: 'document',
-      footnote: { numFmt: 'decimal' },
+      // A default value is not written where nothing authors it, so name another format.
+      footnote: { numFmt: 'lowerRoman' },
     })),
     story('setContentControlProperties', zipDoc({ body: SDT }), (store) => ({
       op: 'setContentControlProperties',

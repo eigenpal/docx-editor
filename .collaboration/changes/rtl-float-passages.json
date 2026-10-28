@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Right-to-left lines beside a floating object filled the passage to the left of the object first and aligned across the object.",
+  "after": "Right-to-left lines fill the passage to the right of the object first and align each part inside its own passage. Carets and remote cursors follow the new geometry.",
+  "reason": "Only layout geometry changes. Source ranges, canonical OOXML, operations, awareness positions, and collaboration formats remain unchanged; each peer derives the same geometry from the same tree.",
+  "tests": [
+    "packages/core/src/layout/__tests__/rtl-float-passages.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-rtl-float-passages.test.ts"
+  ],
+  "changeset": "rtl-float-passages",
+  "migration": null
+}

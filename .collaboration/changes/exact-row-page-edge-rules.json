@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A supported exact row that ends a page fragment draws the table bottom rule inside its authored height, and a supported exact row that opens a continuation fragment draws the table top rule inside its authored height.",
+  "after": "A supported exact row that ends a page fragment places the table bottom rule below its authored height and moves when that rule does not fit, unless it starts the page. In compatibility mode 15 and later, repeated header rows that leave no room for that rule are omitted. A supported exact row that opens a continuation fragment grows above its authored height by the part of the top rule that is wider than its inside rule.",
+  "reason": "Only local layout and paint geometry change. Canonical XML, replicated operations, and saved rooms remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-exact-closing-rule.test.ts",
+    "packages/core/src/layout/__tests__/table-exact-terminal-reference.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-exact-terminal-border.test.ts"
+  ],
+  "changeset": "exact-row-page-edge-rules",
+  "migration": null
+}

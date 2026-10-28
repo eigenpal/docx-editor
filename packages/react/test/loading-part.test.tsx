@@ -96,6 +96,10 @@ const LARGE_SOURCE = zipSync({
  * work, and a slow runner must still finish the whole open inside the waits below.
  */
 const SLICED_PARAGRAPHS = 600;
+// The sliced-open tests wait up to 20 s twice: first for the indicator to move below the pages,
+// then for it to leave. A shared CI runner can be slow for a while, so the test budget covers both
+// waits instead of the runner's 30 s default cutting the second one short.
+const SLICED_OPEN_TEST_TIMEOUT_MS = 45_000;
 
 function slicedSource(): Uint8Array {
   const paragraphs: string[] = [];
@@ -592,32 +596,36 @@ describe('DocxEditor.Loading', () => {
     expect(view.container.querySelector('.docx-editor__loading-page')).not.toBeNull();
   });
 
-  test('with overlay, the indicator moves below the laid-out pages while the rest are laid out', async () => {
-    const places: string[] = [];
-    const view = render(
-      <DocxEditorRoot document={slicedSource()}>
-        <div style={{ position: 'relative' }}>
-          <DocxEditorViewport>
-            <DocxEditorContent />
-          </DocxEditorViewport>
-          <DocxEditorLoading overlay indicator={trackedIndicator(places)} />
-        </div>
-      </DocxEditorRoot>
-    );
+  test(
+    'with overlay, the indicator moves below the laid-out pages while the rest are laid out',
+    async () => {
+      const places: string[] = [];
+      const view = render(
+        <DocxEditorRoot document={slicedSource()}>
+          <div style={{ position: 'relative' }}>
+            <DocxEditorViewport>
+              <DocxEditorContent />
+            </DocxEditorViewport>
+            <DocxEditorLoading overlay indicator={trackedIndicator(places)} />
+          </div>
+        </DocxEditorRoot>
+      );
 
-    await waitFor(() => expect(places).toContain('below the pages'), { timeout: 20_000 });
-    expect(places[0]).toBe('screen');
-    // The screen yields at the first painted page, but the indicator below the pages stays until the
-    // last slice lands. Wait for that end state, not for the screen alone.
-    await waitFor(
-      () => {
-        expect(view.container.querySelector(LOADING)).toBeNull();
-        expect(view.container.querySelector('.docx-opening-indicator')).toBeNull();
-        expect(view.container.querySelector('.mine')).toBeNull();
-      },
-      { timeout: 20_000 }
-    );
-  });
+      await waitFor(() => expect(places).toContain('below the pages'), { timeout: 20_000 });
+      expect(places[0]).toBe('screen');
+      // The screen yields at the first painted page, but the indicator below the pages stays until the
+      // last slice lands. Wait for that end state, not for the screen alone.
+      await waitFor(
+        () => {
+          expect(view.container.querySelector(LOADING)).toBeNull();
+          expect(view.container.querySelector('.docx-opening-indicator')).toBeNull();
+          expect(view.container.querySelector('.mine')).toBeNull();
+        },
+        { timeout: 20_000 }
+      );
+    },
+    SLICED_OPEN_TEST_TIMEOUT_MS
+  );
 
   test('className is appended after the load-bearing class, not instead of it', () => {
     const view = render(<DocxEditorLoading when className="demo-loading" />);
@@ -667,20 +675,24 @@ describe('packaged DocxEditor loading screen', () => {
     ).toBe(true);
   });
 
-  test('loadingIndicator shows on the loading page, then below the laid-out pages', async () => {
-    const places: string[] = [];
-    const view = render(
-      <DocxEditor document={slicedSource()} loadingIndicator={trackedIndicator(places)} />
-    );
+  test(
+    'loadingIndicator shows on the loading page, then below the laid-out pages',
+    async () => {
+      const places: string[] = [];
+      const view = render(
+        <DocxEditor document={slicedSource()} loadingIndicator={trackedIndicator(places)} />
+      );
 
-    await act(async () => {});
-    expect(view.container.querySelector('.docx-editor__loading-page .mine')).not.toBeNull();
-    expect(view.container.querySelector(SPINNER)).toBeNull();
-    await waitFor(() => expect(places).toContain('below the pages'), { timeout: 20_000 });
-    await waitFor(() => expect(view.container.querySelector('.mine')).toBeNull(), {
-      timeout: 20_000,
-    });
-  });
+      await act(async () => {});
+      expect(view.container.querySelector('.docx-editor__loading-page .mine')).not.toBeNull();
+      expect(view.container.querySelector(SPINNER)).toBeNull();
+      await waitFor(() => expect(places).toContain('below the pages'), { timeout: 20_000 });
+      await waitFor(() => expect(view.container.querySelector('.mine')).toBeNull(), {
+        timeout: 20_000,
+      });
+    },
+    SLICED_OPEN_TEST_TIMEOUT_MS
+  );
 
   test('loadingIndicator without chrome warns once in development', () => {
     const warn = console.warn;
