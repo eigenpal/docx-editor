@@ -129,7 +129,7 @@ for (const { kind, text, spacing, compression, punctuation } of [
     compression: 'compressPunctuation',
   },
   {
-    kind: 'Kana compression',
+    kind: 'natural kana widths under spacing control',
     punctuation: false,
     text: 'あいうえおかきく',
     spacing: 0,
@@ -146,18 +146,24 @@ for (const { kind, text, spacing, compression, punctuation } of [
         punctuation ? { kern: 2, eastAsianDefault: true, split: 2 } : { eastAsianDefault: true }
       ),
       (surface) => {
+        const naturalKana = compression === 'compressPunctuationAndJapaneseKana';
+        const expectedLines = naturalKana ? [text.slice(0, 7), text.slice(7)] : [text];
         const sourceId = surface.session.paragraphIds()[0]!;
         const sourceLines = linesOf(surface.layout()).filter(
           (line) => line.range.paragraphId === sourceId
         );
-        expect(sourceLines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
-          text,
-        ]);
+        expect(sourceLines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual(
+          expectedLines
+        );
         const opening = sourceLines
           .flatMap((line) => line.spans)
           .find((span) => span.range.start <= 2 && span.range.end > 2)!;
         expect(opening.text.slice(2 - opening.range.start, 3 - opening.range.start)).toBe(text[2]!);
-        expect(opening.style.characterSpacingPt).toBeLessThan(spacing);
+        if (naturalKana) {
+          // Eight natural 12pt kana exceed the fixture's 90pt measure.
+          expect(measurer.measure(text, opening.style)).toBe(96);
+          expect(opening.style.characterSpacingPt).toBe(spacing);
+        } else expect(opening.style.characterSpacingPt).toBeLessThan(spacing);
         const original = serializeOoxmlPart(surface.session.part());
         withSurface(surface.session.save(), (reopened) => {
           expect(serializeOoxmlPart(reopened.session.part())).toBe(original);
@@ -172,14 +178,14 @@ for (const { kind, text, spacing, compression, punctuation } of [
           const source = linesOf(reopened.layout()).filter(
             (line) => line.range.paragraphId === reopened.session.paragraphIds()[0]
           );
-          expect(source.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
-            text,
-          ]);
-          expect(
-            source
-              .flatMap((line) => line.spans)
-              .find((span) => span.range.start <= 2 && span.range.end > 2)!.style.characterSpacingPt
-          ).toBeLessThan(spacing);
+          expect(source.map((line) => line.spans.map((span) => span.text).join(''))).toEqual(
+            expectedLines
+          );
+          const reopenedSpacing = source
+            .flatMap((line) => line.spans)
+            .find((span) => span.range.start <= 2 && span.range.end > 2)!.style.characterSpacingPt;
+          if (naturalKana) expect(reopenedSpacing).toBe(spacing);
+          else expect(reopenedSpacing).toBeLessThan(spacing);
         });
       }
     );

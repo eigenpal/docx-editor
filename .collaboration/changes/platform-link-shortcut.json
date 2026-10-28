@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The named link control displays Ctrl+K on macOS.",
+  "after": "The named link control displays the keyboard's modifier in React and Vue.",
+  "reason": "Only toolbar labels change. Document state, editing operations, synchronization, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/react/test/toolbar-link-platform.test.tsx",
+    "packages/vue/test/toolbar-link-platform.test.ts"
+  ],
+  "changeset": "platform-link-shortcut",
+  "migration": null
+}

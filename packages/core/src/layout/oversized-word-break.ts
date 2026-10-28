@@ -59,6 +59,8 @@ export function chopOversizedWord(
     /** Closes a line that ends inside the word, after a cut. Defaults to `closeLine`. */
     readonly closeCutLine?: () => void;
     readonly overflowTolerancePt: number;
+    /** Advance after this candidate in the same cross-run grapheme. */
+    readonly followingWidth?: number;
     /** Keep the leading fragment with the preceding text when their seam is protected. */
     readonly keepWithPrevious?: boolean;
     /**
@@ -70,7 +72,10 @@ export function chopOversizedWord(
     readonly cutAllowedAt?: (text: string, utf16Index: number) => boolean;
   }
 ): OversizedWordRemainder {
-  if (width <= options.remainingLineWidth() + options.overflowTolerancePt) {
+  if (
+    width + (options.followingWidth ?? 0) <=
+    options.remainingLineWidth() + options.overflowTolerancePt
+  ) {
     return { text, modelStart, width, brokeLine: false };
   }
   const graphemes = segmentGraphemes(text);
@@ -81,7 +86,8 @@ export function chopOversizedWord(
 
   while (
     graphemeFrom < graphemes.length &&
-    remainingWidth > options.remainingLineWidth() + options.overflowTolerancePt
+    remainingWidth + (options.followingWidth ?? 0) >
+      options.remainingLineWidth() + options.overflowTolerancePt
   ) {
     const graphemesLeft = graphemes.length - graphemeFrom;
     if (graphemesLeft === 1) {

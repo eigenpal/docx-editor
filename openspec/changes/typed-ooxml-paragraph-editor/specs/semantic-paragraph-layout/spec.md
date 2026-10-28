@@ -466,6 +466,34 @@ Row and column insertion, deletion, and column resize commits SHALL publish `flo
 - **WHEN** a middle-table column resize converges without repagination before the following page
 - **THEN** preceding and following unchanged pages retain stable identities
 
+### Requirement: Passage-local justified space compression
+
+For modern left-to-right justified text beside floating objects, the layout engine SHALL test complete words against the current passage. It SHALL apply the existing compression floor and compression-versus-expansion rule to that passage's eligible spaces. It SHALL NOT borrow space capacity across a floating object. Right-to-left and mixed-direction passages SHALL retain their existing behavior.
+
+#### Scenario: A narrow passage keeps one more word
+
+- **GIVEN** a 66 pt passage beside a square-wrapped picture and words whose natural widths total 68 pt
+- **AND** its two 4 pt spaces can each compress by 1 pt under the existing admission rule
+- **WHEN** the layout engine breaks the justified paragraph in compatibility mode 15 or later
+- **THEN** all three words remain in that passage
+- **AND** their published span and caret geometry fits within the passage
+- **AND** source text, formatting, and image parts remain unchanged
+
+#### Scenario: Earlier passages cannot subsidize a later passage
+
+- **GIVEN** a later passage whose words exceed its own eligible compression budget
+- **AND** an earlier passage has spare compression capacity
+- **WHEN** the layout engine tests the later passage's next word
+- **THEN** that word wraps instead of borrowing capacity across the floating object
+
+#### Scenario: A compressed passage ends at the floating object
+
+- **GIVEN** a passage that ends at the near edge of a square- or tight-wrapped floating object
+- **AND** a line in that passage keeps its last word by compressing its spaces
+- **WHEN** the layout engine aligns the justified line
+- **THEN** the line's last word ends at the passage edge
+- **AND** no text of that line overlaps the floating object
+
 ### Requirement: Automatic inter-script spacing
 
 Semantic layout SHALL resolve `w:autoSpaceDE` and `w:autoSpaceDN` through the paragraph cascade, with enabled defaults. It SHALL add bounded layout advances at supported East Asian and Latin-letter or ASCII-digit boundaries. It SHALL preserve source text and canonical UTF-16 offsets. Line fitting, paint, caret geometry, and anchor prediction SHALL use the same advances. Authored character spacing and unsupported run forms SHALL retain their existing behavior.
@@ -796,3 +824,14 @@ The layout engine SHALL allow curly quotes in runs with the East Asian font hint
 - **GIVEN** a curly-only punctuation window, unhinted Latin quotes, a curly quote's inner side, unresolved face, authored tracking, horizontal scaling, complex shaping, decorated text, or source punctuation-kerning refusal
 - **WHEN** layout considers optical fitting
 - **THEN** the new East Asian curly path leaves the unsupported geometry unchanged
+
+### Requirement: Natural kana advances
+
+Layout SHALL preserve natural kana advances and authored tracking when a line overflows. Paragraph overflow SHALL NOT apply a fixed kana reduction. Kana compression that fits a line-start-prohibited character on a full line is outside this requirement.
+
+#### Scenario: Japanese kana overflow the measure
+
+- **GIVEN** twenty kana with natural advances of 24 points and a 468-point measure
+- **WHEN** character spacing control enables punctuation and Japanese kana compression
+- **THEN** the first line contains nineteen kana and the next line contains one kana
+- **AND** source text, run properties, and settings remain unchanged after save and reopen

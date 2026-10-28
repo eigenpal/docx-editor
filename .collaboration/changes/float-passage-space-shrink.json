@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Modern justified lines beside floating pictures break before words that fit after ordinary space compression.",
+  "after": "Each left-to-right text passage borrows only its own eligible spaces before it wraps.",
+  "reason": "Only derived line breaks and span geometry change. Canonical OOXML, operations, shared fields, node identities, and awareness payloads remain unchanged. Released clients can share the same document state.",
+  "tests": [
+    "packages/core/src/layout/__tests__/paragraph-float-space-shrink.test.ts",
+    "packages/core/src/layout/__tests__/paragraph-float-space-shrink-package.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-float-space-shrink.test.ts"
+  ],
+  "changeset": "float-passage-space-shrink",
+  "migration": null
+}

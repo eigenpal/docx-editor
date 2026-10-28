@@ -1,4 +1,4 @@
-// Opt-in OOXML punctuation/kana compression and hanging punctuation. All advances
+// Opt-in OOXML punctuation compression and hanging punctuation. All advances
 // are measured here and travel in layout records to browser paint and exporters.
 import type { FieldAwarePiece } from './field-projection.ts';
 import { formatRevisionOf } from './revision-projection.ts';
@@ -16,7 +16,6 @@ const FULLWIDTH_PUNCTUATION =
 // seam rule because its ink can be centred, depending on the face and locale.
 const OPENING = /^[〈《「『【〔〖〘〚（［｛]$/u;
 const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
-const KANA = /^[\u3041-\u3096\u30a1-\u30fa][\u3099\u309a]?$/u;
 
 /** A colon cannot borrow an opening bearing across a line or exclusion passage. */
 export function colonLostOpeningBearing(lines: LineSpans): boolean {
@@ -119,7 +118,6 @@ interface CompressionSlice {
 
 function compressionSlices(
   pieces: readonly FieldAwarePiece[],
-  includeKana: boolean,
   includePunctuation: boolean,
   measurer: TextMeasurer,
   { preserveColonAdvances, keepRightBearings }: LineLocalAdvances
@@ -189,8 +187,7 @@ function compressionSlices(
           !preserveColonAdvances &&
           !base.style.highlight &&
           !base.style.shading));
-    const fraction =
-      trimLeft || trimRight ? 0.5 : includeKana && KANA.test(cluster.text) ? 0.125 : 0;
+    const fraction = trimLeft || trimRight ? 0.5 : 0;
     if (!fraction) continue;
     // Measure the complete cluster with its base character's font. Apply the
     // same per-unit reduction to every fragment, including split combining marks.
@@ -275,28 +272,14 @@ export function compressCjkPieces(
   pieces: readonly FieldAwarePiece[],
   policy: CjkParagraphTypography,
   measurer: TextMeasurer,
-  advances: LineLocalAdvances = SHARED_BEARINGS,
-  available?: number
+  advances: LineLocalAdvances = SHARED_BEARINGS
 ): readonly FieldAwarePiece[] {
-  const compression = policy.settings?.compression;
   const punctuation =
     policy.settings?.punctuationKerning !== false && policy.settings?.sourceEastAsianFont === true;
-  const kana =
-    compression === 'compressPunctuationAndJapaneseKana' &&
-    (available === undefined ||
-      (Number.isFinite(available) &&
-        available > 0 &&
-        pieces.reduce(
-          (sum, piece) =>
-            sum +
-            measureDisplayText(piece.text, styleForFontSlot(piece.style, piece.fontSlot), measurer),
-          0
-        ) >
-          available + 0.001));
-  if (!punctuation && !kana) return pieces;
+  if (!punctuation) return pieces;
   const result: FieldAwarePiece[] = [];
   const derived = new WeakMap<ResolvedRunStyle, Map<number, ResolvedRunStyle>>();
-  const slices = compressionSlices(pieces, kana, punctuation, measurer, advances);
+  const slices = compressionSlices(pieces, punctuation, measurer, advances);
   for (const piece of pieces) {
     const compressedSlices = slices.get(piece);
     if (!compressedSlices) {

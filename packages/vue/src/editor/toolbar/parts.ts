@@ -4,6 +4,7 @@ import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor, useEditorStateTick } from '../context';
 import { useHyperlinkPopup } from '../useHyperlinkPopup';
+import { usePlatformShortcut } from '../usePlatformShortcut';
 import { mergeHostClass } from '../../lib/mergeHostClass';
 import { useToolbarContext, useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
@@ -96,6 +97,7 @@ export const ToolbarLink = defineComponent({
     const stateTick = useEditorStateTick();
     const { openAtCaret } = useHyperlinkPopup();
     const label = useToolbarLabel();
+    const shortcut = usePlatformShortcut();
     const { t } = useTranslation();
     return () => {
       if (props.hidden) return null;
@@ -108,7 +110,7 @@ export const ToolbarLink = defineComponent({
         t
       );
       const control = chromeControlForSlot('text.link');
-      const text = label(control?.labelKey ?? 'text.link');
+      const text = shortcut(label(control?.labelKey ?? 'text.link'));
       const shared = {
         class: mergeHostClass('docx-toolbar__button', props.class, props.className),
         'data-slot': 'text.link',

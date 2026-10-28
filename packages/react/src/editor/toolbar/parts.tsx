@@ -17,6 +17,7 @@ import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
 import { useHyperlinkPopup } from '../useHyperlinkPopup';
+import { usePlatformShortcut } from '../usePlatformShortcut';
 import { ToolbarContext, useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
 import {
@@ -110,9 +111,10 @@ function ToolbarLinkImpl({ className, hidden, icon, asChild, children }: Toolbar
   const { t } = useTranslation();
   const disabledReason = localizeDisabledReason(allowed && !allowed.ok ? allowed.reason : null, t);
   const label = useToolbarLabel();
+  const shortcut = usePlatformShortcut();
   if (hidden) return null;
   const control = chromeControlForSlot('text.link');
-  const text = label(control?.labelKey ?? 'text.link');
+  const text = shortcut(label(control?.labelKey ?? 'text.link'));
   const shared = {
     type: 'button' as const,
     className: `docx-toolbar__button${className ? ` ${className}` : ''}`,

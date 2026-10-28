@@ -36,6 +36,31 @@ export function endsAtHyphenBreak(candidate: string): boolean {
   return /\p{L}[-‐]$/u.test(candidate);
 }
 
+/** Probe the current LTR passage without borrowing spaces across a float. */
+export function createShrinkProbe<Zone>(
+  zones: () => readonly Zone[],
+  intervals: (
+    zones: readonly Zone[]
+  ) => readonly { readonly start: number; readonly end: number }[],
+  pieces: readonly FieldAwarePiece[],
+  paragraphRtl: boolean
+): (penX: number) => number | undefined {
+  let supportsPassages: boolean | undefined;
+  return (penX) => {
+    const active = zones();
+    if (active.length === 0) return undefined;
+    // Preserve the existing bidi alignment path across floats.
+    supportsPassages ??=
+      !paragraphRtl && !pieces.some((piece) => piece.style.shaping?.direction === 'rtl');
+    if (!supportsPassages) return Infinity;
+    return (
+      intervals(active).find(
+        (interval) => penX >= interval.start - 0.001 && penX <= interval.end + 0.001
+      )?.start ?? Infinity
+    );
+  };
+}
+
 /**
  * The first span whose space can shrink. Only the text after a line's last tab is
  * justified; a tab and everything before it keep their positions.
@@ -95,15 +120,27 @@ export function fitsWithSpaceShrink(
   wordStart: number = spans.length,
   wordStartWidth: number = lineWidth,
   wordEnds = false,
-  followingWidth = 0
+  followingWidth = 0,
+  passageStart?: number
 ): boolean {
   const ownSpace = SPACED_WORD.test(candidate);
+  // Earlier passages own their spaces. The pen can already have stepped over a
+  // float while this passage still has no spans, so an empty suffix cannot lend.
+  const passageFirst =
+    passageStart === undefined ? 0 : spans.findIndex((span) => span.box.x >= passageStart - 0.001);
   if (
     !(ownSpace || (wordEnds && BARE_WORD.test(candidate))) ||
-    spans.some((s) => s.wrapAdvanceBefore || s.equation)
+    passageFirst < 0 ||
+    wordStart < passageFirst ||
+    spans.some(
+      (span, index) =>
+        index >= passageFirst &&
+        (span.equation ||
+          ((passageStart === undefined || index > passageFirst) && span.wrapAdvanceBefore))
+    )
   )
     return false;
-  const first = firstShrinkSlot(spans);
+  const first = Math.max(passageFirst, firstShrinkSlot(spans));
   const visible = measureDisplayText(
     ownSpace ? withoutSpaceSlot(candidate) : candidate,
     style,

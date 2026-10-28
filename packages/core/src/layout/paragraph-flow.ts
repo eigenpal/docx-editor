@@ -13,6 +13,7 @@ import {
   admittedToNarrowPassage,
 } from './pending-line.ts';
 import { spaceShrinkWordTail } from './space-shrink-word-tail.ts';
+import { graphemeContinuationWidth } from './grapheme-continuation-width.ts';
 import { wordFollowsOnlyTabs } from './leading-tab-word.ts';
 import { growScriptLineMetrics } from './paragraph-mark-metrics.ts';
 import { spacedLine } from './positioned-run-spacing.ts';
@@ -21,6 +22,7 @@ import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
 import {
   endsAtHyphenBreak,
   fitsWithSpaceShrink,
+  createShrinkProbe,
   opensWithHangingSpace,
   lineEndAt,
 } from './paragraph-space-shrink.ts';
@@ -35,7 +37,6 @@ export {
 import { bidiPieces, paragraphIsRtl } from './rtl-paragraph.ts';
 import { recordLineWrapPassages } from './line-wrap-passages.ts';
 import { wrapBreakSpace } from './wrap-break-space.ts';
-
 import { PAGE_BREAK_CHAR, type OoxmlNode, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import {
   propertiesOfRunContainer as propertiesOf,
@@ -114,15 +115,11 @@ import { carryWordAtOptionalHyphens } from './optional-hyphen-break.ts';
 import { measuredWidth, styleCutAtHyphen } from './optional-hyphen-joining.ts';
 import { collectLineChangeSites } from './paragraph-change-sites.ts';
 import { rebreakForEarlierOwnBands } from './top-and-bottom-earlier-lines.ts';
-
 // Ignore subpixel rounding: a tab that ends exactly at the margin must not wrap.
 const OVERFLOW_TOLERANCE_PT = 0.001;
-
 import type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
 export type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
-
 export { propertiesOf };
-
 import {
   measureFollowingTabSegment,
   placeableContentSuffixes,
@@ -240,13 +237,14 @@ export function breakParagraph(
     measurer
   );
   const { preserveColonAdvances } = advances;
-  const pieces = compressCjkPieces(visiblePieces, typography, measurer, advances, available);
+  const pieces = compressCjkPieces(visiblePieces, typography, measurer, advances);
   const seamNaturalWidths = cjkSeamNaturalWidths(pieces, visiblePieces, measurer);
   const placeableSuffixes = placeableContentSuffixes(pieces, pageBreaksIgnored);
   const replayScope = cellTabReplayScope(flow?.cellAnchorScope, rawPieces);
   const endsParagraph = lineEndAt(pieces);
   const endSpacesAt = lineEndSpaces.paragraphEndSpacesOf(pieces, paragraphRtl, measurer);
   const cjkBreaks = cjkParagraphBreaks(pieces, typography);
+  const clusterTail = graphemeContinuationWidth(pieces, measurer, typography);
   const { opticalParagraph, opticalCompression, fitCjkOptically } = createParagraphCjkOpticalFitter(
     allPieces,
     pieces,
@@ -537,6 +535,7 @@ export function breakParagraph(
     initialMetrics: measurer.lineMetrics(lineStartStyle),
   });
   const availableIntervals = exclusionProbe.intervals;
+  const probeX = createShrinkProbe(activeExclusionZones, availableIntervals, pieces, paragraphRtl);
 
   /**
    * First usable x at or after the pen, with the first-line indent preserved.
@@ -1406,7 +1405,9 @@ export function breakParagraph(
       }
       // A bearing shared across a line break is lost, so fit at the natural advance.
       const baseFitWidth = opticalFit ? width : (seamNaturalWidths.get(piece) ?? width);
-      const fitWidth = baseFitWidth + automaticGap() + (lineEndWhitespace ? 0 : endSpaces.room);
+      const followingCluster = clusterTail?.(pieceIndex, boundary) ?? 0;
+      const fitWidth =
+        baseFitWidth + followingCluster + automaticGap() + (lineEndWhitespace ? 0 : endSpaces.room);
       const overflows =
         !hangs &&
         // A space after a word that borrowed inter-word space hangs on its line.
@@ -1417,14 +1418,10 @@ export function breakParagraph(
       const borrowsSpace =
         overflows &&
         flow?.justifySpaceShrink === true &&
-        // A word split across source runs overflows on a later piece than the one
-        // that opened it, where the open decision is `continues`. The shrink test
-        // still applies to the whole word: `wordStartSpan` says where it began.
+        // A word split across runs still borrows from the span where the word began.
         (opensWord || (openDecision === 'continues' && wordStartSpan > 0)) &&
         // Text after a right, center or decimal tab is placed against its stop, not justified.
         alignedTabRight === 0 &&
-        !flow.pageExclusionZones?.length &&
-        sameParagraphAnchorStarts.length === 0 &&
         line.drawings.length === 0 &&
         (placeableSuffixes[pieceIndex]![boundary] === 1 || endsParagraph(pieceIndex, boundary)) &&
         fitsWithSpaceShrink(
@@ -1441,7 +1438,8 @@ export function breakParagraph(
             (boundary < piece.text.length
               ? !layoutOwned && (piece.text[boundary] === ' ' || endsAtHyphenBreak(candidate))
               : opensWithHangingSpace(pieces[pieceIndex + 1])),
-          followingWidth ?? 0
+          followingWidth ?? 0,
+          probeX(lineOrigin() + line.width)
         );
       // Leading tabs define the opening word's remaining measure. Chop the word
       // there instead of closing a line that contains only those tabs.
@@ -1500,9 +1498,10 @@ export function breakParagraph(
         // The pen of an empty line may already stand in a later passage: the test above is
         // the room ahead of it, not the line's capacity from its origin.
         if (!ensurePlacementWidth(fitWidth)) continue;
-      } else if (borrowsSpace && endsParagraph(pieceIndex, boundary)) {
+      } else if (borrowsSpace) {
+        line.borrowedSpace = true;
         // Only this admission may compress the paragraph's last line when it is aligned.
-        line.spaceShrink = true;
+        if (endsParagraph(pieceIndex, boundary)) line.spaceShrink = true;
       }
       // Overflow can close the previous line after the clearance check above.
       // Recheck the newly opened line before placing this candidate, including
@@ -1527,7 +1526,7 @@ export function breakParagraph(
         canChopWord &&
         !hangs &&
         (!holdsContent() || (!opensWord && wordOpensLine()) || chopsAfterLeadingTabs) &&
-        width + automaticGap() >
+        width + followingCluster + automaticGap() >
           remainingLineWidth() +
             OVERFLOW_TOLERANCE_PT +
             // The whole group is on the line once its last candidate arrives.
@@ -1578,6 +1577,7 @@ export function breakParagraph(
             previousLineCut = true;
           },
           overflowTolerancePt: OVERFLOW_TOLERANCE_PT,
+          followingWidth: followingCluster,
           keepWithPrevious: openDecision === 'forbidden',
           // Kinsoku vetoes measured cuts: 天。地。人。 must not chop onto a leading 。.
           cutAllowedAt: textBreaks

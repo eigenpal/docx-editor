@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Paragraph overflow applies an automatic 12.5 percent kana reduction.",
+  "after": "Kana retain natural advances and authored character spacing when lines wrap.",
+  "reason": "Only derived layout changes. Canonical OOXML, source offsets, operations, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/kana-natural-width.test.ts",
+    "packages/core/src/layout/__tests__/kana-natural-width-package.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-kana-natural-width.test.ts"
+  ],
+  "changeset": "kana-natural-width",
+  "migration": null
+}

@@ -48,6 +48,11 @@ export interface PendingLine {
    * overflow such as hanging punctuation.
    */
   spaceShrink?: true;
+  /**
+   * The flow admitted a word on this line by borrowing inter-word space, so its natural
+   * content can run past its float passage while the compressed line stays inside it.
+   */
+  borrowedSpace?: true;
   /** Model ranges on this line covering deleted content; see {@link LineRecord.deletedRanges}. */
   deletedRanges?: readonly ModelRange[];
   /** Vertical gap inserted before this line to clear a drawing exclusion band. */
