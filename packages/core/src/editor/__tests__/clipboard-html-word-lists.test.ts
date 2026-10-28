@@ -59,6 +59,19 @@ test('a right-aligned Word list number keeps the hanging from mso-text-indent-al
   expect(docXml).not.toContain(' ');
 });
 
+test('a zero mso-text-indent-alt on a list item writes a zero first-line indent', () => {
+  const { docXml } = project(
+    '<p style="margin-left:36.0pt;text-indent:-36.0pt;mso-text-indent-alt:0cm;' +
+      'mso-list:l0 level1 lfo1"><span style="mso-list:Ignore">' +
+      '<span>&nbsp;&nbsp;&nbsp;&nbsp;</span>1.' +
+      '<span>&nbsp;</span></span>Flush</p>'
+  );
+  const item = docXml.split('</w:p>').find((paragraph) => paragraph.includes('Flush'));
+  expect(item).toContain('w:left="720"');
+  expect(item).toContain('w:firstLine="0"');
+  expect(item).not.toContain('w:hanging=');
+});
+
 test('an unparseable mso-text-indent-alt falls back to text-indent', () => {
   const { docXml } = project(
     '<p style="margin-left:36.0pt;text-indent:-18.0pt;mso-text-indent-alt:auto">hang</p>'
