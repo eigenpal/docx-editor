@@ -12,6 +12,7 @@ import type {
 import { TextWriter } from './text.ts';
 import { Work, color } from './context.ts';
 import { pageHeight, rect } from './context.ts';
+import { mergeEquationText } from './equation-text-merge.ts';
 
 export function paintEquation(
   visit: SemanticSpanVisit,
@@ -112,5 +113,6 @@ export function paintEquation(
     }
   }
   node(equation.geometry, visit.absoluteBox.x, top);
-  return out.join('\n');
+  // Spaced atoms paint as separate nodes; one face on one baseline writes one text object.
+  return mergeEquationText(out, text.faces.values()).join('\n');
 }

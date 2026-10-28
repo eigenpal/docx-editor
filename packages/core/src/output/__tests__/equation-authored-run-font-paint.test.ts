@@ -35,16 +35,16 @@ test('paints authored digit faces and inherited normal text without restyling ma
   const container = document.createElement('div');
   paintSemanticLayout(container, layout, { scale: 1 });
   const nodes = Array.from(container.querySelectorAll<HTMLElement>('.docx-equation-text'));
-  expect(nodes.map((node) => node.textContent)).toEqual(['𝑥', '12', '+', '𝛼', 'normal']);
+  // The spaced `+` and the letter after it share a face, so one span draws both.
+  expect(nodes.map((node) => node.textContent)).toEqual(['𝑥', '12', '+𝛼', 'normal']);
   expect(nodes[0]?.style.fontFamily).toContain('Cambria Math');
   expect(nodes[0]?.style.fontStyle).toBe('normal');
   expect(nodes[1]?.style.fontFamily).toContain('Arial');
   expect(nodes[1]?.style.fontStyle).toBe('italic');
   expect(nodes[1]?.style.fontWeight).toBe('bold');
   expect(nodes[2]?.style.fontFamily).toContain('Cambria Math');
-  expect(nodes[3]?.style.fontFamily).toContain('Cambria Math');
-  expect(nodes[4]?.style.fontFamily).toContain('Paragraph Face');
-  expect(nodes[4]?.style.fontStyle).toBe('normal');
+  expect(nodes[3]?.style.fontFamily).toContain('Paragraph Face');
+  expect(nodes[3]?.style.fontStyle).toBe('normal');
 });
 
 test('normal text without a resolved paragraph face uses the surface default face', () => {
