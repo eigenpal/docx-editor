@@ -118,6 +118,8 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
+          # Downloading the binary takes seconds; caching it only fills the cache.
+          no-cache: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -150,6 +152,8 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
+          # Downloading the binary takes seconds; caching it only fills the cache.
+          no-cache: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -286,6 +290,8 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
+          # Downloading the binary takes seconds; caching it only fills the cache.
+          no-cache: true
 
       # Node 24 ships with npm 11.x; Trusted Publishing requires >=11.5.1.
       - name: Setup Node.js

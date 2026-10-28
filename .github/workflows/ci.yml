@@ -78,6 +78,8 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
+          # Downloading the binary takes seconds; caching it only fills the cache.
+          no-cache: true
       - name: Restore npm cache
         if: "matrix.check == 'consumers' || matrix.check == 'packages'"
         uses: actions/cache/restore@v6
@@ -288,6 +290,8 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
+          # Downloading the binary takes seconds; caching it only fills the cache.
+          no-cache: true
       - name: Restore npm cache
         uses: actions/cache/restore@v6
         with:
@@ -389,6 +393,8 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
+          # Downloading the binary takes seconds; caching it only fills the cache.
+          no-cache: true
       - name: Install dependencies
         run: bash scripts/ci/install-dependencies.sh
       # Required when planned: a shard that lost the file would split differently.
@@ -476,6 +482,16 @@ jobs:
                 gh cache delete "$id"
               done
           done
+          # CodeQL's default setup saves a code database of about 1 GB after each push to
+          # main and never removes the older ones, which alone filled the 10 GB repository
+          # cache. Its analysis restores only the newest, so keep one per language.
+          gh cache list --ref refs/heads/main --key codeql-overlay-base-database- \
+            --sort created_at --order desc --limit 100 --json id,key --jq '
+              [.[] | . + {language: (.key | capture("^codeql-overlay-base-database-[0-9]+-[0-9a-f]+-(?<l>[a-z-]+?)-[0-9]").l // .key)}]
+              | group_by(.language) | map(.[1:][].id) | flatten | .[]' |
+            while read -r id; do
+              gh cache delete "$id"
+            done
 
   collaboration:
     if: github.actor != 'dependabot[bot]'
