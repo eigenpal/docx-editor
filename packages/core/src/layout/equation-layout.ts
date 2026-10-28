@@ -20,6 +20,12 @@ const BASE_LOWERCASE_HEIGHT = 976 / 2048;
 const SUB_SUPERSCRIPT_GAP_MIN = 300 / 2048;
 /** How high a superscript bottom may rise to open the gap above a subscript. */
 const SUPERSCRIPT_BOTTOM_MAX_WITH_SUBSCRIPT = 765 / 2048;
+/** The stroke of an upper or lower bar. */
+const BAR_RULE_THICKNESS = 133 / 2048;
+/** The gap between a bar and the ink of its body. */
+const BAR_VERTICAL_GAP = 345 / 2048;
+/** The space a bar reserves on its outer side. */
+const BAR_EXTRA_SPACE = 133 / 2048;
 const NARY_OPERATOR_SCALE = 1.25;
 /** The synthetic face Core layout uses for every OMML equation. @internal */
 export const EQUATION_FONT_FAMILY = 'Cambria Math';
@@ -424,16 +430,29 @@ function layoutExpression(
     case 'bar': {
       const resolved = scaledStyle(style, scale, cache);
       const body = layoutExpression(expression.body, measurer, style, scale, cache);
-      const thickness = Math.max(0.55, resolved.fontSizePt * 0.05);
-      const gap = Math.max(0.35, resolved.fontSizePt * 0.035);
-      const bodyY = expression.position === 'top' ? thickness + gap : 0;
-      const barY = expression.position === 'top' ? 0 : body.box.height + gap;
+      const em = resolved.fontSizePt;
+      const thickness = BAR_RULE_THICKNESS * em;
+      const gap = BAR_VERTICAL_GAP * em;
+      // The rule keeps its gap from the body's ink, not from its font box, and reserves
+      // one more rule thickness of space on its outer side. Offsets are from the body
+      // baseline, downward.
+      const ink = equationInk(body, measurer);
+      const barTop =
+        expression.position === 'top' ? -(ink.ascent + gap + thickness) : ink.descent + gap;
+      const top = Math.min(
+        -body.baseline,
+        expression.position === 'top' ? barTop - BAR_EXTRA_SPACE * em : -body.baseline
+      );
+      const bottom = Math.max(
+        body.box.height - body.baseline,
+        expression.position === 'top' ? 0 : barTop + thickness + BAR_EXTRA_SPACE * em
+      );
       return Object.freeze({
         kind: 'bar',
-        body: shifted(body, 0, bodyY),
-        bar: box(0, barY, body.box.width, thickness),
-        box: box(0, 0, body.box.width, body.box.height + gap + thickness),
-        baseline: body.baseline + bodyY,
+        body: shifted(body, 0, -body.baseline - top),
+        bar: box(0, barTop - top, body.box.width, thickness),
+        box: box(0, 0, body.box.width, bottom - top),
+        baseline: -top,
       });
     }
     case 'script': {

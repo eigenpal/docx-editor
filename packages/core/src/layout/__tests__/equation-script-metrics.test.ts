@@ -150,3 +150,57 @@ test('scripts with enough ink gap keep their own positions', () => {
   expect(rise(both, both.superscript!) / size).toBeCloseTo(750 / 2048, 6);
   expect(-rise(both, both.subscript!) / size).toBeCloseTo(0.2, 6);
 });
+
+function bar(geometry: EquationGeometry) {
+  if (geometry.kind !== 'bar') throw new Error(`expected a bar, got ${geometry.kind}`);
+  return geometry;
+}
+
+const barred = (position: 'top' | 'bot', body: string, size: number) =>
+  bar(
+    layout(
+      `<m:bar><m:barPr><m:pos m:val="${position}"/></m:barPr><m:e>${run(body)}</m:e></m:bar>`,
+      size,
+      inked
+    )
+  );
+
+test.each([12, 24])('a bar in a structure of %d pt strokes 133/2048 em', (size) => {
+  for (const position of ['top', 'bot'] as const) {
+    expect(barred(position, 'xa', size).bar.height / size).toBeCloseTo(133 / 2048, 6);
+  }
+});
+
+test.each(['xa', 'bk', 'yg'])('an upper bar keeps 345/2048 em above the ink of %s', (body) => {
+  const size = 12;
+  const geometry = barred('top', body, size);
+  const inkTop = geometry.baseline - equationInk(geometry.body, inked).ascent;
+  expect((inkTop - (geometry.bar.y + geometry.bar.height)) / size).toBeCloseTo(345 / 2048, 6);
+});
+
+test.each(['xa', 'bk', 'yg'])('a lower bar keeps 345/2048 em below the ink of %s', (body) => {
+  const size = 12;
+  const geometry = barred('bot', body, size);
+  const inkBottom = geometry.baseline + equationInk(geometry.body, inked).descent;
+  expect((geometry.bar.y - inkBottom) / size).toBeCloseTo(345 / 2048, 6);
+  expect(geometry.box.height).toBeGreaterThanOrEqual(geometry.bar.y + geometry.bar.height);
+});
+
+test('an upper bar over short letters fits in the font box of its body', () => {
+  const geometry = barred('top', 'xa', 12);
+  expect(geometry.box.height).toBeCloseTo(geometry.body.box.height, 6);
+  expect(geometry.baseline).toBeCloseTo(geometry.body.baseline, 6);
+});
+
+test('a bar beyond the font box reserves one more stroke of space outside it', () => {
+  const size = 12;
+  // The fixed measurer reports no ink, so the bar clears the whole font box.
+  const geometry = bar(
+    layout(`<m:bar><m:barPr><m:pos m:val="top"/></m:barPr><m:e>${run('x')}</m:e></m:bar>`, size)
+  );
+  expect(geometry.bar.y / size).toBeCloseTo(133 / 2048, 6);
+  expect(geometry.body.box.y - (geometry.bar.y + geometry.bar.height)).toBeCloseTo(
+    (345 / 2048) * size,
+    6
+  );
+});

@@ -40,6 +40,12 @@ The engine SHALL publish equation geometry from DOM-free layout. Paint SHALL use
 - **AND** the superscript baseline rises at least 750/2048 em of the structure size, and the subscript baseline sits 0.2 em below the base baseline
 - **AND** the two scripts of one base keep a 300/2048 em gap between their glyphs
 
+#### Scenario: Bar placement
+
+- **WHEN** an equation contains `m:bar` with an upper or lower position
+- **THEN** the bar strokes 133/2048 em of the structure size
+- **AND** the bar keeps a 345/2048 em gap from the ink of its body, with one more stroke of space on its outer side
+
 #### Scenario: Safe paint
 
 - **WHEN** OMML text contains markup-like attacker-controlled characters
