@@ -30,6 +30,8 @@ The layout engine SHALL stretch the final line of a paragraph with `w:jc` set to
 - **WHEN** layout aligns the line
 - **THEN** each space first takes up to 45 percent of its own advance, and each automatic gap between East Asian and other text grows up to twice its size
 - **AND** the rest of the slack goes in equal steps to every boundary between two East Asian characters, punctuation and brackets included, to every boundary with an automatic gap, and to every boundary after a space
+- **AND** a character counts as East Asian by its code point or by its East Asian font slot
+- **AND** a justified line opens no gap between two Korean syllables, and a distributed line does
 - **AND** text in other scripts keeps its letters together, and a boundary between East Asian and other text with no automatic gap does not stretch
 
 #### Scenario: Distributed line has nothing to stretch

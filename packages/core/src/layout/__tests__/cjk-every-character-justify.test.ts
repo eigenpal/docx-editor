@@ -120,3 +120,50 @@ test('character distribution doubles an automatic gap before it spreads the char
   expect(xs[2]![1]).toBeCloseTo(20 + 2 * step + 2 * AUTOMATIC_GAP, 4);
   expect(xs[3]![1]).toBeCloseTo(90, 4);
 });
+
+/** Each visible span's x against its natural x, from its source offset on the line. */
+function naturalDrift(line: LineRecord) {
+  const visible = line.spans.filter((span) => span.text.trim() !== '');
+  const start = visible[0]!.range.start;
+  return Math.max(...visible.map((span) => Math.abs(span.box.x - 10 * (span.range.start - start))));
+}
+
+test('a justified Korean word keeps its syllables together', () => {
+  // A word longer than the 95pt measure breaks; its first line keeps its 5pt of slack.
+  const [first] = lines(paragraph('가나다라마바사아자차카타파하', 'both', 100));
+  expect(first!.spans.map((span) => span.text).join('')).toBe('가나다라마바사아자');
+  expect(naturalDrift(first!)).toBeLessThan(1e-6);
+});
+
+test('a justified Korean line stretches only its spaces', () => {
+  const [first] = lines(paragraph('가나 다라 마바 사아', 'both'));
+  // 20pt of slack over the two spaces between the words.
+  expect(placed(first!).filter(([text]) => text.trim() !== '')).toEqual([
+    ['가나', 0],
+    ['다라', 40],
+    ['마바', 80],
+  ]);
+});
+
+test('a distributed Korean word spreads its syllables', () => {
+  for (const styles of [SPACES, CHARACTERS]) {
+    const [line] = lines(paragraph('가나다라', 'distribute'), styles);
+    expect(placed(line!)).toEqual([
+      ['가', 0],
+      ['나', 30],
+      ['다', 60],
+      ['라', 90],
+    ]);
+  }
+});
+
+test('a symbol hinted to the East Asian face takes an East Asian gap', () => {
+  const hinted = `<w:p><w:pPr><w:jc w:val="distribute"/></w:pPr><w:r><w:rPr><w:rFonts w:hint="eastAsia" w:eastAsia="MS Mincho"/><w:sz w:val="22"/></w:rPr><w:t>漢“字</w:t></w:r></w:p>`;
+  const [line] = lines(hinted);
+  expect(line!.spans.find((span) => span.text === '“')?.fontSlot).toBe('eastAsia');
+  expect(placed(line!)).toEqual([
+    ['漢', 0],
+    ['“', 45],
+    ['字', 90],
+  ]);
+});
