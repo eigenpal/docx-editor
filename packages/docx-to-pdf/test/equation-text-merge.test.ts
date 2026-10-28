@@ -64,6 +64,27 @@ test('keeps text objects apart across a face, a baseline, a colour, or a rule', 
   expect(mergeEquationText(painted, [F1, F2])).toEqual(painted);
 });
 
+test('a long numeric TJ body parses in linear time', () => {
+  // The shape a backtracking pattern spent exponential time on.
+  const body = `[${'.'.repeat(50_000)}!] TJ`;
+  const painted = ['0 0 0 rg', 'BT', '/F1 12 Tf', `! 0 ! ! ! ! Tm ${body}`, 'ET'].join('\n');
+  const started = performance.now();
+  expect(mergeEquationText([painted, painted], [F1])).toEqual([painted, painted]);
+  expect(performance.now() - started).toBeLessThan(200);
+});
+
+test('adjacent numbers in a TJ body refuse the merge', () => {
+  const first = show(100, '[<0001>12-3<0002>] TJ');
+  const second = show(120, '<0003> Tj');
+  expect(mergeEquationText([first, second], [F1])).toEqual([first, second]);
+});
+
+test('a text object that opens with a number is not merged after an adjustment', () => {
+  const first = show(100, '<0001> Tj');
+  const second = show(120, '[25<0002>] TJ');
+  expect(mergeEquationText([first, second], [F1])).toEqual([first, second]);
+});
+
 const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
 
 test('an equation with spaced operators writes one text object per face and baseline', async () => {

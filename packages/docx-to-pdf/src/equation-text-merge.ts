@@ -16,9 +16,27 @@ const MAX_TJ_ADJUSTMENT = 1_000_000;
 
 const FILL = /^\S+ \S+ \S+ rg$/;
 const FONT = /^\/(\S+) (\S+) Tf$/;
-const SHOW =
-  /^(\S+) 0 (\S+) (\S+) (\S+) (\S+) Tm (?:(<[0-9A-Fa-f]+>) Tj|\[((?:<[0-9A-Fa-f]+>|-?[0-9.]+)+)\] TJ)$/;
-const PART = /<([0-9A-Fa-f]+)>|(-?[0-9.]+)/g;
+// Each group stops at a space or a bracket, so no pattern here can backtrack.
+const SHOW = /^(\S+) 0 (\S+) (\S+) (\S+) (\S+) Tm (?:(<[0-9A-Fa-f]+>) Tj|\[([^\]]+)\] TJ)$/;
+const PART = /<[0-9A-Fa-f]+>|-?(?:\d+(?:\.\d*)?|\.\d+)/y;
+
+/**
+ * Split a `TJ` array body into glyph strings and numbers, or return null when the body holds
+ * anything else. Two numbers in a row are ambiguous, so they also refuse the merge.
+ */
+function showParts(body: string): string[] | null {
+  const parts: string[] = [];
+  PART.lastIndex = 0;
+  while (PART.lastIndex < body.length) {
+    const start = PART.lastIndex;
+    const match = PART.exec(body);
+    if (!match || match.index !== start) return null;
+    const part = match[0];
+    if (!part.startsWith('<') && parts.length > 0 && !parts.at(-1)!.startsWith('<')) return null;
+    parts.push(part);
+  }
+  return parts.length > 0 ? parts : null;
+}
 
 /** One text object that shows glyphs on one baseline and does nothing else. */
 interface SimpleShow {
@@ -46,7 +64,8 @@ function parseShow(painted: string, faces: ReadonlyMap<string, EmbeddedFace>): S
   const horizontal = Number(show[1]);
   const unit = size * horizontal;
   if (!Number.isFinite(unit) || unit === 0) return null;
-  const parts = show[6] ? [show[6]] : (show[7]!.match(PART) ?? []);
+  const parts = show[6] ? [show[6]] : showParts(show[7]!);
+  if (!parts) return null;
   const startX = Number(show[4]);
   let penX = startX;
   for (const part of parts) {
@@ -113,7 +132,9 @@ export function mergeEquationText(
       current.fill === show.fill &&
       current.face === show.face &&
       current.size === show.size &&
-      current.matrix === show.matrix
+      current.matrix === show.matrix &&
+      // A leading number would run into the adjustment written before it.
+      show.parts[0]!.startsWith('<')
     ) {
       const adjustment = (1000 * (current.penX - show.startX)) / current.unit;
       if (Number.isFinite(adjustment) && Math.abs(adjustment) <= MAX_TJ_ADJUSTMENT) {
