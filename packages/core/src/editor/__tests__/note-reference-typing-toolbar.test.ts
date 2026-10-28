@@ -1,6 +1,7 @@
 // The toolbar at a caret right after a note reference shows the face that typing writes:
 // the text before the reference, else the text after it, else the paragraph mark. Never
-// the reference's own superscript, bold, or color.
+// the reference's own superscript, bold, or color. Presses there, and beside a locked
+// content control, toggle that same face.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -18,7 +19,8 @@ const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const STYLES =
   `<w:styles xmlns:w="${W}"><w:style w:type="character" w:styleId="FootnoteReference">` +
   '<w:name w:val="footnote reference"/><w:rPr><w:vertAlign w:val="superscript"/></w:rPr>' +
-  '</w:style></w:styles>';
+  '</w:style><w:style w:type="character" w:styleId="Strong"><w:name w:val="Strong"/>' +
+  '<w:rPr><w:b/></w:rPr></w:style></w:styles>';
 
 function docx(body: string): Uint8Array {
   return zipSync({
@@ -215,5 +217,70 @@ test('after a note reference a press turns on a property the face lacks', () => 
     expect(surface.formatting().bold).toBe(true);
     surface.type('x');
     expect(faceOfTyped(surface, 'x')?.sort()).toEqual(['b', 'i']);
+  });
+});
+
+test('after a note reference alone the toolbar reads the mark character style', () => {
+  withSurface(
+    '<w:pPr><w:rPr><w:rStyle w:val="Strong"/></w:rPr></w:pPr>' + reference('<w:i/>'),
+    (surface) => {
+      caretAt(surface, 1);
+      expect(surface.formatting().bold).toBe(true);
+      expect(surface.formatting().italic).toBe(false);
+      surface.type('x');
+      expect(faceOfTyped(surface, 'x')).toEqual(['rStyle=Strong']);
+    }
+  );
+});
+
+test('after a note reference alone a press turns off the bold of the mark style', () => {
+  withSurface(
+    '<w:pPr><w:rPr><w:rStyle w:val="Strong"/></w:rPr></w:pPr>' + reference(''),
+    (surface) => {
+      caretAt(surface, 1);
+      surface.toggleRunProperty('b');
+      expect(surface.formatting().bold).toBe(false);
+      surface.type('x');
+      expect(faceOfTyped(surface, 'x')).toEqual(['rStyle=Strong', 'b=0']);
+    }
+  );
+});
+
+test('after a reference that ends a hyperlink the toolbar reads no face', () => {
+  withSurface(
+    text('Alpha', '<w:i/>') + `<w:hyperlink w:anchor="target">${reference(BOLD_RED)}</w:hyperlink>`,
+    (surface) => {
+      caretAt(surface, 6);
+      expect(surface.formatting().italic).toBe(false);
+      expect(surface.formatting().bold).toBe(false);
+      surface.type('x');
+      expect(faceOfTyped(surface, 'x')).toEqual([]);
+    }
+  );
+});
+
+const LOCKED =
+  '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent>' +
+  '<w:r><w:rPr><w:b/><w:color w:val="FF0000"/></w:rPr><w:t>[1]</w:t></w:r></w:sdtContent></w:sdt>';
+
+test('after a bold locked control a Bold press turns on bold over the text face', () => {
+  withSurface(text('see ', '<w:i/>') + LOCKED, (surface) => {
+    caretAt(surface, 7);
+    expect(surface.formatting().bold).toBe(false);
+    surface.toggleRunProperty('b');
+    expect(surface.formatting().bold).toBe(true);
+    surface.type('x');
+    expect(faceOfTyped(surface, 'x')?.sort()).toEqual(['b', 'i']);
+  });
+});
+
+test('after a bold locked control an Italic press turns off the text face', () => {
+  withSurface(text('see ', '<w:i/>') + LOCKED, (surface) => {
+    caretAt(surface, 7);
+    expect(surface.formatting().italic).toBe(true);
+    surface.toggleRunProperty('i');
+    expect(surface.formatting().italic).toBe(false);
+    surface.type('x');
+    expect(faceOfTyped(surface, 'x')).toEqual(['i=0']);
   });
 });

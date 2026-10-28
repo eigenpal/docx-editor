@@ -1,4 +1,5 @@
 import { createContextualRunFormatting } from '../layout/complex-script-formatting.ts';
+import { paragraphMarkFace } from '../layout/paragraph-mark-face.ts';
 
 // Run and paragraph property edits at the selection (paginated-surface seam).
 //
@@ -138,8 +139,9 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   const storyPart = () => session.partFor(deps.storyScope()) ?? session.part();
   // A caret beside a control that typing cannot enter reads the run that typing will copy,
   // outside the control, rather than the control's own run; or no run, when typing copies none.
-  // After a note reference it reads the run whose face typing takes, never the reference run;
-  // with no such run, typing takes the paragraph mark's face, which `markFace` carries.
+  // After a note reference it reads the run whose face typing takes, never the reference run.
+  // With no such run, typing takes the paragraph mark's face, which `markFace` carries
+  // resolved through the styles; after a reference that ends a link, it takes no face.
   const formattingSelection = (
     selection: SemanticSelection
   ): {
@@ -152,17 +154,14 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       return { selection, caretSpan: true };
     }
     const paragraph = findNode(storyPart(), head.paragraphId);
-    const afterNote =
-      paragraph?.kind === 'paragraph' && noteReferenceEndingAt(paragraph, head.offset);
-    const run =
-      paragraph?.kind !== 'paragraph'
-        ? undefined
-        : afterNote
-          ? noteTypingSourceRange(paragraph, head.offset)
-          : formattingRangeBesideRestrictedControl(paragraph, head.offset);
-    if (run === undefined) return { selection, caretSpan: true };
+    if (paragraph?.kind !== 'paragraph') return { selection, caretSpan: true };
+    const afterNote = noteReferenceEndingAt(paragraph, head.offset) !== undefined;
+    const run = afterNote
+      ? noteTypingSourceRange(paragraph, head.offset)
+      : formattingRangeBesideRestrictedControl(paragraph, head.offset);
+    if (run === undefined) return { selection, caretSpan: !afterNote };
     if (run === null && afterNote) {
-      const markFace = directParagraphMarkProperties(storyPart(), head.paragraphId);
+      const markFace = paragraphMarkFace(paragraph, session.stylesRoot(), session.settingsRoot());
       return { selection, caretSpan: false, markFace };
     }
     if (run === null) return { selection, caretSpan: false };

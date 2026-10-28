@@ -136,6 +136,45 @@ interface TypingSources {
 
 const typingSources = new WeakMap<OoxmlParagraphNode, TypingSources>();
 
+/** Where a run sits in its paragraph, as {@link walkParagraphRuns} reports it. */
+export interface RunPlacement {
+  /** Inside a control that typing cannot enter. */
+  readonly inRestricted: boolean;
+  /** Inside a tracked deletion or the source of a tracked move. */
+  readonly inDeletion: boolean;
+  /** The innermost hyperlink that holds the run, if any. */
+  readonly hyperlink: OoxmlElement | null;
+}
+
+/**
+ * Visit every run of a paragraph in document order, with where it sits, and every control
+ * that typing cannot enter, outermost first. The one walk the typing-source readers share.
+ */
+export function walkParagraphRuns(
+  paragraph: OoxmlParagraphNode,
+  onRun: (run: OoxmlElement, placement: RunPlacement) => void,
+  onRestricted?: (control: OoxmlElement) => void
+): void {
+  const walk = (node: OoxmlNode, placement: RunPlacement): void => {
+    if (node.kind === 'textValue') return;
+    const restrictsTyping = isContentControlNode(node) && refusesTypedContent(node);
+    if (restrictsTyping) onRestricted?.(node);
+    if (node.kind === 'run') onRun(node, placement);
+    const deletes = node.kind === 'revisionDelete' || node.kind === 'revisionMoveFrom';
+    const inner =
+      restrictsTyping || deletes || node.kind === 'hyperlink'
+        ? {
+            inRestricted: placement.inRestricted || restrictsTyping,
+            inDeletion: placement.inDeletion || deletes,
+            hyperlink: node.kind === 'hyperlink' ? node : placement.hyperlink,
+          }
+        : placement;
+    for (const child of node.children) walk(child, inner);
+  };
+  const top: RunPlacement = { inRestricted: false, inDeletion: false, hyperlink: null };
+  for (const child of paragraph.children) walk(child, top);
+}
+
 /** One walk per paragraph revision; paragraph nodes are immutable. */
 function typingSourcesOf(paragraph: OoxmlParagraphNode): TypingSources {
   const cached = typingSources.get(paragraph);
@@ -143,25 +182,20 @@ function typingSourcesOf(paragraph: OoxmlParagraphNode): TypingSources {
   const restricted: OoxmlElement[] = [];
   const textRuns: OoxmlNode[] = [];
   if (holdsContentControl(paragraph)) {
-    const walk = (node: OoxmlNode, inRestricted: boolean, inDeletion: boolean): void => {
-      if (node.kind === 'textValue') return;
-      const restrictsTyping = isContentControlNode(node) && refusesTypedContent(node);
-      if (restrictsTyping) restricted.push(node);
-      const deletes = node.kind === 'revisionDelete' || node.kind === 'revisionMoveFrom';
-      if (
-        node.kind === 'run' &&
-        !inRestricted &&
-        !inDeletion &&
-        node.children.some((child) => child.kind === 'text') &&
-        !node.children.some(isFieldChrome)
-      ) {
-        textRuns.push(node);
-      }
-      for (const child of node.children) {
-        walk(child, inRestricted || restrictsTyping, inDeletion || deletes);
-      }
-    };
-    for (const child of paragraph.children) walk(child, false, false);
+    walkParagraphRuns(
+      paragraph,
+      (run, { inRestricted, inDeletion }) => {
+        if (
+          !inRestricted &&
+          !inDeletion &&
+          run.children.some((child) => child.kind === 'text') &&
+          !run.children.some(isFieldChrome)
+        ) {
+          textRuns.push(run);
+        }
+      },
+      (control) => restricted.push(control)
+    );
   }
   const sources = { restricted, textRuns };
   typingSources.set(paragraph, sources);

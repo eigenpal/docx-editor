@@ -315,6 +315,8 @@ for (const tracked of [false, true]) {
       modules: [reviewModule()],
     });
     editors.push(restored);
-    for (const face of typedFaces(restored, 0)) expect(face).toEqual(['i']);
+    const reopened = typedFaces(restored, 0);
+    expect(reopened.length).toBeGreaterThan(0);
+    for (const face of reopened) expect(face).toEqual(['i']);
   });
 }

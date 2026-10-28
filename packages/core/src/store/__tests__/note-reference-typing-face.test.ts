@@ -8,6 +8,7 @@ import { expect, test } from 'bun:test';
 import { bodyStoryRoot, storyParagraphs, type OoxmlNode, type OoxmlPart } from '../index.ts';
 import { authoredRunPropertiesAt } from '../../editor/surface-formatting.ts';
 import { formattingRunAt } from '../store/direct-properties.ts';
+import { noteReferenceEndingAt } from '../store/note-typing-boundary.ts';
 import { ADA, apply, paragraphId, part } from './tracked-edit-fixture.ts';
 
 type Kind = 'footnote' | 'endnote';
@@ -38,7 +39,80 @@ interface Case {
   readonly face: readonly string[];
   /** The paragraph has no other text run, so the face comes from the paragraph mark. */
   readonly fromMark?: true;
+  /** The reference ends a hyperlink, so the text takes no face at all. */
+  readonly noFace?: true;
 }
+
+const deleted = (value: string, rPr: string) =>
+  '<w:del w:id="91" w:author="Other" w:date="2026-01-01T00:00:00Z">' +
+  `<w:r><w:rPr>${rPr}</w:rPr><w:delText>${value}</w:delText></w:r></w:del>`;
+const link = (content: string) => `<w:hyperlink w:anchor="target">${content}</w:hyperlink>`;
+
+/** Runs that hold deleted text or only a tab give a face; a run with only a break does not. */
+const CONTENT_CASES: readonly Case[] = [
+  {
+    name: 'italic text, deleted bold run, reference',
+    body: (k) => text('Alpha', '<w:i/>') + deleted('Gone', '<w:b/>') + reference(k),
+    offset: 10,
+    face: ['b'],
+  },
+  {
+    name: 'deleted bold run only, reference, underlined mark',
+    body: (k) => mark(UNDERLINE) + deleted('Gone', '<w:b/>') + reference(k),
+    offset: 5,
+    face: ['b'],
+  },
+  {
+    name: 'deleted bold run, reference, underlined text',
+    body: (k) => deleted('Gone', '<w:b/>') + reference(k) + text('tail', UNDERLINE),
+    offset: 5,
+    face: ['b'],
+  },
+  {
+    name: 'italic text, bold tab-only run, reference',
+    body: (k) =>
+      text('Alpha', '<w:i/>') + '<w:r><w:rPr><w:b/></w:rPr><w:tab/></w:r>' + reference(k),
+    offset: 7,
+    face: ['b'],
+  },
+  {
+    name: 'bold tab-only run, reference, underlined text',
+    body: (k) =>
+      '<w:r><w:rPr><w:b/></w:rPr><w:tab/></w:r>' + reference(k) + text('tail', UNDERLINE),
+    offset: 2,
+    face: ['b'],
+  },
+  {
+    name: 'italic text, bold break-only run, reference',
+    body: (k) => text('Alpha', '<w:i/>') + '<w:r><w:rPr><w:b/></w:rPr><w:br/></w:r>' + reference(k),
+    offset: 7,
+    face: ['i'],
+  },
+  {
+    name: 'italic text, hyperlink that ends with the reference',
+    body: (k) => text('Alpha', '<w:i/>') + link(reference(k)),
+    offset: 6,
+    face: [],
+    noFace: true,
+  },
+  {
+    name: 'underlined mark, italic text, hyperlink that ends with the reference',
+    body: (k) => mark(UNDERLINE) + text('Alpha', '<w:i/>') + link(reference(k)),
+    offset: 6,
+    face: [],
+    noFace: true,
+  },
+  {
+    name: 'italic text, hyperlink with bold text and the reference, underlined text',
+    body: (k) =>
+      text('Alpha', '<w:i/>') +
+      link(text('Link', '<w:b/>') + reference(k)) +
+      text('tail', UNDERLINE),
+    offset: 10,
+    face: [],
+    noFace: true,
+  },
+];
 
 const CASES: readonly Case[] = [
   {
@@ -85,10 +159,11 @@ const CASES: readonly Case[] = [
     face: ['rStyle=Strong'],
   },
   {
-    name: 'plain text, reference inside a hyperlink',
+    name: 'plain text, hyperlink that ends with the reference',
     body: (k) => text('Hotel') + `<w:hyperlink w:anchor="x">${reference(k)}</w:hyperlink>`,
     offset: 6,
     face: [],
+    noFace: true,
   },
   {
     name: 'bold text, bold reference, bold text',
@@ -178,10 +253,11 @@ function typedRun(source: OoxmlPart): OoxmlNode {
 const faceNames = (face: readonly string[]) => face.map((entry) => entry.split('=')[0]!);
 
 for (const kind of ['footnote', 'endnote'] as const) {
-  for (const { name, body, offset, face, fromMark } of CASES) {
+  for (const { name, body, offset, face, fromMark, noFace } of [...CASES, ...CONTENT_CASES]) {
     for (const tracked of [false, true]) {
       test(`${kind}, ${tracked ? 'tracked' : 'plain'}: ${name}`, () => {
         const before = part(`<w:p>${body(kind)}</w:p>`);
+        expect(noteReferenceEndingAt(paragraphOf(before), offset)).toBeDefined();
         const after = apply(before, {
           op: 'insertText',
           paragraphId: paragraphId(before),
@@ -192,6 +268,14 @@ for (const kind of ['footnote', 'endnote'] as const) {
         const run = typedRun(after);
         expect(faceOf(run)).toEqual([...face]);
         expect(find(run, (node) => node.kind === 'noteReference')).toBeUndefined();
+        if (noFace) {
+          const inLink = find(
+            paragraphOf(after),
+            (node) =>
+              node.kind === 'hyperlink' && find(node, (child) => child === run) !== undefined
+          );
+          expect(inLink).toBeUndefined();
+        }
         if (tracked) {
           const insertion = find(
             paragraphOf(after),
@@ -213,7 +297,7 @@ for (const kind of ['footnote', 'endnote'] as const) {
           .sort()
       );
       const owner = formattingRunAt(paragraphOf(before), offset);
-      if (fromMark) {
+      if (fromMark || noFace) {
         expect(owner).toBeNull();
       } else {
         expect(owner && faceOf(owner)).toEqual([...face]);

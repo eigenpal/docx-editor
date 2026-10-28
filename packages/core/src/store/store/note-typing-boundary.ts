@@ -1,10 +1,15 @@
 // Note reference formatting belongs to the reference, not to the next character. Text typed
-// after a reference takes the face of the text around it instead (`noteTypingSourceRun`).
+// after a reference takes the face of the text around it instead (`noteTypingSource`).
 
 import { withFreshIds } from '../package/hf-lifecycle-shell.ts';
 import { WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import { replaceChildren, type EditOptions, type OoxmlEditResult } from '../package/ooxml-edit.ts';
-import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import type {
+  OoxmlElement,
+  OoxmlNode,
+  OoxmlParagraphNode,
+  OoxmlPart,
+} from '../package/ooxml-tree.ts';
 import { NOT_INHERITED } from './mark-character-style-run.ts';
 import {
   isRunPropertiesNode,
@@ -15,6 +20,7 @@ import {
 import { build } from './tree-op-tracked-builders.ts';
 import { paragraphOffsetIndex, type OffsetSpan } from './tree-op-segments.ts';
 import { isFieldChrome } from '../package/field-nodes.ts';
+import { walkParagraphRuns } from './tree-op-restricted-edge.ts';
 
 /** The canonical body-side note reference immediately before this caret, if any. */
 export function noteReferenceEndingAt(paragraph: OoxmlParagraphNode, offset: number) {
@@ -23,78 +29,111 @@ export function noteReferenceEndingAt(paragraph: OoxmlParagraphNode, offset: num
   );
 }
 
-/** Text runs per paragraph revision; paragraph nodes are immutable. */
-const textRunsCache = new WeakMap<OoxmlParagraphNode, readonly OoxmlNode[]>();
+interface NoteTypingRuns {
+  /** Runs that can give a face, in document order. */
+  readonly sources: readonly OoxmlNode[];
+  /** The innermost hyperlink of each run that holds a note reference. */
+  readonly referenceLinks: ReadonlyMap<string, OoxmlElement>;
+}
+
+/** One walk per paragraph revision; paragraph nodes are immutable. */
+const typingRunsCache = new WeakMap<OoxmlParagraphNode, NoteTypingRuns>();
+
+/** Text, deleted text, or a tab: what lets a run give its face. A break alone does not. */
+const holdsContent = (child: OoxmlNode) =>
+  child.kind === 'text' || child.kind === 'deletedText' || child.kind === 'tab';
 
 /**
- * Runs that hold text, in document order. A run that holds a note reference, field chrome,
- * or deleted text does not count. The walk stops at each run, so text box content inside a
- * drawing never counts.
+ * Runs that hold content, in document order, deleted ones included. A run that holds a note
+ * reference or field chrome does not count. Runs inside a drawing's text box have no offsets
+ * in the paragraph, so the search below skips them.
  */
-function textRunsOf(paragraph: OoxmlParagraphNode): readonly OoxmlNode[] {
-  const cached = textRunsCache.get(paragraph);
+function noteTypingRunsOf(paragraph: OoxmlParagraphNode): NoteTypingRuns {
+  const cached = typingRunsCache.get(paragraph);
   if (cached) return cached;
-  const runs: OoxmlNode[] = [];
-  const walk = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
-    if (node.kind === 'revisionDelete' || node.kind === 'revisionMoveFrom') return;
-    if (node.kind !== 'run') {
-      for (const child of node.children) walk(child);
-      return;
+  const sources: OoxmlNode[] = [];
+  const referenceLinks = new Map<string, OoxmlElement>();
+  walkParagraphRuns(paragraph, (run, { hyperlink }) => {
+    const { children } = run;
+    if (children.some((child) => child.kind === 'noteReference')) {
+      if (hyperlink) referenceLinks.set(run.id, hyperlink);
+    } else if (children.some(holdsContent) && !children.some(isFieldChrome)) {
+      sources.push(run);
     }
-    const { children } = node;
-    if (
-      children.some((child) => child.kind === 'text') &&
-      !children.some((child) => child.kind === 'noteReference' || isFieldChrome(child))
-    ) {
-      runs.push(node);
-    }
-  };
-  for (const child of paragraph.children) walk(child);
-  textRunsCache.set(paragraph, runs);
+  });
+  const runs = { sources, referenceLinks };
+  typingRunsCache.set(paragraph, runs);
   return runs;
 }
 
 /**
- * The run whose face text typed at `offset` after a note reference takes: the nearest text
- * run before the caret, past any note references, or else the first text run after it.
- * `null` when the paragraph has no such run, so the text takes the paragraph mark's face.
+ * Where text typed at `offset` after a note reference takes its face from:
+ * - `run`: the nearest run before the caret that holds content, past any note references, or
+ *   else the first such run after it. Deleted text and tabs count; a break alone does not.
+ * - `paragraphMark`: the paragraph has no such run.
+ * - `none`: the reference ends a hyperlink. The text lands after the link and takes no face,
+ *   neither from inside the link nor from around it.
  */
+export type NoteTypingSource =
+  | { readonly kind: 'run'; readonly run: OoxmlNode }
+  | { readonly kind: 'paragraphMark' }
+  | { readonly kind: 'none' };
+
+const PARAGRAPH_MARK: NoteTypingSource = { kind: 'paragraphMark' };
+const NO_FACE: NoteTypingSource = { kind: 'none' };
+
+/** The face source for text typed at `offset`, right after a note reference. */
+export function noteTypingSource(paragraph: OoxmlParagraphNode, offset: number): NoteTypingSource {
+  const offsets = paragraphOffsetIndex(paragraph);
+  const { sources, referenceLinks } = noteTypingRunsOf(paragraph);
+  const reference = noteReferenceEndingAt(paragraph, offset);
+  const link = reference ? referenceLinks.get(reference.runId) : undefined;
+  if (link && offsets.spanOf(link)?.end === offset) return NO_FACE;
+  let before: OoxmlNode | null = null;
+  for (const run of sources) {
+    const span = offsets.spanOf(run);
+    if (span === null || span.start === span.end) continue;
+    if (span.end <= offset) before = run;
+    else if (span.start >= offset) return { kind: 'run', run: before ?? run };
+  }
+  return before ? { kind: 'run', run: before } : PARAGRAPH_MARK;
+}
+
+/** The source run of {@link noteTypingSource}, or `null` when the face comes from no run. */
 export function noteTypingSourceRun(
   paragraph: OoxmlParagraphNode,
   offset: number
 ): OoxmlNode | null {
-  const offsets = paragraphOffsetIndex(paragraph);
-  let before: OoxmlNode | null = null;
-  for (const run of textRunsOf(paragraph)) {
-    const span = offsets.spanOf(run);
-    if (span === null || span.start === span.end) continue;
-    if (span.end <= offset) before = run;
-    else if (span.start >= offset) return before ?? run;
-  }
-  return before;
-}
-
-/** The offsets of `noteTypingSourceRun`, for a reader that resolves formatting by offset. */
-export function noteTypingSourceRange(
-  paragraph: OoxmlParagraphNode,
-  offset: number
-): OffsetSpan | null {
-  const run = noteTypingSourceRun(paragraph, offset);
-  return run ? paragraphOffsetIndex(paragraph).spanOf(run) : null;
+  const source = noteTypingSource(paragraph, offset);
+  return source.kind === 'run' ? source.run : null;
 }
 
 /**
- * The run properties for text typed at `offset` after a note reference: the face of
- * `noteTypingSourceRun`, or the paragraph mark's face when there is no such run. Never the
- * reference's own run properties, and never revision or hidden-text properties.
+ * The offsets of the source run, for a reader that resolves formatting by offset; `null` for
+ * the paragraph mark, `undefined` when typing takes no face.
+ */
+export function noteTypingSourceRange(
+  paragraph: OoxmlParagraphNode,
+  offset: number
+): OffsetSpan | null | undefined {
+  const source = noteTypingSource(paragraph, offset);
+  if (source.kind === 'none') return undefined;
+  return source.kind === 'run' ? paragraphOffsetIndex(paragraph).spanOf(source.run) : null;
+}
+
+/**
+ * The run properties for text typed at `offset` after a note reference, from
+ * {@link noteTypingSource}. Never the reference's own run properties, and never revision or
+ * hidden-text properties, so a deleted source run gives its face without its deletion.
  */
 export function noteTypingProperties(
   paragraph: OoxmlParagraphNode,
   offset: number,
   mint: () => string
 ): OoxmlNode[] {
-  const holder = noteTypingSourceRun(paragraph, offset) ?? paragraphPropertiesNodeOf(paragraph);
+  const source = noteTypingSource(paragraph, offset);
+  if (source.kind === 'none') return [];
+  const holder = source.kind === 'run' ? source.run : paragraphPropertiesNodeOf(paragraph);
   const properties = holder ? runPropertiesNodeOf(holder) : undefined;
   if (!properties) return [];
   const children = properties.children.filter(
