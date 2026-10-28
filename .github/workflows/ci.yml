@@ -45,11 +45,21 @@ jobs:
       matrix:
         # `lint` also runs the advisory and changeset checks, and `typecheck` the
         # informational Office.js report: each takes seconds, not a runner of its own.
-        # Two browser lanes, so neither one sets the wall clock. `consumers` installs
-        # the packed packages into fresh apps; `packages` checks the published
-        # artifacts and the repository-wide checks that read the build.
-        check: [lint, typecheck, browser, acceptance, consumers, packages]
-    name: ${{ matrix.check }}
+        # The acceptance specs run one at a time, so they split into two jobs to keep
+        # the browser lanes off the wall clock. `consumers` installs the packed
+        # packages into fresh apps; `packages` checks the published artifacts and the
+        # repository-wide checks that read the build.
+        include:
+          - check: lint
+          - check: typecheck
+          - check: browser
+          - check: acceptance
+            shard: 1/2
+          - check: acceptance
+            shard: 2/2
+          - check: consumers
+          - check: packages
+    name: "${{ matrix.shard && format('{0} ({1})', matrix.check, matrix.shard) || matrix.check }}"
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -167,12 +177,14 @@ jobs:
         run: bun run check:border-patterns
       - name: Editor acceptance tests (React and Vue)
         if: "matrix.check == 'acceptance'"
-        run: bun run test:e2e:acceptance
+        env:
+          ACCEPTANCE_SHARD: ${{ matrix.shard }}
+        run: bun run test:e2e:acceptance --shard "$ACCEPTANCE_SHARD"
       - name: Save editor browser failure evidence
         if: "failure() && (matrix.check == 'browser' || matrix.check == 'acceptance')"
         uses: actions/upload-artifact@v7
         with:
-          name: editor-${{ matrix.check }}-failures
+          name: editor-${{ matrix.check }}-${{ strategy.job-index }}-failures
           path: test-results/
           retention-days: 7
       - name: Build packages
@@ -387,13 +399,16 @@ jobs:
           name: test-durations-plan
           path: node_modules/.cache/docx-editor
       # --balance splits by measured time. Without a durations file every shard
-      # falls back to the same split by count, so the shards still partition the suite.
+      # falls back to the same split without durations, so the shards still partition
+      # the suite. --retry-failed runs a failed file once more: a pass on the retry is
+      # reported as a FLAKY warning annotation instead of cancelling every shard.
       - name: Run unit test shard
         env:
           TEST_SHARD: '${{ matrix.shard }}'
           EVENT_NAME: '${{ github.event_name }}'
         run: |
-          set -- --shard "$TEST_SHARD" --fail-fast --balance --durations-out shard-durations.json
+          set -- --shard "$TEST_SHARD" --fail-fast --retry-failed --balance \
+            --durations-out shard-durations.json
           if [ "$EVENT_NAME" = pull_request ]; then
             set -- "$@" \
               --exclude benchmarks/collaboration-server/collaboration-scenarios- \

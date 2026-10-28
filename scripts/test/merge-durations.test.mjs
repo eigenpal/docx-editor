@@ -18,7 +18,5 @@ test('later sources win and deleted test files are pruned', () => {
 });
 
 test('entries without a finite duration are dropped', () => {
-  expect(mergeDurations([{ 'a.test.ts': { peak: 5 }, 'b.test.ts': null }], () => true)).toEqual(
-    {}
-  );
+  expect(mergeDurations([{ 'a.test.ts': { peak: 5 }, 'b.test.ts': null }], () => true)).toEqual({});
 });

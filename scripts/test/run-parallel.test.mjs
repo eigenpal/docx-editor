@@ -64,6 +64,33 @@ test('fail-fast stops dispatch after the first failure; normal mode reports both
     expect(balanced.stdout).toContain('FAIL packages/second.test.ts');
     expect(Object.keys(JSON.parse(readFileSync(out, 'utf8')))).toEqual(['packages/second.test.ts']);
 
+    // --retry-failed: a file that fails only on its first run passes and is reported as FLAKY;
+    // a file that fails every time still fails.
+    const marker = join(root, 'flaky-ran-once');
+    writeFileSync(
+      join(root, 'packages', 'flaky.test.ts'),
+      `import { test, expect } from 'bun:test';
+       import { existsSync, writeFileSync } from 'node:fs';
+       test('fails only on the first run', () => {
+         const first = !existsSync(${JSON.stringify(marker)});
+         writeFileSync(${JSON.stringify(marker)}, '');
+         expect(first).toBe(false);
+       });`
+    );
+    const retried = run(
+      '--retry-failed',
+      '--exclude',
+      'packages/first',
+      '--exclude',
+      'packages/second'
+    );
+    expect(retried.status).toBe(0);
+    expect(retried.stdout).toContain('FLAKY packages/flaky.test.ts');
+    const stillFailing = run('--retry-failed', '--exclude', 'packages/flaky');
+    expect(stillFailing.status).toBe(1);
+    expect(stillFailing.stdout).toContain('FAIL packages/first.test.ts');
+    rmSync(join(root, 'packages', 'flaky.test.ts'));
+
     const emptyExclude = run('--exclude=');
     expect(emptyExclude.status).toBe(1);
     expect(emptyExclude.stderr).toContain('non-empty path prefix');

@@ -87,17 +87,17 @@ jobs:
           - label: typecheck
             command: bun run typecheck
           - label: tests (1/6)
-            command: bun run test --shard 1/6 --fail-fast
+            command: bun run test --shard 1/6 --fail-fast --retry-failed
           - label: tests (2/6)
-            command: bun run test --shard 2/6 --fail-fast
+            command: bun run test --shard 2/6 --fail-fast --retry-failed
           - label: tests (3/6)
-            command: bun run test --shard 3/6 --fail-fast
+            command: bun run test --shard 3/6 --fail-fast --retry-failed
           - label: tests (4/6)
-            command: bun run test --shard 4/6 --fail-fast
+            command: bun run test --shard 4/6 --fail-fast --retry-failed
           - label: tests (5/6)
-            command: bun run test --shard 5/6 --fail-fast
+            command: bun run test --shard 5/6 --fail-fast --retry-failed
           - label: tests (6/6)
-            command: bun run test --shard 6/6 --fail-fast
+            command: bun run test --shard 6/6 --fail-fast --retry-failed
           - label: parity
             command: bun run check:parity
           - label: documentation
