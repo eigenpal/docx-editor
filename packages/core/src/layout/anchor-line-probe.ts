@@ -148,7 +148,8 @@ export function anchorLineStartsByModelOffset(input: {
           probeLineAvail() - probeWidth,
           width,
           measurer,
-          paragraphFinal(pieceIndex, boundary)
+          paragraphFinal(pieceIndex, boundary),
+          input.typography
         );
       const fitWidth = (input.seamNaturalWidths?.get(piece) ?? width) + gap();
       if (!hangs && probeWidth > 0 && probeWidth + fitWidth > probeLineAvail()) {

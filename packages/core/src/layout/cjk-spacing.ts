@@ -6,7 +6,11 @@ import { segmentGraphemes } from './grapheme.ts';
 import { measureDisplayText, type ResolvedRunStyle } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
-import { eastAsianLanguage, type CjkParagraphTypography } from './cjk-typography.ts';
+import {
+  eastAsianLanguage,
+  kinsokuCharacters,
+  type CjkParagraphTypography,
+} from './cjk-typography.ts';
 import { withLayoutDerivedSpacing } from './layout-derived-spacing.ts';
 import { isRunKerningEnabled } from './run-kerning.ts';
 
@@ -330,31 +334,56 @@ export function compressCjkPieces(
  * before them instead of hanging.
  */
 const JAPANESE_NON_HANGING = '〕》〉！？：；・!?:;)]}％°';
+/** Closing and other punctuation, and the degree sign, which Chinese text also hangs. */
+const HANGING_CLASS = /^[\p{Pe}\p{Pf}\p{Po}°]$/u;
+/** The half-width ideographic comma cannot start a Traditional Chinese line, and never hangs. */
+const TRADITIONAL_CHINESE_NON_HANGING = '､';
+
+/**
+ * Whether the paragraph's line-start rules forbid `mark` at a line start, so that it may hang.
+ * The list is the custom or default one for the run language. A paragraph that turns kinsoku
+ * off forbids nothing. Without a run language the list is unknown, and only the switch counts.
+ */
+function lineStartForbids(
+  mark: string,
+  language: string | undefined,
+  policy: CjkParagraphTypography
+): boolean {
+  if (!policy.kinsoku) return false;
+  return (
+    language === undefined || kinsokuCharacters(language, policy.settings).before.includes(mark)
+  );
+}
 
 /**
  * The advance of the final mark that may hang past the margin, or undefined when none may.
  * `paragraphFinal` says that only whitespace follows the text in its paragraph: Korean text
- * hangs a mark other than `。` or `、` only there.
+ * hangs a mark other than `。` or `、` only there. With `policy`, a mark hangs only when the
+ * paragraph's line-start rules forbid it at a line start; otherwise it starts the next line.
  */
 export function hangingCjkPunctuationAdvance(
   text: string,
   piece: FieldAwarePiece,
   measurer: TextMeasurer,
-  paragraphFinal = false
+  paragraphFinal = false,
+  policy?: CjkParagraphTypography
 ): number | undefined {
   if (piece.projected || piece.measureText !== undefined) return undefined;
   // Callers check the paragraph's hanging policy first. Ordinary Latin words/spaces must not
   // allocate a grapheme array on every placement candidate just to discover no punctuation.
   const tail = text[text.length - 1];
-  if (!tail || !/^[\p{Pe}\p{Pf}\p{Po}]$/u.test(tail)) return undefined;
+  if (!tail || !HANGING_CLASS.test(tail)) return undefined;
   const language = eastAsianLanguage(piece.props);
   if (language?.startsWith('ko') && (!paragraphFinal || '。、'.includes(tail))) return undefined;
   if (language?.startsWith('ja') && JAPANESE_NON_HANGING.includes(tail)) return undefined;
   // Simplified Chinese keeps a full-width full stop inside the measure; Traditional hangs it.
   if (/^zh-cn$/i.test(language ?? '') && tail === '．') return undefined;
+  if (/^zh-(tw|hk|mo|hant)(-|$)/.test(language ?? '') && TRADITIONAL_CHINESE_NON_HANGING === tail)
+    return undefined;
+  if (policy && !lineStartForbids(tail, language, policy)) return undefined;
   if (!FULLWIDTH_PUNCTUATION.test(tail) && !language) return undefined;
   const last = segmentGraphemes(text).at(-1)?.text;
-  if (!last || !/^[\p{Pe}\p{Pf}\p{Po}]$/u.test(last)) return undefined;
+  if (!last || !HANGING_CLASS.test(last)) return undefined;
   return measureDisplayText(last, styleForFontSlot(piece.style, piece.fontSlot), measurer);
 }
 
@@ -369,10 +398,11 @@ export function canHangCjkPunctuation(
   remaining: number,
   width: number,
   measurer: TextMeasurer,
-  paragraphFinal = false
+  paragraphFinal = false,
+  policy?: CjkParagraphTypography
 ): boolean {
   return hangsWithin(
-    hangingCjkPunctuationAdvance(text, piece, measurer, paragraphFinal),
+    hangingCjkPunctuationAdvance(text, piece, measurer, paragraphFinal, policy),
     remaining,
     width
   );

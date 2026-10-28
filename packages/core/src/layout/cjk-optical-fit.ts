@@ -581,7 +581,8 @@ export function createParagraphCjkOpticalFitter(
       breaks,
       measurer,
       typography.hangingPunctuation ?? typography.overflowPunctuation,
-      !opticalParagraph
+      !opticalParagraph,
+      typography
     ),
   };
 }
@@ -592,7 +593,8 @@ export function createCjkOpticalFitter(
   breaks: CjkParagraphBreaks | null,
   measurer: TextMeasurer,
   hangingPunctuation: boolean,
-  requireLocalQualification = false
+  requireLocalQualification = false,
+  policy?: CjkParagraphTypography
 ) {
   const queued = new Map<number, CjkOpticalFit>();
   const memo: ClusterMemo = new Map();
@@ -689,7 +691,9 @@ export function createCjkOpticalFitter(
       ? hangingCjkPunctuationAdvance(
           candidates.map((candidate) => candidate.text).join(''),
           pieces[currentIndex]!,
-          measurer
+          measurer,
+          false,
+          policy
         )
       : undefined;
     // A group that hangs at its natural width needs no fit; one that does not may still hang

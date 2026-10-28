@@ -1361,7 +1361,8 @@ export function breakParagraph(
           lineAvailable() - line.width,
           width,
           measurer,
-          ends
+          ends,
+          typography
         );
       let hangs = hangsAtLineEnd();
       const applyOpticalFit =
