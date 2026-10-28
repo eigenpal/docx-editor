@@ -66,9 +66,12 @@ function automationError(
 
 /** Map a store story-transaction refusal onto the protocol code a caller can handle. */
 function storeTransactionError(reason: string): AutomationError {
+  // `edit.tracked-structure-unsupported` is the public code of a browser surface refusal: a
+  // suggesting-mode edit, such as deleting a whole table, that has no tracked form.
   if (
     reason === 'review-module-required' ||
-    reason === 'automation-structural-tracking-unsupported'
+    reason === 'automation-structural-tracking-unsupported' ||
+    reason === 'edit.tracked-structure-unsupported'
   )
     return automationError(
       'unsupported-capability',
