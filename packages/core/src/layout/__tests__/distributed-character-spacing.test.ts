@@ -394,3 +394,91 @@ test('distributeLineCharacters reports a line with no character gap', () => {
   const [line] = linesOf(layout(paragraph(run('X')), undefined));
   expect(distributeLineCharacters(line!.spans, measurer, 90, line!.spans.length)).toBeNull();
 });
+
+// Pair kerning (`w:kern`) holds a run's letters together on a modern character-distributed
+// line. The runs here are 11pt (`w:sz` 22); kerning is on when `w:kern` is not 0 and at most 22.
+const kerned = (halfPoints: number) =>
+  `<w:rPr><w:sz w:val="22"/><w:kern w:val="${halfPoints}"/></w:rPr>`;
+const runDefaults = (rPr: string) =>
+  `<w:docDefaults><w:rPrDefault><w:rPr>${rPr}</w:rPr></w:rPrDefault></w:docDefaults>`;
+
+test('a kerned run keeps its letters together and an unkerned run beside it spreads', () => {
+  const cascade = WITH_RUN_DEFAULTS['an empty rPrDefault'];
+  // No gap inside `Wo`, none between `o` and `r`: all 60pt of slack goes between `r` and `d`.
+  const [after] = linesOf(layout(paragraph(run('Wo', kerned(2)) + run('rd', kerned(0))), cascade));
+  expect(placed(after!)).toEqual([
+    ['Wo', 0],
+    ['r', 20],
+    ['d', 90],
+  ]);
+  // Mirrored: the gap opens between `W` and `o` only.
+  const [before] = linesOf(layout(paragraph(run('Wo', kerned(0)) + run('rd', kerned(2))), cascade));
+  expect(placed(before!)).toEqual([
+    ['W', 0],
+    ['o', 70],
+    ['rd', 80],
+  ]);
+});
+
+test('a kerned run stretches at its spaces, and a space opens a gap after it only', () => {
+  const cascade = WITH_RUN_DEFAULTS['an empty rPrDefault'];
+  // Gaps open between `a` and `b` and after the kerned space: 50pt of slack, the space takes
+  // 4.5pt, and two gaps share the other 45.5pt.
+  const [line] = linesOf(layout(paragraph(run('ab', kerned(0)) + run(' cd', kerned(2))), cascade));
+  const step = (50 - SPACE_SHARE_LIMIT * 10) / 2;
+  expect(placed(line!).map(([text]) => text)).toEqual(['a', 'b', ' ', 'cd']);
+  const xs = placed(line!).map(([, x]) => x);
+  expect(xs[1]).toBeCloseTo(10 + step, 6);
+  expect(xs[2]).toBeCloseTo(20 + step, 6);
+  expect(xs[3]).toBeCloseTo(80, 6);
+  // A kerned line with spaces sets as a justified line: words whole, spaces stretched.
+  const [words] = linesOf(layout(paragraph(run('ab cd', kerned(2))), cascade));
+  expect(placed(words!).filter(([text]) => text.trim() !== '')).toEqual([
+    ['ab', 0],
+    ['cd', 80],
+  ]);
+});
+
+test('the common kerning default keeps a distributed single word centered', () => {
+  const cascade = styles(runDefaults('<w:kern w:val="2"/>'));
+  const [line] = linesOf(layout(paragraph(run('Text')), cascade));
+  expect(placed(line!)).toEqual([['Text', 30]]);
+  // An explicit `w:kern w:val="0"` on the run turns the inherited kerning off again.
+  const [unkerned] = linesOf(layout(paragraph(run('Text', kerned(0))), cascade));
+  expect(placed(unkerned!).map(([, x]) => x)).toEqual([0, 30, 60, 90]);
+});
+
+test('a kerning threshold above the run size does not hold the letters', () => {
+  // 12pt threshold, 11pt runs: kerning is off, so the word spreads.
+  const [above] = linesOf(
+    layout(paragraph(run('Text')), styles(runDefaults('<w:kern w:val="24"/>')))
+  );
+  expect(placed(above!).map(([, x]) => x)).toEqual([0, 30, 60, 90]);
+  // A threshold equal to the run size kerns, so the word centers.
+  const [equal] = linesOf(
+    layout(paragraph(run('Text')), styles(runDefaults('<w:kern w:val="22"/>')))
+  );
+  expect(placed(equal!)).toEqual([['Text', 30]]);
+});
+
+test('kerning does not hold East Asian characters together', () => {
+  const cascade = styles(runDefaults('<w:kern w:val="2"/>'));
+  const [cjk] = linesOf(layout(paragraph(run('漢字漢字')), cascade));
+  expect(placed(cjk!)).toEqual([
+    ['漢', 0],
+    ['字', 30],
+    ['漢', 60],
+    ['字', 90],
+  ]);
+  // Latin text between East Asian characters stays whole; the gaps beside it still open.
+  const [mixed] = linesOf(layout(paragraph(run('漢ab漢')), cascade));
+  expect(placed(mixed!).map(([text]) => text)).toEqual(['漢', 'ab', '漢']);
+});
+
+test('a legacy package spreads kerned runs too', () => {
+  const kernDefault = runDefaults('<w:kern w:val="2"/>');
+  for (const cascade of [styles(kernDefault, 14), styles(kernDefault, null)]) {
+    const [line] = linesOf(layout(paragraph(run('Text')), cascade));
+    expect(placed(line!).map(([, x]) => x)).toEqual([0, 30, 60, 90]);
+  }
+});
