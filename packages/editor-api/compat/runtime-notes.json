@@ -201,7 +201,7 @@
   },
   "Word.Paragraph#startNewList": {
     "status": "partial",
-    "notes": "Creates an independent bullet-list counter and nine defined levels. Existing templates may be shared, but missing levels and later format changes use private instance overrides. Creation must be the only mutation in its sync. Sync before configuring the returned list. Protected targets refuse. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
+    "notes": "Creates an independent bullet-list counter and nine defined levels. Existing templates may be shared; the new instance then restarts every level with a startOverride, so it numbers on its own after a later format change. Missing levels and later format changes use private instance overrides. Creation must be the only mutation in its sync. Sync before configuring the returned list. Protected targets refuse. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
   },
   "Word.Paragraph#attachToList": {
     "status": "partial",
@@ -221,7 +221,7 @@
   },
   "Word.List#setLevelStartingNumber": {
     "status": "partial",
-    "notes": "Sets the instance level counter start, including zero, as a nonnegative 32-bit integer. Existing startOverride values are replaced by the authored level start. Changes save/reopen and undo/redo without changing unrelated list counters. Membership shared across stories, including main body, headers, and notes, refuses with InvalidArgument. Unrelated override metadata is preserved. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles. TrackMineOnly supports definition changes only for a newly proposed list whose membership belongs to the runtime author. Established list definitions refuse."
+    "notes": "Sets the instance level counter start, including zero, as a nonnegative 32-bit integer. The starting number is written as a startOverride and as the level start, replacing any earlier override. Changes save/reopen and undo/redo without changing unrelated list counters. Membership shared across stories, including main body, headers, and notes, refuses with InvalidArgument. Unrelated override metadata is preserved. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles. TrackMineOnly supports definition changes only for a newly proposed list whose membership belongs to the runtime author. Established list definitions refuse."
   },
   "Word.List#setLevelIndents": {
     "status": "partial",

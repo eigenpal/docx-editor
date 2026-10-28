@@ -248,22 +248,20 @@ function nextFreeId(nodes: readonly OoxmlElement[], attributeName: string): numb
 }
 
 /**
- * One `w:lvlOverride`/`w:startOverride` per numbered level of a reused `w:abstractNum`, each at
- * that level's own `w:start`.
+ * One `w:lvlOverride`/`w:startOverride` per level of a reused `w:abstractNum`, each at that
+ * level's own `w:start`.
  *
  * Every `w:num` over one abstract definition counts on one shared counter, so a new list on a
- * reused template would otherwise continue the earlier list. Bullet and `none` levels print no
- * counter and get no override. The start comes from the file, so it is bounded the way the
- * layout index reads it.
+ * reused template would otherwise continue the earlier list. Bullet and `none` levels get the
+ * override too: a bullet list can become numbered later (a level format change replaces the
+ * level inside this same `w:num`), and it must still start on its own. The start comes from the
+ * file, so it is bounded the way the layout index reads it.
  */
 function restartOverridesXml(abstract: OoxmlElement): string {
   const starts = new Map<number, number>();
   for (const level of childrenNamed(abstract, 'lvl')) {
     const ilvlRaw = attribute(level, 'ilvl') ?? '0';
     if (!/^[0-8]$/.test(ilvlRaw) || starts.has(Number(ilvlRaw))) continue;
-    const format = childrenNamed(level, 'numFmt')[0];
-    const formatValue = (format && attribute(format, 'val')) ?? 'decimal';
-    if (formatValue === 'bullet' || formatValue === 'none') continue;
     const start = childrenNamed(level, 'start')[0];
     const startRaw = (start && attribute(start, 'val')) ?? '';
     starts.set(Number(ilvlRaw), /^\d{1,9}$/.test(startRaw) ? Math.min(Number(startRaw), 9999) : 1);
@@ -288,7 +286,7 @@ export interface EnsuredListDefinition {
  *
  * An existing abstract definition of the same kind is reused, but every disconnected list
  * gets a fresh `w:num` instance. Counters belong to the abstract definition, shared by every
- * `w:num` over it, so the fresh instance restarts each numbered level with a
+ * `w:num` over it, so the fresh instance restarts each level with a
  * `w:startOverride` (see {@link restartOverridesXml}). Returns null only when the part cannot
  * be built at all.
  */
