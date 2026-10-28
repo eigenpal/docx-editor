@@ -562,6 +562,66 @@ The editor SHALL replace host font resources without replacing its document sess
 - **THEN** the editor reports the failure with its cause and keeps bounded fallback measurement
 - **AND** it does not restore fonts that the host removed
 
+### Requirement: Terminal exact-row outer rule extent
+
+Semantic layout SHALL place a supported terminal exact row's simple bottom rule outside its authored content height. Published boxes, painted borders, following flow, and page admission SHALL include that outer extent, with the exceptions that the scenarios state. Canonical source text and saved XML SHALL remain unchanged.
+
+#### Scenario: Outer rule preserves authored exact row pitch
+
+- **WHEN** supported exact rows have equal single outer rules
+- **THEN** the distance between the outer rule centers equals the authored exact row pitch
+- **AND** following text starts below the published terminal extent
+
+#### Scenario: Border room is insufficient
+
+- **WHEN** an authored exact row fits the remaining band but its complete outer rule does not
+- **AND** the row starts below other content on the page
+- **THEN** the row moves to the next page
+
+#### Scenario: Border room is insufficient at the top of a page
+
+- **WHEN** an authored exact row fits the page band but its complete outer rule does not
+- **AND** the row starts at the top of the page, or directly below repeated header rows before compatibility mode 15
+- **THEN** the row keeps its page and authored content height
+- **AND** only its outer bottom rule extends past the bottom margin
+
+#### Scenario: Outer rule ends exactly at the bottom margin
+
+- **WHEN** an authored exact row and its complete outer rule end exactly at the bottom of the band
+- **THEN** the row keeps its page
+
+#### Scenario: Repeated headers yield to the outer rule
+
+- **WHEN** compatibility mode is 15 or later
+- **AND** a continuation page can hold the repeated header group and the authored exact row, but not also its complete outer rule
+- **THEN** the repeated header group is omitted on that page
+- **AND** the row starts at the top of the page
+
+#### Scenario: Cell text uses the authored bottom
+
+- **WHEN** a terminal exact-row cell has center or bottom alignment
+- **THEN** text aligns within the authored height and cell margins
+- **AND** the bottom rule reserves no space inside that content box
+
+### Requirement: Terminal-rule table eligibility
+
+Bounded, top-level, unpositioned, collapsed tables with text-only horizontal projections and complete grid coverage SHALL qualify. Terminal bottom-cell rules SHALL be equal single rules up to 12pt. Repeated headers, horizontal spans, and vertical merges in either column SHALL use the same terminal rule. Top and bottom widths MAY differ. Eighth-point widths SHALL NOT require integral-twip conversion for this outer extent.
+
+#### Scenario: Unsupported shapes keep existing geometry
+
+- **WHEN** a table has nested content, supported bottom-to-top cells, compound bottom rules, cell spacing, or unequal bottom-cell widths
+- **THEN** it retains its existing geometry
+
+### Requirement: Cached terminal-rule eligibility
+
+Eligibility scanning SHALL preserve canonical rows and their merge state. Repeated placement of an immutable table SHALL reuse its cached eligibility decision, including a refused decision.
+
+#### Scenario: Cached eligibility preserves source rows
+
+- **WHEN** a supported immutable table has a two-row first-column prefix merge
+- **THEN** eligibility scanning leaves the actual merge and canonical rows unchanged
+- **AND** repeated placement reuses only the structure's cached eligibility decision
+
 ### Requirement: Qualified East Asian curly bearings in existing punctuation windows
 
 The layout engine SHALL allow curly quotes in runs with the East Asian font hint (`w:hint="eastAsia"`) to contribute measured opening or closing bearings inside an existing qualified CJK punctuation fitting window. The face SHALL resolve, authored character spacing SHALL be zero, horizontal scale SHALL be 100%, and complex shaping SHALL be absent. The document SHALL qualify its East Asian default face and SHALL NOT disable punctuation kerning.

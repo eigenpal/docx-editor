@@ -40,6 +40,7 @@ const MODE_MATRIX = {
   positionedTableBreaksAtMargin: 'modern',
   pageBreakBeforeKeepsSpace: 'legacy',
   pageBreakLinesStretch: 'legacy',
+  repeatedHeaderYieldsToTerminalRule: 'modern',
   rowPageBreakYieldsToKeep: 'modern',
   tableParagraphWidowControl: 'modern',
   vMergeTextMovesPastHeadRow: 'modern',

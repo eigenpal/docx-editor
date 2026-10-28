@@ -125,6 +125,32 @@ describe('authored header rows before a cantSplit row taller than a page', () =>
     expect(placed[3]!.startsWith(`${HEADER} R1c1-`)).toBe(true);
   });
 
+  test('mode 15: the tall-row page and the exact last row page both omit the repeat', () => {
+    // A 155pt exact last row fits below a 14pt repeat in the 170pt band only without its
+    // 1.5pt bottom rule, so that page omits the repeat too; without borders it keeps it.
+    const BORDERS =
+      '<w:tblBorders>' +
+      ['top', 'left', 'bottom', 'right']
+        .map((side) => `<w:${side} w:val="single" w:sz="12"/>`)
+        .join('') +
+      '</w:tblBorders>';
+    const rows = [HEAD, tall('R1'), row('X', { cantSplit: true, exactTwips: 3100 })];
+    const layOut = (tblPr: string) =>
+      pages(lay(load(P8 + table(rows, tblPr) + TAIL), 15)).map((page) => page.split(' '));
+    for (const [tblPr, terminalRepeat] of [
+      [BORDERS, false],
+      ['', true],
+    ] as const) {
+      const placed = layOut(tblPr);
+      const start = placed.findIndex((page) => page.includes('R1c1-1'));
+      expect(placed[start]![0]).toBe('R1c1-1');
+      expect(placed[start + 1]!.slice(0, 2)).toEqual(['Hc1-1', 'Hc2-1']);
+      const last = placed.findIndex((page) => page.includes('Xc1-1'));
+      expect(last).toBeGreaterThan(start + 1);
+      expect(placed[last]![0] === 'Hc1-1').toBe(terminalRepeat);
+    }
+  });
+
   test('mode 15: the header rows and a kept first body row move before the tall row', () => {
     const body = P8 + table([HEAD, row('K', { keep: [true, true] }), tall('R1')]) + TAIL;
     const placed = pages(lay(load(body), 15));
