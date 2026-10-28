@@ -322,57 +322,114 @@ function alignLogicalSpans(
       withoutTrailingZeroWidthSpaces(spans[slotEnd - 1]!.text) === ''
     )
       slotEnd -= 1;
-    // A distributed line with nothing to stretch, such as a single word or character, centers.
-    // Tabs and float advances hold their reserved positions, so a line with one never moves.
-    const reserved = spans.some(
-      (span) => span.text.includes('\t') || (span.wrapAdvanceBefore ?? 0) > 0.001
-    );
-    const centers = distributed !== undefined && !reserved;
     const centered = (): readonly StyleSpanRecord[] =>
       spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + slack / 2 } }));
-    // Character distribution, unless the spaces can take all the slack: the line then sets
-    // as a justified line, and only its spaces stretch.
-    let spacesOnly = false;
-    if (centers && distributed !== undefined && distributed !== 'spaces' && !paragraphRtl) {
-      spacesOnly = spacesAbsorbSlack(spans, measurer, slack, slotEnd, distributed);
-      if (!spacesOnly)
-        return distributeLineCharacters(spans, measurer, slack, slotEnd, distributed) ?? centered();
+    // Float advances hold their reserved positions, so a line with one never moves.
+    const floatReserved = spans.some((span) => (span.wrapAdvanceBefore ?? 0) > 0.001);
+    // A left-to-right distributed line with a tab stretches only the text after its last
+    // tab, from that tab's stop to the line end, when the stop is a left one. Otherwise, or
+    // when that text has nothing to stretch, the whole line centers with its tab positions.
+    const tabIndex =
+      distributed !== undefined && !paragraphRtl && !floatReserved
+        ? lastTabBefore(spans, slotEnd)
+        : -1;
+    if (tabIndex >= 0) {
+      const from = tabIndex + 1;
+      const stretched =
+        spans[tabIndex]!.tabAlignment === undefined && from < slotEnd
+          ? stretchJustifiedLine(
+              spans.slice(from),
+              measurer,
+              slack,
+              slotEnd - from,
+              distributed,
+              true
+            )
+          : null;
+      return stretched ? [...spans.slice(0, from), ...stretched] : centered();
     }
-    const justified = spacesOnly ? null : justifyCjkSpans(spans, measurer, slack, distributed);
-    if (justified) return justified === spans && centers ? centered() : justified;
-    // Only boundaries after an expandable space receive slack — the same slots paint stretches
-    // with `word-spacing`. A uniform step across every span pair invented gaps before tabs and
-    // run splits and drifted every later caret by N×step. Hanging whitespace runs are not
-    // slots either: a boundary between two of them took a share of the slack from the words.
-    const gapBefore: number[] = [];
-    // Spaces before a distributed line's first character keep their advance.
-    let slotStart = 1;
-    if (distributed !== undefined) {
-      while (slotStart < slotEnd && withoutTrailingSpaces(spans[slotStart - 1]!.text) === '')
-        slotStart += 1;
-    }
-    for (let index = slotStart; index < slotEnd; index += 1) {
-      if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
-    }
+    // A distributed line with nothing to stretch, such as a single word or character, centers.
+    const centers =
+      distributed !== undefined &&
+      !floatReserved &&
+      !spans.some((span) => span.text.includes('\t'));
+    const stretched = stretchJustifiedLine(
+      spans,
+      measurer,
+      slack,
+      slotEnd,
+      distributed,
+      centers,
+      paragraphRtl
+    );
+    if (stretched) return stretched;
     // Nothing to stretch, such as one word before a manual line break: a distributed line
     // centers; any other line stays at its start edge, the right one in a right-to-left paragraph.
-    if (gapBefore.length === 0) {
-      if (centers) return centered();
-      if (!paragraphRtl) return spans;
-      const start = slack - rtlTrailingAdvance;
-      return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + start } }));
-    }
-    const step = slack / gapBefore.length;
-    const gapSet = new Set(gapBefore);
-    let shift = 0;
-    return spans.map((span, index) => {
-      if (gapSet.has(index)) shift += step;
-      return shift === 0 ? span : { ...span, box: { ...span.box, x: span.box.x + shift } };
-    });
+    if (centers) return centered();
+    if (!paragraphRtl) return spans;
+    const start = slack - rtlTrailingAdvance;
+    return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + start } }));
   }
 
   const offset = (alignment === 'center' ? slack / 2 : slack) - rtlTrailingAdvance;
   return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } }));
+}
+
+/** The index of the last tab span before `end`, or -1. */
+function lastTabBefore(spans: readonly StyleSpanRecord[], end: number): number {
+  for (let index = Math.min(end, spans.length) - 1; index >= 0; index -= 1) {
+    if (spans[index]!.text.includes('\t')) return index;
+  }
+  return -1;
+}
+
+/**
+ * Stretch a justified line, or the part of a distributed line after its last tab, by `slack`
+ * over `spans[0, slotEnd)`. `distributed` is the spacing of a distributed line, undefined for
+ * an ordinary justified line. `spreads` says whether the line may spread its characters or
+ * center: a distributed line with no reserved position. Returns null when nothing can
+ * stretch, so the caller decides where the line sits.
+ */
+function stretchJustifiedLine(
+  spans: readonly StyleSpanRecord[],
+  measurer: TextMeasurer,
+  slack: number,
+  slotEnd: number,
+  distributed: DistributedSpacing | undefined,
+  spreads: boolean,
+  paragraphRtl = false
+): readonly StyleSpanRecord[] | null {
+  // Character distribution, unless the spaces can take all the slack: the line then sets
+  // as a justified line, and only its spaces stretch.
+  let spacesOnly = false;
+  if (spreads && distributed !== undefined && distributed !== 'spaces' && !paragraphRtl) {
+    spacesOnly = spacesAbsorbSlack(spans, measurer, slack, slotEnd, distributed);
+    if (!spacesOnly) return distributeLineCharacters(spans, measurer, slack, slotEnd, distributed);
+  }
+  const justified = spacesOnly ? null : justifyCjkSpans(spans, measurer, slack, distributed);
+  if (justified) return justified === spans && spreads ? null : justified;
+  // Only boundaries after an expandable space receive slack — the same slots paint stretches
+  // with `word-spacing`. A uniform step across every span pair invented gaps before tabs and
+  // run splits and drifted every later caret by N×step. Hanging whitespace runs are not
+  // slots either: a boundary between two of them took a share of the slack from the words.
+  const gapBefore: number[] = [];
+  // Spaces before a distributed line's first character keep their advance.
+  let slotStart = 1;
+  if (distributed !== undefined) {
+    while (slotStart < slotEnd && withoutTrailingSpaces(spans[slotStart - 1]!.text) === '')
+      slotStart += 1;
+  }
+  for (let index = slotStart; index < slotEnd; index += 1) {
+    if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
+  }
+  if (gapBefore.length === 0) return null;
+  const step = slack / gapBefore.length;
+  const gapSet = new Set(gapBefore);
+  let shift = 0;
+  return spans.map((span, index) => {
+    if (gapSet.has(index)) shift += step;
+    return shift === 0 ? span : { ...span, box: { ...span.box, x: span.box.x + shift } };
+  });
 }
 
 /**

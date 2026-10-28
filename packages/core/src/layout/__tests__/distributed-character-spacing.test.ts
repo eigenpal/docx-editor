@@ -231,16 +231,23 @@ test('right-to-left text keeps its letters together', () => {
   expect(placed(hebrew!)).toEqual([['שלום', 30]]);
 });
 
-test('a distributed tab line keeps its tab position', () => {
+test('a distributed tab line spreads the text after its tab from the tab stop', () => {
   const cascade = WITH_RUN_DEFAULTS['an empty rPrDefault'];
   const body = (alignment: string) =>
     paragraph(
       `<w:r>${RUN}<w:t>Ab</w:t><w:tab/><w:t>Cd</w:t></w:r>`,
       `<w:jc w:val="${alignment}"/>`
     );
-  const xOf = (alignment: string) =>
-    linesOf(layout(body(alignment), cascade))[0]!.spans.find((s) => s.text.includes('Cd'))!.box.x;
-  expect(xOf('distribute')).toBeCloseTo(xOf('left'), 7);
+  const left = linesOf(layout(body('left'), cascade))[0]!;
+  const [line] = linesOf(layout(body('distribute'), cascade));
+  const stop = left.spans.find((span) => span.text === 'Cd')!.box.x;
+  // The text before the tab and the tab stop stay; the last character reaches the edge.
+  expect(placed(line!)).toEqual([
+    ['Ab', 0],
+    ['\t', 20],
+    ['C', stop],
+    ['d', 90],
+  ]);
 });
 
 test('a distributed single word spreads its letters in a table cell', () => {

@@ -37,7 +37,15 @@ The layout engine SHALL stretch the final line of a paragraph with `w:jc` set to
 - **THEN** the line is centered in its measure
 - **AND** spaces before the line's first character are not stretched
 - **AND** a justified paragraph with the same line keeps it at its start edge
-- **AND** a distributed line with a tab or a float advance keeps its reserved positions
+- **AND** a distributed line with a float advance keeps its reserved positions
+
+#### Scenario: Distributed line with a tab
+
+- **GIVEN** a left-to-right distributed paragraph
+- **WHEN** layout aligns a line that holds a tab
+- **THEN** the text before the last tab and every tab position stay where the tabs put them
+- **AND** when the last tab reaches a left stop, the text after it stretches from that stop to the line end as a distributed line does
+- **AND** when the last tab reaches a right, center, or decimal stop, or the text after it has nothing to stretch, the whole line is centered in its measure
 
 ### Requirement: Native semantic layout records
 

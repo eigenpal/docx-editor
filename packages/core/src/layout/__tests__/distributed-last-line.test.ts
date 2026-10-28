@@ -145,13 +145,15 @@ for (const [name, before, after] of [
   ['Latin', 'Ab', 'Cd'],
   ['CJK', '氏名', '値'],
 ] as const) {
-  test(`a distributed ${name} line with a tab keeps its tab position`, () => {
+  test(`a distributed ${name} line with nothing to stretch after its tab centers`, () => {
     const body = (alignment: string) =>
       `<w:p><w:pPr><w:jc w:val="${alignment}"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${before}</w:t><w:tab/><w:t>${after}</w:t></w:r></w:p>`;
     const xOf = (alignment: string) =>
       layout(body(alignment))[0]!.spans.find((s) => s.text.includes(after))!.box.x;
-    expect(xOf('distribute')).toBeCloseTo(xOf('both'), 7);
-    expect(xOf('distribute')).toBeCloseTo(xOf('left'), 7);
+    // The whole line moves by half the room after its content, its tab position included.
+    const end = xOf('left') + 10 * after.length;
+    expect(xOf('both')).toBeCloseTo(xOf('left'), 7);
+    expect(xOf('distribute')).toBeCloseTo(xOf('left') + (100 - end) / 2, 7);
   });
 }
 

@@ -288,6 +288,7 @@ const SPAN_DECORATIONS: Record<Exclude<keyof StyleSpanRecord, 'range' | 'text' |
   caretEdges: true,
   tabLeader: true,
   tabLeaderAdvancePt: true,
+  tabAlignment: true,
   link: true,
   wrapAdvanceBefore: true,
   revisions: true,

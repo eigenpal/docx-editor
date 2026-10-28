@@ -4533,6 +4533,8 @@ export interface StyleSpanRecord {
     readonly range: SourceRange;
     readonly revisions?: readonly RevisionAttribution[];
     readonly style: ResolvedRunStyle;
+    // @internal
+    readonly tabAlignment?: Exclude<TabAlignment, 'left'>;
     readonly tabLeader?: TabLeader;
     readonly tabLeaderAdvancePt?: number;
     // (undocumented)

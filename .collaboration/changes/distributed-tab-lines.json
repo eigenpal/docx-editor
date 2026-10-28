@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A distributed line with a tab keeps every span at the position the tabs give it.",
+  "after": "A left-to-right distributed line with a tab stretches only the text after its last tab. When that tab reaches a left stop, the text spreads from the stop to the line end; when it reaches a right, center, or decimal stop, or the text has nothing to stretch, the whole line is centered with its tab positions.",
+  "reason": "Only layout geometry changes. Canonical OOXML, source positions, operations, and collaboration formats remain unchanged. Tab spans carry the alignment of the stop they reached as a derived layout field. Every peer derives the same geometry from the same document parts.",
+  "tests": [
+    "packages/core/src/layout/__tests__/distributed-tab-lines.test.ts",
+    "packages/core/src/layout/__tests__/distributed-character-spacing.test.ts",
+    "packages/core/src/layout/__tests__/distributed-last-line.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-distributed-last-line.test.ts"
+  ],
+  "changeset": "distributed-tab-lines",
+  "migration": null
+}

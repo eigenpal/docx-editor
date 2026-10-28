@@ -65,7 +65,7 @@ import {
 import {
   EMPTY_TAB_STOPS,
   tabAdvanceWidth,
-  TAB_LEADER_GLYPH,
+  tabStopSpanFields,
   type ResolvedTabStops,
 } from './paragraph-tabs.ts';
 import { SINGLE_LINE_SPACING } from './paragraph-style.ts';
@@ -1273,19 +1273,11 @@ export function breakParagraph(
           props: piece.props,
           style: piece.style,
           box: { x: currentX, y: 0, width, height: metrics.height },
-          // The leader belongs to the stop that was REACHED, so it is resolved here with the
-          // destination rather than re-derived from the paragraph at paint time — and its
-          // glyph is MEASURED here too, in this run's own face, because paint has no
-          // measurer and a guessed advance cannot space the dots the way typing them would.
-          ...(destination.leader
-            ? {
-                tabLeader: destination.leader,
-                tabLeaderAdvancePt: measurer.measure(
-                  TAB_LEADER_GLYPH.get(destination.leader) ?? '.',
-                  piece.style
-                ),
-              }
-            : {}),
+          // The leader and alignment belong to the stop that was REACHED, so they are resolved
+          // here with the destination rather than re-derived from the paragraph at paint
+          // time — and the leader glyph is MEASURED here too, in this run's own face, because
+          // paint has no measurer and a guessed advance cannot space the dots as typing would.
+          ...tabStopSpanFields(destination, (glyph) => measurer.measure(glyph, piece.style)),
           ...(piece.link ? { link: piece.link } : {}),
           ...(layoutOwned && !piece.positionalTab ? { projected: true as const } : {}),
           ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
