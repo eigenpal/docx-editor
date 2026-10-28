@@ -7,6 +7,7 @@
 // gaps are real span geometry, as in East Asian justification, so paint, PDF export, the caret
 // and hit testing read one layout.
 import { authoredCjkGapMetric } from './cjk-auto-spacing-metric-port.ts';
+import { automaticTextSpacingBefore } from './cjk-automatic-spacing.ts';
 import { knownFamilyReverseGap } from './authored-average-widths.ts';
 import type { DistributedSpacing } from './distributed-spacing.ts';
 import { segmentGraphemes } from './grapheme.ts';
@@ -19,11 +20,11 @@ import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 export const SPACE_SHARE_LIMIT = 0.45;
 
 /**
- * How much of the slack one U+0020 takes before any character gap does. In
+ * How much of the slack one U+0020 of advance `own` takes before any character gap does. In
  * `'legacyCharacters'` spacing it is the face's average character width less the space's own
  * advance; a face with no known average width takes the `'characters'` share instead.
  */
-function spaceCapacity(
+export function spaceSlackCapacity(
   space: StyleSpanRecord,
   own: number,
   measurer: TextMeasurer,
@@ -72,7 +73,7 @@ export function spacesAbsorbSlack(
       if (character === ' ') {
         if (!seen) continue;
         own ??= measureDisplayText(' ', styleForFontSlot(span.style, span.fontSlot), measurer);
-        pending += spaceCapacity(span, own, measurer, spacing);
+        pending += spaceSlackCapacity(span, own, measurer, spacing);
       } else if (!ZERO_WIDTH.test(character)) {
         if (seen) capacity += pending;
         pending = 0;
@@ -147,24 +148,33 @@ export function distributeLineCharacters(
   if (first < 0 || first === last) return null;
   // A gap opens before every visible character after the first.
   let gaps = 0;
+  // Slack a space takes after itself, and an automatic inter-script gap before its piece.
   const capacities = new Map<number, number>();
+  const gapCapacities = new Map<number, number>();
   let totalCapacity = 0;
   for (let index = first + 1; index <= last; index++) {
     const piece = pieces[index]!;
     if (!isVisible(piece)) continue;
     gaps += 1;
     if (index < last && isSpace(piece)) {
-      const capacity = spaceCapacity(piece, piece.box.width, measurer, spacing);
+      const capacity = spaceSlackCapacity(piece, piece.box.width, measurer, spacing);
       capacities.set(index, capacity);
       totalCapacity += capacity;
     }
+    // An automatic gap between East Asian and other text grows up to twice its size.
+    const automatic = automaticTextSpacingBefore(piece);
+    if (automatic > 0) {
+      gapCapacities.set(index, automatic);
+      totalCapacity += automatic;
+    }
   }
-  // Spaces fill first, in proportion to their capacity, up to it.
+  // Spaces and automatic gaps fill first, in proportion to their capacity, up to it.
   const spaceShare = totalCapacity > 0 ? Math.min(1, slack / totalCapacity) : 0;
   const step = (slack - spaceShare * totalCapacity) / gaps;
   let shift = 0;
   const placed = pieces.map((piece, index) => {
-    if (index > first && index <= last && isVisible(piece)) shift += step;
+    if (index > first && index <= last && isVisible(piece))
+      shift += step + spaceShare * (gapCapacities.get(index) ?? 0);
     const moved = shift === 0 ? piece : { ...piece, box: { ...piece.box, x: piece.box.x + shift } };
     shift += spaceShare * (capacities.get(index) ?? 0);
     return moved;

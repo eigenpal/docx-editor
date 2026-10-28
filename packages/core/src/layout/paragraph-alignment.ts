@@ -338,7 +338,7 @@ function alignLogicalSpans(
       if (!spacesOnly)
         return distributeLineCharacters(spans, measurer, slack, slotEnd, distributed) ?? centered();
     }
-    const justified = spacesOnly ? null : justifyCjkSpans(spans, measurer, slack);
+    const justified = spacesOnly ? null : justifyCjkSpans(spans, measurer, slack, distributed);
     if (justified) return justified === spans && centers ? centered() : justified;
     // Only boundaries after an expandable space receive slack — the same slots paint stretches
     // with `word-spacing`. A uniform step across every span pair invented gaps before tabs and

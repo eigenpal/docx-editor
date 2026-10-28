@@ -22,6 +22,14 @@ The layout engine SHALL stretch the final line of a paragraph with `w:jc` set to
 - **AND** caret placement and hit testing follow the spread characters
 - **AND** screen paint keeps underline, highlight, and revision marks continuous across the gaps, and the PDF joins a single underline across them
 
+#### Scenario: East Asian line spreads every character gap
+
+- **GIVEN** a justified line, or a distributed line that does not spread every character, that holds East Asian text
+- **WHEN** layout aligns the line
+- **THEN** each space first takes up to 45 percent of its own advance, and each automatic gap between East Asian and other text grows up to twice its size
+- **AND** the rest of the slack goes in equal steps to every boundary between two East Asian characters, punctuation and brackets included, to every boundary with an automatic gap, and to every boundary after a space
+- **AND** text in other scripts keeps its letters together, and a boundary between East Asian and other text with no automatic gap does not stretch
+
 #### Scenario: Distributed line has nothing to stretch
 
 - **GIVEN** a distributed paragraph in a modern-mode package with no `w:rPrDefault` element, or a right-to-left distributed paragraph
