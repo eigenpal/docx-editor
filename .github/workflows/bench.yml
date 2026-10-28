@@ -1,7 +1,8 @@
 name: Performance benchmark
 
-# Runs two benchmarks for PRs and main pushes (docs-only changes skip it). PRs receive one
-# sticky comment with the before/after tables. Main runs retain artifacts:
+# Runs two benchmarks for PRs that change runtime code, and once each night for main.
+# PRs receive one sticky comment with the before/after tables. Nightly runs compare main with
+# main 24 hours earlier and retain artifacts:
 #   - the browser typing-latency bench (e2e/edit-browser.bench.spec.ts) — the
 #     UX number: keystroke handler and frame latency through the real editor;
 #   - the deterministic edit benchmark (scripts/bench/edit-bench.ts) — the
@@ -22,42 +23,78 @@ name: Performance benchmark
 # HEAD browser runs (this is the only CI execution of that spec). A failing
 # BASELINE run only degrades the comment.
 
-# Documentation, changesets, and specs cannot change editing speed, so a change
-# that touches only those files skips the benchmark.
+# Only shipped source, the benchmark host, and the benchmark itself can change editing speed.
+# Tests, docs, examples other than the benchmark host, and CI files skip the PR benchmark.
+# Patterns apply in order: the negations drop test files, and the last line puts the benchmark
+# gate tests back. Main used to run this on every merge; one nightly run costs a fraction of
+# that and still shows which day's merges moved a number.
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - 'openspec/**'
-      - '.changeset/**'
-      - '**/*.md'
-      - '**/*.mdx'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - 'openspec/**'
-      - '.changeset/**'
-      - '**/*.md'
-      - '**/*.mdx'
+    paths:
+      - 'packages/*/src/**'
+      - 'packages/*/package.json'
+      - 'examples/vite/**'
+      - 'e2e/edit-browser*'
+      - 'e2e/fixtures/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'bunfig.toml'
+      - '.github/workflows/bench.yml'
+      - '!**/__tests__/**'
+      - '!**/*.test.ts'
+      - '!**/*.test.tsx'
+      - '!**/*.md'
+      - 'scripts/bench/**'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch: {}
 
 # Least-privilege default; the bench job escalates pull-requests itself.
 permissions:
   contents: read
 
-# PR pushes supersede their previous run. Each main commit keeps its own run.
+# PR pushes supersede their previous run. Each nightly run keeps its own run.
 concurrency:
-  group: bench-${{ github.event.pull_request.number || github.sha }}
+  group: bench-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # The nightly baseline is main 24 hours ago. A night without merges has nothing to measure.
+  # This runs on a free hosted runner, so an idle night costs nothing.
+  nightly-base:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      base: ${{ steps.base.outputs.base }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Find main 24 hours ago
+        id: base
+        run: |
+          BASE=$(git rev-list -1 --before='24 hours ago' HEAD)
+          if [ -z "$BASE" ] || [ "$BASE" = "$(git rev-parse HEAD)" ]; then
+            echo "No merges in the last 24 hours; skipping the benchmark."
+          else
+            echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          fi
+
   bench:
-    if: github.event_name == 'push' || github.actor != 'dependabot[bot]'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: nightly-base
+    if: >-
+      !cancelled() && (
+        (github.event_name == 'pull_request' && github.actor != 'dependabot[bot]') ||
+        (github.event_name != 'pull_request' && needs.nightly-base.outputs.base != '')
+      )
+    runs-on: ubuntu-24.04
     # Sized for the three-fixture browser pass (plain + tracked + the generated
     # ~1,000-page stress document) on both sides.
-    timeout-minutes: ${{ github.event_name == 'push' && 45 || 35 }}
+    timeout-minutes: ${{ github.event_name != 'pull_request' && 45 || 35 }}
     permissions:
       contents: read # checkout + merge-base worktree
       pull-requests: write # upsert the single sticky benchmark comment
@@ -78,10 +115,12 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
+          # Downloading the binary takes seconds; caching it only fills the cache.
+          no-cache: true
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bash scripts/ci/install-dependencies.sh
 
       - name: Install Playwright Chromium
         run: bash scripts/install-ci-chromium.sh
@@ -91,14 +130,14 @@ jobs:
         env:
           BENCH_EVENT: ${{ github.event_name }}
           BENCH_BASE_REF: ${{ github.base_ref }}
-          BENCH_PREVIOUS_SHA: ${{ github.event.before }}
+          BENCH_PREVIOUS_SHA: ${{ needs.nightly-base.outputs.base }}
         run: |
           mkdir -p bench-out
           # HEAD is the PR merge ref, so this resolves to the main tip the merge
           # ref was built against — the delta isolates exactly what merging this
           # PR changes. Do not "fix" this to the branch fork point.
-          if [ "$BENCH_EVENT" = "push" ]; then
-            # Compare the merged main state with the main state before this push.
+          if [ "$BENCH_EVENT" != "pull_request" ]; then
+            # Compare main with main 24 hours earlier.
             BASE="$BENCH_PREVIOUS_SHA"
             if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
               echo "Previous main commit is unavailable; report head measurements only."
@@ -112,7 +151,7 @@ jobs:
           if [ -f "$RUNNER_TEMP/base/scripts/bench/edit-bench.ts" ] && \
              [ -f "$RUNNER_TEMP/base/e2e/fixtures/synthetic-long-edit.docx" ]; then
             cd "$RUNNER_TEMP/base"
-            bun install --frozen-lockfile
+            bash "$GITHUB_WORKSPACE/scripts/ci/install-dependencies.sh"
             # Browser binaries live in the shared Playwright cache; install still
             # runs in case the baseline pins a different Playwright build.
             # ux only when the baseline spec understands the RUNS env var, or its
@@ -212,7 +251,7 @@ jobs:
         run: bun scripts/bench/edit-bench.ts --runs 3 --json > bench-out/head-4.json
 
       - name: Additional engine rounds on main
-        if: github.event_name == 'push' && steps.baseline.outputs.engine == 'true'
+        if: github.event_name != 'pull_request' && steps.baseline.outputs.engine == 'true'
         run: |
           # Twelve paired engine rounds support uncertainty estimates without
           # multiplying the expensive browser passes. Preserve ABBA ordering.

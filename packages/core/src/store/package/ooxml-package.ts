@@ -55,6 +55,7 @@ import type { OoxmlPart, OoxmlReadRejection } from './ooxml-tree.ts';
 import { serializeOoxmlPartSteps } from './ooxml-serialize-steps.ts';
 import { captureXmlPartRoot } from './canonical-primitive-lower.ts';
 import { commentExportPackage } from './comment-export-cleanup.ts';
+import { withoutDuplicateNoteProperties } from './note-lifecycle-props.ts';
 
 const CONTENT_TYPES_PART = '/[Content_Types].xml';
 const CONTENT_TYPES_NAMESPACE = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -640,7 +641,11 @@ export function writeOoxmlPackage(pkg: OoxmlPackage): Uint8Array {
  * @internal
  */
 export function* writeOoxmlPackageSteps(pkg: OoxmlPackage): Generator<void, Uint8Array> {
-  const exported = yield* textboxFallbackExportPackageSteps(commentExportPackage(pkg));
+  // Concurrent note property writes can leave a repeated element in shared state; the saved
+  // file keeps the first copy, which is the one every reader uses.
+  const exported = yield* textboxFallbackExportPackageSteps(
+    commentExportPackage(withoutDuplicateNoteProperties(pkg))
+  );
   yield;
   const entries = new Map<string, Uint8Array>(exported.partBytes);
   for (const [name, part] of exported.parts) {

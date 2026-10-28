@@ -41,6 +41,12 @@ export interface WrapExclusionInput {
   readonly wrapDistances: DrawingInsets;
   readonly effectInsets: DrawingInsets;
   readonly textSide: WrapTextSide;
+  /**
+   * The physical side `largest` keeps when both sides are equally wide. Absent means the
+   * right, as in compatibility modes before 15; the paragraph breaker sets the left for
+   * mode 15 and later (`largestWrapTieLeft`).
+   */
+  readonly largestTie?: 'left' | 'right';
   readonly contentLeft: number;
   readonly contentRight: number;
 }
@@ -486,7 +492,8 @@ function filterByTextSide(
   excluded: readonly ScanlineInterval[],
   textSide: WrapTextSide,
   contentLeft: number,
-  contentRight: number
+  contentRight: number,
+  largestTie: 'left' | 'right' = 'right'
 ): readonly ScanlineInterval[] {
   if (textSide === 'bothSides') return available;
   if (excluded.length === 0) return available;
@@ -501,7 +508,9 @@ function filterByTextSide(
   const leftWidth = Math.max(0, span.start - contentLeft);
   const rightWidth = Math.max(0, contentRight - span.end);
   if (leftWidth === rightWidth) {
-    return Object.freeze(available.filter((interval) => interval.start >= span.end - 0.000_1));
+    return largestTie === 'left'
+      ? Object.freeze(available.filter((interval) => interval.end <= span.start + 0.000_1))
+      : Object.freeze(available.filter((interval) => interval.start >= span.end - 0.000_1));
   }
   return leftWidth > rightWidth
     ? Object.freeze(available.filter((interval) => interval.end <= span.start + 0.000_1))
@@ -519,7 +528,8 @@ export function availableTextIntervalsOnScanline(
     excluded,
     input.textSide,
     input.contentLeft,
-    input.contentRight
+    input.contentRight,
+    input.largestTie
   );
 }
 

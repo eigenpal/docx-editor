@@ -33,7 +33,7 @@ Add per-endpoint observations to `runtime-notes.json`:
 
 Runtime statuses are `equivalent`, `partial`, `different`, `unsupported`, and `unverified`. Missing notes default to `unverified`. Use `equivalent` only after reviewing runtime behavior and tests. Notes never change signature scores. Notes outside the editing scope remain stored but do not appear in the editing report.
 
-CI runs the report as an independent, non-blocking job. It writes a step summary and uploads an `office-js-compatibility` artifact. Signature differences do not fail the command. Tooling errors exit nonzero and show an unavailable report. Existing subset conformance checks remain unchanged.
+CI runs the report as a non-blocking step in the `typecheck` job. It writes a step summary and uploads an `office-js-compatibility` artifact. Signature differences do not fail the command. Tooling errors exit nonzero and show an unavailable report. Existing subset conformance checks remain unchanged.
 
 To refresh the full reference after reviewing the pin in `provenance.json`, run:
 

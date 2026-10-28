@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Supported exact terminal rows paint the outer rule inside the authored row pitch.",
+  "after": "Supported exact terminal rows place the bottom rule outside the authored height. Text uses authored cell margins. A row that does not fit with its bottom rule moves to the next page unless it starts at the page top. In compatibility mode 15 and later, repeated header rows that leave no room for that rule are omitted; earlier modes keep them and the row stays below them. Rows kept with it move together.",
+  "reason": "Only local layout and paint geometry change. Canonical XML, replicated operations, and saved rooms remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-exact-terminal-border.test.ts",
+    "packages/core/src/layout/__tests__/table-exact-terminal-reference.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-exact-terminal-border.test.ts"
+  ],
+  "changeset": "exact-terminal-row-outer-rule",
+  "migration": null
+}
