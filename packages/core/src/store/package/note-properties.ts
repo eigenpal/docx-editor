@@ -1,7 +1,11 @@
 // Note properties: CT_FtnProps / CT_EdnProps at document (settings) and section level.
 //
-// Authored vs resolved stay distinguishable. Resolution order: section → document →
-// OOXML defaults. Unedited documents without authored props must not invent any on save.
+// Authored vs resolved stay distinguishable. Numbering (`w:numFmt`, `w:numStart`,
+// `w:numRestart`) and the footnote position resolve from the section's own `w:sectPr` and the
+// defaults only: the document-wide copies in settings.xml do not apply. The endnote position
+// (`w:pos`) is the reverse: it is document-wide, read from settings.xml only, and a section's own
+// endnote `w:pos` does not apply. Unedited documents without authored props must not invent any
+// on save.
 // This module is store/layout-shared and does not mutate trees.
 
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
@@ -40,7 +44,7 @@ export interface ResolvedEndnoteProperties {
   readonly numRestart: NoteNumRestart;
 }
 
-/** Word's own footnote defaults, applied where a section declares no `w:footnotePr`. */
+/** Footnote defaults, applied to every field a section's `w:footnotePr` does not author. */
 export const DEFAULT_FOOTNOTE_PROPERTIES: ResolvedFootnoteProperties = Object.freeze({
   pos: 'pageBottom',
   numFmt: 'decimal',
@@ -199,73 +203,78 @@ export function authoredDocumentEndnoteProperties(
   return readPropsChild(settings.root, 'endnotePr');
 }
 
-function pick<T>(section: T | undefined, document: T | undefined, fallback: T): T {
-  return section !== undefined ? section : document !== undefined ? document : fallback;
-}
-
-/**
- * A section's note number format. Word numbers a section that authors note properties of its own in the default
- * format unless that section names one: the document-wide format (settings.xml) applies only to a section with none.
- * A document whose settings say `chicago` for a title-page star note, while the body's sectPr states only
- * `numRestart`, prints the body's notes 1, 2, 3 in Word, not ‡, §, **.
- */
-function sectionFormat(
-  section: AuthoredNoteProperties | undefined,
-  document: AuthoredNoteProperties | undefined,
-  fallback: string
-): string {
-  if (section !== undefined) return section.numFmt ?? fallback;
-  return document?.numFmt ?? fallback;
-}
-
 function resolveRestart(raw: string | undefined, fallback: NoteNumRestart): NoteNumRestart {
   if (raw !== undefined && NUM_RESTART.has(raw)) return raw as NoteNumRestart;
   return fallback;
 }
 
 /**
- * Resolve footnote properties: section → document → defaults.
- * Illegal position strings fall through to the next layer / default.
+ * Resolve footnote properties from the section's own `w:footnotePr` and the defaults.
+ *
+ * The document-wide `w:footnotePr` in settings.xml does not take part: a section with no
+ * footnote properties of its own numbers `decimal` from 1, continuously, at the page bottom,
+ * whatever settings.xml says. A section that authors only some fields takes the defaults for
+ * the rest, so `<w:footnotePr><w:numRestart w:val="eachSect"/></w:footnotePr>` numbers its
+ * notes 1, 2, 3 in decimal even when settings.xml names `chicago`.
+ * Illegal position or restart strings fall back to the default.
+ *
+ * @param section - The section's authored `w:footnotePr`, if any.
  */
 export function resolveFootnoteProperties(
-  section?: AuthoredNoteProperties,
-  document?: AuthoredNoteProperties
+  section?: AuthoredNoteProperties
+): ResolvedFootnoteProperties;
+/**
+ * Resolve footnote properties, ignoring the document-wide value.
+ *
+ * @deprecated The settings.xml `w:footnotePr` does not change footnote numbering or
+ * position, so the second argument has no effect. Call `resolveFootnoteProperties(section)`.
+ * @param section - The section's authored `w:footnotePr`, if any.
+ * @param document - Ignored.
+ */
+export function resolveFootnoteProperties(
+  section: AuthoredNoteProperties | undefined,
+  document: AuthoredNoteProperties | undefined
+): ResolvedFootnoteProperties;
+export function resolveFootnoteProperties(
+  section?: AuthoredNoteProperties
 ): ResolvedFootnoteProperties {
-  const posRaw = pick(section?.pos, document?.pos, DEFAULT_FOOTNOTE_PROPERTIES.pos);
+  const posRaw = section?.pos ?? DEFAULT_FOOTNOTE_PROPERTIES.pos;
   const pos = FOOTNOTE_POS.has(posRaw)
     ? (posRaw as FootnotePosition)
     : DEFAULT_FOOTNOTE_PROPERTIES.pos;
   return {
     pos,
-    numFmt: sectionFormat(section, document, DEFAULT_FOOTNOTE_PROPERTIES.numFmt),
-    numStart: pick(section?.numStart, document?.numStart, DEFAULT_FOOTNOTE_PROPERTIES.numStart),
-    numRestart: resolveRestart(
-      pick(section?.numRestart, document?.numRestart, DEFAULT_FOOTNOTE_PROPERTIES.numRestart),
-      DEFAULT_FOOTNOTE_PROPERTIES.numRestart
-    ),
+    numFmt: section?.numFmt ?? DEFAULT_FOOTNOTE_PROPERTIES.numFmt,
+    numStart: section?.numStart ?? DEFAULT_FOOTNOTE_PROPERTIES.numStart,
+    numRestart: resolveRestart(section?.numRestart, DEFAULT_FOOTNOTE_PROPERTIES.numRestart),
   };
 }
 
 /**
- * Resolve endnote properties: section → document → defaults.
- * `pageBottom` is never a legal endnote position — falls back.
+ * Resolve endnote properties.
+ *
+ * Numbering (`numFmt`, `numStart`, `numRestart`) comes from the section's own `w:endnotePr`
+ * and the defaults (`lowerRoman` from 1, continuous) only. The position is document-wide: the
+ * settings.xml `w:pos`, else `docEnd`. A section's own endnote `w:pos` does not move its
+ * endnotes. `pageBottom` is never a legal endnote position and resolves to `docEnd`.
+ *
+ * @param section - The section's authored `w:endnotePr`, if any; its `w:pos` is not read.
+ * @param document - The settings.xml `w:endnotePr`; only its `w:pos` is read.
  */
 export function resolveEndnoteProperties(
   section?: AuthoredNoteProperties,
   document?: AuthoredNoteProperties
 ): ResolvedEndnoteProperties {
-  const posRaw = pick(section?.pos, document?.pos, DEFAULT_ENDNOTE_PROPERTIES.pos);
-  const pos = ENDNOTE_POS.has(posRaw)
-    ? (posRaw as EndnotePosition)
-    : DEFAULT_ENDNOTE_PROPERTIES.pos;
+  const posRaw = document?.pos;
+  const pos =
+    posRaw !== undefined && ENDNOTE_POS.has(posRaw)
+      ? (posRaw as EndnotePosition)
+      : DEFAULT_ENDNOTE_PROPERTIES.pos;
   return {
     pos,
-    numFmt: sectionFormat(section, document, DEFAULT_ENDNOTE_PROPERTIES.numFmt),
-    numStart: pick(section?.numStart, document?.numStart, DEFAULT_ENDNOTE_PROPERTIES.numStart),
-    numRestart: resolveRestart(
-      pick(section?.numRestart, document?.numRestart, DEFAULT_ENDNOTE_PROPERTIES.numRestart),
-      DEFAULT_ENDNOTE_PROPERTIES.numRestart
-    ),
+    numFmt: section?.numFmt ?? DEFAULT_ENDNOTE_PROPERTIES.numFmt,
+    numStart: section?.numStart ?? DEFAULT_ENDNOTE_PROPERTIES.numStart,
+    numRestart: resolveRestart(section?.numRestart, DEFAULT_ENDNOTE_PROPERTIES.numRestart),
   };
 }
 

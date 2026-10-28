@@ -12,7 +12,22 @@
 // `document.querySelector`. Shorter AND stricter.
 //
 //   node scripts/test/run-parallel.mjs [--jobs N] [--shard INDEX/TOTAL] [--fail-fast]
+//     [--exclude PATH_PREFIX]... [--balance] [--durations-out FILE] [--retry-failed]
+//     [--only LIST_FILE]
 //     [-- <args passed to every `bun test`>]
+//
+// `--exclude` drops files whose repository-relative path starts with the prefix, after shards
+// are assigned, so a shard holds the same files with or without it and CI duration caches stay
+// valid across both. Pull request CI uses it to leave the seeded collaboration scenarios to main.
+//
+// `--balance` assigns shards by the durations in the cache file instead of by file count. Only
+// use it where every shard reads an identical cache file, as CI does; otherwise shards overlap.
+// `--durations-out` writes this run's own measurements, which CI merges into the shared cache.
+// `--retry-failed` runs a failed file once more before reporting it. A file that passes on the
+// retry is listed as FLAKY at the end, so the timing problem stays visible without stopping CI.
+// `--only` runs just the test files named in LIST_FILE, one repository-relative path per line;
+// `bun run test:changed` uses it. Paths are never passed to `bun test`, which would forward them
+// to every file instead of selecting files.
 //
 // Slowest-first, from a duration cache written on every run, so the long poles start immediately
 // instead of landing last and leaving the pool half-idle.
@@ -264,6 +279,11 @@ function parseArguments(argv) {
   let jobs = 0;
   let shard = '1/1';
   let failFast = false;
+  let balance = false;
+  let retryFailed = false;
+  let only = '';
+  let durationsOut = '';
+  const exclude = [];
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === '--') {
@@ -281,11 +301,34 @@ function parseArguments(argv) {
       index += 1;
     } else if (argument.startsWith('--jobs=')) {
       jobs = Number(argument.slice('--jobs='.length));
+    } else if (argument === '--balance') {
+      balance = true;
+    } else if (argument === '--retry-failed') {
+      retryFailed = true;
+    } else if (argument === '--only') {
+      only = argv[++index] ?? '';
+    } else if (argument === '--durations-out') {
+      durationsOut = argv[++index] ?? '';
+    } else if (argument.startsWith('--durations-out=')) {
+      durationsOut = argument.slice('--durations-out='.length);
+    } else if (argument === '--exclude') {
+      exclude.push(argv[++index] ?? '');
+    } else if (argument.startsWith('--exclude=')) {
+      exclude.push(argument.slice('--exclude='.length));
     } else {
       passthrough.push(argument);
     }
   }
-  return { jobs, passthrough, shard, failFast };
+  // An empty prefix would match every file and turn a typo into a green, empty run.
+  if (exclude.some((prefix) => prefix === '')) {
+    console.error('--exclude needs a non-empty path prefix');
+    process.exit(1);
+  }
+  if (only === '' && argv.includes('--only')) {
+    console.error('--only needs a file that lists test paths');
+    process.exit(1);
+  }
+  return { jobs, passthrough, shard, failFast, exclude, balance, durationsOut, retryFailed, only };
 }
 
 /** The child's current resident set in bytes, or 0 when it cannot be read. */
@@ -352,7 +395,13 @@ function runFile(file, passthrough, failFast, onRss) {
     child.on('error', (error) => {
       children.delete(child);
       clearInterval(sampler);
-      settle({ file, output: `failed to spawn ${node ? 'node' : 'bun'}: ${error.message}`, code: 1, ms: 0, peak: 0 });
+      settle({
+        file,
+        output: `failed to spawn ${node ? 'node' : 'bun'}: ${error.message}`,
+        code: 1,
+        ms: 0,
+        peak: 0,
+      });
     });
     child.on('exit', (code) => {
       // Descendants can inherit the worker's output pipes. Stop them on failure
@@ -372,17 +421,36 @@ function runFile(file, passthrough, failFast, onRss) {
 }
 
 async function main() {
-  const { jobs, passthrough, shard, failFast } = parseArguments(process.argv.slice(2));
+  const { jobs, passthrough, shard, failFast, exclude, balance, durationsOut, retryFailed, only } =
+    parseArguments(process.argv.slice(2));
+  const selected = only
+    ? new Set(
+        readFileSync(only, 'utf8')
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+      )
+    : null;
   if (failFast) passthrough.push('--bail=1');
+  const durations = readDurations();
+  const weights = balance
+    ? Object.fromEntries(Object.entries(durations).map(([file, entry]) => [file, entry.ms]))
+    : undefined;
   const queue = selectShard(
     SEARCH_ROOTS.flatMap((searchRoot) => discover(searchRoot)),
-    shard
+    shard,
+    weights
+  ).filter(
+    (file) =>
+      !exclude.some((prefix) => file.startsWith(prefix)) && (!selected || selected.has(file))
   );
   if (queue.length === 0) {
     console.error(`no test files found for shard ${shard}`);
     process.exit(1);
   }
   const total = queue.length;
+  // Workers drain `queue`; keep the shard's file list for --durations-out.
+  const shardFiles = [...queue];
   // A filtered run executes slivers of every file: its timings and peaks describe the filter,
   // not the file, and caching them would both scramble slowest-first ordering and teach the
   // memory gate that the multi-GiB oracles are tiny. Leave the cache alone entirely.
@@ -393,7 +461,6 @@ async function main() {
       argument.startsWith('--test-name-pattern=')
   );
 
-  const durations = readDurations();
   // Slowest first. An unseen file sorts high so a NEW slow file is not discovered last.
   queue.sort(
     (a, b) =>
@@ -426,6 +493,7 @@ async function main() {
 
   const totals = { pass: 0, fail: 0, skip: 0, todo: 0 };
   const failures = [];
+  const flaky = [];
   const started = Date.now();
   let done = 0;
   let pausedLogged = false;
@@ -504,11 +572,20 @@ async function main() {
         continue;
       }
       const { file, entry } = picked;
-      const result = await runFile(file, passthrough, failFast, (rss) => (entry.rss = rss));
+      let result = await runFile(file, passthrough, failFast, (rss) => (entry.rss = rss));
+      let counts = tally(result.output);
+      const failed = (run, runCounts) =>
+        (run.code !== 0 || runCounts.fail > 0) &&
+        !(runCounts.fail === 0 && NO_MATCHES.test(run.output));
+      if (retryFailed && failed(result, counts)) {
+        const first = result;
+        result = await runFile(file, passthrough, failFast, (rss) => (entry.rss = rss));
+        counts = tally(result.output);
+        if (!failed(result, counts)) flaky.push(first);
+      }
       inFlight.delete(file);
       done += 1;
 
-      const counts = tally(result.output);
       totals.pass += counts.pass;
       totals.fail += counts.fail;
       totals.skip += counts.skip;
@@ -541,10 +618,37 @@ async function main() {
   await Promise.all(Array.from({ length: Math.min(maxWidth, total) }, (_, index) => worker(index)));
   if (process.stdout.isTTY) process.stdout.write(`\r${''.padEnd(96)}\r`);
   if (!filteredRun) writeDurations(durations);
+  if (durationsOut && !filteredRun) {
+    const own = Object.fromEntries(
+      shardFiles.filter((file) => durations[file]).map((file) => [file, durations[file]])
+    );
+    writeFileSync(durationsOut, JSON.stringify(own));
+  }
 
   for (const failure of failures) {
     console.log(`\n${'─'.repeat(72)}\n${failure.file}\n${'─'.repeat(72)}`);
     console.log(failure.output.trimEnd());
+  }
+  // Passed on the retry. Printed in full, so the first failure can still be investigated.
+  for (const first of flaky) {
+    if (process.env.GITHUB_ACTIONS === 'true') {
+      console.log(`::warning file=${first.file}::Flaky test file: failed once, passed on retry`);
+    }
+    console.log(
+      `\n${'─'.repeat(72)}\nFLAKY ${first.file} (failed once, passed on retry)\n${'─'.repeat(72)}`
+    );
+    console.log(first.output.trimEnd());
+  }
+
+  // CI output is otherwise silent about passing files, so a file that turns slow on one machine
+  // would go unnoticed until it times out.
+  if (!process.stdout.isTTY && !filteredRun) {
+    const slowest = shardFiles
+      .filter((file) => durations[file])
+      .sort((a, b) => durations[b].ms - durations[a].ms)
+      .slice(0, 10);
+    console.log('\nSlowest files:');
+    for (const file of slowest) console.log(`  ${(durations[file].ms / 1000).toFixed(1)}s ${file}`);
   }
 
   const elapsed = ((Date.now() - started) / 1000).toFixed(2);

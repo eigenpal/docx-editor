@@ -131,6 +131,10 @@ export const MODE_RULES = {
     'A kept row group that exceeds a fresh page starts beside preceding content, except directly below authored headers',
     'ECMA-376 Part 1 §17.3.1.15 keepNext'
   ),
+  largestWrapTieLeft: modern(
+    'Square wrapping on the largest side keeps text on the physical left when both sides are equally wide; earlier modes keep it on the right',
+    'ECMA-376 Part 1 §20.4.2.17 wrapSquare'
+  ),
   wrapIgnoresMultipleSpacingExtra: modern(
     'A wrap band moves a line only where it crosses the text or picture of the line, not the extra space an auto line-spacing multiple adds below it',
     'ECMA-376 Part 1 §17.3.1.33 spacing'

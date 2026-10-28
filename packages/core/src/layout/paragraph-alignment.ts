@@ -12,7 +12,14 @@ import {
   withoutTrailingZeroWidthSpaces,
 } from './trailing-spaces.ts';
 import { alignBidiTrailingSpaces, bidiTrailingSpaces } from './bidi-trailing-spaces.ts';
-import { alignPassageSpans, partUsedWidth, type LinePassage } from './passage-alignment.ts';
+import {
+  alignBidiPassageSpans,
+  alignPassageSpans,
+  isMirroredPassageList,
+  partUsedWidth,
+  type LinePassage,
+  type MirroredLinePassage,
+} from './passage-alignment.ts';
 
 const OVERFLOW_TOLERANCE_PT = 0.001;
 const SLACK_RESIDUE_PT = 1e-9;
@@ -429,7 +436,8 @@ export function alignSpans(
   const effective =
     alignment === 'both' && isLastLine && paragraphRtl && !lastLineShrinks ? 'right' : alignment;
   const split = splitBidiTrailingWhitespace(spans, measurer);
-  if (passages && passages.length > 1 && !paragraphRtl && !split.some(isRightToLeft)) {
+  const bidiLine = paragraphRtl || split.some(isRightToLeft);
+  if (passages && passages.length > 1 && !bidiLine) {
     const aligned = alignPassageSpans(split, passages, (part, passage, isLastPart) =>
       alignLogicalSpans(
         part,
@@ -445,6 +453,23 @@ export function alignSpans(
       )
     );
     if (aligned) return reorderBidiSpans(aligned, false, pageBreaksIgnored);
+  } else if (passages && (isMirroredPassageList(passages) || passages.length > 1)) {
+    // Each part aligns, and bidi reorders it, as a line of its own inside its passage.
+    const aligned = alignBidiPassageSpans(spans, passages, (part, passage, isLastPart) =>
+      alignSpans(
+        part,
+        measurer,
+        passage.start,
+        Math.max(1, passage.end - passage.start),
+        alignment,
+        isLastLine && isLastPart,
+        alignment === 'center' || alignment === 'right' ? partUsedWidth(part, passage) : undefined,
+        paragraphRtl,
+        pageBreaksIgnored,
+        lastLineShrinks
+      )
+    );
+    if (aligned) return aligned;
   }
   const align = (
     line: readonly StyleSpanRecord[],
@@ -511,6 +536,11 @@ export function lineAlignOffset(
  * a float forced before the first glyph is not mistaken for content and does not push a
  * centred line off toward the far margin. A line that steps over a float also returns its
  * `passages` in the spans' x space, for {@link alignSpans} to align each part inside its own.
+ *
+ * `penX` is the offset placement adds to the line's pen x: the column's left edge, less the
+ * first-line indent of a right-to-left line. A right-to-left line breaks in mirrored x
+ * (`PendingLine.wrapMirrored`). Its passages come back physical, in the order the line fills
+ * them (rightmost first), each with the pen x it began at.
  */
 export function lineAlignmentMeasure(
   line: {
@@ -521,8 +551,9 @@ export function lineAlignmentMeasure(
       readonly contentEnd?: number;
     };
     readonly wrapPassages?: readonly LinePassage[];
+    readonly wrapMirrored?: true;
   },
-  columnX: number,
+  penX: number,
   lineIndent: number,
   lineAvailableWidth: number
 ): {
@@ -532,10 +563,29 @@ export function lineAlignmentMeasure(
   readonly passages?: readonly LinePassage[];
 } {
   const segment = line.wrapSegment;
+  if (line.wrapMirrored) {
+    // The line broke in x mirrored about its measure, which runs from `lineIndent` for
+    // `lineAvailableWidth`. Each passage maps back to its physical place, in break order.
+    const axis = 2 * lineIndent + lineAvailableWidth;
+    const broken = line.wrapPassages ?? (segment ? [segment] : []);
+    return {
+      indent: lineIndent,
+      available: lineAvailableWidth,
+      used: line.width,
+      passages: broken.map(
+        (passage): MirroredLinePassage => ({
+          start: axis - (passage.end + penX),
+          end: axis - (passage.start + penX),
+          mirrored: true,
+          breakStart: passage.start + penX,
+        })
+      ),
+    };
+  }
   if (!segment) {
     const passages = line.wrapPassages?.map((passage) => ({
-      start: columnX + passage.start,
-      end: columnX + passage.end,
+      start: penX + passage.start,
+      end: penX + passage.end,
     }));
     return {
       indent: lineIndent,
@@ -545,12 +595,12 @@ export function lineAlignmentMeasure(
     };
   }
   return {
-    indent: columnX + segment.start,
+    indent: penX + segment.start,
     available: Math.max(1, segment.end - segment.start),
     used:
       segment.contentEnd !== undefined
         ? segment.contentEnd - segment.start
-        : lineIndent - columnX + line.width - segment.start,
+        : lineIndent - penX + line.width - segment.start,
   };
 }
 
