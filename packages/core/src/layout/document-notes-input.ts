@@ -21,7 +21,11 @@ import type { DocumentLinkProjectors } from './document-link-projector.ts';
 import { layoutHeaderFooterStory } from './hf-layout.ts';
 import { enumerateDocumentSectionsBounded, sectionLineGridPt } from './section-properties.ts';
 import type { NotesLayoutInput } from './note-pagination.ts';
-import { bodySectionNode, paragraphSectionNode } from './section-properties.ts';
+import {
+  bodySectionNode,
+  paragraphSectionNode,
+  sectionPropertiesNodes,
+} from './section-properties.ts';
 import { storyBlocks } from './story-roots.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
@@ -60,20 +64,11 @@ function sectionPropertyNodes(
   revisionAuthorFilter?: RevisionAuthorFilter
 ): readonly (OoxmlElement | undefined)[] {
   const blocks = storyBlocks(part, displayMode, revisionAuthorFilter);
+  if (!truncated) return sectionPropertiesNodes(part, blocks, sections);
   // The last section's properties are the body's own w:sectPr, not a paragraph's.
   const body = bodySectionNode(part);
   const final =
     body !== undefined && body.kind !== 'textValue' ? (body as OoxmlElement) : undefined;
-  if (!truncated) {
-    return sections.map((section, index) => {
-      const block =
-        section.blockStart < section.blockEndExclusive
-          ? blocks[section.blockEndExclusive - 1]
-          : undefined;
-      const own = block?.kind === 'paragraph' ? paragraphSectionNode(block) : undefined;
-      return own ?? (index === sections.length - 1 ? final : undefined);
-    });
-  }
   const nodes: (OoxmlElement | undefined)[] = [];
   for (const block of blocks) {
     if (block.kind !== 'paragraph') continue;

@@ -9,7 +9,9 @@
     "packages/pro/src/collaboration/__tests__/document-concurrent-joins.test.ts",
     "packages/core/src/store/__tests__/note-properties-document-write.test.ts",
     "packages/core/src/editor/__tests__/note-properties-document-scope.test.ts",
-    "packages/core/src/layout/__tests__/note-properties-settings-layout.test.ts"
+    "packages/core/src/layout/__tests__/note-properties-settings-layout.test.ts",
+    "packages/core/src/layout/__tests__/final-section-note-format.test.ts",
+    "packages/core/src/editor/__tests__/note-properties-section.test.ts"
   ],
   "changeset": "note-numbering-section-properties",
   "migration": null
