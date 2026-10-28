@@ -474,6 +474,11 @@ export const ContextMenuSelectAll: ((input: ContextMenuCommandProps) => react.JS
 };
 
 // @public
+export const ContextMenuSelectTable: ((input: ContextMenuTableRowProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
 export const ContextMenuSplitCell: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
     docxRow: string;
 };
@@ -768,6 +773,8 @@ export interface DocxEditorContextMenuNamespace {
     readonly Row: typeof MenuRow;
     // (undocumented)
     readonly SelectAll: typeof ContextMenuSelectAll;
+    // (undocumented)
+    readonly SelectTable: typeof ContextMenuSelectTable;
     // (undocumented)
     readonly Separator: typeof MenuSeparator;
     readonly Slot: typeof MenuItem;

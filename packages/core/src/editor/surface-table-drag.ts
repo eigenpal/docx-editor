@@ -46,6 +46,7 @@ interface Press {
   readonly tableId: string;
   readonly handle: HTMLElement;
   readonly mode: TableDragMode;
+  lastX: number;
   lastY: number;
   slots: readonly TableDropSlot[] | null;
   slot: TableDropSlot | null;
@@ -75,13 +76,18 @@ export function createTableDrag(host: TableDragHost): TableDrag {
   function track(): void {
     if (!press?.slots) return;
     const rect = host.pagesLayer.getBoundingClientRect();
-    press.slot = nearestTableDropSlot(press.slots, (press.lastY - rect.top) / host.scale());
+    const scale = host.scale();
+    press.slot = nearestTableDropSlot(
+      press.slots,
+      (press.lastX - rect.left) / scale,
+      (press.lastY - rect.top) / scale,
+      host.pageOffsetX
+    );
     const slot = press.slot;
-    if (!slot) {
+    if (!slot || slot.stays) {
       indicator.remove();
       return;
     }
-    const scale = host.scale();
     const left = slot.origin.x + slot.x + host.pageOffsetX(slot.pageIndex);
     indicator.style.left = `${left * scale}px`;
     indicator.style.top = `${(slot.origin.y + slot.y) * scale - 1}px`;
@@ -91,6 +97,7 @@ export function createTableDrag(host: TableDragHost): TableDrag {
 
   function onMove(event: PointerEvent): void {
     if (!press || event.pointerId !== press.pointerId) return;
+    press.lastX = event.clientX;
     press.lastY = event.clientY;
     if (!press.slots) {
       const travelled = Math.hypot(event.clientX - press.startX, event.clientY - press.startY);
@@ -109,7 +116,7 @@ export function createTableDrag(host: TableDragHost): TableDrag {
     if (!press || event.pointerId !== press.pointerId) return;
     const { tableId, slot, slots, mode } = press;
     finish();
-    if (slot) host.applyTableCommandPlan(moveTablePlan(tableId, slot.beforeBlockId));
+    if (slot && !slot.stays) host.applyTableCommandPlan(moveTablePlan(tableId, slot.beforeBlockId));
     else if (mode === 'refuse' && slots)
       host.applyTableCommandPlan(moveTablePlan(tableId, tableId));
   }
@@ -150,6 +157,7 @@ export function createTableDrag(host: TableDragHost): TableDrag {
         tableId,
         handle,
         mode,
+        lastX: event.clientX,
         lastY: event.clientY,
         slots: null,
         slot: null,

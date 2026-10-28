@@ -4,6 +4,7 @@
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 import {
   isCanonicalPrimitiveCaptureActive,
+  recordMoveNode,
   recordPutNode,
   recordPutXmlPart,
   recordSetAttribute,
@@ -363,6 +364,11 @@ export function captureInsertChildren(
     0,
     children.map((child) => child.id)
   );
+}
+
+/** Lower `moveChild` after a successful edit; `index` counts siblings without the moved child. */
+export function captureMoveChild(parentId: string, childId: string, index: number): void {
+  if (isCanonicalPrimitiveCaptureActive()) recordMoveNode(childId, parentId, index);
 }
 
 /** Lower `removeNode` after a successful edit. */

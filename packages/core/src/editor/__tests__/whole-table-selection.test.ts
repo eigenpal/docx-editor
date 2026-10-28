@@ -78,12 +78,14 @@ describe('Backspace on a whole-table selection', () => {
     expect(xml).toContain('a2');
   });
 
-  test('suggesting refuses it without changing the document', async () => {
+  test('suggesting strikes the cell text and keeps the table', async () => {
     const { surface, body } = mount('suggesting');
-    const before = await body();
     selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
     surface.deleteBackward();
-    expect(await body()).toBe(before);
+    const xml = await body();
+    expect(xml).toContain('<w:tbl>');
+    for (const text of ['a1', 'a2', 'b1', 'b2'])
+      expect(xml).toMatch(new RegExp(`<w:del [^>]*><w:r><w:delText>${text}</w:delText>`));
   });
 });
 

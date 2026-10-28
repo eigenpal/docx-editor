@@ -666,6 +666,7 @@ describe('keyboard', () => {
 
 describe('table context rows (Task 10)', () => {
   const TABLE_ROW_IDS = [
+    'table.selectTable',
     'table.insertRowAbove',
     'table.insertRowBelow',
     'table.insertColumnLeft',
@@ -696,9 +697,25 @@ describe('table context rows (Task 10)', () => {
     });
     rightClick(view);
     const slots = rows(view).map((row) => row.dataset.slot);
-    const tableStart = slots.indexOf('table.insertRowAbove');
+    const tableStart = slots.indexOf('table.selectTable');
     expect(tableStart).toBeGreaterThan(-1);
     expect(slots.slice(tableStart, tableStart + TABLE_ROW_IDS.length)).toEqual([...TABLE_ROW_IDS]);
+  });
+
+  test('Select table selects every cell of the table', () => {
+    const { view, editor } = mountDocument(TABLE_2X2);
+    act(() => {
+      const paragraphId = editor().surface!.session.paragraphIds()[0]!;
+      editor().surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 1 },
+      });
+    });
+    rightClick(view);
+    const row = rows(view).find((candidate) => candidate.dataset.slot === 'table.selectTable')!;
+    expect(row.getAttribute('aria-disabled')).not.toBe('true');
+    act(() => row.click());
+    expect(editor().surface!.state().cellSelection?.cellIds).toHaveLength(4);
   });
 
   test('destructive table rows carry the destructive treatment before cell alignment', () => {

@@ -9,6 +9,7 @@ import {
   type CellSelection,
 } from '../layout/semantic-cell-selection.ts';
 import type { SemanticLayout } from '../layout/semantic-records.ts';
+import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
 import type { TableCommandPlan, TableCommandPlannerInput } from './table-command-plan.ts';
 
 type SelectTableRegion = Extract<EditorCommand, { type: 'selectTableRegion' }>;
@@ -33,12 +34,16 @@ export function planSelectTableRegion(
   return { ok: true, ops: [], selection: { kind: 'selectCells', cells } };
 }
 
-/** Word: Backspace on a whole-table selection deletes the table; Delete only empties it. */
+/**
+ * Word: Backspace on a whole-table selection deletes the table; Delete only empties it.
+ * Suggesting keeps the tracked strike of the cell text, because deleting a table has no tracked form.
+ */
 export function wholeTableDeletionPlan(
   layout: SemanticLayout,
-  cellSelection: CellSelection | null
+  cellSelection: CellSelection | null,
+  mode: SurfaceEditingMode
 ): TableCommandPlan | null {
-  if (!cellSelection || !coversWholeTable(layout, cellSelection)) return null;
+  if (mode === 'suggest' || !cellSelection || !coversWholeTable(layout, cellSelection)) return null;
   return {
     ok: true,
     ops: [{ op: 'deleteBlock', blockId: cellSelection.tableId }],

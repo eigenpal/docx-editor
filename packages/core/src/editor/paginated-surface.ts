@@ -4567,7 +4567,7 @@ export function mountPaginatedSurface(
     insertPlainText: (text: string) => insertPlainText(text),
 
     deleteBackward() {
-      const tableDeletion = wholeTableDeletionPlan(editingLayout(), cellSelection);
+      const tableDeletion = wholeTableDeletionPlan(editingLayout(), cellSelection, editingMode);
       if (tableDeletion) return void surface.applyTableCommandPlan(tableDeletion);
       if (textFormInteraction?.selectForDeletion('backward')) return;
       if (deleteAtomicControl('backward')) return;

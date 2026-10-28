@@ -27,6 +27,7 @@ import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
 import { hostTimers } from './host-realm.ts';
 import type { SurfaceHostListeners } from './surface-host-listeners.ts';
 import { createTableDrag } from './surface-table-drag.ts';
+import { tableChromeIconPaths } from './table-chrome.ts';
 import { partNameOf, partOfTableIn } from './surface-table-story.ts';
 import type { TableCommandPlan } from './table-command-plan.ts';
 
@@ -98,6 +99,21 @@ function outermostTableOnPage(
   return null;
 }
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function moveIcon(document: Document): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 -960 960 960');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  for (const data of tableChromeIconPaths('open_with')) {
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('d', data);
+    svg.append(path);
+  }
+  return svg;
+}
+
 export function createSurfaceTableSelectHandle(
   host: SurfaceTableSelectHandleHost
 ): SurfaceTableSelectHandle {
@@ -124,7 +140,7 @@ export function createSurfaceTableSelectHandle(
   const button = layer.ownerDocument.createElement('button');
   button.type = 'button';
   button.className = 'docx-table-select-handle';
-  button.textContent = '✥';
+  button.append(moveIcon(layer.ownerDocument));
   button.style.position = 'absolute';
   button.style.pointerEvents = 'auto';
   const guard = (event: Event) => {

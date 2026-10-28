@@ -152,9 +152,26 @@ describe('table cell structure (Vue)', () => {
       // A caret is not a cell selection, so Merge cells says what it needs.
       const merge = mounted.container.querySelector<HTMLElement>('[data-slot="table.mergeCells"]')!;
       expect(merge.getAttribute('aria-disabled')).toBe('true');
-      expect(merge.getAttribute('title')).toBe(
-        'Select two or more cells to merge them'
-      );
+      expect(merge.getAttribute('title')).toBe('Select two or more cells to merge them');
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  test('Select table leads the table rows and selects every cell', async () => {
+    const mounted = mount(TABLE);
+    try {
+      await flush();
+      await caretInFirstCell(mounted.editor());
+      await openMenu(mounted.container);
+      const slots = [
+        ...mounted.container.querySelectorAll<HTMLElement>('.docx-contextmenu [role="menuitem"]'),
+      ].map((row) => row.dataset.slot);
+      expect(slots[slots.indexOf('table.insertRowAbove') - 1]).toBe('table.selectTable');
+      mounted.container.querySelector<HTMLElement>('[data-slot="table.selectTable"]')!.click();
+      await flush();
+      const cells = mounted.editor().getTableCellSelection();
+      expect(cells?.columns).toEqual({ from: 0, to: 1 });
     } finally {
       mounted.unmount();
     }

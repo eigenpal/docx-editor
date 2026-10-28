@@ -8,6 +8,7 @@ import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surfa
 import { docx, paragraph as p } from './paginated-surface-fixtures.ts';
 import { paragraphTextFromLayout } from '../../layout/semantic-interaction.ts';
 import { SUGGESTING_TABLE_MOVE_REFUSAL } from '../surface-suggesting-structure.ts';
+import { nearestTableDropSlot, type TableDropSlot } from '../surface-table-drop-slots.ts';
 
 const table = (props = '') =>
   `<w:tbl>${props}<w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:tc>${p('cell')}</w:tc></w:tr></w:tbl>`;
@@ -98,6 +99,21 @@ describe('dragging a table by its handle', () => {
     expect(order(surface)).toEqual(['one', '[T]', 'two', 'three']);
   });
 
+  test('a drag that ends where the table is leaves it in place', () => {
+    const { surface, handle, indicator } = mount();
+    const revision = surface.session.packageRevision();
+    const page = surface.layout().pages[0]!;
+    const table = page.fragments.find((fragment) => fragment.kind === 'table')!;
+    const top = page.contentBox.y + table.box.y;
+    pointer(handle(), 'pointerdown', 100);
+    pointer(handle(), 'pointermove', top + 40);
+    pointer(handle(), 'pointermove', top + 1);
+    expect(indicator()).toBeNull();
+    pointer(handle(), 'pointerup', top + 1);
+    expect(surface.session.packageRevision()).toBe(revision);
+    expect(order(surface)).toEqual(['one', '[T]', 'two', 'three']);
+  });
+
   test('a press that barely moves is a click, not a drag', () => {
     const { surface, handle, indicator } = mount();
     const revision = surface.session.packageRevision();
@@ -147,5 +163,29 @@ describe('dragging a table by its handle', () => {
     expect(indicator()).toBeNull();
     pointer(handle(), 'pointerup', 400);
     expect(surface.session.packageRevision()).toBe(revision);
+  });
+});
+
+describe('choosing a drop slot', () => {
+  const origin = { x: 0, y: 0, width: 600, height: 800 };
+  const slot = (beforeBlockId: string, x: number, y: number): TableDropSlot => ({
+    beforeBlockId,
+    stays: false,
+    pageIndex: 0,
+    x,
+    y,
+    width: 250,
+    origin,
+  });
+
+  test('prefers a slot in the column under the pointer over a nearer one beside it', () => {
+    const slots = [slot('left', 0, 100), slot('right', 300, 300)];
+    expect(nearestTableDropSlot(slots, 350, 110, () => 0)?.beforeBlockId).toBe('right');
+    expect(nearestTableDropSlot(slots, 50, 290, () => 0)?.beforeBlockId).toBe('left');
+  });
+
+  test('falls back to the nearest slot when no line spans the pointer', () => {
+    const slots = [slot('left', 0, 100), slot('right', 300, 300)];
+    expect(nearestTableDropSlot(slots, 275, 290, () => 0)?.beforeBlockId).toBe('right');
   });
 });

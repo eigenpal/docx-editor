@@ -84,6 +84,8 @@ describe('table select handle', () => {
     const page = surface.layout().pages[0]!;
     expect(shown.dataset.tableId).toBe(table.tableId);
     expect(shown.getAttribute('aria-label')).toBe('Select entire table');
+    expect(shown.querySelector('svg path')).not.toBeNull();
+    expect(shown.textContent).toBe('');
     expect(parseFloat(shown.style.left)).toBeCloseTo(page.contentBox.x + table.box.x - 18);
     expect(parseFloat(shown.style.top)).toBeCloseTo(page.contentBox.y + table.box.y - 18);
   });

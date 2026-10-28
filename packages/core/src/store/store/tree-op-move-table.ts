@@ -1,9 +1,11 @@
 // Moving a whole table among its siblings, as the table handle's drag does.
 
 import {
+  applyEdits,
   createNodeIdAllocator,
   findNode,
-  replaceChildren,
+  insertChildren,
+  moveChild,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
@@ -55,9 +57,8 @@ export function applyMoveTable(
   const rejection = validateMoveTable(part, op);
   if (rejection) return { ok: false, reason: rejection };
   const parent = parentOf(part, op.tableId)!;
-  const table = parent.children.find((child) => child.id === op.tableId)!;
-  const children = parent.children.filter((child) => child.id !== op.tableId);
-  const index = children.findIndex((child) => child.id === op.beforeBlockId);
+  const siblings = parent.children.filter((child) => child.id !== op.tableId);
+  const index = siblings.findIndex((child) => child.id === op.beforeBlockId);
 
   const nextId = createNodeIdAllocator(part);
   const wml = wmlFreshNamespaceContextAt(part, parent);
@@ -65,18 +66,32 @@ export function applyMoveTable(
   const usedParagraphIds = new Set(usedParaIds(part.root));
   const separator = (side: string) =>
     emptyParagraph(w14Prefix, `${op.tableId}:${side}`, usedParagraphIds, nextId, wml);
-  const before = isTable(children[index - 1]) ? separator('sep-before') : null;
-  const after = isTable(children[index]) ? separator('sep-after') : null;
-  const placed = [...(before ? [before] : []), table, ...(after ? [after] : [])];
-  children.splice(index, 0, ...placed);
+  const before = isTable(siblings[index - 1]) ? separator('sep-before') : null;
+  const after = isTable(siblings[index]) ? separator('sep-after') : null;
 
-  // ONE edit on the shared parent: removing and re-inserting in two edits would journal
-  // the whole table as new nodes, and a peer's concurrent typing inside it would be lost.
-  return fromEdit(replaceChildren(part, parent.id, children, options), {
-    dirty: [parent.id, op.tableId],
-    created: [before, after].flatMap((paragraph) => (paragraph ? [paragraph.id] : [])),
-    deleted: [],
-    dependencyKeys: TEXT_DEPS,
-    impact: 'flow-structural',
-  });
+  return fromEdit(
+    applyEdits(
+      part,
+      [
+        (current) => moveChild(current, parent.id, op.tableId, op.beforeBlockId, options),
+        ...(before
+          ? [(current: OoxmlPart) => insertChildren(current, parent.id, index, [before], options)]
+          : []),
+        ...(after
+          ? [
+              (current: OoxmlPart) =>
+                insertChildren(current, parent.id, index + (before ? 2 : 1), [after], options),
+            ]
+          : []),
+      ],
+      options
+    ),
+    {
+      dirty: [parent.id, op.tableId],
+      created: [before, after].flatMap((paragraph) => (paragraph ? [paragraph.id] : [])),
+      deleted: [],
+      dependencyKeys: TEXT_DEPS,
+      impact: 'flow-structural',
+    }
+  );
 }

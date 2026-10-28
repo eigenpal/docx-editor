@@ -369,6 +369,13 @@ function defineTableCommandRow(
   return Object.assign(Part, { docxRow: rowId });
 }
 
+/** Select every cell of the table at the selection. @public */
+export const ContextMenuSelectTable = defineTableCommandRow(
+  'table.selectTable',
+  { type: 'selectTableRegion', region: 'table' },
+  { labelKey: 'table.selectTable', paths: tableChromeIconPaths('select_all') }
+);
+
 /** Insert a row above the current table row. @public */
 export const ContextMenuInsertRowAbove = defineTableCommandRow(
   'table.insertRowAbove',
@@ -618,6 +625,7 @@ export function useTableContextMenuVisible(): boolean {
 
 /** Fixed table context rows in registry order. @internal */
 export const TABLE_CONTEXT_ROWS = [
+  ContextMenuSelectTable,
   ContextMenuInsertRowAbove,
   ContextMenuInsertRowBelow,
   ContextMenuInsertColumnLeft,

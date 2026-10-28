@@ -15,6 +15,7 @@ import { createDocumentCollaboration } from '../document-session.ts';
 import { collaborationModule } from '../collaboration-module.ts';
 import { reviewModule } from '../../review/review-module.ts';
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
+import { paragraphTextFromLayout } from '../../../../core/src/layout/semantic-interaction.ts';
 import {
   createPeerHarness,
   nodeText,
@@ -256,14 +257,19 @@ describe('suggesting mode with a peer', () => {
     ctx.harness.expectConverged(ctx.peer, await ctx.observer());
   });
 
-  test('Backspace on a whole-table selection is refused and sends nothing', async () => {
+  test('Backspace on a whole-table selection strikes the cell text on both replicas', async () => {
     const ctx = await editorWithPeer();
     expect(ctx.editor.setEditingMode('suggesting')).toMatchObject({ ok: true });
-    const before = ctx.peerUpdates();
     ctx.selectWholeTable();
     ctx.surface.deleteBackward();
-    expect(ctx.peerUpdates()).toBe(before);
+    await ctx.settle();
     expect(ctx.tables(ctx.peer)).toHaveLength(1);
+    let struck = 0;
+    walk(ctx.tables(ctx.peer)[0]!, (node) => {
+      if (node.kind !== 'textValue' && node.localName === 'delText') struck += 1;
+    });
+    expect(struck).toBe(4);
+    ctx.harness.expectConverged(ctx.peer, await ctx.observer());
   });
 });
 
@@ -311,6 +317,49 @@ describe('moving a table with a peer', () => {
     await ctx.settle();
     expect(ctx.bodyOrder(ctx.peer)).toEqual(['[T]', 'before', 'after']);
     ctx.harness.expectConverged(ctx.peer, await ctx.observer());
+  });
+
+  test('a caret in the moved table stays in its cell, locally and as the peer sees it', async () => {
+    const ctx = await editorWithPeer();
+    const cellParagraph = ctx.surface.session
+      .paragraphIds()
+      .find((id) => paragraphTextFromLayout(ctx.surface.layout(), id) === 'B2')!;
+    ctx.surface.setSelection({
+      anchor: { paragraphId: cellParagraph, offset: 1 },
+      head: { paragraphId: cellParagraph, offset: 1 },
+    });
+    ctx.moveTableToStart();
+    await ctx.settle();
+    expect(ctx.bodyOrder(ctx.peer)).toEqual(['[T]', 'before', 'after']);
+    expect(ctx.surface.state().selection.head).toEqual({ paragraphId: cellParagraph, offset: 1 });
+    expect(ctx.peer.room.session.remoteSelections()).toMatchObject([
+      { actorId: 'editor-user', head: { nodeId: ctx.peerCellParagraph('B2'), offset: 1 } },
+    ]);
+  });
+
+  test("a move by the peer keeps the editor's caret in its cell", async () => {
+    const ctx = await editorWithPeer();
+    const cellParagraph = ctx.surface.session
+      .paragraphIds()
+      .find((id) => paragraphTextFromLayout(ctx.surface.layout(), id) === 'B2')!;
+    ctx.surface.setSelection({
+      anchor: { paragraphId: cellParagraph, offset: 1 },
+      head: { paragraphId: cellParagraph, offset: 1 },
+    });
+    ctx.harness.apply(ctx.peer, [
+      {
+        op: 'moveTable',
+        tableId: ctx.tables(ctx.peer)[0]!.id,
+        beforeBlockId: ctx.harness.paragraphIdAt(ctx.peer, 0),
+      },
+    ]);
+    await ctx.settle();
+    expect(
+      ctx.surface.session
+        .paragraphIds()
+        .map((id) => paragraphTextFromLayout(ctx.surface.layout(), id))
+    ).toEqual(['A1', 'B1', 'A2', 'B2', 'before', 'after']);
+    expect(ctx.surface.state().selection.head).toEqual({ paragraphId: cellParagraph, offset: 1 });
   });
 
   test('suggesting mode refuses the move and sends nothing', async () => {

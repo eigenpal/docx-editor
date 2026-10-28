@@ -7,6 +7,8 @@ import type { BlockFragmentRecord, LayoutBox, SemanticLayout } from '../layout/s
 
 export interface TableDropSlot {
   readonly beforeBlockId: string;
+  /** The table's own place: above it, or above the block after it. Dropping here does nothing. */
+  readonly stays: boolean;
   readonly pageIndex: number;
   /** Story-local coordinates of the drop line, relative to `origin`. */
   readonly x: number;
@@ -15,7 +17,7 @@ export interface TableDropSlot {
   readonly origin: LayoutBox;
 }
 
-/** Every slot the table could move to; the two that would leave it in place are left out. */
+/** Every slot the table could move to, including the two that leave it where it is. */
 export function tableDropSlots(
   layout: SemanticLayout,
   part: OoxmlPart,
@@ -27,9 +29,7 @@ export function tableDropSlots(
     (child) => child.kind === 'paragraph' || child.kind === 'table'
   );
   const index = blocks.findIndex((block) => block.id === tableId);
-  const candidates = new Set(
-    blocks.filter((_, at) => at !== index && at !== index + 1).map((block) => block.id)
-  );
+  const stays = new Map(blocks.map((block, at) => [block.id, at === index || at === index + 1]));
   const slots: TableDropSlot[] = [];
   const visit = (
     fragments: readonly BlockFragmentRecord[],
@@ -38,9 +38,10 @@ export function tableDropSlots(
   ): void => {
     for (const fragment of fragments) {
       const id = fragment.kind === 'paragraph' ? fragment.paragraphId : fragment.tableId;
-      if (fragment.fragmentIndex === 0 && candidates.has(id)) {
+      const staysHere = stays.get(id);
+      if (fragment.fragmentIndex === 0 && staysHere !== undefined) {
         const { x, y, width } = fragment.box;
-        slots.push({ beforeBlockId: id, pageIndex, x, y, width, origin });
+        slots.push({ beforeBlockId: id, stays: staysHere, pageIndex, x, y, width, origin });
       }
       if (fragment.kind === 'table') {
         for (const row of fragment.rows) {
@@ -58,15 +59,33 @@ export function tableDropSlots(
   return slots;
 }
 
-/** The slot whose line is closest to a sheet-space point, or null when there are none. */
+/**
+ * The slot nearest a sheet-space point. Slots whose line spans the pointer's x come first, so
+ * in a multi-column section the drop stays in the column under the pointer.
+ */
 export function nearestTableDropSlot(
   slots: readonly TableDropSlot[],
-  sheetY: number
+  sheetX: number,
+  sheetY: number,
+  pageOffsetX: (pageIndex: number) => number
 ): TableDropSlot | null {
+  const left = (slot: TableDropSlot) => slot.origin.x + slot.x + pageOffsetX(slot.pageIndex);
+  /** Out of column ranks after every in-column slot; within a rank, nearer wins. */
+  const rank = (slot: TableDropSlot): readonly [number, number] => {
+    const dy = Math.abs(slot.origin.y + slot.y - sheetY);
+    const from = left(slot);
+    if (sheetX >= from && sheetX <= from + slot.width) return [0, dy];
+    const dx = Math.min(Math.abs(sheetX - from), Math.abs(sheetX - from - slot.width));
+    return [1, Math.hypot(dx, dy)];
+  };
   let best: TableDropSlot | null = null;
+  let bestRank: readonly [number, number] = [2, 0];
   for (const slot of slots) {
-    const distance = Math.abs(slot.origin.y + slot.y - sheetY);
-    if (!best || distance < Math.abs(best.origin.y + best.y - sheetY)) best = slot;
+    const [tier, distance] = rank(slot);
+    if (tier < bestRank[0] || (tier === bestRank[0] && distance < bestRank[1])) {
+      best = slot;
+      bestRank = [tier, distance];
+    }
   }
   return best;
 }
