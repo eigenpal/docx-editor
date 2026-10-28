@@ -165,15 +165,22 @@ function characterPieces(
   return pieces;
 }
 
+/** Whether a piece starts or ends East Asian: by code point, or by its East Asian font slot. */
+function isEastAsianEnd(span: StyleSpanRecord, end: 'first' | 'last'): boolean {
+  return span.fontSlot === 'eastAsia' || isCjkCluster(span.text, end);
+}
+
 /**
- * Whether a gap opens between two adjacent visible pieces. One always opens after a space and
- * at an East Asian character. Elsewhere both sides must spread their letters: a kerned run
- * opens no gap inside its words, and none against the text on either side of it.
+ * Whether a gap opens between two adjacent visible pieces. One always opens after a space, and
+ * where both sides spread their letters. A kerned run opens no gap inside its words, none
+ * against the text beside it, and none before its spaces. It still opens one next to an East
+ * Asian character.
  */
 function opensGap(before: CharacterPiece, after: CharacterPiece): boolean {
   if (isSpace(before.span)) return true;
-  if (isCjkCluster(before.span.text, 'last') || isCjkCluster(after.span.text, 'first')) return true;
-  return !before.held && !after.held;
+  if (!before.held && !after.held) return true;
+  if (isSpace(after.span)) return false;
+  return isEastAsianEnd(before.span, 'last') || isEastAsianEnd(after.span, 'first');
 }
 
 /**
