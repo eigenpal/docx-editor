@@ -20,7 +20,7 @@ import {
   type TreePackageStore,
 } from '@docx-editor.dev/core/store';
 import type { NodeAddressed } from './structure-edits.ts';
-import { elements } from './scenario-tree.ts';
+import { elements, parentOf } from './scenario-tree.ts';
 
 const BODY: StoryScope = { kind: 'body' };
 
@@ -90,6 +90,48 @@ export function planBlockMoves(root: OoxmlNode, random: () => number): NodeAddre
     targets: [{ field: 'parentId', localName, index }],
   };
 }
+
+/**
+ * Plan one `moveTable`, the table handle's drag: a table goes just before another paragraph or
+ * table of its container. The op mints an empty paragraph on a side that would otherwise touch
+ * another table, so it covers the inserts beside a moved block that a reorder does not make.
+ */
+export function planTableMove(root: OoxmlNode, random: () => number): NodeAddressed | null {
+  const tables = elements(root, 'tbl');
+  const movable = tables.filter((table) => {
+    const parent = parentOf(root, table.id);
+    return (
+      parent !== null &&
+      parent.kind !== 'textValue' &&
+      (CONTAINERS as readonly string[]).includes(parent.localName) &&
+      blockCount(parent) >= 2
+    );
+  });
+  if (movable.length === 0) return null;
+  const table = movable[Math.floor(random() * movable.length)]!;
+  const parent = parentOf(root, table.id)!;
+  const targets = parent.kind === 'textValue' ? [] : parent.children.filter(isTarget);
+  const choices = targets.filter((block) => block.id !== table.id);
+  if (choices.length === 0) return null;
+  const before = choices[Math.floor(random() * choices.length)]!;
+  if (before.kind === 'textValue') return null;
+  return {
+    kind: 'node',
+    op: { op: 'moveTable', tableId: '', beforeBlockId: '' } as unknown as TreeDocOp,
+    targets: [
+      { field: 'tableId', localName: 'tbl', index: tables.indexOf(table) },
+      {
+        field: 'beforeBlockId',
+        localName: before.localName,
+        index: elements(root, before.localName).indexOf(before),
+      },
+    ],
+  };
+}
+
+/** A block `moveTable` can put a table before: a paragraph or a table. */
+const isTarget = (node: OoxmlNode): boolean =>
+  node.kind !== 'textValue' && (node.localName === 'p' || node.localName === 'tbl');
 
 /** The container's children after the moves, or null when a move names no block. */
 export function movedChildren(

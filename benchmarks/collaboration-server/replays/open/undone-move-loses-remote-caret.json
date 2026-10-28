@@ -1,0 +1,166 @@
+{
+  "config": "reorderUndo",
+  "seed": 1058,
+  "replicas": 3,
+  "delivery": "peer",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveBlocks",
+          "parentId": "",
+          "moves": [[0, 7]]
+        },
+        "targets": [
+          {
+            "field": "parentId",
+            "localName": "body",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveBlocks",
+          "parentId": "",
+          "moves": [[1, 0]]
+        },
+        "targets": [
+          {
+            "field": "parentId",
+            "localName": "body",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveTable",
+          "tableId": "",
+          "beforeBlockId": ""
+        },
+        "targets": [
+          {
+            "field": "tableId",
+            "localName": "tbl",
+            "index": 1
+          },
+          {
+            "field": "beforeBlockId",
+            "localName": "tbl",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveBlocks",
+          "parentId": "",
+          "moves": [[1, 8]]
+        },
+        "targets": [
+          {
+            "field": "parentId",
+            "localName": "body",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "undo",
+      "replica": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveBlocks",
+          "parentId": "",
+          "moves": [[8, 0]]
+        },
+        "targets": [
+          {
+            "field": "parentId",
+            "localName": "body",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 0,
+          "text": "lore"
+        },
+        "paragraphs": [0]
+      }
+    }
+  ]
+}

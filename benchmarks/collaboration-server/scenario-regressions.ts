@@ -159,6 +159,12 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
   { config: 'reorder', delivery: 'server', seed: 1 },
   { config: 'reorderUndo', delivery: 'server', seed: 2 },
   { config: 'reorderEverything', delivery: 'peer', seed: 3 },
+  // A table move in a parent that listed the table twice, after two peers moved it at once,
+  // inserted its separator paragraph one place late, so the two tables touched.
+  { config: 'reorder', delivery: 'server', seed: 11 },
+  { config: 'reorder', delivery: 'peer', seed: 12 },
+  { config: 'reorderUndo', delivery: 'server', seed: 25 },
+  { config: 'reorderEverything', delivery: 'server', seed: 52 },
 ];
 
 /**
@@ -167,53 +173,51 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
  */
 const OPEN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number; case: string }[] =
   [
-    // Two replicas delete the same table column, or row, at once, and one undoes its delete:
-    // text a third replica typed there shows again after the other replica deleted it.
+    // Undo and caret defects beside moved blocks. Every shrunk case below moves blocks or
+    // tables, and none of them loses or misplaces a block. The other cases in `replays/open/`
+    // were shrunk before the fuzzer moved tables with `moveTable`; they still fail, with the
+    // same kinds of defects and a join that refuses a later delete (`invalid-bound`).
+    //
+    // An undo after concurrent row or block deletes beside moved blocks shows text again that
+    // another replica deleted.
+    {
+      config: 'reorderUndo',
+      delivery: 'server',
+      seed: 40,
+      case: 'undo-after-row-deletes-beside-moved-blocks-restores-deleted-text.json',
+    },
+    {
+      config: 'reorderUndo',
+      delivery: 'server',
+      seed: 1005,
+      case: 'undo-after-row-and-block-deletes-restores-deleted-text.json',
+    },
     {
       config: 'reorderEverything',
       delivery: 'server',
-      seed: 1,
-      case: 'concurrent-column-deletes-then-undo-restore-deleted-text.json',
+      seed: 1045,
+      case: 'undo-after-table-move-and-row-deletes-restores-deleted-text.json',
     },
+    // An undo beside moved tables removes text that another replica typed.
     {
       config: 'reorderUndo',
-      delivery: 'server',
-      seed: 50,
-      case: 'concurrent-row-deletes-then-undo-restore-deleted-text.json',
-    },
-    // A join copies the second paragraph's text, so an undo of typing the joining replica had
-    // not received yet leaves the copy.
-    {
-      config: 'reorderUndo',
-      delivery: 'server',
-      seed: 80,
-      case: 'join-copies-text-an-undo-removes.json',
-    },
-    // Splits, joins, deletes, and undo beside moved blocks. Each case needs its moves to fail,
-    // and none of them loses or misplaces a block.
-    {
-      config: 'reorder',
-      delivery: 'server',
-      seed: 73,
-      case: 'moved-blocks-with-splits-and-joins-show-text-twice.json',
-    },
-    {
-      config: 'reorder',
-      delivery: 'server',
-      seed: 91,
-      case: 'caret-after-joins-beside-moved-blocks.json',
-    },
-    {
-      config: 'reorderUndo',
-      delivery: 'server',
-      seed: 91,
-      case: 'undone-join-beside-moved-blocks-refuses-a-delete.json',
-    },
-    {
-      config: 'reorderEverything',
       delivery: 'peer',
-      seed: 63,
-      case: 'undo-beside-moved-blocks-removes-peer-text.json',
+      seed: 95,
+      case: 'undo-beside-moved-tables-removes-peer-text.json',
+    },
+    // Blocks moved, split, and deleted at once show one typed character twice.
+    {
+      config: 'reorder',
+      delivery: 'server',
+      seed: 3057,
+      case: 'moved-and-split-blocks-show-typed-text-twice.json',
+    },
+    // An undone move leaves the peers without one replica's caret.
+    {
+      config: 'reorderUndo',
+      delivery: 'peer',
+      seed: 1058,
+      case: 'undone-move-loses-remote-caret.json',
     },
   ];
 

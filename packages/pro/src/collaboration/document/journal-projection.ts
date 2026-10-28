@@ -80,13 +80,19 @@ export class JournalProjection {
     parent.children.splice(start, deleteCount, ...childIds);
   }
 
-  /** A move detaches from the current parent first, so neither count drifts. */
+  /**
+   * A move detaches the node from every listing first, as the shared write does, so neither
+   * count drifts. Two peers that move one block at once leave it listed twice in one parent;
+   * a projection that removed only one listing measured later indexes against a list one
+   * entry longer than the shared one, and the next insert in that parent landed one place late.
+   */
   moveNode(id: LogicalId, destinationParentId: LogicalId, destinationIndex: number): void {
-    const currentParentId = this.parentOf(id);
-    if (currentParentId !== null) {
-      const currentParent = this.node(currentParentId);
-      const index = currentParent?.children.indexOf(id) ?? -1;
-      if (currentParent && index >= 0) currentParent.children.splice(index, 1);
+    for (const parentId of this.listersOf(id)) {
+      const parent = this.node(parentId);
+      if (!parent) continue;
+      for (let index = parent.children.length - 1; index >= 0; index -= 1) {
+        if (parent.children[index] === id) parent.children.splice(index, 1);
+      }
     }
     const destination = this.node(destinationParentId);
     if (!destination) return;
@@ -94,12 +100,18 @@ export class JournalProjection {
     destination.children.splice(at, 0, id);
   }
 
-  /** Projected parents win, because an earlier effect in this journal may have reparented. */
-  private parentOf(id: LogicalId): LogicalId | null {
+  /**
+   * Every parent that may list `id`: the projected parents, because an earlier effect in this
+   * journal may have reparented it, and every parent the shared state lists it under.
+   */
+  private listersOf(id: LogicalId): Set<LogicalId> {
+    const parents = new Set<LogicalId>(this.registry.listingParents(id));
+    const shown = this.registry.parentOf(id);
+    if (shown !== null) parents.add(shown);
     for (const [parentId, node] of this.touched) {
-      if (node.children.includes(id)) return parentId;
+      if (node.children.includes(id)) parents.add(parentId);
     }
-    return this.registry.parentOf(id);
+    return parents;
   }
 }
 

@@ -221,6 +221,38 @@ describe('a block moved among its siblings in one transaction', () => {
   }
 });
 
+describe('moveTable after two concurrent moves of the same table', () => {
+  // `p0 p1 [T] p2 [U] p3`: a move of T before U needs an empty paragraph between the tables.
+  const TWO_TABLES = zipDocument(
+    [paragraph('p0'), paragraph('p1'), table('T'), paragraph('p2'), table('U'), paragraph('p3')]
+      .join('')
+      .concat('<w:sectPr/>')
+  );
+
+  // Both peers move T to the start at once, so the body lists it twice before the place it
+  // moves to. The move removes both listings, so the separator it adds next must land between
+  // the two tables.
+  test('the separator lands between the tables on both peers', async () => {
+    const { alice, bob, pause, resume } = await harness.pair(TWO_TABLES);
+    pause();
+    reorder(alice, [['[T]', 0]]);
+    reorder(bob, [['[T]', 0]]);
+    resume();
+    expect(order(bob)).toEqual(order(alice));
+    harness.apply(alice, [
+      { op: 'moveTable', tableId: blockId(alice, '[T]'), beforeBlockId: blockId(alice, '[U]') },
+    ]);
+    const expected = ['p0', 'p1', 'p2', '[T]', '', '[U]', 'p3'];
+    expectBoth(alice, bob, expected);
+    const late = await harness.join(alice, 'late');
+    expect(order(late)).toEqual(expected);
+    expect(alice.room.session.undo()).toBe(true);
+    expect(order(alice)).toEqual(order(bob));
+    expect(order(alice).filter((name) => name === '[T]')).toEqual(['[T]']);
+    harness.expectConverged(alice, bob);
+  });
+});
+
 describe('properties a formatting edit puts back in schema order', () => {
   // A formatting edit writes paragraph and run properties in schema order. Properties
   // authored out of order then move toward the start of their container, the same reorder

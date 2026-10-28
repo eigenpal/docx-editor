@@ -24,7 +24,7 @@ import {
   type TreePackageStore,
 } from '@docx-editor.dev/core/store';
 import { elements, parentOf, textOf } from './scenario-tree.ts';
-import { applyBlockMoves, isMoveBlocks, planBlockMoves } from './block-moves.ts';
+import { applyBlockMoves, isMoveBlocks, planBlockMoves, planTableMove } from './block-moves.ts';
 
 const BODY: StoryScope = { kind: 'body' };
 
@@ -57,6 +57,8 @@ export type EditKind =
   | 'deleteRow'
   // One transaction that moves one or two existing blocks to new places in their container.
   | 'moveBlocks'
+  // The table handle's drag: a table goes before another block, with separator paragraphs.
+  | 'moveTable'
   | TrackedEditKind
   | StructureEditKind;
 
@@ -103,6 +105,7 @@ export const DEFAULT_WEIGHTS: Record<EditKind, number> = {
   // Off by default, so every existing seed draws the same numbers; the `reorder` shapes turn
   // it on.
   moveBlocks: 0,
+  moveTable: 0,
   trackedType: 0,
   trackedDelete: 0,
   acceptRevision: 0,
@@ -139,11 +142,12 @@ export const TRACKED_STRUCTURE_WEIGHTS: Partial<Record<EditKind, number>> = {
 };
 
 /**
- * The mix of the `reorder` shapes: block moves, with typing inside the blocks that move, splits
- * and joins beside them, and deletes of their neighbours.
+ * The mix of the `reorder` shapes: block moves and table moves, with typing inside the blocks
+ * that move, splits and joins beside them, and deletes of their neighbours.
  */
 export const REORDER_WEIGHTS: Partial<Record<EditKind, number>> = {
   moveBlocks: 20,
+  moveTable: 6,
   type: 30,
   delete: 8,
   split: 6,
@@ -372,6 +376,8 @@ export function planEdit(
       return planCardDecision(store, random, kind === 'acceptCard' ? 'accept' : 'reject');
     case 'moveBlocks':
       return planBlockMoves(root, random);
+    case 'moveTable':
+      return planTableMove(root, random);
     case 'acceptAll':
     case 'rejectAll':
       return {
