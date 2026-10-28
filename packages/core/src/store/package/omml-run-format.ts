@@ -54,8 +54,10 @@ function textFontSlots(text: string): ReadonlySet<FontSlot> {
   for (const character of text) {
     const codePoint = character.codePointAt(0)!;
     ascii &&= codePoint < 0x80;
-    const slot = classifyFontSlot(codePoint)?.slot;
-    if (slot) slots.add(slot);
+    const classified = classifyFontSlot(codePoint);
+    // A script outside the slot policy, such as Armenian, draws in the w:hAnsi face.
+    if (classified === undefined) slots.add('hAnsi');
+    else if (classified) slots.add(classified.slot);
   }
   if (slots.size === 0 && text.length > 0) slots.add(ascii ? 'ascii' : 'hAnsi');
   return slots;

@@ -3564,7 +3564,6 @@ export interface ScriptItem {
     readonly direction: TextDirection;
     // (undocumented)
     readonly from: number;
-    // (undocumented)
     readonly script: 'Zyyy' | 'Latn' | 'Grek' | 'Cyrl' | 'Hani' | 'Hebr' | 'Arab' | 'Deva' | 'Beng' | 'Thai' | 'Khmr';
     // (undocumented)
     readonly slot: FontSlot;

@@ -3,15 +3,13 @@ import type { TextDirection } from './shaped-run.ts';
 import { withFontFamily, type ResolvedRunStyle } from './run-style.ts';
 import { isEastAsiaHinted, type EastAsiaHintScope } from './east-asia-symbol-hint.ts';
 import { segmentGraphemes } from './grapheme.ts';
-import { classifyFontSlot } from '../store/package/font-slot-classes.ts';
+import {
+  classifyFontSlot,
+  type FontSlot,
+  type FontSlotClass,
+} from '../store/package/font-slot-classes.ts';
 
-/**
- * Which `w:rFonts` slot a character resolves its face through.
- *
- * OOXML gives a run up to four faces and picks between them by SCRIPT, so one run of mixed Latin
- * and CJK text uses two different fonts without saying so anywhere in its properties.
- */
-export type FontSlot = 'ascii' | 'hAnsi' | 'eastAsia' | 'cs';
+export type { FontSlot };
 
 /**
  * A run of text sharing one script, direction and font slot — the unit handed to the shaper.
@@ -24,6 +22,7 @@ export interface ScriptItem {
   readonly to: number;
   readonly direction: TextDirection;
   readonly bidiLevel: number;
+  /** The shaping script. The public union restates the shared slot policy's set. */
   readonly script:
     | 'Zyyy'
     | 'Latn'
@@ -38,6 +37,16 @@ export interface ScriptItem {
     | 'Khmr';
   readonly slot: FontSlot;
 }
+
+// Fails to compile when the public script union and the shared slot policy drift apart.
+type SameScripts = [ScriptItem['script'], FontSlotClass['script']] extends [
+  FontSlotClass['script'],
+  ScriptItem['script'],
+]
+  ? true
+  : never;
+const SCRIPTS_MATCH: SameScripts = true;
+void SCRIPTS_MATCH;
 
 type Classified = Omit<ScriptItem, 'from' | 'to' | 'direction' | 'bidiLevel'> | null;
 

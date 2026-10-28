@@ -124,6 +124,7 @@ test.each([
     'α+β',
     'Face B',
   ],
+  ['Armenian text beside ASCII text', '<w:rFonts w:hAnsi="Face B"/>', 'աx', 'Face B'],
   [
     'operator-only ASCII text',
     '<w:rFonts w:ascii="Face A" w:eastAsia="East Face"/>',
