@@ -37,6 +37,7 @@ import {
   type SemanticHit,
 } from '../layout/semantic-hit-test.ts';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
+import { findNode } from '../store/package/ooxml-edit.ts';
 import { logicalLineSegments } from '../layout/line-segments.ts';
 
 export const SCOPE_BODY: ViewScope = Object.freeze({ kind: 'body' as const });
@@ -112,6 +113,23 @@ export function partOfNodeId(
   const partName = nodeId!.slice(0, hash);
   if (partName.length === 0) return null;
   return session.currentPackage().parts.get(partName) ?? null;
+}
+
+/**
+ * The story part that holds a node, whatever the shape of its id.
+ *
+ * A collaboration replica names nodes by logical id, which carries no part name, so
+ * {@link partOfNodeId} finds no part for them. Those ids are looked up in each story's node
+ * index instead. A tracked change another participant made, or one made in a session, is
+ * addressed this way.
+ */
+export function storyPartOfNodeId(
+  session: Pick<TreeDocxSessionView, 'currentPackage' | 'part' | 'storyParts'>,
+  nodeId: string | undefined
+): OoxmlPart | null {
+  const named = partOfNodeId(session, nodeId);
+  if (named || nodeId === undefined || nodeId.includes('#')) return named;
+  return session.storyParts().find((part) => findNode(part, nodeId) !== null) ?? null;
 }
 
 export function storyScopeOfNodeId(
