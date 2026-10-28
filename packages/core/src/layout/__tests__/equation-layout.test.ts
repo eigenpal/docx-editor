@@ -322,7 +322,11 @@ describe('script placement', () => {
     equationSpan(`<w:p><m:oMath>${inner}</m:oMath></w:p>`).equation!.geometry;
 
   test('a subscript baseline sits a fifth of an em below the base baseline', () => {
-    const geometry = script(`<m:sSub><m:e>${run('M')}</m:e><m:sub>${run('d')}</m:sub></m:sSub>`);
+    // The control size sizes the structure, so the em is the run size here.
+    const control = `<m:sSubPr><m:ctrlPr><w:rPr><w:sz w:val="${sizePt * 2}"/></w:rPr></m:ctrlPr></m:sSubPr>`;
+    const geometry = script(
+      `<m:sSub>${control}<m:e>${run('M')}</m:e><m:sub>${run('d')}</m:sub></m:sSub>`
+    );
     expect(geometry.kind).toBe('script');
     if (geometry.kind !== 'script') return;
     const sub = geometry.subscript!;

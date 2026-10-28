@@ -11,6 +11,8 @@ export interface EquationInk {
   readonly ascent: number;
   /** Distance below the baseline. Negative when all ink is above the baseline. */
   readonly descent: number;
+  /** Some text reported no glyph ink, so its font box stands in for it. */
+  readonly fromFontBox?: true;
 }
 
 function children(node: EquationGeometry): readonly EquationGeometry[] {
@@ -137,12 +139,16 @@ export function equationInk(node: EquationGeometry, measurer: TextMeasurer): Equ
 function measureInk(node: EquationGeometry, measurer: TextMeasurer): EquationInk {
   if (node.kind === 'text' || node.kind === 'fallback') {
     const ink = node.text && node.runStyle ? textInk(node.text, node.runStyle, measurer) : null;
-    return ink ?? { ascent: node.baseline, descent: node.box.height - node.baseline };
+    return (
+      ink ?? { ascent: node.baseline, descent: node.box.height - node.baseline, fromFontBox: true }
+    );
   }
   let top = Number.POSITIVE_INFINITY;
   let bottom = Number.NEGATIVE_INFINITY;
+  let fromFontBox = false;
   for (const child of children(node)) {
     const ink = equationInk(child, measurer);
+    fromFontBox ||= ink.fromFontBox === true;
     const baseline = child.box.y + child.baseline;
     top = Math.min(top, baseline - ink.ascent);
     bottom = Math.max(bottom, baseline + ink.descent);
@@ -153,7 +159,11 @@ function measureInk(node: EquationGeometry, measurer: TextMeasurer): EquationInk
     bottom = Math.max(bottom, stroke.y + stroke.height);
   }
   if (top > bottom) return { ascent: 0, descent: 0 };
-  return { ascent: node.baseline - top, descent: bottom - node.baseline };
+  return {
+    ascent: node.baseline - top,
+    descent: bottom - node.baseline,
+    ...(fromFontBox ? { fromFontBox: true as const } : {}),
+  };
 }
 
 /** The top of lowercase letters, in ems of their size. */

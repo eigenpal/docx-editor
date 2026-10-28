@@ -1599,6 +1599,7 @@ export function ensureNumberingLevel(pkg: OoxmlPackage, numId: string, level: nu
 
 // @public
 export interface EquationControlSource {
+    readonly controlFontSizePt?: number;
     readonly controlProperties?: true;
 }
 

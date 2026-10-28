@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Script offsets and bar strokes took the size of the runs inside the structure.",
+  "after": "Script offsets and bar strokes take the m:ctrlPr size of the structure, or the size of the text around the equation; a tall subscript drops below the subscript top limit.",
+  "reason": "The projection gains a read-only size read from preserved source, and only local equation geometry changes. Canonical OMML, offsets, operations, and collaboration data remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/equation-structure-size.test.ts",
+    "packages/core/src/store/__tests__/omml-control-defaults.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-equation-mixed-run-size.test.ts"
+  ],
+  "changeset": "equation-structure-size",
+  "migration": null
+}

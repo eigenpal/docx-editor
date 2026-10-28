@@ -101,9 +101,11 @@ test('projects default control properties as an editable equation', () => {
   const projection = projectOmmlEquation(equationOf(read(sourceWithDefaults)))!;
   expect(projection.expression).toEqual({
     kind: 'fraction',
+    controlFontSizePt: 11,
     numerator: { kind: 'text', value: 'a' },
     denominator: {
       kind: 'script',
+      controlFontSizePt: 11,
       base: { kind: 'text', value: 'b' },
       superscript: { kind: 'text', value: '2' },
     },

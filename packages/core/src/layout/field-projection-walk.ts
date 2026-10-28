@@ -95,7 +95,7 @@ import {
 } from './revision-projection.ts';
 import { resolvedFormatChangeOf } from './revision-formatting-projection.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
-import { equationRunStyle } from './equation-layout.ts';
+import { equationStyleForText } from './equation-layout.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
 import {
   contentControlContentChildren,
@@ -926,9 +926,11 @@ export function unmergedPiecesOfParagraphForDisplay(
       if (revisionsAreDeletion(revisions) && deletedRanges)
         appendModelRange(deletedRanges, start, offset);
       // Runs that share one default `w:sz` size the equation; otherwise it takes the text size.
-      const text = resolveRunStyle(inheritedRunProperties, themeFonts);
-      const { fontSizePt } = equation;
-      const style = equationRunStyle(fontSizePt === undefined ? text : { ...text, fontSizePt });
+      // Structures without a control size take the text size either way.
+      const style = equationStyleForText(
+        resolveRunStyle(inheritedRunProperties, themeFonts),
+        equation.fontSizePt
+      );
       if (!style.hidden && !revisionsVisible(revisions, displayMode, authorFilter)) {
         recordRemoved(start, offset, revisions);
       }

@@ -39,7 +39,8 @@ The engine SHALL publish equation geometry from DOM-free layout. Paint SHALL use
 - **THEN** each script draws at 73 percent of its run size, rounded down to a whole half point
 - **AND** a script inside a script, fraction part, or limit draws at 60 percent of its run size, at every deeper level too
 - **AND** the superscript baseline rises at least 750/2048 em of the structure size, and at least to 460/2048 em below the top of the lowercase text of its base, including text inside a structured base
-- **AND** the subscript baseline sits 0.2 em below the base baseline
+- **AND** the subscript baseline sits 0.2 em below the base baseline, and lower when the top of the subscript ink would rise more than 760/2048 em above it
+- **AND** the em of these offsets is the `w:sz` of the structure `m:ctrlPr`, or the size of the text around the equation when the structure has none
 - **AND** the two scripts of one base keep a 300/2048 em gap between their glyphs
 
 #### Scenario: Operator spacing
@@ -70,7 +71,7 @@ The engine SHALL publish equation geometry from DOM-free layout. Paint SHALL use
 #### Scenario: Bar placement
 
 - **WHEN** an equation contains `m:bar` with an upper or lower position
-- **THEN** the bar strokes 133/2048 em of the structure size
+- **THEN** the bar strokes 133/2048 em of the structure size, which is the `w:sz` of its `m:ctrlPr` or the size of the text around the equation
 - **AND** the bar keeps a 345/2048 em gap from the ink of its body, with one more stroke of space on its outer side
 
 #### Scenario: Safe paint

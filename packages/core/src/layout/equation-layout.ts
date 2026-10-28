@@ -26,6 +26,8 @@ const SUPERSCRIPT_SHIFT_UP = 750 / 2048;
 const SUPERSCRIPT_BASELINE_DROP_MAX = 460 / 2048;
 /** The least ink gap between a superscript and a subscript of one base. */
 const SUB_SUPERSCRIPT_GAP_MIN = 300 / 2048;
+/** How high the top of a subscript's ink may reach above the base baseline. */
+const SUBSCRIPT_TOP_MAX = 760 / 2048;
 /** How high a superscript bottom may rise to open the gap above a subscript. */
 const SUPERSCRIPT_BOTTOM_MAX_WITH_SUBSCRIPT = 765 / 2048;
 /** The stroke of an upper or lower bar. */
@@ -54,6 +56,25 @@ export const EQUATION_FONT_FAMILY = 'Cambria Math';
 // paragraph face that supplied this memoized derivation.
 const equationTextStyles = new WeakMap<ResolvedRunStyle, ResolvedRunStyle>();
 const equationMathStyles = new WeakMap<ResolvedRunStyle, ResolvedRunStyle>();
+
+// The size of the text around an equation whose style takes the size its runs share.
+const surroundingSizes = new WeakMap<ResolvedRunStyle, number>();
+
+/**
+ * The equation style for the text around an equation. Runs that share one default size give
+ * the style that size. Structures without a control size keep the size of `text`.
+ * @internal
+ */
+export function equationStyleForText(
+  text: ResolvedRunStyle,
+  sharedSizePt: number | undefined
+): ResolvedRunStyle {
+  const style = equationRunStyle(
+    sharedSizePt === undefined ? text : Object.freeze({ ...text, fontSizePt: sharedSizePt })
+  );
+  if (style.fontSizePt !== text.fontSizePt) surroundingSizes.set(style, text.fontSizePt);
+  return style;
+}
 
 /** Use Word's math face when installed while retaining the measurer's safe fallback stack. */
 export function equationRunStyle(style: ResolvedRunStyle): ResolvedRunStyle {
@@ -157,6 +178,8 @@ function shifted<T extends EquationGeometry>(node: T, x: number, y: number): T {
 
 interface EquationLayoutCache {
   readonly textStyle: ResolvedRunStyle;
+  /** The size of the text around the equation: the structure size without `m:ctrlPr`. */
+  readonly surroundingSizePt: number;
   readonly formats: WeakMap<
     object,
     Map<boolean, { readonly style: ResolvedRunStyle; readonly cache: EquationLayoutCache }>
@@ -179,6 +202,7 @@ function geometryStyleToken(style: ResolvedRunStyle): string {
     resolved.fontFamily ?? '',
     (equationTextStyles.get(style) ?? style).fontFamily ?? '',
     resolved.fontSizePt,
+    surroundingSizes.get(style) ?? '',
     resolved.bold ? 1 : 0,
     resolved.italic ? 1 : 0,
     resolved.verticalAlign,
@@ -227,6 +251,23 @@ function scriptScale(scale: number): number {
   return scale >= 1 ? scale * SCRIPT_SCALE : Math.min(scale, SCRIPT_SCRIPT_SCALE);
 }
 
+// A reduced size rounds down to whole half points, the unit of authored run sizes.
+function scaledSizePt(sizePt: number, scale: number): number {
+  return scale < 1 ? Math.max(0.5, Math.floor(sizePt * scale * 2 + 1e-9) / 2) : sizePt * scale;
+}
+
+/**
+ * The size that sizes the offsets and rules of one structure: its `m:ctrlPr` size, or the
+ * size of the text around the equation, reduced to the structure's script level.
+ */
+function structureSizePt(
+  expression: { readonly controlFontSizePt?: number },
+  scale: number,
+  cache: EquationLayoutCache
+): number {
+  return scaledSizePt(expression.controlFontSizePt ?? cache.surroundingSizePt, scale);
+}
+
 function scaledStyle(
   style: ResolvedRunStyle,
   scale: number,
@@ -234,16 +275,12 @@ function scaledStyle(
 ): ResolvedRunStyle {
   const cached = cache.styles.get(scale);
   if (cached) return cached;
-  // A reduced size rounds down to whole half points, the unit of authored run sizes.
   const resolved =
     scale === 1
       ? style
       : Object.freeze({
           ...style,
-          fontSizePt:
-            scale < 1
-              ? Math.max(0.5, Math.floor(style.fontSizePt * scale * 2 + 1e-9) / 2)
-              : style.fontSizePt * scale,
+          fontSizePt: scaledSizePt(style.fontSizePt, scale),
           characterSpacingPt: style.characterSpacingPt * scale,
         });
   cache.styles.set(scale, resolved);
@@ -378,6 +415,7 @@ function layoutText(
       style: face,
       cache: {
         textStyle: cache.textStyle,
+        surroundingSizePt: cache.surroundingSizePt,
         styles: new Map(),
         metrics: new Map(),
         formats: new WeakMap(),
@@ -609,9 +647,9 @@ function layoutExpression(
       });
     }
     case 'bar': {
-      const resolved = scaledStyle(style, scale, cache);
       const body = layoutExpression(expression.body, measurer, style, scale, cache);
-      const em = resolved.fontSizePt;
+      // The rule takes the structure size, not the size of the runs inside it.
+      const em = structureSizePt(expression, scale, cache);
       const thickness = BAR_RULE_THICKNESS * em;
       const gap = BAR_VERTICAL_GAP * em;
       // The rule keeps its gap from the body's ink, not from its font box, and reserves
@@ -637,7 +675,6 @@ function layoutExpression(
       });
     }
     case 'script': {
-      const resolved = scaledStyle(style, scale, cache);
       const base = layoutExpression(expression.base, measurer, style, scale, cache);
       const subscript = expression.subscript
         ? layoutExpression(expression.subscript, measurer, style, scriptScale(scale), cache)
@@ -645,9 +682,10 @@ function layoutExpression(
       const superscript = expression.superscript
         ? layoutExpression(expression.superscript, measurer, style, scriptScale(scale), cache)
         : undefined;
-      const gap = Math.max(0.4, resolved.fontSizePt * 0.04);
+      // Offsets take the structure size, not the size of the runs inside it.
+      const em = structureSizePt(expression, scale, cache);
+      const gap = Math.max(0.4, em * 0.04);
       const scriptX = base.box.width + gap;
-      const em = resolved.fontSizePt;
       // The superscript baseline rises at least a fixed share of the structure size, and
       // never sits lower than a fixed drop below the top of the base's lowercase text. A
       // text base gives its lowercase height, so an ascender keeps the same rise; a
@@ -658,13 +696,17 @@ function layoutExpression(
             equationLowercaseTop(base) - SUPERSCRIPT_BASELINE_DROP_MAX * em
           )
         : 0;
-      // The subscript's own baseline sits a fifth of an em below the base baseline.
-      let drop = em * 0.2;
-      if (superscript && subscript) {
+      // The subscript's own baseline sits a fifth of an em below the base baseline, and lower
+      // when the top of its ink would rise past a fixed height, as a tall subscript does.
+      // A font box standing in for missing glyph ink reaches far above the glyphs, so it
+      // says nothing about the limit.
+      const subInk = subscript ? equationInk(subscript, measurer) : null;
+      const inkTop = subInk && !subInk.fromFontBox ? subInk.ascent : 0;
+      let drop = Math.max(em * 0.2, inkTop - SUBSCRIPT_TOP_MAX * em);
+      if (superscript && subInk) {
         // Keep an ink gap between the scripts. The superscript rises first, up to a limit,
         // and the subscript drops for the rest.
         const supInk = equationInk(superscript, measurer);
-        const subInk = equationInk(subscript, measurer);
         const missing =
           SUB_SUPERSCRIPT_GAP_MIN * em - (rise - supInk.descent - (subInk.ascent - drop));
         if (missing > 0) {
@@ -762,6 +804,7 @@ export function layoutEquation(
   const mathStyle = equationRunStyle(style);
   const cache: EquationLayoutCache = {
     textStyle: equationTextStyles.get(style) ?? style,
+    surroundingSizePt: surroundingSizes.get(style) ?? style.fontSizePt,
     styles: new Map(),
     metrics: new Map(),
     formats: new WeakMap(),

@@ -233,6 +233,31 @@ function runNamesLanguage(run: OoxmlElement): boolean {
 const TRACKED_CONTROL_ATTRIBUTES: ReadonlySet<string> = new Set(['id', 'author', 'date']);
 
 /**
+ * The font size, in points, of one supported `m:ctrlPr`: the `w:sz` of its `w:rPr`, directly
+ * or inside a tracked `w:ins` or `w:del`. Undefined when the control names no valid size.
+ */
+export function equationControlFontSizePt(control: OoxmlElement): number | undefined {
+  let properties = control.children[0];
+  if (
+    properties &&
+    properties.kind !== 'textValue' &&
+    (element(properties, WML_NAMESPACE_URI, 'ins') || element(properties, WML_NAMESPACE_URI, 'del'))
+  ) {
+    properties = properties.children[0];
+  }
+  if (!properties || properties.kind === 'textValue') return undefined;
+  if (!element(properties, WML_NAMESPACE_URI, 'rPr')) return undefined;
+  for (const property of properties.children) {
+    if (property.kind === 'textValue' || !element(property, WML_NAMESPACE_URI, 'sz')) continue;
+    const value = property.attributes.find(
+      (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'val'
+    )?.value;
+    return value !== undefined && /^[1-9][0-9]{0,3}$/.test(value) ? Number(value) / 2 : undefined;
+  }
+  return undefined;
+}
+
+/**
  * True when an `m:ctrlPr` holds only source the equation lane can preserve: default control
  * properties, one `w:rPr` within the math run allowlist, or one tracked `w:ins`/`w:del` around
  * such a `w:rPr`.

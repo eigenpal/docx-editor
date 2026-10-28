@@ -5,6 +5,7 @@
 
 import { XML_NAMESPACE_URI } from './ooxml-shared.ts';
 import {
+  equationControlFontSizePt,
   equationRunFormat,
   equationMathChild as namedChild,
   equationMathChildren as namedChildren,
@@ -58,6 +59,15 @@ export interface OmmlLimits {
 export interface EquationControlSource {
   /** The structure carries non-default `m:ctrlPr` properties, so compact replacement refuses it. */
   readonly controlProperties?: true;
+  /**
+   * Font size of the structure, in points. The source is the `w:sz` value of the run
+   * properties in the structure's `m:ctrlPr`, which counts half-points.
+   *
+   * Layout sizes script offsets and bar strokes and gaps from this size, not from the size of
+   * the runs inside the structure. When it is not set, those use the size of the text around
+   * the equation. Set whether or not the control properties are default.
+   */
+  readonly controlFontSizePt?: number;
 }
 
 export type EquationExpression =
@@ -277,9 +287,15 @@ function controlSource(
   propertyName: string,
   state: ProjectionState
 ): EquationControlSource {
-  return !state.defaultControls && equationStructureHasControlProperties(node, propertyName)
-    ? { controlProperties: true }
-    : {};
+  const property = namedChild(node, propertyName);
+  const control = property ? namedChild(property, 'ctrlPr') : null;
+  const controlFontSizePt = control ? equationControlFontSizePt(control) : undefined;
+  return {
+    ...(!state.defaultControls && equationStructureHasControlProperties(node, propertyName)
+      ? { controlProperties: true as const }
+      : {}),
+    ...(controlFontSizePt === undefined ? {} : { controlFontSizePt }),
+  };
 }
 
 function projectStructured(
