@@ -21,14 +21,19 @@ import {
   findTableInteractionAt,
   tableInteractionIndex,
 } from '../layout/semantic-table-interaction.ts';
+import type { ExecResult } from '../contracts/editor.ts';
+import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
 import { hostTimers } from './host-realm.ts';
 import type { SurfaceHostListeners } from './surface-host-listeners.ts';
-import { partNameOf } from './surface-table-story.ts';
+import { createTableDrag } from './surface-table-drag.ts';
+import { partNameOf, partOfTableIn } from './surface-table-story.ts';
+import type { TableCommandPlan } from './table-command-plan.ts';
 
 const HOVER_HIDE_MS = 120;
-/** Points from the table's top-left corner to the handle's, clear of the insert buttons. */
-const HANDLE_OFFSET_PT = 18;
+/** CSS pixels, not points, so the gap to the table stays the same at every zoom. */
+const HANDLE_SIZE_PX = 16;
+const HANDLE_GAP_PX = 2;
 
 export interface SurfaceTableSelectHandleHost {
   readonly pagesLayer: HTMLElement;
@@ -43,6 +48,8 @@ export interface SurfaceTableSelectHandleHost {
   };
   label(key: TableInteractionLabelKey): string;
   setCellSelection(cells: CellSelection): void;
+  session(): TreeDocxSessionView;
+  applyTableCommandPlan(plan: TableCommandPlan): ExecResult;
 }
 
 export interface SurfaceTableSelectHandle {
@@ -100,6 +107,19 @@ export function createSurfaceTableSelectHandle(
   let overHandle = false;
   let hideTimer: number | null = null;
   let shownTableId: string | null = null;
+  // Positioned tables move by their anchor properties, which the editor does not edit yet.
+  let shownFloating = false;
+  const drag = createTableDrag({
+    pagesLayer: host.pagesLayer,
+    layer,
+    listeners: host.listeners,
+    frames: timers,
+    scale: () => host.scale(),
+    pageOffsetX: (pageIndex) => host.pageOffsetX(pageIndex),
+    layout: () => host.read().layout,
+    partOf: (tableId) => partOfTableIn(host.session(), tableId),
+    applyTableCommandPlan: (plan) => host.applyTableCommandPlan(plan),
+  });
 
   const button = layer.ownerDocument.createElement('button');
   button.type = 'button';
@@ -111,7 +131,13 @@ export function createSurfaceTableSelectHandle(
     event.preventDefault();
     event.stopPropagation();
   };
-  button.addEventListener('pointerdown', guard);
+  button.addEventListener('pointerdown', (event) => {
+    guard(event);
+    const mode = host.read().editingMode;
+    if (!shownTableId || shownFloating || mode === 'view') return;
+    clearHideTimer();
+    drag.press(event, shownTableId, button, mode === 'suggest' ? 'refuse' : 'move');
+  });
   button.addEventListener('mousedown', guard);
   button.addEventListener('click', (event) => {
     guard(event);
@@ -160,16 +186,19 @@ export function createSurfaceTableSelectHandle(
     const scale = host.scale();
     const offsetX = host.pageOffsetX(target.pageIndex);
     shownTableId = table.tableId;
+    shownFloating = table.floatingWrap !== undefined;
     button.dataset.tableId = table.tableId;
+    button.dataset.draggable = String(!shownFloating && editingMode === 'edit');
     button.setAttribute('aria-label', host.label('table.selectTable'));
     button.title = host.label('table.selectTable');
-    button.style.left = `${(origin.x + table.box.x - HANDLE_OFFSET_PT + offsetX) * scale}px`;
-    button.style.top = `${(origin.y + table.box.y - HANDLE_OFFSET_PT) * scale}px`;
+    const inset = HANDLE_SIZE_PX + HANDLE_GAP_PX;
+    button.style.left = `${(origin.x + table.box.x + offsetX) * scale - inset}px`;
+    button.style.top = `${(origin.y + table.box.y) * scale - inset}px`;
     if (button.parentNode !== layer) layer.append(button);
   }
 
   function onPointerMove(event: PointerEvent): void {
-    if (overHandle) return;
+    if (overHandle || drag.dragging()) return;
     const { layout } = host.read();
     const rect = host.pagesLayer.getBoundingClientRect();
     const scale = host.scale();
@@ -209,6 +238,7 @@ export function createSurfaceTableSelectHandle(
     update,
     destroy() {
       clearHideTimer();
+      drag.destroy();
       unlisten();
       layer.remove();
     },

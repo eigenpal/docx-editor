@@ -1588,6 +1588,15 @@ a.docx-hyperlink:focus-visible {
   cursor: pointer;
 }
 
+.docx-table-select-handle[data-draggable='true'] {
+  cursor: move;
+}
+
+.docx-table-drop-indicator {
+  height: 2px;
+  background-color: var(--doc-primary);
+}
+
 /* Table chrome — contextual border/fill controls (Task 9). */
 .docx-table-chrome {
   display: inline-flex;

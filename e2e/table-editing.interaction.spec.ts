@@ -771,3 +771,51 @@ test.describe('table select handle', () => {
     expect((await e2eReadback(page))?.outer).not.toBeNull();
   });
 });
+
+test.describe('table move handle', () => {
+  test('drags the outer table below the merged table, and undo puts it back', async ({ page }) => {
+    await waitForHook(page);
+    const blockOrder = () =>
+      page.evaluate(() =>
+        [...document.querySelectorAll('.docx-paragraph-fragment')]
+          .map((element) => element.textContent?.trim() ?? '')
+          .filter((text) => /^(INNER-NW|MERGED-ONLY|Continuation-page nested host)$/.test(text))
+      );
+    expect(await blockOrder()).toEqual([
+      'INNER-NW',
+      'MERGED-ONLY',
+      'Continuation-page nested host',
+    ]);
+
+    await focusInnerCell(page);
+    const handle = page.locator('.docx-table-select-handle');
+    await expect(handle).toHaveAttribute('data-draggable', 'true');
+    const start = (await handle.boundingBox())!;
+    await page.mouse.move(start.x + 8, start.y + 8);
+    await page.mouse.down();
+    await page.mouse.move(start.x + 8, start.y + 30, { steps: 4 });
+    const target = (await page
+      .locator('.docx-paragraph-fragment')
+      .filter({ hasText: 'Continuation-page nested host' })
+      .first()
+      .boundingBox())!;
+    await page.mouse.move(target.x + 20, target.y + 2, { steps: 10 });
+    await expect(page.locator('.docx-table-drop-indicator')).toBeVisible();
+    await capture(page, 'table-move-handle-01-dragging');
+    await page.mouse.up();
+    await settle(page);
+    expect(await blockOrder()).toEqual([
+      'MERGED-ONLY',
+      'INNER-NW',
+      'Continuation-page nested host',
+    ]);
+    await capture(page, 'table-move-handle-02-dropped');
+
+    await undoViaToolbar(page);
+    expect(await blockOrder()).toEqual([
+      'INNER-NW',
+      'MERGED-ONLY',
+      'Continuation-page nested host',
+    ]);
+  });
+});

@@ -29,11 +29,11 @@ afterEach(() => {
   for (const container of mountedContainers.splice(0)) container.remove();
 });
 
-function mount(body: string, options: PaginatedSurfaceOptions = {}) {
+function mount(body: string, options: PaginatedSurfaceOptions = {}, scale = 1) {
   const container = document.createElement('div');
   document.body.append(container);
   mountedContainers.push(container);
-  const result = mountPaginatedSurface(container, docx(body), { scale: 1, ...options });
+  const result = mountPaginatedSurface(container, docx(body), { scale, ...options });
   if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
   const surface = result.surface;
   const pages = container.querySelector<HTMLElement>('.docx-pages')!;
@@ -86,6 +86,17 @@ describe('table select handle', () => {
     expect(shown.getAttribute('aria-label')).toBe('Select entire table');
     expect(parseFloat(shown.style.left)).toBeCloseTo(page.contentBox.x + table.box.x - 18);
     expect(parseFloat(shown.style.top)).toBeCloseTo(page.contentBox.y + table.box.y - 18);
+  });
+
+  test('keeps the same 2px gap to the table at any zoom', () => {
+    const { surface, handle, caretAtText } = mount(TABLE, {}, 2);
+    caretAtText('A1');
+    const table = outerTable(surface);
+    const page = surface.layout().pages[0]!;
+    expect(parseFloat(handle()!.style.left)).toBeCloseTo(
+      (page.contentBox.x + table.box.x) * 2 - 18
+    );
+    expect(parseFloat(handle()!.style.top)).toBeCloseTo((page.contentBox.y + table.box.y) * 2 - 18);
   });
 
   test('shows on hover and hides after the pointer leaves the table', async () => {

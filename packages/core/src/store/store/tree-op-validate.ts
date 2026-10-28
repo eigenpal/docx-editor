@@ -106,6 +106,7 @@ import {
 } from './tree-op-toc.ts';
 import { validateRefreshFieldResults } from './tree-op-field-results.ts';
 import { validateInsertTable } from './tree-op-insert-table.ts';
+import { validateMoveTable } from './tree-op-move-table.ts';
 import { validateReplaceStoryBlocks } from './tree-op-story-replace.ts';
 import {
   ACCEPTED_PARAGRAPH_PROPERTIES,
@@ -409,6 +410,7 @@ export function validateTreeOp(
   if (op.op === 'insertTable') {
     return validateInsertTable(part, op);
   }
+  if (op.op === 'moveTable') return validateMoveTable(part, op);
 
   if (op.op === 'insertToc') {
     return validateInsertToc(part, op);

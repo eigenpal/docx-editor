@@ -4,6 +4,9 @@ import type { TreeDocOp } from '../store/store/tree-op-types.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import { SUGGESTING_CELL_STRUCTURE_REFUSAL } from './table-cell-structure-plan.ts';
 
+export const SUGGESTING_TABLE_MOVE_REFUSAL =
+  'suggesting cannot move a table; stop suggesting to move it';
+
 export const SUGGESTING_TABLE_DELETE_REFUSAL =
   'suggesting cannot delete a whole table; stop suggesting to delete it, or delete its rows one at a time';
 
@@ -42,5 +45,6 @@ export function suggestingStructureRefusal(
   if (ops.some((op) => op.op === 'deleteBlock' && isTable(op.blockId))) {
     return SUGGESTING_TABLE_DELETE_REFUSAL;
   }
+  if (ops.some((op) => op.op === 'moveTable')) return SUGGESTING_TABLE_MOVE_REFUSAL;
   return null;
 }

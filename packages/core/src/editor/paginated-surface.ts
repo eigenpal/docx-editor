@@ -6257,6 +6257,8 @@ export function mountPaginatedSurface(
     read: () => ({ layout: currentLayout, selection, editingMode }),
     label: (key) => tableLabelState.resolve(key),
     setCellSelection: (cells) => setCellSelection(cells),
+    session: () => session,
+    applyTableCommandPlan: (plan) => surface.applyTableCommandPlan(plan),
   });
 
   render();

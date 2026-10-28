@@ -53,12 +53,11 @@ import {
   parentOf,
   TEXT_DEPS,
 } from './tree-op-nodes.ts';
-import type { TreeDocOp, TreeOpEffect, TreeOpRejection, TreeOpResult } from './tree-op-types.ts';
+import type { InsertTableOp } from './table-placement-op-types.ts';
+import type { TreeOpEffect, TreeOpRejection, TreeOpResult } from './tree-op-types.ts';
 import { invalidRevisionAttribution } from './tree-op-revision-attribution.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { withTrackedRowMarker } from './tree-op-tables.ts';
-
-export type InsertTableOp = Extract<TreeDocOp, { op: 'insertTable' }>;
 
 /**
  * Story containers a block-level table may be inserted into.
@@ -67,7 +66,15 @@ export type InsertTableOp = Extract<TreeDocOp, { op: 'insertTable' }>;
  * paragraph can also be a `w:p`-shaped revision container or a run-level wrapper, and a
  * `w:tbl` under one of those is not a block, it is corruption that survives validation.
  */
-const BLOCK_CONTAINERS = new Set(['body', 'hdr', 'ftr', 'tc', 'sdtContent', 'footnote', 'endnote']);
+export const BLOCK_CONTAINERS = new Set([
+  'body',
+  'hdr',
+  'ftr',
+  'tc',
+  'sdtContent',
+  'footnote',
+  'endnote',
+]);
 
 function fresh(
   localName: string,
@@ -177,7 +184,7 @@ function tableGrid(
   } as OoxmlNode;
 }
 
-function emptyParagraph(
+export function emptyParagraph(
   w14Prefix: string | null,
   seed: string,
   usedParagraphIds: Set<string>,

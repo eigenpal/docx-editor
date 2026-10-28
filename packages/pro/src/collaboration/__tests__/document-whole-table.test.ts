@@ -52,6 +52,7 @@ async function editorWithPeer() {
   const { createDocxEditor } = await import('@docx-editor.dev/core/editor');
   const { selectCellRectangle } =
     await import('../../../../core/src/editor/__tests__/paginated-surface-fixtures.ts');
+  const { moveTablePlan } = await import('../../../../core/src/editor/surface-table-drag.ts');
   const harness = createPeerHarness(DOCUMENT_ID);
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
@@ -111,6 +112,26 @@ async function editorWithPeer() {
   const selectWholeTable = () =>
     selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  /** Body blocks as text, the table as `[T]`. */
+  const bodyOrder = (target: Peer) => {
+    const pkg = harness.packageOf(target);
+    let body: OoxmlNode | undefined;
+    walk(pkg.parts.get(pkg.mainDocumentPart)!.root, (node) => {
+      if (!body && node.kind !== 'textValue' && node.localName === 'body') body = node;
+    });
+    if (!body || body.kind === 'textValue') return [];
+    return body.children
+      .filter((node) => node.kind === 'paragraph' || node.kind === 'table')
+      .map((node) => (node.kind === 'table' ? '[T]' : nodeText(node)));
+  };
+  /** Drop the editor's table before its first paragraph, the path the handle's drag commits. */
+  const moveTableToStart = () => {
+    const table = surface.layout().pages[0]!.fragments.find((f) => f.kind === 'table');
+    if (!table || table.kind !== 'table') throw new Error('no table');
+    return surface.applyTableCommandPlan(
+      moveTablePlan(table.tableId, surface.session.paragraphIds()[0]!)
+    );
+  };
   const observer = () => harness.join({ ydoc } as unknown as Peer, 'observer');
 
   cleanups.push(() => {
@@ -130,6 +151,8 @@ async function editorWithPeer() {
     peerCellParagraph,
     selectWholeTable,
     settle,
+    bodyOrder,
+    moveTableToStart,
     observer,
     peerUpdates: () => peerUpdates,
     offline() {
@@ -241,5 +264,61 @@ describe('suggesting mode with a peer', () => {
     ctx.surface.deleteBackward();
     expect(ctx.peerUpdates()).toBe(before);
     expect(ctx.tables(ctx.peer)).toHaveLength(1);
+  });
+});
+
+describe('moving a table with a peer', () => {
+  test('a move while the peer types in a cell keeps the typing', async () => {
+    const ctx = await editorWithPeer();
+    const typed = ctx.peerCellParagraph('B2');
+    ctx.offline();
+    expect(ctx.moveTableToStart()).toMatchObject({ ok: true });
+    ctx.harness.apply(ctx.peer, [
+      { op: 'insertText', paragraphId: typed, offset: 2, text: '-peer' },
+    ]);
+    ctx.reconnect();
+    await ctx.settle();
+    expect(ctx.bodyOrder(ctx.peer)).toEqual(['[T]', 'before', 'after']);
+    expect(nodeText(ctx.tables(ctx.peer)[0]!)).toContain('B2-peer');
+    ctx.harness.expectConverged(ctx.peer, await ctx.observer());
+  });
+
+  test('both replicas moving the same table converge on one table', async () => {
+    const ctx = await editorWithPeer();
+    ctx.offline();
+    ctx.moveTableToStart();
+    ctx.harness.apply(ctx.peer, [
+      {
+        op: 'moveTable',
+        tableId: ctx.tables(ctx.peer)[0]!.id,
+        beforeBlockId: ctx.harness.paragraphIdAt(ctx.peer, 0),
+      },
+    ]);
+    ctx.reconnect();
+    await ctx.settle();
+    expect(ctx.bodyOrder(ctx.peer)).toEqual(['[T]', 'before', 'after']);
+    ctx.harness.expectConverged(ctx.peer, await ctx.observer());
+  });
+
+  test('undo and redo of a move reach the peer', async () => {
+    const ctx = await editorWithPeer();
+    ctx.moveTableToStart();
+    expect(ctx.bodyOrder(ctx.peer)).toEqual(['[T]', 'before', 'after']);
+    ctx.surface.undo();
+    await ctx.settle();
+    expect(ctx.bodyOrder(ctx.peer)).toEqual(['before', '[T]', 'after']);
+    ctx.surface.redo();
+    await ctx.settle();
+    expect(ctx.bodyOrder(ctx.peer)).toEqual(['[T]', 'before', 'after']);
+    ctx.harness.expectConverged(ctx.peer, await ctx.observer());
+  });
+
+  test('suggesting mode refuses the move and sends nothing', async () => {
+    const ctx = await editorWithPeer();
+    expect(ctx.editor.setEditingMode('suggesting')).toMatchObject({ ok: true });
+    const before = ctx.peerUpdates();
+    expect(ctx.moveTableToStart()).toMatchObject({ ok: false });
+    expect(ctx.peerUpdates()).toBe(before);
+    expect(ctx.bodyOrder(ctx.peer)).toEqual(['before', '[T]', 'after']);
   });
 });
