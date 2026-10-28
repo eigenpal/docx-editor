@@ -191,6 +191,29 @@ test('a level rule sets the level indents and number tab stop', () => {
   expect(levelOf(projected, 'third')).toContain('<w:pPr><w:ind w:left="2160" w:firstLine="0"/>');
 });
 
+test('a level rule keeps a negative left indent', () => {
+  const projected = project(
+    wordHtml(
+      '@list l0:level1 {margin-left:-18.0pt;text-indent:-18.0pt;}',
+      '<ol><li style="mso-list:l0 level1 lfo1">outdented</li></ol>'
+    )
+  );
+  expect(levelOf(projected, 'outdented')).toContain('<w:ind w:left="-360" w:hanging="360"/>');
+});
+
+test('a bullet glyph with no stated font gets no font of its own', () => {
+  // The glyph then draws in the paragraph font, as the rule states nothing else.
+  const projected = project(
+    wordHtml(
+      '@list l0:level1 {mso-level-number-format:bullet;mso-level-text:;text-indent:-18.0pt;}',
+      '<ul><li style="mso-list:l0 level1 lfo1">plain</li></ul>'
+    )
+  );
+  const level = levelOf(projected, 'plain');
+  expect(level).toContain('<w:lvlText w:val=""/>');
+  expect(level).not.toContain('<w:rPr>');
+});
+
 test('hostile level rules stay bounded and escaped', () => {
   const projected = project(
     wordHtml(

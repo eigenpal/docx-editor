@@ -141,7 +141,7 @@ export function wordListLevelFormat(
   const rawText = declarations.get('mso-level-text');
   const text = rawText === undefined ? undefined : xmlSafeText(unescapeCssValue(rawText));
   const runXml = markerRunXml(declarations);
-  const leftTwips = twipsOf(declarations.get('margin-left'), 0);
+  const leftTwips = twipsOf(declarations.get('margin-left'), -MAX_TWIPS);
   const firstLineTwips = twipsOf(declarations.get('text-indent'), -MAX_TWIPS);
   const tabTwips = twipsOf(declarations.get('mso-level-tab-stop'), 0);
   const format: ListLevelRuleFormat = {
