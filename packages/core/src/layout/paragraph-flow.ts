@@ -34,7 +34,7 @@ export {
 } from './paragraph-alignment.ts';
 import { bidiPieces, paragraphIsRtl } from './rtl-paragraph.ts';
 import { recordLineWrapPassages } from './line-wrap-passages.ts';
-import { wrapBreakSpace } from './rtl-wrap-mirror.ts';
+import { wrapBreakSpace } from './wrap-break-space.ts';
 
 import { PAGE_BREAK_CHAR, type OoxmlNode, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import {
@@ -296,7 +296,7 @@ export function breakParagraph(
   // The right-to-left line's leading (right) indent, from the paragraph's full measure.
   const rtlLeadingIndent = Math.max(0, (flow?.marginExtent?.right ?? rightEdge) - rightEdge);
   const wrapRight = Math.min(contentRight, contentOriginX + rightEdge);
-  // A right-to-left line fills a float's passages from the right; see `rtl-wrap-mirror.ts`.
+  // A right-to-left line fills a float's passages from the right; see `wrap-break-space.ts`.
   const breakSpace = wrapBreakSpace(paragraphRtl, contentOriginX + indentLeft, available, {
     firstLineOffset,
     contentLeft,

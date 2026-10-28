@@ -11,7 +11,7 @@ export interface LinePassage {
 }
 
 /**
- * A passage of a line that broke in x mirrored about its measure (`rtl-wrap-mirror.ts`), as a
+ * A passage of a line that broke in x mirrored about its measure (`wrap-break-space.ts`), as a
  * right-to-left line beside a float does. `start` and `end` are the physical passage. The
  * line's spans still stand at their pen x, so `breakStart` is where the pen began this
  * passage; {@link alignBidiPassageSpans} moves each part from there to its physical passage.

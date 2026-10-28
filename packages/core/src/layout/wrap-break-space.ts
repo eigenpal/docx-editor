@@ -1,4 +1,9 @@
-// The x space a paragraph's lines break in beside floats.
+// The x space a paragraph's lines break in beside floats, and the zones as its pen sees them.
+//
+// It has two jobs, in both paragraph directions. First, square wrapping on the largest side
+// breaks a tie between equal sides by a physical side that the compatibility mode chooses
+// (left from mode 15, right before); that side is set on each such zone. Second, a
+// right-to-left paragraph mirrors every zone, as follows.
 //
 // A right-to-left line fills the passages a float leaves it from right to left: its first
 // words take the rightmost passage, and the text then continues in the passage to the left of
@@ -69,11 +74,13 @@ export function wrapBreakSpace(
     };
   }
   const axis = 2 * lineLeft + width;
-  const images = new WeakMap<ExclusionZone, ExclusionZone>();
+  // Made on first use, so a paragraph whose lines meet no zone it changes allocates nothing.
+  let images: WeakMap<ExclusionZone, ExclusionZone> | undefined;
   const image = (zone: ExclusionZone): ExclusionZone => {
+    images ??= new WeakMap();
     let seen = images.get(zone);
     if (!seen) {
-      seen = tieLeft && zone.input.textSide === 'largest' ? withLargestTie(zone, 'left') : zone;
+      seen = tieLeft && wrapsLargest(zone) ? withLargestTie(zone, 'left') : zone;
       if (rightToLeft) seen = mirrorExclusionZone(seen, axis);
       if (seen !== zone) carryHorizontalResolution(zone, seen);
       images.set(zone, seen);
@@ -81,7 +88,11 @@ export function wrapBreakSpace(
     return seen;
   };
   const zones = (list: readonly ExclusionZone[]) =>
-    list.length === 0 ? list : Object.freeze(list.map(image));
+    // A left-to-right paragraph changes only zones that wrap on the largest side; any other
+    // list comes back as it is.
+    list.length === 0 || (!rightToLeft && !list.some(wrapsLargest))
+      ? list
+      : Object.freeze(list.map(image));
   if (!rightToLeft) {
     return { left: contentLeft, right: wrapRight, mirrored: false, zones, clearSide: (c) => c };
   }
@@ -92,6 +103,10 @@ export function wrapBreakSpace(
     zones,
     clearSide: (clear) => (clear === 'left' ? 'right' : clear === 'right' ? 'left' : clear),
   };
+}
+
+function wrapsLargest(zone: ExclusionZone): boolean {
+  return zone.input.textSide === 'largest';
 }
 
 function withLargestTie(zone: ExclusionZone, largestTie: 'left' | 'right'): ExclusionZone {

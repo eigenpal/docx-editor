@@ -834,7 +834,8 @@ function* layoutBlocksPass(
               preparedParagraph,
               measurer,
               styleCascade,
-              options.inlineDrawingLayout
+              options.inlineDrawingLayout,
+              options.compatibilityMode
             )
           : undefined;
       if (frame)

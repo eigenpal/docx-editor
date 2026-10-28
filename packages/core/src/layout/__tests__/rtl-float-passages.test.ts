@@ -23,6 +23,7 @@ import {
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { caretAt, caretStops } from '../semantic-interaction.ts';
 import { breakParagraph } from '../paragraph-flow.ts';
+import { wrapBreakSpace } from '../wrap-break-space.ts';
 import { hitTestPage } from '../semantic-hit-test.ts';
 import { linesOf, type LineRecord, type StyleSpanRecord } from '../semantic-records.ts';
 
@@ -524,6 +525,26 @@ test('a remainder after a clearing break clears its own float in either directio
     );
     expect(lines[0]!.exclusionSkipBefore).toBe(30);
   }
+});
+
+test('a left-to-right paragraph keeps its zone list unless a zone wraps on the largest side', () => {
+  const zone = zoneFor('paragraph');
+  const largest = zoneFor('paragraph', { textSide: 'largest' });
+  const space = wrapBreakSpace(false, 0, 180, {
+    firstLineOffset: 0,
+    contentLeft: 0,
+    wrapRight: 180,
+    largestTieLeft: true,
+  });
+  const plain = [zone];
+  expect(space.zones(plain)).toBe(plain);
+  const mixed = [zone, largest];
+  const seen = space.zones(mixed);
+  expect(seen).not.toBe(mixed);
+  expect(seen[0]).toBe(zone);
+  expect(seen[1]!.input.largestTie).toBe('left');
+  // Each zone keeps one image, so identity checks across calls still hold.
+  expect(space.zones(mixed)[1]).toBe(seen[1]);
 });
 
 describe('a left-to-right paragraph with right-to-left text beside a float', () => {

@@ -95,7 +95,7 @@ export interface PendingLine {
   wrapPassages?: readonly { readonly start: number; readonly end: number }[];
   /**
    * The line broke in x mirrored about its paragraph's measure, as a right-to-left line does
-   * beside a float (`rtl-wrap-mirror.ts`): it fills the rightmost passage first. Its spans,
+   * beside a float (`wrap-break-space.ts`): it fills the rightmost passage first. Its spans,
    * {@link wrapSegment} and {@link wrapPassages} are then in that mirrored x, in break order.
    */
   wrapMirrored?: true;

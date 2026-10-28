@@ -1,5 +1,5 @@
 import { lineContentEdges, type PendingLine } from './pending-line.ts';
-import type { WrapBreakSpace } from './rtl-wrap-mirror.ts';
+import type { WrapBreakSpace } from './wrap-break-space.ts';
 
 /** A horizontal run of x a float leaves free on one line, in paragraph-local coordinates. */
 export interface WrapInterval {
