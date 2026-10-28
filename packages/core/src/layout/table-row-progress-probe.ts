@@ -74,8 +74,8 @@ export function probeRowFragmentProgress(
 
 /**
  * Whether the next fragment of a body row makes progress at `top` on a page that ends at
- * `bottom`, without the row's page-start allowance. A new row that fits a page must start
- * every cell there. A taller or continued row needs only one.
+ * `bottom`, without the row's page-start allowance. A new row must start every cell there,
+ * also when it is taller than a page. A continued row needs only one.
  * @internal
  */
 export function probeBodyRowStart(
@@ -84,7 +84,6 @@ export function probeBodyRowStart(
   left: number,
   top: number,
   bottom: number,
-  naturalHeight: number,
   isContinuation: boolean,
   deps: TableFlowDeps,
   cursors: readonly CellPlaceCursor[]
@@ -100,6 +99,6 @@ export function probeBodyRowStart(
     { ...deps, rowAtPageStart: false },
     cursors,
     structure.cellSpacingPt,
-    { requireEveryCell: !isContinuation && naturalHeight <= bottom + 0.001 }
+    { requireEveryCell: !isContinuation }
   );
 }

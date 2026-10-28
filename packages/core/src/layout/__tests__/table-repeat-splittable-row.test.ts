@@ -22,7 +22,7 @@ const cases: [string, Row][] = [
 
 for (const [name, z] of cases) {
   for (const compatibilityMode of [undefined, 14]) {
-    test(`before mode 15, the header repeats above a splittable row with ${name} whose first line does not fit below it (mode ${compatibilityMode})`, () => {
+    test(`before mode 15, the header repeats above a splittable row with ${name} whose first line does not fit below it (${compatibilityMode ? `mode ${compatibilityMode}` : 'no mode'})`, () => {
       const result = layOut(headerCase(z), compatibilityMode);
       const placed = rowsOf(result);
       expect(placed.get('hc1@repeat')!.page).toBe(1);
@@ -105,7 +105,7 @@ const nestedCases: [string, readonly [string, string]][] = [
 
 for (const [name, cellContent] of nestedCases) {
   for (const compatibilityMode of [undefined, 14]) {
-    test(`before mode 15, the header repeats above a row that opens with a nested table ${name} whose first line does not fit below it (mode ${compatibilityMode})`, () => {
+    test(`before mode 15, the header repeats above a row that opens with a nested table ${name} whose first nested row does not fit below it (${compatibilityMode ? `mode ${compatibilityMode}` : 'no mode'})`, () => {
       const result = layOut(
         headerCase({ tag: 'z', cantSplit: false, cellContent }),
         compatibilityMode
@@ -146,3 +146,77 @@ test('before mode 15, a row whose nested table starts below the header splits th
   expect(head!.row.hasContinuation).toBe(true);
   expect(repeatPagesOf(result)).toEqual([1, 2]);
 });
+
+/** The fragments of row z: every row fragment after page 1 that is not a header repeat. */
+const zFragmentsOf = (result: ReturnType<typeof layOut>) =>
+  result.pages.flatMap((page, index) =>
+    index === 0
+      ? []
+      : page.fragments.flatMap((fragment) =>
+          fragment.kind === 'table'
+            ? fragment.rows
+                .filter((row) => !row.isHeaderRepeat)
+                .map((row) => ({ page: index, row }))
+            : []
+        )
+  );
+
+// Rows taller than a page in which the first content of only one cell does not fit below the
+// header: a nested table, or a 600pt paragraph line followed by more lines.
+const tallCases: [string, readonly [string, string]][] = [
+  ['a nested table', [`${line('zc1')}${line('zl1')}`, nested('zc2', 12000)]],
+  [
+    'a paragraph line',
+    [
+      `${line('zc1')}${line('zl1')}`,
+      line('zc2', 12000) + Array.from({ length: 7 }, (_, i) => line(`y${i}`)).join(''),
+    ],
+  ],
+];
+
+for (const [name, cellContent] of tallCases) {
+  for (const compatibilityMode of [undefined, 14]) {
+    test(`before mode 15, the header repeats above a row taller than a page when ${name} in one cell does not fit below it (${compatibilityMode ? `mode ${compatibilityMode}` : 'no mode'})`, () => {
+      const result = layOut(
+        headerCase({ tag: 'z', cantSplit: false, cellContent }),
+        compatibilityMode
+      );
+      expect(repeatPagesOf(result)).toEqual([1]);
+      const placed = zFragmentsOf(result);
+      expect(placed).toHaveLength(1);
+      expect(placed[0]!.page).toBe(1);
+      expect(placed[0]!.row.box.y).toBeCloseTo(60, 6);
+      expect(placed[0]!.row.hasContinuation).toBeFalsy();
+      expect(pageOf(result, 'AFTER')).toBe(2);
+    });
+  }
+
+  test(`mode 15 omits the header above a row taller than a page when ${name} in one cell does not fit below it`, () => {
+    const result = layOut(headerCase({ tag: 'z', cantSplit: false, cellContent }), 15);
+    expect(repeatPagesOf(result)).toEqual([2]);
+    const [first] = zFragmentsOf(result);
+    expect(first!.page).toBe(1);
+    expect(first!.row.box.y).toBe(0);
+    expect(first!.row.hasContinuation).toBe(true);
+    // Every cell starts on that page.
+    expect(first!.row.cells.every((cell) => cell.blocks.length > 0)).toBe(true);
+  });
+}
+
+for (const compatibilityMode of [14, 15]) {
+  test(`a row taller than a page whose first lines all fit below the header splits there (mode ${compatibilityMode})`, () => {
+    const cellContent = [
+      `${line('zc1')}${line('zl1')}`,
+      line('zc2', 11000) + Array.from({ length: 12 }, (_, i) => line(`y${i}`)).join(''),
+    ] as const;
+    const result = layOut(
+      headerCase({ tag: 'z', cantSplit: false, cellContent }),
+      compatibilityMode
+    );
+    expect(repeatPagesOf(result)).toEqual([1, 2]);
+    const [head] = zFragmentsOf(result);
+    expect(head!.page).toBe(1);
+    expect(head!.row.box.y).toBeCloseTo(60, 6);
+    expect(head!.row.hasContinuation).toBe(true);
+  });
+}

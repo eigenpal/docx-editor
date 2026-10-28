@@ -555,7 +555,6 @@ export function* paginateTableInFlowSteps(
         tableLeft,
         top,
         contentHeight(),
-        naturalHeight,
         isContinuation,
         tableDeps,
         cursors
