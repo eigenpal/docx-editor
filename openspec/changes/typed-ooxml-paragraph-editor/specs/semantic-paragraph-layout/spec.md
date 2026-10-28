@@ -963,3 +963,33 @@ A run with pair kerning on (`w:kern`) SHALL keep kana, ideographs, CJK punctuati
 - **WHEN** the run sets `w:kern`
 - **THEN** every katakana keeps its full-width advance
 - **AND** a Latin pair such as `AV` in the same run kerns
+
+### Requirement: List counters belong to the abstract list
+
+Every `w:num` that names one `w:abstractNum` SHALL count on one shared counter per level. A level that starts again after its parent level SHALL take the start of the `w:num` that counts it.
+
+#### Scenario: A list without overrides continues the list it shares a definition with
+
+- **GIVEN** two `w:num` entries that name one `w:abstractNum`, with no level overrides
+- **WHEN** two items of the first `w:num` precede one item of the second, then one more item of the first
+- **THEN** the items number `1.`, `2.`, `3.`, and `4.`
+
+### Requirement: A start override restarts a shared list once
+
+A `w:num` with a `w:startOverride` SHALL restart the shared counter once, at its first paragraph on an overridden level. The restart SHALL apply to that level alone and SHALL then be spent. When the same `w:lvlOverride` also replaces the level, the restart value SHALL be the replacement's `w:start`.
+
+#### Scenario: A later item continues from a restart on another list
+
+- **GIVEN** two `w:num` entries that name one `w:abstractNum`, and the second has `w:startOverride w:val="1"` on level 0
+- **WHEN** two level-0 items of the first `w:num` precede one item of the second, then one more item of the first
+- **THEN** the items number `1.`, `2.`, `1.`, and `2.`
+
+### Requirement: A new list on a reused definition starts at its first number
+
+A list that the editor starts on a reused `w:abstractNum` SHALL carry a `w:lvlOverride` with a `w:startOverride` for each numbered level of that definition.
+
+#### Scenario: A second numbered list begins at one
+
+- **GIVEN** a document with a two-item numbered list
+- **WHEN** the user starts a numbered list on a later, separate paragraph
+- **THEN** the new item numbers `1.`, also after save and reopen

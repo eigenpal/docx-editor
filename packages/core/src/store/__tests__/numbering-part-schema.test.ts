@@ -415,6 +415,32 @@ describe('the saved package reopens with the list intact', () => {
     expect(second.numId).not.toBe(first.numId);
     expect(named(numberingRoot(second.pkg), 'abstractNum')).toHaveLength(1);
     expect(named(numberingRoot(second.pkg), 'num')).toHaveLength(2);
+    // A bullet level prints no counter, so the fresh instance needs no restart.
+    expect(named(named(numberingRoot(second.pkg), 'num')[1]!, 'lvlOverride')).toHaveLength(0);
+  });
+
+  test('a second ordered list on the reused template restarts every numbered level', () => {
+    const first = ensured(load(), 'ordered');
+    const second = ensured(first.pkg, 'ordered');
+    expect(named(numberingRoot(second.pkg), 'abstractNum')).toHaveLength(1);
+    const [firstNum, secondNum] = named(numberingRoot(second.pkg), 'num');
+    // The first list owns the template; the counter it shares starts at the level start.
+    expect(named(firstNum!, 'lvlOverride')).toHaveLength(0);
+    const overrides = named(secondNum!, 'lvlOverride');
+    expect(overrides.map((override) => attribute(override, 'ilvl'))).toEqual([
+      '0',
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+    ]);
+    for (const override of overrides) {
+      expect(attribute(named(override, 'startOverride')[0]!, 'val')).toBe('1');
+    }
   });
 
   test('bullet then ordered gives two definitions, still in sequence order', () => {

@@ -440,6 +440,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Lists that share one abstract numbering definition count together. A start override restarts that shared count once, at the first item of its list on an overridden level, and the other lists continue from the restarted count. A new list that the editor starts on an existing definition writes its own start overrides, so it begins at its first number.',
   },
   {
     id: 'lists.picture-bullets',
