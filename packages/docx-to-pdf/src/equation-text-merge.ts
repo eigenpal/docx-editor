@@ -106,7 +106,8 @@ export function mergeEquationText(
       if (item) out.push(item);
       continue;
     }
-    const current: SimpleShow | null = open;
+    // `close` reassigns `open` inside a closure, which control-flow narrowing does not see.
+    const current = open as SimpleShow | null;
     if (
       current &&
       current.fill === show.fill &&
