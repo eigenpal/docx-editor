@@ -78,7 +78,10 @@ async function e2eGetCellSelection(page: Page) {
 }
 
 async function e2eDetailedTopology(page: Page, marker: 'inner' | 'outer' | 'merged' | 'tall') {
-  return page.evaluate((tableMarker) => window.__DOCX_EDITOR_E2E__!.detailedTopology(tableMarker), marker);
+  return page.evaluate(
+    (tableMarker) => window.__DOCX_EDITOR_E2E__!.detailedTopology(tableMarker),
+    marker
+  );
 }
 
 async function e2eCanUndo(page: Page) {
@@ -108,11 +111,10 @@ async function capture(page: Page, name: string) {
   await page.screenshot({ path: path.join(SCREENSHOTS, `${name}.png`), fullPage: false });
 }
 
-async function focusInnerCell(
-  page: Page,
-  expected?: { rowCount: number; columnCount: number }
-) {
-  const scrolled = await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.scrollToParagraph('INNER-NW'));
+async function focusInnerCell(page: Page, expected?: { rowCount: number; columnCount: number }) {
+  const scrolled = await page.evaluate(() =>
+    window.__DOCX_EDITOR_E2E__!.scrollToParagraph('INNER-NW')
+  );
   expect(scrolled).toBe(true);
   await settle(page);
   const cell = page.locator('.docx-paragraph-fragment').filter({ hasText: 'INNER-NW' }).first();
@@ -150,8 +152,7 @@ async function hoverEdge(
   expect(point).not.toBeNull();
   await page.mouse.move(point!.x, point!.y);
   if (kind === 'insert-row' || kind === 'insert-column') {
-    const selector =
-      kind === 'insert-row' ? '.docx-table-insert-row' : '.docx-table-insert-column';
+    const selector = kind === 'insert-row' ? '.docx-table-insert-row' : '.docx-table-insert-column';
     await expect(page.locator(selector).first()).toBeVisible();
   } else {
     await page.waitForTimeout(220);
@@ -161,12 +162,7 @@ async function hoverEdge(
   return point!;
 }
 
-async function dragFromHandle(
-  page: Page,
-  selector: string,
-  deltaX: number,
-  deltaY = 0
-) {
+async function dragFromHandle(page: Page, selector: string, deltaX: number, deltaY = 0) {
   const handle = page.locator(selector).first();
   await expect(handle).toBeVisible();
   const box = await handle.boundingBox();
@@ -193,7 +189,10 @@ async function dragCellRectangle(
     startX = startBox!.x + startBox!.width / 2;
     startY = startBox!.y + startBox!.height / 2;
   } else if (options?.startText) {
-    const startCell = page.locator('.docx-paragraph-fragment').filter({ hasText: options.startText }).first();
+    const startCell = page
+      .locator('.docx-paragraph-fragment')
+      .filter({ hasText: options.startText })
+      .first();
     const startBox = await startCell.boundingBox();
     expect(startBox).not.toBeNull();
     startX = startBox!.x + startBox!.width / 2;
@@ -250,7 +249,8 @@ async function pointerClickVerifiedControl(
       const el = document.elementFromPoint(px, py);
       if (!(el instanceof Element)) return { ok: false, reason: 'no element at point' };
       const furniture = el.closest('[data-table-id]');
-      if (!(furniture instanceof HTMLElement)) return { ok: false, reason: 'no furniture at point' };
+      if (!(furniture instanceof HTMLElement))
+        return { ok: false, reason: 'no furniture at point' };
       const hitTableId = furniture.getAttribute('data-table-id');
       if (hitTableId !== tableId) {
         return { ok: false, reason: `hit ${hitTableId ?? 'null'} not ${tableId}` };
@@ -413,11 +413,17 @@ test.describe('nested table editing acceptance', () => {
     );
     await capture(page, 'task12-02-inner-divider-resized');
 
-    const totalBeforeRight = readback!.inner!.columnWidthsTwips.reduce((sum, width) => sum + width, 0);
+    const totalBeforeRight = readback!.inner!.columnWidthsTwips.reduce(
+      (sum, width) => sum + width,
+      0
+    );
     await hoverEdge(page, 'right-edge', { row: 0 });
     await dragFromHandle(page, '.docx-table-edge-handle-right', 12, 0);
     readback = await e2eReadback(page);
-    const totalAfterRight = readback!.inner!.columnWidthsTwips.reduce((sum, width) => sum + width, 0);
+    const totalAfterRight = readback!.inner!.columnWidthsTwips.reduce(
+      (sum, width) => sum + width,
+      0
+    );
     expect(totalAfterRight).toBeGreaterThan(totalBeforeRight);
     await capture(page, 'task12-03-inner-right-edge-resized');
 
@@ -435,7 +441,9 @@ test.describe('nested table editing acceptance', () => {
     expect(innerDetailedAfterRow!.tableId).toBe(innerIdBeforeRow);
     expect(innerDetailedAfterRow!.rows.length).toBe(innerDetailedBeforeRow!.rows.length + 1);
     const rowsAfterFurnitureInsert = readback!.inner!.rowCount;
-    expect(readback?.outer?.columnWidthsTwips.join(',')).toBe(outerBaseline.columnWidthsTwips.join(','));
+    expect(readback?.outer?.columnWidthsTwips.join(',')).toBe(
+      outerBaseline.columnWidthsTwips.join(',')
+    );
     expect(readback?.outer?.tableId).toBe(outerBaseline.tableId);
     await capture(page, 'task12-04-inner-row-inserted');
 
@@ -469,7 +477,10 @@ test.describe('nested table editing acceptance', () => {
       rowCount: rowsAfterFurnitureInsert,
       columnCount: colsBefore + 1,
     });
-    const innerCell = page.locator('.docx-paragraph-fragment').filter({ hasText: 'INNER-NW' }).first();
+    const innerCell = page
+      .locator('.docx-paragraph-fragment')
+      .filter({ hasText: 'INNER-NW' })
+      .first();
     const innerBox = await innerCell.boundingBox();
     if (!innerBox) throw new Error('inner cell box missing');
     await page.mouse.click(innerBox.x + innerBox.width / 2, innerBox.y + innerBox.height / 2, {
@@ -485,7 +496,10 @@ test.describe('nested table editing acceptance', () => {
 
     const rowsAfterContextInsert = readback!.inner!.rowCount;
     const innerTableIdBeforeDelete = readback!.inner!.tableId;
-    const deleteCell = page.locator('.docx-paragraph-fragment').filter({ hasText: 'INNER-SW' }).first();
+    const deleteCell = page
+      .locator('.docx-paragraph-fragment')
+      .filter({ hasText: 'INNER-SW' })
+      .first();
     await expect(deleteCell).toBeVisible();
     const deleteBox = await deleteCell.boundingBox();
     if (!deleteBox) throw new Error('inner SW cell box missing for delete');
@@ -517,14 +531,13 @@ test.describe('nested table editing acceptance', () => {
     const rectFromCol = 0;
     const rectToRow = Math.min(nwRowIndex + 1, topoBeforeRect!.rowCount - 1);
     const rectToCol = Math.min(1, topoBeforeRect!.columnWidthsTwips.length - 1);
-    const startParagraphId = topoBeforeRect!.rows[rectFromRow]!.cells[rectFromCol]!.paragraphIds[0]!;
+    const startParagraphId =
+      topoBeforeRect!.rows[rectFromRow]!.cells[rectFromCol]!.paragraphIds[0]!;
     const endParagraphId = topoBeforeRect!.rows[rectToRow]!.cells[rectToCol]!.paragraphIds[0]!;
-    await dragCellRectangle(
-      page,
-      [rectFromRow, rectFromCol],
-      [rectToRow, rectToCol],
-      { startParagraphId, endParagraphId }
-    );
+    await dragCellRectangle(page, [rectFromRow, rectFromCol], [rectToRow, rectToCol], {
+      startParagraphId,
+      endParagraphId,
+    });
     const cellSelection = await e2eGetCellSelection(page);
     expect(cellSelection?.tableId).toBe(readback!.inner!.tableId);
     expect(cellSelection?.rows).toEqual({
@@ -588,7 +601,8 @@ test.describe('nested table editing acceptance', () => {
     let undoSteps = 0;
     for (let step = 0; step < 8; step += 1) {
       const currentDetailed = await e2eDetailedTopology(page, 'inner');
-      if (currentDetailed && detailedTopologyContentEqual(currentDetailed, preFormatInnerSnapshot)) break;
+      if (currentDetailed && detailedTopologyContentEqual(currentDetailed, preFormatInnerSnapshot))
+        break;
       expect(await e2eCanUndo(page)).toBe(true);
       await undoViaToolbar(page);
       undoSteps += 1;
@@ -619,7 +633,9 @@ test.describe('nested table editing acceptance', () => {
     expect(await e2eGetZoom(page)).toBe(1.25);
     expect(await e2eGetRenderScale(page)).toBeCloseTo(1.25 * (96 / 72), 5);
     await page.waitForFunction(() =>
-      window.__DOCX_EDITOR_E2E__!.readback()?.inner?.cellTexts.some((text) => text.includes('INNER-NW'))
+      window
+        .__DOCX_EDITOR_E2E__!.readback()
+        ?.inner?.cellTexts.some((text) => text.includes('INNER-NW'))
     );
     await settle(page);
 
@@ -640,13 +656,17 @@ test.describe('nested table editing acceptance', () => {
     const dividerHandle = page.locator('.docx-table-divider-handle').first();
     await expect(dividerHandle).toBeVisible();
     mkdirSync(SCREENSHOTS, { recursive: true });
-    await dividerHandle.screenshot({ path: path.join(SCREENSHOTS, 'task12-09-zoom-divider-handle.png') });
+    await dividerHandle.screenshot({
+      path: path.join(SCREENSHOTS, 'task12-09-zoom-divider-handle.png'),
+    });
     await dragFromHandle(page, '.docx-table-divider-handle', 10, 0);
     readback = await e2eReadback(page);
     expect(readback?.inner?.tableId).toBe(innerIdAtZoom);
     expect(readback?.inner?.columnWidthsTwips[0]).not.toBe(widthsBeforeZoomDivider[0]);
     expect(readback?.inner?.columnWidthsTwips[1]).not.toBe(widthsBeforeZoomDivider[1]);
-    expect(readback?.outer?.columnWidthsTwips.join(',')).toBe(outerBaseline.columnWidthsTwips.join(','));
+    expect(readback?.outer?.columnWidthsTwips.join(',')).toBe(
+      outerBaseline.columnWidthsTwips.join(',')
+    );
     await capture(page, 'task12-09-zoom-scroll-divider');
 
     readback = await e2eReadback(page);
@@ -696,7 +716,10 @@ test.describe('nested table editing acceptance', () => {
     if (refusal.ok) return;
     // This row occupies three columns, but its table grid declares only two.
     expect(refusal.reason).toBe('this table has a cell the editor cannot place in the grid');
-    const mergedCell = page.locator('.docx-paragraph-fragment').filter({ hasText: 'MERGED-ONLY' }).first();
+    const mergedCell = page
+      .locator('.docx-paragraph-fragment')
+      .filter({ hasText: 'MERGED-ONLY' })
+      .first();
     const box = await mergedCell.boundingBox();
     if (!box) throw new Error('merged cell box missing');
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { button: 'right' });
@@ -706,5 +729,93 @@ test.describe('nested table editing acceptance', () => {
     await expect(row).toBeVisible();
     await expect(row).toHaveAttribute('aria-disabled', 'true');
     await capture(page, 'task12-11-merged-column-refused');
+  });
+});
+
+test.describe('table select handle', () => {
+  test('selects the outer table, and Backspace deletes it while Delete empties it', async ({
+    page,
+  }) => {
+    await waitForHook(page);
+    const outerId = await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.outerTableId());
+    await focusInnerCell(page);
+    const handle = page.locator('.docx-table-select-handle');
+    await expect(handle).toBeVisible();
+    await expect(handle).toHaveAttribute('data-table-id', outerId!);
+    await expect(handle).toHaveAttribute('aria-label', 'Select entire table');
+    await capture(page, 'table-select-handle-01-shown');
+
+    await handle.click();
+    await settle(page);
+    expect((await e2eGetCellSelection(page))?.tableId).toBe(outerId);
+    await capture(page, 'table-select-handle-02-selected');
+
+    // Delete empties the cells, so the text markers the readback finds tables by are gone.
+    await page.keyboard.press('Delete');
+    await settle(page);
+    await expect(handle).toHaveAttribute('data-table-id', outerId!);
+    expect((await e2eReadback(page))?.outer).toBeNull();
+    await undoViaToolbar(page);
+    expect((await e2eReadback(page))?.outer).not.toBeNull();
+
+    await focusInnerCell(page);
+    await handle.click();
+    await settle(page);
+    await page.keyboard.press('Backspace');
+    await settle(page);
+    expect((await e2eReadback(page))?.outer).toBeNull();
+    await capture(page, 'table-select-handle-03-deleted');
+
+    await undoViaToolbar(page);
+    await settle(page);
+    expect((await e2eReadback(page))?.outer).not.toBeNull();
+  });
+});
+
+test.describe('table move handle', () => {
+  test('drags the outer table below the merged table, and undo puts it back', async ({ page }) => {
+    await waitForHook(page);
+    const blockOrder = () =>
+      page.evaluate(() =>
+        [...document.querySelectorAll('.docx-paragraph-fragment')]
+          .map((element) => element.textContent?.trim() ?? '')
+          .filter((text) => /^(INNER-NW|MERGED-ONLY|Continuation-page nested host)$/.test(text))
+      );
+    expect(await blockOrder()).toEqual([
+      'INNER-NW',
+      'MERGED-ONLY',
+      'Continuation-page nested host',
+    ]);
+
+    await focusInnerCell(page);
+    const handle = page.locator('.docx-table-select-handle');
+    await expect(handle).toHaveAttribute('data-draggable', 'true');
+    const start = (await handle.boundingBox())!;
+    await page.mouse.move(start.x + 8, start.y + 8);
+    await page.mouse.down();
+    await page.mouse.move(start.x + 8, start.y + 30, { steps: 4 });
+    const target = (await page
+      .locator('.docx-paragraph-fragment')
+      .filter({ hasText: 'Continuation-page nested host' })
+      .first()
+      .boundingBox())!;
+    await page.mouse.move(target.x + 20, target.y + 2, { steps: 10 });
+    await expect(page.locator('.docx-table-drop-indicator')).toBeVisible();
+    await capture(page, 'table-move-handle-01-dragging');
+    await page.mouse.up();
+    await settle(page);
+    expect(await blockOrder()).toEqual([
+      'MERGED-ONLY',
+      'INNER-NW',
+      'Continuation-page nested host',
+    ]);
+    await capture(page, 'table-move-handle-02-dropped');
+
+    await undoViaToolbar(page);
+    expect(await blockOrder()).toEqual([
+      'INNER-NW',
+      'MERGED-ONLY',
+      'Continuation-page nested host',
+    ]);
   });
 });

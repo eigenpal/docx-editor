@@ -1489,7 +1489,7 @@ export interface DocxEditorConfig {
     reviewDisplayMode?: ReviewDisplayMode;
     revisionMarkup?: RevisionMarkupOptions;
     revisionStyles?: RevisionStyles;
-    tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
+    tableInteractionLabel?: (key: TableInteractionLabelKey) => string;
     translate?: (key: string, params?: Record<string, string | number>) => string;
     unsupportedElementRules?: readonly UnsupportedElementRule[];
     zoom?: number;
@@ -2715,7 +2715,7 @@ export interface PaginatedSurface {
     }): boolean;
     setSelection(next: SemanticSelection): void;
     setShowParagraphMarks(show: boolean): void;
-    setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
+    setTableInteractionLabel(resolver: (key: TableInteractionLabelKey) => string): void;
     setTocLabels(labels: NonNullable<PaginatedSurfaceOptions['tocLabels']>): void;
     setTrackedChangesFilter(predicate: TrackedChangePredicate | null, mode?: TrackedChangeFilterMode): void;
     setTranslate(translate: PaginatedSurfaceOptions['translate']): void;
@@ -2785,7 +2785,7 @@ export interface PaginatedSurfaceOptions {
     readonly scale?: number;
     readonly showBookmarks?: boolean;
     readonly showParagraphMarks?: boolean;
-    readonly tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
+    readonly tableInteractionLabel?: (key: TableInteractionLabelKey) => string;
     readonly tocLabels?: {
         readonly title: string;
     };
@@ -4061,7 +4061,7 @@ export function tableCommandState(command: EditorCommand, surface: PaginatedSurf
 export function tableCommandToolbarState(surface: PaginatedSurface | null, command: EditorCommand): Pick<ToolbarCommandState, 'enabled' | 'disabledReason'>;
 
 // @public
-export type TableInteractionLabelKey = 'table.insertRowBelow' | 'table.insertColumnRight';
+export type TableInteractionLabelKey = 'table.insertRowBelow' | 'table.insertColumnRight' | 'table.selectTable';
 
 // @public
 export const TEXT_FORM_FORMATS: {

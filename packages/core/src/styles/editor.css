@@ -1555,7 +1555,8 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* Table interaction furniture (core-owned, semantic geometry). */
-.docx-table-furniture {
+.docx-table-furniture,
+.docx-table-select-layer {
   z-index: 3;
   pointer-events: none;
 }
@@ -1572,7 +1573,8 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-table-insert-row,
-.docx-table-insert-column {
+.docx-table-insert-column,
+.docx-table-select-handle {
   pointer-events: auto;
   width: 16px;
   height: 16px;
@@ -1584,6 +1586,27 @@ a.docx-hyperlink:focus-visible {
   font-size: 12px;
   line-height: 14px;
   cursor: pointer;
+}
+
+.docx-table-select-handle[data-draggable='true'] {
+  cursor: move;
+}
+
+.docx-table-select-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.docx-table-select-handle svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+
+.docx-table-drop-indicator {
+  height: 2px;
+  background-color: var(--doc-primary);
 }
 
 /* Table chrome — contextual border/fill controls (Task 9). */

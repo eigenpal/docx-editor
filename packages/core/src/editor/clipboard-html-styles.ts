@@ -827,10 +827,18 @@ export function applyParaCss(para: HtmlParaProps, style: ReadonlyMap<string, str
   if (marginRightPt !== null && marginRightPt >= 0) {
     para.indRightTwips = clamp(Math.round(marginRightPt * 20), 0, 31_680);
   }
-  const indentPt = parseCssLengthPt(style.get('text-indent') ?? '');
-  if (indentPt !== null && indentPt !== 0) {
-    const twips = clamp(Math.round(indentPt * 20), -31_680, 31_680);
-    if (twips !== 0) para.firstLineTwips = twips;
+  // A right-aligned or centered list number writes `text-indent` as `-margin-left` for
+  // browsers; `mso-text-indent-alt` holds the authored first-line indent. A parsed alt value
+  // is always written, zero included, so it overrides the numbering level's hang.
+  const altIndentPt = parseCssLengthPt(style.get('mso-text-indent-alt') ?? '');
+  if (altIndentPt !== null) {
+    para.firstLineTwips = clamp(Math.round(altIndentPt * 20), -31_680, 31_680);
+  } else {
+    const indentPt = parseCssLengthPt(style.get('text-indent') ?? '');
+    if (indentPt !== null && indentPt !== 0) {
+      const twips = clamp(Math.round(indentPt * 20), -31_680, 31_680);
+      if (twips !== 0) para.firstLineTwips = twips;
+    }
   }
   const beforePt = parseCssLengthPt(style.get('margin-top') ?? '') ?? shorthand.top;
   if (beforePt !== null && beforePt >= 0) {

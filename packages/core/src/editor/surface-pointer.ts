@@ -59,6 +59,7 @@ import {
   storyMatchesBinding,
   type HeaderFooterScopeBinding,
 } from './surface-scope.ts';
+import { autoScrollDelta } from './surface-drag-autoscroll.ts';
 
 /** Active header/footer scope as seen by the pointer layer. */
 export interface ActiveHeaderFooterPointerState {
@@ -190,11 +191,6 @@ export interface PointerController {
   cancelGesture(): void;
   destroy(): void;
 }
-
-/** How close to the scroller's edge a drag must reach before the view starts following it. */
-const AUTO_SCROLL_EDGE_PX = 40;
-/** Fastest the view follows, per frame. */
-const AUTO_SCROLL_MAX_PX = 12;
 
 type Granularity = 'character' | 'word' | 'paragraph';
 
@@ -457,19 +453,6 @@ export function createPointerController(
    */
   function scroller(): HTMLElement | null {
     return host.container.closest('.docx-editor__scroll-container');
-  }
-
-  /** How far the view should move this frame, from how deep into the edge zone the drag is. */
-  function autoScrollDelta(top: number, bottom: number, clientY: number): number {
-    if (clientY < top + AUTO_SCROLL_EDGE_PX) {
-      const depth = Math.max(0, top + AUTO_SCROLL_EDGE_PX - clientY);
-      return -Math.min(AUTO_SCROLL_MAX_PX, (depth / AUTO_SCROLL_EDGE_PX) * AUTO_SCROLL_MAX_PX);
-    }
-    if (clientY > bottom - AUTO_SCROLL_EDGE_PX) {
-      const depth = Math.max(0, clientY - (bottom - AUTO_SCROLL_EDGE_PX));
-      return Math.min(AUTO_SCROLL_MAX_PX, (depth / AUTO_SCROLL_EDGE_PX) * AUTO_SCROLL_MAX_PX);
-    }
-    return 0;
   }
 
   function stopAutoScroll(): void {

@@ -14,6 +14,8 @@ import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
 import { DocxEditorContextMenu } from '../src/editor/contextmenu/index.ts';
 import { docx, flush } from './helpers/fixtures.ts';
+import { en } from '@docx-editor.dev/i18n';
+import { reviewModule } from '../../pro/src/index';
 
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
@@ -30,7 +32,7 @@ const THREE_ROW_MERGE = docx(
     `<w:tr><w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p/></w:tc><w:tc>${p('B3')}</w:tc></w:tr></w:tbl><w:p/>`
 );
 
-function mount(source: Uint8Array) {
+function mount(source: Uint8Array, review = false) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const ready: DocxEditorInstance[] = [];
@@ -40,6 +42,7 @@ function mount(source: Uint8Array) {
         DocxEditorRoot,
         {
           document: source,
+          ...(review ? { modules: [reviewModule()], author: 'Reviewer' } : {}),
           onReady: (editor: Editor) => {
             ready.push(editor as DocxEditorInstance);
           },
@@ -152,9 +155,41 @@ describe('table cell structure (Vue)', () => {
       // A caret is not a cell selection, so Merge cells says what it needs.
       const merge = mounted.container.querySelector<HTMLElement>('[data-slot="table.mergeCells"]')!;
       expect(merge.getAttribute('aria-disabled')).toBe('true');
-      expect(merge.getAttribute('title')).toBe(
-        'Select two or more cells to merge them'
-      );
+      expect(merge.getAttribute('title')).toBe('Select two or more cells to merge them');
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  test('Select table leads the table rows and selects every cell', async () => {
+    const mounted = mount(TABLE);
+    try {
+      await flush();
+      await caretInFirstCell(mounted.editor());
+      await openMenu(mounted.container);
+      const slots = [
+        ...mounted.container.querySelectorAll<HTMLElement>('.docx-contextmenu [role="menuitem"]'),
+      ].map((row) => row.dataset.slot);
+      expect(slots[slots.indexOf('table.insertRowAbove') - 1]).toBe('table.selectTable');
+      mounted.container.querySelector<HTMLElement>('[data-slot="table.selectTable"]')!.click();
+      await flush();
+      const cells = mounted.editor().getTableCellSelection();
+      expect(cells?.columns).toEqual({ from: 0, to: 1 });
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  test('Delete table in suggesting mode is disabled with the localized reason', async () => {
+    const mounted = mount(TABLE, true);
+    try {
+      await flush();
+      mounted.editor().setEditingMode('suggesting');
+      await caretInFirstCell(mounted.editor());
+      await openMenu(mounted.container);
+      const row = mounted.container.querySelector<HTMLElement>('[data-slot="table.deleteTable"]')!;
+      expect(row.getAttribute('aria-disabled')).toBe('true');
+      expect(row.getAttribute('title')).toBe(en.disabledReason.tableDeleteSuggesting);
     } finally {
       mounted.unmount();
     }

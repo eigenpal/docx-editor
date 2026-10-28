@@ -82,7 +82,7 @@ The editor reads construction props when it creates the instance. Changes to `do
 | `onChange` | `(change: DocumentChange) => void` | Reports revision and identity changes after mutations. |
 | `onFontError` | `(error: EditorFontError) => void` | Reports typed font-resolution failures. |
 | `translate` | `(key, params?) => string` | Resolves live document-surface labels. It defaults to the active catalog. |
-| `tableInteractionLabel` | `(key) => string` | Resolves labels for table insertion controls. |
+| `tableInteractionLabel` | `(key) => string` | Resolves labels for the table insertion controls and the table select handle. |
 | `imageDecodePort` | `ImageDecodePort` | Overrides raster decoding for tests or custom hosts. |
 
 For exact signatures, see the [React API reference](/docs/2.x/api/react).

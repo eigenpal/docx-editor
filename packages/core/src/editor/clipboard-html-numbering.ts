@@ -17,9 +17,13 @@ export type HtmlListKind =
   | 'upperLetter'
   | 'lowerLetter';
 
+export type HtmlListAlign = 'left' | 'center' | 'right';
+
 export type HtmlListLevel = {
   readonly kind: HtmlListKind;
   readonly start: number;
+  /** Word's `mso-level-number-position`; absent, the format decides. */
+  readonly align?: HtmlListAlign;
 };
 
 export type HtmlListAllocation = {
@@ -37,27 +41,27 @@ const BULLET_LEVELS = [
 ] as const;
 
 /** One `w:lvl` in strict CT_Lvl order: start, numFmt, lvlText, lvlJc, pPr, rPr. */
-function levelXml(kind: HtmlListKind, start: number, ilvl: number): string {
+function levelXml({ kind, start, align }: HtmlListLevel, ilvl: number): string {
   const left = 720 * (ilvl + 1);
   if (kind === 'bullet') {
     const bullet = BULLET_LEVELS[ilvl % BULLET_LEVELS.length]!;
     return (
       `<w:lvl w:ilvl="${ilvl}"><w:start w:val="1"/><w:numFmt w:val="bullet"/>` +
-      `<w:lvlText w:val="${escapeXmlAttribute(bullet.text)}"/><w:lvlJc w:val="left"/>` +
+      `<w:lvlText w:val="${escapeXmlAttribute(bullet.text)}"/><w:lvlJc w:val="${align ?? 'left'}"/>` +
       `<w:pPr><w:ind w:left="${left}" w:hanging="360"/></w:pPr>` +
       `<w:rPr><w:rFonts w:ascii="${bullet.font}" w:hAnsi="${bullet.font}" w:hint="default"/></w:rPr>` +
       '</w:lvl>'
     );
   }
-  // Word right-aligns roman markers in a narrower 180-twip hanging slot — the same
-  // geometry the store's numbering writer synthesizes, so pasted and toolbar-made
-  // lists match.
-  const roman = kind === 'lowerRoman' || kind === 'upperRoman';
+  // Without Word's stated position, roman markers right-align in a narrower 180-twip
+  // hanging slot — the geometry the store's numbering writer synthesizes, so pasted and
+  // toolbar-made lists match.
+  const jc = align ?? (kind === 'lowerRoman' || kind === 'upperRoman' ? 'right' : 'left');
   return (
     `<w:lvl w:ilvl="${ilvl}"><w:start w:val="${start}"/>` +
     `<w:numFmt w:val="${kind}"/>` +
-    `<w:lvlText w:val="%${ilvl + 1}."/><w:lvlJc w:val="${roman ? 'right' : 'left'}"/>` +
-    `<w:pPr><w:ind w:left="${left}" w:hanging="${roman ? 180 : 360}"/></w:pPr></w:lvl>`
+    `<w:lvlText w:val="%${ilvl + 1}."/><w:lvlJc w:val="${jc}"/>` +
+    `<w:pPr><w:ind w:left="${left}" w:hanging="${jc === 'right' ? 180 : 360}"/></w:pPr></w:lvl>`
   );
 }
 
@@ -85,7 +89,14 @@ const WORD_LEVEL_FORMATS: ReadonlyMap<string, HtmlListKind> = new Map([
 export interface WordListLevelDefinition {
   readonly kind: HtmlListKind;
   readonly start: number | null;
+  readonly align?: HtmlListAlign;
 }
+
+const WORD_NUMBER_POSITIONS: ReadonlyMap<string, HtmlListAlign> = new Map([
+  ['left', 'left'],
+  ['center', 'center'],
+  ['right', 'right'],
+]);
 
 // Bounded: the block is a character class capped at 2048 (no backtracking blowup).
 // Word writes the override selector colon-joined (`@list l0:level1:lfo2`); the
@@ -111,6 +122,7 @@ export function wordListDefinitionsFromStyleText(
     rules += 1;
     let kind: HtmlListKind | null = 'decimal';
     let start: number | null = null;
+    let align: HtmlListAlign | undefined;
     for (const declaration of match[4]!.split(';')) {
       const colon = declaration.indexOf(':');
       if (colon <= 0) continue;
@@ -123,6 +135,8 @@ export function wordListDefinitionsFromStyleText(
         kind = WORD_LEVEL_FORMATS.get(value) ?? null;
       } else if (name === 'mso-level-start-at' && /^\d{1,5}$/.test(value)) {
         start = Math.min(32_767, Number.parseInt(value, 10));
+      } else if (name === 'mso-level-number-position') {
+        align = WORD_NUMBER_POSITIONS.get(value);
       }
     }
     if (kind === null) continue;
@@ -133,7 +147,7 @@ export function wordListDefinitionsFromStyleText(
       match[3] === undefined
         ? `l${match[1]}:level${match[2]}`
         : `l${match[1]}:level${match[2]}:lfo${match[3]}`;
-    if (!out.has(key)) out.set(key, { kind, start });
+    if (!out.has(key)) out.set(key, { kind, start, ...(align ? { align } : {}) });
   }
   return out;
 }
@@ -279,8 +293,11 @@ export function numberingPartXml(allocations: readonly HtmlListAllocation[]): st
         // An observed level keeps its detected format and start; the rest default —
         // bullets cascade, ordered lists restart as decimal.
         const observed = allocation.levels.get(ilvl);
-        if (observed) return levelXml(observed.kind, observed.start, ilvl);
-        return levelXml(fallback.kind === 'bullet' ? 'bullet' : 'decimal', 1, ilvl);
+        if (observed) return levelXml(observed, ilvl);
+        return levelXml(
+          { kind: fallback.kind === 'bullet' ? 'bullet' : 'decimal', start: 1 },
+          ilvl
+        );
       }).join('');
       return (
         `<w:abstractNum w:abstractNumId="${index}">` +

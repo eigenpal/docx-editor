@@ -8,6 +8,7 @@ import type { SetTextFormFieldDefaultOp, CommitTextFormFieldOp } from './text-fo
 import type { SetLegacyCheckboxOp } from './legacy-checkbox-fields.ts';
 import type { InsertBuildingBlockOp } from './building-block-insert.ts';
 import type { InsertBookmarkOp, DeleteBookmarkOp } from './tree-op-bookmarks.ts';
+import type { InsertTableOp, MoveTableOp } from './table-placement-op-types.ts';
 // The op vocabulary and effect/rejection contracts (tree-ops seam).
 //
 // This module owns what an op IS — the declarative, JSON-safe `TreeDocOp` shapes, the
@@ -637,25 +638,8 @@ export type TreeDocOp =
       readonly op: 'deleteBlock';
       readonly blockId: string;
     }
-  | {
-      /**
-       * Insert a fresh empty table immediately before a block-level paragraph.
-       *
-       * Before, never after, so the anchor paragraph stays as the block that follows the
-       * table: a `w:tbl` is not a valid final child of a story container, and two tables
-       * that end up adjacent merge into one when the file is reopened. When the anchor's
-       * previous sibling is already a table, a separating empty paragraph is authored with
-       * it, which is what Word does for the same reason.
-       */
-      readonly op: 'insertTable';
-      readonly beforeParagraphId: string;
-      readonly rows: number;
-      readonly cols: number;
-      /** Width of every grid column, in twips. The caller divides the content width. */
-      readonly columnWidthTwips: number;
-      /** Propose the complete table through native row and cell insertion revisions. */
-      readonly revision?: RevisionAttributionInput;
-    }
+  | InsertTableOp
+  | MoveTableOp
   | {
       /** Insert a fresh row above or below a canonical table row. */
       readonly op: 'insertTableRow';

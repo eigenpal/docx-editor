@@ -464,6 +464,15 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
       cols: 2,
       columnWidthTwips: 1440,
     })),
+    story(
+      'moveTable',
+      zipDoc({ body: `<w:p><w:r><w:t>before</w:t></w:r></w:p>${TABLE}` }),
+      (store) => ({
+        op: 'moveTable',
+        tableId: tableIds(store).tableId,
+        beforeBlockId: paragraphIds(store)[0]!,
+      })
+    ),
     story('insertTableRow', zipDoc({ body: TABLE }), (store) => {
       const ids = tableIds(store);
       return {

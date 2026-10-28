@@ -35,6 +35,7 @@ import type {
   Editor,
   EditorFontError,
   ZoomMode,
+  TableInteractionLabelKey,
 } from '@docx-editor.dev/core/contracts/editor';
 import {
   createDocxEditor,
@@ -122,7 +123,7 @@ export interface DocxEditorRootProps {
    */
   lockedControlNavigation?: LockedControlNavigation;
 
-  tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
+  tableInteractionLabel?: (key: TableInteractionLabelKey) => string;
   imageDecodePort?: ImageDecodePort;
   onReady?: (editor: Editor) => void;
   onChange?: (change: DocumentChange) => void;

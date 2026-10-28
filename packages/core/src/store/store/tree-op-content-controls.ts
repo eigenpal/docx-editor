@@ -493,6 +493,11 @@ const TREE_OP_REACH: {
   // A whole-table insert writes BESIDE the anchor paragraph, never into it — the same shape
   // as a TOC insert, and answered by the controls enclosing that paragraph.
   insertTable: (op) => ({ kind: 'nodes', targets: [{ nodeId: op.beforeParagraphId }] }),
+  // A move leaves one place and writes beside the anchor, so it is asked of both.
+  moveTable: (op) => ({
+    kind: 'nodes',
+    targets: [{ nodeId: op.tableId, removes: true }, { nodeId: op.beforeBlockId }],
+  }),
   insertTableRow: (op) => restructuring(op.tableId),
   deleteTableRow: (op) => ({
     kind: 'nodes',

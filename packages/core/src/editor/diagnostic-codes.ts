@@ -39,6 +39,10 @@ import {
   SUGGESTED_BREAK_REFUSAL,
   TABLE_CELL_BREAK_REFUSAL,
 } from './surface-section-breaks.ts';
+import {
+  SUGGESTING_TABLE_DELETE_REFUSAL,
+  SUGGESTING_TABLE_MOVE_REFUSAL,
+} from './surface-suggesting-structure.ts';
 
 export {
   openDiagnosticCode,
@@ -83,6 +87,8 @@ const EDIT_SENTENCES: ReadonlyMap<string, EditDiagnosticCode> = new Map([
   [COLLABORATION_FIELD_RESULTS_REFUSAL, 'edit.unsupported-story'],
   [FIELD_CODE_INPUT_REFUSAL, 'edit.field-structure'],
   [SUGGESTED_BREAK_REFUSAL, 'edit.tracked-structure-unsupported'],
+  [SUGGESTING_TABLE_DELETE_REFUSAL, 'edit.tracked-structure-unsupported'],
+  [SUGGESTING_TABLE_MOVE_REFUSAL, 'edit.tracked-structure-unsupported'],
   [TABLE_CELL_BREAK_REFUSAL, 'edit.section-mark'],
   [LOCKED_SECTION_BREAK_REFUSAL, 'edit.protected-content'],
   [LOCKED_CONTENT_BREAK_REFUSAL, 'edit.protected-content'],

@@ -11,6 +11,13 @@ import type { ResolvedReviewPane } from './review-pane.ts';
  */
 
 import type { ZoomMode } from './editor-zoom.ts';
+
+/** Keys for the table furniture's accessible names, resolved by `tableInteractionLabel`. */
+export type TableInteractionLabelKey =
+  | 'table.insertRowBelow'
+  | 'table.insertColumnRight'
+  | 'table.selectTable';
+
 export type { ZoomFitTarget, ZoomMode } from './editor-zoom.ts';
 import type { TextMatch } from './editor-text-match.ts';
 export type { TextMatch } from './editor-text-match.ts';
@@ -474,9 +481,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
   } | null;
 
   /** Update table furniture aria labels without remounting the editor. */
-  setTableInteractionLabel(
-    resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string
-  ): void;
+  setTableInteractionLabel(resolver: (key: TableInteractionLabelKey) => string): void;
 
   /** Section page setup — size, orientation and margins — for the page-setup dialog. */
   getPageSetup(): PageSetup | null;

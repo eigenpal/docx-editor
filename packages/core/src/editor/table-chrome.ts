@@ -8,6 +8,7 @@ import type {
   TableBorderSpec,
   TableBorderStyle,
   TableContext,
+  TableInteractionLabelKey,
 } from '@docx-editor.dev/core/contracts/editor';
 import { createT, en } from '@docx-editor.dev/i18n';
 import type { ChromeSlotId } from './chrome-controls.ts';
@@ -54,8 +55,7 @@ export const TABLE_CHROME_SLOT_IDS: readonly TableChromeSlotId[] = [
   'table.cellFill',
 ];
 
-/** Furniture insertion controls (Task 8) share this label seam. */
-export type TableInteractionLabelKey = 'table.insertRowBelow' | 'table.insertColumnRight';
+export type { TableInteractionLabelKey };
 
 /**
  * The English label for a furniture-insertion control.

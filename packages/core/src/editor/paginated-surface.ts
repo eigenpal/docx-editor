@@ -230,7 +230,12 @@ import type {
 } from './paginated-surface-contract.ts';
 import type { ExecResult, SelectionPin, ViewScope } from '../contracts/editor.ts';
 import type { TableCommandPlan } from './table-command-plan.ts';
-import { suggestingStructureRefusal } from './surface-suggesting-structure.ts';
+import { suggestingStructureRefusal, tableLookupIn } from './surface-suggesting-structure.ts';
+import { wholeTableDeletionPlan } from './table-select-plan.ts';
+import {
+  createSurfaceTableSelectHandle,
+  type SurfaceTableSelectHandle,
+} from './surface-table-select-handle.ts';
 import {
   clampedToDocument,
   collapsedAt,
@@ -474,11 +479,14 @@ export function mountPaginatedSurface(
   const remoteSelectionLayer = overlaySheet(mountDocument, 'docx-remote-selection-overlay');
   const bookmarkLayer = overlaySheet(mountDocument, 'docx-bookmark-overlay');
   const tableFurnitureLayer = overlaySheet(mountDocument, 'docx-table-furniture', false);
+  const tableSelectLayer = overlaySheet(mountDocument, 'docx-table-select-layer', false);
+  let tableSelectHandle: SurfaceTableSelectHandle | null = null;
 
   container.style.position = 'relative';
   // Stacking order over the pages, bottom first.
   const sheets = [
     tableFurnitureLayer,
+    tableSelectLayer,
     commentLayer,
     bookmarkLayer,
     highlightLayer,
@@ -3003,7 +3011,7 @@ export function mountPaginatedSurface(
     }
     // Without an author, refuse every suggested edit instead of writing untracked changes.
     if (editingMode === 'suggest' && !author?.trim() && edits) return AUTHOR_WRITE_REFUSAL;
-    if (editingMode === 'suggest') return suggestingStructureRefusal(ops);
+    if (editingMode === 'suggest') return suggestingStructureRefusal(ops, tableLookupIn(session));
     return null;
   }
 
@@ -3918,6 +3926,7 @@ export function mountPaginatedSurface(
   /** Draw selected cells, retained text, or paragraph marks native selection cannot show. */
   function renderOverlay(): void {
     textFormInteraction?.update();
+    tableSelectHandle?.update();
     const rects = cellSelection
       ? cellSelectionRects(currentLayout, cellSelection.cellIds)
       : retainedSelection
@@ -4558,6 +4567,8 @@ export function mountPaginatedSurface(
     insertPlainText: (text: string) => insertPlainText(text),
 
     deleteBackward() {
+      const tableDeletion = wholeTableDeletionPlan(editingLayout(), cellSelection, editingMode);
+      if (tableDeletion) return void surface.applyTableCommandPlan(tableDeletion);
       if (textFormInteraction?.selectForDeletion('backward')) return;
       if (deleteAtomicControl('backward')) return;
       const plan = deleteSelectionPlan();
@@ -5668,6 +5679,10 @@ export function mountPaginatedSurface(
       if (!plan.ok) {
         return { ok: false, code: plan.code, reason: plan.reason };
       }
+      if (plan.selection.kind === 'selectCells') {
+        setCellSelection(plan.selection.cells);
+        return { ok: true, changed: false };
+      }
       let committedCaret: {
         readonly paragraphId: string;
         readonly start: number;
@@ -5821,6 +5836,7 @@ export function mountPaginatedSurface(
         legacyCheckboxInteraction?.destroy();
         pointer?.destroy();
         tableInteraction.destroy();
+        tableSelectHandle?.destroy();
         navigation.destroy();
         equationInteraction.destroy();
         selectionSync.destroy();
@@ -6232,6 +6248,18 @@ export function mountPaginatedSurface(
     applyTableCommandPlan: (plan) => surface.applyTableCommandPlan(plan),
     label: (key) => tableLabelState.resolve(key),
   });
+  tableSelectHandle = createSurfaceTableSelectHandle({
+    pagesLayer,
+    layer: tableSelectLayer,
+    listeners: hostListeners,
+    scale: () => scale,
+    pageOffsetX: (pageIndex) => materializedExtent?.pageOffsetX.get(pageIndex) ?? 0,
+    read: () => ({ layout: currentLayout, selection, editingMode }),
+    label: (key) => tableLabelState.resolve(key),
+    setCellSelection: (cells) => setCellSelection(cells),
+    session: () => session,
+    applyTableCommandPlan: (plan) => surface.applyTableCommandPlan(plan),
+  });
 
   render();
   legacyDropdownInteraction?.sync();
@@ -6269,9 +6297,11 @@ export function mountPaginatedSurface(
   surface.setTableInteractionLabel = (resolver) => {
     tableLabelState.resolve = resolver;
     tableInteraction.refreshLabels();
+    tableSelectHandle?.update();
   };
   surface.refreshTableInteractionLabels = () => {
     tableInteraction.refreshLabels();
+    tableSelectHandle?.update();
   };
   registerSurfaceMeasurement(
     surface,

@@ -459,7 +459,10 @@ function projectList(
   const state: ListState = ctx.list
     ? { numId: ctx.list.numId, level: Math.min(ctx.list.level + 1, 8) }
     : {
-        numId: allocateList(p, `sem:${p.semanticListCount}`, kind, semanticHtmlListStart(element)),
+        numId: allocateList(p, `sem:${p.semanticListCount}`, {
+          kind,
+          start: semanticHtmlListStart(element),
+        }),
         level: 0,
       };
   if (ctx.list) {

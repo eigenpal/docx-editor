@@ -52,6 +52,7 @@ import {
   ContextMenuInsertColumnRight,
   ContextMenuMergeCells,
   ContextMenuSplitCell,
+  ContextMenuSelectTable,
   ContextMenuInsertRowAbove,
   ContextMenuInsertRowBelow,
   ContextMenuItem,
@@ -170,6 +171,11 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
 function tableContextEntries(): readonly DefaultEntry[] {
   return [
     { kind: 'separator', id: 'sep.table' },
+    {
+      kind: 'row',
+      id: ContextMenuSelectTable.docxRow,
+      render: () => <ContextMenuSelectTable />,
+    },
     {
       kind: 'row',
       id: ContextMenuInsertRowAbove.docxRow,
@@ -569,6 +575,7 @@ export interface DocxEditorContextMenuNamespace {
   readonly PasteWithoutFormatting: typeof ContextMenuPasteWithoutFormatting;
   readonly Delete: typeof ContextMenuDelete;
   readonly SelectAll: typeof ContextMenuSelectAll;
+  readonly SelectTable: typeof ContextMenuSelectTable;
   readonly InsertRowAbove: typeof ContextMenuInsertRowAbove;
   readonly InsertRowBelow: typeof ContextMenuInsertRowBelow;
   readonly InsertColumnLeft: typeof ContextMenuInsertColumnLeft;
@@ -597,6 +604,7 @@ export const ContextMenu = Object.assign(DocxEditorContextMenu, {
   PasteWithoutFormatting: ContextMenuPasteWithoutFormatting,
   Delete: ContextMenuDelete,
   SelectAll: ContextMenuSelectAll,
+  SelectTable: ContextMenuSelectTable,
   InsertRowAbove: ContextMenuInsertRowAbove,
   InsertRowBelow: ContextMenuInsertRowBelow,
   InsertColumnLeft: ContextMenuInsertColumnLeft,

@@ -295,6 +295,41 @@ export function cellSelectionBetween(
   };
 }
 
+/** Every cell of a table, as one rectangle; null when the table is not laid out. */
+export function wholeTableCellSelection(
+  layout: SemanticLayout,
+  tableId: string
+): CellSelection | null {
+  const table = tableIndex(layout).get(tableId);
+  if (!table) return null;
+  const cellIds: string[] = [];
+  const seen = new Set<string>();
+  let lastRow = 0;
+  for (const entry of table.placed) {
+    if (entry.isHeaderRepeat || seen.has(entry.cell.id)) continue;
+    seen.add(entry.cell.id);
+    cellIds.push(entry.cell.id);
+    lastRow = Math.max(lastRow, entry.rowIndex);
+  }
+  if (cellIds.length === 0) return null;
+  return {
+    kind: 'cells',
+    tableId,
+    cellIds,
+    rows: { from: 0, to: lastRow },
+    columns: { from: 0, to: columnCountOf(table) - 1 },
+    text: textRangeOf(layout, tableId, cellIds),
+  };
+}
+
+/** Whether a rectangle holds every cell of its table. */
+export function coversWholeTable(layout: SemanticLayout, selection: CellSelection): boolean {
+  const whole = wholeTableCellSelection(layout, selection.tableId);
+  if (!whole) return false;
+  const selected = new Set(selection.cellIds);
+  return whole.cellIds.every((id) => selected.has(id));
+}
+
 /**
  * Paragraph ids that are DIRECT children of the cells — nested tables excluded — in
  * document order, each once.

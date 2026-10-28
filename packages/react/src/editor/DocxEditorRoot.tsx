@@ -41,6 +41,7 @@ import type {
   EditorFontError,
   FontConfiguration,
   ZoomMode,
+  TableInteractionLabelKey,
 } from '@docx-editor.dev/core/contracts/editor';
 import {
   createDocxEditor,
@@ -183,7 +184,7 @@ export interface DocxEditorRootProps {
    * Localized labels for table insertion furniture. When omitted, core falls back to
    * bundled English through {@link defaultTableLabel}.
    */
-  tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
+  tableInteractionLabel?: (key: TableInteractionLabelKey) => string;
   /** Optional decode port for embedded image insertion and paint in tests or custom hosts. */
   imageDecodePort?: ImageDecodePort;
   children?: DocxEditorChildren;

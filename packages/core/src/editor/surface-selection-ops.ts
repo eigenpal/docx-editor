@@ -479,7 +479,10 @@ export function planRangeDeletion(
   // gesture actually covered, never for being adjacent to it.
   const covered = coveredParagraphIdsIn(textOf, effectiveOrder, firstIndex, lastIndex, from, to);
 
-  const removableTables = removableTablesIn(part, covered);
+  // `deleteBlock` has no tracked form, so a tracked range strikes the cell text instead.
+  const removableTables = tracked
+    ? new Map<string, readonly string[]>()
+    : removableTablesIn(part, covered);
   const tableOfParagraph = new Map<string, string>();
   for (const [tableId, paragraphs] of removableTables) {
     for (const id of paragraphs) tableOfParagraph.set(id, tableId);

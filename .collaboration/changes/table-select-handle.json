@@ -1,0 +1,18 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Suggesting mode deleted a whole table with an untracked deleteBlock, selectTableRegion was refused, and no op moved a table.",
+  "after": "Suggesting mode refuses whole-table deletion and moves, and strikes the cell text of tables a range encloses. selectTableRegion selects every cell of a table, Backspace on that selection deletes the table, and the new moveTable op reorders a table among its siblings with every node id kept.",
+  "reason": "moveTable journals as one moveNode effect through the new moveChild edit helper, so the shared list never holds the table twice and a peer's concurrent text inside the table survives. Other edits use existing operations. Selection is local state. No shared field, schema or package serialization changes.",
+  "tests": [
+    "packages/core/src/editor/__tests__/surface-table-drag.test.ts",
+    "packages/core/src/editor/__tests__/surface-table-select-handle.test.ts",
+    "packages/core/src/editor/__tests__/whole-table-selection.test.ts",
+    "packages/core/src/store/__tests__/canonical-primitive-journal-coverage.test.ts",
+    "packages/core/src/store/__tests__/tree-op-move-table.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-move-table.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-whole-table.test.ts"
+  ],
+  "changeset": "table-select-handle",
+  "migration": null
+}
