@@ -28,6 +28,8 @@ export interface FixtureOptions {
   lineStartRule?: { language: string; characters: string };
   /** Paragraph properties; the default is left aligned without hanging punctuation. */
   paragraphProperties?: string;
+  /** The layout measurer; the default gives every character its font size. */
+  measurer?: TextMeasurer;
   /** One `word/fontTable.xml` entry: the face and its `w:charset` value. */
   fontTableEntry?: { name: string; charset: string };
 }
@@ -125,7 +127,7 @@ export function loadFixture(options: FixtureOptions = {}) {
   const pkg = view.currentPackage();
   const before = [...pkg.parts].map(([name, part]) => [name, JSON.stringify(part.root)]);
   const layout = layoutSemanticDocument(pkg.parts.get(pkg.mainDocumentPart)!, 0, {
-    measurer,
+    measurer: options.measurer ?? measurer,
     styleCascade: dependencies.styleCascade(),
     ...(options.compatibility === undefined ? {} : { compatibilityMode: options.compatibility }),
     geometry: {

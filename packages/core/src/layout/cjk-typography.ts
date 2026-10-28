@@ -64,6 +64,14 @@ export interface CjkParagraphTypography {
    * @internal
    */
   readonly automaticSpacingNeedsEastAsianFont?: true;
+  /**
+   * Kana may compress to pull a line-start-prohibited character onto a full line
+   * (`compressPunctuationAndJapaneseKana`): the paragraph is distributed, or the document
+   * defaults name an East Asian face and the paragraph is justified, or any alignment in a
+   * legacy compatibility mode.
+   * @internal
+   */
+  readonly kanaLineFit?: true;
 }
 
 export const DEFAULT_CJK_TYPOGRAPHY: CjkParagraphTypography = Object.freeze({
@@ -169,6 +177,10 @@ export function resolveCjkTypography(
     autoSpaceDN,
     autoSpaceDE,
     ...(spacingOff && distributed ? { automaticSpacingNeedsEastAsianFont: true as const } : {}),
+    ...(settings?.compression === 'compressPunctuationAndJapaneseKana' &&
+    (distributed || hangingAlignment)
+      ? { kanaLineFit: true as const }
+      : {}),
   };
 }
 
