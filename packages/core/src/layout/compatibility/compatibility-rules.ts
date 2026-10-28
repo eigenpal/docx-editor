@@ -68,7 +68,7 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §20.4.2.3 anchor (layoutInCell)'
   ),
   distributedLinesSpreadCharacters: legacy(
-    'A distributed paragraph spreads the slack of every line after every character, whatever the document defaults. A space first takes up to its face average character width less its own advance',
+    'A distributed paragraph spreads the slack of every line after every character, whatever the document defaults and run kerning. A space first takes up to its face average character width less its own advance',
     'ECMA-376 Part 1 §17.18.44 ST_Jc'
   ),
   fixedTableContentEdgeOrigin: legacy(

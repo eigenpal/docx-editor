@@ -13,6 +13,9 @@ import { segmentGraphemes } from './grapheme.ts';
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import { isSplittableSpan, splitSpanParts } from './span-parts.ts';
+import { isCjk } from './cjk-paragraph-breaks.ts';
+import { lastCodePointOf } from './cjk-line-break.ts';
+import { isRunKerningEnabled } from './run-kerning.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 
 /** In `'characters'` spacing, how much of its own advance a U+0020 takes from the slack first. */
@@ -93,30 +96,83 @@ function isVisible(span: StyleSpanRecord): boolean {
 }
 
 /**
+ * Whether `span` keeps its letters together on a `'characters'` line: pair kerning is on for
+ * the run (`w:kern` not 0 and at most the run's size) and the text is not East Asian. Such a
+ * run stretches only at its spaces and its East Asian characters. `'legacyCharacters'`
+ * spacing spreads every run.
+ */
+function holdsLetters(
+  span: StyleSpanRecord,
+  spacing: Exclude<DistributedSpacing, 'spaces'>
+): boolean {
+  return (
+    spacing === 'characters' &&
+    span.fontSlot !== 'eastAsia' &&
+    isRunKerningEnabled(styleForFontSlot(span.style, span.fontSlot))
+  );
+}
+
+function isCjkCluster(text: string, end: 'first' | 'last'): boolean {
+  const codePoint = end === 'first' ? text.codePointAt(0) : lastCodePointOf(text);
+  return codePoint !== undefined && isCjk(codePoint);
+}
+
+/** A piece of a distributed line, and whether its run keeps its letters together. */
+interface CharacterPiece {
+  readonly span: StyleSpanRecord;
+  readonly held: boolean;
+}
+
+/**
  * Split each span into its grapheme clusters. Right-to-left text keeps its letters joined, and
- * spans that cannot split ({@link isSplittableSpan}) stay whole and act as one character.
+ * spans that cannot split ({@link isSplittableSpan}) stay whole and act as one character. A
+ * span that {@link holdsLetters} splits only around its spaces and East Asian characters, so
+ * its words keep their kerned widths.
  */
 function characterPieces(
   spans: readonly StyleSpanRecord[],
-  measurer: TextMeasurer
-): StyleSpanRecord[] {
-  const pieces: StyleSpanRecord[] = [];
+  measurer: TextMeasurer,
+  spacing: Exclude<DistributedSpacing, 'spaces'>
+): CharacterPiece[] {
+  const pieces: CharacterPiece[] = [];
   for (const span of spans) {
+    const held = holdsLetters(span, spacing);
     const clusters =
       isSplittableSpan(span) && span.style.shaping?.direction !== 'rtl'
         ? segmentGraphemes(span.text)
         : [];
-    if (clusters.length < 2) {
-      pieces.push(span);
+    const cuts = clusters.filter((cluster, index) => {
+      if (index === 0 || !held) return true;
+      const before = clusters[index - 1]!.text;
+      return (
+        before === ' ' ||
+        cluster.text === ' ' ||
+        isCjkCluster(before, 'last') ||
+        isCjkCluster(cluster.text, 'first')
+      );
+    });
+    if (cuts.length < 2) {
+      pieces.push({ span, held });
       continue;
     }
-    const parts = clusters.map((cluster, index) => ({
+    const parts = cuts.map((cluster, index) => ({
       from: cluster.utf16From,
-      to: clusters[index + 1]?.utf16From ?? span.text.length,
+      to: cuts[index + 1]?.utf16From ?? span.text.length,
     }));
-    pieces.push(...splitSpanParts(span, parts, measurer));
+    for (const part of splitSpanParts(span, parts, measurer)) pieces.push({ span: part, held });
   }
   return pieces;
+}
+
+/**
+ * Whether a gap opens between two adjacent visible pieces. One always opens after a space and
+ * at an East Asian character. Elsewhere both sides must spread their letters: a kerned run
+ * opens no gap inside its words, and none against the text on either side of it.
+ */
+function opensGap(before: CharacterPiece, after: CharacterPiece): boolean {
+  if (isSpace(before.span)) return true;
+  if (isCjkCluster(before.span.text, 'last') || isCjkCluster(after.span.text, 'first')) return true;
+  return !before.held && !after.held;
 }
 
 /**
@@ -126,7 +182,8 @@ function characterPieces(
  * character.
  *
  * Returns null when the content has no gap between two characters, such as a single
- * character or a single right-to-left word. The caller then centers the line.
+ * character, a single right-to-left word, or a single kerned word. The caller then centers
+ * the line.
  */
 export function distributeLineCharacters(
   spans: readonly StyleSpanRecord[],
@@ -135,7 +192,8 @@ export function distributeLineCharacters(
   contentEnd: number,
   spacing: Exclude<DistributedSpacing, 'spaces'> = 'characters'
 ): readonly StyleSpanRecord[] | null {
-  const pieces = characterPieces(spans.slice(0, contentEnd), measurer);
+  const characters = characterPieces(spans.slice(0, contentEnd), measurer, spacing);
+  const pieces = characters.map((character) => character.span);
   let first = -1;
   let last = -1;
   for (let index = 0; index < pieces.length; index++) {
@@ -145,26 +203,34 @@ export function distributeLineCharacters(
     last = index;
   }
   if (first < 0 || first === last) return null;
-  // A gap opens before every visible character after the first.
+  // A gap opens before a visible character after the first, where {@link opensGap} allows.
   let gaps = 0;
+  const opens = new Set<number>();
+  let previous = first;
   const capacities = new Map<number, number>();
   let totalCapacity = 0;
   for (let index = first + 1; index <= last; index++) {
     const piece = pieces[index]!;
     if (!isVisible(piece)) continue;
-    gaps += 1;
+    if (opensGap(characters[previous]!, characters[index]!)) {
+      opens.add(index);
+      gaps += 1;
+    }
+    previous = index;
     if (index < last && isSpace(piece)) {
       const capacity = spaceCapacity(piece, piece.box.width, measurer, spacing);
       capacities.set(index, capacity);
       totalCapacity += capacity;
     }
   }
+  // Nothing can spread, such as one kerned word: the caller centers the line.
+  if (gaps === 0) return null;
   // Spaces fill first, in proportion to their capacity, up to it.
   const spaceShare = totalCapacity > 0 ? Math.min(1, slack / totalCapacity) : 0;
   const step = (slack - spaceShare * totalCapacity) / gaps;
   let shift = 0;
   const placed = pieces.map((piece, index) => {
-    if (index > first && index <= last && isVisible(piece)) shift += step;
+    if (opens.has(index)) shift += step;
     const moved = shift === 0 ? piece : { ...piece, box: { ...piece.box, x: piece.box.x + shift } };
     shift += spaceShare * (capacities.get(index) ?? 0);
     return moved;

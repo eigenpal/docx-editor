@@ -14,9 +14,10 @@ import type { CompatibilityProfile } from './compatibility/compatibility-profile
  * - `'spaces'`: over its spaces, or by East Asian character rules. A line with nothing to
  *   stretch is centered.
  * - `'characters'`: each space first takes up to 45 percent of its own advance, and the rest
- *   goes in equal steps after every character.
+ *   goes in equal steps after every character. A run with pair kerning on keeps its letters
+ *   together and stretches only at its spaces and East Asian characters.
  * - `'legacyCharacters'`: as `'characters'`, but a space first takes up to its face's average
- *   character width less its own advance.
+ *   character width less its own advance, and kerned runs spread too.
  */
 export type DistributedSpacing = 'spaces' | 'characters' | 'legacyCharacters';
 
