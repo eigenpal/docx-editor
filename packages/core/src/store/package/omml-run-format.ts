@@ -6,6 +6,7 @@ import {
   EQUATION_DEFAULT_MATH_FONT,
   equationControlPropertiesAreDefault,
   equationDefaultRunSizePt,
+  equationLanguagePropertyIsSupported,
   equationRunPropertiesAreDefault,
 } from './omml-control-defaults.ts';
 import type { OoxmlElement, OoxmlGenericElementNode, OoxmlNode } from './ooxml-tree.ts';
@@ -134,6 +135,9 @@ function readRunProperties(
       if (size !== undefined && size !== points) return false;
       size = points;
       if (property.localName === 'sz') format.fontSizePt = points;
+    } else if (word && property.localName === 'lang') {
+      // Language takes no part in equation layout. The source keeps it on save.
+      if (!equationLanguagePropertyIsSupported(property)) return false;
     } else if (!word && property.localName === 'sty') {
       if (property.children.length !== 0 || property.attributes.length > 1) return false;
       const attribute = property.attributes[0];
@@ -209,7 +213,21 @@ function readRunFormat(run: OoxmlElement): EquationRunFormat | null {
   const face = runFace(fonts, text);
   if (face === null) return null;
   if (face !== undefined) format.fontFamily = face;
+  // A format keeps compact replacement refused, so a language is never written away. A run
+  // whose only other properties are default leaves the decision to the default reader.
+  if (Object.keys(format).length === 0 && runNamesLanguage(run)) return null;
   return Object.freeze(format);
+}
+
+function runNamesLanguage(run: OoxmlElement): boolean {
+  return run.children.some(
+    (child) =>
+      child.kind !== 'textValue' &&
+      element(child, WML_NAMESPACE_URI, 'rPr') &&
+      child.children.some(
+        (property) => property.kind !== 'textValue' && element(property, WML_NAMESPACE_URI, 'lang')
+      )
+  );
 }
 
 const TRACKED_CONTROL_ATTRIBUTES: ReadonlySet<string> = new Set(['id', 'author', 'date']);
