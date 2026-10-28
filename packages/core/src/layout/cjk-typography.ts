@@ -3,6 +3,8 @@
 // References: ECMA-376 §17.3.1.16, §17.3.1.21, §17.15.1.18, §17.15.1.58–59, §17.15.1.82.
 import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
 import { isEastAsianFace } from '../store/package/default-font-faces.ts';
+import { omittedDocDefaults } from '../store/package/application-doc-defaults.ts';
+import { WML_NAMESPACE_URI } from '../store/package/ooxml-tree.ts';
 import { resolveRunStyle, type ThemeFonts } from './run-style.ts';
 
 /** Document-wide East Asian line-break and whitespace policy. @public */
@@ -13,6 +15,13 @@ export interface CjkTypographySettings {
   readonly punctuationKerning?: boolean;
   /** The document defaults explicitly select an East Asian face as the East Asian font. */
   readonly sourceEastAsianFont?: boolean;
+  /**
+   * False when the document defaults turn off inter-character East Asian justification on
+   * justified lines and automatic spacing between East Asian and other text
+   * ({@link defaultsTypography}). Absent means both apply.
+   * @internal
+   */
+  readonly eastAsianSpacing?: false;
   /** Whitespace compression selected by `w:characterSpacingControl`. */
   readonly compression:
     | 'doNotCompress'
@@ -40,6 +49,13 @@ export interface CjkParagraphTypography {
   readonly autoSpaceDN?: boolean;
   /** Automatic spacing at Latin/East Asian boundaries; absent means enabled. */
   readonly autoSpaceDE?: boolean;
+  /**
+   * Automatic spacing opens only beside East Asian text whose run authors an East Asian font
+   * (`ResolvedRunStyle.eastAsianFontAuthored`): a distributed paragraph whose document defaults
+   * turn East Asian spacing off.
+   * @internal
+   */
+  readonly automaticSpacingNeedsEastAsianFont?: true;
 }
 
 export const DEFAULT_CJK_TYPOGRAPHY: CjkParagraphTypography = Object.freeze({
@@ -109,6 +125,7 @@ export function resolveCjkTypography(
 ): CjkParagraphTypography {
   let { kinsoku, overflowPunctuation, characterWrap } = DEFAULT_CJK_TYPOGRAPHY;
   let justified = false;
+  let distributed = false;
   let autoSpaceDN = true;
   let autoSpaceDE = true;
   for (const prop of props) {
@@ -117,8 +134,16 @@ export function resolveCjkTypography(
     if (prop.localName === 'kinsoku') kinsoku = on(prop.attributes?.val);
     if (prop.localName === 'overflowPunct') overflowPunctuation = on(prop.attributes?.val);
     if (prop.localName === 'wordWrap') characterWrap = !on(prop.attributes?.val);
-    if (prop.localName === 'jc') justified = JUSTIFIED.has(prop.attributes?.val ?? '');
+    if (prop.localName === 'jc') {
+      justified = JUSTIFIED.has(prop.attributes?.val ?? '');
+      distributed = prop.attributes?.val === 'distribute';
+    }
   }
+  // Document defaults that turn East Asian spacing off override the paragraph switches. A
+  // distributed paragraph, which then spreads every character, keeps automatic spacing beside
+  // runs that author an East Asian font.
+  const spacingOff = settings?.eastAsianSpacing === false;
+  if (spacingOff && !distributed) autoSpaceDN = autoSpaceDE = false;
   // Punctuation hangs only in justified paragraphs, full-width and Latin alike. Left, centered,
   // and right-aligned lines keep line-end punctuation inside the margin. A document whose
   // defaults name no East Asian face hangs no punctuation at all.
@@ -130,6 +155,7 @@ export function resolveCjkTypography(
     characterWrap,
     autoSpaceDN,
     autoSpaceDE,
+    ...(spacingOff && distributed ? { automaticSpacingNeedsEastAsianFont: true as const } : {}),
   };
 }
 
@@ -198,12 +224,36 @@ export function defaultsSelectEastAsianFace(
   defaultRun: readonly OoxmlProperty[],
   themeFonts: ThemeFonts
 ): boolean {
-  const authored = defaultRun.some(
+  if (!namesEastAsianFont(defaultRun)) return false;
+  const face = resolveRunStyle(defaultRun, themeFonts).fontFamilyEastAsia;
+  return isEastAsianFace(face, themeFonts.eastAsianFontTableFaces);
+}
+
+/** Whether run defaults name an East Asian face slot (`w:eastAsia` or `w:eastAsiaTheme`). */
+function namesEastAsianFont(defaultRun: readonly OoxmlProperty[]): boolean {
+  return defaultRun.some(
     (prop) =>
       prop.localName === 'rFonts' &&
       Boolean(prop.attributes?.eastAsia || prop.attributes?.eastAsiaTheme)
   );
-  if (!authored) return false;
-  const face = resolveRunStyle(defaultRun, themeFonts).fontFamilyEastAsia;
-  return isEastAsianFace(face, themeFonts.eastAsianFontTableFaces);
+}
+
+/**
+ * The East Asian typography the styles part's document defaults select. East Asian spacing
+ * (inter-character justification on justified lines, and automatic spacing between East Asian
+ * and other text) applies when the styles part omits `w:rPrDefault`, or when `w:rPrDefault`
+ * names an East Asian font in `w:rFonts`. Any other `w:rPrDefault`, even an empty one, turns
+ * it off, in every compatibility mode. Fonts set on styles or runs do not count.
+ */
+export function defaultsTypography(
+  stylesRoot: OoxmlElement,
+  defaultRun: readonly OoxmlProperty[],
+  themeFonts: ThemeFonts
+): Pick<CjkTypographySettings, 'sourceEastAsianFont' | 'eastAsianSpacing'> {
+  const sourceEastAsianFont = defaultsSelectEastAsianFace(defaultRun, themeFonts);
+  const spacing =
+    stylesRoot.namespaceUri !== WML_NAMESPACE_URI ||
+    omittedDocDefaults(stylesRoot).run ||
+    namesEastAsianFont(defaultRun);
+  return spacing ? { sourceEastAsianFont } : { sourceEastAsianFont, eastAsianSpacing: false };
 }

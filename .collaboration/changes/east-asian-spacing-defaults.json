@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Justified East Asian lines spread between their characters, and automatic spacing opens between East Asian and Latin text, whatever the document defaults.",
+  "after": "Both apply only when the styles part omits w:rPrDefault or names an East Asian font in its w:rFonts. Otherwise a justified East Asian line stretches only its spaces and no automatic spacing opens, except beside runs that name an East Asian font on a distributed line.",
+  "reason": "Only layout geometry changes. Canonical OOXML, source positions, operations, and collaboration formats remain unchanged. Every peer derives the same geometry from the same styles part.",
+  "tests": [
+    "packages/core/src/layout/__tests__/east-asian-spacing-defaults.test.ts",
+    "packages/core/src/layout/__tests__/cjk-every-character-justify.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-distributed-last-line.test.ts"
+  ],
+  "changeset": "east-asian-spacing-defaults",
+  "migration": null
+}
