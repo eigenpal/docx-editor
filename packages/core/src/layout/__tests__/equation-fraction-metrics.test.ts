@@ -9,6 +9,7 @@ import {
 import { layoutEquation, type EquationGeometry } from '../equation-layout.ts';
 import { equationInk } from '../equation-ink.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
+import { layoutSemanticDocument, linesOf } from '../index.ts';
 import { resolveRunStyle } from '../run-style.ts';
 import type { TextMeasurer } from '../semantic-records.ts';
 
@@ -105,4 +106,46 @@ test('moves a tall denominator down to keep the least gap below the rule', () =>
     em(133) * 11 + em(133) * 11 * 0.5 - em(585) * 11 + inkAbove,
     9
   );
+});
+
+/** The equation of a one-paragraph document laid out in full, with every run at 24 pt. */
+function layoutInParagraph(math: string): EquationGeometry {
+  const sized = math.replaceAll('<m:r>', '<m:r><w:rPr><w:sz w:val="48"/></w:rPr>');
+  const read = readOoxmlPart(
+    `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:m="${OFFICE_MATH_NAMESPACE_URI}">` +
+      `<w:body><w:p>${sized}</w:p></w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!read.ok) throw new Error(read.reason);
+  const spans = linesOf(layoutSemanticDocument(read.part, 1, { measurer: inked })).flatMap(
+    (line) => line.spans
+  );
+  const equation = spans.find((span) => span.equation)?.equation;
+  if (!equation) throw new Error('missing equation span');
+  return equation.geometry;
+}
+
+test('keeps the padded placement for a fraction in a display equation', () => {
+  // Display style is not modelled. A display fraction takes the inline part size, 17.5 pt at
+  // 24 pt, with full font boxes, a padded rule, and fixed gaps of 0.08 em around a 0.055 em
+  // rule. Changing this placement is a deliberate change to display equations.
+  const display = stack(
+    layoutInParagraph(
+      `<m:oMathPara><m:oMath>${fraction(run('2'), run('3'))}</m:oMath></m:oMathPara>`
+    )
+  );
+  const part = { width: (6 * 17.5) / 11, height: (14 * 17.5) / 11 };
+  expect(display.numerator.box.height).toBeCloseTo(part.height, 9);
+  expect(display.box.width).toBeCloseTo(part.width + 2 * 1.92, 9);
+  expect(display.bar).toEqual(
+    expect.objectContaining({ x: 0.96, width: part.width + 1.92, height: 1.32 })
+  );
+  expect(display.bar.y).toBeCloseTo(part.height + 1.92, 9);
+  expect(display.denominator.box.y).toBeCloseTo(part.height + 1.92 + 1.32 + 1.92, 9);
+  expect(display.box.height).toBeCloseTo(2 * part.height + 1.92 + 1.32 + 1.92, 9);
+  expect(display.baseline).toBeCloseTo(part.height + 1.92 + 0.66 + 24 * 0.22, 9);
+  // The same fraction inline takes the typographic placement.
+  const inline = stack(layoutInParagraph(`<m:oMath>${fraction(run('2'), run('3'))}</m:oMath>`));
+  expect(inline.bar.height).toBeCloseTo(em(133) * 24, 9);
+  expect(inline.box.width).toBeCloseTo(part.width, 9);
 });

@@ -41,6 +41,7 @@ import {
 import type { ResolvedRunStyle, ThemeFonts } from './run-style.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
 import type { OmmlEquationProjection } from '@docx-editor.dev/core/store';
+import type { EquationLayoutInput } from './equation-layout.ts';
 
 /**
  * A `w:ptab` — the ABSOLUTE-position tab (ECMA-376 §17.3.3.16), which is what a table of
@@ -190,6 +191,8 @@ export interface FieldAwarePiece {
   readonly unsupported?: UnsupportedContentRecord;
   /** Bounded paragraph-level OMML projection occupying one UTF-16 model unit. */
   readonly equation?: OmmlEquationProjection;
+  /** With {@link equation}: the layout inputs that do not live on the shared projection. */
+  readonly equationLayout?: EquationLayoutInput;
   /**
    * The revision wrappers enclosing this text, outermost first, absent when untracked.
    *
@@ -382,6 +385,7 @@ export interface PieceEmitExtras {
   readonly inlineDrawing?: InlineDrawingLayoutInput;
   readonly anchoredAtom?: true;
   readonly equation?: FieldAwarePiece['equation'];
+  readonly equationLayout?: FieldAwarePiece['equationLayout'];
   readonly unsupported?: FieldAwarePiece['unsupported'];
   /**
    * Attribution to attach INSTEAD of the walk's live stack, for text emitted after the walk

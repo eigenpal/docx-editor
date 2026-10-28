@@ -95,7 +95,7 @@ import {
 } from './revision-projection.ts';
 import { resolvedFormatChangeOf } from './revision-formatting-projection.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
-import { equationRunStyle } from './equation-layout.ts';
+import { equationAtom } from './equation-piece.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
 import {
   contentControlContentChildren,
@@ -203,6 +203,7 @@ export function unmergedPiecesOfParagraphForDisplay(
         ...(extras?.inlineDrawing ? { inlineDrawing: extras.inlineDrawing } : {}),
         ...(extras?.anchoredAtom ? { anchoredAtom: true as const } : {}),
         ...(extras?.equation ? { equation: extras.equation } : {}),
+        ...(extras?.equationLayout ? { equationLayout: extras.equationLayout } : {}),
         ...(extras?.unsupported ? { unsupported: extras.unsupported } : {}),
         ...(extras?.fieldAtom ? { fieldAtom: extras.fieldAtom } : {}),
         ...link,
@@ -925,15 +926,13 @@ export function unmergedPiecesOfParagraphForDisplay(
       const start = offset++;
       if (revisionsAreDeletion(revisions) && deletedRanges)
         appendModelRange(deletedRanges, start, offset);
-      // Runs that share one default `w:sz` size the equation; otherwise it takes the text size.
       const text = resolveRunStyle(inheritedRunProperties, themeFonts);
-      const { fontSizePt } = equation;
-      const style = equationRunStyle(fontSizePt === undefined ? text : { ...text, fontSizePt });
+      const { style, extras: atom } = equationAtom(child, equation, text);
       if (!style.hidden && !revisionsVisible(revisions, displayMode, authorFilter)) {
         recordRemoved(start, offset, revisions);
       }
       if (style.hidden || !revisionsVisible(revisions, displayMode, authorFilter)) return;
-      return push('\uFFFC', inheritedRunProperties, style, true, start, offset, { equation });
+      return push('\uFFFC', inheritedRunProperties, style, true, start, offset, atom);
     }
     if (isFldSimple(child)) {
       // A saved result laid out as text: its runs are ordinary content at their own offsets.
