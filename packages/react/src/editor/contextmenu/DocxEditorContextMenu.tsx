@@ -81,7 +81,14 @@ import {
 } from './parts';
 import { useScopeClassName } from '../scope-context';
 import { chromeControlForSlot, chromeIcon } from '../toolbar/ToolbarButton';
-import { hostDocumentOf, hostWindowOf, isHTMLElementNode } from '@docx-editor.dev/core/editor';
+import {
+  chromeProbeForSlot,
+  hostDocumentOf,
+  hostWindowOf,
+  isHTMLElementNode,
+} from '@docx-editor.dev/core/editor';
+import { localizeDisabledReason } from '@docx-editor.dev/i18n';
+import { useHyperlinkPopup } from '../useHyperlinkPopup';
 
 /** Distance kept between the panel and the window edge when it flips. @internal */
 const VIEWPORT_INSET = 8;
@@ -138,6 +145,38 @@ function ContextMenuAddComment() {
   );
 }
 
+/**
+ * Insert link, as a row. Like `Toolbar.Link`, it does not run a command: a link needs a
+ * target, and only the popover can supply one. It opens the same panel Ctrl/Cmd+K opens,
+ * and the enabled state comes from the same probe the toolbar button asks.
+ */
+function ContextMenuInsertLink() {
+  const editor = useDocxEditor();
+  const menu = useMenuContext();
+  const label = useMenuLabel();
+  const { openAtCaret } = useHyperlinkPopup();
+  const probe = chromeProbeForSlot('text.link');
+  const allowed = editor && probe ? editor.can(probe) : null;
+  const reason = localizeDisabledReason(allowed && !allowed.ok ? allowed.reason : null, label);
+  const control = chromeControlForSlot('text.link');
+  return (
+    <MenuRow
+      icon={chromeIcon(control?.paths)}
+      slot="text.link"
+      disabled={allowed?.ok !== true}
+      title={reason ?? undefined}
+      onSelect={() => {
+        // Close first: closing puts focus back in the document, and the popover then moves
+        // it to its URL field. The other order would take focus away from the open panel.
+        menu.setOpenMenu(null);
+        openAtCaret();
+      }}
+    >
+      {label('formattingBar.insertLink')}
+    </MenuRow>
+  );
+}
+
 function ContextMenuEditField() {
   const editor = useDocxEditor();
   const menu = useMenuContext();
@@ -184,11 +223,9 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   {
     kind: 'row',
     id: 'text.link',
-    render: () => (
-      // No shortcut column: the catalogue has no plain "Ctrl+K" key, and inventing one
-      // here would put a literal English keystroke in a row every locale renders.
-      <MenuItem slotId="text.link" labelKey="formattingBar.insertLink" />
-    ),
+    // No shortcut column: the catalogue has no plain "Ctrl+K" key, and inventing one
+    // here would put a literal English keystroke in a row every locale renders.
+    render: () => <ContextMenuInsertLink />,
   },
   {
     kind: 'row',

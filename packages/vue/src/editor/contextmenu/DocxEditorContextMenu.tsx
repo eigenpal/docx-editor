@@ -13,7 +13,13 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
-import { isHTMLElementNode, hostDocumentOf, hostWindowOf } from '@docx-editor.dev/core/editor';
+import {
+  chromeProbeForSlot,
+  isHTMLElementNode,
+  hostDocumentOf,
+  hostWindowOf,
+} from '@docx-editor.dev/core/editor';
+import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { mergeArrangement } from '../merge-arrangement';
 import { flattenChildren } from '../../lib/flattenChildren';
@@ -65,6 +71,7 @@ import {
   useTableContextMenuVisible,
 } from './parts';
 import { useScopeClassName } from '../scope-context';
+import { useHyperlinkPopup } from '../useHyperlinkPopup';
 import { chromeControlForSlot, chromeIcon } from '../toolbar/ToolbarButton';
 import { useChromeDir } from '../../i18n';
 
@@ -115,6 +122,45 @@ const ContextMenuAddComment = defineComponent({
   },
 });
 
+/**
+ * Insert link, as a row. Like `Toolbar.Link`, it does not run a command: a link needs a
+ * target, and only the popover can supply one. It opens the same panel Ctrl/Cmd+K opens,
+ * and the enabled state comes from the same probe the toolbar button asks.
+ */
+const ContextMenuInsertLink = defineComponent({
+  name: 'ContextMenuInsertLink',
+  setup() {
+    const editor = useDocxEditor();
+    const stateTick = useEditorStateTick();
+    const menu = useMenuContext();
+    const label = useMenuLabel();
+    const { openAtCaret } = useHyperlinkPopup();
+    return () => {
+      void stateTick.value;
+      const probe = chromeProbeForSlot('text.link');
+      const allowed = editor.value && probe ? editor.value.can(probe) : null;
+      const reason = localizeDisabledReason(allowed && !allowed.ok ? allowed.reason : null, label);
+      const control = chromeControlForSlot('text.link');
+      return (
+        <MenuRow
+          icon={chromeIcon(control?.paths) ?? undefined}
+          {...{ rowSlot: 'text.link' }}
+          disabled={allowed?.ok !== true}
+          title={reason ?? undefined}
+          selectHandler={() => {
+            // Close first: closing puts focus back in the document, and the popover then
+            // moves it to its URL field. The other order would take focus away from the panel.
+            menu.value.setOpenMenu(null);
+            openAtCaret();
+          }}
+        >
+          {{ default: () => label('formattingBar.insertLink') }}
+        </MenuRow>
+      );
+    };
+  },
+});
+
 const ContextMenuEditField = defineComponent({
   name: 'ContextMenuEditField',
   setup() {
@@ -159,7 +205,7 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   {
     kind: 'row',
     id: 'text.link',
-    render: () => <MenuItem slotId="text.link" labelKey="formattingBar.insertLink" />,
+    render: () => <ContextMenuInsertLink />,
   },
   {
     kind: 'row',
