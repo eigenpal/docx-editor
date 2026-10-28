@@ -1,4 +1,4 @@
-import { isRunKerningEnabled } from './run-kerning.ts';
+import { isRunKerningEnabled, kernsText } from './run-kerning.ts';
 // Browser/canvas-backed text measurement for the semantic layout lane.
 //
 // Layout itself stays DOM-free: this module is an optional adapter of the `TextMeasurer`
@@ -364,11 +364,12 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
     measure(text, style) {
       if (text.length === 0) return 0;
       const font = fontOf(style);
-      const key = `${font}\0${isRunKerningEnabled(style)}\0${text}`;
+      const kerns = kernsText(style, text);
+      const key = `${font}\0${kerns}\0${text}`;
       const cached = widthCache.get(key);
       if (cached !== undefined) return scaled(cached, text, style);
       ctx.font = font;
-      if ('fontKerning' in ctx) ctx.fontKerning = isRunKerningEnabled(style) ? 'normal' : 'none';
+      if ('fontKerning' in ctx) ctx.fontKerning = kerns ? 'normal' : 'none';
       const width = ctx.measureText(text).width;
       widthCache.set(key, width);
       return scaled(width, text, style);

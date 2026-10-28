@@ -8,3 +8,7 @@ These fixtures are unmodified files from the authoritative DejaVu Fonts 2.37 rel
 - `DejaVuSans-Bold.ttf` SHA-256: `e6476c1b80502924294eed40894c5b18e06c181444ca953e5334262df9c27724`
 
 Copyright © 2003 by Bitstream, Inc. All Rights Reserved. DejaVu changes are in the public domain. The exact upstream license and attribution text is retained verbatim in `DejaVu-LICENSE.txt`.
+
+# Noto Sans CJK JP kana subset
+
+`NotoSansCJKjp-kana.subset.otf` is a subset of Noto Sans CJK JP Regular, the face that `@docx-editor.dev/fonts-cjk` ships in `packages/fonts-cjk/assets/`. It keeps the `kern` and `palt` features for the kana, ideographs, and Latin letters that `east-asian-kerning.test.ts` shapes. Reproduce it with FontTools `pyftsubset`, `--text="アイウエオカキクケコあいうえおかきくけこ漢字国AVATo "`, `--layout-features='kern,palt'`, and `--name-IDs='*' --name-languages='*' --name-legacy`. The SIL Open Font License text is in `NotoSansCJK-OFL.txt`.

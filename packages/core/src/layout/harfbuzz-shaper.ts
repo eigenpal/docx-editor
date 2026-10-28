@@ -8,6 +8,7 @@ import {
   type ResolvedFont,
 } from './font-resource.ts';
 import { fontHasSymbolCmap, toSymbolCmapText } from './symbol-cmap.ts';
+import { unkernedTextRanges } from './run-kerning.ts';
 import {
   createShapedRun,
   createShapingEnvironment,
@@ -794,6 +795,12 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
       const features = Object.entries(environment.features).map(
         ([tag, value]) => new this.#harfBuzz.Feature(tag, value)
       );
+      // Pair kerning leaves full-width East Asian text alone; Latin text in the run still kerns.
+      // Clusters count from the start of the shaped context, so the ranges do too.
+      if ((environment.features.kern ?? 1) !== 0) {
+        for (const [start, end] of unkernedTextRanges(before + text + after))
+          features.push(new this.#harfBuzz.Feature('kern', 0, start, end));
+      }
       this.#instrumentation?.onShapeCall?.();
       this.#harfBuzz.shape(font, buffer, features);
       const glyphCount = buffer.getLength();

@@ -18,7 +18,7 @@ import { appendEmptyLineAnchor } from './semantic-paint-empty-line.ts';
 import { paintListMarkerPicture } from './semantic-paint-list-marker-picture.ts';
 import { paintNoteSeparatorSpan } from './semantic-paint-note-rule.ts';
 import { paintRunBorders } from './semantic-paint-run-borders.ts';
-import { isRunKerningEnabled } from '../layout/run-kerning.ts';
+import { isRunKerningEnabled, kernsText } from '../layout/run-kerning.ts';
 import { paintLegacyDropdown } from './semantic-paint-legacy-dropdown.ts';
 import { paintLegacyCheckbox } from './semantic-paint-legacy-checkbox.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
@@ -903,6 +903,7 @@ function paintSpan(
     element.contentEditable = 'false';
   }
   applyRunFaceStyle(element, faceStyle, ctx);
+  if (!kernsText(faceStyle, span.text)) element.style.fontKerning = 'none';
   applyFieldShading(element, span, ctx);
   applyRevisionPresentation(element, span, ctx);
   const textHost = prepareTextPaintHost(document, element, span, ctx.scale);
