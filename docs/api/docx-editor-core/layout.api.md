@@ -386,6 +386,8 @@ export interface CjkTypographySettings {
     readonly compression: 'doNotCompress' | 'compressPunctuation' | 'compressPunctuationAndJapaneseKana';
     // @internal
     readonly eastAsianSpacing?: false;
+    // @internal
+    readonly legacyLineEndPunctuation?: true;
     readonly punctuationKerning?: boolean;
     readonly sourceEastAsianFont?: boolean;
     readonly strict: boolean;

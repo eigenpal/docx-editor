@@ -621,7 +621,7 @@ Justified East Asian lines SHALL distribute punctuation compression across avail
 
 ### Requirement: Hanging punctuation only on justified paragraphs
 
-With `w:overflowPunct` on, the layout engine SHALL let line-end punctuation hang past the margin only when the paragraph alignment is justified. This SHALL apply to full-width punctuation and to Latin punctuation in a run with an East Asian language. Left-aligned, centered, and right-aligned lines SHALL keep line-end punctuation inside the margin. A document whose defaults name no East Asian face SHALL hang no punctuation.
+With `w:overflowPunct` on, the layout engine SHALL let line-end punctuation hang past the margin only when the paragraph alignment is justified or distributed. This SHALL apply to full-width punctuation and to Latin punctuation in a run with an East Asian language. In compatibility mode 15 and later, left-aligned, centered, and right-aligned lines SHALL keep line-end punctuation inside the margin.
 
 #### Scenario: A closing quote stays inside a left-aligned line
 
@@ -629,6 +629,24 @@ With `w:overflowPunct` on, the layout engine SHALL let line-end punctuation hang
 - **WHEN** the paragraph is left-aligned, centered, or right-aligned
 - **THEN** the quote wraps to the next line with the character before it
 - **AND** the same quote hangs past the margin when the paragraph is justified
+
+### Requirement: Hanging punctuation in legacy modes and distributed paragraphs
+
+With no compatibility mode, or in mode 11, 12, or 14, line-end punctuation SHALL hang at every alignment, and the text before the mark SHALL fill the measure. A document whose defaults name no East Asian face SHALL hang punctuation only in distributed paragraphs.
+
+#### Scenario: A legacy mode hangs a left-aligned line
+
+- **GIVEN** a left-aligned, centered, or right-aligned line of nineteen 24 pt ideographs and a 24 pt `。` on a 468 pt measure
+- **WHEN** the document declares compatibility mode 14
+- **THEN** the mark hangs past the margin and starts at 468 pt
+- **AND** in mode 15 the mark wraps with the ideograph before it
+
+#### Scenario: A distributed paragraph hangs without East Asian defaults
+
+- **GIVEN** a document whose `w:rPrDefault` names no East Asian face
+- **WHEN** a distributed line ends with an overflowing `。`, `、`, or `）`
+- **THEN** the mark hangs past the margin
+- **AND** a justified line in the same document wraps the mark with the character before it
 
 #### Scenario: A hanging mark and compression fit one line
 
@@ -667,6 +685,17 @@ When a justified paragraph enables hanging punctuation, the punctuation run's la
 - **WHEN** a full-width full stop `．` overflows the measure
 - **THEN** the mark hangs
 - **AND** the same mark in Simplified Chinese wraps with its preceding character
+
+### Requirement: Line-start rules decide hanging
+
+A mark SHALL hang only when the custom or default line-start list for its run language forbids it at a line start and the paragraph keeps kinsoku on; otherwise the mark SHALL start the next line. A legacy compatibility mode SHALL hang a listed mark whatever the paragraph kinsoku switch.
+
+#### Scenario: The effective line-start list decides hanging
+
+- **GIVEN** a justified line that ends with an overflowing `。` in a Japanese run
+- **WHEN** the paragraph sets `w:kinsoku w:val="0"`, or `settings.xml` sets a Japanese `w:noLineBreaksBefore` list without `。`
+- **THEN** `。` starts the next line
+- **AND** Simplified Chinese `・`, `｡`, and `､`, and Traditional Chinese `％` and `°`, start the next line too
 
 ### Requirement: Alignment before hanging punctuation
 
@@ -878,7 +907,7 @@ The layout engine SHALL allow curly quotes in runs with the East Asian font hint
 
 ### Requirement: Natural kana advances
 
-Layout SHALL preserve natural kana advances and authored tracking when a line overflows. Paragraph overflow SHALL NOT apply a fixed kana reduction. Kana compression that fits a line-start-prohibited character on a full line is outside this requirement.
+Layout SHALL preserve natural kana advances and authored tracking when a line overflows. Paragraph overflow SHALL NOT apply a fixed kana reduction. Kana compression that fits a line-start-prohibited character on a full line follows its own requirement.
 
 #### Scenario: Japanese kana overflow the measure
 
@@ -886,3 +915,42 @@ Layout SHALL preserve natural kana advances and authored tracking when a line ov
 - **WHEN** character spacing control enables punctuation and Japanese kana compression
 - **THEN** the first line contains nineteen kana and the next line contains one kana
 - **AND** source text, run properties, and settings remain unchanged after save and reopen
+
+### Requirement: Kana fit a line-start-prohibited character
+
+When `w:characterSpacingControl` is `compressPunctuationAndJapaneseKana`, a full line SHALL pull a following line-start-prohibited character onto itself when compression can absorb the overflow. Punctuation blank sides SHALL compress first, then hiragana and katakana by at most one sixteenth of an em each, in equal shares. A final closing mark SHALL give its trailing half first when that half alone absorbs the overflow, and otherwise only when the kana cannot absorb the rest.
+
+#### Scenario: Kana fit a full stop after a full line
+
+- **GIVEN** a justified line of 39 kana of 24 pt on a 936 pt measure, followed by `。`
+- **WHEN** kana compression is on
+- **THEN** each kana advances 24 − 24/39 pt and `。` keeps its 24 pt advance inside the margin
+- **AND** with eight kana among kanji, the kana give 1.5 pt each and `。` gives its trailing half
+
+#### Scenario: A character that may start a line wraps
+
+- **GIVEN** a full line of kana followed by a kana, or by `ー`, and then `。`
+- **WHEN** kana compression is on
+- **THEN** the line keeps natural kana advances and the next character starts the next line
+
+### Requirement: Kana fit scope
+
+Kanji, the prolonged sound mark, and half-width katakana SHALL keep their advances in a kana fit. Without punctuation overflow, the final trailing half SHALL compress before the kana. When compression cannot absorb the overflow, the line SHALL hang the mark or wrap as without kana compression. The fit SHALL apply where punctuation hangs, and SHALL NOT apply in Korean runs or in Traditional Chinese runs in mode 15 and later.
+
+#### Scenario: Paragraphs that fit kana
+
+- **GIVEN** a full line of kana followed by `。`, with kana compression on
+- **WHEN** the paragraph is left-aligned in mode 15, or justified in a document without East Asian defaults
+- **THEN** the kana keep their advances
+- **AND** a left-aligned paragraph in mode 14 and a distributed paragraph without East Asian defaults fit the kana
+
+### Requirement: East Asian text keeps its advances under pair kerning
+
+A run with pair kerning on (`w:kern`) SHALL keep kana, ideographs, CJK punctuation, and full-width and half-width forms at their own advances in measurement, PDF glyph positions, and screen paint. Latin letters in the same run SHALL still kern. Adjacent East Asian punctuation SHALL compress by its own rule, not by the font's kerning pairs.
+
+#### Scenario: Kerned katakana keep full-width steps
+
+- **GIVEN** a katakana run in a face with katakana kerning pairs
+- **WHEN** the run sets `w:kern`
+- **THEN** every katakana keeps its full-width advance
+- **AND** a Latin pair such as `AV` in the same run kerns
