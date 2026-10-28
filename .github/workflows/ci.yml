@@ -49,7 +49,10 @@ jobs:
           # Two browser lanes of about four minutes each, so neither one sets the wall clock.
           - check: browser
           - check: acceptance
+          # Both build the packages. `build` verifies the repository and hands the build to the
+          # collaboration jobs; `consumers` installs and runs the packed packages.
           - check: build
+          - check: consumers
           - check: unit
             shard: 1/6
           - check: unit
@@ -184,7 +187,7 @@ jobs:
           # near 1.2 GiB. If one outgrows this budget, it fails here instead of in a
           # caller that does not raise the heap.
           NODE_OPTIONS: '--max-old-space-size=2048'
-        if: "matrix.check == 'build'"
+        if: "matrix.check == 'build' || matrix.check == 'consumers'"
       - name: Root and example type check
         run: bun run typecheck:root
         if: "matrix.check == 'build'"
@@ -193,7 +196,7 @@ jobs:
         if: "matrix.check == 'build'"
       - name: Check editor API consumers against published declarations
         run: "bun run --filter '@docx-editor-examples/editor-api-consumers' typecheck:published"
-        if: "matrix.check == 'build'"
+        if: "matrix.check == 'consumers'"
       - name: Server agent lifecycle integration
         run: "bun run --filter './examples/server-agent-review' test:lifecycle"
         if: "matrix.check == 'build'"
@@ -207,7 +210,7 @@ jobs:
         if: "matrix.check == 'build'"
       - name: Editor API public consumer workflows
         run: "bun run --filter '@docx-editor-examples/editor-api-consumers' test:published"
-        if: "matrix.check == 'build'"
+        if: "matrix.check == 'consumers'"
       - name: Package size report
         run: bun run check:package-size --out package-sizes.json
         if: "matrix.check == 'build'"
@@ -226,7 +229,7 @@ jobs:
         if: "matrix.check == 'build'"
       - name: Third-party notices generate (gate)
         run: bun run notices:generate
-        if: "matrix.check == 'build'"
+        if: "matrix.check == 'build' || matrix.check == 'consumers'"
       - name: Collaboration policy
         if: "matrix.check == 'build'"
         env:
@@ -256,16 +259,16 @@ jobs:
           retention-days: 3
       - name: Published-package artifact check
         run: bun run check:package-artifacts
-        if: "matrix.check == 'build'"
+        if: "matrix.check == 'consumers'"
       - name: Shipped text-shaper check
         run: bun run check:shipped-shaper
-        if: "matrix.check == 'build'"
+        if: "matrix.check == 'consumers'"
       - name: Published-package consumer check
         run: SKIP_CONSUMER_INSTALL_BUILD=1 bun run check:consumer-install
-        if: "matrix.check == 'build'"
+        if: "matrix.check == 'consumers'"
       - name: PDF packed consumer check
         run: "bun run --filter '@docx-editor.dev/docx-to-pdf' check:consumer"
-        if: "matrix.check == 'build'"
+        if: "matrix.check == 'consumers'"
       - name: i18n per-locale bundle size check
         run: bun run check:i18n-bundle-size
         if: "matrix.check == 'build'"
