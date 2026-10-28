@@ -337,8 +337,8 @@ function alignLogicalSpans(
     for (let index = 1; index < slotEnd; index += 1) {
       if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
     }
-    // Nothing to stretch, such as one word before a manual line break: the line stays at its
-    // start edge, which is the right one in a right-to-left paragraph.
+    // Nothing to stretch, such as one word before a manual line break: a distributed line
+    // centers; any other line stays at its start edge, the right one in a right-to-left paragraph.
     if (gapBefore.length === 0) {
       if (centers) return centered();
       if (!paragraphRtl) return spans;

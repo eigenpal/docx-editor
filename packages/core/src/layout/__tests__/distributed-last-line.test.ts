@@ -159,3 +159,24 @@ test('a justified single word stays at its start edge', () => {
   const [line] = layout(paragraph('both', 'Word'));
   expect(start(line!.spans)).toBeCloseTo(0, 7);
 });
+
+test('a distributed right-to-left CJK line beside a float keeps its passages', () => {
+  // The float advance holds each passage in place, so the line does not center.
+  const source = loadBody(
+    '<w:p><w:pPr><w:bidi/><w:jc w:val="distribute"/></w:pPr><w:r><w:rPr><w:rtl/></w:rPr><w:t>甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥</w:t></w:r></w:p>'
+  );
+  const target = source.root.children
+    .flatMap((child) => ('children' in child ? child.children : []))
+    .find((child) => child.kind === 'paragraph')!;
+  const zone = squareWrapZone({
+    anchorParagraphId: target.id,
+    top: 0,
+    height: 70,
+    left: 60,
+    width: 40,
+  });
+  const [line] = linesOf(layoutUnderFloat(source, new Map([[0, [zone]]])));
+  const [before, after] = parts(line!);
+  expect(before![0]!.box.x).toBeCloseTo(0, 7);
+  expect(after![0]!.box.x).toBeCloseTo(100, 7);
+});
