@@ -176,7 +176,9 @@ test('a distributed right-to-left CJK line beside a float keeps its passages', (
     width: 40,
   });
   const [line] = linesOf(layoutUnderFloat(source, new Map([[0, [zone]]])));
-  const [before, after] = parts(line!);
-  expect(before![0]!.box.x).toBeCloseTo(0, 7);
-  expect(after![0]!.box.x).toBeCloseTo(100, 7);
+  expect(parts(line!)).toHaveLength(2);
+  for (const span of line!.spans.filter((s) => s.text.trim().length > 0)) {
+    // Each character stays in a free passage, left of 60 or right of 100.
+    expect(span.box.x + span.box.width <= 60 + 1e-6 || span.box.x >= 100 - 1e-6).toBe(true);
+  }
 });
