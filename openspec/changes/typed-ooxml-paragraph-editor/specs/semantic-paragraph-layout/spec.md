@@ -19,7 +19,8 @@ The layout engine SHALL stretch the final line of a paragraph with `w:jc` set to
 - **AND** the rest of the slack goes in equal steps after every character, so a single word reaches both edges
 - **AND** a line whose spaces can take all its slack sets as a justified line
 - **AND** a single character, or a single right-to-left word, is centered
-- **AND** caret placement, hit testing, and painted underline and highlight follow the spread characters
+- **AND** caret placement and hit testing follow the spread characters
+- **AND** screen paint keeps underline, highlight, and revision marks continuous across the gaps, and the PDF joins a single underline across them
 
 #### Scenario: Distributed line has nothing to stretch
 

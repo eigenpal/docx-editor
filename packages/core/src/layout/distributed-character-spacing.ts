@@ -31,7 +31,8 @@ function spaceCapacity(
 ): number {
   if (spacing === 'characters') return SPACE_SHARE_LIMIT * own;
   const style = styleForFontSlot(space.style, space.fontSlot);
-  // The average width is twice the reverse automatic-spacing gap, which is half of it.
+  // Both metrics return half the face's average character width (the East Asian automatic
+  // spacing gap), so double it.
   const half = authoredCjkGapMetric(measurer, style) ?? knownFamilyReverseGap(style);
   return half === undefined ? SPACE_SHARE_LIMIT * own : Math.max(0, 2 * half - own);
 }
