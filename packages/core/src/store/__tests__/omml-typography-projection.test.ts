@@ -89,7 +89,7 @@ test.each([
 });
 
 test.each([
-  '<w:rPr><w:rFonts w:ascii="Font A" w:hAnsi="Font B"/></w:rPr>',
+  '<w:rPr><w:rFonts w:ascii="Font A" w:hint="eastAsia"/></w:rPr>',
   '<m:rPr><m:unknown/></m:rPr>',
   '<w:rPr><w:constructor/></w:rPr>',
   '<m:rPr><m:__proto__/></m:rPr>',

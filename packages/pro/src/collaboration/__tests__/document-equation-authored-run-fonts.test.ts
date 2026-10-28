@@ -86,98 +86,107 @@ function select(editor: Editor, offset: number) {
   editor.surface!.setSelection({ anchor: { paragraphId, offset }, head: { paragraphId, offset } });
 }
 
-test('two editors preserve equation fonts, atomic carets, history, and concurrent deletion', async () => {
-  const peers = await harness.pair(
-    zipDocument(
-      '<w:p xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">' +
-        '<w:r><w:t>Left</w:t></w:r><m:oMath>' +
-        '<m:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:b/></w:rPr><m:t>x12+α</m:t></m:r>' +
-        '<m:r><m:rPr><m:nor/></m:rPr><m:t>normal</m:t></m:r></m:oMath>' +
-        '<w:r><w:t>Right</w:t></w:r></w:p>',
-      {
-        overrides:
-          '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>',
-        documentRels:
-          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="styles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
-        extraXml: {
-          'word/styles.xml':
-            '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:rPr><w:rFonts w:ascii="Paragraph Face" w:hAnsi="Paragraph Face"/></w:rPr></w:style></w:styles>',
-        },
-      }
-    )
-  );
-  const alice = mount(peers.alice);
-  const bob = mount(peers.bob);
-  const original = equationXml(alice);
-  const sync = () => {
-    peers.alice.room.session.flushPendingJournals();
-    peers.bob.room.session.flushPendingJournals();
-  };
-  const converged = () => {
+test.each([
+  ['one face', '<w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>'],
+  [
+    'other faces in other slots',
+    '<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="East Face" w:cs="Complex Face"/>',
+  ],
+])(
+  'two editors preserve equation fonts (%s), atomic carets, history, and concurrent deletion',
+  async (_name, fonts) => {
+    const peers = await harness.pair(
+      zipDocument(
+        '<w:p xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">' +
+          '<w:r><w:t>Left</w:t></w:r><m:oMath>' +
+          `<m:r><w:rPr>${fonts}<w:b/></w:rPr><m:t>x12+α</m:t></m:r>` +
+          '<m:r><m:rPr><m:nor/></m:rPr><m:t>normal</m:t></m:r></m:oMath>' +
+          '<w:r><w:t>Right</w:t></w:r></w:p>',
+        {
+          overrides:
+            '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>',
+          documentRels:
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="styles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
+          extraXml: {
+            'word/styles.xml':
+              '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:rPr><w:rFonts w:ascii="Paragraph Face" w:hAnsi="Paragraph Face"/></w:rPr></w:style></w:styles>',
+          },
+        }
+      )
+    );
+    const alice = mount(peers.alice);
+    const bob = mount(peers.bob);
+    const original = equationXml(alice);
+    const sync = () => {
+      peers.alice.room.session.flushPendingJournals();
+      peers.bob.room.session.flushPendingJournals();
+    };
+    const converged = () => {
+      sync();
+      const left = alice.surface!.session.currentPackage();
+      const right = bob.surface!.session.currentPackage();
+      expect(packageFingerprint(right)).toBe(packageFingerprint(left));
+      expect(saveReopenDigest(right)).toEqual(saveReopenDigest(left));
+    };
+    expect(snapshot(bob)).toEqual(snapshot(alice));
+    select(alice, 5);
+    applyAwarenessUpdate(
+      peers.bob.awareness,
+      encodeAwarenessUpdate(peers.alice.awareness, [peers.alice.ydoc.clientID]),
+      'test'
+    );
+    const remote = peers.bob.room.session.remoteSelections()[0]!;
+    expect(remote.head.offset).toBe(5);
+    const local = alice.surface!.state().selection.head;
+    const localCaret = caretAt(alice.surface!.layout(), local)!;
+    const remoteCaret = caretAt(bob.surface!.layout(), {
+      paragraphId: remote.head.nodeId!,
+      offset: remote.head.offset,
+    })!;
+    expect({ x: remoteCaret.x, y: remoteCaret.y, height: remoteCaret.height }).toEqual({
+      x: localCaret.x,
+      y: localCaret.y,
+      height: localCaret.height,
+    });
+
+    peers.pause();
+    select(alice, 0);
+    alice.surface!.type('Alice ');
+    select(bob, 0);
+    bob.surface!.type('Bob ');
     sync();
-    const left = alice.surface!.session.currentPackage();
-    const right = bob.surface!.session.currentPackage();
-    expect(packageFingerprint(right)).toBe(packageFingerprint(left));
-    expect(saveReopenDigest(right)).toEqual(saveReopenDigest(left));
-  };
-  expect(snapshot(bob)).toEqual(snapshot(alice));
-  select(alice, 5);
-  applyAwarenessUpdate(
-    peers.bob.awareness,
-    encodeAwarenessUpdate(peers.alice.awareness, [peers.alice.ydoc.clientID]),
-    'test'
-  );
-  const remote = peers.bob.room.session.remoteSelections()[0]!;
-  expect(remote.head.offset).toBe(5);
-  const local = alice.surface!.state().selection.head;
-  const localCaret = caretAt(alice.surface!.layout(), local)!;
-  const remoteCaret = caretAt(bob.surface!.layout(), {
-    paragraphId: remote.head.nodeId!,
-    offset: remote.head.offset,
-  })!;
-  expect({ x: remoteCaret.x, y: remoteCaret.y, height: remoteCaret.height }).toEqual({
-    x: localCaret.x,
-    y: localCaret.y,
-    height: localCaret.height,
-  });
+    peers.resume();
+    converged();
+    expect(equationXml(alice)).toEqual(original);
+    expect(snapshot(bob)).toEqual(snapshot(alice));
+    expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+    converged();
+    expect(alice.exec({ type: 'redo' }).ok).toBe(true);
+    converged();
+    expect(snapshot(bob)).toEqual(snapshot(alice));
 
-  peers.pause();
-  select(alice, 0);
-  alice.surface!.type('Alice ');
-  select(bob, 0);
-  bob.surface!.type('Bob ');
-  sync();
-  peers.resume();
-  converged();
-  expect(equationXml(alice)).toEqual(original);
-  expect(snapshot(bob)).toEqual(snapshot(alice));
-  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
-  converged();
-  expect(alice.exec({ type: 'redo' }).ok).toBe(true);
-  converged();
-  expect(snapshot(bob)).toEqual(snapshot(alice));
-
-  const offset = alice.surface!.session.bodyText().indexOf('\uFFFC');
-  select(alice, offset);
-  const equation = alice.surface!.equations.equationAtCaret()!;
-  peers.pause();
-  expect(alice.surface!.equations.removeEquation(equation.id)).toBe(true);
-  select(bob, 0);
-  bob.surface!.type('Concurrent ');
-  sync();
-  peers.resume();
-  converged();
-  expect(equationXml(alice)).toEqual([]);
-  expect(equationXml(bob)).toEqual([]);
-  expect(alice.findMatches('Concurrent')).toHaveLength(1);
-  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
-  converged();
-  expect(equationXml(alice)).toEqual(original);
-  expect(snapshot(bob)).toEqual(snapshot(alice));
-  const late = await harness.join(peers.alice, 'late-peer');
-  const lateEditor = mount(late);
-  expect(snapshot(lateEditor)).toEqual(snapshot(alice));
-  expect(saveReopenDigest(lateEditor.surface!.session.currentPackage())).toEqual(
-    saveReopenDigest(alice.surface!.session.currentPackage())
-  );
-});
+    const offset = alice.surface!.session.bodyText().indexOf('\uFFFC');
+    select(alice, offset);
+    const equation = alice.surface!.equations.equationAtCaret()!;
+    peers.pause();
+    expect(alice.surface!.equations.removeEquation(equation.id)).toBe(true);
+    select(bob, 0);
+    bob.surface!.type('Concurrent ');
+    sync();
+    peers.resume();
+    converged();
+    expect(equationXml(alice)).toEqual([]);
+    expect(equationXml(bob)).toEqual([]);
+    expect(alice.findMatches('Concurrent')).toHaveLength(1);
+    expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+    converged();
+    expect(equationXml(alice)).toEqual(original);
+    expect(snapshot(bob)).toEqual(snapshot(alice));
+    const late = await harness.join(peers.alice, 'late-peer');
+    const lateEditor = mount(late);
+    expect(snapshot(lateEditor)).toEqual(snapshot(alice));
+    expect(saveReopenDigest(lateEditor.surface!.session.currentPackage())).toEqual(
+      saveReopenDigest(alice.surface!.session.currentPackage())
+    );
+  }
+);

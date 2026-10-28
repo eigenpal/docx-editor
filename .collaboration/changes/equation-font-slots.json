@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "An equation run or control whose w:rFonts slots named different faces showed a text fallback, without its face, size, or math style.",
+  "after": "Such a run takes the face of the slots that its text uses and keeps its size and math style. A run whose text needs two faces keeps the text fallback.",
+  "reason": "Only the local equation projection, geometry, and font selection change. Canonical OMML, offsets, operations, and collaboration data remain unchanged.",
+  "tests": [
+    "packages/core/src/store/__tests__/omml-run-format.test.ts",
+    "packages/core/src/layout/__tests__/equation-authored-run-font.test.ts",
+    "packages/core/src/editor/__tests__/surface-equation-source-format.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-equation-authored-run-fonts.test.ts"
+  ],
+  "changeset": "equation-font-slots",
+  "migration": null
+}

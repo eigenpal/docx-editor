@@ -50,6 +50,13 @@ The engine SHALL publish equation geometry from DOM-free layout. Paint SHALL use
 - **THEN** the digits use mathematical bold digits from the math face
 - **AND** letters in the same run stay in the same math-face text node
 
+#### Scenario: Run font slots that name different faces
+
+- **WHEN** an equation run's `w:rFonts` names different faces in its `w:ascii`, `w:hAnsi`, `w:eastAsia`, and `w:cs` slots
+- **THEN** the run takes the face of the slots that its characters use, and keeps its size and math style
+- **AND** a run whose characters use two different faces keeps the text fallback
+- **AND** compact replacement refuses the equation, and save keeps the source properties
+
 #### Scenario: Normal text without a run font
 
 - **WHEN** an equation run specifies `m:nor` without `w:rFonts`

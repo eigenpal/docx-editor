@@ -15,6 +15,21 @@ const fraction = (properties: string | null) =>
 const cases = [
   ['plain', run(), false],
   ['font', run('<w:rPr><w:rFonts w:ascii="Public Math" w:hAnsi="Public Math"/></w:rPr>'), true],
+  [
+    'font slots that name different faces',
+    run(
+      '<w:rPr><w:rFonts w:ascii="Public Text" w:hAnsi="Public Text" w:eastAsia="Public East" ' +
+        'w:cs="Public Complex"/><w:sz w:val="36"/></w:rPr>'
+    ),
+    true,
+  ],
+  [
+    'control font slots that name different faces',
+    fraction(
+      '<w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math" w:eastAsia="Public East"/><w:i/>'
+    ),
+    true,
+  ],
   ['literal', run('<m:rPr><m:lit/></m:rPr>'), true],
   ['normal', run('<m:rPr><m:nor/></m:rPr>'), true],
   ['bar', `<m:bar><m:e>${run()}</m:e></m:bar>`, true],

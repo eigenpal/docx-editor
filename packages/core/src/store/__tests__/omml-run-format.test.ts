@@ -5,9 +5,9 @@ import { equationRunFormat } from '../package/omml-run-format.ts';
 const w = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const m = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
 
-function run(properties: string): OoxmlElement {
+function run(properties: string, text = 'al'): OoxmlElement {
   const result = readOoxmlPart(
-    `<w:document xmlns:w="${w}" xmlns:m="${m}"><w:body><w:p><m:oMath><m:r>${properties}<m:t>al</m:t></m:r></m:oMath></w:p></w:body></w:document>`,
+    `<w:document xmlns:w="${w}" xmlns:m="${m}"><w:body><w:p><m:oMath><m:r>${properties}<m:t>${text}</m:t></m:r></m:oMath></w:p></w:body></w:document>`,
     { name: '/word/document.xml', contentType: 'app/xml' }
   );
   if (!result.ok) throw new Error(result.reason);
@@ -93,8 +93,53 @@ test.each([
   expect(equationRunFormat(run(`<w:rPr>${properties}</w:rPr>`))).toBeNull();
 });
 
+const slotFonts =
+  '<w:rFonts w:ascii="Latin Face" w:hAnsi="Latin Face" w:eastAsia="East Face" w:cs="Complex Face"/>';
+
+test('keeps the Latin face, size, and math style when other font slots name other faces', () => {
+  const node = run(
+    `<m:rPr><m:sty m:val="b"/></m:rPr><w:rPr>${slotFonts}<w:sz w:val="36"/><w:szCs w:val="36"/></w:rPr>`,
+    '1234'
+  );
+  const before = JSON.stringify(node);
+  expect(equationRunFormat(node)).toEqual({
+    fontFamily: 'Latin Face',
+    fontSizePt: 18,
+    mathStyle: 'b',
+  });
+  expect(JSON.stringify(node)).toBe(before);
+});
+
 test.each([
-  '<w:rPr><w:rFonts w:ascii="Face A" w:hAnsi="Face B"/></w:rPr>',
+  ['ASCII text', '<w:rFonts w:ascii="Face A" w:hAnsi="Face B"/>', 'x12', 'Face A'],
+  ['Greek text', '<w:rFonts w:ascii="Face A" w:hAnsi="Face B"/>', 'αβ', 'Face B'],
+  ['East Asian text', slotFonts, '中文', 'East Face'],
+  ['Hebrew text', slotFonts, 'שלום', 'Complex Face'],
+  ['Latin text and an unnamed East Asian slot', '<w:rFonts w:ascii="A" w:cs="B"/>', 'x中', 'A'],
+] as const)('takes the face of the slot that %s reaches', (_name, fonts, text, family) => {
+  expect(equationRunFormat(run(`<w:rPr>${fonts}</w:rPr>`, text))).toEqual({
+    fontFamily: family,
+  });
+});
+
+test('names no face when the slots the text reaches name none', () => {
+  expect(
+    equationRunFormat(run('<w:rPr><w:rFonts w:eastAsia="East Face" w:cs="Complex Face"/></w:rPr>'))
+  ).toEqual({});
+});
+
+test.each([
+  ['ASCII and Greek text', '<w:rFonts w:ascii="Face A" w:hAnsi="Face B"/>', 'xα'],
+  ['Latin and East Asian text', slotFonts, 'x中'],
+  ['Latin and Hebrew text', slotFonts, 'xש'],
+])('refuses a run whose %s needs two faces', (_name, fonts, text) => {
+  expect(equationRunFormat(run(`<w:rPr>${fonts}</w:rPr>`, text))).toBeNull();
+});
+
+test.each([
+  '<w:rPr><w:rFonts w:ascii="Face A" w:hint="eastAsia"/></w:rPr>',
+  '<w:rPr><w:rFonts w:ascii="Face A" w:eastAsia=""/></w:rPr>',
+  '<w:rPr><w:rFonts w:ascii="Face A" w:cs=" Face B"/></w:rPr>',
   '<w:rPr><w:rFonts w:asciiTheme="minorHAnsi"/></w:rPr>',
   '<w:rPr><w:vertAlign w:val="superscript"/></w:rPr>',
   '<w:rPr><w:b w:val="unknown"/></w:rPr>',
