@@ -10,6 +10,7 @@ import { WML_NAMESPACE_URI } from '@docx-editor.dev/core/store';
 import {
   partitionChildIds,
   singletonLayout,
+  singletonParentKind,
   type ChildShell,
 } from '../document/singleton-children.ts';
 
@@ -59,6 +60,36 @@ describe('singleton child layout', () => {
     expect(
       singletonLayout('paragraphProperties', [jc, mark, sectPr], (id) => local[id] ?? null)
     ).toBeNull();
+  });
+
+  test('note properties in a section, in the settings, and their fields show one copy', () => {
+    const generic = (localName: string): ChildShell => ({
+      kind: 'generic',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName,
+    });
+    const first = 'lid:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:6';
+    const second = 'lid:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:6';
+    const third = 'lid:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:7';
+    for (const [parent, child] of [
+      ['sectPr', 'footnotePr'],
+      ['settings', 'endnotePr'],
+      ['footnotePr', 'numFmt'],
+    ] as const) {
+      const kind = singletonParentKind('generic', () => generic(parent));
+      expect(kind).toBe(`w:${parent}`);
+      const local: Record<string, ChildShell> = {
+        [first]: generic(child),
+        [second]: generic(child),
+        [third]: generic('pgSz'),
+      };
+      expect(
+        singletonLayout(kind, [first, third, second], (id) => local[id] ?? null)?.order
+      ).toEqual([0, 1]);
+    }
+    // Any other generic parent keeps its kind, and the rule leaves it alone.
+    expect(singletonParentKind('generic', () => generic('body'))).toBe('generic');
+    expect(singletonParentKind('paragraph', () => null)).toBe('paragraph');
   });
 
   test('a list without conflicts needs no layout', () => {

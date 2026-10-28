@@ -178,11 +178,17 @@ Semantic layout SHALL implement the D8 paragraph property boundary and the secti
 - **THEN** that section's notes, the painted note marks, and refreshed NOTEREF results use the section's own values and the defaults (decimal footnotes, lowerRoman endnotes, start 1, continuous, footnotes at the page bottom) for the rest, never the settings.xml values
 - **AND** the endnote position resolves from settings.xml `w:pos`, else `docEnd`, for every section, and a section's own endnote `w:pos` does not apply
 
+#### Scenario: A note number adds the section start to the note index
+
+- **WHEN** a section's resolved `numStart` is S and a numbered note is the note at index N (from 0) of its numbering domain, which is the whole document for `continuous`, the section for `eachSect`, and the page for `eachPage`
+- **THEN** the painted mark and a refreshed NOTEREF result show S + N in the section's `numFmt`, so a section starting at 10 after two continuous notes shows 12 and 13
+
 #### Scenario: A document-scope note properties write reaches every section
 
 - **WHEN** `setNoteProperties` runs with `scope: 'document'`
-- **THEN** the write replaces the named note properties in every section's `w:sectPr`, minting a body-level `w:sectPr` for an implicit final section, and in settings.xml, each in schema order and keeping the other children of a replaced element
-- **AND** a `scope: 'section'` write that names an endnote position also merges that position into settings.xml
+- **THEN** the write merges the named fields into every section's `w:sectPr` and into settings.xml, in place and in schema order, keeping each field it does not name, adding no default value where nothing authors the field, and minting a body-level `w:sectPr` for an implicit final section only when it adds a value
+- **AND** the endnote position goes to settings.xml only, in either scope
+- **AND** two concurrent writes leave one `w:footnotePr` and one `w:endnotePr` in each parent, and one of each field in them, and a concurrent paragraph join keeps the write in the section it keeps
 - **AND** one undo restores the sections and settings.xml together, and the write converges on every collaborating peer
 
 #### Scenario: Page-furniture PAGE and NUMPAGES project per sheet

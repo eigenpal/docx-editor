@@ -17,6 +17,7 @@ import {
   resolveEndnoteProperties,
   resolveFootnoteProperties,
   settingsPartOf,
+  type OoxmlElement,
   type OoxmlPackage,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
@@ -89,6 +90,35 @@ function numbering(pkg: OoxmlPackage) {
   });
 }
 
+/**
+ * How many copies of each note properties element, and of each field inside one, a replica
+ * shows. The schema allows one of each; concurrent writers must not leave two.
+ */
+function copies(pkg: OoxmlPackage): string[] {
+  const containers: OoxmlElement[] = [];
+  const settings = settingsPartOf(pkg);
+  if (settings) containers.push(settings.root as OoxmlElement);
+  for (const sectPr of collectSectionPropertyNodes(pkg.parts.get(pkg.mainDocumentPart)!.root))
+    if (sectPr) containers.push(sectPr);
+  const counts: string[] = [];
+  const named = (parent: OoxmlElement, name: string) =>
+    parent.children.filter(
+      (child) => child.kind !== 'textValue' && child.localName === name
+    ) as OoxmlElement[];
+  for (const container of containers) {
+    for (const name of ['footnotePr', 'endnotePr']) {
+      const found = named(container, name);
+      if (found.length > 1) counts.push(`${container.localName}/${name} x${found.length}`);
+      for (const props of found)
+        for (const field of ['pos', 'numFmt', 'numStart', 'numRestart']) {
+          const fields = named(props, field).length;
+          if (fields > 1) counts.push(`${container.localName}/${name}/${field} x${fields}`);
+        }
+    }
+  }
+  return counts;
+}
+
 function bodyText(pkg: OoxmlPackage): string[] {
   const texts: string[] = [];
   walk(pkg.parts.get(pkg.mainDocumentPart)!.root, (node) => {
@@ -97,7 +127,12 @@ function bodyText(pkg: OoxmlPackage): string[] {
   return texts;
 }
 
-const WRITTEN = 'lowerRoman/1/eachSect decimal/sectEnd';
+/** Every section after `lowerRoman()`: the second keeps the `numStart` the write leaves out. */
+const WRITTEN = [
+  'lowerRoman/1/eachSect decimal/sectEnd',
+  'lowerRoman/5/eachSect decimal/sectEnd',
+  'lowerRoman/1/eachSect decimal/sectEnd',
+];
 const ORIGINAL = [
   'decimal/1/continuous lowerRoman/docEnd',
   'decimal/5/continuous lowerRoman/docEnd',
@@ -110,10 +145,10 @@ describe('document-scope note properties collaboration', () => {
     expect(numbering(harness.packageOf(bob))).toEqual(ORIGINAL);
     applyLifecycle(alice, lowerRoman());
     harness.expectConverged(alice, bob);
-    expect(numbering(harness.packageOf(bob))).toEqual([WRITTEN, WRITTEN, WRITTEN]);
+    expect(numbering(harness.packageOf(bob))).toEqual(WRITTEN);
     const reopened = await harness.remount(bob);
     harness.expectConverged(alice, reopened);
-    expect(numbering(harness.packageOf(reopened))).toEqual([WRITTEN, WRITTEN, WRITTEN]);
+    expect(numbering(harness.packageOf(reopened))).toEqual(WRITTEN);
   });
 
   test('undo and redo as one step on every peer', async () => {
@@ -132,7 +167,7 @@ describe('document-scope note properties collaboration', () => {
     expect(alice.room.session.redo()).toBe(true);
     alice.port.flushPendingJournals();
     harness.expectConverged(alice, bob);
-    expect(numbering(harness.packageOf(bob))).toEqual([WRITTEN, WRITTEN, WRITTEN]);
+    expect(numbering(harness.packageOf(bob))).toEqual(WRITTEN);
   });
 
   test('a concurrent body edit and the write both survive', async () => {
@@ -148,7 +183,7 @@ describe('document-scope note properties collaboration', () => {
     harness.expectConverged(alice, bob);
     for (const peer of [alice, bob]) {
       expect(peer.room.session.status()).toBe('ready');
-      expect(numbering(harness.packageOf(peer))).toEqual([WRITTEN, WRITTEN, WRITTEN]);
+      expect(numbering(harness.packageOf(peer))).toEqual(WRITTEN);
       expect(bodyText(harness.packageOf(peer))[1]).toBe('New Second section');
     }
   });
@@ -162,14 +197,13 @@ describe('document-scope note properties collaboration', () => {
     alice.port.flushPendingJournals();
     bob.port.flushPendingJournals();
     harness.expectConverged(alice, bob);
+    for (const peer of [alice, bob]) expect(copies(harness.packageOf(peer))).toEqual([]);
+    // Each field resolves to one write's value; both writes name the same format and restart.
     const sections = numbering(harness.packageOf(alice));
     expect(sections).toHaveLength(3);
-    // One write wins as a whole: no section keeps the other peer's value.
-    expect(new Set(sections).size).toBe(1);
-    expect([
-      'lowerRoman/2/eachSect decimal/sectEnd',
-      'lowerRoman/7/eachSect decimal/sectEnd',
-    ]).toContain(sections[0]!);
+    for (const section of sections) {
+      expect(section).toMatch(/^lowerRoman\/[27]\/eachSect decimal\/sectEnd$/);
+    }
   });
 
   test('a peer joining two sections while the write lands converges', async () => {
@@ -192,9 +226,37 @@ describe('document-scope note properties collaboration', () => {
       expect(peer.room.session.status()).toBe('ready');
       expect(bodyText(harness.packageOf(peer))[0]).toBe('First sectionSecond section');
     }
-    const sections = numbering(harness.packageOf(bob));
-    // Every section that is left numbers by the write.
-    expect(sections.length).toBeGreaterThanOrEqual(2);
-    expect(sections[sections.length - 1]).toBe(WRITTEN);
+    // The join keeps the second paragraph's section properties, written in place by Alice.
+    for (const peer of [alice, bob]) {
+      expect(numbering(harness.packageOf(peer))).toEqual([WRITTEN[1], WRITTEN[2]]);
+      expect(copies(harness.packageOf(peer))).toEqual([]);
+    }
+  });
+
+  test('concurrent section-scope writes to two sections leave one endnotePr in settings.xml', async () => {
+    const { alice, bob, pause, resume } = await harness.pair(threeSections());
+    pause();
+    const sectionWrite = (sectionIndex: number, position: string): TreeDocOp => ({
+      op: 'setNoteProperties',
+      scope: 'section',
+      sectionIndex,
+      footnote: { numFmt: 'upperRoman' },
+      endnote: { numFmt: 'decimal', position },
+    });
+    applyLifecycle(alice, sectionWrite(0, 'sectEnd'));
+    applyLifecycle(bob, sectionWrite(1, 'sectEnd'));
+    resume();
+    alice.port.flushPendingJournals();
+    bob.port.flushPendingJournals();
+    harness.expectConverged(alice, bob);
+    for (const peer of [alice, bob]) {
+      expect(peer.room.session.status()).toBe('ready');
+      expect(copies(harness.packageOf(peer))).toEqual([]);
+      expect(numbering(harness.packageOf(peer))).toEqual([
+        'upperRoman/1/continuous decimal/sectEnd',
+        'upperRoman/5/continuous decimal/sectEnd',
+        'decimal/1/continuous lowerRoman/sectEnd',
+      ]);
+    }
   });
 });

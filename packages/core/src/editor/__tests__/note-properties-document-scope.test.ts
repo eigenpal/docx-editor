@@ -116,7 +116,7 @@ function resolvedBySection(editor: ReturnType<typeof createDocxEditor>) {
 const WHOLE_DOCUMENT: EditorCommand = {
   type: 'setNoteProperties',
   scope: 'document',
-  footnote: { numFmt: 'lowerRoman', numRestart: 'eachSect', position: 'pageBottom' },
+  footnote: { numFmt: 'lowerRoman', numRestart: 'eachSect', position: 'beneathText' },
   endnote: { numFmt: 'decimal', numRestart: 'continuous', position: 'docEnd' },
 };
 
@@ -164,7 +164,7 @@ describe('a document-scope note properties write', () => {
     for (const sectPr of sectPrs) {
       // CT_SectPr: header/footer references, then footnotePr, endnotePr, then page geometry.
       expect(sectPr).toMatch(
-        /^<w:sectPr>(<w:headerReference[^>]*\/>)*<w:footnotePr><w:pos w:val="pageBottom"\/><w:numFmt w:val="lowerRoman"\/><w:numRestart w:val="eachSect"\/><\/w:footnotePr><w:endnotePr>[\s\S]*<\/w:endnotePr><w:pgSz /
+        /^<w:sectPr>(<w:headerReference[^>]*\/>)*<w:footnotePr><w:pos w:val="beneathText"\/><w:numFmt w:val="lowerRoman"\/><w:numRestart w:val="eachSect"\/><\/w:footnotePr><w:endnotePr>[\s\S]*<\/w:endnotePr><w:pgSz /
       );
     }
     const settings = strFromU8(files['word/settings.xml']!);
@@ -213,6 +213,54 @@ describe('a document-scope note properties write', () => {
     const sections = resolvedBySection(editor);
     expect(sections.map((section) => section.footnote.numStart)).toEqual([4, 4]);
     expect(sections.map((section) => section.endnote.numFmt)).toEqual(['lowerRoman', 'upperRoman']);
+  });
+});
+
+describe('a note properties write merges by field', () => {
+  test('a field the write leaves out keeps every section’s value', () => {
+    const editor = mount();
+    expect(
+      editor.exec({
+        type: 'setNoteProperties',
+        scope: 'document',
+        footnote: { numStart: 3, numRestart: 'eachSect', position: 'beneathText' },
+      }).ok
+    ).toBe(true);
+    expect(editor.exec({ type: 'setNoteProperties', footnote: { numFmt: 'upperLetter' } }).ok).toBe(
+      true
+    );
+    for (const section of resolvedBySection(editor)) {
+      expect(section.footnote).toEqual({
+        pos: 'beneathText',
+        numFmt: 'upperLetter',
+        numStart: 3,
+        numRestart: 'eachSect',
+      });
+    }
+  });
+
+  test('applying the values the dialog opened with leaves every section as it was', async () => {
+    const editor = mount();
+    const before = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+    const state = notePropertiesStateOf(editor.surface!)!;
+    // The command the properties dialog sends when nothing was changed.
+    const result = editor.exec({
+      type: 'setNoteProperties',
+      scope: 'document',
+      footnote: {
+        numFmt: state.footnote.resolved.numFmt,
+        numRestart: state.footnote.resolved.numRestart,
+        position: state.footnote.resolved.pos,
+      },
+      endnote: {
+        numFmt: state.endnote.resolved.numFmt,
+        numRestart: state.endnote.resolved.numRestart,
+        position: state.endnote.resolved.pos,
+      },
+    });
+    expect(result.ok).toBe(true);
+    const after = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+    expect(after).toBe(before);
   });
 });
 

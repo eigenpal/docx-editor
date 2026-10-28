@@ -9,7 +9,7 @@ import './dom-setup.ts';
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
-import { zipSync, strToU8 } from 'fflate';
+import { zipSync, strToU8, strFromU8, unzipSync } from 'fflate';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
@@ -464,6 +464,24 @@ describe('DocxEditor.NotesChrome', () => {
     expect(editor().getNotePropertiesState()!.footnote.resolved.numFmt).toBe('decimal');
   });
 
+  test('properties dialog Apply with nothing changed leaves the document as it was', async () => {
+    const { view, editor } = mountChrome(footnoteDoc());
+    const before = unzipSync(new Uint8Array(await editor().save()));
+    await enterFootnote(editor());
+    await act(async () => {
+      fireEvent.click(view.getByTestId('docx-notes-options'));
+    });
+    await act(async () => {
+      fireEvent.click(view.getByTestId('docx-notes-properties'));
+    });
+    await act(async () => {
+      fireEvent.click(view.getByTestId('docx-notes-properties-apply'));
+    });
+    const after = unzipSync(new Uint8Array(await editor().save()));
+    expect(strFromU8(after['word/document.xml']!)).toBe(strFromU8(before['word/document.xml']!));
+    expect(after['word/settings.xml']).toBeUndefined();
+  });
+
   test('engine refuses endnote pageBottom for setNoteProperties', () => {
     const { editor } = mountChrome(footnoteDoc());
     const refused = editor().can({
@@ -493,7 +511,7 @@ describe('DocxEditor.NotesChrome', () => {
     expect(first).toBe(second);
   });
 
-  test('useNotePropertiesState updates when documentAuthored appears with same resolved values', async () => {
+  test('useNotePropertiesState updates when documentAuthored appears', async () => {
     const { editor } = mountChrome(footnoteDoc(), <PropertiesProbe />);
     const first = (globalThis as unknown as { __notePropsProbe?: NotePropertiesState | null })
       .__notePropsProbe;
@@ -504,15 +522,15 @@ describe('DocxEditor.NotesChrome', () => {
       editor().exec({
         type: 'setNoteProperties',
         scope: 'document',
-        footnote: { numFmt: 'decimal' },
+        footnote: { numFmt: 'upperRoman' },
       });
     });
 
     const second = (globalThis as unknown as { __notePropsProbe?: NotePropertiesState | null })
       .__notePropsProbe;
     expect(second).not.toBe(first);
-    expect(second!.footnote.documentAuthored?.numFmt).toBe('decimal');
-    expect(second!.footnote.resolved.numFmt).toBe('decimal');
+    expect(second!.footnote.documentAuthored?.numFmt).toBe('upperRoman');
+    expect(second!.footnote.resolved.numFmt).toBe('upperRoman');
   });
 
   test('useNotePropertiesState updates when resolved numStart changes', async () => {

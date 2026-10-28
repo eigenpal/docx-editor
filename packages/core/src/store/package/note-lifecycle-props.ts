@@ -5,20 +5,30 @@
 // write therefore writes every section's `w:footnotePr`/`w:endnotePr`, and settings.xml as
 // well, so the saved file carries the change in both places other consumers look. A
 // section-scope write that names an endnote position also writes it to settings.xml, because
-// the endnote position is document-wide and a section's own copy does not apply.
+// the endnote position is document-wide and a section's own copy does not apply. For the same
+// reason a write never adds or changes an endnote position in a section.
+//
+// Every write is a per-field merge made in place:
+// - A field the op does not name keeps its value.
+// - An element that exists keeps its node id, and so does each of its field children; only
+//   the `w:val` that changes is rewritten. Concurrent writers then contest the same nodes and
+//   attributes instead of each adding a copy of an element the schema allows once.
+// - A field the container does not author is added only when its value differs from the
+//   default, so a write that changes nothing (the dialog applied as it opened) leaves the
+//   package as it was.
 
-import { createNodeIdAllocator, insertChildren, replaceChildren } from './ooxml-edit.ts';
+import { createNodeIdAllocator, insertChildren, replaceNode } from './ooxml-edit.ts';
 import { readOoxmlPart, type OoxmlElement, type OoxmlNode, type OoxmlPart } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { withPart } from './ooxml-package.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import { collectSectionPropertyNodes } from './hf-references.ts';
 import { freeRelationshipId, withContentTypeOverride } from './note-lifecycle-shell.ts';
-import { withFreshIds, withStoryRelationship } from './hf-lifecycle-shell.ts';
+import { withStoryRelationship } from './hf-lifecycle-shell.ts';
 import {
-  authoredDocumentEndnoteProperties,
+  DEFAULT_ENDNOTE_PROPERTIES,
+  DEFAULT_FOOTNOTE_PROPERTIES,
   settingsPartOf,
-  type AuthoredNoteProperties,
 } from './note-properties.ts';
 
 const W = WML_NAMESPACE_URI;
@@ -26,28 +36,52 @@ const SETTINGS_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/rela
 const SETTINGS_CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml';
 const SETTINGS_PART = '/word/settings.xml';
 
+/** The fields one note kind's write can set. A field left out keeps its current value. */
+export interface NotePropertiesWrite {
+  readonly numFmt?: string;
+  readonly numRestart?: string;
+  readonly position?: string;
+  readonly numStart?: number;
+}
+
 export type SetNotePropertiesOp = {
   readonly op: 'setNoteProperties';
   readonly scope: 'document' | 'section';
   readonly sectionIndex?: number;
-  readonly footnote?: {
-    readonly numFmt?: string;
-    readonly numRestart?: string;
-    readonly position?: string;
-    readonly numStart?: number;
-  };
-  readonly endnote?: {
-    readonly numFmt?: string;
-    readonly numRestart?: string;
-    readonly position?: string;
-    readonly numStart?: number;
-  };
+  readonly footnote?: NotePropertiesWrite;
+  readonly endnote?: NotePropertiesWrite;
+};
+
+type PropsName = 'footnotePr' | 'endnotePr';
+
+/** `CT_FtnProps`/`CT_EdnProps` fields in schema order, with the op key that sets each. */
+const FIELDS: readonly (readonly [string, keyof NotePropertiesWrite])[] = [
+  ['pos', 'position'],
+  ['numFmt', 'numFmt'],
+  ['numStart', 'numStart'],
+  ['numRestart', 'numRestart'],
+];
+const FIELD_NAMES: ReadonlySet<string> = new Set(FIELDS.map(([name]) => name));
+
+const DEFAULTS: Readonly<Record<PropsName, Readonly<Record<string, string>>>> = {
+  footnotePr: {
+    pos: DEFAULT_FOOTNOTE_PROPERTIES.pos,
+    numFmt: DEFAULT_FOOTNOTE_PROPERTIES.numFmt,
+    numStart: String(DEFAULT_FOOTNOTE_PROPERTIES.numStart),
+    numRestart: DEFAULT_FOOTNOTE_PROPERTIES.numRestart,
+  },
+  endnotePr: {
+    pos: DEFAULT_ENDNOTE_PROPERTIES.pos,
+    numFmt: DEFAULT_ENDNOTE_PROPERTIES.numFmt,
+    numStart: String(DEFAULT_ENDNOTE_PROPERTIES.numStart),
+    numRestart: DEFAULT_ENDNOTE_PROPERTIES.numRestart,
+  },
 };
 
 /**
  * Write note properties for the whole document: settings.xml and every section's `w:sectPr`.
- * A side the op omits (`footnote` or `endnote`) keeps its prior value everywhere. An implicit
- * final section with no `w:sectPr` gets one, holding only the note properties.
+ * A side the op omits (`footnote` or `endnote`), and a field a side omits, keep their values
+ * everywhere. An implicit final section with no `w:sectPr` gets one when the write adds a value.
  */
 export function writeDocumentNoteProperties(
   pkg: OoxmlPackage,
@@ -58,6 +92,41 @@ export function writeDocumentNoteProperties(
   return writeEverySectionNoteProperties(withSettings, op);
 }
 
+/** Write one section's note properties; an endnote position also goes to settings.xml. */
+export function writeSectionNoteProperties(
+  pkg: OoxmlPackage,
+  sectionIndex: number,
+  op: SetNotePropertiesOp
+): OoxmlPackage | null {
+  const main = pkg.parts.get(pkg.mainDocumentPart);
+  if (!main) return null;
+  const sectPrNodes = collectSectionPropertyNodes(main.root);
+  if (sectionIndex >= sectPrNodes.length) return null;
+  const target = sectPrNodes[sectionIndex];
+  if (!target) return null;
+
+  const updated = containerWith(
+    target,
+    sectionOp(op),
+    createNodeIdAllocator(main),
+    sectPrInsertIndex
+  );
+  let written = pkg;
+  if (updated) {
+    const replaced = replaceNode(main, target.id, updated);
+    if (!replaced.ok) return null;
+    written = withPart(pkg, replaced.part);
+  }
+  const position = op.endnote?.position;
+  if (position === undefined) return written;
+  // The endnote position is document-wide: merge it into settings.xml, keeping the rest.
+  return writeSettingsNoteProperties(written, {
+    op: 'setNoteProperties',
+    scope: 'document',
+    endnote: { position },
+  });
+}
+
 function writeSettingsNoteProperties(
   pkg: OoxmlPackage,
   op: SetNotePropertiesOp
@@ -65,16 +134,24 @@ function writeSettingsNoteProperties(
   let next = pkg;
   let settings = settingsPartOf(next);
   if (!settings) {
+    // Create the part only when the write adds a value to it.
+    const empty = element('probe', 'settings', []);
+    if (!containerWith(empty, op, counterIds(), settingsInsertIndex)) return pkg;
     const created = ensureSettingsPart(next);
     if (!created) return null;
     next = created;
     settings = settingsPartOf(next);
   }
   if (!settings) return null;
-
-  const rebuilt = rebuildSettings(settings, op);
-  if (!rebuilt) return null;
-  return withPart(next, rebuilt);
+  const updated = containerWith(
+    settings.root,
+    op,
+    createNodeIdAllocator(settings),
+    settingsInsertIndex
+  );
+  if (!updated) return next;
+  const replaced = replaceNode(settings, settings.root.id, updated);
+  return replaced.ok ? withPart(next, replaced.part) : null;
 }
 
 function ensureSettingsPart(pkg: OoxmlPackage): OoxmlPackage | null {
@@ -89,6 +166,138 @@ function ensureSettingsPart(pkg: OoxmlPackage): OoxmlPackage | null {
   next = related;
   const typed = withContentTypeOverride(next, SETTINGS_PART, SETTINGS_CT);
   return typed;
+}
+
+/**
+ * Write the op's note properties into every section's `w:sectPr`. Sections are bounded by
+ * `collectSectionPropertyNodes`. The implicit final section (no body-level `w:sectPr`) gets a
+ * new one as the body's last child, so the write reaches every section the document has.
+ */
+function writeEverySectionNoteProperties(
+  pkg: OoxmlPackage,
+  op: SetNotePropertiesOp
+): OoxmlPackage | null {
+  const main = pkg.parts.get(pkg.mainDocumentPart);
+  if (!main) return null;
+  const nextId = createNodeIdAllocator(main);
+  const forSection = sectionOp(op);
+  let working: OoxmlPart = main;
+  for (const sectPr of collectSectionPropertyNodes(main.root)) {
+    if (sectPr) {
+      const updated = containerWith(sectPr, forSection, nextId, sectPrInsertIndex);
+      if (!updated) continue;
+      const replaced = replaceNode(working, sectPr.id, updated);
+      if (!replaced.ok) return null;
+      working = replaced.part;
+      continue;
+    }
+    const minted = containerWith(
+      element(nextId(), 'sectPr', []),
+      forSection,
+      nextId,
+      sectPrInsertIndex
+    );
+    if (!minted) continue;
+    const body = bodyOf(working.root);
+    if (!body) return null;
+    const inserted = insertChildren(working, body.id, body.children.length, [minted]);
+    if (!inserted.ok) return null;
+    working = inserted.part;
+  }
+  return working === main ? pkg : withPart(pkg, working);
+}
+
+/**
+ * The op as a section receives it. The endnote position is document-wide and settings.xml
+ * holds it; a section's own copy has no effect, so a write does not add or change one there.
+ */
+function sectionOp(op: SetNotePropertiesOp): SetNotePropertiesOp {
+  if (op.endnote?.position === undefined) return op;
+  const { position: _position, ...endnote } = op.endnote;
+  return { ...op, endnote };
+}
+
+/**
+ * The container (a `w:sectPr` or the settings root) with the op's note properties merged in,
+ * or null when nothing changes. An existing `w:footnotePr`/`w:endnotePr` is updated in place;
+ * a missing one is inserted where `insertIndex` says.
+ */
+function containerWith(
+  container: OoxmlElement,
+  op: SetNotePropertiesOp,
+  nextId: () => string,
+  insertIndex: (children: readonly OoxmlNode[], name: PropsName) => number
+): OoxmlElement | null {
+  const children = [...container.children];
+  let changed = false;
+  for (const [name, side] of [
+    ['footnotePr', op.footnote],
+    ['endnotePr', op.endnote],
+  ] as const) {
+    if (!side) continue;
+    const index = children.findIndex((child) => isW(child, name));
+    const prior = index >= 0 ? (children[index] as OoxmlElement) : undefined;
+    const next = mergedProps(prior, name, side, nextId);
+    if (!next || next === prior) continue;
+    changed = true;
+    if (index >= 0) children[index] = next;
+    else children.splice(insertIndex(children, name), 0, next);
+  }
+  return changed ? ({ ...container, children } as OoxmlElement) : null;
+}
+
+/**
+ * `prior` with the side's fields merged in, keeping its id and the ids of the field children
+ * it already has. Returns `prior` itself when nothing changes, and undefined when there is no
+ * prior and every named value is the default.
+ */
+function mergedProps(
+  prior: OoxmlElement | undefined,
+  name: PropsName,
+  side: NotePropertiesWrite,
+  nextId: () => string
+): OoxmlElement | undefined {
+  const fields: OoxmlNode[] = [];
+  let changed = false;
+  for (const [field, key] of FIELDS) {
+    const raw = side[key];
+    const value = raw === undefined ? undefined : String(raw);
+    const existing = prior?.children.find((child) => isW(child, field)) as OoxmlElement | undefined;
+    if (existing) {
+      if (value === undefined || valOf(existing) === value) fields.push(existing);
+      else {
+        fields.push(withVal(existing, value));
+        changed = true;
+      }
+    } else if (value !== undefined && value !== DEFAULTS[name][field]) {
+      fields.push(element(nextId(), field, [wmlVal(value)]));
+      changed = true;
+    }
+  }
+  if (!changed) return prior;
+  // Children other than the four fields (settings.xml lists separator references here) stay,
+  // after the fields, as `CT_FtnDocProps` orders them.
+  const others = (prior?.children ?? []).filter(
+    (child) =>
+      !(child.kind !== 'textValue' && child.namespaceUri === W && FIELD_NAMES.has(child.localName))
+  );
+  const children = [...fields, ...others];
+  return prior ? ({ ...prior, children } as OoxmlElement) : element(nextId(), name, [], children);
+}
+
+/** `CT_SectPr`: note properties follow the header/footer references, footnotes first. */
+function sectPrInsertIndex(children: readonly OoxmlNode[], name: PropsName): number {
+  let at = 0;
+  children.forEach((child, index) => {
+    if (
+      isW(child, 'headerReference') ||
+      isW(child, 'footerReference') ||
+      (name === 'endnotePr' && isW(child, 'footnotePr'))
+    ) {
+      at = index + 1;
+    }
+  });
+  return at;
 }
 
 /**
@@ -116,230 +325,64 @@ const SETTINGS_AFTER_NOTE_PROPERTIES: ReadonlySet<string> = new Set([
   'listSeparator',
 ]);
 
-function followsNoteProperties(child: OoxmlNode): boolean {
-  if (child.kind === 'textValue') return false;
-  if (child.namespaceUri !== W) return true;
-  return SETTINGS_AFTER_NOTE_PROPERTIES.has(child.localName);
-}
-
-/** `w:headerReference`/`w:footerReference` lead `CT_SectPr`; note properties follow them. */
-function isHeaderFooterReference(child: OoxmlNode): boolean {
-  return (
-    child.kind !== 'textValue' &&
-    child.namespaceUri === W &&
-    (child.localName === 'headerReference' || child.localName === 'footerReference')
+function settingsInsertIndex(children: readonly OoxmlNode[], name: PropsName): number {
+  const at = children.findIndex(
+    (child) =>
+      child.kind !== 'textValue' &&
+      (child.namespaceUri !== W ||
+        SETTINGS_AFTER_NOTE_PROPERTIES.has(child.localName) ||
+        (name === 'footnotePr' && child.localName === 'endnotePr'))
   );
+  return at === -1 ? children.length : at;
 }
 
-function isNoteProperties(child: OoxmlNode): boolean {
-  return (
-    child.kind !== 'textValue' &&
-    child.namespaceUri === W &&
-    (child.localName === 'footnotePr' || child.localName === 'endnotePr')
-  );
+function isW(child: OoxmlNode, localName: string): boolean {
+  return child.kind !== 'textValue' && child.namespaceUri === W && child.localName === localName;
 }
 
-/** The `w:footnotePr`, then `w:endnotePr`, a container holds after the op: new, or kept. */
-function notePropertiesAfter(
-  container: OoxmlElement,
-  op: SetNotePropertiesOp,
-  nextId: () => string
-): OoxmlNode[] {
-  const prior = (localName: string) =>
-    container.children.find(
-      (child) => isNoteProperties(child) && (child as OoxmlElement).localName === localName
-    ) as OoxmlElement | undefined;
-  const out: OoxmlNode[] = [];
-  const priorFootnote = prior('footnotePr');
-  const footnote = op.footnote
-    ? buildPropsNode(nextId, 'footnotePr', op.footnote, priorFootnote)
-    : priorFootnote;
-  if (footnote) out.push(footnote);
-  const priorEndnote = prior('endnotePr');
-  const endnote = op.endnote
-    ? buildPropsNode(nextId, 'endnotePr', op.endnote, priorEndnote)
-    : priorEndnote;
-  if (endnote) out.push(endnote);
-  return out;
+function valOf(node: OoxmlElement): string | undefined {
+  return node.attributes.find((attribute) => attribute.localName === 'val')?.value;
 }
 
-function rebuildSettings(settings: OoxmlPart, op: SetNotePropertiesOp): OoxmlPart | null {
-  const nextId = createNodeIdAllocator(settings);
-  const kept = settings.root.children.filter((child) => !isNoteProperties(child));
-  const at = kept.findIndex(followsNoteProperties);
-  const insertAt = at === -1 ? kept.length : at;
-  const added = notePropertiesAfter(settings.root, op, nextId);
-  const children = [...kept.slice(0, insertAt), ...added, ...kept.slice(insertAt)];
-  const replaced = replaceChildren(settings, settings.root.id, children);
-  return replaced.ok ? replaced.part : null;
-}
-
-/** A `w:sectPr`'s children with its note properties replaced, in `CT_SectPr` order. */
-function sectionChildrenWith(
-  sectPr: OoxmlElement,
-  op: SetNotePropertiesOp,
-  nextId: () => string
-): OoxmlNode[] {
-  const added = notePropertiesAfter(sectPr, op, nextId);
-  const without = sectPr.children.filter((child) => !isNoteProperties(child));
-  let insertAt = 0;
-  for (let i = 0; i < without.length; i += 1) {
-    if (isHeaderFooterReference(without[i]!)) insertAt = i + 1;
-  }
-  return [...without.slice(0, insertAt), ...added, ...without.slice(insertAt)];
-}
-
-export function writeSectionNoteProperties(
-  pkg: OoxmlPackage,
-  sectionIndex: number,
-  op: SetNotePropertiesOp
-): OoxmlPackage | null {
-  const main = pkg.parts.get(pkg.mainDocumentPart);
-  if (!main) return null;
-  const sectPrNodes = collectSectionPropertyNodes(main.root);
-  if (sectionIndex >= sectPrNodes.length) return null;
-  const target = sectPrNodes[sectionIndex];
-  if (!target) return null;
-
-  const nextId = createNodeIdAllocator(main);
-  const replaced = replaceChildren(main, target.id, sectionChildrenWith(target, op, nextId));
-  if (!replaced.ok) return null;
-  const written = withPart(pkg, replaced.part);
-  const position = op.endnote?.position;
-  if (position === undefined) return written;
-  // The endnote position is document-wide: merge it into settings.xml, keeping the rest.
-  const prior = authoredDocumentEndnoteProperties(settingsPartOf(written));
-  return writeSettingsNoteProperties(written, {
-    op: 'setNoteProperties',
-    scope: 'document',
-    endnote: { ...writeShapeOf(prior), position },
-  });
-}
-
-/** Authored note properties in the op's write shape (`pos` is `position` there). */
-function writeShapeOf(
-  authored: AuthoredNoteProperties | undefined
-): NonNullable<SetNotePropertiesOp['endnote']> {
-  if (!authored) return {};
-  return {
-    ...(authored.pos !== undefined ? { position: authored.pos } : {}),
-    ...(authored.numFmt !== undefined ? { numFmt: authored.numFmt } : {}),
-    ...(authored.numStart !== undefined ? { numStart: authored.numStart } : {}),
-    ...(authored.numRestart !== undefined ? { numRestart: authored.numRestart } : {}),
-  };
-}
-
-/**
- * Write the op's note properties into every section's `w:sectPr`. Sections are bounded by
- * `collectSectionPropertyNodes`. The implicit final section (no body-level `w:sectPr`) gets a
- * new one as the body's last child, so the write reaches every section the document has.
- */
-function writeEverySectionNoteProperties(
-  pkg: OoxmlPackage,
-  op: SetNotePropertiesOp
-): OoxmlPackage | null {
-  const main = pkg.parts.get(pkg.mainDocumentPart);
-  if (!main) return null;
-  const nextId = createNodeIdAllocator(main);
-  let working: OoxmlPart = main;
-  for (const sectPr of collectSectionPropertyNodes(main.root)) {
-    if (sectPr) {
-      const replaced = replaceChildren(working, sectPr.id, sectionChildrenWith(sectPr, op, nextId));
-      if (!replaced.ok) return null;
-      working = replaced.part;
-      continue;
-    }
-    const body = bodyOf(working.root);
-    if (!body) return null;
-    const minted = {
-      id: nextId(),
-      kind: 'generic',
-      namespaceUri: W,
-      localName: 'sectPr',
-      prefix: 'w',
-      namespaceBindings: [],
-      attributes: [],
-      children: [],
-    } as unknown as OoxmlElement;
-    const children = sectionChildrenWith(minted, op, nextId);
-    const inserted = insertChildren(working, body.id, body.children.length, [
-      { ...minted, children } as OoxmlNode,
-    ]);
-    if (!inserted.ok) return null;
-    working = inserted.part;
-  }
-  return working === main ? pkg : withPart(pkg, working);
+function withVal(node: OoxmlElement, value: string): OoxmlElement {
+  const has = node.attributes.some((attribute) => attribute.localName === 'val');
+  const attributes = has
+    ? node.attributes.map((attribute) =>
+        attribute.localName === 'val' ? { ...attribute, value } : attribute
+      )
+    : [...node.attributes, wmlVal(value)];
+  return { ...node, attributes } as OoxmlElement;
 }
 
 function bodyOf(root: OoxmlNode): OoxmlElement | undefined {
   if (root.kind === 'textValue') return undefined;
-  return root.children.find(
-    (child) => child.kind !== 'textValue' && child.namespaceUri === W && child.localName === 'body'
-  ) as OoxmlElement | undefined;
+  return root.children.find((child) => isW(child, 'body')) as OoxmlElement | undefined;
 }
 
-/** The four `CT_FtnProps`/`CT_EdnProps` fields a write sets; anything else is kept. */
-const WRITTEN_FIELDS: ReadonlySet<string> = new Set(['pos', 'numFmt', 'numStart', 'numRestart']);
+/** Ids for a throwaway probe tree that never enters a part. */
+function counterIds(): () => string {
+  let next = 0;
+  return () => `probe:${(next += 1)}`;
+}
 
-/**
- * A new `w:footnotePr`/`w:endnotePr` with the written fields. The prior element's other
- * children follow them (as copies), so the separator references settings.xml lists there
- * (`<w:footnote w:id="-1"/>`) survive the write.
- */
-function buildPropsNode(
-  nextId: () => string,
-  localName: 'footnotePr' | 'endnotePr',
-  props: {
-    readonly numFmt?: string;
-    readonly numRestart?: string;
-    readonly position?: string;
-    readonly numStart?: number;
-  },
-  prior?: OoxmlElement
-): OoxmlNode {
-  const children: OoxmlNode[] = [];
-  if (props.position !== undefined) children.push(valChild(nextId, 'pos', props.position));
-  if (props.numFmt !== undefined) children.push(valChild(nextId, 'numFmt', props.numFmt));
-  if (props.numStart !== undefined) {
-    children.push(valChild(nextId, 'numStart', String(props.numStart)));
-  }
-  if (props.numRestart !== undefined) {
-    children.push(valChild(nextId, 'numRestart', props.numRestart));
-  }
-  for (const child of prior?.children ?? []) {
-    if (child.kind === 'textValue') continue;
-    if (child.namespaceUri === W && WRITTEN_FIELDS.has(child.localName)) continue;
-    children.push(withFreshIds(child, nextId));
-  }
+function element(
+  id: string,
+  localName: string,
+  attributes: readonly unknown[],
+  children: readonly OoxmlNode[] = []
+): OoxmlElement {
   return {
-    id: nextId(),
+    id,
     kind: 'generic',
     namespaceUri: W,
     localName,
     prefix: 'w',
     namespaceBindings: [],
-    attributes: [],
+    attributes,
     children,
-  } as unknown as OoxmlNode;
+  } as unknown as OoxmlElement;
 }
 
-function valChild(nextId: () => string, localName: string, value: string): OoxmlNode {
-  return {
-    id: nextId(),
-    kind: 'generic',
-    namespaceUri: W,
-    localName,
-    prefix: 'w',
-    namespaceBindings: [],
-    attributes: [
-      {
-        kind: 'wmlVal',
-        namespaceUri: W,
-        localName: 'val',
-        prefix: 'w',
-        value,
-      },
-    ],
-    children: [],
-  } as unknown as OoxmlNode;
+function wmlVal(value: string) {
+  return { kind: 'wmlVal', namespaceUri: W, localName: 'val', prefix: 'w', value };
 }

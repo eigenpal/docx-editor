@@ -151,8 +151,48 @@ const UNIQUE_PROPERTY_PARENTS = new Set([
   'tableProperties',
 ]);
 
+/**
+ * Generic WML parents whose named generic children appear once (ECMA-376 `CT_SectPr`,
+ * `CT_Settings`, `CT_FtnProps`, `CT_EdnProps`). Two peers writing note properties into a
+ * section or the settings at once each add the element the section lacked; the first copy shows.
+ * Keyed by `singletonParentKind`, which names these parents `w:<localName>`.
+ */
+const NOTE_FIELDS = ['pos', 'numFmt', 'numStart', 'numRestart'];
+const GENERIC_SINGLETON_PARENTS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ['w:sectPr', new Set(['footnotePr', 'endnotePr'])],
+  ['w:settings', new Set(['footnotePr', 'endnotePr'])],
+  ['w:footnotePr', new Set(NOTE_FIELDS)],
+  ['w:endnotePr', new Set(NOTE_FIELDS)],
+]);
+const GENERIC_SINGLETON_NAMES: ReadonlySet<string> = new Set(
+  [...GENERIC_SINGLETON_PARENTS.keys()].map((key) => key.slice(2))
+);
+
+/**
+ * The parent kind the rule reads. A known kind is itself; a generic WML element the rule
+ * covers is `w:<localName>`, read from `shell` only for generic parents, so other parents cost
+ * nothing extra.
+ */
+export function singletonParentKind(
+  kind: string | null,
+  shell: () => { readonly namespaceUri: string; readonly localName: string } | null
+): string | null {
+  if (kind !== 'generic') return kind;
+  const parent = shell();
+  if (!parent || parent.namespaceUri !== WML_NAMESPACE_URI) return kind;
+  return GENERIC_SINGLETON_NAMES.has(parent.localName) ? `w:${parent.localName}` : kind;
+}
+
 function groupKey(parentKind: string, child: ChildShell): string | null {
   if (SINGLETON_KINDS.get(parentKind)?.includes(child.kind)) return `kind:${child.kind}`;
+  const generic = GENERIC_SINGLETON_PARENTS.get(parentKind);
+  if (generic) {
+    return child.kind === 'generic' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      generic.has(child.localName)
+      ? `wml:${child.localName}`
+      : null;
+  }
   const choice = CHOICE_GROUPS.get(parentKind)?.(child);
   if (choice) return choice;
   if (
@@ -172,7 +212,8 @@ export function hasSingletonRules(parentKind: string | null): boolean {
     (SINGLETON_KINDS.has(parentKind) ||
       CHOICE_GROUPS.has(parentKind) ||
       NOT_ALLOWED.has(parentKind) ||
-      UNIQUE_PROPERTY_PARENTS.has(parentKind))
+      UNIQUE_PROPERTY_PARENTS.has(parentKind) ||
+      GENERIC_SINGLETON_PARENTS.has(parentKind))
   );
 }
 

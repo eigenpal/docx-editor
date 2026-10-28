@@ -180,9 +180,16 @@ export interface EditorNoteCommands {
 
   /**
    * Footnote and endnote properties: numbering format, start value, restart rule and
-   * position. `scope: 'document'` (the default) writes every section and the document settings. `scope: 'section'` writes the `sectionIndex` section; an endnote
-   * `position` there also changes the document settings, because the endnote position
-   * applies to the whole document.
+   * position.
+   *
+   * - `scope: 'document'` (the default) writes every section and the document settings.
+   * - `scope: 'section'` writes the `sectionIndex` section.
+   * - The endnote `position` applies to the whole document, so it always goes to the document
+   *   settings, in either scope, and never to a section.
+   * - Fields you omit keep each section's value. A value equal to the default is not added
+   *   where nothing authors the field, so applying the values a section already shows
+   *   leaves the document unchanged.
+   * - The write is not tracked in suggesting mode, like other section property writes.
    */
   setNoteProperties: {
     scope?: 'document' | 'section';

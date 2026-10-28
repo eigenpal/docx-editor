@@ -3152,7 +3152,10 @@ function withSectionMarkOf(
       : first;
   const sectPr = namedChild(paragraphPropertiesNodeOf(second), 'sectPr');
   if (!sectPr) return withMark;
-  const carried = cloneWithNewIds(sectPr, nextId);
+  // The section properties MOVE, keeping their node ids, like the runs the join moves: a peer
+  // that edits them at the same time (a note properties write, a page setup) then edits the
+  // node the survivor holds, and the edit is not lost to a copy.
+  const carried = sectPr;
   const pPr = paragraphPropertiesNodeOf(withMark);
   if (!pPr) {
     const minted = {

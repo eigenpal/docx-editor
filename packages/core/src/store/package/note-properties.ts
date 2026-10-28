@@ -219,12 +219,24 @@ function resolveRestart(raw: string | undefined, fallback: NoteNumRestart): Note
  * Illegal position or restart strings fall back to the default.
  *
  * @param section - The section's authored `w:footnotePr`, if any.
- * @param _document - The settings.xml `w:footnotePr`. Accepted for signature symmetry with
- *   {@link resolveEndnoteProperties}; it does not change the result.
  */
 export function resolveFootnoteProperties(
-  section?: AuthoredNoteProperties,
-  _document?: AuthoredNoteProperties
+  section?: AuthoredNoteProperties
+): ResolvedFootnoteProperties;
+/**
+ * Resolve footnote properties, ignoring the document-wide value.
+ *
+ * @deprecated The settings.xml `w:footnotePr` does not change footnote numbering or
+ * position, so the second argument has no effect. Call `resolveFootnoteProperties(section)`.
+ * @param section - The section's authored `w:footnotePr`, if any.
+ * @param document - Ignored.
+ */
+export function resolveFootnoteProperties(
+  section: AuthoredNoteProperties | undefined,
+  document: AuthoredNoteProperties | undefined
+): ResolvedFootnoteProperties;
+export function resolveFootnoteProperties(
+  section?: AuthoredNoteProperties
 ): ResolvedFootnoteProperties {
   const posRaw = section?.pos ?? DEFAULT_FOOTNOTE_PROPERTIES.pos;
   const pos = FOOTNOTE_POS.has(posRaw)

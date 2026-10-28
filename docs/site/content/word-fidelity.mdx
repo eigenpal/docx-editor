@@ -311,6 +311,8 @@ Each section numbers its footnotes and endnotes from its own note properties (`w
 
 The note properties in `settings.xml` do not change numbering or the footnote position. The endnote position is the exception. It applies to the whole document and comes from `settings.xml` only, so an endnote position in a section has no effect.
 
+A note number is the start value of its section plus the index of the note in its numbering domain. With continuous numbering, the domain is the whole document. For example, a section that starts at 10 after two earlier notes numbers its notes 12 and 13. With numbering that restarts in each section or on each page, the domain is that section or page.
+
 ### Table rows and merged cells
 
 Bottom-to-top cell text does not make its row taller. The text wraps at the final row height, or along the full merged cell height. The cell width clips overflowing text.

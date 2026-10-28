@@ -1,11 +1,12 @@
 {
   "impact": "compatible",
   "fields": [],
-  "before": "Note numbering fell back to the settings.xml w:footnotePr and w:endnotePr for format, start, restart, and footnote position, a section endnote position overrode settings.xml, and a document-scope setNoteProperties wrote only settings.xml.",
-  "after": "Numbering and the footnote position resolve from each section's own w:sectPr and the defaults, the endnote position from settings.xml only, and a document-scope write also writes every section's note properties in schema order.",
-  "reason": "The setNoteProperties operation shape, the collaboration schema, and the protocol do not change. A document-scope write touches more sections, but it reaches peers as ordinary shared package edits of w:sectPr and settings.xml, and undo restores them as one step. Every peer resolves numbering from the same shared w:sectPr nodes.",
+  "before": "Note numbering fell back to the settings.xml w:footnotePr and w:endnotePr for format, start, restart, and footnote position, a section endnote position overrode settings.xml, a document-scope setNoteProperties wrote only settings.xml and replaced each element with new nodes, two concurrent writes left two w:footnotePr or w:endnotePr in one parent, and a join copied the surviving w:sectPr with new ids, so a concurrent edit to it was lost.",
+  "after": "Numbering and the footnote position resolve from each section's own w:sectPr and the defaults, and the endnote position from settings.xml only. A document-scope write merges the named fields into every section and settings.xml in place, keeping node ids. Each replica shows the first copy of w:footnotePr and w:endnotePr under w:sectPr and w:settings, and of each field under them. A join moves the surviving w:sectPr with its ids.",
+  "reason": "The setNoteProperties operation shape, the collaboration schema, and the protocol do not change. The writes are ordinary node, attribute, and child-array edits that released readers apply, and a join move is an ordinary child-array splice. The singleton rule only chooses which copy of a duplicated element a replica shows; every reader already resolved the first copy. A peer on an older release still resolves numbering from settings.xml where a section has no note properties of its own, so two peers on different releases can paint different note numbers for the same shared state until both upgrade; the shared state itself is the same.",
   "tests": [
     "packages/pro/src/collaboration/__tests__/document-note-properties.test.ts",
+    "packages/pro/src/collaboration/__tests__/singleton-children.test.ts",
     "packages/core/src/store/__tests__/note-properties-document-write.test.ts",
     "packages/core/src/editor/__tests__/note-properties-document-scope.test.ts",
     "packages/core/src/layout/__tests__/note-properties-settings-layout.test.ts"
