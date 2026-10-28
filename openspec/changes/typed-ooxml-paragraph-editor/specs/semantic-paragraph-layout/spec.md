@@ -626,9 +626,23 @@ Semantic layout SHALL place a supported terminal exact row's simple bottom rule 
 #### Scenario: A whole tall row keeps the first line of its first footnote
 
 - **WHEN** compatibility mode is 14 or earlier, or absent
-- **AND** a row that stays whole past the bottom margin references footnotes
+- **AND** a row taller than the page stays whole past the bottom margin and references footnotes
 - **THEN** the page keeps the first line of the first referenced footnote at its bottom, over the row, wherever the reference sits in the row
 - **AND** the rest of that footnote and every later footnote of the row continue on the next page, each later footnote with its own mark
+
+#### Scenario: A carried footnote keeps the footnotes of a whole tall row behind it
+
+- **WHEN** compatibility mode is 14 or earlier, or absent
+- **AND** a footnote continued from an earlier page has no room on the page of a whole row taller than the page
+- **THEN** that page keeps no line of the footnotes of the row and paints no footnote area
+- **AND** the footnotes of the row start, each with its own mark, only on the page where the continued footnote ends
+
+#### Scenario: A row kept whole below repeated header rows keeps none of its footnotes
+
+- **WHEN** compatibility mode is 14 or earlier, or absent
+- **AND** a row that cannot split fits a fresh page but stays whole below repeated header rows and runs past the bottom margin
+- **THEN** the page of the row keeps no line of the footnotes that the row references
+- **AND** each of those footnotes starts on the next page with its own mark
 
 #### Scenario: A tall row splits before mode 15 outside the text-only case
 

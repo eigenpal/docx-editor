@@ -221,7 +221,11 @@ export interface NoteReferenceLineBand {
   readonly tableRow?: true;
   /** The referencing row's id when that row ends the page's flow (`endsPage`). */
   readonly endsPageRowId?: string;
-  /** The referencing table row is placed whole past the bottom of the content band. */
+  /**
+   * The referencing table row is taller than the content band, so it runs past the bottom
+   * margin on every page. A row that only ends past the margin (below repeated header rows)
+   * does not set it.
+   */
   readonly rowOverflowsPage?: true;
 }
 
@@ -287,6 +291,7 @@ function computeReferenceLineBand(
   let preserveOrphanLine = false;
   let tableRow = false;
   let endsPageRowId: string | undefined;
+  let rowTallerThanPage = false;
   for (const block of page.fragments) {
     if (block.kind === 'paragraph') {
       if (!fragmentOwnsPosition(block, ref.paragraphId, ref.atomOffset)) continue;
@@ -306,6 +311,7 @@ function computeReferenceLineBand(
         // unsplittable paragraphs still move together with their references.
         tableRow = false;
         endsPageRowId = undefined;
+        rowTallerThanPage = false;
         preserveOrphanLine =
           evictable &&
           line?.index === 1 &&
@@ -330,6 +336,7 @@ function computeReferenceLineBand(
       preserveOrphanLine = false;
       tableRow = row !== 'table';
       endsPageRowId = row !== 'table' && row.endsPage ? row.row.id : undefined;
+      rowTallerThanPage = row !== 'table' && row.row.box.height > page.contentBox.height + 0.001;
     }
   }
   const clamp = (value: number): number => Math.min(Math.max(0, value), page.contentBox.height);
@@ -346,7 +353,7 @@ function computeReferenceLineBand(
     ...(preserveOrphanLine ? { preserveOrphanLine: true } : {}),
     ...(tableRow ? { tableRow: true } : {}),
     ...(endsPageRowId !== undefined ? { endsPageRowId } : {}),
-    ...(tableRow && bottom > page.contentBox.height + 0.001 ? { rowOverflowsPage: true } : {}),
+    ...(rowTallerThanPage ? { rowOverflowsPage: true } : {}),
   };
 }
 

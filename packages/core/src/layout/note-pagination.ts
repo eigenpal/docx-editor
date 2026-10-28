@@ -916,7 +916,7 @@ function buildFootnoteArea(
    * line to the next page (reserve mode only; undefined when nothing needs evicting).
    */
   evictionTopPt?: number;
-  /** The area rides over a whole row past the bottom margin and needs no body room. */
+  /** The page holds a whole row taller than the page; its area needs no body room. */
   overRow?: boolean;
 } {
   const nextCarry: NoteCarryMap = new Map(continuationCarry);
@@ -1020,10 +1020,11 @@ function buildFootnoteArea(
         stackHeight += split.headHeight;
       }
       if (split.tail.length > 0) {
+        // A note that places nothing here still opens later, with its mark.
         nextCarry.set(scopeId, {
           fragments: split.tail,
           height: split.tailHeight,
-          mark: null,
+          mark: split.head.length > 0 ? null : carry.mark,
         });
       } else {
         nextCarry.delete(scopeId);
@@ -1033,7 +1034,7 @@ function buildFootnoteArea(
 
   let evictionTopPt: number | undefined;
   let placedBudget = Number.POSITIVE_INFINITY;
-  // A note placed over a whole row that runs past the bottom margin.
+  // The page holds a whole row taller than the page: no reserve can make room below it.
   let overRow = false;
   for (const ref of pageRefs) {
     if (notes.length >= MAX_NOTES_LAID_OUT) {
@@ -1078,11 +1079,13 @@ function buildFootnoteArea(
     // (`note-overflow-row.ts`). The area then rides over the row and reserves nothing.
     if (band && referenceRowOverflowsPage(band, input.compatibilityMode)) {
       const shown = ref.customMarkFollows ? null : mark;
-      const { note, carry } = overflowRowNote(laid, shown, notes.length === 0, page, reasons);
+      // Only the page's first note keeps a line, and only when no carried note waits for room.
+      const first = notes.length === 0 && continuationCarry.size === 0;
+      const { note, carry } = overflowRowNote(laid, shown, first, page, reasons);
       if (note) notes.push(note);
       if (carry) nextCarry.set(laid.scopeId, carry);
       stackHeight += note?.box.height ?? 0;
-      overRow ||= note !== undefined;
+      overRow = true;
       continue;
     }
     const refBudget = band
@@ -1169,10 +1172,11 @@ function buildFootnoteArea(
         placedBudget = Math.min(placedBudget, refBudget);
       }
       if (split.tail.length > 0) {
+        // A note that places nothing here opens on a later page, with its mark.
         nextCarry.set(laid.scopeId, {
           fragments: split.tail,
           height: split.tailHeight,
-          mark: null,
+          mark: split.head.length > 0 || ref.customMarkFollows ? null : mark,
         });
       }
     }
@@ -1211,8 +1215,9 @@ function buildFootnoteArea(
     }
   }
 
-  if (notes.length === 0 && continuationCarry.size === 0) {
-    return { area: undefined, nextCarry, evictionTopPt };
+  // Over a whole tall row, a waiting continuation paints no separator without notes.
+  if (notes.length === 0 && (continuationCarry.size === 0 || overRow)) {
+    return { area: undefined, nextCarry, evictionTopPt, overRow };
   }
 
   const sepHeight = separator.flowHeight;

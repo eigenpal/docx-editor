@@ -1,19 +1,23 @@
 // Footnotes of a whole table row that runs past the bottom margin.
 //
 // Before mode 15 a row that cannot split stays whole on its page even when it is taller than
-// the page band (`tallRowStaysWhole`), or when it stays below repeated header rows
-// (`repeatKeepsWholeRow`). No reserve can make room below such a row. The page keeps the
-// first line of the first note the row references, at the page bottom over the row; that
-// note's other lines and every later note continue on the next page. Where the reference sits
-// in the row does not matter, also past the bottom margin.
+// the page band (`tallRowStaysWhole`). No reserve can make room below such a row. The page
+// keeps the first line of the first note the row references, at the page bottom over the row;
+// that note's other lines and every later note continue on the next page. Where the reference
+// sits in the row does not matter, also past the bottom margin.
+//
+// Only a row taller than the page qualifies. A row that fits a fresh page but runs past the
+// margin below repeated header rows (`repeatKeepsWholeRow`) keeps none of its notes: each one
+// moves whole, with its mark, to the next page. A note carried from an earlier page that waits
+// for room also keeps the row's notes off the page, so the notes stay in order.
 
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import type { NoteReferenceLineBand } from './note-fragment-geometry.ts';
 import type { NoteStoryLayout } from './note-layout.ts';
-import { splitNoteFragments } from './note-splitting.ts';
+import { splitNoteFragments, type NoteSplitReasons } from './note-splitting.ts';
 import type { BlockFragmentRecord, NoteStoryRecord, PageRecord } from './semantic-records.ts';
 
-/** Whether `band` is a table row placed whole past the bottom of its page's content band. */
+/** Whether `band` is a table row taller than its page's content band, placed whole. */
 export function referenceRowOverflowsPage(
   band: NoteReferenceLineBand,
   compatibilityMode: number | undefined
@@ -42,7 +46,7 @@ export function overflowRowNote(
   mark: string | null,
   first: boolean,
   page: PageRecord,
-  reasons: NonNullable<Parameters<typeof splitNoteFragments>[2]>['reasons']
+  reasons: NoteSplitReasons
 ): {
   readonly note?: NoteStoryRecord;
   readonly carry?: {
