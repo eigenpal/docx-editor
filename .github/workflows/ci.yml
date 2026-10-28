@@ -77,7 +77,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
       - name: Restore npm cache
         if: "matrix.check == 'consumers' || matrix.check == 'packages'"
         uses: actions/cache/restore@v6
@@ -86,7 +86,7 @@ jobs:
           key: npm-${{ matrix.check }}-${{ hashFiles('bun.lock') }}
           restore-keys: npm-${{ matrix.check }}-
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bash scripts/ci/install-dependencies.sh
       - name: Lint
         run: bun run lint
         if: "matrix.check == 'lint'"
@@ -287,7 +287,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
       - name: Restore npm cache
         uses: actions/cache/restore@v6
         with:
@@ -295,7 +295,7 @@ jobs:
           key: npm-build-${{ hashFiles('bun.lock') }}
           restore-keys: npm-build-
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bash scripts/ci/install-dependencies.sh
       - name: Build packages
         run: bun run build:packages
         env:
@@ -388,9 +388,9 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bash scripts/ci/install-dependencies.sh
       # Required when planned: a shard that lost the file would split differently.
       - name: Download test durations
         if: needs.unit-plan.outputs.planned == 'true'

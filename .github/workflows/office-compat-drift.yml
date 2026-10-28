@@ -63,7 +63,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
 
       # HUSKY=0 for the same reason dependabot-lockfile.yml sets it: the root
       # `prepare` script points core.hooksPath at .husky, and the adopt step
@@ -73,7 +73,7 @@ jobs:
         working-directory: .
         env:
           HUSKY: 0
-        run: bun install --frozen-lockfile
+        run: bash scripts/ci/install-dependencies.sh
 
       - name: Check for upstream @types/office-js drift
         id: drift

@@ -115,10 +115,10 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bash scripts/ci/install-dependencies.sh
 
       - name: Install Playwright Chromium
         run: bash scripts/install-ci-chromium.sh
@@ -149,7 +149,7 @@ jobs:
           if [ -f "$RUNNER_TEMP/base/scripts/bench/edit-bench.ts" ] && \
              [ -f "$RUNNER_TEMP/base/e2e/fixtures/synthetic-long-edit.docx" ]; then
             cd "$RUNNER_TEMP/base"
-            bun install --frozen-lockfile
+            bash "$GITHUB_WORKSPACE/scripts/ci/install-dependencies.sh"
             # Browser binaries live in the shared Playwright cache; install still
             # runs in case the baseline pins a different Playwright build.
             # ux only when the baseline spec understands the RUNS env var, or its
