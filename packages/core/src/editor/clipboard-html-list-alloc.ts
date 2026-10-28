@@ -62,6 +62,7 @@ export function msoListNumPr(
           kind: definition.kind,
           start: htmlListStartFromMarker(marker, definition.kind) ?? definition.start ?? 1,
           ...(definition.align ? { align: definition.align } : {}),
+          ...(definition.format ? { format: definition.format } : {}),
         }
       : marker.trim().length > 0
         ? htmlListKindAndStart(marker)

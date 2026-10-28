@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A pasted list level took the default level text, no marker run properties, the default bullet glyph and font, and the default indents, whatever its @list rule stated.",
+  "after": "The paste reads mso-level-text, the rule's font, color, weight, style, size, and underline, margin-left, text-indent, and mso-level-tab-stop into the pasted w:lvl.",
+  "reason": "Only the values the paste writes into ordinary w:lvlText, w:rPr, w:ind, and w:tabs of a new w:lvl change. Released participants already store, replicate, and lay out those elements; shared nodes, operations, and package serialization are unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/clipboard-html-word-lists.test.ts",
+    "packages/core/src/editor/__tests__/clipboard-rich-surface.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-paste-list-levels.test.ts"
+  ],
+  "changeset": "paste-list-level-rules",
+  "migration": null
+}

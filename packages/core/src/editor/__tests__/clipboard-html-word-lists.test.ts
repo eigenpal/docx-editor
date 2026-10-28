@@ -114,3 +114,96 @@ test('a Word <li> with no level rule and no marker takes its list element format
   expect(levelOf(projected, 'nested')).toContain('<w:numFmt w:val="lowerLetter"/>');
   expect(levelOf(projected, 'bullet')).toContain('<w:numFmt w:val="bullet"/>');
 });
+
+// Clipboard HTML states each level's text, marker format, and geometry in its `@list` rule. The marker
+// span only shows the result, so the level comes from the rule.
+const wordItem = (list: string, ilvl: number, marker: string, text: string): string =>
+  `<p class=MsoNormal style="mso-list:${list} level${ilvl} lfo1">` +
+  `<span style="mso-list:Ignore">${marker}<span>&nbsp;</span></span>${text}</p>`;
+
+test("a level rule's mso-level-text becomes the level text", () => {
+  const projected = project(
+    wordHtml(
+      '@list l0:level1 {mso-level-text:"%1\\)";}\n' +
+        '@list l0:level2 {mso-level-number-format:alpha-lower;mso-level-text:"\\(%2\\)";}\n' +
+        '@list l0:level3 {mso-level-text:"Art\\. %3\;\\\\";}',
+      wordItem('l0', 1, '1)', 'one') +
+        wordItem('l0', 2, '(a)', 'two') +
+        wordItem('l0', 3, 'x', 'three')
+    )
+  );
+  expect(levelOf(projected, 'one')).toContain('<w:lvlText w:val="%1)"/>');
+  expect(levelOf(projected, 'two')).toContain('<w:lvlText w:val="(%2)"/>');
+  // A quoted `;` does not end the declaration, and `\\` is one backslash.
+  expect(levelOf(projected, 'three')).toContain('<w:lvlText w:val="Art. %3;\\"/>');
+});
+
+test('a level rule keeps the marker run format', () => {
+  const projected = project(
+    wordHtml(
+      '@list l0:level1 {mso-level-text:"%1\\)";color:red;mso-ansi-font-weight:bold;}\n' +
+        '@list l0:level2 {mso-level-number-format:roman-upper;mso-ansi-font-weight:normal;' +
+        'mso-ansi-font-style:italic;mso-ansi-font-size:14.0pt;font-family:"Arial",sans-serif;' +
+        'color:#0070C0;text-decoration:underline;text-underline:single;}',
+      wordItem('l0', 1, '1)', 'red') + wordItem('l0', 2, 'I.', 'blue')
+    )
+  );
+  expect(levelOf(projected, 'red')).toContain('<w:rPr><w:b/><w:color w:val="FF0000"/></w:rPr>');
+  expect(levelOf(projected, 'blue')).toContain(
+    '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:b w:val="0"/><w:i/>' +
+      '<w:color w:val="0070C0"/><w:sz w:val="28"/><w:u w:val="single"/></w:rPr>'
+  );
+});
+
+test('a symbol-font bullet keeps its glyph and font', () => {
+  const projected = project(
+    wordHtml(
+      '@list l0:level1 {mso-level-number-format:bullet;mso-level-text:;font-family:Wingdings;}\n' +
+        '@list l0:level2 {mso-level-number-format:bullet;mso-level-text:●;' +
+        'font-family:"Segoe UI Symbol",sans-serif;}',
+      wordItem('l0', 1, 'Ø', 'arrow') + wordItem('l0', 2, '●', 'dot')
+    )
+  );
+  const arrow = levelOf(projected, 'arrow');
+  expect(arrow).toContain('<w:lvlText w:val=""/>');
+  expect(arrow).toContain('<w:rFonts w:ascii="Wingdings" w:hAnsi="Wingdings"/>');
+  const dot = levelOf(projected, 'dot');
+  expect(dot).toContain('<w:lvlText w:val="●"/>');
+  expect(dot).toContain('<w:rFonts w:ascii="Segoe UI Symbol" w:hAnsi="Segoe UI Symbol"/>');
+});
+
+test('a level rule sets the level indents and number tab stop', () => {
+  const projected = project(
+    wordHtml(
+      '@list l0:level1 {margin-left:54.0pt;text-indent:-27.0pt;}\n' +
+        '@list l0:level2 {mso-level-tab-stop:72.0pt;margin-left:90.0pt;text-indent:-36.0pt;}\n' +
+        // The clipboard leaves out a margin-left of 36pt per level.
+        '@list l0:level3 {mso-level-tab-stop:none;text-indent:0cm;}',
+      '<ol><li style="mso-list:l0 level1 lfo1">first</li></ol>' +
+        '<ol><li style="mso-list:l0 level2 lfo1">second</li></ol>' +
+        '<ol><li style="mso-list:l0 level3 lfo1">third</li></ol>'
+    )
+  );
+  expect(levelOf(projected, 'first')).toContain('<w:pPr><w:ind w:left="1080" w:hanging="540"/>');
+  expect(levelOf(projected, 'second')).toContain(
+    '<w:pPr><w:tabs><w:tab w:val="num" w:pos="1440"/></w:tabs><w:ind w:left="1800" w:hanging="720"/>'
+  );
+  expect(levelOf(projected, 'third')).toContain('<w:pPr><w:ind w:left="2160" w:firstLine="0"/>');
+});
+
+test('hostile level rules stay bounded and escaped', () => {
+  const projected = project(
+    wordHtml(
+      `@list l0:level1 {mso-level-text:"${'%1'.repeat(40)}";margin-left:99999pt;}\n` +
+        '@list l0:level2 {mso-level-text:"<b>&\\"%2\\0 \\1 ";text-indent:-99999pt;}',
+      wordItem('l0', 1, '1.', 'long') + wordItem('l0', 2, '1.', 'markup')
+    )
+  );
+  const long = levelOf(projected, 'long');
+  // An over-long level text is not a marker; the level keeps the default.
+  expect(long).toContain('<w:lvlText w:val="%1."/>');
+  expect(long).toContain('w:left="31680"');
+  const markup = levelOf(projected, 'markup');
+  expect(markup).toContain('<w:lvlText w:val="&lt;b&gt;&amp;&quot;%2"/>');
+  expect(markup).toContain('w:hanging="31680"');
+});
