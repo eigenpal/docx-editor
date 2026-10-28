@@ -342,14 +342,15 @@ const TRADITIONAL_CHINESE_NON_HANGING = '､';
 /**
  * Whether the paragraph's line-start rules forbid `mark` at a line start, so that it may hang.
  * The list is the custom or default one for the run language. A paragraph that turns kinsoku
- * off forbids nothing. Without a run language the list is unknown, and only the switch counts.
+ * off forbids nothing, except in a legacy compatibility mode, whose hanging ignores the switch.
+ * Without a run language the list is unknown, and only the switch counts.
  */
 function lineStartForbids(
   mark: string,
   language: string | undefined,
   policy: CjkParagraphTypography
 ): boolean {
-  if (!policy.kinsoku) return false;
+  if (!policy.kinsoku && policy.settings?.legacyLineEndPunctuation !== true) return false;
   return (
     language === undefined || kinsokuCharacters(language, policy.settings).before.includes(mark)
   );

@@ -552,14 +552,14 @@ export function alignSpans(
   const hangingPunctuationAdvance = pendingLine ? lineHangingPunctuationAdvance(pendingLine) : 0;
   // A right-to-left last line aligns to the right, unless the flow kept its last word by
   // borrowing inter-word space: then it compresses as justified text does.
+  // A line whose final mark hangs fills the measure before the mark at every alignment. Only
+  // legacy compatibility modes hang marks outside justified paragraphs.
   const effective =
-    alignment === 'both' &&
-    isLastLine &&
-    paragraphRtl &&
-    !lastLineShrinks &&
-    hangingPunctuationAdvance === 0
-      ? 'right'
-      : alignment;
+    hangingPunctuationAdvance > 0
+      ? 'both'
+      : alignment === 'both' && isLastLine && paragraphRtl && !lastLineShrinks
+        ? 'right'
+        : alignment;
   const split = splitBidiTrailingWhitespace(spans, measurer);
   const bidiLine = paragraphRtl || split.some(isRightToLeft);
   if (passages && passages.length > 1 && !bidiLine) {

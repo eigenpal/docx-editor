@@ -39,6 +39,9 @@ function root(xml: string): OoxmlElement {
 const runOf = (text: string, rPr: string) =>
   `<w:r><w:rPr><w:sz w:val="22"/>${rPr}</w:rPr><w:t xml:space="preserve">${text}</w:t></w:r>`;
 
+// Mode 15: legacy modes also hang punctuation in left, centered, and right-aligned lines.
+const MODERN_MODE =
+  '<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat>';
 function layout(
   parts: readonly string[],
   width: number,
@@ -53,7 +56,7 @@ function layout(
   // A field result is one layout-owned piece that checks its cuts by its own text.
   const body = field ? `<w:fldSimple w:instr=" DATE ">${runs}</w:fldSimple>` : runs;
   const p = root(`<w:p xmlns:w="${W}"><w:pPr>${pPr}</w:pPr>${body}</w:p>`);
-  const settingsRoot = root(`<w:settings xmlns:w="${W}">${settings}</w:settings>`);
+  const settingsRoot = root(`<w:settings xmlns:w="${W}">${MODERN_MODE}${settings}</w:settings>`);
   // Document defaults that name an East Asian face, so justified punctuation may hang.
   const cascade = buildStyleCascadeTable(
     root(

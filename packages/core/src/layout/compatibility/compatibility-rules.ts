@@ -135,6 +135,10 @@ export const MODE_RULES = {
     'A kept row group that exceeds a fresh page starts beside preceding content, except directly below authored headers',
     'ECMA-376 Part 1 §17.3.1.15 keepNext'
   ),
+  lineEndPunctuationAtEveryAlignment: legacy(
+    'Line-end East Asian punctuation hangs past the margin at every paragraph alignment, and the text before it fills the measure. The paragraph kinsoku switch does not stop it. Modern modes hang only in justified and distributed paragraphs',
+    'ECMA-376 Part 1 §17.3.1.21 overflowPunct'
+  ),
   koreanHangingLineFills: modern(
     'A Korean paragraph-final mark that hangs past the margin lets the text before it fill the measure. Earlier modes keep that last line at its natural width',
     'ECMA-376 Part 1 §17.3.1.21 overflowPunct'

@@ -454,9 +454,11 @@ export function buildStyleCascadeTable(
   themeFonts: ThemeFonts = NO_THEME_FONTS,
   settingsRoot: OoxmlElement | null = null
 ): StyleCascadeTable {
-  let typography = cjkTypographyFromSettings(settingsRoot);
   // One read of the compatibility profile; the cache token folds every rule it turns on.
   const compatibility = compatibilityProfileFromSettings(settingsRoot);
+  let typography = cjkTypographyFromSettings(settingsRoot);
+  if (compatibility.has('lineEndPunctuationAtEveryAlignment'))
+    typography = Object.freeze({ ...typography, legacyLineEndPunctuation: true as const });
   const ligaturesEnabled = compatibility.has('optionalLigatures');
   const ligatureCompatibility = ligaturesEnabled ? {} : { disableOptionalLigatures: true as const };
   const strictTableHierarchy = compatibility.has('strictTableStyleHierarchy');

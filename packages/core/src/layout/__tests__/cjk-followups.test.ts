@@ -24,6 +24,9 @@ function paragraph(parts: readonly string[], pPr = '', rPr = ''): OoxmlElement {
     `<w:p xmlns:w="${W}"><w:pPr><w:overflowPunct w:val="0"/>${pPr}</w:pPr>${parts.map((text) => `<w:r><w:rPr><w:sz w:val="22"/>${rPr}</w:rPr><w:t xml:space="preserve">${escape(text)}</w:t></w:r>`).join('')}</w:p>`
   );
 }
+// Mode 15: legacy modes also hang punctuation in left, centered, and right-aligned lines.
+const MODERN_MODE =
+  '<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat>';
 function layout(
   parts: readonly string[],
   width: number,
@@ -33,7 +36,7 @@ function layout(
   sourceDefaults = false
 ) {
   const p = paragraph(parts, pPr, rPr);
-  const settingsRoot = root(`<w:settings xmlns:w="${W}">${settings}</w:settings>`);
+  const settingsRoot = root(`<w:settings xmlns:w="${W}">${MODERN_MODE}${settings}</w:settings>`);
   const cascade = sourceDefaults
     ? buildStyleCascadeTable(
         root(
