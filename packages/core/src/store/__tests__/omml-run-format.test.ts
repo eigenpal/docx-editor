@@ -116,16 +116,31 @@ test.each([
   ['East Asian text', slotFonts, '中文', 'East Face'],
   ['Hebrew text', slotFonts, 'שלום', 'Complex Face'],
   ['Latin text and an unnamed East Asian slot', '<w:rFonts w:ascii="A" w:cs="B"/>', 'x中', 'A'],
+  ['Thai text', slotFonts, 'กข', 'Complex Face'],
+  ['Arabic mathematical letters', slotFonts, '\u{1EE01}', 'Complex Face'],
+  [
+    'an operator beside Greek text',
+    '<w:rFonts w:ascii="Face A" w:hAnsi="Face B"/>',
+    'α+β',
+    'Face B',
+  ],
+  [
+    'operator-only ASCII text',
+    '<w:rFonts w:ascii="Face A" w:eastAsia="East Face"/>',
+    '+',
+    'Face A',
+  ],
 ] as const)('takes the face of the slot that %s reaches', (_name, fonts, text, family) => {
   expect(equationRunFormat(run(`<w:rPr>${fonts}</w:rPr>`, text))).toEqual({
     fontFamily: family,
   });
 });
 
-test('names no face when the slots the text reaches name none', () => {
-  expect(
-    equationRunFormat(run('<w:rPr><w:rFonts w:eastAsia="East Face" w:cs="Complex Face"/></w:rPr>'))
-  ).toEqual({});
+test.each([
+  ['other slots', '<w:rFonts w:eastAsia="East Face" w:cs="Complex Face"/>'],
+  ['one complex-script slot', '<w:rFonts w:cs="Complex Face"/>'],
+])('names no face when the text reaches only unnamed slots (%s)', (_name, fonts) => {
+  expect(equationRunFormat(run(`<w:rPr>${fonts}</w:rPr>`, '12'))).toEqual({});
 });
 
 test.each([

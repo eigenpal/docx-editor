@@ -1,6 +1,6 @@
 // Read only the run properties whose typography the equation lane represents.
 // Unknown properties retain the bounded fallback rather than being discarded.
-import { isEastAsianCodePoint } from './east-asian-code-points.ts';
+import { classifyFontSlot, type FontSlot } from './font-slot-classes.ts';
 import { WML_NAMESPACE_URI, XML_NAMESPACE_URI } from './ooxml-shared.ts';
 import {
   EQUATION_DEFAULT_MATH_FONT,
@@ -40,38 +40,41 @@ function toggle(node: OoxmlElement, namespace: string): boolean | null {
 
 type MutableRunFormat = { -readonly [K in keyof EquationRunFormat]: EquationRunFormat[K] };
 
-type FontSlot = 'ascii' | 'hAnsi' | 'eastAsia' | 'cs';
 const FONT_SLOTS: readonly FontSlot[] = ['ascii', 'hAnsi', 'eastAsia', 'cs'];
 
-/** The `w:rFonts` slot whose face draws one code point of run text. */
-function fontSlotOf(codePoint: number): FontSlot {
-  if (codePoint < 0x80) return 'ascii';
-  if (isEastAsianCodePoint(codePoint)) return 'eastAsia';
-  if (
-    (codePoint >= 0x590 && codePoint <= 0x7bf) ||
-    (codePoint >= 0xfb1d && codePoint <= 0xfdff) ||
-    (codePoint >= 0xfe70 && codePoint <= 0xfefe)
-  )
-    return 'cs';
-  return 'hAnsi';
+/**
+ * The `w:rFonts` slots that the characters of `text` draw through, with the slot policy that
+ * text layout uses (`classifyFontSlot`). Common characters, such as spaces, punctuation, and
+ * operators, take a neighbour's slot, so they add no slot beside strong text. Text of only
+ * common characters takes `w:ascii` when it is ASCII and `w:hAnsi` otherwise.
+ */
+function textFontSlots(text: string): ReadonlySet<FontSlot> {
+  const slots = new Set<FontSlot>();
+  let ascii = true;
+  for (const character of text) {
+    const codePoint = character.codePointAt(0)!;
+    ascii &&= codePoint < 0x80;
+    const slot = classifyFontSlot(codePoint)?.slot;
+    if (slot) slots.add(slot);
+  }
+  if (slots.size === 0 && text.length > 0) slots.add(ascii ? 'ascii' : 'hAnsi');
+  return slots;
 }
 
 /**
  * The one face that a run's `w:rFonts` gives its text. Undefined means no named face, and
  * null means the text needs two faces.
  *
- * Slots that all name one family give that family. Otherwise each character takes the face
- * of its own slot: `w:ascii` for ASCII, `w:eastAsia` for East Asian scripts, `w:cs` for
- * Hebrew and Arabic, and `w:hAnsi` for other text. So Latin text keeps its Latin face beside
- * a different East Asian or complex-script face. A character whose slot names no face does
- * not choose the run face.
+ * Each character takes the face of its own slot: for example `w:ascii` for ASCII letters and
+ * digits, `w:eastAsia` for East Asian scripts, `w:cs` for complex scripts such as Hebrew,
+ * Arabic, and Thai, and `w:hAnsi` for other Latin, Greek, and Cyrillic text. So Latin text
+ * keeps its Latin face beside a different East Asian or complex-script face. A slot that
+ * names no face does not choose the run face, so `w:cs` alone gives ASCII digits no face.
  */
 function runFace(fonts: ReadonlyMap<FontSlot, string>, text: string): string | undefined | null {
-  const families = new Set(fonts.values());
-  if (families.size <= 1) return families.values().next().value;
   let face: string | undefined;
-  for (const character of text) {
-    const family = fonts.get(fontSlotOf(character.codePointAt(0)!));
+  for (const slot of textFontSlots(text)) {
+    const family = fonts.get(slot);
     if (family === undefined) continue;
     if (face !== undefined && face !== family) return null;
     face = family;
