@@ -52,14 +52,29 @@ export function fittingClusters(text: string): readonly GraphemeSegment[] {
  * Sound because a resolved run style is never mutated: a changed style is a new object, and
  * measurement reads only the style, the slot, the text, and the fitter's one measurer.
  */
-type ClusterMemo = Map<StyleSpanRecord['style'], Map<string, unknown>>;
-function memoized<T>(memo: ClusterMemo, span: StyleSpanRecord, key: string, measure: () => T): T {
-  let byKey = memo.get(span.style);
-  if (!byKey) memo.set(span.style, (byKey = new Map()));
-  const slotKey = `${span.fontSlot ?? ''}:${key}`;
-  if (byKey.has(slotKey)) return byKey.get(slotKey) as T;
+type MemoKind = 'prefixEnds' | 'natural' | 'ink' | 'authored';
+type ClusterMemo = Map<
+  StyleSpanRecord['style'],
+  Map<StyleSpanRecord['fontSlot'], Map<MemoKind, Map<string, unknown>>>
+>;
+/** The measurement of `kind` for `text` in the span's style and slot, measured once. */
+function memoized<T>(
+  memo: ClusterMemo,
+  span: StyleSpanRecord,
+  kind: MemoKind,
+  text: string,
+  measure: () => T
+): T {
+  let bySlot = memo.get(span.style);
+  if (!bySlot) memo.set(span.style, (bySlot = new Map()));
+  let byKind = bySlot.get(span.fontSlot);
+  if (!byKind) bySlot.set(span.fontSlot, (byKind = new Map()));
+  let byText = byKind.get(kind);
+  if (!byText) byKind.set(kind, (byText = new Map()));
+  const cached = byText.get(text);
+  if (cached !== undefined || byText.has(text)) return cached as T;
   const value = measure();
-  byKey.set(slotKey, value);
+  byText.set(text, value);
   return value;
 }
 interface Cell {
@@ -239,7 +254,7 @@ function cellsOf(
     )
       return undefined;
     // One prefix-width list per span text keeps the memo linear in the text length.
-    const ends = memoized(memo, span, `w:${span.text}`, () =>
+    const ends = memoized(memo, span, 'prefixEnds', span.text, () =>
       clusters.map((cluster) =>
         measureDisplayText(span.text.slice(0, cluster.utf16To), face, measurer)
       )
@@ -249,13 +264,14 @@ function cellsOf(
       memo,
       span,
       'authored',
+      '',
       () => layoutDerivedSpacingStyleForEditing(face).characterSpacingPt
     );
     let previous = 0;
     for (const [index, cluster] of clusters.entries()) {
       const end = cluster.utf16To === span.text.length ? span.box.width : ends[index]!;
       const width = end - previous;
-      const natural = memoized(memo, span, `n:${cluster.text}`, () =>
+      const natural = memoized(memo, span, 'natural', cluster.text, () =>
         measureDisplayText(cluster.text, { ...face, characterSpacingPt: 0 }, measurer)
       );
       const modelStart = span.range.start + cluster.utf16From;
@@ -277,7 +293,7 @@ function cellsOf(
           natural + authoredSpacing * cluster.text.length - width
         ),
         natural,
-        ink: memoized(memo, span, `i:${cluster.text}`, () =>
+        ink: memoized(memo, span, 'ink', cluster.text, () =>
           measurer.inkBounds?.(cluster.text, face)
         ),
         reduction: 0,
@@ -373,6 +389,22 @@ const kanaShare = (cell: Cell): number =>
     0,
     Math.min(cell.span.style.fontSizePt / 16 - cell.reduction, cell.span.box.width - cell.reduction)
   );
+/**
+ * An upper bound on what a kana fit can absorb: a sixteenth of an em per kana and half an em
+ * per punctuation mark or curly quote, from each span's own font size.
+ */
+function kanaFitBound(line: PendingLine, candidates: readonly StyleSpanRecord[]): number {
+  let bound = TOLERANCE;
+  for (const spans of [line.spans, candidates])
+    for (const span of spans) {
+      const em = span.style.fontSizePt;
+      for (const character of span.text) {
+        if (FULL_WIDTH_KANA.test(character)) bound += em / 16;
+        else if (PUNCTUATION.test(character) || curlyRole(character)) bound += em / 2;
+      }
+    }
+  return bound;
+}
 /** Give `amount` to `cells` in equal shares within their kana capacity; returns the rest. */
 function shareAmong(cells: readonly Cell[], amount: number): number {
   let active = cells.filter((cell) => kanaShare(cell) > TOLERANCE);
@@ -408,6 +440,10 @@ function fitCjkOptically(
     !candidates.some((span) => HAS_PUNCTUATION.test(span.text)) &&
     !line.spans.some((span) => HAS_PUNCTUATION.test(span.text))
   )
+    return undefined;
+  // A kana fit is gated, and the gate needs room left on the line. Check that and an upper
+  // bound on the capacity before the line is split into cells and measured for ink.
+  if (kana && (available - line.width <= TOLERANCE || deficit > kanaFitBound(line, candidates)))
     return undefined;
   // Do not redistribute spacing across separate float passages.
   for (let index = 1; index < line.spans.length; index++) {
