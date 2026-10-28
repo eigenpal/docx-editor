@@ -12,11 +12,16 @@
 // `document.querySelector`. Shorter AND stricter.
 //
 //   node scripts/test/run-parallel.mjs [--jobs N] [--shard INDEX/TOTAL] [--fail-fast]
-//     [--exclude PATH_PREFIX]... [-- <args passed to every `bun test`>]
+//     [--exclude PATH_PREFIX]... [--balance] [--durations-out FILE]
+//     [-- <args passed to every `bun test`>]
 //
 // `--exclude` drops files whose repository-relative path starts with the prefix, after shards
 // are assigned, so a shard holds the same files with or without it and CI duration caches stay
 // valid across both. Pull request CI uses it to leave the seeded collaboration scenarios to main.
+//
+// `--balance` assigns shards by the durations in the cache file instead of by file count. Only
+// use it where every shard reads an identical cache file, as CI does; otherwise shards overlap.
+// `--durations-out` writes this run's own measurements, which CI merges into the shared cache.
 //
 // Slowest-first, from a duration cache written on every run, so the long poles start immediately
 // instead of landing last and leaving the pool half-idle.
@@ -268,6 +273,8 @@ function parseArguments(argv) {
   let jobs = 0;
   let shard = '1/1';
   let failFast = false;
+  let balance = false;
+  let durationsOut = '';
   const exclude = [];
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -286,6 +293,12 @@ function parseArguments(argv) {
       index += 1;
     } else if (argument.startsWith('--jobs=')) {
       jobs = Number(argument.slice('--jobs='.length));
+    } else if (argument === '--balance') {
+      balance = true;
+    } else if (argument === '--durations-out') {
+      durationsOut = argv[++index] ?? '';
+    } else if (argument.startsWith('--durations-out=')) {
+      durationsOut = argument.slice('--durations-out='.length);
     } else if (argument === '--exclude') {
       exclude.push(argv[++index] ?? '');
     } else if (argument.startsWith('--exclude=')) {
@@ -299,7 +312,7 @@ function parseArguments(argv) {
     console.error('--exclude needs a non-empty path prefix');
     process.exit(1);
   }
-  return { jobs, passthrough, shard, failFast, exclude };
+  return { jobs, passthrough, shard, failFast, exclude, balance, durationsOut };
 }
 
 /** The child's current resident set in bytes, or 0 when it cannot be read. */
@@ -386,17 +399,26 @@ function runFile(file, passthrough, failFast, onRss) {
 }
 
 async function main() {
-  const { jobs, passthrough, shard, failFast, exclude } = parseArguments(process.argv.slice(2));
+  const { jobs, passthrough, shard, failFast, exclude, balance, durationsOut } = parseArguments(
+    process.argv.slice(2)
+  );
   if (failFast) passthrough.push('--bail=1');
+  const durations = readDurations();
+  const weights = balance
+    ? Object.fromEntries(Object.entries(durations).map(([file, entry]) => [file, entry.ms]))
+    : undefined;
   const queue = selectShard(
     SEARCH_ROOTS.flatMap((searchRoot) => discover(searchRoot)),
-    shard
+    shard,
+    weights
   ).filter((file) => !exclude.some((prefix) => file.startsWith(prefix)));
   if (queue.length === 0) {
     console.error(`no test files found for shard ${shard}`);
     process.exit(1);
   }
   const total = queue.length;
+  // Workers drain `queue`; keep the shard's file list for --durations-out.
+  const shardFiles = [...queue];
   // A filtered run executes slivers of every file: its timings and peaks describe the filter,
   // not the file, and caching them would both scramble slowest-first ordering and teach the
   // memory gate that the multi-GiB oracles are tiny. Leave the cache alone entirely.
@@ -407,7 +429,6 @@ async function main() {
       argument.startsWith('--test-name-pattern=')
   );
 
-  const durations = readDurations();
   // Slowest first. An unseen file sorts high so a NEW slow file is not discovered last.
   queue.sort(
     (a, b) =>
@@ -555,6 +576,12 @@ async function main() {
   await Promise.all(Array.from({ length: Math.min(maxWidth, total) }, (_, index) => worker(index)));
   if (process.stdout.isTTY) process.stdout.write(`\r${''.padEnd(96)}\r`);
   if (!filteredRun) writeDurations(durations);
+  if (durationsOut && !filteredRun) {
+    const own = Object.fromEntries(
+      shardFiles.filter((file) => durations[file]).map((file) => [file, durations[file]])
+    );
+    writeFileSync(durationsOut, JSON.stringify(own));
+  }
 
   for (const failure of failures) {
     console.log(`\n${'─'.repeat(72)}\n${failure.file}\n${'─'.repeat(72)}`);

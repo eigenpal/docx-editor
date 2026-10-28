@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -57,6 +57,12 @@ test('fail-fast stops dispatch after the first failure; normal mode reports both
     const excludedShard = run('--shard', '2/2', '--exclude', 'packages/first');
     expect(excludedShard.status).toBe(1);
     expect(excludedShard.stdout).toContain('FAIL packages/second.test.ts');
+
+    // A balanced shard still runs its files, and --durations-out lists only what this run ran.
+    const out = join(root, 'durations-out.json');
+    const balanced = run('--balance', '--exclude', 'packages/first', '--durations-out', out);
+    expect(balanced.stdout).toContain('FAIL packages/second.test.ts');
+    expect(Object.keys(JSON.parse(readFileSync(out, 'utf8')))).toEqual(['packages/second.test.ts']);
 
     const emptyExclude = run('--exclude=');
     expect(emptyExclude.status).toBe(1);
