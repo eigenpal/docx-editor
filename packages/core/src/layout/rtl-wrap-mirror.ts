@@ -33,12 +33,18 @@ export interface WrapBreakSpace {
 }
 
 /**
- * The break space of a paragraph whose measure starts at `lineLeft` and is `width` wide. A
- * left-to-right paragraph breaks in physical x, between `contentLeft` and `wrapRight`. A
+ * The break space of a paragraph whose measure starts at `lineLeft` and is `width` wide.
+ *
+ * A left-to-right paragraph breaks in physical x, between `contentLeft` and `wrapRight`. A
  * right-to-left paragraph mirrors x about its measure, so the pen's first line origin (after a
- * first-line indent) maps to the physical right edge less that indent. Its bounds are those
- * edges mirrored; the near bound also reaches a hanging first line, which starts before the
- * measure in that space.
+ * first-line indent) maps to the physical right edge less that indent. Its bounds are the
+ * physical edges mirrored. The far bound stops at the paragraph's own left edge, as
+ * `wrapRight` stops at its right edge. The near bound also reaches a hanging first line, which
+ * starts before the measure in that space.
+ *
+ * `largestTieLeft` breaks a tie of square wrapping on the largest side to the physical left
+ * (compatibility mode 15 and later). The tie is physical, so it is set on each zone before the
+ * zone is mirrored.
  */
 export function wrapBreakSpace(
   rightToLeft: boolean,
@@ -48,10 +54,12 @@ export function wrapBreakSpace(
     readonly firstLineOffset: number;
     readonly contentLeft: number;
     readonly wrapRight: number;
+    readonly largestTieLeft?: boolean;
   }
 ): WrapBreakSpace {
   const { contentLeft, wrapRight } = edges;
-  if (!rightToLeft) {
+  const tieLeft = edges.largestTieLeft === true;
+  if (!rightToLeft && !tieLeft) {
     return {
       left: contentLeft,
       right: wrapRight,
@@ -61,23 +69,33 @@ export function wrapBreakSpace(
     };
   }
   const axis = 2 * lineLeft + width;
-  const mirrors = new WeakMap<ExclusionZone, ExclusionZone>();
-  const mirror = (zone: ExclusionZone): ExclusionZone => {
-    let image = mirrors.get(zone);
-    if (!image) {
-      image = mirrorExclusionZone(zone, axis);
-      carryHorizontalResolution(zone, image);
-      mirrors.set(zone, image);
+  const images = new WeakMap<ExclusionZone, ExclusionZone>();
+  const image = (zone: ExclusionZone): ExclusionZone => {
+    let seen = images.get(zone);
+    if (!seen) {
+      seen = tieLeft && zone.input.textSide === 'largest' ? withLargestTie(zone, 'left') : zone;
+      if (rightToLeft) seen = mirrorExclusionZone(seen, axis);
+      if (seen !== zone) carryHorizontalResolution(zone, seen);
+      images.set(zone, seen);
     }
-    return image;
+    return seen;
   };
+  const zones = (list: readonly ExclusionZone[]) =>
+    list.length === 0 ? list : Object.freeze(list.map(image));
+  if (!rightToLeft) {
+    return { left: contentLeft, right: wrapRight, mirrored: false, zones, clearSide: (c) => c };
+  }
   return {
     left: Math.min(axis - wrapRight, lineLeft + Math.min(0, edges.firstLineOffset)),
-    right: axis - contentLeft,
+    right: Math.min(axis - contentLeft, lineLeft + width),
     mirrored: true,
-    zones: (zones) => (zones.length === 0 ? zones : Object.freeze(zones.map(mirror))),
+    zones,
     clearSide: (clear) => (clear === 'left' ? 'right' : clear === 'right' ? 'left' : clear),
   };
+}
+
+function withLargestTie(zone: ExclusionZone, largestTie: 'left' | 'right'): ExclusionZone {
+  return Object.freeze({ ...zone, input: Object.freeze({ ...zone.input, largestTie }) });
 }
 
 /** `zone` reflected about the vertical line `x = axis / 2`. */
@@ -94,6 +112,7 @@ export function mirrorExclusionZone(zone: ExclusionZone, axis: number): Exclusio
       wrapDistances: mirrorInsets(input.wrapDistances),
       effectInsets: mirrorInsets(input.effectInsets),
       textSide: mirrorTextSide(input.textSide),
+      largestTie: input.largestTie === 'left' ? 'right' : 'left',
       contentLeft: axis - input.contentRight,
       contentRight: axis - input.contentLeft,
     }),
@@ -117,8 +136,8 @@ function mirrorInsets(insets: DrawingInsets): DrawingInsets {
 }
 
 /**
- * A wrap side names a physical side, so it swaps. `largest` stays: on a tie it keeps the
- * pen's far side, which is the physical left in a right-to-left paragraph.
+ * A wrap side names a physical side, so it swaps. `largest` stays, and its physical tie side
+ * (`largestTie`, right when absent) swaps with the zone.
  */
 function mirrorTextSide(side: WrapTextSide): WrapTextSide {
   return side === 'left' ? 'right' : side === 'right' ? 'left' : side;

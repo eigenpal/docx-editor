@@ -15,8 +15,10 @@ import { alignBidiTrailingSpaces, bidiTrailingSpaces } from './bidi-trailing-spa
 import {
   alignBidiPassageSpans,
   alignPassageSpans,
+  isMirroredPassageList,
   partUsedWidth,
   type LinePassage,
+  type MirroredLinePassage,
 } from './passage-alignment.ts';
 
 const OVERFLOW_TOLERANCE_PT = 0.001;
@@ -451,7 +453,7 @@ export function alignSpans(
       )
     );
     if (aligned) return reorderBidiSpans(aligned, false, pageBreaksIgnored);
-  } else if (passages && (passages[0]?.breakStart !== undefined || passages.length > 1)) {
+  } else if (passages && (isMirroredPassageList(passages) || passages.length > 1)) {
     // Each part aligns, and bidi reorders it, as a line of its own inside its passage.
     const aligned = alignBidiPassageSpans(spans, passages, (part, passage, isLastPart) =>
       alignSpans(
@@ -570,11 +572,14 @@ export function lineAlignmentMeasure(
       indent: lineIndent,
       available: lineAvailableWidth,
       used: line.width,
-      passages: broken.map((passage) => ({
-        start: axis - (passage.end + penX),
-        end: axis - (passage.start + penX),
-        breakStart: passage.start + penX,
-      })),
+      passages: broken.map(
+        (passage): MirroredLinePassage => ({
+          start: axis - (passage.end + penX),
+          end: axis - (passage.start + penX),
+          mirrored: true,
+          breakStart: passage.start + penX,
+        })
+      ),
     };
   }
   if (!segment) {

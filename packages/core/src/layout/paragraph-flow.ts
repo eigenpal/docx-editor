@@ -301,6 +301,7 @@ export function breakParagraph(
     firstLineOffset,
     contentLeft,
     wrapRight,
+    largestTieLeft: flow?.largestWrapTieLeft === true,
   });
   const lines: PendingLine[] = [];
   let previousLineCut = false; // The last line closed inside a word the oversized cut split.
@@ -942,7 +943,7 @@ export function breakParagraph(
     // where a float anchored earlier is; one anchored on this line moves with it, so clearing
     // it again on every region would leave the line no region to fit.
     const select = breakClearOnLine(restartClear);
-    const placed = new Set(flow?.pageExclusionZones ?? []);
+    const placed = new Set(breakSpace.zones(flow?.pageExclusionZones ?? []));
     applyBreakClearance((zones) =>
       select(zones).filter((zone) => zone.anchorParagraphId !== paragraphId || placed.has(zone))
     );

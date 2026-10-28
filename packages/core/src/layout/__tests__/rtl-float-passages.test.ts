@@ -22,6 +22,7 @@ import {
 } from '../semantic-layout.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { caretAt, caretStops } from '../semantic-interaction.ts';
+import { breakParagraph } from '../paragraph-flow.ts';
 import { hitTestPage } from '../semantic-hit-test.ts';
 import { linesOf, type LineRecord, type StyleSpanRecord } from '../semantic-records.ts';
 
@@ -46,6 +47,9 @@ interface FloatOptions {
   readonly textSide?: WrapTextSide;
   /** Overrides on the zone's wrap input, such as wrap distances or a wrap polygon. */
   readonly input?: Partial<ExclusionZone['input']>;
+  /** More floats beside the same lines, each `[left, left + width)`. */
+  readonly more?: readonly { readonly left: number; readonly width: number }[];
+  readonly compatibilityMode?: number;
 }
 
 function zoneFor(paragraphId: string, options: FloatOptions = {}): ExclusionZone {
@@ -72,7 +76,43 @@ function linesBeside(paragraphXml: string, options: FloatOptions = {}): LineReco
   const target = source.root.children
     .flatMap((child) => ('children' in child ? child.children : []))
     .find((child) => child.kind === 'paragraph')!;
-  return linesOf(layoutUnderFloat(source, new Map([[0, [zoneFor(target.id, options)]]])));
+  const zones = [
+    zoneFor(target.id, options),
+    ...(options.more ?? []).map((float, index) => ({
+      ...squareWrapZone({
+        anchorParagraphId: target.id,
+        top: 0,
+        height: 70,
+        ...float,
+        drawingNodeId: `float-${index + 2}`,
+      }),
+    })),
+  ];
+  if (options.compatibilityMode === undefined)
+    return linesOf(layoutUnderFloat(source, new Map([[0, zones]])));
+  return linesOf(
+    layoutSemanticDocument(source, 0, {
+      ...harnessOptions(new Map([[0, zones]])),
+      compatibilityMode: options.compatibilityMode,
+    })
+  );
+}
+
+/** The options `layoutUnderFloat` lays out with, on its 200 by 100pt page. */
+function harnessOptions(zones: ReadonlyMap<number, readonly ExclusionZone[]>) {
+  return {
+    measurer: createFixedMeasurer(),
+    geometry: { width: 200, height: 100, margin: { top: 10, right: 10, bottom: 10, left: 10 } },
+    inlineDrawingLayout: {
+      ownerPartName: '/word/document.xml',
+      project: () => null,
+      resourceOf: () => {
+        throw new Error('no drawings');
+      },
+    },
+    drawingExclusionZonesByPage: zones,
+    drawingExclusionPass: 0,
+  };
 }
 
 /** The line's parts, in model order: a new part starts at each float's jump. */
@@ -106,6 +146,25 @@ function glyphs(
     end = Math.max(end, span.box.x + span.box.width - (rtl ? 0 : trailing));
   }
   return { start, end };
+}
+
+const glyphSpans = (line: LineRecord) => line.spans.filter((span) => span.text.trim());
+
+/** The lines beside a float over [70, 110), which leaves 70pt on each side. */
+function besideOnly(textSide: WrapTextSide, rtl: boolean, compatibilityMode?: number) {
+  // Few enough words to stay beside the float.
+  const words = HEBREW.split(' ').slice(0, 10).join(' ');
+  const paragraph = rtl
+    ? rtlParagraph('start', rtlRun(words))
+    : `<w:p><w:r><w:t>${words.replace(/[^ ]/g, 'a')}</w:t></w:r></w:p>`;
+  const beside = linesBeside(paragraph, {
+    left: 70,
+    width: 40,
+    textSide,
+    ...(compatibilityMode === undefined ? {} : { compatibilityMode }),
+  }).filter((line) => line.box.y < 70);
+  expect(beside.length).toBeGreaterThan(0);
+  return beside;
 }
 
 const twoPartLines = (lines: readonly LineRecord[]) =>
@@ -220,26 +279,29 @@ describe('a right-to-left line beside a float', () => {
     }
   });
 
-  test('keeps physical wrap sides, and breaks a largest-side tie to the left', () => {
-    const glyphsOf = (line: LineRecord) => line.spans.filter((span) => span.text.trim());
+  test('keeps physical wrap sides', () => {
     // A float over [70, 110) leaves 70pt on each side.
-    for (const [textSide, rtl, passage] of [
-      ['largest', true, { start: 0, end: 70 }],
-      ['largest', false, { start: 110, end: 180 }],
-      ['left', true, { start: 0, end: 70 }],
-      ['right', true, { start: 110, end: 180 }],
+    for (const [textSide, passage] of [
+      ['left', { start: 0, end: 70 }],
+      ['right', { start: 110, end: 180 }],
     ] as const) {
-      // Few enough words to stay beside the float.
-      const words = HEBREW.split(' ').slice(0, 10).join(' ');
-      const paragraph = rtl
-        ? rtlParagraph('start', rtlRun(words))
-        : `<w:p><w:r><w:t>${words.replace(/[^ ]/g, 'a')}</w:t></w:r></w:p>`;
-      const beside = linesBeside(paragraph, { left: 70, width: 40, textSide }).filter(
-        (line) => line.box.y < 70
-      );
-      expect(beside.length).toBeGreaterThan(0);
-      for (const line of beside) {
-        for (const span of glyphsOf(line)) expectInside([span], passage);
+      for (const line of besideOnly(textSide, true)) {
+        for (const span of glyphSpans(line)) expectInside([span], passage);
+      }
+    }
+  });
+
+  test('breaks a largest-side tie by physical side and compatibility mode', () => {
+    // Before mode 15 a tie keeps the right side, from mode 15 the left, in either direction.
+    for (const rtl of [true, false]) {
+      for (const [mode, passage] of [
+        [undefined, { start: 110, end: 180 }],
+        [14, { start: 110, end: 180 }],
+        [15, { start: 0, end: 70 }],
+      ] as const) {
+        for (const line of besideOnly('largest', rtl, mode)) {
+          for (const span of glyphSpans(line)) expectInside([span], passage);
+        }
       }
     }
   });
@@ -279,6 +341,72 @@ describe('a right-to-left line beside a float', () => {
       expectInside(first!, RIGHT);
       expectInside(second!, LEFT);
     }
+  });
+
+  test('keeps every part out of a physical left indent', () => {
+    // `w:end` is the physical left indent of a right-to-left paragraph: 40pt here, with a
+    // float over [80, 120), so the passages are [120, 180) and [40, 80).
+    const near = { start: 120, end: 180 };
+    const far = { start: 40, end: 80 };
+    for (const jc of ['start', 'center', 'end', 'both']) {
+      const all = linesBeside(rtlParagraph(jc, rtlRun(HEBREW), '<w:ind w:end="800"/>'), {
+        left: 80,
+      });
+      const lines = twoPartLines(all).filter((line) => line !== all.at(-1));
+      expect(lines.length).toBeGreaterThanOrEqual(2);
+      for (const line of lines) {
+        const [first, second] = partsOf(line);
+        expectInside(first!, near);
+        expectInside(second!, far);
+        const { start, end } = glyphs(second!);
+        if (jc === 'start') expect(end).toBeCloseTo(far.end, 6);
+        if (jc === 'end' || jc === 'both') expect(start).toBeCloseTo(far.start, 6);
+        if (jc === 'center') expect((start + end) / 2).toBeCloseTo(60, 6);
+        if (jc === 'both') expect(end).toBeCloseTo(far.end, 6);
+      }
+    }
+  });
+
+  test('fills three passages from the right between two floats', () => {
+    // Floats over [20, 50) and [100, 130): passages [130, 180), [50, 100), and [0, 20).
+    const passages = [
+      { start: 130, end: 180 },
+      { start: 50, end: 100 },
+      { start: 0, end: 20 },
+    ];
+    const text = 'אא בב גג דד הה וו זז חח טט יי ככ לל ממ נן סס עע פפ צצ קק רר שש תת';
+    for (const jc of ['start', 'center']) {
+      const lines = linesBeside(rtlParagraph(jc, rtlRun(text)), {
+        left: 20,
+        width: 30,
+        more: [{ left: 100, width: 30 }],
+      }).filter((line) => partsOf(line).length === 3);
+      expect(lines.length).toBeGreaterThanOrEqual(2);
+      for (const line of lines) {
+        for (const [index, part] of partsOf(line).entries()) {
+          const passage = passages[index]!;
+          const { start, end } = glyphs(part);
+          expectInside(part, passage);
+          if (jc === 'start') expect(end).toBeCloseTo(passage.end, 6);
+          else expect((start + end) / 2).toBeCloseTo((passage.start + passage.end) / 2, 6);
+        }
+      }
+    }
+  });
+
+  test('keeps a tab stop measured from the start edge beside a float', () => {
+    const paragraph = rtlParagraph('start', rtlRun('אא') + '<w:r><w:tab/></w:r>' + rtlRun(HEBREW));
+    const tabOf = (lines: readonly LineRecord[]) => {
+      const [line] = lines;
+      const index = line!.spans.findIndex((span) => span.text === '\t');
+      return { tab: line!.spans[index]!, after: line!.spans[index + 1]! };
+    };
+    const beside = tabOf(linesBeside(paragraph));
+    const plain = tabOf(linesOf(layoutWithoutFloat(loadBody(paragraph))));
+    // The text after the tab ends at the 36pt default stop from the right edge.
+    expect(beside.after.box.x + beside.after.box.width).toBeCloseTo(RIGHT.end - 36, 6);
+    expect(beside.tab.box.width).toBeCloseTo(plain.tab.box.width, 6);
+    expect(beside.tab.box.x).toBeCloseTo(plain.tab.box.x, 6);
   });
 
   test('lays out a line the float does not reach as it would without the float', () => {
@@ -352,6 +480,50 @@ describe('a right-to-left line beside a float', () => {
     expect(twoPartLines(linesOf(first)).length).toBeGreaterThanOrEqual(2);
     expect(layoutSemanticDocument(source, 2, options).pages).toBe(first.pages);
   });
+});
+
+test('a remainder after a clearing break clears its own float in either direction', () => {
+  // The paragraph's own 30pt float stands at its start edge and is published on the page. The
+  // remainder after `w:br w:clear` restarts below it, as on the first pass.
+  for (const [rtl, clear] of [
+    [false, 'all'],
+    [false, 'left'],
+    [true, 'all'],
+    [true, 'right'],
+  ] as const) {
+    const part = loadBody(
+      `<w:p><w:pPr>${rtl ? '<w:bidi/>' : ''}</w:pPr>${rtlRun('אא')}` +
+        `<w:r><w:br w:type="textWrapping" w:clear="${clear}"/></w:r>${rtlRun('בב גג')}</w:p>`
+    );
+    const paragraph = part.root.children
+      .flatMap((node) => ('children' in node ? node.children : []))
+      .find((node) => node.kind === 'paragraph')!;
+    const zone = {
+      ...squareWrapZone({
+        anchorParagraphId: paragraph.id,
+        top: 0,
+        height: 30,
+        left: rtl ? 100 : 0,
+        width: 80,
+      }),
+      anchorModelStart: 0,
+    };
+    const lines = breakParagraph(
+      paragraph,
+      paragraph.id,
+      0,
+      180,
+      createFixedMeasurer(),
+      undefined,
+      null,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      { paragraphRtl: rtl, startOffset: 3, pageExclusionZones: [zone], paragraphStartY: 0 }
+    );
+    expect(lines[0]!.exclusionSkipBefore).toBe(30);
+  }
 });
 
 describe('a left-to-right paragraph with right-to-left text beside a float', () => {

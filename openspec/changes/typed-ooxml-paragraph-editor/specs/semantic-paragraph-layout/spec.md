@@ -31,7 +31,7 @@ The layout engine SHALL fill the passages that a floating object leaves a right-
 - **GIVEN** a right-to-left paragraph beside a floating object with a one-sided wrap or wrap distance
 - **WHEN** layout breaks its lines
 - **THEN** the wrap side and the wrap distance keep their physical sides
-- **AND** square wrapping on the largest side keeps text on the left when both sides are equal
+- **AND** square wrapping on the largest side with equal sides keeps text on the physical left in compatibility mode 15 and later, and on the physical right in earlier modes, in either paragraph direction
 
 ### Requirement: Native semantic layout records
 

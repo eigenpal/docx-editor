@@ -4,12 +4,28 @@ import type { StyleSpanRecord } from './semantic-records.ts';
 export interface LinePassage {
   readonly start: number;
   readonly end: number;
-  /**
-   * Where the pen began this passage, when the line broke in mirrored x
-   * (`rtl-wrap-mirror.ts`). `start` and `end` are then the physical passage, and the line's
-   * spans still stand at their pen x until {@link alignBidiPassageSpans} moves each part.
-   */
+  /** Set on every passage of a line that broke in mirrored x; see {@link MirroredLinePassage}. */
+  readonly mirrored?: true;
+  /** Where the pen began this passage; see {@link MirroredLinePassage}. */
   readonly breakStart?: number;
+}
+
+/**
+ * A passage of a line that broke in x mirrored about its measure (`rtl-wrap-mirror.ts`), as a
+ * right-to-left line beside a float does. `start` and `end` are the physical passage. The
+ * line's spans still stand at their pen x, so `breakStart` is where the pen began this
+ * passage; {@link alignBidiPassageSpans} moves each part from there to its physical passage.
+ */
+export interface MirroredLinePassage extends LinePassage {
+  readonly mirrored: true;
+  readonly breakStart: number;
+}
+
+/** Whether `passages` come from a line that broke in mirrored x. */
+export function isMirroredPassageList(
+  passages: readonly LinePassage[]
+): passages is readonly MirroredLinePassage[] {
+  return passages.length > 0 && passages.every((passage) => passage.mirrored === true);
 }
 
 type AlignPart = (
@@ -52,7 +68,8 @@ function passageOwners(
     let owner = -1;
     for (let index = passages.length - 1; index >= 0; index -= 1) {
       const passage = passages[index]!;
-      if ((passage.breakStart ?? passage.start) <= x + 0.001) {
+      // A mirrored line's spans stand at their pen x, where its passages began.
+      if ((passage.mirrored ? passage.breakStart! : passage.start) <= x + 0.001) {
         owner = index;
         break;
       }
@@ -81,7 +98,7 @@ export function alignPassageSpans(
   alignPart: AlignPart
 ): readonly StyleSpanRecord[] | null {
   const parts = passageParts(spans);
-  if (parts.length < 2) return null;
+  if (parts.length < 2 || isMirroredPassageList(passages)) return null;
   const owners = passageOwners(parts, passages);
   if (!owners) return null;
   const aligned: StyleSpanRecord[] = [];
@@ -119,7 +136,7 @@ export function alignBidiPassageSpans(
   passages: readonly LinePassage[],
   alignPart: AlignPart
 ): readonly StyleSpanRecord[] | null {
-  const mirrored = passages[0]?.breakStart !== undefined;
+  const mirrored = isMirroredPassageList(passages);
   const parts = passageParts(spans);
   if (parts.length === 0 || (!mirrored && parts.length < 2)) return null;
   const owners = passageOwners(parts, passages);
@@ -128,7 +145,7 @@ export function alignBidiPassageSpans(
   let previous: { readonly left: number; readonly right: number } | undefined;
   for (const [index, part] of parts.entries()) {
     const passage = owners[index]!;
-    const shift = passage.breakStart === undefined ? 0 : passage.start - passage.breakStart;
+    const shift = passage.mirrored ? passage.start - passage.breakStart! : 0;
     const moved =
       shift === 0
         ? part
