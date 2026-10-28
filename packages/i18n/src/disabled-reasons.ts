@@ -59,6 +59,8 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   // Keyed on the equation lane's `can` refusals, which the equation popover shows.
   'compact linear editing cannot preserve this equation source formatting':
     'disabledReason.equationSourceFormatting',
+  // Keyed on `NO_LINEAR_FORM_EQUATION_REFUSAL` in the engine's equation lane.
+  'compact linear text cannot spell this equation': 'disabledReason.equationNoLinearForm',
   'equation replacement is not supported in suggesting mode': 'disabledReason.equationSuggesting',
   'in suggesting mode, remove the whole equation block rather than one equation':
     'disabledReason.equationSuggestingDisplay',

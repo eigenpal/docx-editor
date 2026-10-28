@@ -983,6 +983,7 @@
     "editorNotReady": "Editor belum siap",
     "imageSuggesting": "Perubahan gambar tidak tersedia dalam mode saran",
     "equationSourceFormatting": "Pengeditan linear akan menghilangkan format persamaan ini",
+    "equationNoLinearForm": "Persamaan ini tidak memiliki bentuk linear, sehingga tidak dapat diganti dari teks",
     "equationSuggesting": "Pengeditan persamaan tidak tersedia dalam mode saran",
     "equationSuggestingDisplay": "Dalam mode saran, hapus seluruh blok persamaan, bukan satu persamaan",
     "invalidValue": "Nilai ini tidak valid untuk perintah",

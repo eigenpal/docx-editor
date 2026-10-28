@@ -18,11 +18,16 @@ const SOURCE = docx(
 const REPLACEMENT_SOURCE = docx(
   `<w:p><m:oMath xmlns:m="${M}"><m:r><m:t>y</m:t></m:r></m:oMath></w:p>`
 );
+// Without m:chr the n-ary operator is an integral, which compact text cannot spell.
+const INTEGRAL_SOURCE = docx(
+  `<w:p><m:oMath xmlns:m="${M}"><m:nary><m:naryPr/><m:sub><m:r><m:t>a</m:t></m:r></m:sub>` +
+    '<m:sup><m:r><m:t>b</m:t></m:r></m:sup><m:e><m:r><m:t>y</m:t></m:r></m:e></m:nary></m:oMath></w:p>'
+);
 
-function mount(mode: 'edit' | 'view' = 'edit'): MountedEditor {
+function mount(mode: 'edit' | 'view' = 'edit', source = SOURCE): MountedEditor {
   return mountEditorTree(
     () => [],
-    SOURCE,
+    source,
     () => h(DocxEditorEquation),
     undefined,
     { mode }
@@ -187,6 +192,25 @@ describe('default Vue equation popover', () => {
     expect(
       view.container.querySelector('[data-testid="equation-popup-disabled-reason"]')?.textContent
     ).toContain('open for viewing');
+    view.unmount();
+  });
+
+  test('explains why an equation without a linear form cannot be replaced', async () => {
+    const view = mount('edit', INTEGRAL_SOURCE);
+    await flush();
+    await open(view);
+    const apply = view.container.querySelector(
+      '[data-testid="equation-popup-apply"]'
+    ) as HTMLButtonElement;
+    const remove = view.container.querySelector(
+      '[data-testid="equation-popup-delete"]'
+    ) as HTMLButtonElement;
+
+    expect(apply.disabled).toBe(true);
+    expect(remove.disabled).toBe(false);
+    expect(
+      view.container.querySelector('[data-testid="equation-popup-disabled-reason"]')?.textContent
+    ).toBe('This equation has no linear form, so it cannot be replaced from text');
     view.unmount();
   });
 

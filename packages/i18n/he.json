@@ -984,6 +984,7 @@
     "editorNotReady": "העורך אינו מוכן",
     "imageSuggesting": "שינויים בתמונות אינם זמינים במצב הצעות",
     "equationSourceFormatting": "עריכה לינארית תאבד את העיצוב של משוואה זו",
+    "equationNoLinearForm": "למשוואה זו אין צורה לינארית, ולכן לא ניתן להחליף אותה מטקסט",
     "equationSuggesting": "עריכת משוואות אינה זמינה במצב הצעות",
     "equationSuggestingDisplay": "במצב הצעות, הסירו את כל גוש המשוואות במקום משוואה אחת",
     "invalidValue": "ערך זה אינו תקף לפקודה",

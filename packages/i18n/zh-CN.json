@@ -983,6 +983,7 @@
     "editorNotReady": "编辑器尚未就绪",
     "imageSuggesting": "建议模式下无法更改图片",
     "equationSourceFormatting": "线性编辑会丢失此公式的格式",
+    "equationNoLinearForm": "此公式没有线性形式，因此无法从文本替换",
     "equationSuggesting": "建议模式下无法编辑公式",
     "equationSuggestingDisplay": "在建议模式下，请删除整个公式块，而不是其中一个公式",
     "invalidValue": "此值不适用于该命令",

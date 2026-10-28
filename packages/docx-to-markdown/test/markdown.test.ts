@@ -165,6 +165,23 @@ describe('record-only Markdown export', () => {
     expect(result.markdown).not.toContain('\uFFFC');
   });
 
+  test('spells each n-ary equation with the operator it draws', async () => {
+    const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
+    const limits =
+      '<m:sub><m:r><m:t>a</m:t></m:r></m:sub><m:sup><m:r><m:t>b</m:t></m:r></m:sup>' +
+      '<m:e><m:r><m:t>y</m:t></m:r></m:e>';
+    const result = await exportMarkdown(
+      docx(
+        `<w:p><m:oMath xmlns:m="${M}"><m:nary><m:naryPr/>${limits}</m:nary></m:oMath></w:p>` +
+          `<w:p><m:oMath xmlns:m="${M}"><m:nary><m:naryPr><m:chr m:val="\u2211"/></m:naryPr>` +
+          `${limits}</m:nary></m:oMath></w:p>`
+      )
+    );
+
+    // Without m:chr the operator is an integral.
+    expect(result.markdown).toBe('\u222Baby\n\n\u2211aby');
+  });
+
   test('publishes resolved paragraph semantics and translates marks, hard breaks, and hostile text', async () => {
     const bytes = docx(
       '<w:p><w:pPr><w:pStyle w:val="Heading1"/><w:outlineLvl w:val="0"/><w:jc w:val="center"/></w:pPr><w:r><w:t>Title</w:t></w:r></w:p>' +

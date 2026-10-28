@@ -43,6 +43,7 @@
     "tableGridUnplaceable": "この表には列グリッドに収まらないセルがあります",
     "imageSuggesting": "提案モードでは画像を変更できません",
     "equationSourceFormatting": "行形式で編集すると、この数式の書式が失われます",
+    "equationNoLinearForm": "この数式には行形式がないため、テキストから置き換えることはできません",
     "equationSuggesting": "提案モードでは数式を編集できません",
     "equationSuggestingDisplay": "提案モードでは、1 つの数式ではなく数式ブロック全体を削除してください",
     "invalidValue": "このコマンドでは使用できない値です",

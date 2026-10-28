@@ -122,12 +122,14 @@ describe('server-first defaults', () => {
         // Small table text no longer reserves an inherited, taller cell-end mark.
         pages: 25,
         bodyLineCount: 280,
-        // Includes the four checkbox symbols and two authored nonbreaking hyphens.
-        markdownLength: 17_201,
+        // Includes the four checkbox symbols, two authored nonbreaking hyphens, and the
+        // operator of the one n-ary equation.
+        markdownLength: 17_202,
         headers: 24,
         footers: 24,
-        markdownHash: 'e6da51e7832a8859bedddf028a16d9bc7265871924f2393ea9f2fae06dfda263',
+        markdownHash: 'ac074362687021a44c72b570b9115da792a5c5a9f4bc6181b5edc605b8efe8f9',
       });
+      expect(translated.markdown).toContain('Summation: ∑i\\=1ni');
       expect(translated.markdown).toStartWith('**COMPREHENSIVE WORD ELEMENT**');
       expect(translated.markdown).toEndWith(
         'Endnote 2: Additional bibliography reference – Smith et al\\., 2025\\.'

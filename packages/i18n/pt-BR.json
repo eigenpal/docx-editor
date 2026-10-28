@@ -983,6 +983,7 @@
     "editorNotReady": "O editor não está pronto",
     "imageSuggesting": "Alterações em imagens não estão disponíveis no modo de sugestão",
     "equationSourceFormatting": "A edição linear perderia a formatação desta equação",
+    "equationNoLinearForm": "Esta equação não tem forma linear, portanto não pode ser substituída por texto",
     "equationSuggesting": "A edição de equações não está disponível no modo de sugestão",
     "equationSuggestingDisplay": "No modo de sugestão, remova o bloco de equações inteiro em vez de uma única equação",
     "invalidValue": "Este valor não é válido para o comando",

@@ -983,6 +983,7 @@
     "editorNotReady": "Düzenleyici hazır değil",
     "imageSuggesting": "Öneri modunda resim değişiklikleri kullanılamaz",
     "equationSourceFormatting": "Doğrusal düzenleme bu denklemin biçimlendirmesini kaybeder",
+    "equationNoLinearForm": "Bu denklemin doğrusal biçimi yok, bu nedenle metinden değiştirilemez",
     "equationSuggesting": "Öneri modunda denklem düzenleme kullanılamaz",
     "equationSuggestingDisplay": "Öneri modunda tek bir denklem yerine tüm denklem bloğunu kaldırın",
     "invalidValue": "Bu değer komut için geçerli değil",

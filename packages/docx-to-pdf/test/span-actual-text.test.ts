@@ -70,3 +70,18 @@ test('each ActualText region has one character per painted glyph', async () => {
     });
   }
 });
+
+test('an n-ary equation region carries the operator it draws', async () => {
+  const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
+  const bytes = docx(
+    `<w:p xmlns:m="${M}"><m:oMath><m:nary><m:naryPr/>` +
+      '<m:sub><m:r><m:t>a</m:t></m:r></m:sub><m:sup><m:r><m:t>b</m:t></m:r></m:sup>' +
+      '<m:e><m:r><m:t>y</m:t></m:r></m:e></m:nary></m:oMath></w:p>'
+  );
+  const stream = await pageStream((await exportPdf(bytes, { useSystemFonts: false })).bytes);
+  const texts = [...stream.matchAll(/\/Span << \/ActualText <FEFF([0-9A-Fa-f]*)> >> BDC/g)].map(
+    ([, hex]) => decode(hex!)
+  );
+  // Without m:chr the operator is an integral, and copied PDF text includes it.
+  expect(texts).toEqual(['∫aby']);
+});

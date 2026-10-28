@@ -373,6 +373,22 @@ describe('copying equations to other applications', () => {
     expect(flavours.html).not.toContain('∑');
   });
 
+  test('an n-ary outside the supported subset copies its operator in the text fallback', () => {
+    const limits =
+      '<m:sub><m:r><m:t>a</m:t></m:r></m:sub><m:sup><m:r><m:t>b</m:t></m:r></m:sup>' +
+      '<m:e><m:r><m:t>y</m:t></m:r></m:e>';
+    const source = mount(
+      `<w:p xmlns:m="${M}"><m:oMath><m:nary><m:naryPr><m:chr m:val="∑"/>` +
+        `<m:subHide m:val="1"/></m:naryPr>${limits}</m:nary></m:oMath></w:p>`
+    );
+    putCaret(source.surface, 0);
+    source.surface.selectAll();
+    const flavours = source.surface.copyFlavours();
+    source.container.remove();
+    expect(flavours.text).toBe('∑aby');
+    expect(flavours.html).toContain('<mtext>∑aby</mtext>');
+  });
+
   test('the HTML alone pastes back as the same equations without duplicates', () => {
     const html = copied();
     const visible = /<div[^>]*>([\s\S]*)<\/div>/.exec(html)![1]!;

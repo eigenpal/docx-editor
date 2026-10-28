@@ -983,6 +983,7 @@
     "editorNotReady": "Edytor nie jest gotowy",
     "imageSuggesting": "Zmiany obrazów są niedostępne w trybie sugerowania",
     "equationSourceFormatting": "Edycja liniowa usunęłaby formatowanie tego równania",
+    "equationNoLinearForm": "To równanie nie ma postaci liniowej, więc nie można go zastąpić tekstem",
     "equationSuggesting": "Edycja równań jest niedostępna w trybie sugerowania",
     "equationSuggestingDisplay": "W trybie sugerowania usuń cały blok równań zamiast jednego równania",
     "invalidValue": "Ta wartość jest nieprawidłowa dla tego polecenia",

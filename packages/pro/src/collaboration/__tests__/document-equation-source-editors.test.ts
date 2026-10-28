@@ -349,7 +349,7 @@ test('two editors keep an equation read-only when its default run properties dif
   }
 });
 
-test('two editors keep an n-ary without m:chr as an integral through replace and undo', async () => {
+test('two editors keep an n-ary without m:chr as an integral and refuse to replace it', async () => {
   const { left, right, equationXml, select, pause, resume, close } = await openPair(
     'n-ary without operator',
     '<m:nary><m:naryPr/><m:sub><m:r><m:t>a</m:t></m:r></m:sub>' +
@@ -364,27 +364,34 @@ test('two editors keep an n-ary without m:chr as an integral through replace and
       const part = editor.surface!.session.partFor({ kind: 'body' })!;
       const projected = projectOmmlEquation(findNode(part, equation.id)!);
       expect(projected?.expression).toMatchObject({ kind: 'nary', operator: '∫' });
+      // The compact syntax spells only the sum, so neither editor replaces the integral.
+      expect(editor.surface!.equations.can(equation.id, 'replace')).toEqual({
+        ok: false,
+        code: 'unsupported',
+        reason: 'compact linear text cannot spell this equation',
+      });
+      expect(editor.surface!.equations.can(equation.id, 'remove')).toEqual({ ok: true });
     }
-    // The compact syntax spells only the sum, so it offers no text for the integral.
     expect(equation.linear).toBe('');
+    expect(left.surface!.equations.applyEquation(equation.id, '∑[i]{x}')).toBe(false);
+    expect(equationXml(await right.save())).toEqual(original);
 
+    // A removal stays one shared step while the other editor types.
     pause();
-    expect(left.surface!.equations.applyEquation(equation.id, '∑[i]{x}')).toBe(true);
+    expect(left.surface!.equations.removeEquation(equation.id)).toBe(true);
     select(right, 0);
     expect(right.exec({ type: 'pasteWithoutFormatting', text: 'Bob ' }).ok).toBe(true);
     resume();
-
-    // A sum written from the compact syntax names its operator, so it stays a sum.
-    const replaced = equationXml(await left.save());
-    expect(equationXml(await right.save())).toEqual(replaced);
-    expect(replaced[0]).toMatch(/<m:chr m:val="∑"\/>/);
-    expect(right.surface!.session.bodyText()).toBe('Bob Left￼Right');
+    expect(equationXml(await left.save())).toEqual([]);
+    expect(equationXml(await right.save())).toEqual([]);
+    expect(right.surface!.session.bodyText()).toBe('Bob LeftRight');
 
     expect(left.exec({ type: 'undo' }).ok).toBe(true);
     expect(equationXml(await left.save())).toEqual(original);
     expect(equationXml(await right.save())).toEqual(original);
+    expect(right.surface!.session.bodyText()).toBe('Bob Left￼Right');
     expect(left.exec({ type: 'redo' }).ok).toBe(true);
-    expect(equationXml(await right.save())).toEqual(replaced);
+    expect(equationXml(await right.save())).toEqual([]);
   } finally {
     close();
   }

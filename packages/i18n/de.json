@@ -983,6 +983,7 @@
     "editorNotReady": "Der Editor ist nicht bereit",
     "imageSuggesting": "Bildänderungen sind im Vorschlagsmodus nicht verfügbar",
     "equationSourceFormatting": "Bei linearer Bearbeitung ginge die Formatierung dieser Gleichung verloren",
+    "equationNoLinearForm": "Diese Gleichung hat keine lineare Form und kann daher nicht durch Text ersetzt werden",
     "equationSuggesting": "Das Bearbeiten von Gleichungen ist im Vorschlagsmodus nicht verfügbar",
     "equationSuggestingDisplay": "Entfernen Sie im Vorschlagsmodus den ganzen Gleichungsblock statt einer einzelnen Gleichung",
     "invalidValue": "Dieser Wert ist für den Befehl ungültig",

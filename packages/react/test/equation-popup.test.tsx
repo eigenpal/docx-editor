@@ -43,17 +43,22 @@ const SOURCE = equationDocument(
     '<m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup></m:oMath>'
 );
 const REPLACEMENT_SOURCE = equationDocument('<m:oMath><m:r><m:t>y</m:t></m:r></m:oMath>');
+// Without m:chr the n-ary operator is an integral, which compact text cannot spell.
+const INTEGRAL_SOURCE = equationDocument(
+  '<m:oMath><m:nary><m:naryPr/><m:sub><m:r><m:t>a</m:t></m:r></m:sub>' +
+    '<m:sup><m:r><m:t>b</m:t></m:r></m:sup><m:e><m:r><m:t>y</m:t></m:r></m:e></m:nary></m:oMath>'
+);
 
 interface Mounted {
   readonly view: ReturnType<typeof render>;
   editor(): DocxEditorInstance;
 }
 
-function mount(mode: 'edit' | 'view' = 'edit'): Mounted {
+function mount(mode: 'edit' | 'view' = 'edit', source = SOURCE): Mounted {
   let instance: DocxEditorInstance | null = null;
   const view = render(
     <DocxEditorRoot
-      document={SOURCE}
+      document={source}
       mode={mode}
       onReady={(editor) => {
         instance = editor as DocxEditorInstance;
@@ -213,6 +218,23 @@ describe('default React equation popover', () => {
     );
     expect(mounted.view.getByTestId('equation-popup-disabled-reason').textContent).toContain(
       'open for viewing'
+    );
+  });
+
+  test('explains why an equation without a linear form cannot be replaced', async () => {
+    const mounted = mount('edit', INTEGRAL_SOURCE);
+    await tick();
+    open(mounted);
+    await tick();
+
+    expect((mounted.view.getByTestId('equation-popup-apply') as HTMLButtonElement).disabled).toBe(
+      true
+    );
+    expect((mounted.view.getByTestId('equation-popup-delete') as HTMLButtonElement).disabled).toBe(
+      false
+    );
+    expect(mounted.view.getByTestId('equation-popup-disabled-reason').textContent).toBe(
+      'This equation has no linear form, so it cannot be replaced from text'
     );
   });
 

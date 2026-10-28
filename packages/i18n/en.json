@@ -43,6 +43,7 @@
     "tableGridUnplaceable": "This table has a cell that doesn't fit its column grid",
     "imageSuggesting": "Image changes are unavailable in suggesting mode",
     "equationSourceFormatting": "Linear editing would lose this equation's formatting",
+    "equationNoLinearForm": "This equation has no linear form, so it cannot be replaced from text",
     "equationSuggesting": "Editing an equation is unavailable in suggesting mode",
     "equationSuggestingDisplay": "In suggesting mode, remove the whole equation block instead of one equation",
     "pictureSelected": "A picture is selected. Place the cursor in text to insert a picture.",

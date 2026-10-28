@@ -209,4 +209,16 @@ describe('an n-ary operator without m:chr', () => {
     // The text spelling of every n-ary structure includes the operator it draws.
     expect(project(nary('∑', 'subSup')).fallbackText).toBe('∑qkx');
   });
+
+  test('outside the supported subset, its text fallback paints the integral', () => {
+    for (const hidden of ['<m:subHide m:val="1"/>', '<m:grow m:val="1"/>']) {
+      const body = unnamed(`<m:naryPr>${hidden}</m:naryPr>`);
+      const projected = project(body);
+      expect(projected.expression).toEqual({ kind: 'fallback', text: '∫qkx' });
+      expect(inline(body)).toMatchObject({ kind: 'fallback', text: '∫qkx' });
+    }
+    // A named operator paints in the fallback text too.
+    const named = nary('∑').replace('</m:naryPr>', '<m:subHide m:val="1"/></m:naryPr>');
+    expect(project(named).expression).toEqual({ kind: 'fallback', text: '∑qkx' });
+  });
 });

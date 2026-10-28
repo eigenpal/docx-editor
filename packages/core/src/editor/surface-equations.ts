@@ -25,6 +25,12 @@ const SUGGESTING_DISPLAY_REFUSAL =
   'in suggesting mode, remove the whole equation block rather than one equation';
 const paragraphEquationCache = new WeakMap<OoxmlParagraphNode, readonly SurfaceEquation[]>();
 const sourcePreservingEquations = new WeakSet<SurfaceEquation>();
+/**
+ * Compact text spells fractions, radicals, scripts, and sums only. An equation in the editable
+ * subset with no such spelling (an integral, for example) would open as an empty field, and
+ * text applied there would replace it, so replacement is refused with this reason.
+ */
+const NO_LINEAR_FORM_EQUATION_REFUSAL = 'compact linear text cannot spell this equation';
 
 /** One addressable inline equation and its compact editable projection. */
 export interface SurfaceEquation {
@@ -391,6 +397,14 @@ export function createEquationOps(deps: EquationOpsDeps): EquationOps {
         code: 'unsupported',
         reason: 'compact linear editing cannot preserve this equation source formatting',
       };
+    }
+    if (
+      action === 'replace' &&
+      equation.supported &&
+      equation.linear === '' &&
+      equation.fallbackText !== ''
+    ) {
+      return { ok: false, code: 'unsupported', reason: NO_LINEAR_FORM_EQUATION_REFUSAL };
     }
     const [op] =
       action === 'replace'

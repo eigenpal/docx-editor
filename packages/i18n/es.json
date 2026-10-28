@@ -43,6 +43,7 @@
     "tableGridUnplaceable": "Esta tabla tiene una celda que no encaja en su cuadrícula de columnas",
     "imageSuggesting": "Los cambios de imagen no están disponibles en modo de sugerencias",
     "equationSourceFormatting": "La edición lineal perdería el formato de esta ecuación",
+    "equationNoLinearForm": "Esta ecuación no tiene forma lineal, por lo que no se puede reemplazar desde texto",
     "equationSuggesting": "La edición de ecuaciones no está disponible en modo de sugerencias",
     "equationSuggestingDisplay": "En modo de sugerencias, quite el bloque de ecuaciones completo en lugar de una sola ecuación",
     "invalidValue": "Este valor no es válido para el comando",

@@ -11,7 +11,7 @@ const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
-function docx(): Uint8Array {
+function docx(math = '<m:r><m:t>x</m:t></m:r>'): Uint8Array {
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
@@ -25,19 +25,19 @@ function docx(): Uint8Array {
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}" xmlns:m="${M}"><w:body><w:p>` +
         '<w:r><w:t>A</w:t></w:r>' +
-        '<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>' +
+        `<m:oMath>${math}</m:oMath>` +
         '<w:r><w:t>Z</w:t></w:r>' +
         '</w:p></w:body></w:document>'
     ),
   });
 }
 
-function mounted(author?: string) {
+function mounted(author?: string, math?: string) {
   const container = document.createElement('div');
   document.body.append(container);
   const editor = createDocxEditor({
     container,
-    document: docx(),
+    document: docx(math),
     ...(author ? { author } : {}),
   });
   if (!editor.surface) throw new Error('surface failed to mount');
@@ -74,6 +74,43 @@ describe('atomic equation editing', () => {
     expect(editor.surface!.session.bodyText()).toBe('AZ');
     editor.exec({ type: 'undo' });
     expect(editor.surface!.session.bodyText()).toBe('A\uFFFCZ');
+  });
+
+  test('refuses to replace an equation that compact text cannot spell, and says why', () => {
+    const limits =
+      '<m:sub><m:r><m:t>a</m:t></m:r></m:sub><m:sup><m:r><m:t>b</m:t></m:r></m:sup>' +
+      '<m:e><m:r><m:t>y</m:t></m:r></m:e>';
+    const reason = 'compact linear text cannot spell this equation';
+    // Without m:chr the operator is an integral; the compact syntax spells only the sum.
+    for (const properties of ['<m:naryPr/>', '<m:naryPr><m:limLoc m:val="undOvr"/></m:naryPr>']) {
+      const { editor, container } = mounted(undefined, `<m:nary>${properties}${limits}</m:nary>`);
+      const surface = editor.surface!;
+      const equation = surface.equations.equationAtCaret()!;
+      expect(equation).toMatchObject({ linear: '', fallbackText: '∫aby', supported: true });
+      const revision = surface.session.packageRevision();
+      expect(surface.equations.can(equation.id, 'replace')).toEqual({
+        ok: false,
+        code: 'unsupported',
+        reason,
+      });
+      expect(surface.equations.applyEquation(equation.id, 'x')).toBe(false);
+      expect(surface.session.packageRevision()).toBe(revision);
+      expect(surface.state().lastRejection).toBe(reason);
+      // Removal stays available.
+      expect(surface.equations.can(equation.id, 'remove')).toEqual({ ok: true });
+      editor.destroy();
+      container.remove();
+    }
+    // A sum has a compact spelling, so it stays replaceable.
+    const { editor, container } = mounted(
+      undefined,
+      `<m:nary><m:naryPr><m:chr m:val="∑"/></m:naryPr>${limits}</m:nary>`
+    );
+    const sum = editor.surface!.equations.equationAtCaret()!;
+    expect(sum.linear).toBe('∑[a]^[b]{y}');
+    expect(editor.surface!.equations.can(sum.id, 'replace')).toEqual({ ok: true });
+    editor.destroy();
+    container.remove();
   });
 
   test('refuses malformed input without changing the equation', () => {
