@@ -396,9 +396,11 @@ export function* paginateTableInFlowSteps(
     repeatedPlan = candidate;
   };
 
+  /** Start the next fragment; `repeat` false leaves out the header repeat on that page. */
   const breakForContinuation = (
     admitsBodyAfter?: (bodyTop: number) => boolean,
-    newPage = false
+    newPage = false,
+    repeat = repeatsEnabled
   ): void => {
     closeTableFragment();
     if (newPage) flow.advancePage();
@@ -407,8 +409,8 @@ export function* paginateTableInFlowSteps(
     // See placeHeaderGroup: the new fragment opens at the advanced cursor, which is the
     // column region top on a shared sheet and 0 only when a fresh page was opened.
     fragmentTop = flow.cursorY;
-    clearance?.clearPending(repeatsEnabled && headerRows.length > 0 ? headerGroupHeight : 0);
-    if (repeatsEnabled) placeHeaderGroup(true, admitsBodyAfter);
+    clearance?.clearPending(repeat && headerRows.length > 0 ? headerGroupHeight : 0);
+    if (repeat) placeHeaderGroup(true, admitsBodyAfter);
   };
 
   /** Whole band of a fresh page: a note reserve yields to a kept row. */
@@ -861,10 +863,8 @@ export function* paginateTableInFlowSteps(
         // ones. From mode 15 it opens its fresh page without a repeat (`onlyRepeatedHeaderRows`).
         const belowRepeatsOnly = onlyRepeatedHeaderRows(rows);
         if (flow.cursorY > bandTop && !movedToFreshPage && !(splitsAnyway && belowRepeatsOnly)) {
-          const repeats = repeatsEnabled;
-          repeatsEnabled &&= !(splitsAnyway && laterLayout);
-          breakForContinuation(admitsRepeatedHeaders);
-          repeatsEnabled = repeats;
+          const repeat = repeatsEnabled && !(splitsAnyway && laterLayout);
+          breakForContinuation(admitsRepeatedHeaders, false, repeat);
           movedToFreshPage = true;
           // Re-offered like every other break that retries this row: a merge starting on a
           // `w:cantSplit` row that did not fit the band it was offered in may fit the fresh

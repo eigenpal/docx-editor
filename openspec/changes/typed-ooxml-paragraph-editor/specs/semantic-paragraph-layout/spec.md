@@ -30,7 +30,7 @@ A `w:keepNext` paragraph, a chain of them, or a kept row before a `w:cantSplit` 
 
 ### Requirement: Header rows above a row taller than a page
 
-Authored header rows SHALL NOT hold a `w:cantSplit` body row taller than a page on their page, even at the page top. Only repeated header rows SHALL hold it. In compatibility mode 15 and later, authored header rows below other content, with a kept group that opens the body, SHALL move to the next page before that row. A header row group taller than a page SHALL place and keep as body rows.
+Authored header rows SHALL NOT hold a `w:cantSplit` body row taller than a page on their page, even at the page top. Only repeated header rows SHALL hold it. In compatibility mode 15 and later, authored header rows below other content SHALL first move to the next page by themselves, together with a kept group that opens the body. A header row group taller than a page SHALL place and keep as body rows.
 
 #### Scenario: Authored header rows above a tall row
 

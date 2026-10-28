@@ -115,6 +115,16 @@ describe('authored header rows before a cantSplit row taller than a page', () =>
     expect(placed[3]!.startsWith(`${HEADER} R1c1-`)).toBe(true);
   });
 
+  test('mode 15: a tall row after a row that splits opens its page without a repeat', () => {
+    // The ordinary 20-line row splits across pages 1 and 2, below the header rows each time.
+    const body = table([HEAD, row('O', { lines: 20 }), tall('R1')]) + TAIL;
+    const placed = pages(lay(load(body), 15));
+    expect(placed[0]!.startsWith(`${HEADER} Oc1-1`)).toBe(true);
+    expect(placed[1]!.startsWith(`${HEADER} Oc1-`)).toBe(true);
+    expect(placed[2]!.startsWith('R1c1-1')).toBe(true);
+    expect(placed[3]!.startsWith(`${HEADER} R1c1-`)).toBe(true);
+  });
+
   test('mode 15: the header rows and a kept first body row move before the tall row', () => {
     const body = P8 + table([HEAD, row('K', { keep: [true, true] }), tall('R1')]) + TAIL;
     const placed = pages(lay(load(body), 15));
