@@ -9,10 +9,10 @@ import { type ScenarioReport, type SustainedReport } from '../../e2e/edit-browse
 import { type BurstReport } from '../../e2e/edit-browser-burst.js';
 
 /**
- * The sustained gates decide whether a pull request lands, from numbers a browser
- * produces in ten minutes. They are plain arithmetic over a report, so they run
- * here in milliseconds — feed the boundary values by hand and see which side of
- * the gate they fall on.
+ * The sustained and burst gates decide whether a pull request lands, from numbers a
+ * browser produces in ten minutes. They are plain arithmetic over a report, so they run
+ * here in milliseconds — feed the boundary values by hand and see which side of the
+ * gate they fall on, in strict and in `EDIT_BROWSER_BENCH_TIMING_TAILS=warn` mode.
  *
  * Next to `edit-bench-gates.test.ts`, which does the same job for the headless
  * benchmark, and not next to the module it imports: `bun run test` walks
