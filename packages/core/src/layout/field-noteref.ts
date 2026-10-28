@@ -37,7 +37,6 @@ import {
 } from '../store/package/ooxml-shared.ts';
 import {
   authoredDocumentEndnoteProperties,
-  authoredDocumentFootnoteProperties,
   authoredEndnotePropertiesFromSectPr,
   authoredFootnotePropertiesFromSectPr,
   resolveEndnoteProperties,
@@ -120,8 +119,8 @@ export function noteRefNumberingFromNotes(
 
 /**
  * The save-refresh path's numbering input, rebuilt from the package the way the surface
- * builds its notes input (settings-level `w:footnotePr`/`w:endnotePr`, then each section's
- * own `w:sectPr` override — a paragraph's, or the body-level one for the final section), so a
+ * builds its notes input (each section's own `w:sectPr` — a paragraph's, or the body-level one
+ * for the final section — with only the endnote position falling back to settings.xml), so a
  * refreshed NOTEREF result carries the value the pages paint.
  */
 export function noteRefNumberingForPart(
@@ -129,10 +128,9 @@ export function noteRefNumberingForPart(
   part: OoxmlPart,
   blocks: readonly OoxmlElement[]
 ): NoteRefNumberingInput {
-  const settings = settingsPartOf(pkg);
-  const docFnAuthored = authoredDocumentFootnoteProperties(settings);
-  const docEnAuthored = authoredDocumentEndnoteProperties(settings);
-  const documentFootnoteProps = resolveFootnoteProperties(undefined, docFnAuthored);
+  // settings.xml contributes only the endnote position; numbering is per section.
+  const docEnAuthored = authoredDocumentEndnoteProperties(settingsPartOf(pkg));
+  const documentFootnoteProps = resolveFootnoteProperties();
   const documentEndnoteProps = resolveEndnoteProperties(undefined, docEnAuthored);
   const sections = enumerateDocumentSectionsFromBlocks(part, blocks).sections;
   // The last section's properties are the body's own w:sectPr, not a paragraph's.
@@ -150,10 +148,7 @@ export function noteRefNumberingForPart(
   return {
     sections,
     footnotePropsBySection: sections.map((section, index) =>
-      resolveFootnoteProperties(
-        authoredFootnotePropertiesFromSectPr(sectPrOf(section, index)),
-        docFnAuthored
-      )
+      resolveFootnoteProperties(authoredFootnotePropertiesFromSectPr(sectPrOf(section, index)))
     ),
     endnotePropsBySection: sections.map((section, index) =>
       resolveEndnoteProperties(

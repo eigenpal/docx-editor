@@ -201,7 +201,10 @@ export interface NotesLayoutInput {
   readonly footnotePropsBySection: readonly ResolvedFootnoteProperties[];
   /** Per-section resolved endnote properties. */
   readonly endnotePropsBySection: readonly ResolvedEndnoteProperties[];
-  /** Document-level defaults (section 0 fallback). */
+  /**
+   * Properties of a section with none of its own: the defaults, plus the settings.xml endnote
+   * position. The fallback when the document has no enumerated sections.
+   */
   readonly documentFootnoteProps: ResolvedFootnoteProperties;
   readonly documentEndnoteProps: ResolvedEndnoteProperties;
   readonly measurer: TextMeasurer;

@@ -26,7 +26,7 @@ const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
-function footnoteDoc(noteText = 'Note text'): Uint8Array {
+function footnoteDoc(noteText = 'Note text', settings?: string): Uint8Array {
   const body =
     `<w:p><w:r><w:t>Body</w:t></w:r>` +
     `<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr>` +
@@ -41,14 +41,24 @@ function footnoteDoc(noteText = 'Note text'): Uint8Array {
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
         '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+        (settings === undefined
+          ? ''
+          : '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>') +
         '</Types>'
     ),
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
     ),
     'word/_rels/document.xml.rels': strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/>` +
+        (settings === undefined
+          ? ''
+          : `<Relationship Id="rIdSet" Type="${R}/settings" Target="settings.xml"/>`) +
+        '</Relationships>'
     ),
+    ...(settings === undefined
+      ? {}
+      : { 'word/settings.xml': strToU8(`<w:settings xmlns:w="${W}">${settings}</w:settings>`) }),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}<w:sectPr/></w:body></w:document>`
     ),
@@ -435,6 +445,23 @@ describe('DocxEditor.NotesChrome', () => {
         footnote: { numFmt: 'decimal' },
       }).ok
     ).toBe(true);
+  });
+
+  test('properties dialog marks values inherited unless the section authors them', async () => {
+    // settings.xml numbering does not apply, so it does not count as an authored value.
+    const { view, editor } = mountChrome(
+      footnoteDoc('Note text', '<w:footnotePr><w:numFmt w:val="chicago"/></w:footnotePr>')
+    );
+    await enterFootnote(editor());
+    await act(async () => {
+      fireEvent.click(view.getByTestId('docx-notes-options'));
+    });
+    await act(async () => {
+      fireEvent.click(view.getByTestId('docx-notes-properties'));
+    });
+    const dialog = view.getByTestId('docx-notes-properties-dialog');
+    expect(dialog.querySelectorAll('.docx-note-properties__badge')).toHaveLength(2);
+    expect(editor().getNotePropertiesState()!.footnote.resolved.numFmt).toBe('decimal');
   });
 
   test('engine refuses endnote pageBottom for setNoteProperties', () => {

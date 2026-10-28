@@ -172,6 +172,19 @@ Semantic layout SHALL implement the D8 paragraph property boundary and the secti
 - **WHEN** a body story contains multiple sections ended by paragraph-level or body `w:sectPr` with distinct geometry and read-only header/footer references
 - **THEN** layout paginates each section against its own page size/margins, starts non-continuous sections on a new page, and attaches the correct per-section furniture including `titlePage` inheritance
 
+#### Scenario: Note numbering resolves from the section only
+
+- **WHEN** settings.xml declares `w:footnotePr` or `w:endnotePr` and a section's own `w:sectPr` declares none, or only some, of `w:numFmt`, `w:numStart`, `w:numRestart`, and footnote `w:pos`
+- **THEN** that section's notes, the painted note marks, and refreshed NOTEREF results use the section's own values and the defaults (decimal footnotes, lowerRoman endnotes, start 1, continuous, footnotes at the page bottom) for the rest, never the settings.xml values
+- **AND** the endnote position resolves from settings.xml `w:pos`, else `docEnd`, for every section, and a section's own endnote `w:pos` does not apply
+
+#### Scenario: A document-scope note properties write reaches every section
+
+- **WHEN** `setNoteProperties` runs with `scope: 'document'`
+- **THEN** the write replaces the named note properties in every section's `w:sectPr`, minting a body-level `w:sectPr` for an implicit final section, and in settings.xml, each in schema order and keeping the other children of a replaced element
+- **AND** a `scope: 'section'` write that names an endnote position also merges that position into settings.xml
+- **AND** one undo restores the sections and settings.xml together, and the write converges on every collaborating peer
+
 #### Scenario: Page-furniture PAGE and NUMPAGES project per sheet
 
 - **WHEN** a read-only header or footer story contains allowlisted complex `PAGE`/`NUMPAGES` field instructions

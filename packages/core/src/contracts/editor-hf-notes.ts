@@ -45,7 +45,11 @@ export interface AuthoredNoteNumbering {
   readonly numRestart?: string;
 }
 
-/** Resolved note-numbering fields after document/section cascade. */
+/**
+ * Resolved note-numbering fields for one section. Numbering and the footnote position come
+ * from the section's own properties and the defaults; the endnote position comes from the
+ * document settings.
+ */
 export interface ResolvedNoteNumbering {
   readonly pos: string;
   readonly numFmt: string;
@@ -56,7 +60,12 @@ export interface ResolvedNoteNumbering {
 /** One note kind's resolved + authored properties for the caret section. */
 export interface NotePropertiesSide {
   readonly resolved: ResolvedNoteNumbering;
+  /**
+   * The document settings (settings.xml) values. Only the endnote `pos` affects `resolved`;
+   * the other fields are kept for files that carry them.
+   */
   readonly documentAuthored?: AuthoredNoteNumbering;
+  /** The caret section's own values, which set numbering and the footnote position. */
   readonly sectionAuthored?: AuthoredNoteNumbering;
 }
 
@@ -170,8 +179,10 @@ export interface EditorNoteCommands {
   };
 
   /**
-   * Footnote and endnote properties for the section — numbering format, restart rule
-   * and position, as Word's dialog offers them.
+   * Footnote and endnote properties: numbering format, start value, restart rule and
+   * position. `scope: 'document'` (the default) writes every section and the document settings. `scope: 'section'` writes the `sectionIndex` section; an endnote
+   * `position` there also changes the document settings, because the endnote position
+   * applies to the whole document.
    */
   setNoteProperties: {
     scope?: 'document' | 'section';

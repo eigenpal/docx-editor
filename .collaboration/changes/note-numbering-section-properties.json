@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Note numbering fell back to the settings.xml w:footnotePr and w:endnotePr for format, start, restart, and footnote position, a section endnote position overrode settings.xml, and a document-scope setNoteProperties wrote only settings.xml.",
+  "after": "Numbering and the footnote position resolve from each section's own w:sectPr and the defaults, the endnote position from settings.xml only, and a document-scope write also writes every section's note properties in schema order.",
+  "reason": "The setNoteProperties operation shape, the collaboration schema, and the protocol do not change. A document-scope write touches more sections, but it reaches peers as ordinary shared package edits of w:sectPr and settings.xml, and undo restores them as one step. Every peer resolves numbering from the same shared w:sectPr nodes.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-note-properties.test.ts",
+    "packages/core/src/store/__tests__/note-properties-document-write.test.ts",
+    "packages/core/src/editor/__tests__/note-properties-document-scope.test.ts",
+    "packages/core/src/layout/__tests__/note-properties-settings-layout.test.ts"
+  ],
+  "changeset": "note-numbering-section-properties",
+  "migration": null
+}

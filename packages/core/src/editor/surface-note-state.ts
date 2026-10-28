@@ -104,7 +104,8 @@ export function notePropertiesStateOf(
   const sectionFnAuthored = authoredFootnotePropertiesFromSectPr(sectPrBySection[sectionIndex]);
   const sectionEnAuthored = authoredEndnotePropertiesFromSectPr(sectPrBySection[sectionIndex]);
 
-  const footnoteResolved = resolveFootnoteProperties(sectionFnAuthored, docFnAuthored);
+  // Footnote numbering and position ignore settings.xml; only the endnote position reads it.
+  const footnoteResolved = resolveFootnoteProperties(sectionFnAuthored);
   const endnoteResolved = resolveEndnoteProperties(sectionEnAuthored, docEnAuthored);
 
   return {

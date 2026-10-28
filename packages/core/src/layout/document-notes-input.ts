@@ -9,7 +9,6 @@ import {
 } from '@docx-editor.dev/core/store';
 import {
   authoredDocumentEndnoteProperties,
-  authoredDocumentFootnoteProperties,
   authoredEndnotePropertiesFromSectPr,
   authoredFootnotePropertiesFromSectPr,
   resolveEndnoteProperties,
@@ -97,10 +96,9 @@ export function createDocumentNotesInput(
   const body = options.view.part();
   if (collectNoteReferences(body).length === 0) return undefined;
 
-  const settings = settingsPartOf(pkg);
-  const footnoteAuthored = authoredDocumentFootnoteProperties(settings);
-  const endnoteAuthored = authoredDocumentEndnoteProperties(settings);
-  const documentFootnoteProps = resolveFootnoteProperties(undefined, footnoteAuthored);
+  // settings.xml contributes only the endnote position; numbering is per section.
+  const endnoteAuthored = authoredDocumentEndnoteProperties(settingsPartOf(pkg));
+  const documentFootnoteProps = resolveFootnoteProperties();
   const documentEndnoteProps = resolveEndnoteProperties(undefined, endnoteAuthored);
   const enumeration = enumerateDocumentSectionsBounded(
     body,
@@ -115,10 +113,7 @@ export function createDocumentNotesInput(
     options.revisionAuthorFilter
   );
   const footnotePropsBySection = enumeration.sections.map((_, index) =>
-    resolveFootnoteProperties(
-      authoredFootnotePropertiesFromSectPr(sectionNodes[index]),
-      footnoteAuthored
-    )
+    resolveFootnoteProperties(authoredFootnotePropertiesFromSectPr(sectionNodes[index]))
   );
   const endnotePropsBySection = enumeration.sections.map((_, index) =>
     resolveEndnoteProperties(

@@ -79,7 +79,7 @@ describe('footnote drain vs endnote placement', () => {
     if (!loaded.ok) throw new Error(loaded.reason);
     const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
     const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
-    const sectEnd = resolveEndnoteProperties({ pos: 'sectEnd' });
+    const sectEnd = resolveEndnoteProperties(undefined, { pos: 'sectEnd' });
     const notes: NotesLayoutInput = {
       footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
       endnotesPart: resolveNotesPart(loaded.package, 'endnote'),
@@ -286,7 +286,7 @@ describe('footnote drain vs endnote placement', () => {
     if (!loaded.ok) throw new Error(loaded.reason);
     const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
     const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
-    const sectEnd = resolveEndnoteProperties({ pos: 'sectEnd' });
+    const sectEnd = resolveEndnoteProperties(undefined, { pos: 'sectEnd' });
     const notes: NotesLayoutInput = {
       footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
       endnotesPart: resolveNotesPart(loaded.package, 'endnote'),
@@ -384,7 +384,7 @@ describe('footnote drain vs endnote placement', () => {
     if (!loaded.ok) throw new Error(loaded.reason);
     const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
     const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
-    const sectEnd = resolveEndnoteProperties({ pos: 'sectEnd' });
+    const sectEnd = resolveEndnoteProperties(undefined, { pos: 'sectEnd' });
     const notes: NotesLayoutInput = {
       footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
       endnotesPart: resolveNotesPart(loaded.package, 'endnote'),
