@@ -19,13 +19,17 @@ function ignoredFrameMeasureIsValid(raw: string | undefined, signed: boolean): b
   return Number.isFinite(points) && Math.abs(points) <= 1584;
 }
 
-/** Resolve auto-width drop caps only when their authored size and line band are explicit. */
+/**
+ * Resolve auto-width drop caps only when their authored size and line band are explicit. The
+ * drop cap's width is measured under the document's `compatibilityMode`, as its lines are.
+ */
 export function resolveParagraphFrame(
   paragraph: OoxmlElement,
   inputs: ParagraphLayoutInputs,
   measurer: TextMeasurer,
   styles: StyleCascadeTable | undefined,
-  drawings?: InlineDrawingLayoutContext
+  drawings?: InlineDrawingLayoutContext,
+  compatibilityMode?: number
 ): ParagraphFrame | undefined {
   const ordinary = readParagraphFrame(inputs.props);
   if (ordinary) {
@@ -106,7 +110,7 @@ export function resolveParagraphFrame(
       if (characters > 32) return undefined;
     }
   }
-  const width = intrinsicFrameWidth(paragraph, inputs, measurer, styles, 'drop-cap-probe');
+  const width = intrinsicFrameWidth(paragraph, inputs, measurer, styles, compatibilityMode);
   if (width === undefined) return undefined;
   const frame = readParagraphFrame([
     {
@@ -139,7 +143,7 @@ function intrinsicFrameWidth(
   inputs: ParagraphLayoutInputs,
   measurer: TextMeasurer,
   styles: StyleCascadeTable | undefined,
-  producer: string
+  compatibilityMode: number | undefined
 ): number | undefined {
   const lines = breakPreparedParagraph({
     paragraph,
@@ -150,7 +154,8 @@ function intrinsicFrameWidth(
     cache: undefined,
     cacheKey: null,
     formatting: inputs,
-    producer,
+    producer: 'drop-cap-probe',
+    ...(compatibilityMode === undefined ? {} : { compatibilityMode }),
     styleCascade: styles,
     tabStops: inputs.tabStops,
     flow: { firstLineOffset: inputs.indent.firstLine - inputs.indent.hanging },
