@@ -281,6 +281,24 @@ describe('repeated-header shared horizontal border measurement', () => {
       }
       expect(fragments(result).flatMap((fragment) => fragment.rows)).toHaveLength(19);
     });
+
+    test(`before mode 15, a repeat stays above a row that ${headerBottom}/${bodyTop} leaves no room`, () => {
+      // The same 24pt band. The repeat stays (`repeatKeepsWholeRow`), so the plan refuses the
+      // row and the ordinary repeat path reserves its band: the row runs past the margin.
+      const result = layout(fixture({ headerBottom, bodyTop }), 44, 14);
+      const continued = fragments(result).slice(1);
+      expect(continued).toHaveLength(18);
+      for (const [index, fragment] of continued.entries()) {
+        expect(fragment.rows[0]!.isHeaderRepeat).toBe(true);
+        const body = fragment.rows[1]!;
+        expect(body.hasContinuation).toBeFalsy();
+        // The first body row resolves its top against the header it was authored under.
+        const resolved = index === 0 ? Math.max(headerBottom!, bodyTop!) : bodyTop!;
+        expect(band(body.cells[0]!).top).toBeCloseTo(bandSplit(resolved).top, 6);
+        expect(band(fragment.rows[0]!.cells[0]!).bottom).toBeCloseTo(bandSplit(resolved).bottom, 6);
+        expect(body.box.y + body.box.height).toBeGreaterThan(24);
+      }
+    });
   }
 
   test('multiple headers keep the final boundary separate from earlier header rows', () => {
@@ -525,6 +543,23 @@ describe('repeated-header shared horizontal border measurement', () => {
     expect(band(tables[1]!.rows[0]!.cells[0]!).top).toBeCloseTo(0.5, 6);
     expect(tables[2]!.rows[0]!.isHeaderRepeat).toBe(true);
     expect(band(tables[2]!.rows[1]!.cells[0]!).top).toBeCloseTo(bandSplit(0.5).top, 6);
+  });
+
+  test('before mode 15, a repeat kept above an exact row does not leak its insets', () => {
+    const body =
+      row(cell('first')) +
+      row(cell('large'), '<w:trHeight w:val="1360" w:hRule="exact"/>') +
+      Array.from({ length: 10 }, (_, index) => row(cell(`B${index}`))).join('');
+    // The repeat stays above the exact row (`repeatKeepsWholeRow`), which runs past the margin.
+    const tables = fragments(layout(fixture({ body }), 100, 14));
+    expect(tables[1]!.rows.map((item) => item.isHeaderRepeat)).toEqual([true, false]);
+    const large = tables[1]!.rows[1]!;
+    expect(band(large.cells[0]!).top).toBeCloseTo(bandSplit(0.5).top, 6);
+    expect(large.box.y + large.box.height).toBeCloseTo(12.5 + 68, 6);
+    expect(tables[2]!.rows[0]!.isHeaderRepeat).toBe(true);
+    for (const item of tables[2]!.rows.slice(1)) {
+      expect(band(item.cells[0]!).top).toBeCloseTo(bandSplit(0.5).top, 6);
+    }
   });
 
   test('bounded candidate inspection rejects large, deep, sparse and foreign markup', () => {
