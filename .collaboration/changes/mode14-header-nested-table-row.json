@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "In compatibility mode 14 and earlier, a continuation page omitted its repeated header rows when the next row opened with a nested table whose first row did not fit below them.",
+  "after": "In compatibility mode 14 and earlier, the header rows repeat above that row, and the row stays whole below them and runs past the bottom margin. Mode 15 and later still omit the repeat.",
+  "reason": "Only local page geometry changes. Canonical OOXML, offsets, operations, and collaboration data remain unchanged, and every peer derives the same layout from the same document.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-repeat-splittable-row.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-exact-terminal-border.test.ts"
+  ],
+  "changeset": "mode14-header-nested-table-row",
+  "migration": null
+}

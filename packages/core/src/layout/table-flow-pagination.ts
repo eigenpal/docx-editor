@@ -561,8 +561,9 @@ export function* paginateTableInFlowSteps(
         cursors
       );
     // Before mode 15, repeated header rows also stay above a row that can split when the first
-    // line of a cell does not fit below them. The row then stays whole there, past the margin or
-    // the page edge. Cells ignore widow control in these modes (`tableParagraphWidowControl`).
+    // line of a cell, or the first row of a nested table that opens one, does not fit below them.
+    // The row then stays whole there, past the margin or the page edge. Cells ignore widow
+    // control in these modes (`tableParagraphWidowControl`).
     const startMissesBelowRepeat = (top: number): boolean =>
       repeatKeepsWholeRow &&
       !isContinuation &&
@@ -570,7 +571,6 @@ export function* paginateTableInFlowSteps(
       vMerge === undefined &&
       row.height.rule !== 'exact' &&
       !keepsWholeAt(top) &&
-      row.cells.every((cell) => cell.blocks.every((block) => block.kind === 'paragraph')) &&
       !progressesAt(top);
 
     // A row an accepted span covers below its head, a nested head row included, does not

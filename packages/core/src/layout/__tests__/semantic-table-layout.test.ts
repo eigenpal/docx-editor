@@ -861,12 +861,12 @@ describe('table row pagination (tiny page)', () => {
     const nested = `<w:tbl>${tr(tc(p('nested-0') + p('nested-1')), '<w:trPr><w:cantSplit/></w:trPr>')}</w:tbl>`;
     const tail = Array.from({ length: 8 }, (_, index) => p(`tail-${index}`)).join('');
     const part = loadPart(`<w:tbl>${header}${tr(tc(nested + tail))}</w:tbl>`);
-    const result = layoutTiny(part);
+    const result = layoutTiny(part, undefined, 15);
     assertNoContentOverflow(result);
     expect(result.pages.length).toBeGreaterThan(2);
     const rows = allTableFragments(result).flatMap((fragment) => fragment.rows);
-    // Page 2 omits the header because its 15pt remainder cannot hold the atomic nested row. Once
-    // the nested block is consumed, later paragraph continuations can use that remainder.
+    // In mode 15 page 2 omits the header: its 15pt remainder cannot hold the atomic nested row
+    // (earlier modes keep it). Later paragraph continuations can then use that remainder.
     expect(tableFragments(result.pages[1]!)[0]!.rows[0]!.isHeaderRepeat).not.toBe(true);
     expect(rows.some((row) => row.isHeaderRepeat)).toBe(true);
     expect(documentOrder(result).map((id) => paragraphTextFromLayout(result, id))).toEqual([

@@ -40,7 +40,11 @@ interface ReferenceCase {
   footnote?: boolean;
   /** No compatibility mode: a splittable row opens with a 40pt line, so it stays whole. */
   splitStart?: boolean;
+  /** With `splitStart`: a nested table holds that 40pt line. */
+  nested?: boolean;
 }
+const nestedTable = (content: string) =>
+  `<w:tbl><w:tblPr><w:tblW w:w="3000" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:tc>${content}</w:tc></w:tr></w:tbl>`;
 const SETTINGS = 'application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml';
 const settingsPackage = {
   overrides: `<Override PartName="/word/settings.xml" ContentType="${SETTINGS}"/>`,
@@ -74,7 +78,7 @@ function documentBody(options: ReferenceCase) {
   const rows = (options.pageEdge ? ['First', 'Middle', 'Terminal'] : ['First', 'Terminal'])
     .map((text, index) =>
       options.splitStart && index === 1
-        ? `<w:tr><w:tc>${paragraph(`${text}1`).replace('w:line="240"', 'w:line="800"')}${paragraph(`${text}2`)}</w:tc></w:tr>`
+        ? `<w:tr><w:tc>${(options.nested ? nestedTable : (xml: string) => xml)(paragraph(`${text}1`).replace('w:line="240"', 'w:line="800"'))}${paragraph(`${text}2`)}</w:tc></w:tr>`
         : options.tallRow && index === 1
           ? `<w:tr><w:trPr><w:cantSplit/></w:trPr><w:tc><w:tcPr><w:vAlign w:val="${options.align}"/></w:tcPr>${[1, 2, 3, 4, 5, 6].map((line) => (options.footnote && line === 2 ? citing : paragraph)(`${text}${line}`)).join('')}</w:tc></w:tr>`
           : `<w:tr><w:trPr>${index === 0 && !options.pageEdge ? '<w:tblHeader/>' : ''}<w:trHeight w:val="${index === 1 && options.headerYields ? 620 : index === 1 && options.overflows ? 800 : 397}" w:hRule="exact"/></w:trPr><w:tc><w:tcPr><w:vAlign w:val="${options.align}"/></w:tcPr>${paragraph(text)}</w:tc></w:tr>`
@@ -149,7 +153,10 @@ function geometry(editor: Editor, options: ReferenceCase) {
     const [repeat, last] = table.rows;
     expect(repeat!.isHeaderRepeat).toBe(true);
     expect(last!.hasContinuation).toBeFalsy();
-    expect(last!.cells[0]!.blocks).toHaveLength(2);
+    expect(last!.cells[0]!.blocks.map((b) => b.kind)).toEqual([
+      options.nested ? 'table' : 'paragraph',
+      'paragraph',
+    ]);
     expect(last!.box.y + last!.box.height).toBeGreaterThan(52);
     expect(layout.pages[2]!.fragments).toContain(after!);
     return { rows: table.rows.map((r) => r.box), after: after?.box };
@@ -215,8 +222,9 @@ for (const options of [
   { align: 'center', width: 1.5, tightPage: true, tallRow: true },
   { align: 'center', width: 1.5, tightPage: true, tallRow: true, footnote: true },
   { align: 'center', width: 1.5, tightPage: true, splitStart: true },
+  { align: 'center', width: 1.5, tightPage: true, splitStart: true, nested: true },
 ] satisfies ReferenceCase[])
-  test(`the ${options.align} terminal rule${options.headerYields ? ' that omits a repeated header' : options.pageEdge ? ' at a page edge' : options.overflows ? ' below a kept repeat' : options.splitStart ? ' below a repeat kept over a splittable row' : options.tallRow ? ` of a whole tall row${options.footnote ? ' with a footnote' : ''}` : ''} converges through edits and cold reopen`, async () => {
+  test(`the ${options.align} terminal rule${options.headerYields ? ' that omits a repeated header' : options.pageEdge ? ' at a page edge' : options.overflows ? ' below a kept repeat' : options.splitStart ? ` below a repeat kept over a splittable row${options.nested ? ' that opens with a nested table' : ''}` : options.tallRow ? ` of a whole tall row${options.footnote ? ' with a footnote' : ''}` : ''} converges through edits and cold reopen`, async () => {
     const source = documentBody(options);
     const peers = await harness.pair(
       options.headerYields

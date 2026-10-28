@@ -19,6 +19,8 @@ export interface Row {
   readonly lines?: number;
   /** The exact height of the first line in each cell, in twips (default 240). */
   readonly firstLineTwips?: number;
+  /** Raw content for each cell, which replaces the generated lines. */
+  readonly cellContent?: readonly [string, string];
 }
 
 export function letterDocument(
@@ -46,9 +48,13 @@ export function letterDocument(
       `<w:tr><w:trPr>${row.cantSplit === false ? '' : '<w:cantSplit/>'}` +
       `${row.header ? '<w:tblHeader/>' : ''}${height}</w:trPr>`;
     for (const column of [1, 2]) {
-      const text = Array.from({ length: row.lines ?? 1 }, (_, index) =>
-        index === 0 ? line(`${row.tag}c${column}`, row.firstLineTwips) : line(`${row.tag}l${index}`)
-      ).join('');
+      const text =
+        row.cellContent?.[column - 1] ??
+        Array.from({ length: row.lines ?? 1 }, (_, index) =>
+          index === 0
+            ? line(`${row.tag}c${column}`, row.firstLineTwips)
+            : line(`${row.tag}l${index}`)
+        ).join('');
       table += `<w:tc><w:tcPr><w:tcW w:w="1800" w:type="dxa"/><w:vAlign w:val="${options.align ?? 'center'}"/></w:tcPr>${text}</w:tc>`;
     }
     table += '</w:tr>';

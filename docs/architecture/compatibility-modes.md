@@ -60,7 +60,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `pageBreakBeforeKeepsSpace` | `legacy` | A paragraph with `w:pageBreakBefore` keeps its space before at the top of the new page. In `modern` modes only the first block of a section keeps it |
 | `pageBreakLinesStretch` | `legacy` | A justified line before a page or column break stretches, unless it ends its paragraph |
 | `repeatBoundaryUsesHeaderRule` | `legacy` | A complete body row directly below a repeated header row reserves the wider of its own top border and the header row's bottom border. In `modern` modes it keeps the band of the row it follows in the table |
-| `repeatKeepsWholeRow` | `legacy` | Repeated header rows stay above a row that cannot split and does not fit below them, or a row whose first line does not fit below them; the row stays whole and runs past the bottom margin |
+| `repeatKeepsWholeRow` | `legacy` | Repeated header rows stay above a row that cannot split and does not fit below them, or a row whose first line, or the first row of a nested table that opens a cell, does not fit below them; the row stays whole and runs past the bottom margin |
 | `repeatedHeaderYieldsToTerminalRule` | `modern` | Repeated header rows yield when the last fixed-height row fits below them only without its bottom rule |
 | `rowPageBreakYieldsToKeep` | `modern` | A row with a page break follows a row that keeps with it |
 | `tallRowStaysWhole` | `legacy` | A row that cannot split and is taller than a page stays whole on its page and runs past the bottom margin |
