@@ -23,6 +23,7 @@ import { wordFollowsOnlyTabs } from './leading-tab-word.ts';
 import { growScriptLineMetrics } from './paragraph-mark-metrics.ts';
 import { spacedLine } from './positioned-run-spacing.ts';
 import { paragraphMarkStyles } from './paragraph-mark-styles.ts';
+import { splitAtSpacedSoundMarks } from './sound-mark-pieces.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
 import {
   endsAtHyphenBreak,
@@ -231,9 +232,12 @@ export function breakParagraph(
   const markerBaselineFloor = slotOpen ? (flow?.firstLineMinimumBaseline ?? 0) : 0;
   const markerAscent = slotOpen ? Math.max(0, flow?.firstLineMarkerAscent ?? 0) : 0;
   const typography = flow?.typography ?? resolveCjkTypography(paragraphProperties());
-  const visiblePieces = splitAtAutomaticSpacing(
-    continuationPiecesWithRules(allPieces, startOffset, flow?.showFieldCodes, available),
-    typography,
+  const visiblePieces = splitAtSpacedSoundMarks(
+    splitAtAutomaticSpacing(
+      continuationPiecesWithRules(allPieces, startOffset, flow?.showFieldCodes, available),
+      typography,
+      measurer
+    ),
     measurer
   );
   const { preserveColonAdvances } = advances;

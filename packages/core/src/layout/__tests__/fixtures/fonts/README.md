@@ -12,3 +12,7 @@ Copyright © 2003 by Bitstream, Inc. All Rights Reserved. DejaVu changes are in 
 # Noto Sans CJK JP kana subset
 
 `NotoSansCJKjp-kana.subset.otf` is a subset of Noto Sans CJK JP Regular, the face that `@docx-editor.dev/fonts-cjk` ships in `packages/fonts-cjk/assets/`. It keeps the `kern` and `palt` features for the kana, ideographs, and Latin letters that `east-asian-kerning.test.ts` shapes. Reproduce it with FontTools `pyftsubset`, `--text="アイウエオカキクケコあいうえおかきくけこ漢字国AVATo "`, `--layout-features='kern,palt'`, and `--name-IDs='*' --name-languages='*' --name-legacy`. The SIL Open Font License text is in `NotoSansCJK-OFL.txt`.
+
+# Sound mark test faces
+
+`sound-mark-spacing.ttf` and `sound-mark-joining.ttf` are synthetic faces made for `sound-mark-spacing.test.ts` with FontTools `FontBuilder`. Each maps `あかがはぱ国`, U+3099, U+309A, U+309B, U+309C, and a space, on a 1000-unit em; every glyph is a rectangle with a 1000-unit advance. The spacing face has no `GDEF` table and draws the sound marks at the left of their own cell. The joining face classes U+3099 and U+309A as marks (`GDEF` class 3), draws them at the right of their cell, and has one `GPOS` kerning pair, so the shaper does not move a zero-width mark back over its base. They contain no third-party outlines.

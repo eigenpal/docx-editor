@@ -9,6 +9,7 @@ import {
 } from './font-resource.ts';
 import { fontHasSymbolCmap, toSymbolCmapText } from './symbol-cmap.ts';
 import { unkernedTextRanges } from './run-kerning.ts';
+import { hasSoundMark, spacedSoundMarks, withSpacingSoundMarks } from './sound-mark-spacing.ts';
 import {
   createShapedRun,
   createShapingEnvironment,
@@ -780,7 +781,12 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
       // Context is read for contextual forms and never shaped. HarfBuzz reports clusters as
       // offsets into the whole string, so they shift back by the leading context below.
       // A symbol cmap face answers a plain byte at U+F000 plus the code (`symbol-cmap.ts`).
-      const mapped = fontHasSymbolCmap(environment.font, bytes) ? toSymbolCmapText : String;
+      const symbolText = fontHasSymbolCmap(environment.font, bytes) ? toSymbolCmapText : String;
+      const shapedText = before + text + after;
+      // A face that draws a sound mark in its own cell shapes it as its spacing form.
+      const soundMarks = hasSoundMark(shapedText) ? spacedSoundMarks(active) : undefined;
+      const mapped = (value: string) =>
+        symbolText(soundMarks ? withSpacingSoundMarks(value, soundMarks) : value);
       if (before || after)
         buffer.addText(mapped(before + text + after), before.length, text.length);
       else buffer.addText(mapped(text));
@@ -832,11 +838,15 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
       const runOutlines = new Map<number, GlyphOutline>();
       const glyphs: ShapedGlyph[] = shaped.map((glyph, index) => {
         const position = positions[index];
-        exactAdvancesX.push(exactAdvance(position?.xAdvance ?? 0));
-        const advanceX = convert(position?.xAdvance ?? 0);
+        // The face's own mark glyph and advance replace the spacing form it was shaped as.
+        const soundMark = soundMarks?.get(shapedText.charCodeAt(glyph.cluster));
+        const xAdvance = soundMark?.advance ?? position?.xAdvance ?? 0;
+        exactAdvancesX.push(exactAdvance(xAdvance));
+        const advanceX = convert(xAdvance);
         const advanceY = convert(position?.yAdvance ?? 0);
+        const glyphId = soundMark?.glyph ?? glyph.codepoint;
         const positioned = {
-          id: glyph.codepoint,
+          id: glyphId,
           cluster: glyph.cluster - before.length,
           originX,
           originY,
@@ -845,10 +855,10 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
           offsetX: convert(position?.xOffset ?? 0),
           offsetY: convert(position?.yOffset ?? 0),
           outline:
-            runOutlines.get(glyph.codepoint) ??
+            runOutlines.get(glyphId) ??
             (() => {
-              const outline = this.#outline(active, glyph.codepoint);
-              runOutlines.set(glyph.codepoint, outline);
+              const outline = this.#outline(active, glyphId);
+              runOutlines.set(glyphId, outline);
               return outline;
             })(),
         };

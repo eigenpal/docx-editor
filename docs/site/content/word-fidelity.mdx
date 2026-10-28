@@ -159,7 +159,7 @@ When `w:characterSpacingControl` is `compressPunctuationAndJapaneseKana`, a full
 
 If the trailing half of the final mark alone fits the line, only that half compresses. Without punctuation overflow, the trailing half compresses before the kana. The line-start list decides the fit, whatever the kinsoku switch. If the line still cannot fit the character, the mark hangs or the last character moves to the next line. Kanji, the prolonged sound mark `ー`, and half-width katakana keep their advances. Kana fitting applies where punctuation hangs, as the previous paragraph describes. It does not apply in Korean runs, or in Traditional Chinese runs in mode 15 and later.
 
-Pair kerning (`w:kern`) leaves kana, ideographs, CJK punctuation, and full-width and half-width forms at their own advances. Latin letters in the same run still kern. A combining voiced or semi-voiced sound mark (U+3099 or U+309A) adds no width, also in faces that give the mark a full character cell.
+Pair kerning (`w:kern`) leaves kana, ideographs, CJK punctuation, and full-width and half-width forms at their own advances. Latin letters in the same run still kern. A combining voiced or semi-voiced sound mark (U+3099 or U+309A) follows its face. If the face classes the mark as a mark, the mark joins the kana before it and adds no width, also when it is in a separate run. If the face gives the mark an advance of its own and no mark class, the mark takes a full character cell beside an uncomposed base. In both cases, the mark stays on the line of its base.
 
 ### Lists and numbering
 

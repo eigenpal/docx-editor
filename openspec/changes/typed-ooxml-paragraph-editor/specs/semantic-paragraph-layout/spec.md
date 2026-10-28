@@ -691,6 +691,24 @@ When the spaces reach their shrink floor before the mark fits, a justified line 
 - **THEN** the comma hangs past the margin and the text before it fills the measure
 - **AND** a distributed paragraph moves the word to the next line
 
+### Requirement: Combining kana sound marks follow their face
+
+The layout engine SHALL measure and paint the combining voiced and semi-voiced sound marks (U+3099, U+309A) by their face. When the face classes the mark glyph as a mark, the mark SHALL join the kana before it and add no width, including a mark in a separate run, which SHALL paint over its base. When the face leaves the glyph unclassed with an advance of its own, the mark SHALL take that advance in its own cell beside an uncomposed base. The mark SHALL never start a line apart from its base.
+
+#### Scenario: A face that spaces the mark
+
+- **GIVEN** a face whose U+3099 glyph has no mark class and a full-cell advance
+- **WHEN** a line ends with a kana and U+3099 that together overflow the measure, in one run or in two
+- **THEN** the base and the mark move to the next line together
+- **AND** the mark takes a full cell there
+
+#### Scenario: A face that joins the mark
+
+- **GIVEN** a face that classes the U+3099 glyph as a mark
+- **WHEN** the mark is in its own run after its base at the end of a full line
+- **THEN** the mark adds no width and stays on that line
+- **AND** it paints over its base, not past the margin
+
 ### Requirement: Language-specific hanging punctuation
 
 When a justified paragraph enables hanging punctuation, the punctuation run's language SHALL select its hanging characters. Japanese `〕》〉！？：；・`, ASCII `! ? : ; ) ] }`, `％`, and `°`, Simplified Chinese `．`, and Korean punctuation SHALL NOT hang, except that a Korean paragraph-final mark other than `。` or `、` SHALL hang. Korean overflow punctuation SHALL start the next line.
