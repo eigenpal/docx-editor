@@ -10,6 +10,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
+import { validateOoxmlPart } from '../package/ooxml-validate.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const META = {
@@ -53,11 +54,13 @@ function savedBody(part: OoxmlPart): string {
   return xml.slice(xml.indexOf('<w:body>') + '<w:body>'.length, xml.lastIndexOf('<w:sectPr/>'));
 }
 
-/** A save reads back to the same save. */
+/** The part passes the write-time invariants, and a save reads back to the same save. */
 function expectStable(part: OoxmlPart): void {
+  expect(validateOoxmlPart(part)).toEqual({ ok: true });
   const saved = serializeOoxmlPart(part);
   const reread = readOoxmlPart(saved, META);
   if (!reread.ok) throw new Error(reread.reason);
+  expect(validateOoxmlPart(reread.part)).toEqual({ ok: true });
   expect(serializeOoxmlPart(reread.part)).toBe(saved);
 }
 
@@ -387,6 +390,144 @@ describe('nesting', () => {
     );
     expect(savedBody(part)).toContain(
       '<w:r><w:rPr><w:u w:color="FF0000" w:val="single"/></w:rPr><w:t>Two</w:t></w:r>'
+    );
+    expectStable(part);
+  });
+});
+
+describe('bounds and stability', () => {
+  test('a run with many w:rPr stays as written instead of copying properties per part', () => {
+    const parts = Array.from(
+      { length: 1000 },
+      (_, index) => `<w:rPr><w:x${index}/></w:rPr><w:t>a</w:t>`
+    ).join('');
+    const part = parse(`<w:p><w:r>${parts}</w:r></w:p>`);
+    let nodes = 0;
+    const visit = (node: OoxmlNode): void => {
+      nodes += 1;
+      if (node.kind !== 'textValue') node.children.forEach(visit);
+    };
+    visit(part.root);
+    expect(nodes).toBeLessThan(5000);
+    expect(elements(part, 'r').map((run) => run.kind)).toEqual(['generic']);
+  });
+
+  test('a w:pPr after the text stays inert beside a nested paragraph or table, across saves', () => {
+    for (const body of [
+      '<w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>a</w:t></w:r>' +
+        '<w:pPr><w:jc w:val="center"/></w:pPr><w:p><w:r><w:t>b</w:t></w:r></w:p></w:p>',
+      '<w:p><w:r><w:t>a</w:t></w:r><w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid>' +
+        '<w:tr><w:tc><w:p><w:r><w:t>c</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
+        '<w:pPr><w:jc w:val="center"/></w:pPr></w:p>',
+      '<w:p><w:r><w:t>z</w:t></w:r><w:p><w:r><w:t>a</w:t></w:r>' +
+        '<w:pPr><w:jc w:val="center"/></w:pPr></w:p></w:p>',
+    ]) {
+      const part = parse(body);
+      const leading = elements(part, 'p')
+        .map((paragraph) => paragraph.children[0])
+        .filter((child) => child?.kind === 'paragraphProperties');
+      for (const properties of leading) {
+        expect(
+          properties!.kind !== 'textValue' &&
+            properties!.children.some(
+              (child) =>
+                child.kind !== 'textValue' &&
+                child.localName === 'jc' &&
+                child.attributes.some((attribute) => attribute.value === 'center')
+            )
+        ).toBe(false);
+      }
+      expectStable(part);
+    }
+  });
+
+  test('a w:pPr after an empty inner paragraph stays inert across saves', () => {
+    for (const body of [
+      '<w:p><w:p/><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>a</w:t></w:r></w:p>',
+      '<w:p><w:p><w:p/><w:pPr><w:jc w:val="center"/></w:pPr></w:p></w:p>',
+      '<w:p><w:pPr><w:spacing w:after="1"/></w:pPr><w:p><w:bookmarkStart w:id="1" w:name="b"/>' +
+        '<w:p></w:p><w:pPr><w:jc w:val="center"/></w:pPr></w:p></w:p>',
+      '<w:p><w:r><w:t>q</w:t></w:r><w:pPr><w:jc w:val="center"/></w:pPr><w:tbl><w:tr><w:tc>' +
+        '<w:p><w:r><w:t>c</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:p>',
+    ]) {
+      const part = parse(body);
+      for (const paragraph of elements(part, 'p')) {
+        const lead = paragraph.children[0];
+        if (lead?.kind === 'paragraphProperties') expect(kinds(lead)).not.toContain('jc:generic');
+      }
+      expectStable(part);
+    }
+  });
+
+  test('nested runs each count their own w:rPr', () => {
+    const inner = '<w:r><w:rPr><w:i/></w:rPr><w:t>a</w:t><w:rPr><w:b/></w:rPr><w:t>b</w:t></w:r>';
+    const part = parse(`<w:p><w:r>${inner.repeat(20)}</w:r></w:p>`);
+    expect(elements(part, 'r').every((run) => run.kind === 'run')).toBe(true);
+    expectStable(part);
+  });
+
+  test('elements with attributes their kind refuses stay generic', () => {
+    const breakPart = parse('<w:p><w:r><w:t>a<w:br w:val="x"/>b</w:t></w:r></w:p>');
+    expect(kinds(breakPart.root)).not.toContain('br:hardBreak');
+    expectStable(breakPart);
+    const nestedPart = parse(
+      '<w:p><w:p><w:pPr w:val="x"><w:jc w:val="center"/></w:pPr><w:r><w:t>a</w:t></w:r></w:p></w:p>'
+    );
+    expectStable(nestedPart);
+  });
+
+  test('text pieces split around an element show their own white space', () => {
+    const part = parse('<w:p><w:r><w:t>a\nb<w:br/>c\td </w:t></w:r></w:p>');
+    expect(savedBody(part)).toBe('<w:p><w:r><w:t>a b</w:t><w:br/><w:t>c d</w:t></w:r></w:p>');
+    expectStable(part);
+  });
+
+  test('an inner paragraph before a table keeps its w:pPr on the paragraph after the table', () => {
+    const part = parse(
+      '<w:p><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>a</w:t></w:r></w:p>' +
+        '<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:tc><w:p/></w:tc></w:tr>' +
+        '</w:tbl></w:p>'
+    );
+    expect(savedBody(part)).toContain('</w:tbl><w:p><w:pPr><w:jc w:val="center"/></w:pPr></w:p>');
+    expectStable(part);
+  });
+
+  test('a stray paragraph in a row stays in place unless a typed cell follows it', () => {
+    const part = parse(
+      '<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr>' +
+        '<w:tc><w:p><w:r><w:t>One</w:t></w:r></w:p></w:tc><w:p><w:r><w:t>Stray</w:t></w:r></w:p>' +
+        '<w:bookmarkStart w:id="1" w:name="b"/><w:tc w:val="x" xml:space="bogus"><w:p/></w:tc>' +
+        '</w:tr></w:tbl>'
+    );
+    const [row] = elements(part, 'tr');
+    expect(childKinds(row!)).toEqual([
+      'tc:tableCell',
+      'p:generic',
+      'bookmarkStart:bookmarkStart',
+      'tc:generic',
+    ]);
+  });
+
+  test('a nested run ends its properties where it ends', () => {
+    const part = parse(
+      '<w:p><w:r><w:t>x</w:t><w:rPr><w:b/></w:rPr><w:r><w:rPr><w:i/></w:rPr><w:t>a</w:t></w:r>' +
+        '<w:t>c</w:t></w:r></w:p>'
+    );
+    expect(savedBody(part)).toBe(
+      '<w:p><w:r><w:t>x</w:t></w:r><w:r><w:rPr><w:b/><w:i/></w:rPr><w:t>a</w:t></w:r>' +
+        '<w:r><w:rPr><w:b/></w:rPr><w:t>c</w:t></w:r></w:p>'
+    );
+    expectStable(part);
+  });
+
+  test('properties after the last text are kept, also behind an empty marker', () => {
+    const part = parse(
+      '<w:p><w:r><w:rPr><w:i/></w:rPr><w:t>a</w:t><w:rPr><w:b/></w:rPr>' +
+        '<w:lastRenderedPageBreak/></w:r></w:p>'
+    );
+    expect(savedBody(part)).toBe(
+      '<w:p><w:r><w:rPr><w:i/></w:rPr><w:t>a</w:t></w:r>' +
+        '<w:r><w:rPr><w:b/><w:i/></w:rPr><w:lastRenderedPageBreak/></w:r></w:p>'
     );
     expectStable(part);
   });

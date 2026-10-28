@@ -20,10 +20,30 @@ import { mergedPropertyList } from './ooxml-property-merge.ts';
 import { CT_RPR_SEQUENCE } from './ooxml-property-order.ts';
 import { WML_NAMESPACE_URI, isRangeMarkerKind, validKnownKind } from './ooxml-shared.ts';
 import { knownKindAllowsWmlVal } from './ooxml-sdt.ts';
+import { displayedText, ownXmlSpace } from './ooxml-text-space.ts';
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 
 /** Runs nested deeper than this inside one run stay as written. */
 const MAX_NESTED_RUNS = 8;
+
+/**
+ * A run with more `w:rPr` elements than this, or whose parts would copy more property nodes
+ * than `MAX_COPIED_NODES`, stays as written: each part carries every property in effect, so
+ * the copies would grow with the square of the file.
+ */
+const MAX_RUN_PROPERTIES = 32;
+const MAX_COPIED_NODES = 2048;
+
+/** Nodes in `node`'s subtree, attributes included, counting no further than `limit`. */
+function sizeOf(node: OoxmlNode, limit: number): number {
+  if (node.kind === 'textValue') return 1;
+  let size = 1 + node.attributes.length;
+  for (const child of node.children) {
+    if (size > limit) break;
+    size += sizeOf(child, limit - size);
+  }
+  return size;
+}
 
 /** Childless WML markers that take no width and no properties. */
 const EMPTY_MARKERS: ReadonlySet<string> = new Set([
@@ -92,15 +112,17 @@ function withSuffixedIds(node: OoxmlNode, suffix: string): OoxmlNode {
  * A generic `w:t` or `w:delText` that holds elements, as typed text pieces between them. A
  * `w:br` among them is a break; any other element stays generic and shows nothing.
  */
-function splitTextElement(node: OoxmlElement): OoxmlNode[] | null {
+function splitTextElement(node: OoxmlElement, rootPreserve: boolean): OoxmlNode[] | null {
   const kind = node.localName === 't' ? 'text' : 'deletedText';
   if (!attributesFitKind(kind, node.attributes)) return null;
+  // Each piece reads back as a text element of its own, so each shows its white space alone.
+  const preserve = ownXmlSpace(node.attributes) ?? rootPreserve;
   const pieces: OoxmlNode[] = [];
   let values: OoxmlNode[] = [];
   const flush = () => {
     if (values.length === 0) return;
     const id = pieces.length === 0 ? node.id : `${node.id}~${pieces.length}`;
-    pieces.push({ ...node, id, kind, children: values } as OoxmlNode);
+    pieces.push({ ...node, id, kind, children: displayedText(values, preserve) } as OoxmlNode);
     values = [];
   };
   for (const child of node.children) {
@@ -109,7 +131,11 @@ function splitTextElement(node: OoxmlElement): OoxmlNode[] | null {
       continue;
     }
     flush();
-    if (isWml(child, 'br') && child.children.length === 0) {
+    if (
+      isWml(child, 'br') &&
+      child.children.length === 0 &&
+      attributesFitKind('hardBreak', child.attributes)
+    ) {
       pieces.push({ ...child, kind: 'hardBreak' } as OoxmlNode);
       continue;
     }
@@ -136,8 +162,11 @@ interface Part {
   readonly insertion?: OoxmlElement;
 }
 
-/** The runs a generic `w:r` shows, or null when it cannot type that way. */
-export function repairedRun(run: OoxmlElement): OoxmlNode[] | null {
+/**
+ * The runs a generic `w:r` shows, or null when it cannot type that way. `rootPreserve` is the
+ * `xml:space` of the part's root.
+ */
+export function repairedRun(run: OoxmlElement, rootPreserve: boolean): OoxmlNode[] | null {
   if (!attributesFitKind('run', run.attributes)) return null;
   const parts: Part[] = [];
   let properties: readonly OoxmlNode[] | null = null;
@@ -148,48 +177,56 @@ export function repairedRun(run: OoxmlElement): OoxmlNode[] | null {
     content = [];
     if (insertion && inserted) parts.push({ properties, source, content: inserted, insertion });
   };
-  // A run written inside the run shows as part of it, its properties adding to the ones in
-  // effect, so its children are read in place.
-  const children: OoxmlNode[] = [];
-  const unnest = (nodes: readonly OoxmlNode[], depth: number) => {
-    for (const node of nodes) {
-      if (depth < MAX_NESTED_RUNS && isWml(node, 'r') && node.kind !== 'textValue')
-        unnest(node.children, depth + 1);
-      else children.push(node);
+  // Whether a `w:rPr` came after the last content, so it applies to nothing that follows.
+  let trailing = false;
+  // A run written inside the run shows as part of it: its properties add to the ones in effect
+  // until it ends.
+  const read = (nodes: readonly OoxmlNode[], depth: number): boolean => {
+    // Counted per run: a nested run's properties end with it.
+    let propertyCount = 0;
+    for (const child of nodes) {
+      if (depth < MAX_NESTED_RUNS && child.kind !== 'textValue' && isWml(child, 'r')) {
+        const outer = { properties, source };
+        if (!read(child.children, depth + 1)) return false;
+        close();
+        ({ properties, source } = outer);
+        trailing = false;
+        continue;
+      }
+      if (child.kind === 'runProperties') {
+        if (++propertyCount > MAX_RUN_PROPERTIES) return false;
+        close();
+        source = properties === null ? child : null;
+        properties = mergedPropertyList(properties ?? [], child.children, CT_RPR_SEQUENCE);
+        trailing = true;
+        continue;
+      }
+      if (child.kind === 'generic' && (isWml(child, 't') || isWml(child, 'delText'))) {
+        const pieces = splitTextElement(child as OoxmlElement, rootPreserve);
+        if (!pieces) return false;
+        content.push(...pieces);
+        trailing = false;
+        continue;
+      }
+      if (
+        child.kind === 'generic' &&
+        isWml(child, 'ins') &&
+        attributesFitKind('revisionInsert', child.attributes) &&
+        (child as OoxmlElement).children.every((grand: OoxmlNode) => grand.kind !== 'run')
+      ) {
+        close(child as OoxmlElement, [...(child as OoxmlElement).children]);
+        trailing = false;
+        continue;
+      }
+      content.push(child);
+      if (!isEmptyMarker(child)) trailing = false;
     }
+    return true;
   };
-  unnest(run.children, 0);
-  for (const child of children) {
-    if (child.kind === 'runProperties') {
-      close();
-      source = properties === null ? child : null;
-      properties = mergedPropertyList(properties ?? [], child.children, CT_RPR_SEQUENCE);
-      continue;
-    }
-    if (child.kind === 'generic' && (isWml(child, 't') || isWml(child, 'delText'))) {
-      const pieces = splitTextElement(child as OoxmlElement);
-      if (!pieces) return null;
-      content.push(...pieces);
-      continue;
-    }
-    if (
-      child.kind === 'generic' &&
-      isWml(child, 'ins') &&
-      attributesFitKind('revisionInsert', child.attributes) &&
-      (child as OoxmlElement).children.every((grand: OoxmlNode) => grand.kind !== 'run')
-    ) {
-      close(child as OoxmlElement, [...(child as OoxmlElement).children]);
-      continue;
-    }
-    content.push(child);
-  }
+  if (!read(run.children, 0)) return null;
   close();
   // Properties after the last content apply to nothing, but they are kept on an empty run.
-  if (
-    properties !== null &&
-    (parts.length === 0 || parts[parts.length - 1]!.properties !== properties)
-  )
-    parts.push({ properties, source, content: [] });
+  if (properties !== null && trailing) parts.push({ properties, source, content: [] });
 
   // Empty markers join the part after them, or the last part when nothing follows.
   const joined: Part[] = [];
@@ -209,6 +246,19 @@ export function repairedRun(run: OoxmlElement): OoxmlNode[] | null {
         ? { ...last, content: [...last.content, ...held] }
         : { properties: null, source: null, content: held }
     );
+  }
+
+  // Count the property copies before making any.
+  const sources = new Set<OoxmlElement>();
+  let copied = 0;
+  for (const part of joined) {
+    if (part.properties === null) continue;
+    if (part.source && !sources.has(part.source)) {
+      sources.add(part.source);
+      continue;
+    }
+    for (const child of part.properties) copied += sizeOf(child, MAX_COPIED_NODES);
+    if (copied > MAX_COPIED_NODES) return null;
   }
 
   const used = new Set<OoxmlElement>();
