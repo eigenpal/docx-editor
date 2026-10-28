@@ -147,6 +147,10 @@ export const MODE_RULES = {
     'A justified line that ends in a page or column break stretches to the measure, unless it is the last line of its paragraph',
     'ECMA-376 Part 1 §17.3.3.1 br'
   ),
+  repeatBoundaryUsesHeaderRule: legacy(
+    "A complete body row directly below a repeated header row reserves the wider of its own top border and the header row's bottom border; modern modes keep the band of the row it follows in the table",
+    'ECMA-376 Part 1 §17.4.49 tblHeader'
+  ),
   repeatKeepsWholeRow: legacy(
     'Repeated header rows stay above a row that cannot split and does not fit below them; the row runs past the bottom margin',
     'ECMA-376 Part 1 §17.4.49 tblHeader'

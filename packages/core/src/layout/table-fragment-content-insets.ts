@@ -1,7 +1,13 @@
 // A new fragment has no preceding cell. Do not carry a shared border from the previous page.
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { effectiveBorderSide } from './table-border-cascade.ts';
 import { withExactOpeningExtension } from './table-exact-terminal-border.ts';
-import { borderContentInset, cellContentInsets, simpleBandWidthPt } from './table-cell-geometry.ts';
+import {
+  borderContentInset,
+  cellContentInsets,
+  ownTopBandWidthPt,
+  simpleBandWidthPt,
+} from './table-cell-geometry.ts';
 import type { SemanticTableRow, SemanticTableStructure } from './semantic-table.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
 
@@ -124,6 +130,89 @@ export function repeatedHeaderContinuationDeps(
   return { ...deps, cellContentInsets: insets };
 }
 
+const isCompound = (side: SemanticTableRow['cells'][number]['borders']['top']): boolean =>
+  side.state === 'edge' && simpleBandWidthPt(side) === 0;
+
+/**
+ * The top band, in points, that a complete body row reserves directly below a repeated
+ * header, or undefined when the row keeps the band of the row it was authored under.
+ *
+ * Before mode 15 (`repeatBoundaryUsesHeaderRule`) the row meets the repeated header, not its
+ * authored neighbor: the band is the wider of the row's own top rule and the bottom rule of
+ * the last header row above its columns. From mode 15 the row keeps its authored band, also
+ * where the row above it on the original page has the wider rule. Compound rules keep their
+ * own extent geometry, so they also answer undefined.
+ */
+export function repeatBoundaryBandPt(
+  structure: SemanticTableStructure,
+  row: SemanticTableRow,
+  deps: TableFlowDeps
+): number | undefined {
+  if (
+    structure.cellSpacingPt > 0 ||
+    !hasCompatibilityRule(deps.compatibilityMode, 'repeatBoundaryUsesHeaderRule')
+  )
+    return undefined;
+  let header: SemanticTableRow | undefined;
+  for (const candidate of structure.rows) {
+    if (!candidate.isHeader) break;
+    header = candidate;
+  }
+  if (!header) return undefined;
+  let widest = 0;
+  for (const cell of row.cells) {
+    const own = effectiveBorderSide(
+      cell.borders.top,
+      (cell.rowTableBorders ?? structure.tableBorders).insideH
+    );
+    if (isCompound(own)) return undefined;
+    let headerBand = 0;
+    for (const above of header.cells) {
+      if (above.gridColumn + above.gridSpan <= cell.gridColumn) continue;
+      if (above.gridColumn >= cell.gridColumn + cell.gridSpan) continue;
+      const bottom = effectiveBorderSide(
+        above.borders.bottom,
+        (above.rowTableBorders ?? structure.tableBorders).insideH
+      );
+      if (isCompound(bottom)) return undefined;
+      headerBand = Math.max(headerBand, simpleBandWidthPt(bottom));
+    }
+    widest = Math.max(
+      widest,
+      ownTopBandWidthPt(
+        cell.borders.top,
+        (cell.rowTableBorders ?? structure.tableBorders).insideH,
+        headerBand
+      )
+    );
+  }
+  return widest;
+}
+
+/** A complete body row directly below a repeated header reserves the boundary's band. */
+function rowBelowRepeatContentDeps(
+  structure: SemanticTableStructure,
+  row: SemanticTableRow,
+  deps: TableFlowDeps
+): TableFlowDeps {
+  const band = repeatBoundaryBandPt(structure, row, deps);
+  if (band === undefined) return deps;
+  const insets = new Map(deps.cellContentInsets);
+  const minimumInsets = new Map(deps.cellMinimumContentInsets);
+  for (const cell of row.cells) {
+    const top = cell.margins.top + band;
+    const before = insets.get(cell.id) ?? cellContentInsets(cell, true);
+    insets.set(cell.id, { ...before, top });
+    const minimum = minimumInsets.get(cell.id) ?? cell.minimumContentInsets;
+    if (minimum) minimumInsets.set(cell.id, { ...minimum, top });
+  }
+  return {
+    ...deps,
+    cellContentInsets: insets,
+    ...(minimumInsets.size ? { cellMinimumContentInsets: minimumInsets } : {}),
+  };
+}
+
 /** Content deps for a row about to open, continue in, or follow rows of one fragment. */
 export function fragmentRowContentDeps(
   structure: SemanticTableStructure,
@@ -133,7 +222,8 @@ export function fragmentRowContentDeps(
   isContinuation: boolean
 ): TableFlowDeps {
   if (placed.length === 0) return firstRowContentDeps(structure, row, deps);
-  return isContinuation && placed.every((item) => item.isHeaderRepeat)
+  if (!placed.every((item) => item.isHeaderRepeat)) return deps;
+  return isContinuation
     ? repeatedHeaderContinuationDeps(structure, row, deps)
-    : deps;
+    : rowBelowRepeatContentDeps(structure, row, deps);
 }

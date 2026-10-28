@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A complete body row below a repeated header reserved its own top rule on the shared border plan, and the band of the row it was authored under on the ordinary repeat path.",
+  "after": "Before compatibility mode 15 the row reserves the wider of its own top rule and the header's bottom rule; from mode 15 it reserves the band it shares with the row above it in the table, on both paths.",
+  "reason": "Only local layout geometry changes. Canonical XML, replicated operations, and saved rooms remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/repeated-header-boundary-band.test.ts",
+    "packages/core/src/layout/__tests__/repeated-header-border-metrics.test.ts"
+  ],
+  "changeset": "repeat-boundary-band",
+  "migration": null
+}

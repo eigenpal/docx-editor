@@ -615,6 +615,13 @@ Semantic layout SHALL place a supported terminal exact row's simple bottom rule 
 - **THEN** the repeated header group stays on that page
 - **AND** the row stays whole below it and runs past the bottom margin
 
+#### Scenario: A body row below a repeated header reserves the boundary rule
+
+- **WHEN** a complete body row of a collapsed table starts directly below its repeated header rows
+- **THEN** before compatibility mode 15, or with no mode, the row reserves the wider of its own top rule and the bottom rule of the last header row
+- **AND** in compatibility mode 15 and later, the row reserves the rule it shares with the row above it in the table
+- **AND** the shared border plan and the ordinary repeat path reserve the same band
+
 #### Scenario: Cell text uses the authored bottom
 
 - **WHEN** a terminal exact-row cell has center or bottom alignment

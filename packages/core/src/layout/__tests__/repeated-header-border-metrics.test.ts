@@ -64,7 +64,15 @@ function fixture(
 }
 const geometry = { width: 200, height: 100, margin: { top: 10, right: 10, bottom: 10, left: 10 } };
 const measurer = createFixedMeasurer(5, 12);
-function layout(part: ReturnType<typeof fixture>, height = 100, compatibilityMode?: number) {
+const modern = { geometry, measurer, compatibilityMode: 15 };
+// Mode 15 unless a test says otherwise: there a body row below a repeat keeps the band of the
+// row it was authored under, which for these uniform fixtures is its own top rule. Before
+// mode 15 it meets the header's bottom rule instead (`repeatBoundaryUsesHeaderRule`).
+function layout(
+  part: ReturnType<typeof fixture>,
+  height = 100,
+  compatibilityMode: number | undefined = 15
+) {
   return layoutSemanticDocument(part, 0, {
     geometry: { ...geometry, height },
     measurer,
@@ -223,12 +231,15 @@ describe('repeated-header shared horizontal border measurement', () => {
       ['nil', 'omit', 2],
       ['nil', 1, 1],
     ] as const) {
+      // Before mode 15, where the header's bottom rule takes part in the boundary.
       const result = layout(
         fixture({
           headerBottom,
           bodyTop,
           tableProperties: '<w:tblBorders><w:insideH w:val="single" w:sz="16"/></w:tblBorders>',
-        })
+        }),
+        100,
+        14
       );
       for (const fragment of repeated(result)) {
         expect(band(fragment.rows[0]!.cells[0]!).bottom).toBeCloseTo(bandSplit(expected).bottom, 6);
@@ -247,8 +258,8 @@ describe('repeated-header shared horizontal border measurement', () => {
           row(cell(`B${index}`, index % 2 === 0 ? top : 2))
         ).join(''),
       });
-      const warm = layoutSemanticDocument(part, version, { geometry, measurer, cache, session });
-      const cold = layoutSemanticDocument(part, version, { geometry, measurer });
+      const warm = layoutSemanticDocument(part, version, { ...modern, cache, session });
+      const cold = layoutSemanticDocument(part, version, modern);
       expect(JSON.parse(JSON.stringify(warm))).toEqual(JSON.parse(JSON.stringify(cold)));
       for (const fragment of repeated(warm)) {
         const target = fragment.rows[1]!.cells[0]!;
@@ -288,12 +299,13 @@ describe('repeated-header shared horizontal border measurement', () => {
       const result = layout(fixture({ headerBottom, bodyTop }), 44, 14);
       const continued = fragments(result).slice(1);
       expect(continued).toHaveLength(18);
-      for (const [index, fragment] of continued.entries()) {
+      for (const fragment of continued) {
         expect(fragment.rows[0]!.isHeaderRepeat).toBe(true);
         const body = fragment.rows[1]!;
         expect(body.hasContinuation).toBeFalsy();
-        // The first body row resolves its top against the header it was authored under.
-        const resolved = index === 0 ? Math.max(headerBottom!, bodyTop!) : bodyTop!;
+        // Before mode 15 every body row below a repeat meets the header's bottom rule, the
+        // row authored under the header and the later ones alike: the wider rule wins.
+        const resolved = Math.max(headerBottom!, bodyTop!);
         expect(band(body.cells[0]!).top).toBeCloseTo(bandSplit(resolved).top, 6);
         expect(band(fragment.rows[0]!.cells[0]!).bottom).toBeCloseTo(bandSplit(resolved).bottom, 6);
         expect(body.box.y + body.box.height).toBeGreaterThan(24);
@@ -355,7 +367,7 @@ describe('repeated-header shared horizontal border measurement', () => {
     const bodyBlock = structure.rows[1]!.cells[0]!.blocks[0];
     const cache = createParagraphLayoutCache<readonly PendingLine[]>();
     const session = createLayoutSession();
-    layoutSemanticDocument(original, 0, { geometry, measurer, cache, session });
+    layoutSemanticDocument(original, 0, { ...modern, cache, session });
     const edited = applyTreeOp(original, {
       op: 'setTableCellBorders',
       tableId: table.id,
@@ -368,8 +380,8 @@ describe('repeated-header shared horizontal border measurement', () => {
     expect(structureOf(edited.part).structure.rows[1]!.cells[0]!.blocks[0]).toBe(bodyBlock);
     for (const [index, part] of [edited.part, original, edited.part].entries()) {
       const version = index + 1;
-      const warm = layoutSemanticDocument(part, version, { geometry, measurer, cache, session });
-      const cold = layoutSemanticDocument(part, version, { geometry, measurer });
+      const warm = layoutSemanticDocument(part, version, { ...modern, cache, session });
+      const cold = layoutSemanticDocument(part, version, modern);
       expect(JSON.parse(JSON.stringify(warm))).toEqual(JSON.parse(JSON.stringify(cold)));
       // Widening the header's own bottom rule changes what it PAINTS. It cannot change what
       // the body row reserves, which is the body row's own top rule.
@@ -551,14 +563,16 @@ describe('repeated-header shared horizontal border measurement', () => {
       row(cell('large'), '<w:trHeight w:val="1360" w:hRule="exact"/>') +
       Array.from({ length: 10 }, (_, index) => row(cell(`B${index}`))).join('');
     // The repeat stays above the exact row (`repeatKeepsWholeRow`), which runs past the margin.
+    // Before mode 15 the first body row below each repeat meets the header's 2pt bottom rule;
+    // the rows after it keep their own 0.5pt band, not a leaked repeat inset.
     const tables = fragments(layout(fixture({ body }), 100, 14));
     expect(tables[1]!.rows.map((item) => item.isHeaderRepeat)).toEqual([true, false]);
     const large = tables[1]!.rows[1]!;
-    expect(band(large.cells[0]!).top).toBeCloseTo(bandSplit(0.5).top, 6);
+    expect(band(large.cells[0]!).top).toBeCloseTo(bandSplit(2).top, 6);
     expect(large.box.y + large.box.height).toBeCloseTo(12.5 + 68, 6);
     expect(tables[2]!.rows[0]!.isHeaderRepeat).toBe(true);
-    for (const item of tables[2]!.rows.slice(1)) {
-      expect(band(item.cells[0]!).top).toBeCloseTo(bandSplit(0.5).top, 6);
+    for (const [index, item] of tables[2]!.rows.slice(1).entries()) {
+      expect(band(item.cells[0]!).top).toBeCloseTo(bandSplit(index === 0 ? 2 : 0.5).top, 6);
     }
   });
 
