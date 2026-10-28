@@ -146,38 +146,63 @@ describe('a section-scope endnote position write', () => {
 });
 
 // Two peers that each add the element a section lacked leave two copies in shared state.
-// Every reader uses the first; the next write and every save collapse them into it.
+// Every reader uses the first copy and the first occurrence of each field in it; the next write
+// and every save drop the rest, so what the document shows does not change.
 describe('repeated note properties', () => {
+  // The first copy repeats numFmt; the second adds numStart and a restart no reader sees.
   const REPEATED =
     '<w:p><w:pPr><w:sectPr>' +
     '<w:footnotePr><w:numFmt w:val="lowerRoman"/><w:numFmt w:val="upperRoman"/></w:footnotePr>' +
-    '<w:footnotePr><w:numFmt w:val="chicago"/><w:numStart w:val="4"/></w:footnotePr>' +
+    '<w:footnotePr><w:numStart w:val="5"/><w:numRestart w:val="eachSect"/></w:footnotePr>' +
     '<w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:pPr></w:p>' +
     '<w:p><w:r><w:t>Last</w:t></w:r></w:p><w:sectPr/>';
-  const ONE = '<w:footnotePr><w:numFmt w:val="lowerRoman"/><w:numStart w:val="4"/></w:footnotePr>';
+  const SETTINGS =
+    '<w:endnotePr><w:numFmt w:val="decimal"/></w:endnotePr>' +
+    '<w:endnotePr><w:pos w:val="sectEnd"/></w:endnotePr>';
   const mainXml = (pkg: OoxmlPackage) => serializeOoxmlPart(pkg.parts.get(pkg.mainDocumentPart)!);
-
-  test('collapse into the first copy on save, without changing the document', () => {
-    const store = open(
-      REPEATED,
-      '<w:footnotePr/><w:footnotePr><w:pos w:val="beneathText"/></w:footnotePr>'
-    );
-    const before = mainXml(store.currentPackage());
+  const resolved = (pkg: OoxmlPackage) => {
+    const settings = authoredDocumentEndnoteProperties(settingsPartOf(pkg));
+    return sectPrs(pkg).map((sectPr) => ({
+      footnote: resolveFootnoteProperties(authoredFootnotePropertiesFromSectPr(sectPr)),
+      endnote: resolveEndnoteProperties(authoredEndnotePropertiesFromSectPr(sectPr), settings),
+    }));
+  };
+  const savedAndReopened = (store: TreePackageStore) => {
     const reread = readOoxmlPackage(writeOoxmlPackage(store.currentPackage()));
     if (!reread.ok) throw new Error(reread.reason);
-    expect(mainXml(reread.package)).toContain(`<w:sectPr>${ONE}<w:pgSz`);
-    expect(settingsXml(reread.package)).toContain(
-      '<w:footnotePr><w:pos w:val="beneathText"/></w:footnotePr></w:settings>'
+    return reread.package;
+  };
+
+  test('a source file saved unedited reads the same and keeps only the first copies', () => {
+    const store = open(REPEATED, SETTINGS);
+    const before = resolved(store.currentPackage());
+    expect(before[0]!.footnote).toEqual({
+      pos: 'pageBottom',
+      numFmt: 'lowerRoman',
+      numStart: 1,
+      numRestart: 'continuous',
+    });
+    expect(before[0]!.endnote.pos).toBe('docEnd');
+    const liveXml = mainXml(store.currentPackage());
+    const saved = savedAndReopened(store);
+    expect(resolved(saved)).toEqual(before);
+    expect(mainXml(saved)).toContain(
+      '<w:sectPr><w:footnotePr><w:numFmt w:val="lowerRoman"/></w:footnotePr><w:pgSz'
     );
-    expect(mainXml(store.currentPackage())).toBe(before);
+    expect(settingsXml(saved)).toContain(
+      '<w:endnotePr><w:numFmt w:val="decimal"/></w:endnotePr></w:settings>'
+    );
+    // Save rewrites only the file; the document state is as it was.
+    expect(mainXml(store.currentPackage())).toBe(liveXml);
   });
 
-  test('collapse into the first copy on the next write', () => {
+  test('the next write keeps the first copy whole and merges into it', () => {
     const store = open(REPEATED, '');
     apply(store, { scope: 'document', footnote: { numRestart: 'eachSect' } });
     expect(mainXml(store.currentPackage())).toContain(
-      '<w:sectPr><w:footnotePr><w:numFmt w:val="lowerRoman"/><w:numStart w:val="4"/>' +
+      '<w:sectPr><w:footnotePr><w:numFmt w:val="lowerRoman"/>' +
         '<w:numRestart w:val="eachSect"/></w:footnotePr><w:pgSz'
     );
+    expect(resolved(store.currentPackage())[0]!.footnote.numStart).toBe(1);
   });
 });

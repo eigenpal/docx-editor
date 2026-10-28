@@ -242,9 +242,7 @@ function containerWith(
     // Copies the schema allows once (two peers that each added the element at the same time)
     // collapse into the first, which is the copy every reader uses. This runs whether or not
     // the write names this kind, so any write heals the container it visits.
-    const prior = first
-      ? collapseCopies(at.map((index) => children[index] as OoxmlElement))
-      : undefined;
+    const prior = first ? collapseCopies(first) : undefined;
     let next = prior;
     if (side)
       next = prior ? fieldsWritten(prior, name, side, nextId) : addedProps(name, side, nextId);
@@ -262,34 +260,22 @@ function containerWith(
 }
 
 /**
- * One `w:footnotePr`/`w:endnotePr` from the copies a container holds: the first copy, keeping
- * its node id and its first copy of each field. A field that only a later copy has moves to it.
- * Returns the first copy itself when it is the only one and repeats no field.
+ * One `w:footnotePr`/`w:endnotePr` from the copies a container holds: the first copy, whole,
+ * keeping its node id and the first occurrence of each field. Every reader uses exactly that,
+ * so the result reads the same as before. Later copies are dropped with all their children,
+ * fields and anything else; nothing moves from them into the first copy. Returns the first copy
+ * itself when it repeats no field.
  */
-function collapseCopies(copies: readonly OoxmlElement[]): OoxmlElement {
-  const first = copies[0]!;
+function collapseCopies(first: OoxmlElement): OoxmlElement {
   const seen = new Set<string>();
-  let changed = copies.length > 1;
-  const kept: OoxmlNode[] = [];
-  for (const child of first.children) {
-    if (isField(child)) {
-      if (seen.has(child.localName)) {
-        changed = true;
-        continue;
-      }
-      seen.add(child.localName);
-    }
-    kept.push(child);
-  }
-  for (const copy of copies.slice(1)) {
-    for (const child of copy.children) {
-      if (!isField(child) || seen.has(child.localName)) continue;
-      seen.add(child.localName);
-      kept.push(child);
-    }
-  }
-  if (!changed) return first;
-  return { ...first, children: inFieldOrder(kept) } as OoxmlElement;
+  const kept = first.children.filter((child) => {
+    if (!isField(child)) return true;
+    if (seen.has(child.localName)) return false;
+    seen.add(child.localName);
+    return true;
+  });
+  if (kept.length === first.children.length) return first;
+  return { ...first, children: kept } as OoxmlElement;
 }
 
 /** A new element for a container that has none, or undefined when every value is the default. */
@@ -355,8 +341,9 @@ function inFieldOrder(children: readonly OoxmlNode[]): OoxmlNode[] {
 
 /**
  * The package with every `w:sectPr` and the settings root holding at most one
- * `w:footnotePr`/`w:endnotePr`, and at most one of each field in them, keeping the first copy,
- * which is the one every reader uses. Returns `pkg` itself when nothing repeats. Save runs it on
+ * `w:footnotePr`/`w:endnotePr`, and at most one of each field in them. It keeps the first copy
+ * and the first occurrence of each field, which is what every reader uses, and drops later
+ * copies whole, so the saved file reads the same as the document. Returns `pkg` itself when nothing repeats. Save runs it on
  * the package it exports; the document state does not change.
  */
 export function withoutDuplicateNoteProperties(pkg: OoxmlPackage): OoxmlPackage {
