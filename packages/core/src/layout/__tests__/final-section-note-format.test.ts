@@ -72,6 +72,7 @@ test('the painted notes input reads the same per-section properties', () => {
     cache: undefined,
     linkProjectors: createDocumentLinkProjectors(opened.view),
   });
+  expect(input).toBeDefined();
   expect(input?.footnotePropsBySection.map((p) => p.numFmt)).toEqual(['chicago', 'decimal']);
   expect(input?.footnotePropsBySection[1]?.numRestart).toBe('eachSect');
 });
