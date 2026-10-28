@@ -190,9 +190,9 @@ describe('insertHyperlink wraps a range without disturbing it', () => {
 
   test('a range overlapping an existing link is refused rather than nested', () => {
     const part = load(
-      '<w:p><w:r><w:t>a </w:t></w:r>' +
+      '<w:p><w:r><w:t xml:space="preserve">a </w:t></w:r>' +
         '<w:hyperlink w:anchor="one"><w:r><w:t>linked</w:t></w:r></w:hyperlink>' +
-        '<w:r><w:t> b</w:t></w:r></w:p>'
+        '<w:r><w:t xml:space="preserve"> b</w:t></w:r></w:p>'
     );
     expect(
       reject(part, {
@@ -221,9 +221,9 @@ describe('insertHyperlink wraps a range without disturbing it', () => {
 
 describe('removeHyperlink gives the runs back unchanged', () => {
   const LINKED =
-    '<w:p><w:r><w:t>Visit </w:t></w:r>' +
+    '<w:p><w:r><w:t xml:space="preserve">Visit </w:t></w:r>' +
     '<w:hyperlink r:id="rId9" w:history="1"><w:r><w:rPr><w:b/></w:rPr><w:t>example</w:t></w:r></w:hyperlink>' +
-    '<w:r><w:t> today</w:t></w:r></w:p>';
+    '<w:r><w:t xml:space="preserve"> today</w:t></w:r></w:p>';
 
   test('text and formatting survive; no w:hyperlink remains', () => {
     const part = load(LINKED);

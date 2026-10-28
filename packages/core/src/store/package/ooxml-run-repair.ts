@@ -3,12 +3,12 @@
  *
  * `CT_R` holds one `w:rPr`, first, then run content. Files break that shape in ways that
  * still show text: the properties after a saved `w:lastRenderedPageBreak` or after text, a
- * second `w:rPr`, a `w:t` with an element inside it, a `w:ins` inside the run. Read as written,
+ * second `w:rPr`, a `w:t` with an element inside it, a `w:ins` or a `w:r` inside the run. Read as written,
  * the run was a generic node, and its text left the page.
  *
  * Run properties take effect where they stand and add to the ones before them in the same
  * run: content before the first `w:rPr` has none, and content after a later `w:rPr` has both,
- * the later winning where they name the same property. So the run splits at each `w:rPr`, and
+ * the later winning where they set the same attribute. So the run splits at each `w:rPr`, and
  * each part carries the properties in effect for its content. Empty markers (a saved page
  * break, a bookmark) join the part after them. A `w:br` inside a `w:t` breaks the line, and
  * other elements inside it show nothing and stay inside a `w:t`. A `w:ins` inside the run becomes a tracked insertion
@@ -16,10 +16,14 @@
  *
  * A run that still fails its shape after this stays generic, as written.
  */
+import { mergedPropertyList } from './ooxml-property-merge.ts';
 import { CT_RPR_SEQUENCE } from './ooxml-property-order.ts';
 import { WML_NAMESPACE_URI, isRangeMarkerKind, validKnownKind } from './ooxml-shared.ts';
 import { knownKindAllowsWmlVal } from './ooxml-sdt.ts';
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
+
+/** Runs nested deeper than this inside one run stay as written. */
+const MAX_NESTED_RUNS = 8;
 
 /** Childless WML markers that take no width and no properties. */
 const EMPTY_MARKERS: ReadonlySet<string> = new Set([
@@ -84,30 +88,6 @@ function withSuffixedIds(node: OoxmlNode, suffix: string): OoxmlNode {
   } as OoxmlNode;
 }
 
-/** Position in `CT_RPr`; an unmodelled name sorts last, in the order it came. */
-function rank(node: OoxmlNode): number {
-  if (node.kind === 'textValue') return CT_RPR_SEQUENCE.length;
-  const at = CT_RPR_SEQUENCE.indexOf(node.localName);
-  return at < 0 ? CT_RPR_SEQUENCE.length : at;
-}
-
-/** `state` with `next`'s properties added, each replacing an earlier one of the same name. */
-function mergedProperties(state: readonly OoxmlNode[], next: OoxmlElement): OoxmlNode[] {
-  const added = next.children.filter((child) => child.kind !== 'textValue');
-  const named = new Set(
-    added.map((child) =>
-      child.kind === 'textValue' ? '' : `${child.namespaceUri} ${child.localName}`
-    )
-  );
-  const kept = state.filter(
-    (child) => child.kind === 'textValue' || !named.has(`${child.namespaceUri} ${child.localName}`)
-  );
-  return [...kept, ...added]
-    .map((child, order) => ({ child, order }))
-    .sort((a, b) => rank(a.child) - rank(b.child) || a.order - b.order)
-    .map(({ child }) => child);
-}
-
 /**
  * A generic `w:t` or `w:delText` that holds elements, as typed text pieces between them. A
  * `w:br` among them is a break; any other element stays generic and shows nothing.
@@ -168,11 +148,22 @@ export function repairedRun(run: OoxmlElement): OoxmlNode[] | null {
     content = [];
     if (insertion && inserted) parts.push({ properties, source, content: inserted, insertion });
   };
-  for (const child of run.children) {
+  // A run written inside the run shows as part of it, its properties adding to the ones in
+  // effect, so its children are read in place.
+  const children: OoxmlNode[] = [];
+  const unnest = (nodes: readonly OoxmlNode[], depth: number) => {
+    for (const node of nodes) {
+      if (depth < MAX_NESTED_RUNS && isWml(node, 'r') && node.kind !== 'textValue')
+        unnest(node.children, depth + 1);
+      else children.push(node);
+    }
+  };
+  unnest(run.children, 0);
+  for (const child of children) {
     if (child.kind === 'runProperties') {
       close();
       source = properties === null ? child : null;
-      properties = mergedProperties(properties ?? [], child);
+      properties = mergedPropertyList(properties ?? [], child.children, CT_RPR_SEQUENCE);
       continue;
     }
     if (child.kind === 'generic' && (isWml(child, 't') || isWml(child, 'delText'))) {

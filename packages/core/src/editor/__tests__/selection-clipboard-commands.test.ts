@@ -34,7 +34,7 @@ function docx(body: string): Uint8Array {
   });
 }
 
-const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+const p = (text: string) => `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 
 function mount(
   body: string,

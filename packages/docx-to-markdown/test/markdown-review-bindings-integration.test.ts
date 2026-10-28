@@ -71,7 +71,7 @@ function selectedBindingText(
 
 test('binds real Core comment occurrences through escaping and UTF-16 text', async () => {
   const source = docx(
-    '<w:p><w:r><w:t>pre </w:t></w:r>' +
+    '<w:p><w:r><w:t xml:space="preserve">pre </w:t></w:r>' +
       '<w:commentRangeStart w:id="0"/><w:r><w:t>A &amp; 😀 *B*</w:t></w:r>' +
       '<w:commentRangeEnd w:id="0"/><w:r><w:commentReference w:id="0"/></w:r></w:p>',
     {
@@ -133,7 +133,9 @@ test('binds independent replacement revisions in every revision view', async () 
         (binding) => binding.artifactId === change.id && binding.occurrenceIndex === 0
       );
       expect(bindings).toHaveLength(2);
-      expect(bindings.every((binding) => selectedBindingText(result, binding) === selected)).toBe(true);
+      expect(bindings.every((binding) => selectedBindingText(result, binding) === selected)).toBe(
+        true
+      );
     }
   }
 });

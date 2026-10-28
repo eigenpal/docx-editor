@@ -316,7 +316,8 @@ describe('walkCharged depth overflow is fail-closed', () => {
   function nest(depth: number): ReturnType<typeof readOoxmlPart> {
     const xml =
       `<w:document xmlns:w="${W}"><w:body>` +
-      `${'<w:p>'.repeat(depth)}<w:p/>${'</w:p>'.repeat(depth)}` +
+      // An unknown wrapper nests as written; nested paragraphs would read flattened.
+      `${'<w:wrapper>'.repeat(depth)}<w:p/>${'</w:wrapper>'.repeat(depth)}` +
       `</w:body></w:document>`;
     return readOoxmlPart(xml, {
       name: '/word/document.xml',

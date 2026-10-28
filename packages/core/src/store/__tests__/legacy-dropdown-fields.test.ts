@@ -17,7 +17,7 @@ function fixture(
   separate = true,
   blue = 'Blue'
 ) {
-  const body = `<w:p><w:r><w:t>Color: </w:t></w:r><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Color"/>${enabled}<w:ddList><w:result w:val="1"/><w:default w:val="0"/><w:listEntry w:val="Red"/><w:listEntry w:val="Green"/><w:listEntry w:val="${blue}"/></w:ddList></w:ffData></w:fldChar></w:r><w:bookmarkStart w:id="0" w:name="Color"/><w:r><w:instrText> FORMDROPDOWN </w:instrText></w:r>${separate ? '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' : ''}${result}<w:r><w:fldChar w:fldCharType="end"/></w:r><w:bookmarkEnd w:id="0"/><w:r><w:t> tail</w:t></w:r></w:p>`;
+  const body = `<w:p><w:r><w:t xml:space="preserve">Color: </w:t></w:r><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Color"/>${enabled}<w:ddList><w:result w:val="1"/><w:default w:val="0"/><w:listEntry w:val="Red"/><w:listEntry w:val="Green"/><w:listEntry w:val="${blue}"/></w:ddList></w:ffData></w:fldChar></w:r><w:bookmarkStart w:id="0" w:name="Color"/><w:r><w:instrText> FORMDROPDOWN </w:instrText></w:r>${separate ? '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' : ''}${result}<w:r><w:fldChar w:fldCharType="end"/></w:r><w:bookmarkEnd w:id="0"/><w:r><w:t xml:space="preserve"> tail</w:t></w:r></w:p>`;
   const parsed = readOoxmlPart(
     `<w:document xmlns:w="${W}"><w:body>${wrapper ? `<w:sdt><w:sdtPr>${wrapper}</w:sdtPr><w:sdtContent>${body}</w:sdtContent></w:sdt>` : body}</w:body></w:document>`,
     {

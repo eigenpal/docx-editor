@@ -205,7 +205,7 @@ test('read-derived field writes defer addressing until sync', async () => {
 test('multiple field result updates in one paragraph share measured pagination', async () => {
   const runtime = await DocxEditor.createServer(
     docx(
-      '<w:p><w:fldSimple w:instr="PAGE"><w:r><w:t>0</w:t></w:r></w:fldSimple><w:r><w:t> of </w:t></w:r><w:fldSimple w:instr="NUMPAGES"><w:r><w:t>0</w:t></w:r></w:fldSimple></w:p>'
+      '<w:p><w:fldSimple w:instr="PAGE"><w:r><w:t>0</w:t></w:r></w:fldSimple><w:r><w:t xml:space="preserve"> of </w:t></w:r><w:fldSimple w:instr="NUMPAGES"><w:r><w:t>0</w:t></w:r></w:fldSimple></w:p>'
     ),
     { pagination: { measurer: createFixedMeasurer(6, 14) } }
   );

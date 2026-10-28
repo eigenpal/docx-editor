@@ -53,10 +53,10 @@ function docx(body: string): Uint8Array {
 
 /** One paragraph holding a recognized citation SDT between two plain runs. */
 const CITED = docx(
-  '<w:p><w:r><w:t>see </w:t></w:r>' +
+  '<w:p><w:r><w:t xml:space="preserve">see </w:t></w:r>' +
     '<w:sdt><w:sdtPr><w:tag w:val="acme:citation?sourceId=src_9f3&amp;locator=p.42"/></w:sdtPr>' +
     '<w:sdtContent><w:r><w:t>(Smith 2024, p. 42)</w:t></w:r></w:sdtContent></w:sdt>' +
-    '<w:r><w:t> for details</w:t></w:r></w:p>'
+    '<w:r><w:t xml:space="preserve"> for details</w:t></w:r></w:p>'
 );
 
 const edits: string[] = [];

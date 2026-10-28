@@ -80,10 +80,10 @@ describe('a control wrapper changes nothing about the page', () => {
   test('an inline control paints the characters inside it', () => {
     const layout = layoutOf(
       parseDoc(
-        `<w:p><w:r><w:t>before </w:t></w:r>` +
+        `<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>` +
           `<w:sdt><w:sdtPr><w:tag w:val="inline"/></w:sdtPr>` +
           `<w:sdtContent><w:r><w:t>inside</w:t></w:r></w:sdtContent></w:sdt>` +
-          `<w:r><w:t> after</w:t></w:r></w:p>`
+          `<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>`
       )
     );
     expect(textOf(layout)).toBe('before inside after');
@@ -93,9 +93,9 @@ describe('a control wrapper changes nothing about the page', () => {
     const bare = layoutOf(parseDoc(`<w:p><w:r><w:t>before inside after</w:t></w:r></w:p>`));
     const wrapped = layoutOf(
       parseDoc(
-        `<w:p><w:r><w:t>before </w:t></w:r>` +
+        `<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>` +
           `<w:sdt><w:sdtContent><w:r><w:t>inside</w:t></w:r></w:sdtContent></w:sdt>` +
-          `<w:r><w:t> after</w:t></w:r></w:p>`
+          `<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>`
       )
     );
     // Per LINE, not per span: the wrapper divides the text into three runs where the bare
@@ -147,7 +147,7 @@ describe('boundary records describe every control the layout laid out', () => {
     `<w:sdt><w:sdtPr><w:alias w:val="Intro"/><w:tag w:val="intro"/><w:id w:val="7"/>` +
       `<w:lock w:val="sdtContentLocked"/><w:showingPlcHdr/><w:richText/></w:sdtPr>` +
       `<w:sdtContent><w:p><w:r><w:t>Click here to enter text.</w:t></w:r></w:p></w:sdtContent></w:sdt>` +
-      `<w:p><w:r><w:t>after </w:t></w:r>` +
+      `<w:p><w:r><w:t xml:space="preserve">after </w:t></w:r>` +
       `<w:sdt><w:sdtPr><w:tag w:val="pick"/><w:dropDownList>` +
       `<w:listItem w:displayText="One" w:value="1"/></w:dropDownList></w:sdtPr>` +
       `<w:sdtContent><w:r><w:t>One</w:t></w:r></w:sdtContent></w:sdt></w:p>`

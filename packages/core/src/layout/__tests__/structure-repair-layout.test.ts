@@ -172,3 +172,54 @@ describe('tables in a broken shape', () => {
     expect(words).toEqual([['One'], ['Stray', 'Two']]);
   });
 });
+
+describe('text white space', () => {
+  test('boundary spaces without xml:space show nothing, and inner spaces stay', () => {
+    const layout = lay(
+      '<w:p><w:r><w:t>One </w:t><w:t>Two</w:t></w:r><w:r><w:t> </w:t></w:r>' +
+        '<w:r><w:t> Three  Four</w:t></w:r></w:p>'
+    );
+    expect(text(layout)).toBe('OneTwoThree  Four');
+  });
+});
+
+describe('paragraph properties merged', () => {
+  test('two w:pPr before the content both apply, and attributes of one element add up', () => {
+    const layout = lay(
+      '<w:p><w:pPr><w:jc w:val="right"/><w:ind w:left="2880"/></w:pPr>' +
+        '<w:pPr><w:spacing w:before="2000"/><w:ind w:firstLine="720"/></w:pPr>' +
+        '<w:r><w:t>Merged</w:t></w:r></w:p>'
+    );
+    const [paragraph] = paragraphs(layout);
+    expect(paragraph!.alignment).toBe('right');
+    expect(paragraph!.spacing.before).toBe(100);
+    expect(paragraph!.indent).toMatchObject({ left: 144, firstLine: 36 });
+  });
+});
+
+describe('nesting', () => {
+  test('a paragraph and a run inside a paragraph show on its line, and a table stays a table', () => {
+    const layout = lay(
+      '<w:p><w:r><w:t>Aa</w:t></w:r><w:p><w:pPr><w:jc w:val="center"/></w:pPr>' +
+        '<w:r><w:t>Bb</w:t><w:r><w:rPr><w:b/></w:rPr><w:t>Cc</w:t></w:r></w:r></w:p></w:p>' +
+        '<w:p><w:r><w:t>Dd</w:t></w:r><w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid>' +
+        '<w:tr><w:tc><w:p><w:r><w:t>Ee</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:p>'
+    );
+    // The outer paragraph's own mark follows the joined text, and follows the table.
+    const [first, firstMark, tableMark] = paragraphs(layout);
+    expect(paragraphs(layout)).toHaveLength(3);
+    expect(firstMark!.lines.flatMap((line) => line.spans)).toEqual([]);
+    expect(tableMark!.lines.flatMap((line) => line.spans)).toEqual([]);
+    expect(first!.lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
+      'AaBbCc',
+    ]);
+    expect(first!.alignment).toBe('center');
+    expect(propsOf(layout, 'Cc')).toEqual(['b']);
+    const cell = tables(layout)[0]!.rows[0]!.cells[0]!;
+    const [cellParagraph] = cell.blocks;
+    expect(
+      cellParagraph!.kind === 'paragraph' &&
+        cellParagraph!.lines.map((line) => line.spans.map((span) => span.text).join(''))
+    ).toEqual(['DdEe']);
+  });
+});

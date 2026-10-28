@@ -49,16 +49,16 @@ function docx(body: string, rels = ''): Uint8Array {
 
 const EXTERNAL_REL = `<Relationship Id="rId9" Type="${R}/hyperlink" Target="https://example.com" TargetMode="External"/>`;
 const LINKED = docx(
-  `<w:p><w:r><w:t>Visit </w:t></w:r>` +
+  `<w:p><w:r><w:t xml:space="preserve">Visit </w:t></w:r>` +
     `<w:hyperlink r:id="rId9"><w:r><w:t>Example</w:t></w:r></w:hyperlink>` +
-    `<w:r><w:t> today</w:t></w:r></w:p>`,
+    `<w:r><w:t xml:space="preserve"> today</w:t></w:r></w:p>`,
   EXTERNAL_REL
 );
 const PLAIN = docx('<w:p><w:r><w:t>Visit example today</w:t></w:r></w:p>');
 // A HYPERLINK field, not a typed `w:hyperlink`: its link record comes from the field-link
 // registry, is an atom with no caret-addressable range, and no relationship backs it.
 const FIELD_LINKED = docx(
-  `<w:p><w:r><w:t>See </w:t></w:r>` +
+  `<w:p><w:r><w:t xml:space="preserve">See </w:t></w:r>` +
     `<w:fldSimple w:instr=" HYPERLINK &quot;https://field.example&quot; ">` +
     `<w:r><w:t>FieldLink</w:t></w:r></w:fldSimple></w:p>`
 );

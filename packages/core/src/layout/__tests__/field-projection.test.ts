@@ -156,10 +156,10 @@ describe('complex field piece projection', () => {
   test('empty PAGE/NUMPAGES project under page context and keep surrounding offsets', () => {
     const part = parsePart(
       `<w:p>` +
-        `<w:r><w:t>Page </w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve">Page </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText>` +
         `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r>` +
-        `<w:r><w:t> of </w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve"> of </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>NUMPAGES</w:instrText>` +
         `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r>` +
         `</w:p>`
@@ -175,7 +175,7 @@ describe('complex field piece projection', () => {
 
   test('without page context empty fields stay empty', () => {
     const part = parsePart(
-      `<w:p><w:r><w:t>Page </w:t></w:r>` +
+      `<w:p><w:r><w:t xml:space="preserve">Page </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText>` +
         `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r></w:p>`
     );
@@ -292,10 +292,10 @@ describe('header/footer page-context layout cache', () => {
     const bytes = footerDoc(
       `<w:p><w:pPr><w:tabs><w:tab w:val="right" w:pos="4000"/></w:tabs></w:pPr>` +
         `<w:r><w:t>L</w:t><w:tab/></w:r>` +
-        `<w:r><w:t>Page </w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve">Page </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText>` +
         `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r>` +
-        `<w:r><w:t> of </w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve"> of </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>NUMPAGES</w:instrText>` +
         `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r></w:p>`
     );
@@ -355,7 +355,7 @@ describe('header/footer page-context layout cache', () => {
 
   test('NUMPAGES-only stories reuse one layout per page count', () => {
     const bytes = footerDoc(
-      `<w:p><w:r><w:t>of </w:t></w:r>` +
+      `<w:p><w:r><w:t xml:space="preserve">of </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>NUMPAGES</w:instrText>` +
         `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r></w:p>`
     );
@@ -532,13 +532,13 @@ describe('story page-field detection', () => {
   test('detects mixed PAGE and NUMPAGES when each field is split across runs', () => {
     const part = parsePart(
       `<w:p>` +
-        `<w:r><w:t>Page </w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve">Page </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
         `<w:r><w:instrText>PAGE</w:instrText></w:r>` +
         `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
         `<w:r><w:t>1</w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
-        `<w:r><w:t> of </w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve"> of </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
         `<w:r><w:instrText>NUMPAGES</w:instrText></w:r>` +
         `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
@@ -605,13 +605,13 @@ describe('header/footer split-field projection and reuse', () => {
   test('cross-run PAGE/NUMPAGES detection enables live projection and context reuse', () => {
     const bytes = footerDoc(
       `<w:p>` +
-        `<w:r><w:t>Page </w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve">Page </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
         `<w:r><w:instrText>PAGE</w:instrText></w:r>` +
         `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
         `<w:r><w:t>1</w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
-        `<w:r><w:t> of </w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve"> of </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
         `<w:r><w:instrText>NU</w:instrText></w:r>` +
         `<w:r><w:instrText>MPAGES</w:instrText></w:r>` +
@@ -670,7 +670,7 @@ describe('header/footer split-field projection and reuse', () => {
   test('NUMPAGES-only split across runs reuses one layout per page count', () => {
     const bytes = footerDoc(
       `<w:p>` +
-        `<w:r><w:t>of </w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve">of </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
         `<w:r><w:instrText>NUM</w:instrText></w:r>` +
         `<w:r><w:instrText>PAGES</w:instrText></w:r>` +
@@ -704,18 +704,19 @@ describe('header/footer split-field projection and reuse', () => {
   test('document layout projects split-run footer fields per page', () => {
     const body =
       Array.from({ length: 5 }, (_, i) => `<w:p><w:r><w:t>line ${i}</w:t></w:r></w:p>`).join('') +
-      Array.from({ length: 20 }, () => `<w:p><w:r><w:t>${'x'.repeat(40)}</w:t></w:r></w:p>`).join(
-        ''
-      );
+      Array.from(
+        { length: 20 },
+        () => `<w:p><w:r><w:t xml:space="preserve">${'x'.repeat(40)}</w:t></w:r></w:p>`
+      ).join('');
     const bytes = footerDoc(
       `<w:p>` +
-        `<w:r><w:t>Page </w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve">Page </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
         `<w:r><w:instrText>PAGE</w:instrText></w:r>` +
         `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
         `<w:r><w:t>1</w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
-        `<w:r><w:t> of </w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve"> of </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
         `<w:r><w:instrText>NUMPAGES</w:instrText></w:r>` +
         `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
@@ -756,14 +757,15 @@ describe('document layout page index and page count', () => {
   test('footer fields show physical page index and total pages', () => {
     const body =
       Array.from({ length: 5 }, (_, i) => `<w:p><w:r><w:t>line ${i}</w:t></w:r></w:p>`).join('') +
-      Array.from({ length: 20 }, () => `<w:p><w:r><w:t>${'x'.repeat(40)}</w:t></w:r></w:p>`).join(
-        ''
-      );
+      Array.from(
+        { length: 20 },
+        () => `<w:p><w:r><w:t xml:space="preserve">${'x'.repeat(40)}</w:t></w:r></w:p>`
+      ).join('');
     const bytes = footerDoc(
-      `<w:p><w:r><w:t>Page </w:t></w:r>` +
+      `<w:p><w:r><w:t xml:space="preserve">Page </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText>` +
         `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r>` +
-        `<w:r><w:t> of </w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve"> of </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>NUMPAGES</w:instrText>` +
         `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r></w:p>`,
       body
@@ -798,7 +800,7 @@ describe('document layout page index and page count', () => {
   test('field-free furniture keeps baseline fragments and skips projectors', () => {
     const body = Array.from(
       { length: 25 },
-      () => `<w:p><w:r><w:t>${'x'.repeat(40)}</w:t></w:r></w:p>`
+      () => `<w:p><w:r><w:t xml:space="preserve">${'x'.repeat(40)}</w:t></w:r></w:p>`
     ).join('');
     const bytes = footerDoc(`<w:p><w:r><w:t>Static</w:t></w:r></w:p>`, body);
     const loaded = readOoxmlPackage(bytes);

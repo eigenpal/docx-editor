@@ -166,7 +166,7 @@ describe('paragraph offset coverage', () => {
   test('inline run wrappers paint their text in reading order over the model range', () => {
     const result = readOoxmlPart(
       `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
-        '<w:body><w:p><w:r><w:t>before </w:t></w:r>' +
+        '<w:body><w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>' +
         '<w:smartTag><w:r><w:t>smart</w:t></w:r></w:smartTag>' +
         '<w:customXml><w:r><w:t>custom</w:t></w:r></w:customXml>' +
         '<w:dir w:val="rtl"><w:r><w:rPr>' +
@@ -175,7 +175,7 @@ describe('paragraph offset coverage', () => {
         '<w:bdo w:val="rtl"><w:r><w:t>abc</w:t></w:r></w:bdo>' +
         '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="SimSun"/>' +
         '</w:rPr><w:t>C字D</w:t></w:r>' +
-        '<w:r><w:t> after</w:t></w:r></w:p></w:body></w:document>',
+        '<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p></w:body></w:document>',
       { name: '/word/document.xml', contentType: 'app/xml' }
     );
     if (!result.ok) throw new Error(result.reason);

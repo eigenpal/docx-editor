@@ -117,7 +117,7 @@ describe('a complex HYPERLINK field', () => {
   test('its cached result carries the projected record over one atom unit', () => {
     const seen: HyperlinkFieldSpec[] = [];
     const pieces = project(
-      '<w:p><w:r><w:t>See </w:t></w:r>' +
+      '<w:p><w:r><w:t xml:space="preserve">See </w:t></w:r>' +
         complexField(
           ' HYPERLINK "https://example.com" \\o "Visit" ',
           '<w:r><w:t>the site</w:t></w:r>'

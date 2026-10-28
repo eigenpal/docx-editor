@@ -71,7 +71,7 @@ const refField = (instr: string, cached = '') =>
   '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
   `<w:r><w:instrText>${instr}</w:instrText></w:r>` +
   '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
-  (cached ? `<w:r><w:t>${cached}</w:t></w:r>` : '') +
+  (cached ? `<w:r><w:t xml:space="preserve">${cached}</w:t></w:r>` : '') +
   '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
 const cite = (id: number, extra = '') => `<w:r><w:footnoteReference w:id="${id}"${extra}/></w:r>`;
 const bookmarkedCite = (name: string, inner: string) =>
@@ -108,7 +108,7 @@ describe('NOTEREF resolution against the body story', () => {
   test('paints the display number of the note referenced inside the bookmark', () => {
     const part = document(
       `<w:p>${cite(11)}</w:p>` +
-        `<w:p><w:r><w:t>lead </w:t></w:r>${bookmarkedCite('nb', cite(12))}</w:p>` +
+        `<w:p><w:r><w:t xml:space="preserve">lead </w:t></w:r>${bookmarkedCite('nb', cite(12))}</w:p>` +
         `<w:p>${refField(' NOTEREF nb \\h ')}</w:p>`
     );
     // Second citation in document order under the default decimal footnote numbering.
@@ -299,7 +299,8 @@ describe('NOTEREF through full layout', () => {
   test('paints the number the note area shows, per-section numFmt included', () => {
     const { part, notes } = openNotesDoc(
       notesDoc(
-        CITING_BODY + `<w:p><w:r><w:t>see </w:t></w:r>${refField(' NOTEREF noteBm \\h ')}</w:p>`
+        CITING_BODY +
+          `<w:p><w:r><w:t xml:space="preserve">see </w:t></w:r>${refField(' NOTEREF noteBm \\h ')}</w:p>`
       ),
       'lowerRoman'
     );
@@ -318,9 +319,9 @@ describe('NOTEREF through full layout', () => {
     const { part, notes } = openNotesDoc(
       notesDoc(
         CITING_BODY +
-          `<w:p><w:r><w:t>a </w:t></w:r>${refField(' NOTEREF noteBm \\p ', 'above')}</w:p>` +
-          `<w:p><w:r><w:t>b </w:t></w:r>${refField(' NOTEREF gone ', 'kept')}</w:p>` +
-          `<w:p><w:r><w:t>c </w:t></w:r>${refField(' NOTEREF noteBm ', 'IX')}</w:p>`
+          `<w:p><w:r><w:t xml:space="preserve">a </w:t></w:r>${refField(' NOTEREF noteBm \\p ', 'above')}</w:p>` +
+          `<w:p><w:r><w:t xml:space="preserve">b </w:t></w:r>${refField(' NOTEREF gone ', 'kept')}</w:p>` +
+          `<w:p><w:r><w:t xml:space="preserve">c </w:t></w:r>${refField(' NOTEREF noteBm ', 'IX')}</w:p>`
       )
     );
     const layout = layoutSemanticDocument(part, 1, {
@@ -339,9 +340,9 @@ describe('NOTEREF through full layout', () => {
       notesDoc(
         CITING_BODY +
           // Empty cache: always calibration-eligible, paints live.
-          `<w:p><w:r><w:t>see </w:t></w:r>${refField(' NOTEREF noteBm \\h ')}</w:p>` +
+          `<w:p><w:r><w:t xml:space="preserve">see </w:t></w:r>${refField(' NOTEREF noteBm \\h ')}</w:p>` +
           // A cache the computed value never reproduces: pinned to `X` before and after.
-          `<w:p><w:r><w:t>pin </w:t></w:r>${refField(' NOTEREF noteBm ', 'X')}</w:p>`
+          `<w:p><w:r><w:t xml:space="preserve">pin </w:t></w:r>${refField(' NOTEREF noteBm ', 'X')}</w:p>`
       )
     );
     const options = {
@@ -371,7 +372,8 @@ describe('NOTEREF results ride the save refresh plan', () => {
     // The cache normalizes to the computed `2` (NBSP = space), so the field calibrates
     // live; the raw run still carries the NBSP, so the plan rewrites it to the painted text.
     const bytes = notesDoc(
-      CITING_BODY + `<w:p><w:r><w:t>see </w:t></w:r>${refField(' NOTEREF noteBm \\h ', ' 2')}</w:p>`
+      CITING_BODY +
+        `<w:p><w:r><w:t xml:space="preserve">see </w:t></w:r>${refField(' NOTEREF noteBm \\h ', ' 2')}</w:p>`
     );
     const pkg = packageOf(bytes);
     const part = pkg.parts.get(pkg.mainDocumentPart)!;
@@ -383,7 +385,8 @@ describe('NOTEREF results ride the save refresh plan', () => {
 
   test('a fresh document with an exact NOTEREF cache plans nothing', () => {
     const bytes = notesDoc(
-      CITING_BODY + `<w:p><w:r><w:t>see </w:t></w:r>${refField(' NOTEREF noteBm \\h ', '2')}</w:p>`
+      CITING_BODY +
+        `<w:p><w:r><w:t xml:space="preserve">see </w:t></w:r>${refField(' NOTEREF noteBm \\h ', '2')}</w:p>`
     );
     const pkg = packageOf(bytes);
     const part = pkg.parts.get(pkg.mainDocumentPart)!;

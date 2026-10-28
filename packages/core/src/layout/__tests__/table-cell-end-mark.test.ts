@@ -16,7 +16,7 @@ const measurer: TextMeasurer = {
   lineMetrics: (style) => ({ height: glyph(style), baseline: glyph(style) * 0.8 }),
 };
 const paragraph = (text: string, mark = 20, run = '') =>
-  `<w:p><w:pPr><w:rPr><w:sz w:val="${mark * 2}"/></w:rPr></w:pPr><w:r><w:rPr><w:sz w:val="10"/>${run}</w:rPr><w:t>${text}</w:t></w:r></w:p>`;
+  `<w:p><w:pPr><w:rPr><w:sz w:val="${mark * 2}"/></w:rPr></w:pPr><w:r><w:rPr><w:sz w:val="10"/>${run}</w:rPr><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 /**
  * A superscript line keeps the 5pt line of its full-size run as a floor, not the mark's 20pt
  * or the 10pt cascade, except under a cell's end mark, so it shows which role the mark had.
@@ -79,7 +79,7 @@ test('an end paragraph of hidden or deleted runs takes the mark line', () => {
   const deleted = paragraph('Gone').replace(
     /<w:r>(.*)<\/w:r>/u,
     (_, inner: string) =>
-      `<w:del w:id="1" w:author="A"><w:r>${inner.replace(/w:t>/gu, 'w:delText>')}</w:r></w:del>`
+      `<w:del w:id="1" w:author="A"><w:r>${inner.replace(/w:t\b/gu, 'w:delText')}</w:r></w:del>`
   );
   expect(rows(run(table(deleted)))[0]!.box.height).toBe(20);
 });

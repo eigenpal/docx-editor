@@ -65,7 +65,7 @@ for (const type of ['PlainText', 'RichText', 'DatePicker'] as const) {
 
 test('tracked wrappers preserve mixed run formatting and unrelated text through both decisions', async () => {
   const body =
-    '<w:p><w:r><w:t>Keep: </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>Alpha</w:t></w:r><w:r><w:rPr><w:i/></w:rPr><w:t>Beta</w:t></w:r><w:r><w:t> tail</w:t></w:r></w:p>';
+    '<w:p><w:r><w:t xml:space="preserve">Keep: </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>Alpha</w:t></w:r><w:r><w:rPr><w:i/></w:rPr><w:t>Beta</w:t></w:r><w:r><w:t xml:space="preserve"> tail</w:t></w:r></w:p>';
   const runtime = await DocxEditor.createServer(docx(body), {
     author: 'Writer',
     revisionTextView: 'original',

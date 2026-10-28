@@ -51,7 +51,7 @@ function docx(body: string, rels = '', stylesXml = ''): Uint8Array {
   });
 }
 
-const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+const p = (text: string) => `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 const PID = (index: number) => `/word/document.xml#0.0.${index}`;
 
 function nestedSmartTags(inner: string, count: number): string {
@@ -278,7 +278,7 @@ describe('editing a hyperlink through the editor', () => {
       const target = 'https://example.com/original';
       const hyperlink = '<w:hyperlink r:id="rId9"><w:r><w:t>Docs</w:t></w:r></w:hyperlink>';
       const mounted = mount(
-        `<w:p>${wrap(hyperlink)}<w:r><w:t> tail</w:t></w:r></w:p>`,
+        `<w:p>${wrap(hyperlink)}<w:r><w:t xml:space="preserve"> tail</w:t></w:r></w:p>`,
         `<Relationship Id="rId9" Type="${R}/hyperlink" Target="${target}" TargetMode="External"/>`
       );
       const before = mounted.editor.surface!.hyperlinks.linksInCaretParagraph()[0]!;
@@ -700,7 +700,7 @@ function complexField(instr: string, result = ''): string {
 describe('a field link at the caret', () => {
   // 'See ' is four characters; the HYPERLINK field's result projects as ONE atom over [4, 5).
   const FIELD_DOC =
-    '<w:p><w:r><w:t>See </w:t></w:r>' +
+    '<w:p><w:r><w:t xml:space="preserve">See </w:t></w:r>' +
     complexField(' HYPERLINK "https://example.com" ', '<w:r><w:t>site</w:t></w:r>') +
     '</w:p>';
 

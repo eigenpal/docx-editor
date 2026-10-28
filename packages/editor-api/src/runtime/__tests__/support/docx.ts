@@ -85,7 +85,8 @@ export function commentedDocx(): Uint8Array {
 export const style = (styleId: string, name: string): string =>
   `<w:style w:type="paragraph" w:styleId="${styleId}"><w:name w:val="${name}"/></w:style>`;
 
-export const p = (text: string): string => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+export const p = (text: string): string =>
+  `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 
 /** The default fixture: two paragraphs, so a collection has more than one item. */
 export const TWO_PARAGRAPHS = docx(`${p('alpha')}${p('beta')}`);

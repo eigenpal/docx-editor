@@ -253,7 +253,9 @@ for (const action of ['accept', 'reject'] as const) {
       const wrapper = (text: string) =>
         `<w:${kind} w:id="1" w:author="Reviewer"><w:r><w:${textTag}>${text}</w:${textTag}></w:r></w:${kind}>`;
       const runtime = await createServer(
-        docx(`<w:p>${wrapper('A')}<w:r><w:t> and </w:t></w:r>${wrapper('B')}</w:p>`)
+        docx(
+          `<w:p>${wrapper('A')}<w:r><w:t xml:space="preserve"> and </w:t></w:r>${wrapper('B')}</w:p>`
+        )
       );
       try {
         await runtime.run(async (context) => {

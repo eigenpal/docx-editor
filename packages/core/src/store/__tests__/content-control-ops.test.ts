@@ -890,9 +890,9 @@ const V2_PARAGRAPH = '/word/document.xml#0.0.0';
 describe('inline content controls contribute UTF-16 offsets', () => {
   test('segmentsOf includes runs inside an inline sdt', () => {
     const part = loadV2(
-      '<w:p><w:r><w:t>before </w:t></w:r>' +
+      '<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>' +
         '<w:sdt><w:sdtPr/><w:sdtContent><w:r><w:t>mid</w:t></w:r></w:sdtContent></w:sdt>' +
-        '<w:r><w:t> after</w:t></w:r></w:p>'
+        '<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>'
     );
     const paragraph = findByIdV2(part.root, V2_PARAGRAPH);
     expect(paragraph?.kind).toBe('paragraph');

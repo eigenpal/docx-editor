@@ -8,7 +8,7 @@ const editors: DocxEditorInstance[] = [];
 afterEach(() => {
   for (const editor of editors.splice(0)) editor.destroy();
 });
-const run = (text: string) => `<w:r><w:t>${text}</w:t></w:r>`;
+const run = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
 const complex = (instruction: string, text: string) =>
   '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
   `<w:r><w:instrText xml:space="preserve">${instruction}</w:instrText></w:r>` +

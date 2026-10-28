@@ -50,7 +50,7 @@ function load(body: string): OoxmlPart {
 const numbered = (inner: string) =>
   `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="5"/></w:numPr></w:pPr>${inner}</w:p>`;
 const bookmarked = (name: string, text: string) =>
-  `<w:bookmarkStart w:id="1" w:name="${name}"/><w:r><w:t>${text}</w:t></w:r>` +
+  `<w:bookmarkStart w:id="1" w:name="${name}"/><w:r><w:t xml:space="preserve">${text}</w:t></w:r>` +
   `<w:bookmarkEnd w:id="1"/>`;
 /**
  * A complex REF. An empty `cached` writes NO result run — always calibration-eligible; a
@@ -60,10 +60,10 @@ const refField = (instr: string, cached = '') =>
   '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
   `<w:r><w:instrText>${instr}</w:instrText></w:r>` +
   '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
-  (cached ? `<w:r><w:t>${cached}</w:t></w:r>` : '') +
+  (cached ? `<w:r><w:t xml:space="preserve">${cached}</w:t></w:r>` : '') +
   '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
 const refParagraph = (instr: string, cached = '') =>
-  `<w:p><w:r><w:t>see </w:t></w:r>${refField(instr, cached)}</w:p>`;
+  `<w:p><w:r><w:t xml:space="preserve">see </w:t></w:r>${refField(instr, cached)}</w:p>`;
 
 /** Every fragment's text per page — what a reader sees, independent of node identity. */
 const shapeOf = (layout: SemanticLayout): unknown =>
@@ -128,8 +128,8 @@ describe('complex REF fields resolve live in body layout', () => {
 
   test('a plain REF paints the bookmarked text', () => {
     const layout = layoutOf(
-      `<w:p><w:r><w:t>The </w:t></w:r>${bookmarked('term', 'Closing Date')}` +
-        `<w:r><w:t> occurs.</w:t></w:r></w:p>` +
+      `<w:p><w:r><w:t xml:space="preserve">The </w:t></w:r>${bookmarked('term', 'Closing Date')}` +
+        `<w:r><w:t xml:space="preserve"> occurs.</w:t></w:r></w:p>` +
         refParagraph(' REF term ')
     );
     expect(textsOf(layout)).toContain('see Closing Date');

@@ -219,10 +219,10 @@ describe('migrating a saved room', () => {
   }
 
   test('a paragraph the editor cannot show is kept and counted', async () => {
-    // A table inside a paragraph is not a paragraph shape the editor shows.
+    // A table row inside a paragraph is not a paragraph shape the editor shows.
     const exported = zipDocument(
       '<w:p><w:r><w:t>Shown</w:t></w:r></w:p>' +
-        '<w:p><w:r><w:t>Odd</w:t></w:r><w:tbl><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl></w:p>' +
+        '<w:p><w:r><w:t>Odd</w:t></w:r><w:tr><w:tc><w:p/></w:tc></w:tr></w:p>' +
         '<w:sectPr/>'
     );
     const migrated = await migrateCollaborationRoom({ state: earlierRoom(), exported });

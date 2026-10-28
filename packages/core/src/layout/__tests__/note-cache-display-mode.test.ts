@@ -9,8 +9,8 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
 test('a shared break cache never leaks all-markup note or separator projection into original', () => {
   const tracked =
-    '<w:r><w:t>keep </w:t></w:r>' +
-    '<w:ins w:id="1" w:author="QA"><w:r><w:t>added </w:t></w:r></w:ins>' +
+    '<w:r><w:t xml:space="preserve">keep </w:t></w:r>' +
+    '<w:ins w:id="1" w:author="QA"><w:r><w:t xml:space="preserve">added </w:t></w:r></w:ins>' +
     '<w:del w:id="2" w:author="QA"><w:r><w:delText>removed</w:delText></w:r></w:del>';
   const parsed = readOoxmlPart(
     `<w:footnotes xmlns:w="${W}">` +

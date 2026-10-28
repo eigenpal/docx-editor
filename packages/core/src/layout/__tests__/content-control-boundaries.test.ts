@@ -43,8 +43,9 @@ const GEOMETRY: PageGeometry = {
 // 22 half-points = 11pt, the size the fixed measurer's base advance describes, so exact
 // coordinate assertions stay whole numbers regardless of the engine's default font size.
 const p = (text: string) =>
-  `<w:p><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
-const run = (text: string) => `<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${text}</w:t></w:r>`;
+  `<w:p><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+const run = (text: string) =>
+  `<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">${text}</w:t></w:r>`;
 const sdt = (pr: string, content: string) =>
   `<w:sdt><w:sdtPr>${pr}</w:sdtPr><w:sdtContent>${content}</w:sdtContent></w:sdt>`;
 

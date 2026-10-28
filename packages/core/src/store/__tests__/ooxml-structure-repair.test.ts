@@ -62,21 +62,42 @@ function expectStable(part: OoxmlPart): void {
 }
 
 describe('paragraph properties', () => {
-  test('a second w:pPr stays generic, its section break included, and saves where it stood', () => {
+  test('w:pPr elements before the content merge, the later adding to and winning over the earlier', () => {
     const part = parse(
-      '<w:p><w:pPr><w:jc w:val="center"/></w:pPr>' +
-        '<w:pPr><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:pPr>' +
-        '<w:r><w:t>Doubled</w:t></w:r></w:p>'
+      '<w:p><w:pPr><w:jc w:val="right"/><w:ind w:left="2880"/><w:rPr><w:sz w:val="72"/></w:rPr></w:pPr>' +
+        '<w:bookmarkStart w:id="0" w:name="b"/>' +
+        '<w:pPr><w:ind w:firstLine="720"/><w:jc w:val="center"/><w:rPr><w:b/></w:rPr>' +
+        '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:pPr>' +
+        '<w:pPr><w:tabs><w:tab w:val="left" w:pos="5760"/></w:tabs></w:pPr>' +
+        '<w:r><w:t>Merged</w:t></w:r><w:bookmarkEnd w:id="0"/></w:p>'
     );
     const [paragraph] = elements(part, 'p');
-    expect(paragraph!.kind).toBe('paragraph');
-    expect(paragraph!.children.map((child) => child.kind)).toEqual([
-      'paragraphProperties',
-      'generic',
-      'run',
+    expect(childKinds(paragraph!)).toEqual([
+      'pPr:paragraphProperties',
+      'bookmarkStart:bookmarkStart',
+      'r:run',
+      'bookmarkEnd:bookmarkEnd',
     ]);
-    expect(kinds(paragraph!.children[1]!).every((entry) => entry.endsWith(':generic'))).toBe(true);
-    expect(savedBody(part)).toContain('</w:pPr><w:pPr><w:sectPr>');
+    expect(savedBody(part)).toBe(
+      '<w:p><w:pPr><w:tabs><w:tab w:pos="5760" w:val="left"/></w:tabs>' +
+        '<w:ind w:firstLine="720" w:left="2880"/><w:jc w:val="center"/>' +
+        '<w:rPr><w:b/><w:sz w:val="72"/></w:rPr><w:sectPr><w:pgSz w:h="15840" w:w="12240"/></w:sectPr>' +
+        '</w:pPr><w:bookmarkStart w:id="0" w:name="b"/><w:r><w:t>Merged</w:t></w:r>' +
+        '<w:bookmarkEnd w:id="0"/></w:p>'
+    );
+    expectStable(part);
+  });
+
+  test('two w:tabs keep every stop, the later winning at one position', () => {
+    const part = parse(
+      '<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="2880"/><w:tab w:val="left" w:pos="5760"/></w:tabs></w:pPr>' +
+        '<w:pPr><w:tabs><w:tab w:val="right" w:pos="5760"/><w:tab w:val="left" w:pos="1440"/></w:tabs></w:pPr>' +
+        '<w:r><w:t>Tabs</w:t></w:r></w:p>'
+    );
+    expect(savedBody(part)).toContain(
+      '<w:tabs><w:tab w:pos="1440" w:val="left"/><w:tab w:pos="2880" w:val="left"/>' +
+        '<w:tab w:pos="5760" w:val="right"/></w:tabs>'
+    );
     expectStable(part);
   });
 
@@ -256,6 +277,117 @@ describe('tables', () => {
     expect(childKinds(row!)).toEqual(['tc:tableCell', 'tc:tableCell', 'p:generic']);
     const second = row!.children[1] as OoxmlElement;
     expect(childKinds(second)).toEqual(['tcPr:generic', 'p:paragraph', 'p:paragraph']);
+    expectStable(part);
+  });
+});
+
+describe('text white space', () => {
+  test('without its own xml:space, a w:t drops boundary white space and shows a tab as a space', () => {
+    const part = parse(
+      '<w:p><w:r><w:t> Lead</w:t><w:t>Trail </w:t><w:t>In  side</w:t><w:t>Tab\there</w:t>' +
+        '<w:t> </w:t><w:t>\n    Pretty\n  </w:t></w:r></w:p>'
+    );
+    expect(savedBody(part)).toBe(
+      '<w:p><w:r><w:t>Lead</w:t><w:t>Trail</w:t><w:t>In  side</w:t><w:t>Tab here</w:t>' +
+        '<w:t/><w:t>Pretty</w:t></w:r></w:p>'
+    );
+    expectStable(part);
+  });
+
+  test('xml:space on an ancestor does not keep it; on the w:t it keeps spaces and tabs', () => {
+    const part = parse(
+      '<w:p xml:space="preserve"><w:r xml:space="preserve"><w:t>Inherited </w:t>' +
+        '<w:t xml:space="preserve"> Own\ttab </w:t><w:t xml:space="default">Default </w:t></w:r></w:p>'
+    );
+    expect(savedBody(part)).toContain(
+      '<w:t>Inherited</w:t><w:t xml:space="preserve"> Own\ttab </w:t><w:t>Default</w:t>'
+    );
+    expectStable(part);
+  });
+
+  test('xml:space on the part root keeps the white space, unless the w:t sets default', () => {
+    const result = readOoxmlPart(
+      `<w:document xmlns:w="${W}" xml:space="preserve"><w:body><w:p><w:r><w:t>Root </w:t>` +
+        '<w:t> </w:t><w:t xml:space="default">Own </w:t></w:r></w:p><w:sectPr/></w:body></w:document>',
+      META
+    );
+    if (!result.ok) throw new Error(result.reason);
+    expect(savedBody(result.part)).toContain(
+      '<w:t xml:space="preserve">Root </w:t><w:t xml:space="preserve"> </w:t><w:t>Own</w:t>'
+    );
+    expectStable(result.part);
+  });
+
+  test('a line break in text is a space, and deleted text follows the same rule', () => {
+    const part = parse(
+      '<w:p><w:r><w:t xml:space="preserve">One\r\nTwo\nThree</w:t></w:r>' +
+        '<w:del w:id="1" w:author="a"><w:r><w:delText> Gone </w:delText></w:r></w:del></w:p>'
+    );
+    expect(savedBody(part)).toContain('<w:t>One Two Three</w:t>');
+    expect(savedBody(part)).toContain('<w:delText>Gone</w:delText>');
+    expectStable(part);
+  });
+
+  test('a saved tab inside text keeps xml:space so it reads back as a tab', () => {
+    const part = parse('<w:p><w:r><w:t xml:space="preserve">A\tB</w:t></w:r></w:p>');
+    expect(savedBody(part)).toBe('<w:p><w:r><w:t xml:space="preserve">A\tB</w:t></w:r></w:p>');
+    expectStable(part);
+  });
+});
+
+describe('nesting', () => {
+  test('a paragraph inside a paragraph joins it, its w:pPr adds, and the outer mark follows empty', () => {
+    const part = parse(
+      '<w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>Outer</w:t></w:r>' +
+        '<w:p><w:pPr><w:spacing w:before="2000"/></w:pPr><w:r><w:t>Inner</w:t></w:r></w:p></w:p>'
+    );
+    expect(elements(part, 'p').map((paragraph) => paragraph.kind)).toEqual([
+      'paragraph',
+      'paragraph',
+    ]);
+    expect(savedBody(part)).toBe(
+      '<w:p><w:pPr><w:spacing w:before="2000"/><w:jc w:val="right"/></w:pPr>' +
+        '<w:r><w:t>Outer</w:t></w:r><w:r><w:t>Inner</w:t></w:r></w:p><w:p/>'
+    );
+    expectStable(part);
+  });
+
+  test('a table inside a paragraph stays a table, the content before it starting the first cell', () => {
+    const part = parse(
+      '<w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>Before</w:t></w:r>' +
+        '<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid>' +
+        '<w:tr><w:tc><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>Cell</w:t></w:r></w:p>' +
+        '</w:tc></w:tr></w:tbl></w:p>'
+    );
+    expect(elements(part, 'tbl').map((table) => table.kind)).toEqual(['table']);
+    expect(savedBody(part)).toBe(
+      '<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:tc><w:p>' +
+        '<w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>Before</w:t></w:r><w:r><w:t>Cell</w:t></w:r>' +
+        '</w:p></w:tc></w:tr></w:tbl><w:p><w:pPr><w:jc w:val="right"/></w:pPr></w:p>'
+    );
+    expectStable(part);
+  });
+
+  test('a run inside a run joins it, its properties adding to the ones in effect', () => {
+    const part = parse(
+      '<w:p><w:r><w:rPr><w:sz w:val="56"/></w:rPr><w:t>Outer</w:t>' +
+        '<w:r><w:rPr><w:color w:val="FF0000"/></w:rPr><w:t>Inner</w:t></w:r></w:r></w:p>'
+    );
+    expect(savedBody(part)).toBe(
+      '<w:p><w:r><w:rPr><w:sz w:val="56"/></w:rPr><w:t>Outer</w:t></w:r>' +
+        '<w:r><w:rPr><w:color w:val="FF0000"/><w:sz w:val="56"/></w:rPr><w:t>Inner</w:t></w:r></w:p>'
+    );
+    expectStable(part);
+  });
+
+  test('a later w:rPr element of the same name adds its attributes', () => {
+    const part = parse(
+      '<w:p><w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>One</w:t>' +
+        '<w:rPr><w:u w:color="FF0000"/></w:rPr><w:t>Two</w:t></w:r></w:p>'
+    );
+    expect(savedBody(part)).toContain(
+      '<w:r><w:rPr><w:u w:color="FF0000" w:val="single"/></w:rPr><w:t>Two</w:t></w:r>'
+    );
     expectStable(part);
   });
 });

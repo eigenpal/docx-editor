@@ -170,7 +170,7 @@ const PAGE_X_OF_SECTION =
   `<w:r><w:t>/</w:t></w:r>` +
   `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>SECTIONPAGES</w:instrText>` +
   `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r>` +
-  `<w:r><w:t> of </w:t></w:r>` +
+  `<w:r><w:t xml:space="preserve"> of </w:t></w:r>` +
   `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>NUMPAGES</w:instrText>` +
   `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r></w:p>`;
 
@@ -199,7 +199,7 @@ describe('SECTIONPAGES and pgNumType projection', () => {
 
   test('detects SECTIONPAGES and reuses one layout per section page count', () => {
     const bytes = footerDoc(
-      `<w:p><w:r><w:t>sec </w:t></w:r>` +
+      `<w:p><w:r><w:t xml:space="preserve">sec </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>SECTIONPAGES</w:instrText>` +
         `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r></w:p>`
     );
@@ -241,9 +241,10 @@ describe('SECTIONPAGES and pgNumType projection', () => {
 
   test('multi-section footer: NUMPAGES is document-wide, SECTIONPAGES is per section', () => {
     const pad = (n: number) =>
-      Array.from({ length: n }, () => `<w:p><w:r><w:t>${'x'.repeat(40)}</w:t></w:r></w:p>`).join(
-        ''
-      );
+      Array.from(
+        { length: n },
+        () => `<w:p><w:r><w:t xml:space="preserve">${'x'.repeat(40)}</w:t></w:r></w:p>`
+      ).join('');
     const bytes = multiSectionDoc({
       footerBody: PAGE_X_OF_SECTION,
       sections: [{ body: pad(8) }, { body: pad(12) }, { body: pad(8) }],
@@ -280,9 +281,10 @@ describe('SECTIONPAGES and pgNumType projection', () => {
 
   test('pgNumType start restarts PAGE mid-document', () => {
     const pad = (n: number) =>
-      Array.from({ length: n }, () => `<w:p><w:r><w:t>${'x'.repeat(40)}</w:t></w:r></w:p>`).join(
-        ''
-      );
+      Array.from(
+        { length: n },
+        () => `<w:p><w:r><w:t xml:space="preserve">${'x'.repeat(40)}</w:t></w:r></w:p>`
+      ).join('');
     const bytes = multiSectionDoc({
       footerBody:
         `<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText>` +
@@ -313,7 +315,7 @@ describe('SECTIONPAGES and pgNumType projection', () => {
   test('pgNumType lowerRoman formats PAGE', () => {
     const pad = Array.from(
       { length: 8 },
-      () => `<w:p><w:r><w:t>${'x'.repeat(40)}</w:t></w:r></w:p>`
+      () => `<w:p><w:r><w:t xml:space="preserve">${'x'.repeat(40)}</w:t></w:r></w:p>`
     ).join('');
     const bytes = footerDoc(
       `<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText>` +
@@ -350,9 +352,10 @@ describe('SECTIONPAGES and pgNumType projection', () => {
   test('digit-width right tab stays correct across 9→10 for PAGE', () => {
     const body =
       Array.from({ length: 5 }, (_, i) => `<w:p><w:r><w:t>line ${i}</w:t></w:r></w:p>`).join('') +
-      Array.from({ length: 40 }, () => `<w:p><w:r><w:t>${'x'.repeat(40)}</w:t></w:r></w:p>`).join(
-        ''
-      );
+      Array.from(
+        { length: 40 },
+        () => `<w:p><w:r><w:t xml:space="preserve">${'x'.repeat(40)}</w:t></w:r></w:p>`
+      ).join('');
     const bytes = footerDoc(
       `<w:p><w:pPr><w:tabs><w:tab w:val="right" w:pos="4000"/></w:tabs></w:pPr>` +
         `<w:r><w:t>L</w:t><w:tab/></w:r>` +
@@ -392,11 +395,11 @@ describe('SECTIONPAGES and pgNumType projection', () => {
       `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r></w:p>`;
     const shortBody = Array.from(
       { length: 10 },
-      () => `<w:p><w:r><w:t>${'x'.repeat(40)}</w:t></w:r></w:p>`
+      () => `<w:p><w:r><w:t xml:space="preserve">${'x'.repeat(40)}</w:t></w:r></w:p>`
     ).join('');
     const longBody = Array.from(
       { length: 30 },
-      () => `<w:p><w:r><w:t>${'x'.repeat(40)}</w:t></w:r></w:p>`
+      () => `<w:p><w:r><w:t xml:space="preserve">${'x'.repeat(40)}</w:t></w:r></w:p>`
     ).join('');
     const geometry = {
       width: 200,

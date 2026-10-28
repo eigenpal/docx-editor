@@ -50,9 +50,9 @@ const BODY =
   '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
 
 const INLINE =
-  '<w:p><w:r><w:t>start </w:t></w:r>' +
+  '<w:p><w:r><w:t xml:space="preserve">start </w:t></w:r>' +
   '<w:sdt><w:sdtContent><w:r><w:t>control word</w:t></w:r></w:sdtContent></w:sdt>' +
-  '<w:r><w:t> end</w:t></w:r></w:p>';
+  '<w:r><w:t xml:space="preserve"> end</w:t></w:r></w:p>';
 
 describe('binding content-control walks', () => {
   test('allParagraphs includes paragraphs inside generic block SDTs and tables', () => {

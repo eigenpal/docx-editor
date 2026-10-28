@@ -61,9 +61,9 @@ function paragraphIds(part: OoxmlPart): string[] {
 
 const SIMPLE = '<w:p><w:r><w:t>Hello world</w:t></w:r></w:p>';
 const FORMATTED =
-  '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Bold</w:t></w:r><w:r><w:t> plain</w:t></w:r></w:p>';
+  '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Bold</w:t></w:r><w:r><w:t xml:space="preserve"> plain</w:t></w:r></w:p>';
 const WITH_UNKNOWN =
-  '<w:p><w:r><w:t>before </w:t></w:r>' +
+  '<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>' +
   '<w:r><w:drawing><a:graphic uri="urn:clip"/></w:drawing></w:r>' +
   '<w:r><w:t>after</w:t></w:r></w:p>';
 
@@ -189,7 +189,7 @@ describe('text operations over UTF-16 offsets (task 5.1)', () => {
   test('typing at the end of a hyperlink stays OUTSIDE the link', () => {
     const part = load(
       '<w:p><w:hyperlink r:id="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
-        '<w:r><w:t>link</w:t></w:r></w:hyperlink><w:r><w:t> after</w:t></w:r></w:p>'
+        '<w:r><w:t>link</w:t></w:r></w:hyperlink><w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>'
     );
     const [id] = paragraphIds(part);
     const typed = apply(part, { op: 'insertText', paragraphId: id!, offset: 4, text: 'X' });
@@ -590,7 +590,7 @@ describe('splitParagraphMany equals the sequence of single splits it stands for'
     },
     {
       name: 'formatted runs',
-      body: '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>Bold text</w:t></w:r><w:r><w:t> and plain tail</w:t></w:r></w:p>',
+      body: '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>Bold text</w:t></w:r><w:r><w:t xml:space="preserve"> and plain tail</w:t></w:r></w:p>',
     },
     {
       name: 'tabs and breaks',
@@ -927,7 +927,7 @@ describe('split and join carry w14 paragraph identity', () => {
 
   test('join: the surviving head keeps ITS paraId and the removed one is gone', () => {
     const part = load(
-      '<w:p w14:paraId="4C000001" w14:textId="4C000001"><w:r><w:t>Hello </w:t></w:r></w:p>' +
+      '<w:p w14:paraId="4C000001" w14:textId="4C000001"><w:r><w:t xml:space="preserve">Hello </w:t></w:r></w:p>' +
         '<w:p w14:paraId="4C000002" w14:textId="4C000002"><w:r><w:t>world</w:t></w:r></w:p>'
     );
     const [first, second] = paragraphIds(part);

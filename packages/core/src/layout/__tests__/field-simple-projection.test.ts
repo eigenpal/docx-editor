@@ -232,7 +232,7 @@ describe('a nested simple field inside a tracked complex cache', () => {
   // noted as replaced content instead: one live value, from the tracked end only.
   const TRACKED_NESTED_SIMPLE =
     '<w:p><w:fldSimple w:instr=" QUOTE x ">' +
-    '<w:r><w:t>p. </w:t></w:r>' +
+    '<w:r><w:t xml:space="preserve">p. </w:t></w:r>' +
     '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
     '<w:r><w:instrText> PAGE </w:instrText></w:r>' +
     '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +

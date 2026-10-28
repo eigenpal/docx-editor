@@ -100,7 +100,7 @@ describe('projection (task 6.1)', () => {
 
   test('unknown content projects as an inert positional atom, never dropped', () => {
     const part = load(
-      '<w:p><w:r><w:t>before </w:t></w:r>' +
+      '<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>' +
         '<w:r><w:drawing><a:graphic uri="urn:clip"/></w:drawing></w:r>' +
         '<w:r><w:t>after</w:t></w:r></w:p>'
     );
@@ -402,7 +402,7 @@ describe('reverse mapping (task 6.2)', () => {
 
   test('a full round trip through the projection changes nothing', () => {
     const part = load(
-      '<w:p><w:r><w:t>before </w:t></w:r>' +
+      '<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>' +
         '<w:r><w:drawing><a:graphic uri="urn:clip"/></w:drawing></w:r>' +
         '<w:r><w:rPr><w:b/></w:rPr><w:t>after</w:t></w:r></w:p>'
     );

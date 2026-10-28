@@ -132,7 +132,7 @@ function lay(part: OoxmlPart, drawingLayout?: InlineDrawingLayoutContext, geomet
   });
 }
 
-const run = (text: string) => `<w:r><w:t>${text}</w:t></w:r>`;
+const run = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
 
 describe('measureInlineDrawing', () => {
   test('converts wp:extent EMUs to points without using pixel dimensions', () => {

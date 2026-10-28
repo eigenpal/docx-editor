@@ -8,9 +8,9 @@ const LONG = 'x'.repeat(30);
 const DEL = 'w:author="A" w:date="2026-01-01T00:00:00Z"';
 const cell = (content: string) =>
   `<w:tc><w:tcPr><w:tcW w:w="3120" w:type="dxa"/></w:tcPr><w:p>${content}</w:p></w:tc>`;
-const run = (text: string) => `<w:r><w:t>${text}</w:t></w:r>`;
+const run = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
 const deleted = (id: number, text: string) =>
-  `<w:del w:id="${id}" ${DEL}><w:r><w:delText>${text}</w:delText></w:r></w:del>`;
+  `<w:del w:id="${id}" ${DEL}><w:r><w:delText xml:space="preserve">${text}</w:delText></w:r></w:del>`;
 
 /** Column widths of a three-column automatic-width table with one extra row. */
 function widths(row: string): number[] {

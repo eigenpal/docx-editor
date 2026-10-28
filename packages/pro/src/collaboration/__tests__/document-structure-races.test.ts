@@ -153,7 +153,7 @@ describe('inline object races', () => {
 
   test('typing after a line break in a run a peer deletes whole keeps the typing', async () => {
     const bytes = zipDocument(
-      '<w:p><w:r><w:t>Keep </w:t></w:r><w:r><w:t>gone</w:t><w:br/><w:t>too</w:t></w:r></w:p><w:sectPr/>'
+      '<w:p><w:r><w:t xml:space="preserve">Keep </w:t></w:r><w:r><w:t>gone</w:t><w:br/><w:t>too</w:t></w:r></w:p><w:sectPr/>'
     );
     const { alice } = await race(
       bytes,
@@ -267,7 +267,7 @@ describe('link races', () => {
 
   test('removing a link while a peer types inside it keeps the typing', async () => {
     const bytes = zipDocument(
-      '<w:p><w:hyperlink w:anchor="top"><w:r><w:t>Linked</w:t></w:r></w:hyperlink><w:r><w:t> text</w:t></w:r></w:p><w:sectPr/>'
+      '<w:p><w:hyperlink w:anchor="top"><w:r><w:t>Linked</w:t></w:r></w:hyperlink><w:r><w:t xml:space="preserve"> text</w:t></w:r></w:p><w:sectPr/>'
     );
     const pair = await harness.pair(bytes);
     const link = nodes(pair.alice, 'hyperlink')[0]!;
@@ -759,7 +759,7 @@ describe('inline insert races', () => {
 
   test('setting a content control value while a peer types after it keeps both', async () => {
     const bytes = zipDocument(
-      '<w:p><w:sdt><w:sdtPr><w:tag w:val="t"/></w:sdtPr><w:sdtContent><w:r><w:t>old</w:t></w:r></w:sdtContent></w:sdt><w:r><w:t> tail</w:t></w:r></w:p><w:sectPr/>'
+      '<w:p><w:sdt><w:sdtPr><w:tag w:val="t"/></w:sdtPr><w:sdtContent><w:r><w:t>old</w:t></w:r></w:sdtContent></w:sdt><w:r><w:t xml:space="preserve"> tail</w:t></w:r></w:p><w:sectPr/>'
     );
     const pair = await harness.pair(bytes);
     const control = nodes(pair.alice, 'sdt')[0]!;

@@ -162,9 +162,9 @@ describe('generic unknown nodes survive supported edits (task 4.6)', () => {
   // has no representation for.
   const xml =
     `<w:document xmlns:w="${W}" xmlns:a="${A}"><w:body><w:p>` +
-    '<w:r><w:t>before </w:t></w:r>' +
+    '<w:r><w:t xml:space="preserve">before </w:t></w:r>' +
     '<w:r><w:drawing><a:graphic><a:graphicData uri="urn:clip"/></a:graphic></w:drawing></w:r>' +
-    '<w:r><w:rPr><w:u w:val="double"/><a:customUnknown val="keep-me"/></w:rPr><w:t> after</w:t></w:r>' +
+    '<w:r><w:rPr><w:u w:val="double"/><a:customUnknown val="keep-me"/></w:rPr><w:t xml:space="preserve"> after</w:t></w:r>' +
     '<w:futureThing a:attr="x">tail</w:futureThing>' +
     '</w:p></w:body></w:document>';
 

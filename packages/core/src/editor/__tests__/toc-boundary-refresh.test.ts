@@ -47,7 +47,7 @@ function docx(body: string): Uint8Array {
 const begin = (code: string) =>
   `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>${code}</w:instrText><w:fldChar w:fldCharType="separate"/></w:r>`;
 const end = '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
-const text = (s: string) => `<w:r><w:t>${s}</w:t></w:r>`;
+const text = (s: string) => `<w:r><w:t xml:space="preserve">${s}</w:t></w:r>`;
 const p = (s: string) => `<w:p>${s}</w:p>`;
 const heading = (s: string) => p(`<w:pPr><w:pStyle w:val="Heading1"/></w:pPr>${text(s)}`);
 async function refresh(body: string) {

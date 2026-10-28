@@ -25,7 +25,7 @@ const bytes = zipSync({
   ),
   'word/document.xml': strToU8(
     `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
-      '<w:p><w:r><w:t>Open </w:t></w:r>' +
+      '<w:p><w:r><w:t xml:space="preserve">Open </w:t></w:r>' +
       '<w:hyperlink r:id="rId5"><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t>Example</w:t></w:r></w:hyperlink>' +
       '</w:p>' +
       '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4320"/></w:tblGrid>' +

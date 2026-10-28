@@ -623,7 +623,7 @@ describe('a table clear of a float does not inherit its wrap band', () => {
     const cell = (width: string, text: string): string =>
       `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/></w:tcPr>` +
       '<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>' +
-      `<w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+      `<w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p></w:tc>`;
     return (
       `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
       '<w:body>' +
@@ -762,7 +762,7 @@ describe('header and footer drawing exclusions in body flow', () => {
   const body = (content: string) =>
     load(`<w:document xmlns:w="${WML_NAMESPACE_URI}"><w:body>${content}</w:body></w:document>`);
   const paragraph = (text: string, props = '') =>
-    `<w:p><w:pPr><w:spacing w:after="0"/>${props}</w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+    `<w:p><w:pPr><w:spacing w:after="0"/>${props}</w:pPr><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
   function render(
     source: OoxmlPart,
     kind: 'header' | 'footer',
@@ -834,7 +834,7 @@ describe('header and footer drawing exclusions in body flow', () => {
   });
   test('a taller run cannot pull earlier text through a rectangular float', () => {
     const source = body(
-      '<w:p><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>A </w:t></w:r><w:r><w:rPr><w:sz w:val="48"/></w:rPr><w:t>B</w:t></w:r></w:p>'
+      '<w:p><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve">A </w:t></w:r><w:r><w:rPr><w:sz w:val="48"/></w:rPr><w:t>B</w:t></w:r></w:p>'
     );
     const story = furnitureStory('header', 80, 66, false, 10);
     const layout = layoutSemanticDocument(source, 0, {
@@ -859,7 +859,7 @@ describe('header and footer drawing exclusions in body flow', () => {
   });
   test('a taller run that needs a new line leaves earlier text at its original position', () => {
     const source = body(
-      '<w:p><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>A </w:t></w:r><w:r><w:rPr><w:sz w:val="48"/></w:rPr><w:t>BBBBBBBBBBBBBBBBBBB</w:t></w:r></w:p>'
+      '<w:p><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve">A </w:t></w:r><w:r><w:rPr><w:sz w:val="48"/></w:rPr><w:t>BBBBBBBBBBBBBBBBBBB</w:t></w:r></w:p>'
     );
     const story = furnitureStory('header', 80, 66, false, 10);
     const layout = layoutSemanticDocument(source, 0, {

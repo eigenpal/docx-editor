@@ -11,7 +11,7 @@ import type { ParagraphFragmentRecord } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const paragraph = (text: string, height = 20, props = '') =>
-  `<w:p><w:pPr><w:spacing w:line="${height * 20}" w:lineRule="exact"/>${props}</w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+  `<w:p><w:pPr><w:spacing w:line="${height * 20}" w:lineRule="exact"/>${props}</w:pPr><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 function source(attributes: string, height = 20, members = 1) {
   const frame = `<w:framePr w:x="0" ${attributes}/>`;
   const body =

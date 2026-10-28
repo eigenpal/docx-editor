@@ -31,7 +31,7 @@ const autonumField = (instr: string) =>
   '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
 
 const autonumParagraph = (instr: string, text: string) =>
-  `<w:p>${autonumField(instr)}<w:r><w:t> ${text}</w:t></w:r></w:p>`;
+  `<w:p>${autonumField(instr)}<w:r><w:t xml:space="preserve"> ${text}</w:t></w:r></w:p>`;
 
 const textsOf = (layout: SemanticLayout): string[] =>
   layout.pages.flatMap((page) =>
@@ -113,7 +113,7 @@ describe('AUTONUM-family fields synthesize sequential numbers in layout', () => 
 
   test('a simple AUTONUM field synthesizes the same way', () => {
     const layout = layoutOf(
-      `<w:p><w:fldSimple w:instr=" AUTONUM "/><w:r><w:t> via fldSimple</w:t></w:r></w:p>`
+      `<w:p><w:fldSimple w:instr=" AUTONUM "/><w:r><w:t xml:space="preserve"> via fldSimple</w:t></w:r></w:p>`
     );
     expect(textsOf(layout)).toEqual(['1. via fldSimple']);
   });
@@ -125,7 +125,7 @@ describe('AUTONUM-family fields synthesize sequential numbers in layout', () => 
     const body =
       autonumParagraph(' AUTONUM ', 'first') +
       `<w:p><w:del w:id="9" w:author="a">${autonumField(' AUTONUM ')}</w:del>` +
-      `<w:r><w:t> second</w:t></w:r></w:p>` +
+      `<w:r><w:t xml:space="preserve"> second</w:t></w:r></w:p>` +
       autonumParagraph(' AUTONUM ', 'third');
     const proposed = layoutSemanticDocument(load(body), 1, {
       measurer,
@@ -143,9 +143,9 @@ describe('AUTONUM-family fields synthesize sequential numbers in layout', () => 
     const layout = layoutOf(
       `<w:p><w:bookmarkStart w:id="1" w:name="annexB"/>` +
         `${autonumField(' AUTONUMLGL \\* ALPHABETIC \\e ')}` +
-        `<w:r><w:t> target</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p>` +
+        `<w:r><w:t xml:space="preserve"> target</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p>` +
         autonumParagraph(' AUTONUMLGL \\* ALPHABETIC \\e ', 'second') +
-        `<w:p><w:r><w:t>see </w:t></w:r>` +
+        `<w:p><w:r><w:t xml:space="preserve">see </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
         `<w:r><w:instrText> REF annexB \\n \\h </w:instrText></w:r>` +
         `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +

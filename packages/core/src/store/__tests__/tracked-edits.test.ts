@@ -764,7 +764,7 @@ describe('an atomic field survives a tracked edit whole', () => {
 // unattributed field in suggesting mode: an edit the review pane could not act on.
 describe('a tracked page field', () => {
   test('the complete atom lands inside one w:ins', () => {
-    const before = part('<w:p><w:r><w:t>Page </w:t></w:r></w:p>');
+    const before = part('<w:p><w:r><w:t xml:space="preserve">Page </w:t></w:r></w:p>');
     const after = apply(before, {
       op: 'insertPageField',
       paragraphId: paragraphId(before),
@@ -801,7 +801,7 @@ describe('a tracked page field', () => {
   });
 
   test('rejecting the proposal removes the whole atom; accepting unwraps it', () => {
-    const before = part('<w:p><w:r><w:t>Page </w:t></w:r></w:p>');
+    const before = part('<w:p><w:r><w:t xml:space="preserve">Page </w:t></w:r></w:p>');
     const proposed = apply(before, {
       op: 'insertPageField',
       paragraphId: paragraphId(before),
@@ -920,7 +920,7 @@ describe('a tracked page field', () => {
   });
 
   test('an empty attributed author is refused, as every tracked insert is', () => {
-    const before = part('<w:p><w:r><w:t>Page </w:t></w:r></w:p>');
+    const before = part('<w:p><w:r><w:t xml:space="preserve">Page </w:t></w:r></w:p>');
     const result = applyTreeOp(before, {
       op: 'insertPageField',
       paragraphId: paragraphId(before),

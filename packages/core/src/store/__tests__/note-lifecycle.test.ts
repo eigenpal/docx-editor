@@ -739,7 +739,7 @@ describe('TreePackageStore notes coexistence', () => {
 
 describe('convertAllNotes atomic bulk lifecycle', () => {
   test('converts every footnote in one undo unit with saved round-trip', () => {
-    const body = `<w:p><w:r><w:footnoteReference w:id="1"/><w:t> </w:t><w:footnoteReference w:id="3"/></w:r></w:p>`;
+    const body = `<w:p><w:r><w:footnoteReference w:id="1"/><w:t xml:space="preserve"> </w:t><w:footnoteReference w:id="3"/></w:r></w:p>`;
     const store = openStore(
       build({
         body,

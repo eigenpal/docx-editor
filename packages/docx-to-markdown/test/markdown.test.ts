@@ -156,7 +156,7 @@ describe('record-only Markdown export', () => {
     const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
     const result = await exportMarkdown(
       docx(
-        `<w:p><w:r><w:t>Formula: </w:t></w:r><m:oMath xmlns:m="${M}">` +
+        `<w:p><w:r><w:t xml:space="preserve">Formula: </w:t></w:r><m:oMath xmlns:m="${M}">` +
           '<m:r><m:t>x &lt; y</m:t></m:r></m:oMath></w:p>'
       )
     );
@@ -221,7 +221,7 @@ describe('record-only Markdown export', () => {
       '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum>' +
       '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>';
     const list = (text: string) =>
-      `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+      `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
     const table =
       '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>' +
       '<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:tcPr/><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>Name</w:t></w:r></w:p></w:tc><w:tc><w:tcPr/><w:p><w:r><w:t>Value</w:t></w:r></w:p></w:tc></w:tr>' +
@@ -239,7 +239,7 @@ describe('record-only Markdown export', () => {
       '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum>' +
       '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>';
     const list = (text: string, lead = '') =>
-      `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>${lead}<w:r><w:t>${text}</w:t></w:r></w:p>`;
+      `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>${lead}<w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
     const result = await exportMarkdown(
       docx(list('One') + list('Two', '<w:r><w:br w:type="page"/></w:r>'), numbering)
     );
@@ -308,7 +308,7 @@ describe('record-only Markdown export', () => {
 
   test('uses semantic tags when punctuation makes GFM style delimiters unsafe', async () => {
     const run = (text: string, properties = '') =>
-      `<w:r>${properties ? `<w:rPr>${properties}</w:rPr>` : ''}<w:t>${text}</w:t></w:r>`;
+      `<w:r>${properties ? `<w:rPr>${properties}</w:rPr>` : ''}<w:t xml:space="preserve">${text}</w:t></w:r>`;
     const result = await exportMarkdown(
       docx(
         '<w:p>' +
@@ -362,7 +362,7 @@ describe('record-only Markdown export', () => {
   test('retains one inline style state across layout-created line fragments', async () => {
     const text = 'x'.repeat(500);
     const result = await exportMarkdown(
-      docx(`<w:p><w:r><w:rPr><w:i/></w:rPr><w:t>${text}</w:t></w:r></w:p>`)
+      docx(`<w:p><w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`)
     );
     expect(result.markdown).toBe(`*${text}*`);
     expect(micromark(result.markdown, { extensions: [gfm()], htmlExtensions: [gfmHtml()] })).toBe(
@@ -473,7 +473,7 @@ describe('record-only Markdown export', () => {
       '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
       '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
     const linked = (label: string) =>
-      `<w:hyperlink r:id="rLink"><w:r><w:t>${label}</w:t></w:r></w:hyperlink>`;
+      `<w:hyperlink r:id="rLink"><w:r><w:t xml:space="preserve">${label}</w:t></w:r></w:hyperlink>`;
     const header = `<w:hdr xmlns:w="${W}" xmlns:r="${R}"><w:p>${field}${linked('header')}</w:p></w:hdr>`;
     const footnotes =
       `<w:footnotes xmlns:w="${W}" xmlns:r="${R}">` +
@@ -602,7 +602,7 @@ describe('record-only Markdown export', () => {
     const result = await exportMarkdown(
       docx(
         '<w:p><w:pPr><w:outlineLvl w:val="0"/></w:pPr>' +
-          '<w:r><w:t>Review </w:t></w:r>' +
+          '<w:r><w:t xml:space="preserve">Review </w:t></w:r>' +
           '<w:r><w:rPr><w:b/></w:rPr><w:t>carefully</w:t></w:r></w:p>'
       )
     );
@@ -701,7 +701,7 @@ describe('record-only Markdown export', () => {
       '<w:tblStylePr w:type="firstRow"><w:trPr><w:tblHeader/></w:trPr></w:tblStylePr>' +
       '</w:style></w:styles>';
     const row = (text: string, properties = '') =>
-      `<w:tr>${properties}<w:tc><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc></w:tr>`;
+      `<w:tr>${properties}<w:tc><w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p></w:tc></w:tr>`;
     const table =
       '<w:tbl><w:tblPr><w:tblStyle w:val="Headers"/><w:tblLook w:firstRow="1"/></w:tblPr>' +
       '<w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
@@ -971,7 +971,7 @@ describe('record-only Markdown export', () => {
       '<w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="bullet"/><w:lvlText w:val="•"/></w:lvl>' +
       '</w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>';
     const item = (level: number, text: string) =>
-      `<w:p><w:pPr><w:numPr><w:ilvl w:val="${level}"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+      `<w:p><w:pPr><w:numPr><w:ilvl w:val="${level}"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
     const nested =
       '<w:tbl><w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>inner</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
     const outer =

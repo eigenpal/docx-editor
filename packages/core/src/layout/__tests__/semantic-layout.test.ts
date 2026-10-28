@@ -37,7 +37,7 @@ const SMALL: PageGeometry = {
 // instead of resolving to the 10pt terminal fallback (see `DEFAULT_RUN_STYLE`), which would
 // scale every box by 10/11 and turn round assertions into repeating decimals.
 const paragraph = (text: string, pPr = '') =>
-  `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
+  `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 
 describe('layout records carry revision and stable source ranges (task 7.1)', () => {
   test('the layout is tagged with the revision it came from', () => {
@@ -56,7 +56,8 @@ describe('layout records carry revision and stable source ranges (task 7.1)', ()
 
   test('style spans cover the line text in order, with their own ranges', () => {
     const part = load(
-      '<w:p><w:r><w:t>plain </w:t></w:r>' + '<w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r></w:p>'
+      '<w:p><w:r><w:t xml:space="preserve">plain </w:t></w:r>' +
+        '<w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r></w:p>'
     );
     const [line] = linesOf(lay(part));
     expect(line!.spans.map((span) => span.text)).toEqual(['plain ', 'bold']);

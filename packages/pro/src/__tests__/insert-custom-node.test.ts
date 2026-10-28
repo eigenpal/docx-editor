@@ -135,7 +135,7 @@ describe('insertCustomNode', () => {
   });
 
   test('typing after a locked chip that ENDS the paragraph lands beside it', () => {
-    const editor = mount('<w:p><w:r><w:t>before </w:t></w:r></w:p>');
+    const editor = mount('<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r></w:p>');
     insertCustomNode(editor, citation, {
       attrs: { sourceId: 's1' },
       text: 'LABEL',
@@ -156,7 +156,7 @@ describe('insertCustomNode', () => {
 
   test('typing at the chip LEFT edge lands before the chip, never in its locked label', () => {
     // A locked chip takes no typing, so its leading edge belongs to the text before it.
-    const editor = mount('<w:p><w:r><w:t>before </w:t></w:r></w:p>');
+    const editor = mount('<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r></w:p>');
     insertCustomNode(editor, citation, {
       attrs: { sourceId: 's1' },
       text: 'LABEL',

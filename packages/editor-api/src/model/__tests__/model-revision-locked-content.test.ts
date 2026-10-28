@@ -12,8 +12,8 @@ import { docx } from './support/documents.ts';
 const ann = (id: number) => `w:id="${id}" w:author="Ann" w:date="2026-10-01T10:00:00Z"`;
 const body =
   '<w:p><w:sdt><w:sdtPr><w:id w:val="7"/><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent>' +
-  `<w:r><w:t xml:space="preserve">in </w:t></w:r><w:del ${ann(1)}><w:r><w:delText>OLD </w:delText></w:r></w:del>` +
-  `<w:ins ${ann(2)}><w:r><w:t>NEW </w:t></w:r></w:ins><w:r><w:t>end</w:t></w:r></w:sdtContent></w:sdt></w:p>`;
+  `<w:r><w:t xml:space="preserve">in </w:t></w:r><w:del ${ann(1)}><w:r><w:delText xml:space="preserve">OLD </w:delText></w:r></w:del>` +
+  `<w:ins ${ann(2)}><w:r><w:t xml:space="preserve">NEW </w:t></w:r></w:ins><w:r><w:t>end</w:t></w:r></w:sdtContent></w:sdt></w:p>`;
 
 async function attempt(
   decide: (revisions: any) => void,
@@ -142,7 +142,7 @@ test('acceptAll() on the body ignores a locked change inside a text box', async 
     '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr/>' +
     `<wps:txbx>${locked}</wps:txbx><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic>` +
     '</wp:anchor></w:drawing></w:r>';
-  const xml = `<w:p><w:ins ${ann(2)}><w:r><w:t>NEW </w:t></w:r></w:ins>${box}</w:p>`;
+  const xml = `<w:p><w:ins ${ann(2)}><w:r><w:t xml:space="preserve">NEW </w:t></w:r></w:ins>${box}</w:p>`;
   const runtime = await createServer(docx(xml), { author: 'Reviewer' });
   try {
     const left = await runtime.run(async (context) => {

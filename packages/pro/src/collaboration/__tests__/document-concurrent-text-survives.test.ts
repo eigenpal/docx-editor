@@ -50,7 +50,7 @@ async function race(
 
 const ONE_RUN = '<w:p><w:r><w:t>Hello world</w:t></w:r></w:p>';
 const THREE_RUNS =
-  '<w:p><w:r><w:t>One </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>Two </w:t></w:r>' +
+  '<w:p><w:r><w:t xml:space="preserve">One </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Two </w:t></w:r>' +
   '<w:r><w:t>Three</w:t></w:r></w:p>';
 const at = (peer: Peer) => harness.paragraphIdAt(peer, 0);
 

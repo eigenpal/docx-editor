@@ -26,7 +26,7 @@ function setup(
   const field = (name: string) =>
     `<w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="${name}"/><w:textInput><w:default w:val="Sample"/></w:textInput></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMTEXT </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Sample</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>`;
   const parsed = readOoxmlPart(
-    `<w:document xmlns:w="${W}"><w:body><w:p>${emptyFirst ? field('InputA').replace('<w:t>Sample</w:t>', '') : field('InputA')}${separator ? `<w:r><w:t>${separator}</w:t></w:r>` : ''}${emptySecond ? field('InputB').replace('<w:t>Sample</w:t>', '') : field('InputB')}</w:p></w:body></w:document>`,
+    `<w:document xmlns:w="${W}"><w:body><w:p>${emptyFirst ? field('InputA').replace('<w:t>Sample</w:t>', '') : field('InputA')}${separator ? `<w:r><w:t xml:space="preserve">${separator}</w:t></w:r>` : ''}${emptySecond ? field('InputB').replace('<w:t>Sample</w:t>', '') : field('InputB')}</w:p></w:body></w:document>`,
     {
       name: '/word/document.xml',
       contentType:

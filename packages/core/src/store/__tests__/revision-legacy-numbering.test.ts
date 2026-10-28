@@ -13,7 +13,7 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const body =
   '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/>' +
   '<w:numberingChange w:id="1" w:author="Ann" w:original="%1."/></w:numPr></w:pPr>' +
-  '<w:r><w:t>Item</w:t></w:r><w:ins w:id="2" w:author="Ann"><w:r><w:t> added</w:t></w:r></w:ins></w:p>';
+  '<w:r><w:t>Item</w:t></w:r><w:ins w:id="2" w:author="Ann"><w:r><w:t xml:space="preserve"> added</w:t></w:r></w:ins></w:p>';
 
 for (const action of ['accept', 'reject'] as const)
   test(`${action} all drops the legacy list record and keeps the list`, () => {

@@ -1175,6 +1175,17 @@ export const wordFeatures: WordFeature[] = [
       'Some files put a break directly in a paragraph or hyperlink, outside a run. The editor keeps that break in place and saves it unchanged. The text around it renders and stays editable. The break itself does not start a new line or page. The caret does not stop at it, and deleting text across it keeps it.',
   },
   {
+    id: 'structure.out-of-order-markup',
+    name: 'Out-of-order and repeated markup',
+    category: 'structure',
+    editing: 'full',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Text stays visible and editable when a file places or repeats markup outside the schema order. Run properties take effect where they stand, also after a w:lastRenderedPageBreak or after text, and a later w:rPr adds to the earlier one attribute by attribute. Paragraph properties before the text merge, a later w:pPr adding to the earlier one; tab stops from both apply. Paragraph properties after the text do not apply. Two w:tblPr merge, and the first w:tblGrid sets the columns. A paragraph written straight into a table row joins the next cell. A paragraph or run written inside another joins it, and a table written inside a paragraph stays a table. A stray w:val attribute on a paragraph, run, text, table, row, cell, or hyperlink is ignored. A w:br inside w:t breaks the line, and other elements inside w:t show nothing. A w:ins inside a run shows as a tracked insertion. Text in w:t and w:delText drops leading and trailing spaces unless xml:space="preserve" is on the element or on the part root, and a tab inside it shows as a space. A save writes the rebuilt markup in schema order. Shapes that do not open in desktop word processors, such as a run directly in the body, stay hidden and are saved unchanged.',
+  },
+  {
     id: 'structure.macros',
     name: 'VBA macros',
     category: 'structure',

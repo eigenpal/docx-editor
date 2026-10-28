@@ -90,7 +90,7 @@ const EXTERNAL_REL = `<Relationship Id="rId9" Type="${R}/hyperlink" Target="http
 describe('painted hyperlink anchors', () => {
   test('an external link paints an anchor carrying the sanitized target', () => {
     const container = paint(
-      '<w:p><w:r><w:t>Visit </w:t></w:r>' +
+      '<w:p><w:r><w:t xml:space="preserve">Visit </w:t></w:r>' +
         '<w:hyperlink r:id="rId9" w:tooltip="Our site"><w:r><w:t>Example</w:t></w:r></w:hyperlink>' +
         '</w:p>',
       EXTERNAL_REL
@@ -167,7 +167,7 @@ describe('painted hyperlink anchors', () => {
     const container = paint(
       '<w:p><w:hyperlink w:anchor="top">' +
         '<w:r><w:rPr><w:b/></w:rPr><w:t>Bold</w:t></w:r>' +
-        '<w:r><w:t> and plain</w:t></w:r>' +
+        '<w:r><w:t xml:space="preserve"> and plain</w:t></w:r>' +
         '</w:hyperlink></w:p>'
     );
     const anchors = container.querySelectorAll('a.docx-hyperlink');
@@ -177,9 +177,9 @@ describe('painted hyperlink anchors', () => {
 
   test('two links in one paragraph paint two anchors, and plain text stays outside both', () => {
     const container = paint(
-      '<w:p><w:r><w:t>a </w:t></w:r>' +
+      '<w:p><w:r><w:t xml:space="preserve">a </w:t></w:r>' +
         '<w:hyperlink w:anchor="one"><w:r><w:t>first</w:t></w:r></w:hyperlink>' +
-        '<w:r><w:t> b </w:t></w:r>' +
+        '<w:r><w:t xml:space="preserve"> b </w:t></w:r>' +
         '<w:hyperlink w:anchor="two"><w:r><w:t>second</w:t></w:r></w:hyperlink>' +
         '</w:p>'
     );
@@ -255,7 +255,7 @@ describe('each HYPERLINK field is its own anchor', () => {
     const container = paint(
       '<w:p><w:hyperlink w:anchor="top">' +
         '<w:r><w:rPr><w:b/></w:rPr><w:t>Bold</w:t></w:r>' +
-        '<w:r><w:t> and plain</w:t></w:r>' +
+        '<w:r><w:t xml:space="preserve"> and plain</w:t></w:r>' +
         '</w:hyperlink></w:p>',
       '',
       true

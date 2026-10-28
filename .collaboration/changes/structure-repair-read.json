@@ -1,8 +1,8 @@
 {
   "impact": "compatible",
   "fields": [],
-  "before": "Files whose run, paragraph or table shape is broken in ways that still show text seeded those runs, paragraphs or tables as generic nodes, so no participant showed or edited their text. Examples: a w:rPr after a saved w:lastRenderedPageBreak or after text, a second w:rPr, a w:pPr after content, a stray w:val, a w:t holding a w:br, two w:tblPr, a paragraph written straight into a row.",
-  "after": "The read rebuilds those shapes before it types them, so they seed as typed runs, paragraphs and tables in a valid shape: properties first, split runs, merged table properties, a stray paragraph moved into the next cell.",
+  "before": "Files whose run, paragraph or table markup is out of order, repeated or nested seeded those nodes as generic, so no participant showed or edited their text. Repeated paragraph properties seeded with only the first applying, and w:t text without xml:space kept its boundary spaces.",
+  "after": "The read rebuilds those shapes before it types them: properties first and merged in order, split runs, flattened nested paragraphs and runs, a table hoisted out of a paragraph, a stray paragraph moved into the next cell, and w:t text with boundary spaces dropped unless xml:space preserves them.",
   "reason": "The change is in the file read that seeds a room. Shared state stores node kinds, and participants decode them without reading the file again. Every rebuilt node is a shape released participants already read and edit. Rooms seeded earlier keep their stored shape on every version.",
   "tests": [
     "packages/pro/src/collaboration/__tests__/document-rebuilt-structure.test.ts",

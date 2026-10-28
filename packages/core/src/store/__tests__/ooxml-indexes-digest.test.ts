@@ -31,7 +31,7 @@ const DOCUMENT =
   `<w:document xmlns:w="${W}" xmlns:a="${A}"><w:body>` +
   '<w:p><w:pPr><w:pStyle w:val="Heading1"/><w:jc w:val="center"/></w:pPr>' +
   '<w:r><w:rPr><w:b/><w:u w:val="double"/></w:rPr><w:t>Title</w:t></w:r></w:p>' +
-  '<w:p><w:r><w:t>before </w:t></w:r>' +
+  '<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>' +
   '<w:r><w:drawing><a:graphic><a:graphicData uri="urn:clip"/></a:graphic></w:drawing></w:r>' +
   '<w:r><w:t>after</w:t></w:r></w:p>' +
   '<w:p><w:r><w:t>tab</w:t><w:tab/><w:t>and</w:t><w:br/><w:t>break</w:t></w:r></w:p>' +

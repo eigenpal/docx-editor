@@ -98,19 +98,19 @@ async function generateStyledContentDocx(): Promise<void> {
   <w:body>
     <w:p>
       <w:r>
-        <w:t>Normal text. </w:t>
+        <w:t xml:space="preserve">Normal text. </w:t>
       </w:r>
       <w:r>
         <w:rPr>
           <w:b/>
         </w:rPr>
-        <w:t>Bold text. </w:t>
+        <w:t xml:space="preserve">Bold text. </w:t>
       </w:r>
       <w:r>
         <w:rPr>
           <w:i/>
         </w:rPr>
-        <w:t>Italic text. </w:t>
+        <w:t xml:space="preserve">Italic text. </w:t>
       </w:r>
       <w:r>
         <w:rPr>
@@ -125,7 +125,7 @@ async function generateStyledContentDocx(): Promise<void> {
           <w:b/>
           <w:i/>
         </w:rPr>
-        <w:t>Bold and italic text. </w:t>
+        <w:t xml:space="preserve">Bold and italic text. </w:t>
       </w:r>
       <w:r>
         <w:rPr>
@@ -139,7 +139,7 @@ async function generateStyledContentDocx(): Promise<void> {
         <w:rPr>
           <w:sz w:val="36"/>
         </w:rPr>
-        <w:t>Large text (18pt). </w:t>
+        <w:t xml:space="preserve">Large text (18pt). </w:t>
       </w:r>
       <w:r>
         <w:rPr>
@@ -277,7 +277,7 @@ async function generateComplexStylesDocx(): Promise<void> {
     </w:p>
     <w:p>
       <w:r>
-        <w:t>Another paragraph with </w:t>
+        <w:t xml:space="preserve">Another paragraph with </w:t>
       </w:r>
       <w:r>
         <w:rPr>
@@ -286,7 +286,7 @@ async function generateComplexStylesDocx(): Promise<void> {
         <w:t>Times New Roman font</w:t>
       </w:r>
       <w:r>
-        <w:t> and </w:t>
+        <w:t xml:space="preserve"> and </w:t>
       </w:r>
       <w:r>
         <w:rPr>
@@ -303,13 +303,13 @@ async function generateComplexStylesDocx(): Promise<void> {
         <w:rPr>
           <w:color w:val="FF0000"/>
         </w:rPr>
-        <w:t>Red text. </w:t>
+        <w:t xml:space="preserve">Red text. </w:t>
       </w:r>
       <w:r>
         <w:rPr>
           <w:color w:val="0000FF"/>
         </w:rPr>
-        <w:t>Blue text. </w:t>
+        <w:t xml:space="preserve">Blue text. </w:t>
       </w:r>
       <w:r>
         <w:rPr>
@@ -326,7 +326,7 @@ async function generateComplexStylesDocx(): Promise<void> {
         <w:t>Highlighted text</w:t>
       </w:r>
       <w:r>
-        <w:t> and normal text.</w:t>
+        <w:t xml:space="preserve"> and normal text.</w:t>
       </w:r>
     </w:p>
     <w:sectPr>

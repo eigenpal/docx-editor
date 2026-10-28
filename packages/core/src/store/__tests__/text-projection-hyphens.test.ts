@@ -120,7 +120,7 @@ describe('hyphen elements in paragraph text', () => {
   test('a hyphen in a field result reads inside the result', () => {
     const body =
       '<w:p><w:fldSimple w:instr=" REF ref "><w:r><w:t>1</w:t><w:noBreakHyphen/>' +
-      '<w:t>A</w:t></w:r></w:fldSimple><w:r><w:t> end</w:t></w:r></w:p>';
+      '<w:t>A</w:t></w:r></w:fldSimple><w:r><w:t xml:space="preserve"> end</w:t></w:r></w:p>';
     const { projected } = project(body);
     expect(projected.text).toBe(`1${NBH}A end`);
     expect(projected.resultRunAddressAt(2)?.offset).toBe(2);

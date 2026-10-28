@@ -18,7 +18,7 @@ const measurer: TextMeasurer = {
 };
 const source = (alignment = 'both', text = 'aa bb cc dd', width = 66) =>
   loadBody(
-    `<w:p><w:pPr><w:jc w:val="${alignment}"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="${(width + 50) * 20}" w:h="6000"/><w:pgMar w:left="500" w:right="500" w:top="500" w:bottom="500"/></w:sectPr>`
+    `<w:p><w:pPr><w:jc w:val="${alignment}"/></w:pPr><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="${(width + 50) * 20}" w:h="6000"/><w:pgMar w:left="500" w:right="500" w:top="500" w:bottom="500"/></w:sectPr>`
   );
 const content = (layout: ReturnType<typeof layoutSemanticDocument>) =>
   linesOf(layout).map((l) =>

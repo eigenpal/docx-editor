@@ -89,7 +89,10 @@ function furnitureFromText(opts: {
     headers.set(
       'default',
       layoutHeaderFooterStory(
-        loadHfPart('header', `<w:p><w:r><w:t>${opts.header}</w:t></w:r></w:p>`),
+        loadHfPart(
+          'header',
+          `<w:p><w:r><w:t xml:space="preserve">${opts.header}</w:t></w:r></w:p>`
+        ),
         CONTENT_WIDTH,
         measurer,
         'test'
@@ -100,7 +103,10 @@ function furnitureFromText(opts: {
     footers.set(
       'default',
       layoutHeaderFooterStory(
-        loadHfPart('footer', `<w:p><w:r><w:t>${opts.footer}</w:t></w:r></w:p>`),
+        loadHfPart(
+          'footer',
+          `<w:p><w:r><w:t xml:space="preserve">${opts.footer}</w:t></w:r></w:p>`
+        ),
         CONTENT_WIDTH,
         measurer,
         'test'
@@ -118,9 +124,9 @@ function furnitureFromText(opts: {
 function furnitureWithFieldFooter(pageResult = ''): PageFurniture {
   const part = loadHfPart(
     'footer',
-    `<w:p><w:r><w:t>Page </w:t></w:r>` +
+    `<w:p><w:r><w:t xml:space="preserve">Page </w:t></w:r>` +
       `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText>` +
-      `<w:fldChar w:fldCharType="separate"/><w:t>${pageResult}</w:t>` +
+      `<w:fldChar w:fldCharType="separate"/><w:t xml:space="preserve">${pageResult}</w:t>` +
       `<w:fldChar w:fldCharType="end"/></w:r></w:p>`
   );
   return {
@@ -132,7 +138,7 @@ function furnitureWithFieldFooter(pageResult = ''): PageFurniture {
 }
 
 const simpleBody =
-  `<w:p><w:r><w:t>${'body word '.repeat(40)}</w:t></w:r></w:p>` +
+  `<w:p><w:r><w:t xml:space="preserve">${'body word '.repeat(40)}</w:t></w:r></w:p>` +
   `<w:sectPr><w:pgSz w:w="6120" w:h="4000"/><w:pgMar w:top="400" w:right="400" w:bottom="400" w:left="400" w:header="200" w:footer="200"/></w:sectPr>`;
 
 function twoSectionBody(): string {
@@ -336,11 +342,11 @@ describe('package-backed equal-height header swap', () => {
           `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/header" Target="header1.xml"/></Relationships>`
         ),
         'word/header1.xml': strToU8(
-          `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>${headerText}</w:t></w:r></w:p></w:hdr>`
+          `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t xml:space="preserve">${headerText}</w:t></w:r></w:p></w:hdr>`
         ),
         'word/document.xml': strToU8(
           `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
-            `<w:p><w:r><w:t>${'body '.repeat(30)}</w:t></w:r></w:p>` +
+            `<w:p><w:r><w:t xml:space="preserve">${'body '.repeat(30)}</w:t></w:r></w:p>` +
             `<w:sectPr><w:headerReference w:type="default" r:id="rId1"/>` +
             `<w:pgSz w:w="6120" w:h="4000"/><w:pgMar w:top="400" w:right="400" w:bottom="400" w:left="400" w:header="200" w:footer="200"/>` +
             `</w:sectPr></w:body></w:document>`

@@ -166,7 +166,7 @@ describe('a hidden w:sym', () => {
 describe('w:sym inside field results', () => {
   test('joins a fldSimple cached result when it maps to real Unicode', () => {
     const pieces = project(
-      `<w:p><w:fldSimple w:instr=" REF x "><w:r><w:t>ok </w:t>${SYM}</w:r></w:fldSimple></w:p>`
+      `<w:p><w:fldSimple w:instr=" REF x "><w:r><w:t xml:space="preserve">ok </w:t>${SYM}</w:r></w:fldSimple></w:p>`
     );
     expect(pieces.map((piece) => piece.text)).toEqual(['ok ✔']);
   });
@@ -186,7 +186,7 @@ describe('w:sym inside field results', () => {
       '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
         '<w:r><w:instrText> REF x </w:instrText></w:r>' +
         '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
-        `<w:r><w:t>ok </w:t>${SYM}</w:r>` +
+        `<w:r><w:t xml:space="preserve">ok </w:t>${SYM}</w:r>` +
         '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
     );
     expect(pieces.map((piece) => piece.text)).toEqual(['ok ✔']);

@@ -11,7 +11,7 @@ import { mount, putCaret } from './paginated-surface-fixtures.ts';
 const ANN = 'w:author="Ann" w:date="2026-01-01T00:00:00Z"';
 const BODY =
   `<w:p><w:pPr><w:rPr><w:del w:id="1" ${ANN}/></w:rPr></w:pPr>` +
-  '<w:r><w:t>Joined </w:t></w:r></w:p>' +
+  '<w:r><w:t xml:space="preserve">Joined </w:t></w:r></w:p>' +
   `<w:p><w:r><w:t xml:space="preserve">first </w:t></w:r>` +
   `<w:del w:id="2" ${ANN}><w:r><w:delText xml:space="preserve">gone </w:delText></w:r></w:del>` +
   `<w:ins w:id="3" ${ANN}><w:r><w:t xml:space="preserve">added </w:t></w:r></w:ins>` +

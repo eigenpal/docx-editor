@@ -187,13 +187,13 @@ describe('interopHtmlFromFragment', () => {
     const html = interopHtmlFromFragment(
       fragment({
         body:
-          '<w:p><w:r><w:t>before </w:t></w:r>' +
+          '<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>' +
           '<w:smartTag><w:r><w:t>smart</w:t></w:r></w:smartTag>' +
           '<w:customXml><w:r><w:t>custom</w:t></w:r></w:customXml>' +
           '<w:sdt><w:sdtContent><w:r><w:t>demoted</w:t></w:r></w:sdtContent><w:sdtPr/></w:sdt>' +
           '<w:dir><w:r><w:t>dir</w:t></w:r></w:dir>' +
           '<w:bdo><w:r><w:t>bdo</w:t></w:r></w:bdo>' +
-          '<w:r><w:t> after</w:t></w:r></w:p>',
+          '<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>',
       })
     );
 
@@ -280,7 +280,7 @@ describe('interopHtmlFromFragment', () => {
     const item = (ilvl: number, text: string): string =>
       `<w:p><w:pPr><w:pStyle w:val="ListParagraph"/><w:numPr>` +
       `<w:ilvl w:val="${ilvl}"/><w:numId w:val="5"/></w:numPr></w:pPr>` +
-      `<w:r><w:t>${text}</w:t></w:r></w:p>`;
+      `<w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
     const html = interopHtmlFromFragment(
       fragment({
         styles:
@@ -319,7 +319,7 @@ describe('interopHtmlFromFragment', () => {
   test('a list fragment starting below level zero opens one valid root list', () => {
     const item = (text: string): string =>
       '<w:p><w:pPr><w:numPr><w:ilvl w:val="1"/><w:numId w:val="5"/>' +
-      `</w:numPr></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+      `</w:numPr></w:pPr><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
     const html = interopHtmlFromFragment(
       fragment({
         numbering:
@@ -354,7 +354,7 @@ describe('interopHtmlFromFragment', () => {
 
   test('a table emits colspan, rowspan, shading, and swallows vMerge continuations', () => {
     const cell = (props: string, text: string): string =>
-      `<w:tc><w:tcPr>${props}</w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+      `<w:tc><w:tcPr>${props}</w:tcPr><w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p></w:tc>`;
     const html = interopHtmlFromFragment(
       fragment({
         body:
@@ -387,7 +387,7 @@ describe('interopHtmlFromFragment', () => {
 
   test('a continuation below an unmerged cell starts its own merge and keeps its text', () => {
     const cell = (props: string, text: string): string =>
-      `<w:tc><w:tcPr>${props}</w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+      `<w:tc><w:tcPr>${props}</w:tcPr><w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p></w:tc>`;
     const html = interopHtmlFromFragment(
       fragment({
         body:
@@ -423,7 +423,8 @@ describe('interopHtmlFromFragment', () => {
   });
 
   test('table inside borders remain Word hints and interior cell edges', () => {
-    const cell = (text: string): string => `<w:tc><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+    const cell = (text: string): string =>
+      `<w:tc><w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p></w:tc>`;
     const html = interopHtmlFromFragment(
       fragment({
         body:

@@ -66,7 +66,8 @@ async function snapshot(runtime: DocxEditorRuntime) {
 
 test('browser and headless agent workflows insert pictures and compute saved field results', async () => {
   const bytes = docx(
-    p('Page one') + '<w:p><w:r><w:br w:type="page"/><w:t>Page two </w:t></w:r></w:p>'
+    p('Page one') +
+      '<w:p><w:r><w:br w:type="page"/><w:t xml:space="preserve">Page two </w:t></w:r></w:p>'
   );
   const server = await createServer(bytes, {
     pagination: { measurer: createFixedMeasurer(6, 14) },

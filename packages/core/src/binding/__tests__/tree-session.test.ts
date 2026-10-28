@@ -44,7 +44,7 @@ function docx(body: string): Uint8Array {
 const CLIPART_BODY =
   '<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>' +
   `<w:r>${DRAWING}</w:r>` +
-  '<w:r><w:t> after</w:t></w:r></w:p>' +
+  '<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>' +
   '<w:p><w:r><w:t>a normal paragraph</w:t></w:r></w:p>';
 
 function open(bytes: Uint8Array): TreeDocxSession {

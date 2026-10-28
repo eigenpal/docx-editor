@@ -57,8 +57,8 @@ function checkedValues(part: OoxmlPart): string[] {
 describe('legacyCheckboxFieldsOf', () => {
   test('lists FORMCHECKBOX fields with their offsets, state and enabled flag', () => {
     const part = partOf(
-      `<w:p><w:r><w:t>Tick: </w:t></w:r>${checkboxField('<w:size w:val="24"/><w:default w:val="0"/><w:checked w:val="1"/>')}` +
-        `<w:r><w:t> and </w:t></w:r>${checkboxField('<w:default w:val="0"/>', '<w:enabled w:val="0"/>')}</w:p>`
+      `<w:p><w:r><w:t xml:space="preserve">Tick: </w:t></w:r>${checkboxField('<w:size w:val="24"/><w:default w:val="0"/><w:checked w:val="1"/>')}` +
+        `<w:r><w:t xml:space="preserve"> and </w:t></w:r>${checkboxField('<w:default w:val="0"/>', '<w:enabled w:val="0"/>')}</w:p>`
     );
     const fields = legacyCheckboxFieldsOf(paragraph(part));
     expect(fields).toHaveLength(2);

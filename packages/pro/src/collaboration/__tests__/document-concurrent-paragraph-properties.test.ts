@@ -333,8 +333,8 @@ describe('concurrent singleton properties', () => {
       'Still Doubled',
       'After',
     ]);
-    // The first `w:pPr` decides the alignment; the second is kept as it was.
-    expect(alignment(bob, 1)).toBe('center');
+    // The file's two `w:pPr` read as one, the later adding to the earlier, and save as one.
+    expect(alignment(bob, 1)).toBe('right');
     const saved = readOoxmlPackage(readCollaborationDocument(alice.ydoc));
     if (!saved.ok) throw new Error(saved.reason);
     const doubled = saved.package.parts.get(saved.package.mainDocumentPart)!.root.children[0]!;
@@ -344,6 +344,6 @@ describe('concurrent singleton properties', () => {
     expect(exported.kind).toBe('paragraph');
     expect(
       exported.children.filter((child) => child.kind !== 'textValue' && child.localName === 'pPr')
-    ).toHaveLength(2);
+    ).toHaveLength(1);
   });
 });

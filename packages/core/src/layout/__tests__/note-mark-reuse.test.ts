@@ -30,10 +30,10 @@ const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 function doc(): Uint8Array {
   const paras = Array.from({ length: 8 }, (_, i) =>
     i === 1
-      ? `<w:p><w:r><w:t>Body ${i} ${'word '.repeat(6)}</w:t><w:footnoteReference w:id="1"/><w:t> tail text</w:t></w:r></w:p>`
+      ? `<w:p><w:r><w:t xml:space="preserve">Body ${i} ${'word '.repeat(6)}</w:t><w:footnoteReference w:id="1"/><w:t xml:space="preserve"> tail text</w:t></w:r></w:p>`
       : i === 3
-        ? `<w:p><w:r><w:t>Body ${i} ${'word '.repeat(6)}</w:t><w:footnoteReference w:id="2"/><w:t> tail text</w:t></w:r></w:p>`
-        : `<w:p><w:r><w:t>Body ${i} ${'word '.repeat(6)}</w:t></w:r></w:p>`
+        ? `<w:p><w:r><w:t xml:space="preserve">Body ${i} ${'word '.repeat(6)}</w:t><w:footnoteReference w:id="2"/><w:t xml:space="preserve"> tail text</w:t></w:r></w:p>`
+        : `<w:p><w:r><w:t xml:space="preserve">Body ${i} ${'word '.repeat(6)}</w:t></w:r></w:p>`
   ).join('');
   return zipSync({
     '[Content_Types].xml': strToU8(

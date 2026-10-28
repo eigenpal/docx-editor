@@ -54,13 +54,13 @@ const numberingIndex = numberingIndexOf();
 const numbered = (inner: string) =>
   `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="5"/></w:numPr></w:pPr>${inner}</w:p>`;
 const bookmarked = (name: string, text: string) =>
-  `<w:bookmarkStart w:id="1" w:name="${name}"/><w:r><w:t>${text}</w:t></w:r>` +
+  `<w:bookmarkStart w:id="1" w:name="${name}"/><w:r><w:t xml:space="preserve">${text}</w:t></w:r>` +
   `<w:bookmarkEnd w:id="1"/>`;
 const refField = (instr: string, cached: string) =>
   '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
   `<w:r><w:instrText>${instr}</w:instrText></w:r>` +
   '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
-  `<w:r><w:t>${cached}</w:t></w:r>` +
+  `<w:r><w:t xml:space="preserve">${cached}</w:t></w:r>` +
   '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
 
 function notesDoc(body: string, footnoteContent: string): Uint8Array {
@@ -162,7 +162,10 @@ describe('REF fields in footnote stories', () => {
   test('a plain footnote REF with an empty cache paints the bookmarked body text', () => {
     // No result run at all — always calibration-eligible, so the live value paints.
     const { part, notes } = openNotesDoc(
-      notesDoc(BODY, `<w:r><w:t>see </w:t></w:r>${refField(' REF target ', '')}`)
+      notesDoc(
+        BODY,
+        `<w:r><w:t xml:space="preserve">see </w:t></w:r>${refField(' REF target ', '')}`
+      )
     );
     const layout = layoutSemanticDocument(part, 1, {
       measurer: notes.measurer,
@@ -177,7 +180,10 @@ describe('REF fields in footnote stories', () => {
     // 'IX' cannot be reproduced from the target's numbering, so the field keeps its cache —
     // the note never renders worse than the saved file.
     const { part, notes } = openNotesDoc(
-      notesDoc(BODY, `<w:r><w:t>see </w:t></w:r>${refField(' REF target \\r \\h ', 'IX')}`)
+      notesDoc(
+        BODY,
+        `<w:r><w:t xml:space="preserve">see </w:t></w:r>${refField(' REF target \\r \\h ', 'IX')}`
+      )
     );
     const layout = layoutSemanticDocument(part, 1, {
       measurer: notes.measurer,
@@ -194,7 +200,10 @@ describe('REF fields in footnote stories', () => {
     // The cache ('2') reproduces the computed value, so the field calibrates LIVE on the
     // first pass; the verdict then sticks across the edit that makes the cache stale.
     const { part, notes } = openNotesDoc(
-      notesDoc(BODY, `<w:r><w:t>see </w:t></w:r>${refField(' REF target \\r \\h ', '2')}`)
+      notesDoc(
+        BODY,
+        `<w:r><w:t xml:space="preserve">see </w:t></w:r>${refField(' REF target \\r \\h ', '2')}`
+      )
     );
     const options = {
       measurer: notes.measurer,

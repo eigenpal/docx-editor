@@ -71,7 +71,7 @@ describe('rich paste in suggesting mode', () => {
       document.createElement('div'),
       docx(
         '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r>' +
-          '<w:del w:id="3" w:author="Ann Author"><w:r><w:delText> old</w:delText></w:r></w:del></w:p>' +
+          '<w:del w:id="3" w:author="Ann Author"><w:r><w:delText xml:space="preserve"> old</w:delText></w:r></w:del></w:p>' +
           '<w:p><w:r><w:t>second</w:t></w:r></w:p>'
       ),
       { scale: 1 }

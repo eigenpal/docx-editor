@@ -87,11 +87,13 @@ function documentWith(options: {
       : '') +
     '<w:p>' +
     (options.spacing ? `<w:pPr><w:spacing ${options.spacing}/></w:pPr>` : '') +
-    (options.leadingText ? `<w:r><w:t>${options.leadingText}</w:t></w:r>` : '') +
+    (options.leadingText
+      ? `<w:r><w:t xml:space="preserve">${options.leadingText}</w:t></w:r>`
+      : '') +
     Array.from({ length: options.pictures ?? 1 }, (_, index) => pictureRun(index + 1, cx, cy)).join(
       ''
     ) +
-    `<w:r><w:rPr><w:sz w:val="22"/>${options.captionRunProperties ?? ''}</w:rPr><w:t>${options.caption ?? 'This is a caption'}</w:t></w:r>` +
+    `<w:r><w:rPr><w:sz w:val="22"/>${options.captionRunProperties ?? ''}</w:rPr><w:t xml:space="preserve">${options.caption ?? 'This is a caption'}</w:t></w:r>` +
     '</w:p></w:body></w:document>';
   const result = readOoxmlPart(xml, {
     name: OWNER,

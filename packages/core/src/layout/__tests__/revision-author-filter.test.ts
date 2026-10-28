@@ -28,8 +28,8 @@ function paragraph(body: string): OoxmlNode {
 }
 
 const run = (text: string, properties = '') =>
-  `<w:r>${properties ? `<w:rPr>${properties}</w:rPr>` : ''}<w:t>${text}</w:t></w:r>`;
-const delRun = (text: string) => `<w:r><w:delText>${text}</w:delText></w:r>`;
+  `<w:r>${properties ? `<w:rPr>${properties}</w:rPr>` : ''}<w:t xml:space="preserve">${text}</w:t></w:r>`;
+const delRun = (text: string) => `<w:r><w:delText xml:space="preserve">${text}</w:delText></w:r>`;
 const ins = (author: string, text: string) =>
   `<w:ins w:id="1" w:author="${author}">${run(text)}</w:ins>`;
 const del = (author: string, text: string) =>

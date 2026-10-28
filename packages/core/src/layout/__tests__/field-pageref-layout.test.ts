@@ -35,23 +35,24 @@ function load(body: string): OoxmlPart {
 }
 
 const filler = (count: number, prefix = 'filler') =>
-  Array.from({ length: count }, (_, i) => `<w:p><w:r><w:t>${prefix} ${i}</w:t></w:r></w:p>`).join(
-    ''
-  );
+  Array.from(
+    { length: count },
+    (_, i) => `<w:p><w:r><w:t xml:space="preserve">${prefix} ${i}</w:t></w:r></w:p>`
+  ).join('');
 
 const heading = (name: string, text: string) =>
-  `<w:p><w:bookmarkStart w:id="1" w:name="${name}"/><w:r><w:t>${text}</w:t></w:r>` +
+  `<w:p><w:bookmarkStart w:id="1" w:name="${name}"/><w:r><w:t xml:space="preserve">${text}</w:t></w:r>` +
   `<w:bookmarkEnd w:id="1"/></w:p>`;
 
 const pageRefField = (instr: string, cached = '') =>
   '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
   `<w:r><w:instrText>${instr}</w:instrText></w:r>` +
   '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
-  (cached ? `<w:r><w:t>${cached}</w:t></w:r>` : '') +
+  (cached ? `<w:r><w:t xml:space="preserve">${cached}</w:t></w:r>` : '') +
   '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
 
 const pageRefParagraph = (instr: string, cached = '') =>
-  `<w:p><w:r><w:t>page </w:t></w:r>${pageRefField(instr, cached)}</w:p>`;
+  `<w:p><w:r><w:t xml:space="preserve">page </w:t></w:r>${pageRefField(instr, cached)}</w:p>`;
 
 const textsOf = (layout: SemanticLayout): string[] =>
   layout.pages.flatMap((page) =>
@@ -104,7 +105,7 @@ describe('body PAGEREF fields compute the target page at finalize', () => {
 
   test('a simple PAGEREF resolves the same way', () => {
     const body =
-      `<w:p><w:r><w:t>page </w:t></w:r><w:fldSimple w:instr=" PAGEREF target \\h "/></w:p>` +
+      `<w:p><w:r><w:t xml:space="preserve">page </w:t></w:r><w:fldSimple w:instr=" PAGEREF target \\h "/></w:p>` +
       filler(5) +
       heading('target', 'The heading');
     const layout = layoutOf(body);

@@ -134,7 +134,7 @@ describe('a range that opens AND closes at the caret stays paired', () => {
     // The rule this guards must not swallow the case it was written for.
     const part = load(
       '<w:p><w:bookmarkStart w:id="7" w:name="intro"/><w:r><w:t>alpha</w:t></w:r>' +
-        '<w:bookmarkEnd w:id="7"/><w:r><w:t> beta</w:t></w:r></w:p>'
+        '<w:bookmarkEnd w:id="7"/><w:r><w:t xml:space="preserve"> beta</w:t></w:r></w:p>'
     );
     const split = apply(part, {
       op: 'splitParagraph',
@@ -374,7 +374,7 @@ describe('a run whose w:rPr the read demoted is still its w:rPr', () => {
 describe('the digest reaches every paragraph the parser admits', () => {
   /** `levels` of `w:sdt > w:sdtContent > w:tbl > w:tr > w:tc` around one paragraph. */
   function nested(levels: number, text: string): string {
-    let inner = `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+    let inner = `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
     for (let level = 0; level < levels; level += 1) {
       inner =
         '<w:sdt><w:sdtContent><w:tbl><w:tr><w:tc>' +

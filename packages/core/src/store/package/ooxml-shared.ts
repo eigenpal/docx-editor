@@ -577,9 +577,12 @@ export function isXmlWhitespaceChar(char: string): boolean {
 
 /** True when a `w:t` text value must carry `xml:space="preserve"` on save. */
 export function wmlTextNeedsXmlSpacePreserve(text: string): boolean {
+  // Without it, a reader drops boundary white space and shows a tab as a space.
   return (
     text.length > 0 &&
-    (isXmlWhitespaceChar(text[0]!) || isXmlWhitespaceChar(text[text.length - 1]!))
+    (isXmlWhitespaceChar(text[0]!) ||
+      isXmlWhitespaceChar(text[text.length - 1]!) ||
+      text.includes('\t'))
   );
 }
 

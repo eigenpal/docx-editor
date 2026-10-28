@@ -82,12 +82,12 @@ describe('whitespace between the children of a modeled container under xml:space
   test('an indented run keeps its type and its no-break space', () => {
     const indented = parse(
       documentXml(
-        `<w:p>${LABEL}<w:r xml:space="preserve">${RUN_PROPERTIES}\n\t\t\t<w:t>${NBSP}</w:t>\n\t\t</w:r>${BODY_RUN}</w:p>`
+        `<w:p>${LABEL}<w:r xml:space="preserve">${RUN_PROPERTIES}\n\t\t\t<w:t xml:space="preserve">${NBSP}</w:t>\n\t\t</w:r>${BODY_RUN}</w:p>`
       )
     );
     const compact = parse(
       documentXml(
-        `<w:p>${LABEL}<w:r xml:space="preserve">${RUN_PROPERTIES}<w:t>${NBSP}</w:t></w:r>${BODY_RUN}</w:p>`
+        `<w:p>${LABEL}<w:r xml:space="preserve">${RUN_PROPERTIES}<w:t xml:space="preserve">${NBSP}</w:t></w:r>${BODY_RUN}</w:p>`
       )
     );
 
@@ -109,17 +109,18 @@ describe('whitespace between the children of a modeled container under xml:space
     expectRoundTrip(part);
   });
 
-  test('text content keeps every authored space, tab and line break', () => {
+  test('text with its own xml:space keeps every space and tab; an ancestor xml:space does not', () => {
     const part = parse(
       documentXml(
-        '<w:p><w:r xml:space="preserve">\n  <w:tab/>\n  <w:t>  a\tb  </w:t>\n  <w:br/>\n' +
+        '<w:p><w:r xml:space="preserve">\n  <w:tab/>\n  <w:t xml:space="preserve">  a\tb  </w:t>\n  <w:br/>\n' +
           '  <w:t>\n</w:t>\n</w:r></w:p>'
       )
     );
     const run = runsOf(part)[0]!;
     expect(run.kind).toBe('run');
     expect(run.children.map((child) => child.kind)).toEqual(['tab', 'text', 'hardBreak', 'text']);
-    expect(textValues(run)).toEqual(['  a\tb  ', '\n']);
+    // The second w:t takes no preserve from its run: its line break is a boundary space.
+    expect(textValues(run)).toEqual(['  a\tb  ']);
     expectRoundTrip(part);
   });
 
@@ -168,7 +169,7 @@ describe('whitespace between the children of a modeled container under xml:space
   test('xml:space="default" below a preserved ancestor reads the same', () => {
     const part = parse(
       documentXml(
-        `<w:p xml:space="preserve">\n  <w:r xml:space="default">\n    <w:t>${NBSP}</w:t>\n  </w:r>\n</w:p>`
+        `<w:p xml:space="preserve">\n  <w:r xml:space="default">\n    <w:t xml:space="preserve">${NBSP}</w:t>\n  </w:r>\n</w:p>`
       )
     );
     expect(elements(part.root).find((element) => element.localName === 'p')!.kind).toBe(
@@ -223,7 +224,7 @@ describe('whitespace between the children of a modeled container under xml:space
   test('the saved part drops the indentation and reopens with identical content', () => {
     const part = parse(
       documentXml(
-        `<w:p>${LABEL}<w:r xml:space="preserve">${RUN_PROPERTIES}\n\t\t\t<w:t>${NBSP}</w:t>\n\t\t</w:r>${BODY_RUN}</w:p>`
+        `<w:p>${LABEL}<w:r xml:space="preserve">${RUN_PROPERTIES}\n\t\t\t<w:t xml:space="preserve">${NBSP}</w:t>\n\t\t</w:r>${BODY_RUN}</w:p>`
       )
     );
     const saved = serializeOoxmlPart(part);

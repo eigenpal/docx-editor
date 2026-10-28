@@ -693,13 +693,15 @@ describe('normalized OOXML serialization and canonical oracle', () => {
   test('injects xml:space preserve for boundary whitespace on w:t', () => {
     const part = parse(
       `<w:document xmlns:w="${WML_NAMESPACE_URI}"><w:body><w:p><w:r>` +
-        '<w:t> leading</w:t><w:t>trailing </w:t><w:t>\tnewline\n</w:t>' +
+        '<w:t xml:space="preserve"> leading</w:t><w:t xml:space="preserve">trailing </w:t>' +
+        '<w:t xml:space="preserve">\tnewline\n</w:t>' +
         '</w:r></w:p></w:body></w:document>'
     );
     const saved = serializeOoxmlPart(part);
     expect(saved).toContain('<w:t xml:space="preserve"> leading</w:t>');
     expect(saved).toContain('<w:t xml:space="preserve">trailing </w:t>');
-    expect(saved).toContain('<w:t xml:space="preserve">\tnewline\n</w:t>');
+    // A line break in text reads as a space.
+    expect(saved).toContain('<w:t xml:space="preserve">\tnewline </w:t>');
     const reopened = parse(saved);
     expect(ooxmlTreesEqual(part, reopened)).toBe(true);
   });
@@ -736,7 +738,7 @@ describe('normalized OOXML serialization and canonical oracle', () => {
   test('escapes hostile text and still marks boundary whitespace for preserve', () => {
     const part = parse(
       `<w:document xmlns:w="${WML_NAMESPACE_URI}"><w:body><w:p><w:r>` +
-        '<w:t> &lt;script&gt;</w:t>' +
+        '<w:t xml:space="preserve"> &lt;script&gt;</w:t>' +
         '</w:r></w:p></w:body></w:document>'
     );
     const saved = serializeOoxmlPart(part);
@@ -753,7 +755,7 @@ describe('normalized OOXML serialization and canonical oracle', () => {
   test('whitespace-only w:t nodes always serialize with xml:space preserve', () => {
     const part = parse(
       `<w:document xmlns:w="${WML_NAMESPACE_URI}"><w:body><w:p><w:r>` +
-        '<w:t>  </w:t><w:t>\t</w:t>' +
+        '<w:t xml:space="preserve">  </w:t><w:t xml:space="preserve">\t</w:t>' +
         '</w:r></w:p></w:body></w:document>'
     );
     const saved = serializeOoxmlPart(part);

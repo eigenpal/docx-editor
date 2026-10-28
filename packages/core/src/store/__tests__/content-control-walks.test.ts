@@ -155,9 +155,9 @@ describe('store projections descend block content controls', () => {
 
   test('digest collects text inside block and inline controls', () => {
     const inline =
-      '<w:p><w:r><w:t>prefix </w:t></w:r>' +
+      '<w:p><w:r><w:t xml:space="preserve">prefix </w:t></w:r>' +
       '<w:sdt><w:sdtContent><w:r><w:t>inline</w:t></w:r></w:sdtContent></w:sdt>' +
-      '<w:r><w:t> suffix</w:t></w:r></w:p>';
+      '<w:r><w:t xml:space="preserve"> suffix</w:t></w:r></w:p>';
     const digest = semanticDigest([load(BLOCK_XML + inline)]);
     const texts = digest.stories[0]!.paragraphs.map((paragraph) => paragraph.text);
     expect(texts).toContain('inside control');
