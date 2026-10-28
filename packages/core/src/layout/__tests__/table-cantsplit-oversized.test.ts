@@ -25,6 +25,10 @@ const options = {
   },
 };
 
+// Mode 15 splits a row that cannot split once it is taller than a page. Earlier modes keep it
+// whole (`table-tall-row-stays-whole.test.ts`).
+const modern = { ...options, compatibilityMode: 15 };
+
 function source(body: string) {
   const xml = `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`;
   const result = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'app/xml' });
@@ -75,7 +79,7 @@ test('an oversized cantSplit row starts on a fresh page and splits there', () =>
     p('before') + table(row(p('short')) + row(lines('x', 10), '<w:cantSplit/>')) + p('after')
   );
   const original = serializeOoxmlPart(part);
-  const layout = layoutSemanticDocument(part, 0, options);
+  const layout = layoutSemanticDocument(part, 0, modern);
   expect(lineTexts(layout)).toEqual([
     'before',
     'short',
@@ -103,7 +107,7 @@ test('an oversized cantSplit row already at the page top splits in place', () =>
   const layout = layoutSemanticDocument(
     source(table(row(lines('x', 8), '<w:cantSplit/>'))),
     0,
-    options
+    modern
   );
   expect(layout.pages).toHaveLength(2);
   const pages = pageOfLines(layout);
@@ -137,9 +141,11 @@ test('repeated header rows precede every page of an oversized cantSplit row', ()
   const pages = pageOfLines(layout);
   expect(pages.get('short')).toBe(1);
   expect(pages.get('x0')).toBe(2);
-  expectInsideContentBox(layout);
+  // Before mode 15 the row stays whole below the repeat on page 2 and runs past the margin
+  // (`tallRowStaysWhole`).
+  expect(pages.get('x11')).toBe(2);
   const fragments = tables(layout);
-  expect(fragments.length).toBeGreaterThanOrEqual(3);
+  expect(fragments).toHaveLength(2);
   for (const fragment of fragments.slice(1)) {
     expect(fragment.rows[0]!.isHeaderRepeat).toBe(true);
     expect(fragment.rows[0]!.box.y).toBe(0);
@@ -159,7 +165,10 @@ test('an oversized cantSplit row leaves authored header rows at the page top', (
   expect(fragments[0]!.rows.map((tableRow) => tableRow.rowIndex)).toEqual([0]);
   expect(pageOfLines(layout).get('x0')).toBe(2);
   for (const fragment of fragments.slice(1)) expect(fragment.rows[0]!.isHeaderRepeat).toBe(true);
-  expectInsideContentBox(layout);
+  // Before mode 15 the row stays whole below the repeat on page 2 and runs past the margin
+  // (`tallRowStaysWhole`).
+  expect(pageOfLines(layout).get('x11')).toBe(2);
+  expect(fragments).toHaveLength(2);
 });
 
 test('an oversized cantSplit row below a mid-page header row moves to a fresh page', () => {
@@ -184,7 +193,10 @@ test('an oversized cantSplit row below a mid-page header row moves to a fresh pa
     expect(fragment.rows[0]!.box.y).toBe(0);
   }
   expect(lineTexts(layout).filter((text) => text.startsWith('x'))).toHaveLength(12);
-  expectInsideContentBox(layout);
+  // Before mode 15 the row stays whole below the repeat on page 2 and runs past the margin
+  // (`tallRowStaysWhole`).
+  expect(pageOfLines(layout).get('x11')).toBe(2);
+  expect(fragments).toHaveLength(2);
 });
 
 test('an oversized cantSplit row splits its nested table between nested rows', () => {

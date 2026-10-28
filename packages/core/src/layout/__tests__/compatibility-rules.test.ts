@@ -43,6 +43,7 @@ const MODE_MATRIX = {
   repeatKeepsWholeRow: 'legacy',
   repeatedHeaderYieldsToTerminalRule: 'modern',
   rowPageBreakYieldsToKeep: 'modern',
+  tallRowStaysWhole: 'legacy',
   tableParagraphWidowControl: 'modern',
   vMergeTextMovesPastHeadRow: 'modern',
   wrappedAnchorsStayBelowTopMargin: 'modern',

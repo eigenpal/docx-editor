@@ -647,7 +647,8 @@ describe('table row pagination (tiny page)', () => {
   test('w:cantSplit taller than a page splits instead of overflowing', () => {
     const paras = Array.from({ length: 30 }, (_, i) => p(`X${i}`)).join('');
     const part = loadPart(`<w:tbl>${tr(tc(paras), '<w:trPr><w:cantSplit/></w:trPr>')}</w:tbl>`);
-    const result = layoutTiny(part);
+    // Mode 15 splits it. Earlier modes keep it whole past the margin (`tallRowStaysWhole`).
+    const result = layoutTiny(part, undefined, 15);
     expect(result.pages.length).toBeGreaterThan(1);
     assertNoContentOverflow(result);
     const bodyRows = allTableFragments(result).flatMap((fragment) => fragment.rows);

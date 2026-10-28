@@ -615,6 +615,13 @@ Semantic layout SHALL place a supported terminal exact row's simple bottom rule 
 - **THEN** the repeated header group stays on that page
 - **AND** the row stays whole below it and runs past the bottom margin
 
+#### Scenario: A text row that cannot split stays whole before mode 15
+
+- **WHEN** compatibility mode is 14 or earlier, or absent
+- **AND** a text-only row that cannot split is taller than a page
+- **THEN** the row starts on a fresh page and keeps all its lines there, past the bottom margin
+- **AND** the next row or block starts on the following page
+
 #### Scenario: Cell text uses the authored bottom
 
 - **WHEN** a terminal exact-row cell has center or bottom alignment

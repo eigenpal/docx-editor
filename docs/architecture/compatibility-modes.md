@@ -60,6 +60,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `repeatKeepsWholeRow` | `legacy` | Repeated header rows stay above a row that cannot split and does not fit below them; the row runs past the bottom margin |
 | `repeatedHeaderYieldsToTerminalRule` | `modern` | Repeated header rows yield when the last fixed-height row fits below them only without its bottom rule |
 | `rowPageBreakYieldsToKeep` | `modern` | A row with a page break follows a row that keeps with it |
+| `tallRowStaysWhole` | `legacy` | A row that cannot split and is taller than a page stays whole on its page and runs past the bottom margin |
 | `tableParagraphWidowControl` | `modern` | Paragraphs that split in table cells apply widow control |
 | `vMergeTextMovesPastHeadRow` | `modern` | Merged cell text moves whole past a head row that cannot hold it |
 | `wrappedAnchorsStayBelowTopMargin` | `modern` | A wrapping object positioned from its paragraph never starts above the top margin |

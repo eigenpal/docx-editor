@@ -159,6 +159,10 @@ export const MODE_RULES = {
     'A row with a page break does not start a page when the row before it keeps with it',
     'ECMA-376 Part 1 §17.3.1.15 keepNext'
   ),
+  tallRowStaysWhole: legacy(
+    'A row that cannot split and is taller than a page stays whole on its page and runs past the bottom margin',
+    'ECMA-376 Part 1 §17.4.6 cantSplit'
+  ),
   tableParagraphWidowControl: modern(
     'Paragraphs that split inside table cells apply widow and orphan control',
     'ECMA-376 Part 1 §17.3.1.44 widowControl'

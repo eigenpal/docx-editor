@@ -220,6 +220,7 @@ export function* paginateTableInFlowSteps(
   };
   const laterLayout = hasCompatibilityRule(flow.compatibilityMode, 'headerRowsKeepWithBody');
   const repeatKeepsWholeRow = hasCompatibilityRule(flow.compatibilityMode, 'repeatKeepsWholeRow');
+  const tallRowStaysWhole = hasCompatibilityRule(flow.compatibilityMode, 'tallRowStaysWhole');
   let repeatedPlan: RepeatedHeaderBorderPlan | undefined;
   let prepareRepeat: (() => RepeatedHeaderBorderPlan | null | undefined) | undefined;
   const rememberInsets = (record: TableRowFragmentRecord, deps: TableFlowDeps): void => {
@@ -818,11 +819,23 @@ export function* paginateTableInFlowSteps(
       // `cursorY === 0` — a fresh page the row was just moved to — and aborts a layout
       // nothing in `core` catches, on a path the module comment calls a recovery.
       if (!isContinuation && (row.cantSplit || row.height.rule === 'exact')) {
-        const splitsAnyway = row.height.rule !== 'exact' && !pageHoldsRow();
-        // A row that splits anyway stays below repeated header rows only, and leaves authored
-        // ones. From mode 15 it opens its fresh page without a repeat (`onlyRepeatedHeaderRows`).
+        // No page holds this row. Before mode 15 it stays whole on its fresh page and runs past
+        // the bottom margin (`tallRowStaysWhole`); later modes split it there.
+        const tall = row.height.rule !== 'exact' && !pageHoldsRow();
+        const staysWhole =
+          tall &&
+          tallRowStaysWhole &&
+          breaksPages &&
+          !pinnedBreak &&
+          vMerge === undefined &&
+          bandTop === 0 &&
+          !tableDeps.pageExclusionZones?.().length &&
+          row.cells.every((cell) => cell.blocks.every((block) => block.kind === 'paragraph'));
+        const splitsAnyway = tall && !staysWhole;
+        // A tall row stays below repeated header rows only, and leaves authored ones. From
+        // mode 15 it opens its fresh page without a repeat (`onlyRepeatedHeaderRows`).
         const belowRepeatsOnly = onlyRepeatedHeaderRows(rows);
-        if (flow.cursorY > bandTop && !movedToFreshPage && !(splitsAnyway && belowRepeatsOnly)) {
+        if (flow.cursorY > bandTop && !movedToFreshPage && !(tall && belowRepeatsOnly)) {
           const repeat = repeatsEnabled && !(splitsAnyway && laterLayout);
           breakForContinuation(admitsRepeatedHeaders, false, repeat);
           movedToFreshPage = true;
@@ -841,7 +854,7 @@ export function* paginateTableInFlowSteps(
         // An exact row no band holds fills the rest of this one (`table-exact-row-clip.ts`).
         // A row kept below repeated headers only runs past the margin (`overflowsBelowRepeat`).
         const offer =
-          onlyRepeatedHeaderRows(rows) && overflowsBelowRepeat()
+          (belowRepeatsOnly && overflowsBelowRepeat()) || staysWhole
             ? { row, band: POSITIONED_TABLE_LAYOUT_BOTTOM_PT }
             : fullBand > contentHeight() + 0.001 && naturalHeight <= fullBand - flow.cursorY + 0.001
               ? { row, band: fullBand }
