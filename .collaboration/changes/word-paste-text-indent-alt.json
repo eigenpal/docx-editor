@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Pasted Word lists lost geometry and format the clipboard stated: right-aligned numbers got a hanging indent equal to their left indent and painted left of the page margin, every level's number position was guessed from its format, and a list item with no level rule and no marker span pasted as a bullet.",
+  "after": "The paste reads mso-text-indent-alt for the authored hanging indent, mso-level-number-position for each level's w:lvlJc, and the enclosing ol or ul for an item with neither a level rule nor a marker.",
+  "reason": "Only the values the paste writes into ordinary w:ind, w:lvlJc, and w:numFmt change. Released participants already store and lay out those elements; shared nodes, operations, and package serialization are unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/clipboard-html-word-lists.test.ts",
+    "packages/core/src/editor/__tests__/clipboard-rich-surface.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-paste-word-list-indent.test.ts"
+  ],
+  "changeset": "word-paste-text-indent-alt",
+  "migration": null
+}
