@@ -984,6 +984,8 @@
     "tableGridUnplaceable": "Ce tableau contient une cellule qui ne correspond pas à sa grille de colonnes",
     "drawingLocked": "Cette image est verrouillée",
     "contentLocked": "Ce contenu est verrouillé",
+    "lockedParagraphFormat": "Ce contenu est verrouillé ; seul l’alignement peut être modifié",
+    "boundParagraphFormat": "Ce contenu est lié à des données et ne peut pas être modifié",
     "editorNotReady": "L’éditeur n’est pas prêt",
     "imageSuggesting": "La modification des images est indisponible en mode suggestion",
     "equationSourceFormatting": "La modification linéaire ferait perdre la mise en forme de cette équation",

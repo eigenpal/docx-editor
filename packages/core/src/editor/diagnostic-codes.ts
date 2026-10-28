@@ -34,6 +34,10 @@ import { PICTURE_SELECTED_INSERT_REASON } from './docx-editor-images.ts';
 import { PREVIEW_WRITE_REFUSAL, REFRESH_WRITE_REFUSAL } from './refresh-write-guard.ts';
 import { BOUND_CHANGES_REFUSAL, LOCKED_CHANGES_REFUSAL } from './review-guard-refusals.ts';
 import {
+  BOUND_PARAGRAPH_FORMAT_REASON,
+  LOCKED_PARAGRAPH_FORMAT_REASON,
+} from './paragraph-format-lock-refusal.ts';
+import {
   LOCKED_CONTENT_BREAK_REFUSAL,
   LOCKED_SECTION_BREAK_REFUSAL,
   SUGGESTED_BREAK_REFUSAL,
@@ -76,6 +80,8 @@ const EDIT_SENTENCES: ReadonlyMap<string, EditDiagnosticCode> = new Map([
   ['the document is open for viewing', 'edit.read-only'],
   ['the document is read-only', 'edit.read-only'],
   ['this content is locked', 'edit.protected-content'],
+  [LOCKED_PARAGRAPH_FORMAT_REASON, 'edit.protected-content'],
+  [BOUND_PARAGRAPH_FORMAT_REASON, 'edit.protected-content'],
   [READ_ONLY_PROTECTION_REASON, 'edit.read-only'],
   [COMMENTS_PROTECTION_REASON, 'edit.protected-content'],
   [FORMS_WRITE_REASON, 'edit.protected-content'],
