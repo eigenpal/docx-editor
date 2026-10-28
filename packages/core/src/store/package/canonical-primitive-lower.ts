@@ -223,11 +223,20 @@ function lowerChildList(
   // rebuild that wraps a kept run (new properties before it, pasted runs after it) otherwise
   // deleted and reinserted that run, and two peers rebuilding one paragraph then merged both
   // lists side by side, so the kept run's text moved behind the other peer's insertion.
-  const kept = keptMiddle(previous, next, start, previousEnd, nextEnd);
+  const found = keptMiddle(previous, next, start, previousEnd, nextEnd);
+  // A child that changes place among kept siblings leaves its old slot before it takes the
+  // new one, so no splice lists it twice in this parent.
+  const lifted =
+    found.length > 0
+      ? liftMovedChildren(parentLogicalId, previous, next, { start, previousEnd, nextEnd }, found)
+      : null;
+  const remaining = lifted?.previous ?? previous;
+  const kept = lifted?.kept ?? found;
+  const remainingEnd = previousEnd - (previous.length - remaining.length);
   let previousAt = start;
   let nextAt = start;
   let cursor = start;
-  for (const [previousIndex, nextIndex] of [...kept, [previousEnd, nextEnd] as const]) {
+  for (const [previousIndex, nextIndex] of [...kept, [remainingEnd, nextEnd] as const]) {
     const deleted = previousIndex - previousAt;
     const inserted = next.slice(nextAt, nextIndex);
     if (deleted > 0 || inserted.length > 0) {
@@ -240,8 +249,8 @@ function lowerChildList(
       );
     }
     cursor += inserted.length;
-    if (previousIndex < previousEnd) {
-      lowerSameIdentity(previous[previousIndex]!, next[nextIndex]!, knownIds, previousNodes);
+    if (previousIndex < remainingEnd) {
+      lowerSameIdentity(remaining[previousIndex]!, next[nextIndex]!, knownIds, previousNodes);
       cursor += 1;
     }
     previousAt = previousIndex + 1;
@@ -270,6 +279,52 @@ function lowerInserted(
     // edits the subtree reaches the journal.
     expandInserted(node, knownIds, previousNodes);
   }
+}
+
+/**
+ * Remove, as their own splices, the children that both middles hold but the kept order does not.
+ *
+ * Splices run in list order. A child that moves toward the start of the list was inserted at
+ * its new slot before the splice that removed its old one. The list then held one id twice,
+ * and an apply that shows only one copy of a repeated child read the later removal as the next
+ * sibling: moving a block up by two dropped the block after its old place. Removing moved
+ * children first, right to left, keeps every list free of repeats and every index unambiguous.
+ *
+ * Returns the previous list without the moved children and the kept pairs reindexed to it, or
+ * null when nothing moved.
+ */
+function liftMovedChildren(
+  parentLogicalId: string,
+  previous: readonly OoxmlNode[],
+  next: readonly OoxmlNode[],
+  middle: { readonly start: number; readonly previousEnd: number; readonly nextEnd: number },
+  kept: readonly (readonly [number, number])[]
+): { previous: OoxmlNode[]; kept: (readonly [number, number])[] } | null {
+  // Only the middles can hold a moved child: the trimmed ends match by id and position.
+  const keptAt = new Set(kept.map(([previousIndex]) => previousIndex));
+  const nextIds = new Set<string>();
+  for (let index = middle.start; index < middle.nextEnd; index += 1) nextIds.add(next[index]!.id);
+  const movedAt: number[] = [];
+  for (let index = middle.start; index < middle.previousEnd; index += 1) {
+    if (!keptAt.has(index) && nextIds.has(previous[index]!.id)) movedAt.push(index);
+  }
+  if (movedAt.length === 0) return null;
+  let end = movedAt.length;
+  while (end > 0) {
+    let run = end - 1;
+    while (run > 0 && movedAt[run - 1] === movedAt[run]! - 1) run -= 1;
+    recordSpliceChildren(parentLogicalId, movedAt[run]!, end - run, []);
+    end = run;
+  }
+  const moved = new Set(movedAt);
+  let skipped = 0;
+  return {
+    previous: previous.filter((_, index) => !moved.has(index)),
+    kept: kept.map(([previousIndex, nextIndex]) => {
+      while (skipped < movedAt.length && movedAt[skipped]! < previousIndex) skipped += 1;
+      return [previousIndex - skipped, nextIndex] as const;
+    }),
+  };
 }
 
 /** Above this many index pairs the middle is lowered as one splice, as before. */

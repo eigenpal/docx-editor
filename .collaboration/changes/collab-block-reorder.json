@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A transaction that moved an existing child toward the start of its parent, such as a block reorder or a formatting edit that sorts properties into schema order, recorded the insert at the new place before the removal at the old place, and the local write removed the next sibling instead of the old listing. A later move of a block that two peers had moved at once left its other listing in place, so the block showed where it was.",
+  "after": "The local journal removes each moved child from its old place before it inserts the child at the new place, so no child list names a child twice and every index addresses the child its author saw. Removing a shown child also removes its other listings in the same parent.",
+  "reason": "Only the local writer changes: which ordinary list deletions and insertions of existing node ids it writes. Released replicas read, apply, undo, and materialize those writes with the same meaning, and they already show the first of two listings. No stored field, identity, conflict rule, or canonical mapping changes, so a mixed room converges on the corrected order.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-block-reorder.test.ts",
+    "packages/core/src/store/__tests__/canonical-primitive-journal.test.ts"
+  ],
+  "changeset": "collab-block-reorder",
+  "migration": null
+}

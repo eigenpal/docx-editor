@@ -24,7 +24,7 @@ import {
   type ScenarioOptions,
 } from './scenario-harness.ts';
 import { readCase, replayOf, writeCase, type SavedCase } from './scenario-case.ts';
-import { TRACKED_STRUCTURE_WEIGHTS, TRACKED_WEIGHTS } from './scenario-plan.ts';
+import { REORDER_WEIGHTS, TRACKED_STRUCTURE_WEIGHTS, TRACKED_WEIGHTS } from './scenario-plan.ts';
 import { zipDocument } from '../../packages/pro/src/collaboration/__tests__/document-peer-support.ts';
 
 const TEXTBOX_DOCUMENT = path.resolve(
@@ -99,6 +99,36 @@ const TRACKED_STRUCTURES_BODY = [
   PLAIN('Plain text without changes, for edits beside them.'),
 ].join('');
 
+/**
+ * Paragraphs and tables side by side, a cell and a content control that hold several
+ * paragraphs, so reorders move paragraphs past tables, tables past tables, and blocks inside
+ * a cell, while others type in, split, join, and delete the blocks that move.
+ */
+const REORDER_CELL = (content: string) =>
+  `<w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr>${content}</w:tc>`;
+const REORDER_TABLE = (name: string, cells: readonly string[]) =>
+  '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid>' +
+  `<w:tr>${cells.map(REORDER_CELL).join('')}</w:tr>` +
+  `<w:tr>${REORDER_CELL(PLAIN(`${name} lower left`))}${REORDER_CELL(PLAIN(`${name} lower right`))}</w:tr>` +
+  '</w:tbl>';
+const REORDER_BODY = [
+  PLAIN('Zero paragraph before everything.'),
+  PLAIN('One paragraph with words to type in.'),
+  REORDER_TABLE('First', [
+    PLAIN('Cell head') + PLAIN('Cell middle') + PLAIN('Cell tail'),
+    PLAIN('Single cell text'),
+  ]),
+  PLAIN('Two paragraph between the tables.'),
+  PLAIN('Three paragraph to split and join.'),
+  REORDER_TABLE('Second', [PLAIN('Other cell'), PLAIN('Last cell')]),
+  '<w:sdt><w:sdtPr><w:id w:val="7"/></w:sdtPr><w:sdtContent>' +
+    PLAIN('Control first paragraph.') +
+    PLAIN('Control second paragraph.') +
+    '</w:sdtContent></w:sdt>',
+  PLAIN('Four paragraph near the end.'),
+  PLAIN('Five paragraph at the end.'),
+].join('');
+
 /** Named scenario shapes. Each varies one source of concurrency over the same edit mix. */
 export const SCENARIO_CONFIGS = {
   sequential: { replicas: 3, steps: 150, delivery: 'in-order' },
@@ -171,6 +201,30 @@ export const SCENARIO_CONFIGS = {
     steps: 200,
     documentBody: TRACKED_STRUCTURES_BODY,
     weights: TRACKED_STRUCTURE_WEIGHTS,
+  },
+  // Blocks moved up and down by one to three places, and to either end, one or two at a time,
+  // against typing inside them, splits and joins beside them, and deletes of their neighbours.
+  reorder: { replicas: 3, steps: 150, documentBody: REORDER_BODY, weights: REORDER_WEIGHTS },
+  reorderSequential: {
+    replicas: 3,
+    steps: 120,
+    delivery: 'in-order',
+    documentBody: REORDER_BODY,
+    weights: REORDER_WEIGHTS,
+  },
+  reorderUndo: {
+    replicas: 3,
+    steps: 150,
+    undoChance: 0.15,
+    documentBody: REORDER_BODY,
+    weights: REORDER_WEIGHTS,
+  },
+  reorderEverything: {
+    ...DENSE,
+    replicas: 4,
+    steps: 150,
+    documentBody: REORDER_BODY,
+    weights: REORDER_WEIGHTS,
   },
 } as const satisfies Record<
   string,
@@ -254,6 +308,8 @@ async function main(): Promise<void> {
       out: { type: 'string' },
       start: { type: 'string' },
       jobs: { type: 'string' },
+      // `matrix` only: a comma-separated list of shapes to run instead of all of them.
+      configs: { type: 'string' },
       // Check every replica against a fresh build of its shared state after every action.
       strict: { type: 'boolean', default: false },
     },
@@ -283,8 +339,11 @@ async function main(): Promise<void> {
   }
 
   if (command === 'matrix') {
+    const shapes = values.configs
+      ? values.configs.split(',').map((name) => configFor(name.trim()))
+      : Object.keys(SCENARIO_CONFIGS);
     const jobs = matrixJobs(
-      Object.keys(SCENARIO_CONFIGS),
+      shapes,
       // A shape that fixes its own delivery runs once, under that delivery's name.
       (name) => {
         const fixed = fixedDelivery(name as ScenarioConfig);

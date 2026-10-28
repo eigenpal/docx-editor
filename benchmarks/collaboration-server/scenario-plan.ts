@@ -24,6 +24,7 @@ import {
   type TreePackageStore,
 } from '@docx-editor.dev/core/store';
 import { elements, parentOf, textOf } from './scenario-tree.ts';
+import { applyBlockMoves, isMoveBlocks, planBlockMoves } from './block-moves.ts';
 
 const BODY: StoryScope = { kind: 'body' };
 
@@ -54,6 +55,8 @@ export type EditKind =
   | 'deleteParagraph'
   | 'insertRow'
   | 'deleteRow'
+  // One transaction that moves one or two existing blocks to new places in their container.
+  | 'moveBlocks'
   | TrackedEditKind
   | StructureEditKind;
 
@@ -97,6 +100,9 @@ export const DEFAULT_WEIGHTS: Record<EditKind, number> = {
   deleteParagraph: 3,
   insertRow: 2,
   deleteRow: 1,
+  // Off by default, so every existing seed draws the same numbers; the `reorder` shapes turn
+  // it on.
+  moveBlocks: 0,
   trackedType: 0,
   trackedDelete: 0,
   acceptRevision: 0,
@@ -129,6 +135,22 @@ export const TRACKED_STRUCTURE_WEIGHTS: Partial<Record<EditKind, number>> = {
   rejectAll: 1,
   split: 0,
   join: 0,
+  format: 4,
+};
+
+/**
+ * The mix of the `reorder` shapes: block moves, with typing inside the blocks that move, splits
+ * and joins beside them, and deletes of their neighbours.
+ */
+export const REORDER_WEIGHTS: Partial<Record<EditKind, number>> = {
+  moveBlocks: 20,
+  type: 30,
+  delete: 8,
+  split: 6,
+  join: 5,
+  deleteParagraph: 5,
+  insertRow: 2,
+  deleteRow: 2,
   format: 4,
 };
 
@@ -348,6 +370,8 @@ export function planEdit(
     case 'acceptCard':
     case 'rejectCard':
       return planCardDecision(store, random, kind === 'acceptCard' ? 'accept' : 'reject');
+    case 'moveBlocks':
+      return planBlockMoves(root, random);
     case 'acceptAll':
     case 'rejectAll':
       return {
@@ -459,6 +483,7 @@ export function applyOp(
     });
     return result.ok ? { ok: true } : { ok: false, reason: String(result.reason) };
   }
+  if (isMoveBlocks(op)) return applyBlockMoves(store, op, actorId);
   // The editor binds its collaboration actor to every write, so ids it mints are striped by
   // author: two people who add the first note at once do not mint the same `rId`.
   if (PACKAGE_OPS.has(op.op)) return store.applyLifecycleOp(op, { actorId });

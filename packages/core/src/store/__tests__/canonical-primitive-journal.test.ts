@@ -398,12 +398,24 @@ describe('canonical primitive journal (task 3.5)', () => {
       for (const effect of lowered.journal!.effects) {
         if (effect.kind !== 'spliceChildren' || effect.parentLogicalId !== parent.id) continue;
         ids.splice(effect.start, effect.deleteCount, ...effect.childLogicalIds);
+        // A moved child leaves its old slot first: an apply that shows one copy of a repeated
+        // child would otherwise read a later index as the next sibling (#1572).
+        expect(new Set(ids).size).toBe(ids.length);
       }
       return ids;
     };
     const [a, b, x] = [run('a'), run('b'), run('x')];
     expect(replay([a, b, x], [x, a, b])).toEqual([x.id, a.id, b.id]);
     expect(replay([a, b, x], [b, x, a])).toEqual([b.id, x.id, a.id]);
+    const [c, d, e] = [run('c'), run('d'), run('e')];
+    // Up by two and three, down by two, to both ends, and two moves at once.
+    expect(replay([a, b, x, c, d], [x, a, b, c, d])).toEqual([x.id, a.id, b.id, c.id, d.id]);
+    expect(replay([a, b, c, x, d], [x, a, b, c, d])).toEqual([x.id, a.id, b.id, c.id, d.id]);
+    expect(replay([x, a, b, c, d], [a, b, x, c, d])).toEqual([a.id, b.id, x.id, c.id, d.id]);
+    expect(replay([a, b, x, c, d], [a, b, c, d, x])).toEqual([a.id, b.id, c.id, d.id, x.id]);
+    expect(replay([a, b, x, c, d, e], [x, e, a, b, c, d])).toEqual(
+      [x, e, a, b, c, d].map((child) => child.id)
+    );
     const wide = Array.from({ length: 80 }, (_, index) => run(`w${index}`));
     const shuffled = [...wide.slice(40), run('new'), ...wide.slice(0, 40)].reverse();
     expect(replay(wide, shuffled)).toEqual(shuffled.map((child) => child.id));

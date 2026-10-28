@@ -152,6 +152,13 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
   // A card addressed its change among every wrapper, and a plain store that kept an empty
   // wrapper of a change bound it to another change.
   { config: 'trackedStructuresSequential', delivery: 'in-order', seed: 4 },
+  // A block moved toward the start of its container in one transaction removed the block
+  // after its old place on every replica, and a block two peers moved at once showed at its
+  // old place after a later move.
+  { config: 'reorderSequential', delivery: 'in-order', seed: 1 },
+  { config: 'reorder', delivery: 'server', seed: 1 },
+  { config: 'reorderUndo', delivery: 'server', seed: 2 },
+  { config: 'reorderEverything', delivery: 'peer', seed: 3 },
 ];
 
 /**
@@ -159,7 +166,56 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
  * into `replays/` and the seed back into `CLEAN`.
  */
 const OPEN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number; case: string }[] =
-  [];
+  [
+    // Two replicas delete the same table column, or row, at once, and one undoes its delete:
+    // text a third replica typed there shows again after the other replica deleted it.
+    {
+      config: 'reorderEverything',
+      delivery: 'server',
+      seed: 1,
+      case: 'concurrent-column-deletes-then-undo-restore-deleted-text.json',
+    },
+    {
+      config: 'reorderUndo',
+      delivery: 'server',
+      seed: 50,
+      case: 'concurrent-row-deletes-then-undo-restore-deleted-text.json',
+    },
+    // A join copies the second paragraph's text, so an undo of typing the joining replica had
+    // not received yet leaves the copy. It fails the same way with no block moves.
+    {
+      config: 'reorderUndo',
+      delivery: 'server',
+      seed: 80,
+      case: 'join-copies-text-an-undo-removes.json',
+    },
+    // Splits, joins, deletes, and undo beside moved blocks. Each case needs its moves to fail,
+    // and none of them loses or misplaces a block.
+    {
+      config: 'reorder',
+      delivery: 'server',
+      seed: 73,
+      case: 'moved-blocks-with-splits-and-joins-show-text-twice.json',
+    },
+    {
+      config: 'reorder',
+      delivery: 'server',
+      seed: 91,
+      case: 'caret-after-joins-beside-moved-blocks.json',
+    },
+    {
+      config: 'reorderUndo',
+      delivery: 'server',
+      seed: 91,
+      case: 'undone-join-beside-moved-blocks-refuses-a-delete.json',
+    },
+    {
+      config: 'reorderEverything',
+      delivery: 'peer',
+      seed: 63,
+      case: 'undo-beside-moved-blocks-removes-peer-text.json',
+    },
+  ];
 
 /** How many test files share the seeds. Each file defines one share with `scenarioShare`. */
 export const SCENARIO_SHARES = 8;

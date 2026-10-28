@@ -5,6 +5,7 @@ import {
   readOoxmlPackage,
   TreePackageStore,
   type OoxmlNode,
+  type OoxmlPackage,
 } from '@docx-editor.dev/core/store';
 
 export function storeFrom(bytes: Uint8Array): TreePackageStore {
@@ -13,6 +14,13 @@ export function storeFrom(bytes: Uint8Array): TreePackageStore {
   const main = loaded.package.parts.get(loaded.package.mainDocumentPart);
   if (!main) throw new Error('the document has no main part');
   return new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
+}
+
+/** A plain store, with no collaboration attached, that starts from a replica's package. */
+export function storeFromPackage(pkg: OoxmlPackage): TreePackageStore {
+  const main = pkg.parts.get(pkg.mainDocumentPart);
+  if (!main) throw new Error('the document has no main part');
+  return new TreePackageStore(pkg, main);
 }
 
 function textOf(node: OoxmlNode): string {

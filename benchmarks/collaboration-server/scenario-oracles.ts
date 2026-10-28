@@ -226,3 +226,40 @@ export function paragraphIds(
   }
   return ids.join(' ');
 }
+
+const BLOCK_NAMES: ReadonlySet<string> = new Set(['p', 'tbl', 'sdt']);
+
+/** Every node id in a package's main part. */
+export function mainPartIds(pkg: OoxmlPackage): Set<string> {
+  const ids = new Set<string>();
+  const part = pkg.parts.get(pkg.mainDocumentPart);
+  const walk = (node: OoxmlNode): void => {
+    ids.add(node.id);
+    if (node.kind !== 'textValue') for (const child of node.children) walk(child);
+  };
+  if (part) walk(part.root);
+  return ids;
+}
+
+/**
+ * The blocks of every block container in the main part, in order: each block by its id when `known`
+ * holds it, and `+` for one the edit created. Text and formatting are left out, so concurrent
+ * conflicts inside paragraphs cannot differ here, while a lost, repeated, or misplaced block
+ * does.
+ */
+export function blockSkeleton(pkg: OoxmlPackage, known: ReadonlySet<string>): string {
+  const out: string[] = [];
+  const name = (node: OoxmlNode): string => (known.has(node.id) ? node.id : '+');
+  const walk = (node: OoxmlNode): void => {
+    // Inside a paragraph, content controls and text boxes are inline content, not blocks.
+    if (node.kind === 'textValue' || node.localName === 'p') return;
+    const blocks = node.children.filter(
+      (child) => child.kind !== 'textValue' && BLOCK_NAMES.has(child.localName)
+    );
+    if (blocks.length > 0) out.push(`${name(node)}{${blocks.map(name).join(' ')}}`);
+    for (const child of node.children) walk(child);
+  };
+  const part = pkg.parts.get(pkg.mainDocumentPart);
+  if (part) walk(part.root);
+  return out.join('\n');
+}

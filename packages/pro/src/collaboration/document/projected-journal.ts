@@ -376,12 +376,18 @@ export function projectJournalToShared(
   // This is the materializer's rule, so a local edit's visible indexes map back exactly:
   // no split losers, tombstones, repeats, or self-listing, and one copy of each singleton a
   // concurrent peer duplicated. A node this journal creates is live by definition.
-  // `companions` maps a shown singleton's index to the hidden copies it stands for.
+  // `companions` maps a shown singleton's index to the hidden copies it stands for, and
+  // `repeats` maps a shown child's index to its other listings in the same parent.
   const visibleLayout = (
     parentId: LogicalId,
     children: readonly LogicalId[]
-  ): { positions: number[]; companions: ReadonlyMap<number, readonly number[]> } => {
-    const seen = new Set<LogicalId>();
+  ): {
+    positions: number[];
+    companions: ReadonlyMap<number, readonly number[]>;
+    repeats: ReadonlyMap<number, readonly number[]>;
+  } => {
+    const seen = new Map<LogicalId, number>();
+    const repeats = new Map<number, number[]>();
     const base: number[] = [];
     const order =
       hidden.size === 0
@@ -393,8 +399,16 @@ export function projectJournalToShared(
           );
     (order ?? children.map((_, index) => index)).forEach((index) => {
       const id = children[index]!;
-      if (id === parentId || seen.has(id) || hidden.has(id)) return;
-      seen.add(id);
+      if (id === parentId || hidden.has(id)) return;
+      const first = seen.get(id);
+      if (first !== undefined) {
+        // Two peers that move one block at the same time each list it at their own place.
+        const others = repeats.get(first) ?? [];
+        others.push(index);
+        repeats.set(first, others);
+        return;
+      }
+      seen.set(id, index);
       // A tombstone is not shown, nor is a child whose record has not arrived yet, nor a split
       // text whose source has not: the materializer shows none of them. One record read, as
       // Enter in a long document reads this for every block.
@@ -406,7 +420,7 @@ export function projectJournalToShared(
       base.map((index) => children[index]!),
       shellOf
     );
-    if (!layout) return { positions: base, companions: new Map() };
+    if (!layout) return { positions: base, companions: new Map(), repeats };
     const companions = new Map<number, readonly number[]>();
     for (const [winner, losers] of layout.companions) {
       companions.set(
@@ -414,7 +428,7 @@ export function projectJournalToShared(
         losers.map((at) => base[at]!)
       );
     }
-    return { positions: layout.order.map((at) => base[at]!), companions };
+    return { positions: layout.order.map((at) => base[at]!), companions, repeats };
   };
   const visibleIndexes = (parentId: LogicalId, children: readonly LogicalId[]): number[] =>
     visibleLayout(parentId, children).positions;
@@ -668,7 +682,10 @@ export function projectJournalToShared(
         listMergedWhereShown(effect.parentLogicalId);
         const parent = raw.node(effect.parentLogicalId);
         if (!parent || parent.isText) return { ok: false, code: 'invalid-bound' };
-        const { positions, companions } = visibleLayout(effect.parentLogicalId, parent.children);
+        const { positions, companions, repeats } = visibleLayout(
+          effect.parentLogicalId,
+          parent.children
+        );
         const removed = positions
           .slice(effect.start, effect.start + effect.deleteCount)
           .map((index) => parent.children[index]!);
@@ -683,8 +700,13 @@ export function projectJournalToShared(
           // deleting the entire raw interval would alter that branch's undo history.
           const selected = positions.slice(effect.start, effect.start + effect.deleteCount);
           // Deleting a shown singleton deletes the copies it hid as well, or the next copy
-          // would show the value this author just removed.
-          const hiddenCopies = selected.flatMap((index) => companions.get(index) ?? []);
+          // would show the value this author just removed. Deleting a shown child deletes
+          // its other listings in this parent too: a block that two peers moved at once is
+          // listed twice, and moving it again left the other listing to show it where it was.
+          const hiddenCopies = selected.flatMap((index) => [
+            ...(companions.get(index) ?? []),
+            ...(repeats.get(index) ?? []),
+          ]);
           if (hiddenCopies.length > 0 || permuted(positions)) {
             // A conflict hid copies, or moved a properties element out of shared order.
             // Delete from the highest index down, then insert where the range began.

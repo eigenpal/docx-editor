@@ -1,0 +1,81 @@
+{
+  "config": "reorderEverything",
+  "seed": 1,
+  "replicas": 4,
+  "delivery": "server",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 3,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 16,
+          "text": "lor "
+        },
+        "paragraphs": [5]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "deleteTableColumn",
+          "tableId": "",
+          "gridColumnId": ""
+        },
+        "targets": [
+          {
+            "field": "tableId",
+            "localName": "tbl",
+            "index": 0
+          },
+          {
+            "field": "gridColumnId",
+            "localName": "gridCol",
+            "index": 1,
+            "within": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "deleteTableColumn",
+          "tableId": "",
+          "gridColumnId": ""
+        },
+        "targets": [
+          {
+            "field": "tableId",
+            "localName": "tbl",
+            "index": 0
+          },
+          {
+            "field": "gridColumnId",
+            "localName": "gridCol",
+            "index": 1,
+            "within": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "undo",
+      "replica": 1
+    }
+  ]
+}
