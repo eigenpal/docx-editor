@@ -623,6 +623,13 @@ Semantic layout SHALL place a supported terminal exact row's simple bottom rule 
 - **THEN** the row starts on a fresh page and keeps all its lines there, past the bottom margin
 - **AND** the next row or block starts on the following page
 
+#### Scenario: A whole tall row keeps the first line of its first footnote
+
+- **WHEN** compatibility mode is 14 or earlier, or absent
+- **AND** a row that stays whole past the bottom margin references footnotes
+- **THEN** the page keeps the first line of the first referenced footnote at its bottom, over the row, wherever the reference sits in the row
+- **AND** the rest of that footnote and every later footnote of the row continue on the next page, each later footnote with its own mark
+
 #### Scenario: A tall row splits before mode 15 outside the text-only case
 
 - **WHEN** compatibility mode is 14 or earlier, or absent

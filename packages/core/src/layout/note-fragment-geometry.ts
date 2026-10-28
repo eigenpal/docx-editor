@@ -221,6 +221,8 @@ export interface NoteReferenceLineBand {
   readonly tableRow?: true;
   /** The referencing row's id when that row ends the page's flow (`endsPage`). */
   readonly endsPageRowId?: string;
+  /** The referencing table row is placed whole past the bottom of the content band. */
+  readonly rowOverflowsPage?: true;
 }
 
 /**
@@ -344,6 +346,7 @@ function computeReferenceLineBand(
     ...(preserveOrphanLine ? { preserveOrphanLine: true } : {}),
     ...(tableRow ? { tableRow: true } : {}),
     ...(endsPageRowId !== undefined ? { endsPageRowId } : {}),
+    ...(tableRow && bottom > page.contentBox.height + 0.001 ? { rowOverflowsPage: true } : {}),
   };
 }
 

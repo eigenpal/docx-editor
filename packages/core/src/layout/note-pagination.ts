@@ -104,6 +104,7 @@ import { DEFAULT_RUN_STYLE, resolveRunStyle, type ResolvedRunStyle } from './run
 import { finalizePageFieldProjection } from './field-projection.ts';
 import type { LayoutSteps } from './layout-steps.ts';
 import { withNoteAreasOnProgress, type NotesBodyOptions } from './note-progress.ts';
+import { overflowRowNote, referenceRowOverflowsPage } from './note-overflow-row.ts';
 import { overflowPageShellAt, type OverflowPageShell } from './page-furniture-insets.ts';
 import { resettleParitySheets } from './page-parity-sheet.ts';
 import {
@@ -915,6 +916,8 @@ function buildFootnoteArea(
    * line to the next page (reserve mode only; undefined when nothing needs evicting).
    */
   evictionTopPt?: number;
+  /** The area rides over a whole row past the bottom margin and needs no body room. */
+  overRow?: boolean;
 } {
   const nextCarry: NoteCarryMap = new Map(continuationCarry);
   const pageRefs = refs.filter((ref) => ref.noteKind === 'footnote');
@@ -973,8 +976,9 @@ function buildFootnoteArea(
         noteKind: 'footnote',
         noteId,
         scopeId,
-        mark: null,
-        continuation: true,
+        // A note carried whole keeps its mark: this page opens it.
+        mark: carry.mark,
+        ...(carry.mark === null ? { continuation: true } : {}),
         box: {
           x: page.contentBox.x,
           y: 0,
@@ -1003,8 +1007,8 @@ function buildFootnoteArea(
           noteKind: 'footnote',
           noteId,
           scopeId,
-          mark: null,
-          continuation: true,
+          mark: carry.mark,
+          ...(carry.mark === null ? { continuation: true } : {}),
           box: {
             x: page.contentBox.x,
             y: 0,
@@ -1029,6 +1033,8 @@ function buildFootnoteArea(
 
   let evictionTopPt: number | undefined;
   let placedBudget = Number.POSITIVE_INFINITY;
+  // A note placed over a whole row that runs past the bottom margin.
+  let overRow = false;
   for (const ref of pageRefs) {
     if (notes.length >= MAX_NOTES_LAID_OUT) {
       reasons.push('note-count-limit');
@@ -1068,6 +1074,17 @@ function buildFootnoteArea(
       continue;
     }
     const mark = noteMarks.marks.get(noteMarkKey('footnote', ref.noteId)) ?? null;
+    // A whole row past the bottom margin keeps only the first line of its first note
+    // (`note-overflow-row.ts`). The area then rides over the row and reserves nothing.
+    if (band && referenceRowOverflowsPage(band, input.compatibilityMode)) {
+      const shown = ref.customMarkFollows ? null : mark;
+      const { note, carry } = overflowRowNote(laid, shown, notes.length === 0, page, reasons);
+      if (note) notes.push(note);
+      if (carry) nextCarry.set(laid.scopeId, carry);
+      stackHeight += note?.box.height ?? 0;
+      overRow ||= note !== undefined;
+      continue;
+    }
     const refBudget = band
       ? Math.min(
           availableForNotes,
@@ -1213,8 +1230,8 @@ function buildFootnoteArea(
   } else {
     // pageBottom — pin to bottom of content column.
     areaTop = page.contentBox.y + page.contentBox.height - totalHeight;
-    // Never overlap body text.
-    areaTop = Math.max(areaTop, page.contentBox.y + textBottom);
+    // Never overlap body text, except a whole row past the bottom margin.
+    if (!overRow) areaTop = Math.max(areaTop, page.contentBox.y + textBottom);
   }
 
   let cursorY = areaTop + sepHeight;
@@ -1250,7 +1267,7 @@ function buildFootnoteArea(
     ...placeContinuationNotice(activeNotice, page.contentBox.x, cursorY, contentWidth),
     ...(noticeRefused ? { fallbackReason: 'note-continuation-notice-height-cap' } : {}),
   };
-  return { area, nextCarry, evictionTopPt };
+  return { area, nextCarry, evictionTopPt, overRow };
 }
 
 /**
@@ -2211,7 +2228,7 @@ function computeFootnoteReservesWithPolicy(
     // floor would stably strangle every note above it on a multi-reference page.
     const carryWasEmpty = carry.size === 0;
     const reasonsBefore = reasons.length;
-    const { area, nextCarry, evictionTopPt } = buildFootnoteArea(
+    const { area, nextCarry, evictionTopPt, overRow } = buildFootnoteArea(
       bodyPage,
       pageBottomRefs,
       input,
@@ -2244,7 +2261,8 @@ function computeFootnoteReservesWithPolicy(
       evictionTopPt !== undefined
         ? Math.max(0, bodyPage.contentBox.height - evictionTopPt - RESERVE_BOUNDARY_BACKOFF_PT)
         : 0;
-    const areaHeight = area?.box.height ?? 0;
+    // An area over a whole row past the bottom margin cannot gain room from the body.
+    const areaHeight = overRow ? 0 : (area?.box.height ?? 0);
     const localNeeded = Math.min(Math.max(areaHeight, evictionNeed), maxArea);
     if (memo && carryWasEmpty && carry.size === 0) {
       memo.pageReserve.set(page, {
