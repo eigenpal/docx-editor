@@ -75,6 +75,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     fontSlot: 'layout-only',
     glyphOffsetPt: 'layout-only',
     borderBaselinePt: 'layout-only',
+    tabAlignment: 'layout-only',
   } satisfies Record<keyof StyleSpanRecord, MarkdownFieldPolicy>,
   sourceRange: {
     paragraphId: 'represented',
@@ -84,6 +85,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
   runStyle: {
     fontFamily: 'layout-only',
     fontFamilyEastAsia: 'layout-only',
+    eastAsianFontAuthored: 'layout-only',
     latinLane: 'layout-only',
     complexLane: 'layout-only',
     shaping: 'layout-only',
