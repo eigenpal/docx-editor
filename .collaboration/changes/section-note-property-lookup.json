@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The painted notes input, NOTEREF numbering, and the note properties state each found a section's own sectPr with their own copy of the lookup.",
+  "after": "All three read a section's own sectPr through one shared lookup, with the same results.",
+  "reason": "Only how resolved note properties are read changes. Canonical OOXML, operations, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/final-section-note-format.test.ts",
+    "packages/core/src/editor/__tests__/note-properties-section.test.ts"
+  ],
+  "changeset": "section-note-property-lookup",
+  "migration": null
+}
