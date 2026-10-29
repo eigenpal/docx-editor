@@ -24,7 +24,12 @@ import {
   type ScenarioOptions,
 } from './scenario-harness.ts';
 import { readCase, replayOf, writeCase, type SavedCase } from './scenario-case.ts';
-import { REORDER_WEIGHTS, TRACKED_STRUCTURE_WEIGHTS, TRACKED_WEIGHTS } from './scenario-plan.ts';
+import {
+  REORDER_CONTROL_WEIGHTS,
+  REORDER_WEIGHTS,
+  TRACKED_STRUCTURE_WEIGHTS,
+  TRACKED_WEIGHTS,
+} from './scenario-plan.ts';
 import { zipDocument } from '../../packages/pro/src/collaboration/__tests__/document-peer-support.ts';
 
 const TEXTBOX_DOCUMENT = path.resolve(
@@ -144,7 +149,6 @@ export const SCENARIO_CONFIGS = {
     offlineChance: 0.04,
     undoChance: 0.08,
     lateJoiners: 2,
-    weights: { unwrapControl: 1 },
   },
   // Updates that arrive twice, never, or cut short, repaired by state-vector syncs.
   faults: {
@@ -232,6 +236,14 @@ export const SCENARIO_CONFIGS = {
     steps: 150,
     documentBody: REORDER_BODY,
     weights: REORDER_WEIGHTS,
+  },
+  // The reorder edits with content controls removed and more splits beside moves, with undo.
+  reorderControls: {
+    replicas: 3,
+    steps: 150,
+    undoChance: 0.15,
+    documentBody: REORDER_BODY,
+    weights: REORDER_CONTROL_WEIGHTS,
   },
 } as const satisfies Record<
   string,

@@ -156,7 +156,17 @@ export const REORDER_WEIGHTS: Partial<Record<EditKind, number>> = {
   insertRow: 2,
   deleteRow: 2,
   format: 4,
-  unwrapControl: 1,
+};
+
+/**
+ * The `reorderControls` mix: the reorder mix with content controls removed, keeping their
+ * content or deleting it, and more splits beside the blocks that move. A separate shape, so
+ * every `reorder` seed still draws the same numbers.
+ */
+export const REORDER_CONTROL_WEIGHTS: Partial<Record<EditKind, number>> = {
+  ...REORDER_WEIGHTS,
+  split: 12,
+  unwrapControl: 3,
 };
 
 export const TRACKED_WEIGHTS: Partial<Record<EditKind, number>> = {

@@ -54,8 +54,8 @@ export const STRUCTURE_WEIGHTS: Record<StructureEditKind, number> = {
   splitCell: 0,
   pageBreak: 1,
   control: 1,
-  // Off by default, so every existing seed draws the same numbers; the `reorder` and
-  // `everything` shapes turn it on.
+  // Off by default, so every existing seed draws the same numbers; the `reorderControls`
+  // shape turns it on.
   unwrapControl: 0,
   footnote: 1,
   comment: 1,

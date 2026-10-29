@@ -21,6 +21,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import * as Y from 'yjs';
 import { NODE_DELETED_FIELD } from './schema.ts';
+import { deleteSetRuns, structAt } from './yjs-items.ts';
 
 /** The transaction origin of the writes; no undo stack tracks it, the step it joins does. */
 export const TOMBSTONE_ORIGIN = Symbol('docx-tombstone-again');
@@ -64,14 +65,68 @@ export function restoreLostTombstones(
   doc.transact(() => {
     for (const { record } of lost) record.set(NODE_DELETED_FIELD, true);
   }, TOMBSTONE_ORIGIN);
-  for (const { record, step } of lost) {
-    const written = record._map.get(NODE_DELETED_FIELD);
-    if (!written) continue;
-    const added = Y.createDeleteSet();
-    added.clients.set(written.id.client, [
-      { clock: written.id.clock, len: written.length },
-    ] as never);
-    step.insertions = Y.mergeDeleteSets([step.insertions as never, added]);
+  for (const { record, step } of lost) joinStep(step, record);
+}
+
+/** Add the current deletion write on `record` to `step`, so the step's undo removes it. */
+function joinStep(step: StackItemShape, record: Y.Map<unknown>): void {
+  const written = record._map.get(NODE_DELETED_FIELD);
+  if (!written) return;
+  const added = Y.createDeleteSet();
+  added.clients.set(written.id.client, [{ clock: written.id.clock, len: written.length }] as never);
+  step.insertions = Y.mergeDeleteSets([step.insertions as never, added]);
+}
+
+/**
+ * After a redo: write again each deletion of this replica that Yjs did not put back.
+ *
+ * Yjs does not redo a map value when a later value from another client follows it, even a
+ * deleted one. After a peer wrote its own dropped deletion again, that is the case for this
+ * replica's deletion of the same node: the redo writes nothing, and the node shows deleted
+ * only through the peer's write, or not at all once the peer undid. The peer's undo then
+ * brings the node back although this redo stands. So the redo writes the deletion under this
+ * client, and the undo step it pushed takes it back.
+ * Call it inside a transaction.
+ *
+ * The undo's own record of its step's deletions counts too ({@link ownDeletedRecords}): when a
+ * peer's later write had already replaced this replica's write, the undo deleted nothing, so
+ * the redo step does not name the write, though the redo must still delete the node.
+ *
+ * @param redone - the history step the redo popped.
+ * @param undoneRecords - the nodes whose deletion the undo of that step took back.
+ * @param pushed - the undo step that redo pushed, or a function that pushes one.
+ */
+export function redoRefusedDeletes(
+  doc: Y.Doc,
+  nodes: unknown,
+  redone: { readonly deletions?: unknown },
+  undoneRecords: readonly string[],
+  pushed: () => StackItemShape
+): void {
+  const records = new Set<Y.Map<unknown>>();
+  const nodeMap = nodes instanceof Y.Map ? (nodes as Y.Map<unknown>) : null;
+  for (const id of undoneRecords) {
+    const record = nodeMap?.get(id);
+    if (record instanceof Y.Map && !ownValueStands(record, doc.clientID)) records.add(record);
+  }
+  for (const run of deleteSetRuns(redone.deletions)) {
+    for (let clock = run.clock; clock < run.clock + run.length; ) {
+      const item = structAt(doc, { client: run.client, clock });
+      if (!item) break;
+      clock = item.id.clock + item.length;
+      if (item.parentSub !== NODE_DELETED_FIELD || item.id.client !== doc.clientID) continue;
+      if (!item.deleted || item.redone !== null) continue;
+      const record = item.parent as unknown;
+      if (!(record instanceof Y.Map) || record._item?.parent !== nodes) continue;
+      if (ownValueStands(record as Y.Map<unknown>, doc.clientID)) continue;
+      records.add(record as Y.Map<unknown>);
+    }
+  }
+  if (records.size === 0) return;
+  const step = pushed();
+  for (const record of records) {
+    record.set(NODE_DELETED_FIELD, true);
+    joinStep(step, record);
   }
 }
 
@@ -92,4 +147,36 @@ function ownLostDelete(
     if (step) return step;
   }
   return null;
+}
+
+/** Whether this replica's own deletion value holds the key: nothing to write again. */
+function ownValueStands(record: Y.Map<unknown>, client: number): boolean {
+  const holder = record._map.get(NODE_DELETED_FIELD);
+  return !!holder && !holder.deleted && holder.id.client === client;
+}
+
+/**
+ * The nodes this replica's deletion writes in `step` name, by ID: what an undo of the step
+ * takes back, kept on the redo step for {@link redoRefusedDeletes}.
+ */
+export function ownDeletedRecords(
+  doc: Y.Doc,
+  nodes: unknown,
+  step: { readonly insertions?: unknown } | undefined
+): string[] {
+  const ids = new Set<string>();
+  for (const run of deleteSetRuns(step?.insertions)) {
+    if (run.client !== doc.clientID) continue;
+    for (let clock = run.clock; clock < run.clock + run.length; ) {
+      const item = structAt(doc, { client: run.client, clock });
+      if (!item) break;
+      clock = item.id.clock + item.length;
+      if (item.parentSub !== NODE_DELETED_FIELD) continue;
+      const record = item.parent as unknown;
+      if (!(record instanceof Y.Map) || record._item?.parent !== nodes) continue;
+      const id = record._item?.parentSub ?? null;
+      if (id !== null) ids.add(id);
+    }
+  }
+  return [...ids];
 }

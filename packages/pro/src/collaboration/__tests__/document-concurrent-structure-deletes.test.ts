@@ -278,3 +278,104 @@ describe('two peers delete one row and one of them undoes', () => {
     });
   }
 });
+
+describe('a redo after a peer wrote its dropped delete again', () => {
+  // The undoing peer's write wins the shared key, so its undo empties it, and the other peer
+  // writes its delete again. A redo of the first peer's delete must still stand on its own:
+  // the other peer's later undo of its delete leaves the row deleted.
+  const DELETED = ['Before', { table: [[['a2'], ['b2']]] }, 'After'];
+  const BACK = [
+    'Before',
+    {
+      table: [
+        [['a1'], ['b1']],
+        [['a2'], ['b2']],
+      ],
+    },
+    'After',
+  ];
+
+  test('the redo stands when the other peer undoes', async () => {
+    const harness = harnessWith({ alice: 10, bob: 20 });
+    const { alice, bob, pause, resume } = await harness.pair(TWO_BY_TWO);
+    pause();
+    harness.apply(alice, [deleteRow(alice)]);
+    harness.apply(bob, [deleteRow(bob)]);
+    expect(bob.room.session.undo()).toBe(true);
+    resume();
+    expectBoth(harness, [alice, bob], DELETED);
+    expect(bob.room.session.redo()).toBe(true);
+    expectBoth(harness, [alice, bob], DELETED);
+    expect(alice.room.session.undo()).toBe(true);
+    expectBoth(harness, [alice, bob], DELETED);
+    expect(bob.room.session.undo()).toBe(true);
+    expectBoth(harness, [alice, bob], BACK);
+    // Alice's undo took back nothing Bob's write had not replaced: her redo still deletes.
+    expect(alice.room.session.redo()).toBe(true);
+    expectBoth(harness, [alice, bob], DELETED);
+    expect(alice.room.session.undo()).toBe(true);
+    expectBoth(harness, [alice, bob], BACK);
+  });
+
+  test('with three peers, each later undo leaves the redo standing', async () => {
+    const harness = harnessWith({ alice: 10, carol: 20, bob: 30 });
+    const { alice, bob, pause, resume } = await harness.pair(TWO_BY_TWO);
+    const carol = await harness.joinDetached(alice, 'carol');
+    const sync = () => {
+      for (let round = 0; round < 3; round += 1) {
+        for (const peer of [alice, bob]) {
+          Y.applyUpdate(
+            peer.ydoc,
+            Y.encodeStateAsUpdate(carol.ydoc, Y.encodeStateVector(peer.ydoc)),
+            'relay'
+          );
+          Y.applyUpdate(
+            carol.ydoc,
+            Y.encodeStateAsUpdate(peer.ydoc, Y.encodeStateVector(carol.ydoc)),
+            'relay'
+          );
+        }
+      }
+    };
+    pause();
+    harness.apply(alice, [deleteRow(alice)]);
+    harness.apply(bob, [deleteRow(bob)]);
+    harness.apply(carol, [deleteRow(carol)]);
+    expect(bob.room.session.undo()).toBe(true);
+    resume();
+    sync();
+    expectBoth(harness, [alice, bob, carol], DELETED);
+    expect(bob.room.session.redo()).toBe(true);
+    sync();
+    expectBoth(harness, [alice, bob, carol], DELETED);
+    expect(alice.room.session.undo()).toBe(true);
+    sync();
+    expectBoth(harness, [alice, bob, carol], DELETED);
+    expect(carol.room.session.undo()).toBe(true);
+    sync();
+    expectBoth(harness, [alice, bob, carol], DELETED);
+    expect(bob.room.session.undo()).toBe(true);
+    sync();
+    expectBoth(harness, [alice, bob, carol], BACK);
+  });
+
+  test('when both peers redo, the last undo brings the row back', async () => {
+    const harness = harnessWith({ alice: 10, bob: 20 });
+    const { alice, bob, pause, resume } = await harness.pair(TWO_BY_TWO);
+    pause();
+    harness.apply(alice, [deleteRow(alice)]);
+    harness.apply(bob, [deleteRow(bob)]);
+    expect(bob.room.session.undo()).toBe(true);
+    resume();
+    expect(alice.room.session.undo()).toBe(true);
+    expectBoth(harness, [alice, bob], BACK);
+    expect(bob.room.session.redo()).toBe(true);
+    expectBoth(harness, [alice, bob], DELETED);
+    expect(alice.room.session.redo()).toBe(true);
+    expectBoth(harness, [alice, bob], DELETED);
+    expect(alice.room.session.undo()).toBe(true);
+    expectBoth(harness, [alice, bob], DELETED);
+    expect(bob.room.session.undo()).toBe(true);
+    expectBoth(harness, [alice, bob], BACK);
+  });
+});

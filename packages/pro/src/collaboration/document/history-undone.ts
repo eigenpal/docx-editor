@@ -23,6 +23,7 @@ import { deleteSetRuns, structAt } from './yjs-items.ts';
 import { textMarksOf } from './paragraph-text-marks.ts';
 import { INLINE_FIELD } from './paragraph-text.ts';
 import { whileUndoingCreations } from './undo-delete-filter.ts';
+import { ownDeletedRecords, redoRefusedDeletes } from './tombstone-guard.ts';
 
 /**
  * The part members a part always lists. Numbering definitions are not among them: concurrent
@@ -36,6 +37,9 @@ const MARKED = 'docx-undone-records';
 interface StackItemShape {
   readonly meta: Map<unknown, unknown>;
 }
+
+/** A history step as Yjs records it: what it inserted and what it deleted. */
+type YjsStep = StackItemShape & { readonly insertions?: unknown; readonly deletions?: unknown };
 
 export function markUndoneRecords(
   registry: DocumentRegistry,
@@ -77,6 +81,8 @@ const COPY_RUNS = 'docx-copy-runs';
 const HIDDEN_KEYS = 'docx-hidden-copies';
 /** A step with nothing for Yjs to reverse: only copies to hide or show again. */
 const COPIES_ONLY = 'docx-copies-only';
+/** The nodes whose deletion the undo that pushed this redo step took back. */
+const OWN_DELETES = 'docx-own-deletes';
 /** A step that a host undo group collected: one undo reverts it and nothing older. */
 const GROUP_STEP = 'docx-undo-group';
 
@@ -119,6 +125,12 @@ export function stepHistory(
       ? copiesOf(registry, popped)
       : (runsOf<DeletedRun>(popped, COPY_RUNS) ?? []);
   const before = opposite.length;
+  // The nodes the step's own deletion writes name: the redo deletes them again, whatever a
+  // peer wrote over those writes meanwhile (`tombstone-guard.ts`).
+  const ownDeletes =
+    direction === 'undo'
+      ? ownDeletedRecords(registry.doc, registry.schema.nodes, popped as YjsStep | undefined)
+      : (runsOf<string>(popped, OWN_DELETES) ?? []);
   // A step for copies alone that Yjs later merged an edit into has that edit to reverse too.
   const copiesOnly = popped?.meta.get(COPIES_ONLY) === true && changesOf(popped) === 0;
   // Yjs pops steps until one changes something. When other participants already removed
@@ -149,6 +161,16 @@ export function stepHistory(
   // stack tracks that transaction.
   registry.doc.transact(() => {
     afterStep();
+    if (direction === 'redo' && popped) {
+      redoRefusedDeletes(registry.doc, registry.schema.nodes, popped as YjsStep, ownDeletes, () => {
+        pushed ??= pushCopiesOnly(opposite);
+        return pushed as unknown as { insertions: unknown };
+      });
+    }
+    if (direction === 'undo' && ownDeletes.length > 0) {
+      pushed ??= pushCopiesOnly(opposite);
+      pushed.meta.set(OWN_DELETES, ownDeletes);
+    }
     if (direction === 'redo') {
       const keys = runsOf<string>(popped, HIDDEN_KEYS);
       if (keys && keys.length > 0) textDeletionsOf(registry.doc).withdraw(keys);

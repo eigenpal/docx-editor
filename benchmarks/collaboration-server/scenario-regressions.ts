@@ -168,12 +168,11 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
   // Two replicas deleted one row or table at once and one undid its delete: the row showed
   // again, with the text the other deleted (server 40, 1005, 1045). An undone table move left
   // its separator, which a peer moved at the same time, with no paragraph identity (peer
-  // 1058). Peer 95 was a false report of the check: a replica's undo of its own copy of typing
-  // that the typist had already undone.
+  // 1058). The case of peer 95, a false report of the check, stays as a replay only: the seed
+  // passes on code without the fixes once the check is right.
   { config: 'reorderUndo', delivery: 'server', seed: 40 },
   { config: 'reorderUndo', delivery: 'server', seed: 1005 },
   { config: 'reorderEverything', delivery: 'server', seed: 1045 },
-  { config: 'reorderUndo', delivery: 'peer', seed: 95 },
   { config: 'reorderUndo', delivery: 'peer', seed: 1058 },
 ];
 
