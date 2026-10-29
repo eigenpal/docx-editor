@@ -4820,6 +4820,19 @@ export type SetCommentResolvedResult = {
 };
 
 // @public
+export function setCommentText(store: TreeDocumentStore, commentId: string, text: string): SetCommentTextResult;
+
+// @public
+export type SetCommentTextResult = {
+    readonly change: TreeModelChange | null;
+    readonly changed: boolean;
+    readonly ok: true;
+} | {
+    readonly ok: false;
+    readonly reason: TreeOpRejection | 'unknown-comment';
+};
+
+// @public
 export interface SetFieldResultOp {
     readonly fieldNodeId: string;
     // (undocumented)
@@ -4856,6 +4869,9 @@ export interface SetLegacyDropdownOp {
 
 // @public
 export function setPackageCommentResolved(packageStore: TreePackageStore, commentId: string, resolved: boolean, historyGroup?: HistoryGroup): SetCommentResolvedResult;
+
+// @public
+export function setPackageCommentText(packageStore: TreePackageStore, commentId: string, text: string, historyGroup?: HistoryGroup): SetCommentTextResult;
 
 // @public
 export interface SetTextFormFieldDefaultOp {

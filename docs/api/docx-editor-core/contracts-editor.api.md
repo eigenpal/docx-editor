@@ -824,6 +824,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
     setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
     setActiveScope(scope: ViewScope): void;
     setCommentResolved(key: string, resolved: boolean, options?: HistoryGroupOptions): ExecResult;
+    setCommentText(key: string, text: string, options?: HistoryGroupOptions): ExecResult;
     // (undocumented)
     setEditingMode(mode: DocumentEditingMode): ExecResult;
     setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null, options?: {

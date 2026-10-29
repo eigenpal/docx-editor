@@ -342,6 +342,14 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
    */
   setCommentResolved(commentId: string, resolved: boolean, options?: PackageWriteOptions): boolean;
   /**
+   * Replace the text of one comment or reply. False when the document holds no such comment, or
+   * when the write was refused.
+   *
+   * Only the body changes: the id, author, date, thread state, replies and range markers stay, so
+   * the comment keeps its place in its thread in Word.
+   */
+  setCommentText(commentId: string, text: string, options?: PackageWriteOptions): boolean;
+  /**
    * Delete a comment thread outright — body, thread state and story markers.
    *
    * A THREAD, like resolving one: a reply whose parent is gone has nothing left to answer.
