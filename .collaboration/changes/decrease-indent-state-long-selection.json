@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Finding the laid-out fragment of a paragraph scanned the pages from the start on every read, so the Decrease Indent state over a long selection read the pages once per paragraph.",
+  "after": "Each layout keeps the first fragment of each paragraph, loaded page by page as reads need it, and answers the same fragment as before.",
+  "reason": "Only a read-side cache over an immutable layout changes. No shared field, operation, node identity, snapshot, or awareness payload changes, and each peer builds its own cache from its own layout.",
+  "tests": ["packages/core/src/editor/__tests__/indent-state-long-selection.test.ts"],
+  "changeset": "decrease-indent-state-long-selection",
+  "migration": null
+}
