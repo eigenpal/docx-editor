@@ -6,6 +6,7 @@
   "reason": "Only derived measurement, layout, and paint change. Canonical OOXML, source offsets, operations, and collaboration formats remain unchanged.",
   "tests": [
     "packages/core/src/layout/__tests__/sound-mark-spacing.test.ts",
+    "packages/core/src/output/__tests__/sound-mark-paint.test.ts",
     "packages/pro/src/collaboration/__tests__/document-sound-mark.test.ts"
   ],
   "changeset": "kana-sound-mark-faces",

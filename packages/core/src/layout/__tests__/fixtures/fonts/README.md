@@ -15,4 +15,10 @@ Copyright © 2003 by Bitstream, Inc. All Rights Reserved. DejaVu changes are in 
 
 # Sound mark test faces
 
-`sound-mark-spacing.ttf` and `sound-mark-joining.ttf` are synthetic faces made for `sound-mark-spacing.test.ts` with FontTools `FontBuilder`. Each maps `あかがはぱ国`, U+3099, U+309A, U+309B, U+309C, and a space, on a 1000-unit em; every glyph is a rectangle with a 1000-unit advance. The spacing face has no `GDEF` table and draws the sound marks at the left of their own cell. The joining face classes U+3099 and U+309A as marks (`GDEF` class 3), draws them at the right of their cell, and has one `GPOS` kerning pair, so the shaper does not move a zero-width mark back over its base. They contain no third-party outlines.
+`sound-mark-spacing.ttf`, `sound-mark-joining.ttf`, and `sound-mark-circle.ttf` are synthetic faces made for `sound-mark-spacing.test.ts` with FontTools `FontBuilder`. Each maps `あかがはぱ国`, U+3099, U+309A, U+309B, U+309C, U+25CC, and a space, on a 1000-unit em. Every glyph is one rectangle with a 1000-unit advance, except the 500-unit dotted circle.
+
+- The spacing face has no `GDEF` table and draws the sound marks at the left of their own cell.
+- The joining face classes U+3099 and U+309A as marks (`GDEF` class 3), draws them at the right of their cell, and has one `GPOS` kerning pair, so the shaper does not move a zero-width mark back over its base.
+- The circle face is the joining face with a `ccmp` substitution that draws a lone mark on a dotted circle.
+
+License: the faces are original to this repository. They contain no third-party outlines and are covered by the repository license. Their `name` table states the same in its copyright and license records.

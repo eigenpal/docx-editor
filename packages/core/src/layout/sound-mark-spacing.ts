@@ -3,7 +3,7 @@
 // A face that classes the mark glyph as a mark (GDEF class 3) joins the mark with the kana
 // before it, and the pair takes one cell. A face whose mark glyph has no class and an advance
 // of its own draws the mark as a character, in its own cell, beside an uncomposed base. A face
-// whose unclassed mark glyph has no advance overlays it on the base.
+// whose mark glyph has no advance, unclassed or classed as a base, overlays it on the base.
 //
 // HarfBuzz composes a base and a mark into the precomposed kana when the face has it, and
 // zeroes an unclassed mark, so it would draw the second kind of face like the first. Such a
@@ -33,6 +33,11 @@ export interface SpacedSoundMark {
 export type SpacedSoundMarks = ReadonlyMap<number, SpacedSoundMark>;
 
 const classified = new WeakMap<object, SpacedSoundMarks>();
+
+/** Whether the character is a combining sound mark. */
+export function isSoundMark(character: string): boolean {
+  return character === '\u3099' || character === '\u309A';
+}
 
 /** Whether the text holds a combining sound mark. */
 export function hasSoundMark(text: string): boolean {

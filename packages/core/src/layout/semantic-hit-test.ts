@@ -4,6 +4,7 @@ import { drawingAtOffset, pictureEdgeX, pictureIsRtl } from './inline-picture-ca
 import { bidiPrefixWidth } from './shaped-caret-advances.ts';
 import { nearestBidiSpan, paragraphIsRtl } from './rtl-paragraph.ts';
 import { lineContentEdges } from './pending-line.ts';
+import { snapToSoundMarkCluster } from './sound-mark-hit.ts';
 import { headerFooterAnchoredDrawingOrigin } from './header-footer-drawing-origin.ts';
 // Pointer hit testing in MODEL space, over semantic layout records.
 //
@@ -732,7 +733,13 @@ function offsetOnLine(
   // otherwise a later inline image can claim text that lies between earlier images.
   for (const span of spans) {
     if (x >= span.box.x && x < span.box.x + span.box.width) {
-      return offsetWithinSpan(span, x, context);
+      return snapToSoundMarkCluster(
+        offsetWithinSpan(span, x, context),
+        x,
+        line.range.start,
+        (offset) => characterAt(line, offset),
+        (offset) => caretBoxOnLine(line, offset, context.measurer).x
+      );
     }
   }
 

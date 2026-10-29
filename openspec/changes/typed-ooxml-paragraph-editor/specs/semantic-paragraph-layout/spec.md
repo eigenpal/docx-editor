@@ -693,7 +693,7 @@ When the spaces reach their shrink floor before the mark fits, a justified line 
 
 ### Requirement: Combining kana sound marks follow their face
 
-The layout engine SHALL measure and paint the combining voiced and semi-voiced sound marks (U+3099, U+309A) by their face. When the face classes the mark glyph as a mark, the mark SHALL join the kana before it and add no width, including a mark in a separate run, which SHALL paint over its base. When the face leaves the glyph unclassed with an advance of its own, the mark SHALL take that advance in its own cell beside an uncomposed base. The mark SHALL never start a line apart from its base.
+The layout engine SHALL measure and paint the combining kana sound marks (U+3099, U+309A) by their face. A face that classes the mark glyph as a mark SHALL join it with the kana before it and add no width. A face that gives the unclassed glyph an advance SHALL draw the mark in its own cell beside an uncomposed base. The mark SHALL never start a line apart from its base.
 
 #### Scenario: A face that spaces the mark
 
@@ -704,7 +704,7 @@ The layout engine SHALL measure and paint the combining voiced and semi-voiced s
 
 #### Scenario: A face that joins the mark
 
-- **GIVEN** a face that classes the U+3099 glyph as a mark
+- **GIVEN** a face that classes the U+3099 glyph as a mark and draws a lone mark with no extra glyph
 - **WHEN** the mark is in its own run after its base at the end of a full line
 - **THEN** the mark adds no width and stays on that line
 - **AND** it paints over its base, not past the margin

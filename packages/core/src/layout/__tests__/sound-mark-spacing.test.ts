@@ -17,6 +17,7 @@ import {
   sha256FontBytes,
 } from '../index.ts';
 import { loadFixture } from './punctuation-kerning-fixture.ts';
+import { hitTestPage } from '../semantic-hit-test.ts';
 
 await initializeHarfBuzz();
 
@@ -35,6 +36,7 @@ function face(file: string) {
 }
 const spacing = face('sound-mark-spacing.ttf');
 const joining = face('sound-mark-joining.ttf');
+const circle = face('sound-mark-circle.ttf');
 
 /** Glyph ids and advances of `text` at 24 pt, in points. */
 function shape(font: typeof spacing, text: string, before = '', after = '') {
@@ -65,6 +67,7 @@ const HIRAGANA_A = 2;
 const KA = 3;
 const GA = 4;
 const VOICED = 8;
+const DOTTED_CIRCLE = 12;
 
 function measurer(font: typeof spacing) {
   return createShapedMeasurer({
@@ -150,5 +153,51 @@ describe('a face that classes the sound mark as a mark joins it with its base', 
     });
     expect(texts(result)).toEqual([A + 'が', 'あいう']);
     expect(result.lines[0]!.spans.every((span) => span.glyphOffsetPt === undefined)).toBe(true);
+  });
+});
+
+describe('a face that draws a lone mark on a dotted circle still joins it with its base', () => {
+  test('only a lone mark gets the circle', () => {
+    expect(shape(circle, 'か\u3099')).toEqual([{ id: GA, advance: 24 }]);
+    expect(shape(circle, '\u3099', 'か')).toEqual([
+      { id: DOTTED_CIRCLE, advance: 12 },
+      { id: VOICED, advance: 0 },
+    ]);
+  });
+
+  test('a base and its mark in one run stay one cell on the full line', () => {
+    const result = loadFixture({
+      text: A + 'か\u3099あいう',
+      available: 456,
+      measurer: measurer(circle),
+    });
+    expect(texts(result)).toEqual([A + 'か\u3099', 'あいう']);
+    expect(result.lines[0]!.spans.map((span) => span.text)).not.toContain('\u3099');
+  });
+});
+
+describe('a click never lands between a base and its spaced mark', () => {
+  test('a click on either cell of the cluster goes to the nearer cluster edge', () => {
+    const m = measurer(spacing);
+    const result = loadFixture({ text: 'あか\u3099あ', available: 456, measurer: m });
+    const line = result.lines[0]!;
+    const page = result.layout.pages[0]!;
+    const fragment = page.fragments.find((entry) => entry.kind === 'paragraph')!;
+    const origin = fragment.box.x + line.box.x;
+    const offsetAt = (x: number) =>
+      hitTestPage(
+        result.layout,
+        0,
+        { x: origin + x, y: fragment.box.y + line.box.y + 8 },
+        {
+          measurer: m,
+        }
+      )?.position.offset;
+    // Cells: あ 0-24, か 24-48, the mark 48-72, あ 72-96. Offset 2 lies inside the cluster.
+    expect(offsetAt(40)).toBe(1);
+    expect(offsetAt(44)).toBe(1);
+    expect(offsetAt(52)).toBe(3);
+    expect(offsetAt(70)).toBe(3);
+    for (let x = 0; x < 96; x += 2) expect(offsetAt(x)).not.toBe(2);
   });
 });
