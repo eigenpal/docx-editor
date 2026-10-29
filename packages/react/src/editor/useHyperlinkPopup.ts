@@ -104,6 +104,13 @@ export function isFieldLink(link: SurfaceHyperlink): boolean {
   return link.paragraphId === '';
 }
 
+/**
+ * The longest target the per-update check reads. `selectedText` builds the whole selected
+ * string, so a select-all panel in a long document would pay for it on every remote keystroke.
+ * Longer targets are checked once, at Apply.
+ */
+const TARGET_CHECK_LIMIT = 4096;
+
 const CLOSED: HyperlinkPopupState = Object.freeze({
   mode: 'closed' as const,
   link: null,
@@ -226,11 +233,16 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
   // or rewrote them, or an undo took them out. The selection maps through those edits, so it
   // no longer holds the same text, and Apply would insert the draft as a NEW link at the
   // collapsed caret instead of linking what the user selected.
-  const targetGone = useCallback(() => {
-    const target = targetTextRef.current;
-    if (target === '' || !editor) return false;
-    return editor.query({ type: 'selectedText' }) !== target;
-  }, [editor]);
+  // `everyUpdate` bounds the cost on the per-update path; see `TARGET_CHECK_LIMIT`.
+  const targetGone = useCallback(
+    (everyUpdate = false) => {
+      const target = targetTextRef.current;
+      if (target === '' || !editor) return false;
+      if (everyUpdate && target.length > TARGET_CHECK_LIMIT) return false;
+      return editor.query({ type: 'selectedText' }) !== target;
+    },
+    [editor]
+  );
 
   const open = useCallback(
     (link?: SurfaceHyperlink | null, anchor?: HyperlinkPopupAnchor | null) => {
@@ -371,7 +383,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     if (current.mode !== 'editing' || current.link) return;
     const surface = editor?.surface;
     if (!surface) return;
-    if (surface.retainedSelection() && !targetGone()) return;
+    if (surface.retainedSelection() && !targetGone(true)) return;
     close();
   }, [snapshot, editor, targetGone, close]);
 

@@ -59,8 +59,8 @@ function mountBob(peer: Peer): DocxEditorInstance {
   return editor;
 }
 
-async function open() {
-  const pair = await harness.pair(SOURCE);
+async function open(source: Uint8Array = SOURCE) {
+  const pair = await harness.pair(source);
   pair.alice.detach();
   pair.bob.detach();
   let alice: DocxEditorInstance | undefined;
@@ -193,5 +193,74 @@ test('a peer editing elsewhere leaves the panel open, and Apply links the select
   alice().exec({ type: 'redo' });
   sync();
   expect(linksIn(bob, 0)).toEqual(['example|https://example.com/b']);
+  converged(alice(), bob);
+});
+
+// Longer than the per-update check reads, so only Apply compares the selected text.
+const LONG = 'a'.repeat(5000);
+const LONG_SOURCE = zipDocument(
+  `<w:p><w:r><w:t>${LONG}</w:t></w:r></w:p>` +
+    '<w:p><w:r><w:t>Second line</w:t></w:r></w:p><w:sectPr/>'
+);
+
+test('a long target is not reread on every update, and Apply still refuses a deleted one', async () => {
+  const { view, alice, bob, sync } = await open(LONG_SOURCE);
+  const pid = alice().surface!.session.paragraphIds()[0]!;
+  act(() => {
+    alice().surface!.setSelection({
+      anchor: { paragraphId: pid, offset: 0 },
+      head: { paragraphId: pid, offset: LONG.length },
+    });
+  });
+  act(() => {
+    const surface = view.container.querySelector('.docx-paginated-surface')!;
+    fireEvent.contextMenu(surface, { clientX: 120, clientY: 140, button: 2 });
+  });
+  act(() => {
+    fireEvent.click(view.container.querySelector('[role="menu"] [data-slot="text.link"]')!);
+  });
+  const input = view.getByTestId('hyperlink-popup-url-input') as HTMLInputElement;
+  act(() => {
+    fireEvent.change(input, { target: { value: 'https://example.com/long' } });
+  });
+
+  // Count the selected-text reads a remote update triggers.
+  const editor = alice();
+  const query = editor.query.bind(editor);
+  let reads = 0;
+  editor.query = ((request: { type: string }) => {
+    if (request.type === 'selectedText') reads += 1;
+    return query(request as never);
+  }) as typeof editor.query;
+
+  const second = bob.surface!.session.paragraphIds()[1]!;
+  bob.surface!.setSelection({
+    anchor: { paragraphId: second, offset: 0 },
+    head: { paragraphId: second, offset: 0 },
+  });
+  bob.surface!.type('New ');
+  sync();
+  await settle();
+  expect(reads).toBe(0);
+  expect(view.getByTestId('hyperlink-popup').dataset.mode).toBe('editing');
+
+  // The peer deletes the long words. The panel is still open, and Apply refuses.
+  const bobPid = bob.surface!.session.paragraphIds()[0]!;
+  bob.surface!.setSelection({
+    anchor: { paragraphId: bobPid, offset: 0 },
+    head: { paragraphId: bobPid, offset: LONG.length },
+  });
+  bob.surface!.deleteBackward();
+  sync();
+  await settle();
+  act(() => {
+    fireEvent.keyDown(input, { key: 'Enter' });
+  });
+  await settle();
+  sync();
+  expect(reads).toBeGreaterThan(0);
+  expect(view.queryByTestId('hyperlink-popup')).toBeNull();
+  expect(linksIn(alice(), 0)).toEqual([]);
+  expect(linksIn(bob, 0)).toEqual([]);
   converged(alice(), bob);
 });

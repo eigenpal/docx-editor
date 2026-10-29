@@ -47,6 +47,13 @@ export function isFieldLink(link: SurfaceHyperlink): boolean {
   return link.paragraphId === '';
 }
 
+/**
+ * The longest target the per-update check reads. `selectedText` builds the whole selected
+ * string, so a select-all panel in a long document would pay for it on every remote keystroke.
+ * Longer targets are checked once, at Apply. The React twin uses the same limit.
+ */
+const TARGET_CHECK_LIMIT = 4096;
+
 const CLOSED: HyperlinkPopupState = Object.freeze({
   mode: 'closed' as const,
   link: null,
@@ -117,9 +124,10 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
   // Whether the words a create panel is about to link are gone (a peer deleted or rewrote
   // them, or an undo took them out). Apply would otherwise insert the draft as a new link at
   // the collapsed caret. The React twin states the full reason.
-  const targetGone = (): boolean => {
+  const targetGone = (everyUpdate = false): boolean => {
     const editor = editorRef.value;
     if (targetText === '' || !editor) return false;
+    if (everyUpdate && targetText.length > TARGET_CHECK_LIMIT) return false;
     return editor.query({ type: 'selectedText' }) !== targetText;
   };
 
@@ -214,7 +222,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     if (current.mode === 'editing' && !current.link) {
       const surface = editor?.surface;
       if (!surface) return;
-      if (surface.retainedSelection() && !targetGone()) return;
+      if (surface.retainedSelection() && !targetGone(true)) return;
       close();
     }
   });
