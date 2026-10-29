@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Only a CJK face with a one-em box takes a line of 1.3 times its box.",
+  "after": "A taller CJK face that draws as the family the run names also takes 1.3 times its own box; stand-ins and glyph fallbacks keep their own box. A hinted character the East Asian face has no glyph for takes the Latin slot in layout.",
+  "reason": "Only line measurement changes. Shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/cjk-line-metrics.test.ts",
+    "packages/core/src/layout/__tests__/east-asia-hint-coverage.test.ts",
+    "packages/core/src/layout/__tests__/sfnt-cmap-coverage.test.ts"
+  ],
+  "changeset": "cjk-face-line-height",
+  "migration": null
+}

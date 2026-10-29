@@ -115,7 +115,9 @@ test('list restart preserves foreign override metadata and leaf attributes', asy
       const xml = strFromU8(unzipSync(await reopened.save())['word/numbering.xml']!);
       expect(xml).toContain('x:keep="yes"');
       expect(xml).toContain('x:keep="leaf"');
-      expect(xml).not.toContain('w:startOverride');
+      // The new start is written as the override and as the level start.
+      expect(xml).toContain('w:startOverride w:val="4"');
+      expect(xml).not.toContain('w:startOverride w:val="7"');
       expect(xml).toContain('w:start w:val="4"');
     } finally {
       reopened.dispose();

@@ -240,14 +240,15 @@ export function holdsOnlyPageBreak(line: PendingLine): boolean {
 }
 
 /**
- * Spaces (U+0020) and tabs take no line height, whatever their size, underline or tab leader.
- * A line that holds only them measures as an empty line: the paragraph mark sets its height.
- * A no-break space still counts, and so does a line break.
+ * Spaces (U+0020), ideographic spaces (U+3000) and tabs take no line height, whatever their
+ * face, size, underline or tab leader. A line that holds only them measures as an empty line:
+ * the paragraph mark sets its height. A no-break space still counts, and so does a line break.
  */
 export function isHeightlessWhitespace(text: string): boolean {
   // Spaces, tabs, soft hyphens and zero-width characters draw no ink: a line of only these
-  // takes the paragraph mark's height.
-  return text.length > 0 && /^[ \t\u00AD\u200B\u200C\u200D\u2060\uFEFF]+$/.test(text);
+  // takes the paragraph mark's height. An ideographic space draws in the East Asian face, so
+  // counting it would give a Latin line the taller line of that face.
+  return text.length > 0 && /^[ \t\u00AD\u200B\u200C\u200D\u2060\uFEFF\u3000]+$/.test(text);
 }
 
 /** Face extents translated by an authored baseline position, without rescaling glyphs. */

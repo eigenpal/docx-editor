@@ -1,4 +1,4 @@
-import { legacyCjkLineMetrics } from './legacy-cjk-line-metrics.ts';
+import { cjkLineMetrics } from './cjk-line-metrics.ts';
 import type { ResolvedFont } from './font-resource.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { glyphSizeFactorOf, type ResolvedRunStyle } from './run-style.ts';
@@ -9,6 +9,29 @@ import {
 } from './layout-run-shape.ts';
 import type { TextShaper } from './shaped-run.ts';
 import { faceLineGapPt, takesLegacyLineGap } from './times-new-roman-leading.ts';
+
+/** Half-point keys are integers, so a half step marks the named-face entry of a size. */
+const NAMED_FACE_KEY = 0.5;
+
+/** True when `font` is the family that `style` names, not a substitute or a glyph fallback. */
+function drawsAsNamedFace(font: ResolvedFont, style: ResolvedRunStyle): boolean {
+  if (style.fontFamily === null) return false;
+  // A bold or italic request answered by the same family's regular face (a synthesized
+  // style) still draws as the named family. A stand-in from another family does not.
+  const substitution = font.substitution;
+  if (
+    substitution !== null &&
+    (substitution.lineMetrics !== undefined ||
+      substitution.requested.family.trim().toLowerCase() !==
+        substitution.resolved.family.trim().toLowerCase())
+  )
+    return false;
+  // The exact comparison answers almost every call on this per-span path without allocating.
+  return (
+    font.family === style.fontFamily ||
+    font.family.trim().toLowerCase() === style.fontFamily.trim().toLowerCase()
+  );
+}
 
 /** Cached face metrics, independent of the glyph fallback selected by a run. */
 export function createShapedLineMetrics(
@@ -32,7 +55,10 @@ export function createShapedLineMetrics(
     const halfPoints = layoutRunHalfPointsOf(style);
     // The legacy gap depends on the run, not only the face, so it keys the cache too.
     const legacyGap = takesLegacyLineGap(style);
-    const key = legacyGap ? halfPoints : -halfPoints;
+    // So does the CJK line rule for a taller face: it applies to the family the run names,
+    // not to a substitute for it or to a glyph fallback that the same font object serves.
+    const namedFace = drawsAsNamedFace(font, style);
+    const key = (legacyGap ? halfPoints : -halfPoints) + (namedFace ? NAMED_FACE_KEY : 0);
     const cached = bySize.get(key);
     if (cached) {
       return factor === 1
@@ -95,12 +121,13 @@ export function createShapedLineMetrics(
         );
         const height = faceBox + lineGap;
         if (height > 0) {
-          metrics = legacyCjkLineMetrics(
+          metrics = cjkLineMetrics(
             font,
             baseSizePt,
             { height, baseline: ascent * squeeze + lineGap },
             lineGap,
-            2 / baseEnvironment.fixedPointScale
+            2 / baseEnvironment.fixedPointScale,
+            namedFace
           );
         } else {
           metrics = fallback.lineMetrics(style);
