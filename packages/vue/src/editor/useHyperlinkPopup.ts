@@ -111,9 +111,12 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
 
   // The words a create panel opened over; empty for a panel opened at a bare caret.
   let targetText = '';
+  // Whether those words were already a pending deletion when the panel opened.
+  let struckAtOpen = false;
 
   const releaseSelectionPin = () => {
     targetText = '';
+    struckAtOpen = false;
     const retained = selectionRetainer.value;
     if (!retained) return;
     retained.editor.releaseSelection(retained.pin);
@@ -122,11 +125,13 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
   scopeDispose(releaseSelectionPin);
 
   // Whether the words a create panel is about to link are gone (a peer deleted or rewrote
-  // them, or an undo took them out). Apply would otherwise insert the draft as a new link at
-  // the collapsed caret. The React twin states the full reason.
+  // them, struck them in suggesting mode, or an undo took them out). Apply would otherwise
+  // insert the draft as a new link at the collapsed caret. The React twin states the full reason.
   const targetGone = (everyUpdate = false): boolean => {
     const editor = editorRef.value;
     if (targetText === '' || !editor) return false;
+    if (!struckAtOpen && editor.surface?.hyperlinks.selectionIsPendingDeletion() === true)
+      return true;
     if (everyUpdate && targetText.length > TARGET_CHECK_LIMIT) return false;
     return editor.query({ type: 'selectedText' }) !== targetText;
   };
@@ -180,6 +185,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     const pin = editor?.retainSelection() ?? null;
     if (editor && pin) selectionRetainer.value = { editor, pin };
     targetText = selected;
+    struckAtOpen = editor?.surface?.hyperlinks.selectionIsPendingDeletion() === true;
     state.value = {
       mode: 'editing',
       link: null,

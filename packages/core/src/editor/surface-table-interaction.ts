@@ -743,7 +743,7 @@ export function createSurfaceTableInteraction(
     if (!hoverHit || drag || input.editingMode === 'view') return;
     clearTimers();
     const hit = hitAtLastPointer(input);
-    const offered = offeredHit(hit, input.selection.head.paragraphId);
+    const offered = offeredHit(host.session(), hit, input.selection.head.paragraphId);
     if (!offered) {
       hoverHit = null;
       clearFurniture();
@@ -834,7 +834,7 @@ export function createSurfaceTableInteraction(
           pageIndex >= 0 ? pageIndex : undefined
         )
       : null;
-    const offered = offeredHit(hit, input.selection.head.paragraphId);
+    const offered = offeredHit(host.session(), hit, input.selection.head.paragraphId);
     if (!offered) {
       if (overInsertControl) return;
       timers.migrate();

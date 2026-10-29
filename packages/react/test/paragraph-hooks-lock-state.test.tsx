@@ -47,7 +47,7 @@ function Probe() {
   return null;
 }
 
-for (const [name, first, formatInFirst] of [
+for (const [name, first, enabledInFirst] of [
   ['a content lock', LOCKED, true],
   ['a data binding', BOUND, false],
 ] as const) {
@@ -78,9 +78,9 @@ for (const [name, first, formatInFirst] of [
       });
       return seen.at(-1)!;
     };
-    // Alignment passes a content lock, so the dialog stays available there.
-    expect(await put(0)).toEqual({ indent: false, format: formatInFirst });
+    // Indents and alignment pass a content lock, so the ruler and the dialog stay available there.
+    expect(await put(0)).toEqual({ indent: enabledInFirst, format: enabledInFirst });
     expect(await put(1)).toEqual({ indent: true, format: true });
-    expect(await put(0)).toEqual({ indent: false, format: formatInFirst });
+    expect(await put(0)).toEqual({ indent: enabledInFirst, format: enabledInFirst });
   });
 }

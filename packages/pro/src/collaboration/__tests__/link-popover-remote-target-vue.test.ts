@@ -20,6 +20,7 @@ import {
   DocxEditorViewport,
 } from '@docx-editor.dev/vue';
 import { collaborationModule } from '../../index.ts';
+import { reviewModule } from '../../review/review-module.ts';
 import { createPeerHarness, zipDocument, type Peer } from './document-peer-support';
 import { packageFingerprint, saveReopenDigest } from './document-support';
 
@@ -50,7 +51,8 @@ function mountBob(peer: Peer): DocxEditorInstance {
   const editor = createDocxEditor({
     container,
     document: peer.room.document,
-    modules: [collaborationModule({ session: peer.room.session })],
+    author: 'Bob',
+    modules: [reviewModule(), collaborationModule({ session: peer.room.session })],
   });
   editors.push(editor);
   return editor;
@@ -69,7 +71,7 @@ async function open() {
         DocxEditorRoot,
         {
           document: pair.alice.room.document,
-          modules: [collaborationModule({ session: pair.alice.room.session })],
+          modules: [reviewModule(), collaborationModule({ session: pair.alice.room.session })],
           onReady: (editor: unknown) => {
             alice = editor as DocxEditorInstance;
           },
@@ -114,10 +116,10 @@ function linksIn(editor: DocxEditorInstance, index: number): string[] {
   return out;
 }
 
-test('a peer deleting the selected words closes the create panel and links nothing', async () => {
-  const { container, alice, bob, sync } = await open();
-  const pid = alice().surface!.session.paragraphIds()[0]!;
-  alice().surface!.setSelection({
+/** Select "example" on Alice and open the create panel from the context menu row. */
+async function openPanelOnWord(container: HTMLElement, alice: DocxEditorInstance) {
+  const pid = alice.surface!.session.paragraphIds()[0]!;
+  alice.surface!.setSelection({
     anchor: { paragraphId: pid, offset: 6 },
     head: { paragraphId: pid, offset: 13 },
   });
@@ -132,6 +134,36 @@ test('a peer deleting the selected words closes the create panel and links nothi
   await settle();
   const popup = () => container.querySelector<HTMLElement>('[data-testid="hyperlink-popup"]');
   expect(popup()?.dataset.mode).toBe('editing');
+  return popup;
+}
+
+test('a peer striking the selected words in suggesting mode closes the panel', async () => {
+  const { container, alice, bob, sync } = await open();
+  const popup = await openPanelOnWord(container, alice());
+
+  expect(bob.exec({ type: 'setEditingMode', mode: 'suggesting' }).ok).toBe(true);
+  const bobPid = bob.surface!.session.paragraphIds()[0]!;
+  bob.surface!.setSelection({
+    anchor: { paragraphId: bobPid, offset: 6 },
+    head: { paragraphId: bobPid, offset: 13 },
+  });
+  bob.surface!.deleteBackward();
+  sync();
+  await settle();
+
+  expect(alice().query({ type: 'selectedText' })).toBe('example');
+  expect(popup()).toBeNull();
+  sync();
+  expect(linksIn(alice(), 0)).toEqual([]);
+  expect(linksIn(bob, 0)).toEqual([]);
+  const left = alice().surface!.session.currentPackage();
+  const right = bob.surface!.session.currentPackage();
+  expect(packageFingerprint(right)).toBe(packageFingerprint(left));
+});
+
+test('a peer deleting the selected words closes the create panel and links nothing', async () => {
+  const { container, alice, bob, sync } = await open();
+  const popup = await openPanelOnWord(container, alice());
 
   const bobPid = bob.surface!.session.paragraphIds()[0]!;
   bob.surface!.setSelection({

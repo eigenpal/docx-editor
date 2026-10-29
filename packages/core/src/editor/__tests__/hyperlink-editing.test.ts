@@ -740,3 +740,28 @@ describe('a field link at the caret', () => {
     expect(mounted.editor.surface!.hyperlinks.fieldLinkAtCaret()).toBeNull();
   });
 });
+
+describe('whether a link target is a pending deletion', () => {
+  const DEL = 'w:author="Ada" w:date="2026-01-01T00:00:00Z"';
+  // "keep " + struck "GONE" by one author + struck "BYE" by another + " tail".
+  const STRUCK =
+    '<w:p><w:r><w:t xml:space="preserve">keep </w:t></w:r>' +
+    `<w:del w:id="1" ${DEL}><w:r><w:delText>GONE</w:delText></w:r></w:del>` +
+    `<w:del w:id="2" ${DEL.replace('Ada', 'Bea')}><w:r><w:delText>BYE</w:delText></w:r></w:del>` +
+    '<w:r><w:t xml:space="preserve"> tail</w:t></w:r></w:p>';
+
+  test('struck words, across adjacent deletions, are deleted; live or partial words are not', () => {
+    const mounted = mount(STRUCK);
+    const deleted = () => mounted.editor.surface!.hyperlinks.selectionIsPendingDeletion();
+    select(mounted, 0, 5, 9);
+    expect(deleted()).toBe(true);
+    select(mounted, 0, 12, 5);
+    expect(deleted()).toBe(true);
+    select(mounted, 0, 3, 9);
+    expect(deleted()).toBe(false);
+    select(mounted, 0, 10, 14);
+    expect(deleted()).toBe(false);
+    caret(mounted, 0, 6);
+    expect(deleted()).toBe(false);
+  });
+});
