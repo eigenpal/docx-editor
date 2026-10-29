@@ -327,8 +327,8 @@ export interface DocxEditorToolbarProps {
    */
   preset?: boolean;
   /**
-   * `false` lets the bar WRAP to more rows instead of collapsing groups into the "⋯"
-   * menu when it runs out of width. Default `true`.
+   * `false` lets the bar WRAP to more rows instead of moving controls into the "⋯" menu,
+   * one at a time, when it runs out of width. Default `true`.
    */
   overflow?: boolean;
   children?: DocxEditorChildren;

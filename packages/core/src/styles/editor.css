@@ -3840,9 +3840,10 @@ a.docx-hyperlink:focus-visible {
  * that draws several elements lays out as it did without the wrapper. */
 .docx-toolbar__item {
   display: inline-flex;
-  align-items: center;
+  /* The group's own layout, so a host's gap or alignment on a group still applies. */
+  align-items: inherit;
   flex: none;
-  gap: 2px;
+  gap: inherit;
 }
 
 .docx-toolbar__item:empty {

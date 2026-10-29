@@ -26,7 +26,7 @@ export const TOOLBAR_ITEM_ATTRIBUTE = 'data-toolbar-item';
 /**
  * The control id of a group's host content (`Toolbar.Group` children), which collapses as one
  * control after the group's own slots. Printable, so it survives server rendering in a DOM
- * attribute, and never a slot id, which always has a dot.
+ * attribute, and never a slot or arrangement id.
  *
  * @internal
  */

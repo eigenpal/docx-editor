@@ -51,9 +51,12 @@ function useOverlayScope(): {
 } {
   const dark = useChromeDark();
   const [own, setOwn] = useState(false);
-  const ref = useCallback((node: HTMLDivElement | null) => {
-    if (node) setOwn(!node.parentElement?.closest('.docx-editor'));
-  }, []);
+  const ref = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node) setOwn(!node.parentElement?.closest(dark ? '.docx-editor.dark' : '.docx-editor'));
+    },
+    [dark]
+  );
   return { ref, className: own ? `docx-editor ${dark ? 'dark ' : ''}` : '' };
 }
 

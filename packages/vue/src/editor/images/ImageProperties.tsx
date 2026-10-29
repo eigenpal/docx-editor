@@ -55,7 +55,8 @@ function useOverlayScope(): {
   const own = ref(false);
   return {
     ref: (node: unknown) => {
-      if (isHTMLElementNode(node)) own.value = !node.parentElement?.closest('.docx-editor');
+      if (isHTMLElementNode(node))
+        own.value = !node.parentElement?.closest(dark.value ? '.docx-editor.dark' : '.docx-editor');
     },
     className: () => (own.value ? `docx-editor ${dark.value ? 'dark ' : ''}` : ''),
   };
