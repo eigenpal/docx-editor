@@ -227,12 +227,74 @@ describe('Document.getStyles', () => {
     }
   });
 
-  test('a listed item loads its properties in a later sync', async () => {
+  test('a bare load, or load("items"), reads every property of each style', async () => {
+    const runtime = await createServer(STYLED);
+    try {
+      const read = await runtime.run(async (context) => {
+        const bare = context.document.getStyles();
+        bare.load();
+        const items = context.document.getStyles();
+        items.load('items');
+        await context.sync();
+        const third = bare.items[2]!;
+        return {
+          bare: bare.items.map((style) => style.nameLocal),
+          items: items.items.map((style) => style.type),
+          third: [
+            third.nameLocal,
+            third.type,
+            third.builtIn,
+            third.baseStyle,
+            third.nextParagraphStyle,
+            third.linked,
+            third.visibility,
+            third.priority,
+            third.quickStyle,
+            third.unhideWhenUsed,
+          ],
+        };
+      });
+      expect(read.bare).toEqual([
+        'Normal',
+        'heading 1',
+        'Clause Text',
+        'Heading 1 Char',
+        'Table Grid',
+        'Outline List',
+        '__proto__',
+      ]);
+      expect(read.items).toEqual([
+        'Paragraph',
+        'Paragraph',
+        'Paragraph',
+        'Character',
+        'Table',
+        'List',
+        'Paragraph',
+      ]);
+      expect(read.third).toEqual([
+        'Clause Text',
+        'Paragraph',
+        false,
+        'Normal',
+        'Clause Text',
+        false,
+        true,
+        99,
+        false,
+        false,
+      ]);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('a listed item loads its properties again in a later sync', async () => {
     const runtime = await createServer(STYLED);
     try {
       const name = await runtime.run(async (context) => {
         const styles = context.document.getStyles();
-        styles.load('items');
+        styles.load('items/type');
         await context.sync();
         const style = styles.items[2]!;
         expect(() => style.nameLocal).toThrow();
@@ -283,7 +345,7 @@ describe('Document.getStyles', () => {
     try {
       await runtime.run(async (context) => {
         const styles = context.document.getStyles();
-        for (const option of ['items/font', 'items/nameLocal/bold', 'priority']) {
+        for (const option of ['items/font', 'items/nameLocal/bold', 'inUse']) {
           let code: string | undefined;
           try {
             styles.load(option);
@@ -432,30 +494,102 @@ describe('one name, several kinds', () => {
   });
 });
 
-test('the guide example applies a listed style', async () => {
+test('the guide example offers only visible paragraph styles and applies one', async () => {
   // packages/editor-api/OFFICE_JS_GUIDE.md, "Apply a style the document defines".
   const runtime = await createServer(
     withStyles(
-      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
-        '<w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/></w:style>'
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/>' +
+        '<w:uiPriority w:val="0"/><w:qFormat/></w:style>' +
+        '<w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/>' +
+        '<w:uiPriority w:val="29"/><w:qFormat/></w:style>' +
+        '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/>' +
+        '<w:uiPriority w:val="9"/></w:style>' +
+        '<w:style w:type="paragraph" w:styleId="TOC1"><w:name w:val="toc 1"/>' +
+        '<w:uiPriority w:val="39"/><w:semiHidden/><w:unhideWhenUsed/></w:style>' +
+        '<w:style w:type="paragraph" w:styleId="Old"><w:name w:val="Old"/><w:hidden w:val="1"/></w:style>' +
+        '<w:style w:type="paragraph" w:styleId="Shown"><w:name w:val="Shown"/><w:semiHidden w:val="0"/></w:style>' +
+        '<w:style w:type="character" w:styleId="Strong"><w:name w:val="Strong"/></w:style>'
     )
   );
   try {
-    await runtime.run(async (context) => {
+    const offered = await runtime.run(async (context) => {
       const styles = context.document.getStyles();
-      styles.load('items/nameLocal,items/type');
+      styles.load('items/nameLocal,items/type,items/visibility,items/priority');
       const paragraph = context.document.body.paragraphs.getFirst();
       await context.sync();
 
+      // Offer an agent only the visible paragraph styles, in gallery order.
       const names = styles.items
-        .filter((style) => style.type === 'Paragraph')
+        .filter((style) => style.type === 'Paragraph' && style.visibility)
+        .sort((a, b) => a.priority - b.priority)
         .map((style) => style.nameLocal);
       const chosen = names.find((name) => name.toLowerCase() === 'quote');
-      if (chosen === undefined) return;
+      if (chosen === undefined) return names;
       paragraph.style = chosen;
       await context.sync();
+      return names;
     });
+    expect(offered).toEqual(['Normal', 'heading 1', 'Quote', 'Shown']);
     expect(await mainXmlOf(runtime)).toContain('<w:pStyle w:val="Quote"/>');
+
+    const flags = await runtime.run(async (context) => {
+      const styles = context.document.getStyles();
+      styles.load('items/nameLocal,items/quickStyle,items/unhideWhenUsed,items/visibility');
+      await context.sync();
+      return styles.items.map((style) => [
+        style.nameLocal,
+        style.quickStyle,
+        style.unhideWhenUsed,
+        style.visibility,
+      ]);
+    });
+    expect(flags).toEqual([
+      ['Normal', true, false, true],
+      ['Quote', true, false, true],
+      ['heading 1', false, false, true],
+      ['toc 1', false, true, false],
+      ['Old', false, false, false],
+      ['Shown', false, false, true],
+      ['Strong', false, false, true],
+    ]);
+  } finally {
+    runtime.dispose();
+  }
+});
+
+test('style references resolve only to a listed style of the allowed kind', async () => {
+  const runtime = await createServer(
+    withStyles(
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+        '<w:style w:type="character" w:styleId="Strong"><w:name w:val="Strong"/></w:style>' +
+        // w:next naming a character style, w:basedOn naming a character style.
+        '<w:style w:type="paragraph" w:styleId="Probe"><w:name w:val="Probe"/>' +
+        '<w:basedOn w:val="Strong"/><w:next w:val="Strong"/></w:style>' +
+        // A character style based on a paragraph style, and one based on a character style.
+        '<w:style w:type="character" w:styleId="Odd"><w:name w:val="Odd"/><w:basedOn w:val="Normal"/></w:style>' +
+        '<w:style w:type="character" w:styleId="Fine"><w:name w:val="Fine"/><w:basedOn w:val="Strong"/></w:style>' +
+        '<w:style w:type="paragraph" w:styleId="Next"><w:name w:val="Next"/><w:next w:val="Normal"/></w:style>'
+    )
+  );
+  try {
+    const read = await runtime.run(async (context) => {
+      const styles = context.document.getStyles();
+      styles.load('items/nameLocal,items/baseStyle,items/nextParagraphStyle');
+      await context.sync();
+      return styles.items.map((style) => [
+        style.nameLocal,
+        style.baseStyle,
+        style.nextParagraphStyle,
+      ]);
+    });
+    expect(read).toEqual([
+      ['Normal', '', 'Normal'],
+      ['Strong', '', ''],
+      ['Probe', '', ''],
+      ['Odd', '', ''],
+      ['Fine', 'Strong', ''],
+      ['Next', '', 'Normal'],
+    ]);
   } finally {
     runtime.dispose();
   }

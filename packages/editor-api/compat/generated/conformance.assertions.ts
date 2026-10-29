@@ -1420,48 +1420,88 @@ type Auth_Style_nextParagraphStyle_readonly_280 = { value: string };
 type _check_Style_nextParagraphStyle_readonly_280 = IsExact<Ref_Style_nextParagraphStyle_readonly_280, Auth_Style_nextParagraphStyle_readonly_280>;
 type _assert_Style_nextParagraphStyle_readonly_280 = Expect<_check_Style_nextParagraphStyle_readonly_280>;
 
-type Ref_Style_type_281 = () => "Character" | "List" | "Paragraph" | "Table";
-type Auth_Style_type_281 = () => "Character" | "List" | "Paragraph" | "Table";
-type _check_Style_type_281 = IsExact<Ref_Style_type_281, Auth_Style_type_281>;
-type _assert_Style_type_281 = Expect<_check_Style_type_281>;
+type Ref_Style_priority_281 = () => number;
+type Auth_Style_priority_281 = () => number;
+type _check_Style_priority_281 = IsExact<Ref_Style_priority_281, Auth_Style_priority_281>;
+type _assert_Style_priority_281 = Expect<_check_Style_priority_281>;
 
-type Ref_Style_type_readonly_282 = { readonly value: "Character" | "List" | "Paragraph" | "Table" };
-type Auth_Style_type_readonly_282 = { readonly value: "Character" | "List" | "Paragraph" | "Table" };
-type _check_Style_type_readonly_282 = IsExact<Ref_Style_type_readonly_282, Auth_Style_type_readonly_282>;
-type _assert_Style_type_readonly_282 = Expect<_check_Style_type_readonly_282>;
+type Ref_Style_priority_readonly_282 = { value: number };
+type Auth_Style_priority_readonly_282 = { value: number };
+type _check_Style_priority_readonly_282 = IsExact<Ref_Style_priority_readonly_282, Auth_Style_priority_readonly_282>;
+type _assert_Style_priority_readonly_282 = Expect<_check_Style_priority_readonly_282>;
 
-type Ref_StyleCollection_getByNameOrNullObject_283 = (name: string) => DocxEditor.Style;
-type Auth_StyleCollection_getByNameOrNullObject_283 = (name: string) => DocxEditor.Style;
-type _check_StyleCollection_getByNameOrNullObject_283 = IsExact<Ref_StyleCollection_getByNameOrNullObject_283, Auth_StyleCollection_getByNameOrNullObject_283>;
-type _assert_StyleCollection_getByNameOrNullObject_283 = Expect<_check_StyleCollection_getByNameOrNullObject_283>;
+type Ref_Style_quickStyle_283 = () => boolean;
+type Auth_Style_quickStyle_283 = () => boolean;
+type _check_Style_quickStyle_283 = IsExact<Ref_Style_quickStyle_283, Auth_Style_quickStyle_283>;
+type _assert_Style_quickStyle_283 = Expect<_check_Style_quickStyle_283>;
 
-type Ref_StyleCollection_getCount_284 = () => DocxEditor.ClientResult<number>;
-type Auth_StyleCollection_getCount_284 = () => DocxEditor.ClientResult<number>;
-type _check_StyleCollection_getCount_284 = IsExact<Ref_StyleCollection_getCount_284, Auth_StyleCollection_getCount_284>;
-type _assert_StyleCollection_getCount_284 = Expect<_check_StyleCollection_getCount_284>;
+type Ref_Style_quickStyle_readonly_284 = { value: boolean };
+type Auth_Style_quickStyle_readonly_284 = { value: boolean };
+type _check_Style_quickStyle_readonly_284 = IsExact<Ref_Style_quickStyle_readonly_284, Auth_Style_quickStyle_readonly_284>;
+type _assert_Style_quickStyle_readonly_284 = Expect<_check_Style_quickStyle_readonly_284>;
 
-type Ref_StyleCollection_items_285 = () => DocxEditor.Style[];
-type Auth_StyleCollection_items_285 = () => DocxEditor.Style[];
-type _check_StyleCollection_items_285 = IsExact<Ref_StyleCollection_items_285, Auth_StyleCollection_items_285>;
-type _assert_StyleCollection_items_285 = Expect<_check_StyleCollection_items_285>;
+type Ref_Style_type_285 = () => "Character" | "List" | "Paragraph" | "Table";
+type Auth_Style_type_285 = () => "Character" | "List" | "Paragraph" | "Table";
+type _check_Style_type_285 = IsExact<Ref_Style_type_285, Auth_Style_type_285>;
+type _assert_Style_type_285 = Expect<_check_Style_type_285>;
 
-type Ref_StyleCollection_items_readonly_286 = { readonly value: DocxEditor.Style[] };
-type Auth_StyleCollection_items_readonly_286 = { readonly value: DocxEditor.Style[] };
-type _check_StyleCollection_items_readonly_286 = IsExact<Ref_StyleCollection_items_readonly_286, Auth_StyleCollection_items_readonly_286>;
-type _assert_StyleCollection_items_readonly_286 = Expect<_check_StyleCollection_items_readonly_286>;
+type Ref_Style_type_readonly_286 = { readonly value: "Character" | "List" | "Paragraph" | "Table" };
+type Auth_Style_type_readonly_286 = { readonly value: "Character" | "List" | "Paragraph" | "Table" };
+type _check_Style_type_readonly_286 = IsExact<Ref_Style_type_readonly_286, Auth_Style_type_readonly_286>;
+type _assert_Style_type_readonly_286 = Expect<_check_Style_type_readonly_286>;
 
-type Ref_run_287 = (objects: DocxEditor.ClientObject[], batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
-type Auth_run_287 = (objects: DocxEditor.ClientObject[], batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
-type _check_run_287 = IsExact<Ref_run_287, Auth_run_287>;
-type _assert_run_287 = Expect<_check_run_287>;
+type Ref_Style_unhideWhenUsed_287 = () => boolean;
+type Auth_Style_unhideWhenUsed_287 = () => boolean;
+type _check_Style_unhideWhenUsed_287 = IsExact<Ref_Style_unhideWhenUsed_287, Auth_Style_unhideWhenUsed_287>;
+type _assert_Style_unhideWhenUsed_287 = Expect<_check_Style_unhideWhenUsed_287>;
 
-type Ref_run_288 = (object: DocxEditor.ClientObject, batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
-type Auth_run_288 = (object: DocxEditor.ClientObject, batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
-type _check_run_288 = IsExact<Ref_run_288, Auth_run_288>;
-type _assert_run_288 = Expect<_check_run_288>;
+type Ref_Style_unhideWhenUsed_readonly_288 = { value: boolean };
+type Auth_Style_unhideWhenUsed_readonly_288 = { value: boolean };
+type _check_Style_unhideWhenUsed_readonly_288 = IsExact<Ref_Style_unhideWhenUsed_readonly_288, Auth_Style_unhideWhenUsed_readonly_288>;
+type _assert_Style_unhideWhenUsed_readonly_288 = Expect<_check_Style_unhideWhenUsed_readonly_288>;
 
-type Ref_run_289 = (batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
-type Auth_run_289 = (batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
-type _check_run_289 = IsExact<Ref_run_289, Auth_run_289>;
-type _assert_run_289 = Expect<_check_run_289>;
+type Ref_Style_visibility_289 = () => boolean;
+type Auth_Style_visibility_289 = () => boolean;
+type _check_Style_visibility_289 = IsExact<Ref_Style_visibility_289, Auth_Style_visibility_289>;
+type _assert_Style_visibility_289 = Expect<_check_Style_visibility_289>;
+
+type Ref_Style_visibility_readonly_290 = { value: boolean };
+type Auth_Style_visibility_readonly_290 = { value: boolean };
+type _check_Style_visibility_readonly_290 = IsExact<Ref_Style_visibility_readonly_290, Auth_Style_visibility_readonly_290>;
+type _assert_Style_visibility_readonly_290 = Expect<_check_Style_visibility_readonly_290>;
+
+type Ref_StyleCollection_getByNameOrNullObject_291 = (name: string) => DocxEditor.Style;
+type Auth_StyleCollection_getByNameOrNullObject_291 = (name: string) => DocxEditor.Style;
+type _check_StyleCollection_getByNameOrNullObject_291 = IsExact<Ref_StyleCollection_getByNameOrNullObject_291, Auth_StyleCollection_getByNameOrNullObject_291>;
+type _assert_StyleCollection_getByNameOrNullObject_291 = Expect<_check_StyleCollection_getByNameOrNullObject_291>;
+
+type Ref_StyleCollection_getCount_292 = () => DocxEditor.ClientResult<number>;
+type Auth_StyleCollection_getCount_292 = () => DocxEditor.ClientResult<number>;
+type _check_StyleCollection_getCount_292 = IsExact<Ref_StyleCollection_getCount_292, Auth_StyleCollection_getCount_292>;
+type _assert_StyleCollection_getCount_292 = Expect<_check_StyleCollection_getCount_292>;
+
+type Ref_StyleCollection_items_293 = () => DocxEditor.Style[];
+type Auth_StyleCollection_items_293 = () => DocxEditor.Style[];
+type _check_StyleCollection_items_293 = IsExact<Ref_StyleCollection_items_293, Auth_StyleCollection_items_293>;
+type _assert_StyleCollection_items_293 = Expect<_check_StyleCollection_items_293>;
+
+type Ref_StyleCollection_items_readonly_294 = { readonly value: DocxEditor.Style[] };
+type Auth_StyleCollection_items_readonly_294 = { readonly value: DocxEditor.Style[] };
+type _check_StyleCollection_items_readonly_294 = IsExact<Ref_StyleCollection_items_readonly_294, Auth_StyleCollection_items_readonly_294>;
+type _assert_StyleCollection_items_readonly_294 = Expect<_check_StyleCollection_items_readonly_294>;
+
+type Ref_run_295 = (objects: DocxEditor.ClientObject[], batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
+type Auth_run_295 = (objects: DocxEditor.ClientObject[], batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
+type _check_run_295 = IsExact<Ref_run_295, Auth_run_295>;
+type _assert_run_295 = Expect<_check_run_295>;
+
+type Ref_run_296 = (object: DocxEditor.ClientObject, batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
+type Auth_run_296 = (object: DocxEditor.ClientObject, batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
+type _check_run_296 = IsExact<Ref_run_296, Auth_run_296>;
+type _assert_run_296 = Expect<_check_run_296>;
+
+type Ref_run_297 = (batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
+type Auth_run_297 = (batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
+type _check_run_297 = IsExact<Ref_run_297, Auth_run_297>;
+type _assert_run_297 = Expect<_check_run_297>;
 

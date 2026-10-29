@@ -2428,6 +2428,28 @@
             }
           ]
         },
+        "priority": {
+          "uid": "DocxEditor.Style#priority",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "quickStyle": {
+          "uid": "DocxEditor.Style#quickStyle",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
         "type": {
           "uid": "DocxEditor.Style#type",
           "kind": "property",
@@ -2437,6 +2459,28 @@
             {
               "params": [],
               "returns": "\"Character\" | \"List\" | \"Paragraph\" | \"Table\""
+            }
+          ]
+        },
+        "unhideWhenUsed": {
+          "uid": "DocxEditor.Style#unhideWhenUsed",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "visibility": {
+          "uid": "DocxEditor.Style#visibility",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
             }
           ]
         }

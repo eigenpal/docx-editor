@@ -1592,9 +1592,13 @@ export class Style extends ModelObject {
     get nextParagraphStyle(): string;
     // @internal
     protected onLoad(request: ResolvedLoadOptions): void;
+    get priority(): number;
     // @internal
-    static promised(context: RequestContext, label: string, name: unknown): Style;
+    static promised(context: RequestContext, label: string): Style;
+    get quickStyle(): boolean;
     get type(): StyleType | 'Character' | 'List' | 'Paragraph' | 'Table';
+    get unhideWhenUsed(): boolean;
+    get visibility(): boolean;
 }
 
 // @public

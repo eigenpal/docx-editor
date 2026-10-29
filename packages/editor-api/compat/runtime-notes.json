@@ -829,7 +829,7 @@
   },
   "Word.StyleCollection#items": {
     "status": "partial",
-    "notes": "Requires load. items/<property> paths load nameLocal, type, builtIn, baseStyle, nextParagraphStyle, and linked on each item in the same sync. top and skip window the listing. Navigation and deeper item paths refuse with InvalidArgument."
+    "notes": "Requires load. load() and load('items') read every published property of each style in the same sync. items/<property> paths read fewer. top and skip window the listing. Navigation and deeper item paths refuse with InvalidArgument."
   },
   "Word.StyleCollection#getByNameOrNullObject": {
     "status": "partial",
@@ -857,10 +857,26 @@
   },
   "Word.Style#baseStyle": {
     "status": "partial",
-    "notes": "Read-only. The name of the w:basedOn style, or an empty string when the style states none or names a style that is not listed. The property has no setter."
+    "notes": "Read-only. The name of the w:basedOn style when it is a listed style of the same type, and an empty string otherwise. The property has no setter."
   },
   "Word.Style#nextParagraphStyle": {
     "status": "partial",
-    "notes": "Read-only. The name of the w:next style. A paragraph style that states no w:next names itself. Other kinds, and a w:next that names a style the listing leaves out, read an empty string. The property has no setter."
+    "notes": "Read-only. The name of the w:next style when it is a listed paragraph style. A paragraph style that states no w:next names itself. Other types, and a w:next that names anything but a listed paragraph style, read an empty string. The property has no setter."
+  },
+  "Word.Style#visibility": {
+    "status": "partial",
+    "notes": "Read-only. True unless the style states w:semiHidden or w:hidden as on. The property has no setter."
+  },
+  "Word.Style#priority": {
+    "status": "partial",
+    "notes": "Read-only. The w:uiPriority value, or 99 when the style states no valid value. The property has no setter."
+  },
+  "Word.Style#quickStyle": {
+    "status": "partial",
+    "notes": "Read-only. The w:qFormat flag; false when the style does not state it. The property has no setter."
+  },
+  "Word.Style#unhideWhenUsed": {
+    "status": "partial",
+    "notes": "Read-only. The w:unhideWhenUsed flag; false when the style does not state it. The property has no setter."
   }
 }

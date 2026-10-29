@@ -561,12 +561,14 @@ A style setter refuses a name that the document does not define. List the define
 ```ts
 await runtime.run(async (context) => {
   const styles = context.document.getStyles();
-  styles.load('items/nameLocal,items/type');
+  styles.load('items/nameLocal,items/type,items/visibility,items/priority');
   const paragraph = context.document.body.paragraphs.getFirst();
   await context.sync();
 
+  // Offer an agent only the visible paragraph styles, in gallery order.
   const names = styles.items
-    .filter((style) => style.type === 'Paragraph')
+    .filter((style) => style.type === 'Paragraph' && style.visibility)
+    .sort((a, b) => a.priority - b.priority)
     .map((style) => style.nameLocal);
   const chosen = names.find((name) => name.toLowerCase() === 'quote');
   if (chosen === undefined) return;
@@ -575,7 +577,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-The list includes character, table, and list styles too. The `style` setters accept paragraph style names only and refuse the others, so filter on `type` first. Every listed paragraph style applies through `style`. To check one name, call `styles.getByNameOrNullObject(name)` and read `isNullObject` after a sync. Style definitions are read-only.
+The list includes character, table, and list styles too. The `style` setters accept paragraph style names only and refuse the others, so filter on `type` first. Every listed paragraph style applies through `style`, including linked styles such as headings. A built-in name is accepted as listed, such as `heading 1`. `styles.load()` with no arguments reads every property of each style. To check one name, call `styles.getByNameOrNullObject(name)` and read `isNullObject` after a sync. Style definitions are read-only.
 
 ## Go to a bookmark
 

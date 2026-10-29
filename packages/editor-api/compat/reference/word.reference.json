@@ -2428,6 +2428,28 @@
             }
           ]
         },
+        "priority": {
+          "uid": "Word.Style#priority",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "quickStyle": {
+          "uid": "Word.Style#quickStyle",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
         "type": {
           "uid": "Word.Style#type",
           "kind": "property",
@@ -2437,6 +2459,28 @@
             {
               "params": [],
               "returns": "\"Character\" | \"List\" | \"Paragraph\" | \"Table\""
+            }
+          ]
+        },
+        "unhideWhenUsed": {
+          "uid": "Word.Style#unhideWhenUsed",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "visibility": {
+          "uid": "Word.Style#visibility",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
             }
           ]
         }

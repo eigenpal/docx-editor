@@ -159,8 +159,15 @@ export type AutomationOperation =
       readonly op: 'getDocumentProperty';
       readonly name: import('../store/package/document-property-writes.ts').DocumentPropertyName;
     }
-  /** The styles `styles.xml` defines, in part order, each named the way `setStyle` accepts it. */
-  | { readonly op: 'getStyles' }
+  /**
+   * The styles `styles.xml` defines, of every kind, in part order. `setStyle` accepts paragraph
+   * style names only; character, table, and numbering names are listed but refused there.
+   *
+   * With `name`, the answer holds at most the one style that name finds: names compare without
+   * case and surrounding spaces, as `setStyle` compares them, and a paragraph style wins over
+   * another kind with the same name.
+   */
+  | { readonly op: 'getStyles'; readonly name?: string }
   | {
       readonly op: 'setDocumentProperties';
       readonly values: import('../store/package/document-property-writes.ts').DocumentPropertyWrites;

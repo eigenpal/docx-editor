@@ -12,8 +12,11 @@ export async function applyListedParagraphStyle(): Promise<void> {
     const count = styles.getCount();
     await context.sync();
 
-    const paragraphStyles: string[] = styles.items
-      .filter((style) => style.type === 'Paragraph' && !style.linked)
+    // Linked paragraph styles, such as headings, are valid choices too.
+    const paragraphStyles = styles.items.filter((style) => style.type === 'Paragraph');
+    const offered: string[] = paragraphStyles
+      .filter((style) => style.visibility)
+      .sort((a, b) => a.priority - b.priority)
       .map((style) => style.nameLocal);
     const total: number = count.value;
     void total;
@@ -21,9 +24,13 @@ export async function applyListedParagraphStyle(): Promise<void> {
     const quote = styles.getByNameOrNullObject('Quote');
     await context.sync();
 
-    const custom: boolean = !quote.isNullObject && !quote.builtIn;
+    const custom: boolean = !quote.isNullObject && !quote.builtIn && quote.linked;
+    const flags: boolean[] = [quote.quickStyle, quote.unhideWhenUsed];
+    const related: string[] = [quote.baseStyle, quote.nextParagraphStyle];
     void custom;
-    const name = paragraphStyles[0];
+    void flags;
+    void related;
+    const name = offered[0];
     if (name !== undefined) context.document.paragraphs.getFirst().style = name;
     await context.sync();
   });

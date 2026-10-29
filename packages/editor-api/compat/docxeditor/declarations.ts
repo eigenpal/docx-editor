@@ -501,9 +501,13 @@ export declare namespace DocxEditor {
   // ---------------------------------------------------------------------
 
   export class Style extends ClientObject {
-    // Assignable upstream; the runtime publishes both read-only (see the divergences).
+    // Assignable upstream; the runtime publishes these read-only (see the divergences).
     baseStyle: string;
     nextParagraphStyle: string;
+    priority: number;
+    quickStyle: boolean;
+    unhideWhenUsed: boolean;
+    visibility: boolean;
     readonly builtIn: boolean;
     readonly linked: boolean;
     readonly nameLocal: string;

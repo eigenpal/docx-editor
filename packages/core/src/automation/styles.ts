@@ -18,7 +18,7 @@
 // caller's is bounded and validated as XML text here, and only ever compared against names the
 // document already declares — nothing is templated into markup and no id is derived from it.
 
-import { indexStyles, numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import { numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { isValidXmlText } from '../store/package/sinks.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
@@ -29,17 +29,10 @@ import {
   type DirectionSources,
 } from '../layout/paragraph-direction-inheritance.ts';
 import { namedChild, paragraphPropertiesNodeOf } from '../store/store/tree-op-nodes.ts';
+import { styleDefinitionsOf, styleNameKey } from './style-definitions.ts';
 
 /** Longest style name a write may carry. Word's own limit is far below this. */
 export const MAX_STYLE_NAME = 255;
-
-/**
- * The form two style names are compared in: surrounding spaces dropped, case folded. One helper so
- * the style setters, the style listing and an object model's lookup cannot drift apart.
- */
-export function foldStyleName(name: string): string {
-  return name.trim().toLowerCase();
-}
 
 /** What the document says its paragraph styles are. */
 export interface AutomationStyleIndex {
@@ -85,23 +78,14 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
       inheritsRtl,
     });
   }
-  const byId = new Map<string, string | null>();
-  const byName = new Map<string, string>();
-  let defaultId: string | null = null;
-  for (const entry of indexStyles(part).values()) {
-    if (entry.type !== 'paragraph') continue;
-    byId.set(entry.styleId, entry.name);
-    if (entry.name !== null) {
-      const folded = foldStyleName(entry.name);
-      // First definition wins, matching the store's own index: a later duplicate must not
-      // silently retarget a name.
-      if (!byName.has(folded)) byName.set(folded, entry.styleId);
-    }
-    if (entry.isDefault && defaultId === null) defaultId = entry.styleId;
-  }
+  // The same cached definitions the style listing reads, so the two agree on every name.
+  const definitions = styleDefinitionsOf(part);
+  const byId = definitions.paragraphNameById;
+  const byName = definitions.paragraphIdByName;
+  const defaultId = definitions.defaultParagraphId;
   return Object.freeze({
     nameOf: (styleId: string) => byId.get(styleId) ?? null,
-    idOf: (name: string) => byName.get(foldStyleName(name)) ?? null,
+    idOf: (name: string) => byName.get(styleNameKey(name)) ?? null,
     defaultId,
     present: true,
     inheritsRtl,

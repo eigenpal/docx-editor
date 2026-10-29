@@ -1683,7 +1683,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           !host.collaborative
         );
       case 'getStyles':
-        return planStyleListing(packageReads);
+        return planStyleListing(operation, packageReads);
       case 'getDocument':
         return query({ kind: 'handle', handle: handles.document() });
 

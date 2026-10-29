@@ -227,7 +227,18 @@
       "members": ["author", "title", "subject", "keywords", "comments", "category", "lastAuthor"]
     },
     "Style": {
-      "members": ["baseStyle", "builtIn", "linked", "nameLocal", "nextParagraphStyle", "type"]
+      "members": [
+        "baseStyle",
+        "builtIn",
+        "linked",
+        "nameLocal",
+        "nextParagraphStyle",
+        "priority",
+        "quickStyle",
+        "type",
+        "unhideWhenUsed",
+        "visibility"
+      ]
     },
     "StyleCollection": {
       "members": ["items", "getByNameOrNullObject", "getCount"]
@@ -746,15 +757,31 @@
     },
     {
       "uid": "Word.Document#getStyles / Word.StyleCollection / Word.Style",
-      "note": "Reads styles.xml in part order. The listing holds every named style of every kind: paragraph, character, table, and numbering. The Paragraph#style, Range#style, and Body#style setters accept paragraph style names only and refuse character, table, and list names, so check type before assigning a nameLocal. Every listed paragraph style applies through those setters. A paragraph style is listed only when its name resolves back to that same style; other kinds keep the first definition of a name. Styles with no w:name, an empty or invalid name, or no recognized w:type are not listed. One name can appear once per kind; each listed Style keeps the style it was listed as across later loads. nameLocal is the w:name the part declares, not a localized display name. type maps w:type numbering to List. builtIn is false only when the part marks w:customStyle. linked is true when w:link names a listed style. getByNameOrNullObject compares names without case and surrounding spaces, like the style setters. When one name belongs to several kinds it answers the paragraph style; otherwise the first match in part order. A document with no styles part lists none. items/<property> paths load item properties in the same sync. Each getStyles() call answers a new collection."
+      "note": "Reads styles.xml in part order. The listing holds every named style of every kind: paragraph, character, table, and numbering. The Paragraph#style, Range#style, and Body#style setters accept paragraph style names only and refuse character, table, and list names, so check type before assigning a nameLocal. Every listed paragraph style applies through those setters. A paragraph style is listed only when its name resolves back to that same style; other kinds keep the first definition of a name. Styles with no w:name, an empty or invalid name, or no recognized w:type are not listed. One name can appear once per kind; each listed Style keeps the style it was listed as across later loads. nameLocal is the w:name the part declares, not a localized display name. type maps w:type numbering to List. builtIn is false only when the part marks w:customStyle. linked is true when w:link names a listed style. getByNameOrNullObject compares names without case and surrounding spaces, like the style setters. When one name belongs to several kinds it answers the paragraph style; otherwise the first match in part order. A document with no styles part lists none. load() and load('items') read every published property of each style in the same sync; items/<property> paths read fewer. At most the first 4096 w:style definitions of the styles part count, the same bound layout uses. Each getStyles() call answers a new collection."
     },
     {
       "uid": "Word.Style#baseStyle",
-      "note": "Published read-only where the reference declares a setter: rebasing a style definition is a styles-part write this subset does not perform, so the object model has no setter and an assignment is a compile error rather than a silent no-op. Reads the name of the w:basedOn style, or an empty string when the style states none or names a style the listing leaves out."
+      "note": "Published read-only where the reference declares a setter: rebasing a style definition is a styles-part write this subset does not perform, so the object model has no setter and an assignment is a compile error rather than a silent no-op. Reads the name of the w:basedOn style when it is a listed style of the same type, and an empty string otherwise."
     },
     {
       "uid": "Word.Style#nextParagraphStyle",
-      "note": "Published read-only where the reference declares a setter, for the same reason as Word.Style#baseStyle. Reads the name of the w:next style. A paragraph style that states no w:next names itself. Other kinds, and a w:next that names a style the listing leaves out, read an empty string."
+      "note": "Published read-only where the reference declares a setter, for the same reason as Word.Style#baseStyle. Reads the name of the w:next style when it is a listed paragraph style. A paragraph style that states no w:next names itself. Other types, and a w:next that names anything but a listed paragraph style, read an empty string."
+    },
+    {
+      "uid": "Word.Style#visibility",
+      "note": "Published read-only where the reference declares a setter, for the same reason as Word.Style#baseStyle. True unless the style states w:semiHidden or w:hidden as on."
+    },
+    {
+      "uid": "Word.Style#priority",
+      "note": "Published read-only where the reference declares a setter, for the same reason as Word.Style#baseStyle. Reads w:uiPriority, or 99 when the style states no valid value."
+    },
+    {
+      "uid": "Word.Style#quickStyle",
+      "note": "Published read-only where the reference declares a setter, for the same reason as Word.Style#baseStyle. Reads w:qFormat; false when the style does not state it."
+    },
+    {
+      "uid": "Word.Style#unhideWhenUsed",
+      "note": "Published read-only where the reference declares a setter, for the same reason as Word.Style#baseStyle. Reads w:unhideWhenUsed; false when the style does not state it."
     }
   ],
   "$divergencesComment": "Members that ARE selected but differ from upstream in a documented source shape or observable behaviour. Kept apart from \"omissions\" on purpose: an omission is a member this subset does not publish, and one of these is a member it publishes and answers differently. The authored compatibility declarations remain the exact upstream reference shape; runtime conformance assertions explicitly account for any listed source-shape divergence."

@@ -142,19 +142,20 @@ await context.sync();
 
 ### List the defined styles
 
-To find out which styles a document defines, call `Document.getStyles()`. Load the properties you need with `items/` paths, then filter the paragraph styles:
+To find out which styles a document defines, call `Document.getStyles()`. Call `load()` with no arguments to read every property, or name the properties you need with `items/` paths. Then filter the visible paragraph styles:
 
 ```ts
 const styles = context.document.getStyles();
-styles.load('items/nameLocal,items/type');
+styles.load('items/nameLocal,items/type,items/visibility,items/priority');
 await context.sync();
 
 const names = styles.items
-  .filter((style) => style.type === 'Paragraph')
+  .filter((style) => style.type === 'Paragraph' && style.visibility)
+  .sort((a, b) => a.priority - b.priority)
   .map((style) => style.nameLocal);
 ```
 
-The list includes paragraph, character, table, and list styles. `Body.style`, `Paragraph.style`, and `Range.style` accept paragraph style names only. They refuse character, table, and list style names, so check `type` before you assign a `nameLocal`. Every listed paragraph style applies through those setters.
+The list includes paragraph, character, table, and list styles. `Body.style`, `Paragraph.style`, and `Range.style` accept paragraph style names only. They refuse character, table, and list style names, so check `type` before you assign a `nameLocal`. Every listed paragraph style applies through those setters, including linked styles such as headings. A built-in name is accepted as listed, such as `heading 1`.
 
 To check for one name, call `styles.getByNameOrNullObject(name)`, load a property, sync, and read `isNullObject`. The lookup compares names without case and surrounding spaces, the same way the style setters do. If one name belongs to styles of several kinds, the lookup returns the paragraph style. `styles.getCount()` returns the number of listed styles.
 
@@ -163,9 +164,13 @@ A `Style` exposes these read-only properties:
 - `nameLocal`: the `w:name` value that `styles.xml` declares, as written. Built-in names can read in lower case, such as `heading 1`.
 - `type`: `Paragraph`, `Character`, `Table`, or `List`. A numbering style reads as `List`.
 - `builtIn`: `false` when the style states `w:customStyle`.
-- `baseStyle`: the name of the `w:basedOn` style. It is an empty string if the style states none or names a style that is not in the list.
-- `nextParagraphStyle`: the name of the `w:next` style. A paragraph style that states no `w:next` names itself. It is an empty string for other kinds, and if `w:next` names a style that is not in the list.
+- `baseStyle`: the name of the `w:basedOn` style when it is a listed style of the same type. Otherwise it is an empty string.
+- `nextParagraphStyle`: the name of the `w:next` style when it is a listed paragraph style. A paragraph style that states no `w:next` names itself. It is an empty string for other types, and if `w:next` names anything but a listed paragraph style.
 - `linked`: `true` when `w:link` names a listed style.
+- `visibility`: `false` when the style states `w:semiHidden` or `w:hidden`. Otherwise `true`.
+- `priority`: the `w:uiPriority` value, or 99 if the style states none. Lower values come first in the gallery.
+- `quickStyle`: `true` when the style states `w:qFormat`.
+- `unhideWhenUsed`: `true` when the style states `w:unhideWhenUsed`.
 
 The list follows the order of `styles.xml`. It leaves out styles that have no `w:name`, an empty or invalid name, a later duplicate name of the same kind, or no recognized `w:type`. A document with no styles part lists no styles. Style definitions are read-only: the API does not add, delete, or change styles, and `Style` has no `font` or `paragraphFormat`.
 

@@ -8,16 +8,15 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // A STYLE IS NOT AN OBJECT THE HOST NAMES. The host answers one listing of `styles.xml`, as plain
 // data, and every object here reads its values from such a listing. A style is found again by its
 // style id, never by its name alone: one name can belong to a character style and a paragraph style
-// at once, and a name lookup would hand back whichever came first.
+// at once. A lookup by name is the host's: it compares names the way the style setters do.
 //
 // NOT EVERY LISTED NAME IS A PARAGRAPH STYLE. The listing holds every kind. The paragraph and range
 // `style` setters accept paragraph style names only, and refuse character, table, and list names.
 //
 // READS ONLY. Writing a style definition (its font, its paragraph format, deleting it, adding one)
-// is not something this API does, so those members are not published at all. `baseStyle` and
-// `nextParagraphStyle` are readable and have no setter.
+// is not something this API does, so those members are not published at all. The properties the
+// reference declares assignable are readable here and have no setter.
 
-import { foldStyleName } from '@docx-editor.dev/core/automation';
 import {
   ObjectPath,
   clientResult,
@@ -44,6 +43,7 @@ export enum StyleType {
   table = 'Table',
 }
 
+/** Every published scalar property: what a bare `load()` reads. */
 const PROPERTIES = [
   'nameLocal',
   'type',
@@ -51,8 +51,15 @@ const PROPERTIES = [
   'baseStyle',
   'nextParagraphStyle',
   'linked',
+  'visibility',
+  'priority',
+  'quickStyle',
+  'unhideWhenUsed',
 ] as const;
 type StyleProperty = (typeof PROPERTIES)[number];
+
+/** The priority a style that states no `w:uiPriority` sorts with. */
+const DEFAULT_PRIORITY = 99;
 
 const TYPES: Readonly<Record<AutomationStyleRead['type'], StyleType>> = Object.freeze({
   paragraph: StyleType.paragraph,
@@ -61,21 +68,10 @@ const TYPES: Readonly<Record<AutomationStyleRead['type'], StyleType>> = Object.f
   numbering: StyleType.list,
 });
 
-/**
- * The style a name lookup answers. Names compare the way the style setters compare them. Where one
- * name belongs to several kinds, the paragraph style wins, because that is the style the setters
- * apply; otherwise the first match in part order.
- */
-function styleNamed(
-  styles: readonly AutomationStyleRead[],
-  name: string
-): AutomationStyleRead | undefined {
-  const key = foldStyleName(name);
-  const matches = styles.filter((style) => foldStyleName(style.name) === key);
-  return matches.find((style) => style.type === 'paragraph') ?? matches[0];
-}
-
-function propertyOf(style: AutomationStyleRead, property: StyleProperty): string | boolean {
+function propertyOf(
+  style: AutomationStyleRead,
+  property: StyleProperty
+): string | boolean | number {
   switch (property) {
     case 'nameLocal':
       return style.name;
@@ -89,24 +85,57 @@ function propertyOf(style: AutomationStyleRead, property: StyleProperty): string
       return style.next ?? '';
     case 'linked':
       return style.linked;
+    case 'visibility':
+      return !style.hidden;
+    case 'priority':
+      return style.uiPriority ?? DEFAULT_PRIORITY;
+    case 'quickStyle':
+      return style.quickStyle;
+    case 'unhideWhenUsed':
+      return style.unhideWhenUsed;
   }
 }
 
+/** Each listing's entries by style id, built once per answered listing. */
+const entriesById = new WeakMap<readonly AutomationStyleRead[], Map<string, AutomationStyleRead>>();
+
+function entryWithId(
+  styles: readonly AutomationStyleRead[],
+  id: string
+): AutomationStyleRead | undefined {
+  let byId = entriesById.get(styles);
+  if (!byId) {
+    byId = new Map(styles.map((style) => [style.id, style]));
+    entriesById.set(styles, byId);
+  }
+  return byId.get(id);
+}
+
 /**
- * One style the document's styles part defines. Every property is read-only and needs an explicit
- * `load` before it is read.
+ * One style the document's styles part defines. Every property is read-only and needs a `load`
+ * before it is read; `load()` with no arguments reads them all.
  *
  * `nameLocal` is the name the styles part declares. Only a style whose `type` is `Paragraph` can be
  * assigned to `paragraph.style`, `range.style`, or `body.style`; those setters refuse character,
  * table, and list style names.
+ *
+ * @example Offer only the visible paragraph styles
+ * ```ts
+ * const styles = context.document.getStyles();
+ * styles.load();
+ * await context.sync();
+ *
+ * const choices = styles.items
+ *   .filter((style) => style.type === 'Paragraph' && style.visibility)
+ *   .sort((a, b) => a.priority - b.priority)
+ *   .map((style) => style.nameLocal);
+ * ```
  *
  * @public
  */
 export class Style extends ModelObject {
   /** The style id this object is found by in a later listing, once known. */
   #id: string | undefined;
-  /** The name a lookup was asked for, until its sync answers. */
-  readonly #lookup: unknown;
 
   /** @internal A member of a loaded collection. */
   static listed(
@@ -115,29 +144,24 @@ export class Style extends ModelObject {
     owner: ObjectPath,
     style: AutomationStyleRead
   ): Style {
-    const item = new Style(context, ObjectPath.derived(label, owner), undefined, false);
+    const item = new Style(context, ObjectPath.derived(label, owner), false);
     item.#id = style.id;
     return item;
   }
 
-  /** @internal A style looked up by name; a sync says whether it exists. */
-  static promised(context: RequestContext, label: string, name: unknown): Style {
-    return new Style(context, ObjectPath.pending(label), name, true);
+  /** @internal A style a lookup is still looking for; a sync says whether it exists. */
+  static promised(context: RequestContext, label: string): Style {
+    return new Style(context, ObjectPath.pending(label), true);
   }
 
-  private constructor(
-    context: RequestContext,
-    path: ObjectPath,
-    lookup: unknown,
-    nullable: boolean
-  ) {
+  private constructor(context: RequestContext, path: ObjectPath, nullable: boolean) {
     super(context, path, { nullable });
-    this.#lookup = lookup;
   }
 
   /**
    * The name the styles part declares. Assign it to `paragraph.style` only when `type` is
-   * `Paragraph`; the paragraph `style` setters refuse other kinds.
+   * `Paragraph`; the paragraph `style` setters refuse other kinds. A built-in name reads as the part
+   * writes it, such as `heading 1`, and the setters accept it that way.
    */
   get nameLocal(): string {
     return this.loadedProperty<string>('nameLocal');
@@ -157,17 +181,17 @@ export class Style extends ModelObject {
   }
 
   /**
-   * The name of the style this one is based on. An empty string when the style states none, or
-   * names a style the listing leaves out. Read-only here.
+   * The name of the style this one is based on: a listed style of the same kind. An empty string
+   * when the style states none or names any other style. Read-only here.
    */
   get baseStyle(): string {
     return this.loadedProperty<string>('baseStyle');
   }
 
   /**
-   * The name of the style for the paragraph after this one. A paragraph style that states no next
-   * style names itself. An empty string for other kinds, and where the next style it names is one
-   * the listing leaves out. Read-only here.
+   * The name of the style for the paragraph after this one: always a listed paragraph style. A
+   * paragraph style that states no next style names itself. An empty string for other kinds, and
+   * where the next style it names is not a listed paragraph style. Read-only here.
    */
   get nextParagraphStyle(): string {
     return this.loadedProperty<string>('nextParagraphStyle');
@@ -176,6 +200,34 @@ export class Style extends ModelObject {
   /** Whether the style is linked to another listed style. */
   get linked(): boolean {
     return this.loadedProperty<boolean>('linked');
+  }
+
+  /**
+   * Whether the style shows as a recommended style. False when the styles part marks it
+   * semi-hidden or hidden; true when it marks neither. Read-only here.
+   */
+  get visibility(): boolean {
+    return this.loadedProperty<boolean>('visibility');
+  }
+
+  /**
+   * The sort order of the style among recommended styles; lower comes first. 99 when the styles
+   * part states no priority. Read-only here.
+   */
+  get priority(): number {
+    return this.loadedProperty<number>('priority');
+  }
+
+  /** Whether the style is in the quick style gallery. False when not stated. Read-only here. */
+  get quickStyle(): boolean {
+    return this.loadedProperty<boolean>('quickStyle');
+  }
+
+  /**
+   * Whether a hidden style becomes visible once it is used. False when not stated. Read-only here.
+   */
+  get unhideWhenUsed(): boolean {
+    return this.loadedProperty<boolean>('unhideWhenUsed');
   }
 
   /** @internal The lookup found this style. */
@@ -203,17 +255,11 @@ export class Style extends ModelObject {
       target,
       () => ({ op: 'getStyles' }),
       (value) => {
-        const styles = hydratedStyles(value, target);
-        // The id when a listing or a lookup has named this style; the asked-for name only for a
-        // lookup whose own answer has not arrived, which the queue orders before this read.
-        const style =
-          this.#id !== undefined
-            ? styles.find((entry) => entry.id === this.#id)
-            : typeof this.#lookup === 'string'
-              ? styleNamed(styles, this.#lookup)
-              : undefined;
+        // A listed style has its id from the start; a looked-up one gets it from the lookup,
+        // which the queue answers before this read because this object's path waits on it.
+        const id = this.#id;
+        const style = id === undefined ? undefined : entryWithId(hydratedStyles(value, target), id);
         if (!style) fail({ code: 'ItemNotFound', target });
-        this.#id = style.id;
         this.hydrateProperties(style, selected);
       }
     );
@@ -230,8 +276,8 @@ export class Style extends ModelObject {
  * applies through those setters. Styles with no name, an invalid name, or an unknown kind are not
  * listed. A document with no styles part lists none.
  *
- * Load the styles and a property of each in one sync with an `items/` path, such as
- * `styles.load('items/nameLocal,items/type')`.
+ * `load()` with no arguments, or `load('items')`, reads every property of each style in the same
+ * sync. Name `items/` paths to read fewer, such as `styles.load('items/nameLocal,items/type')`.
  *
  * @public
  */
@@ -271,15 +317,15 @@ export class StyleCollection extends ModelObject {
    */
   getByNameOrNullObject(name: string): Style {
     const target = `${this.path.label}.getByNameOrNullObject`;
-    const found = Style.promised(this.context, target, name);
+    const found = Style.promised(this.context, target);
     this.read(
       target,
       () => {
         if (typeof name !== 'string') fail({ code: 'InvalidArgument', target });
-        return { op: 'getStyles' };
+        return { op: 'getStyles', name };
       },
       (value) => {
-        const style = styleNamed(hydratedStyles(value, target), name);
+        const style = hydratedStyles(value, target)[0];
         if (style) found.hydrateFound(style);
         else found.hydrateNull();
       }
@@ -295,10 +341,13 @@ export class StyleCollection extends ModelObject {
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     const label = `${this.path.label}.items`;
-    const itemSelect = collectionItemSelection(request);
-    // Refused at the `load` call, before anything is sent, like every other collection.
-    if (itemSelect.length > 0)
-      selectedProperties({ select: itemSelect, itemSelect: [] }, PROPERTIES, label);
+    const named = collectionItemSelection(request);
+    // Refused at the `load` call, before anything is sent, like every other collection. Naming no
+    // item property reads them all, as a collection load does in the reference.
+    const itemSelect =
+      named.length > 0
+        ? selectedProperties({ select: named, itemSelect: [] }, PROPERTIES, label)
+        : PROPERTIES;
     const skip = request.skip ?? 0;
     const top = request.top;
     this.read(

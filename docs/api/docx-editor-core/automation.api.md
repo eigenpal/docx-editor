@@ -456,8 +456,16 @@ export type AutomationOperation = AutomationAuthoringOperation | {
     readonly name: DocumentPropertyName;
     readonly op: 'getDocumentProperty';
 }
-/** The styles `styles.xml` defines, in part order, each named the way `setStyle` accepts it. */
+/**
+* The styles `styles.xml` defines, of every kind, in part order. `setStyle` accepts paragraph
+* style names only; character, table, and numbering names are listed but refused there.
+*
+* With `name`, the answer holds at most the one style that name finds: names compare without
+* case and surrounding spaces, as `setStyle` compares them, and a paragraph style wins over
+* another kind with the same name.
+*/
 | {
+    readonly name?: string;
     readonly op: 'getStyles';
 } | {
     readonly op: 'setDocumentProperties';
@@ -1626,11 +1634,15 @@ export type AutomationStyleKind = 'paragraph' | 'character' | 'table' | 'numberi
 export interface AutomationStyleRead {
     readonly basedOn: string | null;
     readonly builtIn: boolean;
+    readonly hidden: boolean;
     readonly id: string;
     readonly linked: boolean;
     readonly name: string;
     readonly next: string | null;
+    readonly quickStyle: boolean;
     readonly type: AutomationStyleKind;
+    readonly uiPriority: number | null;
+    readonly unhideWhenUsed: boolean;
 }
 
 // @public (undocumented)
@@ -1880,9 +1892,6 @@ export function explainDiagnostic(code: DiagnosticCode): DiagnosticExplanation;
 
 // @public
 export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation' | 'save';
-
-// @public
-export function foldStyleName(name: string): string;
 
 // @public
 export type FontDiagnosticCode = 'font.shaper-unavailable' | 'font.load-failed' | 'font.missing' | 'font.integrity-mismatch' | 'font.malformed' | 'font.size-limit' | 'font.unsupported-face';
