@@ -28,7 +28,7 @@ import {
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { FieldLinkProjector, HyperlinkProjector } from './field-pieces.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
-import type { NoteMarkContext } from './note-projection.ts';
+import { noteMarksCacheToken, type NoteMarkContext } from './note-projection.ts';
 import type { PendingLine } from './paragraph-flow.ts';
 import { paragraphBorders } from './paragraph-style.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
@@ -308,6 +308,11 @@ export function layoutNoteStory(
       (options.showFieldCodes ? '|field-codes' : '') +
       (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
       (options.revisionAuthorFilter ? `|reviewers:${options.revisionAuthorFilter.cacheKey}` : '') +
+      // The story's `w:footnoteRef` paints its derived mark, which moves when a note is cited
+      // earlier or the format changes while this paragraph stays byte-identical. Tokened on the
+      // pass's shared context, not the per-story copy above: the token is memoized per context
+      // object, and a fresh copy per note would re-serialize every mark for every note.
+      (options.noteMarks ? `|nm:${noteMarksCacheToken(options.noteMarks)}` : '') +
       `|${scopeId}`,
     nextLineId: () => `${prefix}-line-${lineCounter++}`,
     styleCascade: options.styleCascade,
