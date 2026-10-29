@@ -78,6 +78,7 @@
     "src/__tests__/use-document-collaboration-vue.test.ts",
     "src/__tests__/use-hocuspocus-collaboration-vue.test.ts",
     "src/__tests__/use-webrtc-collaboration-vue.test.ts",
-    "src/collaboration/__tests__/use-collaboration-status-vue.test.ts"
+    "src/collaboration/__tests__/use-collaboration-status-vue.test.ts",
+    "src/collaboration/__tests__/link-popover-remote-target-vue.test.ts"
   ]
 }

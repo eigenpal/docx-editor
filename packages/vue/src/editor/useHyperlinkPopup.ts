@@ -102,13 +102,26 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     editorRef.value ? editorRef.value.can({ type: 'insertText', text: '' }).ok : false
   );
 
+  // The words a create panel opened over; empty for a panel opened at a bare caret.
+  let targetText = '';
+
   const releaseSelectionPin = () => {
+    targetText = '';
     const retained = selectionRetainer.value;
     if (!retained) return;
     retained.editor.releaseSelection(retained.pin);
     selectionRetainer.value = null;
   };
   scopeDispose(releaseSelectionPin);
+
+  // Whether the words a create panel is about to link are gone (a peer deleted or rewrote
+  // them, or an undo took them out). Apply would otherwise insert the draft as a new link at
+  // the collapsed caret. The React twin states the full reason.
+  const targetGone = (): boolean => {
+    const editor = editorRef.value;
+    if (targetText === '' || !editor) return false;
+    return editor.query({ type: 'selectedText' }) !== targetText;
+  };
 
   const open = (link?: SurfaceHyperlink | null, anchor?: HyperlinkPopupAnchor | null) => {
     releaseSelectionPin();
@@ -158,6 +171,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     const selected = editor?.query({ type: 'selectedText' }) ?? '';
     const pin = editor?.retainSelection() ?? null;
     if (editor && pin) selectionRetainer.value = { editor, pin };
+    targetText = selected;
     state.value = {
       mode: 'editing',
       link: null,
@@ -199,8 +213,9 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     }
     if (current.mode === 'editing' && !current.link) {
       const surface = editor?.surface;
-      if (!surface || surface.retainedSelection()) return;
-      state.value = CLOSED;
+      if (!surface) return;
+      if (surface.retainedSelection() && !targetGone()) return;
+      close();
     }
   });
 
@@ -231,6 +246,10 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     const current = state.value;
     const hyperlinks = editor?.surface?.hyperlinks;
     if (!hyperlinks) return false;
+    if (!current.link && targetGone()) {
+      close();
+      return false;
+    }
     const url = current.url.trim();
     if (url.length === 0) {
       state.value = { ...current, error: true };
