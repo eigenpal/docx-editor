@@ -27,6 +27,7 @@ import type { FormFieldKind } from './field-form.ts';
 import type { AllowlistedPageField } from './field-instruction.ts';
 import type { PageFieldNumberFormat, PageFieldSwitches } from './field-page-switches.ts';
 import type { AutonumFieldSpec } from './field-autonum.ts';
+import type { ListNumFieldSpec } from './field-listnum.ts';
 import type { HyperlinkFieldSpec } from './field-link.ts';
 import type { PageRefFieldProjection, RefFieldSpec } from './field-ref.ts';
 import type { SymbolFieldSpec } from './field-symbol.ts';
@@ -484,6 +485,11 @@ export interface PendingFieldProjection {
    * synthesized sequential value is the only display they have; there is no cache to prefer.
    */
   autonumSpec: AutonumFieldSpec | null;
+  /**
+   * Recognized LISTNUM instruction, or absent/null when the field is none. Its number comes
+   * from the story's list walk (`RefFieldContext`), and wins over a saved result.
+   */
+  listNumSpec?: ListNumFieldSpec | null;
   /**
    * Bounded `w:ffData` render state read at `begin` (`legacyFormFieldDataOf` — state only,
    * macros never), or null when absent or malformed. {@link formField} stays presence-based:

@@ -1073,3 +1073,19 @@ Consecutive runs whose `w:fitText` carries one `w:id` SHALL form one group that 
 - **WHEN** the paragraph lays out in a column that holds the stated width
 - **THEN** the run takes exactly the stated width
 - **AND** the paragraph takes one line
+
+### Requirement: LISTNUM fields number from the list walk
+
+A body `LISTNUM` field SHALL display the next number of its list, computed from the list definitions and never by running the instruction. A name that matches a `w:abstractNum` `w:name` SHALL count on the counters of that list, which its numbered paragraphs share. The built-in names and unknown names SHALL count on one built-in list. A field SHALL count after the number of its own paragraph, and its number SHALL replace a saved result.
+
+#### Scenario: Headings number with a named list and no saved result
+
+- **GIVEN** a list definition named `schedule numbering` whose level 5 text is `[%5]`
+- **WHEN** three paragraphs each start with `LISTNUM "schedule numbering" \l 5` and no saved result
+- **THEN** the fields display `[1]`, `[2]`, and `[3]`
+
+#### Scenario: A field and a numbered paragraph continue each other
+
+- **GIVEN** a numbered paragraph of a named list that shows `S1.`
+- **WHEN** a `LISTNUM` field that names the list at level 1 follows it, and then another numbered paragraph of the list
+- **THEN** the field displays `S2.` and the paragraph shows `S3.`

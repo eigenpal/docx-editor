@@ -126,6 +126,7 @@ import {
   walkStoryParagraphs,
   type ResolvedListItem,
 } from './list-resolve.ts';
+import { listNumValuesOf } from './list-resolve-listnum.ts';
 
 /** Ceiling on live-resolved REF fields per story; fields past it keep their cached results. */
 const MAX_REF_FIELDS_PER_STORY = 512;
@@ -616,7 +617,8 @@ function buildRefFieldContext(
       scanStory(story);
     }
   }
-  if (fieldsByParagraph.size === 0) return null;
+  const listNum = listNumValuesOf(listItems);
+  if (fieldsByParagraph.size === 0 && !listNum) return null;
 
   // Index only referenced names, so the map is bounded by the capped reference count. A Map,
   // never an object: bookmark names are attacker-chosen keys.
@@ -805,8 +807,13 @@ function buildRefFieldContext(
     tokens.set(paragraphId, token);
     storyParts.push(paragraphId, token);
   }
+  // LISTNUM values come from the list walk; a renumbering edit repaints every later field.
+  for (const [paragraphId, token] of listNum?.tokenByParagraph ?? []) {
+    tokens.set(paragraphId, `${tokens.get(paragraphId) ?? ''}\u0004${token}`);
+    storyParts.push(paragraphId, `\u0004${token}`);
+  }
 
-  return {
+  const context: RefFieldContext = {
     valuesToken: framedTokenJoin(storyParts),
     tokenForParagraph: (paragraphId) => tokens.get(paragraphId) ?? '',
     liveValueOf: (anchorId, spec) => {
@@ -838,6 +845,23 @@ function buildRefFieldContext(
       return entry.projection;
     },
   };
+  if (listNum) listNumByContext.set(context, listNum.byAnchor);
+  return context;
+}
+
+/** LISTNUM display text by field anchor id, per context, off the public interface. */
+const listNumByContext = new WeakMap<RefFieldContext, ReadonlyMap<string, string>>();
+
+/**
+ * The number ONE LISTNUM field displays, keyed by its begin / `w:fldSimple` node id, or null
+ * when the story's list walk gave it none (a story without a context, or a field this walk
+ * never counted). The field then keeps its previous rendering.
+ */
+export function listNumFieldValue(
+  context: RefFieldContext | undefined,
+  anchorId: string
+): string | null {
+  return (context && listNumByContext.get(context)?.get(anchorId)) ?? null;
 }
 
 /**
