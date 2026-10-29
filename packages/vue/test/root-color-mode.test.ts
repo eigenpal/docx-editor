@@ -2,13 +2,14 @@
 import './dom-setup.ts';
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { createApp, h, nextTick, ref } from 'vue';
+import { createApp, defineComponent, h, nextTick, ref } from 'vue';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
 import { DocxEditorToolbar } from '../src/editor/toolbar';
 import { DocxEditorMenu } from '../src/editor/menu';
 import { DocxEditorWindow } from '../src/editor/DocxEditorWindow';
+import { useEditorColorMode } from '../src/index';
 
 type Listener = (event: { matches: boolean }) => void;
 
@@ -157,6 +158,42 @@ describe('DocxEditorRoot colorMode', () => {
       host.remove();
       frame.remove();
       window.open = original;
+    }
+  });
+
+  test('useEditorColorMode reports the resolved theme to host parts', async () => {
+    // A Vue setup function, named like a composable so the shared hooks lint rule reads it.
+    function useProbeSetup() {
+      const { colorMode } = useEditorColorMode();
+      return () => h('output', { 'data-testid': 'theme' }, colorMode.value);
+    }
+    const Probe = defineComponent({ setup: useProbeSetup });
+    const colorMode = ref<'light' | 'dark' | 'system' | undefined>();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      render: () =>
+        h(DocxEditorRoot, colorMode.value ? { colorMode: colorMode.value } : {}, {
+          default: () => [h(Probe)],
+        }),
+    });
+    app.mount(container);
+    const theme = () => container.querySelector('[data-testid="theme"]')?.textContent;
+    try {
+      await nextTick();
+      expect(theme()).toBe('light');
+      colorMode.value = 'dark';
+      await nextTick();
+      expect(theme()).toBe('dark');
+      colorMode.value = 'system';
+      await nextTick();
+      expect(theme()).toBe('light');
+      media.set(true);
+      await nextTick();
+      expect(theme()).toBe('dark');
+    } finally {
+      app.unmount();
+      container.remove();
     }
   });
 });

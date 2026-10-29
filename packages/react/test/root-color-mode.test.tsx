@@ -13,6 +13,7 @@ import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorToolbar } from '../src/editor/toolbar/index.ts';
 import { DocxEditorMenu } from '../src/editor/menu/index.ts';
 import { DocxEditorWindow } from '../src/editor/DocxEditorWindow.tsx';
+import { useEditorColorMode } from '../src/index.ts';
 
 type Listener = (event: { matches: boolean }) => void;
 
@@ -130,5 +131,31 @@ describe('DocxEditor.Root colorMode', () => {
       window.open = original;
       frame.remove();
     }
+  });
+
+  test('useEditorColorMode reports the resolved theme to host parts', () => {
+    function Probe() {
+      return <output data-testid="theme">{useEditorColorMode().colorMode}</output>;
+    }
+    const theme = (container: HTMLElement) =>
+      container.querySelector('[data-testid="theme"]')?.textContent;
+    // Outside a Root there is no theme to follow: light.
+    const outside = render(<Probe />);
+    expect(theme(outside.container)).toBe('light');
+    cleanup();
+
+    const probe = (mode?: 'light' | 'dark' | 'system') => (
+      <DocxEditorRoot {...(mode ? { colorMode: mode } : {})}>
+        <Probe />
+      </DocxEditorRoot>
+    );
+    const { container, rerender } = render(probe());
+    expect(theme(container)).toBe('light');
+    rerender(probe('dark'));
+    expect(theme(container)).toBe('dark');
+    rerender(probe('system'));
+    expect(theme(container)).toBe('light');
+    act(() => media.set(true));
+    expect(theme(container)).toBe('dark');
   });
 });

@@ -1908,6 +1908,9 @@ export interface EditorCaret {
     readonly paragraphId: string;
 }
 
+// @public
+export type EditorColorMode = 'light' | 'dark';
+
 export { EditorCommand }
 
 // @public
@@ -3416,6 +3419,14 @@ export interface UseDocxSourceResult {
 
 // @public
 export function useEditorCaret(): EditorCaret | null;
+
+// @public
+export function useEditorColorMode(): UseEditorColorModeReturn;
+
+// @public
+export interface UseEditorColorModeReturn {
+    readonly colorMode: EditorColorMode;
+}
 
 // @public
 export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCommandState;

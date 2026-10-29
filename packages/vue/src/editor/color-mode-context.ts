@@ -74,3 +74,39 @@ export function useChromeScopeClassName(): () => '' | 'docx-editor ' | 'docx-edi
     return dark.value ? 'docx-editor dark ' : 'docx-editor ';
   };
 }
+
+/**
+ * The colour theme the enclosing editor resolved, as {@link useEditorColorMode} reports it.
+ *
+ * @public
+ */
+export type EditorColorMode = 'light' | 'dark';
+
+/**
+ * What {@link useEditorColorMode} returns.
+ *
+ * @public
+ */
+export interface UseEditorColorModeReturn {
+  /** The resolved theme: `'dark'` or `'light'`. Updates when `colorMode` or the OS setting changes. */
+  readonly colorMode: ComputedRef<EditorColorMode>;
+}
+
+/**
+ * The theme the enclosing `DocxEditorRoot` resolved from its `colorMode`, so parts you build
+ * yourself can match the editor chrome. `'system'` resolves to the operating system's current
+ * setting and updates when it changes. Outside a `DocxEditorRoot`, or without `colorMode`, the
+ * answer is `'light'`. Call it in `setup`.
+ *
+ * @example
+ * ```ts
+ * const { colorMode } = useEditorColorMode();
+ * const panelClass = computed(() => (colorMode.value === 'dark' ? 'panel panel--dark' : 'panel'));
+ * ```
+ *
+ * @public
+ */
+export function useEditorColorMode(): UseEditorColorModeReturn {
+  const dark = useChromeDark();
+  return { colorMode: computed(() => (dark.value ? 'dark' : 'light')) };
+}

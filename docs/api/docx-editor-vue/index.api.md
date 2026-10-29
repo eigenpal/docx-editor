@@ -5417,6 +5417,9 @@ export interface EditorCaret {
     readonly paragraphId: string;
 }
 
+// @public
+export type EditorColorMode = 'light' | 'dark';
+
 export { EditorCommand }
 
 // @public (undocumented)
@@ -7853,6 +7856,14 @@ export interface UseDocxSourceResult {
 
 // @public (undocumented)
 export function useEditorCaret(): ShallowRef<EditorCaret | null>;
+
+// @public
+export function useEditorColorMode(): UseEditorColorModeReturn;
+
+// @public
+export interface UseEditorColorModeReturn {
+    readonly colorMode: ComputedRef<EditorColorMode>;
+}
 
 // @public (undocumented)
 export function useEditorCommand(target: MaybeRefOrGetter<ChromeSlotId | EditorCommand>): EditorCommandState;
