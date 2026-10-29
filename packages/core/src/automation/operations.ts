@@ -163,11 +163,19 @@ export type AutomationOperation =
    * The styles `styles.xml` defines, of every kind, in part order. `setStyle` accepts paragraph
    * style names only; character, table, and numbering names are listed but refused there.
    *
-   * With `name`, the answer holds at most the one style that name finds: names compare without
-   * case and surrounding spaces, as `setStyle` compares them, and a paragraph style wins over
-   * another kind with the same name.
+   * Give at most one of these to ask a narrower question:
+   * - `name`: the answer holds at most the one style that name finds. Names compare without case
+   *   and surrounding spaces, as `setStyle` compares them, and a paragraph style wins over another
+   *   kind with the same name. A name longer than a style name may be finds nothing.
+   * - `id`: the answer holds at most the listed style with that `w:styleId`.
+   * - `count: true`: the answer is the number of listed styles, as a `number` value.
    */
-  | { readonly op: 'getStyles'; readonly name?: string }
+  | {
+      readonly op: 'getStyles';
+      readonly name?: string;
+      readonly id?: string;
+      readonly count?: boolean;
+    }
   | {
       readonly op: 'setDocumentProperties';
       readonly values: import('../store/package/document-property-writes.ts').DocumentPropertyWrites;

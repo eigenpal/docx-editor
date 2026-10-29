@@ -177,11 +177,12 @@ export class Document extends ModelObject {
    * @example
    * ```ts
    * const styles = context.document.getStyles();
-   * styles.load('items/nameLocal,items/type');
+   * styles.load('items/nameLocal,items/type,items/visibility,items/unhideWhenUsed');
    * await context.sync();
    *
+   * // Keep hidden styles that unhide once used, such as heading 2, so they can be applied too.
    * const names = styles.items
-   *   .filter((style) => style.type === 'Paragraph')
+   *   .filter((style) => style.type === 'Paragraph' && (style.visibility || style.unhideWhenUsed))
    *   .map((style) => style.nameLocal);
    * ```
    */

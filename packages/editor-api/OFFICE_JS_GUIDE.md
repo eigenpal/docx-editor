@@ -561,13 +561,14 @@ A style setter refuses a name that the document does not define. List the define
 ```ts
 await runtime.run(async (context) => {
   const styles = context.document.getStyles();
-  styles.load('items/nameLocal,items/type,items/visibility,items/priority');
+  styles.load('items/nameLocal,items/type,items/visibility,items/unhideWhenUsed,items/priority');
   const paragraph = context.document.body.paragraphs.getFirst();
   await context.sync();
 
-  // Offer an agent only the visible paragraph styles, in gallery order.
+  // Offer an agent the paragraph styles a reader would see, in gallery order.
+  // Keep hidden styles that unhide once used, such as heading 2, so they can be applied too.
   const names = styles.items
-    .filter((style) => style.type === 'Paragraph' && style.visibility)
+    .filter((style) => style.type === 'Paragraph' && (style.visibility || style.unhideWhenUsed))
     .sort((a, b) => a.priority - b.priority)
     .map((style) => style.nameLocal);
   const chosen = names.find((name) => name.toLowerCase() === 'quote');

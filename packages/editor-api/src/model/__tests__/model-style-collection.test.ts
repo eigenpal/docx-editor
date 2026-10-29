@@ -14,13 +14,13 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
-import { strToU8, zipSync } from 'fflate';
+import { strToU8, unzipSync, zipSync } from 'fflate';
 import { createBrowser } from '../../runtime/browser.ts';
 import type { DocxEditorRuntime } from '../../runtime/runtime.ts';
 import { isDocxEditorError } from '../../runtime/errors.ts';
 import { createServer } from '../../runtime/server.ts';
 import { StyleType } from '../../index.ts';
-import { docx, mainXmlOf, p } from './support/documents.ts';
+import { docx, mainXmlOf, orNull, p } from './support/documents.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -354,14 +354,15 @@ describe('Document.getStyles', () => {
           }
           expect(code).toBe('InvalidArgument');
         }
-        styles.getByNameOrNullObject(42 as unknown as string);
+        // Refused at the call, before anything is queued.
         let code: string | undefined;
         try {
-          await context.sync();
+          styles.getByNameOrNullObject(42 as unknown as string);
         } catch (error) {
           if (isDocxEditorError(error)) code = error.code;
         }
         expect(code).toBe('InvalidArgument');
+        await context.sync();
       });
     } finally {
       runtime.dispose();
@@ -504,6 +505,9 @@ test('the guide example offers only visible paragraph styles and applies one', a
         '<w:uiPriority w:val="29"/><w:qFormat/></w:style>' +
         '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/>' +
         '<w:uiPriority w:val="9"/></w:style>' +
+        // As a default template marks headings 2 to 9: hidden until used.
+        '<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/>' +
+        '<w:uiPriority w:val="9"/><w:semiHidden/><w:unhideWhenUsed/></w:style>' +
         '<w:style w:type="paragraph" w:styleId="TOC1"><w:name w:val="toc 1"/>' +
         '<w:uiPriority w:val="39"/><w:semiHidden/><w:unhideWhenUsed/></w:style>' +
         '<w:style w:type="paragraph" w:styleId="Old"><w:name w:val="Old"/><w:hidden w:val="1"/></w:style>' +
@@ -514,13 +518,16 @@ test('the guide example offers only visible paragraph styles and applies one', a
   try {
     const offered = await runtime.run(async (context) => {
       const styles = context.document.getStyles();
-      styles.load('items/nameLocal,items/type,items/visibility,items/priority');
+      styles.load(
+        'items/nameLocal,items/type,items/visibility,items/unhideWhenUsed,items/priority'
+      );
       const paragraph = context.document.body.paragraphs.getFirst();
       await context.sync();
 
-      // Offer an agent only the visible paragraph styles, in gallery order.
+      // Offer an agent the paragraph styles a reader would see, in gallery order.
+      // Keep hidden styles that unhide once used, such as heading 2, so they can be applied too.
       const names = styles.items
-        .filter((style) => style.type === 'Paragraph' && style.visibility)
+        .filter((style) => style.type === 'Paragraph' && (style.visibility || style.unhideWhenUsed))
         .sort((a, b) => a.priority - b.priority)
         .map((style) => style.nameLocal);
       const chosen = names.find((name) => name.toLowerCase() === 'quote');
@@ -529,7 +536,7 @@ test('the guide example offers only visible paragraph styles and applies one', a
       await context.sync();
       return names;
     });
-    expect(offered).toEqual(['Normal', 'heading 1', 'Quote', 'Shown']);
+    expect(offered).toEqual(['Normal', 'heading 1', 'heading 2', 'Quote', 'toc 1', 'Shown']);
     expect(await mainXmlOf(runtime)).toContain('<w:pStyle w:val="Quote"/>');
 
     const flags = await runtime.run(async (context) => {
@@ -547,11 +554,107 @@ test('the guide example offers only visible paragraph styles and applies one', a
       ['Normal', true, false, true],
       ['Quote', true, false, true],
       ['heading 1', false, false, true],
+      ['heading 2', false, true, false],
       ['toc 1', false, true, false],
       ['Old', false, false, false],
       ['Shown', false, false, true],
       ['Strong', false, false, true],
     ]);
+  } finally {
+    runtime.dispose();
+  }
+});
+
+test('a heading hidden until used is offered and applies', async () => {
+  const runtime = await createServer(
+    withStyles(
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+        '<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/>' +
+        '<w:basedOn w:val="Normal"/><w:uiPriority w:val="9"/><w:semiHidden/><w:unhideWhenUsed/></w:style>'
+    )
+  );
+  try {
+    const read = await runtime.run(async (context) => {
+      const styles = context.document.getStyles();
+      styles.load();
+      const paragraph = context.document.body.paragraphs.getFirst();
+      await context.sync();
+      const offered = styles.items.filter(
+        (style) => style.type === 'Paragraph' && (style.visibility || style.unhideWhenUsed)
+      );
+      const heading = offered.find((style) => style.nameLocal === 'heading 2')!;
+      paragraph.style = heading.nameLocal;
+      await context.sync();
+      paragraph.load('style');
+      await context.sync();
+      return [heading.visibility, heading.unhideWhenUsed, paragraph.style];
+    });
+    expect(read).toEqual([false, true, 'heading 2']);
+  } finally {
+    runtime.dispose();
+  }
+});
+
+test('Table.style accepts the nameLocal of a listed table style', async () => {
+  const runtime = await createServer(
+    withStyles(
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+        '<w:style w:type="table" w:styleId="TableGrid"><w:name w:val="Table Grid"/></w:style>'
+    )
+  );
+  try {
+    const style = await runtime.run(async (context) => {
+      const styles = context.document.getStyles();
+      styles.load('items/nameLocal,items/type');
+      const table = context.document.body.getRange('Start').insertTable(1, 1, 'Before', [['A']]);
+      await context.sync();
+      const tableStyle = styles.items.find((item) => item.type === 'Table')!;
+      table.style = tableStyle.nameLocal;
+      await context.sync();
+      table.load('style');
+      await context.sync();
+      return table.style;
+    });
+    expect(style).toBe('Table Grid');
+  } finally {
+    runtime.dispose();
+  }
+});
+
+test('a paragraph style that repeats an earlier name reads null, as the setter applies the earlier', async () => {
+  const bytes = zipSync({
+    ...Object.fromEntries(
+      Object.entries(
+        unzipSync(
+          withStyles(
+            '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+              '<w:style w:type="paragraph" w:styleId="Body1"><w:name w:val="Body"/></w:style>' +
+              '<w:style w:type="paragraph" w:styleId="Body2"><w:name w:val="body"/></w:style>'
+          )
+        )
+      )
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>` +
+        '<w:p><w:pPr><w:pStyle w:val="Body2"/></w:pPr><w:r><w:t>later</w:t></w:r></w:p>' +
+        '<w:p><w:pPr><w:pStyle w:val="Body1"/></w:pPr><w:r><w:t>earlier</w:t></w:r></w:p>' +
+        '</w:body></w:document>'
+    ),
+  });
+  const runtime = await createServer(bytes);
+  try {
+    const read = await runtime.run(async (context) => {
+      const paragraphs = context.document.body.paragraphs;
+      paragraphs.load('items/style');
+      const styles = context.document.getStyles();
+      styles.load('items/nameLocal');
+      await context.sync();
+      return {
+        styles: paragraphs.items.map((paragraph) => orNull(paragraph.style)),
+        listed: styles.items.map((style) => style.nameLocal),
+      };
+    });
+    expect(read).toEqual({ styles: [null, 'Body'], listed: ['Normal', 'Body'] });
   } finally {
     runtime.dispose();
   }

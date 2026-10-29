@@ -36,7 +36,13 @@ export const MAX_STYLE_NAME = 255;
 
 /** What the document says its paragraph styles are. */
 export interface AutomationStyleIndex {
-  /** The name a paragraph style id shows in a gallery, or null for an id the part omits one for. */
+  /**
+   * The name a paragraph style id shows in a gallery, or null for an id the part omits one for.
+   *
+   * Also null when that name belongs to an EARLIER paragraph style: `idOf` and the style listing
+   * resolve the name to the earlier one, so answering it would hand back a name that applies a
+   * different style than the paragraph has.
+   */
   nameOf(styleId: string): string | null;
   /** The paragraph style id a name belongs to, matched case-insensitively, or null. */
   idOf(name: string): string | null;
@@ -84,7 +90,10 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
   const byName = definitions.paragraphIdByName;
   const defaultId = definitions.defaultParagraphId;
   return Object.freeze({
-    nameOf: (styleId: string) => byId.get(styleId) ?? null,
+    nameOf: (styleId: string) => {
+      const name = byId.get(styleId) ?? null;
+      return name !== null && byName.get(styleNameKey(name)) === styleId ? name : null;
+    },
     idOf: (name: string) => byName.get(styleNameKey(name)) ?? null,
     defaultId,
     present: true,
@@ -97,7 +106,8 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
  *
  * A paragraph that states no `w:pStyle` answers the part's own default paragraph style, because
  * that is the style it has — `w:docDefaults` and `w:default="1"` are the document saying so, not
- * this lane guessing. A package with no styles part answers null: there is no name to give.
+ * this lane guessing. A package with no styles part answers null: there is no name to give. A
+ * style whose name an earlier paragraph style already has answers null too (see `nameOf`).
  */
 export function paragraphStyleName(
   part: OoxmlPart,

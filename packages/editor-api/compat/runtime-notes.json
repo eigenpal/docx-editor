@@ -549,7 +549,7 @@
   },
   "Word.Paragraph#style": {
     "status": "partial",
-    "notes": "Writes a paragraph style by its display name from the document styles part. Unknown style names refuse; load before reading. Other paragraph properties are preserved. Style writes inside a content lock (contentLocked, sdtContentLocked) are refused. A load queued in the same sync as a write returns the value from before the write."
+    "notes": "Writes a paragraph style by its display name from the document styles part. Unknown style names refuse; load before reading. Other paragraph properties are preserved. Style writes inside a content lock (contentLocked, sdtContentLocked) are refused. A load queued in the same sync as a write returns the value from before the write. Reads and writes use the same style definitions as Document#getStyles: a paragraph whose style shares its name with an earlier paragraph style reads null, because that name applies the earlier style."
   },
   "Word.Paragraph#alignment": {
     "status": "partial",
@@ -833,7 +833,7 @@
   },
   "Word.StyleCollection#getByNameOrNullObject": {
     "status": "partial",
-    "notes": "Compares names without case and surrounding spaces, the rule the style setters use. When one name belongs to styles of several kinds, it answers the paragraph style, which the setters apply; otherwise the first match in part order. A missing name answers an object whose isNullObject is true after the sync. A name that is not a string refuses with InvalidArgument at sync."
+    "notes": "Compares names without case and surrounding spaces, the rule the style setters use. When one name belongs to styles of several kinds, it answers the paragraph style, which the setters apply; otherwise the first match in part order. A missing name answers an object whose isNullObject is true after the sync. A name that is not a string refuses with InvalidArgument at the call. A name longer than 255 characters finds nothing."
   },
   "Word.StyleCollection#getCount": {
     "status": "partial",
@@ -865,7 +865,7 @@
   },
   "Word.Style#visibility": {
     "status": "partial",
-    "notes": "Read-only. True unless the style states w:semiHidden or w:hidden as on. The property has no setter."
+    "notes": "Read-only. True means the style shows as a recommended style, as the reference describes the property. The value follows w:semiHidden and w:hidden: it is false when either is on, and true otherwise. A hidden style that states w:unhideWhenUsed reads false here and true in unhideWhenUsed. The property has no setter."
   },
   "Word.Style#priority": {
     "status": "partial",

@@ -131,7 +131,7 @@ Text direction inside a paragraph is a run property. A `readingOrder` write does
 
 ## Apply an existing style
 
-`Body.style`, `Paragraph.style`, and `Range.style` address paragraph styles by display name. The name must already exist in the document's styles part. The runtime rejects unknown style names. Assigning a name does not create a style. A body assignment applies to its paragraphs. A range assignment applies to its addressed paragraphs. Load `style` before reading it; mixed or unspecified authored styles can return `null` at runtime.
+`Body.style`, `Paragraph.style`, and `Range.style` address paragraph styles by display name. The name must already exist in the document's styles part. The runtime rejects unknown style names. Assigning a name does not create a style. A body assignment applies to its paragraphs. A range assignment applies to its addressed paragraphs. Load `style` before reading it; mixed or unspecified authored styles can return `null` at runtime. A read also returns `null` when the paragraph's style has the same name as an earlier paragraph style, because assigning that name applies the earlier style.
 
 Use a template with known styles, then assign its exact style name:
 
@@ -142,15 +142,15 @@ await context.sync();
 
 ### List the defined styles
 
-To find out which styles a document defines, call `Document.getStyles()`. Call `load()` with no arguments to read every property, or name the properties you need with `items/` paths. Then filter the visible paragraph styles:
+To find out which styles a document defines, call `Document.getStyles()`. Call `load()` with no arguments to read every property, or name the properties you need with `items/` paths. Then filter the paragraph styles that a reader would see. Keep styles that are hidden until used, such as `heading 2`, because they appear once they are applied:
 
 ```ts
 const styles = context.document.getStyles();
-styles.load('items/nameLocal,items/type,items/visibility,items/priority');
+styles.load('items/nameLocal,items/type,items/visibility,items/unhideWhenUsed,items/priority');
 await context.sync();
 
 const names = styles.items
-  .filter((style) => style.type === 'Paragraph' && style.visibility)
+  .filter((style) => style.type === 'Paragraph' && (style.visibility || style.unhideWhenUsed))
   .sort((a, b) => a.priority - b.priority)
   .map((style) => style.nameLocal);
 ```
@@ -174,7 +174,7 @@ A `Style` exposes these read-only properties:
 
 The list follows the order of `styles.xml`. It leaves out styles that have no `w:name`, an empty or invalid name, a later duplicate name of the same kind, or no recognized `w:type`. A document with no styles part lists no styles. Style definitions are read-only: the API does not add, delete, or change styles, and `Style` has no `font` or `paragraphFormat`.
 
-`Table.style` is separate. See [Tables and cells](/docs/2.x/editor-api/tables).
+`Table.style` is separate. It accepts the `nameLocal` of a listed style whose `type` is `Table`. See [Tables and cells](/docs/2.x/editor-api/tables).
 
 ## Set a hyperlink
 

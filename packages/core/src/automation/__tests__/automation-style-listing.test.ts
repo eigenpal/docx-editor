@@ -91,6 +91,29 @@ describe('getStyles', () => {
     expect(missing).toEqual([]);
   });
 
+  test('narrower questions answer one entry or a count, not the listing', () => {
+    const host = open(STYLED);
+    const [byId, unknownId, tooLong] = answers(host, [
+      { op: 'getStyles', id: 'QuoteChar' },
+      { op: 'getStyles', id: 'Absent' },
+      { op: 'getStyles', name: ` ${'Quote'.padEnd(300, ' ')}` },
+    ]);
+    expect(byId!.map((style) => [style.id, style.type])).toEqual([['QuoteChar', 'character']]);
+    expect(unknownId).toEqual([]);
+    // Longer than any style name may be, so nothing is folded or found.
+    expect(tooLong).toEqual([]);
+
+    const counted = host.execute({ operations: [{ op: 'getStyles', count: true }] });
+    expect(counted.results[0]).toEqual({ status: 'ok', value: { kind: 'number', value: 4 } });
+
+    const both = host.execute({ operations: [{ op: 'getStyles', id: 'Quote', name: 'Quote' }] });
+    expect(both.ok).toBe(false);
+    expect(both.results[0]).toMatchObject({
+      status: 'error',
+      error: { code: 'unsupported-content' },
+    });
+  });
+
   test('answers one listing, shared across operations, batches, and body edits', () => {
     const host = open(STYLED);
     const [first, second, third] = answers(host, [LIST, LIST, LIST]);

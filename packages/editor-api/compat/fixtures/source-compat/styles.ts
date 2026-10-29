@@ -15,7 +15,7 @@ export async function applyListedParagraphStyle(): Promise<void> {
     // Linked paragraph styles, such as headings, are valid choices too.
     const paragraphStyles = styles.items.filter((style) => style.type === 'Paragraph');
     const offered: string[] = paragraphStyles
-      .filter((style) => style.visibility)
+      .filter((style) => style.visibility || style.unhideWhenUsed)
       .sort((a, b) => a.priority - b.priority)
       .map((style) => style.nameLocal);
     const total: number = count.value;

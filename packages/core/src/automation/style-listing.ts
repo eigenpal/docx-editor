@@ -40,15 +40,27 @@ export function planStyleListing(
       ok: false,
       error: { code: 'document-unavailable', message: 'this host holds no document right now' },
     };
+  const { name, id, count } = operation;
+  const asked = [name, id, count].filter((value) => value !== undefined).length;
+  const refused = (message: string): PlannedOperation => ({
+    ok: false,
+    error: { code: 'unsupported-content', message },
+  });
+  if (asked > 1) return refused('give at most one of name, id, and count');
+  if (name !== undefined && typeof name !== 'string') return refused('a style name is a string');
+  if (id !== undefined && typeof id !== 'string') return refused('a style id is a string');
+  if (count !== undefined && count !== true) return refused('count is true or omitted');
   const listing = reads.styleListing();
-  if (operation.name === undefined)
+  if (count) return { ok: true, kind: 'query', value: { kind: 'number', value: listing.length } };
+  if (name === undefined && id === undefined)
     return { ok: true, kind: 'query', value: { kind: 'styles', styles: listing } };
-  if (typeof operation.name !== 'string')
-    return {
-      ok: false,
-      error: { code: 'unsupported-content', message: 'a style name is a string' },
-    };
-  const found = styleNamed(listing, operation.name);
+  // A name no style may carry finds nothing, and is never folded.
+  const found =
+    id !== undefined
+      ? lookupsOf(listing).byId.get(id)
+      : name!.length > MAX_STYLE_NAME
+        ? undefined
+        : styleNamed(listing, name!);
   return { ok: true, kind: 'query', value: { kind: 'styles', styles: found ? [found] : [] } };
 }
 
@@ -95,7 +107,30 @@ export interface AutomationStyleRead {
 const STYLE_KINDS: ReadonlySet<string> = new Set(['paragraph', 'character', 'table', 'numbering']);
 const NO_STYLES: readonly AutomationStyleRead[] = Object.freeze([]);
 const listings = new WeakMap<OoxmlNode, readonly AutomationStyleRead[]>();
-const byKey = new WeakMap<readonly AutomationStyleRead[], Map<string, AutomationStyleRead>>();
+interface ListingLookups {
+  readonly byKey: ReadonlyMap<string, AutomationStyleRead>;
+  readonly byId: ReadonlyMap<string, AutomationStyleRead>;
+}
+const lookups = new WeakMap<readonly AutomationStyleRead[], ListingLookups>();
+
+/** A listing's entries by folded name and by id, built once per listing. */
+function lookupsOf(listing: readonly AutomationStyleRead[]): ListingLookups {
+  const cached = lookups.get(listing);
+  if (cached) return cached;
+  const byKey = new Map<string, AutomationStyleRead>();
+  const byId = new Map<string, AutomationStyleRead>();
+  for (const style of listing) {
+    byId.set(style.id, style);
+    const key = styleNameKey(style.name);
+    const held = byKey.get(key);
+    // Where a name belongs to several kinds, the paragraph style wins, because that is the style
+    // the setters apply; otherwise the first in part order.
+    if (!held || (held.type !== 'paragraph' && style.type === 'paragraph')) byKey.set(key, style);
+  }
+  const built = { byKey, byId };
+  lookups.set(listing, built);
+  return built;
+}
 
 /**
  * The listed style a name finds, or undefined. Names compare as `setStyle` compares them; where a
@@ -105,18 +140,7 @@ export function styleNamed(
   listing: readonly AutomationStyleRead[],
   name: string
 ): AutomationStyleRead | undefined {
-  let lookup = byKey.get(listing);
-  if (!lookup) {
-    lookup = new Map();
-    for (const style of listing) {
-      const key = styleNameKey(style.name);
-      const held = lookup.get(key);
-      if (!held || (held.type !== 'paragraph' && style.type === 'paragraph'))
-        lookup.set(key, style);
-    }
-    byKey.set(listing, lookup);
-  }
-  return lookup.get(styleNameKey(name));
+  return lookupsOf(listing).byKey.get(styleNameKey(name));
 }
 
 /** The styles of a package, in part order. Built once per styles part root. */

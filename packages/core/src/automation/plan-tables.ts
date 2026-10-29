@@ -1,7 +1,8 @@
 // Table protocol dispatch. Handles never expose canonical node identities.
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { revisionDateNow } from './revision-date.ts';
-import { indexStyles, stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import { styleDefinitionsOf, styleNameKey } from './style-definitions.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import type { AutomationOperation } from './operations.ts';
 import type { AutomationHandleTable } from './handles.ts';
@@ -76,9 +77,10 @@ function parentTable(root: OoxmlNode, nodeId: string): OoxmlElement | undefined 
   }
   return undefined;
 }
+/** The table styles the style listing and the paragraph setters count: the same capped definitions. */
 function styles(reads: AutomationPackageReads) {
   const part = reads.package && stylesPartOf(reads.package);
-  return part ? [...indexStyles(part).values()].filter((s) => s.type === 'table') : [];
+  return part ? styleDefinitionsOf(part).entries.filter((s) => s.type === 'table') : [];
 }
 
 export function planTableOperation(
@@ -284,9 +286,8 @@ export function planTableOperation(
         const wanted = mutation.styleId;
         if (typeof wanted !== 'string' || wanted.trim().length === 0)
           return refuse('unsupported-content', 'invalid-table-style-name');
-        const style = styles(packages).find(
-          (s) => s.name?.trim().toLowerCase() === wanted.trim().toLowerCase()
-        );
+        const key = styleNameKey(wanted);
+        const style = styles(packages).find((s) => s.name !== null && styleNameKey(s.name) === key);
         if (!style) return refuse('unsupported-content', 'table-style-not-defined');
         mutation = { ...mutation, styleId: style.styleId };
       }

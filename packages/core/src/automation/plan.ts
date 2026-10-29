@@ -9,8 +9,7 @@ import {
   planBookmarks,
   withEnclosedBookmarkDrops,
 } from './plan-bookmarks.ts';
-import { planDocumentProperties } from './plan-document-properties.ts';
-import { planStyleListing } from './style-listing.ts';
+import { planPackageOperation } from './plan-package-reads.ts';
 import { referencedNoteIds } from './note-references.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
@@ -1676,14 +1675,15 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       case 'removeDocumentInformation':
       case 'getDocumentProperty':
       case 'setDocumentProperties':
-        return planDocumentProperties(
-          operation,
-          packageReads,
-          () => pinWrite(planFor(packageReads.body!)),
-          !host.collaborative
-        );
       case 'getStyles':
-        return planStyleListing(operation, packageReads);
+      case 'getSections':
+      case 'getPageSetup':
+        return planPackageOperation(operation, {
+          reads: packageReads,
+          handles,
+          pin: () => pinWrite(planFor(packageReads.body!)),
+          supportsPartCreation: !host.collaborative,
+        });
       case 'getDocument':
         return query({ kind: 'handle', handle: handles.document() });
 
@@ -1975,24 +1975,6 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const story = packageReads.story(paragraph.value.story);
         if (!story) return refuse('invalid-handle', 'that story is not in this document');
         return planDeleteParagraph(planFor(story), paragraph.value);
-      }
-
-      case 'getSections': {
-        if (!handles.resolve(operation.document, 'document'))
-          return refuse('invalid-handle', 'that handle does not name a document', 'document');
-        return query({
-          kind: 'handles',
-          handles: packageReads.sections().map((section) => handles.section(section.index)),
-        });
-      }
-
-      case 'getPageSetup': {
-        const target = handles.resolve(operation.section, 'section');
-        if (!target || target.kind !== 'section')
-          return refuse('invalid-handle', 'that handle does not name a section', 'section');
-        const section = packageReads.sections()[target.index];
-        if (!section) return refuse('invalid-handle', 'that section is not in this document');
-        return query({ kind: 'pageSetup', setup: section.pageSetup });
       }
 
       case 'setPageSetup': {

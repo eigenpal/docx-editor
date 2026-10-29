@@ -22,6 +22,7 @@ import {
   clientResult,
   type ClientResult,
   fail,
+  hydratedNumber,
   hydratedStyles,
   selectedProperties,
   type AutomationStyleRead,
@@ -39,7 +40,10 @@ export enum StyleType {
   list = 'List',
   /** A paragraph style, which `paragraph.style` accepts by its `nameLocal`. */
   paragraph = 'Paragraph',
-  /** A table style. The paragraph `style` setters refuse its name. */
+  /**
+   * A table style. The paragraph `style` setters refuse its name; `Table.style` accepts its
+   * `nameLocal`.
+   */
   table = 'Table',
 }
 
@@ -96,37 +100,23 @@ function propertyOf(
   }
 }
 
-/** Each listing's entries by style id, built once per answered listing. */
-const entriesById = new WeakMap<readonly AutomationStyleRead[], Map<string, AutomationStyleRead>>();
-
-function entryWithId(
-  styles: readonly AutomationStyleRead[],
-  id: string
-): AutomationStyleRead | undefined {
-  let byId = entriesById.get(styles);
-  if (!byId) {
-    byId = new Map(styles.map((style) => [style.id, style]));
-    entriesById.set(styles, byId);
-  }
-  return byId.get(id);
-}
-
 /**
  * One style the document's styles part defines. Every property is read-only and needs a `load`
  * before it is read; `load()` with no arguments reads them all.
  *
  * `nameLocal` is the name the styles part declares. Only a style whose `type` is `Paragraph` can be
  * assigned to `paragraph.style`, `range.style`, or `body.style`; those setters refuse character,
- * table, and list style names.
+ * table, and list style names. `Table.style` accepts the `nameLocal` of a listed table style.
  *
- * @example Offer only the visible paragraph styles
+ * @example Offer the paragraph styles a reader would see
  * ```ts
  * const styles = context.document.getStyles();
  * styles.load();
  * await context.sync();
  *
+ * // Keep hidden styles that unhide once used, such as heading 2, so they can be applied too.
  * const choices = styles.items
- *   .filter((style) => style.type === 'Paragraph' && style.visibility)
+ *   .filter((style) => style.type === 'Paragraph' && (style.visibility || style.unhideWhenUsed))
  *   .sort((a, b) => a.priority - b.priority)
  *   .map((style) => style.nameLocal);
  * ```
@@ -253,12 +243,16 @@ export class Style extends ModelObject {
     const target = this.path.label;
     this.read(
       target,
-      () => ({ op: 'getStyles' }),
-      (value) => {
+      () => {
         // A listed style has its id from the start; a looked-up one gets it from the lookup,
-        // which the queue answers before this read because this object's path waits on it.
+        // which the queue answers before this read is planned because this object's path waits
+        // on it. Asking by id answers one entry, not the whole listing.
         const id = this.#id;
-        const style = id === undefined ? undefined : entryWithId(hydratedStyles(value, target), id);
+        if (id === undefined) fail({ code: 'ItemNotFound', target });
+        return { op: 'getStyles', id };
+      },
+      (value) => {
+        const style = hydratedStyles(value, target)[0];
         if (!style) fail({ code: 'ItemNotFound', target });
         this.hydrateProperties(style, selected);
       }
@@ -302,8 +296,8 @@ export class StyleCollection extends ModelObject {
     const { result, fill } = clientResult<number>(target);
     this.read(
       target,
-      () => ({ op: 'getStyles' }),
-      (value) => fill(hydratedStyles(value, target).length)
+      () => ({ op: 'getStyles', count: true }),
+      (value) => fill(hydratedNumber(value, target))
     );
     return result;
   }
@@ -317,13 +311,12 @@ export class StyleCollection extends ModelObject {
    */
   getByNameOrNullObject(name: string): Style {
     const target = `${this.path.label}.getByNameOrNullObject`;
+    // Refused at the call, where the mistake is, rather than at the sync.
+    if (typeof name !== 'string') fail({ code: 'InvalidArgument', target });
     const found = Style.promised(this.context, target);
     this.read(
       target,
-      () => {
-        if (typeof name !== 'string') fail({ code: 'InvalidArgument', target });
-        return { op: 'getStyles', name };
-      },
+      () => ({ op: 'getStyles', name }),
       (value) => {
         const style = hydratedStyles(value, target)[0];
         if (style) found.hydrateFound(style);
