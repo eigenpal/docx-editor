@@ -164,6 +164,56 @@ describe('dragging a table by its handle', () => {
     pointer(handle(), 'pointerup', 400);
     expect(surface.session.packageRevision()).toBe(revision);
   });
+
+  test('still shows for the caret after the table moves to another page', () => {
+    const pageBreak = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+    const { surface, handle, paragraphWith, caretIn } = mount(
+      p('one') + table() + p('two') + pageBreak + p('three')
+    );
+    const pageOf = (text: string) =>
+      surface
+        .layout()
+        .pages.findIndex((page) =>
+          page.fragments.some(
+            (fragment) =>
+              fragment.kind === 'paragraph' && fragment.paragraphId === paragraphWith(text)
+          )
+        );
+    const sheetTopOf = (text: string) => {
+      const page = surface.layout().pages[pageOf(text)]!;
+      const fragment = page.fragments.find(
+        (candidate) =>
+          candidate.kind === 'paragraph' && candidate.paragraphId === paragraphWith(text)
+      )!;
+      return page.contentBox.y + fragment.box.y;
+    };
+    expect(pageOf('three')).toBe(1);
+    // The pointer crosses the table on page 1 to reach the handle, and rests there.
+    const page = surface.layout().pages[0]!;
+    const tableBox = page.fragments.find((fragment) => fragment.kind === 'table')!.box;
+    document.dispatchEvent(
+      new PointerEvent('pointermove', {
+        bubbles: true,
+        clientX: page.contentBox.x + tableBox.x + 5,
+        clientY: page.contentBox.y + tableBox.y + 5,
+      })
+    );
+    handle().dispatchEvent(new PointerEvent('pointerenter'));
+    const target = sheetTopOf('three');
+    pointer(handle(), 'pointerdown', 100);
+    pointer(handle(), 'pointermove', 110);
+    pointer(handle(), 'pointermove', target + 2);
+    pointer(handle(), 'pointerup', target + 2);
+    expect(order(surface)).not.toContain('[T]');
+
+    // The table is on page 2 now. With the caret in it, its handle shows there.
+    caretIn('cell');
+    expect(handle()).not.toBeNull();
+    const tablePage = surface
+      .layout()
+      .pages.findIndex((page) => page.fragments.some((fragment) => fragment.kind === 'table'));
+    expect(tablePage).toBe(1);
+  });
 });
 
 describe('choosing a drop slot', () => {

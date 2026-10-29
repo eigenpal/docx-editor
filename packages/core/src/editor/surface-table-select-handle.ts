@@ -187,6 +187,11 @@ export function createSurfaceTableSelectHandle(
   function update(): void {
     const { layout, selection, editingMode } = host.read();
     const caretParagraphId = selection.head.paragraphId;
+    // A hover names a table on a page. After an edit moves that table (a drag to another
+    // page, a page break above it), the hover names nothing; the caret's table then decides.
+    if (hovered && !outermostTableOnPage(layout, hovered.tableId, hovered.pageIndex)) {
+      hovered = null;
+    }
     const target =
       editingMode === 'view'
         ? null
@@ -196,6 +201,8 @@ export function createSurfaceTableSelectHandle(
     const found = target ? outermostTableOnPage(layout, target.tableId, target.pageIndex) : null;
     if (!target || !found) {
       shownTableId = null;
+      // A removed button gets no `pointerleave`, so the pointer is no longer over it.
+      overHandle = false;
       button.remove();
       return;
     }
