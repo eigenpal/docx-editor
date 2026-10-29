@@ -1,3 +1,4 @@
+import { returnUncoveredHintedText } from './east-asia-hint-coverage.ts';
 import { cachedAutofitCellWidths, widenedCellInsets } from './table-autofit-cell-cache.ts';
 import { rowForWidenedMeasurement } from './legacy-table-side-rules.ts';
 import { autofitReuseScope } from './autofit-context-reuse.ts';
@@ -307,7 +308,7 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
   // The bidi pass gives each piece the shaping and joining context line breaking measures with;
   // an unshaped complex-script word measures far wider than it paints.
   const pieces = bidiPieces(
-    projected,
+    returnUncoveredHintedText(projected, measurer),
     paragraphIsRtl(layoutInputs.props),
     bidiSourceBoundaries(paragraph),
     true
