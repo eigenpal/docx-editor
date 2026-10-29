@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Each header and footer part counts its list items from fresh counters, so a footer list restarts at one.",
+  "after": "Header and footer stories continue one list count in section and story order; a footer list continues the header list.",
+  "reason": "Only layout changes. Source ranges, canonical OOXML, operations, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/header-footer-list-count.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-header-footer-lists.test.ts"
+  ],
+  "changeset": "header-footer-list-count",
+  "migration": null
+}

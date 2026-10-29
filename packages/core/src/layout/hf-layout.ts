@@ -56,6 +56,7 @@ import {
   ownedTextboxStories,
 } from './semantic-record-queries.ts';
 import { withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
+import type { ListCounterSnapshot } from './list-counters.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import { hostedStoryFlowDeps, layoutTextboxStory } from './textbox-story-layout.ts';
 import type {
@@ -211,6 +212,14 @@ export interface HeaderFooterStoryInputs {
    * merged into the paragraph's own.
    */
   readonly numberingIndex?: NumberingIndex;
+  /**
+   * The list counters this story starts from. Header and footer stories continue one count
+   * across the document (see `furniture-list-seeds.ts`); absent, the story counts from fresh
+   * counters.
+   *
+   * @internal
+   */
+  readonly listCounterSeed?: ListCounterSnapshot;
   /** Sanitized hyperlink seams scoped to this header/footer part. */
   readonly projectLink?: import('./field-pieces.ts').HyperlinkProjector;
   readonly projectFieldLink?: import('./field-pieces.ts').FieldLinkProjector;
@@ -281,14 +290,18 @@ export function layoutHeaderFooterStory(
   // revision removed entirely kept a blank one. The cache is namespaced by mode below.
   const blocks = storyBlocks(part, displayMode, revisionAuthorFilter);
   const floatingSplit = splitFloatingStoryTables(blocks);
-  // The story's own list-item map, resolved once per layout of this part.
+  // The story's own list-item map, resolved once per layout of this occurrence.
   //
-  // Per STORY, not continuing the body's counters: `createListCounterState` is created fresh
-  // per story walk, and a header repeats on every page, so a numbered header list restarts at
-  // `w:start` and shows the same number on page 3 as on page 1. That matches Word, which keeps
-  // furniture numbering independent of the body's.
+  // Never continuing the body's counters. Header and footer stories share one count, so the
+  // story starts from the counters the stories before it left (`listCounterSeed`). The
+  // numbers do not depend on the page: a header shows the same numbers on page 3 as on page 1.
   const listItems: ReadonlyMap<string, ResolvedListItem> | undefined = withResolvedListItems(
-    { numberingIndex: inputs?.numberingIndex, styleCascade, measurer },
+    {
+      numberingIndex: inputs?.numberingIndex,
+      styleCascade,
+      measurer,
+      ...(inputs?.listCounterSeed ? { listCounterSeed: inputs.listCounterSeed } : {}),
+    },
     blocks
   ).listItems;
   // Content identity is of the authored part, not of a page-field projection.

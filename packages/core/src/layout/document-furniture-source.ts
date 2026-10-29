@@ -25,6 +25,9 @@ import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-proje
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { createBackgroundFurnitureProjection, hasPageBackground } from './background-furniture.ts';
+import { createFurnitureListSeeds } from './furniture-list-seeds.ts';
+import type { ListCounterSnapshot } from './list-counters.ts';
+import { DEFAULT_REVISION_DISPLAY_MODE } from './revision-projection.ts';
 
 /** Page furniture supplied to semantic layout. @public */
 export interface DocumentFurnitureSource {
@@ -137,6 +140,7 @@ export function createDocumentFurnitureSource(
     drawingLayoutToken: string;
     numberingIndex: NumberingIndex | undefined;
     styleCascade: StyleCascadeTable | undefined;
+    listCounterSeed: ListCounterSnapshot | undefined;
     story: ReturnType<typeof layoutHeaderFooterStory>;
   }
   // Several entries per part, one per page geometry. Sections that alternate portrait and
@@ -192,10 +196,13 @@ export function createDocumentFurnitureSource(
     return rIds.get(partName);
   };
 
+  const listSeeds = createFurnitureListSeeds();
+
   const storyOf = (
     part: OoxmlPart,
     width: number,
-    geometry: ReturnType<typeof geometryOfSection>
+    geometry: ReturnType<typeof geometryOfSection>,
+    listCounterSeed: ListCounterSnapshot | undefined
   ): ReturnType<typeof layoutHeaderFooterStory> => {
     const projectionEpoch = linkProjectors.epochForPart(part.name);
     const revisionAuthorFilterKey = revisionAuthorFilter?.cacheKey ?? '';
@@ -217,7 +224,8 @@ export function createDocumentFurnitureSource(
         entry.marginBottom === margins.bottom &&
         entry.marginLeft === geometry.margin.left &&
         entry.marginRight === geometry.margin.right &&
-        entry.storyDistance === storyDistanceOf(part, geometry)
+        entry.storyDistance === storyDistanceOf(part, geometry) &&
+        entry.listCounterSeed === listCounterSeed
     );
     if (
       cached &&
@@ -263,6 +271,7 @@ export function createDocumentFurnitureSource(
       {
         compatibilityMode: currentCompatibilityMode,
         ...(numbering ? { numberingIndex: numbering } : {}),
+        ...(listCounterSeed ? { listCounterSeed } : {}),
         projectLink,
         ...(projectFieldLink ? { projectFieldLink } : {}),
         showFieldCodes,
@@ -290,6 +299,7 @@ export function createDocumentFurnitureSource(
       drawingLayoutToken,
       numberingIndex: numbering,
       styleCascade: styles,
+      listCounterSeed,
       story: baseline,
     };
     // A stale entry for the same geometry is replaced; distinct geometries each keep one.
@@ -309,7 +319,11 @@ export function createDocumentFurnitureSource(
     occurrenceOwner: object,
     parts: ReturnType<HeadlessDocumentView['headerFooterPartsBySection']>[number] | undefined,
     resolution: HeaderFooterSectionResolution | undefined,
-    geometry: ReturnType<typeof geometryOfSection>
+    geometry: ReturnType<typeof geometryOfSection>,
+    seedFor: (
+      kind: 'header' | 'footer',
+      variant: HeaderFooterVariantName
+    ) => ListCounterSnapshot | undefined
   ): PageFurniture | undefined => {
     const reserveBackground = hasPageBackground(view.part());
     if (!parts || (!reserveBackground && parts.headers.size === 0 && parts.footers.size === 0))
@@ -338,7 +352,9 @@ export function createDocumentFurnitureSource(
         // part-memoized and stamp only this cheap occurrence wrapper with its exact slot identity.
         const rId =
           slot?.partName === part.name ? slot.rId : rIdOf(packageOwner, occurrenceOwner, part.name);
-        const baseline = background.authoredStory(storyOf(part, width, geometry));
+        // An implicit background part holds no list, so it never takes a seed.
+        const seed = part === authored ? seedFor(kind, variant) : undefined;
+        const baseline = background.authoredStory(storyOf(part, width, geometry, seed));
         stories.set(variant, rId ? stampStoryRId(occurrenceOwner, baseline, rId) : baseline);
       }
       return stories;
@@ -364,6 +380,13 @@ export function createDocumentFurnitureSource(
     const resolutionBySection =
       view.headerFooterResolutionBySection?.() ??
       resolveHeaderFooterResolutionBySection(packageOwner);
+    const seeds = listSeeds({
+      resolution: resolutionBySection,
+      numberingIndex: numberingIndex?.(),
+      styleCascade: styleCascade?.(),
+      displayMode: displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
+      ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
+    });
     return sections.map((section, index) => {
       const sourceIndex = sourceIndexes[index] ?? index;
       return furnitureFromParts(
@@ -371,7 +394,8 @@ export function createDocumentFurnitureSource(
         occurrenceOwner,
         bySection[sourceIndex],
         resolutionBySection[sourceIndex],
-        geometryOfSection(section.properties)
+        geometryOfSection(section.properties),
+        (kind, variant) => seeds.seedFor(sourceIndex, kind, variant)
       );
     });
   };

@@ -1089,3 +1089,13 @@ A body `LISTNUM` field SHALL display the next number of its list, computed from 
 - **GIVEN** a numbered paragraph of a named list that shows `S1.`
 - **WHEN** a `LISTNUM` field that names the list at level 1 follows it, and then another numbered paragraph of the list
 - **THEN** the field displays `S2.` and the paragraph shows `S3.`
+
+### Requirement: Header and footer lists share one count
+
+Header and footer stories SHALL count list items on one shared count that the body and notes do not join. The count SHALL run over the sections in order and, within a section, over the parts that section references itself: even header, default header, even footer, default footer, first-page header, first-page footer. An inherited part SHALL keep the numbers of its referencing section.
+
+#### Scenario: A footer list continues the header list
+
+- **GIVEN** a section whose default header holds two items of a list and whose default footer holds two items of the same list
+- **WHEN** the document lays out on several pages
+- **THEN** every page shows `1.` and `2.` in the header and `3.` and `4.` in the footer

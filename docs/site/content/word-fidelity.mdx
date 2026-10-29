@@ -169,6 +169,8 @@ Pair kerning (`w:kern`) leaves kana, ideographs, CJK punctuation, and full-width
 
 Lists that share one abstract numbering definition (`w:abstractNum`) count on one shared number per level. A `w:startOverride` restarts that number once, at the first item of its list on an overridden level, and only on that level. Items of the other lists continue from the restarted number. If the same `w:lvlOverride` also replaces the level, the replacement's `w:start` is the restart value.
 
+Header and footer lists share one count that the body and notes do not join. The count runs over every section in order. Within a section, it runs through the parts the section references itself: the even header, default header, even footer, default footer, first-page header, and first-page footer. A part counts even when no page shows it, and a part that two sections reference counts at each reference. An inherited part keeps the numbers of the section that references it. Every page shows the same numbers for a story.
+
 ### Tables
 
 <FeatureMatrix category="tables" />

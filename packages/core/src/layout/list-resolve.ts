@@ -278,13 +278,16 @@ function resolveListSequence(
   index: NumberingIndex,
   styleCascade: StyleCascadeTable | undefined,
   isFontAvailable: ((family: string) => boolean) | undefined,
-  resume?: { readonly from: number; readonly previous: ListSequenceResolve }
+  resume?: { readonly from: number; readonly previous: ListSequenceResolve },
+  seed?: ListCounterSnapshot
 ): ListSequenceResolve {
   const map = new Map<string, ResolvedListItem>();
   // A definition that delegates through `w:numStyleLink` has no levels of its own; resolving
   // the link here is what keeps those paragraphs from losing their markers entirely.
   const linked = withNumberingStyleLinks(index, styleCascade);
   const counters = createListCounterState(linked);
+  // A header or footer story continues the count the stories before it left.
+  if (seed) loadListCounters(counters, seed);
   const listNum = createListNumWalker(linked, counters);
   const states: ListCounterSnapshot[] = [];
   // A LISTNUM field reads the paragraphs before it (the last numbered one, the last heading),
@@ -461,7 +464,69 @@ type WithResolvedListItemsOptions = {
    * save path) keeps the pre-font-resolution answer: translate the private-use bullet.
    */
   readonly measurer?: TextMeasurer;
+  /** The counters a header or footer story starts from (`furniture-list-seeds.ts`). */
+  readonly listCounterSeed?: ListCounterSnapshot;
 };
+
+/** Seeded resolves per story, a few per blocks array: one part can start from several seeds. */
+const seededResolves = new WeakMap<
+  readonly OoxmlElement[],
+  {
+    readonly seed: ListCounterSnapshot;
+    readonly rawIndex: NumberingIndex | undefined;
+    readonly styleCascade: StyleCascadeTable | undefined;
+    readonly isFontAvailable: ((family: string) => boolean) | undefined;
+    readonly linkedIndex: NumberingIndex;
+    readonly listItems: ReadonlyMap<string, ResolvedListItem>;
+  }[]
+>();
+const MAX_SEEDED_RESOLVES_PER_STORY = 4;
+
+/**
+ * The list walk of a story that starts from `seed`. A header or footer part is short, so it
+ * walks whole; the memo keeps one resolve per seed for the part's few occurrences.
+ */
+function seededListItems(
+  options: WithResolvedListItemsOptions,
+  blocks: readonly OoxmlElement[],
+  seed: ListCounterSnapshot,
+  isFontAvailable: ((family: string) => boolean) | undefined
+): {
+  readonly numberingIndex: NumberingIndex;
+  readonly listItems: ReadonlyMap<string, ResolvedListItem>;
+} {
+  const entries = seededResolves.get(blocks) ?? [];
+  const hit = entries.find(
+    (entry) =>
+      entry.seed === seed &&
+      entry.rawIndex === options.numberingIndex &&
+      entry.styleCascade === options.styleCascade &&
+      entry.isFontAvailable === isFontAvailable
+  );
+  if (hit) return { numberingIndex: hit.linkedIndex, listItems: hit.listItems };
+  const linkedIndex = withNumberingStyleLinks(
+    options.numberingIndex ?? EMPTY_NUMBERING_INDEX,
+    options.styleCascade
+  );
+  const listItems = resolveListSequence(
+    walkStoryParagraphs(blocks, 8, true),
+    linkedIndex,
+    options.styleCascade,
+    isFontAvailable,
+    undefined,
+    seed
+  ).items;
+  const entry = {
+    seed,
+    rawIndex: options.numberingIndex,
+    styleCascade: options.styleCascade,
+    isFontAvailable,
+    linkedIndex,
+    listItems,
+  };
+  seededResolves.set(blocks, [entry, ...entries].slice(0, MAX_SEEDED_RESOLVES_PER_STORY));
+  return { numberingIndex: linkedIndex, listItems };
+}
 
 /** The oracle a pass actually resolves with: an explicit one, else the measurer's coverage. */
 function listFontAvailability(
@@ -510,6 +575,12 @@ function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
   // Paragraphs a hidden mark took out of the flow still count; see `hidden-paragraph-mark.ts`.
   const blocks = numberingFlowBlocks(flowBlocks);
   const isFontAvailable = listFontAvailability(options);
+  if (options.listItems === undefined && options.listCounterSeed) {
+    return {
+      ...options,
+      ...seededListItems(options, blocks, options.listCounterSeed, isFontAvailable),
+    };
+  }
   if (options.listItems === undefined) {
     const memo = resolvedListItemsMemoHit(options, isFontAvailable, blocks, memoOwner);
     if (memo && memoOwner === undefined) {
