@@ -78,6 +78,9 @@ export function useToolbarOverflow(
   const inputs = useRef({ groups, order });
   inputs.current = { groups, order };
   const groupsKey = toolbarGroupsKey(groups);
+  // The controls the previous answer counted from. A count from the end names other controls
+  // once a group gains or loses one, so the slack only applies to the same controls.
+  const answeredKey = useRef(groupsKey);
   const orderKey = order.join('\u0000');
 
   const measure = useCallback(() => {
@@ -90,6 +93,9 @@ export function useToolbarOverflow(
     // control is in "⋯". So the first collapse waits for a control that really runs past the
     // bar's box. Without layout to read (null), the arithmetic decides alone.
     const fits = overflowRef.current.size === 0 && reading.overflowing === false;
+    const key = toolbarGroupsKey(inputs.current.groups);
+    const same = answeredKey.current === key;
+    answeredKey.current = key;
     const next = fits
       ? NONE
       : toolbarOverflowItems({
@@ -99,7 +105,7 @@ export function useToolbarOverflow(
           itemWidths: memory.current.itemWidths,
           groupBases: memory.current.groupBases,
           groupGaps: memory.current.groupGaps,
-          previous: overflowRef.current,
+          ...(same ? { previous: overflowRef.current } : {}),
           hysteresis: TOOLBAR_OVERFLOW_HYSTERESIS,
         });
     if (!sameItemOverflow(next, overflowRef.current)) {

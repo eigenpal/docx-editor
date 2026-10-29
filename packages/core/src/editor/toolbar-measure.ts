@@ -418,11 +418,15 @@ function layoutWidth(element: Element, scale: number): number {
   return typeof offset === 'number' && offset > 0 ? offset : 0;
 }
 
-/** True when an item draws something: an element, or text that is not only white space. */
+/**
+ * True when an item is a flex item: it has an element or any text child. This is the CSS
+ * `:empty` test the stylesheet hides empty items with, which ignores only comments, so a Vue
+ * part that renders null (a comment) is empty in both adapters.
+ */
 function drawsSomething(item: Element): boolean {
   if (item.children.length > 0) return true;
   for (const node of item.childNodes) {
-    if (node.nodeType === 3 && (node.textContent ?? '').trim().length > 0) return true;
+    if (node.nodeType === 3 && (node.textContent ?? '').length > 0) return true;
   }
   return false;
 }
@@ -430,6 +434,8 @@ function drawsSomething(item: Element): boolean {
 /** A group's own flex gap, or the bar's when the group does not set one in px. */
 function groupGap(view: ReturnType<typeof hostWindowOf>, group: Element, fallback: number): number {
   const value = view.getComputedStyle(group).columnGap.trim();
+  // `normal` is 0 in a flex container; an unreadable value keeps the bar's gap.
+  if (value === 'normal') return 0;
   return /^-?[\d.]+px$/.test(value) ? Number.parseFloat(value) : fallback;
 }
 

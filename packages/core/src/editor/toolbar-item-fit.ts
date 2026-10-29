@@ -185,10 +185,24 @@ function fit(input: ToolbarItemFitInput, available: number): ToolbarItemOverflow
       if (saved <= 0) continue;
       total -= saved;
       hidden.set(id, count - shown);
+      // What stays may draw nothing: then the group leaves whole, separator and base with it.
+      if (shown > 0 && !drawsAny(input, group, shown)) {
+        total -= groupCost(input, group, shown);
+        hidden.set(id, count);
+        break;
+      }
       if (total <= available) break;
     }
   }
   return hidden;
+}
+
+/** Whether any of a group's first `shown` controls has a width. */
+function drawsAny(input: ToolbarItemFitInput, group: ToolbarFitGroup, shown: number): boolean {
+  for (let index = 0; index < shown && index < group.items.length; index += 1) {
+    if (widthOf(input, group.id, group.items[index]!) > 0) return true;
+  }
+  return false;
 }
 
 /** What the bar costs under an answer. */

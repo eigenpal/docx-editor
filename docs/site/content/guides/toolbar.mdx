@@ -161,6 +161,8 @@ If you use a locale provider, mount this component inside it so `useChromeTransl
 
 The preset toolbar stays on one row. When it runs out of width, it moves controls into the **More** (`⋯`) panel one at a time, from the end of a group, so the bar stays full. The collapse priority picks the group, and the next group starts to collapse only after the previous one is empty. The panel shows exactly the moved controls, in toolbar order, under the label of their group. The contextual table controls move together. Use `Toolbar.Group` to give your own controls the same behavior. The children of one `Toolbar.Group` sit after the built-in controls of that group, so they move into the panel together and first.
 
+Each control in a group is wrapped in a `.docx-toolbar__item` element, and the children of one `Toolbar.Group` share one item. If your CSS targets direct children of `.docx-toolbar__group`, target `.docx-toolbar__group > .docx-toolbar__item > *` instead.
+
 <FrameworkTabs>
 <Framework value="react">
 

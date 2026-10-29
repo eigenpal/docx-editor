@@ -201,6 +201,24 @@ describe('toolbarOverflowItems with uneven controls', () => {
     expect(fitOne(50).get('g')).toBe(1);
   });
 
+  test('a group whose remaining controls draw nothing leaves whole', () => {
+    // [empty, b]: hiding b would leave only the empty control and its separator standing.
+    const answer = toolbarOverflowItems({
+      available: 40,
+      groups: [{ id: 'g', items: ['empty', 'b'] }],
+      order: ['g'],
+      itemWidths: new Map([
+        [toolbarItemKey('g', 'empty'), 0],
+        [toolbarItemKey('g', 'b'), 40],
+      ]),
+      groupBases: new Map([['g', 14]]),
+      gap: 2,
+      fixed: 0,
+      more: 20,
+    });
+    expect(answer.get('g')).toBe(2);
+  });
+
   test("a group's own gap counts instead of the bar's", () => {
     // With a 2 px group gap, a + b cost 62, so 62 fits where the bar's 10 px gap would not.
     expect(fitOne(62, new Map([['g', 2]])).size).toBe(0);
