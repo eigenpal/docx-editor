@@ -9,7 +9,10 @@ import { docx, open, p, paragraphsOf, roots } from './support/protocol.ts';
 import type { AutomationStyleRead } from '../style-listing.ts';
 import type { AutomationHost } from '../protocol.ts';
 import type { AutomationOperation } from '../operations.ts';
-import { MAX_STYLE_DEFINITIONS } from '../../layout/style-cascade.ts';
+import { MAX_STYLE_DEFINITIONS, buildStyleCascadeTable } from '../../layout/style-cascade.ts';
+import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
+import { stylesPartOf } from '../../store/package/ooxml-indexes.ts';
+import { styleDefinitionsOf } from '../style-definitions.ts';
 
 const STYLES =
   '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/>' +
@@ -197,5 +200,20 @@ describe('getStyles', () => {
       operations: [{ op: 'setStyle', span: { paragraph: paragraph! }, name: 'Dup Paragraph' }],
     });
     expect(refusedWrite.ok).toBe(false);
+  });
+
+  test('keeps the default paragraph style when a later duplicate id has another type, as layout does', () => {
+    const opened = readOoxmlPackage(
+      docx(
+        p('one'),
+        '<w:style w:type="paragraph" w:styleId="Body" w:default="1"><w:name w:val="Body"/></w:style>' +
+          '<w:style w:type="character" w:styleId="Body"><w:name w:val="Body Character"/></w:style>'
+      )
+    );
+    if (!opened.ok) throw new Error('package did not open');
+    const part = stylesPartOf(opened.package)!;
+    const layout = buildStyleCascadeTable(part.root);
+    expect(layout.defaultParagraphStyleId).toBe('Body');
+    expect(styleDefinitionsOf(part).defaultParagraphId).toBe(layout.defaultParagraphStyleId);
   });
 });

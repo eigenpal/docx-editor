@@ -288,7 +288,7 @@ export function planTableOperation(
           return refuse('unsupported-content', 'invalid-table-style-name');
         const key = styleNameKey(wanted);
         const style = styles(packages).find((s) => s.name !== null && styleNameKey(s.name) === key);
-        if (!style) return refuse('unsupported-content', 'table-style-not-defined');
+        if (!style) return refuse('unsupported-content', 'style-not-defined: table');
         mutation = { ...mutation, styleId: style.styleId };
       }
       const revision = context.trackingAuthor

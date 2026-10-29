@@ -58,6 +58,8 @@ export interface QueuedCollectionLoad {
   readonly top: number | undefined;
   /** Whether the queued read was marked as queueing item reads for the same sync. */
   readonly continues: boolean;
+  /** Set when a later read answers this load's names too; its own answer is then ignored. */
+  superseded: boolean;
 }
 
 /**
@@ -65,9 +67,14 @@ export interface QueuedCollectionLoad {
  *
  * REPEATED LOADS ACCUMULATE. `load('items/text'); load('items/style'); sync()` must leave both
  * readable, so a second load with the same window joins the first: one listing answers both, with
- * every named property. A load that cannot join (another window, or item reads the queued one was
- * not marked for) queues its own read, carrying the names asked for so far, so the answer that
- * settles last still has all of them. A load stops accepting joins once a sync takes it.
+ * every named property.
+ *
+ * A load that names item properties cannot join a queued read that was not marked as queueing
+ * item reads (a bare `load('items')`), because a sync with writes sends only marked reads before
+ * its writes. It queues its own marked read instead, carrying every name asked for so far, and the
+ * earlier read is superseded: its answer no longer replaces `items`. A load with another window is
+ * a different question; it queues its own read, and the answer that settles last sets `items`.
+ * A load stops accepting joins once a sync takes it.
  */
 export class CollectionLoads {
   #open: QueuedCollectionLoad | undefined;
@@ -93,10 +100,20 @@ export class CollectionLoads {
     top: number | undefined,
     continues: boolean
   ): { readonly load: QueuedCollectionLoad; readonly release: () => void } {
+    const load: QueuedCollectionLoad = {
+      names: new Set(names),
+      skip,
+      top,
+      continues,
+      superseded: false,
+    };
     const earlier = this.#open;
-    const load: QueuedCollectionLoad = { names: new Set(names), skip, top, continues };
-    if (earlier && earlier.skip === skip && earlier.top === top)
+    // Only a same-window load that could not join reaches here with an earlier one open: a bare
+    // load followed by item properties. This read answers both, so the earlier one stands down.
+    if (earlier && earlier.skip === skip && earlier.top === top) {
       for (const name of earlier.names) load.names.add(name);
+      earlier.superseded = true;
+    }
     this.#open = load;
     return {
       load,
@@ -105,6 +122,11 @@ export class CollectionLoads {
       },
     };
   }
+}
+
+/** The index after the last member a `skip`/`top` window covers in a listing of `total`. */
+export function windowEnd(total: number, skip: number, top: number | undefined): number {
+  return top === undefined ? total : Math.min(total, skip + top);
 }
 
 /** What a promised member is told once the read that looked for it has answered. */
@@ -234,6 +256,8 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
         return resolved;
       },
       settle: (value) => {
+        // A later read in this sync answers these names too, and settles after this one.
+        if (load.superseded) return;
         const members = this.#members(value, label, skip, top);
         this.setLoadedProperty('items', members);
         const names = [...load.names];
@@ -316,7 +340,7 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
     top: number | undefined
   ): readonly T[] {
     const total = this.size(value, label);
-    const last = top === undefined ? total : Math.min(total, skip + top);
+    const last = windowEnd(total, skip, top);
     const items: T[] = [];
     for (let index = skip; index < last; index += 1) {
       const address = this.addressAt(value, label, index);

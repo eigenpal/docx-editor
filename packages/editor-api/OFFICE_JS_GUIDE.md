@@ -567,9 +567,10 @@ await runtime.run(async (context) => {
 
   // Offer an agent the paragraph styles a reader would see, in gallery order.
   // Keep hidden styles that unhide once used, such as heading 2, so they can be applied too.
+  // Many styles share priority 99, so sort by name next for a stable order.
   const names = styles.items
     .filter((style) => style.type === 'Paragraph' && (style.visibility || style.unhideWhenUsed))
-    .sort((a, b) => a.priority - b.priority)
+    .sort((a, b) => a.priority - b.priority || a.nameLocal.localeCompare(b.nameLocal))
     .map((style) => style.nameLocal);
   const chosen = names.find((name) => name.toLowerCase() === 'quote');
   if (chosen === undefined) return;

@@ -29,10 +29,10 @@ import {
   type DirectionSources,
 } from '../layout/paragraph-direction-inheritance.ts';
 import { namedChild, paragraphPropertiesNodeOf } from '../store/store/tree-op-nodes.ts';
-import { styleDefinitionsOf, styleNameKey } from './style-definitions.ts';
+import { MAX_STYLE_NAME, styleDefinitionsOf, styleNameKey } from './style-definitions.ts';
 
-/** Longest style name a write may carry. Word's own limit is far below this. */
-export const MAX_STYLE_NAME = 255;
+/** Longest style name a write may carry; the same bound the definitions read names with. */
+export { MAX_STYLE_NAME } from './style-definitions.ts';
 
 /** What the document says its paragraph styles are. */
 export interface AutomationStyleIndex {
@@ -149,9 +149,14 @@ export function styleIdFor(name: unknown, styles: AutomationStyleIndex): StylePl
     return { ok: false, detail: 'style: not a name' };
   if (name.length > MAX_STYLE_NAME) return { ok: false, detail: 'style: name too long' };
   if (!isValidXmlText(name)) return { ok: false, detail: 'style: not valid XML text' };
-  if (!styles.present) return { ok: false, detail: 'style: this document defines no styles' };
+  if (!styles.present)
+    return { ok: false, detail: 'style-not-defined: this document defines no styles' };
   const styleId = styles.idOf(name);
   if (styleId === null)
-    return { ok: false, detail: 'style: this document defines no paragraph style with that name' };
+    return {
+      ok: false,
+      // The token before the colon selects the public diagnostic that points to getStyles().
+      detail: 'style-not-defined: this document defines no paragraph style with that name',
+    };
   return { ok: true, styleId };
 }

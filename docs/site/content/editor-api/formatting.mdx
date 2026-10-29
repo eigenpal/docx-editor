@@ -151,9 +151,11 @@ await context.sync();
 
 const names = styles.items
   .filter((style) => style.type === 'Paragraph' && (style.visibility || style.unhideWhenUsed))
-  .sort((a, b) => a.priority - b.priority)
+  .sort((a, b) => a.priority - b.priority || a.nameLocal.localeCompare(b.nameLocal))
   .map((style) => style.nameLocal);
 ```
+
+Many styles share priority 99, so the example sorts by `nameLocal` next for a stable order.
 
 The list includes paragraph, character, table, and list styles. `Body.style`, `Paragraph.style`, and `Range.style` accept paragraph style names only. They refuse character, table, and list style names, so check `type` before you assign a `nameLocal`. Every listed paragraph style applies through those setters, including linked styles such as headings. A built-in name is accepted as listed, such as `heading 1`.
 
@@ -172,7 +174,7 @@ A `Style` exposes these read-only properties:
 - `quickStyle`: `true` when the style states `w:qFormat`.
 - `unhideWhenUsed`: `true` when the style states `w:unhideWhenUsed`.
 
-The list follows the order of `styles.xml` and reads each style the way the page does. If two definitions share a `w:styleId`, the last one counts. Only the first 4096 `w:style` definitions count, and names longer than 128 characters are not read. It leaves out styles that have no `w:name`, an empty or invalid name, a later duplicate name of the same kind, or no recognized `w:type`. A document with no styles part lists no styles. Style definitions are read-only: the API does not add, delete, or change styles, and `Style` has no `font` or `paragraphFormat`.
+The list follows the order of `styles.xml` and reads each style the way the page does. If two definitions share a `w:styleId`, the last one counts. Only the first 4096 `w:style` definitions count, and names longer than 255 characters are not read. It leaves out styles that have no `w:name`, an empty or invalid name, a later duplicate name of the same kind, or no recognized `w:type`. A document with no styles part lists no styles. Style definitions are read-only: the API does not add, delete, or change styles, and `Style` has no `font` or `paragraphFormat`.
 
 `Table.style` is separate. It accepts the `nameLocal` of a listed style whose `type` is `Table`. See [Tables and cells](/docs/2.x/editor-api/tables).
 

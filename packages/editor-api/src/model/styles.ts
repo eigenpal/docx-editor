@@ -29,7 +29,7 @@ import {
   type RequestContext,
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
-import { CollectionLoads, collectionItemSelection } from './item-collection.ts';
+import { CollectionLoads, collectionItemSelection, windowEnd } from './item-collection.ts';
 import { ModelObject } from './model-object.ts';
 
 /** The kind of a style. @public */
@@ -115,9 +115,10 @@ function propertyOf(
  * await context.sync();
  *
  * // Keep hidden styles that unhide once used, such as heading 2, so they can be applied too.
+ * // Many styles share priority 99, so sort by name next for a stable order.
  * const choices = styles.items
  *   .filter((style) => style.type === 'Paragraph' && (style.visibility || style.unhideWhenUsed))
- *   .sort((a, b) => a.priority - b.priority)
+ *   .sort((a, b) => a.priority - b.priority || a.nameLocal.localeCompare(b.nameLocal))
  *   .map((style) => style.nameLocal);
  * ```
  *
@@ -360,9 +361,10 @@ export class StyleCollection extends ModelObject {
       dispose: release,
       plan: () => ({ op: 'getStyles' }),
       settle: (value) => {
+        if (load.superseded) return;
         const styles = hydratedStyles(value, label);
         const names = [...load.names];
-        const last = top === undefined ? styles.length : Math.min(styles.length, skip + top);
+        const last = windowEnd(styles.length, skip, top);
         const items: Style[] = [];
         for (let index = skip; index < last; index += 1) {
           const style = styles[index]!;

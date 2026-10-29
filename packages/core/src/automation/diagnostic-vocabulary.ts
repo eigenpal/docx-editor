@@ -63,6 +63,7 @@ export type EditDiagnosticCode =
   | 'edit.field-unsupported'
   | 'edit.field-result-unsupported'
   | 'edit.ooxml-unsupported'
+  | 'edit.style-not-defined'
   | 'edit.section-mark'
   | 'edit.table-structure-unsupported'
   | 'edit.table-merge-not-rectangle'

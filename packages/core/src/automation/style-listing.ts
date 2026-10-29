@@ -18,8 +18,7 @@ import type { AutomationOperation } from './operations.ts';
 import { answered, refused } from './plan-results.ts';
 import type { PlannedOperation } from './plan-types.ts';
 import type { AutomationPackageReads } from './reads.ts';
-import { styleDefinitionsOf, styleNameKey } from './style-definitions.ts';
-import { MAX_STYLE_NAME } from './styles.ts';
+import { MAX_STYLE_NAME, styleDefinitionsOf, styleNameKey } from './style-definitions.ts';
 
 /**
  * Plan `getStyles`: a read with no handle, answered from the package the host holds.
@@ -223,7 +222,8 @@ const LINK_PARTNER: ReadonlyMap<string, string> = new Map([
 
 /** The checks a `setStyle` name passes, applied to a name the file declares. */
 function writableName(name: string): boolean {
-  return name.trim().length > 0 && name.length <= MAX_STYLE_NAME && isValidXmlText(name);
+  // The definitions already bound a name to MAX_STYLE_NAME characters.
+  return name.trim().length > 0 && isValidXmlText(name);
 }
 
 const ON: ReadonlySet<string> = new Set(['1', 'true', 'on']);

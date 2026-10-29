@@ -10,6 +10,8 @@ import {
   withEnclosedBookmarkDrops,
 } from './plan-bookmarks.ts';
 import { planPackageOperation } from './plan-package-operations.ts';
+// The shared frozen refusal and query answer, under the names this planner has always used.
+import { answered as query, refused as refuse } from './plan-results.ts';
 import { referencedNoteIds } from './note-references.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
@@ -89,8 +91,6 @@ import type {
 import { createBatchCommandPolicy } from './batch-command-policy.ts';
 import type {
   AutomationCapabilities,
-  AutomationError,
-  AutomationErrorCode,
   AutomationHandle,
   AutomationSpan,
   AutomationValue,
@@ -220,21 +220,10 @@ export interface BatchPlanner {
     | { readonly ok: false; readonly detail: string; readonly selection?: number };
 }
 
-function error(code: AutomationErrorCode, message: string, detail?: string): AutomationError {
-  return Object.freeze(detail === undefined ? { code, message } : { code, message, detail });
-}
-
-function refuse(code: AutomationErrorCode, message: string, detail?: string): PlannedOperation {
-  return { ok: false, error: error(code, message, detail) };
-}
 /** A handle whose object an edit, a peer, or an undo removed: reading again finds a fresh one. */
 const removed = (message: string) => refuse('invalid-handle', message, TARGET_REMOVED);
 
 const APPLIED: AutomationValue = Object.freeze({ kind: 'applied' as const });
-
-function query(value: AutomationValue): PlannedOperation {
-  return { ok: true, kind: 'query', value };
-}
 
 /** Planning state remains separate for each story and scoped body. */
 interface StoryPlan {

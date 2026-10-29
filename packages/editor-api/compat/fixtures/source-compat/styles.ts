@@ -16,7 +16,7 @@ export async function applyListedParagraphStyle(): Promise<void> {
     const paragraphStyles = styles.items.filter((style) => style.type === 'Paragraph');
     const offered: string[] = paragraphStyles
       .filter((style) => style.visibility || style.unhideWhenUsed)
-      .sort((a, b) => a.priority - b.priority)
+      .sort((a, b) => a.priority - b.priority || a.nameLocal.localeCompare(b.nameLocal))
       .map((style) => style.nameLocal);
     const total: number = count.value;
     void total;

@@ -331,6 +331,33 @@ describe('Document.getStyles', () => {
     }
   });
 
+  for (const writes of [false, true]) {
+    test(`a bare load then item properties answer every name ${writes ? 'with' : 'without'} a write in the sync`, async () => {
+      const runtime = await createServer(STYLED);
+      try {
+        const read = await runtime.run(async (context) => {
+          const paragraphs = context.document.body.paragraphs;
+          paragraphs.load('items');
+          paragraphs.load('items/text');
+          const styles = context.document.getStyles();
+          styles.load('items');
+          styles.load('items/nameLocal');
+          if (writes) context.document.body.insertParagraph('third', 'End');
+          await context.sync();
+          return {
+            texts: paragraphs.items.map((paragraph) => paragraph.text),
+            first: styles.items[0]!.nameLocal,
+            type: styles.items[0]!.type,
+          };
+        });
+        // Reads in a sync report the document from before its writes.
+        expect(read).toEqual({ texts: ['first', 'second'], first: 'Normal', type: 'Paragraph' });
+      } finally {
+        runtime.dispose();
+      }
+    });
+  }
+
   test('a listed item loads its properties again in a later sync', async () => {
     const runtime = await createServer(STYLED);
     try {
@@ -570,7 +597,7 @@ test('the guide example offers only visible paragraph styles and applies one', a
       // Keep hidden styles that unhide once used, such as heading 2, so they can be applied too.
       const names = styles.items
         .filter((style) => style.type === 'Paragraph' && (style.visibility || style.unhideWhenUsed))
-        .sort((a, b) => a.priority - b.priority)
+        .sort((a, b) => a.priority - b.priority || a.nameLocal.localeCompare(b.nameLocal))
         .map((style) => style.nameLocal);
       const chosen = names.find((name) => name.toLowerCase() === 'quote');
       if (chosen === undefined) return names;
@@ -697,6 +724,61 @@ test('a paragraph style that repeats an earlier name reads null, as the setter a
       };
     });
     expect(read).toEqual({ styles: [null, 'Body'], listed: ['Normal', 'Body'] });
+  } finally {
+    runtime.dispose();
+  }
+});
+
+test('a style name of 150 characters reads, lists, and applies', async () => {
+  const long = `Long ${'x'.repeat(145)}`;
+  expect(long.length).toBe(150);
+  const runtime = await createServer(
+    withStyles(
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+        `<w:style w:type="paragraph" w:styleId="Long"><w:name w:val="${long}"/></w:style>`
+    )
+  );
+  try {
+    const read = await runtime.run(async (context) => {
+      const styles = context.document.getStyles();
+      styles.load('items/nameLocal');
+      const found = styles.getByNameOrNullObject(long);
+      found.load('nameLocal');
+      const paragraph = context.document.body.paragraphs.getFirst();
+      await context.sync();
+      paragraph.style = long;
+      await context.sync();
+      paragraph.load('style');
+      await context.sync();
+      return {
+        listed: styles.items.map((style) => style.nameLocal),
+        found: found.isNullObject ? null : found.nameLocal,
+        style: paragraph.style,
+      };
+    });
+    expect(read).toEqual({ listed: ['Normal', long], found: long, style: long });
+  } finally {
+    runtime.dispose();
+  }
+});
+
+test('a refused style name says so and points to getStyles()', async () => {
+  const runtime = await createServer(STYLED);
+  try {
+    const refusal = await runtime.run(async (context) => {
+      context.document.body.paragraphs.getFirst().style = 'Missing Style';
+      try {
+        await context.sync();
+        return null;
+      } catch (error) {
+        if (!isDocxEditorError(error)) throw error;
+        return { code: error.code, inner: error.debugInfo.innerError };
+      }
+    });
+    expect(refusal?.code).toBe('InvalidArgument');
+    expect(refusal?.inner?.code).toBe('edit.style-not-defined');
+    expect(refusal?.inner?.message).toContain('not defined');
+    expect(refusal?.inner?.message).toContain('document.getStyles()');
   } finally {
     runtime.dispose();
   }

@@ -4,25 +4,38 @@
 // and table style names all start here, so they agree about which styles exist and how a name
 // compares.
 //
-// THE SAME DEFINITIONS THE PAGE RESOLVES. Each definition is read with layout's own
-// `readStyleDefinition`, over the same direct `w:style` children of the root, under the same
-// `MAX_STYLE_DEFINITIONS` bound, and a repeated `w:styleId` resolves the way layout's cascade table
-// does: the last definition wins. So a style automation lists or applies is the style the page
-// paints.
+// THE SAME DEFINITIONS THE PAGE RESOLVES. A light reader applies layout's own rules for what makes
+// a definition (`isValidStyleId`, the first child of each kind, the `w:default` on-spellings), over
+// the same direct `w:style` children of the root, under the same `MAX_STYLE_DEFINITIONS` bound. A
+// repeated `w:styleId` resolves the way layout's cascade table does: the last definition wins, and
+// the default paragraph style follows layout's rule. Formatting properties are not parsed: only
+// what identifies and names a style is read.
+//
+// ONE DIFFERENCE, ON PURPOSE: the name. Layout keeps names of at most 128 characters because it
+// never looks a style up by name. Automation does, so it reads a name up to `MAX_STYLE_NAME`, the
+// longest name a `setStyle` write accepts.
 //
 // CACHED ON THE PART ROOT. Trees are immutable, so a body edit leaves the styles part's root the
 // same object and the definitions are reused; only an edit to `styles.xml` builds them again.
 
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { MAX_STYLE_DEFINITIONS } from '../layout/style-cascade.ts';
-import { isElement, readStyleDefinition } from '../layout/style-definition-reader.ts';
+import {
+  attributeValue,
+  childNamed,
+  isElement,
+  isValidStyleId,
+} from '../layout/style-definition-reader.ts';
 
-/** One style definition, as layout reads it, with the element it came from. */
+/** Longest style name automation reads or a write may carry. */
+export const MAX_STYLE_NAME = 255;
+
+/** One style definition, read by layout's identity rules, with the element it came from. */
 export interface StyleDefinitionEntry {
   readonly styleId: string;
   /** The `w:type`, or an empty string where the part states none. */
   readonly type: string;
-  /** The `w:name`, or null where the part gives none layout accepts. */
+  /** The `w:name`, or null where the part gives none of at most `MAX_STYLE_NAME` characters. */
   readonly name: string | null;
   /** The `w:basedOn` id, or null. */
   readonly basedOn: string | null;
@@ -39,7 +52,7 @@ export interface StyleDefinitions {
   readonly paragraphIdByName: ReadonlyMap<string, string>;
   /** The `w:name` of each paragraph style id, or null where the part gives none. */
   readonly paragraphNameById: ReadonlyMap<string, string | null>;
-  /** The paragraph style the part marks as default, resolved as layout resolves it, or null. */
+  /** The default paragraph style id, resolved by layout's rule, or null. */
   readonly defaultParagraphId: string | null;
 }
 
@@ -62,36 +75,49 @@ export function styleDefinitionsOf(part: OoxmlPart): StyleDefinitions {
   return built;
 }
 
+/** The validated id a child names, as layout reads `w:basedOn` and `w:next`. */
+function referenceOf(element: OoxmlElement, localName: string): string | null {
+  const child = childNamed(element, localName);
+  const raw = child ? attributeValue(child, 'val') : undefined;
+  return isValidStyleId(raw) ? raw : null;
+}
+
+/** `w:default` as layout reads it. */
+function isDefaultFlag(raw: string | undefined): boolean {
+  return raw === '1' || raw === 'true' || raw === 'on';
+}
+
 function build(root: OoxmlElement): StyleDefinitions {
-  // The walk itself is bounded: it stops at the cap, as layout's does.
   const read: StyleDefinitionEntry[] = [];
   const winner = new Map<string, StyleDefinitionEntry>();
   let defaultParagraphId: string | null = null;
   let counted = 0;
+  // Bounded: the walk itself stops at the cap, as layout's does.
   for (const child of root.children) {
     if (!isElement(child) || child.localName !== 'style') continue;
     if (counted >= MAX_STYLE_DEFINITIONS) break;
     counted += 1;
-    const definition = readStyleDefinition(child);
-    if (!definition) continue;
+    const styleId = attributeValue(child, 'styleId');
+    if (!isValidStyleId(styleId)) continue;
+    const nameNode = childNamed(child, 'name');
+    const name = nameNode ? attributeValue(nameNode, 'val') : undefined;
     const entry: StyleDefinitionEntry = Object.freeze({
-      styleId: definition.styleId,
-      type: definition.type,
-      name: definition.name ?? null,
-      basedOn: definition.basedOn,
-      next: definition.next,
+      styleId,
+      type: attributeValue(child, 'type') ?? '',
+      name: name !== undefined && name.length <= MAX_STYLE_NAME ? name : null,
+      basedOn: referenceOf(child, 'basedOn'),
+      next: referenceOf(child, 'next'),
       element: child,
     });
     read.push(entry);
-    // Last duplicate wins, and the default flag follows the winning definition, as in layout.
-    winner.set(entry.styleId, entry);
+    // Last duplicate wins. The default paragraph style follows layout's rule exactly: only a
+    // paragraph definition sets or clears it, so a later duplicate of another type keeps it.
+    winner.set(styleId, entry);
     if (entry.type === 'paragraph') {
-      if (definition.isDefault) defaultParagraphId = entry.styleId;
-      else if (defaultParagraphId === entry.styleId) defaultParagraphId = null;
+      if (isDefaultFlag(attributeValue(child, 'default'))) defaultParagraphId = styleId;
+      else if (defaultParagraphId === styleId) defaultParagraphId = null;
     }
   }
-  if (defaultParagraphId !== null && winner.get(defaultParagraphId)?.type !== 'paragraph')
-    defaultParagraphId = null;
   const entries = read.filter((entry) => winner.get(entry.styleId) === entry);
   const paragraphIdByName = new Map<string, string>();
   const paragraphNameById = new Map<string, string | null>();
