@@ -19,8 +19,14 @@ await initializeHarfBuzz();
 
 const STAND_IN = { family: 'Missing CJK Family', weight: 400, style: 'normal' as const };
 const FIXTURE = { family: 'Metric Fixture', weight: 400, style: 'normal' as const };
+const BOLD = { family: 'Metric Fixture', weight: 700, style: 'normal' as const };
 
-function measurer(codePageBit: number, gap = 0, ascent = 1760, request = FIXTURE) {
+function measurer(
+  codePageBit: number,
+  gap = 0,
+  ascent = 1760,
+  request: typeof FIXTURE | typeof STAND_IN | typeof BOLD = FIXTURE
+) {
   const bytes = new Uint8Array(
     readFileSync(new URL('./fixtures/fonts/DejaVuSans.ttf', import.meta.url))
   );
@@ -47,7 +53,10 @@ function measurer(codePageBit: number, gap = 0, ascent = 1760, request = FIXTURE
       { id: 'metrics', request: FIXTURE, bytes, hash: sha256FontBytes(bytes), faceIndex: 0 },
     ],
     // A missing family answered by the fixture, as a packaged stand-in is.
-    substitutions: [{ from: STAND_IN, to: FIXTURE }],
+    substitutions: [
+      { from: STAND_IN, to: FIXTURE },
+      { from: BOLD, to: FIXTURE },
+    ],
   });
   const font = snapshot.resolve(request);
   if (font instanceof FontResolutionError) throw font;
@@ -157,4 +166,10 @@ test('a taller CJK face that answers a substitution keeps its own box', () => {
     const style = { ...DEFAULT_RUN_STYLE, fontFamily, fontSizePt: 11 };
     expect(measure.lineMetrics(style).height).toBeCloseTo(box, 2);
   }
+});
+
+test('a bold run that the regular face of the same family answers keeps the CJK line', () => {
+  const measure = measurer(17, 0, 2304, BOLD);
+  const style = { ...DEFAULT_RUN_STYLE, fontFamily: 'Metric Fixture', fontSizePt: 11, bold: true };
+  expect(measure.lineMetrics(style).height).toBeCloseTo(((11 * 2592) / 2048) * 1.3, 2);
 });

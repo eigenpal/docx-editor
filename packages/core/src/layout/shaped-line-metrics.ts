@@ -15,7 +15,17 @@ const NAMED_FACE_KEY = 0.5;
 
 /** True when `font` is the family that `style` names, not a substitute or a glyph fallback. */
 function drawsAsNamedFace(font: ResolvedFont, style: ResolvedRunStyle): boolean {
-  if (font.substitution !== null || style.fontFamily === null) return false;
+  if (style.fontFamily === null) return false;
+  // A bold or italic request answered by the same family's regular face (a synthesized
+  // style) still draws as the named family. A stand-in from another family does not.
+  const substitution = font.substitution;
+  if (
+    substitution !== null &&
+    (substitution.lineMetrics !== undefined ||
+      substitution.requested.family.trim().toLowerCase() !==
+        substitution.resolved.family.trim().toLowerCase())
+  )
+    return false;
   // The exact comparison answers almost every call on this per-span path without allocating.
   return (
     font.family === style.fontFamily ||
