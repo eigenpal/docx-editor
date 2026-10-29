@@ -120,27 +120,42 @@ export function paragraphStyleDisplayName(name: string, styleId: string): string
   return heading ? `Heading ${heading[1]}` : label;
 }
 
-/** Word's own `w:name` for the built-in styles the picker labels from the catalogue. */
-const BUILT_IN_STYLE_KEYS: Readonly<
-  Record<string, 'styles.normal' | 'styles.title' | 'styles.subtitle'>
-> = { normal: 'styles.normal', title: 'styles.title', subtitle: 'styles.subtitle' };
+/** A catalogue key for a built-in paragraph style. */
+type BuiltInStyleKey =
+  | 'styles.normal'
+  | 'styles.title'
+  | 'styles.subtitle'
+  | 'styles.noSpacing'
+  | 'styles.quote'
+  | 'styles.intenseQuote'
+  | 'styles.listParagraph';
+
+/** The lowercased `w:name` of each built-in style the picker labels from the catalogue. */
+const BUILT_IN_STYLE_KEYS: ReadonlyMap<string, BuiltInStyleKey> = new Map([
+  ['normal', 'styles.normal'],
+  ['title', 'styles.title'],
+  ['subtitle', 'styles.subtitle'],
+  ['no spacing', 'styles.noSpacing'],
+  ['quote', 'styles.quote'],
+  ['intense quote', 'styles.intenseQuote'],
+  ['list paragraph', 'styles.listParagraph'],
+]);
 
 /**
  * The catalogue label for a built-in paragraph style, from its `w:name`, or null for any other
- * style. Word stores the English `w:name` for its built-in styles in every language, and shows
- * each one under its own UI language, so a picker in another locale needs the catalogue label.
- * The match ignores case: Word writes `heading 1`, other producers write `Heading 1`. The
- * adapters call `t()` with the answer, so this file stays free of i18n.
+ * style. A document stores the English `w:name` of a built-in style whatever language wrote it,
+ * so a picker in another locale needs the catalogue label. The match uses the name, not the
+ * style id, because a style id can be localized (`Ttulo1`), and it ignores case (`heading 1`
+ * and `Heading 1` both occur). The adapters call `t()` with the answer, so this file stays free
+ * of i18n.
  * @internal
  */
 export function builtInParagraphStyleLabel(name: string): {
-  readonly key: 'styles.normal' | 'styles.title' | 'styles.subtitle' | 'styles.headingLevel';
+  readonly key: BuiltInStyleKey | 'styles.headingLevel';
   readonly vars?: { readonly level: number };
 } | null {
   const lower = name.toLowerCase();
-  const key = Object.prototype.hasOwnProperty.call(BUILT_IN_STYLE_KEYS, lower)
-    ? BUILT_IN_STYLE_KEYS[lower]
-    : undefined;
+  const key = BUILT_IN_STYLE_KEYS.get(lower);
   if (key) return { key };
   const heading = BUILT_IN_HEADING_NAME.exec(lower);
   return heading ? { key: 'styles.headingLevel', vars: { level: Number(heading[1]) } } : null;

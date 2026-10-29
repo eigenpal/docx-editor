@@ -224,7 +224,11 @@
     "heading2": "عنوان 2",
     "heading3": "عنوان 3",
     "normal": "عادي",
-    "headingLevel": "عنوان {level}"
+    "headingLevel": "عنوان {level}",
+    "noSpacing": "بلا تباعد",
+    "quote": "اقتباس",
+    "intenseQuote": "اقتباس مكثف",
+    "listParagraph": "فقرة قائمة"
   },
   "font": {
     "selectAriaLabel": "تحديد عائلة الخطوط",

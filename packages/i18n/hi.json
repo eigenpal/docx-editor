@@ -153,7 +153,11 @@
     "heading2": "शीर्षक 2",
     "heading3": "शीर्षक 3",
     "normal": "सामान्य",
-    "headingLevel": "शीर्षक {level}"
+    "headingLevel": "शीर्षक {level}",
+    "noSpacing": "कोई रिक्ति नहीं",
+    "quote": "उद्धरण",
+    "intenseQuote": "गहन उद्धरण",
+    "listParagraph": "सूची अनुच्छेद"
   },
   "font": {
     "selectAriaLabel": "फ़ॉन्ट फैमिली चुनें",

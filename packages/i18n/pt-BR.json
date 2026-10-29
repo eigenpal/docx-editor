@@ -153,7 +153,11 @@
     "heading2": "Título 2",
     "heading3": "Título 3",
     "normal": "Normal",
-    "headingLevel": "Título {level}"
+    "headingLevel": "Título {level}",
+    "noSpacing": "Sem Espaçamento",
+    "quote": "Citação",
+    "intenseQuote": "Citação Intensa",
+    "listParagraph": "Parágrafo da Lista"
   },
   "font": {
     "selectAriaLabel": "Selecionar família da fonte",

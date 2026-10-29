@@ -10,7 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from './Select';
 import { cn } from '../../lib/utils';
 import type { Theme } from '@docx-editor.dev/core/contracts/editor';
 import type { DocumentStyleSummary } from '../../lib/stylePreview';
-import { getStylePreviewProps, resolveParagraphStyleOptions } from '../../lib/stylePreview';
+import {
+  builtInParagraphStyleLabel,
+  getStylePreviewProps,
+  resolveParagraphStyleOptions,
+} from '../../lib/stylePreview';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 
@@ -134,12 +138,16 @@ export function StylePicker({
   const styleOptions: StyleOption[] = React.useMemo(() => {
     const resolved = resolveParagraphStyleOptions(styles);
     if (resolved.length === 0) return DEFAULT_STYLES;
-    return resolved.map((o) => ({
-      ...o,
-      type: 'paragraph',
-      nameKey: DEFAULT_STYLES.find((d) => d.styleId === o.styleId)?.nameKey,
-    }));
-  }, [styles]);
+    return resolved.map((o) => {
+      // Built-in styles match by name, because a style id can be localized. This picker
+      // keeps its own "Normal text" label for the default style.
+      const builtIn = builtInParagraphStyleLabel(o.name);
+      if (!builtIn) return { ...o, type: 'paragraph' };
+      const name =
+        builtIn.key === 'styles.normal' ? t('styles.normalText') : t(builtIn.key, builtIn.vars);
+      return { ...o, type: 'paragraph', name };
+    });
+  }, [styles, t]);
 
   const handleValueChange = React.useCallback(
     (newValue: string) => {

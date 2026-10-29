@@ -153,7 +153,11 @@
     "heading2": "Nagłówek 2",
     "heading3": "Nagłówek 3",
     "normal": "Normalny",
-    "headingLevel": "Nagłówek {level}"
+    "headingLevel": "Nagłówek {level}",
+    "noSpacing": "Bez odstępów",
+    "quote": "Cytat",
+    "intenseQuote": "Cytat intensywny",
+    "listParagraph": "Akapit z listą"
   },
   "font": {
     "selectAriaLabel": "Wybierz rodzinę czcionek",

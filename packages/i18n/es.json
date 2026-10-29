@@ -224,7 +224,11 @@
     "heading2": "Título 2",
     "heading3": "Título 3",
     "normal": "Normal",
-    "headingLevel": "Título {level}"
+    "headingLevel": "Título {level}",
+    "noSpacing": "Sin espaciado",
+    "quote": "Cita",
+    "intenseQuote": "Cita destacada",
+    "listParagraph": "Párrafo de lista"
   },
   "font": {
     "selectAriaLabel": "Seleccionar fuente",

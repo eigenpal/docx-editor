@@ -153,7 +153,11 @@
     "heading2": "Titre 2",
     "heading3": "Titre 3",
     "normal": "Normal",
-    "headingLevel": "Titre {level}"
+    "headingLevel": "Titre {level}",
+    "noSpacing": "Sans interligne",
+    "quote": "Citation",
+    "intenseQuote": "Citation intense",
+    "listParagraph": "Paragraphe de liste"
   },
   "font": {
     "selectAriaLabel": "Sélectionner une police",
