@@ -18,7 +18,8 @@ import type { RevisionAuthorFilter, RevisionDisplayMode } from '../layout/revisi
 import { storyBlocks } from '../layout/story-roots.ts';
 import { collectNoteReferences, resolveNotesPart } from '../store/package/note-references.ts';
 import { noteIdOf, notesOf } from '../store/package/note-nodes.ts';
-import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
+import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { findNode } from '../store/package/ooxml-edit.ts';
 
 /** Depth cap for the note-body walk, matching the shared tree-walk bound. */
 const MAX_NOTE_WALK_DEPTH = 32;
@@ -189,7 +190,7 @@ export function referencingBodyParagraph(
   const pkg = session.currentPackage();
   for (const noteKind of ['footnote', 'endnote'] as const) {
     const notesPart = resolveNotesPart(pkg, noteKind);
-    if (!notesPart || !paragraphId.startsWith(`${notesPart.name}#`)) continue;
+    if (!notesPart || !holdsNodeId(notesPart, paragraphId)) continue;
     for (const note of notesOf(notesPart.root)) {
       const noteId = noteIdOf(note);
       if (noteId === null || !holdsParagraph(note, paragraphId)) continue;
@@ -200,6 +201,16 @@ export function referencingBodyParagraph(
     }
   }
   return null;
+}
+
+/**
+ * Whether a part holds this node. A loaded id names its part, so a prefix answers. A logical id
+ * from a collaboration session names none, so the part's node index answers.
+ */
+function holdsNodeId(part: OoxmlPart, nodeId: string): boolean {
+  return nodeId.includes('#')
+    ? nodeId.startsWith(`${part.name}#`)
+    : findNode(part, nodeId) !== null;
 }
 
 /** Whether a subtree contains this paragraph id, within the shared depth cap. */
