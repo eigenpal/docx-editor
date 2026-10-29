@@ -273,22 +273,21 @@ describe('insertBreak Line', () => {
     expect(savedMainXml(host)).toBe(before);
   });
 
-  test('Page and section breaks still refuse under tracking', () => {
-    const host = open(docx(p(ADDRESS)));
-    const { body } = roots(host);
-    const response = host.execute({
-      operations: [
-        TRACK,
-        {
-          op: 'insertBreak',
-          span: at(firstParagraph(host, body), 9),
-          breakType: 'Page',
-          location: 'Before',
-        },
-      ],
-    });
-    expect(response.ok).toBe(false);
-    expect(errorAt(response, 1)).toBe('unsupported-capability');
+  test('Page and section breaks are tracked, and a tracked break never replaces text', () => {
+    for (const breakType of ['Page', 'SectionNext']) {
+      const host = open(docx(p(ADDRESS)));
+      const { body } = roots(host);
+      const at9 = at(firstParagraph(host, body), 9);
+      const tracked = host.execute({
+        operations: [TRACK, { op: 'insertBreak', span: at9, breakType, location: 'Before' }],
+      });
+      expect(tracked.ok).toBe(true);
+      const replace = host.execute({
+        operations: [TRACK, { op: 'insertBreak', span: at9, breakType, location: 'Replace' }],
+      });
+      expect(replace.ok).toBe(false);
+      expect(errorAt(replace, 1)).toBe('unsupported-capability');
+    }
   });
 
   test('other break types still refuse', () => {

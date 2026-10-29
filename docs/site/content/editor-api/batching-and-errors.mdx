@@ -69,11 +69,23 @@ Item properties follow the same rule as other loads: in a sync that also writes,
 
 Each `sync(): Promise<void>` commits its writes atomically. It captures queued operations when you call it. Await each sync before starting another on the same context.
 
-A load in the same batch as a write reads the previous value. To read the written value, load it in a later sync. Setters called while a sync waits belong to the next sync.
+A load in the same batch as a write reads the previous value of an object that already exists, even when the load comes after the write in your code. A load on an object that a write in the batch returns reads the value after all the writes in the batch. To read the written value of such an object, load it in a later sync. Setters called while a sync waits belong to the next sync.
 
 Some dependent reads require extra transport batches. Those batches share one document revision. A concurrent edit produces `StaleDocument`; the runtime does not replay the write.
 
-Objects returned by insertions need a completed sync before dependent edits:
+An object that an insertion returns has no previous value. A load on it, or on its `font` or `paragraphs`, can share the insertion's sync and reports the inserted content. The runtime answers it after the writes commit. If that load fails, the writes stay applied and `sync()` rejects with the load's error code. Its `debugInfo.innerError.code` is `edit.read-after-commit`, so you can tell that the writes are applied:
+
+```ts
+await runtime.run(async (context) => {
+  const inserted = context.document.body.paragraphs.getFirst().insertText('#', 'End');
+  inserted.load('text');
+  inserted.font.load('italic');
+  await context.sync();
+  return inserted.font.italic;
+});
+```
+
+Edits to an object that an insertion returns, and navigation reads on it such as `getFirst()`, `getRange()`, `search()`, and `getCell()`, need a completed sync first. Before that sync they fail with `InvalidObjectPath`, and nothing commits:
 
 ```ts
 await runtime.run(async (context) => {
@@ -199,7 +211,7 @@ try {
 | `ConflictingChanges` | Read again and separate dependent edits into different syncs |
 | `InvalidRequestContext` | Start a new run |
 | `RuntimeDisposed` | Create a new runtime |
-| `StaleDocument` | Start a fresh run, read again, and reconsider the proposed change |
+| `StaleDocument` | Start a fresh run, read again, and reconsider the proposed change. If `debugInfo.innerError.code` is `edit.read-after-commit`, the writes are applied: don't apply them again |
 | `DocumentUnavailable` | Wait for the owning editor to attach a document, then start a new run |
 | `PreviewActive` | Commit or discard the open preview, then write or preview again |
 | `PreviewEnded` | Start a new preview; a committed, discarded, or replaced preview cannot commit |
@@ -237,7 +249,7 @@ For all codes, see [Diagnostics](/docs/2.x/guides/diagnostics). To record anonym
 
 ## Recover from a stale range
 
-The following example recovers from a stale range in a loop that writes one suggestion per sync:
+The following example recovers from a stale range in a loop that writes one suggestion per sync. A `StaleDocument` usually means that nothing was applied. If `debugInfo.innerError.code` is `edit.read-after-commit`, the writes in that sync are applied, and only a load on an object that they created failed. Read again, and don't apply the edit a second time:
 
 ```ts
 import { isDocxEditorError } from '@docx-editor.dev/editor-api';
@@ -263,6 +275,8 @@ await runtime.run(async (context) => {
       await context.sync();
     } catch (error) {
       if (!isDocxEditorError(error) || error.code !== 'StaleDocument') throw error;
+      // The write is applied, and only a load that followed it failed: never apply it again.
+      if (error.debugInfo.innerError?.code === 'edit.read-after-commit') continue;
       // Equal revisions: the range moved, often through an earlier sync of this run.
       // Different revisions: another writer changed the document.
       // Either way, search again and reconsider before you write.

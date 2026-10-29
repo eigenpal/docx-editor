@@ -420,7 +420,8 @@ export class Comment extends CommentBase {
       fail({ code: 'NotSupported', target, diagnostic: 'edit.comment-author-required' });
     }
     const created = CommentReply.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () => ({ op: 'replyToComment', comment: this.commentHandle(), text: replyText, author }),
       (value) => {

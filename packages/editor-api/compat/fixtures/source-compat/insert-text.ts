@@ -33,3 +33,14 @@ export async function insertFormattedParagraph(): Promise<void> {
     await context.sync();
   });
 }
+
+export async function insertTextAndLoadItInOneBatch(): Promise<boolean> {
+  return DocxEditor.run(async (context) => {
+    const paragraph = context.document.body.paragraphs.getFirst();
+    const inserted = paragraph.insertText('#', 'End');
+    inserted.load('text');
+    inserted.font.load('italic');
+    await context.sync();
+    return inserted.text === '#' && inserted.font.italic === true;
+  });
+}

@@ -173,6 +173,7 @@ Codes are stable. New codes can be added, but existing codes are never renamed. 
 | <a id="edit-preview-unsupported" />`edit.preview-unsupported` | A preview cannot show this operation, so nothing was shown. Write it with run() after the preview, or leave it out of the preview. |
 | <a id="edit-preview-composing" />`edit.preview-composing` | An input method composition is in progress, so no preview began. Retry after the composition ends. |
 | <a id="edit-preview-diverged" />`edit.preview-diverged` | The document answered a replayed read differently from the preview, so the commit wrote nothing. Read the document again and build a new preview. |
+| <a id="edit-read-after-commit" />`edit.read-after-commit` | The writes in this sync are applied, and a load that followed them failed. Read the document again before you decide; do not apply the same edit again. |
 | <a id="edit-collaboration-not-ready" />`edit.collaboration-not-ready` | The collaboration session is not ready to replicate edits, so this one was refused. Wait for the ready status, then retry; a destroyed session needs a rejoin. |
 | <a id="edit-collaboration-text-limit" />`edit.collaboration-text-limit` | One edit inserted more text than a collaboration session accepts at once. Insert the text in smaller parts. |
 | <a id="edit-internal-invariant" />`edit.internal-invariant` | The editor refused an edit to protect the document structure. This is an engine defect: report the code with the engine version. |

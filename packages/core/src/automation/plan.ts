@@ -1648,7 +1648,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             const refusal = pinWrite(plan) ?? claim(plan, paragraphId);
             if (!refusal) plan.externalCreatedCount += createdCount;
             return refusal;
-          }
+          },
+          trackingAuthor
         );
       case 'startNewList':
       case 'attachToList':
