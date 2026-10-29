@@ -89,7 +89,7 @@ test('comment edge properties, range, and reply dependencies resolve in one sync
   }
 });
 
-test('a created comment remains a write dependency and refuses before commit', async () => {
+test('a created comment loads in the sync that creates it', async () => {
   const runtime = createRuntime({
     host: openHost(docx(p('original'))),
     save: true,
@@ -99,10 +99,11 @@ test('a created comment remains a write dependency and refuses before commit', a
     await runtime.run(async (c) => {
       const comment = c.document.body.getRange().insertComment('Not yet committed.');
       comment.load('text');
-      await expect(c.sync()).rejects.toMatchObject({ code: 'InvalidObjectPath' });
+      await c.sync();
+      expect(comment.text).toBe('Not yet committed.');
       c.document.comments.load('items');
       await c.sync();
-      expect(c.document.comments.items).toHaveLength(0);
+      expect(c.document.comments.items).toHaveLength(1);
     });
   } finally {
     runtime.dispose();

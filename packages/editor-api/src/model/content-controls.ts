@@ -318,7 +318,8 @@ export class ContentControl extends ModelObject implements PromisedItem {
             ? 'end'
             : fail({ code: 'InvalidArgument', target });
     const made = Range.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      made,
       target,
       () => ({ op: 'insertContentControlText', contentControl: this.#handle(), text: written, at }),
       (value) => {

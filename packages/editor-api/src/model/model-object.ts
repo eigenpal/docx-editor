@@ -86,6 +86,29 @@ export abstract class ModelObject extends ClientObject {
     });
   }
 
+  /**
+   * Queue a command whose answer names `created`, the object this call returns.
+   *
+   * A read on `created` queued before the same `sync()` is answered after the writes, on the
+   * revision they produce. A write on `created` still needs a sync first.
+   */
+  protected commandCreating(
+    created: ModelObject,
+    label: string,
+    plan: () => AutomationOperation,
+    settle: (value: AutomationValue) => void,
+    dispose?: () => void
+  ): void {
+    this.enqueue({
+      sort: 'write',
+      label,
+      plan,
+      settle,
+      produces: [created.path],
+      ...(dispose ? { capture: dispose, dispose } : {}),
+    });
+  }
+
   /** Queue a read whose answer is hydrated by the caller. */
   protected read(
     label: string,

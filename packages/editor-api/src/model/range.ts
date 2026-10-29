@@ -541,7 +541,8 @@ export class Range extends ModelObject implements PromisedItem {
     const where = rangeTextLocation(insertLocation, target);
     this.requireUsablePath();
     const created = Range.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () => {
         const span = this.#span();
@@ -604,7 +605,8 @@ export class Range extends ModelObject implements PromisedItem {
       fail({ code: 'NotSupported', target, diagnostic: 'edit.comment-author-required' });
     }
     const created = Comment.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () => ({ op: 'insertComment', span: this.#span(), text: commentText, author }),
       (value) => {
@@ -649,7 +651,8 @@ export class Range extends ModelObject implements PromisedItem {
     if (type !== 'RichText' && type !== 'PlainText' && type !== 'DatePicker')
       fail({ code: 'NotSupported', target });
     const created = ContentControl.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () => ({
         op: 'insertContentControl',
@@ -737,7 +740,8 @@ export class Range extends ModelObject implements PromisedItem {
     const location = rangeTextLocation(insertLocation, target);
     this.requireUsablePath();
     const field = Field.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      field,
       target,
       () => ({
         op: 'insertField',
@@ -768,7 +772,8 @@ export class Range extends ModelObject implements PromisedItem {
     const location = rangeTextLocation(insertLocation, target);
     this.requireUsablePath();
     const created = Range.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () => ({ op: 'insertOoxml', span: this.#span(), location, ooxml }),
       (value) => created.hydrateAddress({ kind: 'span', span: hydratedSpan(value, target) })
@@ -804,7 +809,8 @@ export class Range extends ModelObject implements PromisedItem {
     const location = rangeTextLocation(insertLocation, target);
     this.requireUsablePath();
     const picture = InlinePicture.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      picture,
       target,
       () => ({
         op: 'insertInlinePicture',
@@ -876,7 +882,8 @@ export class Range extends ModelObject implements PromisedItem {
       fail({ code: 'InvalidArgument', target });
     const copied = values?.map((row) => [...row]);
     const table = Table.promised(this.context, target);
-    this.commandAnswering(
+    this.commandCreating(
+      table,
       target,
       () => ({
         op: 'insertTable',
@@ -906,7 +913,8 @@ export class Range extends ModelObject implements PromisedItem {
     const span = this.#span();
     const anchor = where === 'Before' ? span.start.paragraph : span.end.paragraph;
     const created = Paragraph.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () => ({
         op: 'insertParagraph',

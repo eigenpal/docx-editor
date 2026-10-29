@@ -36,7 +36,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-The returned `Table` requires a completed sync before dependent operations. Table insertion is not a `Body.insertTable()` operation in this subset. Use a body paragraph's range as the anchor.
+You can load the returned `Table` in the same sync. Edits to it require a completed sync first. Table insertion is not a `Body.insertTable()` operation in this subset. Use a body paragraph's range as the anchor.
 
 ## Read table values and cells
 

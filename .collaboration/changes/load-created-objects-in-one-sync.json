@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A document API load on an object that a write in the same sync returns refused the batch with InvalidObjectPath.",
+  "after": "That load runs after the batch's write transaction commits, pinned to the revision the commit produced.",
+  "reason": "Only the order of the runtime's own read requests changes. The write transaction, its operations, shared nodes, and package serialization are unchanged.",
+  "tests": [
+    "packages/editor-api/src/runtime/__tests__/runtime-created-object-reads.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-read-dependencies.test.ts"
+  ],
+  "changeset": "load-created-objects-in-one-sync",
+  "migration": null
+}

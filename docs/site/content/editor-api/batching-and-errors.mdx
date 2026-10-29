@@ -69,11 +69,23 @@ Item properties follow the same rule as other loads: in a sync that also writes,
 
 Each `sync(): Promise<void>` commits its writes atomically. It captures queued operations when you call it. Await each sync before starting another on the same context.
 
-A load in the same batch as a write reads the previous value. To read the written value, load it in a later sync. Setters called while a sync waits belong to the next sync.
+A load in the same batch as a write reads the previous value of an object that already exists. To read the written value of such an object, load it in a later sync. Setters called while a sync waits belong to the next sync.
 
 Some dependent reads require extra transport batches. Those batches share one document revision. A concurrent edit produces `StaleDocument`; the runtime does not replay the write.
 
-Objects returned by insertions need a completed sync before dependent edits:
+An object that an insertion returns has no previous value. A load on it, or on its `font` or `paragraphs`, can share the insertion's sync and reports the inserted content. The runtime answers it after the writes commit. If that load fails, the writes stay applied and `sync()` rejects with the load's error:
+
+```ts
+await runtime.run(async (context) => {
+  const inserted = context.document.body.paragraphs.getFirst().insertText('#', 'End');
+  inserted.load('text');
+  inserted.font.load('italic');
+  await context.sync();
+  return inserted.font.italic;
+});
+```
+
+Edits to an object that an insertion returns, and navigation reads such as `getFirst()` on it, need a completed sync first. Before that sync they fail with `InvalidObjectPath`, and nothing commits:
 
 ```ts
 await runtime.run(async (context) => {

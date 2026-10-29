@@ -530,7 +530,7 @@
     },
     {
       "uid": "Word.ParagraphCollection#getFirst / #getLast, Word.RangeCollection#getFirst, Word.CommentCollection#getFirst, Word.ListCollection#getFirst and every other item accessor",
-      "note": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+      "note": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. A load on an object that a write in the same sync returns, such as the range insertText returns, is answered after the writes commit, on the revision they produce; if that read fails, the writes stay applied and sync rejects with the read's error. A navigation read from such an object, and any write to it, require a completed sync first; the runtime never commits a producer just to resolve a dependent command."
     },
     {
       "uid": "OfficeExtension.LoadOption#select",

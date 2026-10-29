@@ -394,7 +394,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
   startNewList(): List {
     const target = `${this.path.label}.startNewList`;
     const created = List.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () => ({ op: 'startNewList', paragraph: this.#handle() }),
       (value) => {
@@ -417,7 +418,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
       fail({ code: 'InvalidArgument', target });
     }
     const joined = List.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      joined,
       target,
       () => ({ op: 'attachToList', paragraph: this.#handle(), listId, level }),
       (value) => {
@@ -505,7 +507,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
     const written = insertableTextWithBreaks(text, target);
     const where = paragraphTextLocation(insertLocation, target);
     const created = Range.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () =>
         where === 'Replace'
@@ -528,7 +531,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
     const written = insertableText(paragraphText, target);
     const where = besideLocation(insertLocation, target);
     const created = Paragraph.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () => ({
         op: 'insertParagraph',

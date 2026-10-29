@@ -7,9 +7,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 //
 // Pending paths resolve from read-only prerequisite batches before one atomic write batch.
 // The runtime pins all such reads and the final write to one document revision. A path
-// returned by an insertion cannot resolve this way: its producer writes, so callers must
-// sync that insertion before using the returned object. Released and null paths never
-// become valid prerequisites.
+// returned by an insertion resolves when that write commits: a read on it in the same sync
+// is answered after the write, but another write on it needs a sync first. Released and
+// null paths never become valid prerequisites.
 //
 // A path also carries its LABEL: the consumer-facing name of the object (`document.body`,
 // `document.body.paragraphs.items[0]`). It is what errors are allowed to say. The handle never
@@ -118,6 +118,14 @@ export class ObjectPath {
     if (!this.isFieldResult || state.status !== 'resolved' || state.address.kind !== 'handle')
       return state;
     return { status: 'resolved', address: { kind: 'fieldResult', field: state.address.handle } };
+  }
+
+  /**
+   * The path this one shares its fate with, followed to the end: itself when it has no owner.
+   * `range.font` and `range.paragraphs` have the range as their origin.
+   */
+  get origin(): ObjectPath {
+    return this.#parent ? this.#parent.origin : this;
   }
 
   get isAddressable(): boolean {

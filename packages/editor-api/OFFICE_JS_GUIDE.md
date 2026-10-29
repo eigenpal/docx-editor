@@ -75,7 +75,19 @@ const snapshot = await runtime.run(async (context) => {
 
 Supported read-derived proxies can share one `sync()` with their edits. For example, `body.getRange().insertText(text, 'Replace')` and `table.getCell(0, 0).value = text` resolve their reads before one atomic write transaction. This can use extra read-only transport calls. Every phase uses the same revision; concurrent changes cause `StaleDocument`.
 
-Proxies returned by insertions require a completed `sync()` before dependent operations. Do not configure a newly inserted table, image, list, or text range before that sync. If a prerequisite fails, the runtime commits no queued writes. Completed prerequisite reads can remain loaded after a later command fails.
+You can load an object that an insertion returns in the same `sync()` as the insertion. The runtime answers that load after the writes commit, so it reports the inserted value:
+
+```ts
+await runtime.run(async (context) => {
+  const inserted = context.document.body.paragraphs.getFirst().insertText('#', 'End');
+  inserted.load('text');
+  inserted.font.load('italic');
+  await context.sync();
+  return { text: inserted.text, italic: inserted.font.italic };
+});
+```
+
+If that load fails, the writes stay applied and `sync()` rejects with the load's error. A write to the returned object, such as `inserted.font.bold = true`, and a navigation read from it, such as `inserted.paragraphs.getFirst()`, still require a completed `sync()` first; before it they fail with `InvalidObjectPath` and nothing commits. If a prerequisite fails, the runtime commits no queued writes. Completed prerequisite reads can remain loaded after a later command fails.
 
 ## Keep writes within one story
 
@@ -202,7 +214,7 @@ Use `isDocxEditorError(error)` and branch on `error.code`. `error.target` identi
 | Code | Next action |
 | --- | --- |
 | `PropertyNotLoaded` | Load the named property and await sync before reading it. |
-| `InvalidObjectPath` | Sync before using a newly returned proxy, or acquire a fresh proxy in a new run. `debugInfo.innerError.code` `edit.stale-target` means the document no longer holds the object; read again. |
+| `InvalidObjectPath` | Sync before editing a newly returned proxy, or acquire a fresh proxy in a new run. `debugInfo.innerError.code` `edit.stale-target` means the document no longer holds the object; read again. |
 | `StaleDocument` | Search again, reconsider the model proposal, then write. |
 | `ConflictingChanges` | Separate edits that claim the same paragraph and reconsider anchors between commits. |
 | `NotSupported` | The call is outside the supported subset for this host, mode, or content. Don't retry it. Read `debugInfo.innerError.code`, then check the host, tracking mode, author, and operation against the [tracking subset](#tracking-subset). |

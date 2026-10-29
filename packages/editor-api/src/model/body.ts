@@ -327,7 +327,8 @@ export class Body extends ModelObject {
     const where = bodyTextLocation(insertLocation, target);
     this.requireUsablePath();
     const created = Range.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () =>
         where === 'Replace'
@@ -354,7 +355,8 @@ export class Body extends ModelObject {
     const where = bodyParagraphLocation(insertLocation, target);
     const handle = this.#handle();
     const created = Paragraph.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () => ({
         op: 'insertParagraph',

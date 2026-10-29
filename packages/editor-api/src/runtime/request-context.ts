@@ -8,7 +8,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // `sync()` commits all queued writes in one transaction. Read-derived proxy dependencies
 // can require read-only preflight batches. They share one revision with the final write
 // batch, so a concurrent change refuses the sync instead of retargeting an edit.
-// Proxies produced by writes still require a separate sync before dependent operations.
+// A read on a proxy that a write in the same sync returns follows the writes, on the
+// revision they produce. A write on such a proxy still requires a separate sync.
 //
 // CONDITIONAL WRITES. A context that has read from the document remembers the revision it read
 // at, and a later batch that writes is sent conditional on that revision. This is what stops a
@@ -82,7 +83,10 @@ export interface RuntimeSession {
  * `sync()` commits all queued commands in one atomic transaction. Supported read-derived
  * proxy dependencies can require additional read-only transport calls before that commit.
  * These reads and the final write share one revision; a concurrent change refuses the sync.
- * Write-created proxies require a separate sync before dependent operations.
+ * A read on an object that a write in the same sync returns (the range `insertText` wrote,
+ * the paragraph `insertParagraph` created) is answered after that commit, on the revision it
+ * produced. If that read fails, the writes stay applied and `sync()` rejects with the read's
+ * error. A write on such an object requires a separate sync.
  *
  * Conditional writes come from the same place. A context that has READ from the document
  * remembers the revision it read at, and a later batch that writes goes out conditional on it,
@@ -206,6 +210,21 @@ export class RequestContext {
         hasWrites && this.#readRevision !== null ? this.#readRevision : undefined;
       const blocked = (action: QueuedAction): boolean =>
         action.dependencies?.some((path) => !path.isAddressable) ?? false;
+      // A read on an object a write in this batch returns has no value before the write, so
+      // it waits for the commit instead of refusing the batch. Writes on such an object are
+      // not moved: they stay blocked and refuse before anything commits.
+      const produced = new Set(
+        actions.flatMap((action) => (action.sort === 'write' ? (action.produces ?? []) : []))
+      );
+      const readsCreated = (action: QueuedAction): boolean =>
+        action.sort === 'read' &&
+        (action.dependencies?.some((path) => !path.isAddressable && produced.has(path.origin)) ??
+          false);
+      let afterWrites = produced.size ? remaining.filter(readsCreated) : [];
+      if (afterWrites.length) {
+        const moved = new Set(afterWrites);
+        remaining = remaining.filter((action) => !moved.has(action));
+      }
       // Read prerequisites never publish edits. Every phase and the final transaction use
       // one revision so another writer cannot retarget an edit between dependency reads.
       while (remaining.some(blocked)) {
@@ -240,6 +259,20 @@ export class RequestContext {
         await this.#dispatch(remaining, expected, reportedRevision);
         // A batch with no writes: the item reads follow on the revision the listing answered.
         await this.#continue(this.#readRevision ?? undefined, reportedRevision);
+      }
+      // The reads on created objects, pinned to the revision the writes produced. A read the
+      // writes did not make addressable refuses here, after the commit, and the writes stay.
+      while (afterWrites.length) {
+        const ready = afterWrites.filter((action) => !blocked(action));
+        if (ready.length === 0)
+          fail({ code: 'InvalidObjectPath', target: afterWrites.find(blocked)?.label });
+        const revision = this.#readRevision ?? undefined;
+        await this.#dispatch(ready, revision, undefined);
+        await this.#continue(revision, undefined);
+        const sent = new Set(ready);
+        afterWrites = afterWrites.filter(
+          (action) => !sent.has(action) && !action.nullableLoad?.isNull
+        );
       }
     } finally {
       for (const action of actions) action.dispose?.();
