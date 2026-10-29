@@ -151,7 +151,9 @@
     "subtitle": "Altyazı",
     "heading1": "Başlık 1",
     "heading2": "Başlık 2",
-    "heading3": "Başlık 3"
+    "heading3": "Başlık 3",
+    "normal": "Normal",
+    "headingLevel": "Başlık {level}"
   },
   "font": {
     "selectAriaLabel": "Yazı tipi ailesini seç",
@@ -1015,7 +1017,13 @@
     "suggestingNeedsAuthor": "Öneri modu için bir yazar gerekir. Düzenleyici yapılandırmasında yazarı ayarlayın.",
     "pictureSelected": "Bir resim seçili. Resim eklemek için imleci metne yerleştirin.",
     "chartDrawing": "Bu bir grafik. Silebilirsiniz ancak resim olarak düzenleyemezsiniz.",
-    "chartClipboard": "Seçim bir grafik içeriyor. Grafikler kopyalanamaz, kesilemez veya yapıştırılamaz."
+    "chartClipboard": "Seçim bir grafik içeriyor. Grafikler kopyalanamaz, kesilemez veya yapıştırılamaz.",
+    "nothingToUndo": "Geri alınacak bir şey yok",
+    "nothingToRedo": "Yinelenecek bir şey yok",
+    "outermostLevel": "Seçim zaten en dış düzeyde",
+    "cannotIndentFurther": "Seçimin girintisi daha fazla artırılamaz",
+    "noGoToView": "Git burada kullanılamıyor",
+    "noBookmarkDialog": "Buraya yer işareti eklenemez"
   },
   "equationPopup": {
     "apply": "Uygula",

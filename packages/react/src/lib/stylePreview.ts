@@ -120,6 +120,32 @@ export function paragraphStyleDisplayName(name: string, styleId: string): string
   return heading ? `Heading ${heading[1]}` : label;
 }
 
+/** Word's own `w:name` for the built-in styles the picker labels from the catalogue. */
+const BUILT_IN_STYLE_KEYS: Readonly<
+  Record<string, 'styles.normal' | 'styles.title' | 'styles.subtitle'>
+> = { normal: 'styles.normal', title: 'styles.title', subtitle: 'styles.subtitle' };
+
+/**
+ * The catalogue label for a built-in paragraph style, from its `w:name`, or null for any other
+ * style. Word stores the English `w:name` for its built-in styles in every language, and shows
+ * each one under its own UI language, so a picker in another locale needs the catalogue label.
+ * The match ignores case: Word writes `heading 1`, other producers write `Heading 1`. The
+ * adapters call `t()` with the answer, so this file stays free of i18n.
+ * @internal
+ */
+export function builtInParagraphStyleLabel(name: string): {
+  readonly key: 'styles.normal' | 'styles.title' | 'styles.subtitle' | 'styles.headingLevel';
+  readonly vars?: { readonly level: number };
+} | null {
+  const lower = name.toLowerCase();
+  const key = Object.prototype.hasOwnProperty.call(BUILT_IN_STYLE_KEYS, lower)
+    ? BUILT_IN_STYLE_KEYS[lower]
+    : undefined;
+  if (key) return { key };
+  const heading = BUILT_IN_HEADING_NAME.exec(lower);
+  return heading ? { key: 'styles.headingLevel', vars: { level: Number(heading[1]) } } : null;
+}
+
 /**
  * Filter the engine's document-style summaries to the paragraph styles and
  * shape them for the picker, keeping the catalog's own order. The summary
