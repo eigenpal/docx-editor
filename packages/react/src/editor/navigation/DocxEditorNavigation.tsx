@@ -52,7 +52,7 @@ import {
   NavigationTitle,
   NavigationToggle,
 } from './parts';
-import { useScopeClassName } from '../scope-context';
+import { useChromeScopeClassName } from '../color-mode-context';
 import { useChromeDir } from '../../i18n';
 
 /** Props for `DocxEditor.Navigation`. @public */
@@ -103,7 +103,7 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
  */
 export function DocxEditorNavigation(props: DocxEditorNavigationProps): ReactElement {
   // Skip the scope class when the packaged wrapper already carries it.
-  const scopeClassName = useScopeClassName();
+  const scopeClassName = useChromeScopeClassName();
   const chromeDir = useChromeDir();
   const {
     t: hostT,

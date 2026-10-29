@@ -147,30 +147,43 @@ export { editorCommandKey } from './command-key.ts';
 export {
   arrangeToolbarGroups,
   collapseOrder,
-  sameOverflow,
   toolbarGroupPriority,
-  toolbarOverflowGroups,
   toolbarPanelPlacement,
   toolbarPopupLeft,
   TOOLBAR_COLLAPSE_ORDER,
   TOOLBAR_OVERFLOW_HYSTERESIS,
   TOOLBAR_PANEL_EDGE_MARGIN,
   TOOLBAR_PINNED_GROUPS,
-  type ToolbarFitInput,
   type ToolbarHostGroupPlacement,
   type ToolbarPanelPlacement,
 } from './toolbar-fit.ts';
 export {
   barRoomWidth,
-  collapsibleGroupCost,
   controlsOverflow,
   readAvailableWidth,
   readColumnGap,
   readInlineMargins,
+  readToolbarRow,
   separatorLeadingCost,
   trailingGapCost,
   type BarRoomInput,
+  type ToolbarRowMemory,
+  type ToolbarRowReading,
 } from './toolbar-measure.ts';
+export {
+  sameItemOverflow,
+  TOOLBAR_HOST_ITEM,
+  TOOLBAR_ITEM_ATTRIBUTE,
+  toolbarGroupItems,
+  toolbarGroupsKey,
+  toolbarHostPanelShown,
+  toolbarItemKey,
+  toolbarOverflowItems,
+  toolbarShownCount,
+  type ToolbarFitGroup,
+  type ToolbarItemFitInput,
+  type ToolbarItemOverflow,
+} from './toolbar-item-fit.ts';
 export { chordLetter, isGoToChord } from './chord-letter.ts';
 export { tableCommandState } from './docx-editor-derive.ts';
 export {

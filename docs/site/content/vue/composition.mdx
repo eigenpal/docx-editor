@@ -114,12 +114,13 @@ To customize a popover, pass your own component to `definePopup`.
 
 - `document`, `fonts`, `author`, `locale`, `mode`, and `modules`
 - `zoom` and `zoomMode`
+- `colorMode` (`'light'`, `'dark'`, or `'system'`), which sets the chrome theme for every composed part, including dialogs and a pop-out window
 - `translate` and `tableInteractionLabel`
 - `imageDecodePort`
 
 Listen for `@ready`, `@change`, and `@font-error` on the root.
 
-The root rebuilds for `document` and `imageDecodePort` identity changes. Changes to `fonts`, `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, and the locale catalog apply without a rebuild. Existing revisions keep their authors. The root ignores a later `modules` array change until you remount it with a different `:key`.
+The root rebuilds for `document` and `imageDecodePort` identity changes. Changes to `fonts`, `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, `colorMode`, and the locale catalog apply without a rebuild. Existing revisions keep their authors. The root ignores a later `modules` array change until you remount it with a different `:key`.
 
 `locale` selects regional date input and generated document labels. It defaults to `en-US`.
 
@@ -229,7 +230,7 @@ A group whose slots are all hidden is removed with its separator.
 
 ### Add controls to the preset toolbar
 
-`DocxEditorToolbar.Group` adds your controls to the preset toolbar as a group. The group collapses into the **More** panel like the built-in groups. `DocxEditorToolbar.Slot` replaces one built-in slot with your own content in the slot's place:
+`DocxEditorToolbar.Group` adds your controls to the preset toolbar as a group. When the toolbar runs out of width, the group's children move into the **More** panel together, as one control. `DocxEditorToolbar.Slot` replaces one built-in slot with your own content in the slot's place:
 
 ```vue
 <DocxEditorToolbar>

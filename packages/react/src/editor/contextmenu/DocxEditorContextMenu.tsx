@@ -79,7 +79,7 @@ import {
   ContextMenuRefreshTocPageNumbers,
   useTableContextMenuVisible,
 } from './parts';
-import { useScopeClassName } from '../scope-context';
+import { useChromeScopeClassName } from '../color-mode-context';
 import { chromeControlForSlot, chromeIcon } from '../toolbar/ToolbarButton';
 import { hostDocumentOf, hostWindowOf, isHTMLElementNode } from '@docx-editor.dev/core/editor';
 import { MenuLinkRow } from '../menu/menu-link-row';
@@ -352,7 +352,7 @@ export function DocxEditorContextMenu({
   children,
 }: DocxEditorContextMenuProps) {
   // Skip the scope class when the packaged wrapper already carries it.
-  const scopeClassName = useScopeClassName();
+  const scopeClassName = useChromeScopeClassName();
   const chromeDir = useChromeDir();
   const editor = useDocxEditor();
   const { t: catalogT } = useTranslation();

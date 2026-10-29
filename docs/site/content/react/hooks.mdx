@@ -249,6 +249,19 @@ function OrientationToggle() {
 }
 ```
 
+## `useEditorColorMode`
+
+Use `useEditorColorMode` to match parts that you build yourself to the editor theme. It returns `{ colorMode }`, the theme that `DocxEditor.Root` resolved from its `colorMode` prop: `'light'` or `'dark'`. With `colorMode="system"`, it follows the operating system setting. Outside a root, or without `colorMode`, it returns `'light'`:
+
+```tsx
+import { useEditorColorMode } from '@docx-editor.dev/react';
+
+function NotesPanel() {
+  const { colorMode } = useEditorColorMode();
+  return <aside className={colorMode === 'dark' ? 'notes notes--dark' : 'notes'} />;
+}
+```
+
 ## `useWatermark`
 
 Use `useWatermark` to read and change the document watermark. `apply` sends one `setWatermark` command, so one call creates one undo step. Pass `null` to remove the watermark:

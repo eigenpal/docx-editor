@@ -106,7 +106,7 @@ To customize a popover, pass your own component to `definePopup`. Define that co
 
 ### Root props
 
-The editor reads construction props when it creates the instance. Changes to `document` or `imageDecodePort` remount the editor. Changes to `fonts`, `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, or the locale catalog apply without a remount. These changes preserve edits, caret position, and undo history.
+The editor reads construction props when it creates the instance. Changes to `document` or `imageDecodePort` remount the editor. Changes to `fonts`, `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, `colorMode`, or the locale catalog apply without a remount. These changes preserve edits, caret position, and undo history.
 
 | Prop | Type | Description |
 | --- | --- | --- |
@@ -117,6 +117,7 @@ The editor reads construction props when it creates the instance. Changes to `do
 | `mode` | `'edit' \| 'view' \| 'suggesting'` | Sets the editing mode. When omitted, `w:trackRevisions` can select suggesting mode. |
 | `modules` | `readonly EditorModule[]` | Registers modules during construction. Remount with a different `key` to change them. |
 | `zoom` / `zoomMode` | `number` / `ZoomMode \| 'auto'` | Sets the display scale and its source. `'auto'` fits the page width. |
+| `colorMode` | `'light' \| 'dark' \| 'system'` | Sets the chrome theme for every composed part, including dialogs and a pop-out window. `'system'` follows the OS setting. Changes apply without a remount. |
 | `onReady` | `(editor: Editor) => void` | Runs once per instance after `Content` attaches. |
 | `onChange` | `(change: DocumentChange) => void` | Reports revision and identity changes after mutations. |
 | `onFontError` | `(error: EditorFontError) => void` | Reports typed font-resolution failures. |
@@ -194,7 +195,7 @@ A group whose slots are all hidden is removed with its separator.
 
 ### Add controls to the preset toolbar
 
-`Toolbar.Group` adds your controls to the preset toolbar as a group. The group collapses into the **More** panel like the built-in groups. `Toolbar.Slot` replaces one built-in slot with your own content in the slot's place:
+`Toolbar.Group` adds your controls to the preset toolbar as a group. When the toolbar runs out of width, the group's children move into the **More** panel together, as one control. `Toolbar.Slot` replaces one built-in slot with your own content in the slot's place:
 
 ```tsx
 <DocxEditor.Toolbar>

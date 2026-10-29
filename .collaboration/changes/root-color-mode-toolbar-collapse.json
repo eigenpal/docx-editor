@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The preset toolbar moved whole groups into the overflow menu, and DocxEditor.Root had no colorMode, so composed chrome stayed light.",
+  "after": "The preset toolbar moves single controls into the overflow menu from the end of a group, and DocxEditor.Root resolves colorMode for the parts that scope themselves.",
+  "reason": "Both changes are local chrome presentation. They add no stored field, operation, or journal primitive, and they do not change how shared nodes, identities, or updates are represented. Each participant measures and themes its own toolbar, so collaborative state is unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/toolbar-item-fit.test.ts",
+    "packages/react/test/root-color-mode.test.tsx",
+    "packages/vue/test/root-color-mode.test.ts"
+  ],
+  "changeset": "root-color-mode-toolbar-collapse",
+  "migration": null
+}

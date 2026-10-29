@@ -248,6 +248,22 @@ function toggleOrientation() {
 
 `apply()` returns `true` when the editor applies the update. Sizes and margins use twips. Set `scope` to `'section'` or `'document'`.
 
+## `useEditorColorMode`
+
+Match parts that you build yourself to the editor theme. `colorMode` is a computed ref holding the theme that `DocxEditorRoot` resolved from its `colorMode` prop: `'light'` or `'dark'`. With `color-mode="system"`, it follows the operating system setting. Outside a root, or without `colorMode`, it is `'light'`:
+
+```vue
+<script setup lang="ts">
+import { useEditorColorMode } from '@docx-editor.dev/vue';
+
+const { colorMode } = useEditorColorMode();
+</script>
+
+<template>
+  <aside :class="colorMode === 'dark' ? 'notes notes--dark' : 'notes'" />
+</template>
+```
+
 ## `useWatermark`
 
 Read and change the document watermark. `apply()` sends one `setWatermark` command, so one call creates one undo step. Pass `null` to remove the watermark:
