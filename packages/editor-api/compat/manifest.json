@@ -30,7 +30,8 @@
       "CommentReplyCollection",
       "Revision",
       "RevisionCollection"
-    ]
+    ],
+    "styles": ["Style", "StyleCollection"]
   },
   "symbols": {
     "run": {
@@ -57,7 +58,8 @@
         "properties",
         "deleteBookmark",
         "getBookmarkRange",
-        "getBookmarkRangeOrNullObject"
+        "getBookmarkRangeOrNullObject",
+        "getStyles"
       ]
     },
     "Body": {
@@ -223,6 +225,12 @@
     },
     "DocumentProperties": {
       "members": ["author", "title", "subject", "keywords", "comments", "category", "lastAuthor"]
+    },
+    "Style": {
+      "members": ["builtIn", "linked", "nameLocal", "type"]
+    },
+    "StyleCollection": {
+      "members": ["items", "getByNameOrNullObject", "getCount"]
     }
   },
   "omissions": [
@@ -437,6 +445,38 @@
     {
       "uid": "Word.Paragraph#readingOrder",
       "reason": "Implemented by DocxEditor's object model as an addition: Office.js has no paragraph direction member on Paragraph or ParagraphFormat, in the pinned declarations or in the preview declarations. The name follows the desktop object model's ParagraphFormat.ReadingOrder, and the values follow Word.SectionDirection ('LeftToRight', 'RightToLeft'). Reads answer the effective direction: the paragraph's own w:bidi, else its style chain, its numbering level, an enclosing cell's table style, and the document defaults, as layout resolves them. A write of the direction the paragraph already has changes nothing. Otherwise it removes the paragraph's own w:bidi when that alone set the other direction, or states w:bidi, with the explicit off value only over a right-to-left style. Writes keep w:jc as authored. With change tracking on, a write that changes the direction records a paragraph property revision."
+    },
+    {
+      "uid": "Word.Style#baseStyle",
+      "reason": "Readable: the name of the w:basedOn style, or an empty string. Not selected because upstream declares it assignable, and rebasing a style definition is a styles-part write this subset does not perform. The object model publishes it read-only, so an assignment is a compile error rather than a silent no-op."
+    },
+    {
+      "uid": "Word.Style#nextParagraphStyle",
+      "reason": "Readable: the name of the w:next style. A paragraph style that states none names itself; other kinds read an empty string. Not selected for the same reason as Word.Style#baseStyle: upstream declares it assignable, and the object model publishes it read-only."
+    },
+    {
+      "uid": "Word.Style#font",
+      "reason": "Style definitions are read, not written. Font is a formatting object over the definition, and this subset does not resolve or write style formatting. Apply a listed style with Paragraph#style, Range#style, or Body#style instead."
+    },
+    {
+      "uid": "Word.Style#paragraphFormat",
+      "reason": "Not published, for the same reason as Word.Style#font."
+    },
+    {
+      "uid": "Word.Style#delete",
+      "reason": "Not published. Deleting a style definition is a styles-part write this subset does not perform."
+    },
+    {
+      "uid": "Word.StyleCollection#getByName",
+      "reason": "Not published. Use getByNameOrNullObject and check isNullObject, or load items."
+    },
+    {
+      "uid": "Word.StyleCollection#getItem",
+      "reason": "Not published, for the same reason as Word.StyleCollection#getByName."
+    },
+    {
+      "uid": "Word.Document#addStyle",
+      "reason": "Not published. Adding a style definition is a styles-part write. A style setter refuses a name the document does not define rather than creating one; list the defined names with Document#getStyles."
     }
   ],
   "divergences": [
@@ -711,6 +751,10 @@
     {
       "uid": "Word.Range#insertContentControl",
       "note": "Creates RichText, PlainText, and DatePicker controls on eligible single-paragraph ranges. Other types refuse. DatePicker creates a date SDT; typed date configuration remains unsupported. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse."
+    },
+    {
+      "uid": "Word.Document#getStyles / Word.StyleCollection / Word.Style",
+      "note": "Reads styles.xml in part order. A style is listed only when its w:name is one the style setters accept: a paragraph style appears only when assigning its nameLocal to Paragraph#style applies that same style, and other kinds keep the first definition of a name. Styles with no w:name, an empty or invalid name, or no recognized w:type are not listed. nameLocal is the w:name the part declares, not a localized display name. type maps w:type numbering to List. builtIn is false only when the part marks w:customStyle. linked is true when w:link names a listed style. getByNameOrNullObject compares names without case and surrounding spaces, like the style setters, and answers the first match in part order. A document with no styles part lists none. items/<property> paths load item properties in the same sync. Each getStyles() call answers a new collection."
     }
   ],
   "$divergencesComment": "Members that ARE selected but differ from upstream in a documented source shape or observable behaviour. Kept apart from \"omissions\" on purpose: an omission is a member this subset does not publish, and one of these is a member it publishes and answers differently. The authored compatibility declarations remain the exact upstream reference shape; runtime conformance assertions explicitly account for any listed source-shape divergence."

@@ -159,6 +159,8 @@ export type AutomationOperation =
       readonly op: 'getDocumentProperty';
       readonly name: import('../store/package/document-property-writes.ts').DocumentPropertyName;
     }
+  /** The styles `styles.xml` defines, in part order, each named the way `setStyle` accepts it. */
+  | { readonly op: 'getStyles' }
   | {
       readonly op: 'setDocumentProperties';
       readonly values: import('../store/package/document-property-writes.ts').DocumentPropertyWrites;

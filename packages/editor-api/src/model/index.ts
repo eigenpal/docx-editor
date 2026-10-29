@@ -43,6 +43,7 @@ export {
   type RevisionAuthorSkipReason,
 } from './review.ts';
 export { PageSetup, Section, SectionCollection, type HeaderFooterType } from './sections.ts';
+export { Style, StyleCollection, StyleType } from './styles.ts';
 export type {
   BesideLocation,
   BodyInsertParagraphLocation,

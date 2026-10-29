@@ -8,6 +8,7 @@ import { AutomationHandle } from '@docx-editor.dev/core/automation';
 import { AutomationOperation } from '@docx-editor.dev/core/automation';
 import { AutomationPaginationOptions } from '@docx-editor.dev/core/automation';
 import { AutomationSpanRef } from '@docx-editor.dev/core/automation';
+import { AutomationStyleRead } from '@docx-editor.dev/core/automation';
 import { AutomationValue } from '@docx-editor.dev/core/automation';
 import { ByteSizeBucket } from '@docx-editor.dev/core/automation';
 import { CollaborationModuleContribution } from '@docx-editor.dev/core/collaboration';
@@ -400,6 +401,7 @@ class Document_2 extends ModelObject {
     get footnotes(): NoteItemCollection;
     getBookmarkRange(name: string): Range_2;
     getBookmarkRangeOrNullObject(name: string): Range_2;
+    getStyles(): StyleCollection;
     // @internal
     protected onLoad(request: ResolvedLoadOptions): void;
     // @internal
@@ -1579,6 +1581,53 @@ export enum ShapeType {
     textBox = "TextBox",
     // (undocumented)
     unsupported = "Unsupported"
+}
+
+// @public
+export class Style extends ModelObject {
+    get baseStyle(): string;
+    get builtIn(): boolean;
+    // @internal
+    hydrateFound(style: AutomationStyleRead): void;
+    // @internal
+    hydrateNull(): void;
+    // @internal
+    hydrateProperties(style: AutomationStyleRead, selected: readonly string[]): void;
+    get linked(): boolean;
+    // @internal
+    static listed(context: RequestContext, label: string, owner: ObjectPath): Style;
+    get nameLocal(): string;
+    get nextParagraphStyle(): string;
+    // @internal
+    protected onLoad(request: ResolvedLoadOptions): void;
+    // @internal
+    static promised(context: RequestContext, label: string, name: unknown): Style;
+    get type(): StyleType | 'Character' | 'List' | 'Paragraph' | 'Table';
+}
+
+// @public
+export class StyleCollection extends ModelObject {
+    getByNameOrNullObject(name: string): Style;
+    getCount(): ClientResult<number>;
+    get items(): readonly Style[];
+    // @internal
+    protected get loadsItemPaths(): boolean;
+    // @internal
+    static of(context: RequestContext, label: string, owner: ObjectPath): StyleCollection;
+    // @internal
+    protected onLoad(request: ResolvedLoadOptions): void;
+}
+
+// @public
+export enum StyleType {
+    // (undocumented)
+    character = "Character",
+    // (undocumented)
+    list = "List",
+    // (undocumented)
+    paragraph = "Paragraph",
+    // (undocumented)
+    table = "Table"
 }
 
 // @public

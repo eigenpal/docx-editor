@@ -29,6 +29,7 @@ export {
   hydratedSpan,
   hydratedSpans,
   hydratedStyle,
+  hydratedStyles,
   hydratedText,
 } from './hydrate.ts';
 export { internalsOf, type ContextInternals, type RootHandles } from './internals.ts';
@@ -63,5 +64,6 @@ export type {
   AutomationSearchOptions,
   AutomationSpan,
   AutomationSpanRef,
+  AutomationStyleRead,
   AutomationValue,
 } from '@docx-editor.dev/core/automation';

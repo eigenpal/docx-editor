@@ -822,5 +822,45 @@
   "Word.Paragraph#contentControls": {
     "status": "partial",
     "notes": "Same rules as Word.Range#contentControls over the whole paragraph: every inline control in it, at any depth, and each block control that holds it."
+  },
+  "Word.Document#getStyles": {
+    "status": "partial",
+    "notes": "Answers a new collection on each call. Lists the styles that styles.xml defines, in part order, when each name is one the style setters accept. A paragraph style is listed only when assigning its nameLocal to Paragraph#style applies that same style. Styles with no w:name, an empty or invalid name, a later duplicate name of the same kind, or no recognized w:type are not listed. A document with no styles part lists none."
+  },
+  "Word.StyleCollection#items": {
+    "status": "partial",
+    "notes": "Requires load. items/<property> paths load nameLocal, type, builtIn, baseStyle, nextParagraphStyle, and linked on each item in the same sync. top and skip window the listing. Navigation and deeper item paths refuse with InvalidArgument."
+  },
+  "Word.StyleCollection#getByNameOrNullObject": {
+    "status": "partial",
+    "notes": "Compares names without case and surrounding spaces, the rule the style setters use, and answers the first match in part order. A missing name answers an object whose isNullObject is true after the sync. A name that is not a string refuses with InvalidArgument at sync."
+  },
+  "Word.StyleCollection#getCount": {
+    "status": "equivalent",
+    "notes": "Counts the listed styles. Readable from the ClientResult after the sync."
+  },
+  "Word.Style#nameLocal": {
+    "status": "different",
+    "notes": "The w:name value that styles.xml declares, as written, not a localized display name. Built-in names can read in lower case, such as heading 1. Assigning the value to a style setter applies that style."
+  },
+  "Word.Style#type": {
+    "status": "partial",
+    "notes": "Character, Paragraph, and Table follow w:type. A numbering style reads as List."
+  },
+  "Word.Style#builtIn": {
+    "status": "partial",
+    "notes": "False only when the style states w:customStyle. Latent styles are not listed."
+  },
+  "Word.Style#linked": {
+    "status": "partial",
+    "notes": "True when w:link names a listed style."
+  },
+  "Word.Style#baseStyle": {
+    "status": "partial",
+    "notes": "Read-only. The name of the w:basedOn style, or an empty string when the style states none or names a style that is not listed. The property has no setter."
+  },
+  "Word.Style#nextParagraphStyle": {
+    "status": "partial",
+    "notes": "Read-only. The name of the w:next style. A paragraph style that states none names itself; other kinds read an empty string. The property has no setter."
   }
 }

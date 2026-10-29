@@ -8,7 +8,7 @@
 export const AUTOMATION_COMMAND_OPERATIONS: readonly ["removeDocumentInformation", "setDocumentProperties", "insertTableRows", "insertTable", "updateTable", "updateTableCell", "splitTableCell", "setInlinePicture", "deleteInlinePicture", "insertField", "insertOoxml", "setFieldCode", "setFieldResult", "deleteField", "updateFieldResult", "insertInlinePicture", "insertBreak", "setChangeTrackingMode", "proposeInsertion", "proposeDeletion", "proposeReplacement", "insertText", "replaceSpan", "replaceStoryBlocks", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "insertBookmark", "deleteBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "startNewList", "attachToList", "detachFromList", "setListLevelFormat", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "resolveRevisionBatch", "setRevisionAuthorBatch", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
 
 // @public
-export const AUTOMATION_QUERY_OPERATIONS: readonly ["getTables", "getTable", "getTableRows", "getTableCells", "getTableCell", "getMergedTableCell", "getTableCellProperties", "getTableCellBody", "getFields", "getField", "getFieldResult", "getInlinePictures", "getInlinePicture", "getShapes", "getShape", "getShapeBody", "getChangeTrackingMode", "getDocument", "getDocumentProperty", "getBody", "getParagraphs", "getRange", "getSpanParagraphs", "getText", "getSpanText", "getTextRanges", "expandSpan", "getReviewedText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getBookmarkNames", "getBookmarkRangeByName", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getReviewItemRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
+export const AUTOMATION_QUERY_OPERATIONS: readonly ["getTables", "getTable", "getTableRows", "getTableCells", "getTableCell", "getMergedTableCell", "getTableCellProperties", "getTableCellBody", "getFields", "getField", "getFieldResult", "getInlinePictures", "getInlinePicture", "getShapes", "getShape", "getShapeBody", "getChangeTrackingMode", "getDocument", "getDocumentProperty", "getStyles", "getBody", "getParagraphs", "getRange", "getSpanParagraphs", "getText", "getSpanText", "getTextRanges", "expandSpan", "getReviewedText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getBookmarkNames", "getBookmarkRangeByName", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getReviewItemRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
 
 // @public
 export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["removeDocumentInformation", "insertTableRows", "resolveRevisionBatch", "setRevisionAuthorBatch", "insertTable", "insertInlinePicture", "insertBreak", "startNewList", "deleteNote", "insertComment", "setCommentResolved", "replyToComment", "insertCustomNode"];
@@ -455,6 +455,10 @@ export type AutomationOperation = AutomationAuthoringOperation | {
 } | {
     readonly name: DocumentPropertyName;
     readonly op: 'getDocumentProperty';
+}
+/** The styles `styles.xml` defines, in part order, each named the way `setStyle` accepts it. */
+| {
+    readonly op: 'getStyles';
 } | {
     readonly op: 'setDocumentProperties';
     readonly values: DocumentPropertyWrites;
@@ -1615,6 +1619,21 @@ export type AutomationStoryId = AutomationShapeOwnerStory | {
     readonly shapeId: number;
 };
 
+// @public
+export type AutomationStyleKind = 'paragraph' | 'character' | 'table' | 'numbering';
+
+// @public
+export interface AutomationStyleRead {
+    readonly basedOn: string | null;
+    readonly builtIn: boolean;
+    readonly linked: boolean;
+    // (undocumented)
+    readonly name: string;
+    readonly next: string | null;
+    // (undocumented)
+    readonly type: AutomationStyleKind;
+}
+
 // @public (undocumented)
 export type AutomationTableMutation = {
     readonly count: number;
@@ -1763,6 +1782,11 @@ export type AutomationValue = {
 | {
     readonly kind: 'style';
     readonly name: string | null;
+}
+/** The styles a document defines, in the order its styles part writes them. */
+| {
+    readonly kind: 'styles';
+    readonly styles: readonly AutomationStyleRead[];
 }
 /** A command that committed. The observable effect is the response's revision/changed. */
 | {

@@ -554,6 +554,29 @@ await runtime.run(async (context) => {
 
 A read returns the direction that the paragraph reads in, after its style. Writes accept only `LeftToRight` and `RightToLeft`; other values fail with `InvalidArgument`. A write of the direction that the paragraph already has changes nothing, so you can write back what you read. The write keeps `alignment` as authored: in a right-to-left paragraph, `Left` names the leading edge at the right margin. With `TrackMineOnly`, the write records a paragraph property revision.
 
+## Apply a style the document defines
+
+A style setter refuses a name that the document does not define. List the defined styles first, then pass plain names to the model. Load the item properties in the same sync as the collection:
+
+```ts
+await runtime.run(async (context) => {
+  const styles = context.document.getStyles();
+  styles.load('items/nameLocal,items/type');
+  const paragraph = context.document.body.paragraphs.getFirst();
+  await context.sync();
+
+  const names = styles.items
+    .filter((style) => style.type === 'Paragraph')
+    .map((style) => style.nameLocal);
+  const chosen = names.find((name) => name.toLowerCase() === 'quote');
+  if (chosen === undefined) return;
+  paragraph.style = chosen;
+  await context.sync();
+});
+```
+
+Every listed paragraph style applies through `style`. To check one name, call `styles.getByNameOrNullObject(name)` and read `isNullObject` after a sync. Style definitions are read-only.
+
 ## Go to a bookmark
 
 Go to a bookmark with the standard calls: `getBookmarkRangeOrNullObject(name)`, then `range.select()`. Check `isNullObject` after a sync instead of catching `ItemNotFound`. Selection needs a browser host (`runtime.capabilities.selection`). It opens the header, footer or note that holds the bookmark. A read-only editor refuses a selection outside the main text with `NotSupported`.

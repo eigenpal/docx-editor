@@ -172,6 +172,7 @@ export declare namespace DocxEditor {
     deleteBookmark(name: string): void;
     getBookmarkRange(name: string): Range;
     getBookmarkRangeOrNullObject(name: string): Range;
+    getStyles(): StyleCollection;
   }
 
   export class DocumentProperties {
@@ -494,4 +495,21 @@ export declare namespace DocxEditor {
     objects: ClientObject[],
     batch: (context: RequestContext) => Promise<T>
   ): Promise<T>;
+
+  // ---------------------------------------------------------------------
+  // styles: read-only listing of the defined styles
+  // ---------------------------------------------------------------------
+
+  export class Style extends ClientObject {
+    readonly builtIn: boolean;
+    readonly linked: boolean;
+    readonly nameLocal: string;
+    readonly type: 'Character' | 'List' | 'Paragraph' | 'Table';
+  }
+
+  export class StyleCollection {
+    readonly items: Style[];
+    getByNameOrNullObject(name: string): Style;
+    getCount(): ClientResult<number>;
+  }
 }

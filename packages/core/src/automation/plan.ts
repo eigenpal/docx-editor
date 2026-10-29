@@ -10,6 +10,7 @@ import {
   withEnclosedBookmarkDrops,
 } from './plan-bookmarks.ts';
 import { planDocumentProperties } from './plan-document-properties.ts';
+import { planStyleListing } from './style-listing.ts';
 import { referencedNoteIds } from './note-references.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
@@ -1681,6 +1682,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           () => pinWrite(planFor(packageReads.body!)),
           !host.collaborative
         );
+      case 'getStyles':
+        return planStyleListing(packageReads);
       case 'getDocument':
         return query({ kind: 'handle', handle: handles.document() });
 

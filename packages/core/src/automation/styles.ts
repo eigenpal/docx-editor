@@ -31,7 +31,7 @@ import {
 import { namedChild, paragraphPropertiesNodeOf } from '../store/store/tree-op-nodes.ts';
 
 /** Longest style name a write may carry. Word's own limit is far below this. */
-const MAX_NAME = 255;
+export const MAX_STYLE_NAME = 255;
 
 /** What the document says its paragraph styles are. */
 export interface AutomationStyleIndex {
@@ -145,7 +145,7 @@ export type StylePlan =
 export function styleIdFor(name: unknown, styles: AutomationStyleIndex): StylePlan {
   if (typeof name !== 'string' || name.trim().length === 0)
     return { ok: false, detail: 'style: not a name' };
-  if (name.length > MAX_NAME) return { ok: false, detail: 'style: name too long' };
+  if (name.length > MAX_STYLE_NAME) return { ok: false, detail: 'style: name too long' };
   if (!isValidXmlText(name)) return { ok: false, detail: 'style: not valid XML text' };
   if (!styles.present) return { ok: false, detail: 'style: this document defines no styles' };
   const styleId = styles.idOf(name);

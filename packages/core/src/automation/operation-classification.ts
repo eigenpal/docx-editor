@@ -21,6 +21,7 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'getChangeTrackingMode',
   'getDocument',
   'getDocumentProperty',
+  'getStyles',
   'getBody',
   'getParagraphs',
   'getRange',
