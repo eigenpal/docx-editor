@@ -42,6 +42,28 @@ describe('edits that wait for the room', () => {
     expect(published).toEqual([true, false]);
   });
 
+  test('an edit elsewhere that goes through leaves the status waiting', () => {
+    const { doc, release } = heldBack();
+    const published: boolean[] = [];
+    let held = true;
+    const wait = new EditWait({
+      ydoc: doc,
+      viewWaiting: () => false,
+      nodeWaits: (id) => held && id === 'held-paragraph',
+      publish: (waiting) => published.push(waiting),
+    });
+    expect(wait.refuses(typeIn('held-paragraph'))).toBe(true);
+    expect(wait.refuses(typeIn('other-paragraph'))).toBe(false);
+    expect(published).toEqual([true]);
+    // The held paragraph no longer waits, though another update is still held back.
+    held = false;
+    wait.refresh();
+    expect(published).toEqual([true, false]);
+    release();
+    wait.refresh();
+    expect(published).toEqual([true, false]);
+  });
+
   test('ids in lists and nested records wait too, and whole-story edits wait', () => {
     const { doc, release } = heldBack();
     const wait = new EditWait({

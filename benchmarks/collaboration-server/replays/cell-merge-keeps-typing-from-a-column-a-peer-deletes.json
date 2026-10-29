@@ -1,0 +1,90 @@
+{
+  "config": "reorder",
+  "seed": 1,
+  "replicas": 3,
+  "delivery": "server",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 0,
+          "text": "ab"
+        },
+        "paragraphs": [5]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "mergeTableCells",
+          "tableId": "",
+          "cellIds": []
+        },
+        "targets": [
+          {
+            "field": "tableId",
+            "localName": "tbl",
+            "index": 0
+          },
+          {
+            "field": "cellIds",
+            "localName": "tc",
+            "index": 0,
+            "within": 0,
+            "array": true
+          },
+          {
+            "field": "cellIds",
+            "localName": "tc",
+            "index": 1,
+            "within": 0,
+            "array": true
+          }
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "deleteTableColumn",
+          "tableId": "",
+          "gridColumnId": ""
+        },
+        "targets": [
+          {
+            "field": "tableId",
+            "localName": "tbl",
+            "index": 0
+          },
+          {
+            "field": "gridColumnId",
+            "localName": "gridCol",
+            "index": 1,
+            "within": 0
+          }
+        ]
+      }
+    }
+  ]
+}

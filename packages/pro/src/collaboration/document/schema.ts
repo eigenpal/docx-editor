@@ -498,10 +498,16 @@ interface PendingStructs {
   readonly origins: ReadonlySet<string>;
   /** `client:clock:key` of each key a pending item sets in a map whose own item exists. */
   readonly fields: ReadonlySet<string>;
+  /** Each string a pending item inserts into an array: the IDs a child listing will name. */
+  readonly listed: ReadonlySet<string>;
 }
 
 const pendingStructs = new WeakMap<Uint8Array, PendingStructs>();
-const NOTHING_PENDING: PendingStructs = { origins: new Set(), fields: new Set() };
+const NOTHING_PENDING: PendingStructs = {
+  origins: new Set(),
+  fields: new Set(),
+  listed: new Set(),
+};
 
 function pendingStructsOf(doc: Y.Doc): PendingStructs {
   const pending = pendingUpdate(doc);
@@ -510,6 +516,7 @@ function pendingStructsOf(doc: Y.Doc): PendingStructs {
   if (known) return known;
   const origins = new Set<string>();
   const fields = new Set<string>();
+  const listed = new Set<string>();
   try {
     // Yjs keeps the pending structs in the version 2 update encoding.
     for (const struct of Y.decodeUpdateV2(pending).structs) {
@@ -518,11 +525,14 @@ function pendingStructsOf(doc: Y.Doc): PendingStructs {
       if (struct.parent instanceof Y.ID && struct.parentSub !== null) {
         fields.add(`${struct.parent.client}:${struct.parent.clock}:${struct.parentSub}`);
       }
+      if (struct.parentSub === null && struct.content instanceof Y.ContentAny) {
+        for (const value of struct.content.arr) if (typeof value === 'string') listed.add(value);
+      }
     }
   } catch {
     // An update Yjs itself parked is well formed; a failure here means nothing is known.
   }
-  const summary = { origins, fields };
+  const summary = { origins, fields, listed };
   pendingStructs.set(pending, summary);
   return summary;
 }
@@ -538,6 +548,15 @@ export function mapFieldArriving<Value>(map: Y.Map<Value>, key: string): boolean
   if (map.has(key) || map.doc === null) return false;
   const id = itemIdOf(map);
   return id !== null && pendingStructsOf(map.doc).fields.has(`${id.client}:${id.clock}:${key}`);
+}
+
+/**
+ * Whether a held-back update lists the node `id` under a parent. Yjs integrates a split's new
+ * paragraph record and its text before it lists the paragraph when that listing waits on
+ * another peer's update, so the paragraph exists and shows nowhere for a while.
+ */
+export function listingArriving(doc: Y.Doc, id: string): boolean {
+  return hasPendingUpdates(doc) && pendingStructsOf(doc).listed.has(id);
 }
 
 /**

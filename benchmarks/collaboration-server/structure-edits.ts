@@ -31,6 +31,7 @@ export type StructureEditKind =
   | 'splitCell'
   | 'pageBreak'
   | 'control'
+  | 'unwrapControl'
   | 'footnote'
   | 'comment';
 
@@ -53,6 +54,9 @@ export const STRUCTURE_WEIGHTS: Record<StructureEditKind, number> = {
   splitCell: 0,
   pageBreak: 1,
   control: 1,
+  // Off by default, so every existing seed draws the same numbers; the `reorderControls`
+  // shape turns it on.
+  unwrapControl: 0,
   footnote: 1,
   comment: 1,
 };
@@ -295,6 +299,14 @@ export function planStructureEdit(
       return {
         paragraphOp: { op: 'insertInlineContentControl', offset, tag: 'fuzz', text: 'value' },
       };
+    case 'unwrapControl': {
+      // Remove a content control, keeping its content or deleting it with the control.
+      const control = pickOf('sdt');
+      if (control === null) return null;
+      return node({ op: 'removeContentControl', controlId: '', keepContent: random() < 0.5 }, [
+        { field: 'controlId', localName: 'sdt', index: control },
+      ]);
+    }
     case 'footnote':
       return { paragraphOp: { op: 'insertNote', noteKind: 'footnote', offset } };
     case 'comment': {

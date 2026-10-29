@@ -243,7 +243,7 @@ export class DocumentRegistry {
    * {@link nodeRecordDeleteFilter}. Omitting this is silent data loss, not a missing nicety.
    */
   undoDeleteFilter(): (item: Y.Item) => boolean {
-    const nodeFilter = nodeRecordDeleteFilter(this.schema.nodes);
+    const nodeFilter = nodeRecordDeleteFilter(this.schema.nodes, this.schema);
     return (item) => !retainsNumberingInfrastructure(this.schema, item) && nodeFilter(item);
   }
 

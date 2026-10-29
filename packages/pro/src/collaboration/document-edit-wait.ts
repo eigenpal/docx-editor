@@ -33,28 +33,46 @@ export interface EditWaitDeps {
 
 export class EditWait {
   private waiting = false;
+  /** The last edit that had to wait, while it still would. */
+  private held: readonly TreeDocOp[] = [];
 
   constructor(private readonly deps: EditWaitDeps) {}
 
   /**
    * Whether these operations must wait. Called for every edit: without a held-back update it
-   * reads two flags, and only with one does it look at the nodes the operations address.
+   * reads two flags, and only with one does it look at the nodes the operations address. An
+   * edit elsewhere that goes through leaves the status waiting while the last refused edit
+   * would still wait.
    */
   refuses(ops: readonly TreeDocOp[]): boolean {
     if (this.deps.viewWaiting()) return this.set(true);
-    if (!awaitingUpdates(this.deps.ydoc)) return this.set(false);
-    return this.set(
-      ops.some(
-        (op) => WHOLE_SCOPE.has(op.op) || addressedIds(op).some((id) => this.deps.nodeWaits(id))
-      )
-    );
+    if (!awaitingUpdates(this.deps.ydoc)) {
+      this.held = [];
+      return this.set(false);
+    }
+    if (this.waits(ops)) {
+      this.held = ops;
+      return this.set(true);
+    }
+    if (this.held.length > 0 && !this.waits(this.held)) this.held = [];
+    this.set(this.held.length > 0);
+    return false;
   }
 
   /** Shared state changed: edits may no longer wait. */
   refresh(): void {
-    if (this.waiting && !this.deps.viewWaiting() && !awaitingUpdates(this.deps.ydoc)) {
+    if (!this.waiting || this.deps.viewWaiting()) return;
+    // The held edit can go through once its update arrives, while another is still held back.
+    if (!awaitingUpdates(this.deps.ydoc) || (this.held.length > 0 && !this.waits(this.held))) {
+      this.held = [];
       this.set(false);
     }
+  }
+
+  private waits(ops: readonly TreeDocOp[]): boolean {
+    return ops.some(
+      (op) => WHOLE_SCOPE.has(op.op) || addressedIds(op).some((id) => this.deps.nodeWaits(id))
+    );
   }
 
   /** Record and publish the answer; returns it. */
