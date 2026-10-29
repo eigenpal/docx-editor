@@ -1048,6 +1048,14 @@ A single-spaced line drawn in a face that lists the Chinese, Japanese, or Korean
 - **AND** multiple, exact, and at-least spacing apply to that line as to any other single-spaced line
 - **AND** ideographic spaces (U+3000) in that face, like ordinary spaces, do not set the line height
 
+#### Scenario: Hinted character the East Asian face cannot draw
+
+- **GIVEN** a run with `w:hint="eastAsia"` that holds a non-breaking hyphen (U+2011), and an East Asian face with no glyph for it
+- **WHEN** layout measures the line, in any East Asian run language
+- **THEN** the hyphen takes the Latin slot, with the Latin face's advance
+- **AND** the East Asian face does not set the line height
+- **AND** a hinted character that the East Asian face draws keeps that face and its line
+
 #### Scenario: Stand-in keeps its own box
 
 - **GIVEN** a run that names a missing CJK family that a packaged face answers, or CJK text that a glyph fallback draws
