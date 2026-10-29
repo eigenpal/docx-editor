@@ -31,13 +31,24 @@ import {
   ObjectPath,
   fail,
   hydratedHandles,
-  selectedProperties,
   type AutomationOperation,
   type AutomationValue,
   type ObjectAddress,
   type RequestContext,
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
+
+/**
+ * The item properties a collection's `load(...)` names.
+ *
+ * A collection has one property of its own, `items`. Any other name is a property of each item,
+ * the same as its `items/` path, so `collection.load('text')` reads like `load('items/text')`.
+ */
+export function collectionItemSelection(request: ResolvedLoadOptions): readonly string[] {
+  return [
+    ...new Set([...request.select.filter((name) => name !== 'items'), ...request.itemSelect]),
+  ];
+}
 
 /** What a promised member is told once the read that looked for it has answered. */
 export interface PromisedItem {
@@ -126,16 +137,7 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
 
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected onLoad(request: ResolvedLoadOptions): void {
-    // A collection has one property of its own. Any other name is a property of each item, the
-    // same as its `items/` path.
-    const itemSelect = [
-      ...new Set([...request.select.filter((name) => name !== 'items'), ...request.itemSelect]),
-    ];
-    selectedProperties(
-      { ...request, select: request.select.filter((name) => name === 'items') },
-      ['items'],
-      this.path.label
-    );
+    const itemSelect = collectionItemSelection(request);
     if (itemSelect.length > 0) this.#checkItemSelect(itemSelect);
     const listing = this.path.isPending ? undefined : this.listing();
     const label = `${this.path.label}.items`;

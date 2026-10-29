@@ -334,6 +334,104 @@ describe('Document.getStyles', () => {
   });
 });
 
+describe('one name, several kinds', () => {
+  // A character style listed BEFORE a paragraph style of the same name: a name lookup that took
+  // the first match would answer the character style, which the setters refuse.
+  const COLLIDING = withStyles(
+    '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+      '<w:style w:type="character" w:styleId="QuoteChar"><w:name w:val="Quote"/></w:style>' +
+      '<w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/>' +
+      '<w:next w:val="Nameless"/></w:style>' +
+      '<w:style w:type="paragraph" w:styleId="Nameless"/>'
+  );
+
+  test('a listed item reloads the style it was listed as, not the first of its name', async () => {
+    const runtime = await createServer(COLLIDING);
+    try {
+      const types = await runtime.run(async (context) => {
+        const styles = context.document.getStyles();
+        styles.load('items');
+        await context.sync();
+        for (const style of styles.items) style.load('nameLocal,type');
+        await context.sync();
+        return styles.items.map((style) => [style.nameLocal, style.type]);
+      });
+      expect(types).toEqual([
+        ['Normal', 'Paragraph'],
+        ['Quote', 'Character'],
+        ['Quote', 'Paragraph'],
+      ]);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('getByNameOrNullObject answers the paragraph style, which the setters apply', async () => {
+    const runtime = await createServer(COLLIDING);
+    try {
+      const read = await runtime.run(async (context) => {
+        const found = context.document.getStyles().getByNameOrNullObject('quote');
+        found.load('nameLocal,type');
+        await context.sync();
+        // A second load on the same object keeps naming the same style.
+        found.load('type');
+        await context.sync();
+        context.document.body.paragraphs.getFirst().style = found.nameLocal;
+        await context.sync();
+        return found.type;
+      });
+      expect(read).toBe('Paragraph');
+      expect(await mainXmlOf(runtime)).toContain('<w:pStyle w:val="Quote"/>');
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('nextParagraphStyle is empty where w:next names a style the listing leaves out', async () => {
+    const runtime = await createServer(COLLIDING);
+    try {
+      const next = await runtime.run(async (context) => {
+        const styles = context.document.getStyles();
+        styles.load('items/nameLocal,items/type,items/nextParagraphStyle');
+        await context.sync();
+        return styles.items.map((style) => style.nextParagraphStyle);
+      });
+      // Normal states none and follows itself; the character style has none; Quote names an
+      // unlisted style.
+      expect(next).toEqual(['Normal', '', '']);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('a character style name is listed but refused by paragraph.style', async () => {
+    const runtime = await createServer(
+      withStyles(
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+          '<w:style w:type="character" w:styleId="Strong"><w:name w:val="Strong"/></w:style>'
+      )
+    );
+    try {
+      const code = await runtime.run(async (context) => {
+        const styles = context.document.getStyles();
+        styles.load('items/nameLocal,items/type');
+        await context.sync();
+        const strong = styles.items.find((style) => style.type === 'Character')!;
+        context.document.body.paragraphs.getFirst().style = strong.nameLocal;
+        try {
+          await context.sync();
+          return null;
+        } catch (error) {
+          return isDocxEditorError(error) ? error.code : 'unknown';
+        }
+      });
+      expect(code).not.toBe(null);
+    } finally {
+      runtime.dispose();
+    }
+  });
+});
+
 test('the guide example applies a listed style', async () => {
   // packages/editor-api/OFFICE_JS_GUIDE.md, "Apply a style the document defines".
   const runtime = await createServer(

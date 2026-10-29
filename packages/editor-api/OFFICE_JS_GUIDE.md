@@ -575,7 +575,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-Every listed paragraph style applies through `style`. To check one name, call `styles.getByNameOrNullObject(name)` and read `isNullObject` after a sync. Style definitions are read-only.
+The list includes character, table, and list styles too. The `style` setters accept paragraph style names only and refuse the others, so filter on `type` first. Every listed paragraph style applies through `style`. To check one name, call `styles.getByNameOrNullObject(name)` and read `isNullObject` after a sync. Style definitions are read-only.
 
 ## Go to a bookmark
 

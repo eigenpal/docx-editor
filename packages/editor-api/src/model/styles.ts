@@ -7,13 +7,17 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 //
 // A STYLE IS NOT AN OBJECT THE HOST NAMES. The host answers one listing of `styles.xml`, as plain
 // data, and every object here reads its values from such a listing. A style is found again by its
-// NAME, compared the way a `style` write compares it, so the name a listing answers is always one
-// `paragraph.style = …` accepts.
+// style id, never by its name alone: one name can belong to a character style and a paragraph style
+// at once, and a name lookup would hand back whichever came first.
+//
+// NOT EVERY LISTED NAME IS A PARAGRAPH STYLE. The listing holds every kind. The paragraph and range
+// `style` setters accept paragraph style names only, and refuse character, table, and list names.
 //
 // READS ONLY. Writing a style definition (its font, its paragraph format, deleting it, adding one)
 // is not something this API does, so those members are not published at all. `baseStyle` and
 // `nextParagraphStyle` are readable and have no setter.
 
+import { foldStyleName } from '@docx-editor.dev/core/automation';
 import {
   ObjectPath,
   clientResult,
@@ -25,17 +29,18 @@ import {
   type RequestContext,
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
+import { collectionItemSelection } from './item-collection.ts';
 import { ModelObject } from './model-object.ts';
 
 /** The kind of a style. @public */
 export enum StyleType {
-  /** A character style, applied to text inside a paragraph. */
+  /** A character style. The paragraph `style` setters refuse its name. */
   character = 'Character',
-  /** A numbering style, which defines list formatting. */
+  /** A numbering style, which defines list formatting. The paragraph `style` setters refuse its name. */
   list = 'List',
   /** A paragraph style, which `paragraph.style` accepts by its `nameLocal`. */
   paragraph = 'Paragraph',
-  /** A table style. */
+  /** A table style. The paragraph `style` setters refuse its name. */
   table = 'Table',
 }
 
@@ -56,18 +61,18 @@ const TYPES: Readonly<Record<AutomationStyleRead['type'], StyleType>> = Object.f
   numbering: StyleType.list,
 });
 
-/** How a name is compared: the rule the paragraph `style` setter uses. */
-function folded(name: string): string {
-  return name.trim().toLowerCase();
-}
-
-/** The first style a listing holds under `name`, or undefined. */
+/**
+ * The style a name lookup answers. Names compare the way the style setters compare them. Where one
+ * name belongs to several kinds, the paragraph style wins, because that is the style the setters
+ * apply; otherwise the first match in part order.
+ */
 function styleNamed(
   styles: readonly AutomationStyleRead[],
   name: string
 ): AutomationStyleRead | undefined {
-  const key = folded(name);
-  return styles.find((style) => folded(style.name) === key);
+  const key = foldStyleName(name);
+  const matches = styles.filter((style) => foldStyleName(style.name) === key);
+  return matches.find((style) => style.type === 'paragraph') ?? matches[0];
 }
 
 function propertyOf(style: AutomationStyleRead, property: StyleProperty): string | boolean {
@@ -81,8 +86,7 @@ function propertyOf(style: AutomationStyleRead, property: StyleProperty): string
     case 'baseStyle':
       return style.basedOn ?? '';
     case 'nextParagraphStyle':
-      // A paragraph style that states no `w:next` is followed by itself.
-      return style.next ?? (style.type === 'paragraph' ? style.name : '');
+      return style.next ?? '';
     case 'linked':
       return style.linked;
   }
@@ -92,18 +96,28 @@ function propertyOf(style: AutomationStyleRead, property: StyleProperty): string
  * One style the document's styles part defines. Every property is read-only and needs an explicit
  * `load` before it is read.
  *
- * `nameLocal` is the name the styles part declares. Assign it to `paragraph.style` to apply a
- * listed paragraph style.
+ * `nameLocal` is the name the styles part declares. Only a style whose `type` is `Paragraph` can be
+ * assigned to `paragraph.style`, `range.style`, or `body.style`; those setters refuse character,
+ * table, and list style names.
  *
  * @public
  */
 export class Style extends ModelObject {
-  /** The name this style is found by in a later listing. */
-  #name: unknown;
+  /** The style id this object is found by in a later listing, once known. */
+  #id: string | undefined;
+  /** The name a lookup was asked for, until its sync answers. */
+  readonly #lookup: unknown;
 
   /** @internal A member of a loaded collection. */
-  static listed(context: RequestContext, label: string, owner: ObjectPath): Style {
-    return new Style(context, ObjectPath.derived(label, owner), undefined, false);
+  static listed(
+    context: RequestContext,
+    label: string,
+    owner: ObjectPath,
+    style: AutomationStyleRead
+  ): Style {
+    const item = new Style(context, ObjectPath.derived(label, owner), undefined, false);
+    item.#id = style.id;
+    return item;
   }
 
   /** @internal A style looked up by name; a sync says whether it exists. */
@@ -111,17 +125,28 @@ export class Style extends ModelObject {
     return new Style(context, ObjectPath.pending(label), name, true);
   }
 
-  private constructor(context: RequestContext, path: ObjectPath, name: unknown, nullable: boolean) {
+  private constructor(
+    context: RequestContext,
+    path: ObjectPath,
+    lookup: unknown,
+    nullable: boolean
+  ) {
     super(context, path, { nullable });
-    this.#name = name;
+    this.#lookup = lookup;
   }
 
-  /** The name the styles part declares. */
+  /**
+   * The name the styles part declares. Assign it to `paragraph.style` only when `type` is
+   * `Paragraph`; the paragraph `style` setters refuse other kinds.
+   */
   get nameLocal(): string {
     return this.loadedProperty<string>('nameLocal');
   }
 
-  /** The kind of style. A numbering definition style reads as `List`. */
+  /**
+   * The kind of style. A numbering style reads as `List`. Only `Paragraph` names are accepted by
+   * the paragraph, range, and body `style` setters.
+   */
   get type(): StyleType | 'Character' | 'List' | 'Paragraph' | 'Table' {
     return this.loadedProperty<StyleType>('type');
   }
@@ -131,14 +156,18 @@ export class Style extends ModelObject {
     return this.loadedProperty<boolean>('builtIn');
   }
 
-  /** The name of the style this one is based on, or an empty string. Read-only here. */
+  /**
+   * The name of the style this one is based on. An empty string when the style states none, or
+   * names a style the listing leaves out. Read-only here.
+   */
   get baseStyle(): string {
     return this.loadedProperty<string>('baseStyle');
   }
 
   /**
-   * The name of the style for the paragraph after this one. A paragraph style that states none
-   * names itself; other kinds read an empty string. Read-only here.
+   * The name of the style for the paragraph after this one. A paragraph style that states no next
+   * style names itself. An empty string for other kinds, and where the next style it names is one
+   * the listing leaves out. Read-only here.
    */
   get nextParagraphStyle(): string {
     return this.loadedProperty<string>('nextParagraphStyle');
@@ -151,7 +180,7 @@ export class Style extends ModelObject {
 
   /** @internal The lookup found this style. */
   hydrateFound(style: AutomationStyleRead): void {
-    this.#name = style.name;
+    this.#id = style.id;
     this.path.resolveTo(this.internals.roots().document);
   }
 
@@ -162,7 +191,6 @@ export class Style extends ModelObject {
 
   /** @internal Record the selected properties from one listing entry. */
   hydrateProperties(style: AutomationStyleRead, selected: readonly string[]): void {
-    this.#name = style.name;
     for (const property of selected as readonly StyleProperty[])
       this.setLoadedProperty(property, propertyOf(style, property));
   }
@@ -175,10 +203,17 @@ export class Style extends ModelObject {
       target,
       () => ({ op: 'getStyles' }),
       (value) => {
-        const name = this.#name;
         const styles = hydratedStyles(value, target);
-        const style = typeof name === 'string' ? styleNamed(styles, name) : undefined;
+        // The id when a listing or a lookup has named this style; the asked-for name only for a
+        // lookup whose own answer has not arrived, which the queue orders before this read.
+        const style =
+          this.#id !== undefined
+            ? styles.find((entry) => entry.id === this.#id)
+            : typeof this.#lookup === 'string'
+              ? styleNamed(styles, this.#lookup)
+              : undefined;
         if (!style) fail({ code: 'ItemNotFound', target });
+        this.#id = style.id;
         this.hydrateProperties(style, selected);
       }
     );
@@ -186,12 +221,14 @@ export class Style extends ModelObject {
 }
 
 /**
- * The styles a document defines, in the order its styles part writes them, as of the sync that
- * loaded them.
+ * The styles a document defines, of every kind, in the order its styles part writes them, as of
+ * the sync that loaded them.
  *
- * A style is listed when its name is one the `style` setters accept. A paragraph style is listed
- * only when assigning its `nameLocal` to `paragraph.style` applies it. A document with no styles
- * part lists none.
+ * The listing holds paragraph, character, table, and list styles. The `paragraph.style`,
+ * `range.style`, and `body.style` setters accept paragraph style names only; they refuse character,
+ * table, and list names. Check `type` before assigning a `nameLocal`. Every listed paragraph style
+ * applies through those setters. Styles with no name, an invalid name, or an unknown kind are not
+ * listed. A document with no styles part lists none.
  *
  * Load the styles and a property of each in one sync with an `items/` path, such as
  * `styles.load('items/nameLocal,items/type')`.
@@ -213,7 +250,7 @@ export class StyleCollection extends ModelObject {
     return this.loadedProperty<readonly Style[]>('items');
   }
 
-  /** The number of styles the document defines, readable after the next sync. */
+  /** The number of listed styles, of every kind, readable after the next sync. */
   getCount(): ClientResult<number> {
     const target = `${this.path.label}.getCount`;
     const { result, fill } = clientResult<number>(target);
@@ -226,8 +263,11 @@ export class StyleCollection extends ModelObject {
   }
 
   /**
-   * The style with this name, compared without case and surrounding spaces, or an object that
-   * reports `isNullObject` after the sync.
+   * The style with this name, or an object that reports `isNullObject` after the sync.
+   *
+   * Names compare without case and surrounding spaces, the way the style setters compare them.
+   * When one name belongs to styles of several kinds, the paragraph style is answered, because that
+   * is the style the setters apply. Otherwise the first match in part order is answered.
    */
   getByNameOrNullObject(name: string): Style {
     const target = `${this.path.label}.getByNameOrNullObject`;
@@ -254,16 +294,9 @@ export class StyleCollection extends ModelObject {
 
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
-    // `items` is the collection's only property; any other name selects it on each item.
     const label = `${this.path.label}.items`;
-    selectedProperties(
-      { ...request, select: request.select.filter((name) => name === 'items') },
-      ['items'],
-      this.path.label
-    );
-    const itemSelect = [
-      ...new Set([...request.select.filter((name) => name !== 'items'), ...request.itemSelect]),
-    ];
+    const itemSelect = collectionItemSelection(request);
+    // Refused at the `load` call, before anything is sent, like every other collection.
     if (itemSelect.length > 0)
       selectedProperties({ select: itemSelect, itemSelect: [] }, PROPERTIES, label);
     const skip = request.skip ?? 0;
@@ -276,8 +309,9 @@ export class StyleCollection extends ModelObject {
         const last = top === undefined ? styles.length : Math.min(styles.length, skip + top);
         const items: Style[] = [];
         for (let index = skip; index < last; index += 1) {
-          const item = Style.listed(this.context, `${label}[${String(index)}]`, this.path);
-          item.hydrateProperties(styles[index]!, itemSelect);
+          const style = styles[index]!;
+          const item = Style.listed(this.context, `${label}[${String(index)}]`, this.path, style);
+          item.hydrateProperties(style, itemSelect);
           items.push(item);
         }
         this.setLoadedProperty('items', Object.freeze(items));

@@ -2370,6 +2370,17 @@
       "kind": "class",
       "requirementSet": null,
       "members": {
+        "baseStyle": {
+          "uid": "DocxEditor.Style#baseStyle",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
         "builtIn": {
           "uid": "DocxEditor.Style#builtIn",
           "kind": "property",
@@ -2398,6 +2409,17 @@
           "uid": "DocxEditor.Style#nameLocal",
           "kind": "property",
           "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "nextParagraphStyle": {
+          "uid": "DocxEditor.Style#nextParagraphStyle",
+          "kind": "property",
           "requirementSet": null,
           "overloads": [
             {

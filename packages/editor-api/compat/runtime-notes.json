@@ -825,7 +825,7 @@
   },
   "Word.Document#getStyles": {
     "status": "partial",
-    "notes": "Answers a new collection on each call. Lists the styles that styles.xml defines, in part order, when each name is one the style setters accept. A paragraph style is listed only when assigning its nameLocal to Paragraph#style applies that same style. Styles with no w:name, an empty or invalid name, a later duplicate name of the same kind, or no recognized w:type are not listed. A document with no styles part lists none."
+    "notes": "Answers a new collection on each call. Lists every named style that styles.xml defines, of every kind, in part order. The Paragraph#style, Range#style, and Body#style setters accept paragraph style names only and refuse character, table, and list names. Every listed paragraph style applies through those setters. Styles with no w:name, an empty or invalid name, a later duplicate name of the same kind, or no recognized w:type are not listed. A document with no styles part lists none."
   },
   "Word.StyleCollection#items": {
     "status": "partial",
@@ -833,15 +833,15 @@
   },
   "Word.StyleCollection#getByNameOrNullObject": {
     "status": "partial",
-    "notes": "Compares names without case and surrounding spaces, the rule the style setters use, and answers the first match in part order. A missing name answers an object whose isNullObject is true after the sync. A name that is not a string refuses with InvalidArgument at sync."
+    "notes": "Compares names without case and surrounding spaces, the rule the style setters use. When one name belongs to styles of several kinds, it answers the paragraph style, which the setters apply; otherwise the first match in part order. A missing name answers an object whose isNullObject is true after the sync. A name that is not a string refuses with InvalidArgument at sync."
   },
   "Word.StyleCollection#getCount": {
-    "status": "equivalent",
-    "notes": "Counts the listed styles. Readable from the ClientResult after the sync."
+    "status": "partial",
+    "notes": "Counts the listed styles only. Styles the listing leaves out, such as styles with no name or an unknown kind, and latent styles, are not counted. Readable from the ClientResult after the sync."
   },
   "Word.Style#nameLocal": {
     "status": "different",
-    "notes": "The w:name value that styles.xml declares, as written, not a localized display name. Built-in names can read in lower case, such as heading 1. Assigning the value to a style setter applies that style."
+    "notes": "The w:name value that styles.xml declares, as written, not a localized display name. Built-in names can read in lower case, such as heading 1. The paragraph, range, and body style setters accept it only when type is Paragraph."
   },
   "Word.Style#type": {
     "status": "partial",
@@ -861,6 +861,6 @@
   },
   "Word.Style#nextParagraphStyle": {
     "status": "partial",
-    "notes": "Read-only. The name of the w:next style. A paragraph style that states none names itself; other kinds read an empty string. The property has no setter."
+    "notes": "Read-only. The name of the w:next style. A paragraph style that states no w:next names itself. Other kinds, and a w:next that names a style the listing leaves out, read an empty string. The property has no setter."
   }
 }

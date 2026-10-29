@@ -1587,7 +1587,7 @@ export class Style extends ModelObject {
     hydrateProperties(style: AutomationStyleRead, selected: readonly string[]): void;
     get linked(): boolean;
     // @internal
-    static listed(context: RequestContext, label: string, owner: ObjectPath): Style;
+    static listed(context: RequestContext, label: string, owner: ObjectPath, style: AutomationStyleRead): Style;
     get nameLocal(): string;
     get nextParagraphStyle(): string;
     // @internal

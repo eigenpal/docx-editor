@@ -167,8 +167,12 @@ export class Document extends ModelObject {
   }
 
   /**
-   * The styles the document defines, in the order its styles part writes them. Each call answers
-   * a new collection; load it before reading `items`.
+   * The styles the document defines, of every kind, in the order its styles part writes them.
+   * Each call answers a new collection; load it before reading `items`.
+   *
+   * The list includes character, table, and list styles. The `paragraph.style`, `range.style`,
+   * and `body.style` setters accept paragraph style names only and refuse the other kinds, so
+   * filter on `type === 'Paragraph'` before assigning a `nameLocal`.
    *
    * @example
    * ```ts

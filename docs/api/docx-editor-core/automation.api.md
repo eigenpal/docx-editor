@@ -1626,6 +1626,7 @@ export type AutomationStyleKind = 'paragraph' | 'character' | 'table' | 'numberi
 export interface AutomationStyleRead {
     readonly basedOn: string | null;
     readonly builtIn: boolean;
+    readonly id: string;
     readonly linked: boolean;
     readonly name: string;
     readonly next: string | null;
@@ -1879,6 +1880,9 @@ export function explainDiagnostic(code: DiagnosticCode): DiagnosticExplanation;
 
 // @public
 export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation' | 'save';
+
+// @public
+export function foldStyleName(name: string): string;
 
 // @public
 export type FontDiagnosticCode = 'font.shaper-unavailable' | 'font.load-failed' | 'font.missing' | 'font.integrity-mismatch' | 'font.malformed' | 'font.size-limit' | 'font.unsupported-face';

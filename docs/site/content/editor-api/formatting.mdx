@@ -154,15 +154,17 @@ const names = styles.items
   .map((style) => style.nameLocal);
 ```
 
-Every listed paragraph style applies when you assign its `nameLocal` to `Body.style`, `Paragraph.style`, or `Range.style`. To check for one name, call `styles.getByNameOrNullObject(name)`, load a property, sync, and read `isNullObject`. The lookup compares names without case and surrounding spaces, the same way the style setters do. `styles.getCount()` returns the number of listed styles.
+The list includes paragraph, character, table, and list styles. `Body.style`, `Paragraph.style`, and `Range.style` accept paragraph style names only. They refuse character, table, and list style names, so check `type` before you assign a `nameLocal`. Every listed paragraph style applies through those setters.
+
+To check for one name, call `styles.getByNameOrNullObject(name)`, load a property, sync, and read `isNullObject`. The lookup compares names without case and surrounding spaces, the same way the style setters do. If one name belongs to styles of several kinds, the lookup returns the paragraph style. `styles.getCount()` returns the number of listed styles.
 
 A `Style` exposes these read-only properties:
 
 - `nameLocal`: the `w:name` value that `styles.xml` declares, as written. Built-in names can read in lower case, such as `heading 1`.
 - `type`: `Paragraph`, `Character`, `Table`, or `List`. A numbering style reads as `List`.
 - `builtIn`: `false` when the style states `w:customStyle`.
-- `baseStyle`: the name of the `w:basedOn` style, or an empty string.
-- `nextParagraphStyle`: the name of the `w:next` style. A paragraph style that states none names itself. Other kinds read an empty string.
+- `baseStyle`: the name of the `w:basedOn` style. It is an empty string if the style states none or names a style that is not in the list.
+- `nextParagraphStyle`: the name of the `w:next` style. A paragraph style that states no `w:next` names itself. It is an empty string for other kinds, and if `w:next` names a style that is not in the list.
 - `linked`: `true` when `w:link` names a listed style.
 
 The list follows the order of `styles.xml`. It leaves out styles that have no `w:name`, an empty or invalid name, a later duplicate name of the same kind, or no recognized `w:type`. A document with no styles part lists no styles. Style definitions are read-only: the API does not add, delete, or change styles, and `Style` has no `font` or `paragraphFormat`.

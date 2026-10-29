@@ -33,6 +33,14 @@ import { namedChild, paragraphPropertiesNodeOf } from '../store/store/tree-op-no
 /** Longest style name a write may carry. Word's own limit is far below this. */
 export const MAX_STYLE_NAME = 255;
 
+/**
+ * The form two style names are compared in: surrounding spaces dropped, case folded. One helper so
+ * the style setters, the style listing and an object model's lookup cannot drift apart.
+ */
+export function foldStyleName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
 /** What the document says its paragraph styles are. */
 export interface AutomationStyleIndex {
   /** The name a paragraph style id shows in a gallery, or null for an id the part omits one for. */
@@ -84,7 +92,7 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
     if (entry.type !== 'paragraph') continue;
     byId.set(entry.styleId, entry.name);
     if (entry.name !== null) {
-      const folded = entry.name.trim().toLowerCase();
+      const folded = foldStyleName(entry.name);
       // First definition wins, matching the store's own index: a later duplicate must not
       // silently retarget a name.
       if (!byName.has(folded)) byName.set(folded, entry.styleId);
@@ -93,7 +101,7 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
   }
   return Object.freeze({
     nameOf: (styleId: string) => byId.get(styleId) ?? null,
-    idOf: (name: string) => byName.get(name.trim().toLowerCase()) ?? null,
+    idOf: (name: string) => byName.get(foldStyleName(name)) ?? null,
     defaultId,
     present: true,
     inheritsRtl,

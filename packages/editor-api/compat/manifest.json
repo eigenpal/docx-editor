@@ -227,7 +227,7 @@
       "members": ["author", "title", "subject", "keywords", "comments", "category", "lastAuthor"]
     },
     "Style": {
-      "members": ["builtIn", "linked", "nameLocal", "type"]
+      "members": ["baseStyle", "builtIn", "linked", "nameLocal", "nextParagraphStyle", "type"]
     },
     "StyleCollection": {
       "members": ["items", "getByNameOrNullObject", "getCount"]
@@ -445,14 +445,6 @@
     {
       "uid": "Word.Paragraph#readingOrder",
       "reason": "Implemented by DocxEditor's object model as an addition: Office.js has no paragraph direction member on Paragraph or ParagraphFormat, in the pinned declarations or in the preview declarations. The name follows the desktop object model's ParagraphFormat.ReadingOrder, and the values follow Word.SectionDirection ('LeftToRight', 'RightToLeft'). Reads answer the effective direction: the paragraph's own w:bidi, else its style chain, its numbering level, an enclosing cell's table style, and the document defaults, as layout resolves them. A write of the direction the paragraph already has changes nothing. Otherwise it removes the paragraph's own w:bidi when that alone set the other direction, or states w:bidi, with the explicit off value only over a right-to-left style. Writes keep w:jc as authored. With change tracking on, a write that changes the direction records a paragraph property revision."
-    },
-    {
-      "uid": "Word.Style#baseStyle",
-      "reason": "Readable: the name of the w:basedOn style, or an empty string. Not selected because upstream declares it assignable, and rebasing a style definition is a styles-part write this subset does not perform. The object model publishes it read-only, so an assignment is a compile error rather than a silent no-op."
-    },
-    {
-      "uid": "Word.Style#nextParagraphStyle",
-      "reason": "Readable: the name of the w:next style. A paragraph style that states none names itself; other kinds read an empty string. Not selected for the same reason as Word.Style#baseStyle: upstream declares it assignable, and the object model publishes it read-only."
     },
     {
       "uid": "Word.Style#font",
@@ -754,7 +746,15 @@
     },
     {
       "uid": "Word.Document#getStyles / Word.StyleCollection / Word.Style",
-      "note": "Reads styles.xml in part order. A style is listed only when its w:name is one the style setters accept: a paragraph style appears only when assigning its nameLocal to Paragraph#style applies that same style, and other kinds keep the first definition of a name. Styles with no w:name, an empty or invalid name, or no recognized w:type are not listed. nameLocal is the w:name the part declares, not a localized display name. type maps w:type numbering to List. builtIn is false only when the part marks w:customStyle. linked is true when w:link names a listed style. getByNameOrNullObject compares names without case and surrounding spaces, like the style setters, and answers the first match in part order. A document with no styles part lists none. items/<property> paths load item properties in the same sync. Each getStyles() call answers a new collection."
+      "note": "Reads styles.xml in part order. The listing holds every named style of every kind: paragraph, character, table, and numbering. The Paragraph#style, Range#style, and Body#style setters accept paragraph style names only and refuse character, table, and list names, so check type before assigning a nameLocal. Every listed paragraph style applies through those setters. A paragraph style is listed only when its name resolves back to that same style; other kinds keep the first definition of a name. Styles with no w:name, an empty or invalid name, or no recognized w:type are not listed. One name can appear once per kind; each listed Style keeps the style it was listed as across later loads. nameLocal is the w:name the part declares, not a localized display name. type maps w:type numbering to List. builtIn is false only when the part marks w:customStyle. linked is true when w:link names a listed style. getByNameOrNullObject compares names without case and surrounding spaces, like the style setters. When one name belongs to several kinds it answers the paragraph style; otherwise the first match in part order. A document with no styles part lists none. items/<property> paths load item properties in the same sync. Each getStyles() call answers a new collection."
+    },
+    {
+      "uid": "Word.Style#baseStyle",
+      "note": "Published read-only where the reference declares a setter: rebasing a style definition is a styles-part write this subset does not perform, so the object model has no setter and an assignment is a compile error rather than a silent no-op. Reads the name of the w:basedOn style, or an empty string when the style states none or names a style the listing leaves out."
+    },
+    {
+      "uid": "Word.Style#nextParagraphStyle",
+      "note": "Published read-only where the reference declares a setter, for the same reason as Word.Style#baseStyle. Reads the name of the w:next style. A paragraph style that states no w:next names itself. Other kinds, and a w:next that names a style the listing leaves out, read an empty string."
     }
   ],
   "$divergencesComment": "Members that ARE selected but differ from upstream in a documented source shape or observable behaviour. Kept apart from \"omissions\" on purpose: an omission is a member this subset does not publish, and one of these is a member it publishes and answers differently. The authored compatibility declarations remain the exact upstream reference shape; runtime conformance assertions explicitly account for any listed source-shape divergence."
