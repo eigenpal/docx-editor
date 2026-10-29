@@ -144,12 +144,11 @@ export class Range extends ModelObject implements PromisedItem {
   }
 
   /**
-   * The paragraph style, by the name a reader sees in the styles gallery.
-   *
-   * Reading answers the name every paragraph this range covers agrees on, and `null` where they do not or
-   * where the document names no style. Writing applies it to all of them, and a name the document
-   * does not already define is refused rather than created — a minted style would report itself
-   * applied while the text stayed exactly as it looked.
+   * The paragraph style of the paragraphs this range covers, by name. A read answers the name they
+   * all agree on, which always writes back to the same style, or `null` where there is no such
+   * name. A write applies a style the document defines and never creates one: list the names with
+   * `context.document.getStyles()` and assign the `nameLocal` of a `Paragraph` style; character,
+   * table, and list names are refused.
    */
   get style(): string {
     return this.loadedProperty<string>('style');

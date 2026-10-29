@@ -26,6 +26,7 @@ import { ModelObject } from './model-object.ts';
 import { NoteItemCollection } from './notes.ts';
 import { CommentCollection, RevisionCollection } from './review.ts';
 import { SectionCollection } from './sections.ts';
+import { StyleCollection } from './styles.ts';
 import { Range } from './range.ts';
 
 /** Office.js tracking mode names. TrackAll is recognized but currently refused. @public */
@@ -163,6 +164,30 @@ export class Document extends ModelObject {
   get properties(): DocumentProperties {
     this.#properties ??= DocumentProperties.of(this.context, this.path);
     return this.#properties;
+  }
+
+  /**
+   * The styles the document defines, of every kind, in the order its styles part writes them.
+   * Each call answers a new collection; load it before reading `items`.
+   *
+   * The list includes character, table, and list styles. The `paragraph.style`, `range.style`,
+   * and `body.style` setters accept paragraph style names only and refuse the other kinds, so
+   * filter on `type === 'Paragraph'` before assigning a `nameLocal`.
+   *
+   * @example
+   * ```ts
+   * const styles = context.document.getStyles();
+   * styles.load('items/nameLocal,items/type,items/visibility,items/unhideWhenUsed');
+   * await context.sync();
+   *
+   * // Keep hidden styles that unhide once used, such as heading 2, so they can be applied too.
+   * const names = styles.items
+   *   .filter((style) => style.type === 'Paragraph' && (style.visibility || style.unhideWhenUsed))
+   *   .map((style) => style.nameLocal);
+   * ```
+   */
+  getStyles(): StyleCollection {
+    return StyleCollection.of(this.context, `${this.path.label}.getStyles()`, this.path);
   }
 
   /** The main story's paragraphs, in reading order. */

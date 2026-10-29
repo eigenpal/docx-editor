@@ -254,6 +254,11 @@ export type AutomationValue =
    * document declares no styles at all.
    */
   | { readonly kind: 'style'; readonly name: string | null }
+  /** The styles a document defines, in the order its styles part writes them. */
+  | {
+      readonly kind: 'styles';
+      readonly styles: readonly import('./style-listing.ts').AutomationStyleRead[];
+    }
   /** A command that committed. The observable effect is the response's revision/changed. */
   | { readonly kind: 'applied' };
 

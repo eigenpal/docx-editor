@@ -1,12 +1,14 @@
 // Table protocol dispatch. Handles never expose canonical node identities.
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { revisionDateNow } from './revision-date.ts';
-import { indexStyles, stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import { isWritableStyleName, styleDefinitionsOf } from './style-definitions.ts';
+import { answered, refused } from './plan-results.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import type { AutomationOperation } from './operations.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
-import type { AutomationErrorCode, AutomationHandle, AutomationValue } from './protocol.ts';
+import type { AutomationErrorCode, AutomationHandle } from './protocol.ts';
 import type { PlannedOperation } from './plan.ts';
 import { resolveSpanRef, storyOfSpanRef } from './spans.ts';
 import { mergeTargetCell } from '../store/store/tree-op-table-merge.ts';
@@ -31,11 +33,10 @@ export interface TablePlannerContext {
     affectedParagraphIds: readonly string[]
   ) => PlannedOperation | null;
 }
-const refuse = (code: AutomationErrorCode, detail: string): PlannedOperation => ({
-  ok: false,
-  error: { code, message: detail, detail },
-});
-const query = (value: AutomationValue): PlannedOperation => ({ ok: true, kind: 'query', value });
+// The shared frozen helpers; a table refusal's message is its detail, as it always was.
+const refuse = (code: AutomationErrorCode, detail: string): PlannedOperation =>
+  refused(code, detail, detail);
+const query = answered;
 const TABLE_OPS = new Set([
   'insertTableRows',
   'getTables',
@@ -76,9 +77,14 @@ function parentTable(root: OoxmlNode, nodeId: string): OoxmlElement | undefined 
   }
   return undefined;
 }
-function styles(reads: AutomationPackageReads) {
+/**
+ * The table style name a read answers: the name that writes back to the same style, by the rule the
+ * listing and the setter share, or an empty string where none does.
+ */
+function tableStyleName(reads: AutomationPackageReads, styleId: string | null | undefined): string {
   const part = reads.package && stylesPartOf(reads.package);
-  return part ? [...indexStyles(part).values()].filter((s) => s.type === 'table') : [];
+  if (!part || typeof styleId !== 'string') return '';
+  return styleDefinitionsOf(part).nameOf('table', styleId) ?? '';
 }
 
 export function planTableOperation(
@@ -199,7 +205,8 @@ export function planTableOperation(
           headerRowCount: data.headerRowCount,
           rowCount: data.rowIds.length,
           columnCount: data.columnCount,
-          style: styles(packages).find((s) => s.styleId === data.styleId)?.name ?? '',
+          // The name that writes back to this style, or none: a read is always writable.
+          style: tableStyleName(packages, data.styleId),
         },
       });
     case 'getTableRows':
@@ -282,13 +289,14 @@ export function planTableOperation(
               : { ...operation.properties, kind: 'cell', cellId: target.nodeId };
       if (mutation.kind === 'properties' && mutation.styleId !== undefined) {
         const wanted = mutation.styleId;
-        if (typeof wanted !== 'string' || wanted.trim().length === 0)
+        // The same name rule the paragraph style setter applies, before any name is compared.
+        if (typeof wanted !== 'string' || !isWritableStyleName(wanted))
           return refuse('unsupported-content', 'invalid-table-style-name');
-        const style = styles(packages).find(
-          (s) => s.name?.trim().toLowerCase() === wanted.trim().toLowerCase()
-        );
-        if (!style) return refuse('unsupported-content', 'table-style-not-defined');
-        mutation = { ...mutation, styleId: style.styleId };
+        const stylesPart = packages.package && stylesPartOf(packages.package);
+        if (!stylesPart) return refuse('unsupported-content', 'no-styles-defined: table');
+        const styleId = styleDefinitionsOf(stylesPart).idOf('table', wanted);
+        if (styleId === null) return refuse('unsupported-content', 'style-not-defined: table');
+        mutation = { ...mutation, styleId };
       }
       const revision = context.trackingAuthor
         ? { author: context.trackingAuthor, date: revisionDateNow() }

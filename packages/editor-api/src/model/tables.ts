@@ -74,7 +74,13 @@ export class Table extends ModelObject implements PromisedItem {
       mutation: { kind: 'values', values },
     }));
   }
-  /** Table style display name. Writes must name an existing table style in the document. */
+  /**
+   * The table style, by its display name. Writes must name a table style the document defines: list
+   * the names with `context.document.getStyles()` and assign the `nameLocal` of a style whose `type`
+   * is `Table`; paragraph, character, and list names are refused. A read answers the name that
+   * writes back to the same style, or an empty string where the table has no style or no name of
+   * its style writes back to it.
+   */
   get style(): string {
     return this.loadedProperty<string>('style');
   }

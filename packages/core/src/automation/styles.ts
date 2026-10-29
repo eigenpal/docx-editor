@@ -18,7 +18,7 @@
 // caller's is bounded and validated as XML text here, and only ever compared against names the
 // document already declares — nothing is templated into markup and no id is derived from it.
 
-import { indexStyles, numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import { numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { isValidXmlText } from '../store/package/sinks.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
@@ -29,16 +29,25 @@ import {
   type DirectionSources,
 } from '../layout/paragraph-direction-inheritance.ts';
 import { namedChild, paragraphPropertiesNodeOf } from '../store/store/tree-op-nodes.ts';
-
-/** Longest style name a write may carry. Word's own limit is far below this. */
-const MAX_NAME = 255;
+import { MAX_STYLE_NAME, styleDefinitionsOf } from './style-definitions.ts';
 
 /** What the document says its paragraph styles are. */
 export interface AutomationStyleIndex {
-  /** The name a paragraph style id shows in a gallery, or null for an id the part omits one for. */
+  /**
+   * The name a paragraph style id shows in a gallery, or null for an id the part omits one for.
+   *
+   * Also null when that name belongs to an EARLIER paragraph style, or is one a write refuses
+   * (blank or not valid XML text): a name read is always one `idOf` resolves back to this style.
+   */
   nameOf(styleId: string): string | null;
   /** The paragraph style id a name belongs to, matched case-insensitively, or null. */
   idOf(name: string): string | null;
+  /**
+   * The CHARACTER style id a name belongs to, or null. Run styles such as the one a hyperlink
+   * takes are character styles; looking them up among paragraph styles would write a `w:rStyle`
+   * that names a paragraph style.
+   */
+  characterIdOf(name: string): string | null;
   /** The id the part marks as the default paragraph style, or null. */
   readonly defaultId: string | null;
   /** Whether the package has a styles part at all. */
@@ -72,28 +81,19 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
     return Object.freeze({
       nameOf: () => null,
       idOf: () => null,
+      characterIdOf: () => null,
       defaultId: null,
       present: false,
       inheritsRtl,
     });
   }
-  const byId = new Map<string, string | null>();
-  const byName = new Map<string, string>();
-  let defaultId: string | null = null;
-  for (const entry of indexStyles(part).values()) {
-    if (entry.type !== 'paragraph') continue;
-    byId.set(entry.styleId, entry.name);
-    if (entry.name !== null) {
-      const folded = entry.name.trim().toLowerCase();
-      // First definition wins, matching the store's own index: a later duplicate must not
-      // silently retarget a name.
-      if (!byName.has(folded)) byName.set(folded, entry.styleId);
-    }
-    if (entry.isDefault && defaultId === null) defaultId = entry.styleId;
-  }
+  // The same cached definitions the style listing reads, so the two agree on every name.
+  const definitions = styleDefinitionsOf(part);
+  const defaultId = definitions.defaultParagraphId;
   return Object.freeze({
-    nameOf: (styleId: string) => byId.get(styleId) ?? null,
-    idOf: (name: string) => byName.get(name.trim().toLowerCase()) ?? null,
+    nameOf: (styleId: string) => definitions.nameOf('paragraph', styleId),
+    idOf: (name: string) => definitions.idOf('paragraph', name),
+    characterIdOf: (name: string) => definitions.idOf('character', name),
     defaultId,
     present: true,
     inheritsRtl,
@@ -105,7 +105,8 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
  *
  * A paragraph that states no `w:pStyle` answers the part's own default paragraph style, because
  * that is the style it has — `w:docDefaults` and `w:default="1"` are the document saying so, not
- * this lane guessing. A package with no styles part answers null: there is no name to give.
+ * this lane guessing. A package with no styles part answers null: there is no name to give. A
+ * style whose name an earlier paragraph style already has answers null too (see `nameOf`).
  */
 export function paragraphStyleName(
   part: OoxmlPart,
@@ -145,11 +146,16 @@ export type StylePlan =
 export function styleIdFor(name: unknown, styles: AutomationStyleIndex): StylePlan {
   if (typeof name !== 'string' || name.trim().length === 0)
     return { ok: false, detail: 'style: not a name' };
-  if (name.length > MAX_NAME) return { ok: false, detail: 'style: name too long' };
+  if (name.length > MAX_STYLE_NAME) return { ok: false, detail: 'style: name too long' };
   if (!isValidXmlText(name)) return { ok: false, detail: 'style: not valid XML text' };
-  if (!styles.present) return { ok: false, detail: 'style: this document defines no styles' };
+  if (!styles.present)
+    return { ok: false, detail: 'no-styles-defined: this document defines no styles' };
   const styleId = styles.idOf(name);
   if (styleId === null)
-    return { ok: false, detail: 'style: this document defines no paragraph style with that name' };
+    return {
+      ok: false,
+      // The token before the colon selects the public diagnostic that points to getStyles().
+      detail: 'style-not-defined: this document defines no paragraph style with that name',
+    };
   return { ok: true, styleId };
 }

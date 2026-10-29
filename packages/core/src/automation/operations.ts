@@ -159,6 +159,23 @@ export type AutomationOperation =
       readonly op: 'getDocumentProperty';
       readonly name: import('../store/package/document-property-writes.ts').DocumentPropertyName;
     }
+  /**
+   * The styles `styles.xml` defines, of every kind, in part order. `setStyle` accepts paragraph
+   * style names only; character, table, and numbering names are listed but refused there.
+   *
+   * Give at most one of these to ask a narrower question:
+   * - `name`: the answer holds at most the one style that name finds. Names compare without case
+   *   and surrounding spaces, as `setStyle` compares them, and a paragraph style wins over another
+   *   kind with the same name. A name longer than 255 characters finds nothing.
+   * - `id`: the answer holds at most the listed style with that `w:styleId`.
+   * - `count: true`: the answer is the number of listed styles, as a `number` value.
+   */
+  | {
+      readonly op: 'getStyles';
+      readonly name?: string;
+      readonly id?: string;
+      readonly count?: true;
+    }
   | {
       readonly op: 'setDocumentProperties';
       readonly values: import('../store/package/document-property-writes.ts').DocumentPropertyWrites;

@@ -122,6 +122,14 @@ export function validateManifestAgainstReference(manifest, referenceFixture) {
     }
   }
 
+  // A class-level omission ("Word.Style") contradicts selecting that class at all: the reason
+  // would describe the class as unpublished while its members are measured as published.
+  const selectedSymbolUids = new Set(
+    Object.entries(manifestSymbols)
+      .filter(([, selection]) => !selection.isFunction)
+      .map(([symbolName, selection]) => `${selection.namespace ?? 'Word'}.${symbolName}`)
+  );
+
   for (const omission of manifest?.omissions ?? []) {
     const uid = omission?.uid ?? '(missing uid)';
     if (typeof omission?.reason !== 'string' || omission.reason.trim().length === 0) {
@@ -130,6 +138,11 @@ export function validateManifestAgainstReference(manifest, referenceFixture) {
     if (typeof omission?.uid !== 'string' || !OMISSION_UID_PATTERN.test(omission.uid)) {
       issues.push(`manifest.omissions: "${uid}" does not look like a Word.*/OfficeExtension.* UID`);
       continue;
+    }
+    if (selectedSymbolUids.has(omission.uid)) {
+      issues.push(
+        `manifest.omissions: "${omission.uid}" omits a whole class that manifest.symbols selects — record member-level omissions instead`
+      );
     }
     if (selectedMemberUids.has(omission.uid)) {
       issues.push(

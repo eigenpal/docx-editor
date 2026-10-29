@@ -784,6 +784,17 @@
             }
           ]
         },
+        "getStyles": {
+          "uid": "Word.Document#getStyles",
+          "kind": "method",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "StyleCollection"
+            }
+          ]
+        },
         "paragraphs": {
           "uid": "Word.Document#paragraphs",
           "kind": "property",
@@ -2349,6 +2360,173 @@
             {
               "params": [],
               "returns": "Section[]"
+            }
+          ]
+        }
+      }
+    },
+    "Style": {
+      "uid": "Word.Style",
+      "kind": "class",
+      "requirementSet": "WordApi 1.3",
+      "members": {
+        "baseStyle": {
+          "uid": "Word.Style#baseStyle",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "builtIn": {
+          "uid": "Word.Style#builtIn",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "linked": {
+          "uid": "Word.Style#linked",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "nameLocal": {
+          "uid": "Word.Style#nameLocal",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "nextParagraphStyle": {
+          "uid": "Word.Style#nextParagraphStyle",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "priority": {
+          "uid": "Word.Style#priority",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "quickStyle": {
+          "uid": "Word.Style#quickStyle",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "type": {
+          "uid": "Word.Style#type",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Character\" | \"List\" | \"Paragraph\" | \"Table\""
+            }
+          ]
+        },
+        "unhideWhenUsed": {
+          "uid": "Word.Style#unhideWhenUsed",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "visibility": {
+          "uid": "Word.Style#visibility",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        }
+      }
+    },
+    "StyleCollection": {
+      "uid": "Word.StyleCollection",
+      "kind": "class",
+      "requirementSet": "WordApi 1.5",
+      "members": {
+        "getByNameOrNullObject": {
+          "uid": "Word.StyleCollection#getByNameOrNullObject",
+          "kind": "method",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "name",
+                  "type": "string"
+                }
+              ],
+              "returns": "Style"
+            }
+          ]
+        },
+        "getCount": {
+          "uid": "Word.StyleCollection#getCount",
+          "kind": "method",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ClientResult<number>"
+            }
+          ]
+        },
+        "items": {
+          "uid": "Word.StyleCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Style[]"
             }
           ]
         }

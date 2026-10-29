@@ -8,7 +8,7 @@
 export const AUTOMATION_COMMAND_OPERATIONS: readonly ["removeDocumentInformation", "setDocumentProperties", "insertTableRows", "insertTable", "updateTable", "updateTableCell", "splitTableCell", "setInlinePicture", "deleteInlinePicture", "insertField", "insertOoxml", "setFieldCode", "setFieldResult", "deleteField", "updateFieldResult", "insertInlinePicture", "insertBreak", "setChangeTrackingMode", "proposeInsertion", "proposeDeletion", "proposeReplacement", "insertText", "replaceSpan", "replaceStoryBlocks", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "insertBookmark", "deleteBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "startNewList", "attachToList", "detachFromList", "setListLevelFormat", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "resolveRevisionBatch", "setRevisionAuthorBatch", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
 
 // @public
-export const AUTOMATION_QUERY_OPERATIONS: readonly ["getTables", "getTable", "getTableRows", "getTableCells", "getTableCell", "getMergedTableCell", "getTableCellProperties", "getTableCellBody", "getFields", "getField", "getFieldResult", "getInlinePictures", "getInlinePicture", "getShapes", "getShape", "getShapeBody", "getChangeTrackingMode", "getDocument", "getDocumentProperty", "getBody", "getParagraphs", "getRange", "getSpanParagraphs", "getText", "getSpanText", "getTextRanges", "expandSpan", "getReviewedText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getBookmarkNames", "getBookmarkRangeByName", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getReviewItemRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
+export const AUTOMATION_QUERY_OPERATIONS: readonly ["getTables", "getTable", "getTableRows", "getTableCells", "getTableCell", "getMergedTableCell", "getTableCellProperties", "getTableCellBody", "getFields", "getField", "getFieldResult", "getInlinePictures", "getInlinePicture", "getShapes", "getShape", "getShapeBody", "getChangeTrackingMode", "getDocument", "getDocumentProperty", "getStyles", "getBody", "getParagraphs", "getRange", "getSpanParagraphs", "getText", "getSpanText", "getTextRanges", "expandSpan", "getReviewedText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getBookmarkNames", "getBookmarkRangeByName", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getReviewItemRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
 
 // @public
 export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["removeDocumentInformation", "insertTableRows", "resolveRevisionBatch", "setRevisionAuthorBatch", "insertTable", "insertInlinePicture", "insertBreak", "startNewList", "deleteNote", "insertComment", "setCommentResolved", "replyToComment", "insertCustomNode"];
@@ -455,6 +455,23 @@ export type AutomationOperation = AutomationAuthoringOperation | {
 } | {
     readonly name: DocumentPropertyName;
     readonly op: 'getDocumentProperty';
+}
+/**
+* The styles `styles.xml` defines, of every kind, in part order. `setStyle` accepts paragraph
+* style names only; character, table, and numbering names are listed but refused there.
+*
+* Give at most one of these to ask a narrower question:
+* - `name`: the answer holds at most the one style that name finds. Names compare without case
+*   and surrounding spaces, as `setStyle` compares them, and a paragraph style wins over another
+*   kind with the same name. A name longer than 255 characters finds nothing.
+* - `id`: the answer holds at most the listed style with that `w:styleId`.
+* - `count: true`: the answer is the number of listed styles, as a `number` value.
+*/
+| {
+    readonly count?: true;
+    readonly id?: string;
+    readonly name?: string;
+    readonly op: 'getStyles';
 } | {
     readonly op: 'setDocumentProperties';
     readonly values: DocumentPropertyWrites;
@@ -1615,6 +1632,24 @@ export type AutomationStoryId = AutomationShapeOwnerStory | {
     readonly shapeId: number;
 };
 
+// @public
+export type AutomationStyleKind = 'paragraph' | 'character' | 'table' | 'numbering';
+
+// @public
+export interface AutomationStyleRead {
+    readonly basedOn: string | null;
+    readonly builtIn: boolean;
+    readonly hidden: boolean;
+    readonly id: string;
+    readonly linked: boolean;
+    readonly name: string;
+    readonly next: string | null;
+    readonly quickStyle: boolean;
+    readonly type: AutomationStyleKind;
+    readonly uiPriority: number | null;
+    readonly unhideWhenUsed: boolean;
+}
+
 // @public (undocumented)
 export type AutomationTableMutation = {
     readonly count: number;
@@ -1764,6 +1799,11 @@ export type AutomationValue = {
     readonly kind: 'style';
     readonly name: string | null;
 }
+/** The styles a document defines, in the order its styles part writes them. */
+| {
+    readonly kind: 'styles';
+    readonly styles: readonly AutomationStyleRead[];
+}
 /** A command that committed. The observable effect is the response's revision/changed. */
 | {
     readonly kind: 'applied';
@@ -1847,7 +1887,7 @@ export function documentPartKind(detail: string | undefined): DocumentPartKind |
 export type DocumentSaveDiagnosticCode = 'save.no-document' | 'save.document-changed' | 'save.failed';
 
 // @public
-export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.comment-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.tracking-required' | 'edit.tracked-image-replace-unsupported' | 'edit.tracked-deleted-text-only' | 'edit.tracked-foreign-revision-unsupported' | 'edit.tracked-own-pending-change' | 'edit.picture-selected' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.field-unsupported' | 'edit.field-result-unsupported' | 'edit.ooxml-unsupported' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-merge-not-rectangle' | 'edit.table-split-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.operation-unsupported' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.preview-active' | 'edit.preview-unsupported' | 'edit.preview-composing' | 'edit.preview-diverged' | 'edit.read-after-commit' | 'edit.collaboration-not-ready' | 'edit.collaboration-text-limit' | 'edit.internal-invariant' | 'edit.refused';
+export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.comment-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.tracking-required' | 'edit.tracked-image-replace-unsupported' | 'edit.tracked-deleted-text-only' | 'edit.tracked-foreign-revision-unsupported' | 'edit.tracked-own-pending-change' | 'edit.picture-selected' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.field-unsupported' | 'edit.field-result-unsupported' | 'edit.ooxml-unsupported' | 'edit.style-not-defined' | 'edit.no-styles-defined' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-merge-not-rectangle' | 'edit.table-split-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.operation-unsupported' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.preview-active' | 'edit.preview-unsupported' | 'edit.preview-composing' | 'edit.preview-diverged' | 'edit.read-after-commit' | 'edit.collaboration-not-ready' | 'edit.collaboration-text-limit' | 'edit.internal-invariant' | 'edit.refused';
 
 // @public
 export function exceptionCause(): string;

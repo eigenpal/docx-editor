@@ -549,7 +549,7 @@
   },
   "Word.Paragraph#style": {
     "status": "partial",
-    "notes": "Writes a paragraph style by its display name from the document styles part. Unknown style names refuse; load before reading. Other paragraph properties are preserved. Style writes inside a content lock (contentLocked, sdtContentLocked) are refused. A load queued in the same sync as a write returns the value from before the write."
+    "notes": "Writes a paragraph style by its display name from the document styles part. Unknown style names refuse; load before reading. Other paragraph properties are preserved. Style writes inside a content lock (contentLocked, sdtContentLocked) are refused. A load queued in the same sync as a write returns the value from before the write. Reads and writes use the same style definitions as Document#getStyles: a paragraph whose style shares its name with an earlier paragraph style reads null, because that name applies the earlier style."
   },
   "Word.Paragraph#alignment": {
     "status": "partial",
@@ -822,5 +822,61 @@
   "Word.Paragraph#contentControls": {
     "status": "partial",
     "notes": "Same rules as Word.Range#contentControls over the whole paragraph: every inline control in it, at any depth, and each block control that holds it."
+  },
+  "Word.Document#getStyles": {
+    "status": "partial",
+    "notes": "Answers a new collection on each call. Lists every named style that styles.xml defines, of every kind, in part order. The Paragraph#style, Range#style, and Body#style setters accept paragraph style names only and refuse character, table, and list names. Every listed paragraph style applies through those setters. Styles with no w:name, an empty or invalid name, a later duplicate name of the same kind, or no recognized w:type are not listed. A document with no styles part lists none."
+  },
+  "Word.StyleCollection#items": {
+    "status": "partial",
+    "notes": "Requires load. load() and load('items') read every published property of each style in the same sync. items/<property> paths read fewer. top and skip window the listing. Navigation and deeper item paths refuse with InvalidArgument."
+  },
+  "Word.StyleCollection#getByNameOrNullObject": {
+    "status": "partial",
+    "notes": "Compares names without case and surrounding spaces, the rule the style setters use. When one name belongs to styles of several kinds, it answers the paragraph style, which the setters apply; otherwise the first match in part order. A missing name answers an object whose isNullObject is true after the sync. A name that is not a string refuses with InvalidArgument at the call. A name longer than 255 characters finds nothing."
+  },
+  "Word.StyleCollection#getCount": {
+    "status": "partial",
+    "notes": "Counts the listed styles only. Styles the listing leaves out, such as styles with no name or an unknown kind, and latent styles, are not counted. Readable from the ClientResult after the sync."
+  },
+  "Word.Style#nameLocal": {
+    "status": "different",
+    "notes": "The w:name value that styles.xml declares, as written, not a localized display name. Built-in names can read in lower case, such as heading 1. The paragraph, range, and body style setters accept it only when type is Paragraph."
+  },
+  "Word.Style#type": {
+    "status": "partial",
+    "notes": "Character, Paragraph, and Table follow w:type. A numbering style reads as List."
+  },
+  "Word.Style#builtIn": {
+    "status": "partial",
+    "notes": "False only when the style states w:customStyle. Latent styles are not listed."
+  },
+  "Word.Style#linked": {
+    "status": "partial",
+    "notes": "True when w:link pairs a paragraph style with a listed character style, or a character style with a listed paragraph style. Table and numbering styles, links to a style of the same type, and links to the style itself read false."
+  },
+  "Word.Style#baseStyle": {
+    "status": "partial",
+    "notes": "Read-only. The name of the w:basedOn style when it is a listed style of the same type, and an empty string otherwise. The property has no setter."
+  },
+  "Word.Style#nextParagraphStyle": {
+    "status": "partial",
+    "notes": "Read-only. The name of the w:next style when it is a listed paragraph style. A paragraph style that states no w:next names itself. Other types, and a w:next that names anything but a listed paragraph style, read an empty string. The property has no setter."
+  },
+  "Word.Style#visibility": {
+    "status": "partial",
+    "notes": "Read-only. True means the style shows as a recommended style, as the reference describes the property. The value follows w:semiHidden and w:hidden: it is false when either is on, and true otherwise. A hidden style that states w:unhideWhenUsed reads false here and true in unhideWhenUsed. The property has no setter."
+  },
+  "Word.Style#priority": {
+    "status": "partial",
+    "notes": "Read-only. The w:uiPriority value, or 99 when the style states no valid value. The property has no setter."
+  },
+  "Word.Style#quickStyle": {
+    "status": "partial",
+    "notes": "Read-only. The w:qFormat flag; false when the style does not state it. The property has no setter."
+  },
+  "Word.Style#unhideWhenUsed": {
+    "status": "partial",
+    "notes": "Read-only. The w:unhideWhenUsed flag; false when the style does not state it. The property has no setter."
   }
 }

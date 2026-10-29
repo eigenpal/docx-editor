@@ -198,6 +198,7 @@ export interface AutomationPackageReads {
 const NO_STYLE_INDEX: AutomationStyleIndex = Object.freeze({
   nameOf: () => null,
   idOf: () => null,
+  characterIdOf: () => null,
   defaultId: null,
   present: false,
   inheritsRtl: () => false,

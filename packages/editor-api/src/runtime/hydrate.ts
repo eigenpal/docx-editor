@@ -17,6 +17,7 @@ import type {
   AutomationPageSetupRead,
   AutomationParagraphFormatRead,
   AutomationSpan,
+  AutomationStyleRead,
   AutomationValue,
 } from '@docx-editor.dev/core/automation';
 import { DocxEditorError } from './errors.ts';
@@ -70,6 +71,15 @@ export function hydratedParagraphFormat(
 export function hydratedStyle(value: AutomationValue, target: string): string | null {
   if (value.kind !== 'style') throw wrongShape(target);
   return value.name;
+}
+
+/** The styles a document defines, in the order its styles part writes them. */
+export function hydratedStyles(
+  value: AutomationValue,
+  target: string
+): readonly AutomationStyleRead[] {
+  if (value.kind !== 'styles') throw wrongShape(target);
+  return value.styles;
 }
 
 /** A number the document states: a list's id, a list item's level, a page dimension. */

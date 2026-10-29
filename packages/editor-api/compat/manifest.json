@@ -30,7 +30,8 @@
       "CommentReplyCollection",
       "Revision",
       "RevisionCollection"
-    ]
+    ],
+    "styles": ["Style", "StyleCollection"]
   },
   "symbols": {
     "run": {
@@ -57,7 +58,8 @@
         "properties",
         "deleteBookmark",
         "getBookmarkRange",
-        "getBookmarkRangeOrNullObject"
+        "getBookmarkRangeOrNullObject",
+        "getStyles"
       ]
     },
     "Body": {
@@ -223,6 +225,23 @@
     },
     "DocumentProperties": {
       "members": ["author", "title", "subject", "keywords", "comments", "category", "lastAuthor"]
+    },
+    "Style": {
+      "members": [
+        "baseStyle",
+        "builtIn",
+        "linked",
+        "nameLocal",
+        "nextParagraphStyle",
+        "priority",
+        "quickStyle",
+        "type",
+        "unhideWhenUsed",
+        "visibility"
+      ]
+    },
+    "StyleCollection": {
+      "members": ["items", "getByNameOrNullObject", "getCount"]
     }
   },
   "omissions": [
@@ -293,10 +312,6 @@
     {
       "uid": "Word.HyperlinkCollection",
       "reason": "Depends on Word.Hyperlink; omitted for the same reason."
-    },
-    {
-      "uid": "Word.Style",
-      "reason": "The named-style object model (Word.Style, Word.StyleCollection) is deferred. Word.Body/Range/Paragraph/ContentControl#style (apply a style by name, WordApi 1.1) and Word.ParagraphFormat (formatting values themselves) cover this slice's styling needs without it."
     },
     {
       "uid": "Word.ContentControl#checkboxContentControl",
@@ -437,6 +452,94 @@
     {
       "uid": "Word.Paragraph#readingOrder",
       "reason": "Implemented by DocxEditor's object model as an addition: Office.js has no paragraph direction member on Paragraph or ParagraphFormat, in the pinned declarations or in the preview declarations. The name follows the desktop object model's ParagraphFormat.ReadingOrder, and the values follow Word.SectionDirection ('LeftToRight', 'RightToLeft'). Reads answer the effective direction: the paragraph's own w:bidi, else its style chain, its numbering level, an enclosing cell's table style, and the document defaults, as layout resolves them. A write of the direction the paragraph already has changes nothing. Otherwise it removes the paragraph's own w:bidi when that alone set the other direction, or states w:bidi, with the explicit off value only over a right-to-left style. Writes keep w:jc as authored. With change tracking on, a write that changes the direction records a paragraph property revision."
+    },
+    {
+      "uid": "Word.Style#font",
+      "reason": "Style definitions are read, not written. Font is a formatting object over the definition, and this subset does not resolve or write style formatting. Apply a listed style with Paragraph#style, Range#style, or Body#style instead."
+    },
+    {
+      "uid": "Word.Style#paragraphFormat",
+      "reason": "Not published, for the same reason as Word.Style#font."
+    },
+    {
+      "uid": "Word.Style#delete",
+      "reason": "Not published. Deleting a style definition is a styles-part write this subset does not perform."
+    },
+    {
+      "uid": "Word.StyleCollection#getByName",
+      "reason": "Not published. Use getByNameOrNullObject and check isNullObject, or load items."
+    },
+    {
+      "uid": "Word.StyleCollection#getItem",
+      "reason": "Not published, for the same reason as Word.StyleCollection#getByName."
+    },
+    {
+      "uid": "Word.Document#addStyle",
+      "reason": "Not published. Adding a style definition is a styles-part write. A style setter refuses a name the document does not define rather than creating one; list the defined names with Document#getStyles."
+    },
+    {
+      "uid": "Word.Style#borders",
+      "reason": "Not published. Style definitions are read, not written, and this subset has no object for style borders. Apply a listed style with Paragraph#style instead."
+    },
+    {
+      "uid": "Word.Style#shading",
+      "reason": "Not published. Style definitions are read, not written, and this subset has no object for style shading."
+    },
+    {
+      "uid": "Word.Style#tableStyle",
+      "reason": "Not published. Style definitions are read, not written, and this subset has no object for a table style's conditional formatting. Table#style applies a listed table style by its nameLocal."
+    },
+    {
+      "uid": "Word.Style#linkStyle",
+      "reason": "Not published. It answers the linked Style object and is assignable upstream; linking styles is a styles-part write. Style#linked reports whether a paragraph style and a character style are linked."
+    },
+    {
+      "uid": "Word.Style#frame",
+      "reason": "Not published. Style definitions are read, not written, and this subset has no object for text frames."
+    },
+    {
+      "uid": "Word.Style#listTemplate",
+      "reason": "Not published. Style definitions are read, not written, and this subset has no object for list templates."
+    },
+    {
+      "uid": "Word.Style#listLevelNumber",
+      "reason": "Not published, for the same reason as Word.Style#listTemplate."
+    },
+    {
+      "uid": "Word.Style#linkToListTemplate",
+      "reason": "Not published. Linking a style to a list template is a styles-part write."
+    },
+    {
+      "uid": "Word.Style#inUse",
+      "reason": "Not published. Whether a style is used needs a walk of every story, which a listing read does not perform."
+    },
+    {
+      "uid": "Word.Style#automaticallyUpdate",
+      "reason": "Not published. A desktop-only setting this subset does not read or write."
+    },
+    {
+      "uid": "Word.Style#hasProofing",
+      "reason": "Not published, for the same reason as Word.Style#automaticallyUpdate."
+    },
+    {
+      "uid": "Word.Style#languageId",
+      "reason": "Not published. Style language is run formatting inside the definition, which this subset does not resolve."
+    },
+    {
+      "uid": "Word.Style#languageIdFarEast",
+      "reason": "Not published, for the same reason as Word.Style#languageId."
+    },
+    {
+      "uid": "Word.Style#locked",
+      "reason": "Not published. Style locking belongs to document protection, which this subset does not model."
+    },
+    {
+      "uid": "Word.Style#noSpaceBetweenParagraphsOfSameStyle",
+      "reason": "Not published. Contextual spacing is paragraph formatting inside the definition, which this subset does not resolve."
+    },
+    {
+      "uid": "Word.Style#set",
+      "reason": "Not published. Setting several style properties at once is a styles-part write."
     }
   ],
   "divergences": [
@@ -538,7 +641,7 @@
     },
     {
       "uid": "OfficeExtension.LoadOption#select",
-      "note": "Collections accept items/<property> paths in load(...) strings, arrays, and select. collection.load('text') is treated as collection.load('items/text'). Items and the selected item properties load in the same context.sync(). As with every read in a sync, item properties report the document from before that sync's writes. Only one navigation level is supported: deeper paths such as items/font/bold, and navigation paths on objects that are not collections, refuse with InvalidArgument and name the path in target. items/<navigation property> such as items/font also refuses; load font on each item. On the range collection that Paragraph#split returns, item paths, top, and skip apply to the split's answer after its sync; before it, they refuse with NotImplemented. The object form with boolean property flags and $all is not accepted; use select."
+      "note": "Collections accept items/<property> paths in load(...) strings, arrays, and select. collection.load('text') is treated as collection.load('items/text'). Items and the selected item properties load in the same context.sync(). As with every read in a sync, item properties report the document from before that sync's writes. Only one navigation level is supported: deeper paths such as items/font/bold, and navigation paths on objects that are not collections, refuse with InvalidArgument and name the path in target. items/<navigation property> such as items/font also refuses; load font on each item. On the range collection that Paragraph#split returns, item paths, top, and skip apply to the split's answer after its sync; before it, they refuse with NotImplemented. The object form with boolean property flags and $all is not accepted; use select. Repeated load calls on one collection in one sync accumulate their item properties and send one listing when they share a window."
     },
     {
       "uid": "OfficeExtension.LoadOption#expand",
@@ -711,6 +814,34 @@
     {
       "uid": "Word.Range#insertContentControl",
       "note": "Creates RichText, PlainText, and DatePicker controls on eligible single-paragraph ranges. Other types refuse. DatePicker creates a date SDT; typed date configuration remains unsupported. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse."
+    },
+    {
+      "uid": "Word.Document#getStyles / Word.StyleCollection / Word.Style",
+      "note": "Reads styles.xml in part order. The listing holds every named style of every kind: paragraph, character, table, and numbering. The Paragraph#style, Range#style, and Body#style setters accept paragraph style names only and refuse character, table, and list names, so check type before assigning a nameLocal. Every listed paragraph style applies through those setters. A paragraph style is listed only when its name resolves back to that same style; other kinds keep the first definition of a name. Styles with no w:name, an empty or invalid name, or no recognized w:type are not listed. One name can appear once per kind; each listed Style keeps the style it was listed as across later loads. nameLocal is the w:name the part declares, not a localized display name. type maps w:type numbering to List. builtIn is false only when the part marks w:customStyle. linked is true only when w:link pairs a paragraph style with a listed character style, or the reverse. getByNameOrNullObject compares names without case and surrounding spaces, like the style setters. When one name belongs to several kinds it answers the paragraph style; otherwise the first match in part order. A document with no styles part lists none. load() and load('items') read every published property of each style in the same sync; items/<property> paths read fewer. Definitions are read as layout reads them: at most the first 4096 direct w:style children count, the last definition of a repeated w:styleId wins, the first of each repeated child counts, and names longer than 255 characters are not read. Repeated load calls in one sync accumulate their selections and share one listing. A refused style name reports the edit.style-not-defined diagnostic, which points to getStyles(). In a document with no styles part, a style write reports edit.no-styles-defined instead. Each getStyles() call answers a new collection."
+    },
+    {
+      "uid": "Word.Style#baseStyle",
+      "note": "Published read-only where the reference declares a setter: rebasing a style definition is a styles-part write this subset does not perform, so the object model has no setter and an assignment is a compile error rather than a silent no-op. Reads the name of the w:basedOn style when it is a listed style of the same type, and an empty string otherwise."
+    },
+    {
+      "uid": "Word.Style#nextParagraphStyle",
+      "note": "Published read-only where the reference declares a setter, for the same reason as Word.Style#baseStyle. Reads the name of the w:next style when it is a listed paragraph style. A paragraph style that states no w:next names itself. Other types, and a w:next that names anything but a listed paragraph style, read an empty string."
+    },
+    {
+      "uid": "Word.Style#visibility",
+      "note": "Published read-only where the reference declares a setter, for the same reason as Word.Style#baseStyle. True unless the style states w:semiHidden or w:hidden as on."
+    },
+    {
+      "uid": "Word.Style#priority",
+      "note": "Published read-only where the reference declares a setter, for the same reason as Word.Style#baseStyle. Reads w:uiPriority, or 99 when the style states no valid value."
+    },
+    {
+      "uid": "Word.Style#quickStyle",
+      "note": "Published read-only where the reference declares a setter, for the same reason as Word.Style#baseStyle. Reads w:qFormat; false when the style does not state it."
+    },
+    {
+      "uid": "Word.Style#unhideWhenUsed",
+      "note": "Published read-only where the reference declares a setter, for the same reason as Word.Style#baseStyle. Reads w:unhideWhenUsed; false when the style does not state it."
     }
   ],
   "$divergencesComment": "Members that ARE selected but differ from upstream in a documented source shape or observable behaviour. Kept apart from \"omissions\" on purpose: an omission is a member this subset does not publish, and one of these is a member it publishes and answers differently. The authored compatibility declarations remain the exact upstream reference shape; runtime conformance assertions explicitly account for any listed source-shape divergence."

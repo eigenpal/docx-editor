@@ -68,6 +68,7 @@ import type {
   RevisionCollection,
 } from '../../model/review.ts';
 import type { PageSetup, Section, SectionCollection } from '../../model/sections.ts';
+import type { Style, StyleCollection } from '../../model/styles.ts';
 import type { ClientObject } from '../client-object.ts';
 import type { RequestContext } from '../request-context.ts';
 import type { DocxEditorRuntime } from '../runtime.ts';
@@ -387,6 +388,26 @@ const sectionItemsAreSections: Satisfies<
 > = true;
 const documentReachesItsSections: Satisfies<Document['sections'], SectionCollection> = true;
 
+// The styles a document defines: read-only properties, a lookup that may answer a null object, and
+// a count that arrives with the sync.
+// `baseStyle`, `nextParagraphStyle`, `priority`, `quickStyle`, `unhideWhenUsed`, and `visibility`
+// are assignable upstream and published read-only here, recorded divergences, so the read shape is
+// what is compared.
+const styleMatchesTheDeclaredStyle: Satisfies<Style, Readonly<Declared.Style>> = true;
+const styleLookupTakesTheDeclaredName: TakesTheSameArguments<
+  StyleCollection['getByNameOrNullObject'],
+  Declared.StyleCollection['getByNameOrNullObject']
+> = true;
+const stylesAnswerTheirOwnObjects: Satisfies<
+  [
+    StyleCollection['items'],
+    ReturnType<StyleCollection['getByNameOrNullObject']>,
+    ReturnType<StyleCollection['getCount']>['value'],
+    ReturnType<Document['getStyles']>,
+  ],
+  [readonly Style[], Style, number, StyleCollection]
+> = true;
+
 // A note is a story of its own, and it says which kind of note it is.
 const noteMatchesTheDeclaredNote: Satisfies<
   Pick<NoteItem, 'type'>,
@@ -537,6 +558,9 @@ void sectionFurnitureTakesTheDeclaredVariant;
 void sectionAnswersItsOwnObjects;
 void sectionItemsAreSections;
 void documentReachesItsSections;
+void styleMatchesTheDeclaredStyle;
+void styleLookupTakesTheDeclaredName;
+void stylesAnswerTheirOwnObjects;
 void noteMatchesTheDeclaredNote;
 void noteDeletes;
 void noteAnswersItsOwnObjects;

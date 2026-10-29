@@ -47,7 +47,8 @@ export function isValidStyleId(raw: string | undefined): raw is string {
   return !CONTROL_CHARS.test(raw) && !isDangerousKey(raw);
 }
 
-function isDefaultFlag(raw: string | undefined): boolean {
+/** `w:default`: only the three on-spellings count. */
+export function isDefaultFlag(raw: string | undefined): boolean {
   return raw === '1' || raw === 'true' || raw === 'on';
 }
 
@@ -104,20 +105,54 @@ export function readDocDefaults(stylesRoot: OoxmlElement): {
   };
 }
 
+/** What identifies and names one `w:style`: the part of a definition that reads no formatting. */
+export interface StyleIdentity {
+  readonly styleId: string;
+  /** The `w:type`, or an empty string where the part states none. */
+  readonly type: string;
+  /** The first `w:name`, when it is at most `nameCap` characters. */
+  readonly name: string | undefined;
+  readonly basedOn: string | null;
+  readonly next: string | null;
+  readonly isDefault: boolean;
+}
+
+/** The validated id a child names, as `w:basedOn` and `w:next` are read. */
+function referenceOf(node: OoxmlElement, localName: string): string | null {
+  const child = childNamed(node, localName);
+  const raw = child ? attributeValue(child, 'val') : undefined;
+  return isValidStyleId(raw) ? raw : null;
+}
+
+/**
+ * Read only what identifies a style, or null where its id is not valid. Layout's own definitions
+ * and automation's style listing both read through this, so they agree on which definitions exist.
+ * `nameCap` is the longest name the caller keeps: layout never looks a style up by name.
+ */
+export function readStyleIdentity(node: OoxmlElement, nameCap: number): StyleIdentity | null {
+  const styleId = attributeValue(node, 'styleId');
+  if (!isValidStyleId(styleId)) return null;
+  const nameNode = childNamed(node, 'name');
+  const name = nameNode ? attributeValue(nameNode, 'val') : undefined;
+  return {
+    styleId,
+    type: attributeValue(node, 'type') ?? '',
+    name: name !== undefined && name.length <= nameCap ? name : undefined,
+    basedOn: referenceOf(node, 'basedOn'),
+    next: referenceOf(node, 'next'),
+    isDefault: isDefaultFlag(attributeValue(node, 'default')),
+  };
+}
+
+/** Longest style name layout keeps. */
+const LAYOUT_NAME_CAP = 128;
+
 export function readStyleDefinition(
   node: OoxmlElement
 ): (StyleDefinition & { isDefault: boolean }) | null {
-  const styleId = attributeValue(node, 'styleId');
-  if (!isValidStyleId(styleId)) return null;
-  const type = attributeValue(node, 'type') ?? '';
-  const nameNode = childNamed(node, 'name');
-  const name = nameNode ? attributeValue(nameNode, 'val') : undefined;
-  const basedOnNode = childNamed(node, 'basedOn');
-  const basedOnRaw = basedOnNode ? attributeValue(basedOnNode, 'val') : undefined;
-  const basedOn = isValidStyleId(basedOnRaw) ? basedOnRaw : null;
-  const nextNode = childNamed(node, 'next');
-  const nextRaw = nextNode ? attributeValue(nextNode, 'val') : undefined;
-  const next = isValidStyleId(nextRaw) ? nextRaw : null;
+  const identity = readStyleIdentity(node, LAYOUT_NAME_CAP);
+  if (!identity) return null;
+  const { styleId, type, name, basedOn, next, isDefault } = identity;
   const paragraphPropertiesNode = findParagraphProperties(node);
   const runPropertiesNode = findRunProperties(node);
   const conditionalTableFormats = new Map<string, OoxmlElement>();
@@ -133,12 +168,12 @@ export function readStyleDefinition(
   }
   return {
     styleId,
-    name: name && name.length <= 128 ? name : undefined,
+    name: name || undefined,
     type,
     basedOn,
     next,
     outlineLevel: styleOutlineLevel(node),
-    isDefault: isDefaultFlag(attributeValue(node, 'default')),
+    isDefault,
     paragraphProperties: withoutChangeRecords(propertiesOf(paragraphPropertiesNode)),
     runProperties: withoutChangeRecords(propertiesOf(runPropertiesNode)),
     paragraphPropertiesNode,

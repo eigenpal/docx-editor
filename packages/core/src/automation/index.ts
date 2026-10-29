@@ -74,6 +74,7 @@ export type {
   AutomationListNumbering,
 } from './list-authoring.ts';
 export type { AutomationTableMutation } from './tables.ts';
+export type { AutomationStyleKind, AutomationStyleRead } from './style-listing.ts';
 
 // Formatting: what a span agrees about its characters, and what a write may author.
 export type {

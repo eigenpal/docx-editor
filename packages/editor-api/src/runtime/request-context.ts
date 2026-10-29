@@ -244,7 +244,11 @@ export class RequestContext {
       // A listing whose items load properties, in a batch that writes. Every read in a batch
       // answers the document as it was before the batch's writes, so the listing and the item
       // reads it queues go first, on the same pinned revision as the writes.
-      const early = hasWrites ? remaining.filter((action) => action.continues === true) : [];
+      const early = hasWrites
+        ? remaining.filter((action) =>
+            typeof action.continues === 'function' ? action.continues() : action.continues === true
+          )
+        : [];
       if (early.length) {
         pinnedRevision ??=
           this.#readRevision !== null ? this.#readRevision : this.#session.host.revision();

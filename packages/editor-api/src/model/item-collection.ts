@@ -31,13 +31,84 @@ import {
   ObjectPath,
   fail,
   hydratedHandles,
-  selectedProperties,
   type AutomationOperation,
   type AutomationValue,
   type ObjectAddress,
   type RequestContext,
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
+
+/**
+ * The item properties a collection's `load(...)` names.
+ *
+ * A collection has one property of its own, `items`. Any other name is a property of each item,
+ * the same as its `items/` path, so `collection.load('text')` reads like `load('items/text')`.
+ */
+export function collectionItemSelection(request: ResolvedLoadOptions): readonly string[] {
+  return [
+    ...new Set([...request.select.filter((name) => name !== 'items'), ...request.itemSelect]),
+  ];
+}
+
+/**
+ * The loads one collection has queued in the current sync.
+ *
+ * REPEATED LOADS ACCUMULATE. `load('items/text'); load('items/style'); sync()` must leave both
+ * readable. There is one read per window (`skip`, `top`) per sync: a later load with the same
+ * window joins the queued read instead of queueing another, and every load's item properties go
+ * into one set that every window's read uses. So whichever read settles last and sets `items`, its
+ * members carry every property this sync asked for. Whether a read queues item reads is asked when
+ * the sync takes it, so a bare `load('items')` that a later `load('items/text')` joins becomes one
+ * that does. A load stops accepting joins once a sync takes it.
+ */
+export class CollectionLoads {
+  #names: Set<string> | undefined;
+  readonly #windows = new Set<string>();
+
+  /** Add a load's item properties. True when a read for its window is already queued. */
+  join(names: readonly string[], skip: number, top: number | undefined): boolean {
+    this.#names ??= new Set();
+    for (const name of names) this.#names.add(name);
+    return this.#windows.has(windowKey(skip, top));
+  }
+
+  /**
+   * Queue the read for a window. `enqueue` receives the shared names and the `release` that ends
+   * the window's joining; a window whose read could not be queued is released at once.
+   */
+  open(
+    skip: number,
+    top: number | undefined,
+    enqueue: (names: ReadonlySet<string>, release: () => void) => void
+  ): void {
+    const names = (this.#names ??= new Set());
+    const key = windowKey(skip, top);
+    this.#windows.add(key);
+    let released = false;
+    const release = (): void => {
+      if (released) return;
+      released = true;
+      this.#windows.delete(key);
+      // The next sync's loads start a set of their own.
+      if (this.#windows.size === 0) this.#names = undefined;
+    };
+    try {
+      enqueue(names, release);
+    } catch (error) {
+      release();
+      throw error;
+    }
+  }
+}
+
+function windowKey(skip: number, top: number | undefined): string {
+  return `${String(skip)}:${top === undefined ? '' : String(top)}`;
+}
+
+/** The index after the last member a `skip`/`top` window covers in a listing of `total`. */
+export function windowEnd(total: number, skip: number, top: number | undefined): number {
+  return top === undefined ? total : Math.min(total, skip + top);
+}
 
 /** What a promised member is told once the read that looked for it has answered. */
 export interface PromisedItem {
@@ -65,6 +136,8 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
   #answer: { readonly value: AutomationValue; readonly label: string } | undefined;
   /** Edges asked for BEFORE that answer arrived. */
   readonly #pending: PendingEdge[] = [];
+  /** Loads queued in the current sync, which a repeated load joins. */
+  readonly #loads = new CollectionLoads();
 
   protected constructor(context: RequestContext, path: ObjectPath) {
     super(context, path);
@@ -126,16 +199,7 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
 
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected onLoad(request: ResolvedLoadOptions): void {
-    // A collection has one property of its own. Any other name is a property of each item, the
-    // same as its `items/` path.
-    const itemSelect = [
-      ...new Set([...request.select.filter((name) => name !== 'items'), ...request.itemSelect]),
-    ];
-    selectedProperties(
-      { ...request, select: request.select.filter((name) => name === 'items') },
-      ['items'],
-      this.path.label
-    );
+    const itemSelect = collectionItemSelection(request);
     if (itemSelect.length > 0) this.#checkItemSelect(itemSelect);
     const listing = this.path.isPending ? undefined : this.listing();
     const label = `${this.path.label}.items`;
@@ -157,24 +221,32 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
       if (itemSelect.length > 0) for (const item of members) item.load(itemSelect);
       return;
     }
-    this.enqueue({
-      sort: 'read',
-      label,
-      ...(itemSelect.length > 0 ? { continues: true } : {}),
-      plan: () => {
-        const resolved = listing ?? this.listing();
-        if (!resolved) fail({ code: 'InvalidObjectPath', target: this.path.label });
-        return resolved;
-      },
-      settle: (value) => {
-        const members = this.#members(value, label, skip, top);
-        this.setLoadedProperty('items', members);
-        if (itemSelect.length === 0) return;
-        this.internals.queue.continuing(() => {
-          for (const item of members) item.load(itemSelect);
-        });
-      },
-    });
+    // A later load in the same sync with this window joins this read: one listing, every name.
+    if (this.#loads.join(itemSelect, skip, top)) return;
+    this.#loads.open(skip, top, (shared, release) =>
+      this.enqueue({
+        sort: 'read',
+        label,
+        // Asked when the sync takes the read, after every load of this sync has joined.
+        continues: () => shared.size > 0,
+        capture: release,
+        dispose: release,
+        plan: () => {
+          const resolved = listing ?? this.listing();
+          if (!resolved) fail({ code: 'InvalidObjectPath', target: this.path.label });
+          return resolved;
+        },
+        settle: (value) => {
+          const members = this.#members(value, label, skip, top);
+          this.setLoadedProperty('items', members);
+          const names = [...shared];
+          if (names.length === 0) return;
+          this.internals.queue.continuing(() => {
+            for (const item of members) item.load(names);
+          });
+        },
+      })
+    );
   }
 
   /**
@@ -248,7 +320,7 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
     top: number | undefined
   ): readonly T[] {
     const total = this.size(value, label);
-    const last = top === undefined ? total : Math.min(total, skip + top);
+    const last = windowEnd(total, skip, top);
     const items: T[] = [];
     for (let index = skip; index < last; index += 1) {
       const address = this.addressAt(value, label, index);

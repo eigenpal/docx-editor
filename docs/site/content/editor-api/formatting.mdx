@@ -131,7 +131,7 @@ Text direction inside a paragraph is a run property. A `readingOrder` write does
 
 ## Apply an existing style
 
-`Body.style`, `Paragraph.style`, and `Range.style` address paragraph styles by display name. The name must already exist in the document's styles part. The runtime rejects unknown style names. Assigning a name does not create a style. A body assignment applies to its paragraphs. A range assignment applies to its addressed paragraphs. Load `style` before reading it; mixed or unspecified authored styles can return `null` at runtime.
+`Body.style`, `Paragraph.style`, and `Range.style` address paragraph styles by display name. The name must already exist in the document's styles part. The runtime rejects unknown style names. Assigning a name does not create a style. A body assignment applies to its paragraphs. A range assignment applies to its addressed paragraphs. Load `style` before reading it; mixed or unspecified authored styles can return `null` at runtime. A read also returns `null` when the paragraph's style has the same name as an earlier paragraph style, because assigning that name applies the earlier style.
 
 Use a template with known styles, then assign its exact style name:
 
@@ -140,7 +140,43 @@ paragraph.style = 'Heading 1'; // The template must define this display name.
 await context.sync();
 ```
 
-`Table.style` is separate. See [Tables and cells](/docs/2.x/editor-api/tables).
+### List the defined styles
+
+To find out which styles a document defines, call `Document.getStyles()`. Call `load()` with no arguments to read every property, or name the properties you need with `items/` paths. Then filter the paragraph styles that a reader would see. Keep styles that are hidden until used, such as `heading 2`, because they appear once they are applied:
+
+```ts
+const styles = context.document.getStyles();
+styles.load('items/nameLocal,items/type,items/visibility,items/unhideWhenUsed,items/priority');
+await context.sync();
+
+const names = styles.items
+  .filter((style) => style.type === 'Paragraph' && (style.visibility || style.unhideWhenUsed))
+  .sort((a, b) => a.priority - b.priority || a.nameLocal.localeCompare(b.nameLocal))
+  .map((style) => style.nameLocal);
+```
+
+Many styles share priority 99, so the example sorts by `nameLocal` next for a stable order.
+
+The list includes paragraph, character, table, and list styles. `Body.style`, `Paragraph.style`, and `Range.style` accept paragraph style names only. They refuse character, table, and list style names, so check `type` before you assign a `nameLocal`. Every listed paragraph style applies through those setters, including linked styles such as headings. A built-in name is accepted as listed, such as `heading 1`.
+
+To check for one name, call `styles.getByNameOrNullObject(name)`, sync, and read `isNullObject`. Reading `isNullObject` needs no property load. Load the properties you want on the same object before that sync, and the lookup answers them too. The lookup compares names without case and surrounding spaces, the same way the style setters do. If one name belongs to styles of several kinds, the lookup returns the paragraph style. `styles.getCount()` returns the number of listed styles.
+
+A `Style` exposes these read-only properties:
+
+- `nameLocal`: the `w:name` value that `styles.xml` declares, as written. Built-in names can read in lower case, such as `heading 1`.
+- `type`: `Paragraph`, `Character`, `Table`, or `List`. A numbering style reads as `List`.
+- `builtIn`: `false` when the style states `w:customStyle`.
+- `baseStyle`: the name of the `w:basedOn` style when it is a listed style of the same type. Otherwise it is an empty string.
+- `nextParagraphStyle`: the name of the `w:next` style when it is a listed paragraph style. A paragraph style that states no `w:next` names itself. It is an empty string for other types, and if `w:next` names anything but a listed paragraph style.
+- `linked`: `true` when `w:link` pairs a paragraph style with a listed character style, or a character style with a listed paragraph style.
+- `visibility`: `false` when the style states `w:semiHidden` or `w:hidden`. Otherwise `true`.
+- `priority`: the `w:uiPriority` value, or 99 if the style states none. Lower values come first in the gallery.
+- `quickStyle`: `true` when the style states `w:qFormat`.
+- `unhideWhenUsed`: `true` when the style states `w:unhideWhenUsed`.
+
+The list follows the order of `styles.xml` and reads each style the way the page does. If two definitions share a `w:styleId`, the last one counts. Only the first 4096 `w:style` definitions count, and names longer than 255 characters are not read. It leaves out styles that have no `w:name`, an empty or invalid name, a later duplicate name of the same kind, or no recognized `w:type`. A document with no styles part lists no styles, and a `style` write there refuses with the `edit.no-styles-defined` diagnostic. A write with a name the document does not define refuses with `edit.style-not-defined`. Style definitions are read-only: the API does not add, delete, or change styles, and `Style` has no `font` or `paragraphFormat`.
+
+`Table.style` is separate. It accepts the `nameLocal` of a listed style whose `type` is `Table`. See [Tables and cells](/docs/2.x/editor-api/tables).
 
 ## Set a hyperlink
 

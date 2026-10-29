@@ -784,6 +784,17 @@
             }
           ]
         },
+        "getStyles": {
+          "uid": "DocxEditor.Document#getStyles",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "StyleCollection"
+            }
+          ]
+        },
         "paragraphs": {
           "uid": "DocxEditor.Document#paragraphs",
           "kind": "property",
@@ -2349,6 +2360,173 @@
             {
               "params": [],
               "returns": "Section[]"
+            }
+          ]
+        }
+      }
+    },
+    "Style": {
+      "uid": "DocxEditor.Style",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "baseStyle": {
+          "uid": "DocxEditor.Style#baseStyle",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "builtIn": {
+          "uid": "DocxEditor.Style#builtIn",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "linked": {
+          "uid": "DocxEditor.Style#linked",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "nameLocal": {
+          "uid": "DocxEditor.Style#nameLocal",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "nextParagraphStyle": {
+          "uid": "DocxEditor.Style#nextParagraphStyle",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "priority": {
+          "uid": "DocxEditor.Style#priority",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "quickStyle": {
+          "uid": "DocxEditor.Style#quickStyle",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "type": {
+          "uid": "DocxEditor.Style#type",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Character\" | \"List\" | \"Paragraph\" | \"Table\""
+            }
+          ]
+        },
+        "unhideWhenUsed": {
+          "uid": "DocxEditor.Style#unhideWhenUsed",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "visibility": {
+          "uid": "DocxEditor.Style#visibility",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        }
+      }
+    },
+    "StyleCollection": {
+      "uid": "DocxEditor.StyleCollection",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "getByNameOrNullObject": {
+          "uid": "DocxEditor.StyleCollection#getByNameOrNullObject",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "name",
+                  "type": "string"
+                }
+              ],
+              "returns": "Style"
+            }
+          ]
+        },
+        "getCount": {
+          "uid": "DocxEditor.StyleCollection#getCount",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ClientResult<number>"
+            }
+          ]
+        },
+        "items": {
+          "uid": "DocxEditor.StyleCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Style[]"
             }
           ]
         }

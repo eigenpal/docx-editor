@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Automation could not list the styles a document defines.",
+  "after": "A getStyles read lists the styles in styles.xml as plain data for the Office-shaped style collection.",
+  "reason": "The change adds a read only. It writes no shared state, emits no tree operations, and leaves the collaboration format and operation handling unchanged.",
+  "tests": [
+    "packages/core/src/automation/__tests__/automation-style-listing.test.ts",
+    "packages/editor-api/src/model/__tests__/model-style-collection.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-style-listing.test.ts"
+  ],
+  "changeset": "document-styles-listing",
+  "migration": null
+}
