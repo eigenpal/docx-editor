@@ -150,8 +150,8 @@ export class Range extends ModelObject implements PromisedItem {
    * `context.document.getStyles()` and assign the `nameLocal` of a `Paragraph` style; character,
    * table, and list names are refused.
    */
-  get style(): string | null {
-    return this.loadedProperty<string | null>('style');
+  get style(): string {
+    return this.loadedProperty<string>('style');
   }
 
   set style(value: string) {

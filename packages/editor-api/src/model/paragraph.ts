@@ -170,8 +170,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
    * `Paragraph`. The write rides the same `w:pPr` rewrite the alignment and indent members do — so
    * applying a style and adjusting a spacing in one sync is one write rather than a refusal.
    */
-  get style(): string | null {
-    return this.loadedProperty<string | null>('style');
+  get style(): string {
+    return this.loadedProperty<string>('style');
   }
 
   set style(value: string) {

@@ -201,8 +201,8 @@ export class Body extends ModelObject {
    * A name read is always one that writes back to the same style. `null` means there is no such
    * name: write a listed name instead.
    */
-  get style(): string | null {
-    return this.loadedProperty<string | null>('style');
+  get style(): string {
+    return this.loadedProperty<string>('style');
   }
 
   set style(value: string) {

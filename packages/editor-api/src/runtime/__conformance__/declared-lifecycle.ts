@@ -42,9 +42,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // surface because mixed or inherited formatting returns it at runtime; its setters remain the
 // upstream non-nullable types. The independently authored compatibility declaration stays exact to
 // upstream, so the font assertion below removes only that documented read sentinel before comparing.
-// `Paragraph#alignment` retains its separately documented `'Mixed'`/`'Unknown'` behavior. The
-// `style` reads on `Body`, `Range`, and `Paragraph` include `null` the same way: no single name
-// writes back to the style the paragraphs have. Their setters keep the upstream `string`.
+// `Paragraph#alignment` and `#style` retain their separately documented `'Mixed'`/`'Unknown'`
+// behavior.
 //
 // The `Declared`/`Mine` naming keeps each assertion readable as a sentence: does mine satisfy the
 // declared one, in the position a consumer would use it.
@@ -286,11 +285,7 @@ const paragraphFormattingMatches: Satisfies<
 
 // And the style, by name, on all three of the objects that declare it.
 const stylesMatch: Satisfies<
-  [
-    WithoutNull<Pick<Body, 'style'>>,
-    WithoutNull<Pick<Range, 'style'>>,
-    WithoutNull<Pick<Paragraph, 'style'>>,
-  ],
+  [Pick<Body, 'style'>, Pick<Range, 'style'>, Pick<Paragraph, 'style'>],
   [Pick<Declared.Body, 'style'>, Pick<Declared.Range, 'style'>, Pick<Declared.Paragraph, 'style'>]
 > = true;
 
