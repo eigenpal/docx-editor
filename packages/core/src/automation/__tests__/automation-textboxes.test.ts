@@ -216,12 +216,37 @@ describe('shapes and text-box stories', () => {
     expect(savedMainXml(target).match(/<w:br\/>/g)).toHaveLength(2);
   });
 
-  test('a shape without text has no body', () => {
+  test('a shape without text reads as an empty body that refuses writes', () => {
     const target = host();
     const { body } = roots(target);
     const [, rectangleShape] = shapesOf(target, { body });
+    const empty = handleAt(
+      target.execute({ operations: [{ op: 'getShapeBody', shape: rectangleShape! }] }),
+      0
+    );
+    expect(storyText(target, empty)).toBe('');
+    expect(paragraphTexts(target, empty)).toEqual([]);
+    const before = savedMainXml(target);
+    for (const operation of [
+      { op: 'insertText', at: { body: empty, at: 'end' }, text: 'x' },
+      { op: 'insertParagraph', anchor: { body: empty, at: 'last' }, where: 'after', text: 'x' },
+      { op: 'replaceSpan', span: { body: empty }, text: 'x' },
+    ] satisfies AutomationOperation[]) {
+      const [result] = target.execute({ operations: [operation] }).results;
+      expect(result?.status === 'error' && result.error).toMatchObject({
+        code: 'unsupported-content',
+        detail: 'unsupported-story',
+      });
+    }
+    expect(savedMainXml(target)).toBe(before);
+  });
+
+  test('a picture has no body', () => {
+    const target = open(docx(`<w:p>${inlinePicture(7)}</w:p>`));
+    const { body } = roots(target);
+    const [picture] = shapesOf(target, { body });
     expect(
-      errorAt(target.execute({ operations: [{ op: 'getShapeBody', shape: rectangleShape! }] }), 0)
+      errorAt(target.execute({ operations: [{ op: 'getShapeBody', shape: picture! }] }), 0)
     ).toBe('unsupported-content');
   });
 

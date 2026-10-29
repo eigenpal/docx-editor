@@ -8,7 +8,9 @@
 //
 // An inline picture is a shape of type Picture here and also an inline picture. A run-level
 // `mc:AlternateContent` is read through the branch layout selects for it: a shape whose selected
-// branch is a VML fallback has no DrawingML story and is not listed. A chart is read through
+// branch is a VML fallback has no DrawingML story and is not listed. A standalone legacy VML
+// `w:pict` lists the shapes it draws, each named by its VML shape number (`vml-shapes.ts`),
+// and a VML text box story is edited the same way. A chart is read through
 // its chart branch, an Unsupported shape, even when the page shows its fallback picture
 // because no renderer draws the chart: the listing never depends on installed renderers. The
 // VML fallback of a
@@ -32,6 +34,7 @@ import type {
   OoxmlPart,
 } from '../store/package/ooxml-tree.ts';
 import { namespaceBindingsAt } from '../store/package/wml-namespace.ts';
+import { vmlShapesOf } from './vml-shapes.ts';
 
 /** Word's shape types, as `Word.ShapeType` spells them. */
 export type AutomationShapeType =
@@ -58,6 +61,12 @@ export interface AutomationShapeEntry extends AutomationShapeRead {
    * shape can hold one; a linked text box continues another box's story and holds none.
    */
   readonly textboxRoot: OoxmlElement | null;
+  /**
+   * A text box or geometric shape the file gives no story at all: no `w:txbxContent` and no
+   * link to another box. Its body reads as an empty story and refuses writes, since the file
+   * has nowhere to put text (`empty-text-frame.ts`).
+   */
+  readonly emptyFrame: boolean;
   /** The `mc:AlternateContent` the drawing was read through, or null for a bare drawing. */
   readonly alternate: OoxmlElement | null;
 }
@@ -88,7 +97,11 @@ function child(parent: OoxmlElement, namespaceUri: string, localName: string): O
   return element(parent.children.find((node) => named(node, namespaceUri, localName)));
 }
 
-type ShapeOf = { readonly read: AutomationShapeRead; readonly root: OoxmlElement | null };
+type ShapeOf = {
+  readonly read: AutomationShapeRead;
+  readonly root: OoxmlElement | null;
+  readonly emptyFrame: boolean;
+};
 
 /** A drawing's identity and type, or null for no drawing frame; 'malformed' if unnamed. */
 function shapeOf(drawing: OoxmlElement): ShapeOf | 'malformed' | null {
@@ -111,6 +124,7 @@ function shapeOf(drawing: OoxmlElement): ShapeOf | 'malformed' | null {
   const uri = data ? schemaAttributeValue(data.attributes, 'uri') : undefined;
   let type: AutomationShapeType = 'Unsupported';
   let root: OoxmlElement | null = null;
+  let emptyFrame = false;
   if (data && uri === WPS_NAMESPACE_URI) {
     const wsp = child(data, WPS_NAMESPACE_URI, 'wsp');
     const txbx = wsp ? child(wsp, WPS_NAMESPACE_URI, 'txbx') : null;
@@ -119,17 +133,31 @@ function shapeOf(drawing: OoxmlElement): ShapeOf | 'malformed' | null {
     const properties = wsp ? child(wsp, WPS_NAMESPACE_URI, 'cNvSpPr') : null;
     const flag = properties ? schemaAttributeValue(properties.attributes, 'txBox') : undefined;
     type = !wsp ? 'Unsupported' : flag === '1' || flag === 'true' ? 'TextBox' : 'GeometricShape';
+    // A connector or a line has no text frame (`wps:cNvCnPr`, a `line` preset).
+    const geometry = wsp ? child(wsp, WPS_NAMESPACE_URI, 'spPr') : null;
+    const preset = geometry ? child(geometry, DRAWINGML_MAIN_NAMESPACE_URI, 'prstGeom') : null;
+    const shapeName = preset ? schemaAttributeValue(preset.attributes, 'prst') : undefined;
+    emptyFrame =
+      !!properties &&
+      !txbx &&
+      !child(wsp!, WPS_NAMESPACE_URI, 'linkedTxbx') &&
+      shapeName !== 'line' &&
+      !shapeName?.includes('Connector');
   } else if (uri === PICTURE_URI) type = 'Picture';
   else if (uri === GROUP_URI) type = 'Group';
   else if (uri === CANVAS_URI) type = 'Canvas';
-  return { read: { id: Number(rawId), name, type }, root };
+  return { read: { id: Number(rawId), name, type }, root, emptyFrame };
 }
 
 /**
  * The shapes in a story's paragraphs, floating and inline, in reading order.
  *
- * Fails closed: a drawing with no usable `wp:docPr/@id`, two shapes sharing an id, or a scan past
- * its bounds refuses the whole list rather than answer one a handle could not name again.
+ * Fails closed: a drawing with no usable `wp:docPr/@id`, two drawings sharing an id, or a scan
+ * past its bounds refuses the whole list rather than answer one a handle could not name again.
+ * A legacy VML shape names itself by a different number (`vml-shapes.ts`). Inline and floating
+ * VML shapes number from separate counters, so one VML number can repeat another shape's id.
+ * Every shape with that number is then left out of the list. It cannot be named again, and
+ * refusing the whole list would also hide every drawing it lists.
  */
 export function shapesInParagraphs(
   part: OoxmlPart,
@@ -137,6 +165,7 @@ export function shapesInParagraphs(
 ): AutomationShapesRead {
   const shapes: AutomationShapeEntry[] = [];
   const seen = new Set<number>();
+  const legacy: AutomationShapeEntry[] = [];
   for (const paragraph of paragraphs) {
     if (paragraph.kind === 'textValue') continue;
     // `mc:Choice/@Requires` names prefixes, so the branch is chosen in the scope the file declares.
@@ -159,6 +188,21 @@ export function shapesInParagraphs(
             ? resolveRunLevelMcAtom(node as OoxmlGenericElementNode, inScope).drawing
             : null;
       if (alternate && !drawing) continue;
+      if (!alternate && named(node, WML_NAMESPACE_URI, 'pict')) {
+        for (const { read, root, emptyFrame } of vmlShapesOf(node as OoxmlElement)) {
+          if (shapes.length >= MAX_SHAPES_PER_STORY) return { ok: false, reason: 'truncated' };
+          const entry: AutomationShapeEntry = {
+            ...read,
+            hostParagraphId: paragraph.id,
+            textboxRoot: root,
+            emptyFrame,
+            alternate: null,
+          };
+          shapes.push(entry);
+          legacy.push(entry);
+        }
+        continue;
+      }
       if (drawing) {
         const found = shapeOf(drawing);
         if (found === 'malformed') return { ok: false, reason: 'malformed' };
@@ -170,6 +214,7 @@ export function shapesInParagraphs(
             ...found.read,
             hostParagraphId: paragraph.id,
             textboxRoot: found.root,
+            emptyFrame: found.emptyFrame,
             alternate: alternate ? node : null,
           });
         }
@@ -180,5 +225,14 @@ export function shapesInParagraphs(
       }
     }
   }
-  return { ok: true, shapes: Object.freeze(shapes) };
+  if (legacy.length === 0) return { ok: true, shapes: Object.freeze(shapes) };
+  const uses = new Map<number, number>();
+  for (const shape of shapes) uses.set(shape.id, (uses.get(shape.id) ?? 0) + 1);
+  const ambiguous = new Set(legacy.filter((shape) => uses.get(shape.id)! > 1));
+  return {
+    ok: true,
+    shapes: Object.freeze(
+      ambiguous.size ? shapes.filter((shape) => !ambiguous.has(shape)) : shapes
+    ),
+  };
 }

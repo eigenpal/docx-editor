@@ -1,0 +1,17 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Automation listed only DrawingML shapes, so a standalone VML text box story was unreachable and a shape with no story refused Shape.body.",
+  "after": "Automation lists standalone VML shapes by their shape number and reads, edits, and reviews their text box stories; the owner story's accept-all and reject-all leave those boxes' changes pending. A closed shape with no story reads as an empty body that refuses writes. New drawing ids skip VML shape numbers.",
+  "reason": "Only local automation planning and the local revision scope check change. Edits inside a VML text box commit as the same paragraph and revision changes that interactive VML text box editing already shares, so released peers read the shared state unchanged. No shared field, format value, or operation encoding changes.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-vml-shape-automation.test.ts",
+    "packages/core/src/automation/__tests__/automation-vml-shapes.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-vml-shapes.test.ts",
+    "packages/core/src/store/__tests__/revision-resolve.test.ts",
+    "packages/core/src/store/__tests__/drawing-package-edit.test.ts",
+    "packages/core/src/store/__tests__/clipboard-fragment-dense-ids.test.ts"
+  ],
+  "changeset": "vml-text-box-shapes",
+  "migration": null
+}
