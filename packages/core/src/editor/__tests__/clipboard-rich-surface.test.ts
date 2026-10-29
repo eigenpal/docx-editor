@@ -429,6 +429,29 @@ describe('rich paste', () => {
     expect(marker.box.x + marker.box.width).toBeCloseTo(roman.box.x - 18, 3);
   });
 
+  test('a pasted list item without its own indents takes the level rule geometry', () => {
+    const target = mount(paragraph(''));
+    putCaret(target.surface, 0);
+    target.surface.pasteRich(
+      'Alpha',
+      '<html><head><style>@list l0:level1 {mso-level-text:"%1\\)";' +
+        'margin-left:54.0pt;text-indent:-27.0pt;color:red;mso-ansi-font-weight:bold;}' +
+        '</style></head><body><ol start=1 type=1>' +
+        '<li style="mso-list:l0 level1 lfo1">Alpha</li></ol></body></html>'
+    );
+
+    const item = target.surface
+      .layout()
+      .pages.flatMap((page) => page.fragments)
+      .find((fragment) => fragment.kind === 'paragraph' && fragment.marker !== undefined);
+    expect(item?.kind).toBe('paragraph');
+    if (item?.kind !== 'paragraph') return;
+    const marker = item.marker!;
+    expect(marker.text).toBe('1)');
+    // The number hangs 27pt left of the 54pt text indent.
+    expect(item.box.x - marker.box.x).toBeCloseTo(27, 3);
+  });
+
   test('external Word footnotes land as referenced note parts', () => {
     const target = mount(paragraph(''));
     putCaret(target.surface, 0);

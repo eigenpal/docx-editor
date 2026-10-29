@@ -650,7 +650,7 @@
     },
     {
       "uid": "Word.Paragraph#startNewList",
-      "note": "Creates an independent bullet-list counter and nine defined levels. Existing templates may be shared, but missing levels and later format changes use private instance overrides. Creation must be the only mutation in its sync. Sync before configuring the returned list. Protected targets refuse. TrackMineOnly writes native list-membership revisions."
+      "note": "Creates an independent bullet-list counter and nine defined levels. Existing templates may be shared; the new instance then restarts every level with a startOverride, so it numbers on its own after a later format change. Missing levels and later format changes use private instance overrides. Creation must be the only mutation in its sync. Sync before configuring the returned list. Protected targets refuse. TrackMineOnly writes native list-membership revisions."
     },
     {
       "uid": "Word.Paragraph#attachToList",
@@ -670,7 +670,7 @@
     },
     {
       "uid": "Word.List#setLevelStartingNumber",
-      "note": "Sets the instance level counter start, including zero, as a nonnegative 32-bit integer. Existing startOverride values are replaced by the authored level start. Changes save/reopen and undo/redo without changing unrelated list counters."
+      "note": "Sets the instance level counter start, including zero, as a nonnegative 32-bit integer. The starting number is written as a startOverride and as the level start, replacing any earlier override. Changes save/reopen and undo/redo without changing unrelated list counters."
     },
     {
       "uid": "Word.List#setLevelIndents",

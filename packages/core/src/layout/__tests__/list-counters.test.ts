@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import { buildNumberingIndex } from '../numbering-index.ts';
-import { createListCounterState } from '../list-counters.ts';
+import { createListCounterState, loadListCounters, saveListCounters } from '../list-counters.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -75,7 +75,7 @@ describe('list counters', () => {
     expect(state.advance('9', 1)?.markerText).toBe('5.');
   });
 
-  test('independent numIds keep their own nested startOverride baselines', () => {
+  test('each numId restarts a nested level at its own startOverride baseline', () => {
     const index = loadNumbering(`
       <w:abstractNum w:abstractNumId="1">
         <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>
@@ -91,11 +91,12 @@ describe('list counters', () => {
     const state = createListCounterState(index);
     expect(state.advance('1', 0)?.markerText).toBe('1.');
     expect(state.advance('1', 1)?.markerText).toBe('5.');
-    expect(state.advance('2', 0)?.markerText).toBe('1.');
-    expect(state.advance('2', 1)?.markerText).toBe('9.');
-    expect(state.advance('1', 0)?.markerText).toBe('2.');
-    expect(state.advance('1', 1)?.markerText).toBe('5.');
+    // Level 0 is shared and has no override on numId 2, so it continues.
     expect(state.advance('2', 0)?.markerText).toBe('2.');
+    expect(state.advance('2', 1)?.markerText).toBe('9.');
+    expect(state.advance('1', 0)?.markerText).toBe('3.');
+    expect(state.advance('1', 1)?.markerText).toBe('5.');
+    expect(state.advance('2', 0)?.markerText).toBe('4.');
     expect(state.advance('2', 1)?.markerText).toBe('9.');
   });
 
@@ -134,15 +135,15 @@ describe('list counters', () => {
     expect(state.advance('1', 1)?.markerText).toBe('a)');
   });
 
-  test('nums sharing an abstractNum maintain independent counter streams', () => {
+  test('a startOverride restarts the counter its abstract list shares', () => {
     const index = loadNumbering(DECIMAL);
     const state = createListCounterState(index);
     expect(state.advance('1', 0)?.markerText).toBe('1.');
     expect(state.advance('1', 0)?.markerText).toBe('2.');
-    // numId 2 shares abstractNum 1 but owns its own counter bag.
+    // numId 2 shares abstractNum 1; its startOverride restarts the shared level.
     expect(state.advance('2', 0)?.markerText).toBe('1.');
     expect(state.advance('2', 0)?.markerText).toBe('2.');
-    // numId 1 continues independently.
+    // numId 1 continues from the restarted count. Its own override was spent on first use.
     expect(state.advance('1', 0)?.markerText).toBe('3.');
   });
 
@@ -268,5 +269,180 @@ describe('list counters', () => {
     expect(state.advance('1', 0)?.markerText).toBe('1.');
     expect(state.advance('1', 0)?.markerText).toBe('2.');
     expect(state.advance('1', 0)?.markerText).toBe('3.');
+  });
+});
+
+/** One abstract list (decimal `%1.`, letter `%2)`) and the given `w:num` entries. */
+function sharedAbstract(nums: string, levelOneExtra = ''): ReturnType<typeof loadNumbering> {
+  return loadNumbering(`
+    <w:abstractNum w:abstractNumId="1">
+      <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>
+        <w:lvlJc w:val="left"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>
+      <w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="lowerLetter"/>${levelOneExtra}
+        <w:lvlText w:val="%2)"/><w:lvlJc w:val="left"/>
+        <w:pPr><w:ind w:left="1440" w:hanging="360"/></w:pPr></w:lvl>
+    </w:abstractNum>
+    ${nums}
+  `);
+}
+
+const restartAt = (ilvl: number, value: number, level = ''): string =>
+  `<w:lvlOverride w:ilvl="${ilvl}"><w:startOverride w:val="${value}"/>${level}</w:lvlOverride>`;
+
+function markers(
+  index: ReturnType<typeof loadNumbering>,
+  sequence: ReadonlyArray<readonly [string, number]>
+): string[] {
+  const state = createListCounterState(index);
+  return sequence.map(([numId, ilvl]) => state.advance(numId, ilvl)?.markerText ?? '');
+}
+
+describe('list counters shared by an abstract list', () => {
+  test('a w:num without overrides continues the list it shares a definition with', () => {
+    const index = sharedAbstract(
+      '<w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>' +
+        '<w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>'
+    );
+    expect(
+      markers(index, [
+        ['1', 0],
+        ['1', 0],
+        ['2', 0],
+        ['1', 0],
+      ])
+    ).toEqual(['1.', '2.', '3.', '4.']);
+  });
+
+  test('a later item of the first w:num continues from a restart on another w:num', () => {
+    const index = sharedAbstract(
+      '<w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>' +
+        `<w:num w:numId="2"><w:abstractNumId w:val="1"/>${restartAt(0, 1)}</w:num>`
+    );
+    expect(
+      markers(index, [
+        ['1', 0],
+        ['1', 0],
+        ['2', 0],
+        ['1', 0],
+        ['2', 0],
+      ])
+    ).toEqual(['1.', '2.', '1.', '2.', '3.']);
+  });
+
+  test('a restart value other than one carries the shared count on', () => {
+    const index = sharedAbstract(
+      '<w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>' +
+        `<w:num w:numId="2"><w:abstractNumId w:val="1"/>${restartAt(0, 5)}</w:num>`
+    );
+    expect(
+      markers(index, [
+        ['2', 0],
+        ['2', 0],
+        ['1', 0],
+      ])
+    ).toEqual(['5.', '6.', '7.']);
+  });
+
+  test('the restart waits for the first item on an overridden level', () => {
+    const index = sharedAbstract(
+      '<w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>' +
+        `<w:num w:numId="2"><w:abstractNumId w:val="1"/>${restartAt(0, 5)}</w:num>`
+    );
+    expect(
+      markers(index, [
+        ['1', 0],
+        ['1', 0],
+        ['2', 1],
+        ['1', 0],
+        ['2', 0],
+      ])
+    ).toEqual(['1.', '2.', 'a)', '3.', '5.']);
+  });
+
+  test('the restart applies once, to the first overridden level the w:num uses', () => {
+    const restartEveryLevel = restartAt(0, 1) + restartAt(1, 1);
+    const index = sharedAbstract(
+      '<w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>' +
+        `<w:num w:numId="2"><w:abstractNumId w:val="1"/>${restartEveryLevel}</w:num>`
+    );
+    expect(
+      markers(index, [
+        ['1', 0],
+        ['1', 1],
+        ['1', 0],
+        ['2', 1],
+        ['2', 0],
+        ['2', 1],
+        ['1', 0],
+      ])
+    ).toEqual(['1.', 'a)', '2.', 'a)', '3.', 'a)', '4.']);
+  });
+
+  test('a spent restart does not reset a deeper level that never restarts', () => {
+    const index = sharedAbstract(
+      '<w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>' +
+        `<w:num w:numId="2"><w:abstractNumId w:val="1"/>${restartAt(0, 1)}${restartAt(1, 1)}</w:num>`,
+      '<w:lvlRestart w:val="0"/>'
+    );
+    expect(
+      markers(index, [
+        ['1', 0],
+        ['1', 1],
+        ['1', 1],
+        ['2', 0],
+        ['2', 1],
+      ])
+    ).toEqual(['1.', 'a)', 'b)', '1.', 'c)']);
+  });
+
+  test('a level that starts again after its parent takes the counting w:num start', () => {
+    const index = sharedAbstract(
+      '<w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>' +
+        `<w:num w:numId="2"><w:abstractNumId w:val="1"/>${restartAt(1, 5)}</w:num>`
+    );
+    expect(
+      markers(index, [
+        ['1', 0],
+        ['1', 1],
+        ['2', 1],
+        ['1', 0],
+        ['1', 1],
+        ['2', 0],
+        ['2', 1],
+      ])
+    ).toEqual(['1.', 'a)', 'e)', '2.', 'a)', '3.', 'e)']);
+  });
+
+  test('a replacement level under a startOverride restarts at its own w:start', () => {
+    const replacement =
+      '<w:lvl w:ilvl="0"><w:start w:val="7"/><w:numFmt w:val="upperRoman"/>' +
+      '<w:lvlText w:val="%1."/><w:lvlJc w:val="left"/></w:lvl>';
+    const index = sharedAbstract(
+      '<w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>' +
+        `<w:num w:numId="2"><w:abstractNumId w:val="1"/>${restartAt(0, 5, replacement)}</w:num>`
+    );
+    expect(
+      markers(index, [
+        ['1', 0],
+        ['1', 0],
+        ['2', 0],
+        ['1', 0],
+      ])
+    ).toEqual(['1.', '2.', 'VII.', '8.']);
+  });
+
+  test('a resumed walk keeps a spent restart spent', () => {
+    const index = sharedAbstract(
+      '<w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>' +
+        `<w:num w:numId="2"><w:abstractNumId w:val="1"/>${restartAt(0, 1)}</w:num>`
+    );
+    const first = createListCounterState(index);
+    first.advance('1', 0);
+    first.advance('2', 0);
+    const snapshot = saveListCounters(first);
+    const resumed = createListCounterState(index);
+    loadListCounters(resumed, snapshot);
+    expect(resumed.advance('2', 0)?.markerText).toBe('2.');
+    expect(resumed.advance('1', 0)?.markerText).toBe('3.');
   });
 });

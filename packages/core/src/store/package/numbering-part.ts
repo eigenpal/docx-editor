@@ -247,6 +247,34 @@ function nextFreeId(nodes: readonly OoxmlElement[], attributeName: string): numb
   return Number(nextStripedDecimalId(used, actor, MAX_RELATIONSHIP_NUMBER));
 }
 
+/**
+ * One `w:lvlOverride`/`w:startOverride` per level of a reused `w:abstractNum`, each at that
+ * level's own `w:start`.
+ *
+ * Every `w:num` over one abstract definition counts on one shared counter, so a new list on a
+ * reused template would otherwise continue the earlier list. Bullet and `none` levels get the
+ * override too: a bullet list can become numbered later (a level format change replaces the
+ * level inside this same `w:num`), and it must still start on its own. The start comes from the
+ * file, so it is bounded the way the layout index reads it.
+ */
+function restartOverridesXml(abstract: OoxmlElement): string {
+  const starts = new Map<number, number>();
+  for (const level of childrenNamed(abstract, 'lvl')) {
+    const ilvlRaw = attribute(level, 'ilvl') ?? '0';
+    if (!/^[0-8]$/.test(ilvlRaw) || starts.has(Number(ilvlRaw))) continue;
+    const start = childrenNamed(level, 'start')[0];
+    const startRaw = (start && attribute(start, 'val')) ?? '';
+    starts.set(Number(ilvlRaw), /^\d{1,9}$/.test(startRaw) ? Math.min(Number(startRaw), 9999) : 1);
+  }
+  return [...starts]
+    .sort(([left], [right]) => left - right)
+    .map(
+      ([ilvl, start]) =>
+        `<w:lvlOverride w:ilvl="${ilvl}"><w:startOverride w:val="${start}"/></w:lvlOverride>`
+    )
+    .join('');
+}
+
 export interface EnsuredListDefinition {
   readonly pkg: OoxmlPackage;
   /** The `w:numId` a paragraph's `w:numPr` should name. */
@@ -257,8 +285,10 @@ export interface EnsuredListDefinition {
  * Find or create a list definition of `kind`, returning the package that holds it.
  *
  * An existing abstract definition of the same kind is reused, but every disconnected list
- * gets a fresh `w:num` instance. Counters belong to `w:num`, so reusing that instance would
- * continue an earlier list. Returns null only when the part cannot be built at all.
+ * gets a fresh `w:num` instance. Counters belong to the abstract definition, shared by every
+ * `w:num` over it, so the fresh instance restarts each level with a
+ * `w:startOverride` (see {@link restartOverridesXml}). Returns null only when the part cannot
+ * be built at all.
  */
 export function ensureListDefinition(
   pkg: OoxmlPackage,
@@ -273,8 +303,8 @@ export function ensureListDefinition(
   const nums = childrenNamed(root, 'num');
 
   // Reuse the first matching TEMPLATE, not its counter instance. Two disconnected lists
-  // can share one `w:abstractNum`, but each needs its own `w:num` to start at the authored
-  // level baseline. Reusing the earlier `w:num` made a new list after 39 items begin at 40.
+  // can share one `w:abstractNum`, but each needs its own `w:num` with restart overrides to
+  // start at the authored level baseline. Without them a new list after 39 items began at 40.
   const wantedFormat = kind === 'bullet' ? 'bullet' : 'decimal';
   const matchingAbstract = abstractNums.find((abstract) => {
     const abstractId = attribute(abstract, 'abstractNumId');
@@ -296,7 +326,8 @@ export function ensureListDefinition(
   const createsAbstract = matchingAbstract === undefined;
   const authored = authoredElements(
     (createsAbstract ? abstractNumXml(kind, abstractNumId) : '') +
-      `<w:num w:numId="${numId}"><w:abstractNumId w:val="${abstractNumId}"/></w:num>`,
+      `<w:num w:numId="${numId}"><w:abstractNumId w:val="${abstractNumId}"/>` +
+      `${matchingAbstract ? restartOverridesXml(matchingAbstract) : ''}</w:num>`,
     createsAbstract
       ? [
           {

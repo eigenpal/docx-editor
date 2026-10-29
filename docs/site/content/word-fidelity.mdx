@@ -163,6 +163,8 @@ Pair kerning (`w:kern`) leaves kana, ideographs, CJK punctuation, and full-width
 
 <FeatureMatrix category="lists" />
 
+Lists that share one abstract numbering definition (`w:abstractNum`) count on one shared number per level. A `w:startOverride` restarts that number once, at the first item of its list on an overridden level, and only on that level. Items of the other lists continue from the restarted number. If the same `w:lvlOverride` also replaces the level, the replacement's `w:start` is the restart value.
+
 ### Tables
 
 <FeatureMatrix category="tables" />
