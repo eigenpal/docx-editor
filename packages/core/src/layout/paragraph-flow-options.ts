@@ -18,7 +18,8 @@ export interface ParagraphFlowOptions {
   /**
    * With `justifySpaceShrink`, a word whose half-width final mark may hang joins the line when
    * its spaces fit the text before the mark, and the mark hangs (`w:jc` `both`). Without it,
-   * as in a distributed paragraph, such a word joins only when its mark fits inside too.
+   * as in a distributed paragraph, such a word joins only when its mark fits inside too. The
+   * kashida and Thai distribution values of `w:jc` count as distributed here.
    */
   readonly spaceShrinkHangsMarks?: boolean;
   /** A left tab stop past the margin is honoured, and its text may run past the margin. */
