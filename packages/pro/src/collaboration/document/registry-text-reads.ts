@@ -22,19 +22,40 @@ export interface TextReadsHost {
   readonly changed: (ids: ReadonlySet<LogicalId>) => void;
 }
 
-/** Read paragraphs again when their marks or deletions change. Returns the unsubscribe. */
+/**
+ * Read paragraphs again when their marks or deletions change. Returns the unsubscribe.
+ *
+ * Both indexes tell their listeners while a transaction calls its observers. One transaction
+ * can change both, as an undo or redo that marks restored text and records or withdraws its
+ * deletion does, so the texts are collected and each one is read once, after both have told.
+ */
 export function subscribeTextReads(doc: Y.Doc, host: TextReadsHost): () => void {
   const marks = textMarksOf(doc);
   const deletions = textDeletionsOf(doc);
-  const reread = (texts: ReadonlySet<Y.Text> | 'all'): void => {
+  let pending: Set<Y.Text> | 'all' | null = null;
+  const collect = (texts: ReadonlySet<Y.Text> | 'all'): void => {
     if (host.loading()) return;
+    if (texts === 'all' || pending === 'all') {
+      pending = 'all';
+      return;
+    }
+    pending ??= new Set();
+    for (const text of texts) pending.add(text);
+  };
+  // Registered after both indexes, which register theirs when they are first read above.
+  const flush = (): void => {
+    const texts = pending;
+    pending = null;
+    if (texts === null || host.loading()) return;
     const ids = host.inline.marksChanged(texts === 'all' ? host.inline.allTexts() : texts);
     if (ids.size > 0) host.changed(ids);
   };
-  const stopMarks = marks.subscribe(reread);
-  const stopDeletions = deletions.subscribe((runs) => reread(marks.textsReading(runs)));
+  const stopMarks = marks.subscribe(collect);
+  const stopDeletions = deletions.subscribe((runs) => collect(marks.textsReading(runs)));
+  doc.on('beforeObserverCalls', flush);
   return () => {
     stopMarks();
     stopDeletions();
+    doc.off('beforeObserverCalls', flush);
   };
 }

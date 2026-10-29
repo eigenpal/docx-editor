@@ -18,6 +18,7 @@ import { useTranslation } from '../i18n';
 import { absolutePointInScroller } from './scroller-geometry.ts';
 import { isFieldLink, useHyperlinkPopup } from './useHyperlinkPopup';
 import { Slot } from './toolbar/Slot';
+import { useDocxEditor } from './context';
 
 // `asChild` merges a part's wiring onto your own element. The packaged
 // `docx-hyperlink-popup__*` class stays OFF that element, so your own styles apply as
@@ -30,6 +31,19 @@ function guardMousedown(event: MouseEvent): void {
   const tag = (event.target as HTMLElement | null)?.tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
   event.preventDefault();
+}
+
+/**
+ * Give the keyboard back to the document after the panel closes itself. Escape, Cancel,
+ * Apply and Unlink end with this call; an outside press does not, because that press already
+ * put focus where the user wanted it. `editor.focus()` restores the saved model selection
+ * rather than moving it. The React twin states the full reason.
+ */
+function useReturnFocus(): () => void {
+  const editor = useDocxEditor();
+  return () => {
+    editor.value?.focus();
+  };
 }
 
 /** Shared props for every part. @public */
@@ -225,6 +239,7 @@ const HyperLinkUnlink = defineComponent({
   },
   setup(props, { slots }) {
     const popup = useHyperlinkPopup();
+    const returnFocus = useReturnFocus();
     const { t } = useTranslation();
     return () => {
       if (props.hidden) return null;
@@ -236,7 +251,9 @@ const HyperLinkUnlink = defineComponent({
         'aria-label': label,
         title: label,
         onMousedown: guardMousedown,
-        onClick: () => popup.unlink(),
+        onClick: () => {
+          if (popup.unlink()) returnFocus();
+        },
       };
       const content = props.icon ?? slots.default?.() ?? icon(UNLINK_ICON);
       if (props.asChild)
@@ -259,6 +276,7 @@ const HyperLinkFields = defineComponent({
   },
   setup(props) {
     const popup = useHyperlinkPopup();
+    const returnFocus = useReturnFocus();
     const { t } = useTranslation();
     const urlRef = ref<HTMLInputElement | null>(null);
     const textId = useStableDocxId('hyperlink-text');
@@ -281,12 +299,14 @@ const HyperLinkFields = defineComponent({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Enter') {
         event.preventDefault();
-        popup.commitEdit();
+        // A refused draft keeps the panel open, and focus with it, so the value can be fixed.
+        if (popup.commitEdit()) returnFocus();
         return;
       }
       if (event.key === 'Escape') {
         event.preventDefault();
         popup.close();
+        returnFocus();
       }
     };
 
@@ -339,6 +359,7 @@ const HyperLinkApply = defineComponent({
   },
   setup(props, { slots }) {
     const popup = useHyperlinkPopup();
+    const returnFocus = useReturnFocus();
     const { t } = useTranslation();
     return () => {
       if (props.hidden) return null;
@@ -350,7 +371,9 @@ const HyperLinkApply = defineComponent({
         'data-testid': 'hyperlink-popup-apply',
         disabled: state.url.trim().length === 0,
         onMousedown: guardMousedown,
-        onClick: () => popup.commitEdit(),
+        onClick: () => {
+          if (popup.commitEdit()) returnFocus();
+        },
       };
       if (props.asChild)
         return (
@@ -399,6 +422,7 @@ const HyperLinkCancel = defineComponent({
   },
   setup(props, { slots }) {
     const popup = useHyperlinkPopup();
+    const returnFocus = useReturnFocus();
     const { t } = useTranslation();
     return () => {
       if (props.hidden) return null;
@@ -408,7 +432,10 @@ const HyperLinkCancel = defineComponent({
         class: `docx-hyperlink-popup__cancel${props.className ? ` ${props.className}` : ''}`,
         'data-testid': 'hyperlink-popup-cancel',
         onMousedown: guardMousedown,
-        onClick: () => popup.close(),
+        onClick: () => {
+          popup.close();
+          returnFocus();
+        },
       };
       if (props.asChild)
         return (
@@ -472,6 +499,7 @@ const HyperLinkRoot = defineComponent({
   },
   setup(props, { slots }) {
     const popup = useHyperlinkPopup();
+    const returnFocus = useReturnFocus();
     const panelRef = ref<HTMLDivElement | null>(null);
     const placement = ref<CSSProperties | null>(null);
     const { t } = useTranslation();
@@ -484,6 +512,7 @@ const HyperLinkRoot = defineComponent({
           if (event.key !== 'Escape') return;
           event.preventDefault();
           popup.close();
+          returnFocus();
         };
         const doc = hostDocumentOf(panelRef.value);
         doc.addEventListener('keydown', onKeyDown);

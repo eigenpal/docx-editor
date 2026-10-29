@@ -21,6 +21,9 @@ import { isElementRecord, isNodeMap, NODE_UNDONE_FIELD } from './schema.ts';
 import { textDeletionsOf, type DeletedRun } from './paragraph-text-deletions.ts';
 import { deleteSetRuns, structAt } from './yjs-items.ts';
 import { textMarksOf } from './paragraph-text-marks.ts';
+import { INLINE_FIELD } from './paragraph-text.ts';
+import { whileUndoingCreations } from './undo-delete-filter.ts';
+import { ownDeletedRecords, redoRefusedDeletes } from './tombstone-guard.ts';
 
 /**
  * The part members a part always lists. Numbering definitions are not among them: concurrent
@@ -34,6 +37,9 @@ const MARKED = 'docx-undone-records';
 interface StackItemShape {
   readonly meta: Map<unknown, unknown>;
 }
+
+/** A history step as Yjs records it: what it inserted and what it deleted. */
+type YjsStep = StackItemShape & { readonly insertions?: unknown; readonly deletions?: unknown };
 
 export function markUndoneRecords(
   registry: DocumentRegistry,
@@ -75,6 +81,8 @@ const COPY_RUNS = 'docx-copy-runs';
 const HIDDEN_KEYS = 'docx-hidden-copies';
 /** A step with nothing for Yjs to reverse: only copies to hide or show again. */
 const COPIES_ONLY = 'docx-copies-only';
+/** The nodes whose deletion the undo that pushed this redo step took back. */
+const OWN_DELETES = 'docx-own-deletes';
 /** A step that a host undo group collected: one undo reverts it and nothing older. */
 const GROUP_STEP = 'docx-undo-group';
 
@@ -117,6 +125,12 @@ export function stepHistory(
       ? copiesOf(registry, popped)
       : (runsOf<DeletedRun>(popped, COPY_RUNS) ?? []);
   const before = opposite.length;
+  // The nodes the step's own deletion writes name: the redo deletes them again, whatever a
+  // peer wrote over those writes meanwhile (`tombstone-guard.ts`).
+  const ownDeletes =
+    direction === 'undo'
+      ? ownDeletedRecords(registry.doc, registry.schema.nodes, popped as YjsStep | undefined)
+      : (runsOf<string>(popped, OWN_DELETES) ?? []);
   // A step for copies alone that Yjs later merged an edit into has that edit to reverse too.
   const copiesOnly = popped?.meta.get(COPIES_ONLY) === true && changesOf(popped) === 0;
   // Yjs pops steps until one changes something. When other participants already removed
@@ -130,8 +144,9 @@ export function stepHistory(
   } else {
     const below = stack.splice(0, grouped ? stack.length - 1 : aboveLastGroupStep(stack));
     try {
-      if (direction === 'undo') history.undo();
-      else history.redo();
+      if (direction === 'undo') {
+        whileUndoingCreations(registry.schema, createdBy(registry, popped), () => history.undo());
+      } else history.redo();
     } finally {
       if (below.length > 0) {
         const restored = below.concat(stack);
@@ -140,26 +155,34 @@ export function stepHistory(
       }
     }
   }
-  afterStep();
   let pushed = opposite.length > before ? opposite[opposite.length - 1] : undefined;
-  if (direction === 'redo') {
-    const keys = runsOf<string>(popped, HIDDEN_KEYS);
-    if (keys && keys.length > 0) {
-      registry.doc.transact(() => textDeletionsOf(registry.doc).withdraw(keys));
-    }
-  }
-  if (runs.length > 0) {
-    pushed ??= pushCopiesOnly(opposite);
-    pushed.meta.set(COPY_RUNS, runs);
-    if (direction === 'undo') {
-      // As the marks above, the record follows the history step; no undo stack tracks it.
-      let keys: string[] = [];
-      registry.doc.transact(() => {
-        keys = textDeletionsOf(registry.doc).record(runs);
+  // The restore marks and the deletion records follow the history step in one transaction,
+  // so each paragraph they touch reads its text again once, not once per write. No undo
+  // stack tracks that transaction.
+  registry.doc.transact(() => {
+    afterStep();
+    if (direction === 'redo' && popped) {
+      redoRefusedDeletes(registry.doc, registry.schema.nodes, popped as YjsStep, ownDeletes, () => {
+        pushed ??= pushCopiesOnly(opposite);
+        return pushed as unknown as { insertions: unknown };
       });
-      pushed.meta.set(HIDDEN_KEYS, keys);
     }
-  }
+    if (direction === 'undo' && ownDeletes.length > 0) {
+      pushed ??= pushCopiesOnly(opposite);
+      pushed.meta.set(OWN_DELETES, ownDeletes);
+    }
+    if (direction === 'redo') {
+      const keys = runsOf<string>(popped, HIDDEN_KEYS);
+      if (keys && keys.length > 0) textDeletionsOf(registry.doc).withdraw(keys);
+    }
+    if (runs.length > 0) {
+      pushed ??= pushCopiesOnly(opposite);
+      pushed.meta.set(COPY_RUNS, runs);
+      if (direction === 'undo') {
+        pushed.meta.set(HIDDEN_KEYS, textDeletionsOf(registry.doc).record(runs));
+      }
+    }
+  }, RESTORE_ORIGIN);
   if (grouped) {
     // The step that undoes this undo is the group's step too, even when it changes nothing.
     pushed ??= pushCopiesOnly(opposite);
@@ -220,6 +243,31 @@ function hasShownCopy(
   return false;
 }
 
+/** The nodes whose records a step created. */
+function createdBy(registry: DocumentRegistry, step: StackItemShape | undefined): Set<string> {
+  const created = new Set<string>();
+  const nodes = registry.schema.nodes as unknown;
+  for (const run of deleteSetRuns((step as { insertions?: unknown } | undefined)?.insertions)) {
+    for (let clock = run.clock; clock < run.clock + run.length; ) {
+      const item = structAt(registry.doc, { client: run.client, clock });
+      if (!item) break;
+      if ((item.parent as unknown) === nodes && item.parentSub !== null) {
+        created.add(item.parentSub);
+      }
+      clock = item.id.clock + item.length;
+    }
+  }
+  return created;
+}
+
+/** Whether `item` is a character or inline element of a paragraph's shared text. */
+function isParagraphCharacter(item: Y.Item): boolean {
+  if (!(item.content instanceof Y.ContentString) && !(item.content instanceof Y.ContentEmbed)) {
+    return false;
+  }
+  return item.parent instanceof Y.Text && item.parent._item?.parentSub === INLINE_FIELD;
+}
+
 /** How many steps lie at or below the topmost group step under the top one, or 0. */
 function aboveLastGroupStep(stack: readonly StackItemShape[]): number {
   for (let index = stack.length - 2; index >= 0; index -= 1) {
@@ -235,7 +283,8 @@ function changesOf(step: StackItemShape): number {
 }
 
 /**
- * The characters a step typed whose copies show, and those an earlier undo of it hid.
+ * The characters a step typed whose copies show, those it typed that are still in place,
+ * and those an earlier undo of it hid.
  *
  * Walked by item, not by character: a move deletes whole spans of a step's characters at
  * once. A span already deleted, with a copy of any of its characters, is recorded whole; its
@@ -264,13 +313,19 @@ function copiesOf(registry: DocumentRegistry, step: StackItemShape | undefined):
       // counts only once deleted.
       if (item?.deleted || (item && !marks.origin('restore', run.client, clock))) {
         const spans = identitySpans(marks, run.client, clock, end);
-        // Spans first, characters only where an index run holds a copy: an undo of a long
-        // paste reads its marks once per insert, not once per character.
-        const shown = spans.some(
-          (span) =>
-            follow.holdsCopyIn(span.client, span.from, span.to) &&
-            hasShownCopy(follow, span.client, span.from, span.to)
-        );
+        // A peer can copy typed text this undo removes at the same time, as a join of its
+        // paragraph does. The copy reaches this replica later, so the undo records every
+        // character it wrote and removes, and that copy stays hidden too. A copy the step
+        // wrote of another character records only its own item, which names nothing else.
+        // Otherwise spans first, characters only where an index run holds a copy: an undo
+        // of a long paste reads its marks once per insert, not once per character.
+        const shown =
+          (!!item && !item.deleted && isParagraphCharacter(item)) ||
+          spans.some(
+            (span) =>
+              follow.holdsCopyIn(span.client, span.from, span.to) &&
+              hasShownCopy(follow, span.client, span.from, span.to)
+          );
         if (shown) for (const span of spans) add(span.client, span.from, span.to);
       }
       clock = end;

@@ -1,6 +1,6 @@
 import { setLineHangingPunctuationAdvance } from './line-hanging-punctuation.ts';
 import { hangingCjkPunctuationAdvance } from './cjk-spacing.ts';
-import { eastAsianLanguage } from './cjk-typography.ts';
+import { eastAsianLanguage, type CjkParagraphTypography } from './cjk-typography.ts';
 import type { FieldAwarePiece } from './field-projection.ts';
 import type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
 import type { PendingLine } from './pending-line.ts';
@@ -25,6 +25,27 @@ export function paragraphFinalAt(
   }
   return (pieceIndex, boundary) =>
     pieceIndex > lastPiece || (pieceIndex === lastPiece && boundary >= lastEnd);
+}
+
+/**
+ * The advance of the half-width Latin mark (below U+2000) that ends `candidate` and may hang
+ * past the margin, or 0. A justified line that may shrink its spaces
+ * (`ParagraphFlowOptions.justifySpaceShrink`) shrinks them before such a mark hangs, and
+ * hangs it only when the spaces reach their floor first: see `spaceShrinkFit`. Full-width
+ * marks hang as before.
+ */
+export function spaceShrinkMarkAdvance(
+  candidate: string,
+  piece: FieldAwarePiece,
+  measurer: TextMeasurer,
+  typography: CjkParagraphTypography,
+  paragraphFinal: boolean
+): number {
+  const mark = candidate.at(-1);
+  if (!(typography.hangingPunctuation ?? typography.overflowPunctuation)) return 0;
+  if (mark === undefined || mark.charCodeAt(0) >= 0x2000) return 0;
+  const options = { paragraphFinal, policy: typography };
+  return hangingCjkPunctuationAdvance(candidate, piece, measurer, options) ?? 0;
 }
 
 /**

@@ -5,10 +5,11 @@
 // shape at once, so they can never disagree about the paragraph — the same arrangement
 // `usePageSetup` has for the section.
 
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import type { EditorSnapshot, RunFormatting } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
+import { useEditorCommand } from './useEditorCommand';
 
 import type { ParagraphFormatRead, ParagraphFormatUpdate } from '@docx-editor.dev/core/editor';
 export type {
@@ -132,6 +133,7 @@ const sameFormat = (a: ParagraphFormatRead | null, b: ParagraphFormatRead | null
 };
 
 const selectEditable = (snapshot: EditorSnapshot): boolean => snapshot.editable;
+const SET_FORMAT_PROBE = { type: 'setParagraphFormat', alignment: 'left' } as const;
 
 /**
  * The selection's paragraph formatting, plus the command to change it.
@@ -146,15 +148,11 @@ export function useParagraphFormat(): UseParagraphFormatReturn {
   const format = useEditorState(selectFormat, sameFormat);
   const editable = useEditorState(selectEditable);
 
-  // `can` needs a representative payload; an alignment is always classifiable, so the
-  // answer reflects only the mount/mode gates.
-  const isEnabled = useMemo(
-    () =>
-      editable &&
-      editor !== null &&
-      editor.can({ type: 'setParagraphFormat', alignment: 'left' }).ok,
-    [editor, editable]
-  );
+  // `can` needs a representative payload; an alignment is always classifiable. The answer
+  // depends on the selection too (a data binding refuses it), so it is re-read on every
+  // snapshot, not once per mount.
+  const { isEnabled: canFormat } = useEditorCommand(SET_FORMAT_PROBE);
+  const isEnabled = editable && canFormat;
 
   const apply = useCallback(
     (update: ParagraphFormatUpdate): boolean => {

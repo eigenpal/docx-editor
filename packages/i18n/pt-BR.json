@@ -984,6 +984,8 @@
     "tableGridUnplaceable": "Esta tabela tem uma célula que não cabe na grade de colunas",
     "drawingLocked": "Esta imagem está bloqueada",
     "contentLocked": "Este conteúdo está bloqueado",
+    "lockedParagraphFormat": "Este conteúdo está bloqueado; apenas o alinhamento pode ser alterado",
+    "boundParagraphFormat": "Este conteúdo está vinculado a dados e não pode ser alterado",
     "editorNotReady": "O editor não está pronto",
     "imageSuggesting": "Alterações em imagens não estão disponíveis no modo de sugestão",
     "equationSourceFormatting": "A edição linear perderia a formatação desta equação",

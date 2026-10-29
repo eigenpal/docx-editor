@@ -16,6 +16,8 @@
     "reviewLockedChanges": "Los controles de contenido bloquean todos los cambios restantes, por lo que esta acción cambiaría contenido bloqueado. Pida al propietario del documento que quite los bloqueos.",
     "reviewBoundChanges": "Todos los cambios restantes están en controles de contenido vinculados a datos externos, por lo que no se pueden aceptar ni rechazar aquí. Pida al propietario del documento que actualice los datos vinculados.",
     "contentLocked": "Este contenido está bloqueado",
+    "lockedParagraphFormat": "Este contenido está bloqueado; solo se puede cambiar la alineación",
+    "boundParagraphFormat": "Este contenido está vinculado a datos y no se puede cambiar",
     "editorNotReady": "El editor no está listo",
     "notWired": "Este control no está conectado a un comando del editor",
     "viewing": "Este documento está abierto en modo de lectura",

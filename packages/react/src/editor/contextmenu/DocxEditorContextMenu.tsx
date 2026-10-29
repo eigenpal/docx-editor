@@ -82,6 +82,7 @@ import {
 import { useScopeClassName } from '../scope-context';
 import { chromeControlForSlot, chromeIcon } from '../toolbar/ToolbarButton';
 import { hostDocumentOf, hostWindowOf, isHTMLElementNode } from '@docx-editor.dev/core/editor';
+import { MenuLinkRow } from '../menu/menu-link-row';
 
 /** Distance kept between the panel and the window edge when it flips. @internal */
 const VIEWPORT_INSET = 8;
@@ -184,11 +185,10 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   {
     kind: 'row',
     id: 'text.link',
-    render: () => (
-      // No shortcut column: the catalogue has no plain "Ctrl+K" key, and inventing one
-      // here would put a literal English keystroke in a row every locale renders.
-      <MenuItem slotId="text.link" labelKey="formattingBar.insertLink" />
-    ),
+    // No shortcut column: the catalogue has no plain "Ctrl+K" key, and inventing one
+    // here would put a literal English keystroke in a row every locale renders.
+    // The label switches to Edit link on an existing link; see `MenuLinkRow`.
+    render: () => <MenuLinkRow />,
   },
   {
     kind: 'row',

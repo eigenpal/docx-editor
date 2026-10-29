@@ -478,7 +478,16 @@ describe('undo groups', () => {
       lookups = 0;
       expect(undo(alice)).toBe(true);
       expect(texts(alice)[0]).toBe('Alpha');
-      expect(lookups).toBeLessThan(50);
+      // The undo records the paste as deleted, and the paragraphs that read the record read
+      // their few remaining characters again: a cost per paragraph, the same for any paste.
+      expect(lookups).toBeLessThan(100);
+      // A redo writes every character again, and the paragraph reads each one: a cost per
+      // character. The redo withdraws the record in the transaction that marks the restored
+      // text, so the paragraph reads its text once for both, not once more for the record.
+      lookups = 0;
+      expect(alice.room.session.redo()).toBe(true);
+      expect(texts(alice)[0]).toBe(`${'x'.repeat(200_000)}Alpha`);
+      expect(lookups).toBeLessThan(13 * 200_000);
     } finally {
       marks.origin = origin;
       follow.shownCopy = shownCopy;

@@ -669,6 +669,46 @@ With no compatibility mode, or in mode 11, 12, or 14, line-end punctuation SHALL
 - **WHEN** a line fits only when its punctuation compresses or hangs
 - **THEN** the line wraps instead
 
+### Requirement: Space shrinking before hanging punctuation
+
+In compatibility mode 15 and later, a justified or distributed line SHALL shrink its inter-word spaces before a half-width line-end mark hangs. The mark SHALL stay inside the margin when the space-shrink rule admits the word with the mark inside the measure, also for a paragraph-final word. Full-width marks and legacy modes SHALL keep their hanging behavior.
+
+#### Scenario: A comma stays inside a justified line
+
+- **GIVEN** a justified mode 15 line of English words in a run whose East Asian language is Chinese or Japanese
+- **WHEN** the line overflows by less than its spaces can give up, and the text before a final `,` fits at its natural width
+- **THEN** the spaces shrink and the comma ends at the margin
+- **AND** in mode 14 the comma hangs past the margin with natural spacing
+
+### Requirement: Hanging a mark beside shrunk spaces
+
+When the spaces reach their shrink floor before the mark fits, a justified line SHALL hang the mark if the space-shrink rule admits the word and the spaces make room for the text before the mark. A distributed line SHALL wrap the word instead.
+
+#### Scenario: A comma hangs beside spaces at their floor
+
+- **GIVEN** the same line, where the spaces at their floor make room for the text before the comma but not for the comma
+- **WHEN** the paragraph is justified
+- **THEN** the comma hangs past the margin and the text before it fills the measure
+- **AND** a distributed paragraph moves the word to the next line
+
+### Requirement: Combining kana sound marks follow their face
+
+The layout engine SHALL measure and paint the combining kana sound marks (U+3099, U+309A) by their face. A face that classes the mark glyph as a mark SHALL join it with the kana before it and add no width. A face that gives the unclassed glyph an advance SHALL draw the mark in its own cell beside an uncomposed base. The mark SHALL never start a line apart from its base.
+
+#### Scenario: A face that spaces the mark
+
+- **GIVEN** a face whose U+3099 glyph has no mark class and a full-cell advance
+- **WHEN** a line ends with a kana and U+3099 that together overflow the measure, in one run or in two
+- **THEN** the base and the mark move to the next line together
+- **AND** the mark takes a full cell there
+
+#### Scenario: A face that joins the mark
+
+- **GIVEN** a face that classes the U+3099 glyph as a mark and draws a lone mark with no extra glyph
+- **WHEN** the mark is in its own run after its base at the end of a full line
+- **THEN** the mark adds no width and stays on that line
+- **AND** it paints over its base, not past the margin
+
 ### Requirement: Language-specific hanging punctuation
 
 When a justified paragraph enables hanging punctuation, the punctuation run's language SHALL select its hanging characters. Japanese `〕》〉！？：；・`, ASCII `! ? : ; ) ] }`, `％`, and `°`, Simplified Chinese `．`, and Korean punctuation SHALL NOT hang, except that a Korean paragraph-final mark other than `。` or `、` SHALL hang. Korean overflow punctuation SHALL start the next line.
@@ -972,3 +1012,62 @@ A run with pair kerning on (`w:kern`) SHALL keep kana, ideographs, CJK punctuati
 - **WHEN** the run sets `w:kern`
 - **THEN** every katakana keeps its full-width advance
 - **AND** a Latin pair such as `AV` in the same run kerns
+
+### Requirement: List counters belong to the abstract list
+
+Every `w:num` that names one `w:abstractNum` SHALL count on one shared counter per level. A level that starts again after its parent level SHALL take the start of the `w:num` that counts it.
+
+#### Scenario: A list without overrides continues the list it shares a definition with
+
+- **GIVEN** two `w:num` entries that name one `w:abstractNum`, with no level overrides
+- **WHEN** two items of the first `w:num` precede one item of the second, then one more item of the first
+- **THEN** the items number `1.`, `2.`, `3.`, and `4.`
+
+### Requirement: A start override restarts a shared list once
+
+A `w:num` with a `w:startOverride` SHALL restart the shared counter once, at its first paragraph on an overridden level. The restart SHALL apply to that level alone and SHALL then be spent. When the same `w:lvlOverride` also replaces the level, the restart value SHALL be the replacement's `w:start`.
+
+#### Scenario: A later item continues from a restart on another list
+
+- **GIVEN** two `w:num` entries that name one `w:abstractNum`, and the second has `w:startOverride w:val="1"` on level 0
+- **WHEN** two level-0 items of the first `w:num` precede one item of the second, then one more item of the first
+- **THEN** the items number `1.`, `2.`, `1.`, and `2.`
+
+### Requirement: A new list on a reused definition starts at its first number
+
+A list that the editor starts on a reused `w:abstractNum` SHALL carry a `w:lvlOverride` with a `w:startOverride` for each numbered level of that definition.
+
+#### Scenario: A second numbered list begins at one
+
+- **GIVEN** a document with a two-item numbered list
+- **WHEN** the user starts a numbered list on a later, separate paragraph
+- **THEN** the new item numbers `1.`, also after save and reopen
+
+### Requirement: CJK face line height
+
+A single-spaced line drawn in a face that lists the Chinese, Japanese, or Korean code pages SHALL take 1.3 times the face box (ascent plus descent), with the face's own leading absorbed and the extra space split above and below the glyphs. A face with a one-em box SHALL take at least that line in every role. A taller face SHALL take it only when it draws as the family that the run names; a substitute for a missing family and a glyph fallback SHALL keep their own box.
+
+#### Scenario: Taller CJK face drawn as itself
+
+- **GIVEN** a run that names a CJK face with a 1.448 em box, and the face is available
+- **WHEN** layout measures a single-spaced line of that run at 11 pt
+- **THEN** the line is 1.882 em (20.71 pt) high
+- **AND** Latin text in a run whose Latin slot names that face takes the same line
+- **AND** a face with 0.5 em of its own leading over a 1.102 em box takes 1.433 em, not its box plus leading
+- **AND** multiple, exact, and at-least spacing apply to that line as to any other single-spaced line
+- **AND** ideographic spaces (U+3000) in that face, like ordinary spaces, do not set the line height
+
+#### Scenario: Hinted character the East Asian face cannot draw
+
+- **GIVEN** a run with `w:hint="eastAsia"` that holds a non-breaking hyphen (U+2011), and an East Asian face with no glyph for it
+- **WHEN** layout measures the line, in any East Asian run language
+- **THEN** the hyphen takes the Latin slot, with the Latin face's advance
+- **AND** the East Asian face does not set the line height
+- **AND** a hinted character that the East Asian face draws keeps that face and its line
+
+#### Scenario: Stand-in keeps its own box
+
+- **GIVEN** a run that names a missing CJK family that a packaged face answers, or CJK text that a glyph fallback draws
+- **WHEN** layout measures the line
+- **THEN** a taller stand-in or fallback face keeps its own box
+- **AND** a one-em face takes 1.3 em in either role

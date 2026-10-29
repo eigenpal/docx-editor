@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Text typed after a note reference takes the paragraph mark's formatting. The caret and toolbar read no text face there.",
+  "after": "That text takes the formatting of the nearest run with text, deleted text, or a tab before the reference, else such a run after it, else the paragraph mark; after a reference that ends a hyperlink it takes none. The caret, the toolbar, and toolbar presses read the same face, also beside locked content controls, where presses are local caret state.",
+  "reason": "Only the run properties copied into the new run change. The insertion writer emits the same canonical node shapes and primitive operations, so peers receive ordinary runs. Shared schema, operation fields, persistence, and protocol versions remain unchanged.",
+  "tests": [
+    "packages/core/src/store/__tests__/note-reference-typing-face.test.ts",
+    "packages/core/src/editor/__tests__/note-reference-typing-toolbar.test.ts",
+    "packages/editor-api/src/model/__tests__/note-reference-typing.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-note-reference-typing.test.ts"
+  ],
+  "changeset": "note-typing-face",
+  "migration": null
+}

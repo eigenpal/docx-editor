@@ -27,6 +27,10 @@ jobs:
             workflow: sync-release.yml
           - repository: docx-to-pdf.dev
             workflow: sync-release.yml
+          # Pins the editor, merges after its checks, and tags a draft release.
+          # Publishing the plugin stays manual: host acceptance and directory review.
+          - repository: docx-editor-mcp-app
+            workflow: sync-release.yml
     runs-on: ubuntu-latest
     # The documentation sync waits for its own PR checks before it merges.
     timeout-minutes: 60

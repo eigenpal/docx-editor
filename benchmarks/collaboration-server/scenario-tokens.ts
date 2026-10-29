@@ -36,6 +36,8 @@ const DELETING = new Set<string>([
   'deleteTableRow',
   'deleteTableColumn',
   'deleteDrawing',
+  // Removing a content control without its content deletes that content.
+  'removeContentControl',
   // A decision removes text: a rejected insertion, an accepted deletion.
   'acceptRevision',
   'rejectRevision',
@@ -89,7 +91,12 @@ export class TypedTokens {
    * the merge put them somewhere the deletion did not reach. Text deletions still win.
    */
   private readonly mergedAway = new Set<string>();
+  /** The replica that merged each paragraph away, and those whose merger then stepped history. */
+  private readonly mergedBy = new Map<string, number>();
+  private readonly mergeMaybeUndone = new Set<string>();
   private readonly structureDeleted = new Set<string>();
+  /** Tokens something other than a row or column deletion took out: text deletes, undos. */
+  private readonly removedOtherwise = new Set<string>();
   /** The edit between `beforeEdit` and `afterEdit`, and the cells its table's paragraphs were in. */
   private editing: { readonly op: TreeDocOp; readonly cells: Map<string, string> | null } | null =
     null;
@@ -139,7 +146,10 @@ export class TypedTokens {
       const after = table ? paragraphCells(table) : new Map<string, string>();
       for (const [paragraph, cell] of editing.cells) {
         const now = after.get(paragraph);
-        if (now !== undefined && now !== cell) this.mergedAway.add(paragraph);
+        if (now !== undefined && now !== cell) {
+          this.mergedAway.add(paragraph);
+          this.mergedBy.set(paragraph, replica);
+        }
       }
     }
     if (!before) return;
@@ -148,6 +158,7 @@ export class TypedTokens {
       if (after.has(token)) continue;
       this.excused.add(token);
       if (editing && STRUCTURE_DELETING.has(editing.op.op)) this.structureDeleted.add(token);
+      else this.removedOtherwise.add(token);
       this.deletedBy.set(token, replica);
       const deleters = this.deleters.get(token) ?? new Set<number>();
       deleters.add(replica);
@@ -169,7 +180,14 @@ export class TypedTokens {
   ): void {
     const still = this.ownInText(after, replica);
     for (const token of this.ownInText(before, replica)) {
-      if (!still.has(token)) this.excused.add(token);
+      if (still.has(token)) continue;
+      this.excused.add(token);
+      this.removedOtherwise.add(token);
+      // The typist took the token back, as a deletion does. A copy a peer wrote at the same
+      // time can show it until the undo arrives there, and the peer's own undo of that copy
+      // then removes nothing the typist kept. It must not show again once updates settle. A
+      // peer that deleted it first stays its deleter, so a redo that brings it back still fails.
+      if (!this.deletedBy.has(token)) this.deletedBy.set(token, replica);
     }
     // An undo of a replica's own deletion puts the token back. A deleted paragraph keeps its
     // text, so the undo shows in the view, not in the shared text.
@@ -180,7 +198,12 @@ export class TypedTokens {
     for (const token of viewBefore) {
       if (!viewAfter.has(token) && this.typed.get(token)?.replica === replica) {
         this.excused.add(token);
+        this.removedOtherwise.add(token);
       }
+    }
+    // The replica's undo or redo can take back a merge it made.
+    for (const [paragraph, merger] of this.mergedBy) {
+      if (merger === replica) this.mergeMaybeUndone.add(paragraph);
     }
     for (const [token, deleter] of this.deletedBy) {
       if (deleter !== replica) continue;
@@ -287,13 +310,19 @@ export class TypedTokens {
       if (count > 1) problems.push(`${name} shows ${count} times`);
       const deleter = this.deletedBy.get(token);
       const keptByMerge = this.mergedAway.has(typed.paragraph) && this.structureDeleted.has(token);
+      // A merge moved the paragraph out of the cells a row or column deletion removed, and
+      // nothing else removed the token: it must still show.
+      const keptOnlyByMerge =
+        keptByMerge &&
+        !this.removedOtherwise.has(token) &&
+        !this.mergeMaybeUndone.has(typed.paragraph);
       if (count > 0 && deleter !== undefined && !keptByMerge) {
         problems.push(`${name} shows again after replica ${deleter} deleted it`);
       }
       const store = packages[typed.replica];
       if (
         count === 0 &&
-        !this.excused.has(token) &&
+        (!this.excused.has(token) || keptOnlyByMerge) &&
         store !== undefined &&
         hasParagraph(store, typed.paragraph)
       ) {

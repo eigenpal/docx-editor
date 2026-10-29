@@ -434,9 +434,20 @@ export function formatAutomationListLevel(
         (node.localName !== 'lvl' &&
           (format.startingNumber === undefined || node.localName !== 'startOverride'))
     ) ?? [];
+  // Every `w:num` over one template counts on one shared counter, and a `w:lvl` override alone
+  // does not restart it. So the starting number is a `w:startOverride`, and the level's own
+  // `w:start` agrees with it. CT_NumLvl puts `w:startOverride` before `w:lvl`.
+  const restart =
+    format.startingNumber === undefined
+      ? null
+      : element(`<w:startOverride w:val="${format.startingNumber}"/>`);
+  if (format.startingNumber !== undefined && !restart) return null;
   const shell = override ?? element(`<w:lvlOverride w:ilvl="${level}"/>`);
   if (!shell) return null;
-  const updatedOverride = { ...shell, children: [...startOverride, authoredLevel] } as OoxmlElement;
+  const updatedOverride = {
+    ...shell,
+    children: [...(restart ? [restart] : []), ...startOverride, authoredLevel],
+  } as OoxmlElement;
   const numChildren = [...num.children];
   const at = override ? numChildren.indexOf(override) : -1;
   if (at >= 0) numChildren[at] = updatedOverride;

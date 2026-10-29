@@ -31,7 +31,14 @@ import {
   rejectString,
   type LimitCode,
 } from './limits.ts';
-import { isNodeMap, JOURNAL_ORIGIN, mapFieldArriving } from './schema.ts';
+import type * as Y from 'yjs';
+import {
+  hasPendingUpdates,
+  isNodeMap,
+  JOURNAL_ORIGIN,
+  listingArriving,
+  mapFieldArriving,
+} from './schema.ts';
 import { INLINE_FIELD } from './paragraph-text.ts';
 import { SharedTextValueRefused } from './paragraph-text-codec.ts';
 import { tokensOfParagraph, type Token } from './paragraph-text-diff.ts';
@@ -655,8 +662,9 @@ export function applyPrimitiveJournal(
  * editor committed it, so the operation gate refuses it first.
  */
 export function paragraphEditWaits(registry: DocumentRegistry, paragraphId: LogicalId): boolean {
-  if (registry.inline.textOf(paragraphId) === null && paragraphTextArriving(registry, paragraphId))
-    return true;
+  const text = registry.inline.textOf(paragraphId);
+  if (text === null && paragraphTextArriving(registry, paragraphId)) return true;
+  if (text !== null && showsArrivingText(registry, paragraphId, text)) return true;
   const record = registry.record(paragraphId);
   const children = record && 'childIds' in record ? record.childIds : [];
   return children.some((id) => registry.kindOf(id) === 'run' && runTextPending(registry, id));
@@ -667,6 +675,22 @@ export function editWaits(registry: DocumentRegistry, id: LogicalId): boolean {
   const paragraph =
     registry.kindOf(id) === 'paragraph' ? id : (registry.inline.owner(id) ?? registry.parentOf(id));
   return paragraph !== null && paragraphEditWaits(registry, paragraph);
+}
+
+/**
+ * Whether a paragraph shows text that follows from a paragraph a held-back update lists.
+ *
+ * A split's tail can integrate before the update that lists it, and until then its text shows
+ * in the paragraph it came from. An edit there writes that text again and deletes the tail's
+ * characters, and an undo of the edit puts the characters back in a paragraph that still shows
+ * nowhere, so the text vanishes. The edit waits until the listing arrives.
+ */
+function showsArrivingText(registry: DocumentRegistry, id: LogicalId, text: Y.Text): boolean {
+  if (!hasPendingUpdates(registry.doc)) return false;
+  return registry.inline
+    .viewOf(id)
+    .shown(text)
+    .incoming.some((following) => listingArriving(registry.doc, following.source));
 }
 
 function paragraphTextArriving(registry: DocumentRegistry, id: LogicalId): boolean {

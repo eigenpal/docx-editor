@@ -1,4 +1,8 @@
-import { paragraphFinalAt, rememberHangingPunctuation } from './paragraph-hanging-punctuation.ts';
+import {
+  paragraphFinalAt,
+  rememberHangingPunctuation,
+  spaceShrinkMarkAdvance,
+} from './paragraph-hanging-punctuation.ts';
 import { appendUnsupportedContent } from './unsupported-content-flow.ts';
 import { besideFloatWidth } from './legacy-inline-beside-float.ts';
 import { continuationPiecesWithRules } from './paragraph-continuation-pieces.ts';
@@ -19,11 +23,13 @@ import { graphemeContinuationWidth } from './grapheme-continuation-width.ts';
 import { wordFollowsOnlyTabs } from './leading-tab-word.ts';
 import { growScriptLineMetrics } from './paragraph-mark-metrics.ts';
 import { spacedLine } from './positioned-run-spacing.ts';
-import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts';
+import { paragraphMarkStyles } from './paragraph-mark-styles.ts';
+import { splitAtSpacedSoundMarks } from './sound-mark-pieces.ts';
+import { returnUncoveredHintedText } from './east-asia-hint-coverage.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
 import {
   endsAtHyphenBreak,
-  fitsWithSpaceShrink,
+  spaceShrinkFit,
   createShrinkProbe,
   opensWithHangingSpace,
   lineEndAt,
@@ -72,12 +78,7 @@ import {
   type ResolvedTabStops,
 } from './paragraph-tabs.ts';
 import { SINGLE_LINE_SPACING } from './paragraph-style.ts';
-import {
-  DEFAULT_RUN_STYLE,
-  displayText,
-  resolveRunStyle,
-  type ResolvedRunStyle,
-} from './run-style.ts';
+import { displayText, type ResolvedRunStyle } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import {
   createLineExclusionClearance,
@@ -233,9 +234,15 @@ export function breakParagraph(
   const markerBaselineFloor = slotOpen ? (flow?.firstLineMinimumBaseline ?? 0) : 0;
   const markerAscent = slotOpen ? Math.max(0, flow?.firstLineMarkerAscent ?? 0) : 0;
   const typography = flow?.typography ?? resolveCjkTypography(paragraphProperties());
-  const visiblePieces = splitAtAutomaticSpacing(
-    continuationPiecesWithRules(allPieces, startOffset, flow?.showFieldCodes, available),
-    typography,
+  const visiblePieces = splitAtSpacedSoundMarks(
+    splitAtAutomaticSpacing(
+      returnUncoveredHintedText(
+        continuationPiecesWithRules(allPieces, startOffset, flow?.showFieldCodes, available),
+        measurer
+      ),
+      typography,
+      measurer
+    ),
     measurer
   );
   const { preserveColonAdvances } = advances;
@@ -264,32 +271,18 @@ export function breakParagraph(
   if (pieces.length === 0 && flow?.suppressEmptyPlaceholderLine) {
     return [];
   }
-  // Mark face (CT_PPr/rPr), not content inheritance: it sizes a line with nothing on it.
-  const markProps = flow?.markRunProperties ?? inheritedRunProperties;
-  const emptyStyle =
-    markProps.length === 0 ? DEFAULT_RUN_STYLE : resolveRunStyle(markProps, flow?.themeFonts);
-  // A line with content never takes the mark's size (`paragraph-mark-metrics.ts`).
-  const cascadeStyle =
-    markProps === inheritedRunProperties
-      ? emptyStyle
-      : inheritedRunProperties.length === 0
-        ? DEFAULT_RUN_STYLE
-        : resolveRunStyle(inheritedRunProperties, flow?.themeFonts);
-  // The floor of a script line reads the mark's vertical alignment WITHOUT its character style
-  // (`paragraph-mark-run.ts`).
-  const unstyledMark = markRunPropertiesWithoutCharacterStyle(markProps);
-  const unstyledMarkStyle =
-    unstyledMark === markProps ? emptyStyle : resolveRunStyle(unstyledMark, flow?.themeFonts);
-  // Before its first piece a line is estimated from the shorter of the unstyled mark and the
-  // runs' cascade: a small direct mark usually carries the size of its runs, and a taller one
-  // never grows the line. Heights, not sizes, compare, since faces differ. Only an empty
-  // paragraph's line, which has no piece to come, reads the whole mark.
-  const lineStartStyle =
-    pieces.length === 0
-      ? emptyStyle
-      : measurer.lineMetrics(unstyledMarkStyle).height < measurer.lineMetrics(cascadeStyle).height
-        ? unstyledMarkStyle
-        : cascadeStyle;
+  const {
+    empty: emptyStyle,
+    cascade: cascadeStyle,
+    unstyledMark: unstyledMarkStyle,
+    lineStart: lineStartStyle,
+  } = paragraphMarkStyles(
+    flow?.markRunProperties ?? inheritedRunProperties,
+    inheritedRunProperties,
+    flow?.themeFonts,
+    measurer,
+    pieces.length > 0
+  );
   const rightEdge = indentLeft + available;
   const contentLeft = flow?.contentLeft ?? indentLeft;
   const contentRight = flow?.contentRight ?? rightEdge;
@@ -1420,14 +1413,19 @@ export function breakParagraph(
       const followingCluster = clusterTail?.(pieceIndex, boundary) ?? 0;
       const fitWidth =
         baseFitWidth + followingCluster + automaticGap() + (lineEndWhitespace ? 0 : endSpaces.room);
-      const overflows =
-        !hangs &&
+      // A justified line shrinks its spaces before a half-width final mark hangs.
+      const shrinkMark =
+        flow?.justifySpaceShrink && !opticalFit
+          ? spaceShrinkMarkAdvance(candidate, piece, measurer, typography, ends)
+          : 0;
+      let overflows =
+        (!hangs || shrinkMark > 0) &&
         // A space after a word that borrowed inter-word space hangs on its line.
         !(lineEndWhitespace && flow?.justifySpaceShrink) &&
         line.width + fitWidth > lineAvailable() + OVERFLOW_TOLERANCE_PT;
       const followingWidth =
         overflows && flow?.justifySpaceShrink ? shrinkTail(pieceIndex, boundary) : undefined;
-      const borrowsSpace =
+      const shrinkFit =
         overflows &&
         flow?.justifySpaceShrink === true &&
         // A word split across runs still borrows from the span where the word began.
@@ -1436,7 +1434,7 @@ export function breakParagraph(
         alignedTabRight === 0 &&
         line.drawings.length === 0 &&
         (placeableSuffixes[pieceIndex]![boundary] === 1 || endsParagraph(pieceIndex, boundary)) &&
-        fitsWithSpaceShrink(
+        spaceShrinkFit(
           line.spans,
           candidate,
           faceStyle,
@@ -1451,8 +1449,14 @@ export function breakParagraph(
               ? !layoutOwned && (piece.text[boundary] === ' ' || endsAtHyphenBreak(candidate))
               : opensWithHangingSpace(pieces[pieceIndex + 1])),
           followingWidth ?? 0,
-          probeX(lineOrigin() + line.width)
+          probeX(lineOrigin() + line.width),
+          flow.spaceShrinkHangsMarks ? shrinkMark : 0
         );
+      // The spaces make room for the mark, or it hangs beside spaces at their floor.
+      if (shrinkMark > 0 && overflows)
+        if (shrinkFit) hangs = shrinkFit === 'hangs';
+        else if (hangs) overflows = false;
+      const borrowsSpace = shrinkFit !== false;
       // Leading tabs define the opening word's remaining measure. Chop the word
       // there instead of closing a line that contains only those tabs.
       const chopsAfterLeadingTabs =

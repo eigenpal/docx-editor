@@ -77,6 +77,7 @@ import { CollaborationSchemaError } from './errors.ts';
 import type { CollaborationHandle, CollaborationIdentityUpdate } from './types.ts';
 import type { DocumentCollaborationSession } from './document-session-contract.ts';
 import { UndoGroups, type CollaborationUndoGroup } from './document-undo-group.ts';
+import { restoreLostTombstones } from './document/tombstone-guard.ts';
 import type { CreateDocumentCollaborationOptions } from './document-session-options.ts';
 
 /**
@@ -671,7 +672,12 @@ class DocumentSession implements DocumentCollaborationSession {
   }
 
   private readonly onYjsTransaction = (transaction: Y.Transaction): void => {
-    if (this.destroyed || !this.hasCompatibleSharedSchema() || !this.port) return;
+    if (this.destroyed || !this.hasCompatibleSharedSchema()) return;
+    // A peer's undo can empty a deletion this replica still stands by: write it again.
+    if (this.canWriteSharedState()) {
+      restoreLostTombstones(transaction, this.registry.schema.nodes, this.undoManager);
+    }
+    if (!this.port) return;
     // The canonical store already holds a local commit. Its journal translates visible
     // positions before writing shared state, so no local materialization is necessary.
     if (transaction.origin === this.localOrigin) return;

@@ -201,7 +201,7 @@
   },
   "Word.Paragraph#startNewList": {
     "status": "partial",
-    "notes": "Creates an independent bullet-list counter and nine defined levels. Existing templates may be shared, but missing levels and later format changes use private instance overrides. Creation must be the only mutation in its sync. Sync before configuring the returned list. Protected targets refuse. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
+    "notes": "Creates an independent bullet-list counter and nine defined levels. Existing templates may be shared; the new instance then restarts every level with a startOverride, so it numbers on its own after a later format change. Missing levels and later format changes use private instance overrides. Creation must be the only mutation in its sync. Sync before configuring the returned list. Protected targets refuse. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
   },
   "Word.Paragraph#attachToList": {
     "status": "partial",
@@ -221,7 +221,7 @@
   },
   "Word.List#setLevelStartingNumber": {
     "status": "partial",
-    "notes": "Sets the instance level counter start, including zero, as a nonnegative 32-bit integer. Existing startOverride values are replaced by the authored level start. Changes save/reopen and undo/redo without changing unrelated list counters. Membership shared across stories, including main body, headers, and notes, refuses with InvalidArgument. Unrelated override metadata is preserved. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles. TrackMineOnly supports definition changes only for a newly proposed list whose membership belongs to the runtime author. Established list definitions refuse."
+    "notes": "Sets the instance level counter start, including zero, as a nonnegative 32-bit integer. The starting number is written as a startOverride and as the level start, replacing any earlier override. Changes save/reopen and undo/redo without changing unrelated list counters. Membership shared across stories, including main body, headers, and notes, refuses with InvalidArgument. Unrelated override metadata is preserved. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles. TrackMineOnly supports definition changes only for a newly proposed list whose membership belongs to the runtime author. Established list definitions refuse."
   },
   "Word.List#setLevelIndents": {
     "status": "partial",
@@ -553,7 +553,7 @@
   },
   "Word.Paragraph#alignment": {
     "status": "partial",
-    "notes": "Writes Left, Centered, Right, or Justified. Mixed and Unknown describe reads and are refused on writes. Unspecified or mixed authored values can read as null or a mixed marker. Values are the stored w:jc: in a right-to-left paragraph, Left and Right name the leading and trailing edges, so Left sits at the right margin. Setting the DocxEditor addition Paragraph.readingOrder keeps w:jc as authored. A load queued in the same sync as a write returns the value from before the write."
+    "notes": "Writes Left, Centered, Right, or Justified. Mixed and Unknown describe reads and are refused on writes. Unspecified or mixed authored values can read as null or a mixed marker. Values are the stored w:jc: in a right-to-left paragraph, Left and Right name the leading and trailing edges, so Left sits at the right margin. Setting the DocxEditor addition Paragraph.readingOrder keeps w:jc as authored. Alignment writes pass a content lock (contentLocked, sdtContentLocked) when every other paragraph property stays unchanged; tracked alignment there can be accepted or rejected. A tracked alignment write is refused there when the paragraph already has a pending paragraph property change that records other properties, because the lock could not reject the combined revision. Other paragraph property writes in locked content are refused. A load queued in the same sync as a write returns the value from before the write."
   },
   "Word.Paragraph#leftIndent": {
     "status": "partial",

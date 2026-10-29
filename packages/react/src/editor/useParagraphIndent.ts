@@ -9,6 +9,7 @@ import { useCallback, useMemo } from 'react';
 import type { EditorSnapshot, IndentFormatting } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
+import { useEditorCommand } from './useEditorCommand';
 
 /**
  * The fields `apply` accepts — twips throughout, like every other read shape here.
@@ -53,6 +54,7 @@ export interface UseParagraphIndentReturn {
 const selectIndent = (snapshot: EditorSnapshot): IndentFormatting | null =>
   snapshot.formatting?.indent ?? null;
 const selectEditable = (snapshot: EditorSnapshot): boolean => snapshot.editable;
+const SET_INDENT_PROBE = { type: 'setIndent', left: 0 } as const;
 
 /**
  * The selection's paragraph indent — left, right, and the signed first line — plus the
@@ -71,11 +73,10 @@ export function useParagraphIndent(): UseParagraphIndentReturn {
   const editable = useEditorState(selectEditable);
 
   // `can` needs a representative payload (an empty command is refused); a zero left
-  // indent is always in range, so the answer reflects only the mount/mode gates.
-  const isEnabled = useMemo(
-    () => editable && editor !== null && editor.can({ type: 'setIndent', left: 0 }).ok,
-    [editor, editable]
-  );
+  // indent is always in range. The answer depends on the selection too (a content lock
+  // refuses indents), so it is re-read on every snapshot, not once per mount.
+  const { isEnabled: canIndent } = useEditorCommand(SET_INDENT_PROBE);
+  const isEnabled = editable && canIndent;
 
   const apply = useCallback(
     (update: IndentUpdate): boolean => {

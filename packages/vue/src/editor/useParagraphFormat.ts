@@ -6,6 +6,7 @@ import { computed, type ComputedRef } from 'vue';
 import type { EditorSnapshot, RunFormatting } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
+import { useEditorCommand } from './useEditorCommand';
 
 import type { ParagraphFormatRead, ParagraphFormatUpdate } from '@docx-editor.dev/core/editor';
 export type {
@@ -126,6 +127,7 @@ const sameFormat = (a: ParagraphFormatRead | null, b: ParagraphFormatRead | null
 };
 
 const selectEditable = (snapshot: EditorSnapshot): boolean => snapshot.editable;
+const SET_FORMAT_PROBE = { type: 'setParagraphFormat', alignment: 'left' } as const;
 
 /**
  * The selection's paragraph formatting, plus the command to change it.
@@ -137,12 +139,10 @@ export function useParagraphFormat(): UseParagraphFormatReturn {
   const format = useEditorState(selectFormat, sameFormat);
   const editable = useEditorState(selectEditable);
 
-  const isEnabled = computed(
-    () =>
-      editable.value &&
-      editorRef.value !== null &&
-      editorRef.value.can({ type: 'setParagraphFormat', alignment: 'left' }).ok
-  );
+  // The answer depends on the selection too (a data binding refuses it), so it comes from the command
+  // state, which re-reads `can` on every snapshot.
+  const command = useEditorCommand(SET_FORMAT_PROBE);
+  const isEnabled = computed(() => editable.value && command.isEnabled.value);
 
   const apply = (update: ParagraphFormatUpdate): boolean => {
     if (!editorRef.value) return false;

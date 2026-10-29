@@ -775,6 +775,7 @@ function applyInsertContent(
       const edited = insertAfterNoteInRun(
         part,
         paragraph,
+        offset,
         site.run,
         site.index,
         nodes,
@@ -867,7 +868,7 @@ function applyInsertContent(
           : null;
     const inheritedProperties =
       bias === 'left' && noteReferenceEndingAt(paragraph, offset)
-        ? noteTypingProperties(paragraph, nextId)
+        ? noteTypingProperties(paragraph, offset, nextId)
         : leftRun && leftRun.kind === 'run'
           ? fieldInsertionEndAt(paragraph, offset)
             ? insertedRunProperties(nextId, leftRun)

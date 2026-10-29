@@ -12,7 +12,7 @@ export const SUGGESTING_TABLE_DELETE_REFUSAL =
 
 /** Whether a block id names a `w:tbl`, in whichever part of the package holds it. */
 export function tableLookupIn(
-  session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'>
+  session: Pick<TreeDocxSessionView, 'currentPackage' | 'part' | 'storyParts'>
 ): (blockId: string) => boolean {
   return (blockId) => {
     const part = partOfNodeId(session, blockId);

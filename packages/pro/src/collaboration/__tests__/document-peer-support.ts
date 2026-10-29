@@ -146,6 +146,11 @@ export function createPeerHarness(
     bytes: Uint8Array
   ) => Promise<{ alice: Peer; bob: Peer; pause: () => void; resume: () => void }>;
   readonly join: (host: Peer, name: string) => Promise<Peer>;
+  /**
+   * A peer that joins from `host` with no relay to anyone: the test delivers its updates,
+   * so it can hold one back from one peer and give it to another.
+   */
+  readonly joinDetached: (host: Peer, name: string) => Promise<Peer>;
   readonly leave: (peer: Peer) => void;
   readonly remount: (peer: Peer) => Promise<Peer>;
   readonly apply: (peer: Peer, ops: readonly TreeDocOp[], scope?: StoryScope) => void;
@@ -249,7 +254,8 @@ export function createPeerHarness(
 
   async function joinPeer(
     host: Peer,
-    name: string
+    name: string,
+    detached = false
   ): Promise<{ peer: Peer; pause: () => void; resume: () => void }> {
     const ydoc = newDoc(name);
     const awareness = new Awareness(ydoc);
@@ -263,6 +269,7 @@ export function createPeerHarness(
       ...sessionOptions,
     });
     const peer = attachPeer(ydoc, awareness, room);
+    if (detached) return { peer, pause: () => {}, resume: () => {} };
     return { peer, ...wireToOpened(peer) };
   }
 
@@ -317,6 +324,9 @@ export function createPeerHarness(
     async join(host, name) {
       const joined = await joinPeer(host, name);
       return joined.peer;
+    },
+    async joinDetached(host, name) {
+      return (await joinPeer(host, name, true)).peer;
     },
     leave,
     remount,
