@@ -3,7 +3,7 @@ import {
   rememberHangingPunctuation,
   spaceShrinkMarkAdvance,
 } from './paragraph-hanging-punctuation.ts';
-import { appendUnsupportedContent } from './unsupported-content-flow.ts';
+import { appendColumnBreak, appendUnsupportedContent } from './unsupported-content-flow.ts';
 import { besideFloatWidth } from './legacy-inline-beside-float.ts';
 import { continuationPiecesWithRules } from './paragraph-continuation-pieces.ts';
 import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
@@ -943,27 +943,11 @@ export function breakParagraph(
     const piece = pieces[pieceIndex]!;
     if (piece.breakKind === 'column') {
       const opensParagraph: boolean = firstLineOpen && !line.spans.length && !line.drawings.length;
-      const breakMetrics = measurer.lineMetrics(piece.style);
-      line.spans.push({
-        range: { paragraphId, start: piece.start, end: piece.end },
-        text: piece.text,
-        props: piece.props,
-        style: piece.style,
-        box: { x: lineOrigin() + line.width, y: 0, width: 0, height: breakMetrics.height },
-        ...(piece.link ? { link: piece.link } : {}),
-        ...paragraphSpanMetadata(piece),
-      });
-      growLineMetrics(line, breakMetrics);
-      line.end = piece.end;
+      appendColumnBreak(line, piece, paragraphId, lineOrigin() + line.width, measurer);
       closeLine();
       lines[lines.length - 1]!.columnBreakAfter = true;
       firstLineOpen = opensParagraph;
-      // Like a trailing hard break, NOT like a page break: Word still lays out the
-      // paragraph's remainder after the column advance. The common authoring form
-      // `<w:p><w:r><w:br w:type="column"/></w:r></w:p>` therefore opens one empty line
-      // at the top of the next column before the following block — the paragraph mark
-      // after the break. Suppressing that remainder put "After Column Break" flush with
-      // the prior column's first line.
+      // Like a trailing hard break: the paragraph mark after it takes a line in the next column.
       trailingLineBreak = true;
       continue;
     }
@@ -1404,19 +1388,19 @@ export function breakParagraph(
         baseFitWidth + followingCluster + automaticGap() + (lineEndWhitespace ? 0 : endSpaces.room);
       // A justified line shrinks its spaces before a half-width final mark hangs.
       const shrinkMark =
-        flow?.justifySpaceShrink && !opticalFit
+        flow?.spaceShrink && !opticalFit
           ? spaceShrinkMarkAdvance(candidate, piece, measurer, typography, ends)
           : 0;
       let overflows =
         (!hangs || shrinkMark > 0) &&
         // A space after a word that borrowed inter-word space hangs on its line.
-        !(lineEndWhitespace && flow?.justifySpaceShrink) &&
+        !(lineEndWhitespace && flow?.spaceShrink) &&
         line.width + fitWidth > lineAvailable() + OVERFLOW_TOLERANCE_PT;
       const followingWidth =
-        overflows && flow?.justifySpaceShrink ? shrinkTail(pieceIndex, boundary) : undefined;
+        overflows && flow?.spaceShrink ? shrinkTail(pieceIndex, boundary) : undefined;
       const shrinkFit =
         overflows &&
-        flow?.justifySpaceShrink === true &&
+        flow?.spaceShrink !== undefined &&
         // A word split across runs still borrows from the span where the word began.
         (opensWord || (openDecision === 'continues' && wordStartSpan > 0)) &&
         // Text after a right, center or decimal tab is placed against its stop, not justified.
@@ -1425,21 +1409,25 @@ export function breakParagraph(
         (placeableSuffixes[pieceIndex]![boundary] === 1 || endsParagraph(pieceIndex, boundary)) &&
         spaceShrinkFit(
           line.spans,
-          candidate,
-          faceStyle,
           measurer,
-          line.width + automaticGap(),
-          lineAvailable(),
-          opensWord ? line.spans.length : wordStartSpan,
-          opensWord ? line.width : wordStartWidth,
-          followingWidth !== undefined ||
-            endsParagraph(pieceIndex, boundary) ||
-            (boundary < piece.text.length
-              ? !layoutOwned && (piece.text[boundary] === ' ' || endsAtHyphenBreak(candidate))
-              : opensWithHangingSpace(pieces[pieceIndex + 1])),
-          followingWidth ?? 0,
-          probeX(lineOrigin() + line.width),
-          flow.spaceShrinkHangsMarks ? shrinkMark : 0
+          {
+            text: candidate,
+            style: faceStyle,
+            lineWidth: line.width + automaticGap(),
+            available: lineAvailable(),
+            wordStart: opensWord ? line.spans.length : wordStartSpan,
+            wordStartWidth: opensWord ? line.width : wordStartWidth,
+            wordEnds:
+              followingWidth !== undefined ||
+              endsParagraph(pieceIndex, boundary) ||
+              (boundary < piece.text.length
+                ? !layoutOwned && (piece.text[boundary] === ' ' || endsAtHyphenBreak(candidate))
+                : opensWithHangingSpace(pieces[pieceIndex + 1])),
+            followingWidth: followingWidth ?? 0,
+            passageStart: probeX(lineOrigin() + line.width),
+            hangingMarkAdvance: shrinkMark,
+          },
+          flow.spaceShrink
         );
       // The spaces make room for the mark, or it hangs beside spaces at their floor.
       if (shrinkMark > 0 && overflows)

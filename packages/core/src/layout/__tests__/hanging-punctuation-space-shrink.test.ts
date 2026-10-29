@@ -75,9 +75,13 @@ describe('a justified line shrinks its spaces before a final mark hangs', () => 
     expect(caretX(result, 15)).toBeCloseTo(357, 6);
   });
 
-  test('a distributed line wraps the word where a justified line hangs its comma', () => {
+  test('a distributed line hangs the comma beside spaces at their floor', () => {
+    // The text before the comma fits within the floor, and its shrink costs less than a third
+    // of the stretch the line without the word would take.
     const result = load(330, { paragraphProperties: '<w:jc w:val="distribute"/>' });
-    expect(texts(result)).toEqual(['aa aa aa aa ', 'aa, aa']);
+    expect(texts(result)).toEqual([FIRST, 'aa']);
+    expect(caretX(result, 14)).toBeCloseTo(330, 6);
+    expect(caretX(result, 15)).toBeCloseTo(354, 6);
   });
 
   test('a left-aligned line neither hangs the comma nor shrinks its spaces', () => {

@@ -682,14 +682,23 @@ In compatibility mode 15 and later, a justified or distributed line SHALL shrink
 
 ### Requirement: Hanging a mark beside shrunk spaces
 
-When the spaces reach their shrink floor before the mark fits, a justified line SHALL hang the mark if the space-shrink rule admits the word and the spaces make room for the text before the mark. A distributed line SHALL wrap the word instead.
+When the spaces reach their shrink floor before the mark fits, a justified or distributed line SHALL hang the mark if the space-shrink rule admits the word and the spaces make room for the text before the mark.
 
 #### Scenario: A comma hangs beside spaces at their floor
 
 - **GIVEN** the same line, where the spaces at their floor make room for the text before the comma but not for the comma
-- **WHEN** the paragraph is justified
+- **WHEN** the paragraph is justified, or distributed and the word passes the distributed test
 - **THEN** the comma hangs past the margin and the text before it fills the measure
-- **AND** a distributed paragraph moves the word to the next line
+
+### Requirement: Distributed space shrinking
+
+In compatibility mode 15 and later, a distributed line SHALL keep the word that overflows it by shrinking its spaces only when each space loses at most a third of what the line without the word would add to it. The test SHALL count half the advance of a final half-width mark that may hang. A justified line SHALL allow half instead, counting the whole mark.
+
+#### Scenario: A distributed line ends one word earlier
+
+- **GIVEN** a justified and a distributed mode 15 paragraph of English words with the same measure
+- **WHEN** keeping the next word costs each space more than a third, but at most half, of the stretch the line without it would take
+- **THEN** the justified line keeps the word and the distributed line moves it to the next line
 
 ### Requirement: Combining kana sound marks follow their face
 
