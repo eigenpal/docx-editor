@@ -50,7 +50,6 @@ import { paragraphTextOf } from '../store/store/tree-ops.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import { sectionReads, type AutomationSectionRead } from './sections.ts';
 import { styleIndex, type AutomationStyleIndex } from './styles.ts';
-import { NO_STYLES, packageStyleListing, type AutomationStyleRead } from './style-listing.ts';
 import {
   BODY_STORY,
   HEADER_FOOTER_VARIANTS,
@@ -193,17 +192,13 @@ export interface AutomationPackageReads {
    */
   shapes(story: AutomationStoryId): AutomationShapesRead;
   styles(): AutomationStyleIndex;
-  /**
-   * Every style `styles.xml` defines, as `getStyles` answers it. Cached on the styles part root,
-   * so listings in one batch, and in batches after an edit that leaves `styles.xml` alone, share it.
-   */
-  styleListing(): readonly AutomationStyleRead[];
 }
 
 /** What a host with no document declares about styles: nothing. */
 const NO_STYLE_INDEX: AutomationStyleIndex = Object.freeze({
   nameOf: () => null,
   idOf: () => null,
+  characterIdOf: () => null,
   defaultId: null,
   present: false,
   inheritsRtl: () => false,
@@ -223,7 +218,6 @@ export const EMPTY_READS: AutomationPackageReads = Object.freeze({
   noteIds: (): AutomationNoteIdsRead => ({ ok: true, ids: NONE_NUMBERS }),
   shapes: (): AutomationShapesRead => NO_SHAPES,
   styles: () => NO_STYLE_INDEX,
-  styleListing: () => NO_STYLES,
 });
 
 /** The story root's own children, each with what it holds and whether it can be removed. */
@@ -569,7 +563,6 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
     noteIds: noteIdsOf,
     shapes: shapesOf,
     styles: stylesOf,
-    styleListing: () => packageStyleListing(pkg),
   };
 }
 

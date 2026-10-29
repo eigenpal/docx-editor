@@ -2,7 +2,7 @@
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { revisionDateNow } from './revision-date.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
-import { MAX_STYLE_NAME, styleDefinitionsOf, styleNameKey } from './style-definitions.ts';
+import { MAX_STYLE_NAME, styleDefinitionsOf } from './style-definitions.ts';
 import { answered, refused } from './plan-results.ts';
 import { isValidXmlText } from '../store/package/sinks.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
@@ -78,10 +78,14 @@ function parentTable(root: OoxmlNode, nodeId: string): OoxmlElement | undefined 
   }
   return undefined;
 }
-/** The table styles the style listing and the paragraph setters count: the same capped definitions. */
-function styles(reads: AutomationPackageReads) {
+/**
+ * The table style name a read answers: the name that writes back to the same style, by the rule the
+ * listing and the setter share, or an empty string where none does.
+ */
+function tableStyleName(reads: AutomationPackageReads, styleId: string | null | undefined): string {
   const part = reads.package && stylesPartOf(reads.package);
-  return part ? styleDefinitionsOf(part).entries.filter((s) => s.type === 'table') : [];
+  if (!part || typeof styleId !== 'string') return '';
+  return styleDefinitionsOf(part).nameOf('table', styleId) ?? '';
 }
 
 export function planTableOperation(
@@ -202,7 +206,8 @@ export function planTableOperation(
           headerRowCount: data.headerRowCount,
           rowCount: data.rowIds.length,
           columnCount: data.columnCount,
-          style: styles(packages).find((s) => s.styleId === data.styleId)?.name ?? '',
+          // The name that writes back to this style, or none: a read is always writable.
+          style: tableStyleName(packages, data.styleId),
         },
       });
     case 'getTableRows':
@@ -295,10 +300,9 @@ export function planTableOperation(
           return refuse('unsupported-content', 'invalid-table-style-name');
         if (!(packages.package && stylesPartOf(packages.package)))
           return refuse('unsupported-content', 'no-styles-defined: table');
-        const key = styleNameKey(wanted);
-        const style = styles(packages).find((s) => s.name !== null && styleNameKey(s.name) === key);
-        if (!style) return refuse('unsupported-content', 'style-not-defined: table');
-        mutation = { ...mutation, styleId: style.styleId };
+        const styleId = styleDefinitionsOf(stylesPartOf(packages.package)!).idOf('table', wanted);
+        if (styleId === null) return refuse('unsupported-content', 'style-not-defined: table');
+        mutation = { ...mutation, styleId };
       }
       const revision = context.trackingAuthor
         ? { author: context.trackingAuthor, date: revisionDateNow() }

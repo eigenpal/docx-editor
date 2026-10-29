@@ -19,6 +19,7 @@
 // same object and the definitions are reused; only an edit to `styles.xml` builds them again.
 
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { isValidXmlText } from '../store/package/sinks.ts';
 import { MAX_STYLE_DEFINITIONS } from '../layout/style-cascade.ts';
 import { isElement, readStyleIdentity } from '../layout/style-definition-reader.ts';
 
@@ -39,14 +40,21 @@ export interface StyleDefinitionEntry {
   readonly element: OoxmlElement;
 }
 
-/** What one styles part defines, as automation reads it. */
+/**
+ * What one styles part defines, as automation reads it.
+ *
+ * ONE RULE FOR READS AND WRITES. A name belongs to the FIRST definition of its type that carries
+ * it, and only a name a write accepts (`isWritableStyleName`) belongs to any style. `idOf` is what a
+ * write resolves; `nameOf` answers a name only when `idOf` resolves it back to the same style. So a
+ * name read can always be written back, and writing it applies the style it was read from.
+ */
 export interface StyleDefinitions {
   /** Every counted definition that wins its id, in the order the part writes the winners. */
   readonly entries: readonly StyleDefinitionEntry[];
-  /** The paragraph style id a folded name belongs to. The first definition of a name wins. */
-  readonly paragraphIdByName: ReadonlyMap<string, string>;
-  /** The `w:name` of each paragraph style id, or null where the part gives none. */
-  readonly paragraphNameById: ReadonlyMap<string, string | null>;
+  /** The style of `type` a name belongs to, compared folded, or null. */
+  idOf(type: string, name: string): string | null;
+  /** The name that writes back to this style of `type`, or null where no name does. */
+  nameOf(type: string, styleId: string): string | null;
   /** The default paragraph style id, resolved by layout's rule, or null. */
   readonly defaultParagraphId: string | null;
 }
@@ -57,6 +65,18 @@ export interface StyleDefinitions {
  */
 export function styleNameKey(name: string): string {
   return name.trim().toLowerCase();
+}
+
+/**
+ * Whether a name is one a style write accepts: not empty once trimmed, at most `MAX_STYLE_NAME`
+ * characters, and valid XML text.
+ */
+export function isWritableStyleName(name: string): boolean {
+  return name.trim().length > 0 && name.length <= MAX_STYLE_NAME && isValidXmlText(name);
+}
+
+function kindKey(type: string, name: string): string {
+  return `${type}\u0000${styleNameKey(name)}`;
 }
 
 const cache = new WeakMap<OoxmlNode, StyleDefinitions>();
@@ -101,20 +121,21 @@ function build(root: OoxmlElement): StyleDefinitions {
     }
   }
   const entries = read.filter((entry) => winner.get(entry.styleId) === entry);
-  const paragraphIdByName = new Map<string, string>();
-  const paragraphNameById = new Map<string, string | null>();
+  const idByName = new Map<string, string>();
   for (const entry of entries) {
-    if (entry.type !== 'paragraph') continue;
-    paragraphNameById.set(entry.styleId, entry.name);
-    if (entry.name === null) continue;
-    const key = styleNameKey(entry.name);
+    if (entry.name === null || !isWritableStyleName(entry.name)) continue;
+    const key = kindKey(entry.type, entry.name);
     // First definition of a name wins: a later style must not silently retarget a name.
-    if (!paragraphIdByName.has(key)) paragraphIdByName.set(key, entry.styleId);
+    if (!idByName.has(key)) idByName.set(key, entry.styleId);
   }
   return Object.freeze({
     entries: Object.freeze(entries),
-    paragraphIdByName,
-    paragraphNameById,
+    idOf: (type: string, name: string) => idByName.get(kindKey(type, name)) ?? null,
+    nameOf: (type: string, styleId: string) => {
+      const entry = winner.get(styleId);
+      if (!entry || entry.type !== type || entry.name === null) return null;
+      return idByName.get(kindKey(type, entry.name)) === styleId ? entry.name : null;
+    },
     defaultParagraphId,
   });
 }

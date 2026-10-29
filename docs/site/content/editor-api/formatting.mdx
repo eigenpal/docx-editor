@@ -159,7 +159,7 @@ Many styles share priority 99, so the example sorts by `nameLocal` next for a st
 
 The list includes paragraph, character, table, and list styles. `Body.style`, `Paragraph.style`, and `Range.style` accept paragraph style names only. They refuse character, table, and list style names, so check `type` before you assign a `nameLocal`. Every listed paragraph style applies through those setters, including linked styles such as headings. A built-in name is accepted as listed, such as `heading 1`.
 
-To check for one name, call `styles.getByNameOrNullObject(name)`, load a property, sync, and read `isNullObject`. The lookup compares names without case and surrounding spaces, the same way the style setters do. If one name belongs to styles of several kinds, the lookup returns the paragraph style. `styles.getCount()` returns the number of listed styles.
+To check for one name, call `styles.getByNameOrNullObject(name)`, sync, and read `isNullObject`. Reading `isNullObject` needs no property load. Load the properties you want on the same object before that sync, and the lookup answers them too. The lookup compares names without case and surrounding spaces, the same way the style setters do. If one name belongs to styles of several kinds, the lookup returns the paragraph style. `styles.getCount()` returns the number of listed styles.
 
 A `Style` exposes these read-only properties:
 

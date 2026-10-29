@@ -50,17 +50,6 @@ export function collectionItemSelection(request: ResolvedLoadOptions): readonly 
   ];
 }
 
-/** One collection read queued in the current sync, for one `skip`/`top` window. */
-export interface QueuedCollectionLoad {
-  /**
-   * The item properties every load of this collection in this sync asked for, whatever its
-   * window. Shared by every window's read and read when the listing answers.
-   */
-  readonly names: Set<string>;
-  readonly skip: number;
-  readonly top: number | undefined;
-}
-
 /**
  * The loads one collection has queued in the current sync.
  *
@@ -74,40 +63,41 @@ export interface QueuedCollectionLoad {
  */
 export class CollectionLoads {
   #names: Set<string> | undefined;
-  readonly #windows = new Map<string, QueuedCollectionLoad>();
+  readonly #windows = new Set<string>();
 
-  /**
-   * Add a load's item properties. Answers the queued read for its window, or undefined when the
-   * caller has to queue one with {@link CollectionLoads.open}.
-   */
-  join(
-    names: readonly string[],
-    skip: number,
-    top: number | undefined
-  ): QueuedCollectionLoad | undefined {
+  /** Add a load's item properties. True when a read for its window is already queued. */
+  join(names: readonly string[], skip: number, top: number | undefined): boolean {
     this.#names ??= new Set();
     for (const name of names) this.#names.add(name);
-    return this.#windows.get(windowKey(skip, top));
+    return this.#windows.has(windowKey(skip, top));
   }
 
-  /** Start the read for a window; `release` ends its joining window. */
+  /**
+   * Queue the read for a window. `enqueue` receives the shared names and the `release` that ends
+   * the window's joining; a window whose read could not be queued is released at once.
+   */
   open(
     skip: number,
-    top: number | undefined
-  ): { readonly load: QueuedCollectionLoad; readonly release: () => void } {
-    this.#names ??= new Set();
+    top: number | undefined,
+    enqueue: (names: ReadonlySet<string>, release: () => void) => void
+  ): void {
+    const names = (this.#names ??= new Set());
     const key = windowKey(skip, top);
-    const load: QueuedCollectionLoad = { names: this.#names, skip, top };
-    this.#windows.set(key, load);
-    return {
-      load,
-      release: () => {
-        if (this.#windows.get(key) !== load) return;
-        this.#windows.delete(key);
-        // The next sync's loads start a set of their own.
-        if (this.#windows.size === 0) this.#names = undefined;
-      },
+    this.#windows.add(key);
+    let released = false;
+    const release = (): void => {
+      if (released) return;
+      released = true;
+      this.#windows.delete(key);
+      // The next sync's loads start a set of their own.
+      if (this.#windows.size === 0) this.#names = undefined;
     };
+    try {
+      enqueue(names, release);
+    } catch (error) {
+      release();
+      throw error;
+    }
   }
 }
 
@@ -233,29 +223,30 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
     }
     // A later load in the same sync with this window joins this read: one listing, every name.
     if (this.#loads.join(itemSelect, skip, top)) return;
-    const { load, release } = this.#loads.open(skip, top);
-    this.enqueue({
-      sort: 'read',
-      label,
-      // Asked when the sync takes the read, after every load of this sync has joined.
-      continues: () => load.names.size > 0,
-      capture: release,
-      dispose: release,
-      plan: () => {
-        const resolved = listing ?? this.listing();
-        if (!resolved) fail({ code: 'InvalidObjectPath', target: this.path.label });
-        return resolved;
-      },
-      settle: (value) => {
-        const members = this.#members(value, label, skip, top);
-        this.setLoadedProperty('items', members);
-        const names = [...load.names];
-        if (names.length === 0) return;
-        this.internals.queue.continuing(() => {
-          for (const item of members) item.load(names);
-        });
-      },
-    });
+    this.#loads.open(skip, top, (shared, release) =>
+      this.enqueue({
+        sort: 'read',
+        label,
+        // Asked when the sync takes the read, after every load of this sync has joined.
+        continues: () => shared.size > 0,
+        capture: release,
+        dispose: release,
+        plan: () => {
+          const resolved = listing ?? this.listing();
+          if (!resolved) fail({ code: 'InvalidObjectPath', target: this.path.label });
+          return resolved;
+        },
+        settle: (value) => {
+          const members = this.#members(value, label, skip, top);
+          this.setLoadedProperty('items', members);
+          const names = [...shared];
+          if (names.length === 0) return;
+          this.internals.queue.continuing(() => {
+            for (const item of members) item.load(names);
+          });
+        },
+      })
+    );
   }
 
   /**

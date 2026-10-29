@@ -192,12 +192,17 @@ export class Body extends ModelObject {
    * The paragraph style, by the name a reader sees in the styles gallery.
    *
    * Reading answers the name every paragraph in the story agrees on, and `null` where they do not or
-   * where the document names no style. Writing applies it to all of them, and a name the document
-   * does not already define is refused rather than created — a minted style would report itself
-   * applied while the text stayed exactly as it looked.
+   * where no paragraph style name writes back to their style. Writing applies it to all of them, and
+   * a name the document does not already define is refused rather than created — a minted style
+   * would report itself applied while the text stayed exactly as it looked.
+   *
+   * List the names you can write with `context.document.getStyles()`, and assign the `nameLocal`
+   * of a style whose `type` is `Paragraph`; character, table, and list names are refused.
+   * A name read is always one that writes back to the same style. `null` means there is no such
+   * name: write a listed name instead.
    */
-  get style(): string {
-    return this.loadedProperty<string>('style');
+  get style(): string | null {
+    return this.loadedProperty<string | null>('style');
   }
 
   set style(value: string) {

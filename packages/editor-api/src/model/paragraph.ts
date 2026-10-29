@@ -161,16 +161,17 @@ export class Paragraph extends ModelObject implements PromisedItem {
   /**
    * The paragraph style, by the name a reader sees in the styles gallery.
    *
-   * A read answers the style's `nameLocal` as the styles part writes it, such as `heading 1`.
-   * `null` where the document names none, and where the paragraph's style has the same name as an
-   * earlier paragraph style, because assigning that name applies the earlier style. A name it does
+   * A read answers the style's `nameLocal` as the styles part writes it, such as `heading 1`, and
+   * any name read writes back to the same style. `null` where the document names none, where the
+   * paragraph's style has the same name as an earlier paragraph style (assigning that name applies
+   * the earlier style), and where its name is one a write refuses, such as a blank name. A name it does
    * not already define is refused rather than created; list the defined names with
    * `context.document.getStyles()` and assign the `nameLocal` of a style whose `type` is
    * `Paragraph`. The write rides the same `w:pPr` rewrite the alignment and indent members do — so
    * applying a style and adjusting a spacing in one sync is one write rather than a refusal.
    */
-  get style(): string {
-    return this.loadedProperty<string>('style');
+  get style(): string | null {
+    return this.loadedProperty<string | null>('style');
   }
 
   set style(value: string) {

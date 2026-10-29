@@ -579,7 +579,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-The list includes character, table, and list styles too. The `style` setters accept paragraph style names only and refuse the others, so filter on `type` first. Every listed paragraph style applies through `style`, including linked styles such as headings. A built-in name is accepted as listed, such as `heading 1`. `styles.load()` with no arguments reads every property of each style. To check one name, call `styles.getByNameOrNullObject(name)` and read `isNullObject` after a sync. Style definitions are read-only.
+The list includes character, table, and list styles too. The `style` setters accept paragraph style names only and refuse the others, so filter on `type` first. Every listed paragraph style applies through `style`, including linked styles such as headings. A built-in name is accepted as listed, such as `heading 1`. `styles.load()` with no arguments reads every property of each style. To check one name, call `styles.getByNameOrNullObject(name)` and read `isNullObject` after a sync; it needs no property load. Style definitions are read-only.
 
 ## Go to a bookmark
 

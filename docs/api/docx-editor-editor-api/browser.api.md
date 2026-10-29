@@ -78,7 +78,7 @@ class Body_2 extends ModelObject {
     get revisions(): RevisionCollection;
     search(searchText: string, options?: SearchOptions): RangeCollection;
     get shapes(): ShapeCollection;
-    get style(): string;
+    get style(): string | null;
     set style(value: string);
     get tables(): TableCollection;
     get text(): string;
@@ -1176,7 +1176,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
     set spaceBefore(value: number);
     split(delimiters: string[], trimDelimiters?: boolean, trimSpacing?: boolean): RangeCollection;
     startNewList(): List;
-    get style(): string;
+    get style(): string | null;
     set style(value: string);
     get text(): string;
     get uniqueLocalId(): string;
@@ -1260,7 +1260,7 @@ class Range_2 extends ModelObject implements PromisedItem {
     get revisions(): RevisionCollection;
     search(searchText: string, options?: SearchOptions): RangeCollection;
     select(selectionMode_?: SelectionMode_2): void;
-    get style(): string;
+    get style(): string | null;
     set style(value: string);
     get tables(): TableCollection;
     get text(): string;
@@ -1596,6 +1596,8 @@ export class Style extends ModelObject {
     get linked(): boolean;
     // @internal
     static listed(context: RequestContext, label: string, owner: ObjectPath, style: AutomationStyleRead): Style;
+    // @internal
+    lookupCaptured(): void;
     // @internal
     lookupEnded(): void;
     get nameLocal(): string;

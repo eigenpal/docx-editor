@@ -132,6 +132,8 @@ export class Style extends ModelObject {
    * carries every property, so these are filled from it rather than by a second read.
    */
   #awaiting: Set<string> | undefined;
+  /** The properties that were awaiting when the sync took the lookup; its answer fills them. */
+  #captured: Set<string> | undefined;
 
   /** @internal A member of a loaded collection. */
   static listed(
@@ -236,19 +238,32 @@ export class Style extends ModelObject {
   hydrateFound(style: AutomationStyleRead): void {
     this.#id = style.id;
     this.path.resolveTo(this.internals.roots().document);
-    const awaiting = this.#awaiting;
+    const awaiting = this.#captured ?? this.#awaiting;
+    this.#captured = undefined;
     this.#awaiting = undefined;
     if (awaiting) this.hydrateProperties(style, [...awaiting]);
   }
 
   /** @internal The lookup found nothing. */
   hydrateNull(): void {
+    this.#captured = undefined;
     this.#awaiting = undefined;
     this.path.resolveNull();
   }
 
+  /**
+   * @internal The sync took the lookup. The properties awaiting it are its answer's to fill; a load
+   * after this point queues its own read by id, so it is never left waiting on a sync that has
+   * already been sent, or that fails.
+   */
+  lookupCaptured(): void {
+    this.#captured = this.#awaiting;
+    this.#awaiting = undefined;
+  }
+
   /** @internal The lookup's batch ended; later loads read by id. */
   lookupEnded(): void {
+    this.#captured = undefined;
     this.#awaiting = undefined;
   }
 
@@ -331,7 +346,9 @@ export class StyleCollection extends ModelObject {
   }
 
   /**
-   * The style with this name, or an object that reports `isNullObject` after the sync.
+   * The style with this name, or an object that reports `isNullObject` after the sync. Reading
+   * `isNullObject` needs no property load; properties loaded on the object before that sync are
+   * answered by the same lookup.
    *
    * Names compare without case and surrounding spaces, the way the style setters compare them.
    * When one name belongs to styles of several kinds, the paragraph style is answered, because that
@@ -352,6 +369,7 @@ export class StyleCollection extends ModelObject {
         if (style) found.hydrateFound(style);
         else found.hydrateNull();
       },
+      capture: () => found.lookupCaptured(),
       dispose: () => found.lookupEnded(),
     });
     return found;
@@ -376,26 +394,27 @@ export class StyleCollection extends ModelObject {
     const top = request.top;
     // A repeated load in the same sync joins this one, so one listing answers every selection.
     if (this.#loads.join(itemSelect, skip, top)) return;
-    const { load, release } = this.#loads.open(skip, top);
-    this.enqueue({
-      sort: 'read',
-      label,
-      capture: release,
-      dispose: release,
-      plan: () => ({ op: 'getStyles' }),
-      settle: (value) => {
-        const styles = hydratedStyles(value, label);
-        const names = [...load.names];
-        const last = windowEnd(styles.length, skip, top);
-        const items: Style[] = [];
-        for (let index = skip; index < last; index += 1) {
-          const style = styles[index]!;
-          const item = Style.listed(this.context, `${label}[${String(index)}]`, this.path, style);
-          item.hydrateProperties(style, names);
-          items.push(item);
-        }
-        this.setLoadedProperty('items', Object.freeze(items));
-      },
-    });
+    this.#loads.open(skip, top, (shared, release) =>
+      this.enqueue({
+        sort: 'read',
+        label,
+        capture: release,
+        dispose: release,
+        plan: () => ({ op: 'getStyles' }),
+        settle: (value) => {
+          const styles = hydratedStyles(value, label);
+          const names = [...shared];
+          const last = windowEnd(styles.length, skip, top);
+          const items: Style[] = [];
+          for (let index = skip; index < last; index += 1) {
+            const style = styles[index]!;
+            const item = Style.listed(this.context, `${label}[${String(index)}]`, this.path, style);
+            item.hydrateProperties(style, names);
+            items.push(item);
+          }
+          this.setLoadedProperty('items', Object.freeze(items));
+        },
+      })
+    );
   }
 }

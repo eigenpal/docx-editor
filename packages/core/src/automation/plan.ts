@@ -1482,7 +1482,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     }
     const conflict = touch(plan, range.start.paragraphId);
     if (conflict) return conflict;
-    const styleId = reads.styles().idOf('hyperlink');
+    const styleId = reads.styles().characterIdOf('hyperlink');
     return staged((aim) => ({
       op: 'insertHyperlink',
       paragraphId: range.start.paragraphId,

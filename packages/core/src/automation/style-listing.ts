@@ -10,7 +10,6 @@
 // value becomes an object key or a loop bound. The definitions are capped like layout's.
 
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
-import { isValidXmlText } from '../store/package/sinks.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { attributeValue, childNamed } from '../layout/style-definition-reader.ts';
@@ -39,7 +38,8 @@ export function planStyleListing(
   if (name !== undefined && typeof name !== 'string') return bad('a style name is a string');
   if (id !== undefined && typeof id !== 'string') return bad('a style id is a string');
   if (count !== undefined && (count as unknown) !== true) return bad('count is true or omitted');
-  const listing = reads.styleListing();
+  // Cached on the styles part root, so every getStyles at one styles revision shares it.
+  const listing = packageStyleListing(reads.package);
   if (count) return answered({ kind: 'number', value: listing.length });
   if (name === undefined && id === undefined) return answered({ kind: 'styles', styles: listing });
   // A name no style may carry finds nothing, and is never folded.
@@ -96,8 +96,8 @@ export interface AutomationStyleRead {
 }
 
 const STYLE_KINDS: ReadonlySet<string> = new Set(['paragraph', 'character', 'table', 'numbering']);
-/** The one frozen empty listing, for a package with no styles part and a host with no document. */
-export const NO_STYLES: readonly AutomationStyleRead[] = Object.freeze([]);
+/** The one frozen empty listing, for a package with no styles part. */
+const NO_STYLES: readonly AutomationStyleRead[] = Object.freeze([]);
 const listings = new WeakMap<OoxmlNode, readonly AutomationStyleRead[]>();
 interface ListingLookups {
   readonly byKey: ReadonlyMap<string, AutomationStyleRead>;
@@ -162,16 +162,11 @@ function styleListing(part: OoxmlPart): readonly AutomationStyleRead[] {
   const definitions = styleDefinitionsOf(part);
   const listed: (typeof definitions.entries)[number][] = [];
   const kept = new Map<string, { readonly name: string; readonly type: string }>();
-  const seen = new Set<string>();
   for (const entry of definitions.entries) {
-    const name = entry.name;
-    if (!STYLE_KINDS.has(entry.type) || name === null || !writableName(name)) continue;
-    const key = styleNameKey(name);
-    if (entry.type === 'paragraph' && definitions.paragraphIdByName.get(key) !== entry.styleId)
-      continue;
-    const kindKey = `${entry.type}\u0000${key}`;
-    if (seen.has(kindKey)) continue;
-    seen.add(kindKey);
+    if (!STYLE_KINDS.has(entry.type)) continue;
+    // The same rule a read and a write use: listed under the name that writes back to it.
+    const name = definitions.nameOf(entry.type, entry.styleId);
+    if (name === null) continue;
     listed.push(entry);
     kept.set(entry.styleId, { name, type: entry.type });
   }
@@ -220,12 +215,6 @@ const LINK_PARTNER: ReadonlyMap<string, string> = new Map([
   ['paragraph', 'character'],
   ['character', 'paragraph'],
 ]);
-
-/** The checks a `setStyle` name passes, applied to a name the file declares. */
-function writableName(name: string): boolean {
-  // The definitions already bound a name to MAX_STYLE_NAME characters.
-  return name.trim().length > 0 && isValidXmlText(name);
-}
 
 const ON: ReadonlySet<string> = new Set(['1', 'true', 'on']);
 

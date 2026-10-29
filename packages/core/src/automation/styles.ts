@@ -29,20 +29,25 @@ import {
   type DirectionSources,
 } from '../layout/paragraph-direction-inheritance.ts';
 import { namedChild, paragraphPropertiesNodeOf } from '../store/store/tree-op-nodes.ts';
-import { MAX_STYLE_NAME, styleDefinitionsOf, styleNameKey } from './style-definitions.ts';
+import { MAX_STYLE_NAME, styleDefinitionsOf } from './style-definitions.ts';
 
 /** What the document says its paragraph styles are. */
 export interface AutomationStyleIndex {
   /**
    * The name a paragraph style id shows in a gallery, or null for an id the part omits one for.
    *
-   * Also null when that name belongs to an EARLIER paragraph style: `idOf` and the style listing
-   * resolve the name to the earlier one, so answering it would hand back a name that applies a
-   * different style than the paragraph has.
+   * Also null when that name belongs to an EARLIER paragraph style, or is one a write refuses
+   * (blank or not valid XML text): a name read is always one `idOf` resolves back to this style.
    */
   nameOf(styleId: string): string | null;
   /** The paragraph style id a name belongs to, matched case-insensitively, or null. */
   idOf(name: string): string | null;
+  /**
+   * The CHARACTER style id a name belongs to, or null. Run styles such as the one a hyperlink
+   * takes are character styles; looking them up among paragraph styles would write a `w:rStyle`
+   * that names a paragraph style.
+   */
+  characterIdOf(name: string): string | null;
   /** The id the part marks as the default paragraph style, or null. */
   readonly defaultId: string | null;
   /** Whether the package has a styles part at all. */
@@ -76,6 +81,7 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
     return Object.freeze({
       nameOf: () => null,
       idOf: () => null,
+      characterIdOf: () => null,
       defaultId: null,
       present: false,
       inheritsRtl,
@@ -83,15 +89,11 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
   }
   // The same cached definitions the style listing reads, so the two agree on every name.
   const definitions = styleDefinitionsOf(part);
-  const byId = definitions.paragraphNameById;
-  const byName = definitions.paragraphIdByName;
   const defaultId = definitions.defaultParagraphId;
   return Object.freeze({
-    nameOf: (styleId: string) => {
-      const name = byId.get(styleId) ?? null;
-      return name !== null && byName.get(styleNameKey(name)) === styleId ? name : null;
-    },
-    idOf: (name: string) => byName.get(styleNameKey(name)) ?? null,
+    nameOf: (styleId: string) => definitions.nameOf('paragraph', styleId),
+    idOf: (name: string) => definitions.idOf('paragraph', name),
+    characterIdOf: (name: string) => definitions.idOf('character', name),
     defaultId,
     present: true,
     inheritsRtl,
