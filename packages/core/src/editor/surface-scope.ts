@@ -122,6 +122,25 @@ export function partOfNodeId(
   return session.currentPackage().parts.get(nodeId.slice(0, hash)) ?? null;
 }
 
+/**
+ * Whether two node ids live in the same story part. Two part-named ids compare their names,
+ * a string scan that is cheap enough for every pointer move. A logical id from a session
+ * names no part, so it is looked up; an id no part holds is in no story, and matches nothing.
+ */
+export function sameStoryPart(
+  session: Pick<TreeDocxSessionView, 'currentPackage' | 'part' | 'storyParts'>,
+  left: string,
+  right: string
+): boolean {
+  const leftHash = left.indexOf('#');
+  const rightHash = right.indexOf('#');
+  if (leftHash > 0 && rightHash > 0) {
+    return leftHash === rightHash && left.startsWith(right.slice(0, rightHash + 1));
+  }
+  const leftPart = partOfNodeId(session, left);
+  return leftPart !== null && leftPart.name === partOfNodeId(session, right)?.name;
+}
+
 export function storyScopeOfNodeId(
   session: StoryScopeLookup,
   nodeId: string | undefined,

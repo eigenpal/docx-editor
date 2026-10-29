@@ -42,6 +42,8 @@ interface ReferenceCase {
   splitStart?: boolean;
   /** With `splitStart`: a nested table holds that 40pt line. */
   nested?: boolean;
+  /** With `splitStart`: a 12pt line opens the row on page 1, so the row continues on page 2. */
+  late?: boolean;
 }
 const nestedTable = (content: string) =>
   `<w:tbl><w:tblPr><w:tblW w:w="3000" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:tc>${content}</w:tc></w:tr></w:tbl>`;
@@ -78,7 +80,7 @@ function documentBody(options: ReferenceCase) {
   const rows = (options.pageEdge ? ['First', 'Middle', 'Terminal'] : ['First', 'Terminal'])
     .map((text, index) =>
       options.splitStart && index === 1
-        ? `<w:tr><w:tc>${(options.nested ? nestedTable : (xml: string) => xml)(paragraph(`${text}1`).replace('w:line="240"', 'w:line="800"'))}${paragraph(`${text}2`)}</w:tc></w:tr>`
+        ? `<w:tr><w:tc>${options.late ? paragraph(`${text}0`) : ''}${(options.nested ? nestedTable : (xml: string) => xml)(paragraph(`${text}1`).replace('w:line="240"', 'w:line="800"'))}${paragraph(`${text}2`)}</w:tc></w:tr>`
         : options.tallRow && index === 1
           ? `<w:tr><w:trPr><w:cantSplit/></w:trPr><w:tc><w:tcPr><w:vAlign w:val="${options.align}"/></w:tcPr>${[1, 2, 3, 4, 5, 6].map((line) => (options.footnote && line === 2 ? citing : paragraph)(`${text}${line}`)).join('')}</w:tc></w:tr>`
           : `<w:tr><w:trPr>${index === 0 && !options.pageEdge ? '<w:tblHeader/>' : ''}<w:trHeight w:val="${index === 1 && options.headerYields ? 620 : index === 1 && options.overflows ? 800 : 397}" w:hRule="exact"/></w:trPr><w:tc><w:tcPr><w:vAlign w:val="${options.align}"/></w:tcPr>${paragraph(text)}</w:tc></w:tr>`
@@ -149,6 +151,11 @@ function geometry(editor: Editor, options: ReferenceCase) {
   }
   if (options.splitStart) {
     // Page 2: the repeat stays above the row, which keeps both lines and ends past the band.
+    // A late row starts on page 1 and continues there.
+    if (options.late) {
+      const head = tables[0]!.at(-1)!;
+      expect(head.kind === 'table' && head.rows.at(-1)!.hasContinuation).toBe(true);
+    }
     expect(tables[1]).toEqual([table]);
     const [repeat, last] = table.rows;
     expect(repeat!.isHeaderRepeat).toBe(true);
@@ -223,8 +230,10 @@ for (const options of [
   { align: 'center', width: 1.5, tightPage: true, tallRow: true, footnote: true },
   { align: 'center', width: 1.5, tightPage: true, splitStart: true },
   { align: 'center', width: 1.5, tightPage: true, splitStart: true, nested: true },
+  { align: 'center', width: 1.5, tightPage: true, splitStart: true, late: true },
+  { align: 'center', width: 1.5, tightPage: true, splitStart: true, nested: true, late: true },
 ] satisfies ReferenceCase[])
-  test(`the ${options.align} terminal rule${options.headerYields ? ' that omits a repeated header' : options.pageEdge ? ' at a page edge' : options.overflows ? ' below a kept repeat' : options.splitStart ? ` below a repeat kept over a splittable row${options.nested ? ' that opens with a nested table' : ''}` : options.tallRow ? ` of a whole tall row${options.footnote ? ' with a footnote' : ''}` : ''} converges through edits and cold reopen`, async () => {
+  test(`the ${options.align} terminal rule${options.headerYields ? ' that omits a repeated header' : options.pageEdge ? ' at a page edge' : options.overflows ? ' below a kept repeat' : options.splitStart ? ` below a repeat kept over a ${options.late ? 'continued' : 'splittable'} row${options.nested ? ` ${options.late ? 'whose next content is' : 'that opens with'} a nested table` : ''}` : options.tallRow ? ` of a whole tall row${options.footnote ? ' with a footnote' : ''}` : ''} converges through edits and cold reopen`, async () => {
     const source = documentBody(options);
     const peers = await harness.pair(
       options.headerYields

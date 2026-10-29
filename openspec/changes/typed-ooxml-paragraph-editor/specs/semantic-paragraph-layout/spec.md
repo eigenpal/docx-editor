@@ -946,6 +946,15 @@ Semantic layout SHALL place a supported terminal exact row's simple bottom rule 
 - **AND** the content after the row starts on the next page
 - **AND** in compatibility mode 15 and later the repeat is omitted, and the row starts the page with every cell
 
+#### Scenario: A repeated header stays above a continued row whose next content does not fit
+
+- **WHEN** compatibility mode is 14 or earlier, or absent
+- **AND** a row that can split continues from the previous page and has no vertical merge
+- **AND** the next line of one of its cells, or the first row of the next nested table in a cell, does not fit below the repeated header rows
+- **THEN** the header rows repeat, and the rest of the row stays below them on that page and runs past the bottom margin
+- **AND** the content after the row starts on the next page
+- **AND** in compatibility mode 15 and later the repeat is omitted, and the rest of the row starts the page
+
 #### Scenario: A tall row splits before mode 15 outside the text-only case
 
 - **WHEN** compatibility mode is 14 or earlier, or absent

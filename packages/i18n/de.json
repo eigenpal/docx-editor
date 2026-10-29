@@ -984,7 +984,7 @@
     "tableGridUnplaceable": "Diese Tabelle enthält eine Zelle, die nicht in ihr Spaltenraster passt",
     "drawingLocked": "Dieses Bild ist gesperrt",
     "contentLocked": "Dieser Inhalt ist gesperrt",
-    "lockedParagraphFormat": "Dieser Inhalt ist gesperrt; nur die Ausrichtung kann geändert werden",
+    "lockedParagraphFormat": "Dieser Inhalt ist gesperrt; nur Ausrichtung, Einzüge, Abstände sowie Zeilen- und Seitenumbrüche können geändert werden",
     "boundParagraphFormat": "Dieser Inhalt ist an Daten gebunden und kann nicht geändert werden",
     "editorNotReady": "Der Editor ist nicht bereit",
     "imageSuggesting": "Bildänderungen sind im Vorschlagsmodus nicht verfügbar",

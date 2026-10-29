@@ -3,11 +3,23 @@ import { LINE_BREAK_CHAR } from './line-break-text.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import type { PlannedOperation } from './plan.ts';
+import { revisionDateNow } from './revision-date.ts';
 import { resolveSpanRef } from './spans.ts';
-import { isTableNested } from '../store/store/tree-op-section-address.ts';
+import {
+  governingSectionAt,
+  isTableNested,
+  sectionBreakTypeOf,
+} from '../store/store/tree-op-section-address.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 
-/** Page/section breaks are structural mutations, with one atomic store transaction. */
+/**
+ * Page/section breaks are structural mutations, with one atomic store transaction.
+ *
+ * With a tracking author, each is a tracked insertion, in the shape suggesting mode writes:
+ * a page break is a `w:br w:type="page"` run inside `w:ins`, and a section break splits the
+ * paragraph with an inserted mark (`w:rPr/w:ins`) that carries the new `w:sectPr`. Rejecting
+ * the section break joins the paragraphs again and drops that `w:sectPr`.
+ */
 export function planBreakOperation(
   operation: Extract<AutomationOperation, { op: 'insertBreak' }>,
   handles: AutomationHandleTable,
@@ -16,16 +28,30 @@ export function planBreakOperation(
     story: AutomationStoryReads,
     paragraphId: string,
     createdCount: number
-  ) => PlannedOperation | null
+  ) => PlannedOperation | null,
+  trackingAuthor?: string
 ): PlannedOperation {
   const refuse = (message: string): PlannedOperation => ({
     ok: false,
     error: { code: 'unsupported-content', message },
   });
+  // The public code for a write that has no tracked form: nothing is applied.
+  const refuseTracked = (message: string): PlannedOperation => ({
+    ok: false,
+    error: {
+      code: 'unsupported-capability',
+      message,
+      detail: 'change-tracking-operation-unsupported',
+    },
+  });
   if (operation.breakType !== 'Page' && operation.breakType !== 'SectionNext')
     return refuse('only Line, Page, and SectionNext breaks are supported');
   if (!['Before', 'After', 'Start', 'End', 'Replace'].includes(operation.location))
     return refuse('invalid break insertion location');
+  if (trackingAuthor !== undefined && operation.location === 'Replace')
+    return refuseTracked(
+      'a tracked page or section break cannot replace text; delete the text, then insert the break'
+    );
   const resolved = resolveSpanRef(operation.span, handles, reads);
   if (!resolved.ok) return { ok: false, error: { code: resolved.code, message: resolved.detail } };
   const range = resolved.value;
@@ -39,8 +65,23 @@ export function planBreakOperation(
   const section = operation.breakType === 'SectionNext';
   if (section && (story.story.kind !== 'body' || isTableNested(story.part, point.paragraphId)))
     return refuse('section breaks require a body paragraph outside a table');
+  // The break type belongs to the section that STARTS at the new mark, which is the one that
+  // governs the paragraph now. A section that does not start on a new page would have to change
+  // type, and a section type change has no tracked form here.
+  if (
+    section &&
+    trackingAuthor !== undefined &&
+    sectionBreakTypeOf(governingSectionAt(story.part, point.paragraphId).section) !== 'nextPage'
+  )
+    return refuseTracked(
+      'a tracked next-page section break cannot change how the following section starts'
+    );
   const conflict = admit(story, point.paragraphId, section ? 1 : 0);
   if (conflict) return conflict;
+  const revision =
+    trackingAuthor === undefined
+      ? undefined
+      : { author: trackingAuthor.trim(), date: revisionDateNow() };
   const ops: TreeDocOp[] = [];
   if (operation.location === 'Replace' && range.end.offset > range.start.offset)
     ops.push({
@@ -51,10 +92,23 @@ export function planBreakOperation(
     });
   if (section)
     ops.push(
-      { op: 'splitParagraph', paragraphId: point.paragraphId, offset: point.offset },
+      revision
+        ? {
+            op: 'splitParagraphMany',
+            paragraphId: point.paragraphId,
+            offsets: [point.offset],
+            revision,
+          }
+        : { op: 'splitParagraph', paragraphId: point.paragraphId, offset: point.offset },
       { op: 'setSectionMark', paragraphId: point.paragraphId, breakType: 'nextPage' }
     );
-  else ops.push({ op: 'insertPageBreak', paragraphId: point.paragraphId, offset: point.offset });
+  else
+    ops.push({
+      op: 'insertPageBreak',
+      paragraphId: point.paragraphId,
+      offset: point.offset,
+      ...(revision ? { revision } : {}),
+    });
   return {
     ok: true,
     kind: 'command',

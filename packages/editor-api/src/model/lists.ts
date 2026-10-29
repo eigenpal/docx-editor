@@ -151,7 +151,8 @@ export class List extends ModelObject implements PromisedItem {
       fail({ code: 'InvalidArgument', target });
     }
     const created = Paragraph.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () => ({
         op: 'insertListParagraph',

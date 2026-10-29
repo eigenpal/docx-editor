@@ -64,7 +64,7 @@ Use the returned body's paragraph, search, bookmark, field, and review accessors
 
 A `Line` break is a manual line break inside the paragraph. It works in every story, including headers, footers, notes, table cells, and text boxes. It can share a sync with other edits, including text edits in the same paragraph. With `TrackMineOnly`, it becomes a tracked insertion.
 
-A next-page section break requires a main-body paragraph outside a table. `Page` and `SectionNext` refuse while change tracking is on.
+A next-page section break requires a main-body paragraph outside a table. With `TrackMineOnly`, `Page` and `SectionNext` become tracked insertions. A page break is an inserted run in its paragraph. A section break is an inserted paragraph mark that carries the new section. **Reject** removes the break; for a section break, it also joins the paragraphs and removes the section. If the section that the break starts does not start on a new page, a tracked `SectionNext` fails with `NotSupported`, because the break would change the section type.
 
 Queue a page or section break alone in its write transaction:
 

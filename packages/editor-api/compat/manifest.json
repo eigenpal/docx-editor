@@ -462,7 +462,7 @@
     },
     {
       "uid": "Word.Range#insertBreak",
-      "note": "Supports Line, Page, and SectionNext. Line supports tracked insertion and text edits in the same sync. Single-line controls refuse Line. Page and SectionNext require a separate sync and refuse tracking. Other break types refuse. Text reads report manual line breaks as U+000B and column breaks as U+000E; text writes refuse U+000E."
+      "note": "Supports Line, Page, and SectionNext. Line supports tracked insertion and text edits in the same sync. Single-line controls refuse Line. Page and SectionNext require a separate sync. A page break, tracked or not, stays in its paragraph, so the text after it stays in the same paragraph and list item; in a table cell it is written in the cell. With TrackMineOnly, all three are tracked insertions, and a tracked SectionNext refuses where the section it starts does not start on a new page. Other break types refuse. Text reads report manual line breaks as U+000B and column breaks as U+000E; text writes refuse U+000E."
     },
     {
       "uid": "Word.Document#removeDocumentInformation",
@@ -530,7 +530,11 @@
     },
     {
       "uid": "Word.ParagraphCollection#getFirst / #getLast, Word.RangeCollection#getFirst, Word.CommentCollection#getFirst, Word.ListCollection#getFirst and every other item accessor",
-      "note": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+      "note": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. A load on an object that a write in the same sync returns, such as the range insertText returns, is answered after the writes commit, on the revision they produce; if that read fails, the writes stay applied and sync rejects with the read's error. A navigation read from such an object (getFirst, getRange, search, getCell), and any write to it, require a completed sync first; the runtime never commits a producer just to resolve a dependent command."
+    },
+    {
+      "uid": "OfficeExtension.ClientRequestContext#sync",
+      "note": "In a sync that writes, loads on objects that already exist answer the document before the writes. Loads on an object that a write in the same sync returns, and on its font and paragraphs, answer after all the writes of that sync. Office.js answers every load in queue order, so a load queued between two writes sees only the first write; here a load on a created object sees both. A navigation read from a created object, such as getFirst, getRange, search, or getCell, refuses with InvalidObjectPath before anything commits. A load that fails after the writes commit carries debugInfo.innerError.code edit.read-after-commit, because the writes are applied."
     },
     {
       "uid": "OfficeExtension.LoadOption#select",
@@ -682,7 +686,7 @@
     },
     {
       "uid": "Word.Paragraph#split",
-      "note": "Changes the document: it splits the paragraph into one paragraph per piece at every delimiter and returns one range per resulting paragraph, including the piece that keeps the paragraph's identity. Office.js returns ranges and leaves the paragraph whole. Each delimiter stays at the end of its piece unless trimDelimiters is true; trimSpacing trims the returned ranges. The paragraph must be addressable (synced), and the returned pieces load only in a later sync. With TrackMineOnly, it refuses with NotSupported and edit.tracked-operation-unsupported. To read pieces without changing the document, use getTextRanges; to split, or to propose a split as a tracked change, use insertText with a line feed."
+      "note": "Changes the document: it splits the paragraph into one paragraph per piece at every delimiter and returns one range per resulting paragraph, including the piece that keeps the paragraph's identity. Office.js returns ranges and leaves the paragraph whole. Each delimiter stays at the end of its piece unless trimDelimiters is true; trimSpacing trims the returned ranges. The paragraph must be addressable (synced), and the returned pieces load only in a later sync. With TrackMineOnly, each new paragraph mark is a tracked insertion (w:rPr/w:ins on the mark); reject joins the pieces again. A tracked split keeps its delimiters: with trimDelimiters true and a delimiter found, it refuses with NotSupported and edit.tracked-operation-unsupported, and nothing changes. To read pieces without changing the document, use getTextRanges."
     },
     {
       "uid": "Word.Range#insertOoxml",

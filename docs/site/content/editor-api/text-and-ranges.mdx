@@ -67,7 +67,7 @@ The location types describe the supported call shapes:
 
 The exported aliases are `BodyInsertTextLocation`, `BodyInsertParagraphLocation`, `ParagraphInsertTextLocation`, `RangeInsertTextLocation`, and `BesideLocation`. `InsertLocation` provides matching enum values, such as `InsertLocation.replace`. A method only accepts the locations shown in its signature.
 
-`insertText()` returns the inserted `Range`. `insertParagraph()` returns the created `Paragraph`. Sync before configuring or reading the returned object. `insertParagraph()` and `ContentControl.insertText()` refuse paragraph separators such as `\r` and `\n`.
+`insertText()` returns the inserted `Range`. `insertParagraph()` returns the created `Paragraph`. You can load the returned object in the same sync; the load reports the inserted content. Sync before configuring the returned object. `insertParagraph()` and `ContentControl.insertText()` refuse paragraph separators such as `\r` and `\n`.
 
 To keep lines in one paragraph, write a manual line break as `\v` (U+000B). `insertText()` and `insertParagraph()` write each `\v` as a line break. Text reads report that break as `\v`. A single-line content control refuses a line break. You can also insert one break with `Range.insertBreak('Line', location)`.
 
@@ -129,7 +129,7 @@ An insertion lands exactly at the range end that you name, so you choose the spa
 - `search()` matches a trailing space. Search for `'see Section '`, with its space, and insert a field or an equation `'After'` that range. The new content then follows the space.
 - If the words have no space after them, insert `' '` first. In a later sync, insert the field or equation after the range that the write returns.
 - With `TrackMineOnly`, content that you insert right after your own pending text joins that insertion. For example, a field after your own pending space becomes part of that proposal. One **Reject** then removes both. Text after a field that ends its paragraph starts a new insertion after the field.
-- A range that a write returns has no address until that write syncs. Sync before you insert next to it. Otherwise the call fails with `InvalidObjectPath`.
+- A range that a write returns has no address until that write syncs. You can load it in the same sync. Sync before you insert next to it. Otherwise the call fails with `InvalidObjectPath`.
 
 This example proposes a field after an existing space:
 

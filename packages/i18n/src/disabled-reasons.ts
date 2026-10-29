@@ -14,7 +14,8 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'this content is locked': 'disabledReason.contentLocked',
   // Keyed on `LOCKED_PARAGRAPH_FORMAT_REASON` and `BOUND_PARAGRAPH_FORMAT_REASON` in the
   // engine's `paragraph-format-lock-refusal.ts`; the sentences must stay the same.
-  'this content is locked; only alignment can change': 'disabledReason.lockedParagraphFormat',
+  'this content is locked; only alignment, indents, spacing, and line and page breaks can change':
+    'disabledReason.lockedParagraphFormat',
   'this content is bound to data and cannot change': 'disabledReason.boundParagraphFormat',
   'not wired to an editor command': 'disabledReason.notWired',
   'this document was opened for viewing': 'disabledReason.viewing',

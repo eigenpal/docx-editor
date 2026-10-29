@@ -525,6 +525,7 @@ export class Range extends ModelObject implements PromisedItem {
    * `editor.exec({ type: 'replaceMatch', match, text })` on a match from `editor.findMatches`.
    * In suggesting mode it records a tracked replacement as the editor's author.
    *
+   * You can load the returned range in the same sync. Editing it needs a sync first.
    * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement | Replace as a tracked change}
    */
   insertText(
@@ -541,7 +542,8 @@ export class Range extends ModelObject implements PromisedItem {
     const where = rangeTextLocation(insertLocation, target);
     this.requireUsablePath();
     const created = Range.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () => {
         const span = this.#span();
@@ -604,7 +606,8 @@ export class Range extends ModelObject implements PromisedItem {
       fail({ code: 'NotSupported', target, diagnostic: 'edit.comment-author-required' });
     }
     const created = Comment.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () => ({ op: 'insertComment', span: this.#span(), text: commentText, author }),
       (value) => {
@@ -649,7 +652,8 @@ export class Range extends ModelObject implements PromisedItem {
     if (type !== 'RichText' && type !== 'PlainText' && type !== 'DatePicker')
       fail({ code: 'NotSupported', target });
     const created = ContentControl.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () => ({
         op: 'insertContentControl',
@@ -737,7 +741,8 @@ export class Range extends ModelObject implements PromisedItem {
     const location = rangeTextLocation(insertLocation, target);
     this.requireUsablePath();
     const field = Field.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      field,
       target,
       () => ({
         op: 'insertField',
@@ -768,7 +773,8 @@ export class Range extends ModelObject implements PromisedItem {
     const location = rangeTextLocation(insertLocation, target);
     this.requireUsablePath();
     const created = Range.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () => ({ op: 'insertOoxml', span: this.#span(), location, ooxml }),
       (value) => created.hydrateAddress({ kind: 'span', span: hydratedSpan(value, target) })
@@ -804,7 +810,8 @@ export class Range extends ModelObject implements PromisedItem {
     const location = rangeTextLocation(insertLocation, target);
     this.requireUsablePath();
     const picture = InlinePicture.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      picture,
       target,
       () => ({
         op: 'insertInlinePicture',
@@ -820,9 +827,9 @@ export class Range extends ModelObject implements PromisedItem {
   }
 
   /**
-   * Line, page, and next-page section breaks are supported; other break types refuse at sync.
-   * TrackMineOnly records a line break as a tracked insertion. Page and section breaks refuse
-   * while tracking.
+   * Line, page, and next-page section breaks are supported; other types refuse at sync. With
+   * `TrackMineOnly`, each is a tracked insertion that reject removes. A tracked `SectionNext`
+   * refuses with `NotSupported` where the next section does not start on a new page.
    */
   insertBreak(
     breakType:
@@ -839,11 +846,10 @@ export class Range extends ModelObject implements PromisedItem {
     const target = `${this.path.label}.insertBreak`;
     if (insertLocation !== 'Before' && insertLocation !== 'After')
       fail({ code: 'InvalidArgument', target });
-    const location = insertLocation;
     this.requireUsablePath();
     this.commandAnswering(
       target,
-      () => ({ op: 'insertBreak', span: this.#span(), breakType, location }),
+      () => ({ op: 'insertBreak', span: this.#span(), breakType, location: insertLocation }),
       (value) => hydratedApplied(value, target)
     );
   }
@@ -876,7 +882,8 @@ export class Range extends ModelObject implements PromisedItem {
       fail({ code: 'InvalidArgument', target });
     const copied = values?.map((row) => [...row]);
     const table = Table.promised(this.context, target);
-    this.commandAnswering(
+    this.commandCreating(
+      table,
       target,
       () => ({
         op: 'insertTable',
@@ -894,7 +901,10 @@ export class Range extends ModelObject implements PromisedItem {
     return table;
   }
 
-  /** Add a paragraph before or after the one this range starts or ends in. */
+  /**
+   * Add a paragraph before or after the one this range starts or ends in.
+   * You can load the returned paragraph in the same sync. Editing it needs a sync first.
+   */
   insertParagraph(
     paragraphText: string,
     insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After'
@@ -906,7 +916,8 @@ export class Range extends ModelObject implements PromisedItem {
     const span = this.#span();
     const anchor = where === 'Before' ? span.start.paragraph : span.end.paragraph;
     const created = Paragraph.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () => ({
         op: 'insertParagraph',

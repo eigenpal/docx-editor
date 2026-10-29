@@ -172,6 +172,8 @@ export function bodyParagraphSectionIndexForSession(
   part: OoxmlPart,
   paragraphId: string
 ): number | null {
-  if (!paragraphId.startsWith(`${part.name}#`)) return null;
+  // A part-named id from another story is never a body paragraph. A logical id from a
+  // collaboration session names no part, so the body's own index answers for it.
+  if (paragraphId.includes('#') && !paragraphId.startsWith(`${part.name}#`)) return null;
   return bodySectionMapForSession(session, part).get(paragraphId) ?? null;
 }

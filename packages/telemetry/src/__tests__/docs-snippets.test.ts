@@ -56,6 +56,9 @@ const READER: Readonly<Record<string, string>> = {
   awareness: `import('@docx-editor.dev/telemetry/server').AwarenessLike`,
   error: 'unknown',
   loadRoom: `(doc: import('yjs').Doc) => Promise<void>`,
+  runtime: `import('@docx-editor.dev/editor-api').DocxEditorServerRuntime`,
+  proposals: 'readonly { readonly find: string; readonly replace: string }[]',
+  stillApplies: '(proposal: { readonly find: string; readonly replace: string }) => boolean',
 };
 
 /** Names an earlier block on the same page may set up, as one file would. */

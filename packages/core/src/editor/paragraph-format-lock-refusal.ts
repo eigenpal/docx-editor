@@ -14,15 +14,22 @@ import {
   lockForbidsEdit,
 } from '../store/package/content-control-nodes.ts';
 import { directParagraphProperties, propertyContainer } from '../store/store/direct-properties.ts';
-import { isBoundAt } from '../store/store/tree-op-nodes.ts';
+import { isBoundContentControl } from '../store/store/tree-op-nodes.ts';
 import { validateTreeOp } from '../store/store/tree-op-validate.ts';
 import type { TreeDocOp } from '../store/store/tree-op-types.ts';
 import { paragraphsInCells } from '../layout/semantic-cell-selection.ts';
+import { fragmentParagraphs } from '../layout/line-segments.ts';
+import { paragraphFragmentsOnPage } from '../layout/story-fragments.ts';
+import type { SemanticLayout } from '@docx-editor.dev/core/layout';
 import { LOCKED_FORMAT_REASON } from './content-lock-format-refusal.ts';
 import { partOfNodeId, storyScopeOfNodeId } from './surface-scope.ts';
 
-/** A content lock lets only alignment through, so every other paragraph format names that. */
-export const LOCKED_PARAGRAPH_FORMAT_REASON = 'this content is locked; only alignment can change';
+/**
+ * A content lock lets alignment, indents, spacing, and the line and page break settings
+ * change. Paragraph style, lists, direction, tab stops, and contextual spacing stay locked.
+ */
+export const LOCKED_PARAGRAPH_FORMAT_REASON =
+  'this content is locked; only alignment, indents, spacing, and line and page breaks can change';
 
 /** A data binding mirrors another part, so the engine cannot change the paragraph either. */
 export const BOUND_PARAGRAPH_FORMAT_REASON = 'this content is bound to data and cannot change';
@@ -57,12 +64,42 @@ const PARAGRAPH_FORMAT_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set<
   'setParagraphFormat',
 ]);
 
-/** Whether the command changes paragraph alignment and nothing else. */
-function alignsOnly(command: ParagraphFormatCommand): boolean {
-  if (command.type === 'setAlignment') return true;
-  if (command.type !== 'setParagraphFormat') return false;
-  const { type: _type, alignment, ...others } = command;
-  return alignment !== undefined && Object.values(others).every((value) => value === undefined);
+/**
+ * What a command writes, as far as a content lock is concerned.
+ *
+ * - `alignment`: `w:jc` alone.
+ * - `placement`: properties the lock lets change (alignment, indents, spacing, keeps).
+ * - `locked`: a property the lock keeps (a style, a list, direction, tab stops).
+ * - `indentStep`: Increase or Decrease Indent, which moves a list item's level and every other
+ *   paragraph's indent, so it is decided per paragraph.
+ */
+type LockReach = 'alignment' | 'placement' | 'locked' | 'indentStep';
+
+/** The `setParagraphFormat` fields that write a property a content lock keeps. */
+const LOCKED_FORMAT_FIELDS = ['direction', 'contextualSpacing', 'tabStops'] as const;
+
+function lockReachOf(command: ParagraphFormatCommand): LockReach {
+  switch (command.type) {
+    case 'setAlignment':
+      return 'alignment';
+    case 'setLineSpacing':
+    case 'setParagraphSpacing':
+    case 'setIndent':
+      return 'placement';
+    case 'adjustIndent':
+      return 'indentStep';
+    case 'setParagraphDirection':
+    case 'toggleList':
+    case 'setParagraphStyle':
+      return 'locked';
+    case 'setParagraphFormat': {
+      if (LOCKED_FORMAT_FIELDS.some((field) => command[field] !== undefined)) return 'locked';
+      const { type: _type, alignment, ...others } = command;
+      const alignsOnly =
+        alignment !== undefined && Object.values(others).every((value) => value === undefined);
+      return alignsOnly ? 'alignment' : 'placement';
+    }
+  }
 }
 
 /** The paragraphs a paragraph write reaches, with the same coverage the writer uses. */
@@ -85,24 +122,61 @@ function selectedParagraphIds(surface: PaginatedSurface): readonly string[] {
  * paragraph the store can protect is in this set, so the store is asked only about these.
  * Canonical roots are immutable per revision, so the root identity is a safe key.
  */
-const PROTECTED_PARAGRAPHS = new WeakMap<object, ReadonlySet<string>>();
+interface ProtectedParagraphs {
+  /** Inside a control that locks content or binds data. */
+  readonly guarded: ReadonlySet<string>;
+  /** Inside a control that binds data, which refuses every paragraph format. */
+  readonly bound: ReadonlySet<string>;
+}
 
-function protectedParagraphs(part: OoxmlPart): ReadonlySet<string> {
+const PROTECTED_PARAGRAPHS = new WeakMap<object, ProtectedParagraphs>();
+
+function protectedParagraphs(part: OoxmlPart): ProtectedParagraphs {
   const known = PROTECTED_PARAGRAPHS.get(part.root);
   if (known) return known;
-  const ids = new Set<string>();
+  const guarded = new Set<string>();
+  const bound = new Set<string>();
   for (const entry of contentControlsIn(part.root)) {
     const properties = contentControlPropertiesOf(entry.node);
-    if (!lockForbidsEdit(properties.lock) && properties.dataBinding === undefined) continue;
+    const binds = isBoundContentControl(entry.node);
+    if (!lockForbidsEdit(properties.lock) && properties.dataBinding === undefined && !binds) {
+      continue;
+    }
     const pending: OoxmlNode[] = [entry.node];
     while (pending.length > 0) {
       const node = pending.pop()!;
       if (node.kind === 'textValue') continue;
-      if (node.kind === 'paragraph') ids.add(node.id);
+      if (node.kind === 'paragraph') {
+        guarded.add(node.id);
+        if (binds) bound.add(node.id);
+      }
       for (const child of node.children) pending.push(child);
     }
   }
-  PROTECTED_PARAGRAPHS.set(part.root, ids);
+  const sets = { guarded, bound };
+  PROTECTED_PARAGRAPHS.set(part.root, sets);
+  return sets;
+}
+
+/**
+ * Per layout: the paragraphs that publish a list marker, which Increase Indent moves by level.
+ * The same fragments `markerHolding` reads, walked once instead of once per paragraph, so a
+ * select-all over a long locked block stays linear. Layouts are immutable, so identity is a key.
+ */
+const LIST_ITEMS = new WeakMap<SemanticLayout, ReadonlySet<string>>();
+
+function listItemParagraphs(layout: SemanticLayout): ReadonlySet<string> {
+  const known = LIST_ITEMS.get(layout);
+  if (known) return known;
+  const ids = new Set<string>();
+  for (const page of layout.pages) {
+    for (const fragment of paragraphFragmentsOnPage(page)) {
+      if (!fragment.marker) continue;
+      ids.add(fragment.paragraphId);
+      for (const id of fragmentParagraphs(fragment)) ids.add(id);
+    }
+  }
+  LIST_ITEMS.set(layout, ids);
   return ids;
 }
 
@@ -120,35 +194,46 @@ function hasPendingParagraphChange(part: OoxmlPart, paragraphId: string): boolea
   );
 }
 
+/** The direct properties with one flat property added, or removed when it is there. */
+function toggled(part: OoxmlPart, paragraphId: string, localName: string) {
+  const direct = directParagraphProperties(part, paragraphId);
+  const without = direct.filter((property) => property.localName !== localName);
+  return without.length === direct.length ? [...direct, { localName }] : without;
+}
+
 /**
- * The write the store is asked about. Alignment asks with the alignment it would write,
- * tracked as the surface would track it. Every other command asks with a change to a
- * property other than alignment, because that is the part of the write a lock refuses.
+ * The write the store is asked about, tracked as the surface would track it.
+ *
+ * Alignment asks with the alignment it would write. A placement write asks with an indent
+ * change, the representative of every property the lock lets change. A locked write asks with
+ * a contextual spacing change: every property outside that set gets the same answer from the
+ * lock, and this one is flat, so the probe needs no definition to point at.
  */
 function probeOp(
   part: OoxmlPart,
   paragraphId: string,
-  aligns: boolean,
+  reach: Exclude<LockReach, 'indentStep'>,
   author: string | undefined
 ): TreeDocOp {
-  const direct = directParagraphProperties(part, paragraphId);
-  if (aligns) {
+  const revision = author !== undefined ? { revision: { author } } : {};
+  if (reach === 'alignment') {
     return {
       op: 'setParagraphProperties',
       paragraphId,
       properties: [
-        ...direct.filter((property) => property.localName !== 'jc'),
+        ...directParagraphProperties(part, paragraphId).filter(
+          (property) => property.localName !== 'jc'
+        ),
         { localName: 'jc', attributes: { val: 'center' } },
       ],
-      ...(author !== undefined ? { revision: { author } } : {}),
+      ...revision,
     };
   }
-  const withoutKeep = direct.filter((property) => property.localName !== 'keepNext');
   return {
     op: 'setParagraphProperties',
     paragraphId,
-    properties:
-      withoutKeep.length === direct.length ? [...direct, { localName: 'keepNext' }] : withoutKeep,
+    properties: toggled(part, paragraphId, reach === 'placement' ? 'ind' : 'contextualSpacing'),
+    ...(reach === 'placement' ? revision : {}),
   };
 }
 
@@ -156,8 +241,10 @@ function probeOp(
  * The refusal a paragraph formatting command meets because the selection reaches a
  * paragraph that a content lock or a data binding protects, or null.
  *
- * Alignment passes a content lock, so it is refused only where the store refuses the exact
- * alignment write. Every other paragraph format is refused wherever the lock reaches.
+ * Alignment, indents, spacing, and the keep settings pass a content lock, so they are refused
+ * only where the store refuses the write: a data binding, or a pending tracked change the
+ * write would merge into that records a locked property. Styles, lists, direction, and tab
+ * stops are refused wherever the lock reaches.
  */
 export function paragraphFormatLockRefusal(
   command: EditorCommand,
@@ -165,7 +252,7 @@ export function paragraphFormatLockRefusal(
   policy: ContentLockPolicy | undefined
 ): Exclude<ExecResult, { ok: true }> | null {
   if (!PARAGRAPH_FORMAT_COMMANDS.has(command.type)) return null;
-  const aligns = alignsOnly(command as ParagraphFormatCommand);
+  const commandReach = lockReachOf(command as ParagraphFormatCommand);
   const writer = surface.author()?.trim();
   const author =
     surface.editingMode() === 'suggest' &&
@@ -176,20 +263,28 @@ export function paragraphFormatLockRefusal(
   // A selection stays in one story, and the writer writes every paragraph into that part.
   const head = surface.state().selection.head.paragraphId;
   const part = partOfNodeId(surface.session, head) ?? surface.session.part();
-  const guarded = protectedParagraphs(part);
+  const { guarded, bound } = protectedParagraphs(part);
   if (guarded.size === 0) return null;
+  const listItems = commandReach === 'indentStep' ? listItemParagraphs(surface.layout()) : null;
   for (const paragraphId of selectedParagraphIds(surface)) {
     if (!guarded.has(paragraphId)) continue;
-    // A lock lets alignment through, so only a binding or a pending tracked change that the
-    // write would merge into can refuse it: skip the store for every other paragraph.
+    // Increase Indent moves a list item's level, which the lock keeps, and indents the rest.
+    const reach: Exclude<LockReach, 'indentStep'> =
+      commandReach !== 'indentStep'
+        ? commandReach
+        : listItems?.has(paragraphId)
+          ? 'locked'
+          : 'placement';
+    // A lock lets these through, so only a binding or a pending tracked change that the
+    // write would merge into can refuse them: skip the store for every other paragraph.
     if (
-      aligns &&
-      !isBoundAt(part, paragraphId) &&
+      reach !== 'locked' &&
+      !bound.has(paragraphId) &&
       (author === undefined || !hasPendingParagraphChange(part, paragraphId))
     ) {
       continue;
     }
-    const refused = validateTreeOp(part, probeOp(part, paragraphId, aligns, author), {
+    const refused = validateTreeOp(part, probeOp(part, paragraphId, reach, author), {
       contentLockPolicy: policy,
     });
     if (refused === 'bound') {
@@ -199,7 +294,7 @@ export function paragraphFormatLockRefusal(
       return {
         ok: false,
         code: 'locked',
-        reason: aligns ? LOCKED_FORMAT_REASON : LOCKED_PARAGRAPH_FORMAT_REASON,
+        reason: reach === 'locked' ? LOCKED_PARAGRAPH_FORMAT_REASON : LOCKED_FORMAT_REASON,
       };
     }
   }

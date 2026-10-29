@@ -28,7 +28,8 @@ import { hostTimers } from './host-realm.ts';
 import type { SurfaceHostListeners } from './surface-host-listeners.ts';
 import { createTableDrag } from './surface-table-drag.ts';
 import { tableChromeIconPaths } from './table-chrome.ts';
-import { partNameOf, partOfTableIn } from './surface-table-story.ts';
+import { partOfTableIn } from './surface-table-story.ts';
+import { sameStoryPart } from './surface-scope.ts';
 import type { TableCommandPlan } from './table-command-plan.ts';
 
 const HOVER_HIDE_MS = 120;
@@ -189,7 +190,7 @@ export function createSurfaceTableSelectHandle(
     const target =
       editingMode === 'view'
         ? null
-        : hovered && partNameOf(hovered.tableId) === partNameOf(caretParagraphId)
+        : hovered && sameStoryPart(host.session(), hovered.tableId, caretParagraphId)
           ? hovered
           : caretTarget(layout, selection);
     const found = target ? outermostTableOnPage(layout, target.tableId, target.pageIndex) : null;

@@ -172,7 +172,7 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §17.4.49 tblHeader'
   ),
   repeatKeepsWholeRow: legacy(
-    'Repeated header rows stay above a row that cannot split and does not fit below them, or a row whose first line, or the first row of a nested table that opens a cell, does not fit below them; the row stays whole and runs past the bottom margin',
+    'Repeated header rows stay above a row that cannot split and does not fit below them, or a row whose first line, or the first row of a nested table that opens a cell, does not fit below them, also when the row continues from the previous page; the row stays whole and runs past the bottom margin',
     'ECMA-376 Part 1 §17.4.49 tblHeader'
   ),
   repeatedHeaderYieldsToTerminalRule: modern(
