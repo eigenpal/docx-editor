@@ -87,3 +87,39 @@ test('tracked placement writes in a lock record one paragraph property change', 
     runtime.dispose();
   }
 });
+
+const BOUND = docx(
+  '<w:sdt><w:sdtPr><w:tag w:val="t"/>' +
+    '<w:dataBinding w:storeItemID="{1}" w:xpath="/root/value"/><w:text/></w:sdtPr><w:sdtContent>' +
+    '<w:p><w:pPr><w:ind w:left="240"/></w:pPr><w:r><w:t>LOCKED</w:t></w:r></w:p>' +
+    '</w:sdtContent></w:sdt><w:p><w:r><w:t>free</w:t></w:r></w:p>'
+);
+
+test('paragraph writes apply inside a data-bound control and keep the bound text', async () => {
+  const runtime = await DocxEditor.createServer(BOUND, { author: 'Agent' });
+  try {
+    await runtime.run(async (c) => {
+      const paragraph = await lockedParagraph(c);
+      paragraph.leftIndent = 36;
+      paragraph.alignment = 'Centered';
+      await c.sync();
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      paragraph.spaceBefore = 12;
+      await c.sync();
+    });
+    const saved = await lockedProperties(runtime);
+    expect(saved).toContain('w:left="720"');
+    expect(saved).toContain('<w:jc w:val="center"/>');
+    expect(saved.match(/<w:pPrChange /g)?.length).toBe(1);
+    const xml = strFromU8(unzipSync(await runtime.save())['word/document.xml']!);
+    expect(xml).toContain('w:dataBinding');
+    expect(xml).toContain('<w:t>LOCKED</w:t>');
+    // The bound text itself stays protected.
+    await runtime.run(async (c) => {
+      (await lockedParagraph(c)).insertText('X', 'End');
+      await expect(c.sync()).rejects.toThrow();
+    });
+  } finally {
+    runtime.dispose();
+  }
+});
