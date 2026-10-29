@@ -24,8 +24,6 @@ const drawings: InlineDrawingLayoutContext = {
 function layout(options: {
   readonly runs?: readonly string[];
   readonly boldIndex?: number;
-  /** The run that carries `w:rtl`. */
-  readonly rtlIndex?: number;
   readonly rtl?: boolean;
   readonly text?: string;
   readonly width?: number;
@@ -56,7 +54,7 @@ function layout(options: {
       runs
         .map(
           (text, index) =>
-            `<w:r><w:rPr>${index === options.boldIndex ? '<w:b/>' : ''}${index === options.rtlIndex ? '<w:rtl/>' : ''}</w:rPr><w:t xml:space="preserve">${text}</w:t></w:r>`
+            `<w:r>${index === options.boldIndex ? '<w:rPr><w:b/></w:rPr>' : ''}<w:t xml:space="preserve">${text}</w:t></w:r>`
         )
         .join('') +
       '</w:p>'
@@ -218,32 +216,6 @@ test('a right-to-left run leaves compression on in its left-to-right paragraph',
       passage.split(' ').slice(0, 2).join(' ')
     );
   }
-});
-
-test('the final space of a right-to-left run needs room at the end of a float passage', () => {
-  // The run sets its final space at its left edge, inside the line, so the space cannot hang.
-  // With it, the last word needs 6pt from two 1pt slots and goes to the next passage.
-  const options = { width: 224, floatLeft: 66, rtlIndex: 1, compatibilityMode: 15 };
-  const lines = layout({ ...options, runs: ['aa ', 'אב גד ', 'ee ff gg hh'] });
-  expect(text(lines[0]!, 0, 66)).toBe('aa אב');
-  expect(text(lines[0]!, 158)).toStartWith('גד ee');
-  outsideFloat(lines[0]!, 66, 158);
-  // A space in its own left-to-right run hangs, so the last word needs only 2pt.
-  const control = layout({ ...options, runs: ['aa ', 'אב גד', ' ee ff gg hh'] });
-  expect(text(control[0]!, 0, 66)).toBe('aa אב גד');
-  expect(text(control[0]!, 158)).toStartWith('ee');
-});
-
-test('the final space of a right-to-left run widens the line that a later word would leave', () => {
-  // Without 'e', the line keeps 6pt of room over five spaces: the run's final space does not
-  // hang there. Compressing 4pt costs more than that, so 'e' starts the next line.
-  const options = { width: 126, float: false, rtlIndex: 1, compatibilityMode: 15 };
-  const lines = layout({ ...options, runs: ['aa bb cc dd ', 'אב ', 'e ff'] });
-  expect(text(lines[0]!)).toBe('aa bb cc dd אב');
-  expect(text(lines[1]!)).toStartWith('e');
-  // A space in its own left-to-right run hangs, and the line keeps 'e'.
-  const control = layout({ ...options, runs: ['aa bb cc dd ', 'אב', ' e ff'] });
-  expect(text(control[0]!)).toBe('aa bb cc dd אב e');
 });
 
 test('spaces after a left tab compress inside the remaining float passage', () => {

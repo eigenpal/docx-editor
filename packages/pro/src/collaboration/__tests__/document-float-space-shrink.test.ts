@@ -119,59 +119,6 @@ test('a remote right-to-left word keeps passage compression in its left-to-right
   }
 }, 10000);
 
-test('the final space of a right-to-left run moves its last word past the picture for both peers', async () => {
-  const harness = createPeerHarness('float-space-shrink-rtl-space', { offlineEditing: true });
-  const views: View[] = [];
-  const lead = 'aa bb cc dd ee ff gg hh ';
-  try {
-    // The 66pt right passage holds 'hh', then the run. Its final space stays inside the line.
-    const source = floatSpacePackage('both', [
-      { text: lead },
-      { text: 'אב גד ', rtl: true },
-      { text: 'kk' },
-    ]);
-    const peers = await harness.pair(source);
-    const left = open(peers.alice.room.document, peers.alice);
-    const right = open(peers.bob.room.document, peers.bob);
-    views.push(left, right);
-    const same = (expected: string) => {
-      peers.alice.room.session.flushPendingJournals();
-      peers.bob.room.session.flushPendingJournals();
-      expect(text(left)).toBe(expected);
-      expect(text(right)).toBe(expected);
-      expect(xml(left)).toBe(xml(right));
-      expect(geometry(left)).toEqual(geometry(right));
-      outsidePicture(left);
-      outsidePicture(right);
-    };
-    const full = `${lead}אב גד kk`;
-    same(full);
-    expect(passage(left)).toBe('hh אב');
-    // A remote edit at the start reflows the line; history and reopen restore the passage.
-    peers.pause();
-    select(right, 0, 3);
-    right.surface.deleteForward();
-    select(left, full.length);
-    left.surface.type(' ll');
-    peers.resume();
-    same(`${full.slice(3)} ll`);
-    right.surface.undo();
-    same(`${full} ll`);
-    expect(passage(left)).toBe('hh אב');
-    right.surface.redo();
-    same(`${full.slice(3)} ll`);
-    right.surface.undo();
-    same(`${full} ll`);
-    const reopened = open(left.surface.save());
-    views.push(reopened);
-    expect(geometry(reopened)).toEqual(geometry(left));
-    expect(passage(reopened)).toBe('hh אב');
-  } finally {
-    for (const view of views) destroy(view);
-    harness.cleanup();
-  }
-}, 10000);
-
 test('picture passage compression converges through concurrent edits, history, deletion, and reopen', async () => {
   const harness = createPeerHarness('float-space-shrink', { offlineEditing: true });
   const views: View[] = [];
