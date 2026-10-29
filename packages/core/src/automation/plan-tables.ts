@@ -2,9 +2,8 @@
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { revisionDateNow } from './revision-date.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
-import { MAX_STYLE_NAME, styleDefinitionsOf } from './style-definitions.ts';
+import { isWritableStyleName, styleDefinitionsOf } from './style-definitions.ts';
 import { answered, refused } from './plan-results.ts';
-import { isValidXmlText } from '../store/package/sinks.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import type { AutomationOperation } from './operations.ts';
 import type { AutomationHandleTable } from './handles.ts';
@@ -290,17 +289,12 @@ export function planTableOperation(
               : { ...operation.properties, kind: 'cell', cellId: target.nodeId };
       if (mutation.kind === 'properties' && mutation.styleId !== undefined) {
         const wanted = mutation.styleId;
-        // The same checks the paragraph style setter makes, before any name is compared.
-        if (
-          typeof wanted !== 'string' ||
-          wanted.trim().length === 0 ||
-          wanted.length > MAX_STYLE_NAME ||
-          !isValidXmlText(wanted)
-        )
+        // The same name rule the paragraph style setter applies, before any name is compared.
+        if (typeof wanted !== 'string' || !isWritableStyleName(wanted))
           return refuse('unsupported-content', 'invalid-table-style-name');
-        if (!(packages.package && stylesPartOf(packages.package)))
-          return refuse('unsupported-content', 'no-styles-defined: table');
-        const styleId = styleDefinitionsOf(stylesPartOf(packages.package)!).idOf('table', wanted);
+        const stylesPart = packages.package && stylesPartOf(packages.package);
+        if (!stylesPart) return refuse('unsupported-content', 'no-styles-defined: table');
+        const styleId = styleDefinitionsOf(stylesPart).idOf('table', wanted);
         if (styleId === null) return refuse('unsupported-content', 'style-not-defined: table');
         mutation = { ...mutation, styleId };
       }

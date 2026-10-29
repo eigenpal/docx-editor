@@ -161,7 +161,9 @@ export class Style extends ModelObject {
   /**
    * The name the styles part declares. Assign it to `paragraph.style` only when `type` is
    * `Paragraph`; the paragraph `style` setters refuse other kinds. A built-in name reads as the part
-   * writes it, such as `heading 1`, and the setters accept it that way.
+   * writes it, such as `heading 1`, and the setters accept it that way. The setters and
+   * `getByNameOrNullObject` compare names without case, so `Heading 1` finds `heading 1`; compare
+   * names the same way rather than with `===`.
    */
   get nameLocal(): string {
     return this.loadedProperty<string>('nameLocal');
