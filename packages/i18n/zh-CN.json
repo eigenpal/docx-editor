@@ -153,7 +153,11 @@
     "heading2": "标题 2",
     "heading3": "标题 3",
     "normal": "正文",
-    "headingLevel": "标题 {level}"
+    "headingLevel": "标题 {level}",
+    "noSpacing": "无间隔",
+    "quote": "引用",
+    "intenseQuote": "明显引用",
+    "listParagraph": "列表段落"
   },
   "font": {
     "selectAriaLabel": "选择字体",

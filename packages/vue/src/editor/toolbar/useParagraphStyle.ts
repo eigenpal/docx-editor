@@ -44,7 +44,7 @@ export function useParagraphStyle(): UseParagraphStyleResult {
           .getDocumentStyles()
           .filter((style) => style.type === 'paragraph')
           .map((style) => {
-            // A built-in style takes its label in the UI language, as Word shows it.
+            // A built-in style takes its label in the UI language.
             const builtIn = builtInParagraphStyleLabel(style.name);
             return {
               styleId: style.styleId,

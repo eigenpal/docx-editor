@@ -157,7 +157,11 @@
     "heading2": "Заголовок 2",
     "heading3": "Заголовок 3",
     "normal": "Обычный",
-    "headingLevel": "Заголовок {level}"
+    "headingLevel": "Заголовок {level}",
+    "noSpacing": "Без интервала",
+    "quote": "Цитата",
+    "intenseQuote": "Выделенная цитата",
+    "listParagraph": "Абзац списка"
   },
   "font": {
     "selectAriaLabel": "Выбрать шрифт",

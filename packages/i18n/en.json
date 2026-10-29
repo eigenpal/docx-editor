@@ -224,7 +224,11 @@
     "heading2": "Heading 2",
     "heading3": "Heading 3",
     "normal": "Normal",
-    "headingLevel": "Heading {level}"
+    "headingLevel": "Heading {level}",
+    "noSpacing": "No Spacing",
+    "quote": "Quote",
+    "intenseQuote": "Intense Quote",
+    "listParagraph": "List Paragraph"
   },
   "font": {
     "selectAriaLabel": "Select font family",

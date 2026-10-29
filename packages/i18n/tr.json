@@ -153,7 +153,11 @@
     "heading2": "Başlık 2",
     "heading3": "Başlık 3",
     "normal": "Normal",
-    "headingLevel": "Başlık {level}"
+    "headingLevel": "Başlık {level}",
+    "noSpacing": "Aralık Yok",
+    "quote": "Alıntı",
+    "intenseQuote": "Güçlü Alıntı",
+    "listParagraph": "Liste Paragraf"
   },
   "font": {
     "selectAriaLabel": "Yazı tipi ailesini seç",

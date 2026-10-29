@@ -224,7 +224,11 @@
     "heading2": "見出し 2",
     "heading3": "見出し 3",
     "normal": "標準",
-    "headingLevel": "見出し {level}"
+    "headingLevel": "見出し {level}",
+    "noSpacing": "行間詰め",
+    "quote": "引用文",
+    "intenseQuote": "引用文 2",
+    "listParagraph": "リスト段落"
   },
   "font": {
     "selectAriaLabel": "フォントの選択",

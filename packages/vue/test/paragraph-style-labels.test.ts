@@ -38,6 +38,8 @@ const SOURCE = zipSync({
       style('Title', 'Title') +
       style('Ttulo1', 'heading 1') +
       style('Heading2', 'Heading 2') +
+      style('NoSpacing', 'No Spacing') +
+      style('ListParagraph', 'List Paragraph') +
       style('Callout', 'Callout') +
       '</w:styles>'
   ),
@@ -48,7 +50,14 @@ const SOURCE = zipSync({
 
 const CATALOGUE = {
   ...en,
-  styles: { ...en.styles, normal: 'Padrão', title: 'Título', headingLevel: 'Título {level}' },
+  styles: {
+    ...en.styles,
+    normal: 'Padrão',
+    title: 'Título',
+    headingLevel: 'Título {level}',
+    noSpacing: 'Sem Espaçamento',
+    listParagraph: 'Parágrafo da Lista',
+  },
 };
 
 const mounted: MountedEditor[] = [];
@@ -79,6 +88,8 @@ test('built-in styles take the catalogue label, and the document own styles keep
     'Título',
     'Título 1',
     'Título 2',
+    'Sem Espaçamento',
+    'Parágrafo da Lista',
     'Callout',
   ]);
 });

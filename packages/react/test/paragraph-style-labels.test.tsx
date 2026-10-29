@@ -1,8 +1,8 @@
-// The style picker labels Word's built-in paragraph styles in the UI language.
+// The style picker labels built-in paragraph styles in the UI language.
 //
-// Word stores the English `w:name` of a built-in style in every language and shows it under its
-// own UI language. The picker reads the label from the catalogue for those, and shows every
-// other style exactly as the document names it.
+// A document stores the English `w:name` of a built-in style whatever language wrote it. The
+// picker reads the label from the catalogue for those, and shows every other style exactly as
+// the document names it.
 
 // MUST be first: happy-dom registration happens on import.
 import './dom-setup.ts';
@@ -18,6 +18,7 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorToolbar } from '../src/editor/toolbar/index.ts';
+import { StylePicker } from '../src/components/ui/StylePicker.tsx';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -42,14 +43,16 @@ const SOURCE = zipSync({
   'word/_rels/document.xml.rels': strToU8(
     `<Relationships xmlns="${REL}"><Relationship Id="rIdStyles" Type="${STYLES_REL}" Target="styles.xml"/></Relationships>`
   ),
-  // Word writes `heading 1`; other producers write `Heading 2`. A style id can be localized
-  // (`Ttulo1` in a Portuguese Word), so the label comes from the name.
+  // Both `heading 1` and `Heading 2` occur. A style id can be localized (`Ttulo1`), so the
+  // label comes from the name.
   'word/styles.xml': strToU8(
     `<w:styles xmlns:w="${W}">` +
       style('Normal', 'Normal', ' w:default="1"') +
       style('Title', 'Title') +
       style('Ttulo1', 'heading 1') +
       style('Heading2', 'Heading 2') +
+      style('NoSpacing', 'No Spacing') +
+      style('ListParagraph', 'List Paragraph') +
       style('Callout', 'Callout') +
       '</w:styles>'
   ),
@@ -60,7 +63,14 @@ const SOURCE = zipSync({
 
 const CATALOGUE = {
   ...en,
-  styles: { ...en.styles, normal: 'Padrão', title: 'Título', headingLevel: 'Título {level}' },
+  styles: {
+    ...en.styles,
+    normal: 'Padrão',
+    title: 'Título',
+    headingLevel: 'Título {level}',
+    noSpacing: 'Sem Espaçamento',
+    listParagraph: 'Parágrafo da Lista',
+  },
 };
 
 afterEach(cleanup);
@@ -90,6 +100,27 @@ test('built-in styles take the catalogue label, and the document own styles keep
     'Título',
     'Título 1',
     'Título 2',
+    'Sem Espaçamento',
+    'Parágrafo da Lista',
     'Callout',
   ]);
+});
+
+test('the standalone style picker labels built-in styles by name, not style id', () => {
+  const preview = { fontFamily: null, fontSizePt: null, bold: false, italic: false, color: null };
+  const styles = [
+    { styleId: 'Normal', name: 'Normal', type: 'paragraph', preview },
+    { styleId: 'Ttulo4', name: 'heading 4', type: 'paragraph', preview },
+    { styleId: 'Callout', name: 'Callout', type: 'paragraph', preview },
+  ];
+  const label = (value: string) =>
+    render(
+      <LocaleProvider i18n={CATALOGUE as typeof en}>
+        <StylePicker value={value} styles={styles} />
+      </LocaleProvider>
+    ).container.querySelector('[aria-label] span')?.textContent;
+  expect(label('Ttulo4')).toBe('Título 4');
+  expect(label('Callout')).toBe('Callout');
+  // This picker keeps its own label for the default style.
+  expect(label('Normal')).toBe(en.styles.normalText);
 });

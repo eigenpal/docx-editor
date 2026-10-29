@@ -154,7 +154,11 @@
     "heading2": "כותרת 2",
     "heading3": "כותרת 3",
     "normal": "רגיל",
-    "headingLevel": "כותרת {level}"
+    "headingLevel": "כותרת {level}",
+    "noSpacing": "ללא מרווח",
+    "quote": "ציטוט",
+    "intenseQuote": "ציטוט חזק",
+    "listParagraph": "פיסקת רשימה"
   },
   "font": {
     "selectAriaLabel": "בחר סוג גופן",

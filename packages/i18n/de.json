@@ -153,7 +153,11 @@
     "heading2": "Überschrift 2",
     "heading3": "Überschrift 3",
     "normal": "Standard",
-    "headingLevel": "Überschrift {level}"
+    "headingLevel": "Überschrift {level}",
+    "noSpacing": "Kein Leerraum",
+    "quote": "Zitat",
+    "intenseQuote": "Intensives Zitat",
+    "listParagraph": "Listenabsatz"
   },
   "font": {
     "selectAriaLabel": "Schriftart auswählen",
