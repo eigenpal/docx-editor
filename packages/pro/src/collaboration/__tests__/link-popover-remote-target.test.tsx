@@ -24,6 +24,7 @@ import {
   DocxEditorViewport,
 } from '@docx-editor.dev/react';
 import { collaborationModule } from '../../index.ts';
+import { reviewModule } from '../../review/review-module.ts';
 import { createPeerHarness, zipDocument, type Peer } from './document-peer-support';
 import { packageFingerprint, saveReopenDigest } from './document-support';
 
@@ -53,7 +54,8 @@ function mountBob(peer: Peer): DocxEditorInstance {
   const editor = createDocxEditor({
     container,
     document: peer.room.document,
-    modules: [collaborationModule({ session: peer.room.session })],
+    author: 'Bob',
+    modules: [reviewModule(), collaborationModule({ session: peer.room.session })],
   });
   editors.push(editor);
   return editor;
@@ -67,7 +69,7 @@ async function open(source: Uint8Array = SOURCE) {
   const view = render(
     <DocxEditorRoot
       document={pair.alice.room.document}
-      modules={[collaborationModule({ session: pair.alice.room.session })]}
+      modules={[reviewModule(), collaborationModule({ session: pair.alice.room.session })]}
       onReady={(editor) => {
         alice = editor as DocxEditorInstance;
       }}
@@ -262,5 +264,71 @@ test('a long target is not reread on every update, and Apply still refuses a del
   expect(view.queryByTestId('hyperlink-popup')).toBeNull();
   expect(linksIn(alice(), 0)).toEqual([]);
   expect(linksIn(bob, 0)).toEqual([]);
+  converged(alice(), bob);
+});
+
+test('a peer striking the selected words in suggesting mode closes the panel and links nothing', async () => {
+  const { view, alice, bob, sync } = await open();
+  openPanelOnWord(view, alice());
+  expect(view.getByTestId('hyperlink-popup').dataset.mode).toBe('editing');
+
+  // The struck words stay in the document as a pending deletion, so the selected text is
+  // unchanged; only the deletion tells the panel that its words are leaving.
+  expect(bob.exec({ type: 'setEditingMode', mode: 'suggesting' }).ok).toBe(true);
+  const pid = bob.surface!.session.paragraphIds()[0]!;
+  bob.surface!.setSelection({
+    anchor: { paragraphId: pid, offset: 6 },
+    head: { paragraphId: pid, offset: 13 },
+  });
+  bob.surface!.deleteBackward();
+  sync();
+  await settle();
+  expect(alice().query({ type: 'selectedText' })).toBe('example');
+
+  expect(view.queryByTestId('hyperlink-popup')).toBeNull();
+  sync();
+  expect(linksIn(alice(), 0)).toEqual([]);
+  expect(linksIn(bob, 0)).toEqual([]);
+  converged(alice(), bob);
+
+  // The peer's undo withdraws the deletion on both sides; no link appears with the words.
+  bob.exec({ type: 'undo' });
+  sync();
+  await settle();
+  expect(linksIn(alice(), 0)).toEqual([]);
+  converged(alice(), bob);
+});
+
+// The second word is already a pending deletion when the file opens.
+const STRUCK_SOURCE = zipDocument(
+  '<w:p><w:r><w:t xml:space="preserve">Visit </w:t></w:r>' +
+    '<w:del w:id="3" w:author="Ada" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>example</w:delText></w:r></w:del>' +
+    '<w:r><w:t xml:space="preserve"> today</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t>Second line</w:t></w:r></w:p><w:sectPr/>'
+);
+
+test('a panel opened on words already struck stays open, and Apply links them', async () => {
+  const { view, alice, bob, sync } = await open(STRUCK_SOURCE);
+  const input = openPanelOnWord(view, alice());
+  expect(alice().surface!.hyperlinks.targetIsDeleted()).toBe(true);
+
+  const second = bob.surface!.session.paragraphIds()[1]!;
+  bob.surface!.setSelection({
+    anchor: { paragraphId: second, offset: 0 },
+    head: { paragraphId: second, offset: 0 },
+  });
+  bob.surface!.type('New ');
+  sync();
+  await settle();
+  expect(view.getByTestId('hyperlink-popup').dataset.mode).toBe('editing');
+
+  act(() => {
+    fireEvent.keyDown(input, { key: 'Enter' });
+  });
+  await settle();
+  sync();
+  expect(view.queryByTestId('hyperlink-popup')).toBeNull();
+  // The link wraps the struck words, so it shows no live text of its own.
+  expect(linksIn(bob, 0)).toEqual(['|https://example.com/b']);
   converged(alice(), bob);
 });

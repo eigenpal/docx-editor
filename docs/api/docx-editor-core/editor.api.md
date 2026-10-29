@@ -2089,6 +2089,7 @@ export interface HyperlinkOps {
     linkById(linkId: string): SurfaceHyperlink | null;
     linksInCaretParagraph(): SurfaceHyperlink[];
     removeHyperlink(linkId?: string): boolean;
+    targetIsDeleted(): boolean;
 }
 
 // @public

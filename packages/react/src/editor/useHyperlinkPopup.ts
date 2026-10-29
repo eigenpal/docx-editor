@@ -211,6 +211,9 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
   const selectionPinRef = useRef<{ editor: Editor; pin: SelectionPin } | null>(null);
   // The words a create panel opened over; empty for a panel opened at a bare caret.
   const targetTextRef = useRef('');
+  // Whether those words were already a pending deletion when the panel opened. Linking struck
+  // words the user selected is allowed; words struck after the panel opened are gone.
+  const targetDeletedAtOpenRef = useRef(false);
   // The engine's gestures fire from listeners registered ONCE; reading the live state
   // through a ref keeps that registration off the render path, so opening the popover does
   // not tear down and rebind the surface's chrome handlers.
@@ -223,6 +226,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
 
   const releaseSelectionPin = useCallback(() => {
     targetTextRef.current = '';
+    targetDeletedAtOpenRef.current = false;
     const retained = selectionPinRef.current;
     if (!retained) return;
     retained.editor.releaseSelection(retained.pin);
@@ -232,12 +236,17 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
   // Whether the words a create panel is about to link are gone: another participant deleted
   // or rewrote them, or an undo took them out. The selection maps through those edits, so it
   // no longer holds the same text, and Apply would insert the draft as a NEW link at the
-  // collapsed caret instead of linking what the user selected.
+  // collapsed caret instead of linking what the user selected. A peer that strikes the words
+  // in suggesting mode leaves the text in place, so the engine says whether it is a pending
+  // deletion now that was not one when the panel opened.
   // `everyUpdate` bounds the cost on the per-update path; see `TARGET_CHECK_LIMIT`.
   const targetGone = useCallback(
     (everyUpdate = false) => {
       const target = targetTextRef.current;
       if (target === '' || !editor) return false;
+      const struck =
+        !targetDeletedAtOpenRef.current && editor.surface?.hyperlinks.targetIsDeleted() === true;
+      if (struck) return true;
       if (everyUpdate && target.length > TARGET_CHECK_LIMIT) return false;
       return editor.query({ type: 'selectedText' }) !== target;
     },
@@ -313,6 +322,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     const pin = editor?.retainSelection() ?? null;
     if (editor && pin) selectionPinRef.current = { editor, pin };
     targetTextRef.current = selected;
+    targetDeletedAtOpenRef.current = editor?.surface?.hyperlinks.targetIsDeleted() === true;
     setState({
       mode: 'editing',
       link: null,
