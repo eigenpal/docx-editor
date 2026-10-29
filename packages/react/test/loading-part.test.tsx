@@ -19,7 +19,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { renderToString } from 'react-dom/server';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
-import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import type { DocxEditorInstance, EditorModule } from '@docx-editor.dev/core/editor';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
 import { DocxEditorLoading } from '../src/editor/DocxEditorLoading.tsx';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
@@ -96,10 +96,30 @@ const LARGE_SOURCE = zipSync({
  * work, and a slow runner must still finish the whole open inside the waits below.
  */
 const SLICED_PARAGRAPHS = 600;
-// The sliced-open tests wait up to 20 s twice: first for the indicator to move below the pages,
-// then for it to leave. A shared CI runner can be slow for a while, so the test budget covers both
-// waits instead of the runner's 30 s default cutting the second one short.
+// The sliced-open tests await the engine's own signal that the open laid out its last page, so
+// they take as long as the open does. This budget only bounds an open that never ends.
 const SLICED_OPEN_TEST_TIMEOUT_MS = 45_000;
+
+/**
+ * Resolves when the editor reports that the opening document laid out its last page
+ * (`document.open`, outcome `opened`). The tests await this instead of polling the DOM while the
+ * open runs: a failed DOM assertion formats the element it received, with the whole page tree
+ * behind it, and a poll re-ran that after every slice, which on a slow runner stalled each slice
+ * for seconds.
+ */
+function openSettled(): { module: EditorModule; settled: Promise<void> } {
+  let resolve!: () => void;
+  const settled = new Promise<void>((done) => (resolve = done));
+  return {
+    module: {
+      id: 'test-open-settled',
+      onDiagnostic: (event) => {
+        if (event.kind === 'document.open' && event.outcome === 'opened') resolve();
+      },
+    },
+    settled,
+  };
+}
 
 function slicedSource(): Uint8Array {
   const paragraphs: string[] = [];
@@ -600,8 +620,9 @@ describe('DocxEditor.Loading', () => {
     'with overlay, the indicator moves below the laid-out pages while the rest are laid out',
     async () => {
       const places: string[] = [];
+      const open = openSettled();
       const view = render(
-        <DocxEditorRoot document={slicedSource()}>
+        <DocxEditorRoot document={slicedSource()} modules={[open.module]}>
           <div style={{ position: 'relative' }}>
             <DocxEditorViewport>
               <DocxEditorContent />
@@ -611,18 +632,14 @@ describe('DocxEditor.Loading', () => {
         </DocxEditorRoot>
       );
 
-      await waitFor(() => expect(places).toContain('below the pages'), { timeout: 20_000 });
+      // The screen yields at the first painted page, but the indicator below the pages stays until
+      // the last slice lands. Wait for that end state, not for the screen alone.
+      await act(() => open.settled);
       expect(places[0]).toBe('screen');
-      // The screen yields at the first painted page, but the indicator below the pages stays until the
-      // last slice lands. Wait for that end state, not for the screen alone.
-      await waitFor(
-        () => {
-          expect(view.container.querySelector(LOADING)).toBeNull();
-          expect(view.container.querySelector('.docx-opening-indicator')).toBeNull();
-          expect(view.container.querySelector('.mine')).toBeNull();
-        },
-        { timeout: 20_000 }
-      );
+      expect(places).toContain('below the pages');
+      expect(view.container.querySelector(LOADING) === null).toBe(true);
+      expect(view.container.querySelector('.docx-opening-indicator') === null).toBe(true);
+      expect(view.container.querySelector('.mine') === null).toBe(true);
     },
     SLICED_OPEN_TEST_TIMEOUT_MS
   );
@@ -679,17 +696,21 @@ describe('packaged DocxEditor loading screen', () => {
     'loadingIndicator shows on the loading page, then below the laid-out pages',
     async () => {
       const places: string[] = [];
+      const open = openSettled();
       const view = render(
-        <DocxEditor document={slicedSource()} loadingIndicator={trackedIndicator(places)} />
+        <DocxEditor
+          document={slicedSource()}
+          modules={[open.module]}
+          loadingIndicator={trackedIndicator(places)}
+        />
       );
 
       await act(async () => {});
       expect(view.container.querySelector('.docx-editor__loading-page .mine')).not.toBeNull();
       expect(view.container.querySelector(SPINNER)).toBeNull();
-      await waitFor(() => expect(places).toContain('below the pages'), { timeout: 20_000 });
-      await waitFor(() => expect(view.container.querySelector('.mine')).toBeNull(), {
-        timeout: 20_000,
-      });
+      await act(() => open.settled);
+      expect(places).toContain('below the pages');
+      expect(view.container.querySelector('.mine') === null).toBe(true);
     },
     SLICED_OPEN_TEST_TIMEOUT_MS
   );
