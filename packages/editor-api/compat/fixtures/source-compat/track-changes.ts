@@ -37,9 +37,7 @@ export async function proposeParagraphSplit(): Promise<void> {
     const paragraph = context.document.body.paragraphs.getFirst();
     await context.sync();
     context.document.changeTrackingMode = 'TrackMineOnly';
-    const pieces = paragraph.split(['. ']);
-    await context.sync();
-    pieces.load('items/text');
+    paragraph.split(['. ']);
     await context.sync();
   });
 }
