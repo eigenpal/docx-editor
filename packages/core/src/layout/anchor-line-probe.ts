@@ -28,6 +28,7 @@ import type { EquationSpanRecord } from './equation-layout.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { displayText } from './run-style.ts';
 import { clipWordEnd, isCollapsibleLineEndWhitespace } from './line-end-whitespace.ts';
+import { fitTextOpenDecision } from './fit-text-groups.ts';
 
 /** Model offset of the first character of the line each anchor start falls on. */
 export function anchorLineStartsByModelOffset(input: {
@@ -132,9 +133,12 @@ export function anchorLineStartsByModelOffset(input: {
           width = Math.min(width, Math.max(0, remaining));
       }
       const modelStart = piece.start + consumed;
-      const probeDecision =
+      const probeDecision = fitTextOpenDecision(
+        piece,
+        consumed,
         input.cjkBreaks?.decision(piece, consumed, probeLastEmitted, candidate) ??
-        lineOpenDecisionAt(probeLastEmitted, candidate, consumed > 0);
+          lineOpenDecisionAt(probeLastEmitted, candidate, consumed > 0)
+      );
       const opens = probeDecision === 'opens';
       if (opens) {
         probeWordStart = modelStart;

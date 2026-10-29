@@ -1062,3 +1062,14 @@ A single-spaced line drawn in a face that lists the Chinese, Japanese, or Korean
 - **WHEN** layout measures the line
 - **THEN** a taller stand-in or fallback face keeps its own box
 - **AND** a one-em face takes 1.3 em in either role
+
+### Requirement: Fitted text takes its stated width
+
+Consecutive runs whose `w:fitText` carries one `w:id` SHALL form one group that takes the `w:val` width of its first run. Narrower text SHALL give every character except the last the same extra advance. Wider text SHALL compress every character advance by one factor. The group SHALL NOT open a new line inside it.
+
+#### Scenario: A fitted phrase keeps its paragraph on one line
+
+- **GIVEN** a paragraph whose fitted run is wider at its natural width than its `w:fitText` value
+- **WHEN** the paragraph lays out in a column that holds the stated width
+- **THEN** the run takes exactly the stated width
+- **AND** the paragraph takes one line

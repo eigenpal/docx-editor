@@ -241,6 +241,17 @@ export const wordFeatures: WordFeature[] = [
       'Opaque solid w14:textOutline with an explicit RGB color renders. Theme-colored, transparent, gradient, dashed, compound, and inset outlines do not render. Legacy outline, shadow, emboss, imprint, and emphasis marks are preserved but do not render. Text effects have no toolbar controls.',
   },
   {
+    id: 'text.fit-text',
+    name: 'Fit text (w:fitText)',
+    category: 'text',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Consecutive runs that share one w:fitText id take the w:val width of the first run, in layout, painting, and PDF export. Narrower text spreads: every character except the last gets the same extra advance. Wider text compresses every character horizontally. The authored character spacing and scale of those runs do not apply inside the group. The group moves to the next line as one unit. Text typed inside the group joins it and fits again. Justification can still stretch spaces inside a group, and the table AutoFit minimum width can break a group at its spaces. There is no control to apply fit text.',
+  },
+  {
     id: 'text.hidden',
     name: 'Hidden text (vanish)',
     category: 'text',

@@ -58,6 +58,7 @@ import { piecesOfParagraphForDisplay } from './field-projection-display.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import { measureDisplayText } from './run-style.ts';
+import { fitTextGroups } from './fit-text-groups.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import type { SemanticTableCell, SemanticTableStructure } from './semantic-table.ts';
@@ -306,12 +307,16 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
     fields?.tocLinkStyleRanges?.get(paragraph.id)
   );
   // The bidi pass gives each piece the shaping and joining context line breaking measures with;
-  // an unshaped complex-script word measures far wider than it paints.
-  const pieces = bidiPieces(
-    returnUncoveredHintedText(projected, measurer),
-    paragraphIsRtl(layoutInputs.props),
-    bidiSourceBoundaries(paragraph),
-    true
+  // an unshaped complex-script word measures far wider than it paints. Fitted text takes
+  // its stated width here as in line breaking.
+  const pieces = fitTextGroups(
+    bidiPieces(
+      returnUncoveredHintedText(projected, measurer),
+      paragraphIsRtl(layoutInputs.props),
+      bidiSourceBoundaries(paragraph),
+      true
+    ),
+    measurer
   );
   const typography = resolveCjkTypography(layoutInputs.props, styleCascade?.typography);
   const automaticSpacing = automaticAutofitSpacing(typography, measurer);

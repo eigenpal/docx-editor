@@ -112,6 +112,7 @@ import {
   type TextWrappingBreakClear,
 } from './text-wrapping-break-clear.ts';
 import { canChopPiece, isLayoutOwnedPiece } from './layout-owned-piece.ts';
+import { fitTextGroups, fitTextOpenDecision } from './fit-text-groups.ts';
 import type { WordCarryContext } from './word-carry.ts';
 import { carryWordAtOptionalHyphens } from './optional-hyphen-break.ts';
 import { measuredWidth, styleCutAtHyphen } from './optional-hyphen-joining.ts';
@@ -214,11 +215,9 @@ export function breakParagraph(
         : undefined
     );
   const paragraphRtl = flow?.paragraphRtl ?? paragraphIsRtl(paragraphProperties());
-  const allPieces = bidiPieces(
-    rawPieces,
-    paragraphRtl,
-    bidiSourceBoundaries(paragraph),
-    pageBreaksIgnored
+  const allPieces = fitTextGroups(
+    bidiPieces(rawPieces, paragraphRtl, bidiSourceBoundaries(paragraph), pageBreaksIgnored),
+    measurer
   );
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
   const carriesSlot = flow?.firstLineAfterLeadingBreaks === true;
@@ -1308,8 +1307,12 @@ export function breakParagraph(
       const openDecision =
         piece.noteSeparator || line.spans.at(-1)?.noteSeparator
           ? 'opens'
-          : (cjkBreaks?.decision(piece, consumed, lastEmitted, candidate) ??
-            lineOpenDecisionAt(lastEmitted, candidate, consumed > 0));
+          : fitTextOpenDecision(
+              piece,
+              consumed,
+              cjkBreaks?.decision(piece, consumed, lastEmitted, candidate) ??
+                lineOpenDecisionAt(lastEmitted, candidate, consumed > 0)
+            );
       const opensWord = openDecision === 'opens';
       if (opensWord) {
         wordStartSpan = line.spans.length;

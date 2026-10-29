@@ -81,6 +81,8 @@ The matrix reports editing, rendering, and round-trip support separately. A feat
 
 Raised and lowered text contributes to automatic and minimum line heights. This includes inherited `w:position` values combined with subscript or superscript. Exact line spacing retains its authored height.
 
+Consecutive runs whose `w:fitText` shares one `w:id` take exactly the `w:val` width of the first run. If the text is narrower, every character except the last gets the same extra advance. If it is wider, every character compresses horizontally by the same factor. The `w:spacing` and `w:w` of those runs do not apply inside the group, and the group moves to the next line as one unit.
+
 #### Equation source formatting
 
 Latin and Greek letters in equations use mathematical italic glyphs from the math font, unless `m:sty` specifies plain, bold, or bold italic. Run fonts, bold, and italic do not change these letters. ASCII digits in authored text fonts use that font with the default italic math style and run bold or italic. For example, Arial digits use italic by default and bold italic with `w:b`. Bold and bold italic math styles (`m:sty` `b` and `bi`) keep mathematical bold digits from the math font. Mathematical letters and symbols beside those digits keep the math font.
