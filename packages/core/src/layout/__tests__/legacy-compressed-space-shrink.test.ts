@@ -173,3 +173,40 @@ describe('a space shrinks down to half its face average character width', () => 
     expect(texts(inFace('Courier New', natural('Courier New') - 6 * 7.2 - 0.5))[0]).toBe(SIX);
   });
 });
+
+// Courier New letters are 24 pt, spaces 14.4 pt, and each space lends 7.2 pt. Ten words and their
+// spaces take 384 pt; the tenth word ends at 369.6 pt.
+describe('one word per line joins by shrinking spaces', () => {
+  const LETTERS = 'a a a a a a a a a a a a';
+  const courier = (available: number) =>
+    loadFixture({
+      text: LETTERS,
+      available,
+      language: 'zh-CN',
+      compatibility: 14,
+      compression: 'compressPunctuation',
+      paragraphProperties: '<w:jc w:val="left"/>',
+      face: 'Courier New',
+      measurer: faceMeasurer,
+    });
+  const gaps = (result: ReturnType<typeof loadFixture>, words: number) =>
+    Array.from(
+      { length: words - 1 },
+      (_, i) => caretX(result, 2 * i + 2) - caretX(result, 2 * i + 1)
+    );
+
+  test('a space cut at the margin takes its advance back and shrinks with the others', () => {
+    // The tenth space ends past 375 pt. The eleventh word joins, and all ten spaces lend 3.3 pt.
+    const result = courier(375);
+    expect(texts(result)[0]).toBe('a '.repeat(11));
+    for (const gap of gaps(result, 11)) expect(gap).toBeCloseTo(11.1, 4);
+    expect(caretX(result, 21)).toBeCloseTo(375, 4);
+  });
+
+  test('after a word joins, the next word opens a line even when the spaces could still lend', () => {
+    // The tenth word joins with 9.6 pt from its nine spaces. The eleventh would need 48 pt of
+    // the 72 pt that ten spaces lend, but it wraps.
+    const result = courier(360);
+    expect(texts(result)[0]).toBe('a '.repeat(10));
+  });
+});

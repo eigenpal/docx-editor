@@ -33,6 +33,7 @@ import {
   createShrinkProbe,
   opensWithHangingSpace,
   lineEndAt,
+  compressLineSpaces,
 } from './paragraph-space-shrink.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-walk.ts';
 import { bidiSourceBoundaries } from './bidi-piece-coalescing.ts';
@@ -1394,16 +1395,18 @@ export function breakParagraph(
       const followingCluster = opticalFit ? 0 : (clusterTail?.(pieceIndex, boundary) ?? 0);
       const fitWidth =
         baseFitWidth + followingCluster + automaticGap() + (lineEndWhitespace ? 0 : endSpaces.room);
-      // A justified line shrinks its spaces before a half-width final mark hangs.
+      const pastMargin = line.width + fitWidth > lineAvailable() + OVERFLOW_TOLERANCE_PT;
+      // A justified line shrinks its spaces before a half-width final mark hangs. Only a word
+      // past the margin needs the mark's advance.
       const shrinkMark =
-        flow?.spaceShrink && !opticalFit
+        flow?.spaceShrink && !opticalFit && pastMargin
           ? spaceShrinkMarkAdvance(candidate, piece, measurer, typography, ends)
           : 0;
       let overflows =
         (!hangs || shrinkMark > 0) &&
         // A space after a word that borrowed inter-word space hangs on its line.
         !(lineEndWhitespace && flow?.spaceShrink) &&
-        line.width + fitWidth > lineAvailable() + OVERFLOW_TOLERANCE_PT;
+        pastMargin;
       const followingWidth =
         overflows && flow?.spaceShrink ? shrinkTail(pieceIndex, boundary) : undefined;
       const shrinkFit =
@@ -1414,6 +1417,7 @@ export function breakParagraph(
         // Text after a right, center or decimal tab is placed against its stop, not justified.
         alignedTabRight === 0 &&
         line.drawings.length === 0 &&
+        !(flow.spaceShrink.everyAlignment && line.compressesSpaces) &&
         (placeableSuffixes[pieceIndex]![boundary] === 1 || endsParagraph(pieceIndex, boundary)) &&
         spaceShrinkFit(
           line.spans,
@@ -1501,7 +1505,11 @@ export function breakParagraph(
         if (!ensurePlacementWidth(fitWidth)) continue;
       } else if (borrowsSpace) {
         line.borrowedSpace = true;
-        if (flow?.spaceShrink?.everyAlignment) line.compressesSpaces = true;
+        if (flow?.spaceShrink?.everyAlignment) {
+          const start = opensWord ? line.spans.length : wordStartSpan;
+          const gained = compressLineSpaces(line, start, measurer);
+          if (!opensWord) wordStartWidth += gained;
+        }
         // Only this admission may compress the paragraph's last line when it is aligned.
         if (endsParagraph(pieceIndex, boundary)) line.spaceShrink = true;
       }

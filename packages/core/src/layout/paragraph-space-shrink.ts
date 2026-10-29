@@ -74,16 +74,6 @@ function firstShrinkSlot(spans: readonly StyleSpanRecord[]): number {
 }
 
 /**
- * Capacities already measured, by span. A line's spans are read again for every word that
- * overflows it, and each read measures the span's text. The entry also holds the span's text,
- * width, and the rule inputs, so a span rebuilt with other text or width measures again.
- */
-const capacityCache = new WeakMap<
-  StyleSpanRecord,
-  { text: string; width: number; limit: number; floor: boolean; value: number }
->();
-
-/**
  * What the space closing `span` can give up: `limit` of its natural advance, or with
  * `halfAverageFloor` everything above half its face's average character width.
  */
@@ -93,24 +83,26 @@ function capacity(
   limit: number,
   halfAverageFloor = false
 ): number {
-  const known = capacityCache.get(span);
+  if (span.lineEndWhitespace || span.equation) return 0;
+  const style = styleForFontSlot(span.style, span.fontSlot);
+  // A face whose space is no wider than half its average width lends nothing: answer before
+  // the text tests, so a line in such a face pays one lookup per span.
+  const floor = halfAverageFloor ? halfAverageWidth(style, measurer) : undefined;
+  if (floor?.noRoom) return 0;
   if (
-    known &&
-    known.text === span.text &&
-    known.width === span.box.width &&
-    known.limit === limit &&
-    known.floor === halfAverageFloor
+    (!span.style.shaping &&
+      !/^[\p{Script=Latin}\p{Script=Cyrillic}\p{N}\p{P}\p{Sc}\p{Sm} \u2007\u202f\u200b]*$/u.test(
+        span.text
+      )) ||
+    !SPACED_SPAN.test(span.text)
   )
-    return known.value;
-  const value = measuredCapacity(span, measurer, limit, halfAverageFloor);
-  capacityCache.set(span, {
-    text: span.text,
-    width: span.box.width,
-    limit,
-    floor: halfAverageFloor,
-    value,
-  });
-  return value;
+    return 0;
+  const space = Math.max(
+    0,
+    span.box.width - measureDisplayText(withoutSpaceSlot(span.text), style, measurer)
+  );
+  if (floor?.value !== undefined) return Math.max(0, space - floor.value);
+  return space * limit;
 }
 
 /** Half-average widths by face style; one style serves every span and line that uses it. */
@@ -141,31 +133,55 @@ function halfAverageWidth(
   return known;
 }
 
-function measuredCapacity(
-  span: StyleSpanRecord,
-  measurer: TextMeasurer,
-  limit: number,
-  halfAverageFloor: boolean
+/**
+ * The spaces clipped at the margin just before span `end`, each at its natural advance and
+ * without its line-end mark, with its index. A word that joins the line stands after them, so
+ * they are inside the line again.
+ */
+function clippedSpacesBefore(
+  spans: readonly StyleSpanRecord[],
+  end: number,
+  first: number,
+  measurer: TextMeasurer
+): (StyleSpanRecord & { readonly index: number })[] {
+  const restored: (StyleSpanRecord & { readonly index: number })[] = [];
+  for (let index = end - 1; index >= first && spans[index]!.lineEndWhitespace; index -= 1) {
+    const { lineEndWhitespace: _clipped, ...span } = spans[index]!;
+    const style = styleForFontSlot(span.style, span.fontSlot);
+    const width = Math.max(span.box.width, measureDisplayText(span.text, style, measurer));
+    restored.push({ ...span, index, box: { ...span.box, width } });
+  }
+  return restored;
+}
+
+/**
+ * Mark a line that kept a word under the legacy rule as one that compresses its spaces. The
+ * spaces clipped at the margin before span `end` take their natural advance back, as the word
+ * now stands after them, so that they shrink with the line's other spaces. Later spans move
+ * right by the same amount. Answers the width the line gains.
+ */
+export function compressLineSpaces(
+  line: { spans: StyleSpanRecord[]; width: number; compressesSpaces?: true },
+  end: number,
+  measurer: TextMeasurer
 ): number {
-  if (
-    (!span.style.shaping &&
-      !/^[\p{Script=Latin}\p{Script=Cyrillic}\p{N}\p{P}\p{Sc}\p{Sm} \u2007\u202f\u200b]*$/u.test(
-        span.text
-      )) ||
-    span.lineEndWhitespace ||
-    !SPACED_SPAN.test(span.text) ||
-    span.equation
-  )
-    return 0;
-  const style = styleForFontSlot(span.style, span.fontSlot);
-  const floor = halfAverageFloor ? halfAverageWidth(style, measurer) : undefined;
-  if (floor?.noRoom) return 0;
-  const space = Math.max(
-    0,
-    span.box.width - measureDisplayText(withoutSpaceSlot(span.text), style, measurer)
-  );
-  if (floor?.value !== undefined) return Math.max(0, space - floor.value);
-  return space * limit;
+  line.compressesSpaces = true;
+  const spans = line.spans;
+  let gained = 0;
+  const restored = clippedSpacesBefore(spans, end, 0, measurer).reverse();
+  if (restored.length === 0) return 0;
+  for (let index = restored[0]!.index; index < spans.length; index += 1) {
+    const span = spans[index]!;
+    const space = restored.find((candidate) => candidate.index === index);
+    const box = { ...span.box, x: span.box.x + gained };
+    if (space) {
+      const { index: _index, ...plain } = space;
+      gained += space.box.width - span.box.width;
+      spans[index] = { ...plain, box: { ...box, width: space.box.width } };
+    } else spans[index] = { ...span, box };
+  }
+  line.width += gained;
+  return gained;
 }
 
 /** The word that overflows a line, for {@link spaceShrinkFit}. */
@@ -251,7 +267,7 @@ export function spaceShrinkFit(
     style,
     measurer
   );
-  const needed = lineWidth + visible + followingWidth - available;
+  let needed = lineWidth + visible + followingWidth - available;
   if (needed <= 0) return false;
   // The alternative line stops before the overflowing word, so only the spans ahead
   // of it carry its stretch, and the space in front of it is the one that hangs.
@@ -265,6 +281,12 @@ export function spaceShrinkFit(
     capacities.push(slot);
     budget += slot;
   }
+  if (rule.everyAlignment)
+    for (const space of clippedSpacesBefore(spans, beforeEnd, first, measurer)) {
+      // Inside the line again, the space takes back its natural advance and lends as any other.
+      needed += space.box.width - spans[space.index]!.box.width;
+      budget += capacity(space, measurer, rule.limit, rule.halfAverageFloor);
+    }
   // The spaces shrink to at most their limit: past it, only a mark that hangs can make room.
   const markInside = needed <= budget + 0.001;
   if (!markInside && (!rule.hangsMarks || mark <= 0 || needed - mark > budget + 0.001))

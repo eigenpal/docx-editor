@@ -73,7 +73,8 @@ const OTHER_JUSTIFIED_SPACE_SHRINK: SpaceShrinkRule = Object.freeze({
  * average character width (OS/2 `xAvgCharWidth`), without a cost test, at every alignment. A
  * face whose half-average width is wider than its space, such as Calibri, keeps natural spaces;
  * Times New Roman gives about a fifth, Courier New half. Without a known average width, a space
- * gives up a fifth. `w:balanceSingleByteDoubleByteWidth` turns the rule off.
+ * gives up a fifth. Only one word per line joins this way, and a space cut at the margin before
+ * it counts at its natural advance. `w:balanceSingleByteDoubleByteWidth` turns the rule off.
  */
 export const COMPRESSED_LEGACY_SPACE_SHRINK: SpaceShrinkRule = Object.freeze({
   limit: 0.2,

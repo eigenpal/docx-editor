@@ -702,7 +702,7 @@ In compatibility mode 15 and later, a distributed line SHALL keep the word that 
 
 ### Requirement: Legacy space shrinking with punctuation compression
 
-In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingControl` compresses punctuation and the document defaults name an East Asian face, a line at any alignment SHALL keep the word that overflows it when each space can shrink to fit it without going below half the average character width of its face. With `w:balanceSingleByteDoubleByteWidth`, spaces SHALL keep their advance.
+In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingControl` compresses punctuation and the document defaults name an East Asian face, a line at any alignment SHALL keep the word that overflows it when each space can shrink to fit it without going below half the average character width of its face. Only one word per line SHALL join this way. With `w:balanceSingleByteDoubleByteWidth`, spaces SHALL keep their advance.
 
 #### Scenario: A left-aligned line shrinks its spaces
 
@@ -710,6 +710,8 @@ In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingCo
 - **WHEN** a word fits only when each Times New Roman space gives up less than a fifth of its advance
 - **THEN** the word stays on the line and the line ends at the margin
 - **AND** without punctuation compression, in Calibri, or with `w:balanceSingleByteDoubleByteWidth`, the word moves to the next line
+- **AND** after that word joins, the next word that overflows opens the next line
+- **AND** a space cut at the margin before the word counts at its natural advance
 
 ### Requirement: Legacy space shrinking before a final mark
 
