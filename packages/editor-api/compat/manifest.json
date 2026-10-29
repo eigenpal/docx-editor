@@ -462,7 +462,7 @@
     },
     {
       "uid": "Word.Range#insertBreak",
-      "note": "Supports Line, Page, and SectionNext. Line supports tracked insertion and text edits in the same sync. Single-line controls refuse Line. Page and SectionNext require a separate sync. With TrackMineOnly, all three are tracked insertions; a tracked page break stays in its paragraph, and a tracked SectionNext refuses where the section it starts does not start on a new page. Other break types refuse. Text reads report manual line breaks as U+000B and column breaks as U+000E; text writes refuse U+000E."
+      "note": "Supports Line, Page, and SectionNext. Line supports tracked insertion and text edits in the same sync. Single-line controls refuse Line. Page and SectionNext require a separate sync. A page break, tracked or not, stays in its paragraph, so the text after it stays in the same paragraph and list item; in a table cell it is written in the cell. With TrackMineOnly, all three are tracked insertions, and a tracked SectionNext refuses where the section it starts does not start on a new page. Other break types refuse. Text reads report manual line breaks as U+000B and column breaks as U+000E; text writes refuse U+000E."
     },
     {
       "uid": "Word.Document#removeDocumentInformation",
@@ -530,7 +530,11 @@
     },
     {
       "uid": "Word.ParagraphCollection#getFirst / #getLast, Word.RangeCollection#getFirst, Word.CommentCollection#getFirst, Word.ListCollection#getFirst and every other item accessor",
-      "note": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. A load on an object that a write in the same sync returns, such as the range insertText returns, is answered after the writes commit, on the revision they produce; if that read fails, the writes stay applied and sync rejects with the read's error. A navigation read from such an object, and any write to it, require a completed sync first; the runtime never commits a producer just to resolve a dependent command."
+      "note": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. A load on an object that a write in the same sync returns, such as the range insertText returns, is answered after the writes commit, on the revision they produce; if that read fails, the writes stay applied and sync rejects with the read's error. A navigation read from such an object (getFirst, getRange, search, getCell), and any write to it, require a completed sync first; the runtime never commits a producer just to resolve a dependent command."
+    },
+    {
+      "uid": "OfficeExtension.ClientRequestContext#sync",
+      "note": "In a sync that writes, loads on objects that already exist answer the document before the writes. Loads on an object that a write in the same sync returns, and on its font and paragraphs, answer after all the writes of that sync. Office.js answers every load in queue order, so a load queued between two writes sees only the first write; here a load on a created object sees both. A navigation read from a created object, such as getFirst, getRange, search, or getCell, refuses with InvalidObjectPath before anything commits. A load that fails after the writes commit carries debugInfo.innerError.code edit.read-after-commit, because the writes are applied."
     },
     {
       "uid": "OfficeExtension.LoadOption#select",

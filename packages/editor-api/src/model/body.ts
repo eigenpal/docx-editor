@@ -311,6 +311,8 @@ export class Body extends ModelObject {
    *
    * `\n`, `\r`, and `\r\n` in `text` start new paragraphs, tracked with `TrackMineOnly` at
    * `Start` and `End`. See `Range.insertText` for the rules.
+   *
+   * You can load the returned range in the same sync. Editing it needs a sync first.
    */
   insertText(
     text: string,
@@ -345,7 +347,10 @@ export class Body extends ModelObject {
     return created;
   }
 
-  /** Add a paragraph at the start or the end of the story. Answers the new paragraph. */
+  /**
+   * Add a paragraph at the start or the end of the story. Answers the new paragraph.
+   * You can load the returned paragraph in the same sync. Editing it needs a sync first.
+   */
   insertParagraph(
     paragraphText: string,
     insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End'

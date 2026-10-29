@@ -139,7 +139,10 @@ test('a failed read on a created object reports its error and keeps the committe
       inserted.load('text');
       await context.sync();
     })
-  ).rejects.toMatchObject({ code: 'InvalidObjectPath' });
+  ).rejects.toMatchObject({
+    code: 'InvalidObjectPath',
+    debugInfo: { innerError: { code: 'edit.read-after-commit' } },
+  });
   expect(inner.revision()).toBe(revision + 1);
   expect(await bodyText(createRuntime({ host: inner, save: true }))).toBe('original kept');
 });
@@ -175,7 +178,11 @@ test('a writer between the commit and the read on a created object refuses as st
       inserted.load('text');
       await context.sync();
     })
-  ).rejects.toMatchObject({ code: 'StaleDocument' });
+  ).rejects.toMatchObject({
+    code: 'StaleDocument',
+    debugInfo: { innerError: { code: 'edit.read-after-commit' } },
+  });
+  expect(await bodyText(createRuntime({ host: inner, save: true }))).toBe('other');
 });
 
 test('a write on a created object still refuses before its producer commits', async () => {

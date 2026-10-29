@@ -492,6 +492,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
    *
    * `\n`, `\r`, and `\r\n` in `text` start new paragraphs, tracked with `TrackMineOnly`. See
    * `Range.insertText` for the rules.
+   *
+   * You can load the returned range in the same sync. Editing it needs a sync first.
    */
   insertText(
     text: string,
@@ -525,7 +527,10 @@ export class Paragraph extends ModelObject implements PromisedItem {
     return created;
   }
 
-  /** Add a paragraph beside this one. Answers the new paragraph. */
+  /**
+   * Add a paragraph beside this one. Answers the new paragraph.
+   * You can load the returned paragraph in the same sync. Editing it needs a sync first.
+   */
   insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph {
     const target = `${this.path.label}.insertParagraph`;
     const written = insertableText(paragraphText, target);

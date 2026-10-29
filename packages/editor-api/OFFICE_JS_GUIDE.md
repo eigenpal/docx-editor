@@ -87,7 +87,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-If that load fails, the writes stay applied and `sync()` rejects with the load's error. A write to the returned object, such as `inserted.font.bold = true`, and a navigation read from it, such as `inserted.paragraphs.getFirst()`, still require a completed `sync()` first; before it they fail with `InvalidObjectPath` and nothing commits. If a prerequisite fails, the runtime commits no queued writes. Completed prerequisite reads can remain loaded after a later command fails.
+If that load fails, the writes stay applied and `sync()` rejects with the load's error code and `debugInfo.innerError.code` `edit.read-after-commit`. Read again; do not apply the edit a second time. A write to the returned object, such as `inserted.font.bold = true`, and a navigation read from it, such as `getFirst()`, `getRange()`, `search()`, or `getCell()`, still require a completed `sync()` first; before it they fail with `InvalidObjectPath` and nothing commits. If a prerequisite fails, the runtime commits no queued writes. Completed prerequisite reads can remain loaded after a later command fails.
 
 ## Keep writes within one story
 
@@ -243,7 +243,7 @@ For all codes, see [Diagnostics](https://www.docx-editor.dev/docs/2.x/guides/dia
 
 ### Recover from a stale range
 
-A range addresses text by paragraph identity and offsets. When text before its end changes, including through an earlier sync of the same run, using the range fails with `StaleDocument` and nothing is applied. When `error.expectedRevision` equals `error.actualRevision`, the range moved; when they differ, another writer changed the document. In both cases, search again and reconsider the proposal before writing. Never replay the failed write unchanged.
+A range addresses text by paragraph identity and offsets. When text before its end changes, including through an earlier sync of the same run, using the range fails with `StaleDocument` and nothing is applied. When `error.expectedRevision` equals `error.actualRevision`, the range moved; when they differ, another writer changed the document. In both cases, search again and reconsider the proposal before writing. Never replay the failed write unchanged. One `StaleDocument` is different: when `debugInfo.innerError.code` is `edit.read-after-commit`, the writes in that sync are applied, and only a load on an object they created failed. Read again, and do not apply the edit a second time.
 
 ```ts
 import { isDocxEditorError } from '@docx-editor.dev/editor-api';
@@ -269,6 +269,8 @@ await runtime.run(async (context) => {
       await context.sync();
     } catch (error) {
       if (!isDocxEditorError(error) || error.code !== 'StaleDocument') throw error;
+      // The write is applied, and only a load that followed it failed: never apply it again.
+      if (error.debugInfo.innerError?.code === 'edit.read-after-commit') continue;
       // Equal revisions: the range moved, often through an earlier sync of this run.
       // Different revisions: another writer changed the document.
       // Either way, search again and reconsider before you write.

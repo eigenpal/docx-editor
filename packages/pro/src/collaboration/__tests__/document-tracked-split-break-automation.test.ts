@@ -209,7 +209,10 @@ test('deleting the paragraph while the other peer splits it converges', async ()
     r.sync();
     r.pair.resume();
     r.sync();
-    await expectConverged(r);
+    // The deletion removes the paragraph it named, which now holds only the first piece. The
+    // pieces the concurrent split created stay, with the split's proposed mark between them.
+    const xml = await expectConverged(r, ['two; ', 'three', 'Signed']);
+    expect(proposedMarks(xml)).toBe(1);
   } finally {
     r.close();
   }

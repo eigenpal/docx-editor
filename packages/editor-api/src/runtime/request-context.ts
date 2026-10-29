@@ -86,7 +86,8 @@ export interface RuntimeSession {
  * A read on an object that a write in the same sync returns (the range `insertText` wrote,
  * the paragraph `insertParagraph` created) is answered after that commit, on the revision it
  * produced. If that read fails, the writes stay applied and `sync()` rejects with the read's
- * error. A write on such an object requires a separate sync.
+ * error code, with `debugInfo.innerError.code` `edit.read-after-commit`: read again, and do not
+ * apply the same edit again. A write on such an object requires a separate sync.
  *
  * Conditional writes come from the same place. A context that has READ from the document
  * remembers the revision it read at, and a later batch that writes goes out conditional on it,
@@ -220,7 +221,7 @@ export class RequestContext {
         action.sort === 'read' &&
         (action.dependencies?.some((path) => !path.isAddressable && produced.has(path.origin)) ??
           false);
-      let afterWrites = produced.size ? remaining.filter(readsCreated) : [];
+      const afterWrites = produced.size ? remaining.filter(readsCreated) : [];
       if (afterWrites.length) {
         const moved = new Set(afterWrites);
         remaining = remaining.filter((action) => !moved.has(action));
@@ -262,22 +263,48 @@ export class RequestContext {
       }
       // The reads on created objects, pinned to the revision the writes produced. A read the
       // writes did not make addressable refuses here, after the commit, and the writes stay.
-      while (afterWrites.length) {
-        const ready = afterWrites.filter((action) => !blocked(action));
-        if (ready.length === 0)
-          fail({ code: 'InvalidObjectPath', target: afterWrites.find(blocked)?.label });
-        const revision = this.#readRevision ?? undefined;
-        await this.#dispatch(ready, revision, undefined);
-        await this.#continue(revision, undefined);
-        const sent = new Set(ready);
-        afterWrites = afterWrites.filter(
-          (action) => !sent.has(action) && !action.nullableLoad?.isNull
-        );
-      }
+      if (afterWrites.length) await this.#readAfterCommit(afterWrites, blocked);
     } finally {
       for (const action of actions) action.dispose?.();
       for (const action of this.#queue.takeContinuations()) action.dispose?.();
       this.#syncInFlight = false;
+    }
+  }
+
+  /**
+   * Answer the reads on objects this sync's writes created, after those writes committed.
+   *
+   * Every refusal from here carries `edit.read-after-commit`: elsewhere `StaleDocument` and
+   * `InvalidObjectPath` mean nothing was applied, and a caller that re-applies on them would
+   * write the same edit twice.
+   */
+  async #readAfterCommit(
+    reads: readonly QueuedAction[],
+    blocked: (action: QueuedAction) => boolean
+  ): Promise<void> {
+    let pending = reads;
+    try {
+      while (pending.length) {
+        const ready = pending.filter((action) => !blocked(action));
+        if (ready.length === 0)
+          fail({ code: 'InvalidObjectPath', target: pending.find(blocked)?.label });
+        const revision = this.#readRevision ?? undefined;
+        await this.#dispatch(ready, revision, undefined);
+        await this.#continue(revision, undefined);
+        const sent = new Set(ready);
+        pending = pending.filter((action) => !sent.has(action) && !action.nullableLoad?.isNull);
+      }
+    } catch (error) {
+      if (!isDocxEditorError(error)) throw error;
+      throw new DocxEditorError({
+        code: error.code,
+        ...(error.target === undefined ? {} : { target: error.target }),
+        ...(error.expectedRevision === undefined
+          ? {}
+          : { expectedRevision: error.expectedRevision }),
+        ...(error.actualRevision === undefined ? {} : { actualRevision: error.actualRevision }),
+        diagnostic: 'edit.read-after-commit',
+      });
     }
   }
 

@@ -525,6 +525,7 @@ export class Range extends ModelObject implements PromisedItem {
    * `editor.exec({ type: 'replaceMatch', match, text })` on a match from `editor.findMatches`.
    * In suggesting mode it records a tracked replacement as the editor's author.
    *
+   * You can load the returned range in the same sync. Editing it needs a sync first.
    * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement | Replace as a tracked change}
    */
   insertText(
@@ -826,12 +827,9 @@ export class Range extends ModelObject implements PromisedItem {
   }
 
   /**
-   * Line, page, and next-page section breaks are supported; other break types refuse at sync.
-   *
-   * With `TrackMineOnly`, each is a tracked insertion: a line or page break as an inserted run,
-   * and a next-page section break as an inserted paragraph mark that carries the new section.
-   * Reject removes the break. A tracked `SectionNext` refuses with `NotSupported` where the
-   * section it starts does not start on a new page, because that would change the section type.
+   * Line, page, and next-page section breaks are supported; other types refuse at sync. With
+   * `TrackMineOnly`, each is a tracked insertion that reject removes. A tracked `SectionNext`
+   * refuses with `NotSupported` where the next section does not start on a new page.
    */
   insertBreak(
     breakType:
@@ -848,11 +846,10 @@ export class Range extends ModelObject implements PromisedItem {
     const target = `${this.path.label}.insertBreak`;
     if (insertLocation !== 'Before' && insertLocation !== 'After')
       fail({ code: 'InvalidArgument', target });
-    const location = insertLocation;
     this.requireUsablePath();
     this.commandAnswering(
       target,
-      () => ({ op: 'insertBreak', span: this.#span(), breakType, location }),
+      () => ({ op: 'insertBreak', span: this.#span(), breakType, location: insertLocation }),
       (value) => hydratedApplied(value, target)
     );
   }
@@ -904,7 +901,10 @@ export class Range extends ModelObject implements PromisedItem {
     return table;
   }
 
-  /** Add a paragraph before or after the one this range starts or ends in. */
+  /**
+   * Add a paragraph before or after the one this range starts or ends in.
+   * You can load the returned paragraph in the same sync. Editing it needs a sync first.
+   */
   insertParagraph(
     paragraphText: string,
     insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After'
