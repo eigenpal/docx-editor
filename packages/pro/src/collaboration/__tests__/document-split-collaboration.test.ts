@@ -123,6 +123,17 @@ async function rejectAll(runtime: Runtime): Promise<void> {
   });
 }
 
+/** Split the first paragraph after each `delimiter`, tracked or not. */
+async function splitAt(runtime: Runtime, delimiter: string, tracked: boolean): Promise<void> {
+  await runtime.run(async (context) => {
+    if (tracked) context.document.changeTrackingMode = 'TrackMineOnly';
+    const paragraph = context.document.body.paragraphs.getFirst();
+    await context.sync();
+    paragraph.split([delimiter]);
+    await context.sync();
+  });
+}
+
 /** A tracked paragraph break after the first match of `find`. */
 async function trackedNewline(runtime: Runtime, find: string): Promise<void> {
   await runtime.run(async (context) => {
@@ -193,6 +204,50 @@ describe('rejecting every change of a paragraph that holds a break and a new par
         expect(r.alice.editor.exec({ type: 'redo' }).ok).toBe(true);
         r.sync();
         await r.expectBoth(ORIGINAL, 0);
+      } finally {
+        r.close();
+      }
+    });
+  }
+});
+
+describe('undoing a split into three paragraphs while a peer types in the middle one', () => {
+  // The split moves the tail of the paragraph into two new paragraphs, one piece in each. The
+  // pieces are the moved text, so text a peer types in one follows it back when the split is
+  // undone, as it does after a split into two.
+  for (const { name, split } of [
+    {
+      name: 'an untracked split',
+      split: (runtime: Runtime) => splitAt(runtime, '; ', false),
+    },
+    {
+      name: 'a tracked split',
+      split: (runtime: Runtime) => splitAt(runtime, '; ', true),
+    },
+  ]) {
+    test(`${name} keeps the typing on undo and on redo`, async () => {
+      const r = await room();
+      try {
+        await split(r.alice.runtime);
+        r.sync();
+        later();
+        await r.bob.runtime.run(async (context) => {
+          const paragraphs = context.document.body.paragraphs;
+          paragraphs.load('items');
+          await context.sync();
+          paragraphs.items[1]!.insertText('2 ', 'Start');
+          await context.sync();
+        });
+        r.sync();
+        await r.expectBoth(['One; ', '2 two; ', 'three', 'Signed']);
+        later();
+        expect(r.alice.editor.exec({ type: 'undo' }).ok).toBe(true);
+        r.sync();
+        await r.expectBoth(['One; 2 two; three', 'Signed']);
+        later();
+        expect(r.alice.editor.exec({ type: 'redo' }).ok).toBe(true);
+        r.sync();
+        await r.expectBoth(['One; ', '2 two; ', 'three', 'Signed']);
       } finally {
         r.close();
       }

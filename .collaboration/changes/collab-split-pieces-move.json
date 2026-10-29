@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A split into three or more paragraphs moved the paragraph's tail in pieces, one in each new paragraph, and the writer matched moved text only when one inserted run equalled one deleted run. The pieces were written as new text without the marks that name the characters they copy. Text a peer typed in a piece followed nothing when the split was undone, so it showed nowhere, and a concurrent deletion of the split paragraph did not hide the pieces as it hides the tail of a split into two.",
+  "after": "Inserted runs in other paragraphs that, one after another, spell a deleted run are that run moved, and each piece carries the marks of the characters it copies. Text a peer types in a piece follows it back when the split is undone and forward again on redo, and a concurrent deletion of the split paragraph treats the pieces as the text it deleted, as it treats the tail of a split into two.",
+  "reason": "The writer writes ordinary move marks in the existing docx-text-marks-v1 map, which released replicas of this format already read. No stored field, identity, conflict rule, or canonical mapping changes, so a mixed room converges. A released replica writes a split into three paragraphs without the marks until it upgrades.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-split-collaboration.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-tracked-split-break-automation.test.ts"
+  ],
+  "changeset": "collab-split-pieces-move",
+  "migration": null
+}

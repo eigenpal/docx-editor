@@ -285,6 +285,18 @@ export function markMoves<T extends MoveToken>(
     );
     if (source) take(run, { source, from: 0, to: 0, length: run.indexes.length });
   }
+  // A split into three or more paragraphs moves the tail in pieces, one run in each new
+  // paragraph: runs inserted one after another in other paragraphs that together spell a
+  // deleted run are that run moved, piece by piece.
+  for (const source of deleted) {
+    if (taken.get(source)!.some(Boolean)) continue;
+    const pieces = piecesOf(source, inserted, taken, sameScope);
+    let from = 0;
+    for (const piece of pieces) {
+      take(piece, { source, from, to: 0, length: piece.indexes.length });
+      from += piece.indexes.length;
+    }
+  }
   // Then characters in the same text element: a move keeps the element of most of what it
   // moves. Then by value, but only whole stretches the first pass left: a split gives its
   // tail a new run, and by value alone a short match could be any typed text.
@@ -325,6 +337,37 @@ export function markMoves<T extends MoveToken>(
     if (sources) wholeMatches(sources, run, true);
   }
   return copied;
+}
+
+/**
+ * Untaken inserted runs, one after another in `inserted` and each in another paragraph than
+ * `source`, whose values together spell `source` exactly, or none. Two pieces at least: one
+ * run equal to the whole source is the first pass's match.
+ */
+function piecesOf(
+  source: Run,
+  inserted: readonly Run[],
+  taken: ReadonlyMap<Run, readonly boolean[]>,
+  sameScope: (left: number, right: number) => boolean
+): readonly Run[] {
+  const fits = (run: Run): boolean =>
+    run.paragraph !== source.paragraph &&
+    sameScope(source.paragraph, run.paragraph) &&
+    run.value.length > 0 &&
+    !taken.get(run)!.some(Boolean);
+  for (let first = 0; first < inserted.length; first += 1) {
+    if (!fits(inserted[first]!) || !source.value.startsWith(inserted[first]!.value)) continue;
+    const pieces: Run[] = [];
+    let offset = 0;
+    for (let at = first; at < inserted.length && offset < source.value.length; at += 1) {
+      const run = inserted[at]!;
+      if (!fits(run) || !source.value.startsWith(run.value, offset)) break;
+      pieces.push(run);
+      offset += run.value.length;
+    }
+    if (offset === source.value.length && pieces.length > 1) return pieces;
+  }
+  return [];
 }
 
 function assignOrigins<T extends MoveToken>(
