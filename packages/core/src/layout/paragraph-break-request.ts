@@ -251,7 +251,11 @@ function breakPreparedParagraphLines(request: ParagraphBreakRequest): readonly P
     {
       ...request.flow,
       paragraphRtl: paragraphIsRtl(formatting.props),
-      spaceShrink: resolveSpaceShrinkRule(request.compatibilityMode, formatting.props),
+      spaceShrink: resolveSpaceShrinkRule(
+        request.compatibilityMode,
+        formatting.props,
+        styleCascade?.typography
+      ),
       leftTabsPastMargin: hasCompatibilityRule(request.compatibilityMode, 'leftTabStopsPastMargin'),
       inlineObjectsBesideFloats: hasCompatibilityRule(
         request.compatibilityMode,

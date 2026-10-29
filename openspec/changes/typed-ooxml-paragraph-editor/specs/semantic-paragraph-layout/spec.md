@@ -700,6 +700,17 @@ In compatibility mode 15 and later, a distributed line SHALL keep the word that 
 - **WHEN** keeping the next word costs each space more than a third, but at most half, of the stretch the line without it would take
 - **THEN** the justified line keeps the word and the distributed line moves it to the next line
 
+### Requirement: Legacy space shrinking with punctuation compression
+
+In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingControl` compresses punctuation and the document defaults name an East Asian face, a line at any alignment SHALL keep the word that overflows it when each space gives up at most 19.8 percent of its advance. A final half-width mark SHALL stay inside when the spaces make room for it, and hang when they make room only for the text before it.
+
+#### Scenario: A left-aligned line shrinks its spaces
+
+- **GIVEN** a mode 14 left-aligned paragraph of English words with `compressPunctuation` and an East Asian default face
+- **WHEN** a word fits only when each space gives up less than 19.8 percent of its advance
+- **THEN** the word stays on the line and the line ends at the margin
+- **AND** without punctuation compression the word moves to the next line
+
 ### Requirement: Combining kana sound marks follow their face
 
 The layout engine SHALL measure and paint the combining kana sound marks (U+3099, U+309A) by their face. A face that classes the mark glyph as a mark SHALL join it with the kana before it and add no width. A face that gives the unclassed glyph an advance SHALL draw the mark in its own cell beside an uncomposed base. The mark SHALL never start a line apart from its base.

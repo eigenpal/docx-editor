@@ -553,9 +553,10 @@ export function alignSpans(
   // A right-to-left last line aligns to the right, unless the flow kept its last word by
   // borrowing inter-word space: then it compresses as justified text does.
   // A line whose final mark hangs fills the measure before the mark at every alignment. Only
-  // legacy compatibility modes hang marks outside justified paragraphs.
+  // legacy compatibility modes hang marks outside justified paragraphs, and only they compress
+  // the spaces of a line at every alignment.
   const effective =
-    hangingPunctuationAdvance > 0
+    hangingPunctuationAdvance > 0 || pendingLine?.compressesSpaces === true
       ? 'both'
       : alignment === 'both' && isLastLine && paragraphRtl && !lastLineShrinks
         ? 'right'

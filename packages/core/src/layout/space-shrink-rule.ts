@@ -2,6 +2,7 @@
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { paragraphAlignment } from './paragraph-alignment.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
+import type { CjkTypographySettings } from './cjk-typography.ts';
 
 /**
  * How a line may borrow inter-word space to keep the word that overflows it: how much of
@@ -27,6 +28,11 @@ export interface SpaceShrinkRule {
    * mark, and the mark hangs. Otherwise the word joins only when the mark fits inside too.
    */
   readonly hangsMarks: boolean;
+  /**
+   * Lines at every alignment shrink their spaces, and a line that does fills the measure as a
+   * justified line does.
+   */
+  readonly everyAlignment?: true;
 }
 
 /** Justified lines (`w:jc` `both`) in a modern compatibility mode. */
@@ -55,11 +61,32 @@ const OTHER_JUSTIFIED_SPACE_SHRINK: SpaceShrinkRule = Object.freeze({
   hangsMarks: false,
 });
 
+/**
+ * A legacy compatibility mode that compresses punctuation (`w:characterSpacingControl`) in a
+ * document whose defaults name an East Asian face: each space gives up at most 19.8 percent of
+ * its advance, just under a fifth, without a cost test, at every alignment. The limit is the
+ * measured boundary: a word that needs 19.75 percent joins its line, and one that needs
+ * 19.84 percent moves to the next line.
+ */
+export const COMPRESSED_LEGACY_SPACE_SHRINK: SpaceShrinkRule = Object.freeze({
+  limit: 0.198,
+  cost: 0,
+  hangsMarks: true,
+  everyAlignment: true,
+});
+
 /** The space-shrink rule of a paragraph, or undefined when its lines keep natural spaces. */
 export function resolveSpaceShrinkRule(
   compatibilityMode: number | undefined,
-  props: readonly OoxmlProperty[]
+  props: readonly OoxmlProperty[],
+  settings?: CjkTypographySettings
 ): SpaceShrinkRule | undefined {
+  if (
+    settings?.legacyLineEndPunctuation === true &&
+    settings.compression !== 'doNotCompress' &&
+    settings.sourceEastAsianFont === true
+  )
+    return COMPRESSED_LEGACY_SPACE_SHRINK;
   // Modern justification is mode 15 and every newer mode. An absent mode stays legacy.
   if (
     !hasCompatibilityRule(compatibilityMode, 'justifiedSpaceShrink') ||

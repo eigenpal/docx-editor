@@ -1493,6 +1493,7 @@ export function breakParagraph(
         if (!ensurePlacementWidth(fitWidth)) continue;
       } else if (borrowsSpace) {
         line.borrowedSpace = true;
+        if (flow?.spaceShrink?.everyAlignment) line.compressesSpaces = true;
         // Only this admission may compress the paragraph's last line when it is aligned.
         if (endsParagraph(pieceIndex, boundary)) line.spaceShrink = true;
       }
