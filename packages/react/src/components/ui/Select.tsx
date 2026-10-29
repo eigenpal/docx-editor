@@ -77,12 +77,10 @@ function SelectContent({
   const trigger = React.useContext(SelectTriggerContext)?.trigger ?? null;
   const doc =
     typeof globalThis.document === 'undefined' && !trigger ? null : hostDocumentOf(trigger);
-  // This editor's theme, not any editor's on the page: the scope around the trigger, or the
-  // enclosing Root's resolved mode before the trigger mounts.
+  // This editor's theme, not any editor's on the page: the enclosing Root's resolved mode, or
+  // a dark scope anywhere around the trigger (a host can still wrap the editor in `.dark`).
   const chromeDark = useChromeDark();
-  const isDark = trigger
-    ? !!trigger.closest('.docx-editor')?.classList.contains('dark')
-    : chromeDark;
+  const isDark = chromeDark || !!trigger?.closest('.docx-editor.dark');
   return (
     <SelectPrimitive.Portal {...(doc?.body ? { container: doc.body } : {})}>
       {/* Wrap in .docx-editor so Tailwind scoped utilities apply inside the portal */}
