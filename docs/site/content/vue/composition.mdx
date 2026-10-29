@@ -62,9 +62,21 @@ You can place all optional chrome inside `DocxEditorRoot`.
 
 ### Popovers
 
-`DocxEditorRoot` does not mount popovers. `<DocxEditor>` mounts four popovers for you: `DocxEditorHyperLink`, `DocxEditorContentControl`, `DocxEditorEquation`, and `DocxEditorContextMenu`. In a composed editor, mount the popovers that you use. Without `DocxEditorHyperLink`, the link button and Ctrl+K do not open a panel. Without `DocxEditorContextMenu`, a right-click opens the browser menu.
+`DocxEditorRoot` does not mount the hyperlink, content control, equation, or context menu popovers. `<DocxEditor>` mounts all four for you: `DocxEditorHyperLink`, `DocxEditorContentControl`, `DocxEditorEquation`, and `DocxEditorContextMenu`. In a composed editor, mount the popovers that you use. Without `DocxEditorHyperLink`, the link button, the context menu's **Insert link** row, and Ctrl+K (⌘+K on macOS) do not open a panel. Without `DocxEditorContextMenu`, a right-click opens the browser menu.
 
-To mount them, pass them to `DocxEditorRoot` in the `popups` prop. Wrap each component with `definePopup`:
+You can mount a popover in one of two ways. The first way is to add it as a child of `DocxEditorViewport`, as in [Full composition](#full-composition):
+
+```vue
+<template>
+  <DocxEditorViewport>
+    <DocxEditorContent />
+    <DocxEditorHyperLink />
+    <DocxEditorContextMenu />
+  </DocxEditorViewport>
+</template>
+```
+
+The second way is to pass it to `DocxEditorRoot` in the `popups` prop, wrapped with `definePopup`. `DocxEditorContent` renders the `popups` entries:
 
 ```vue
 <script setup lang="ts">
