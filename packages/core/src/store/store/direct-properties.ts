@@ -29,7 +29,7 @@ import {
 } from './formattable-runs.ts';
 import { paragraphOffsetIndex, segmentsOf } from './tree-op-segments.ts';
 import { formattingRunBesideRestrictedControl } from './tree-op-restricted-edge.ts';
-import { noteReferenceEndingAt } from './note-typing-boundary.ts';
+import { noteReferenceEndingAt, noteTypingSourceRun } from './note-typing-boundary.ts';
 import {
   containerIsComplexScript,
   withComplexScriptCompanions,
@@ -376,7 +376,8 @@ export function formattingRunAt(
   authorFilter?: FormattingRevisionAuthorFilter
 ): OoxmlNode | null {
   if (paragraph.kind !== 'paragraph') return null;
-  if (noteReferenceEndingAt(paragraph, offset)) return null;
+  // After a note reference, the run whose face typing takes, never the reference run.
+  if (noteReferenceEndingAt(paragraph, offset)) return noteTypingSourceRun(paragraph, offset);
   // Beside a control that typing cannot enter, the run the store will copy, whatever the view.
   const beside = formattingRunBesideRestrictedControl(
     paragraph,
