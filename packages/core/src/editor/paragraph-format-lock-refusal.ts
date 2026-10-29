@@ -173,15 +173,12 @@ export function paragraphFormatLockRefusal(
     !surface.session.trackingSettings().doNotTrackFormatting
       ? writer
       : undefined;
-  let lastPart: OoxmlPart | null = null;
-  let guarded: ReadonlySet<string> = new Set();
+  // A selection stays in one story, and the writer writes every paragraph into that part.
+  const head = surface.state().selection.head.paragraphId;
+  const part = partOfNodeId(surface.session, head) ?? surface.session.part();
+  const guarded = protectedParagraphs(part);
+  if (guarded.size === 0) return null;
   for (const paragraphId of selectedParagraphIds(surface)) {
-    // A pure ancestry read of the story that holds the paragraph.
-    const part = partOfNodeId(surface.session, paragraphId) ?? surface.session.part();
-    if (part !== lastPart) {
-      lastPart = part;
-      guarded = protectedParagraphs(part);
-    }
     if (!guarded.has(paragraphId)) continue;
     // A lock lets alignment through, so only a binding or a pending tracked change that the
     // write would merge into can refuse it: skip the store for every other paragraph.
