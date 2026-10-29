@@ -5,6 +5,7 @@
 // https://github.com/LibreOffice/core/commit/529755f0919217a84a12daad0fddfddd1124f0e9
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
+import { fitTextGroupOf } from './fit-text-groups.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
@@ -78,7 +79,9 @@ function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
       )) ||
     span.lineEndWhitespace ||
     !SPACED_SPAN.test(span.text) ||
-    span.equation
+    span.equation ||
+    // The spaces of a fitted group keep the group's own spacing.
+    fitTextGroupOf(span) !== undefined
   )
     return 0;
   const style = styleForFontSlot(span.style, span.fontSlot);

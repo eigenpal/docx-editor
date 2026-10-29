@@ -81,7 +81,7 @@ The matrix reports editing, rendering, and round-trip support separately. A feat
 
 Raised and lowered text contributes to automatic and minimum line heights. This includes inherited `w:position` values combined with subscript or superscript. Exact line spacing retains its authored height.
 
-Consecutive runs whose `w:fitText` shares one `w:id` take exactly the `w:val` width of the first run. If the text is narrower, every character except the last gets the same extra advance. If it is wider, every character compresses horizontally by the same factor. The `w:spacing` and `w:w` of those runs do not apply inside the group, and the group moves to the next line as one unit.
+Consecutive runs whose `w:fitText` shares one `w:id` take exactly the `w:val` width of the first run. If the text is narrower, every character except the last gets the same extra advance. If it is wider, every character compresses horizontally by the same factor. The `w:spacing` and `w:w` of those runs do not apply inside the group, and the group moves to the next line as one unit. Justification, distribution, and space shrinking leave the spacing inside the group alone. A tab ends the group, and the text after it keeps its natural width.
 
 #### Equation source formatting
 

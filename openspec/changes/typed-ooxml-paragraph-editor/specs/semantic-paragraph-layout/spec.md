@@ -1083,6 +1083,13 @@ Consecutive runs whose `w:fitText` carries one `w:id` SHALL form one group that 
 - **THEN** the run takes exactly the stated width
 - **AND** the paragraph takes one line
 
+#### Scenario: A justified line leaves a fitted group alone
+
+- **GIVEN** a justified paragraph whose first line holds a fitted group with spaces
+- **WHEN** the line stretches to the margins, or would have to shrink the group's spaces to keep it
+- **THEN** the spacing inside the group stays as the group states
+- **AND** a group that does not fit without shrinking its own spaces moves to the next line
+
 ### Requirement: LISTNUM fields number from the list walk
 
 A body `LISTNUM` field SHALL display the next number of its list, computed from the list definitions and never by running the instruction. A name that matches a `w:abstractNum` `w:name` SHALL count on the counters of that list, which its numbered paragraphs share. The built-in names and unknown names SHALL count on one built-in list. A field SHALL count after the number of its own paragraph, and its number SHALL replace a saved result.

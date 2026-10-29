@@ -249,7 +249,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Consecutive runs that share one w:fitText id take the w:val width of the first run, in layout, painting, and PDF export. Narrower text spreads: every character except the last gets the same extra advance. Wider text compresses every character horizontally. The authored character spacing and scale of those runs do not apply inside the group. The group moves to the next line as one unit. Text typed inside the group joins it and fits again. Justification can still stretch spaces inside a group, and the table AutoFit minimum width can break a group at its spaces. There is no control to apply fit text.',
+      'Consecutive runs that share one w:fitText id take the w:val width of the first run, in layout, painting, and PDF export. Narrower text spreads: every character except the last gets the same extra advance. Wider text compresses every character horizontally. The authored character spacing and scale of those runs do not apply inside the group. The group moves to the next line as one unit, and the table AutoFit minimum width keeps it whole. Justification, distribution, and space shrinking do not change the spacing inside a group. A field result is a group character; a tab ends the group, and the text after it keeps its natural width. The width can be in twips or in a unit such as 1in. Text typed inside the group joins it and fits again; text typed right after its last character starts a run without fit text. There is no control to apply fit text.',
   },
   {
     id: 'text.hidden',

@@ -1,5 +1,6 @@
 import type { FieldAwarePiece } from './field-pieces.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
+import { fitTextSpanMarker } from './fit-text-groups.ts';
 
 /** Preserve the projection and revision metadata of every published span. */
 export const paragraphSpanMetadata = (
@@ -10,6 +11,8 @@ export const paragraphSpanMetadata = (
   fieldAtom?: FieldAwarePiece['fieldAtom'];
   noteSeparator?: FieldAwarePiece['noteSeparator'];
 } => ({
+  // A fitted group sets its own spacing; line adjustments read this marker to leave it alone.
+  ...fitTextSpanMarker(piece),
   ...(piece.revisions === undefined ? {} : { revisions: piece.revisions }),
   ...(piece.changeSites === undefined ? {} : { changeSites: piece.changeSites }),
   // Rides the same carrier for the same reason: only the paragraph walk knows an atom was a

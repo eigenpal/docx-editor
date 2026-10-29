@@ -114,3 +114,22 @@ test('typing into a fitted group keeps its width on both replicas', async () => 
   expect(redone.texts[0]).toBe('[ABxyCE]');
   expect(redone.fitWidth).toBeCloseTo(144, 3);
 });
+
+test('text typed right after a fitted group stays out of it on both replicas', async () => {
+  const { alice, bob, converged, pause, resume } = await pairedEditors(
+    `<w:p>${run('[')}${run('ABCDE', FIT)}${run(']')}</w:p><w:p>${run('other')}</w:p>`
+  );
+  // Concurrent: Alice types after the group's last character while Bob types inside it.
+  pause();
+  caret(alice, 0, 6);
+  alice.surface!.type('Z');
+  caret(bob, 0, 2);
+  bob.surface!.type('q');
+  resume();
+  const edited = converged();
+  expect(edited.texts[0]).toBe('[AqBCDEZ]');
+  // The group holds A to E only: Z after it keeps its own width, so "]" moves past 144 pt.
+  expect(edited.fitWidth).toBeGreaterThan(144);
+  alice.surface!.undo();
+  expect(converged().fitWidth).toBeCloseTo(144, 3);
+});

@@ -16,7 +16,7 @@ import { DEFAULT_CJK_TYPOGRAPHY } from './cjk-typography.ts';
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 import { pageBreakYieldsToLineBreak } from './page-break-before-line-break.ts';
 import type { FieldAwarePiece } from './field-projection.ts';
-import { lineOpenDecisionAt, wordBoundaries } from './cjk-line-break.ts';
+import { wordBoundaries } from './cjk-line-break.ts';
 import type { CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
 import { canHangCjkPunctuation } from './cjk-spacing.ts';
 import { paragraphFinalAt } from './paragraph-hanging-punctuation.ts';
@@ -28,7 +28,7 @@ import type { EquationSpanRecord } from './equation-layout.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { displayText } from './run-style.ts';
 import { clipWordEnd, isCollapsibleLineEndWhitespace } from './line-end-whitespace.ts';
-import { fitTextOpenDecision } from './fit-text-groups.ts';
+import { fittedLineOpenDecision } from './fit-text-groups.ts';
 
 /** Model offset of the first character of the line each anchor start falls on. */
 export function anchorLineStartsByModelOffset(input: {
@@ -133,11 +133,12 @@ export function anchorLineStartsByModelOffset(input: {
           width = Math.min(width, Math.max(0, remaining));
       }
       const modelStart = piece.start + consumed;
-      const probeDecision = fitTextOpenDecision(
+      const probeDecision = fittedLineOpenDecision(
         piece,
         consumed,
-        input.cjkBreaks?.decision(piece, consumed, probeLastEmitted, candidate) ??
-          lineOpenDecisionAt(probeLastEmitted, candidate, consumed > 0)
+        probeLastEmitted,
+        candidate,
+        input.cjkBreaks
       );
       const opens = probeDecision === 'opens';
       if (opens) {

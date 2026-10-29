@@ -32,6 +32,7 @@ import {
   noteTypingProperties,
 } from './note-typing-boundary.ts';
 import { withFreshIds } from '../package/hf-lifecycle-shell.ts';
+import { endsFitTextGroup, insertAfterFitTextGroup } from './fit-text-typing-boundary.ts';
 import {
   isContentRevisionKind,
   isInlineRunContainer,
@@ -925,6 +926,17 @@ function applyInsertContent(
       options,
     });
     if (relocated) return relocated;
+    // Right after a fitted group, the text starts its own run without `w:fitText`.
+    if (endsFitTextGroup(run, after ? (findNode(part, after.runId) ?? undefined) : undefined)) {
+      const edited = insertAfterFitTextGroup(
+        part,
+        run,
+        nodes,
+        nextId,
+        deferOptions(options, control)
+      );
+      if (edited) return finishContentEdit(fromEdit(edited, effect), control, options);
+    }
     const plain = insertIntoText(before);
     if (plain) return plain;
     const index = run.children.findIndex((child) => contains(child, before.node.id));

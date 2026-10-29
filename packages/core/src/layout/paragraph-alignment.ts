@@ -1,6 +1,7 @@
 import { lineHangingPunctuationAdvance } from './line-hanging-punctuation.ts';
 import type { PendingLine } from './pending-line.ts';
 import { shrinkJustifiedSpans } from './paragraph-space-shrink.ts';
+import { insideFitTextGroup } from './fit-text-groups.ts';
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import { paragraphIsRtl, reorderBidiSpans, splitBidiTrailingWhitespace } from './rtl-paragraph.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
@@ -441,6 +442,8 @@ function stretchJustifiedLine(
       slotStart += 1;
   }
   for (let index = slotStart; index < slotEnd; index += 1) {
+    // A space inside a fitted group is not a slot: the group keeps its stated width.
+    if (insideFitTextGroup(spans[index - 1]!, spans[index]!)) continue;
     if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
   }
   if (gapBefore.length === 0) return null;
