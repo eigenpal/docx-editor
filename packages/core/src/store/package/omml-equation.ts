@@ -68,8 +68,9 @@ export interface EquationControlSource {
    *
    * Layout sizes script offsets and bar strokes and gaps from this size, not from the size of
    * the runs inside the structure. When it is not set, those use the size of the text around
-   * the equation. Set whether or not the control properties are default. Fractions, radicals, and
-   * n-ary operators with limits below and above do not use it yet.
+   * the equation. A script or fraction after the first atom of the equation takes its offsets
+   * from the size of that first atom instead. Set whether or not the control properties are
+   * default. Radicals and n-ary operators with limits below and above do not use it yet.
    */
   readonly controlFontSizePt?: number;
 }

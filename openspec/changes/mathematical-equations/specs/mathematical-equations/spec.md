@@ -87,12 +87,25 @@ The engine SHALL publish equation geometry from DOM-free layout. Paint SHALL use
 
 #### Scenario: Line extent of runs in different sizes
 
-- **WHEN** a later text atom of an equation has a larger font box than the first atom
-- **THEN** the first atom claims its full font box on the line
-- **AND** a later text atom claims its glyph ink, with 300/2048 em of the first atom size above the ink, and never more than its own font box
+- **WHEN** an equation lays out on its line
+- **THEN** a first text atom claims its full font box on the line, and a first structure claims the font box of its `m:ctrlPr` size, or of the size of the text around the equation
+- **AND** every later text atom, and every text part of a script or an inline fraction at any depth, claims its glyph ink, with 300/2048 em of the smaller of the first atom size and its own size above the ink, and never more than the ascent of its own font box
+- **AND** a script of a script, and every part of a script argument that holds a structure, takes 300/2048 em of the first atom size
+- **AND** the limits and body of an inline n-ary operator other than an integral claim in the same way, and the operator claims its box
 - **AND** a later text atom that draws no ink, such as a run of spaces, claims no height
-- **AND** a first structure takes the leading from its `m:ctrlPr` size, or from the size of the text around the equation
-- **AND** later structures and text without measured ink keep their boxes, so an equation whose runs share one size and face keeps its extent
+- **AND** a display fraction and other structures claim their boxes, and text without measured ink keeps its box, so an equation whose runs share one size and face keeps its extent
+
+#### Scenario: Later structures take the first atom size
+
+- **WHEN** a script or inline fraction follows the first atom of an equation
+- **THEN** its offsets, shifts, rule, and gaps take their em from the first atom size, reduced to the structure's script level
+- **AND** a structure that opens the equation keeps its `m:ctrlPr` size, or the size of the text around the equation
+
+#### Scenario: Multiple line spacing with an equation
+
+- **WHEN** a line holds an equation and no drawing, and its paragraph uses `auto` line spacing without a line grid
+- **THEN** the line keeps the equation's extent and adds the multiple's share of a text band: the taller of the line's text band and the font box of the first atom
+- **AND** above single spacing that extra goes below the line, and below single spacing the line loses that share and its baseline rises by the share of the band's ascent
 
 #### Scenario: Run language
 

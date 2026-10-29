@@ -220,3 +220,47 @@ for (const compatibilityMode of [14, 15]) {
     expect(head!.row.hasContinuation).toBe(true);
   });
 }
+
+// Row z starts below the repeat on page 2 with one short line in each cell. The next content
+// of a cell, a nested table or a 600pt line, does not fit there, so the row continues on page 3.
+const lateCases: [string, readonly [string, string]][] = [
+  [
+    'a nested table in each cell',
+    [line('zc1') + nested('zb1', 12000), line('zc2') + nested('zb2', 12000)],
+  ],
+  ['a nested table in one cell', [line('zc1') + line('zl1'), line('zc2') + nested('zb2', 12000)]],
+  [
+    'a 600pt line in each cell',
+    [line('zc1') + line('zb1', 12000), line('zc2') + line('zb2', 12000)],
+  ],
+];
+
+for (const [name, cellContent] of lateCases) {
+  for (const compatibilityMode of [undefined, 14]) {
+    test(`before mode 15, the header repeats above a continued row when ${name} does not fit below it (${compatibilityMode ? `mode ${compatibilityMode}` : 'no mode'})`, () => {
+      const result = layOut(
+        headerCase({ tag: 'z', cantSplit: false, cellContent }),
+        compatibilityMode
+      );
+      expect(repeatPagesOf(result)).toEqual([1, 2]);
+      const placed = zFragmentsOf(result);
+      expect(placed.map((part) => part.page)).toEqual([1, 2]);
+      expect(placed[0]!.row.hasContinuation).toBe(true);
+      // The rest of the row stays below the repeat and runs past the 648pt band.
+      const rest = placed[1]!.row;
+      expect(rest.box.y).toBeCloseTo(60, 6);
+      expect(rest.hasContinuation).toBeFalsy();
+      expect(rest.box.y + rest.box.height).toBeGreaterThan(648);
+      expect(pageOf(result, 'AFTER')).toBe(3);
+    });
+  }
+
+  test(`mode 15 omits the header above a continued row when ${name} does not fit below it`, () => {
+    const result = layOut(headerCase({ tag: 'z', cantSplit: false, cellContent }), 15);
+    expect(repeatPagesOf(result)).not.toContain(2);
+    const placed = zFragmentsOf(result);
+    expect(placed[1]!.page).toBe(2);
+    expect(placed[1]!.row.box.y).toBe(0);
+    expect(placed[1]!.row.box.y + placed[1]!.row.box.height).toBeLessThanOrEqual(648 + 0.001);
+  });
+}

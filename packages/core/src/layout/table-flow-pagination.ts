@@ -561,11 +561,11 @@ export function* paginateTableInFlowSteps(
       );
     // Before mode 15, repeated header rows also stay above a row that can split when the first
     // line of a cell, or the first row of a nested table that opens one, does not fit below them.
-    // The row then stays whole there, past the margin or the page edge. Cells ignore widow
-    // control in these modes (`tableParagraphWidowControl`).
+    // The row then stays whole there, past the margin or the page edge. A continued row keeps
+    // the repeat the same way when its next line or nested row does not fit, and its rest
+    // stays on that page. Cells ignore widow control in these modes (`tableParagraphWidowControl`).
     const startMissesBelowRepeat = (top: number): boolean =>
       repeatKeepsWholeRow &&
-      !isContinuation &&
       naturalHeight > contentHeight() - top + 0.001 &&
       vMerge === undefined &&
       row.height.rule !== 'exact' &&
@@ -909,12 +909,14 @@ export function* paginateTableInFlowSteps(
 
       const part = cutPart(structure, row, rowDeps(), contentHeight(), isContinuation, pinnedBreak);
       const placementDeps = part.deps;
+      // A continued row kept below its repeat places its rest past the margin.
+      const pastMargin = isContinuation && splitStartMisses;
       let placed = layoutRowFragmentBounded(
         row,
         structure.columnWidthsPt,
         tableLeft,
         flow.cursorY,
-        part.bottom,
+        pastMargin ? POSITIONED_TABLE_LAYOUT_BOTTOM_PT : part.bottom,
         false,
         isContinuation,
         0,
@@ -958,7 +960,7 @@ export function* paginateTableInFlowSteps(
         );
       }
 
-      if (placed.bottom > contentHeight() + 0.001) {
+      if (placed.bottom > contentHeight() + 0.001 && !pastMargin) {
         throw new TablePaginationError(
           'table-row-overheight',
           `Table row ${row.id} overflowed the page content box`
