@@ -153,3 +153,119 @@ describe('a renumbered note is measured, not just relettered', () => {
     expect(session.stats.fullPasses).toBe(before);
   });
 });
+
+// `order` is the citation order in the body. The notes part keeps its notes in id order, as a
+// new note is appended to it, so an earlier note's paragraph is unchanged by the insertion.
+function notesDoc(order: readonly number[]): Uint8Array {
+  const words = ['', 'One.', 'Two.', 'Three.'];
+  const body = order
+    .map(
+      (id) =>
+        `<w:p><w:r><w:t xml:space="preserve">Cites ${id}</w:t><w:footnoteReference w:id="${id}"/></w:r></w:p>`
+    )
+    .join('');
+  const notes = [...order]
+    .sort((a, b) => a - b)
+    .map(
+      (id) =>
+        `<w:footnote w:id="${id}"><w:p><w:r><w:footnoteRef/></w:r>` +
+        `<w:r><w:t xml:space="preserve"> ${words[id]}</w:t></w:r></w:p></w:footnote>`
+    )
+    .join('');
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/></Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}<w:sectPr/></w:body></w:document>`
+    ),
+    'word/footnotes.xml': strToU8(
+      `<w:footnotes xmlns:w="${W}">` +
+        '<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>' +
+        `${notes}</w:footnotes>`
+    ),
+  });
+}
+
+function noteAreaText(
+  order: readonly number[],
+  pass: {
+    readonly revision: number;
+    readonly cache: ReturnType<typeof createParagraphLayoutCache>;
+    readonly session?: ReturnType<typeof createLayoutSession>;
+    readonly numFmt?: string;
+  }
+): string[] {
+  const loaded = readOoxmlPackage(notesDoc(order));
+  if (!loaded.ok) throw new Error(loaded.reason);
+  const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+  const fp = resolveFootnoteProperties({ numFmt: pass.numFmt ?? 'decimal' } as never, undefined);
+  const ep = resolveEndnoteProperties(undefined, undefined);
+  const notes: NotesLayoutInput = {
+    footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
+    endnotesPart: null,
+    footnotePropsBySection: [fp],
+    endnotePropsBySection: [ep],
+    documentFootnoteProps: fp,
+    documentEndnoteProps: ep,
+    measurer,
+    producer: 'probe',
+    cache: pass.cache,
+  };
+  const layout = layoutSemanticDocument(part, pass.revision, {
+    measurer,
+    producer: 'probe',
+    notes,
+    cache: pass.cache,
+    ...(pass.session ? { session: pass.session } : {}),
+  });
+  return layout.pages.flatMap((page) =>
+    (page.footnotes?.notes ?? []).map((note) =>
+      note.fragments
+        .flatMap((f) =>
+          f.kind === 'paragraph' ? f.lines.flatMap((line) => line.spans.map((s) => s.text)) : []
+        )
+        .join('')
+    )
+  );
+}
+
+describe("a note's own mark follows its renumbering", () => {
+  // The `w:footnoteRef` at the head of a note paints the same derived mark as its citation,
+  // and like the citation's paragraph, the note's paragraph does not change when the mark does.
+  test('a note cited before another renumbers it on an incremental pass', () => {
+    const cache = createParagraphLayoutCache();
+    const session = createLayoutSession();
+    expect(noteAreaText([1, 2], { revision: 1, cache, session })).toEqual(['1 One.', '2 Two.']);
+    expect(noteAreaText([1, 3, 2], { revision: 2, cache, session })).toEqual([
+      '1 One.',
+      '2 Three.',
+      '3 Two.',
+    ]);
+  });
+
+  test('a numFmt change reaches the note area under a warm break cache', () => {
+    const cache = createParagraphLayoutCache();
+    noteAreaText([1, 2], { revision: 1, cache });
+    expect(noteAreaText([1, 2], { revision: 1, cache, numFmt: 'lowerRoman' })).toEqual([
+      'i One.',
+      'ii Two.',
+    ]);
+  });
+
+  test('unchanged marks still reuse the note paragraphs from the break cache', () => {
+    const cache = createParagraphLayoutCache();
+    noteAreaText([1, 2], { revision: 1, cache });
+    const entries = cache.size;
+    noteAreaText([1, 2], { revision: 1, cache });
+    expect(cache.size).toBe(entries);
+  });
+});

@@ -8,6 +8,7 @@ import * as React from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { cn } from '../../lib/utils';
 import { hostDocumentOf } from '@docx-editor.dev/core/editor';
+import { useChromeDark } from '../../editor/color-mode-context';
 
 /**
  * The open trigger, so the portal lands in the trigger's own document: a select inside an
@@ -76,7 +77,10 @@ function SelectContent({
   const trigger = React.useContext(SelectTriggerContext)?.trigger ?? null;
   const doc =
     typeof globalThis.document === 'undefined' && !trigger ? null : hostDocumentOf(trigger);
-  const isDark = !!doc?.querySelector('.docx-editor.dark');
+  // This editor's theme, not any editor's on the page: the enclosing Root's resolved mode, or
+  // a dark scope anywhere around the trigger (a host can still wrap the editor in `.dark`).
+  const chromeDark = useChromeDark();
+  const isDark = chromeDark || !!trigger?.closest('.docx-editor.dark');
   return (
     <SelectPrimitive.Portal {...(doc?.body ? { container: doc.body } : {})}>
       {/* Wrap in .docx-editor so Tailwind scoped utilities apply inside the portal */}

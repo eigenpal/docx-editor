@@ -611,6 +611,85 @@ describe('toolbar overflow integration', () => {
     expect(view.queryByTestId('toolbar-overflow-panel')).toBeNull();
   });
 
+  test('controls leave one at a time from the end of a group, and More holds exactly those', async () => {
+    installResizeObserverMock();
+    const { view } = mountToolbar(
+      <DocxEditorToolbar t={(key) => (key === 'formattingBar.more' ? 'More' : key)} />
+    );
+    const toolbar = view.getByTestId('docx-toolbar');
+    // Before any measurement the full bar renders: record each group's controls.
+    const full = new Map<string, string[]>();
+    for (const group of toolbar.querySelectorAll<HTMLElement>('[data-toolbar-group]')) {
+      const items = [...group.querySelectorAll<HTMLElement>(':scope > [data-toolbar-item]')];
+      full.set(
+        group.getAttribute('data-toolbar-group')!,
+        items.map((item) => item.getAttribute('data-toolbar-item')!)
+      );
+    }
+    // 30 px per control, no gaps (no stylesheet here), a 1 px separator, 100 px fixed.
+    for (const item of toolbar.querySelectorAll<HTMLElement>('[data-toolbar-item]')) {
+      Object.defineProperty(item, 'offsetWidth', { configurable: true, get: () => 30 });
+    }
+    for (const group of toolbar.querySelectorAll<HTMLElement>('[data-toolbar-group]')) {
+      // As wide as the controls it still draws, as in a browser.
+      Object.defineProperty(group, 'offsetWidth', {
+        configurable: true,
+        get: () => group.querySelectorAll(':scope > [data-toolbar-item]').length * 30,
+      });
+    }
+    for (const fixed of toolbar.querySelectorAll<HTMLElement>('[data-toolbar-fixed]')) {
+      Object.defineProperty(fixed, 'offsetWidth', { configurable: true, get: () => 100 });
+    }
+    const separator = toolbar.querySelector<HTMLElement>('.docx-toolbar__separator')!;
+    Object.defineProperty(separator, 'offsetWidth', { configurable: true, get: () => 1 });
+    let total = 100;
+    for (const items of full.values()) total += items.length * 30 + 1;
+    // Zoom leaves first (31 px) and the 34 px trigger arrives: 10 px less than that needs
+    // one more control from the next group, not the whole group.
+    const barWidth = total - 31 + 34 - 10;
+    Object.defineProperty(toolbar, 'clientWidth', { configurable: true, get: () => barWidth });
+    await act(async () => {
+      for (const observer of MockResizeObserver.instances) observer.flush();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+
+    const hidden: string[] = [];
+    const partial: string[] = [];
+    for (const [id, items] of full) {
+      const group = toolbar.querySelector<HTMLElement>(`[data-toolbar-group="${id}"]`);
+      const shown = group
+        ? [...group.querySelectorAll<HTMLElement>(':scope > [data-toolbar-item]')].map(
+            (item) => item.getAttribute('data-toolbar-item')!
+          )
+        : [];
+      // What stays is a prefix of the group, in bar order.
+      expect(shown).toEqual(items.slice(0, shown.length));
+      hidden.push(...items.slice(shown.length));
+      if (shown.length > 0 && shown.length < items.length) partial.push(id);
+    }
+    expect(hidden[0]).toBe('zoom.level');
+    expect(hidden.length).toBe(2);
+    expect(partial.length).toBe(1);
+    // A separator stands only between drawn groups.
+    for (const rule of toolbar.querySelectorAll('.docx-toolbar__separator')) {
+      expect(rule.previousElementSibling?.hasAttribute('data-toolbar-group') ||
+        rule.previousElementSibling?.hasAttribute('data-toolbar-fixed')).toBe(true);
+    }
+
+    await act(async () => {
+      view.getByLabelText('More').click();
+    });
+    const panel = view.getByTestId('toolbar-overflow-panel');
+    const inPanel = [...panel.querySelectorAll<HTMLElement>('[data-slot]')].map((element) =>
+      element.getAttribute('data-slot')
+    );
+    expect(inPanel).toEqual(hidden);
+    const sections = [...panel.querySelectorAll('.docx-toolbar__more-section')].map((section) =>
+      section.getAttribute('aria-label')
+    );
+    expect(sections).toEqual(['formattingBar.groups.zoom', `formattingBar.groups.${partial[0]}`]);
+  });
+
   test('hidden override is absent when its group collapses into More', async () => {
     installResizeObserverMock();
     const { view } = mountToolbar(

@@ -6,7 +6,7 @@ import { useTranslation } from '../i18n';
 import { useDocxEditor } from './context';
 import { useNavigationViewportElement } from './navigation/navigation-layout';
 import { useEditorState } from './useEditorState';
-import { useScopeClassName } from './scope-context';
+import { useChromeDark, useChromeScopeClassName } from './color-mode-context';
 import { useViewportOverlayHost } from './viewport-context';
 import { hostWindowOf } from '@docx-editor.dev/core/editor';
 
@@ -49,7 +49,8 @@ export interface DocxEditorPageNumberProps {
  * @public
  */
 export function DocxEditorPageNumber({ className, style }: DocxEditorPageNumberProps) {
-  const ancestorScope = useScopeClassName();
+  const ancestorScope = useChromeScopeClassName();
+  const dark = useChromeDark();
   const editor = useDocxEditor();
   const viewport = useNavigationViewportElement();
   // Inside the scroll container, an absolute overlay scrolls away with the pages.
@@ -82,7 +83,11 @@ export function DocxEditorPageNumber({ className, style }: DocxEditorPageNumberP
 
   if (total <= 1) return null;
   // The viewport scoped everything inside it; its parent may not be scoped.
-  const scopeClassName = host ? (hostScoped ? '' : 'docx-editor ') : ancestorScope;
+  const scopeClassName = host
+    ? hostScoped
+      ? ''
+      : `docx-editor ${dark ? 'dark ' : ''}`
+    : ancestorScope;
   const label = translate
     ? translate('viewer.pageIndicator')
         .replace(/\{current\}/g, String(current))

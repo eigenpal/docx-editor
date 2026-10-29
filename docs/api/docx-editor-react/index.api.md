@@ -1523,6 +1523,7 @@ export interface DocxEditorRootProps {
     author?: string;
     // (undocumented)
     children?: DocxEditorChildren;
+    colorMode?: 'light' | 'dark' | 'system';
     contentLockPolicy?: ContentLockPolicy;
     document?: DocumentSource;
     fieldResults?: FieldResultsMode;
@@ -2740,6 +2741,9 @@ export { RefreshSubmission }
 
 export { RefreshUpdate }
 
+// @public
+export type ResolvedColorMode = 'light' | 'dark';
+
 export { ResolvedRevisionMarkup }
 
 // @public
@@ -3417,6 +3421,14 @@ export interface UseDocxSourceResult {
 export function useEditorCaret(): EditorCaret | null;
 
 // @public
+export function useEditorColorMode(): UseEditorColorModeReturn;
+
+// @public
+export interface UseEditorColorModeReturn {
+    readonly colorMode: ResolvedColorMode;
+}
+
+// @public
 export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCommandState;
 
 // @public
@@ -3663,7 +3675,7 @@ export interface UseRevisionMarkupDialogReturn extends UseDialogReturn<ResolvedR
 }
 
 // @public
-export function useScopeClassName(): '' | 'docx-editor ';
+export function useScopeClassName(): '' | 'docx-editor ' | 'docx-editor dark ';
 
 // @public
 export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTMLElement | null, placement: ScopedChromeAnchorPlacement): ScopedChromeAnchor;

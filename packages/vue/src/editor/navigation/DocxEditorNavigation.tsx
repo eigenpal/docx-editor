@@ -9,7 +9,7 @@ import {
 } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { useFormControlTranslate } from '../form-control-translate';
-import { useScopeClassName } from '../scope-context';
+import { useChromeScopeClassName } from '../color-mode-context';
 import { NavigationContext, type NavigationContextValue } from './navigation-context';
 import { NAVIGATION_PANE_INSET, navigationPaneReservation } from './navigation-geometry';
 import { useDocumentOutline } from './useDocumentOutline';
@@ -103,7 +103,7 @@ const DocxEditorNavigationImpl = defineComponent({
     },
   },
   setup(props, { slots }) {
-    const scope = useScopeClassName();
+    const scope = useChromeScopeClassName();
     const chromeDir = useChromeDir();
     const paneOptions = (): UseNavigationPaneOptions => ({
       ...(props.paneWidth !== undefined ? { paneWidth: props.paneWidth } : {}),
@@ -162,7 +162,7 @@ const DocxEditorNavigationImpl = defineComponent({
     return () => (
       <div
         ref={focus.rootRef}
-        class={`${scope}docx-nav${pane.open.value ? ' docx-nav--open' : ''}${pane.overlay.value ? ' docx-nav--overlay' : ''}${props.className ? ` ${props.className}` : ''}`}
+        class={`${scope()}docx-nav${pane.open.value ? ' docx-nav--open' : ''}${pane.overlay.value ? ' docx-nav--overlay' : ''}${props.className ? ` ${props.className}` : ''}`}
         dir={chromeDir.value}
         data-open={pane.open.value ? 'true' : 'false'}
         onKeydown={focus.onKeyDown}

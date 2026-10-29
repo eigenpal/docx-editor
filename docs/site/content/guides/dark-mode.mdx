@@ -87,6 +87,71 @@ const colorMode = ref<'light' | 'dark'>('light');
 
 To follow the operating system instead, pass `colorMode="system"`.
 
+## Dark mode in a composed editor
+
+If you build the editor from parts, set `colorMode` on the root. Every part that you compose inside it, such as the toolbar, the menu bar, and the viewport, uses the same theme.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.Root document={bytes} colorMode="system">
+  <DocxEditor.Toolbar />
+  <DocxEditor.Viewport>
+    <DocxEditor.Content />
+  </DocxEditor.Viewport>
+</DocxEditor.Root>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditorRoot :document="bytes" color-mode="system">
+  <DocxEditorToolbar />
+  <DocxEditorViewport>
+    <DocxEditorContent />
+  </DocxEditorViewport>
+</DocxEditorRoot>
+```
+
+</Framework>
+</FrameworkTabs>
+
+A `dark` class on an element outside the editor, such as `html`, does not switch the editor's color tokens. A few utility variants and the drawing placeholder card still react to it. Pass the value of your application theme to `colorMode` instead, so every part uses one theme.
+
+### Match your own parts to the editor theme
+
+Parts that you build yourself, such as a side panel or a custom popover, can read the theme that the editor root resolved. `useScopeClassName()` adds `dark` to its class under a dark root, so a part that uses the `--doc-*` tokens follows the theme with no extra code. `useEditorColorMode()` returns `{ colorMode }`, where `colorMode` is `'light'` or `'dark'`. With `colorMode="system"`, it follows the operating system setting and updates when that setting changes.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { useEditorColorMode } from '@docx-editor.dev/react';
+
+function NotesPanel() {
+  const { colorMode } = useEditorColorMode();
+  return <aside className={colorMode === 'dark' ? 'notes notes--dark' : 'notes'} />;
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```ts
+import { computed } from 'vue';
+import { useEditorColorMode } from '@docx-editor.dev/vue';
+
+const { colorMode } = useEditorColorMode();
+const notesClass = computed(() => (colorMode.value === 'dark' ? 'notes notes--dark' : 'notes'));
+```
+
+</Framework>
+</FrameworkTabs>
+
+Outside the editor root, or when the root has no `colorMode`, the hook returns `'light'`. The packaged editor with `chrome={false}` draws no chrome and also reports `'light'`; read your own `colorMode` value there. With `'system'`, a server render and the first render in the browser report `'light'`, and the value updates once the editor reads the operating system setting.
+
 ## What dark mode changes
 
 Dark mode changes the editor controls and the document preview:

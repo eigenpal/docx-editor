@@ -4519,6 +4519,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: StringConstructor;
     };
+    colorMode: {
+        default: undefined;
+        type: PropType<'light' | 'dark' | 'system'>;
+    };
     contentLockPolicy: {
         default: undefined;
         type: PropType<ContentLockPolicy>;
@@ -4590,6 +4594,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: StringConstructor;
     };
+    colorMode: {
+        default: undefined;
+        type: PropType<'light' | 'dark' | 'system'>;
+    };
     contentLockPolicy: {
         default: undefined;
         type: PropType<ContentLockPolicy>;
@@ -4656,6 +4664,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     onRevisionMarkupChange?: ((_settings: ResolvedRevisionMarkup) => any) | undefined;
 }>, {
     author: string;
+    colorMode: "dark" | "light" | "system";
     contentLockPolicy: ContentLockPolicy;
     document: DocumentSource;
     fieldResults: FieldResultsMode;
@@ -4689,6 +4698,7 @@ export interface DocxEditorRootProps {
     author?: string;
     // (undocumented)
     children?: DocxEditorChildren;
+    colorMode?: 'light' | 'dark' | 'system';
     contentLockPolicy?: ContentLockPolicy;
     // (undocumented)
     document?: DocumentSource;
@@ -6933,6 +6943,9 @@ export { RefreshSubmission }
 
 export { RefreshUpdate }
 
+// @public
+export type ResolvedColorMode = 'light' | 'dark';
+
 export { ResolvedRevisionMarkup }
 
 // @public
@@ -7844,6 +7857,14 @@ export interface UseDocxSourceResult {
 // @public (undocumented)
 export function useEditorCaret(): ShallowRef<EditorCaret | null>;
 
+// @public
+export function useEditorColorMode(): UseEditorColorModeReturn;
+
+// @public
+export interface UseEditorColorModeReturn {
+    readonly colorMode: ComputedRef<ResolvedColorMode>;
+}
+
 // @public (undocumented)
 export function useEditorCommand(target: MaybeRefOrGetter<ChromeSlotId | EditorCommand>): EditorCommandState;
 
@@ -8120,8 +8141,8 @@ export interface UseRevisionMarkupDialogReturn extends UseDialogReturn<ResolvedR
     reset(): void;
 }
 
-// @public (undocumented)
-export function useScopeClassName(): '' | 'docx-editor ';
+// @public
+export function useScopeClassName(): '' | 'docx-editor ' | 'docx-editor dark ';
 
 // @public
 export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTMLElement | null, placement: ScopedChromeAnchorPlacement): ScopedChromeAnchor;

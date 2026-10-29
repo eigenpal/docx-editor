@@ -17,6 +17,7 @@ import {
 } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode, RefObject } from 'react';
 import { Slot } from './toolbar/Slot';
+import { useChromeDark } from './color-mode-context';
 import type { DocxEditorChildren } from '../docx-editor-children';
 
 /**
@@ -269,6 +270,7 @@ export function DialogFrame({
   // Rendered through `className`, not `classList.add`: React rewrites `class` whenever the
   // host's `className` changes, such as on a colour-mode switch, and would drop it.
   const [ownScope, setOwnScope] = useState(false);
+  const chromeDark = useChromeDark();
   useLayoutEffect(() => {
     const panel = ref.current;
     if (!panel) return;
@@ -300,7 +302,7 @@ export function DialogFrame({
       aria-modal="true"
       aria-label={label}
       aria-describedby={describedBy}
-      className={`docx-dialog${ownScope ? ' docx-editor' : ''}${className ? ` ${className}` : ''}`}
+      className={`docx-dialog${ownScope ? ` docx-editor${chromeDark ? ' dark' : ''}` : ''}${className ? ` ${className}` : ''}`}
       style={style}
       data-docx-dialog={kind}
       onCancel={(event) => {

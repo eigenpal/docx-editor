@@ -214,8 +214,7 @@
       "ValidatedRasterHeader",
       "ViewScope",
       "Watermark",
-      "ZoomMode",
-      "sameIds"
+      "ZoomMode"
     ],
     "export": [
       "AnchoredDrawingRecord",

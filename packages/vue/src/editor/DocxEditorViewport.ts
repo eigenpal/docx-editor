@@ -18,7 +18,8 @@ import {
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { claimsReviewGutter, useDocxEditor, useReviewRailRegistry } from './context';
 import { useEditorState } from './useEditorState';
-import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
+import { ScopedByAncestorContext } from './scope-context';
+import { useChromeScopeClassName } from './color-mode-context';
 import { InsideViewportContext } from './viewport-context';
 import { zoomLevelForShortcut } from './zoom-levels';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
@@ -54,7 +55,7 @@ export const DocxEditorViewport = defineComponent({
     const translation = useTranslation();
     provide(ScopedByAncestorContext, true);
     provide(InsideViewportContext, true);
-    const scopeClassName = useScopeClassName();
+    const scopeClassName = useChromeScopeClassName();
     const editorRef = useDocxEditor();
     const paneOpen = useEditorState(selectPaneOpen);
     const fitting = useEditorState(selectZoomFitting);
@@ -122,7 +123,7 @@ export const DocxEditorViewport = defineComponent({
         'aria-label': translation.t('editor.documentViewport'),
         onKeydownCapture: onKeyDownCapture,
         class: mergeHostClass(
-          `${scopeClassName}docx-editor-one-surface docx-editor-one-surface__viewport docx-editor__scroll-container`,
+          `${scopeClassName()}docx-editor-one-surface docx-editor-one-surface__viewport docx-editor__scroll-container`,
           props.class,
           props.className
         ),
