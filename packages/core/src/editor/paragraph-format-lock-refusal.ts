@@ -7,10 +7,14 @@ import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
-import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
-import { contentControlsIn } from '../store/package/content-control-nodes.ts';
-import { directParagraphProperties } from '../store/store/direct-properties.ts';
-import { effectiveContentLockAt, isBoundAt } from '../store/store/tree-op-nodes.ts';
+import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import {
+  contentControlPropertiesOf,
+  contentControlsIn,
+  lockForbidsEdit,
+} from '../store/package/content-control-nodes.ts';
+import { directParagraphProperties, propertyContainer } from '../store/store/direct-properties.ts';
+import { isBoundAt } from '../store/store/tree-op-nodes.ts';
 import { validateTreeOp } from '../store/store/tree-op-validate.ts';
 import type { TreeDocOp } from '../store/store/tree-op-types.ts';
 import { paragraphsInCells } from '../layout/semantic-cell-selection.ts';
@@ -76,14 +80,43 @@ function selectedParagraphIds(surface: PaginatedSurface): readonly string[] {
   return order.slice(Math.min(a, b), Math.max(a, b) + 1);
 }
 
-/** Whether a lock or a binding can reach this paragraph's properties at all: most cannot. */
-function mayBeProtected(part: OoxmlPart, paragraphId: string): boolean {
+/**
+ * Per story root: the paragraphs inside a control that locks content or binds data. Every
+ * paragraph the store can protect is in this set, so the store is asked only about these.
+ * Canonical roots are immutable per revision, so the root identity is a safe key.
+ */
+const PROTECTED_PARAGRAPHS = new WeakMap<object, ReadonlySet<string>>();
+
+function protectedParagraphs(part: OoxmlPart): ReadonlySet<string> {
+  const known = PROTECTED_PARAGRAPHS.get(part.root);
+  if (known) return known;
+  const ids = new Set<string>();
+  for (const entry of contentControlsIn(part.root)) {
+    const properties = contentControlPropertiesOf(entry.node);
+    if (!lockForbidsEdit(properties.lock) && properties.dataBinding === undefined) continue;
+    const pending: OoxmlNode[] = [entry.node];
+    while (pending.length > 0) {
+      const node = pending.pop()!;
+      if (node.kind === 'textValue') continue;
+      if (node.kind === 'paragraph') ids.add(node.id);
+      for (const child of node.children) pending.push(child);
+    }
+  }
+  PROTECTED_PARAGRAPHS.set(part.root, ids);
+  return ids;
+}
+
+/** Whether the paragraph holds a pending paragraph property change. */
+function hasPendingParagraphChange(part: OoxmlPart, paragraphId: string): boolean {
   const paragraph = findNode(part, paragraphId);
-  if (!paragraph || paragraph.kind !== 'paragraph') return false;
+  if (paragraph?.kind !== 'paragraph') return false;
+  const properties = propertyContainer(paragraph, 'paragraphProperties', 'pPr');
   return (
-    effectiveContentLockAt(part, paragraphId).content ||
-    isBoundAt(part, paragraphId) ||
-    contentControlsIn(paragraph).length > 0
+    properties !== undefined &&
+    properties.kind !== 'textValue' &&
+    properties.children.some(
+      (child) => child.kind !== 'textValue' && child.localName === 'pPrChange'
+    )
   );
 }
 
@@ -140,10 +173,25 @@ export function paragraphFormatLockRefusal(
     !surface.session.trackingSettings().doNotTrackFormatting
       ? writer
       : undefined;
+  let lastPart: OoxmlPart | null = null;
+  let guarded: ReadonlySet<string> = new Set();
   for (const paragraphId of selectedParagraphIds(surface)) {
     // A pure ancestry read of the story that holds the paragraph.
     const part = partOfNodeId(surface.session, paragraphId) ?? surface.session.part();
-    if (!mayBeProtected(part, paragraphId)) continue;
+    if (part !== lastPart) {
+      lastPart = part;
+      guarded = protectedParagraphs(part);
+    }
+    if (!guarded.has(paragraphId)) continue;
+    // A lock lets alignment through, so only a binding or a pending tracked change that the
+    // write would merge into can refuse it: skip the store for every other paragraph.
+    if (
+      aligns &&
+      !isBoundAt(part, paragraphId) &&
+      (author === undefined || !hasPendingParagraphChange(part, paragraphId))
+    ) {
+      continue;
+    }
     const refused = validateTreeOp(part, probeOp(part, paragraphId, aligns, author), {
       contentLockPolicy: policy,
     });
