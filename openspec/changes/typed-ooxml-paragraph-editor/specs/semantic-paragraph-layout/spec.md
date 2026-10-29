@@ -711,6 +711,16 @@ In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingCo
 - **THEN** the word stays on the line and the line ends at the margin
 - **AND** without punctuation compression the word moves to the next line
 
+### Requirement: A chopped word keeps its final mark
+
+When a word wider than its line breaks at its last fitting character, and that break would leave only the word's final mark for the next line, the mark SHALL hang past the margin if the paragraph lets it hang. A mark inside the word SHALL still open the next line.
+
+#### Scenario: A final period hangs after a long unbroken word
+
+- **GIVEN** a justified mode 15 paragraph of Latin words joined by commas, with no spaces, in a Chinese East Asian language run, that ends with a period
+- **WHEN** the period overflows the last full line
+- **THEN** the period hangs past the margin instead of opening a line alone
+
 ### Requirement: Combining kana sound marks follow their face
 
 The layout engine SHALL measure and paint the combining kana sound marks (U+3099, U+309A) by their face. A face that classes the mark glyph as a mark SHALL join it with the kana before it and add no width. A face that gives the unclassed glyph an advance SHALL draw the mark in its own cell beside an uncomposed base. The mark SHALL never start a line apart from its base.

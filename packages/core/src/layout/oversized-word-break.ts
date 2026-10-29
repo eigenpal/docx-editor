@@ -13,6 +13,8 @@ export interface OversizedWordPrefix {
 export interface OversizedWordRemainder extends OversizedWordPrefix {
   /** Whether chopping closed at least one line, so the caller can preserve word state. */
   readonly brokeLine: boolean;
+  /** The remainder stays on the line, and its final mark hangs past the margin. */
+  readonly finalMarkHangs?: true;
 }
 
 /**
@@ -70,6 +72,13 @@ export function chopOversizedWord(
      * the measure it GROWS past it instead, pushing the protected seam out past the margin.
      */
     readonly cutAllowedAt?: (text: string, utf16Index: number) => boolean;
+    /**
+     * Whether `text`, the rest of the word at `width`, may stay on the current line with its
+     * final mark hanging past the margin. Asked when a cut would leave only the word's final
+     * grapheme for the next line; a mark that ends the word then hangs rather than open a line
+     * alone. A mark inside the word still opens the next line.
+     */
+    readonly finalMarkHangs?: (text: string, width: number) => boolean;
   }
 ): OversizedWordRemainder {
   if (
@@ -146,6 +155,18 @@ export function chopOversizedWord(
       options.closeLine();
       brokeLine = true;
       continue;
+    }
+    if (fitTo === graphemes.length - 1 && options.finalMarkHangs) {
+      const rest = text.slice(utf16From);
+      const restWidth = options.measureText(rest);
+      if (options.finalMarkHangs(rest, restWidth))
+        return {
+          text: rest,
+          modelStart: modelStart + utf16From,
+          width: restWidth,
+          brokeLine,
+          finalMarkHangs: true,
+        };
     }
     // The final group may continue in the next run. Keep it on the pending line;
     // only the caller can decide whether the next piece permits a line break.

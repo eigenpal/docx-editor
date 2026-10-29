@@ -1326,9 +1326,9 @@ export function breakParagraph(
       let clippedWordEnd = clipWordEndAtPen();
       width = clippedWordEnd?.width ?? width;
       const ends = paragraphFinal(pieceIndex, boundary);
-      const hangsAtLineEnd = () =>
+      const hangsAtLineEnd = (text = candidate, textWidth = width) =>
         (typography.hangingPunctuation ?? typography.overflowPunctuation) &&
-        canHangCjkPunctuation(candidate, piece, lineAvailable() - line.width, width, measurer, {
+        canHangCjkPunctuation(text, piece, lineAvailable() - line.width, textWidth, measurer, {
           paragraphFinal: ends,
           policy: typography,
         });
@@ -1577,7 +1577,9 @@ export function breakParagraph(
           cutAllowedAt: textBreaks
             ? (_text, index) => textBreaks.cutAllowed(piece, consumed, index)
             : cjkChopCutAllowedAt,
+          finalMarkHangs: hangsAtLineEnd,
         });
+        if (chopped.finalMarkHangs) hangs = true;
         remaining = chopped.text;
         remainingStart = chopped.modelStart;
         remainingWidth = chopped.width;
