@@ -2,6 +2,7 @@ import { computed, type ComputedRef } from 'vue';
 import type { EditorSnapshot, IndentFormatting } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
+import { useEditorCommand } from './useEditorCommand';
 
 /** @public */
 export interface IndentUpdate {
@@ -20,6 +21,7 @@ export interface UseParagraphIndentReturn {
 const selectIndent = (snapshot: EditorSnapshot): IndentFormatting | null =>
   snapshot.formatting?.indent ?? null;
 const selectEditable = (snapshot: EditorSnapshot): boolean => snapshot.editable;
+const SET_INDENT_PROBE = { type: 'setIndent', left: 0 } as const;
 
 /** @public */
 export function useParagraphIndent(): UseParagraphIndentReturn {
@@ -27,12 +29,10 @@ export function useParagraphIndent(): UseParagraphIndentReturn {
   const indent = useEditorState(selectIndent);
   const editable = useEditorState(selectEditable);
 
-  const isEnabled = computed(
-    () =>
-      editable.value &&
-      editorRef.value !== null &&
-      editorRef.value.can({ type: 'setIndent', left: 0 }).ok
-  );
+  // The answer depends on the selection too (a content lock refuses indents), so it comes from the command
+  // state, which re-reads `can` on every snapshot.
+  const command = useEditorCommand(SET_INDENT_PROBE);
+  const isEnabled = computed(() => editable.value && command.isEnabled.value);
 
   const apply = (update: IndentUpdate): boolean => {
     if (!editorRef.value) return false;
