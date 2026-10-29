@@ -60,7 +60,7 @@ function prepend(paragraph: OoxmlElement, content: readonly OoxmlNode[]): OoxmlE
 }
 /**
  * A run of paragraphs whose marks a decision removed, joined into the paragraph after them.
- * The joined paragraph is the FIRST one, with its attributes, as a join by deleting a mark
+ * The joined paragraph is the first one that brings content, with its attributes, as a join by deleting a mark
  * keeps the paragraph before it: an undo of the split that inserted the mark removes the
  * paragraph after it, and a decision and that undo made at the same time then keep the same
  * paragraph. It takes the properties of the mark that remains, the last paragraph's, and the
@@ -138,7 +138,10 @@ export function mergeRevisionParagraphs(
         // A dropped paragraph only adds to the carried content; the one that keeps its mark
         // is built once, so a long run of joins stays linear.
         for (const child of node.children) if (!properties(child)) carried.push(child);
-        carrier ??= node as OoxmlElement;
+        // Only a paragraph that brings content is the one the join keeps. A paragraph the
+        // decision emptied, as accepting a deleted paragraph does, goes, and the paragraph
+        // after it keeps its own identity.
+        if (!carrier && node.children.some(bringsContent)) carrier = node as OoxmlElement;
         continue;
       }
       out.push(carrier ? joinedInto(carrier, node as OoxmlElement, carried) : node);
@@ -350,6 +353,10 @@ function lastTwoBlocks(children: readonly OoxmlNode[]): readonly OoxmlNode[] {
 
 /** Containers whose emptied last paragraph goes with its content. */
 const DROPS_LAST_PARAGRAPH: ReadonlySet<string> = new Set(['txbxContent', 'customXml']);
+
+/** A child a joined paragraph carries that is content: not properties, a marker, or empty. */
+const bringsContent = (node: OoxmlNode) =>
+  !properties(node) && !emptyRun(node) && (node.kind === 'textValue' || !isInertMarker(node));
 
 const emptyRun = (node: OoxmlNode) =>
   node.kind === 'run' && node.children.every((child) => isNamed(child, 'rPr'));

@@ -49,3 +49,22 @@ for (const { action, kind } of [
     expect(xml).not.toContain('00000002');
   });
 }
+
+test('accepting a deleted paragraph keeps the paragraph after it', () => {
+  const del = 'w:id="1" w:author="Ada"';
+  const part = load(
+    `<w:p w14:paraId="00000001"><w:pPr><w:rPr><w:del ${del}/></w:rPr></w:pPr>` +
+      `<w:del ${del}><w:r><w:delText>gone</w:delText></w:r></w:del></w:p>` +
+      `<w:p w14:paraId="00000002"><w:r><w:t>kept</w:t></w:r></w:p>`
+  );
+  const second = paragraphs(part.root)[1]!;
+  const result = applyTreeOp(part, { op: 'acceptAllRevisions' });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  const after = paragraphs(result.part.root);
+  expect(after).toHaveLength(1);
+  expect(after[0]!.id).toBe(second.id);
+  expect(serializeOoxmlPart(result.part)).toContain(
+    '<w:p w14:paraId="00000002"><w:r><w:t>kept</w:t></w:r></w:p>'
+  );
+});
