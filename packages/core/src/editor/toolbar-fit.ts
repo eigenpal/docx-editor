@@ -52,8 +52,9 @@ export const TOOLBAR_COLLAPSE_ORDER: readonly string[] = [
 export const TOOLBAR_PINNED_GROUPS: ReadonlySet<string> = new Set(['review']);
 
 /**
- * Px of surplus, beyond a control's own width, the bar must have before that control comes
- * back OUT of the overflow menu. A 24 px icon therefore returns at 48 px of free room.
+ * Px of surplus, beyond what a control costs (its width and gap, plus its group's separator
+ * slot when it is the group's first control back, less the "⋯" trigger when it is the last
+ * hidden one), the bar must have before that control comes back OUT of the overflow menu.
  *
  * Without it a value control that widens with its own value (font family going from
  * "Arial" to "Times New Roman") pushes itself out, which frees the width that pulled it

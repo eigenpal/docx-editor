@@ -139,8 +139,10 @@ describe('toolbarOverflowItems', () => {
   test('controls come back only past the hysteresis slack', () => {
     const narrow = fit(230);
     expect(narrow.get('text')).toBe(1);
-    // 10 px wider is not enough to bring the strike button back (it needs 32 + 24 slack).
-    expect(sameItemOverflow(fit(240, { previous: narrow }), narrow)).toBe(true);
+    // At 255 px the strict fit would bring a control back; without a previous answer it does.
+    expect(sameItemOverflow(fit(255), narrow)).toBe(false);
+    // With the previous answer, the slack holds the bar as it was at this width.
+    expect(sameItemOverflow(fit(255, { previous: narrow }), narrow)).toBe(true);
     // Room for the control and the slack brings it back.
     const wide = fit(282 + 24, { previous: narrow });
     expect(wide.size).toBe(0);
