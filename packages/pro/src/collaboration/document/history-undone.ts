@@ -143,26 +143,24 @@ export function stepHistory(
       }
     }
   }
-  afterStep();
   let pushed = opposite.length > before ? opposite[opposite.length - 1] : undefined;
-  if (direction === 'redo') {
-    const keys = runsOf<string>(popped, HIDDEN_KEYS);
-    if (keys && keys.length > 0) {
-      registry.doc.transact(() => textDeletionsOf(registry.doc).withdraw(keys));
+  // The restore marks and the deletion records follow the history step in one transaction,
+  // so each paragraph they touch reads its text again once, not once per write. No undo
+  // stack tracks that transaction.
+  registry.doc.transact(() => {
+    afterStep();
+    if (direction === 'redo') {
+      const keys = runsOf<string>(popped, HIDDEN_KEYS);
+      if (keys && keys.length > 0) textDeletionsOf(registry.doc).withdraw(keys);
     }
-  }
-  if (runs.length > 0) {
-    pushed ??= pushCopiesOnly(opposite);
-    pushed.meta.set(COPY_RUNS, runs);
-    if (direction === 'undo') {
-      // As the marks above, the record follows the history step; no undo stack tracks it.
-      let keys: string[] = [];
-      registry.doc.transact(() => {
-        keys = textDeletionsOf(registry.doc).record(runs);
-      });
-      pushed.meta.set(HIDDEN_KEYS, keys);
+    if (runs.length > 0) {
+      pushed ??= pushCopiesOnly(opposite);
+      pushed.meta.set(COPY_RUNS, runs);
+      if (direction === 'undo') {
+        pushed.meta.set(HIDDEN_KEYS, textDeletionsOf(registry.doc).record(runs));
+      }
     }
-  }
+  }, RESTORE_ORIGIN);
   if (grouped) {
     // The step that undoes this undo is the group's step too, even when it changes nothing.
     pushed ??= pushCopiesOnly(opposite);

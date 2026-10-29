@@ -6,7 +6,6 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { projectedTextTarget } from './projected-text-target.ts';
 import { routeInlineEffects, type InlinePlan } from './paragraph-text-writer.ts';
 import { recordRelocatedMarkers } from './relocated-markers.ts';
-import { paragraphsInsideRemoved } from './removed-descendants.ts';
 import { writeTypedInsert, type TypedInsert } from './paragraph-text-typing.ts';
 import {
   applyInlinePlan,
@@ -639,11 +638,7 @@ export function applyPrimitiveJournal(
       );
     });
     tombstoneRemoved(registry, effects, planned, formerChildren);
-    const removed = deleteCopiesOfRemoved(
-      registry,
-      planned.removed,
-      paragraphsInsideRemoved(registry, planned.removed)
-    );
+    const removed = deleteCopiesOfRemoved(registry, planned.removed);
     const written: InlineWritten = plan
       ? applyInlinePlan(registry, plan, tokens)
       : { copied: new Set<string>(), deleted: new Set<string>(), embedded: new Set<string>() };

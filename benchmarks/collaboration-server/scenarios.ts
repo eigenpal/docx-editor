@@ -138,7 +138,14 @@ export const SCENARIO_CONFIGS = {
   // Explicit undo groups opened and closed at random, with pauses past the capture window.
   undoGroups: { replicas: 3, steps: 200, undoChance: 0.12, groupChance: 0.1 },
   join: { replicas: 2, steps: 200, lateJoiners: 3 },
-  everything: { replicas: 4, steps: 300, offlineChance: 0.04, undoChance: 0.08, lateJoiners: 2 },
+  everything: {
+    replicas: 4,
+    steps: 300,
+    offlineChance: 0.04,
+    undoChance: 0.08,
+    lateJoiners: 2,
+    weights: { unwrapControl: 1 },
+  },
   // Updates that arrive twice, never, or cut short, repaired by state-vector syncs.
   faults: {
     replicas: 4,

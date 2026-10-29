@@ -165,9 +165,11 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
   { config: 'reorder', delivery: 'peer', seed: 12 },
   { config: 'reorderUndo', delivery: 'server', seed: 25 },
   { config: 'reorderEverything', delivery: 'server', seed: 52 },
-  // Two replicas deleted one row or table at once and one undid its delete: the text the other
-  // deleted showed again. An undo of a replica's own move, split, or edit beside a moved block
-  // took back a peer's text or left a moved separator with no paragraph identity.
+  // Two replicas deleted one row or table at once and one undid its delete: the row showed
+  // again, with the text the other deleted (server 40, 1005, 1045). An undone table move left
+  // its separator, which a peer moved at the same time, with no paragraph identity (peer
+  // 1058). Peer 95 was a false report of the check: a replica's undo of its own copy of typing
+  // that the typist had already undone.
   { config: 'reorderUndo', delivery: 'server', seed: 40 },
   { config: 'reorderUndo', delivery: 'server', seed: 1005 },
   { config: 'reorderEverything', delivery: 'server', seed: 1045 },

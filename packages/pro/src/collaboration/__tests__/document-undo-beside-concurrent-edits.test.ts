@@ -29,6 +29,7 @@ import {
   zipDocument,
   type Peer,
 } from './document-peer-support.ts';
+import { FIELD_SEP, PACKAGE_ATTRIBUTES_KEY } from '../document/schema.ts';
 
 const harnesses: ReturnType<typeof createPeerHarness>[] = [];
 
@@ -111,11 +112,15 @@ function moveBlock(peer: Peer, id: string, to: number): void {
 }
 
 describe('two peers delete the same table content and one undoes', () => {
-  // The peer that deletes typed text it saw, while the other peer, which never saw it,
-  // deletes the same row, column, or table and undoes. Only the undoing peer's delete goes.
+  // One peer deletes typed text it saw, while the other peer, which never saw it, deletes the
+  // same row, column, or table and undoes. Only the undoing peer's delete goes: the content
+  // stays deleted, structure and text, whichever peer's write the shared state kept.
   const deletes: readonly {
     readonly name: string;
     readonly op: (peer: Peer) => TreeDocOp;
+    /** The paragraphs and the cell count every peer shows at the end. */
+    readonly after: readonly string[];
+    readonly cells: number;
   }[] = [
     {
       name: 'a row',
@@ -124,6 +129,8 @@ describe('two peers delete the same table content and one undoes', () => {
         tableId: elementIds(peer, 'tbl')[0]!,
         rowId: elementIds(peer, 'tr')[0]!,
       }),
+      after: ['Before', 'a2', 'b2', 'After'],
+      cells: 2,
     },
     {
       name: 'a column',
@@ -132,15 +139,19 @@ describe('two peers delete the same table content and one undoes', () => {
         tableId: elementIds(peer, 'tbl')[0]!,
         gridColumnId: elementIds(peer, 'gridCol')[1]!,
       }),
+      after: ['Before', 'a1', 'a2', 'After'],
+      cells: 2,
     },
     {
       name: 'the table',
       op: (peer) => ({ op: 'deleteBlock', blockId: elementIds(peer, 'tbl')[0]! }),
+      after: ['Before', 'After'],
+      cells: 0,
     },
   ];
   for (const { label, ids } of CLIENT_ORDERS) {
-    for (const { name, op } of deletes) {
-      test(`${name}: the text the other peer deleted stays deleted (${label})`, async () => {
+    for (const { name, op, after, cells } of deletes) {
+      test(`${name} stays deleted, with the text the other peer deleted (${label})`, async () => {
         const harness = harnessWith(ids);
         const { alice, bob, pause, resume } = await harness.pair(TABLE_DOCUMENT);
         pause();
@@ -153,9 +164,15 @@ describe('two peers delete the same table content and one undoes', () => {
         resume();
         harness.expectConverged(alice, bob);
         for (const peer of [alice, bob]) {
-          expect(texts(peer).join('|')).not.toContain('X');
-          expect(texts(peer).join('|')).not.toContain('b1');
+          expect(texts(peer)).toEqual([...after]);
+          expect(elementIds(peer, 'tc')).toHaveLength(cells);
         }
+        // The other peer's own undo still takes its delete, and its typing, back.
+        while (alice.room.session.undo()) {
+          // Every step of Alice's.
+        }
+        harness.expectConverged(alice, bob);
+        expect(texts(bob)).toEqual(['Before', 'a1', 'b1', 'a2', 'b2', 'After']);
       });
     }
   }
@@ -304,5 +321,32 @@ describe('an undone table move whose separator a peer moved', () => {
     );
     const shown = bob.room.session.remoteSelections().find((s) => s.actorId === 'alice');
     expect(shown?.head).toMatchObject(point);
+  });
+
+  test('an undo with no concurrent move keeps only the created nodes attributes', async () => {
+    const harness = harnessWith(CLIENT_ORDERS[0].ids);
+    const { alice, bob } = await harness.pair(DOCUMENT);
+    const [, second] = elementIds(bob, 'tbl');
+    harness.apply(bob, [
+      { op: 'moveTable', tableId: second!, beforeBlockId: harness.paragraphIdAt(bob, 2) },
+    ]);
+    const separator = bodyOf(bob).children.find(
+      (node) => node.kind === 'paragraph' && nodeText(node) === ''
+    );
+    if (!separator) throw new Error('no separator');
+    const paraId = paraIdOf(bob, separator.id);
+    const attributes = bob.ydoc.getMap<string>(PACKAGE_ATTRIBUTES_KEY);
+    const describing = () =>
+      [...attributes.keys()].filter((key) => key.startsWith(`${separator.id}${FIELD_SEP}`));
+    const before = describing();
+    expect(before.length).toBeGreaterThan(0);
+    expect(bob.room.session.undo()).toBe(true);
+    harness.expectConverged(alice, bob);
+    expect(bodyOf(alice).children.some((node) => node.id === separator.id)).toBe(false);
+    // The record keeps its own attributes, and nothing more.
+    expect(describing()).toEqual(before);
+    expect(bob.room.session.redo()).toBe(true);
+    harness.expectConverged(alice, bob);
+    expect(paraIdOf(alice, separator.id)).toBe(paraId);
   });
 });

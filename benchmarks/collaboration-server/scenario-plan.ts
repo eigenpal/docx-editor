@@ -156,6 +156,7 @@ export const REORDER_WEIGHTS: Partial<Record<EditKind, number>> = {
   insertRow: 2,
   deleteRow: 2,
   format: 4,
+  unwrapControl: 1,
 };
 
 export const TRACKED_WEIGHTS: Partial<Record<EditKind, number>> = {
