@@ -123,6 +123,13 @@ function entryIdentity(entry: Element): string {
   return entry.getAttribute('data-slot') ?? entry.getAttribute('aria-label') ?? entry.className;
 }
 
+/** A group's controls, through each control's `docx-toolbar__item` collapse wrapper. */
+function groupEntries(group: Element): Element[] {
+  return [...group.children].flatMap((entry) =>
+    entry.classList.contains('docx-toolbar__item') ? [...entry.children] : [entry]
+  );
+}
+
 /** Flatten intentional top-level group wrappers; keep separators and direct children. */
 function toolbarArrangement(toolbar: HTMLElement): string[] {
   return [...toolbar.children].flatMap((child) => {
@@ -131,7 +138,7 @@ function toolbarArrangement(toolbar: HTMLElement): string[] {
       child.classList.contains('docx-toolbar__group') ||
       child.classList.contains('docx-toolbar__contextual')
     ) {
-      return [...child.children].map(entryIdentity);
+      return groupEntries(child).map(entryIdentity);
     }
     return entryIdentity(child);
   });
@@ -149,7 +156,7 @@ function entryRootAtFlatIndex(toolbar: HTMLElement, index: number): Element | nu
       child.classList.contains('docx-toolbar__group') ||
       child.classList.contains('docx-toolbar__contextual')
     ) {
-      for (const entry of child.children) {
+      for (const entry of groupEntries(child)) {
         if (flat === index) return entry;
         flat += 1;
       }

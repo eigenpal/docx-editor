@@ -21,19 +21,15 @@ import {
   computed,
   defineComponent,
   h,
-  onMounted,
-  onUnmounted,
   provide,
-  ref,
   shallowRef,
-  watch,
   type CSSProperties,
   type PropType,
   type VNode,
 } from 'vue';
 import type { TranslationKey } from '../i18n';
 import { LocaleProvider, useChromeDir, useTranslation } from '../i18n';
-import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../lib/colorMode';
+import { useResolvedDark } from '../editor/color-mode-context';
 import { DocxEditorRoot } from '../editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../editor/DocxEditorViewport';
 import { DocxEditorContent } from '../editor/DocxEditorContent';
@@ -359,32 +355,9 @@ const DocxEditorFrame = defineComponent({
     const contextMenu = computed(() => props.contextMenu ?? true);
     const hyperlinkPopup = computed(() => props.hyperlinkPopup ?? true);
 
-    const systemDark = ref(prefersColorSchemeDark());
-    let unsubscribeDark: (() => void) | undefined;
-    onMounted(() => {
-      if (props.colorMode === 'system') {
-        unsubscribeDark = subscribeSystemDark((dark) => {
-          systemDark.value = dark;
-        });
-      }
-    });
-    onUnmounted(() => unsubscribeDark?.());
-
-    watch(
-      () => props.colorMode,
-      (mode, _, onCleanup) => {
-        unsubscribeDark?.();
-        unsubscribeDark = undefined;
-        if (mode === 'system') {
-          unsubscribeDark = subscribeSystemDark((dark) => {
-            systemDark.value = dark;
-          });
-          onCleanup(() => unsubscribeDark?.());
-        }
-      }
-    );
-
-    const isDark = computed(() => resolveIsDark(props.colorMode, systemDark.value));
+    // Chrome colour mode: 'system' subscribes to the OS setting. The same rule `Root`
+    // applies, which this also hands the mode to for the parts that scope themselves.
+    const isDark = useResolvedDark(() => props.colorMode);
     const translation = useTranslation();
     // The chrome direction a provider decided; nothing keeps the host page direction.
     const chromeDir = useChromeDir();
@@ -542,6 +515,8 @@ const DocxEditorFrame = defineComponent({
           ...(props.locale !== undefined ? { locale: props.locale } : {}),
           popups: createPackagedPopups(props.popups, hyperlinkPopup.value, contextMenu.value, t),
           translate: t,
+          // Only with chrome: `chrome={false}` has never themed its bare viewport.
+          ...(chrome.value ? { colorMode: props.colorMode } : {}),
           ...(props.mode !== undefined ? { mode: props.mode } : { mode: 'edit' }),
           ...(props.modules !== undefined ? { modules: props.modules } : {}),
           ...(props.zoom !== undefined ? { zoom: props.zoom } : {}),

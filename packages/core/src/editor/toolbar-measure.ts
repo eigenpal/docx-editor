@@ -372,3 +372,125 @@ export function readAvailableWidth(bar: HTMLElement, style: CSSStyleDeclaration)
   grewFromRoom.set(bar, room > own);
   return room;
 }
+
+/**
+ * Widths that survive a control leaving the bar: a control in the "⋯" menu renders nothing
+ * to measure, and forgetting its width would mean never knowing whether it could come back.
+ *
+ * @internal
+ */
+export interface ToolbarRowMemory {
+  /** `toolbarItemKey(group, item)` -> width, in px. */
+  readonly itemWidths: Map<string, number>;
+  /** Group id -> separator slot plus the group's own padding, in px. */
+  readonly groupBases: Map<string, number>;
+  /** The "⋯" trigger's cost, in px. Seed it with an assumed width. */
+  more: number;
+}
+
+/**
+ * One measurement of the bar, for the item fit.
+ *
+ * @internal
+ */
+export interface ToolbarRowReading {
+  /** The content width the bar can take, in px. */
+  readonly available: number;
+  /** The bar's flex gap, in px. */
+  readonly gap: number;
+  /** Width of everything that never collapses, in px. */
+  readonly fixed: number;
+  /** The "⋯" trigger's cost, in px. */
+  readonly more: number;
+}
+
+/** Marks one control of a collapsible group; the value is the control id. */
+const ITEM_ATTRIBUTE = 'data-toolbar-item';
+
+/**
+ * A box width with its fraction kept: rounded widths add up to a bar that clips. Falls back
+ * to the layout width where the box reports none.
+ */
+function boxWidth(element: Element): number {
+  const width = element.getBoundingClientRect().width;
+  if (width > 0) return width;
+  const offset = (element as HTMLElement).offsetWidth;
+  return typeof offset === 'number' && offset > 0 ? offset : 0;
+}
+
+/**
+ * Reads the bar into `memory` and returns what the item fit needs.
+ *
+ * Each `[data-toolbar-group]` element is a collapsible group. Its direct
+ * `[data-toolbar-item]` children are its controls, stored under `itemKey(group, item)`. A
+ * group with no item children (the contextual table block) is one control whose id is the
+ * group id. `[data-toolbar-fixed]` elements never collapse, and `[data-toolbar-more]` is the
+ * trigger.
+ *
+ * Every group is charged a leading separator slot, the first one included. That overstates
+ * the row by one separator, so the bar collapses a few px early: the safe direction.
+ *
+ * @internal
+ */
+export function readToolbarRow(
+  bar: HTMLElement,
+  memory: ToolbarRowMemory,
+  itemKey: (groupId: string, itemId: string) => string
+): ToolbarRowReading {
+  const view = hostWindowOf(bar);
+  const style = view.getComputedStyle(bar);
+  const gap = readColumnGap(style);
+  const available = readAvailableWidth(bar, style);
+  const separator = bar.querySelector<HTMLElement>('.docx-toolbar__separator');
+  let separatorLeading = gap * 2;
+  if (separator) {
+    const margins = readInlineMargins(view.getComputedStyle(separator));
+    separatorLeading = separatorLeadingCost(separator.offsetWidth, margins.start, margins.end, gap);
+  }
+
+  for (const group of bar.querySelectorAll<HTMLElement>('[data-toolbar-group]')) {
+    const id = group.getAttribute('data-toolbar-group');
+    // A group mid-transition can measure zero; keeping the last real width beats recording a
+    // zero that would make it look free forever.
+    const width = boxWidth(group);
+    if (!id || !(width > 0)) continue;
+    const items: Element[] = [];
+    for (const child of group.children) {
+      if (child.hasAttribute(ITEM_ATTRIBUTE)) items.push(child);
+    }
+    if (items.length === 0) {
+      memory.itemWidths.set(itemKey(id, id), width);
+      memory.groupBases.set(id, separatorLeading);
+      continue;
+    }
+    let content = 0;
+    let shown = 0;
+    for (const item of items) {
+      const itemId = item.getAttribute(ITEM_ATTRIBUTE) ?? '';
+      const itemWidth = boxWidth(item);
+      if (itemWidth > 0) {
+        memory.itemWidths.set(itemKey(id, itemId), itemWidth);
+        content += itemWidth;
+        shown += 1;
+      } else if (item.childNodes.length === 0) {
+        // Nothing to draw (a part that rendered null): it takes no room, now or later.
+        memory.itemWidths.set(itemKey(id, itemId), 0);
+      }
+    }
+    const own = Math.max(0, width - content - Math.max(0, shown - 1) * gap);
+    memory.groupBases.set(id, separatorLeading + own);
+  }
+
+  let fixed = 0;
+  for (const element of bar.querySelectorAll<HTMLElement>('[data-toolbar-fixed]')) {
+    const width = boxWidth(element);
+    if (width > 0) fixed += trailingGapCost(width, gap);
+  }
+  const more = bar.querySelector<HTMLElement>('[data-toolbar-more]');
+  // More follows flex content; it is not preceded by a separator rule.
+  if (more) {
+    const width = boxWidth(more);
+    if (width > 0) memory.more = trailingGapCost(width, gap);
+  }
+  return { available, gap, fixed, more: memory.more };
+}

@@ -3826,13 +3826,27 @@ a.docx-hyperlink:focus-visible {
   flex-wrap: nowrap;
 }
 
-/* The collapse unit: one registry group. Rendered even when nothing overflows, so the
- * measured width of a group is the width it will have when it comes back. */
+/* One registry group: the collapse order picks the group, and its controls leave from the
+ * end of it. Rendered even when nothing overflows, so the measured width of a group is the
+ * width it will have when it comes back. */
 .docx-toolbar__group {
   display: inline-flex;
   align-items: center;
   flex: none;
   gap: 2px;
+}
+
+/* The collapse unit: one control of a group. Its own gap matches the group's, so a part
+ * that draws several elements lays out as it did without the wrapper. */
+.docx-toolbar__item {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 2px;
+}
+
+.docx-toolbar__item:empty {
+  display: none;
 }
 
 /* Contextual controls collapse as one group before ordinary formatting controls. Keep the

@@ -87,6 +87,39 @@ const colorMode = ref<'light' | 'dark'>('light');
 
 To follow the operating system instead, pass `colorMode="system"`.
 
+## Dark mode in a composed editor
+
+If you build the editor from parts, set `colorMode` on the root. Every part that you compose inside it, such as the toolbar, the menu bar, and the viewport, uses the same theme.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.Root document={bytes} colorMode="system">
+  <DocxEditor.Toolbar />
+  <DocxEditor.Viewport>
+    <DocxEditor.Content />
+  </DocxEditor.Viewport>
+</DocxEditor.Root>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditorRoot :document="bytes" color-mode="system">
+  <DocxEditorToolbar />
+  <DocxEditorViewport>
+    <DocxEditorContent />
+  </DocxEditorViewport>
+</DocxEditorRoot>
+```
+
+</Framework>
+</FrameworkTabs>
+
+A `dark` class on an element outside the editor, such as `html`, does not change the editor theme. Pass the value of your application theme to `colorMode` instead.
+
 ## What dark mode changes
 
 Dark mode changes the editor controls and the document preview:

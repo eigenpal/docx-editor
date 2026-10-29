@@ -21,6 +21,7 @@ import {
   type VNode,
 } from 'vue';
 import { Slot } from './toolbar/Slot';
+import { useChromeDark } from './color-mode-context';
 import { trapTabWithin } from './paragraph-dialog-fields';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { flattenChildren } from '../lib/flattenChildren';
@@ -249,6 +250,7 @@ export const NativeDialog = defineComponent({
   setup(p, { attrs, slots }) {
     const panel = ref<HTMLDialogElement>();
     const defaultScope = ref(false);
+    const chromeDark = useChromeDark();
     let opener: HTMLElement | null = null;
     watch(
       [panel, () => p.sessionSignal],
@@ -303,7 +305,12 @@ export const NativeDialog = defineComponent({
           'aria-label': p.label,
           ...(p.describedBy ? { 'aria-describedby': p.describedBy } : {}),
           'data-docx-dialog': p.kind,
-          class: ['docx-dialog', defaultScope.value ? 'docx-editor' : undefined, attrs.class],
+          class: [
+            'docx-dialog',
+            defaultScope.value ? 'docx-editor' : undefined,
+            defaultScope.value && chromeDark.value ? 'dark' : undefined,
+            attrs.class,
+          ],
           onCancel: (e: Event) => {
             e.preventDefault();
             p.onClose();

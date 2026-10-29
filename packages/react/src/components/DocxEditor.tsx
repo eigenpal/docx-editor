@@ -12,10 +12,10 @@ import { DocxEditorInvalidTextFormFieldDialog } from '../editor/DocxEditorInvali
 import { DocxEditorContentControlWidget } from '../editor/DocxEditorContentControlWidget';
 import { createPackagedPopups } from '../editor/popup-config';
 import { DocxEditorTextFormFieldDialog } from '../editor/DocxEditorTextFormFieldDialog';
-import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useRef } from 'react';
 import type { CSSProperties, ForwardRefExoticComponent, RefAttributes } from 'react';
 import type { Editor, TableInteractionLabelKey } from '@docx-editor.dev/core/contracts/editor';
-import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../lib/colorMode';
+import { useResolvedDark } from '../editor/color-mode-context';
 import { useDocxEditor } from '../editor/context';
 import { DocxEditorContent } from '../editor/DocxEditorContent';
 import { DocxEditorWindow } from '../editor/DocxEditorWindow';
@@ -290,15 +290,9 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
     if (!chrome && loadingIndicator !== undefined) warnLoadingIndicatorWithoutChrome();
     warnOpenFailureActions(openFailure, renderOpenFailureActions !== undefined);
 
-    // Chrome colour mode: 'system' subscribes to the OS setting. Only the chrome
-    // root's `.dark` class moves — the
-    // document canvas stays Word-faithful.
-    const [systemDark, setSystemDark] = useState(prefersColorSchemeDark);
-    useEffect(() => {
-      if (colorMode !== 'system') return undefined;
-      return subscribeSystemDark(setSystemDark);
-    }, [colorMode]);
-    const isDark = resolveIsDark(colorMode, systemDark);
+    // Chrome colour mode: 'system' subscribes to the OS setting. The same rule `Root`
+    // applies, which this also hands the mode to for the parts that scope themselves.
+    const isDark = useResolvedDark(colorMode);
 
     // Label resolution, in precedence order: the host's `t`, else the active
     // `LocaleContext` catalogue (bundled English unless a provider swapped it).
@@ -459,6 +453,8 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
         {...(author !== undefined ? { author } : {})}
         {...(locale !== undefined ? { locale } : {})}
         translate={translate}
+        // Only with chrome: `chrome={false}` has never themed its bare viewport.
+        {...(chrome ? { colorMode } : {})}
         mode={mode}
         {...(modules !== undefined ? { modules } : {})}
         {...(zoom !== undefined ? { zoom } : {})}

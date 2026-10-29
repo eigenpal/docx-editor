@@ -8,10 +8,14 @@
 // of the document was visible. So the row measures itself and moves whole groups into an
 // overflow menu instead.
 //
+// The packaged toolbars collapse one CONTROL at a time (`toolbar-item-fit.ts`), so the bar
+// fills its width. This file keeps the group policy both fits share, and the whole-group fit.
+//
 // TWO RULES DECIDE WHAT GOES:
 //
-// - WHOLE GROUPS, never half of one. Half a group leaves a separator standing between
-//   nothing and something, and splits capabilities that were put together on purpose.
+// - GROUP BY GROUP. The item fit empties one group, from its end, before it touches the
+//   next, and a group that empties takes its separator with it, so no separator stands
+//   between nothing and something.
 // - A DECLARED ORDER, not "whatever is last". Registry order is bar order, and its tail is
 //   the review controls — the comments toggle and the editing-mode pill, the two things
 //   Word keeps at every width. The order below is the collapse policy of THIS arrangement,

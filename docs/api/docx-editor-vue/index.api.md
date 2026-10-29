@@ -4519,6 +4519,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: StringConstructor;
     };
+    colorMode: {
+        default: undefined;
+        type: PropType<'light' | 'dark' | 'system'>;
+    };
     contentLockPolicy: {
         default: undefined;
         type: PropType<ContentLockPolicy>;
@@ -4590,6 +4594,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: StringConstructor;
     };
+    colorMode: {
+        default: undefined;
+        type: PropType<'light' | 'dark' | 'system'>;
+    };
     contentLockPolicy: {
         default: undefined;
         type: PropType<ContentLockPolicy>;
@@ -4656,6 +4664,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     onRevisionMarkupChange?: ((_settings: ResolvedRevisionMarkup) => any) | undefined;
 }>, {
     author: string;
+    colorMode: "dark" | "light" | "system";
     contentLockPolicy: ContentLockPolicy;
     document: DocumentSource;
     fieldResults: FieldResultsMode;
@@ -4689,6 +4698,7 @@ export interface DocxEditorRootProps {
     author?: string;
     // (undocumented)
     children?: DocxEditorChildren;
+    colorMode?: 'light' | 'dark' | 'system';
     contentLockPolicy?: ContentLockPolicy;
     // (undocumented)
     document?: DocumentSource;

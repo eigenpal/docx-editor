@@ -159,7 +159,7 @@ If you use a locale provider, mount this component inside it so `useChromeTransl
 
 ## Keep host controls responsive
 
-The preset toolbar stays on one row. When it runs out of width, it moves whole groups into the **More** (`⋯`) panel, and each moved group becomes a labeled section of the panel. Use `Toolbar.Group` to give your own controls the same behavior.
+The preset toolbar stays on one row. When it runs out of width, it moves controls into the **More** (`⋯`) panel one at a time, from the end of a group, so the bar stays full. The collapse priority picks the group, and the next group starts to collapse only after the previous one is empty. The panel shows exactly the moved controls, in toolbar order, under the label of their group. The contextual table controls move together. Use `Toolbar.Group` to give your own controls the same behavior. The children of one `Toolbar.Group` move together, after the built-in controls of that group.
 
 <FrameworkTabs>
 <Framework value="react">

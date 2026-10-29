@@ -167,10 +167,22 @@ export {
   readAvailableWidth,
   readColumnGap,
   readInlineMargins,
+  readToolbarRow,
   separatorLeadingCost,
   trailingGapCost,
   type BarRoomInput,
+  type ToolbarRowMemory,
+  type ToolbarRowReading,
 } from './toolbar-measure.ts';
+export {
+  sameItemOverflow,
+  toolbarItemKey,
+  toolbarOverflowItems,
+  toolbarShownCount,
+  type ToolbarFitGroup,
+  type ToolbarItemFitInput,
+  type ToolbarItemOverflow,
+} from './toolbar-item-fit.ts';
 export { chordLetter, isGoToChord } from './chord-letter.ts';
 export { tableCommandState } from './docx-editor-derive.ts';
 export {

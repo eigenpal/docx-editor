@@ -3097,6 +3097,9 @@ export function readInlineMargins(style: CSSStyleDeclaration): {
 // @public
 export function readSplitCellCounts(columns: string, rows: string, limits: SplitCellLimits | null): SplitCellCounts;
 
+// @internal
+export function readToolbarRow(bar: HTMLElement, memory: ToolbarRowMemory, itemKey: (groupId: string, itemId: string) => string): ToolbarRowReading;
+
 // @public
 export interface RefreshChange {
     readonly description?: string;
@@ -3551,6 +3554,9 @@ export function runToolbarCommand(editor: Editor | null, id: TableChromeSlotId, 
 
 // @public (undocumented)
 export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId, value: undefined, options: EditorExecOptions): ExecResult;
+
+// @internal
+export function sameItemOverflow(a: ToolbarItemOverflow, b: ToolbarItemOverflow): boolean;
 
 // @internal
 export const sameOverflow: typeof sameIds;
@@ -4166,6 +4172,12 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
 export function toolbarCommandStates(editor: Editor | null, ids: readonly ChromeSlotId[]): readonly ToolbarCommandState[];
 
 // @internal
+export interface ToolbarFitGroup {
+    readonly id: string;
+    readonly items: readonly string[];
+}
+
+// @internal
 export interface ToolbarFitInput {
     readonly available: number;
     readonly fixed: number;
@@ -4189,7 +4201,30 @@ export interface ToolbarHostGroupPlacement {
 }
 
 // @internal
+export interface ToolbarItemFitInput {
+    readonly available: number;
+    readonly fixed: number;
+    readonly gap: number;
+    readonly groupBases: ReadonlyMap<string, number>;
+    readonly groups: readonly ToolbarFitGroup[];
+    readonly hysteresis?: number;
+    readonly itemWidths: ReadonlyMap<string, number>;
+    readonly more: number;
+    readonly order: readonly string[];
+    readonly previous?: ToolbarItemOverflow | undefined;
+}
+
+// @internal
+export function toolbarItemKey(groupId: string, itemId: string): string;
+
+// @internal
+export type ToolbarItemOverflow = ReadonlyMap<string, number>;
+
+// @internal
 export function toolbarOverflowGroups(input: ToolbarFitInput): ReadonlySet<string>;
+
+// @internal
+export function toolbarOverflowItems(input: ToolbarItemFitInput): ToolbarItemOverflow;
 
 // @internal
 export interface ToolbarPanelPlacement {
@@ -4214,6 +4249,24 @@ export function toolbarPopupLeft(input: {
     readonly popupWidth: number;
     readonly viewportWidth: number;
 }): number;
+
+// @internal
+export interface ToolbarRowMemory {
+    readonly groupBases: Map<string, number>;
+    readonly itemWidths: Map<string, number>;
+    more: number;
+}
+
+// @internal
+export interface ToolbarRowReading {
+    readonly available: number;
+    readonly fixed: number;
+    readonly gap: number;
+    readonly more: number;
+}
+
+// @internal
+export function toolbarShownCount(overflow: ToolbarItemOverflow, groupId: string, itemCount: number): number;
 
 // @public (undocumented)
 export type ToolbarSlotValue<K extends ToolbarValueSlot> = K extends keyof ToolbarValueMap ? ToolbarValueMap[K] : unknown;
