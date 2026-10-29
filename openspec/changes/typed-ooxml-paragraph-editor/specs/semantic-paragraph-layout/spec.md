@@ -1127,3 +1127,47 @@ A single-spaced line drawn in a face that lists the Chinese, Japanese, or Korean
 - **WHEN** layout measures the line
 - **THEN** a taller stand-in or fallback face keeps its own box
 - **AND** a one-em face takes 1.3 em in either role
+
+### Requirement: Fitted text takes its stated width
+
+Consecutive runs whose `w:fitText` carries one `w:id` SHALL form one group that takes the `w:val` width of its first run. Narrower text SHALL give every character except the last the same extra advance. Wider text SHALL compress every character advance by one factor. The group SHALL NOT open a new line inside it.
+
+#### Scenario: A fitted phrase keeps its paragraph on one line
+
+- **GIVEN** a paragraph whose fitted run is wider at its natural width than its `w:fitText` value
+- **WHEN** the paragraph lays out in a column that holds the stated width
+- **THEN** the run takes exactly the stated width
+- **AND** the paragraph takes one line
+
+#### Scenario: A justified line leaves a fitted group alone
+
+- **GIVEN** a justified paragraph whose first line holds a fitted group with spaces
+- **WHEN** the line stretches to the margins, or would have to shrink the group's spaces to keep it
+- **THEN** the spacing inside the group stays as the group states
+- **AND** a group that does not fit without shrinking its own spaces moves to the next line
+
+### Requirement: LISTNUM fields number from the list walk
+
+A body `LISTNUM` field SHALL display the next number of its list, computed from the list definitions and never by running the instruction. A name that matches a `w:abstractNum` `w:name` SHALL count on the counters of that list, which its numbered paragraphs share. The built-in names and unknown names SHALL count on one built-in list. A field SHALL count after the number of its own paragraph, and its number SHALL replace a saved result.
+
+#### Scenario: Headings number with a named list and no saved result
+
+- **GIVEN** a list definition named `schedule numbering` whose level 5 text is `[%5]`
+- **WHEN** three paragraphs each start with `LISTNUM "schedule numbering" \l 5` and no saved result
+- **THEN** the fields display `[1]`, `[2]`, and `[3]`
+
+#### Scenario: A field and a numbered paragraph continue each other
+
+- **GIVEN** a numbered paragraph of a named list that shows `S1.`
+- **WHEN** a `LISTNUM` field that names the list at level 1 follows it, and then another numbered paragraph of the list
+- **THEN** the field displays `S2.` and the paragraph shows `S3.`
+
+### Requirement: Header and footer lists share one count
+
+Header and footer stories SHALL count list items on one shared count that the body and notes do not join. The count SHALL run over the sections in order and, within a section, over the parts that section references itself: even header, default header, even footer, default footer, first-page header, first-page footer. An inherited part SHALL keep the numbers of its referencing section.
+
+#### Scenario: A footer list continues the header list
+
+- **GIVEN** a section whose default header holds two items of a list and whose default footer holds two items of the same list
+- **WHEN** the document lays out on several pages
+- **THEN** every page shows `1.` and `2.` in the header and `3.` and `4.` in the footer

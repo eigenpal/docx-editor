@@ -55,7 +55,7 @@ import {
 } from './field-projection.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE, revisionsVisible } from './revision-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
-import { cjkChopCutAllowedAt, lineOpenDecisionAt, wordBoundaries } from './cjk-line-break.ts';
+import { cjkChopCutAllowedAt, wordBoundaries } from './cjk-line-break.ts';
 import { cjkParagraphBreaks, protectedSeamAfter, protectsSeam } from './cjk-paragraph-breaks.ts';
 import { createParagraphCjkOpticalFitter, appendOpticalCjkCandidate } from './cjk-optical-fit.ts';
 import {
@@ -114,6 +114,7 @@ import {
   type TextWrappingBreakClear,
 } from './text-wrapping-break-clear.ts';
 import { canChopPiece, isLayoutOwnedPiece } from './layout-owned-piece.ts';
+import { fitTextGroupOf, fitTextGroups, fittedLineOpenDecision } from './fit-text-groups.ts';
 import type { WordCarryContext } from './word-carry.ts';
 import { carryWordAtOptionalHyphens } from './optional-hyphen-break.ts';
 import { measuredWidth, styleCutAtHyphen } from './optional-hyphen-joining.ts';
@@ -216,11 +217,9 @@ export function breakParagraph(
         : undefined
     );
   const paragraphRtl = flow?.paragraphRtl ?? paragraphIsRtl(paragraphProperties());
-  const allPieces = bidiPieces(
-    rawPieces,
-    paragraphRtl,
-    bidiSourceBoundaries(paragraph),
-    pageBreaksIgnored
+  const allPieces = fitTextGroups(
+    bidiPieces(rawPieces, paragraphRtl, bidiSourceBoundaries(paragraph), pageBreaksIgnored),
+    measurer
   );
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
   const carriesSlot = flow?.firstLineAfterLeadingBreaks === true;
@@ -1296,8 +1295,7 @@ export function breakParagraph(
       const openDecision =
         piece.noteSeparator || line.spans.at(-1)?.noteSeparator
           ? 'opens'
-          : (cjkBreaks?.decision(piece, consumed, lastEmitted, candidate) ??
-            lineOpenDecisionAt(lastEmitted, candidate, consumed > 0));
+          : fittedLineOpenDecision(piece, consumed, lastEmitted, candidate, cjkBreaks);
       const opensWord = openDecision === 'opens';
       if (opensWord) {
         wordStartSpan = line.spans.length;
@@ -1315,7 +1313,9 @@ export function breakParagraph(
       const endSpaces = endSpacesAt(pieceIndex, boundary, candidate, lineAvailable());
       // Spaces that take room still hang where they would not fit even on a fresh line.
       const keepsEnd =
-        protectedEnd || (endSpaces.takesRoom && line.width + width <= lineAvailable() + 0.001);
+        protectedEnd ||
+        fitTextGroupOf(piece) !== undefined ||
+        (endSpaces.takesRoom && line.width + width <= lineAvailable() + 0.001);
       const clipsWordEnd = !layoutOwned && piece.measureText === undefined && !keepsEnd;
       const naturalWidth = width;
       const measureFace = (text: string) =>

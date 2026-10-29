@@ -31,7 +31,11 @@ import {
 } from './field-page-furniture.ts';
 import type { AllowlistedPageFieldMatch } from './field-instruction.ts';
 import type { PendingFieldProjection } from './field-pieces.ts';
-import type { PageRefFieldProjection, RefFieldContext } from './field-ref.ts';
+import {
+  listNumFieldValue,
+  type PageRefFieldProjection,
+  type RefFieldContext,
+} from './field-ref.ts';
 import { symbolFieldGlyph } from './field-symbol.ts';
 import type { ResolvedRunStyle, ThemeFonts } from './run-style.ts';
 
@@ -150,6 +154,12 @@ export function synthesizeAtomicField(
   // saw paints nothing, the field's historical rendering.
   if (pending.autonumSpec && ctx.refFields?.autonumValueOf) {
     const value = ctx.refFields.autonumValueOf(pending.beginId);
+    if (value !== null) return { text: value, props: pending.props, style: pending.style };
+  }
+  // A LISTNUM number is computed at display time from the list walk, so it wins over a saved
+  // result too. A field the walk gave no number keeps the branches below.
+  if (pending.listNumSpec) {
+    const value = listNumFieldValue(ctx.refFields, pending.beginId);
     if (value !== null) return { text: value, props: pending.props, style: pending.style };
   }
   // A non-empty cached result is what Word last painted; it wins over synthesis.

@@ -33,7 +33,9 @@ import { parseRefLinkInstruction } from './field-ref-link.ts';
 import { parseHyperlinkInstruction } from './field-link.ts';
 import type { FieldLinkProjector } from './field-pieces.ts';
 import { parseAutonumInstruction } from './field-autonum.ts';
+import { parseListNumInstruction } from './field-listnum.ts';
 import {
+  listNumFieldValue,
   parseRefInstruction,
   type PageRefFieldProjection,
   type RefFieldContext,
@@ -470,6 +472,14 @@ function projectSimpleFieldDisplay(
             return { text: PAGE_FIELD_PLACEHOLDER, props, style, pageRef };
           }
         }
+      }
+    } else if (parseListNumInstruction(instr)) {
+      // A simple LISTNUM field takes its number from the list walk like the complex shape.
+      const value = listNumFieldValue(args.refFields, simple.id);
+      if (value !== null) {
+        const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+        if (style.hidden) return null;
+        return { text: value, props, style };
       }
     } else if (args.refFields.autonumValueOf && parseAutonumInstruction(instr)) {
       // A simple AUTONUM-family field synthesizes exactly like the complex shape: the

@@ -58,6 +58,7 @@ import { piecesOfParagraphForDisplay } from './field-projection-display.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import { measureDisplayText } from './run-style.ts';
+import { continuesFitTextGroup, fitTextGroupOf, fitTextGroups } from './fit-text-groups.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import type { SemanticTableCell, SemanticTableStructure } from './semantic-table.ts';
@@ -306,12 +307,16 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
     fields?.tocLinkStyleRanges?.get(paragraph.id)
   );
   // The bidi pass gives each piece the shaping and joining context line breaking measures with;
-  // an unshaped complex-script word measures far wider than it paints.
-  const pieces = bidiPieces(
-    returnUncoveredHintedText(projected, measurer),
-    paragraphIsRtl(layoutInputs.props),
-    bidiSourceBoundaries(paragraph),
-    true
+  // an unshaped complex-script word measures far wider than it paints. Fitted text takes
+  // its stated width here as in line breaking.
+  const pieces = fitTextGroups(
+    bidiPieces(
+      returnUncoveredHintedText(projected, measurer),
+      paragraphIsRtl(layoutInputs.props),
+      bidiSourceBoundaries(paragraph),
+      true
+    ),
+    measurer
   );
   const typography = resolveCjkTypography(layoutInputs.props, styleCascade?.typography);
   const automaticSpacing = automaticAutofitSpacing(typography, measurer);
@@ -415,8 +420,9 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
       close();
       continue;
     }
-    // A run that opens with a breaking space breaks before it, as the line breaker does.
-    if (STARTS_WITH_BREAKING_SPACE.test(piece.text)) close();
+    // A run that opens with a breaking space breaks before it, as the line breaker does,
+    // unless it continues a fitted group: a group never breaks.
+    if (STARTS_WITH_BREAKING_SPACE.test(piece.text) && !continuesFitTextGroup(piece)) close();
     const style = styleForFontSlot(piece.style, piece.fontSlot);
     const measure = (text: string): number => measureDisplayText(text, style, measurer);
     if (piece.measureText !== undefined) {
@@ -439,6 +445,11 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
     );
     advance(unwrapped.width, unwrapped.trailing);
     if (cjkBreaks?.opens(piece)) close();
+    // A fitted group is one unit: the minimum holds its whole stated width.
+    if (fitTextGroupOf(piece) !== undefined) {
+      segment += measure(piece.text);
+      continue;
+    }
     let from = 0;
     for (const to of boundaries) {
       const candidate = piece.text.slice(from, to);

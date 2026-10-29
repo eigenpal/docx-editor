@@ -81,6 +81,8 @@ The matrix reports editing, rendering, and round-trip support separately. A feat
 
 Raised and lowered text contributes to automatic and minimum line heights. This includes inherited `w:position` values combined with subscript or superscript. Exact line spacing retains its authored height.
 
+Consecutive runs whose `w:fitText` shares one `w:id` take exactly the `w:val` width of the first run. If the text is narrower, every character except the last gets the same extra advance. If it is wider, every character compresses horizontally by the same factor. The `w:spacing` and `w:w` of those runs do not apply inside the group, and the group moves to the next line as one unit. Justification, distribution, and space shrinking leave the spacing inside the group alone. A tab ends the group, and the text after it keeps its natural width.
+
 #### Equation source formatting
 
 Latin and Greek letters in equations use mathematical italic glyphs from the math font, unless `m:sty` specifies plain, bold, or bold italic. Run fonts, bold, and italic do not change these letters. ASCII digits in authored text fonts use that font with the default italic math style and run bold or italic. For example, Arial digits use italic by default and bold italic with `w:b`. Bold and bold italic math styles (`m:sty` `b` and `bi`) keep mathematical bold digits from the math font. Mathematical letters and symbols beside those digits keep the math font.
@@ -170,6 +172,8 @@ Pair kerning (`w:kern`) leaves kana, ideographs, CJK punctuation, and full-width
 <FeatureMatrix category="lists" />
 
 Lists that share one abstract numbering definition (`w:abstractNum`) count on one shared number per level. A `w:startOverride` restarts that number once, at the first item of its list on an overridden level, and only on that level. Items of the other lists continue from the restarted number. If the same `w:lvlOverride` also replaces the level, the replacement's `w:start` is the restart value.
+
+Header and footer lists share one count that the body and notes do not join. The count runs over every section in order. Within a section, it runs through the parts the section references itself: the even header, default header, even footer, default footer, first-page header, and first-page footer. A part counts even when no page shows it, and a part that two sections reference counts at each reference. An inherited part keeps the numbers of the section that references it. Every page shows the same numbers for a story.
 
 ### Tables
 
@@ -279,6 +283,8 @@ Two other placement rules depend on the compatibility mode or the object options
 ### Fields, links, and table of contents
 
 <FeatureMatrix category="fields" />
+
+`LISTNUM` fields count on the same counters as the numbered paragraphs of their list. A field counts after the number of its own paragraph. A field on a deeper level counts each unused level above it once, so the next field on such a level shows the number after it. The number replaces any saved result.
 
 Character-style `STYLEREF` headers resolve supported display-name references and adjust each page’s header height. See [Fields and cross-references](/docs/2.x/guides/fields) for limits.
 

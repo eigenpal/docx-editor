@@ -9,6 +9,7 @@
 import { authoredCjkGapMetric } from './cjk-auto-spacing-metric-port.ts';
 import { automaticTextSpacingBefore } from './cjk-automatic-spacing.ts';
 import { knownFamilyReverseGap } from './authored-average-widths.ts';
+import { fitTextGroupOf, insideFitTextGroup } from './fit-text-groups.ts';
 import type { DistributedSpacing } from './distributed-spacing.ts';
 import { segmentGraphemes } from './grapheme.ts';
 import { measureDisplayText } from './run-style.ts';
@@ -72,9 +73,11 @@ export function spacesAbsorbSlack(
       continue;
     }
     let own: number | undefined;
+    const fitted = fitTextGroupOf(span) !== undefined;
     for (const character of span.text) {
       if (character === ' ') {
-        if (!seen) continue;
+        // A space inside a fitted group takes no share: the group keeps its stated width.
+        if (!seen || fitted) continue;
         own ??= measureDisplayText(' ', styleForFontSlot(span.style, span.fontSlot), measurer);
         pending += spaceSlackCapacity(span, own, measurer, spacing);
       } else if (!ZERO_WIDTH.test(character)) {
@@ -137,9 +140,13 @@ function characterPieces(
 ): CharacterPiece[] {
   const pieces: CharacterPiece[] = [];
   for (const span of spans) {
-    const held = holdsLetters(span, spacing);
+    // A fitted group is not held: its edges take a gap like any other characters.
+    const held = fitTextGroupOf(span) === undefined && holdsLetters(span, spacing);
+    // A fitted group keeps its own spacing, so its characters are never split apart.
     const clusters =
-      isSplittableSpan(span) && span.style.shaping?.direction !== 'rtl'
+      isSplittableSpan(span) &&
+      span.style.shaping?.direction !== 'rtl' &&
+      fitTextGroupOf(span) === undefined
         ? segmentGraphemes(span.text)
         : [];
     const cuts = clusters.filter((cluster, index) => {
@@ -177,6 +184,7 @@ function isEastAsianEnd(span: StyleSpanRecord, end: 'first' | 'last'): boolean {
  * Asian character.
  */
 function opensGap(before: CharacterPiece, after: CharacterPiece): boolean {
+  if (insideFitTextGroup(before.span, after.span)) return false;
   if (isSpace(before.span)) return true;
   if (!before.held && !after.held) return true;
   if (isSpace(after.span)) return false;
@@ -227,7 +235,7 @@ export function distributeLineCharacters(
       gaps += 1;
     }
     previous = index;
-    if (index < last && isSpace(piece)) {
+    if (index < last && isSpace(piece) && fitTextGroupOf(piece) === undefined) {
       const capacity = spaceSlackCapacity(piece, piece.box.width, measurer, spacing);
       capacities.set(index, capacity);
       totalCapacity += capacity;

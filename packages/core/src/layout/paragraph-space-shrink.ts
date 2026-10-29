@@ -5,6 +5,7 @@
 // https://github.com/LibreOffice/core/commit/529755f0919217a84a12daad0fddfddd1124f0e9
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
+import { fitTextGroupOf } from './fit-text-groups.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
@@ -83,7 +84,8 @@ function capacity(
   limit: number,
   halfAverageFloor = false
 ): number {
-  if (span.lineEndWhitespace || span.equation) return 0;
+  // The spaces of a fitted group keep the group's own spacing.
+  if (span.lineEndWhitespace || span.equation || fitTextGroupOf(span) !== undefined) return 0;
   const style = styleForFontSlot(span.style, span.fontSlot);
   // A face whose space is no wider than half its average width lends nothing: answer before
   // the text tests, so a line in such a face pays one lookup per span.
