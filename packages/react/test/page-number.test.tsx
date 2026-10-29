@@ -45,8 +45,11 @@ const THREE_PAGES = docx(
   paragraph('one') + pageBreak + paragraph('two') + pageBreak + paragraph('three')
 );
 
-/** Three pages past the open-yield threshold, through an ordinary filler part. */
-function largeThreePages(): Uint8Array {
+/**
+ * A document with `body` that is past the open-yield threshold through an ordinary filler part,
+ * so the open lays out in slices without laying out hundreds of pages.
+ */
+function pastOpenThreshold(body: string): Uint8Array {
   const lines: string[] = [];
   for (let line = 1, total = 0; total < 700 * 1024; line += 1) {
     const text = `<l>filler line ${line} carrying a little ordinary sentence text.</l>`;
@@ -63,19 +66,30 @@ function largeThreePages(): Uint8Array {
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
     'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}"><w:body>${paragraph('one') + pageBreak + paragraph('two') + pageBreak + paragraph('three')}</w:body></w:document>`
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
     ),
     'customXml/item1.xml': strToU8(`<filler>${lines.join('')}</filler>`),
   });
 }
 
-/** Many pages of real text, past the open-yield threshold, so the open lays out in slices. */
+/** Three pages past the open-yield threshold. */
+function largeThreePages(): Uint8Array {
+  return pastOpenThreshold(
+    paragraph('one') + pageBreak + paragraph('two') + pageBreak + paragraph('three')
+  );
+}
+
+/**
+ * Pages of real text past the open-yield threshold, so the open lays out in slices. The body is
+ * well past the blocks a sliced open lays out at mount, and small enough to finish quickly on a
+ * slow runner.
+ */
 function manyPages(): Uint8Array {
   const body: string[] = [];
-  for (let index = 0; index < 6000; index += 1) {
+  for (let index = 0; index < 600; index += 1) {
     body.push(paragraph(`Paragraph ${index} of a long document with ordinary sentence text.`));
   }
-  return docx(body.join(''));
+  return pastOpenThreshold(body.join(''));
 }
 
 /** Every total a page counter renders, from the published page total. */
