@@ -119,7 +119,8 @@ describe('list counters', () => {
     expect(state.advance('1', 2)?.markerText).toBe('8.');
     expect(state.advance('1', 0)?.markerText).toBe('2.');
     expect(state.advance('1', 2)?.markerText).toBe('7.');
-    expect(state.advance('1', 1)?.markerText).toBe('1.');
+    // The level 2 item above counted the level 1 it skipped, so level 1 goes on at 2.
+    expect(state.advance('1', 1)?.markerText).toBe('2.');
     expect(state.advance('1', 2)?.markerText).toBe('7.');
     expect(state.advance('1', 0)?.markerText).toBe('3.');
     expect(state.advance('1', 2)?.markerText).toBe('7.');
@@ -133,6 +134,23 @@ describe('list counters', () => {
     expect(state.advance('1', 1)?.markerText).toBe('b)');
     expect(state.advance('1', 0)?.markerText).toBe('2.');
     expect(state.advance('1', 1)?.markerText).toBe('a)');
+  });
+
+  test('a deeper item counts each parent level it skips once, at its start', () => {
+    const index = loadNumbering(`
+      <w:abstractNum w:abstractNumId="1">
+        <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl>
+        <w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%2)"/></w:lvl>
+        <w:lvl w:ilvl="2"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%3]"/></w:lvl>
+      </w:abstractNum>
+      <w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>
+    `);
+    const markers = (levels: readonly number[]) => {
+      const state = createListCounterState(index);
+      return levels.map((ilvl) => state.advance('1', ilvl)?.markerText);
+    };
+    expect(markers([1, 0, 0, 2, 1, 0])).toEqual(['1)', '2.', '3.', '1]', '2)', '4.']);
+    expect(markers([2, 1, 0, 0, 2, 2, 0])).toEqual(['1]', '2)', '2.', '3.', '1]', '2]', '4.']);
   });
 
   test('a startOverride restarts the counter its abstract list shares', () => {

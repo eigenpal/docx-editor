@@ -123,6 +123,25 @@ function lvlRestartTriggerIlvl(targetIlvl: number, lvlRestart: number | undefine
   return triggerIlvl;
 }
 
+/**
+ * An item on level `ilvl` counts every level above it that has no item yet (since that level
+ * last started again) once, at that level's start. The next item on such a parent level then
+ * continues from there: a level 1 item before any level 0 item makes the next level 0 item `2.`.
+ * List paragraphs and LISTNUM fields share this rule.
+ */
+function countSkippedParents(
+  counters: number[],
+  initialized: boolean[],
+  ilvl: number,
+  startOf: (parent: number) => number
+): void {
+  for (let parent = 0; parent < ilvl; parent += 1) {
+    if (initialized[parent]) continue;
+    counters[parent] = startOf(parent);
+    initialized[parent] = true;
+  }
+}
+
 /** The counter values of one bag at one point of its walk. */
 export interface ListCounterSnapshot {
   /** Keyed by abstractNumId. */
@@ -229,6 +248,8 @@ export function createListCounterState(index: NumberingIndex): ListCounterState 
         }
       }
 
+      countSkippedParents(counters, initialized, ilvl, (parent) => starts[parent] ?? 1);
+
       // Increment this level from its authored baseline.
       const effectiveStart = starts[ilvl] ?? level.start;
       if (!initialized[ilvl]) {
@@ -288,13 +309,7 @@ export function createListCounterState(index: NumberingIndex): ListCounterState 
       const trigger = lvlRestartTriggerIlvl(deeper, levelOf(deeper)?.lvlRestart);
       if (trigger !== null && ilvl <= trigger) initialized[deeper] = false;
     }
-    // A field on a deeper level counts every unused level above it once, at its start: the
-    // next field on such a level shows the number after it.
-    for (let parent = 0; parent < ilvl; parent += 1) {
-      if (initialized[parent]) continue;
-      counters[parent] = levelOf(parent)?.start ?? 1;
-      initialized[parent] = true;
-    }
+    countSkippedParents(counters, initialized, ilvl, (parent) => levelOf(parent)?.start ?? 1);
     if (setValue !== undefined) counters[ilvl] = setValue;
     else if (initialized[ilvl]) counters[ilvl] += 1;
     else counters[ilvl] = level.start;
