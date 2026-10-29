@@ -121,7 +121,6 @@ export function createSurfaceTableSelectHandle(
   const { layer } = host;
   const timers = hostTimers(() => layer);
   let hovered: Target | null = null;
-  let overHandle = false;
   let hideTimer: number | null = null;
   let shownTableId: string | null = null;
   // Positioned tables move by their anchor properties, which the editor does not edit yet.
@@ -163,13 +162,7 @@ export function createSurfaceTableSelectHandle(
     host.setCellSelection(cells);
     host.pagesLayer.focus({ preventScroll: true });
   });
-  button.addEventListener('pointerenter', () => {
-    overHandle = true;
-    clearHideTimer();
-  });
-  button.addEventListener('pointerleave', () => {
-    overHandle = false;
-  });
+  button.addEventListener('pointerenter', () => clearHideTimer());
 
   function clearHideTimer(): void {
     if (hideTimer === null) return;
@@ -187,15 +180,32 @@ export function createSurfaceTableSelectHandle(
   function update(): void {
     const { layout, selection, editingMode } = host.read();
     const caretParagraphId = selection.head.paragraphId;
+    // A hover names a table on a page. After an edit moves that table (a drag to another
+    // page, a page break above it, a collaborator's edit), the hover names nothing; the
+    // caret's table then decides.
+    const hoveredFound = hovered
+      ? outermostTableOnPage(layout, hovered.tableId, hovered.pageIndex)
+      : null;
+    if (hovered && !hoveredFound) {
+      hovered = null;
+      clearHideTimer();
+    }
+    const useHover =
+      editingMode !== 'view' &&
+      hovered !== null &&
+      hoveredFound !== null &&
+      sameStoryPart(host.session(), hovered.tableId, caretParagraphId);
     const target =
-      editingMode === 'view'
-        ? null
-        : hovered && sameStoryPart(host.session(), hovered.tableId, caretParagraphId)
-          ? hovered
-          : caretTarget(layout, selection);
-    const found = target ? outermostTableOnPage(layout, target.tableId, target.pageIndex) : null;
+      editingMode === 'view' ? null : useHover ? hovered : caretTarget(layout, selection);
+    const found = !target
+      ? null
+      : useHover
+        ? hoveredFound
+        : outermostTableOnPage(layout, target.tableId, target.pageIndex);
     if (!target || !found) {
       shownTableId = null;
+      // A drag that lost its handle cannot end with a drop; end it where it stands.
+      if (drag.dragging()) drag.cancel();
       button.remove();
       return;
     }
@@ -215,7 +225,10 @@ export function createSurfaceTableSelectHandle(
   }
 
   function onPointerMove(event: PointerEvent): void {
-    if (overHandle || drag.dragging()) return;
+    // Read from the event, not from enter/leave state: a button moved or removed under a
+    // still pointer gets no `pointerleave`.
+    const over = button.contains(event.target as Node | null);
+    if (over || drag.dragging()) return;
     const { layout } = host.read();
     const rect = host.pagesLayer.getBoundingClientRect();
     const scale = host.scale();

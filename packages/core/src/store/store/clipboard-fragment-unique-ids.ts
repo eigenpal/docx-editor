@@ -100,7 +100,12 @@ function idSequence(
 ): () => string | null {
   if (actor) return stripedDecimalIdSequence(used, actor, max);
   let next = denseSeed;
-  return () => String(next++);
+  // The seed sits above every id of its own kind, but `wp:docPr` also skips the legacy VML
+  // shape numbers `drawingPropertyIdOccupancy` marks used, which can lie above it.
+  return () => {
+    while (used.has(String(next))) next += 1;
+    return next > max ? null : String(next++);
+  };
 }
 
 /**

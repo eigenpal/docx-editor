@@ -24,7 +24,7 @@ function bodyOf(place: unknown): AutomationHandle | undefined {
 }
 
 /** The body an operation is about, wherever its shape names one. */
-function bodyHandle(operation: AutomationOperation): AutomationHandle | undefined {
+export function bodyHandle(operation: AutomationOperation): AutomationHandle | undefined {
   if (operation.op === 'getText') return operation.target;
   if ('body' in operation) return operation.body as AutomationHandle;
   const fields = operation as unknown as Readonly<Record<string, unknown>>;
