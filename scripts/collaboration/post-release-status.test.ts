@@ -326,6 +326,7 @@ test('each post-release step is its own job, and the comments wait only for veri
     { repository: 'docx-editor.dev', workflow: 'sync-upstream-api.yml' },
     { repository: 'docx-to-markdown.com', workflow: 'sync-release.yml' },
     { repository: 'docx-to-pdf.dev', workflow: 'sync-release.yml' },
+    { repository: 'docx-editor-mcp-app', workflow: 'sync-release.yml' },
   ]);
   expect(recovery.jobs.sites.env.SYNC_WORKFLOW).toBe('.github/workflows/${{ matrix.workflow }}');
   const update = recovery.jobs.sites.steps.find(
