@@ -11,7 +11,7 @@ import type {
   ReviewModuleContribution,
 } from '../contracts/modules.ts';
 
-import { storyPartOfNodeId, storyScopeOfNodeId } from './surface-scope.ts';
+import { partOfNodeId, storyScopeOfNodeId } from './surface-scope.ts';
 import { planRevisionBatch, type RevisionBatchResult } from '../store/store/revision-batch.ts';
 import {
   invalidRevisionAuthorInput,
@@ -226,7 +226,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
           : new Set(
               items.flatMap((item) => {
                 const ids = item.kind === 'revision' ? revisionSiteNodeIdsOf(item) : [];
-                const part = ids.length ? storyPartOfNodeId(session, ids[0]) : null;
+                const part = ids.length ? partOfNodeId(session, ids[0]) : null;
                 return part ? [part.name] : [];
               })
             );
@@ -244,7 +244,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     for (const item of swept) selected.add(reviewItemKey(item));
     const place = (item: ReviewRevisionItem) => {
       const scope = deps.scope(item);
-      const part = storyPartOfNodeId(deps.surface()!.session, revisionSiteNodeIdsOf(item)[0]);
+      const part = partOfNodeId(deps.surface()!.session, revisionSiteNodeIdsOf(item)[0]);
       if (!part) return;
       let group = scopes.get(part.name);
       if (!group) {
@@ -562,7 +562,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     // A lock or a binding keeps the card in any session state, so it is refused before the
     // commit, with its review code; the exec code stays `locked` or `bound`, as for an edit.
     const kept = guardedCardRefusal(
-      storyPartOfNodeId(deps.surface()!.session, revisionSiteNodeIdsOf(item)[0]),
+      partOfNodeId(deps.surface()!.session, revisionSiteNodeIdsOf(item)[0]),
       item,
       action
     );
@@ -570,7 +570,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     let applied: { committed: boolean; reason?: unknown } | undefined;
     const refused = deps.surface()!.commitReviewOps((historyToken) => {
       const session = deps.surface()!.session;
-      const part = storyPartOfNodeId(session, revisionSiteNodeIdsOf(item)[0]);
+      const part = partOfNodeId(session, revisionSiteNodeIdsOf(item)[0]);
       if (part && outsideStories(part)) {
         const outside = resolutionOps(item, action, part);
         // The planner's reason, as a card in a story gets it.
@@ -698,7 +698,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
         revisionOf,
         (item, action) => {
           const session = deps.surface()?.session;
-          const part = session && storyPartOfNodeId(session, revisionSiteNodeIdsOf(item)[0]);
+          const part = session && partOfNodeId(session, revisionSiteNodeIdsOf(item)[0]);
           if (!part) return {};
           try {
             // The plan the decision itself runs, so the report names the same reason.
@@ -724,9 +724,7 @@ function nextFromCaret(
   step: number
 ): number {
   const caret = surface.state().selection.head;
-  const part = surface.session
-    .storyParts()
-    .find((candidate) => caret.paragraphId.startsWith(`${candidate.name}#`));
+  const part = partOfNodeId(surface.session, caret.paragraphId);
   const order = part ? deepParagraphOrderOfPart(part) : new Map<string, number>();
   const rank = order.get(caret.paragraphId);
   if (rank !== undefined) {

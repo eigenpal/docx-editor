@@ -72,7 +72,7 @@ export function isHeaderFooterScope(
  */
 export type StoryScopeLookup = Pick<
   TreeDocxSessionView,
-  'part' | 'headerFooterResolutionBySection' | 'partFor'
+  'part' | 'headerFooterResolutionBySection' | 'partFor' | 'currentPackage' | 'storyParts'
 >;
 
 /**
@@ -103,33 +103,23 @@ export type StoryScopeLookup = Pick<
  *
  * Read straight from the live package instead. Ids carry the canonical part name, so this is a
  * map lookup.
+ *
+ * A collaboration session names the nodes it creates by logical id, which carries no part name.
+ * Those ids are looked up in each story part's node index, which opens no story store either.
+ * A view without `storyParts` has no session ids, so it answers null for them.
  */
 export function partOfNodeId(
-  session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'>,
+  session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'> &
+    Partial<Pick<TreeDocxSessionView, 'storyParts'>>,
   nodeId: string | undefined
 ): OoxmlPart | null {
-  const hash = nodeId?.indexOf('#') ?? -1;
-  if (hash === -1) return null;
-  const partName = nodeId!.slice(0, hash);
-  if (partName.length === 0) return null;
-  return session.currentPackage().parts.get(partName) ?? null;
-}
-
-/**
- * The story part that holds a node, whatever the shape of its id.
- *
- * A collaboration replica names nodes by logical id, which carries no part name, so
- * {@link partOfNodeId} finds no part for them. Those ids are looked up in each story's node
- * index instead. A tracked change another participant made, or one made in a session, is
- * addressed this way.
- */
-export function storyPartOfNodeId(
-  session: Pick<TreeDocxSessionView, 'currentPackage' | 'part' | 'storyParts'>,
-  nodeId: string | undefined
-): OoxmlPart | null {
-  const named = partOfNodeId(session, nodeId);
-  if (named || nodeId === undefined || nodeId.includes('#')) return named;
-  return session.storyParts().find((part) => findNode(part, nodeId) !== null) ?? null;
+  if (nodeId === undefined) return null;
+  const hash = nodeId.indexOf('#');
+  if (hash === -1) {
+    return session.storyParts?.().find((part) => findNode(part, nodeId) !== null) ?? null;
+  }
+  if (hash === 0) return null;
+  return session.currentPackage().parts.get(nodeId.slice(0, hash)) ?? null;
 }
 
 export function storyScopeOfNodeId(
@@ -138,7 +128,10 @@ export function storyScopeOfNodeId(
   fallback: StoryScope
 ): StoryScope {
   const hash = nodeId?.indexOf('#') ?? -1;
-  return storyScopeOfPartName(session, hash === -1 ? '' : nodeId!.slice(0, hash), fallback);
+  // A session's logical id names no part, so its part is found in the story indexes.
+  const partName =
+    hash === -1 ? (partOfNodeId(session, nodeId)?.name ?? '') : nodeId!.slice(0, hash);
+  return storyScopeOfPartName(session, partName, fallback);
 }
 
 /** The story a part holds: the body, a header or footer, or a notes part. */
