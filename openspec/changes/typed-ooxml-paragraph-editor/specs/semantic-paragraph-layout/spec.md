@@ -924,12 +924,13 @@ Semantic layout SHALL place a supported terminal exact row's simple bottom rule 
 - **THEN** the page keeps the first line of the first referenced footnote at its bottom, over the row, wherever the reference sits in the row
 - **AND** the rest of that footnote and every later footnote of the row continue on the next page, each later footnote with its own mark
 
-#### Scenario: A carried footnote keeps the footnotes of a whole tall row behind it
+#### Scenario: A carried footnote takes its own pages before a whole tall row
 
 - **WHEN** compatibility mode is 14 or earlier, or absent
-- **AND** a footnote continued from an earlier page has no room on the page of a whole row taller than the page
-- **THEN** that page keeps no line of the footnotes of the row and paints no footnote area
-- **AND** the footnotes of the row start, each with its own mark, only on the page where the continued footnote ends
+- **AND** a footnote continued from an earlier page reaches the page where a whole row taller than the page would start
+- **THEN** that page holds only the continued footnote and the content placed before the row
+- **AND** the row starts on the first page after the continued footnote ends, also when the footnote needs more than one page
+- **AND** a page without body content gives the continued footnote its whole column
 
 #### Scenario: A row kept whole below repeated header rows keeps none of its footnotes
 

@@ -906,38 +906,63 @@ describe('a whole row taller than the page before mode 15', () => {
     expect(laid.fixedPoint).toBe(true);
   });
 
-  test('a note carried from the page before keeps the row notes behind it', () => {
-    // Note 1 has 40 lines and continues for pages. The tall row opens page 2, where the
-    // carried rest of note 1 finds no room. Note 2 of the row must not start before note 1
-    // ends: it keeps no line on the row page and opens after note 1's last line.
+  test('a note carried from the page before takes its own pages before the row', () => {
+    // Note 1 has 40 lines and continues for pages. The tall row does not start on a page that
+    // the rest of note 1 reaches: those pages hold only the note, and the row starts on the
+    // first page after it, where note 2 keeps its first line over the row.
     const second = cite('R3b', 2) + para('R3c', 14);
+    for (const mode of [undefined, 14]) {
+      const laid = layoutProbe(
+        cite('INTRO', 1) + tbl(tall(second)) + TAIL,
+        new Map([
+          [1, 40],
+          [2, 3],
+        ]),
+        undefined,
+        1,
+        mode
+      );
+      const at = rowPage(laid.layout);
+      const lastOf = (id: number) =>
+        laid.layout.pages.findLastIndex((page) =>
+          (page.footnotes?.notes ?? []).some((n) => n.noteId === id)
+        );
+      expect(at).toBeGreaterThan(2);
+      expect(lastOf(1)).toBe(at - 1);
+      for (let index = 1; index < at; index += 1) {
+        expect(pages(laid.layout)[index]).not.toContain('R3a');
+        expect(notesOn(laid.layout, index)).toEqual(['1c:-']);
+      }
+      expect(notesOn(laid.layout, at)).toEqual(['2:2']);
+      expect(noteLines(laid.layout, at, 2)).toBe(1);
+      expect(laid.fixedPoint).toBe(true);
+    }
+  });
+
+  test('a carried note keeps a tall row that references no note off its page', () => {
     const laid = layoutProbe(
-      cite('INTRO', 1) + tbl(tall(second)) + TAIL,
-      new Map([
-        [1, 40],
-        [2, 3],
-      ]),
+      cite('INTRO', 1) + tbl(tall(para('R3c', 15))) + TAIL,
+      new Map([[1, 40]]),
       undefined,
       1,
       14
     );
     const at = rowPage(laid.layout);
-    const opened = (id: number) =>
-      laid.layout.pages.findIndex((page) =>
-        (page.footnotes?.notes ?? []).some((n) => n.noteId === id && !n.continuation)
-      );
-    const lastOf = (id: number) =>
-      laid.layout.pages.findLastIndex((page) =>
-        (page.footnotes?.notes ?? []).some((n) => n.noteId === id)
-      );
-    expect(at).toBeGreaterThan(0);
-    // The row page paints no separator without notes, and note 2 opens, with its mark, only
-    // on the page where note 1 ends.
+    expect(notesOn(laid.layout, at - 1)).toEqual(['1c:-']);
+    expect(pages(laid.layout)[at - 1]).not.toContain('R3a');
     expect(laid.layout.pages[at]!.footnotes).toBeUndefined();
-    expect(opened(2)).toBe(lastOf(1));
-    expect(notesOn(laid.layout, opened(2))).toEqual(['1c:-', '2:2']);
-    expect(noteLines(laid.layout, opened(2), 2)).toBe(3);
     expect(laid.fixedPoint).toBe(true);
+  });
+
+  test('from mode 15 a carried note does not move a tall row', () => {
+    const laid = layoutProbe(
+      cite('INTRO', 1) + tbl(tall(para('R3c', 15))) + TAIL,
+      new Map([[1, 20]]),
+      undefined,
+      1,
+      15
+    );
+    expect(laid.layout.pages[1]!.fragments.length).toBeGreaterThan(0);
   });
 
   test('a single note referenced past the bottom margin stays on the row page', () => {

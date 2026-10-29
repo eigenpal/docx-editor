@@ -1,6 +1,7 @@
 import { takePreviousRows } from './table-row-placement-reuse.ts';
 import { createRowProbeReuse } from './table-row-probe-reuse.ts';
 import { clippedExactRow, overheightRowError } from './table-exact-row-clip.ts';
+import * as tallRow from './table-tall-row.ts';
 // Placing ONE top-level table into the body flow, row by row, across page breaks.
 //
 // Lifted out of the story loop because it is the one block kind whose placement is a loop of
@@ -34,7 +35,6 @@ import {
 } from './table-terminal-border-plan.ts';
 import { fragmentRowContentDeps } from './table-fragment-content-insets.ts';
 import { probeBodyRowStart, probeRowFragmentProgress } from './table-row-progress-probe.ts';
-import { bottomToTopTextKeepsRowWhole } from './table-cell-text-direction.ts';
 import {
   headerGroupMoves,
   keptRowGroupMoves,
@@ -48,7 +48,7 @@ import {
   prepareRepeatedHeaderBorderPlan,
   type RepeatedHeaderBorderPlan,
 } from './repeated-header-border-metrics.ts';
-import { cellContentInsets, type CellContentInsets } from './table-cell-geometry.ts';
+import type { CellContentInsets } from './table-cell-geometry.ts';
 import { admitVMergeSpansAt, type RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
 import type { HeaderGroupPlan } from './table-header-vmerge.ts';
 import { createFlowHeaderReuse } from './table-header-flow-reuse.ts';
@@ -496,6 +496,7 @@ export function* paginateTableInFlowSteps(
     let isContinuation = false;
     let fragmentsForRow = 0;
     let movedToFreshPage = false;
+    let noteYields = 0;
     const rowDeps = (): TableFlowDeps => ({
       ...(terminalDeps ??
         (repeatedPlan?.bodyRowId === row.id
@@ -531,19 +532,9 @@ export function* paginateTableInFlowSteps(
     // because a note reserve yields to a kept row. A wrapping float still reduces that band.
     // A taller row starts on a fresh page and then splits like an ordinary row.
     const pageHoldsRow = (): boolean => naturalHeight <= pageBand() - bandTop + 0.001;
-    // `btLr` text takes its line length from the whole row, so such a row also moves whole to
-    // a page that can hold it when its authored minimum does not fit the room below `top`
-    // (`bottomToTopTextKeepsRowWhole`).
-    const keepsWholeAt = (top: number): boolean =>
-      row.cantSplit ||
-      bottomToTopTextKeepsRowWhole(
-        row,
-        contentHeight() - top,
-        (cell) =>
-          tableDeps.cellContentInsets?.get(cell.id) ??
-          cellContentInsets(cell, structure.cellSpacingPt === 0),
-        tableDeps.cellMinimumContentInsets
-      );
+    // `btLr` text also moves the row whole (`rowKeepsWholeAt`).
+    const keepsWholeAt = (top: number) =>
+      tallRow.rowKeepsWholeAt(row, contentHeight() - top, structure, tableDeps);
     // Before mode 15, repeated header rows stay above a row that cannot split, fits a fresh
     // page, and does not fit below them. The row then stays whole there and runs past the margin.
     const overflowsBelowRepeat = (top = flow.cursorY): boolean =>
@@ -843,13 +834,14 @@ export function* paginateTableInFlowSteps(
         const tall = row.height.rule !== 'exact' && !pageHoldsRow();
         const staysWhole =
           tall &&
-          tallRowStaysWhole &&
-          breaksPages &&
-          !pinnedBreak &&
-          vMerge === undefined &&
-          bandTop === 0 &&
-          !tableDeps.pageExclusionZones?.().length &&
-          row.cells.every((cell) => cell.blocks.every((block) => block.kind === 'paragraph'));
+          tallRow.staysWholeAt(row, {
+            staysWholeRule: tallRowStaysWhole,
+            breaksPages,
+            pinnedBreak: pinnedBreak !== undefined,
+            merged: vMerge !== undefined,
+            bandTop,
+            exclusionZones: tableDeps.pageExclusionZones?.().length ?? 0,
+          });
         const splitsAnyway = tall && !staysWhole;
         // A tall row stays below repeated header rows only, and leaves authored ones. From
         // mode 15 it opens its fresh page without a repeat (`onlyRepeatedHeaderRows`).
@@ -862,6 +854,19 @@ export function* paginateTableInFlowSteps(
           // `w:cantSplit` row that did not fit the band it was offered in may fit the fresh
           // page it just moved to, which is the whole point of deciding where a row lands.
           admitSpans(bodyRowIndex, row);
+          continue;
+        }
+        // A footnote continued onto this page keeps a whole tall row off it.
+        if (
+          staysWhole &&
+          tallRow.yieldsToNoteContinuation(
+            flow.cursorY - bandTop,
+            contentHeight(),
+            pageBand(),
+            noteYields++
+          )
+        ) {
+          breakForContinuation(admitsRepeatedHeaders);
           continue;
         }
         // A fresh page whose band is shrunk by a footnote reserve still owns the full
@@ -935,15 +940,10 @@ export function* paginateTableInFlowSteps(
         continue;
       }
 
-      // A note reservation can leave an otherwise valid page with less than one line of body
-      // space. Do not reject a splittable row solely because that empty reserved band was the
-      // table's first offer; advance once to the next physical page and retry under its band.
-      const fullBand = flow.unreservedContentHeight?.() ?? contentHeight();
       if (
         !placed.fitted &&
-        flow.cursorY <= 0.001 &&
         !movedToFreshPage &&
-        fullBand > contentHeight() + 0.001
+        tallRow.noteReserveLeavesNoLine(flow.cursorY, contentHeight(), pageBand())
       ) {
         breakForContinuation(admitsRepeatedHeaders);
         movedToFreshPage = true;
