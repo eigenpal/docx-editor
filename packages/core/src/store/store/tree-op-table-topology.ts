@@ -1,3 +1,4 @@
+import { createTableReadCache } from './table-read-cache.ts';
 // Bounded direct-child table topology for store validation (table-editing task 2).
 //
 // Walks only `w:tbl -> w:tr -> w:tc`, counting visited nodes before allocating result
@@ -170,6 +171,8 @@ function lookupNodeById(
   return { ok: true, node: match };
 }
 
+const cachedTopology = createTableReadCache<OoxmlNode, EditableTableTopologyResult>();
+
 /**
  * Read the bounded direct-child topology of one typed table node.
  *
@@ -177,6 +180,20 @@ function lookupNodeById(
  * independent. Hostile row/column counts are bounded before any result arrays are allocated.
  */
 export function readEditableTableTopology(
+  root: OoxmlElement,
+  tableId: string,
+  limits: TableTopologyLimits = DEFAULT_TABLE_TOPOLOGY_LIMITS
+): EditableTableTopologyResult {
+  const resolved = resolveTableTopologyLimits(limits);
+  const table = cachedUniqueNode(root, tableId);
+  // Only an existing unique-id index proves that another root has the same target.
+  // Keep one revision under its stable properties, never one per undo-history root.
+  const owner = table?.kind === 'table' ? wmlChildNamed(table, 'tblPr') : undefined;
+  if (!owner || !table) return readTableTopology(root, tableId, resolved);
+  return cachedTopology(owner, table, resolved, () => readTableTopology(root, tableId, resolved));
+}
+
+function readTableTopology(
   root: OoxmlElement,
   tableId: string,
   limits: TableTopologyLimits = DEFAULT_TABLE_TOPOLOGY_LIMITS

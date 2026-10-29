@@ -3,10 +3,11 @@
   "fields": [],
   "before": "Table text edits can rebuild unchanged row layout and review state.",
   "after": "Table text edits reuse validated row layout and bounded read caches.",
-  "reason": "The change affects local layout and review reads only. Document operations, shared state, and transport formats stay unchanged.",
+  "reason": "The change affects local layout, table validation, and review reads only. Document operations, shared state, and transport formats stay unchanged.",
   "tests": [
     "e2e/collaboration.reviewwrites.spec.ts",
-    "packages/core/src/layout/__tests__/table-tracked-text-update.test.ts"
+    "packages/core/src/layout/__tests__/table-tracked-text-update.test.ts",
+    "packages/core/src/store/__tests__/table-read-cache.test.ts"
   ],
   "changeset": "tracked-table-layout-cache",
   "migration": null
