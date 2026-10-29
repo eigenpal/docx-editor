@@ -11,6 +11,7 @@ import {
   type NumberingLevel,
 } from './numbering-index.ts';
 import { expandLvlText } from './numbering-format.ts';
+import type { ListNumLevel } from './field-listnum.ts';
 
 /**
  * The result of counting ONE list paragraph: the level that applied, the counter vector after it,
@@ -272,6 +273,39 @@ export function createListCounterState(index: NumberingIndex): ListCounterState 
       return advance;
     },
   };
+  fieldAdvancers.set(state, (counterKey, ilvl, levelOf, setValue) => {
+    const level = levelOf(ilvl);
+    if (!level || ilvl < 0 || ilvl > 8) return null;
+    let counters = byAbstract.get(counterKey);
+    let initialized = initializedByAbstract.get(counterKey);
+    if (!counters || !initialized) {
+      counters = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+      initialized = [false, false, false, false, false, false, false, false, false];
+      byAbstract.set(counterKey, counters);
+      initializedByAbstract.set(counterKey, initialized);
+    }
+    for (let deeper = ilvl + 1; deeper <= 8; deeper += 1) {
+      const trigger = lvlRestartTriggerIlvl(deeper, levelOf(deeper)?.lvlRestart);
+      if (trigger !== null && ilvl <= trigger) initialized[deeper] = false;
+    }
+    // A field on a deeper level counts every unused level above it once, at its start: the
+    // next field on such a level shows the number after it.
+    for (let parent = 0; parent < ilvl; parent += 1) {
+      if (initialized[parent]) continue;
+      counters[parent] = levelOf(parent)?.start ?? 1;
+      initialized[parent] = true;
+    }
+    if (setValue !== undefined) counters[ilvl] = setValue;
+    else if (initialized[ilvl]) counters[ilvl] += 1;
+    else counters[ilvl] = level.start;
+    initialized[ilvl] = true;
+    const expand = counters.map((value, index) =>
+      initialized![index] ? value : (levelOf(index)?.start ?? 1)
+    );
+    const formats = counters.map((_, index) => levelOf(index)?.numFmt ?? 'decimal');
+    if (level.vanish || level.numFmt === 'bullet') return null;
+    return expandLvlText(level.lvlText, expand, legalEffectiveFormats(formats, !!level.isLgl));
+  });
   counterSnapshots.set(state, {
     save: () => ({
       counters: copyArrays(byAbstract),
@@ -289,6 +323,31 @@ export function createListCounterState(index: NumberingIndex): ListCounterState 
     },
   });
   return state;
+}
+
+/** The levels one LISTNUM field counts on, by level index. */
+export type ListNumLevelOf = (ilvl: number) => ListNumLevel | undefined;
+
+const fieldAdvancers = new WeakMap<
+  ListCounterState,
+  (counterKey: string, ilvl: number, levelOf: ListNumLevelOf, setValue?: number) => string | null
+>();
+
+/**
+ * Count one LISTNUM field on the counters `state` keeps under `counterKey` (an
+ * abstractNumId, so the field and the list's paragraphs continue each other), and return the
+ * text it displays, or null when it displays none. `setValue` is the field's `\s` value.
+ *
+ * @internal
+ */
+export function advanceListNumField(
+  state: ListCounterState,
+  counterKey: string,
+  ilvl: number,
+  levelOf: ListNumLevelOf,
+  setValue?: number
+): string | null {
+  return fieldAdvancers.get(state)?.(counterKey, ilvl, levelOf, setValue) ?? null;
 }
 
 /** Substitution-ready counter vectors, keyed on the advance results that produced them. */

@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A LISTNUM field without a saved result displays nothing.",
+  "after": "A body LISTNUM field displays the number its list walk gives it, and renumbers when an earlier paragraph changes.",
+  "reason": "Only layout changes. Source ranges, canonical OOXML, operations, and collaboration formats remain unchanged; the field keeps its stored runs.",
+  "tests": [
+    "packages/core/src/layout/__tests__/field-listnum-layout.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-listnum.test.ts"
+  ],
+  "changeset": "listnum-field-numbers",
+  "migration": null
+}

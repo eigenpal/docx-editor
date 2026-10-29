@@ -1,7 +1,6 @@
 import { registerListGeometry, rememberListItemShape } from './list-marker-reuse.ts';
 import { walkStoryParagraphs } from './story-paragraph-walk.ts';
 import { mergeListIndent } from './list-indent-merge.ts';
-import { styleSeparatorMembersOf } from './style-separator-group.ts';
 import { markerMeasureToken } from './list-marker-measure-key.ts';
 import {
   numberingParagraphProperties,
@@ -10,8 +9,7 @@ import {
 } from './numbering-paragraph-properties.ts';
 // Resolve numbering into marker text, indentation, and font inputs for one story walk.
 
-import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
-import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
+import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { framedTokenJoin } from './layout-cache.ts';
 import {
   createListCounterState,
@@ -32,7 +30,6 @@ import {
   type NumberingLevelIndent,
 } from './numbering-index.ts';
 import {
-  cascadeParagraphFormatting,
   cascadeRunProperties,
   MAX_STYLE_BASED_ON_DEPTH,
   type StyleCascadeTable,
@@ -43,12 +40,19 @@ import { markerSymbolFontAvailability } from './marker-symbol-font.ts';
 import { bulletMarkerStyle } from './marker-symbol-face.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
-import { propertiesOf } from './paragraph-flow.ts';
-import { numberingLevelTiers } from './numbering-level-tier.ts';
 import { DEPENDENCY_KEY_IDS } from '../store/registry/frozen-ids.ts';
 import type { LayoutScope } from './layout-scheduler.ts';
 import type { LayoutSession } from './layout-session.ts';
 import { numberingFlowBlocks } from './hidden-paragraph-mark.ts';
+import { numPrFieldsOf, paragraphListPrelude, readNumPr } from './list-paragraph-prelude.ts';
+import {
+  listNumFieldsOf,
+  listNumSignatureOf,
+  storyHasListNumFields,
+} from './field-listnum-scan.ts';
+import { copyListItemsWithListNum, createListNumWalker } from './list-resolve-listnum.ts';
+
+export { readNumPr };
 
 interface ListResolveChangeEvidence {
   readonly preservesNumberedSequence: boolean;
@@ -162,86 +166,6 @@ export function listItemNumberSource(item: ResolvedListItem): FullContextNumberS
   return listItemNumberSources.get(item);
 }
 
-function isElement(node: OoxmlNode): node is OoxmlElement {
-  return node.kind !== 'textValue';
-}
-
-function attrVal(node: OoxmlElement, localName: string): string | undefined {
-  for (const a of node.attributes) {
-    if (a.localName === localName) return a.value;
-  }
-  return undefined;
-}
-
-function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undefined {
-  for (const child of node.children) {
-    if (isElement(child) && child.localName === localName) return child;
-  }
-  return undefined;
-}
-
-/**
- * One `w:numPr` tier read per FIELD. `undefined` means the tier does not state the field.
- *
- * `numId: null` is a tier that states "no numbering": `w:val="0"` (§17.9.18 — the null
- * numbering definition), a `w:numId` with no value, or an oversized value (hostile-input
- * guard). `ilvl: null` is a stated level outside 0–8, which invalidates the tier's
- * numbering the same way; an unparseable level reads as 0, as before.
- */
-function numPrFieldsOf(
-  node: OoxmlNode
-): { numId: string | null | undefined; ilvl: number | null | undefined } | null {
-  if (!isElement(node)) return null;
-  const numPr = childNamed(node, 'numPr');
-  if (!numPr) return null;
-  const numIdNode = childNamed(numPr, 'numId');
-  const ilvlNode = childNamed(numPr, 'ilvl');
-  let numId: string | null | undefined;
-  if (numIdNode) {
-    const val = attrVal(numIdNode, 'val');
-    numId = val !== undefined && val !== '0' && val.length <= 64 ? val : null;
-  }
-  let ilvl: number | null | undefined;
-  if (ilvlNode) {
-    const raw = attrVal(ilvlNode, 'val');
-    const parsed = /^\d{1,2}$/.test(raw ?? '') ? Number(raw) : 0;
-    ilvl = parsed <= 8 ? parsed : null;
-  }
-  return { numId, ilvl };
-}
-
-/**
- * Read `w:numPr` from cascaded paragraph-property nodes (lowest precedence first).
- *
- * Flat `OoxmlProperty[]` bags drop nested `ilvl`/`numId`, so this walks the tree nodes
- * the same way borders and tabs do.
- *
- * `w:ilvl` and `w:numId` inherit INDEPENDENTLY through the style chain and the direct
- * `w:pPr` (§17.3.1.19): a tier stating only the level keeps the id it inherits — Word's
- * standard Heading2–Heading9 shape, where only Heading1 names the `w:num` — and a tier
- * stating only the id keeps the inherited level. Treating each `w:numPr` node as a full
- * replacement dropped the id at every level-only tier and unnumbered the paragraph. A
- * stated `w:numId w:val="0"` (or an invalid value) still switches numbering off at that
- * tier even when a lower tier set one; a higher tier stating a valid id re-enables. A
- * level-only tier with no id inherited from below resolves to no numbering.
- */
-export function readNumPr(
-  paragraphPropertyNodes: readonly OoxmlNode[]
-): { numId: string; ilvl: number } | null {
-  let numId: string | null = null;
-  let ilvl = 0;
-  for (const node of paragraphPropertyNodes) {
-    const fields = numPrFieldsOf(node);
-    if (!fields) continue;
-    if (fields.numId !== undefined) numId = fields.numId;
-    if (fields.ilvl !== undefined) {
-      if (fields.ilvl === null) numId = null;
-      else ilvl = fields.ilvl;
-    }
-  }
-  return numId === null ? null : { numId, ilvl };
-}
-
 /**
  * The `w:numId` a style numbers with, following `w:basedOn` (§17.9.21 link target).
  *
@@ -312,73 +236,6 @@ export { mergeListIndent } from './list-indent-merge.ts';
 export { walkStoryParagraphs } from './story-paragraph-walk.ts';
 
 /**
- * Per-paragraph prelude for the story walk below, memoized on the paragraph NODE: which
- * `numPr` a paragraph resolves to — and the cascaded property tiers feeding its indent and
- * marker face — are pure functions of the immutable paragraph and the cascade table. An
- * edit republishes only the touched paragraphs, yet the resolver walks the WHOLE story per
- * keystroke; without this cache every unchanged paragraph re-ran the full style cascade
- * just to learn (usually) that it has no numbering. Only the counter advance is genuinely
- * sequential. `perLevel` holds level-derived indent/marker work, keyed on the level object
- * (identity-stable because `resolveNumberingStyleLinks` reuses the target's `levels` maps
- * by reference) — a WeakMap, so level objects orphaned by a numbering edit take their
- * entries with them.
- */
-interface ParagraphListPrelude {
-  readonly styleCascade: StyleCascadeTable | undefined;
-  readonly numPr: { readonly numId: string; readonly ilvl: number } | null;
-  /** Properties below and above the numbering level, from `numberingLevelTiers`. */
-  readonly belowLevel: readonly OoxmlProperty[];
-  readonly aboveLevel: readonly OoxmlProperty[];
-  readonly inheritedMarkProps: readonly OoxmlProperty[];
-  readonly perLevel: WeakMap<
-    object,
-    { indent: NumberingLevelIndent; markerStyle: ResolvedRunStyle }
-  >;
-}
-const paragraphListPreludes = new WeakMap<OoxmlElement, ParagraphListPrelude>();
-
-function paragraphListPrelude(
-  paragraph: OoxmlElement,
-  styleCascade: StyleCascadeTable | undefined
-): ParagraphListPrelude {
-  const cached = paragraphListPreludes.get(paragraph);
-  if (cached && cached.styleCascade === styleCascade) return cached;
-  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-  const cascaded = styleCascade ? cascadeParagraphFormatting(styleCascade, pPr) : null;
-  const nodes: readonly OoxmlNode[] = cascaded ? cascaded.paragraphPropertyNodes : pPr ? [pPr] : [];
-  const directMarkRun = pPr && isElement(pPr) ? childNamed(pPr, 'rPr') : undefined;
-  const numPr = readNumPr(nodes);
-  // Only a list paragraph reads the tiers; skip the second style-chain walk for the rest.
-  const tiers =
-    numPr && styleCascade && cascaded
-      ? numberingLevelTiers(styleCascade, cascaded.styleId, pPr)
-      : { below: [], above: propertiesOf(pPr) };
-  // The number takes the mark's formatting except its underline; only the level's own
-  // `w:u` underlines it.
-  const markProps = (cascaded ? cascaded.markRunProperties : propertiesOf(directMarkRun)).filter(
-    (property) => property.localName !== 'u'
-  );
-  // An admitted separator hides its mark, not its heading number. Content and level
-  // visibility remain independent, so an actually hidden list keeps its hidden marker.
-  const inheritedMarkProps = styleSeparatorMembersOf(paragraph)
-    ? [
-        ...markProps.filter((property) => property.localName !== 'vanish'),
-        ...(cascaded?.runProperties.filter((property) => property.localName === 'vanish') ?? []),
-      ]
-    : markProps;
-  const prelude: ParagraphListPrelude = {
-    styleCascade,
-    numPr,
-    belowLevel: tiers.below,
-    aboveLevel: tiers.above,
-    inheritedMarkProps,
-    perLevel: new WeakMap(),
-  };
-  paragraphListPreludes.set(paragraph, prelude);
-  return prelude;
-}
-
-/**
  * Resolve every list paragraph in a story to a {@link ResolvedListItem}, keyed by node id.
  *
  * Non-list paragraphs are absent from the map. Hostile / missing numbering resolves inertly
@@ -407,6 +264,8 @@ interface ListSequenceResolve {
   readonly items: ReadonlyMap<string, ResolvedListItem>;
   /** `states[k]` is the counter state before paragraph `k * LIST_RESUME_STRIDE`. */
   readonly states: readonly ListCounterSnapshot[];
+  /** A LISTNUM field counted in the walk; a resume then cannot start mid-story. */
+  readonly usesListNum: boolean;
 }
 
 /**
@@ -419,16 +278,23 @@ function resolveListSequence(
   index: NumberingIndex,
   styleCascade: StyleCascadeTable | undefined,
   isFontAvailable: ((family: string) => boolean) | undefined,
-  resume?: { readonly from: number; readonly previous: ListSequenceResolve }
+  resume?: { readonly from: number; readonly previous: ListSequenceResolve },
+  seed?: ListCounterSnapshot
 ): ListSequenceResolve {
   const map = new Map<string, ResolvedListItem>();
   // A definition that delegates through `w:numStyleLink` has no levels of its own; resolving
   // the link here is what keeps those paragraphs from losing their markers entirely.
   const linked = withNumberingStyleLinks(index, styleCascade);
   const counters = createListCounterState(linked);
+  // A header or footer story continues the count the stories before it left.
+  if (seed) loadListCounters(counters, seed);
+  const listNum = createListNumWalker(linked, counters);
   const states: ListCounterSnapshot[] = [];
+  // A LISTNUM field reads the paragraphs before it (the last numbered one, the last heading),
+  // which a saved counter state does not hold: such a walk starts from the top.
+  const usesListNum = paragraphs.some((paragraph) => listNumFieldsOf(paragraph).length > 0);
   let start = 0;
-  if (resume) {
+  if (resume && !usesListNum && !resume.previous.usesListNum) {
     const checkpoint = Math.min(
       Math.floor(resume.from / LIST_RESUME_STRIDE),
       resume.previous.states.length - 1
@@ -450,9 +316,9 @@ function resolveListSequence(
     const paragraph = paragraphs[position]!;
     const prelude = paragraphListPrelude(paragraph, styleCascade);
     const numPr = prelude.numPr;
-    if (!numPr) continue;
-
-    const advanced = counters.advance(numPr.numId, numPr.ilvl);
+    const advanced = numPr ? counters.advance(numPr.numId, numPr.ilvl) : null;
+    // The paragraph's own number counts before the fields inside it.
+    if (usesListNum) listNum.visit(paragraph, advanced, prelude.outlineLevel);
     if (!advanced) continue;
 
     let levelDerived = prelude.perLevel.get(advanced.level);
@@ -559,7 +425,8 @@ function resolveListSequence(
     });
     map.set(paragraph.id, item);
   }
-  return { items: map, states };
+  listNum.finish(map);
+  return { items: map, states, usesListNum };
 }
 
 interface ResolvedListItemsMemoEntry {
@@ -597,7 +464,69 @@ type WithResolvedListItemsOptions = {
    * save path) keeps the pre-font-resolution answer: translate the private-use bullet.
    */
   readonly measurer?: TextMeasurer;
+  /** The counters a header or footer story starts from (`furniture-list-seeds.ts`). */
+  readonly listCounterSeed?: ListCounterSnapshot;
 };
+
+/** Seeded resolves per story, a few per blocks array: one part can start from several seeds. */
+const seededResolves = new WeakMap<
+  readonly OoxmlElement[],
+  {
+    readonly seed: ListCounterSnapshot;
+    readonly rawIndex: NumberingIndex | undefined;
+    readonly styleCascade: StyleCascadeTable | undefined;
+    readonly isFontAvailable: ((family: string) => boolean) | undefined;
+    readonly linkedIndex: NumberingIndex;
+    readonly listItems: ReadonlyMap<string, ResolvedListItem>;
+  }[]
+>();
+const MAX_SEEDED_RESOLVES_PER_STORY = 4;
+
+/**
+ * The list walk of a story that starts from `seed`. A header or footer part is short, so it
+ * walks whole; the memo keeps one resolve per seed for the part's few occurrences.
+ */
+function seededListItems(
+  options: WithResolvedListItemsOptions,
+  blocks: readonly OoxmlElement[],
+  seed: ListCounterSnapshot,
+  isFontAvailable: ((family: string) => boolean) | undefined
+): {
+  readonly numberingIndex: NumberingIndex;
+  readonly listItems: ReadonlyMap<string, ResolvedListItem>;
+} {
+  const entries = seededResolves.get(blocks) ?? [];
+  const hit = entries.find(
+    (entry) =>
+      entry.seed === seed &&
+      entry.rawIndex === options.numberingIndex &&
+      entry.styleCascade === options.styleCascade &&
+      entry.isFontAvailable === isFontAvailable
+  );
+  if (hit) return { numberingIndex: hit.linkedIndex, listItems: hit.listItems };
+  const linkedIndex = withNumberingStyleLinks(
+    options.numberingIndex ?? EMPTY_NUMBERING_INDEX,
+    options.styleCascade
+  );
+  const listItems = resolveListSequence(
+    walkStoryParagraphs(blocks, 8, true),
+    linkedIndex,
+    options.styleCascade,
+    isFontAvailable,
+    undefined,
+    seed
+  ).items;
+  const entry = {
+    seed,
+    rawIndex: options.numberingIndex,
+    styleCascade: options.styleCascade,
+    isFontAvailable,
+    linkedIndex,
+    listItems,
+  };
+  seededResolves.set(blocks, [entry, ...entries].slice(0, MAX_SEEDED_RESOLVES_PER_STORY));
+  return { numberingIndex: linkedIndex, listItems };
+}
 
 /** The oracle a pass actually resolves with: an explicit one, else the measurer's coverage. */
 function listFontAvailability(
@@ -646,6 +575,12 @@ function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
   // Paragraphs a hidden mark took out of the flow still count; see `hidden-paragraph-mark.ts`.
   const blocks = numberingFlowBlocks(flowBlocks);
   const isFontAvailable = listFontAvailability(options);
+  if (options.listItems === undefined && options.listCounterSeed) {
+    return {
+      ...options,
+      ...seededListItems(options, blocks, options.listCounterSeed, isFontAvailable),
+    };
+  }
   if (options.listItems === undefined) {
     const memo = resolvedListItemsMemoHit(options, isFontAvailable, blocks, memoOwner);
     if (memo && memoOwner === undefined) {
@@ -672,7 +607,8 @@ function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
         );
   const listItems =
     options.listItems ??
-    (numberingIndex.nums.size > 0
+    // A LISTNUM field counts on a built-in list even when the document defines none.
+    (numberingIndex.nums.size > 0 || storyHasListNumFields(blocks)
       ? resolveStoryListItemsStable(
           blocks,
           options.numberingIndex,
@@ -744,6 +680,8 @@ export function withResolvedListItemsForSession<T extends WithResolvedListItemsO
 interface NumberedBlockMemo {
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly numbered: readonly OoxmlElement[];
+  /** Numbered paragraphs plus headings and paragraphs with LISTNUM fields: what the walk reads. */
+  readonly walked: readonly OoxmlElement[];
 }
 const numberedBlockMemos = new WeakMap<OoxmlElement, NumberedBlockMemo>();
 const NO_NUMBERED_PARAGRAPHS: readonly OoxmlElement[] = Object.freeze([]);
@@ -756,21 +694,42 @@ export function blockHasNumberedParagraphs(
   block: OoxmlElement,
   styleCascade: StyleCascadeTable | undefined
 ): boolean {
-  return numberedParagraphsOfBlock(block, styleCascade).length > 0;
+  return numberedBlockMemo(block, styleCascade).numbered.length > 0;
 }
 
+function numberedBlockMemo(
+  block: OoxmlElement,
+  styleCascade: StyleCascadeTable | undefined
+): NumberedBlockMemo {
+  const cached = numberedBlockMemos.get(block);
+  if (cached && cached.styleCascade === styleCascade) return cached;
+  const numbered: OoxmlElement[] = [];
+  const walked: OoxmlElement[] = [];
+  for (const paragraph of walkStoryParagraphs([block], 8, true)) {
+    const prelude = paragraphListPrelude(paragraph, styleCascade);
+    if (prelude.numPr !== null) numbered.push(paragraph);
+    if (
+      prelude.numPr !== null ||
+      prelude.outlineLevel !== null ||
+      listNumFieldsOf(paragraph).length > 0
+    )
+      walked.push(paragraph);
+  }
+  const memo = {
+    styleCascade,
+    numbered: numbered.length > 0 ? numbered : NO_NUMBERED_PARAGRAPHS,
+    walked: walked.length > 0 ? walked : NO_NUMBERED_PARAGRAPHS,
+  };
+  numberedBlockMemos.set(block, memo);
+  return memo;
+}
+
+/** The paragraphs of one block the list walk reads. */
 function numberedParagraphsOfBlock(
   block: OoxmlElement,
   styleCascade: StyleCascadeTable | undefined
 ): readonly OoxmlElement[] {
-  const cached = numberedBlockMemos.get(block);
-  if (cached && cached.styleCascade === styleCascade) return cached.numbered;
-  const collected = walkStoryParagraphs([block], 8, true).filter(
-    (paragraph) => paragraphListPrelude(paragraph, styleCascade).numPr !== null
-  );
-  const numbered = collected.length > 0 ? collected : NO_NUMBERED_PARAGRAPHS;
-  numberedBlockMemos.set(block, { styleCascade, numbered });
-  return numbered;
+  return numberedBlockMemo(block, styleCascade).walked;
 }
 
 /**
@@ -823,6 +782,7 @@ function rememberSessionResolve(
 
 function sameNumberedParagraph(paragraph: OoxmlElement, previous: OoxmlElement | undefined) {
   if (!previous || paragraph.id !== previous.id) return false;
+  if (listNumSignatureOf(paragraph) !== listNumSignatureOf(previous)) return false;
   const properties = paragraph.children.find((child) => child.kind === 'paragraphProperties');
   const previousProperties = previous.children.find(
     (child) => child.kind === 'paragraphProperties'
@@ -854,13 +814,15 @@ function resolveStoryListItemsStable(
       : undefined;
   const last = memoOwner
     ? (lastStoryResolvesBySession.get(memoOwner) ??
-      (seed && { ...seed, listItems: new Map(seed.listItems) }))
+      (seed && { ...seed, listItems: copyListItemsWithListNum(seed.listItems) }))
     : ((first ? lastStoryResolvesByAnchor.get(first) : undefined) ??
       (lastBlock ? lastStoryResolvesByAnchor.get(lastBlock) : undefined));
   const evidence = memoOwner ? consumeListResolveChangeEvidence(memoOwner) : undefined;
   if (
     evidence?.preservesNumberedSequence &&
     last &&
+    // A text edit can change a LISTNUM field's instruction; compare the walked paragraphs.
+    !last.walk?.resolve.usesListNum &&
     last.rawIndex === rawIndex &&
     last.styleCascade === styleCascade &&
     last.isFontAvailable === isFontAvailable

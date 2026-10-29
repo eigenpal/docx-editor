@@ -371,12 +371,23 @@ function parseAbstractNum(node: OoxmlElement): AbstractNumDefinition | null {
   }
   const numStyleLink = linkTarget(node, 'numStyleLink');
   const styleLink = linkTarget(node, 'styleLink');
+  const name = child(node, 'name');
+  const nameValue = name ? attr(name, 'val') : undefined;
   return {
     abstractNumId,
     levels,
     ...(numStyleLink !== undefined ? { numStyleLink } : {}),
     ...(styleLink !== undefined ? { styleLink } : {}),
+    // A symbol key, so the public definition type stays as it is; a copy keeps it.
+    ...(nameValue && nameValue.length <= 255 ? { [abstractNumNameKey]: nameValue } : {}),
   };
+}
+
+const abstractNumNameKey = Symbol('abstract-num-name');
+
+/** The `w:name` of an abstract list, lower-cased, or undefined when it states none. */
+export function abstractNumNameOf(definition: AbstractNumDefinition): string | undefined {
+  return (definition as { [abstractNumNameKey]?: string })[abstractNumNameKey]?.toLowerCase();
 }
 
 function parseOverride(node: OoxmlElement): { ilvl: number; override: LevelOverride } | null {

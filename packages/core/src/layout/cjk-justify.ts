@@ -16,6 +16,7 @@ import { hasCjkText, isCjk, isHangul } from './cjk-paragraph-breaks.ts';
 import { lastCodePointOf } from './cjk-line-break.ts';
 import { automaticTextSpacingBefore } from './cjk-automatic-spacing.ts';
 import { spaceSlackCapacity } from './distributed-character-spacing.ts';
+import { fitTextGroupOf, insideFitTextGroup } from './fit-text-groups.ts';
 import type { DistributedSpacing } from './distributed-spacing.ts';
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
@@ -94,7 +95,11 @@ export function justifyCjkSpans(
   const share = spacing === 'legacyCharacters' ? 'legacyCharacters' : 'characters';
   const split: StyleSpanRecord[] = [];
   for (const span of spans) {
-    const parts = isSplittableSpan(span) ? slotParts(span, spacing !== undefined) : [];
+    // A fitted group keeps its own spacing, so it is never split into slots.
+    const parts =
+      isSplittableSpan(span) && fitTextGroupOf(span) === undefined
+        ? slotParts(span, spacing !== undefined)
+        : [];
     if (parts.length < 2) split.push(span);
     else split.push(...splitSpanParts(span, parts, measurer));
   }
@@ -112,6 +117,7 @@ export function justifyCjkSpans(
       after === undefined ||
       current.lineEndWhitespace ||
       current.text === '\n' ||
+      insideFitTextGroup(previous, current) ||
       JOINERS.test(previous.text.slice(-1) + current.text[0])
     )
       continue;

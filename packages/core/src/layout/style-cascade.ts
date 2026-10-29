@@ -63,6 +63,7 @@ import { withNumberingTabRule } from './numbering-tab-rule.ts';
 import { NO_THEME_FONTS, type ThemeFonts } from './run-style.ts';
 import { combineStyleToggles } from './style-toggles.ts';
 import { styleChain, styleIdFromProps } from './style-chain.ts';
+import { resolveParagraphOutlineLevel } from './paragraph-outline-level.ts';
 import { paragraphMarkRunProperties } from './paragraph-mark-run.ts';
 import { legacyTableDefaultProperties } from './table-style-compatibility.ts';
 import {
@@ -929,31 +930,7 @@ export function resolveParagraphLayoutInputs(
     : undefined;
   const tabStops = withNumberingTabRule(cascadedTabStops(nodes), styleCascade);
   const styleId = cascaded ? cascaded.styleId : (styleIdFromProps(props, 'pStyle') ?? null);
-  let outlineLevel: number | null = null;
-  let sawOutlineProperty = false;
-  for (const property of props) {
-    if (property.localName !== 'outlineLvl') continue;
-    sawOutlineProperty = true;
-    const value = property.attributes?.val;
-    outlineLevel = value !== undefined && /^[0-8]$/.test(value) ? Number(value) : null;
-  }
-  if (!sawOutlineProperty && styleCascade && styleId) {
-    const chain = styleChain(styleCascade, styleId, 'paragraph');
-    for (let index = chain.length - 1; index >= 0; index -= 1) {
-      const inherited = chain[index]!.outlineLevel;
-      if (inherited !== null) {
-        outlineLevel = inherited;
-        break;
-      }
-    }
-  }
-  // Built-in Heading styles remain semantic even when a producer omits styles.xml (or names
-  // one without defining it). Keep this in the core record substrate so Markdown, PDF and
-  // future exporters agree. An explicit outlineLvl=9/invalid above deliberately blocks it.
-  if (!sawOutlineProperty && outlineLevel === null && styleId) {
-    const builtIn = /^heading\s*([1-9])$/i.exec(styleId.trim());
-    if (builtIn) outlineLevel = Number(builtIn[1]) - 1;
-  }
+  const outlineLevel = resolveParagraphOutlineLevel(props, styleCascade, styleId);
   return {
     props,
     indent,

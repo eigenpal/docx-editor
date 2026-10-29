@@ -241,6 +241,17 @@ export const wordFeatures: WordFeature[] = [
       'Opaque solid w14:textOutline with an explicit RGB color renders. Theme-colored, transparent, gradient, dashed, compound, and inset outlines do not render. Legacy outline, shadow, emboss, imprint, and emphasis marks are preserved but do not render. Text effects have no toolbar controls.',
   },
   {
+    id: 'text.fit-text',
+    name: 'Fit text (w:fitText)',
+    category: 'text',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Consecutive runs that share one w:fitText id take the w:val width of the first run, in layout, painting, and PDF export. Narrower text spreads: every character except the last gets the same extra advance. Wider text compresses every character horizontally. The authored character spacing and scale of those runs do not apply inside the group. The group moves to the next line as one unit, and the table AutoFit minimum width keeps it whole. Justification, distribution, and space shrinking do not change the spacing inside a group. A field result is a group character; a tab ends the group, and the text after it keeps its natural width. The width can be in twips or in a unit such as 1in. Text typed inside the group joins it and fits again; text typed right after its last character starts a run without fit text. There is no control to apply fit text.',
+  },
+  {
     id: 'text.hidden',
     name: 'Hidden text (vanish)',
     category: 'text',
@@ -441,7 +452,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Lists that share one abstract numbering definition count together. A start override restarts that shared count once, at the first item of its list on an overridden level, and the other lists continue from the restarted count. A new list that the editor starts on an existing definition writes its own start overrides, so it begins at its first number.',
+      'Lists that share one abstract numbering definition count together. A start override restarts that shared count once, at the first item of its list on an overridden level, and the other lists continue from the restarted count. A new list that the editor starts on an existing definition writes its own start overrides, so it begins at its first number. Headers and footers share one count, separate from the body: it runs over each section in order, through the even header, default header, even footer, default footer, first-page header, and first-page footer that the section references. A footer list therefore continues the header list, with the same numbers on every page.',
   },
   {
     id: 'lists.picture-bullets',
@@ -1071,6 +1082,18 @@ export const wordFeatures: WordFeature[] = [
     docsLink: '/docs/2.x/guides/fields',
   },
   {
+    id: 'fields.listnum',
+    name: 'LISTNUM field numbers',
+    category: 'fields',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'LISTNUM fields in the main text compute their number from the list definitions of the document, with or without a saved result. A name that matches a numbering definition name counts on that list, so the field and the numbered paragraphs of the list continue each other. NumberDefault, OutlineDefault, LegalDefault, and unknown names count on one built-in list in the formats the name selects. The \\l switch sets the level and \\s sets the value. Without a name, a field uses the list of its numbered paragraph or of the last numbered paragraph before it. Without \\l, the level follows the paragraph, an earlier field of the list in the paragraph, the last numbered paragraph, or the last heading. LISTNUM fields in headers, footers, notes, and text boxes keep their saved result. Save does not change the field.',
+    docsLink: '/docs/2.x/guides/fields',
+  },
+  {
     id: 'fields.styleref',
     name: 'Character-style header references',
     category: 'fields',
@@ -1091,7 +1114,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      "The document API inserts REF, PAGEREF, NOTEREF, SEQ, STYLEREF, DATE, and TIME fields, untracked or as one tracked insertion that Reject removes whole. Their instructions are never evaluated, and fields that fetch, embed, link, run, or prompt refuse. The cached result starts empty; Field.result writes plain result text, inside the author's own pending insertion when tracked, and marks the field w:dirty so an application that evaluates fields recomputes it. The saved result displays for a complex field and for w:fldSimple. Complex fields also display embedded pictures from saved results, including nested complex results, without resolving external image links. Text and pictures retain their saved order and existing model ranges. Mixed results use each authored font slot for measurement and painting. All display slices retain the field's original model unit. Line breaks inside a saved result start another line. Page breaks follow the surrounding story rules; page breaks in table cells do not add pages. By default the field moves as one unit with the caret. Caret positions and selections keep both source boundaries, including field-only paragraphs. Computed caches remain read-only. With the fieldResults editor option set to editable, the saved results of DATE, TIME, CREATEDATE, SAVEDATE, PRINTDATE, MERGEFIELD, HYPERLINK, QUOTE, FILENAME, FILLIN, and SEQ fields accept typing, deletion, selection, composed input, undo, and tracked changes inside the result. Backspace after such a field or Delete before it selects the whole field, and a selection that crosses the field edge grows to cover the field. Computed fields and fields that contain another field in their result stay one unit. Collaboration sessions refuse the option. Leading direction marks remain in results without replacing the first visible result run’s formatting. The saved result of a field nested inside another field’s instruction displays nothing, and Find skips it; the outer field keeps its normal display behavior. Field codes round-trip unchanged. Option+F9 on macOS and Alt+F9 on Windows toggle instruction display without changing the document. Some Mac keyboards require Fn. SYMBOL renders its character with the requested font and size. MACROBUTTON and GOTOBUTTON render display text without running the macro or jump. TITLE, AUTHOR, SUBJECT, KEYWORDS, LASTSAVEDBY, COMMENTS, and matching DOCPROPERTY fields render sanitized document metadata. DATE-valued properties stay inert. DATE, TIME, FILENAME, SEQ, LISTNUM, and EQ do not calculate a new value. The editor never runs macros, DDE instructions, or external include instructions.",
+      "The document API inserts REF, PAGEREF, NOTEREF, SEQ, STYLEREF, DATE, and TIME fields, untracked or as one tracked insertion that Reject removes whole. Their instructions are never evaluated, and fields that fetch, embed, link, run, or prompt refuse. The cached result starts empty; Field.result writes plain result text, inside the author's own pending insertion when tracked, and marks the field w:dirty so an application that evaluates fields recomputes it. The saved result displays for a complex field and for w:fldSimple. Complex fields also display embedded pictures from saved results, including nested complex results, without resolving external image links. Text and pictures retain their saved order and existing model ranges. Mixed results use each authored font slot for measurement and painting. All display slices retain the field's original model unit. Line breaks inside a saved result start another line. Page breaks follow the surrounding story rules; page breaks in table cells do not add pages. By default the field moves as one unit with the caret. Caret positions and selections keep both source boundaries, including field-only paragraphs. Computed caches remain read-only. With the fieldResults editor option set to editable, the saved results of DATE, TIME, CREATEDATE, SAVEDATE, PRINTDATE, MERGEFIELD, HYPERLINK, QUOTE, FILENAME, FILLIN, and SEQ fields accept typing, deletion, selection, composed input, undo, and tracked changes inside the result. Backspace after such a field or Delete before it selects the whole field, and a selection that crosses the field edge grows to cover the field. Computed fields and fields that contain another field in their result stay one unit. Collaboration sessions refuse the option. Leading direction marks remain in results without replacing the first visible result run’s formatting. The saved result of a field nested inside another field’s instruction displays nothing, and Find skips it; the outer field keeps its normal display behavior. Field codes round-trip unchanged. Option+F9 on macOS and Alt+F9 on Windows toggle instruction display without changing the document. Some Mac keyboards require Fn. SYMBOL renders its character with the requested font and size. MACROBUTTON and GOTOBUTTON render display text without running the macro or jump. TITLE, AUTHOR, SUBJECT, KEYWORDS, LASTSAVEDBY, COMMENTS, and matching DOCPROPERTY fields render sanitized document metadata. DATE-valued properties stay inert. DATE, TIME, FILENAME, SEQ, and EQ do not calculate a new value. The editor never runs macros, DDE instructions, or external include instructions.",
     docsLink: '/docs/2.x/guides/fields',
   },
   {

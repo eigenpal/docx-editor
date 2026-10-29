@@ -24,6 +24,7 @@ The shortcut changes the display without changing document content or adding an 
 | `REF` | Resolves bookmark text or numbering in the document body and notes. |
 | `NOTEREF` | Resolves a bookmarked footnote or endnote reference number. |
 | `AUTONUM`, `AUTONUMLGL`, and `AUTONUMOUT` | Generate separate document-order number sequences. |
+| `LISTNUM` | Numbers from the document's list definitions in the document body. |
 | `SYMBOL` | Renders the requested character, font, and size. |
 | Selected metadata fields | Render sanitized values from document properties. |
 
@@ -176,6 +177,19 @@ The `\*` switch supports Arabic, alphabetic, Roman, ordinal, cardinal text, ordi
 
 An unsupported switch produces no generated value. Save does not add result runs because Word does not store results for these fields.
 
+## `LISTNUM` fields
+
+A `LISTNUM` field in the document body shows the next number of a list. The editor computes the number from the list definitions in the document. It never runs the instruction. The number replaces any saved result.
+
+- **List.** If the field names a list whose numbering definition has that name, the field counts on that list. The field and the numbered paragraphs of the list then continue each other. The names `NumberDefault`, `OutlineDefault`, and `LegalDefault`, and any other name, count on one built-in list. The name selects only the number formats.
+- **List without a name.** The field uses the list of its own numbered paragraph. Otherwise, it uses the list of the last numbered paragraph before it. If there is none, it uses the built-in list.
+- **Level.** The `\l` switch sets the level. Without it, a field in a numbered paragraph of the same list takes the next level down. A field after another field of its list in the same paragraph takes that field's level. A field after a numbered paragraph of its list takes that paragraph's level. On the built-in list, the field takes the outline level of its paragraph, or the level below the last heading.
+- **Value.** The `\s` switch sets the number of the field. Later fields continue from it.
+
+A field on a deeper level counts each unused level above it once. The next field on such a level shows the number after it.
+
+`LISTNUM` fields in headers, footers, notes, and text boxes keep their saved result. Save does not change the field.
+
 ## Save-time refresh
 
 `save()` updates calibrated, writable `REF` and `NOTEREF` results in the body, footnotes, and endnotes. It commits all updated parts in one undo step.
@@ -186,7 +200,7 @@ View mode and read-only sessions do not rewrite results. A collaborative session
 
 ## Fields that stay inert
 
-`DATE`, `TIME`, `FILENAME`, `SEQ`, `LISTNUM`, `EQ`, `CITATION`, and `BIBLIOGRAPHY` do not calculate a new value. The editor displays a saved result when one exists.
+`DATE`, `TIME`, `FILENAME`, `SEQ`, `EQ`, `CITATION`, and `BIBLIOGRAPHY` do not calculate a new value. The editor displays a saved result when one exists.
 
 The editor preserves field instructions through save. It does not execute macros, DDE instructions, OLE content, or external include instructions.
 

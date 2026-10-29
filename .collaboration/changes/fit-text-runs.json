@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Runs with w:fitText keep their natural width, so a fitted phrase can wrap onto an extra line.",
+  "after": "Consecutive runs that share one w:fitText id take the stated width; text typed into the group joins it and fits again, and text typed right after its last character starts a run without w:fitText.",
+  "reason": "Layout changes, and typing right after a fitted group writes a new run through the existing insertText operation. Source ranges, operation shapes, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/fit-text-groups.test.ts",
+    "packages/core/src/layout/__tests__/fit-text-lines.test.ts",
+    "packages/core/src/editor/__tests__/fit-text-typing.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-fit-text.test.ts"
+  ],
+  "changeset": "fit-text-runs",
+  "migration": null
+}
