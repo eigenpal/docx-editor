@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A combining kana sound mark measures zero width in every face, composes with its base, and a mark in a separate run paints after its base, past the margin at a line end.",
+  "after": "The mark follows its face: a full cell beside an uncomposed base in faces that space it, joined with its base in faces that class it as a mark, and painted over its base when it is in a separate run.",
+  "reason": "Only derived measurement, layout, and paint change. Canonical OOXML, source offsets, operations, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/sound-mark-spacing.test.ts",
+    "packages/core/src/output/__tests__/sound-mark-paint.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-sound-mark.test.ts"
+  ],
+  "changeset": "kana-sound-mark-faces",
+  "migration": null
+}

@@ -1,4 +1,5 @@
 import type { StyleSpanRecord } from '../layout/semantic-records.ts';
+import { isSoundMark } from '../layout/sound-mark-spacing.ts';
 
 /**
  * Keep clipped fill geometry outside glyph scaling. The expanded vertical clip preserves
@@ -43,7 +44,14 @@ export function prepareTextPaintHost(
     return glyph;
   }
   const clippedLineEndWhitespace = span.lineEndWhitespace === true;
-  if (span.style.horizontalScalePercent !== 100 || span.text === '\t' || clippedLineEndWhitespace) {
+  // A sound mark in a span of its own may draw with no advance in the browser, while its face
+  // gives it a cell in layout (`sound-mark-pieces.ts`); the span keeps that cell.
+  if (
+    span.style.horizontalScalePercent !== 100 ||
+    span.text === '\t' ||
+    clippedLineEndWhitespace ||
+    (span.text.length === 1 && isSoundMark(span.text))
+  ) {
     element.style.width = `${span.box.width * scale}px`;
   }
   const scaledBidi = span.style.shaping !== undefined && span.style.horizontalScalePercent !== 100;

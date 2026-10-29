@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A justified line in a modern compatibility mode hangs a half-width line-end mark in an East Asian language run past the margin whenever the text before it fits.",
+  "after": "The line shrinks its spaces first and keeps the mark inside the margin when they can make room for it; a justified line hangs the mark beside spaces at their floor, and a distributed line wraps the word.",
+  "reason": "Only derived layout changes. Canonical OOXML, source offsets, operations, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/hanging-punctuation-space-shrink.test.ts",
+    "packages/core/src/layout/__tests__/paragraph-space-shrink-admission.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-line-end-space-shrink.test.ts"
+  ],
+  "changeset": "east-asian-latin-mark-shrink",
+  "migration": null
+}
