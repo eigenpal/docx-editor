@@ -1033,3 +1033,32 @@ A list that the editor starts on a reused `w:abstractNum` SHALL carry a `w:lvlOv
 - **GIVEN** a document with a two-item numbered list
 - **WHEN** the user starts a numbered list on a later, separate paragraph
 - **THEN** the new item numbers `1.`, also after save and reopen
+
+### Requirement: CJK face line height
+
+A single-spaced line drawn in a face that lists the Chinese, Japanese, or Korean code pages SHALL take 1.3 times the face box (ascent plus descent), with the face's own leading absorbed and the extra space split above and below the glyphs. A face with a one-em box SHALL take at least that line in every role. A taller face SHALL take it only when it draws as the family that the run names; a substitute for a missing family and a glyph fallback SHALL keep their own box.
+
+#### Scenario: Taller CJK face drawn as itself
+
+- **GIVEN** a run that names a CJK face with a 1.448 em box, and the face is available
+- **WHEN** layout measures a single-spaced line of that run at 11 pt
+- **THEN** the line is 1.882 em (20.71 pt) high
+- **AND** Latin text in a run whose Latin slot names that face takes the same line
+- **AND** a face with 0.5 em of its own leading over a 1.102 em box takes 1.433 em, not its box plus leading
+- **AND** multiple, exact, and at-least spacing apply to that line as to any other single-spaced line
+- **AND** ideographic spaces (U+3000) in that face, like ordinary spaces, do not set the line height
+
+#### Scenario: Hinted character the East Asian face cannot draw
+
+- **GIVEN** a run with `w:hint="eastAsia"` that holds a non-breaking hyphen (U+2011), and an East Asian face with no glyph for it
+- **WHEN** layout measures the line, in any East Asian run language
+- **THEN** the hyphen takes the Latin slot, with the Latin face's advance
+- **AND** the East Asian face does not set the line height
+- **AND** a hinted character that the East Asian face draws keeps that face and its line
+
+#### Scenario: Stand-in keeps its own box
+
+- **GIVEN** a run that names a missing CJK family that a packaged face answers, or CJK text that a glyph fallback draws
+- **WHEN** layout measures the line
+- **THEN** a taller stand-in or fallback face keeps its own box
+- **AND** a one-em face takes 1.3 em in either role

@@ -49,6 +49,12 @@ export interface TextMeasurer {
   /** Whether line metrics use an admitted face instead of approximate fallback metrics. */
   hasResolvedFont?(style: ResolvedRunStyle): boolean;
   /**
+   * Optional: whether the resolved face itself has a glyph for every character of `text`, with
+   * no glyph fallback. Undefined when no face resolves or the measurer cannot tell.
+   * @internal
+   */
+  faceCovers?(text: string, style: ResolvedRunStyle): boolean | undefined;
+  /**
    * Optional `OS/2` strikeout stroke for the resolved face, at the drawn size. Word paints
    * `w:separator` as a strikeout, so the note rule reads its thickness and offset here rather
    * than assuming one face's numbers. Undefined keeps the caller's own default.

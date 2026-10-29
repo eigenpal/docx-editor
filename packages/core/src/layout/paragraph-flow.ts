@@ -24,6 +24,7 @@ import { growScriptLineMetrics } from './paragraph-mark-metrics.ts';
 import { spacedLine } from './positioned-run-spacing.ts';
 import { paragraphMarkStyles } from './paragraph-mark-styles.ts';
 import { splitAtSpacedSoundMarks } from './sound-mark-pieces.ts';
+import { returnUncoveredHintedText } from './east-asia-hint-coverage.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
 import {
   endsAtHyphenBreak,
@@ -234,7 +235,10 @@ export function breakParagraph(
   const typography = flow?.typography ?? resolveCjkTypography(paragraphProperties());
   const visiblePieces = splitAtSpacedSoundMarks(
     splitAtAutomaticSpacing(
-      continuationPiecesWithRules(allPieces, startOffset, flow?.showFieldCodes, available),
+      returnUncoveredHintedText(
+        continuationPiecesWithRules(allPieces, startOffset, flow?.showFieldCodes, available),
+        measurer
+      ),
       typography,
       measurer
     ),

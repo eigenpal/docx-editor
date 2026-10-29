@@ -2,6 +2,7 @@ import { withAuthoredCjkGapMetric } from './cjk-auto-spacing-metric-port.ts';
 import { createResolvedCjkAutoSpacingGapMetric } from './sfnt-auto-spacing-metrics.ts';
 import { isRunKerningEnabled } from './run-kerning.ts';
 import { runLigatureFeatureKey } from './run-ligatures.ts';
+import { fontMapsCodePoint } from './sfnt-cmap-coverage.ts';
 import { createShapedLineMetrics } from './shaped-line-metrics.ts';
 import { withSymbolFaceMetrics } from './symbol-face-metrics.ts';
 import {
@@ -131,6 +132,9 @@ export interface LayoutEnvironmentShapedMeasurerOptions {
  * full face box would have allowed 2x, which is a usable layout blow-up from a file.
  */
 const MAX_LINE_GAP_FACE_BOXES = 0.5;
+
+/** Bound on cached coverage answers per face; a file controls which characters are asked. */
+const MAX_COVERAGE_ENTRIES_PER_FONT = 4096;
 
 /**
  * Ceiling on a face's own ascent + descent, as a multiple of the size it is drawn at.
@@ -293,10 +297,36 @@ export function createShapedMeasurer(
 
   // Static face numbers, so one read per face serves every size: the em fractions scale.
   const strikeoutByFont = new WeakMap<ResolvedFont, StrikeoutStrokeEm | null>();
+  // Coverage answers per face and text; the callers ask about single hinted characters.
+  const coverageByFont = new WeakMap<ResolvedFont, Map<string, boolean>>();
 
   const measurer: TextMeasurer = {
     hasResolvedFont(style) {
       return resolveFontCached(style) !== null;
+    },
+    faceCovers(text, style) {
+      const font = resolveFontCached(style);
+      if (!font) return undefined;
+      let byText = coverageByFont.get(font);
+      if (!byText) {
+        byText = new Map();
+        coverageByFont.set(font, byText);
+      }
+      const known = byText.get(text);
+      if (known !== undefined) return known;
+      // The face's own cmap answers: shaping would report HarfBuzz's own substitutes (a
+      // missing U+2011 shapes as U+2010) and the export glyph fallback as covered.
+      let covered = true;
+      for (const character of text) {
+        const mapped = fontMapsCodePoint(font, character.codePointAt(0)!);
+        if (mapped === undefined) return undefined;
+        if (!mapped) {
+          covered = false;
+          break;
+        }
+      }
+      if (byText.size < MAX_COVERAGE_ENTRIES_PER_FONT) byText.set(text, covered);
+      return covered;
     },
     strikeoutMetrics(style) {
       const font = resolveFontCached(style);
