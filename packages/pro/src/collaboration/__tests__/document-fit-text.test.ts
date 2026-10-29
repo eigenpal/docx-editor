@@ -9,6 +9,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { collaborationModule } from '../collaboration-module.ts';
+import { reviewModule } from '../../review/review-module.ts';
 import { createPeerHarness, zipDocument } from './document-peer-support.ts';
 import { packageFingerprint, saveReopenDigest } from './document-support.ts';
 
@@ -63,7 +64,8 @@ async function pairedEditors(body: string) {
     const editor = createDocxEditor({
       container: document.createElement('div'),
       document: peer.room.document,
-      modules: [collaborationModule({ session: peer.room.session })],
+      modules: [reviewModule(), collaborationModule({ session: peer.room.session })],
+      author: peer === peers.alice ? 'Alice' : 'Bob',
     });
     editors.push(editor);
     return editor;
@@ -129,6 +131,20 @@ test('text typed right after a fitted group stays out of it on both replicas', a
   const edited = converged();
   expect(edited.texts[0]).toBe('[AqBCDEZ]');
   // The group holds A to E only: Z after it keeps its own width, so "]" moves past 144 pt.
+  expect(edited.fitWidth).toBeGreaterThan(144);
+  alice.surface!.undo();
+  expect(converged().fitWidth).toBeCloseTo(144, 3);
+});
+
+test('a suggestion typed right after a fitted group stays out of it on both replicas', async () => {
+  const { alice, converged } = await pairedEditors(
+    `<w:p>${run('[')}${run('ABCDE', FIT)}${run(']')}</w:p><w:p>${run('other')}</w:p>`
+  );
+  expect(alice.exec({ type: 'setEditingMode', mode: 'suggesting' }).ok).toBe(true);
+  caret(alice, 0, 6);
+  alice.surface!.type('Z');
+  const edited = converged();
+  expect(edited.texts[0]).toBe('[ABCDEZ]');
   expect(edited.fitWidth).toBeGreaterThan(144);
   alice.surface!.undo();
   expect(converged().fitWidth).toBeCloseTo(144, 3);

@@ -4,10 +4,16 @@
 // left-run rule. Layout reads the property in `layout/fit-text-groups.ts`.
 
 import { withFreshIds } from '../package/hf-lifecycle-shell.ts';
-import { insertChildren, type EditOptions, type OoxmlEditResult } from '../package/ooxml-edit.ts';
+import {
+  findNode,
+  insertChildren,
+  type EditOptions,
+  type OoxmlEditResult,
+} from '../package/ooxml-edit.ts';
 import { WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { parentOf, runPropertiesNodeOf } from './tree-op-nodes.ts';
+import type { ParagraphOffsetIndex } from './tree-op-segments.ts';
 import { build } from './tree-op-tracked-builders.ts';
 
 /** The `w:fitText` element of a run's properties, or undefined. */
@@ -23,6 +29,23 @@ function fitTextOf(run: OoxmlNode | undefined): OoxmlElement | undefined {
       return child;
   }
   return undefined;
+}
+
+/** Properties without `w:fitText`, for text that must not join a group. */
+function withoutFitText(properties: readonly OoxmlNode[]): OoxmlNode[] {
+  return properties.map((node) =>
+    node.kind === 'textValue'
+      ? node
+      : ({
+          ...node,
+          children: node.children.filter(
+            (child) =>
+              child.kind === 'textValue' ||
+              child.namespaceUri !== WML_NAMESPACE_URI ||
+              child.localName !== 'fitText'
+          ),
+        } as OoxmlNode)
+  );
 }
 
 function idOf(fitText: OoxmlElement): string {
@@ -65,4 +88,22 @@ export function insertAfterFitTextGroup(
       : [];
   const inserted = build(mint(), 'run', 'r', [], [...runProperties, ...nodes]);
   return insertChildren(part, parent.id, index + 1, [inserted], options);
+}
+
+/**
+ * The properties a suggested insertion takes from `run` when it lands at `offset`: without
+ * `w:fitText` when that offset is the run's end and the end of a fitted group, so tracked
+ * typing follows the same rule as plain typing.
+ */
+export function trackedTypingProperties(
+  properties: readonly OoxmlNode[],
+  part: OoxmlPart,
+  offsets: ParagraphOffsetIndex,
+  run: OoxmlNode,
+  offset: number
+): OoxmlNode[] {
+  if (offsets.spanOf(run)?.end !== offset) return [...properties];
+  const nextRunId = offsets.segments.find((segment) => segment.start === offset)?.runId;
+  const next = nextRunId ? (findNode(part, nextRunId) ?? undefined) : undefined;
+  return endsFitTextGroup(run, next) ? withoutFitText(properties) : [...properties];
 }

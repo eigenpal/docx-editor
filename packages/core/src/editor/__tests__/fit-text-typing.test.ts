@@ -35,19 +35,26 @@ function docx(paragraph: string): Uint8Array {
 /** Each saved run's text with whether it carries `w:fitText`. */
 function savedRuns(surface: PaginatedSurface): string[] {
   const xml = strFromU8(unzipSync(surface.session.save())['word/document.xml']!);
-  return [...xml.matchAll(/<w:r[ >].*?<\/w:r>/gs)].map((match) => {
+  const runs = [...xml.matchAll(/<w:r[ >].*?<\/w:r>/gs)].map((match) => {
     const text = [...match[0].matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)].map((t) => t[1]).join('');
     return `${text}${match[0].includes('w:fitText') ? ' (fit)' : ''}`;
   });
+  return xml.includes('<w:ins ') ? [...runs, '<ins>'] : runs;
 }
 
-function withTyping(paragraph: string, offset: number, text: string): string[] {
+/** Whether the saved paragraph holds a tracked insertion. */
+function insertionTracked(runs: string[]): boolean {
+  return runs.includes('<ins>');
+}
+
+function withTyping(paragraph: string, offset: number, text: string, mode?: 'suggest'): string[] {
   const container = document.createElement('div');
   document.body.append(container);
-  const opened = mountPaginatedSurface(container, docx(paragraph));
+  const opened = mountPaginatedSurface(container, docx(paragraph), { author: 'Ada' });
   if (!opened.ok) throw new Error(opened.reason);
   const surface = opened.surface;
   try {
+    if (mode) surface.setEditingMode(mode);
     const paragraphId = surface.session.paragraphIds()[0]!;
     surface.setSelection({
       anchor: { paragraphId, offset },
@@ -70,6 +77,12 @@ describe('typing at a fitted group', () => {
   test('at the paragraph end the typed text also stays out of the group', () => {
     const runs = withTyping(run('[') + run('ABCDE', FIT), 6, 'Z');
     expect(runs.join('|')).toBe('[|ABCDE (fit)|Z');
+  });
+
+  test('in suggesting mode the text typed after the group stays out of it too', () => {
+    const runs = withTyping(run('[') + run('ABCDE', FIT) + run(']'), 6, 'Z', 'suggest');
+    expect(insertionTracked(runs)).toBe(true);
+    expect(runs.filter((text) => text !== '<ins>').join('|')).toBe('[|ABCDE (fit)|Z|]');
   });
 
   test('text typed inside the group joins it', () => {

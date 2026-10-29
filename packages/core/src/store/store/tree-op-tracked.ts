@@ -21,6 +21,7 @@
 
 import { textWithHyphens } from './tree-op-inline-elements.ts';
 import { noteReferenceEndingAt, noteTypingProperties } from './note-typing-boundary.ts';
+import { trackedTypingProperties } from './fit-text-typing-boundary.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -784,7 +785,13 @@ function applyTrackedInsertion(
           cursor.offset = end + payload.length;
           continue;
         }
-        const properties = insertedRunProperties(mint, node);
+        const properties = trackedTypingProperties(
+          insertedRunProperties(mint, node),
+          part,
+          offsets,
+          node,
+          offset
+        );
         if (offset === start) {
           out.push(wrap(properties, containerDepth), node);
         } else if (offset === end) {
