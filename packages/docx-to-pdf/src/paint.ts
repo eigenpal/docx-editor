@@ -763,7 +763,9 @@ export async function paint(
       const band = text.bandBox(visit);
       const gap = ownedGapAfter(visit);
       const owned =
-        gap > 0 ? widenToGridEdge(band, -visit.page.box.x, band.x + band.width + gap) : band;
+        gap > 0
+          ? widenToGridEdge(band, -visit.page.box.x, band.x + band.width + gap)
+          : { ...band, width: band.width + gap };
       out.push(
         `${color(fill)} rg ${rect(owned, -visit.page.box.x, -visit.page.box.y, pageHeight(page), true)} f`
       );

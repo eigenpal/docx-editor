@@ -121,3 +121,39 @@ export function sharesAnchor(a: GapSpan, b: GapSpan): boolean {
 export function fieldAnchorStart(span: GapSpan): number {
   return span.fieldAtom?.resultStart ?? span.range.start;
 }
+
+/**
+ * The gap paint draws between `span` and the `next` span, in points: the stretch alignment
+ * opens, or a negative gap after a trailing space that a line shrank. Layout shrinks a space by
+ * moving the later spans left, so the space keeps its natural box and the next span starts
+ * inside it. Zero for any other overlap, and for a gap below 0.001 pt.
+ *
+ * @internal
+ */
+export function paintedGapBetween(span: PlacedSpan, next: PlacedSpan): number {
+  const step = next.box.x - (span.box.x + span.box.width);
+  const wrap = next.wrapAdvanceBefore ?? 0;
+  if (step - wrap > 0.001) return step - wrap;
+  // Bidi reorders right-to-left spans, and a line it reorders carries a shrink in its styles.
+  const leftToRight = !(
+    (span.style.shaping?.level ?? 0) % 2 || (next.style.shaping?.level ?? 0) % 2
+  );
+  const shrunk =
+    step < -0.001 &&
+    wrap <= 0.001 &&
+    leftToRight &&
+    withoutTrailingZeroWidthSpaces(span.text).endsWith(' ');
+  return shrunk ? step : 0;
+}
+
+/**
+ * The fields of a laid span that {@link paintedGapBetween} reads. A `StyleSpanRecord` is one.
+ *
+ * @internal
+ */
+export interface PlacedSpan {
+  readonly text: string;
+  readonly box: { readonly x: number; readonly width: number };
+  readonly style: { readonly shaping?: { readonly level?: number } | null };
+  readonly wrapAdvanceBefore?: number;
+}

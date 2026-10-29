@@ -405,7 +405,8 @@ export function shrinkJustifiedSpans(
   needed: number,
   measurer: TextMeasurer,
   slotEnd: number = spans.length - 1,
-  halfAverageFloor = false
+  halfAverageFloor = false,
+  paragraphRtl = false
 ): readonly StyleSpanRecord[] {
   const first = firstShrinkSlot(spans);
   // Admission kept `needed` within the paragraph's rule; equal shares never pass a quarter.
@@ -427,30 +428,37 @@ export function shrinkJustifiedSpans(
       remaining -= take;
     }
   }
-  // Equal shares give most spans of one style the same amount: they share one derived style, so
-  // later stages (and publication, which freezes each style object) see one object, not one per
-  // word.
-  const shrunkStyles = new Map<ResolvedRunStyle, Map<number, ResolvedRunStyle>>();
-  const shrunkStyle = (style: ResolvedRunStyle, amount: number): ResolvedRunStyle => {
-    let byAmount = shrunkStyles.get(style);
-    if (!byAmount) shrunkStyles.set(style, (byAmount = new Map()));
-    let shrunk = byAmount.get(amount);
-    if (!shrunk) {
-      shrunk = {
-        ...style,
-        shaping: {
-          script: 'Latn',
-          direction: 'ltr' as const,
-          level: 0,
-          baseLevel: 0,
-          ...style.shaping,
-          wordSpacingPt: (style.shaping?.wordSpacingPt ?? 0) - amount,
-        },
-      };
-      byAmount.set(amount, shrunk);
-    }
-    return shrunk;
-  };
+  // Bidi places a shaped or right-to-left line again from its span widths, so there the shrink
+  // narrows the span and its style carries it as negative word spacing.
+  if (paragraphRtl || spans.some((span) => span.style.shaping))
+    return shrinkSpanStyles(spans, amounts);
+  // Otherwise a shrink is geometry only, like a stretch: each span keeps its style and its
+  // natural box, and the spans after a shrunk space move left. The gap after that space is
+  // negative, and paint draws it inside the span as negative word spacing.
+  let shift = 0;
+  return spans.map((span, index) => {
+    const result = shift ? { ...span, box: { ...span.box, x: span.box.x - shift } } : span;
+    shift += amounts[index]!;
+    return result;
+  });
+}
+
+/** Shrink each span's closing space by its amount in its box width and its style. */
+function shrinkSpanStyles(
+  spans: readonly StyleSpanRecord[],
+  amounts: readonly number[]
+): readonly StyleSpanRecord[] {
+  const shrunkStyle = (style: ResolvedRunStyle, amount: number): ResolvedRunStyle => ({
+    ...style,
+    shaping: {
+      script: 'Latn',
+      direction: 'ltr' as const,
+      level: 0,
+      baseLevel: 0,
+      ...style.shaping,
+      wordSpacingPt: (style.shaping?.wordSpacingPt ?? 0) - amount,
+    },
+  });
   let shift = 0;
   return spans.map((span, index) => {
     const amount = amounts[index]!;

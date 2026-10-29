@@ -731,8 +731,13 @@ function offsetOnLine(
 
   // Text owns its published box. Check every text box before looking at drawing gaps:
   // otherwise a later inline image can claim text that lies between earlier images.
-  for (const span of spans) {
-    if (x >= span.box.x && x < span.box.x + span.box.width) {
+  for (const [index, span] of spans.entries()) {
+    // A shrunk space ends where the next span starts.
+    const next = spans[index + 1];
+    let end = span.box.x + span.box.width;
+    if (next && next.box.x < end && next.box.x > span.box.x && endsWithSpaceSlot(span.text))
+      end = next.box.x;
+    if (x >= span.box.x && x < end) {
       return snapToSoundMarkCluster(
         offsetWithinSpan(span, x, context),
         x,
@@ -1013,7 +1018,8 @@ export function caretBoxOnLine(
         const cjk = isCjk(lastCodePointOf(span.text) ?? 0) || isCjk(next.text.codePointAt(0) ?? 0);
         const gap = next.box.x - (span.box.x + span.box.width) - (next.wrapAdvanceBefore ?? 0);
         const spaceSlot = endsWithSpaceSlot(span.text);
-        if ((spaceSlot && gap > 0.25) || ((cjk || !spaceSlot) && gap > 0.001)) {
+        // A shrunk space overlaps the next span, which starts where the painted space ends.
+        if ((spaceSlot && (gap > 0.25 || gap < -0.001)) || ((cjk || !spaceSlot) && gap > 0.001)) {
           chosen = next;
           break;
         }
@@ -1073,7 +1079,7 @@ function justifiedSpaceEndX(
   const next = spans[spans.indexOf(span) + 1];
   if (!next || next.range.start !== span.range.end) return undefined;
   const gap = next.box.x - (span.box.x + span.box.width) - (next.wrapAdvanceBefore ?? 0);
-  return gap > 0.25 ? next.box.x : undefined;
+  return gap > 0.25 || gap < -0.001 ? next.box.x : undefined;
 }
 
 function offsetWithinSpan(span: StyleSpanRecord, x: number, context: HitContext): LineOffset {

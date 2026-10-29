@@ -324,7 +324,8 @@ function alignLogicalSpans(
       -slack,
       measurer,
       hangsAfterOwnSpace ? trailingStart - 1 : Math.max(0, contentLast),
-      halfAverageFloor
+      halfAverageFloor,
+      paragraphRtl
     );
   // A line that fills its measure can leave a rounding residue, which must not become spacing.
   if (slack <= SLACK_RESIDUE_PT) return spans;

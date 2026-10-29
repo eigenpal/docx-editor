@@ -1,3 +1,4 @@
+import { anyShrunk, shrunkBy, spacingOf } from './shrunk-space.ts';
 import { expect, test } from 'bun:test';
 import { loadBody, squareWrapZone } from './float-over-table-harness.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
@@ -125,7 +126,7 @@ test('a 66pt right passage admits the same extra word as a plain 66pt line', () 
   expect(text(lines[0]!, 114)).toBe('bb cc dd');
   expect(text(lines[1]!)).toBe('ee');
   const right = lines[0]!.spans.filter((span) => span.box.x >= 114);
-  expect(right.slice(0, 2).map((span) => span.style.shaping?.wordSpacingPt)).toEqual([-1, -1]);
+  expect(spacingOf(right).slice(0, 2)).toEqual([-1, -1]);
   expect(
     right.at(-1)!.box.x + measurer.measure(right.at(-1)!.text.trimEnd(), right.at(-1)!.style)
   ).toBeCloseTo(180, 6);
@@ -187,11 +188,7 @@ test('right-to-left paragraphs keep their existing float admission behavior', ()
     lines.map((line) => [line.range.start, line.range.end]);
   const options = { rtl: true, text: 'aa bb cc dd ee' };
   const lines = layout({ ...options, compatibilityMode: 15 });
-  expect(
-    lines
-      .flatMap((line) => line.spans)
-      .every((span) => (span.style.shaping?.wordSpacingPt ?? 0) >= 0)
-  ).toBe(true);
+  expect(lines.some((line) => anyShrunk(line.spans))).toBe(false);
   // Compression stays off, so the lines break where legacy mode breaks them.
   expect(ranges(lines)).toEqual(ranges(layout({ ...options, compatibilityMode: 14 })));
 });
@@ -207,7 +204,7 @@ test('a right-to-left run leaves compression on in its left-to-right paragraph',
     expect(text(lines[0]!, 114)).toBe(passage);
     // Its two spaces each lend 1pt, wherever the run boundaries fall.
     const right = lines[0]!.spans.filter((span) => span.box.x >= 114);
-    const shrink = right.map((span) => span.style.shaping?.wordSpacingPt ?? 0);
+    const shrink = spacingOf(right);
     expect(shrink.reduce((sum, value) => sum + value, 0)).toBeCloseTo(-2, 6);
     expect(shrink.filter((value) => value !== 0)).toEqual([-1, -1]);
     outsideFloat(lines[0]!, 22, 114);
@@ -229,7 +226,7 @@ test('spaces after a left tab compress inside the remaining float passage', () =
   expect(tab.box.x + tab.box.width).toBeCloseTo(114, 6);
   const bb = lines[0]!.spans.find((span) => span.text.startsWith('bb'))!;
   expect(bb.box.x).toBeCloseTo(114, 6);
-  expect(bb.style.shaping?.wordSpacingPt).toBeCloseTo(-1, 6);
+  expect(shrunkBy(lines[0]!.spans, lines[0]!.spans.indexOf(bb))).toBeCloseTo(1, 6);
   outsideFloat(lines[0]!, 22, 114);
 });
 
@@ -244,8 +241,8 @@ test('a float passage cannot borrow spaces before its left tab', () => {
   // The right passage needs 3pt. Its two slots lend 2pt; the earlier slot lends nothing.
   expect(text(lines[0]!, 158)).toBe('bb cc');
   const tab = lines[0]!.spans.find((span) => span.text === '\t')!;
-  const beforeTab = lines[0]!.spans.slice(0, lines[0]!.spans.indexOf(tab));
-  expect(beforeTab.every((span) => (span.style.shaping?.wordSpacingPt ?? 0) === 0)).toBe(true);
+  const throughTab = lines[0]!.spans.slice(0, lines[0]!.spans.indexOf(tab) + 1);
+  expect(anyShrunk(throughTab)).toBe(false);
   outsideFloat(lines[0]!, 66, 158);
 });
 
@@ -261,11 +258,7 @@ test('center and right tabs keep their uncompressed text beside a float', () => 
     });
     expect(text(lines[0]!, 114)).toBe('bb cc');
     expect(lines).toHaveLength(2);
-    expect(
-      lines
-        .flatMap((line) => line.spans)
-        .every((span) => (span.style.shaping?.wordSpacingPt ?? 0) >= 0)
-    ).toBe(true);
+    expect(lines.some((line) => anyShrunk(line.spans))).toBe(false);
     outsideFloat(lines[0]!, 22, 114);
   }
 });
@@ -299,7 +292,7 @@ test('a compressed line beside a right float ends at its passage edge', () => {
     });
     expect(lines.map((line) => text(line))).toEqual(['bb cc dd', 'ee']);
     const spans = lines[0]!.spans;
-    expect(spans.slice(0, 2).map((span) => span.style.shaping?.wordSpacingPt)).toEqual([-1, -1]);
+    expect(spacingOf(spans).slice(0, 2)).toEqual([-1, -1]);
     const last = spans.at(-1)!;
     expect(last.box.x + measurer.measure(last.text.trimEnd(), last.style)).toBeCloseTo(66, 6);
     outsideFloat(lines[0]!, 66, 180);

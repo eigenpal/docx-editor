@@ -5,6 +5,7 @@ import { linesOf } from '../semantic-records.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import type { PendingLine } from '../pending-line.ts';
 import type { TextMeasurer } from '../semantic-records.ts';
+import { anyShrunk, shrunkBy } from './shrunk-space.ts';
 const measurer: TextMeasurer = {
   measure(text, style) {
     return [...text].reduce(
@@ -32,12 +33,12 @@ test('modern justified flow compresses spaces, preserving letters and measurable
   const result = layoutSemanticDocument(source(), 1, { measurer, compatibilityMode: 15 });
   expect(content(result)).toEqual(['aa bb cc', 'dd']);
   const spans = linesOf(result)[0]!.spans;
-  expect(spans[0]!.style.shaping?.wordSpacingPt).toBeCloseTo(-1, 6);
-  expect(spans[1]!.style.shaping?.wordSpacingPt).toBeCloseTo(-1, 6);
+  expect(shrunkBy(spans, 0)).toBeCloseTo(1, 6);
+  expect(shrunkBy(spans, 1)).toBeCloseTo(1, 6);
   for (const span of spans)
     expect(measurer.measure(span.text, span.style)).toBeCloseTo(span.box.width, 6);
-  expect(spans[1]!.box.x).toBeCloseTo(spans[0]!.box.x + spans[0]!.box.width, 6);
-  expect(linesOf(result)[1]!.spans.every((s) => !s.style.shaping?.wordSpacingPt)).toBe(true);
+  expect(spans[1]!.box.x).toBeCloseTo(spans[0]!.box.x + spans[0]!.box.width - 1, 6);
+  expect(anyShrunk(linesOf(result)[1]!.spans)).toBe(false);
 });
 
 test('Cyrillic justified text compresses its spaces like Latin text', () => {
@@ -46,7 +47,7 @@ test('Cyrillic justified text compresses its spaces like Latin text', () => {
     compatibilityMode: 15,
   });
   expect(content(result)).toEqual(['аа бб вв', 'гг']);
-  expect(linesOf(result)[0]!.spans[0]!.style.shaping?.wordSpacingPt).toBeCloseTo(-1, 6);
+  expect(shrunkBy(linesOf(result)[0]!.spans, 0)).toBeCloseTo(1, 6);
 });
 
 test('a space before a zero-width space lends its shrink like a plain space', () => {
@@ -63,9 +64,7 @@ test('a space before a zero-width space lends its shrink like a plain space', ()
     'aa bb cc',
     'dd',
   ]);
-  expect(
-    linesOf(spaced)[0]!.spans.some((span) => (span.style.shaping?.wordSpacingPt ?? 0) < 0)
-  ).toBe(true);
+  expect(anyShrunk(linesOf(spaced)[0]!.spans)).toBe(true);
 });
 
 test('legacy, unspecified compatibility, and left alignment preserve existing wrapping', () => {
@@ -139,7 +138,7 @@ test('a word split across source runs borrows the same inter-word space', () => 
       compatibilityMode: 15,
     });
     expect(content(result)).toEqual(['aa bb cc', 'dd']);
-    expect(linesOf(result)[0]!.spans[0]!.style.shaping?.wordSpacingPt).toBeCloseTo(-1, 6);
+    expect(shrunkBy(linesOf(result)[0]!.spans, 0)).toBeCloseTo(1, 6);
   }
   expect(
     content(
@@ -187,7 +186,7 @@ test('a word whose space sits in the next run borrows inter-word space', () => {
     expect(content(result)).toEqual(['aa bb cc', 'dd']);
     const line = linesOf(result)[0]!;
     expect(line.spans.at(-1)!.box.x + line.spans.at(-1)!.box.width).toBeLessThanOrEqual(66.001);
-    expect(line.spans.some((s) => (s.style.shaping?.wordSpacingPt ?? 0) < 0)).toBe(true);
+    expect(anyShrunk(line.spans)).toBe(true);
     expect(
       content(layoutSemanticDocument(seamSource(runs), 1, { measurer, compatibilityMode: 14 }))
     ).toEqual(['aa bb', 'cc dd']);
@@ -230,7 +229,7 @@ test('a word with its own space and a hanging space run still compresses to the 
   const cc = spans.find((s) => s.text.startsWith('cc'))!;
   expect(cc.box.x).toBeCloseTo(46, 6);
   expect(cc.box.x + measurer.measure('cc', cc.style)).toBeLessThanOrEqual(66.001);
-  expect(cc.style.shaping?.wordSpacingPt ?? 0).toBe(0);
+  expect(shrunkBy(spans, spans.indexOf(cc))).toBe(0);
 });
 
 test('a hanging space run after a word with its own space does not shorten the stretch', () => {
