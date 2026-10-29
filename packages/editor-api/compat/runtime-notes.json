@@ -237,7 +237,7 @@
   },
   "Word.Paragraph#split": {
     "status": "different",
-    "notes": "Changes the document: it splits the paragraph into one paragraph per piece at every delimiter and returns one range per resulting paragraph, including the piece that keeps the paragraph's identity. Office.js returns ranges and leaves the paragraph whole. Each delimiter stays at the end of its piece unless trimDelimiters is true; trimSpacing trims the returned ranges. The paragraph must be addressable (synced), and the returned pieces load only in a later sync. With TrackMineOnly, it refuses with NotSupported and edit.tracked-operation-unsupported. To read pieces without changing the document, use getTextRanges; to split, or to propose a split as a tracked change, use insertText with a line feed."
+    "notes": "Changes the document: it splits the paragraph into one paragraph per piece at every delimiter and returns one range per resulting paragraph, including the piece that keeps the paragraph's identity. Office.js returns ranges and leaves the paragraph whole. Each delimiter stays at the end of its piece unless trimDelimiters is true; trimSpacing trims the returned ranges. The paragraph must be addressable (synced), and the returned pieces load only in a later sync. With TrackMineOnly, each new paragraph mark is a tracked insertion (w:rPr/w:ins on the mark); reject joins the pieces again. A tracked split keeps its delimiters: with trimDelimiters true and a delimiter found, it refuses with NotSupported and edit.tracked-operation-unsupported, and nothing changes. To read pieces without changing the document, use getTextRanges."
   },
   "Word.Field#result": {
     "status": "partial",
@@ -617,7 +617,7 @@
   },
   "Word.Range#insertBreak": {
     "status": "partial",
-    "notes": "Authors Line, Page, and SectionNext at Before/After. Line writes a manual line break (w:br) in any story, as a text insertion: it shares its sync with other edits, including text edits in the same paragraph, and TrackMineOnly records it as a tracked insertion. A single-line content control (plain text without multiLine, a list, or a date) refuses a line break. SectionNext requires a body paragraph outside a table. Page and SectionNext commit alone in their sync and refuse while tracking. Other break types refuse. A range whose text moved since it was read refuses with StaleDocument."
+    "notes": "Authors Line, Page, and SectionNext at Before/After. Line writes a manual line break (w:br) in any story, as a text insertion: it shares its sync with other edits, including text edits in the same paragraph, and TrackMineOnly records it as a tracked insertion. A single-line content control (plain text without multiLine, a list, or a date) refuses a line break. SectionNext requires a body paragraph outside a table. Page and SectionNext commit alone in their sync. With TrackMineOnly, Page is a tracked insertion of the page break run (w:ins around a page-type w:br), written in the paragraph rather than in a paragraph of its own, and SectionNext is a tracked paragraph mark insertion that carries the new w:sectPr; reject removes the break, and for SectionNext joins the paragraphs and removes the section. A tracked SectionNext refuses with NotSupported and edit.tracked-operation-unsupported where the section it starts does not start on a new page, because that would change the section type. Other break types refuse. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.PageSetup#orientation": {
     "status": "partial",

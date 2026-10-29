@@ -167,7 +167,8 @@ The live editor can also refuse the commit, for example if permissions change. I
 | Paragraph deletion | `Paragraph.delete()` records the text and the paragraph mark as deletions; accept removes the paragraph |
 | Font and paragraph formatting | Record property revisions, including paragraph styles |
 | Paragraph insertion | Track text and paragraph marks; reject removes both |
-| Paragraph split | `insertText()` with `\n` tracks the text and each new paragraph mark; reject joins the paragraphs again |
+| Paragraph split | `insertText()` with `\n` and `Paragraph.split()` track each new paragraph mark; reject joins the paragraphs again |
+| Breaks | `Range.insertBreak()` tracks line, page, and next-page section breaks; reject removes the break |
 | Lists | Track creation, membership, and level changes; configure newly proposed definitions |
 | Tables | Track complete insertion, cell values, row additions, and partial row deletions |
 | Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |

@@ -73,12 +73,15 @@ export function trackingStep(
 export function supportsTrackedAutomationOperation(operation: AutomationOperation): boolean {
   if (!isAutomationCommand(operation) || operation.op === 'setChangeTrackingMode') return true;
   if (operation.op === 'insertText') return true;
-  // A line break is a text write; a tracked whole-story replacement is not supported.
+  // A line break is a text write; a tracked whole-story replacement is not supported. Page and
+  // section breaks are tracked insertions; the break planner refuses the forms it cannot track.
   if (operation.op === 'insertBreak')
     return (
-      operation.breakType === 'Line' &&
+      operation.breakType !== 'Line' ||
       !(operation.location === 'Replace' && 'body' in operation.span)
     );
+  // Each new paragraph mark is a tracked insertion. Removing delimiters is refused below.
+  if (operation.op === 'splitParagraph') return true;
   if (operation.op === 'insertTable' || operation.op === 'insertTableRows') return true;
   // A complex field, or one equation, in one `w:ins`; a field result joins its own pending
   // insertion, and a field deletion takes back the author's own pending field. Each planner
@@ -138,11 +141,23 @@ export function trackPlannedChanges(
       'attachToList',
       'detachFromList',
       'setListLevel',
+      'splitParagraph',
     ].includes(operation.op) ||
     !plan.ok ||
     plan.kind !== 'command'
   )
     return plan;
+  // A tracked split keeps its delimiters: striking them would leave them in the text, and the
+  // pieces the split answers would no longer be the paragraphs it made.
+  if (operation.op === 'splitParagraph' && plan.ops.some((op) => op.op === 'deleteText'))
+    return {
+      ok: false,
+      error: {
+        code: 'unsupported-capability',
+        message: 'a tracked split cannot remove its delimiters; pass trimDelimiters as false',
+        detail: 'change-tracking-operation-unsupported' as const,
+      },
+    };
   const revision = { author, date: revisionDateNow() };
   return {
     ...plan,
@@ -155,6 +170,7 @@ export function trackPlannedChanges(
           offsets: [op.offset],
           revision,
         };
+      if (op.op === 'splitParagraphMany') return { ...op, revision };
       if (
         op.op === 'setRunProperties' ||
         op.op === 'setParagraphProperties' ||

@@ -555,6 +555,10 @@ export class Paragraph extends ModelObject implements PromisedItem {
    * this paragraph's identity — so a caller can read back what each piece became without having to
    * work out which of them is the original. The collection is filled by the split itself: there is
    * no second read, because a second read would describe the document the split had already made.
+   *
+   * With `TrackMineOnly`, each new paragraph mark is a tracked insertion, and reject joins the
+   * pieces again. A tracked split keeps its delimiters: `trimDelimiters` set to `true` refuses
+   * with `NotSupported` when a delimiter is found, and nothing changes.
    */
   split(delimiters: string[], trimDelimiters?: boolean, trimSpacing?: boolean): RangeCollection {
     const target = `${this.path.label}.split`;

@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "With TrackMineOnly, the document API refused Paragraph.split and page and next-page section breaks.",
+  "after": "They plan to the tracked operations suggesting mode already writes: a paragraph split whose new marks carry an insertion revision, a page break run inside an insertion, and a section mark on a split whose new mark carries an insertion revision.",
+  "reason": "The operations, their revision fields, and the saved markup already exist and already replicate. No operation, shared node field, or serialization changes.",
+  "tests": [
+    "packages/editor-api/src/runtime/__tests__/runtime-tracked-breaks.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-tracked-split-break-automation.test.ts"
+  ],
+  "changeset": "tracked-split-and-breaks",
+  "migration": null
+}

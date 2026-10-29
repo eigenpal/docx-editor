@@ -827,8 +827,11 @@ export class Range extends ModelObject implements PromisedItem {
 
   /**
    * Line, page, and next-page section breaks are supported; other break types refuse at sync.
-   * TrackMineOnly records a line break as a tracked insertion. Page and section breaks refuse
-   * while tracking.
+   *
+   * With `TrackMineOnly`, each is a tracked insertion: a line or page break as an inserted run,
+   * and a next-page section break as an inserted paragraph mark that carries the new section.
+   * Reject removes the break. A tracked `SectionNext` refuses with `NotSupported` where the
+   * section it starts does not start on a new page, because that would change the section type.
    */
   insertBreak(
     breakType:

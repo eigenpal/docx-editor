@@ -73,7 +73,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-A split can conflict with other structural writes on that paragraph. The runtime rejects paragraph splitting while tracking changes. To propose a split as a tracked change, use `insertText()` with `'\n'`. For more information, see [Propose a paragraph split](/docs/2.x/editor-api/revisions#propose-a-paragraph-split).
+A split can conflict with other structural writes on that paragraph. With `TrackMineOnly`, each new paragraph mark is a tracked insertion, and **Reject** joins the pieces again. A tracked split keeps its delimiters. If you pass `trimDelimiters` as `true` and a delimiter is found, the split fails with `NotSupported` and nothing changes. For more information, see [Propose a paragraph split](/docs/2.x/editor-api/revisions#propose-a-paragraph-split).
 
 For paragraph collections, use `getFirst()`, `getLast()`, `getFirstOrNullObject()`, or `getLastOrNullObject()`. To insert or remove paragraphs, use [Text and ranges](/docs/2.x/editor-api/text-and-ranges).
 

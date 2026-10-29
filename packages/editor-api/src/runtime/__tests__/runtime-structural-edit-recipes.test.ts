@@ -249,7 +249,7 @@ describe('taking back your own pending field', () => {
 });
 
 describe('Paragraph.split and the rewrite helper inputs', () => {
-  test('Paragraph.split changes the document and refuses under TrackMineOnly', async () => {
+  test('Paragraph.split changes the document and refuses to drop delimiters under TrackMineOnly', async () => {
     const runtime = await DocxEditor.createServer(docx(CLAUSES), { author: AUTHOR });
     try {
       await runtime.run(async (context) => {
@@ -272,7 +272,7 @@ describe('Paragraph.split and the rewrite helper inputs', () => {
           const paragraphs = context.document.body.paragraphs;
           paragraphs.load('items');
           await context.sync();
-          paragraphs.items[0]!.split([' ']);
+          paragraphs.items[0]!.split([' '], true);
           await context.sync();
         })
       ).rejects.toMatchObject({

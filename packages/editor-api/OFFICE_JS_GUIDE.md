@@ -307,7 +307,8 @@ await runtime.run(async (context) => {
 | Paragraph deletion | `paragraph.delete()` records the text and the paragraph mark as deletions; accept removes the paragraph |
 | Font and paragraphs | Track font, paragraph-format, and paragraph-style edits as property revisions |
 | Paragraph insertion | Track inserted text and paragraph marks |
-| Paragraph split | `insertText()` with `\n` tracks the text and each new paragraph mark; reject joins the paragraphs again |
+| Paragraph split | `insertText()` with `\n` and `Paragraph.split()` track each new paragraph mark; reject joins the paragraphs again |
+| Breaks | `Range.insertBreak()` tracks line, page, and next-page section breaks; reject removes the break |
 | Lists | Track creation, membership, and level changes; configure newly proposed definitions |
 | Tables | Track complete insertion, cell values, row additions, and partial row deletions |
 | Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |
@@ -595,7 +596,7 @@ await runtime.run(async (context) => {
 
 ## Pictures and fields
 
-Insert a manual line break with `range.insertBreak('Line', 'After')` or `\v` in inserted text. Call `await context.sync()` after queuing the write. Manual line breaks support `TrackMineOnly` and text edits in the same sync. Single-line content controls refuse manual line breaks. Reads report manual line breaks as `\v`, column breaks as U+000E, and paragraph separators as `\r`. Text writes refuse U+000E. `insertText()` on a body, paragraph, or range writes `\n`, `\r`, and `\r\n` as paragraph breaks. Other paragraph separators refuse. Do not flatten these characters before sending read text back to the document.
+Insert a manual line break with `range.insertBreak('Line', 'After')` or `\v` in inserted text. Call `await context.sync()` after queuing the write. Manual line breaks support `TrackMineOnly` and text edits in the same sync. Page and next-page section breaks also support `TrackMineOnly`; each runs alone in its sync. Single-line content controls refuse manual line breaks. Reads report manual line breaks as `\v`, column breaks as U+000E, and paragraph separators as `\r`. Text writes refuse U+000E. `insertText()` on a body, paragraph, or range writes `\n`, `\r`, and `\r\n` as paragraph breaks. Other paragraph separators refuse. Do not flatten these characters before sending read text back to the document.
 
 Insert PNG or JPEG images with `range.insertInlinePictureFromBase64(data, 'After')`. Sync before setting properties on the returned picture. Width and height use points. New pictures lock the aspect ratio. Set `lockAspectRatio = false` before setting independent dimensions. Set `altTextDescription` to describe the image. Deletion preserves shared media relationships.
 
