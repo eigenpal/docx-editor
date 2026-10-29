@@ -45,7 +45,9 @@ export type AutomationStyleKind = 'paragraph' | 'character' | 'table' | 'numberi
  * leaves out.
  */
 export interface AutomationStyleRead {
+  /** The `w:name`, exactly as the style setters accept it. */
   readonly name: string;
+  /** The `w:type`, in the part's own vocabulary. */
   readonly type: AutomationStyleKind;
   /** False when the part marks the style `w:customStyle`. */
   readonly builtIn: boolean;

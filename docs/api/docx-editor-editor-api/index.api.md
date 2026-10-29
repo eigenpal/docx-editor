@@ -1612,13 +1612,9 @@ export class StyleCollection extends ModelObject {
 
 // @public
 export enum StyleType {
-    // (undocumented)
     character = "Character",
-    // (undocumented)
     list = "List",
-    // (undocumented)
     paragraph = "Paragraph",
-    // (undocumented)
     table = "Table"
 }
 

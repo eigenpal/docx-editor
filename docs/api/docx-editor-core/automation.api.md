@@ -1627,10 +1627,8 @@ export interface AutomationStyleRead {
     readonly basedOn: string | null;
     readonly builtIn: boolean;
     readonly linked: boolean;
-    // (undocumented)
     readonly name: string;
     readonly next: string | null;
-    // (undocumented)
     readonly type: AutomationStyleKind;
 }
 

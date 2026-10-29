@@ -29,9 +29,13 @@ import { ModelObject } from './model-object.ts';
 
 /** The kind of a style. @public */
 export enum StyleType {
+  /** A character style, applied to text inside a paragraph. */
   character = 'Character',
+  /** A numbering style, which defines list formatting. */
   list = 'List',
+  /** A paragraph style, which `paragraph.style` accepts by its `nameLocal`. */
   paragraph = 'Paragraph',
+  /** A table style. */
   table = 'Table',
 }
 
