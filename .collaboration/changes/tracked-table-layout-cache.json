@@ -7,7 +7,8 @@
   "tests": [
     "e2e/collaboration.reviewwrites.spec.ts",
     "packages/core/src/layout/__tests__/table-tracked-text-update.test.ts",
-    "packages/core/src/store/__tests__/table-read-cache.test.ts"
+    "packages/core/src/store/__tests__/table-read-cache.test.ts",
+    "packages/core/src/layout/__tests__/cell-line-alignment.test.ts"
   ],
   "changeset": "tracked-table-layout-cache",
   "migration": null

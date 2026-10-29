@@ -1,3 +1,4 @@
+import { OVERFLOW_TOLERANCE_PT, SLACK_RESIDUE_PT } from './paragraph-alignment-tolerance.ts';
 import { lineHangingPunctuationAdvance } from './line-hanging-punctuation.ts';
 import type { PendingLine } from './pending-line.ts';
 import { shrinkJustifiedSpans } from './paragraph-space-shrink.ts';
@@ -25,9 +26,6 @@ import {
   type LinePassage,
   type MirroredLinePassage,
 } from './passage-alignment.ts';
-
-const OVERFLOW_TOLERANCE_PT = 0.001;
-const SLACK_RESIDUE_PT = 1e-9;
 
 /** Horizontal alignment of a paragraph (`w:jc`, ECMA-376 §17.3.1.13). */
 export type Alignment = 'left' | 'center' | 'right' | 'both';
