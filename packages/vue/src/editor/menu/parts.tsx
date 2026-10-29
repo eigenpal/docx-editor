@@ -41,6 +41,7 @@ import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { useImageInsertOptional } from '../images/ImageInsert';
 import { MenuWatermark } from './menu-watermark';
 import { MenuBookmark, MenuGoToBookmarkRow } from './menu-bookmark';
+import { MenuLinkRow } from './menu-link-row';
 //
 // A row is PRESENTATION over a chrome slot: the icon, the label and the enabled state all
 // come from the registry entry the row names, exactly like a toolbar button, so the same
@@ -320,8 +321,18 @@ export const MenuItem = defineComponent({
     const label = useMenuLabel();
     return () => {
       if (props.hidden || !slotId.value) return null;
-      const { setOpenMenu } = menuContext.value;
       const slot = slotId.value;
+      // `text.link` runs no command; it opens the link popover.
+      if (slot === 'text.link') {
+        return (
+          <MenuLinkRow
+            labelKey={props.labelKey}
+            shortcutKey={props.shortcutKey}
+            className={props.className}
+          />
+        );
+      }
+      const { setOpenMenu } = menuContext.value;
       const control = chromeControlForSlot(slot);
       const text = label(props.labelKey ?? control?.labelKey ?? slot);
       // Checked-ness only where it is meaningful — the ENGINE's rule, the same one

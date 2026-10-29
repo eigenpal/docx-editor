@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A create link panel stays open after another participant deletes the selected words, and Apply inserts the draft text as a new link at the collapsed caret.",
+  "after": "The create link panel closes when its selected words are gone, so Apply never writes a link the user did not select.",
+  "reason": "Only adapter popover state changes. Shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/link-popover-remote-target.test.tsx",
+    "packages/pro/src/collaboration/__tests__/link-popover-remote-target-vue.test.ts"
+  ],
+  "changeset": "link-popover-followups",
+  "migration": null
+}

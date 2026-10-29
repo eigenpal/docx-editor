@@ -38,7 +38,8 @@
     "src/__tests__/custom-node-vue-chrome.test.ts",
     "src/__tests__/review-vue-harness.ts",
     "src/__tests__/vue-runtime-audit.ts",
-    "src/collaboration/__tests__/use-collaboration-status-vue.test.ts"
+    "src/collaboration/__tests__/use-collaboration-status-vue.test.ts",
+    "src/collaboration/__tests__/link-popover-remote-target-vue.test.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

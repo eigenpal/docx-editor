@@ -45,6 +45,7 @@ import {
   type UseHyperlinkPopupResult,
 } from './useHyperlinkPopup';
 import { Slot } from './toolbar/Slot';
+import { useDocxEditor } from './context';
 import { hostDocumentOf, listenForOutsidePress } from '@docx-editor.dev/core/editor';
 
 /** Keeps the caret: a mousedown that bubbles to the editor moves it. Inputs are exempt. */
@@ -52,6 +53,22 @@ function guardMousedown(event: React.MouseEvent): void {
   const tag = (event.target as HTMLElement | null)?.tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
   event.preventDefault();
+}
+
+/**
+ * Give the keyboard back to the document after the panel closes itself.
+ *
+ * The panel's URL field holds focus while it is open, and unmounting it leaves focus on the
+ * page body, so the next keystroke went nowhere until the user clicked the page. Escape,
+ * Cancel, Apply and Unlink all end with this call. An outside press does not: that press
+ * already put focus where the user wanted it. `editor.focus()` restores the saved model
+ * selection rather than moving it, so the caret and the selected words stay where they were.
+ */
+function useReturnFocus(): () => void {
+  const editor = useDocxEditor();
+  return useCallback(() => {
+    editor?.focus();
+  }, [editor]);
 }
 
 /** Shared props for every part. @public */
@@ -111,6 +128,7 @@ function HyperLinkRoot({ className, asChild, hidden, children, preset = true }: 
   const popup = useHyperlinkPopup();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const { state, close } = popup;
+  const returnFocus = useReturnFocus();
 
   // Escape and an outside press both dismiss. Bound only while open, so a closed
   // popover costs nothing and cannot swallow a key the editor wants.
@@ -120,6 +138,7 @@ function HyperLinkRoot({ className, asChild, hidden, children, preset = true }: 
       if (event.key !== 'Escape') return;
       event.preventDefault();
       close();
+      returnFocus();
     };
     const doc = hostDocumentOf(panelRef.current);
     doc.addEventListener('keydown', onKeyDown);
@@ -133,7 +152,7 @@ function HyperLinkRoot({ className, asChild, hidden, children, preset = true }: 
       doc.removeEventListener('keydown', onKeyDown);
       stopPress();
     };
-  }, [state.mode, close]);
+  }, [state.mode, close, returnFocus]);
 
   // The engine reports VIEWPORT coordinates; the panel is an absolutely positioned child of
   // the scroll container. Converting once at open — client rect plus the container's current
@@ -421,6 +440,7 @@ function HyperLinkUnlink({
   icon: glyph,
 }: HyperLinkActionProps) {
   const { unlink } = useHyperlinkPopup();
+  const returnFocus = useReturnFocus();
   const { t } = useTranslation();
   if (hidden) return null;
   const label = t('hyperlinkPopup.removeLink');
@@ -431,7 +451,9 @@ function HyperLinkUnlink({
     'aria-label': label,
     title: label,
     onMouseDown: guardMousedown,
-    onClick: () => unlink(),
+    onClick: () => {
+      if (unlink()) returnFocus();
+    },
   };
   if (asChild)
     return (
@@ -446,6 +468,7 @@ HyperLinkUnlink.docxHyperLinkPart = 'Unlink' as const;
 /** Display-text and URL fields. @public */
 function HyperLinkFields({ className, hidden }: HyperLinkPartProps) {
   const { state, setText, setUrl, commitEdit, close } = useHyperlinkPopup();
+  const returnFocus = useReturnFocus();
   const { t } = useTranslation();
   const urlRef = useRef<HTMLInputElement | null>(null);
   const textId = useId();
@@ -469,15 +492,17 @@ function HyperLinkFields({ className, hidden }: HyperLinkPartProps) {
     (event: React.KeyboardEvent) => {
       if (event.key === 'Enter') {
         event.preventDefault();
-        commitEdit();
+        // A refused draft keeps the panel open, and focus with it, so the value can be fixed.
+        if (commitEdit()) returnFocus();
         return;
       }
       if (event.key === 'Escape') {
         event.preventDefault();
         close();
+        returnFocus();
       }
     },
-    [commitEdit, close]
+    [commitEdit, close, returnFocus]
   );
 
   if (hidden) return null;
@@ -519,6 +544,7 @@ HyperLinkFields.docxHyperLinkPart = 'Fields' as const;
 /** Commit the draft. @public */
 function HyperLinkApply({ className, asChild, hidden, children }: HyperLinkPartProps) {
   const { state, commitEdit } = useHyperlinkPopup();
+  const returnFocus = useReturnFocus();
   const { t } = useTranslation();
   if (hidden) return null;
   const label = t('hyperlinkPopup.apply');
@@ -528,7 +554,9 @@ function HyperLinkApply({ className, asChild, hidden, children }: HyperLinkPartP
     'data-testid': 'hyperlink-popup-apply',
     disabled: state.url.trim().length === 0,
     onMouseDown: guardMousedown,
-    onClick: () => commitEdit(),
+    onClick: () => {
+      if (commitEdit()) returnFocus();
+    },
   };
   if (asChild)
     return (
@@ -566,6 +594,7 @@ HyperLinkApply.docxHyperLinkPart = 'Apply' as const;
 /** Dismiss without applying. @public */
 function HyperLinkCancel({ className, asChild, hidden, children }: HyperLinkPartProps) {
   const { close } = useHyperlinkPopup();
+  const returnFocus = useReturnFocus();
   const { t } = useTranslation();
   if (hidden) return null;
   const label = t('hyperlinkPopup.cancel');
@@ -574,7 +603,10 @@ function HyperLinkCancel({ className, asChild, hidden, children }: HyperLinkPart
     className: `docx-hyperlink-popup__cancel${className ? ` ${className}` : ''}`,
     'data-testid': 'hyperlink-popup-cancel',
     onMouseDown: guardMousedown,
-    onClick: () => close(),
+    onClick: () => {
+      close();
+      returnFocus();
+    },
   };
   if (asChild)
     return (

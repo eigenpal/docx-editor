@@ -69,9 +69,19 @@ You can place optional chrome anywhere inside `Root`. Optional chrome includes t
 
 ### Popovers
 
-`Root` does not mount popovers. `<DocxEditor>` mounts four popovers for you: `HyperLink`, `ContentControl`, `Equation`, and `ContextMenu`. In a composed editor, mount the popovers that you use. Without `HyperLink`, the link button and Ctrl+K do not open a panel. Without `ContextMenu`, a right-click opens the browser menu.
+`Root` does not mount the hyperlink, content control, equation, or context menu popovers. `<DocxEditor>` mounts all four for you: `HyperLink`, `ContentControl`, `Equation`, and `ContextMenu`. In a composed editor, mount the popovers that you use. Without `HyperLink`, the link button, the context menu's **Insert link** row, and Ctrl+K (⌘+K on macOS) do not open a panel. Without `ContextMenu`, a right-click opens the browser menu.
 
-To mount them, pass them to `Root` in the `popups` prop. Wrap each component with `definePopup`:
+You can mount a popover in one of two ways. The first way is to add it as a child of `Viewport`, as in [A full composition](#a-full-composition):
+
+```tsx
+<DocxEditor.Viewport>
+  <DocxEditor.Content />
+  <DocxEditor.HyperLink />
+  <DocxEditor.ContextMenu />
+</DocxEditor.Viewport>
+```
+
+The second way is to pass it to `Root` in the `popups` prop, wrapped with `definePopup`. `Content` renders the `popups` entries:
 
 ```tsx
 import { DocxEditor, definePopup } from '@docx-editor.dev/react';
