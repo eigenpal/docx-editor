@@ -2,11 +2,13 @@ import type { RevisionAttributionInput } from './tree-op-revision-attribution.ts
 import { paragraphModelTextOf, withBreakReadText } from './paragraph-model-text.ts';
 // Canonical table reads and host-neutral mutation plans. No browser/editor dependencies.
 import { collectStoryParagraphs } from '../package/story-blocks.ts';
-import type {
-  OoxmlElement,
-  OoxmlNode,
-  OoxmlPart,
-  OoxmlParagraphNode,
+import { parentNodeOf } from '../package/ooxml-edit.ts';
+import {
+  WML_NAMESPACE_URI,
+  type OoxmlElement,
+  type OoxmlNode,
+  type OoxmlPart,
+  type OoxmlParagraphNode,
 } from '../package/ooxml-tree.ts';
 import { safeRowInsertion } from './table-authoring-row-insertion.ts';
 import { readEditableTableTopology } from './tree-op-table-topology.ts';
@@ -564,6 +566,47 @@ export function planTableMutation(
     : { ok: true, ops, createdRowIds, resultPart: part, effects };
 }
 
+/** Range ends a table may follow without leaving the range: not a permission range's end. */
+const PASSABLE_RANGE_ENDS = new Set(['bookmarkEnd', 'commentRangeEnd']);
+/** A pending revision on a paragraph mark. */
+const MARK_REVISIONS = ['ins', 'del', 'moveFrom', 'moveTo'];
+
+/**
+ * The paragraph that follows `paragraphId` in the same container, past range ends, when a
+ * table may go in front of it instead of splitting `paragraphId`.
+ *
+ * Only when the anchor's mark stays where it is through every decision. A mark that ends a
+ * section keeps the split, so the table stays in that section. A mark with a pending revision
+ * keeps it too: deciding that revision joins the anchor with whatever follows its mark, and
+ * that must be the empty paragraph a split leaves, not the table's first cell.
+ */
+function nextParagraphSibling(part: OoxmlPart, paragraphId: string): string | undefined {
+  const parent = parentNodeOf(part, paragraphId);
+  if (!parent) return undefined;
+  const index = parent.children.findIndex((child) => child.id === paragraphId);
+  const anchor = parent.children[index];
+  if (!anchor || anchor.kind !== 'paragraph') return undefined;
+  const properties = wmlChildNamed(anchor, 'pPr');
+  const mark = properties && wmlChildNamed(properties, 'rPr');
+  if (properties && wmlChildNamed(properties, 'sectPr')) return undefined;
+  if (mark && MARK_REVISIONS.some((name) => wmlChildNamed(mark, name))) return undefined;
+  // A range that starts at the end of the anchor continues past its mark; a split keeps the
+  // table out of it by moving the start into the new paragraph.
+  const last = anchor.children.at(-1);
+  if (last?.localName.endsWith('Start')) return undefined;
+  for (let at = index + 1; at < parent.children.length; at++) {
+    const next = parent.children[at]!;
+    if (next.kind === 'paragraph') return next.id;
+    if (
+      next.kind === 'textValue' ||
+      next.namespaceUri !== WML_NAMESPACE_URI ||
+      !PASSABLE_RANGE_ENDS.has(next.localName)
+    )
+      return undefined;
+  }
+  return undefined;
+}
+
 /** Insert beside a range endpoint, splitting its paragraph when needed. */
 export function planInsertTable(
   reads: AutomationStoryReads,
@@ -605,7 +648,13 @@ export function planInsertTable(
   const effects: TreeOpEffect[] = [];
   let anchor = paragraphId;
   let splitParagraphId: string | undefined;
-  if (offset > 0) {
+  // At the end of a paragraph, the table goes before the next paragraph and no paragraph mark
+  // changes. A split there would mint a new mark after the text, and a tracked split marks
+  // that mark inserted, so rejecting the table also joined the text with what follows.
+  const following =
+    offset > 0 && offset === length ? nextParagraphSibling(part, paragraphId) : undefined;
+  if (following) anchor = following;
+  else if (offset > 0) {
     const op: TreeDocOp = revision
       ? { op: 'splitParagraphMany', paragraphId, offsets: [offset], revision }
       : { op: 'splitParagraph', paragraphId, offset };
@@ -643,10 +692,13 @@ export function planInsertTable(
   const table = tableNodes(part.root).find((n) => !existing.has(n.id));
   if (!table) return { ok: false, reason: 'missing-inserted-table' };
   if (values) {
-    const seeded = planTableMutation({ ...reads, part, root: part.root }, table.id, {
-      kind: 'values',
-      values,
-    });
+    // Tracked values are inserted text inside the inserted table, so rejecting it removes them.
+    const seeded = planTableMutation(
+      { ...reads, part, root: part.root },
+      table.id,
+      { kind: 'values', values },
+      revision
+    );
     if (!seeded.ok) return seeded;
     ops.push(...seeded.ops);
     part = seeded.resultPart;

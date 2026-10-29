@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A tracked table inserted after a paragraph split it and marked its paragraph mark inserted, and its cells carried cell insertion markers.",
+  "after": "A table inserted at the end of a paragraph goes before the next paragraph without a split, tracked or not, so no empty paragraph follows it. A tracked one marks its rows, cell paragraph marks, and initial values inserted. A paragraph split at the end of a field that edits as one unit keeps the whole field, and any wrapper around it is cut once, after the field.",
+  "reason": "Every peer receives ordinary tree operations and standard revision markup that existing versions already read and decide. Operation shapes, node identity, and text offsets are unchanged.",
+  "tests": [
+    "packages/core/src/automation/__tests__/tracked-table-insertion.test.ts",
+    "packages/editor-api/src/model/__tests__/model-tracked-breaks-tables.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-tracked-breaks-tables.test.ts",
+    "packages/core/src/store/__tests__/field-result-mode.test.ts"
+  ],
+  "changeset": "tracked-tables-and-breaks",
+  "migration": null
+}

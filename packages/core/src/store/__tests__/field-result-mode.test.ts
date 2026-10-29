@@ -362,3 +362,43 @@ describe('deciding tracked edits inside a result', () => {
     });
   }
 });
+
+describe('splitting at the end of an atomic field', () => {
+  test('keeps the whole field in the first paragraph', () => {
+    const { part, id } = paragraphWith(complex(' DATE ', run('2020-01-02')));
+    // `ab ` is three characters and the atomic field one more, so offset 4 is just after it.
+    const split = applyTreeOp(part, { op: 'splitParagraph', paragraphId: id, offset: 4 });
+    expect(split.ok).toBe(true);
+    if (!split.ok) return;
+    const xml = serializeOoxmlPart(split.part);
+    const first = xml.slice(xml.indexOf('<w:p'), xml.indexOf('</w:p>'));
+    for (const marker of ['begin', 'separate', 'end'])
+      expect(first).toContain(`w:fldCharType="${marker}"`);
+    expect(first).toContain('2020-01-02');
+    expect(first).not.toContain(' cd');
+  });
+
+  for (const [label, open, close, name] of [
+    ['a hyperlink', '<w:hyperlink w:anchor="target">', '</w:hyperlink>', 'w:hyperlink'],
+    [
+      'a content control',
+      '<w:sdt><w:sdtPr><w:id w:val="7"/></w:sdtPr><w:sdtContent>',
+      '</w:sdtContent></w:sdt>',
+      'w:sdt',
+    ],
+  ] as const) {
+    test(`cuts ${label} around the field once, after its end`, () => {
+      // `ab ` + wrapper(field + ` x`) + ` cd`: the split after the field leaves one wrapper in each half.
+      const { part, id } = paragraphWith(
+        `${open}${complex(' DATE ', run('2020'))}${run(' x')}${close}`
+      );
+      const split = applyTreeOp(part, { op: 'splitParagraph', paragraphId: id, offset: 4 });
+      expect(split.ok).toBe(true);
+      if (!split.ok) return;
+      const xml = serializeOoxmlPart(split.part);
+      const first = xml.slice(xml.indexOf('<w:p'), xml.indexOf('</w:p>'));
+      expect(first.split(`<${name}>`).length + first.split(`<${name} `).length - 2).toBe(1);
+      expect(first).toContain('w:fldCharType="end"');
+    });
+  }
+});

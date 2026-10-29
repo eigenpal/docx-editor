@@ -270,6 +270,24 @@ describe('a scripted write obeys the editing mode', () => {
     expect(xml).toContain('Ada');
   });
 
+  test('suggesting refuses page and section breaks that no runtime author tracks', () => {
+    const { host, editor } = mount({ author: 'Ada' });
+    const paragraphs = paragraphsOf(host);
+    editor.surface!.setEditingMode('suggest');
+    const before = savedDocumentXml(host);
+    for (const breakType of ['Page', 'SectionNext'] as const) {
+      const at = { paragraph: paragraphs[0]!, offset: 2 };
+      const response = host.execute({
+        operations: [
+          { op: 'insertBreak', span: { start: at, end: at }, breakType, location: 'Before' },
+        ],
+      });
+      expect(response.ok).toBe(false);
+      expect(errorAt(response, 0).code).toBe('unsupported-capability');
+    }
+    expect(savedDocumentXml(host)).toBe(before);
+  });
+
   test('suggesting writes a replacement as Word does and answers where the text landed', () => {
     // A scripted `Range.insertText(…, 'Replace')` aims the insertion where the range began,
     // which in suggesting mode is the front edge of the fresh strike. The store puts the

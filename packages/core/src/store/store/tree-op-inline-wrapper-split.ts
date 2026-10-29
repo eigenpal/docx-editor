@@ -1,4 +1,5 @@
-import { orphanFieldEndAt, segmentsOf } from './tree-op-segments.ts';
+import { orphanFieldEndAt, paragraphOffsetIndex, segmentsOf } from './tree-op-segments.ts';
+import { parsedFieldSpansOf } from '../package/field-nodes.ts';
 import { MAX_INLINE_CONTAINER_DEPTH, nextInlineContainerDepth } from '../package/ooxml-shared.ts';
 // Property preservation for paragraph splits through lossless inline wrappers.
 
@@ -37,11 +38,30 @@ export function fieldSplitChildren(
   endIds: ReadonlySet<string>;
   segments: ReturnType<typeof segmentsOf>;
 } {
-  const endIds = new Set(
+  // Where a wrapper is cut: after each closing marker a split lands on.
+  const cutIds = new Set(
     offsets.map((offset) => orphanFieldEndAt(paragraph, offset)).filter((id): id is string => !!id)
   );
+  // What stays in the head. An atomic field measures one character on its begin marker and
+  // nothing after it, so a split at the field's end keeps every node of it in the head, or it
+  // would cut the field after `begin`. A wrapper around the field is cut once, after its end.
+  const endIds = new Set(cutIds);
+  const atomic = parsedFieldSpansOf(paragraph).filter(
+    (field) => field.kind === 'complex' && field.addressing === 'atomic'
+  );
+  if (atomic.length > 0) {
+    const index = paragraphOffsetIndex(paragraph);
+    const at = new Set(offsets);
+    for (const field of atomic) {
+      const end = index.spanOf(field.node)?.end;
+      const last = field.removeNodeIds.at(-1);
+      if (end === undefined || last === undefined || !at.has(end)) continue;
+      for (const id of field.removeNodeIds) endIds.add(id);
+      cutIds.add(last);
+    }
+  }
   let children = paragraph.children;
-  for (const id of endIds) {
+  for (const id of cutIds) {
     children = children.flatMap((child) => {
       const divided = splitThroughNode(child, id, nextId, 0);
       return divided ? [divided.head, ...(divided.tail ? [divided.tail] : [])] : [child];

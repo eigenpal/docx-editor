@@ -856,7 +856,7 @@ export class Range extends ModelObject implements PromisedItem {
 
   /**
    * Insert a rectangular table before or after this range.
-   * TrackMineOnly records native row/cell insertions, including initial values.
+   * TrackMineOnly marks rows, cell marks, and values inserted; when a paragraph splits, see the guide.
    * Sync before configuring the returned table. Nested table authoring refuses.
    */
   insertTable(
