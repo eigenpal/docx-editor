@@ -68,12 +68,22 @@ test('places the parts at the inline shifts of the fraction size', () => {
   expect(-shift(geometry, geometry.denominator)).toBeCloseTo(em(1030) * 11, 9);
 });
 
-test('reaches the typographic extents of its parts, not their font boxes', () => {
+test('a fraction alone claims the font box of its size and the ink of its parts', () => {
   const geometry = stack(layout(fraction(run('2'), run('3'))));
-  // The parts draw at 8 pt: 73 percent of 11 pt, rounded down to a half point.
-  expect(geometry.baseline).toBeCloseTo(em(1200) * 11 + em(1593) * 8, 9);
-  expect(geometry.box.height - geometry.baseline).toBeCloseTo(em(1030) * 11 + em(455) * 8, 9);
-  expect(geometry.numerator.box.y).toBeGreaterThanOrEqual(0);
+  // The 14pt font box of the 11pt structure size, with its baseline at 80 percent.
+  const band = { ascent: 14 * 0.8, descent: 14 * 0.2 };
+  // The parts draw at 8 pt: 73 percent of 11 pt, rounded down to a half point. The numerator
+  // claims its digit ink, 0.7 em high, and the math leading of its own smaller size above it,
+  // up to the ascent of its 8pt font box (14 * 8 / 11 * 0.8), not its typographic box.
+  expect(geometry.baseline).toBeCloseTo(
+    Math.max(band.ascent, em(1200) * 11 + Math.min(((14 * 8) / 11) * 0.8, 0.7 * 8 + em(300) * 8)),
+    9
+  );
+  // The denominator digits have no ink below their baseline.
+  expect(geometry.box.height - geometry.baseline).toBeCloseTo(
+    Math.max(band.descent, em(1030) * 11),
+    9
+  );
 });
 
 test('is as wide as its wider part, with the rule across it', () => {

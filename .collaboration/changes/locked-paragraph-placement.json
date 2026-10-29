@@ -1,0 +1,21 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Inside a content lock, only paragraph alignment could change, and a recorded paragraph property change could be rejected only when it restored alignment.",
+  "after": "Alignment, indents, spacing, line spacing, the keep and page break settings, widow control, outline level, and hyphenation can change inside a content lock, plainly or tracked, and a recorded change of only those properties can be rejected there.",
+  "reason": "The admission rule widens for operations that already replicate. A replica on an earlier release refuses such a write locally but applies a peer's operation, because remote operations bypass local lock checks. Shared nodes, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-session-locked-paragraph-format.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-session-format-review.test.ts",
+    "packages/core/src/store/__tests__/content-control-paragraph-properties.test.ts"
+  ],
+  "supersedesTests": [
+    {
+      "path": "packages/core/src/store/__tests__/content-control-paragraph-alignment.test.ts",
+      "by": "packages/core/src/store/__tests__/content-control-paragraph-properties.test.ts",
+      "reason": "Renamed with the lock rule, which now covers indents, spacing, and the keep settings as well as alignment; the alignment cases still run."
+    }
+  ],
+  "changeset": "locked-paragraph-placement",
+  "migration": null
+}

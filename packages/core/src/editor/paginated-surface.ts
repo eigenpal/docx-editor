@@ -2168,15 +2168,10 @@ export function mountPaginatedSurface(
   function resolveBodyContentControlAtCaret(): ContentControlBoundaryRecord | null {
     const found = contentControlAtSelection(currentLayout, selection, measurer);
     // Belt and braces: the records are the body's, so a match from another part is a bug in
-    // the index rather than an answer, and must not become a write.
+    // the index rather than an answer, and must not become a write. A control a peer inserted
+    // during a session has a logical id with no part name, so the part is looked up.
     if (!found) return null;
-    return partNameOfNodeId(found.id) === session.part().name ? found : null;
-  }
-
-  /** The part name a node id names, or '' when it names none. */
-  function partNameOfNodeId(id: string): string {
-    const hash = id.indexOf('#');
-    return hash === -1 ? '' : id.slice(0, hash);
+    return partOfNodeId(session, found.id)?.name === session.part().name ? found : null;
   }
 
   /**

@@ -65,7 +65,7 @@ The runtime combines lock assignments on the same proxy. Changing one lock prese
 
 If you create the browser runtime over an editor that sets `contentLockPolicy.allowFormattingInLockedContent`, untracked font writes pass a content lock. Text writes, and font writes while `document.changeTrackingMode` tracks changes, still refuse. The server runtime does not take this option. For more information, see [Content controls](/docs/2.x/guides/content-controls#formatting-content-locked-controls).
 
-You can set `Paragraph.alignment` inside a content-locked control without changing its text or other paragraph properties. When `document.changeTrackingMode` tracks changes, alignment creates a revision that you can accept or reject. Binding and document protection checks still apply.
+You can set `Paragraph.alignment`, `leftIndent`, `rightIndent`, `firstLineIndent`, `spaceBefore`, `spaceAfter`, and `lineSpacing` inside a content-locked control without changing its text. When `document.changeTrackingMode` tracks changes, these writes create one paragraph property revision that you can accept or reject. Paragraph style writes stay refused. Binding and document protection checks still apply.
 
 ## Create a text or date control
 

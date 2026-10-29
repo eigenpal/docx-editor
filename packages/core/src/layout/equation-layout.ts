@@ -5,7 +5,7 @@ import { measureDisplayText, withFontFamily, type ResolvedRunStyle } from './run
 import type { LayoutBox, TextMeasurer } from './semantic-records.ts';
 import { equationDisplayText } from './equation-display-text.ts';
 import { equationInk } from './equation-ink.ts';
-import { fitEquationLineExtent } from './equation-line-extent.ts';
+import { fitEquationLineExtent, type EquationTextBand } from './equation-line-extent.ts';
 import { attachScripts, box, naryLimitsBeside, shifted } from './equation-scripts.ts';
 import {
   equationAtomSpaces,
@@ -163,6 +163,11 @@ interface EquationLayoutCache {
   readonly surroundingSizePt: number;
   /** The equation is a display equation, so its fractions keep the padded placement. */
   readonly display: boolean;
+  /**
+   * The size of the first atom, and that atom. Scripts and fractions after it take their
+   * offsets from this size, not from their own (`laterStructureSizePt`).
+   */
+  leading?: { readonly sizePt: number; readonly first: EquationExpression };
   readonly formats: WeakMap<
     object,
     Map<boolean, { readonly style: ResolvedRunStyle; readonly cache: EquationLayoutCache }>
@@ -248,6 +253,20 @@ function structureSizePt(
   cache: EquationLayoutCache
 ): number {
   return scaledSizePt(expression.controlFontSizePt ?? cache.surroundingSizePt, scale);
+}
+
+/**
+ * The size that sizes the offsets of a script or fraction after the first atom of the
+ * equation: the first atom's size, reduced to the structure's script level. Undefined for
+ * the first atom itself and for an equation without a leading size.
+ */
+function laterStructureSizePt(
+  expression: EquationExpression,
+  scale: number,
+  cache: EquationLayoutCache
+): number | undefined {
+  const leading = cache.leading;
+  return leading && leading.first !== expression ? scaledSizePt(leading.sizePt, scale) : undefined;
 }
 
 function scaledStyle(
@@ -596,7 +615,7 @@ function layoutExpression(
       // The rule is centred on the math axis. Each part sits at least a fixed shift from the
       // baseline, and further when its ink would come closer to the rule than the minimum gap.
       // The parts reach their typographic extents, and the rule spans the wider part.
-      const em = resolved.fontSizePt;
+      const em = laterStructureSizePt(expression, scale, cache) ?? resolved.fontSizePt;
       const axis = MATH_AXIS_HEIGHT * em;
       const thickness = FRACTION_RULE_THICKNESS * em;
       const numeratorShift = Math.max(
@@ -701,8 +720,10 @@ function layoutExpression(
       const superscript = expression.superscript
         ? layoutExpression(expression.superscript, measurer, style, scriptScale(scale), cache)
         : undefined;
-      // Offsets take the structure size, not the size of the runs inside it.
-      const em = structureSizePt(expression, scale, cache);
+      // Offsets take the structure size, not the size of the runs inside it. After the first
+      // atom they take the first atom's size.
+      const em =
+        laterStructureSizePt(expression, scale, cache) ?? structureSizePt(expression, scale, cache);
       return attachScripts(base, subscript, superscript, em, measurer);
     }
     case 'nary': {
@@ -847,18 +868,45 @@ function layoutEquationWith(
   // This walk and the geometry walk in `fitEquationLineExtent` both flatten rows and skip
   // nothing, so they find the same first leaf.
   const firstControl = first && 'controlFontSizePt' in first ? first : {};
-  const leadingSizePt =
-    first && first.kind !== 'text' ? structureSizePt(firstControl, 1, cache) : mathStyle.fontSizePt;
+  const firstText = first?.kind === 'text' ? first : undefined;
+  const leadingSizePt = firstText
+    ? (firstText.format?.fontSizePt ?? firstText.fontSizePt ?? mathStyle.fontSizePt)
+    : structureSizePt(firstControl, 1, cache);
+  if (first) cache.leading = { sizePt: leadingSizePt, first };
+  const root = layoutExpression(projection.expression, measurer, mathStyle, 1, cache);
+  // The band is the font box of the first text atom, or of the structure size.
+  const band = firstTextBand(root) ?? leadingBand(measurer, mathStyle, leadingSizePt, cache);
   return Object.freeze({
     sourceNodeId: projection.sourceNodeId,
-    geometry: fitEquationLineExtent(
-      layoutExpression(projection.expression, measurer, mathStyle, 1, cache),
-      leadingSizePt,
-      measurer
-    ),
+    geometry: fitEquationLineExtent(root, band, leadingSizePt, measurer, cache.display),
     fallbackText: projection.fallbackText,
     truncated: projection.truncated,
   });
+}
+
+/** The font box of a text atom that opens the equation on its baseline, if one does. */
+function firstTextBand(root: EquationGeometry): EquationTextBand | undefined {
+  let node = root;
+  let offset = 0;
+  while (node.kind === 'row' && node.items[0]) {
+    const item: EquationGeometry = node.items[0];
+    offset += item.box.y + item.baseline - node.baseline;
+    node = item;
+  }
+  return node.kind === 'text' && Math.abs(offset) < 1e-9
+    ? { height: node.box.height, baseline: node.baseline }
+    : undefined;
+}
+
+/** The font box of the math face at `sizePt`. */
+function leadingBand(
+  measurer: TextMeasurer,
+  style: ResolvedRunStyle,
+  sizePt: number,
+  cache: EquationLayoutCache
+): EquationTextBand {
+  const metrics = metricsAt(measurer, style, sizePt / style.fontSizePt, cache);
+  return { height: metrics.height, baseline: metrics.baseline };
 }
 
 /** Reuse equation geometry across paragraph breaks for one measurement producer. */

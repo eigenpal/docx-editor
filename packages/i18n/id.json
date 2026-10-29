@@ -984,7 +984,7 @@
     "tableGridUnplaceable": "Tabel ini memiliki sel yang tidak sesuai dengan kisi kolomnya",
     "drawingLocked": "Gambar ini dikunci",
     "contentLocked": "Konten ini dikunci",
-    "lockedParagraphFormat": "Konten ini dikunci; hanya perataan yang dapat diubah",
+    "lockedParagraphFormat": "Konten ini dikunci; hanya perataan, indentasi, spasi, serta hentian baris dan halaman yang dapat diubah",
     "boundParagraphFormat": "Konten ini terikat ke data dan tidak dapat diubah",
     "editorNotReady": "Editor belum siap",
     "imageSuggesting": "Perubahan gambar tidak tersedia dalam mode saran",

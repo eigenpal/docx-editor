@@ -81,6 +81,7 @@ export type EditDiagnosticCode =
   | 'edit.preview-unsupported'
   | 'edit.preview-composing'
   | 'edit.preview-diverged'
+  | 'edit.read-after-commit'
   | 'edit.collaboration-not-ready'
   | 'edit.collaboration-text-limit'
   | 'edit.internal-invariant'

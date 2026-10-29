@@ -171,7 +171,7 @@ describe('atomic equation paragraph layout', () => {
     expect(equations[0]!.range.end - equations[0]!.range.start).toBe(1);
   });
 
-  test('auto line spacing scales the text band instead of the built-up fraction', () => {
+  test('auto line spacing adds its share of the text band below the built-up fraction', () => {
     const fraction =
       '<m:oMath><m:f><m:fPr><m:type m:val="bar"/></m:fPr>' +
       '<m:num><m:r><m:t>1</m:t></m:r></m:num>' +
@@ -182,17 +182,11 @@ describe('atomic equation paragraph layout', () => {
         '<w:p><w:pPr><w:spacing w:line="360" w:lineRule="auto"/></w:pPr>' + `${fraction}</w:p>`
       )
     )[0]!;
-    const plainMultiple = linesOf(
-      layout(
-        '<w:p><w:pPr><w:spacing w:line="360" w:lineRule="auto"/></w:pPr>' +
-          '<w:r><w:t>x</w:t></w:r></w:p>'
-      )
-    )[0]!;
+    const plain = linesOf(layout('<w:p><w:r><w:t>x</w:t></w:r></w:p>'))[0]!;
 
-    expect(multiple.box.height).toBeCloseTo(
-      Math.max(single.box.height, plainMultiple.box.height),
-      5
-    );
+    // The line keeps the fraction's extent, and the 1.5 multiple adds half a text band.
+    expect(multiple.box.height).toBeCloseTo(single.box.height + plain.box.height / 2, 5);
+    expect(multiple.baseline).toBeCloseTo(single.baseline, 5);
     expect(multiple.box.height).toBeLessThan(single.box.height * 1.5);
   });
 

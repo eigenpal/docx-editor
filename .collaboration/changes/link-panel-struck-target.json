@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A create link panel stays open after another participant strikes the selected words in suggesting mode, and Apply links the pending deletion.",
+  "after": "The panel closes when its selected words become a pending deletion after it opened. A panel opened over words that were already struck still links them.",
+  "reason": "Only adapter popover state and a local layout read change. Shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/link-popover-remote-target.test.tsx",
+    "packages/pro/src/collaboration/__tests__/link-popover-remote-target-vue.test.ts"
+  ],
+  "changeset": "link-panel-struck-target",
+  "migration": null
+}

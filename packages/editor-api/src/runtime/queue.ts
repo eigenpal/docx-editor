@@ -28,6 +28,12 @@ export interface QueuedAction {
   readonly sort: ActionSort;
   /** Paths that must resolve before this action can be planned. */
   readonly dependencies?: readonly ObjectPath[];
+  /**
+   * Paths a write names in its answer: the range an insertion wrote, the paragraph it created.
+   * A read in the same sync on one of these, or on a path derived from one, is answered after
+   * the writes, because the object has no value before them.
+   */
+  readonly produces?: readonly ObjectPath[];
   /** A scalar load on an OrNullObject proxy is skipped if its lookup resolves null. */
   readonly nullableLoad?: ObjectPath;
   /** The consumer-facing name of what this action is for, for errors. Never a handle. */

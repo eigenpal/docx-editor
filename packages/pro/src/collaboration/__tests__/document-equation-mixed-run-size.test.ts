@@ -167,3 +167,55 @@ test('two shared editors retain mixed sizes through text edits, history, deletio
     harness.cleanup();
   }
 }, 10000);
+
+test('two shared editors agree on a later superscript under multiple spacing through edits, history and reopen', async () => {
+  const harness = createPeerHarness('equation-later-structure', { offlineEditing: true });
+  const views: View[] = [];
+  const structured = zipDocument(
+    `<w:p xmlns:m="${M}"><w:pPr><w:spacing w:before="0" w:after="0" w:line="360" w:lineRule="auto"/></w:pPr>` +
+      '<w:r><w:t>A</w:t></w:r><m:oMath>' +
+      '<m:r><w:rPr><w:sz w:val="16"/></w:rPr><m:t>1</m:t></m:r>' +
+      '<m:sSup><m:sSupPr><m:ctrlPr><w:rPr><w:sz w:val="48"/></w:rPr></m:ctrlPr></m:sSupPr>' +
+      '<m:e><m:r><w:rPr><w:sz w:val="48"/></w:rPr><m:t>x</m:t></m:r></m:e>' +
+      '<m:sup><m:r><w:rPr><w:sz w:val="48"/></w:rPr><m:t>2</m:t></m:r></m:sup></m:sSup>' +
+      '</m:oMath><w:r><w:t>Z</w:t></w:r></w:p>'
+  );
+  try {
+    const peers = await harness.pair(structured);
+    const left = open(peers.alice.room.document, peers.alice);
+    const right = open(peers.bob.room.document, peers.bob);
+    views.push(left, right);
+    const height = () => linesOf(left.surface.layout())[0]!.box.height;
+    const same = (expected: string) => {
+      peers.alice.room.session.flushPendingJournals();
+      peers.bob.room.session.flushPendingJournals();
+      expect(text(left)).toBe(expected);
+      expect(text(right)).toBe(expected);
+      expect(xml(left)).toBe(xml(right));
+      expect(geometry(left)).toEqual(geometry(right));
+    };
+    same('A￼Z');
+    const initial = height();
+    // The 1.5 multiple adds half of the 8pt first run's text band below the equation.
+    expect(initial).toBeGreaterThan(24 * 1.15);
+    peers.pause();
+    select(left, 0);
+    select(right, 3);
+    left.surface.type('L');
+    right.surface.type('R');
+    peers.resume();
+    same('LA￼ZR');
+    expect(height()).toBeCloseTo(initial, 8);
+    left.surface.undo();
+    same('A￼ZR');
+    left.surface.redo();
+    same('LA￼ZR');
+    const reopened = open(left.surface.save());
+    views.push(reopened);
+    expect(geometry(reopened)).toEqual(geometry(left));
+    expect(xml(reopened)).toBe(xml(left));
+  } finally {
+    for (const view of views) destroy(view);
+    harness.cleanup();
+  }
+}, 10000);

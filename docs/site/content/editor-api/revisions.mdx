@@ -27,7 +27,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-Use `insertText(text, 'Before' | 'After')` for insertion suggestions. Use `range.delete()` or `range.clear()` for deletion suggestions. Inserted ranges require sync before dependent use. Mode assignments and edits commit together; a failed batch preserves the previous mode and document.
+Use `insertText(text, 'Before' | 'After')` for insertion suggestions. Use `range.delete()` or `range.clear()` for deletion suggestions. You can load an inserted range in the same sync; edit it after that sync. Mode assignments and edits commit together; a failed batch preserves the previous mode and document.
 
 | `ChangeTrackingMode` value | Runtime behavior |
 | --- | --- |
@@ -83,7 +83,7 @@ A sync is one transaction. These rules decide which structural edits can share a
 
 - Edits in different paragraphs share a sync. A split, a field, and an equation in three paragraphs commit together or not at all.
 - Two edits in one paragraph can't share a sync. This includes two fields, a field and an equation, or a split and a field. The sync refuses with `ConflictingChanges`, and nothing changes. Sync after the first edit, read the range again, and make the second edit.
-- An object that a write returns, such as a field or a range, has no address until that write syncs. Sync before you use it. Otherwise the call fails with `InvalidObjectPath`.
+- An object that a write returns, such as a field or a range, has no address until that write syncs. You can load it in the same sync. Sync before you edit it. Otherwise the edit fails with `InvalidObjectPath`.
 - An `insertBreak()` call, other than a line break, runs alone in its sync. Line breaks and `\n` in `insertText()` follow the paragraph rules in this list.
 
 This example proposes three edits, one in each paragraph, in one sync. It needs no read sync first, because search hits can be edited in the sync that reads them. `ooxml` holds the package from [Propose an equation](#propose-an-equation):
@@ -167,7 +167,8 @@ The live editor can also refuse the commit, for example if permissions change. I
 | Paragraph deletion | `Paragraph.delete()` records the text and the paragraph mark as deletions; accept removes the paragraph |
 | Font and paragraph formatting | Record property revisions, including paragraph styles |
 | Paragraph insertion | Track text and paragraph marks; reject removes both |
-| Paragraph split | `insertText()` with `\n` tracks the text and each new paragraph mark; reject joins the paragraphs again |
+| Paragraph split | `insertText()` with `\n` and `Paragraph.split()` track each new paragraph mark; reject joins the paragraphs again |
+| Breaks | `Range.insertBreak()` tracks line, page, and next-page section breaks; reject removes the break |
 | Lists | Track creation, membership, and level changes; configure newly proposed definitions |
 | Tables | Track complete insertion, cell values, row additions, and partial row deletions |
 | Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |

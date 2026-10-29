@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Scripts and fractions claimed their full boxes on an equation line, a later script or fraction took its offsets from its own size, and multiple line spacing kept the equation as a minimum height.",
+  "after": "Script and inline fraction parts claim their glyph ink with the math leading, later scripts and fractions take their offsets from the first atom size, and multiple line spacing adds or removes its share of the text band around the equation's extent.",
+  "reason": "Only local equation geometry and line heights change. Canonical OOXML, offsets, operations, and collaboration data remain unchanged, and every peer derives the same layout from the same document.",
+  "tests": [
+    "packages/core/src/layout/__tests__/equation-line-extent.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-equation-mixed-run-size.test.ts"
+  ],
+  "changeset": "equation-structure-line-height",
+  "migration": null
+}

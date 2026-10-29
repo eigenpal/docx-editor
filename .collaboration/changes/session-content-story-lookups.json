@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Content created during a session has a logical id with no part name. Readers that took the part from the id prefix treated a peer's header table as a body table, read the first section for a peer's body or note line, found no control at the caret in a peer's body control, found no link at the caret in a peer's line, and wrote a comment or a custom node removal against the reader's open story.",
+  "after": "Those readers find the part through the story node indexes, so table controls, page setup, the control at the caret, the link at the caret, comments, and custom nodes act on the story that holds the content.",
+  "reason": "Only local reads of the canonical tree change. Shared nodes, logical ids, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-session-id-readers.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-session-story-ids.test.ts"
+  ],
+  "changeset": "session-content-story-lookups",
+  "migration": null
+}

@@ -394,7 +394,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
   startNewList(): List {
     const target = `${this.path.label}.startNewList`;
     const created = List.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () => ({ op: 'startNewList', paragraph: this.#handle() }),
       (value) => {
@@ -417,7 +418,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
       fail({ code: 'InvalidArgument', target });
     }
     const joined = List.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      joined,
       target,
       () => ({ op: 'attachToList', paragraph: this.#handle(), listId, level }),
       (value) => {
@@ -490,6 +492,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
    *
    * `\n`, `\r`, and `\r\n` in `text` start new paragraphs, tracked with `TrackMineOnly`. See
    * `Range.insertText` for the rules.
+   *
+   * You can load the returned range in the same sync. Editing it needs a sync first.
    */
   insertText(
     text: string,
@@ -505,7 +509,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
     const written = insertableTextWithBreaks(text, target);
     const where = paragraphTextLocation(insertLocation, target);
     const created = Range.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () =>
         where === 'Replace'
@@ -522,13 +527,17 @@ export class Paragraph extends ModelObject implements PromisedItem {
     return created;
   }
 
-  /** Add a paragraph beside this one. Answers the new paragraph. */
+  /**
+   * Add a paragraph beside this one. Answers the new paragraph.
+   * You can load the returned paragraph in the same sync. Editing it needs a sync first.
+   */
   insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph {
     const target = `${this.path.label}.insertParagraph`;
     const written = insertableText(paragraphText, target);
     const where = besideLocation(insertLocation, target);
     const created = Paragraph.promised(this.context, target, false);
-    this.commandAnswering(
+    this.commandCreating(
+      created,
       target,
       () => ({
         op: 'insertParagraph',
@@ -551,6 +560,10 @@ export class Paragraph extends ModelObject implements PromisedItem {
    * this paragraph's identity — so a caller can read back what each piece became without having to
    * work out which of them is the original. The collection is filled by the split itself: there is
    * no second read, because a second read would describe the document the split had already made.
+   *
+   * With `TrackMineOnly`, each new paragraph mark is a tracked insertion, and reject joins the
+   * pieces again. A tracked split keeps its delimiters: `trimDelimiters` set to `true` refuses
+   * with `NotSupported` when a delimiter is found, and nothing changes.
    */
   split(delimiters: string[], trimDelimiters?: boolean, trimSpacing?: boolean): RangeCollection {
     const target = `${this.path.label}.split`;

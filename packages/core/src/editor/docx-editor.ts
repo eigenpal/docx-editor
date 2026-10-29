@@ -79,6 +79,7 @@ import type { StoryScope } from '@docx-editor.dev/core/store';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import { furnitureHomeOfItem, noteStoryScopeOfItem } from './review-item-story.ts';
+import { partOfNodeId } from './surface-scope.ts';
 import type {
   CanResult,
   DocumentHandle,
@@ -1542,7 +1543,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // permanent ceiling because a store whose part is still in the package is never
     // evicted. On a 40-section document that left 18 headers unopenable for the rest of
     // the session — commenting in a footnote broke header editing.
-    const partName = paragraphId.slice(0, paragraphId.indexOf('#'));
+    // A logical id from a collaboration session names no part; the story indexes find it.
+    const hash = paragraphId.indexOf('#');
+    const partName =
+      hash === -1 ? partOfNodeId(surface.session, paragraphId)?.name : paragraphId.slice(0, hash);
+    if (partName === undefined) return openStoryScope();
     if (partName.length === 0 || partName === surface.session.part().name) {
       return { kind: 'body' };
     }

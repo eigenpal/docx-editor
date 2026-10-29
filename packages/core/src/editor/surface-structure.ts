@@ -862,7 +862,10 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           });
         }
       }
-      if (ops.length === 0) return false;
+      // No op means every requested setting is already in force, as a direction the paragraph
+      // already has. Nothing to write is not a refusal: `can` allowed it, so `exec` succeeds
+      // and reports no change, as `setParagraphDirection` does.
+      if (ops.length === 0) return true;
       return commitOverTarget(() => applyOps(ops, selectionMark()));
     },
 

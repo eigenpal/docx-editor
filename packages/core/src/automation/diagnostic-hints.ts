@@ -158,6 +158,8 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
     'An input method composition is in progress, so no preview began. Retry after the composition ends.',
   'edit.preview-diverged':
     'The document answered a replayed read differently from the preview, so the commit wrote nothing. Read the document again and build a new preview.',
+  'edit.read-after-commit':
+    'The writes in this sync are applied, and a load that followed them failed. Read the document again before you decide; do not apply the same edit again.',
   'edit.collaboration-not-ready':
     'The collaboration session is not ready to replicate edits, so this one was refused. Wait for the ready status, then retry; a destroyed session needs a rejoin.',
   'edit.collaboration-text-limit':

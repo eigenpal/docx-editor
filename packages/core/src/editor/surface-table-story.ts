@@ -19,12 +19,10 @@ import type {
   TableFragmentRecord,
 } from '../layout/semantic-records.ts';
 import type { TableInteractionHit } from '../layout/semantic-table-interaction.ts';
+import { partOfNodeId, sameStoryPart } from './surface-scope.ts';
 
-/** The part name a node id carries, or `''` when the id names none. */
-export function partNameOf(nodeId: string): string {
-  const hash = nodeId.indexOf('#');
-  return hash === -1 ? '' : nodeId.slice(0, hash);
-}
+/** The session reads that find the story part of a node id. */
+type StoryPartLookup = Pick<TreeDocxSessionView, 'currentPackage' | 'part' | 'storyParts'>;
 
 /**
  * The part a table lives in, for planning.
@@ -32,15 +30,12 @@ export function partNameOf(nodeId: string): string {
  * Planning used to read `session.part()` — the body's — while the hit test resolved tables in
  * headers and footers. `readEditableTableTopology` then found no such table and the drag never
  * started, and `planTableCommand` refused with "the table target is no longer valid": chrome
- * offered, then a refusal. The id names the part, so this is a map lookup, not a story open.
+ * offered, then a refusal. A loaded table's id names its part, so this is a map lookup, not a
+ * story open. A table created during a collaboration session has a logical id with no part
+ * name, so it is found in the story indexes, which open no story store either.
  */
-export function partOfTableIn(
-  session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'>,
-  tableId: string
-): OoxmlPart {
-  const partName = partNameOf(tableId);
-  if (partName.length === 0) return session.part();
-  return session.currentPackage().parts.get(partName) ?? session.part();
+export function partOfTableIn(session: StoryPartLookup, tableId: string): OoxmlPart {
+  return partOfNodeId(session, tableId) ?? session.part();
 }
 
 /**
@@ -48,18 +43,19 @@ export function partOfTableIn(
  *
  * Only the story the reader is IN. A write commits under the open scope, so a drag started
  * from the body on a header table would plan against the header part and then be refused by
- * the store. Word has the same rule: you enter the header before you can resize a table in it.
- * Painting chrome that cannot act is the failure this lane keeps producing.
+ * the store: the reader enters the header before resizing a table in it. Painting chrome that
+ * cannot act is the failure this lane keeps producing.
  *
- * `openParagraphId` is the caret's paragraph. A paragraph id already carries its part name, so
- * this costs a string scan rather than a session read on every pointer move.
+ * `openParagraphId` is the caret's paragraph. Two loaded ids carry their part names, so the
+ * usual case costs a string scan rather than a session read on every pointer move.
  */
 export function offeredHit(
+  session: StoryPartLookup,
   hit: TableInteractionHit | null,
   openParagraphId: string
 ): TableInteractionHit | null {
   if (!hit || hit.kind === 'tableBody') return null;
-  return partNameOf(hit.tableId) === partNameOf(openParagraphId) ? hit : null;
+  return sameStoryPart(session, hit.tableId, openParagraphId) ? hit : null;
 }
 
 /**

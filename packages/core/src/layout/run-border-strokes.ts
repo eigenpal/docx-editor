@@ -136,6 +136,16 @@ export function textBandHeightWithBorders(
   fallback: number,
   pageBreaksIgnored = false
 ): number {
+  const band = textBandWithBorders(spans, measurer, pageBreaksIgnored);
+  return band.height > 0 ? band.height : fallback;
+}
+
+/** {@link textBandHeightWithBorders} with its baseline; zero height for a line without text. */
+export function textBandWithBorders(
+  spans: PendingLine['spans'],
+  measurer: TextMeasurer,
+  pageBreaksIgnored = false
+): { readonly height: number; readonly baseline: number } {
   const band = { height: 0, baseline: 0, spans };
   for (const span of spans) {
     if (pageBreaksIgnored && span.text === PAGE_BREAK_CHAR) continue;
@@ -151,5 +161,5 @@ export function textBandHeightWithBorders(
     );
   }
   growRunBorderLineMetrics(band, measurer);
-  return band.height > 0 ? band.height : fallback;
+  return { height: band.height, baseline: band.baseline };
 }

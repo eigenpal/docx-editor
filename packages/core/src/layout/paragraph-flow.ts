@@ -8,7 +8,8 @@ import { besideFloatWidth } from './legacy-inline-beside-float.ts';
 import { continuationPiecesWithRules } from './paragraph-continuation-pieces.ts';
 import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
 import { cellTabReplayScope, tabClosesLine, tabDestinationForFlow } from './paragraph-tab-flow.ts';
-import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-border-strokes.ts';
+import { growRunBorderLineMetrics } from './run-border-strokes.ts';
+import { lineSpacingBand } from './equation-line-spacing.ts';
 import {
   clipLineDrawingsAtTop,
   growPendingLineDrawingExtent,
@@ -804,8 +805,8 @@ export function breakParagraph(
     const naturalHeight = line.height;
     // `auto` scales the TEXT band, not a tall inline drawing or equation (ECMA-376
     // 17.3.1.33). A drawing line above single spacing keeps the drawing's box and adds the
-    // multiple's extra text band below it; an equation or a smaller multiple keeps the atom
-    // as a floor, while a larger text multiple can still win.
+    // multiple's extra text band below it. An equation line keeps the equation's extent and
+    // adds or loses the multiple's share of its band (`lineSpacingBand`).
     const hasUnscaledInlineExtent =
       line.drawings.length > 0 ||
       line.spans.some((span) => span.equation !== undefined || span.unsupported !== undefined);
@@ -819,27 +820,28 @@ export function breakParagraph(
     // Below single spacing the multiple takes its missing text band off the line's top: the
     // line is the picture less that band, never less than the scaled text band.
     const removesTextBand = holdsUnscaledPicture && lineSpacing.value < 240;
-    const spacingBase = scalesTextBandOnly
-      ? textBandHeightWithBorders(
-          line.spans,
-          measurer,
-          pictureRunBand?.height ?? metrics.height,
-          pageBreaksIgnored
-        )
-      : naturalHeight;
-    const spaced = spacedLine(lineSpacing, spacingBase, line.baseline, line.spans, measurer);
+    const fallbackBand = pictureRunBand?.height ?? metrics.height;
+    const band = scalesTextBandOnly
+      ? lineSpacingBand(line, lineSpacing, measurer, fallbackBand, pageBreaksIgnored)
+      : undefined;
+    const equationBand = band?.equation ? band : undefined;
+    const spacingBase = band?.height ?? naturalHeight;
+    const bandBaseline = band?.baseline ?? line.baseline;
+    const spaced = spacedLine(lineSpacing, spacingBase, bandBaseline, line.spans, measurer);
     if (!scalesTextBandOnly) line.baseline = spaced.baseline;
+    else if (equationBand) line.baseline += spaced.baseline - bandBaseline;
     const floored = firstLine && lineSpacing.rule !== 'exact' ? markerBaselineFloor : 0;
     const markerFloor = Math.max(0, floored - line.baseline);
     line.baseline += markerFloor;
     // Space ABOVE the glyph band only (exact baseline placement, not auto/atLeast). Never negative.
     line.leading = Math.max(0, line.baseline - glyphBaseline);
-    // The multiple's extra over the text band sits below the drawing.
-    const textBandExtra = addsTextBandExtra
-      ? Math.max(0, spaced.height - spacingBase)
-      : removesTextBand
-        ? Math.min(0, spaced.height - spacingBase)
-        : 0;
+    const textBandExtra = equationBand
+      ? spaced.height - spacingBase
+      : addsTextBandExtra
+        ? Math.max(0, spaced.height - spacingBase)
+        : removesTextBand
+          ? Math.min(0, spaced.height - spacingBase)
+          : 0;
     line.height = scalesTextBandOnly
       ? Math.max(spaced.height, naturalHeight + textBandExtra)
       : spaced.height;
@@ -847,6 +849,7 @@ export function breakParagraph(
     if (removesTextBand) line.baseline = Math.min(line.baseline, line.height);
     // Like a text line's auto extra, the depth below the drawing may cross the bottom margin.
     const drawingLineTrailing = addsTextBandExtra ? Math.max(0, line.height - naturalHeight) : 0;
+    const spacedExtent = equationBand ? line.height : spaced.height;
     line.height += markerFloor;
     // Baseline shifts from line spacing must move inline drawings too, or authored distT/distB
     // and the text baseline drift apart. For `exact`, keep the authored box — tall drawings
@@ -857,7 +860,7 @@ export function breakParagraph(
     if (lineSpacing.rule !== 'exact') growPendingLineDrawingExtent(line);
     line.trailingSpacing =
       line.drawings.length === 0 && lineSpacing.rule !== 'exact'
-        ? Math.max(0, Math.min(spaced.trailing ?? Infinity, spaced.height - naturalHeight))
+        ? Math.max(0, Math.min(spaced.trailing ?? Infinity, spacedExtent - naturalHeight))
         : drawingLineTrailing;
     finalizeTopAndBottomClearance();
     commitBreakClearance();
