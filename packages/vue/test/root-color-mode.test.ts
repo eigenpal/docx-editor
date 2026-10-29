@@ -9,7 +9,7 @@ import { DocxEditorContent } from '../src/editor/DocxEditorContent';
 import { DocxEditorToolbar } from '../src/editor/toolbar';
 import { DocxEditorMenu } from '../src/editor/menu';
 import { DocxEditorWindow } from '../src/editor/DocxEditorWindow';
-import { useEditorColorMode } from '../src/index';
+import { useEditorColorMode, useScopeClassName } from '../src/index';
 
 type Listener = (event: { matches: boolean }) => void;
 
@@ -191,6 +191,30 @@ describe('DocxEditorRoot colorMode', () => {
       media.set(true);
       await nextTick();
       expect(theme()).toBe('dark');
+    } finally {
+      app.unmount();
+      container.remove();
+    }
+  });
+
+  test('useScopeClassName adds dark under a dark Root', async () => {
+    // A Vue setup function, named like a composable so the shared hooks lint rule reads it.
+    function usePartSetup() {
+      const scope = useScopeClassName();
+      return () => h('div', { 'data-testid': 'part', class: `${scope}my-part` });
+    }
+    const Part = defineComponent({ setup: usePartSetup });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      render: () => h(DocxEditorRoot, { colorMode: 'dark' }, { default: () => [h(Part)] }),
+    });
+    app.mount(container);
+    try {
+      await nextTick();
+      expect(container.querySelector('[data-testid="part"]')!.className).toBe(
+        'docx-editor dark my-part'
+      );
     } finally {
       app.unmount();
       container.remove();

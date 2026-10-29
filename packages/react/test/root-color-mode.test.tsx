@@ -13,7 +13,7 @@ import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorToolbar } from '../src/editor/toolbar/index.ts';
 import { DocxEditorMenu } from '../src/editor/menu/index.ts';
 import { DocxEditorWindow } from '../src/editor/DocxEditorWindow.tsx';
-import { useEditorColorMode } from '../src/index.ts';
+import { useEditorColorMode, useScopeClassName } from '../src/index.ts';
 
 type Listener = (event: { matches: boolean }) => void;
 
@@ -157,5 +157,25 @@ describe('DocxEditor.Root colorMode', () => {
     expect(theme(container)).toBe('light');
     act(() => media.set(true));
     expect(theme(container)).toBe('dark');
+  });
+
+  test('useScopeClassName adds dark under a dark Root', () => {
+    function Part() {
+      return <div data-testid="part" className={`${useScopeClassName()}my-part`} />;
+    }
+    const part = (container: HTMLElement) =>
+      container.querySelector('[data-testid="part"]')!.className;
+    const { container, rerender } = render(
+      <DocxEditorRoot>
+        <Part />
+      </DocxEditorRoot>
+    );
+    expect(part(container)).toBe('docx-editor my-part');
+    rerender(
+      <DocxEditorRoot colorMode="dark">
+        <Part />
+      </DocxEditorRoot>
+    );
+    expect(part(container)).toBe('docx-editor dark my-part');
   });
 });

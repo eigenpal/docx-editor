@@ -1,4 +1,4 @@
-// The chrome colour mode a `DocxEditor.Root` declares, for the parts that scope themselves.
+// The chrome color mode a `DocxEditor.Root` declares, for the parts that scope themselves.
 //
 // The dark palette is scoped to `.docx-editor.dark`. `Root` renders no element, so in the
 // composition path each part puts `.docx-editor` on its own root element (see
@@ -6,20 +6,19 @@
 // mode, so a composed toolbar, menu bar, or viewport themes like the packaged editor.
 // The resolution rules live in `lib/colorMode.ts`, shared with `<DocxEditor>`.
 
-import { createContext, useContext, useSyncExternalStore } from 'react';
+import { useContext, useSyncExternalStore } from 'react';
 import {
   prefersColorSchemeDark,
   resolveIsDark,
   subscribeSystemDark,
   type ColorMode,
 } from '../lib/colorMode';
-import { ScopedByAncestorContext } from './scope-context';
+import { ChromeDarkContext, ScopedByAncestorContext } from './scope-context';
 
-/** True when the enclosing `Root` resolved a dark chrome. */
-export const ChromeDarkContext = createContext(false);
+export { ChromeDarkContext };
 
 /**
- * Whether a colour mode is dark right now. `'system'` follows the OS setting and updates
+ * Whether a color mode is dark right now. `'system'` follows the OS setting and updates
  * when it changes; `undefined` is light.
  */
 export function useResolvedDark(colorMode: ColorMode | undefined): boolean {
@@ -64,11 +63,11 @@ export function useChromeScopeClassName(): '' | 'docx-editor ' | 'docx-editor da
 }
 
 /**
- * The colour theme the enclosing editor resolved, as {@link useEditorColorMode} reports it.
+ * The theme the enclosing editor resolved from `colorMode`, never `'system'`, as {@link useEditorColorMode} reports it.
  *
  * @public
  */
-export type EditorColorMode = 'light' | 'dark';
+export type ResolvedColorMode = 'light' | 'dark';
 
 /**
  * What {@link useEditorColorMode} returns.
@@ -77,7 +76,7 @@ export type EditorColorMode = 'light' | 'dark';
  */
 export interface UseEditorColorModeReturn {
   /** The resolved theme: `'dark'` or `'light'`. Re-renders when `colorMode` or the OS setting changes. */
-  readonly colorMode: EditorColorMode;
+  readonly colorMode: ResolvedColorMode;
 }
 
 /**
@@ -97,5 +96,9 @@ export interface UseEditorColorModeReturn {
  * @public
  */
 export function useEditorColorMode(): UseEditorColorModeReturn {
-  return { colorMode: useContext(ChromeDarkContext) ? 'dark' : 'light' };
+  return useContext(ChromeDarkContext) ? DARK : LIGHT;
 }
+
+// One object per theme, so the answer keeps its identity until the theme changes.
+const LIGHT: UseEditorColorModeReturn = Object.freeze({ colorMode: 'light' });
+const DARK: UseEditorColorModeReturn = Object.freeze({ colorMode: 'dark' });

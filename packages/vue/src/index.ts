@@ -44,7 +44,7 @@ export {
 export { useScopeClassName } from './editor/scope-context';
 export {
   useEditorColorMode,
-  type EditorColorMode,
+  type ResolvedColorMode,
   type UseEditorColorModeReturn,
 } from './editor/color-mode-context';
 export { LOADING_SNAPSHOT } from '@docx-editor.dev/core/editor';

@@ -1908,9 +1908,6 @@ export interface EditorCaret {
     readonly paragraphId: string;
 }
 
-// @public
-export type EditorColorMode = 'light' | 'dark';
-
 export { EditorCommand }
 
 // @public
@@ -2744,6 +2741,9 @@ export { RefreshSubmission }
 
 export { RefreshUpdate }
 
+// @public
+export type ResolvedColorMode = 'light' | 'dark';
+
 export { ResolvedRevisionMarkup }
 
 // @public
@@ -3425,7 +3425,7 @@ export function useEditorColorMode(): UseEditorColorModeReturn;
 
 // @public
 export interface UseEditorColorModeReturn {
-    readonly colorMode: EditorColorMode;
+    readonly colorMode: ResolvedColorMode;
 }
 
 // @public
@@ -3675,7 +3675,7 @@ export interface UseRevisionMarkupDialogReturn extends UseDialogReturn<ResolvedR
 }
 
 // @public
-export function useScopeClassName(): '' | 'docx-editor ';
+export function useScopeClassName(): '' | 'docx-editor ' | 'docx-editor dark ';
 
 // @public
 export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTMLElement | null, placement: ScopedChromeAnchorPlacement): ScopedChromeAnchor;

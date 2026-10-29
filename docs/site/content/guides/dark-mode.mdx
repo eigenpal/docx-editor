@@ -122,7 +122,7 @@ A `dark` class on an element outside the editor, such as `html`, does not switch
 
 ### Match your own parts to the editor theme
 
-Parts that you build yourself, such as a side panel or a custom popover, can read the theme that `DocxEditor.Root` resolved. `useEditorColorMode()` returns `{ colorMode }`, where `colorMode` is `'light'` or `'dark'`. With `colorMode="system"`, it follows the operating system setting and updates when that setting changes.
+Parts that you build yourself, such as a side panel or a custom popover, can read the theme that the editor root resolved. `useScopeClassName()` adds `dark` to its class under a dark root, so a part that uses the `--doc-*` tokens follows the theme with no extra code. `useEditorColorMode()` returns `{ colorMode }`, where `colorMode` is `'light'` or `'dark'`. With `colorMode="system"`, it follows the operating system setting and updates when that setting changes.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -150,7 +150,7 @@ const notesClass = computed(() => (colorMode.value === 'dark' ? 'notes notes--da
 </Framework>
 </FrameworkTabs>
 
-Outside the editor root, or when the root has no `colorMode`, the hook returns `'light'`.
+Outside the editor root, or when the root has no `colorMode`, the hook returns `'light'`. The packaged editor with `chrome={false}` draws no chrome and also reports `'light'`; read your own `colorMode` value there. With `'system'`, a server render and the first render in the browser report `'light'`, and the value updates once the editor reads the operating system setting.
 
 ## What dark mode changes
 

@@ -1,4 +1,4 @@
-// The chrome colour mode a `DocxEditorRoot` declares, for the parts that scope themselves.
+// The chrome color mode a `DocxEditorRoot` declares, for the parts that scope themselves.
 //
 // The dark palette is scoped to `.docx-editor.dark`. `Root` renders no element, so in the
 // composition path each part puts `.docx-editor` on its own root element (see
@@ -14,17 +14,15 @@ import {
   ref,
   watch,
   type ComputedRef,
-  type InjectionKey,
   type Ref,
 } from 'vue';
 import { resolveIsDark, subscribeSystemDark, type ColorMode } from '../lib/colorMode';
-import { ScopedByAncestorContext } from './scope-context';
+import { ChromeDarkContext, ScopedByAncestorContext } from './scope-context';
 
-/** True when the enclosing `Root` resolved a dark chrome. */
-export const ChromeDarkContext: InjectionKey<Readonly<Ref<boolean>>> = Symbol('ChromeDarkContext');
+export { ChromeDarkContext };
 
 /**
- * Whether a colour mode is dark right now. `'system'` follows the OS setting and updates
+ * Whether a color mode is dark right now. `'system'` follows the OS setting and updates
  * when it changes; `undefined` is light. Call it in `setup`.
  *
  * The OS setting is read only once mounted: a server render and the first client render are
@@ -63,7 +61,7 @@ export function useChromeDark(): Readonly<Ref<boolean>> {
 /**
  * The scope classes a self-scoping chrome part adds to its root element: `docx-editor`, and
  * `dark` with it under a dark `Root`, or nothing when an ancestor already carries the scope.
- * Call it in `setup` and the returned function while rendering, so a colour-mode change
+ * Call it in `setup` and the returned function while rendering, so a color-mode change
  * re-renders the part. Ends with a space so it concatenates cleanly.
  */
 export function useChromeScopeClassName(): () => '' | 'docx-editor ' | 'docx-editor dark ' {
@@ -76,11 +74,11 @@ export function useChromeScopeClassName(): () => '' | 'docx-editor ' | 'docx-edi
 }
 
 /**
- * The colour theme the enclosing editor resolved, as {@link useEditorColorMode} reports it.
+ * The theme the enclosing editor resolved from `colorMode`, never `'system'`, as {@link useEditorColorMode} reports it.
  *
  * @public
  */
-export type EditorColorMode = 'light' | 'dark';
+export type ResolvedColorMode = 'light' | 'dark';
 
 /**
  * What {@link useEditorColorMode} returns.
@@ -89,7 +87,7 @@ export type EditorColorMode = 'light' | 'dark';
  */
 export interface UseEditorColorModeReturn {
   /** The resolved theme: `'dark'` or `'light'`. Updates when `colorMode` or the OS setting changes. */
-  readonly colorMode: ComputedRef<EditorColorMode>;
+  readonly colorMode: ComputedRef<ResolvedColorMode>;
 }
 
 /**
