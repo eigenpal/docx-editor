@@ -12,6 +12,7 @@ import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorToolbar } from '../src/editor/toolbar/index.ts';
 import { DocxEditorMenu } from '../src/editor/menu/index.ts';
+import { DocxEditorWindow } from '../src/editor/DocxEditorWindow.tsx';
 
 type Listener = (event: { matches: boolean }) => void;
 
@@ -104,5 +105,30 @@ describe('DocxEditor.Root colorMode', () => {
     expect(media.listeners.size).toBeGreaterThan(0);
     rerender(tree('light'));
     expect(media.listeners.size).toBe(0);
+  });
+
+  test("a pop-out window's editor root follows Root's colorMode", async () => {
+    const frame = document.createElement('iframe');
+    document.body.append(frame);
+    const view = frame.contentWindow as Window & typeof globalThis;
+    const original = window.open;
+    window.open = (() => view) as typeof window.open;
+    try {
+      render(
+        <DocxEditorRoot colorMode="dark">
+          <DocxEditorWindow open>
+            <p data-testid="panel">panel</p>
+          </DocxEditorWindow>
+        </DocxEditorRoot>
+      );
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
+      const panel = view.document.querySelector('[data-testid="panel"]');
+      expect(panel?.closest('.docx-editor')?.classList.contains('dark')).toBe(true);
+    } finally {
+      // Unmount while the window still exists; the portal lives in its document.
+      cleanup();
+      window.open = original;
+      frame.remove();
+    }
   });
 });

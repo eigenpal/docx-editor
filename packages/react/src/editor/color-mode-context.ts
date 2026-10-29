@@ -6,7 +6,7 @@
 // mode, so a composed toolbar, menu bar, or viewport themes like the packaged editor.
 // The resolution rules live in `lib/colorMode.ts`, shared with `<DocxEditor>`.
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useSyncExternalStore } from 'react';
 import {
   prefersColorSchemeDark,
   resolveIsDark,
@@ -23,12 +23,27 @@ export const ChromeDarkContext = createContext(false);
  * when it changes; `undefined` is light.
  */
 export function useResolvedDark(colorMode: ColorMode | undefined): boolean {
-  const [systemDark, setSystemDark] = useState(prefersColorSchemeDark);
-  useEffect(() => {
-    if (colorMode !== 'system') return undefined;
-    return subscribeSystemDark(setSystemDark);
-  }, [colorMode]);
+  const following = colorMode === 'system';
+  // The OS setting as an external store: read on the client, light on the server, so a
+  // server-rendered tree hydrates without a mismatch and corrects itself right after.
+  const systemDark = useSyncExternalStore(
+    following ? subscribeToSystemDark : subscribeToNothing,
+    following ? prefersColorSchemeDark : lightSnapshot,
+    lightSnapshot
+  );
   return resolveIsDark(colorMode ?? 'light', systemDark);
+}
+
+function subscribeToSystemDark(onChange: () => void): () => void {
+  return subscribeSystemDark(() => onChange());
+}
+
+function subscribeToNothing(): () => void {
+  return () => {};
+}
+
+function lightSnapshot(): boolean {
+  return false;
 }
 
 /** True when the enclosing `Root` resolved a dark chrome. */

@@ -61,6 +61,8 @@ import {
   collapseOrder,
   TOOLBAR_COLLAPSE_ORDER,
   TOOLBAR_PINNED_GROUPS,
+  toolbarGroupItems,
+  toolbarHostPanelShown,
   toolbarShownCount,
   type ToolbarFitGroup,
 } from '@docx-editor.dev/core/editor';
@@ -448,19 +450,24 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
       // The group's controls in bar order. When the bar runs out of width they leave from the
       // END, one at a time, so the bar keeps a prefix and "⋯" holds the rest, in bar order.
       const items = groupItems(group, overrides);
+      const entryBySlot = new Map<string, DefaultEntry>(
+        group.entries.map((entry) => [entry.slot, entry])
+      );
       const shown = group.pinned
         ? items.length
         : toolbarShownCount(overflow, group.id, items.length);
       const hidden = items.slice(shown);
       if (hidden.length > 0) {
         const rows = hidden.flatMap((item) => {
-          const entry = group.entries.find((candidate) => candidate.slot === item);
+          const entry = entryBySlot.get(item);
           if (!entry) return [];
           const row = overflowRow(entry, overrides, label, group.labelKey, render);
           if (row === null) return [];
           return [<Fragment key={entry.slot}>{row}</Fragment>];
         });
-        const extra = hostPanelShown(group, hidden) ? hostPanelContent(group) : null;
+        const extra = toolbarHostPanelShown(group.extras.length > 0, hidden)
+          ? hostPanelContent(group)
+          : null;
         if (extra !== null) rows.push(<Fragment key="host">{extra}</Fragment>);
         if (rows.length > 0) {
           sections.push({
@@ -487,7 +494,7 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
           {...(group.pinned ? { [FIXED_ATTRIBUTE]: '' } : { [GROUP_ATTRIBUTE]: group.id })}
         >
           {items.slice(0, shown).map((item) => {
-            const entry = group.entries.find((candidate) => candidate.slot === item);
+            const entry = entryBySlot.get(item);
             return (
               <div key={item} className="docx-toolbar__item" {...{ [ITEM_ATTRIBUTE]: item }}>
                 {entry ? render(entry) : group.extras}
@@ -597,30 +604,18 @@ function isHiddenOverride(override: ReactElement | undefined): boolean {
   return Boolean((override.props as { hidden?: boolean }).hidden);
 }
 
-/** The item id of a group's host content, which collapses as one control after the slots. */
-const HOST_ITEM = '\u0000host';
-
 /**
- * A group's collapsible controls, in bar order: its visible slots, then its host content as
- * one control. A slot removed with `hidden` takes no place.
+ * A group's collapsible controls, in bar order (see core's `toolbarGroupItems`). A slot removed
+ * with `hidden` takes no place.
  */
 function groupItems(
   group: ArrangedGroup,
   overrides: ReadonlyMap<ArrangementKey, ReactElement> | undefined
 ): readonly string[] {
-  const items: string[] = group.entries
+  const slots = group.entries
     .filter((entry) => !isHiddenOverride(overrides?.get(entry.slot)))
     .map((entry) => entry.slot);
-  if (group.extras.length > 0) items.push(HOST_ITEM);
-  return items;
-}
-
-/**
- * Whether a group's host panel content shows: when its host content left the bar, or, for a
- * group whose `overflowContent` has no bar content, when any of its controls did.
- */
-function hostPanelShown(group: ArrangedGroup, hidden: readonly string[]): boolean {
-  return group.extras.length > 0 ? hidden.includes(HOST_ITEM) : hidden.length > 0;
+  return toolbarGroupItems(slots, group.extras.length > 0);
 }
 
 type HostGroupHeading = Pick<DocxEditorToolbarGroupProps, 'id' | 'label' | 'labelKey'>;

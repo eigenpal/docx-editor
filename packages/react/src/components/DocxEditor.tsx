@@ -453,8 +453,9 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
         {...(author !== undefined ? { author } : {})}
         {...(locale !== undefined ? { locale } : {})}
         translate={translate}
+        // Resolved once, here: Root takes the answer, so the OS setting has one subscriber.
         // Only with chrome: `chrome={false}` has never themed its bare viewport.
-        {...(chrome ? { colorMode } : {})}
+        {...(chrome ? { colorMode: isDark ? ('dark' as const) : ('light' as const) } : {})}
         mode={mode}
         {...(modules !== undefined ? { modules } : {})}
         {...(zoom !== undefined ? { zoom } : {})}

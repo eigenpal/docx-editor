@@ -1152,9 +1152,6 @@ export interface CollaborationModuleContribution {
 // @internal
 export function collapseOrder(groups: readonly string[], order?: readonly string[], priorities?: ReadonlyMap<string, number>): readonly string[];
 
-// @internal
-export function collapsibleGroupCost(groupWidth: number, separatorLeading: number): number;
-
 // @public
 export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewItem[];
 
@@ -3558,9 +3555,6 @@ export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId, value
 // @internal
 export function sameItemOverflow(a: ToolbarItemOverflow, b: ToolbarItemOverflow): boolean;
 
-// @internal
-export const sameOverflow: typeof sameIds;
-
 // @public
 export function sameTabStops(a: readonly ParagraphTabStop[], b: readonly ParagraphTabStop[]): boolean;
 
@@ -4146,6 +4140,12 @@ export function toEditorFontError(error: unknown): EditorFontError;
 export const TOOLBAR_COLLAPSE_ORDER: readonly string[];
 
 // @internal
+export const TOOLBAR_HOST_ITEM = "host-content";
+
+// @internal
+export const TOOLBAR_ITEM_ATTRIBUTE = "data-toolbar-item";
+
+// @internal
 export const TOOLBAR_OVERFLOW_HYSTERESIS = 24;
 
 // @internal
@@ -4178,20 +4178,13 @@ export interface ToolbarFitGroup {
 }
 
 // @internal
-export interface ToolbarFitInput {
-    readonly available: number;
-    readonly fixed: number;
-    readonly groups: readonly string[];
-    // (undocumented)
-    readonly hysteresis?: number;
-    readonly more: number;
-    readonly order: readonly string[];
-    readonly previous?: ReadonlySet<string> | undefined;
-    readonly widths: ReadonlyMap<string, number>;
-}
+export function toolbarGroupItems(slots: readonly string[], hasHostContent: boolean): string[];
 
 // @internal
 export function toolbarGroupPriority(id: string, order?: readonly string[]): number | undefined;
+
+// @internal
+export function toolbarGroupsKey(groups: readonly ToolbarFitGroup[]): string;
 
 // @internal
 export interface ToolbarHostGroupPlacement {
@@ -4201,11 +4194,15 @@ export interface ToolbarHostGroupPlacement {
 }
 
 // @internal
+export function toolbarHostPanelShown(hasHostContent: boolean, hidden: readonly string[]): boolean;
+
+// @internal
 export interface ToolbarItemFitInput {
     readonly available: number;
     readonly fixed: number;
     readonly gap: number;
     readonly groupBases: ReadonlyMap<string, number>;
+    readonly groupGaps?: ReadonlyMap<string, number>;
     readonly groups: readonly ToolbarFitGroup[];
     readonly hysteresis?: number;
     readonly itemWidths: ReadonlyMap<string, number>;
@@ -4219,9 +4216,6 @@ export function toolbarItemKey(groupId: string, itemId: string): string;
 
 // @internal
 export type ToolbarItemOverflow = ReadonlyMap<string, number>;
-
-// @internal
-export function toolbarOverflowGroups(input: ToolbarFitInput): ReadonlySet<string>;
 
 // @internal
 export function toolbarOverflowItems(input: ToolbarItemFitInput): ToolbarItemOverflow;
@@ -4253,6 +4247,7 @@ export function toolbarPopupLeft(input: {
 // @internal
 export interface ToolbarRowMemory {
     readonly groupBases: Map<string, number>;
+    readonly groupGaps: Map<string, number>;
     readonly itemWidths: Map<string, number>;
     more: number;
 }
@@ -4263,6 +4258,7 @@ export interface ToolbarRowReading {
     readonly fixed: number;
     readonly gap: number;
     readonly more: number;
+    readonly overflowing: boolean | null;
 }
 
 // @internal

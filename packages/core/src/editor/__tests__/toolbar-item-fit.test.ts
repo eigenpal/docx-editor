@@ -151,6 +151,61 @@ describe('toolbarOverflowItems', () => {
     const narrower = fit(190, { previous: narrow });
     expect(narrower.get('text')).toBeGreaterThan(1);
   });
+
+  test('a previous answer that names a group which left keeps nothing hidden', () => {
+    // A contextual table group was in the menu; the caret left the table, so it is gone.
+    // With 8 px to spare nothing collapses, slack or not.
+    const previous = new Map([
+      ['table', 1],
+      ['zoom', 1],
+    ]);
+    expect(fit(FULL + 8, { previous }).size).toBe(0);
+  });
+
+  test('the slack never hides more than the previous answer did', () => {
+    // The previous answer hid one text control. At full width the strict fit hides nothing,
+    // and the fit at width minus the slack would hide more than one control. The previous
+    // answer no longer fits either (it needs the trigger), so the strict answer wins.
+    const previous = new Map([['text', 1]]);
+    expect(fit(FULL, { previous }).size).toBe(0);
+  });
+});
+
+describe('toolbarOverflowItems with uneven controls', () => {
+  /** One group, three controls, the middle one drawing nothing. */
+  function fitOne(available: number, gaps?: ReadonlyMap<string, number>): ToolbarItemOverflow {
+    const widths = new Map([
+      [toolbarItemKey('g', 'a'), 30],
+      [toolbarItemKey('g', 'empty'), 0],
+      [toolbarItemKey('g', 'b'), 30],
+    ]);
+    return toolbarOverflowItems({
+      available,
+      groups: [{ id: 'g', items: ['a', 'empty', 'b'] }],
+      order: ['g'],
+      itemWidths: widths,
+      groupBases: new Map([['g', 0]]),
+      gap: 10,
+      ...(gaps ? { groupGaps: gaps } : {}),
+      fixed: 0,
+      more: 20,
+    });
+  }
+
+  test('a control that draws nothing takes no gap and is never hidden alone', () => {
+    // a + b + one gap = 70 fits; the empty control adds nothing.
+    expect(fitOne(70).size).toBe(0);
+    // 1 px short: b leaves. The empty control stays, drawing nothing; it never costs a step.
+    expect(fitOne(69).get('g')).toBe(1);
+    // Hiding b frees its width and its gap: a alone plus the trigger is 50.
+    expect(fitOne(50).get('g')).toBe(1);
+  });
+
+  test("a group's own gap counts instead of the bar's", () => {
+    // With a 2 px group gap, a + b cost 62, so 62 fits where the bar's 10 px gap would not.
+    expect(fitOne(62, new Map([['g', 2]])).size).toBe(0);
+    expect(fitOne(62).size).toBe(1);
+  });
 });
 
 describe('sameItemOverflow', () => {

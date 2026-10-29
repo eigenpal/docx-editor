@@ -12,6 +12,7 @@
 // after flex content with margin-inline-start: auto, not after a rule.
 
 import { hostWindowOf, isElementNode } from './host-realm.ts';
+import { TOOLBAR_ITEM_ATTRIBUTE } from './toolbar-item-fit.ts';
 
 /**
  * Leading separator slot cost for one collapsible group (px).
@@ -25,15 +26,6 @@ export function separatorLeadingCost(
   gap: number
 ): number {
   return separatorWidth + marginInlineStart + marginInlineEnd + gap * 2;
-}
-
-/**
- * Total width charged for one collapsible group on the bar.
- *
- * @internal
- */
-export function collapsibleGroupCost(groupWidth: number, separatorLeading: number): number {
-  return groupWidth + separatorLeading;
 }
 
 /**
@@ -380,42 +372,65 @@ export function readAvailableWidth(bar: HTMLElement, style: CSSStyleDeclaration)
  * @internal
  */
 export interface ToolbarRowMemory {
-  /** `toolbarItemKey(group, item)` -> width, in px. */
+  /** `toolbarItemKey(group, item)` -> width, in layout px. */
   readonly itemWidths: Map<string, number>;
-  /** Group id -> separator slot plus the group's own padding, in px. */
+  /** Group id -> separator slot plus the group's own padding, in layout px. */
   readonly groupBases: Map<string, number>;
-  /** The "⋯" trigger's cost, in px. Seed it with an assumed width. */
+  /** Group id -> the flex gap between that group's controls, in layout px. */
+  readonly groupGaps: Map<string, number>;
+  /** The "⋯" trigger's cost, in layout px. Seed it with an assumed width. */
   more: number;
 }
 
 /**
- * One measurement of the bar, for the item fit.
+ * One measurement of the bar, for the item fit. Every width is in layout px, the unit of
+ * `clientWidth`, so a bar inside a scaled container compares like with like.
  *
  * @internal
  */
 export interface ToolbarRowReading {
-  /** The content width the bar can take, in px. */
+  /** The content width the bar can take. */
   readonly available: number;
-  /** The bar's flex gap, in px. */
+  /** The bar's flex gap. */
   readonly gap: number;
-  /** Width of everything that never collapses, in px. */
+  /** Width of everything that never collapses. */
   readonly fixed: number;
-  /** The "⋯" trigger's cost, in px. */
+  /** The "⋯" trigger's cost. */
   readonly more: number;
+  /** {@link controlsOverflow} for this reading: true, false, or null without layout. */
+  readonly overflowing: boolean | null;
 }
 
-/** Marks one control of a collapsible group; the value is the control id. */
-const ITEM_ATTRIBUTE = 'data-toolbar-item';
-
 /**
- * A box width with its fraction kept: rounded widths add up to a bar that clips. Falls back
- * to the layout width where the box reports none.
+ * Converts box widths to layout px. `getBoundingClientRect` reports transformed widths (a
+ * scaled container shrinks them) with their fraction; `offsetWidth` reports layout px rounded.
+ * The bar's own two widths give the ratio, so a control keeps its fraction in layout px.
  */
-function boxWidth(element: Element): number {
-  const width = element.getBoundingClientRect().width;
-  if (width > 0) return width;
+function layoutScale(bar: HTMLElement): number {
+  const box = bar.getBoundingClientRect().width;
+  return box > 0 && bar.offsetWidth > 0 ? bar.offsetWidth / box : 1;
+}
+
+function layoutWidth(element: Element, scale: number): number {
+  const box = element.getBoundingClientRect().width;
+  if (box > 0) return box * scale;
   const offset = (element as HTMLElement).offsetWidth;
   return typeof offset === 'number' && offset > 0 ? offset : 0;
+}
+
+/** True when an item draws something: an element, or text that is not only white space. */
+function drawsSomething(item: Element): boolean {
+  if (item.children.length > 0) return true;
+  for (const node of item.childNodes) {
+    if (node.nodeType === 3 && (node.textContent ?? '').trim().length > 0) return true;
+  }
+  return false;
+}
+
+/** A group's own flex gap, or the bar's when the group does not set one in px. */
+function groupGap(view: ReturnType<typeof hostWindowOf>, group: Element, fallback: number): number {
+  const value = view.getComputedStyle(group).columnGap.trim();
+  return /^-?[\d.]+px$/.test(value) ? Number.parseFloat(value) : fallback;
 }
 
 /**
@@ -425,7 +440,7 @@ function boxWidth(element: Element): number {
  * `[data-toolbar-item]` children are its controls, stored under `itemKey(group, item)`. A
  * group with no item children (the contextual table block) is one control whose id is the
  * group id. `[data-toolbar-fixed]` elements never collapse, and `[data-toolbar-more]` is the
- * trigger.
+ * trigger. An item that draws nothing is stored as 0 wide: it takes no room, now or later.
  *
  * Every group is charged a leading separator slot, the first one included. That overstates
  * the row by one separator, so the bar collapses a few px early: the safe direction.
@@ -441,56 +456,64 @@ export function readToolbarRow(
   const style = view.getComputedStyle(bar);
   const gap = readColumnGap(style);
   const available = readAvailableWidth(bar, style);
+  const scale = layoutScale(bar);
   const separator = bar.querySelector<HTMLElement>('.docx-toolbar__separator');
   let separatorLeading = gap * 2;
   if (separator) {
     const margins = readInlineMargins(view.getComputedStyle(separator));
-    separatorLeading = separatorLeadingCost(separator.offsetWidth, margins.start, margins.end, gap);
+    separatorLeading = separatorLeadingCost(
+      layoutWidth(separator, scale),
+      margins.start,
+      margins.end,
+      gap
+    );
   }
 
   for (const group of bar.querySelectorAll<HTMLElement>('[data-toolbar-group]')) {
     const id = group.getAttribute('data-toolbar-group');
     // A group mid-transition can measure zero; keeping the last real width beats recording a
     // zero that would make it look free forever.
-    const width = boxWidth(group);
+    const width = layoutWidth(group, scale);
     if (!id || !(width > 0)) continue;
     const items: Element[] = [];
     for (const child of group.children) {
-      if (child.hasAttribute(ITEM_ATTRIBUTE)) items.push(child);
+      if (child.hasAttribute(TOOLBAR_ITEM_ATTRIBUTE)) items.push(child);
     }
     if (items.length === 0) {
       memory.itemWidths.set(itemKey(id, id), width);
       memory.groupBases.set(id, separatorLeading);
       continue;
     }
+    const ownGap = groupGap(view, group, gap);
+    memory.groupGaps.set(id, ownGap);
     let content = 0;
     let shown = 0;
     for (const item of items) {
-      const itemId = item.getAttribute(ITEM_ATTRIBUTE) ?? '';
-      const itemWidth = boxWidth(item);
-      if (itemWidth > 0) {
-        memory.itemWidths.set(itemKey(id, itemId), itemWidth);
-        content += itemWidth;
-        shown += 1;
-      } else if (item.childNodes.length === 0) {
-        // Nothing to draw (a part that rendered null): it takes no room, now or later.
+      const itemId = item.getAttribute(TOOLBAR_ITEM_ATTRIBUTE) ?? '';
+      if (!drawsSomething(item)) {
         memory.itemWidths.set(itemKey(id, itemId), 0);
+        continue;
       }
+      const itemWidth = layoutWidth(item, scale);
+      if (!(itemWidth > 0)) continue;
+      memory.itemWidths.set(itemKey(id, itemId), itemWidth);
+      content += itemWidth;
+      shown += 1;
     }
-    const own = Math.max(0, width - content - Math.max(0, shown - 1) * gap);
+    const own = Math.max(0, width - content - Math.max(0, shown - 1) * ownGap);
     memory.groupBases.set(id, separatorLeading + own);
   }
 
   let fixed = 0;
   for (const element of bar.querySelectorAll<HTMLElement>('[data-toolbar-fixed]')) {
-    const width = boxWidth(element);
+    const width = layoutWidth(element, scale);
     if (width > 0) fixed += trailingGapCost(width, gap);
   }
   const more = bar.querySelector<HTMLElement>('[data-toolbar-more]');
   // More follows flex content; it is not preceded by a separator rule.
   if (more) {
-    const width = boxWidth(more);
+    const width = layoutWidth(more, scale);
     if (width > 0) memory.more = trailingGapCost(width, gap);
   }
-  return { available, gap, fixed, more: memory.more };
+  return { available, gap, fixed, more: memory.more, overflowing: controlsOverflow(bar, style) };
 }

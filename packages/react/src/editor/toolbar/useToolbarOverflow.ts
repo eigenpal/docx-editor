@@ -16,11 +16,12 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  controlsOverflow,
   hostWindowOf,
   readToolbarRow,
   sameItemOverflow,
   TOOLBAR_OVERFLOW_HYSTERESIS,
+  TOOLBAR_ITEM_ATTRIBUTE,
+  toolbarGroupsKey,
   toolbarItemKey,
   toolbarOverflowItems,
   type ToolbarFitGroup,
@@ -31,7 +32,7 @@ import {
 /** Marks a collapsible group wrapper; the value is the group id. */
 export const GROUP_ATTRIBUTE = 'data-toolbar-group';
 /** Marks one control of a collapsible group; the value is the control id. */
-export const ITEM_ATTRIBUTE = 'data-toolbar-item';
+export const ITEM_ATTRIBUTE = TOOLBAR_ITEM_ATTRIBUTE;
 /** Marks anything that stays in the bar at every width (pinned groups, host children). */
 export const FIXED_ATTRIBUTE = 'data-toolbar-fixed';
 /** Marks the "⋯" trigger. */
@@ -41,11 +42,6 @@ export const MORE_ATTRIBUTE = 'data-toolbar-more';
 const ASSUMED_MORE_WIDTH = 34;
 
 const NONE: ToolbarItemOverflow = new Map<string, number>();
-
-/** A stable key for a list of groups, so a fresh array literal does not re-measure. */
-export function toolbarGroupsKey(groups: readonly ToolbarFitGroup[]): string {
-  return groups.map((group) => [group.id, ...group.items].join('\u0001')).join('\u0000');
-}
 
 export interface UseToolbarOverflowResult {
   /** Attach to the bar element. */
@@ -70,6 +66,7 @@ export function useToolbarOverflow(
   const memory = useRef<ToolbarRowMemory>({
     itemWidths: new Map(),
     groupBases: new Map(),
+    groupGaps: new Map(),
     more: ASSUMED_MORE_WIDTH,
   });
   const [overflow, setOverflow] = useState<ToolbarItemOverflow>(NONE);
@@ -92,8 +89,7 @@ export function useToolbarOverflow(
     // control then shrinks that bar and the next measurement collapses another, until every
     // control is in "⋯". So the first collapse waits for a control that really runs past the
     // bar's box. Without layout to read (null), the arithmetic decides alone.
-    const style = hostWindowOf(bar).getComputedStyle(bar);
-    const fits = overflowRef.current.size === 0 && controlsOverflow(bar, style) === false;
+    const fits = overflowRef.current.size === 0 && reading.overflowing === false;
     const next = fits
       ? NONE
       : toolbarOverflowItems({
@@ -102,6 +98,7 @@ export function useToolbarOverflow(
           order: inputs.current.order,
           itemWidths: memory.current.itemWidths,
           groupBases: memory.current.groupBases,
+          groupGaps: memory.current.groupGaps,
           previous: overflowRef.current,
           hysteresis: TOOLBAR_OVERFLOW_HYSTERESIS,
         });

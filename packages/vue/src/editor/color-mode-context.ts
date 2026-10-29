@@ -10,18 +10,14 @@ import {
   computed,
   inject,
   onBeforeUnmount,
+  onMounted,
   ref,
   watch,
   type ComputedRef,
   type InjectionKey,
   type Ref,
 } from 'vue';
-import {
-  prefersColorSchemeDark,
-  resolveIsDark,
-  subscribeSystemDark,
-  type ColorMode,
-} from '../lib/colorMode';
+import { resolveIsDark, subscribeSystemDark, type ColorMode } from '../lib/colorMode';
 import { ScopedByAncestorContext } from './scope-context';
 
 /** True when the enclosing `Root` resolved a dark chrome. */
@@ -30,23 +26,31 @@ export const ChromeDarkContext: InjectionKey<Readonly<Ref<boolean>>> = Symbol('C
 /**
  * Whether a colour mode is dark right now. `'system'` follows the OS setting and updates
  * when it changes; `undefined` is light. Call it in `setup`.
+ *
+ * The OS setting is read only once mounted: a server render and the first client render are
+ * both light for `'system'`, so hydration matches, and the mounted component corrects itself.
  */
 export function useResolvedDark(colorMode: () => ColorMode | undefined): ComputedRef<boolean> {
-  const systemDark = ref(prefersColorSchemeDark());
+  const systemDark = ref(false);
   let unsubscribe: (() => void) | undefined;
-  watch(
-    colorMode,
-    (mode) => {
-      unsubscribe?.();
-      unsubscribe = undefined;
-      if (mode === 'system') {
-        unsubscribe = subscribeSystemDark((dark) => {
-          systemDark.value = dark;
-        });
-      }
-    },
-    { immediate: true }
-  );
+  const follow = (mode: ColorMode | undefined) => {
+    unsubscribe?.();
+    unsubscribe = undefined;
+    if (mode === 'system') {
+      // Reports the current value at once, then every change.
+      unsubscribe = subscribeSystemDark((dark) => {
+        systemDark.value = dark;
+      });
+    }
+  };
+  let mounted = false;
+  watch(colorMode, (mode) => {
+    if (mounted) follow(mode);
+  });
+  onMounted(() => {
+    mounted = true;
+    follow(colorMode());
+  });
   onBeforeUnmount(() => unsubscribe?.());
   return computed(() => resolveIsDark(colorMode() ?? 'light', systemDark.value));
 }

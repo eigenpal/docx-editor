@@ -8,6 +8,7 @@ import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
 import { DocxEditorToolbar } from '../src/editor/toolbar';
 import { DocxEditorMenu } from '../src/editor/menu';
+import { DocxEditorWindow } from '../src/editor/DocxEditorWindow';
 
 type Listener = (event: { matches: boolean }) => void;
 
@@ -118,5 +119,44 @@ describe('DocxEditorRoot colorMode', () => {
     await nextTick();
     expect(media.listeners.size).toBe(0);
     view.unmount();
+  });
+
+  test("a pop-out window's editor root follows Root's colorMode", async () => {
+    const frame = document.createElement('iframe');
+    document.body.append(frame);
+    const view = frame.contentWindow as Window & typeof globalThis;
+    view.close = () => {};
+    const original = window.open;
+    window.open = (() => view) as typeof window.open;
+    const host = document.createElement('div');
+    document.body.append(host);
+    const app = createApp({
+      setup: () => () =>
+        h(
+          DocxEditorRoot,
+          { colorMode: 'dark' },
+          {
+            default: () =>
+              h(
+                DocxEditorWindow,
+                { open: true },
+                { default: () => h('p', { 'data-testid': 'panel' }, 'panel') }
+              ),
+          }
+        ),
+    });
+    try {
+      app.mount(host);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await nextTick();
+      const panel = view.document.querySelector('[data-testid="panel"]');
+      expect(panel?.closest('.docx-editor')?.classList.contains('dark')).toBe(true);
+    } finally {
+      // Unmount while the window still exists; the teleport lives in its document.
+      app.unmount();
+      host.remove();
+      frame.remove();
+      window.open = original;
+    }
   });
 });

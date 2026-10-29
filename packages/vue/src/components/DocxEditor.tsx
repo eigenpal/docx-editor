@@ -515,8 +515,9 @@ const DocxEditorFrame = defineComponent({
           ...(props.locale !== undefined ? { locale: props.locale } : {}),
           popups: createPackagedPopups(props.popups, hyperlinkPopup.value, contextMenu.value, t),
           translate: t,
+          // Resolved once, here: Root takes the answer, so the OS setting has one subscriber.
           // Only with chrome: `chrome={false}` has never themed its bare viewport.
-          ...(chrome.value ? { colorMode: props.colorMode } : {}),
+          ...(chrome.value ? { colorMode: isDark.value ? 'dark' : 'light' } : {}),
           ...(props.mode !== undefined ? { mode: props.mode } : { mode: 'edit' }),
           ...(props.modules !== undefined ? { modules: props.modules } : {}),
           ...(props.zoom !== undefined ? { zoom: props.zoom } : {}),

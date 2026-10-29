@@ -15,6 +15,7 @@ import {
 import { openEditorWindow, type EditorWindow } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useTranslation } from '../i18n';
+import { useChromeDark } from './color-mode-context';
 
 /** Props for `DocxEditorWindow`. @public */
 export interface DocxEditorWindowProps {
@@ -82,6 +83,7 @@ export const DocxEditorWindow = defineComponent({
     close: () => true,
   },
   setup(props, { slots, emit }) {
+    const dark = useChromeDark();
     const popup = shallowRef<EditorWindow | null>(null);
     let generation = 0;
 
@@ -145,7 +147,7 @@ export const DocxEditorWindow = defineComponent({
             h(
               'div',
               {
-                class: 'docx-editor',
+                class: `docx-editor${dark.value ? ' dark' : ''}`,
                 style: { height: '100%' },
                 dir: translation.dir,
               },
