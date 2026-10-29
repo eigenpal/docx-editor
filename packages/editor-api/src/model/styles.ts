@@ -29,7 +29,7 @@ import {
   type RequestContext,
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
-import { collectionItemSelection } from './item-collection.ts';
+import { CollectionLoads, collectionItemSelection } from './item-collection.ts';
 import { ModelObject } from './model-object.ts';
 
 /** The kind of a style. @public */
@@ -187,7 +187,11 @@ export class Style extends ModelObject {
     return this.loadedProperty<string>('nextParagraphStyle');
   }
 
-  /** Whether the style is linked to another listed style. */
+  /**
+   * Whether the style is linked to its partner: a paragraph style to a listed character style, or a
+   * character style to a listed paragraph style. Other kinds, and links to the same kind or to
+   * itself, read false.
+   */
   get linked(): boolean {
     return this.loadedProperty<boolean>('linked');
   }
@@ -276,6 +280,9 @@ export class Style extends ModelObject {
  * @public
  */
 export class StyleCollection extends ModelObject {
+  /** Loads queued in the current sync, which a repeated load joins. */
+  readonly #loads = new CollectionLoads();
+
   /** @internal The styles of the document `owner` names. */
   static of(context: RequestContext, label: string, owner: ObjectPath): StyleCollection {
     return new StyleCollection(context, ObjectPath.derived(label, owner));
@@ -343,21 +350,28 @@ export class StyleCollection extends ModelObject {
         : PROPERTIES;
     const skip = request.skip ?? 0;
     const top = request.top;
-    this.read(
+    // A repeated load in the same sync joins this one, so one listing answers every selection.
+    if (this.#loads.join(itemSelect, skip, top, false)) return;
+    const { load, release } = this.#loads.open(itemSelect, skip, top, false);
+    this.enqueue({
+      sort: 'read',
       label,
-      () => ({ op: 'getStyles' }),
-      (value) => {
+      capture: release,
+      dispose: release,
+      plan: () => ({ op: 'getStyles' }),
+      settle: (value) => {
         const styles = hydratedStyles(value, label);
+        const names = [...load.names];
         const last = top === undefined ? styles.length : Math.min(styles.length, skip + top);
         const items: Style[] = [];
         for (let index = skip; index < last; index += 1) {
           const style = styles[index]!;
           const item = Style.listed(this.context, `${label}[${String(index)}]`, this.path, style);
-          item.hydrateProperties(style, itemSelect);
+          item.hydrateProperties(style, names);
           items.push(item);
         }
         this.setLoadedProperty('items', Object.freeze(items));
-      }
-    );
+      },
+    });
   }
 }

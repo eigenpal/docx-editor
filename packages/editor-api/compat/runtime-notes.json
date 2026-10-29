@@ -853,7 +853,7 @@
   },
   "Word.Style#linked": {
     "status": "partial",
-    "notes": "True when w:link names a listed style."
+    "notes": "True when w:link pairs a paragraph style with a listed character style, or a character style with a listed paragraph style. Table and numbering styles, links to a style of the same type, and links to the style itself read false."
   },
   "Word.Style#baseStyle": {
     "status": "partial",

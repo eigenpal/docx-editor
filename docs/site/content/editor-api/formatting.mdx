@@ -166,13 +166,13 @@ A `Style` exposes these read-only properties:
 - `builtIn`: `false` when the style states `w:customStyle`.
 - `baseStyle`: the name of the `w:basedOn` style when it is a listed style of the same type. Otherwise it is an empty string.
 - `nextParagraphStyle`: the name of the `w:next` style when it is a listed paragraph style. A paragraph style that states no `w:next` names itself. It is an empty string for other types, and if `w:next` names anything but a listed paragraph style.
-- `linked`: `true` when `w:link` names a listed style.
+- `linked`: `true` when `w:link` pairs a paragraph style with a listed character style, or a character style with a listed paragraph style.
 - `visibility`: `false` when the style states `w:semiHidden` or `w:hidden`. Otherwise `true`.
 - `priority`: the `w:uiPriority` value, or 99 if the style states none. Lower values come first in the gallery.
 - `quickStyle`: `true` when the style states `w:qFormat`.
 - `unhideWhenUsed`: `true` when the style states `w:unhideWhenUsed`.
 
-The list follows the order of `styles.xml`. It leaves out styles that have no `w:name`, an empty or invalid name, a later duplicate name of the same kind, or no recognized `w:type`. A document with no styles part lists no styles. Style definitions are read-only: the API does not add, delete, or change styles, and `Style` has no `font` or `paragraphFormat`.
+The list follows the order of `styles.xml` and reads each style the way the page does. If two definitions share a `w:styleId`, the last one counts. Only the first 4096 `w:style` definitions count, and names longer than 128 characters are not read. It leaves out styles that have no `w:name`, an empty or invalid name, a later duplicate name of the same kind, or no recognized `w:type`. A document with no styles part lists no styles. Style definitions are read-only: the API does not add, delete, or change styles, and `Style` has no `font` or `paragraphFormat`.
 
 `Table.style` is separate. It accepts the `nameLocal` of a listed style whose `type` is `Table`. See [Tables and cells](/docs/2.x/editor-api/tables).
 

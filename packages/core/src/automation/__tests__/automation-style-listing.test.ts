@@ -16,8 +16,8 @@ const STYLES =
   '<w:uiPriority w:val="0"/><w:qFormat/></w:style>' +
   '<w:style w:type="character" w:styleId="QuoteChar"><w:name w:val="Quote"/></w:style>' +
   '<w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/>' +
-  // Duplicated children: the last one wins, as the store index reads `w:basedOn`.
-  '<w:basedOn w:val="Missing"/><w:basedOn w:val="Normal"/>' +
+  // Duplicated children: the first one wins, as layout reads `w:basedOn`.
+  '<w:basedOn w:val="Normal"/><w:basedOn w:val="Missing"/>' +
   // A next style the listing leaves out answers no name.
   '<w:next w:val="Nameless"/><w:semiHidden/><w:unhideWhenUsed w:val="true"/></w:style>' +
   '<w:style w:type="paragraph" w:styleId="Nameless"/>' +
@@ -154,5 +154,48 @@ describe('getStyles', () => {
       ],
     });
     expect(applied.ok).toBe(true);
+  });
+
+  test('links only a paragraph style with a character style', () => {
+    const host = open(
+      docx(
+        p('one'),
+        '<w:style w:type="paragraph" w:styleId="H1"><w:name w:val="heading 1"/><w:link w:val="H1Char"/></w:style>' +
+          '<w:style w:type="character" w:styleId="H1Char"><w:name w:val="Heading 1 Char"/><w:link w:val="H1"/></w:style>' +
+          '<w:style w:type="paragraph" w:styleId="Same"><w:name w:val="Same"/><w:link w:val="H1"/></w:style>' +
+          '<w:style w:type="paragraph" w:styleId="Self"><w:name w:val="Self"/><w:link w:val="Self"/></w:style>' +
+          '<w:style w:type="table" w:styleId="Grid"><w:name w:val="Grid"/><w:link w:val="H1Char"/></w:style>'
+      )
+    );
+    const [styles] = answers(host, [LIST]);
+    expect(styles!.map((style) => [style.id, style.linked])).toEqual([
+      ['H1', true],
+      ['H1Char', true],
+      ['Same', false],
+      ['Self', false],
+      ['Grid', false],
+    ]);
+  });
+
+  test('a repeated style id resolves to its last definition, as layout resolves it', () => {
+    const host = open(
+      docx(
+        p('one'),
+        '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
+          '<w:style w:type="paragraph" w:styleId="Dup"><w:name w:val="Dup Paragraph"/></w:style>' +
+          '<w:style w:type="character" w:styleId="Dup"><w:name w:val="Dup Character"/></w:style>'
+      )
+    );
+    const [styles] = answers(host, [LIST]);
+    expect(styles!.map((style) => [style.id, style.name, style.type])).toEqual([
+      ['Normal', 'Normal', 'paragraph'],
+      ['Dup', 'Dup Character', 'character'],
+    ]);
+    const [paragraph] = paragraphsOf(host, roots(host).body);
+    // The paragraph definition lost its id, so the setter no longer knows its name.
+    const refusedWrite = host.execute({
+      operations: [{ op: 'setStyle', span: { paragraph: paragraph! }, name: 'Dup Paragraph' }],
+    });
+    expect(refusedWrite.ok).toBe(false);
   });
 });

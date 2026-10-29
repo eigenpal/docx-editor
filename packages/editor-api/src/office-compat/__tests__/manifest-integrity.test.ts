@@ -96,6 +96,26 @@ describe('validateManifestAgainstReference', () => {
   });
 });
 
+describe('class-level omissions', () => {
+  test('flags a class-level omission whose class is a selected symbol', () => {
+    const manifest = makeManifest({
+      symbols: { Body: { members: ['text'] } },
+      omissions: [{ uid: 'Word.Body', reason: 'stale: the class is selected now' }],
+    });
+    const issues = validateManifestAgainstReference(manifest, makeReferenceFixture());
+    expect(issues.some((i) => /"Word\.Body"/.test(i) && /whole class/.test(i))).toBe(true);
+  });
+
+  test('accepts a class-level omission for a class that is not selected', () => {
+    const manifest = makeManifest({
+      symbols: { Body: { members: ['text'] } },
+      omissions: [{ uid: 'Word.Shape', reason: 'deferred' }],
+    });
+    const issues = validateManifestAgainstReference(manifest, makeReferenceFixture());
+    expect(issues.some((i) => /whole class/.test(i))).toBe(false);
+  });
+});
+
 describe('validateManifestSchemaVersion', () => {
   test('flags a missing schemaVersion field', () => {
     const issues = validateManifestSchemaVersion({});

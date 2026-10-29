@@ -9,7 +9,7 @@ import {
   planBookmarks,
   withEnclosedBookmarkDrops,
 } from './plan-bookmarks.ts';
-import { planPackageOperation } from './plan-package-reads.ts';
+import { planPackageOperation } from './plan-package-operations.ts';
 import { referencedNoteIds } from './note-references.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';

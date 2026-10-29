@@ -50,6 +50,63 @@ export function collectionItemSelection(request: ResolvedLoadOptions): readonly 
   ];
 }
 
+/** One collection load queued in the current sync, which later loads in that sync can join. */
+export interface QueuedCollectionLoad {
+  /** The item properties every joined load asked for. Read when the listing answers. */
+  readonly names: Set<string>;
+  readonly skip: number;
+  readonly top: number | undefined;
+  /** Whether the queued read was marked as queueing item reads for the same sync. */
+  readonly continues: boolean;
+}
+
+/**
+ * The loads one collection has queued in the current sync.
+ *
+ * REPEATED LOADS ACCUMULATE. `load('items/text'); load('items/style'); sync()` must leave both
+ * readable, so a second load with the same window joins the first: one listing answers both, with
+ * every named property. A load that cannot join (another window, or item reads the queued one was
+ * not marked for) queues its own read, carrying the names asked for so far, so the answer that
+ * settles last still has all of them. A load stops accepting joins once a sync takes it.
+ */
+export class CollectionLoads {
+  #open: QueuedCollectionLoad | undefined;
+
+  /** The queued load this one joined, or undefined when a new read has to be queued. */
+  join(
+    names: readonly string[],
+    skip: number,
+    top: number | undefined,
+    continues: boolean
+  ): QueuedCollectionLoad | undefined {
+    const open = this.#open;
+    if (!open || open.skip !== skip || open.top !== top || (continues && !open.continues))
+      return undefined;
+    for (const name of names) open.names.add(name);
+    return open;
+  }
+
+  /** Start a load a read is about to be queued for; `release` ends its joining window. */
+  open(
+    names: readonly string[],
+    skip: number,
+    top: number | undefined,
+    continues: boolean
+  ): { readonly load: QueuedCollectionLoad; readonly release: () => void } {
+    const earlier = this.#open;
+    const load: QueuedCollectionLoad = { names: new Set(names), skip, top, continues };
+    if (earlier && earlier.skip === skip && earlier.top === top)
+      for (const name of earlier.names) load.names.add(name);
+    this.#open = load;
+    return {
+      load,
+      release: () => {
+        if (this.#open === load) this.#open = undefined;
+      },
+    };
+  }
+}
+
 /** What a promised member is told once the read that looked for it has answered. */
 export interface PromisedItem {
   /** @internal The member was there, at this address. */
@@ -76,6 +133,8 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
   #answer: { readonly value: AutomationValue; readonly label: string } | undefined;
   /** Edges asked for BEFORE that answer arrived. */
   readonly #pending: PendingEdge[] = [];
+  /** Loads queued in the current sync, which a repeated load joins. */
+  readonly #loads = new CollectionLoads();
 
   protected constructor(context: RequestContext, path: ObjectPath) {
     super(context, path);
@@ -159,10 +218,16 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
       if (itemSelect.length > 0) for (const item of members) item.load(itemSelect);
       return;
     }
+    const continues = itemSelect.length > 0;
+    // A second load in the same sync joins the first: one listing, every named property.
+    if (this.#loads.join(itemSelect, skip, top, continues)) return;
+    const { load, release } = this.#loads.open(itemSelect, skip, top, continues);
     this.enqueue({
       sort: 'read',
       label,
-      ...(itemSelect.length > 0 ? { continues: true } : {}),
+      ...(continues ? { continues: true } : {}),
+      capture: release,
+      dispose: release,
       plan: () => {
         const resolved = listing ?? this.listing();
         if (!resolved) fail({ code: 'InvalidObjectPath', target: this.path.label });
@@ -171,9 +236,10 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
       settle: (value) => {
         const members = this.#members(value, label, skip, top);
         this.setLoadedProperty('items', members);
-        if (itemSelect.length === 0) return;
+        const names = [...load.names];
+        if (names.length === 0) return;
         this.internals.queue.continuing(() => {
-          for (const item of members) item.load(itemSelect);
+          for (const item of members) item.load(names);
         });
       },
     });

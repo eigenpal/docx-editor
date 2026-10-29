@@ -289,6 +289,48 @@ describe('Document.getStyles', () => {
     }
   });
 
+  test('repeated loads in one sync accumulate and share one listing', async () => {
+    const runtime = await createServer(STYLED);
+    try {
+      const read = await runtime.run(async (context) => {
+        const styles = context.document.getStyles();
+        styles.load('items/nameLocal');
+        styles.load('items/type');
+        styles.load({ select: 'items/builtIn' });
+        await context.sync();
+        return styles.items
+          .slice(0, 3)
+          .map((style) => [style.nameLocal, style.type, style.builtIn]);
+      });
+      expect(read).toEqual([
+        ['Normal', 'Paragraph', true],
+        ['heading 1', 'Paragraph', true],
+        ['Clause Text', 'Paragraph', false],
+      ]);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('repeated paragraph collection loads in one sync accumulate too', async () => {
+    const runtime = await createServer(STYLED);
+    try {
+      const read = await runtime.run(async (context) => {
+        const paragraphs = context.document.body.paragraphs;
+        paragraphs.load('items/text');
+        paragraphs.load('items/style');
+        await context.sync();
+        return paragraphs.items.map((paragraph) => [paragraph.text, paragraph.style]);
+      });
+      expect(read).toEqual([
+        ['first', 'Normal'],
+        ['second', 'Normal'],
+      ]);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
   test('a listed item loads its properties again in a later sync', async () => {
     const runtime = await createServer(STYLED);
     try {

@@ -9,17 +9,13 @@
 // frozen data, and keyed in `Map`s and `Set`s only: nothing is templated into markup, and no file
 // value becomes an object key or a loop bound. The definitions are capped like layout's.
 
-import { findNode } from '../store/package/ooxml-edit.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import { isValidXmlText } from '../store/package/sinks.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
-import {
-  WML_NAMESPACE_URI,
-  type OoxmlElement,
-  type OoxmlNode,
-  type OoxmlPart,
-} from '../store/package/ooxml-tree.ts';
+import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { attributeValue, childNamed } from '../layout/style-definition-reader.ts';
 import type { AutomationOperation } from './operations.ts';
+import { answered, refused } from './plan-results.ts';
 import type { PlannedOperation } from './plan-types.ts';
 import type { AutomationPackageReads } from './reads.ts';
 import { styleDefinitionsOf, styleNameKey } from './style-definitions.ts';
@@ -36,24 +32,17 @@ export function planStyleListing(
   reads: AutomationPackageReads
 ): PlannedOperation {
   if (!reads.package)
-    return {
-      ok: false,
-      error: { code: 'document-unavailable', message: 'this host holds no document right now' },
-    };
+    return refused('document-unavailable', 'this host holds no document right now');
   const { name, id, count } = operation;
   const asked = [name, id, count].filter((value) => value !== undefined).length;
-  const refused = (message: string): PlannedOperation => ({
-    ok: false,
-    error: { code: 'unsupported-content', message },
-  });
-  if (asked > 1) return refused('give at most one of name, id, and count');
-  if (name !== undefined && typeof name !== 'string') return refused('a style name is a string');
-  if (id !== undefined && typeof id !== 'string') return refused('a style id is a string');
-  if (count !== undefined && count !== true) return refused('count is true or omitted');
+  const bad = (message: string) => refused('unsupported-content', message);
+  if (asked > 1) return bad('give at most one of name, id, and count');
+  if (name !== undefined && typeof name !== 'string') return bad('a style name is a string');
+  if (id !== undefined && typeof id !== 'string') return bad('a style id is a string');
+  if (count !== undefined && (count as unknown) !== true) return bad('count is true or omitted');
   const listing = reads.styleListing();
-  if (count) return { ok: true, kind: 'query', value: { kind: 'number', value: listing.length } };
-  if (name === undefined && id === undefined)
-    return { ok: true, kind: 'query', value: { kind: 'styles', styles: listing } };
+  if (count) return answered({ kind: 'number', value: listing.length });
+  if (name === undefined && id === undefined) return answered({ kind: 'styles', styles: listing });
   // A name no style may carry finds nothing, and is never folded.
   const found =
     id !== undefined
@@ -61,7 +50,7 @@ export function planStyleListing(
       : name!.length > MAX_STYLE_NAME
         ? undefined
         : styleNamed(listing, name!);
-  return { ok: true, kind: 'query', value: { kind: 'styles', styles: found ? [found] : [] } };
+  return answered({ kind: 'styles', styles: found ? [found] : [] });
 }
 
 /** The style kinds a listing names, in the part's own `w:type` vocabulary. */
@@ -92,7 +81,10 @@ export interface AutomationStyleRead {
    * style that is not a listed paragraph style.
    */
   readonly next: string | null;
-  /** Whether `w:link` names a style the listing holds. */
+  /**
+   * Whether `w:link` pairs this style with a listed style of the other linkable kind: a paragraph
+   * style with a character style, or a character style with a paragraph style.
+   */
   readonly linked: boolean;
   /** Whether the part marks the style `w:semiHidden` or `w:hidden`. */
   readonly hidden: boolean;
@@ -163,6 +155,8 @@ export function packageStyleListing(pkg: OoxmlPackage): readonly AutomationStyle
  * other kind keeps the first definition of a name, the rule the paragraph index uses. One name can
  * appear once per kind, so `id` is what identifies an entry. A style with no `w:name`, a name a
  * write would refuse, or no recognized `w:type` is left out rather than answered under its id.
+ * Values come from the same definitions layout resolves: the first child of each kind, and the
+ * last definition of a repeated id.
  */
 function styleListing(part: OoxmlPart): readonly AutomationStyleRead[] {
   const definitions = styleDefinitionsOf(part);
@@ -181,36 +175,37 @@ function styleListing(part: OoxmlPart): readonly AutomationStyleRead[] {
     listed.push(entry);
     kept.set(entry.styleId, { name, type: entry.type });
   }
-  /** The name of a listed style, when it is of `type`, or of any kind when `type` is omitted. */
-  const nameOf = (id: string | null | undefined, type?: string): string | null => {
+  /** The name of a listed style, when it is of `type`. */
+  const nameOf = (id: string | null | undefined, type: string): string | null => {
     const target = id === null || id === undefined ? undefined : kept.get(id);
-    return target && (type === undefined || target.type === type) ? target.name : null;
+    return target && target.type === type ? target.name : null;
   };
   return Object.freeze(
     listed.map((entry): AutomationStyleRead => {
-      const found = findNode(part, entry.nodeId);
-      const element = found && found.kind !== 'textValue' ? found : undefined;
+      const element = entry.element;
       const name = kept.get(entry.styleId)!.name;
-      const child = (localName: string) => (element ? lastChild(element, localName) : undefined);
-      const next = child('next');
+      const child = (localName: string) => childNamed(element, localName);
       const link = child('link');
+      const linkedTo = link ? attributeValue(link, 'val') : undefined;
+      const partner = LINK_PARTNER.get(entry.type);
       return Object.freeze({
         id: entry.styleId,
         name,
         type: entry.type as AutomationStyleKind,
-        builtIn: !onOffValue(element ? wmlAttribute(element, 'customStyle') : null, false),
-        // The index's own `basedOn`, so every lane reads a duplicated child the same way. A style
-        // is based on a style of its own kind; any other target answers no name.
+        builtIn: !onOffAttribute(attributeValue(element, 'customStyle')),
+        // A style is based on a style of its own kind; any other target answers no name.
         basedOn: nameOf(entry.basedOn, entry.type),
         // Only a paragraph style has a next style, and it is always a paragraph style. Stating
         // none means the style follows itself.
         next:
           entry.type !== 'paragraph'
             ? null
-            : next === undefined
+            : child('next') === undefined
               ? name
-              : nameOf(wmlAttribute(next, 'val'), 'paragraph'),
-        linked: nameOf(link ? wmlAttribute(link, 'val') : null) !== null,
+              : nameOf(entry.next, 'paragraph'),
+        // Only a paragraph style and a character style link, and only to each other.
+        linked:
+          partner !== undefined && linkedTo !== entry.styleId && nameOf(linkedTo, partner) !== null,
         hidden: onOffElement(child('semiHidden')) || onOffElement(child('hidden')),
         uiPriority: priorityOf(child('uiPriority')),
         quickStyle: onOffElement(child('qFormat')),
@@ -220,53 +215,33 @@ function styleListing(part: OoxmlPart): readonly AutomationStyleRead[] {
   );
 }
 
+/** The kind a style of each linkable kind links to. */
+const LINK_PARTNER: ReadonlyMap<string, string> = new Map([
+  ['paragraph', 'character'],
+  ['character', 'paragraph'],
+]);
+
 /** The checks a `setStyle` name passes, applied to a name the file declares. */
 function writableName(name: string): boolean {
   return name.trim().length > 0 && name.length <= MAX_STYLE_NAME && isValidXmlText(name);
 }
 
-/**
- * The LAST child with this name, or undefined where the style states none. The last child wins,
- * the rule `indexStyles` uses for `w:name` and `w:basedOn`.
- */
-function lastChild(element: OoxmlElement, localName: string): OoxmlElement | undefined {
-  let found: OoxmlElement | undefined;
-  for (const child of element.children) {
-    if (
-      child.kind !== 'textValue' &&
-      child.namespaceUri === WML_NAMESPACE_URI &&
-      child.localName === localName
-    )
-      found = child;
-  }
-  return found;
-}
-
-function wmlAttribute(element: OoxmlElement, localName: string): string | null {
-  for (const entry of element.attributes) {
-    if (entry.namespaceUri === WML_NAMESPACE_URI && entry.localName === localName)
-      return entry.value;
-  }
-  return null;
-}
-
 const ON: ReadonlySet<string> = new Set(['1', 'true', 'on']);
 
-/** `ST_OnOff` as an attribute: on only for an on-spelling; `absent` where none is stated. */
-function onOffValue(value: string | null, absent: boolean): boolean {
-  if (value === null) return absent;
-  return ON.has(value);
+/** `ST_OnOff` as an attribute: on only for an on-spelling, off where none is stated. */
+function onOffAttribute(value: string | undefined): boolean {
+  return value !== undefined && ON.has(value);
 }
 
 /** `CT_OnOff` as an element: absent is off; present with no `w:val` or an on-spelling is on. */
 function onOffElement(element: OoxmlElement | undefined): boolean {
   if (!element) return false;
-  const value = wmlAttribute(element, 'val');
-  return value === null || ON.has(value);
+  const value = attributeValue(element, 'val');
+  return value === undefined || ON.has(value);
 }
 
 /** A `w:uiPriority` value: a decimal integer of at most nine digits, or null. */
 function priorityOf(element: OoxmlElement | undefined): number | null {
-  const value = element ? wmlAttribute(element, 'val') : null;
-  return value !== null && /^-?\d{1,9}$/.test(value) ? Number(value) : null;
+  const value = element ? attributeValue(element, 'val') : undefined;
+  return value !== undefined && /^-?\d{1,9}$/.test(value) ? Number(value) : null;
 }
