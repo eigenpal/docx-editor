@@ -33,6 +33,12 @@ export interface SpaceShrinkRule {
    * justified line does.
    */
   readonly everyAlignment?: true;
+  /**
+   * Each space shrinks down to half its face's average character width, the metric of the
+   * reverse automatic spacing gap, rather than by `limit`. `limit` applies when that width is
+   * unknown.
+   */
+  readonly halfAverageFloor?: true;
 }
 
 /** Justified lines (`w:jc` `both`) in a modern compatibility mode. */
@@ -63,16 +69,18 @@ const OTHER_JUSTIFIED_SPACE_SHRINK: SpaceShrinkRule = Object.freeze({
 
 /**
  * A legacy compatibility mode that compresses punctuation (`w:characterSpacingControl`) in a
- * document whose defaults name an East Asian face: each space gives up at most 19.8 percent of
- * its advance, just under a fifth, without a cost test, at every alignment. The limit is the
- * measured boundary: a word that needs 19.75 percent joins its line, and one that needs
- * 19.84 percent moves to the next line.
+ * document whose defaults name an East Asian face: each space shrinks down to half its face's
+ * average character width (OS/2 `xAvgCharWidth`), without a cost test, at every alignment. A
+ * face whose half-average width is wider than its space, such as Calibri, keeps natural spaces;
+ * Times New Roman gives about a fifth, Courier New half. Without a known average width, a space
+ * gives up a fifth. `w:balanceSingleByteDoubleByteWidth` turns the rule off.
  */
 export const COMPRESSED_LEGACY_SPACE_SHRINK: SpaceShrinkRule = Object.freeze({
-  limit: 0.198,
+  limit: 0.2,
   cost: 0,
   hangsMarks: true,
   everyAlignment: true,
+  halfAverageFloor: true,
 });
 
 /** The space-shrink rule of a paragraph, or undefined when its lines keep natural spaces. */
@@ -86,7 +94,8 @@ export function resolveSpaceShrinkRule(
     settings.compression !== 'doNotCompress' &&
     settings.sourceEastAsianFont === true
   )
-    return COMPRESSED_LEGACY_SPACE_SHRINK;
+    // `w:balanceSingleByteDoubleByteWidth` keeps natural spaces in a legacy mode.
+    return settings.balancedWidths ? undefined : COMPRESSED_LEGACY_SPACE_SHRINK;
   // Modern justification is mode 15 and every newer mode. An absent mode stays legacy.
   if (
     !hasCompatibilityRule(compatibilityMode, 'justifiedSpaceShrink') ||

@@ -138,7 +138,8 @@ function alignLogicalSpans(
   lastLineShrinks: boolean,
   distributed: DistributedSpacing | undefined,
   eastAsianSpacing: boolean,
-  hangingPunctuationAdvance: number
+  hangingPunctuationAdvance: number,
+  halfAverageFloor = false
 ): readonly StyleSpanRecord[] {
   if (spans.length === 0) return spans;
   // An unbounded line (a measuring pass) has no far edge to align or justify against.
@@ -158,7 +159,8 @@ function alignLogicalSpans(
         lastLineShrinks,
         distributed,
         eastAsianSpacing,
-        hangingPunctuationAdvance
+        hangingPunctuationAdvance,
+        halfAverageFloor
       )
     );
     if (aligned) return aligned;
@@ -321,7 +323,8 @@ function alignLogicalSpans(
       spans,
       -slack,
       measurer,
-      hangsAfterOwnSpace ? trailingStart - 1 : Math.max(0, contentLast)
+      hangsAfterOwnSpace ? trailingStart - 1 : Math.max(0, contentLast),
+      halfAverageFloor
     );
   // A line that fills its measure can leave a rounding residue, which must not become spacing.
   if (slack <= SLACK_RESIDUE_PT) return spans;
@@ -578,7 +581,8 @@ export function alignSpans(
         lastLineShrinks,
         distributed,
         eastAsianSpacing,
-        isLastPart ? hangingPunctuationAdvance : 0
+        isLastPart ? hangingPunctuationAdvance : 0,
+        pendingLine?.compressesSpaces === true
       )
     );
     if (aligned) return reorderBidiSpans(aligned, false, pageBreaksIgnored);
@@ -618,7 +622,8 @@ export function alignSpans(
       lastLineShrinks,
       distributed,
       eastAsianSpacing,
-      hangingPunctuationAdvance
+      hangingPunctuationAdvance,
+      pendingLine?.compressesSpaces === true
     );
   const trailing = bidiTrailingSpaces(split, paragraphRtl, isLastLine, pageBreaksIgnored);
   if (trailing) {

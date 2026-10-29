@@ -649,8 +649,6 @@ export async function paint(
   // whose text went to the span before them.
   const composedTexts = new Map<SemanticSpanVisit, string>();
   const absorbedSpans = new Set<SemanticSpanVisit>();
-  // The character a span's last glyph reads as, when the mark in the next span joins it.
-  const joinedBases = new Map<SemanticSpanVisit, string>();
   spans.length = 0;
   for (const lines of pageGroups.values())
     for (const group of lines.values()) {
@@ -672,7 +670,6 @@ export async function paint(
         group.forEach((visit, index) => {
           composedTexts.set(visit, composed.texts[index]!);
           if (composed.absorbed.has(index)) absorbedSpans.add(visit);
-          if (composed.joined.has(index)) joinedBases.set(visit, composed.texts[index]!.slice(-1));
         });
       }
     }
@@ -778,9 +775,7 @@ export async function paint(
       );
     out.push(
       withActualText(
-        visit.span.equation
-          ? paintEquation(visit, page, text, work)
-          : text.paint(visit, page, false, joinedBases.get(visit)),
+        visit.span.equation ? paintEquation(visit, page, text, work) : text.paint(visit, page),
         composedTexts.get(visit) ?? spanLogicalText(visit),
         absorbedSpans.has(visit)
       )

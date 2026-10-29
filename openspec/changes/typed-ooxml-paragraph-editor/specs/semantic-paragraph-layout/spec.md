@@ -692,7 +692,7 @@ When the spaces reach their shrink floor before the mark fits, a justified or di
 
 ### Requirement: Distributed space shrinking
 
-In compatibility mode 15 and later, a distributed line SHALL keep the word that overflows it by shrinking its spaces only when each space loses at most a third of what the line without the word would add to it. The test SHALL count half the advance of a final half-width mark that may hang. A justified line SHALL allow half instead, counting the whole mark.
+In compatibility mode 15 and later, a distributed line SHALL keep the word that overflows it by shrinking its spaces only when each space loses at most a third of what the line without the word would add to it. The test SHALL count half the advance of a final half-width mark that may hang, a measured fit. A justified line SHALL allow half instead, counting the whole mark.
 
 #### Scenario: A distributed line ends one word earlier
 
@@ -702,14 +702,24 @@ In compatibility mode 15 and later, a distributed line SHALL keep the word that 
 
 ### Requirement: Legacy space shrinking with punctuation compression
 
-In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingControl` compresses punctuation and the document defaults name an East Asian face, a line at any alignment SHALL keep the word that overflows it when each space gives up at most 19.8 percent of its advance. A final half-width mark SHALL stay inside when the spaces make room for it, and hang when they make room only for the text before it.
+In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingControl` compresses punctuation and the document defaults name an East Asian face, a line at any alignment SHALL keep the word that overflows it when each space can shrink to fit it without going below half the average character width of its face. With `w:balanceSingleByteDoubleByteWidth`, spaces SHALL keep their advance.
 
 #### Scenario: A left-aligned line shrinks its spaces
 
 - **GIVEN** a mode 14 left-aligned paragraph of English words with `compressPunctuation` and an East Asian default face
-- **WHEN** a word fits only when each space gives up less than 19.8 percent of its advance
+- **WHEN** a word fits only when each Times New Roman space gives up less than a fifth of its advance
 - **THEN** the word stays on the line and the line ends at the margin
-- **AND** without punctuation compression the word moves to the next line
+- **AND** without punctuation compression, in Calibri, or with `w:balanceSingleByteDoubleByteWidth`, the word moves to the next line
+
+### Requirement: Legacy space shrinking before a final mark
+
+Under the legacy space shrinking rule, a final half-width mark SHALL stay inside when the spaces make room for it, and hang when they make room only for the text before it.
+
+#### Scenario: A comma hangs beside spaces at their floor in a legacy mode
+
+- **GIVEN** a mode 14 paragraph with `compressPunctuation`, an East Asian default face, and a final `,` that overflows
+- **WHEN** the spaces at their floor make room for the text before the comma but not for the comma
+- **THEN** the comma hangs past the margin and the text before it fills the measure
 
 ### Requirement: A chopped word keeps its final mark
 

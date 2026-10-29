@@ -212,11 +212,8 @@ export class TextWriter {
     readonly authorSlots: ReadonlyMap<string, number> = new Map(),
     readonly rowRevisions: ReadonlyMap<BlockFragmentRecord, RowRevision> = new Map()
   ) {}
-  /**
-   * `marker`: a list marker, which a tracked row's revision does not mark. `finalText`: the text
-   * the span's last character reads as, when a sound mark in the next span joins it.
-   */
-  paint(visit: SemanticSpanVisit, page: PDFPage, marker = false, finalText?: string): string {
+  /** `marker`: a list marker, which a tracked row's revision does not mark. */
+  paint(visit: SemanticSpanVisit, page: PDFPage, marker = false): string {
     const { span, line, storyOrigin, absoluteBox } = visit;
     if (span.style.hidden || !span.text) return '';
     if (span.noteSeparator) {
@@ -470,11 +467,7 @@ export class TextWriter {
         if (i === textGlyph) {
           // A kana and sound mark drawn as one glyph read as the precomposed character.
           const glyphText =
-            finalText !== undefined && cluster.textEnd === shaped.run.text.length
-              ? finalText
-              : cluster.glyphEnd - cluster.glyphStart === 1
-                ? composedPairOr(text)
-                : text;
+            cluster.glyphEnd - cluster.glyphStart === 1 ? composedPairOr(text) : text;
           batch.add(activeFace, activeSize, gx, gy, activeFace.encode(glyph.id, glyphText));
           continue;
         }

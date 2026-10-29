@@ -58,21 +58,17 @@ export function composeJoinedPairs(text: string, run: ShapedClusters | undefined
 /**
  * The logical text of each span of one line, in reading order. A span that opens with a sound
  * mark gives the mark to the kana that closes the previous span when `joinsPrevious(index)` says
- * the mark draws over that base, with no advance of its own. `joined` marks the spans whose last
- * character took a mark, so their last glyph reads as the composed character too. `absorbed`
- * marks the spans whose whole text went to their neighbor: their glyphs need a region with no
- * text, or an extractor reads the mark a second time from the glyph itself.
+ * the mark draws over that base, with no advance of its own. Only the ActualText changes: the
+ * base glyph keeps the base kana as its own text, so a reader that ignores ActualText reads the
+ * kana and the mark, never the mark twice. `absorbed` marks the spans whose whole text went to
+ * their neighbor: their glyphs need a region with no text, or an extractor reads the mark a
+ * second time from the glyph itself.
  */
 export function composeSoundMarks(
   texts: readonly string[],
   joinsPrevious: (index: number) => boolean
-): {
-  readonly texts: readonly string[];
-  readonly joined: ReadonlySet<number>;
-  readonly absorbed: ReadonlySet<number>;
-} {
+): { readonly texts: readonly string[]; readonly absorbed: ReadonlySet<number> } {
   const out = [...texts];
-  const joined = new Set<number>();
   const absorbed = new Set<number>();
   for (let index = 1; index < out.length; index++) {
     const text = out[index]!;
@@ -82,8 +78,7 @@ export function composeSoundMarks(
     if (composed === undefined) continue;
     out[index - 1] = previous.slice(0, -1) + composed;
     out[index] = text.slice(1);
-    joined.add(index - 1);
     if (out[index] === '') absorbed.add(index);
   }
-  return { texts: out, joined, absorbed };
+  return { texts: out, absorbed };
 }

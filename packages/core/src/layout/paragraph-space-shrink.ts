@@ -11,6 +11,8 @@ import type { FieldAwarePiece } from './field-pieces.ts';
 import { isSpaceShrinkWordPiece } from './space-shrink-piece.ts';
 import type { SpaceShrinkRule } from './space-shrink-rule.ts';
 import { withoutTrailingZeroWidthSpaces } from './trailing-spaces.ts';
+import { authoredCjkGapMetric } from './cjk-auto-spacing-metric-port.ts';
+import { knownFamilyReverseGap } from './authored-average-widths.ts';
 
 // No-break spaces join their neighbours into one word. They have width, never break the
 // line, and never hang, so the word-shape tests read them as word characters.
@@ -71,8 +73,80 @@ function firstShrinkSlot(spans: readonly StyleSpanRecord[]): number {
   return 0;
 }
 
-/** What the space closing `span` can give up: `limit` of its natural advance. */
-function capacity(span: StyleSpanRecord, measurer: TextMeasurer, limit: number): number {
+/**
+ * Capacities already measured, by span. A line's spans are read again for every word that
+ * overflows it, and each read measures the span's text. The entry also holds the span's text,
+ * width, and the rule inputs, so a span rebuilt with other text or width measures again.
+ */
+const capacityCache = new WeakMap<
+  StyleSpanRecord,
+  { text: string; width: number; limit: number; floor: boolean; value: number }
+>();
+
+/**
+ * What the space closing `span` can give up: `limit` of its natural advance, or with
+ * `halfAverageFloor` everything above half its face's average character width.
+ */
+function capacity(
+  span: StyleSpanRecord,
+  measurer: TextMeasurer,
+  limit: number,
+  halfAverageFloor = false
+): number {
+  const known = capacityCache.get(span);
+  if (
+    known &&
+    known.text === span.text &&
+    known.width === span.box.width &&
+    known.limit === limit &&
+    known.floor === halfAverageFloor
+  )
+    return known.value;
+  const value = measuredCapacity(span, measurer, limit, halfAverageFloor);
+  capacityCache.set(span, {
+    text: span.text,
+    width: span.box.width,
+    limit,
+    floor: halfAverageFloor,
+    value,
+  });
+  return value;
+}
+
+/** Half-average widths by face style; one style serves every span and line that uses it. */
+const halfAverageWidths = new WeakMap<
+  ResolvedRunStyle,
+  { value: number | undefined; noRoom: boolean }
+>();
+
+/**
+ * Half the face's average character width, the same metric as the reverse automatic gap, and
+ * whether it is at least the face's plain space, so that no space of the style can shrink.
+ */
+function halfAverageWidth(
+  style: ResolvedRunStyle,
+  measurer: TextMeasurer
+): { value: number | undefined; noRoom: boolean } {
+  let known = halfAverageWidths.get(style);
+  if (!known) {
+    const value = authoredCjkGapMetric(measurer, style) ?? knownFamilyReverseGap(style);
+    const plain = !style.shaping?.wordSpacingPt && !style.characterSpacingPt;
+    known = {
+      value,
+      noRoom:
+        value !== undefined && plain && measureDisplayText(' ', style, measurer) <= value + 1e-9,
+    };
+    halfAverageWidths.set(style, known);
+  }
+  return known;
+}
+
+function measuredCapacity(
+  span: StyleSpanRecord,
+  measurer: TextMeasurer,
+  limit: number,
+  halfAverageFloor: boolean
+): number {
   if (
     (!span.style.shaping &&
       !/^[\p{Script=Latin}\p{Script=Cyrillic}\p{N}\p{P}\p{Sc}\p{Sm} \u2007\u202f\u200b]*$/u.test(
@@ -84,10 +158,13 @@ function capacity(span: StyleSpanRecord, measurer: TextMeasurer, limit: number):
   )
     return 0;
   const style = styleForFontSlot(span.style, span.fontSlot);
+  const floor = halfAverageFloor ? halfAverageWidth(style, measurer) : undefined;
+  if (floor?.noRoom) return 0;
   const space = Math.max(
     0,
     span.box.width - measureDisplayText(withoutSpaceSlot(span.text), style, measurer)
   );
+  if (floor?.value !== undefined) return Math.max(0, space - floor.value);
   return space * limit;
 }
 
@@ -184,7 +261,7 @@ export function spaceShrinkFit(
   const capacities: number[] = [];
   let budget = 0;
   for (let index = first; index < spans.length; index += 1) {
-    const slot = capacity(spans[index]!, measurer, rule.limit);
+    const slot = capacity(spans[index]!, measurer, rule.limit, rule.halfAverageFloor);
     capacities.push(slot);
     budget += slot;
   }
@@ -305,12 +382,13 @@ export function shrinkJustifiedSpans(
   spans: readonly StyleSpanRecord[],
   needed: number,
   measurer: TextMeasurer,
-  slotEnd: number = spans.length - 1
+  slotEnd: number = spans.length - 1,
+  halfAverageFloor = false
 ): readonly StyleSpanRecord[] {
   const first = firstShrinkSlot(spans);
   // Admission kept `needed` within the paragraph's rule; equal shares never pass a quarter.
   const capacities = spans.map((span, index) =>
-    index >= first && index < slotEnd ? capacity(span, measurer, 0.25) : 0
+    index >= first && index < slotEnd ? capacity(span, measurer, 0.25, halfAverageFloor) : 0
   );
   if (needed <= 0 || needed > capacities.reduce((a, b) => a + b, 0) + 0.001) return spans;
   const amounts = capacities.map(() => 0);
@@ -327,6 +405,30 @@ export function shrinkJustifiedSpans(
       remaining -= take;
     }
   }
+  // Equal shares give most spans of one style the same amount: they share one derived style, so
+  // later stages (and publication, which freezes each style object) see one object, not one per
+  // word.
+  const shrunkStyles = new Map<ResolvedRunStyle, Map<number, ResolvedRunStyle>>();
+  const shrunkStyle = (style: ResolvedRunStyle, amount: number): ResolvedRunStyle => {
+    let byAmount = shrunkStyles.get(style);
+    if (!byAmount) shrunkStyles.set(style, (byAmount = new Map()));
+    let shrunk = byAmount.get(amount);
+    if (!shrunk) {
+      shrunk = {
+        ...style,
+        shaping: {
+          script: 'Latn',
+          direction: 'ltr' as const,
+          level: 0,
+          baseLevel: 0,
+          ...style.shaping,
+          wordSpacingPt: (style.shaping?.wordSpacingPt ?? 0) - amount,
+        },
+      };
+      byAmount.set(amount, shrunk);
+    }
+    return shrunk;
+  };
   let shift = 0;
   return spans.map((span, index) => {
     const amount = amounts[index]!;
@@ -335,21 +437,7 @@ export function shrinkJustifiedSpans(
         ? {
             ...span,
             box: { ...span.box, x: span.box.x - shift, width: span.box.width - amount },
-            ...(amount
-              ? {
-                  style: {
-                    ...span.style,
-                    shaping: {
-                      script: 'Latn',
-                      direction: 'ltr' as const,
-                      level: 0,
-                      baseLevel: 0,
-                      ...span.style.shaping,
-                      wordSpacingPt: (span.style.shaping?.wordSpacingPt ?? 0) - amount,
-                    },
-                  },
-                }
-              : {}),
+            ...(amount ? { style: shrunkStyle(span.style, amount) } : {}),
           }
         : span;
     shift += amount;

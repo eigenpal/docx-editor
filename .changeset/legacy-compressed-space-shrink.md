@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-In older compatibility modes with punctuation compression and an East Asian default font, a line at any alignment shrinks its spaces by up to almost a fifth to keep one more word. Fixes #1635.
+In older compatibility modes with punctuation compression and an East Asian default font, a line at any alignment shrinks its spaces down to half the average character width of their font to keep one more word, unless the document balances single-byte and double-byte widths. Fixes #1635.

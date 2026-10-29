@@ -36,38 +36,55 @@ const run = (family: string, text: string) =>
   `<w:r><w:rPr><w:rFonts w:ascii="${family}" w:hAnsi="${family}" w:eastAsia="${family}"/>` +
   `<w:sz w:val="48"/><w:lang w:eastAsia="ja-JP"/></w:rPr><w:t>${text}</w:t></w:r>`;
 
-/** The ActualText of every region on the page, in content stream order. */
-async function regions(body: string): Promise<string[]> {
+const decode = (hex: string) =>
+  String.fromCharCode(...(hex.match(/.{4}/g) ?? []).map((unit) => parseInt(unit, 16)));
+
+/**
+ * The ActualText of every region on the page, in content stream order, and the text each glyph
+ * code maps to in the fonts' ToUnicode tables, which a reader that ignores ActualText uses.
+ */
+async function extract(body: string): Promise<{ regions: string[]; glyphTexts: string[] }> {
   const result = await exportPdf(docx(`<w:p>${body}</w:p>`), {
     useSystemFonts: false,
     fonts: { sources },
   });
   const pdf = await PDFDocument.load(result.bytes);
-  const stream = pdf.context
+  const streams = pdf.context
     .enumerateIndirectObjects()
     .flatMap(([, object]) =>
       object instanceof PDFRawStream
         ? [new TextDecoder().decode(decodePDFRawStream(object).decode())]
         : []
-    )
-    .filter((text) => text.includes(' Tm '))
-    .join('\n');
-  return [...stream.matchAll(/\/ActualText <FEFF([0-9A-Fa-f]*)>/g)].map(([, hex]) =>
-    String.fromCharCode(...(hex!.match(/.{4}/g) ?? []).map((unit) => parseInt(unit, 16)))
-  );
+    );
+  const page = streams.filter((text) => text.includes(' Tm ')).join('\n');
+  const cmaps = streams.filter((text) => text.includes('begincmap')).join('\n');
+  return {
+    regions: [...page.matchAll(/\/ActualText <FEFF([0-9A-Fa-f]*)>/g)].map(([, hex]) =>
+      decode(hex!)
+    ),
+    glyphTexts: [...cmaps.matchAll(/<[0-9A-Fa-f]{4}> <([0-9A-Fa-f]+)>/g)].map(([, hex]) =>
+      decode(hex!)
+    ),
+  };
 }
+const regions = async (body: string) => (await extract(body)).regions;
 
 describe('the PDF text of a kana and a sound mark that joins it is the precomposed character', () => {
   test('a face that joins the pair in one glyph', async () => {
-    const texts = await regions(run(JOINING, `か${VOICED}あ`));
-    expect(texts.join('')).toBe('があ');
+    const { regions, glyphTexts } = await extract(run(JOINING, `か${VOICED}あ`));
+    expect(regions.join('')).toBe('があ');
+    // The one glyph reads as the precomposed character without ActualText too.
+    expect(glyphTexts).toContain('が');
   });
 
   test('a joined mark in a run of its own, drawn over its base', async () => {
-    const texts = await regions(run(JOINING, 'か') + run(JOINING, `${VOICED}あ`));
-    expect(texts.join('')).toBe('があ');
+    const { regions, glyphTexts } = await extract(run(JOINING, 'か') + run(JOINING, `${VOICED}あ`));
+    expect(regions.join('')).toBe('があ');
     // The mark's own glyph sits in a region with no text, so it is not read again.
-    expect(texts).toContain('');
+    expect(regions).toContain('');
+    // Without ActualText, the base reads as the kana and the mark as the mark: never twice.
+    expect(glyphTexts).toContain('か');
+    expect(glyphTexts).not.toContain('が');
   });
 
   test('a mark that a face draws in a cell of its own keeps its own character', async () => {
@@ -104,7 +121,6 @@ describe('composeJoinedPairs and composeSoundMarks', () => {
   test('a mark that opens a span joins the base before it only where it draws over it', () => {
     expect(composeSoundMarks(['\u304b', VOICED, '\u3042'], () => true)).toEqual({
       texts: ['\u304c', '', '\u3042'],
-      joined: new Set([0]),
       absorbed: new Set([1]),
     });
     expect(composeSoundMarks(['\u304b', `${VOICED}\u3042`], () => false).texts).toEqual([

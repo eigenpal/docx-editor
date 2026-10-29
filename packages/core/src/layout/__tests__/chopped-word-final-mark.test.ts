@@ -43,6 +43,11 @@ describe('a chopped word keeps its final mark on the line', () => {
     expect(texts(result)).toEqual([WORD.slice(0, 14), WORD.slice(14)]);
   });
 
+  test('an English run in a Chinese document breaks as English text', () => {
+    const result = load({ language: 'en-US', defaultLanguage: 'zh-CN' });
+    expect(texts(result)).toEqual([WORD.slice(0, 14), WORD.slice(14, 28), '.']);
+  });
+
   test('the period opens a line where it may not hang', () => {
     expect(texts(load({ language: 'en-US' }))).toEqual([
       WORD.slice(0, 14),
