@@ -1,5 +1,6 @@
+import { tableTextStructureUnchanged } from './table-text-change.ts';
 import { carryBlockMetadataIdentity } from './block-metadata-identity.ts';
-import { ordinaryTableParagraph } from './table-ordinary-paragraph.ts';
+import { editableTableParagraph } from './table-ordinary-paragraph.ts';
 import {
   firstRowContentDeps,
   cutRowContentDeps,
@@ -37,7 +38,7 @@ export function updateTableText(
   replacements: ReadonlyMap<BlockFragmentRecord, BlockFragmentRecord>;
   paragraphPagesUnchanged?: true;
 } | null {
-  if (!drawingInputsUnchangedByTextEdit(before, after)) return null;
+  if (!tableTextStructureUnchanged(before, after)) return null;
   const structureOf = (table: OoxmlElement) =>
     readTableStructure(
       table,
@@ -55,10 +56,9 @@ export function updateTableText(
   if (oldStructure.rows.length !== structure.rows.length) return null;
   if (JSON.stringify(oldStructure.columnWidthsPt) !== JSON.stringify(structure.columnWidthsPt)) {
     const update = updateTableWidths(after, oldStructure, structure, pages, width, deps, pageBand);
-    // The width lane requires ordinaryTableParagraph, which excludes revision markup and
-    // drawings. The text-only source proof preserves cell properties and shading authors.
-    // Unchanged page membership then preserves attribution order and drawing presence.
-    if (update)
+    // Carry attribution metadata only when existing text values changed. New revision
+    // wrappers require fresh metadata even when the row keeps its page.
+    if (update && drawingInputsUnchangedByTextEdit(before, after))
       for (let index = 0; index < pages.length; index++) {
         const previous = pages[index]!.fragments;
         const next = update.pages[index]!.fragments;
@@ -76,7 +76,7 @@ export function updateTableText(
         c.vMergeContinue ||
         c.textDirection !== 'horizontal' ||
         c.blocks.some(
-          (b) => b.kind !== 'paragraph' || !ordinaryTableParagraph(b) || deps.listItems?.has(b.id)
+          (b) => b.kind !== 'paragraph' || !editableTableParagraph(b) || deps.listItems?.has(b.id)
         )
     )
   )

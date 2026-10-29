@@ -1,4 +1,5 @@
-import { carryParagraphPageRoutes } from './paragraph-lines.ts';
+import { carryParagraphPageRoutes, carryPageParagraphNames } from './paragraph-lines.ts';
+import { carryPageOrder } from './document-order.ts';
 import type { LayoutSession } from './layout-session.ts';
 import type { SectionPrepass } from './section-prepass-types.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
@@ -11,6 +12,7 @@ import { updateTableText } from './table-text-update.ts';
 import type { TablePageBand } from './table-width-update.ts';
 import { carryTableCaretContexts } from './table-caret-context.ts';
 import { offerPreviousRows, offerUnchangedTableRows } from './table-row-placement-reuse.ts';
+import { tableTextStructureUnchanged } from './table-text-change.ts';
 import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
 
 type Result = Omit<BlockLayoutResult, 'overflowShellAt'>;
@@ -108,7 +110,10 @@ export function tryUpdateTableSession(input: {
   if (!update) {
     // The full pagination that follows can still reuse every row that keeps its place. A
     // moved row keeps its old cell and row properties, so only a text-only edit offers rows.
-    if (drawingInputsUnchangedByTextEdit(oldEntry.table, entry.table))
+    if (
+      drawingInputsUnchangedByTextEdit(oldEntry.table, entry.table) ||
+      tableTextStructureUnchanged(oldEntry.table, entry.table)
+    )
       offerPreviousRows(entry.table, session.previous.pages);
     return null;
   }
@@ -123,7 +128,16 @@ export function tryUpdateTableSession(input: {
   );
   // updateTableText proves ordinary text edits and preserves all table occurrences.
   carryTableCaretContexts(oldLayout, session.previous);
-  if (update.paragraphPagesUnchanged) carryParagraphPageRoutes(oldLayout, session.previous);
+  if (update.paragraphPagesUnchanged) {
+    carryParagraphPageRoutes(oldLayout, session.previous);
+    for (let index = 0; index < update.pages.length; index++) {
+      const before = oldLayout.pages[index]!;
+      const after = update.pages[index]!;
+      if (before === after) continue;
+      carryPageParagraphNames(before, after);
+      carryPageOrder(before, after);
+    }
+  }
   session.keys = prepass.flowKeys;
   session.checkpoints = session.checkpoints.map((mark, index) => {
     // Checkpoints precede their block. A table edit cannot change an earlier checkpoint.

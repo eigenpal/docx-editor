@@ -7,10 +7,14 @@ import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 import { readGridSkip, readGridSpan, readVMerge } from './table-row-properties.ts';
 
 /** One cached row walk: its depth budget, the mode and skipped columns, and its paragraphs. */
-const rowParagraphs = new WeakMap<
-  OoxmlNode,
-  { remaining: number; skipped: string; paragraphs: readonly OoxmlElement[] }
->();
+interface RowParagraphs {
+  readonly remaining: number;
+  readonly skipped: string;
+  readonly paragraphs: readonly OoxmlElement[];
+}
+// Numbering skips merged continuations; other readers include them. Keep each mode's
+// latest answer so alternating readers do not discard every unchanged row's walk.
+const rowParagraphs = new WeakMap<OoxmlNode, { plain?: RowParagraphs; merged?: RowParagraphs }>();
 
 const NO_COLUMNS: ReadonlySet<number> = new Set();
 
@@ -37,7 +41,7 @@ export function walkStoryParagraphs(
  * table depth still allowed at the row's table (its walk's `maxTableDepth` minus the depth).
  */
 export function storyRowParagraphs(row: OoxmlElement, remaining: number): readonly OoxmlElement[] {
-  const cached = rowParagraphs.get(row);
+  const cached = rowParagraphs.get(row)?.plain;
   if (cached?.remaining === remaining && cached.skipped === '0|') return cached.paragraphs;
   const out: OoxmlElement[] = [];
   pushRowParagraphs(row, remaining, NO_COLUMNS, out, false);
@@ -116,7 +120,9 @@ function pushRowParagraphs(
   for (const entry of plan.cells) {
     if (entry.continues && mergedAbove.has(entry.column)) key += `${entry.column},`;
   }
-  const cached = rowParagraphs.get(row);
+  const entries = rowParagraphs.get(row);
+  const mode = skipMergedCells ? 'merged' : 'plain';
+  const cached = entries?.[mode];
   if (cached?.remaining === remaining && cached.skipped === key) {
     for (const paragraph of cached.paragraphs) out.push(paragraph);
     return plan.merged;
@@ -134,6 +140,9 @@ function pushRowParagraphs(
     );
   }
   if (out.length - start <= 256)
-    rowParagraphs.set(row, { remaining, skipped: key, paragraphs: out.slice(start) });
+    rowParagraphs.set(row, {
+      ...entries,
+      [mode]: { remaining, skipped: key, paragraphs: out.slice(start) },
+    });
   return plan.merged;
 }

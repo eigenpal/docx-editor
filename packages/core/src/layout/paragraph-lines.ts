@@ -145,6 +145,12 @@ export function carryPageLines(from: PageRecord, to: PageRecord): void {
  */
 const namedParagraphsCache = new WeakMap<PageRecord, ReadonlySet<string>>();
 
+/** @internal Caller proves that every line names the same paragraphs on this page. */
+export function carryPageParagraphNames(from: PageRecord, to: PageRecord): void {
+  const named = namedParagraphsCache.get(from);
+  if (named) namedParagraphsCache.set(to, named);
+}
+
 function pageNamedParagraphs(page: PageRecord): ReadonlySet<string> {
   const cached = namedParagraphsCache.get(page);
   if (cached) return cached;

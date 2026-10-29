@@ -13,7 +13,7 @@
 // floats, drawings, RTL or nested tables) returns null and the caller runs the full table
 // layout instead.
 
-import { ordinaryTableParagraph } from './table-ordinary-paragraph.ts';
+import { editableTableParagraph } from './table-ordinary-paragraph.ts';
 import { noteRowFactRead, rowFacts } from './table-row-facts.ts';
 import { firstRowContentDeps, lastRowContentDeps } from './table-fragment-content-insets.ts';
 import { bodyLineId } from './body-line-id.ts';
@@ -95,7 +95,7 @@ function eligibleRow(row: SemanticTableRow): boolean {
         cell.textDirection === 'horizontal' &&
         // A merge is planned here only inside the leading header group.
         (!cell.vMergeContinue || row.isHeader) &&
-        cell.blocks.every((block) => block.kind === 'paragraph' && ordinaryTableParagraph(block))
+        cell.blocks.every((block) => block.kind === 'paragraph' && editableTableParagraph(block))
     );
   }
   return facts.eligible;

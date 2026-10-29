@@ -18,6 +18,9 @@ import {
   savePackageBytes,
   setEditingMode,
   tocEntriesFromDocument,
+  ORIGIN,
+  waitForEditor,
+  joinRoom,
 } from './collaboration-review-helpers.ts';
 
 const AUTHOR = 'Alice';
@@ -26,6 +29,74 @@ const EDITABLE = 'editable-sample.docx';
 const HEADER = 'review-header-demo.docx';
 const TABLE = 'table-cell-selection-drag.docx';
 const TOC = 'paragraph-acceptance.docx';
+
+test('tracked table edits converge through concurrent deletion, undo, redo, reconnect, and reopen', async ({
+  browser,
+  page: creator,
+}) => {
+  const joiner = await connectedPeers(browser, creator, TABLE);
+  const source = await firstTableCellParagraph(creator);
+  const remote = paragraphById(joiner, source.id);
+  await setEditingMode(creator, 'suggesting');
+  await setEditingMode(joiner, 'suggesting');
+  await source.locator.click();
+  await creator.keyboard.press('End');
+  await remote.click();
+  await joiner.keyboard.press('End');
+  await Promise.all([
+    creator.keyboard.insertText(' AliceEdit'),
+    joiner.keyboard.insertText(' BobEdit'),
+  ]);
+  for (const paragraph of [source.locator, remote]) {
+    await expect(paragraph).toContainText('AliceEdit');
+    await expect(paragraph).toContainText('BobEdit');
+  }
+  await creator.keyboard.press('ControlOrMeta+z');
+  await expect(remote).not.toContainText('AliceEdit');
+  await expect(remote).toContainText('BobEdit');
+  await creator.keyboard.press('ControlOrMeta+Shift+z');
+  await expect(remote).toContainText('AliceEdit');
+  await creator.keyboard.press('Home');
+  await joiner.keyboard.press('Home');
+  await Promise.all([creator.keyboard.press('Delete'), joiner.keyboard.insertText('Concurrent')]);
+  await expect(remote).toContainText('Concurrent');
+  await expect.poll(async () => source.locator.textContent()).toBe(await remote.textContent());
+  await expect(
+    joiner.locator('.docx-remote-caret-label').filter({ hasText: 'Alice' })
+  ).toBeVisible();
+  let saved: Uint8Array;
+  await expect(async () => {
+    const [localBytes, remoteBytes] = await Promise.all([
+      savePackageBytes(creator),
+      savePackageBytes(joiner),
+    ]);
+    expect(documentXml(localBytes)).toBe(documentXml(remoteBytes));
+    saved = localBytes;
+  }).toPass();
+  const invite = joiner.url();
+  await joiner.context().close();
+  const rejoinedContext = await browser.newContext();
+  try {
+    const rejoined = await rejoinedContext.newPage();
+    await joinRoom(rejoined, invite, 'Bob');
+    await expect(async () => {
+      expect(documentXml(await savePackageBytes(rejoined))).toBe(documentXml(saved!));
+    }).toPass();
+  } finally {
+    await rejoinedContext.close();
+  }
+  const reopened = await browser.newPage();
+  try {
+    await reopened.route('**/tracked-cache-reopen.docx', (route) =>
+      route.fulfill({ body: Buffer.from(saved!) })
+    );
+    await waitForEditor(reopened, `${ORIGIN}/?fixture=tracked-cache-reopen.docx`);
+    expect(documentXml(await savePackageBytes(reopened))).toBe(documentXml(saved!));
+  } finally {
+    await reopened.close();
+    await joiner.context().close();
+  }
+});
 
 test('opening a comment changes only the local review display', async ({
   browser,

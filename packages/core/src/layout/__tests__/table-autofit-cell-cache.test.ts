@@ -25,6 +25,24 @@ function fixture() {
 }
 const value = { least: 10, most: 20, left: 1, right: 1, wideLeft: 2, wideRight: 2 };
 
+test('paragraph tokens stay local to one immutable flow context', () => {
+  const { cell } = fixture();
+  const paragraph = cell.blocks[0] as OoxmlElement;
+  let reads = 0;
+  const first = autofitContextOf({
+    measurer,
+    projectionTokenForParagraph: () => {
+      reads++;
+      return 'first';
+    },
+  });
+  const token = first.paragraphToken!(paragraph);
+  expect(first.paragraphToken!(paragraph)).toBe(token);
+  expect(reads).toBe(1);
+  const second = autofitContextOf({ measurer, projectionTokenForParagraph: () => 'second' });
+  expect(second.paragraphToken!(paragraph)).not.toBe(token);
+});
+
 test('unchanged cells reuse widths across verified section revisions', () => {
   const { cell, view } = fixture();
   const first = {};

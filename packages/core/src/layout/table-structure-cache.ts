@@ -1,3 +1,4 @@
+import { tableTextStructureUnchanged } from './table-text-change.ts';
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type { SemanticTableStructure } from './semantic-table.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
@@ -35,7 +36,7 @@ function sameContext(a: Context, b: Context): boolean {
  * Reuse resolved table geometry only when an immutable edit changes ordinary text.
  *
  * Entries live under the table's `w:tblPr` node, which survives ordinary edits, and only the
- * latest table revision per view stays. Keying by the table node itself kept one structure
+ * latest two table revisions per view stay. Keying by the table node itself kept one structure
  * for every revision the undo history holds: a long table grew by megabytes per edit.
  */
 function createStructureCache() {
@@ -45,13 +46,17 @@ function createStructureCache() {
   const latest = new WeakMap<OoxmlNode, Memo[]>();
   const rememberLatest = (owner: OoxmlNode, memo: Memo): void => {
     const entries = latest.get(owner) ?? [];
-    const index = entries.findIndex((entry) => sameContext(entry, memo));
-    if (index >= 0) entries[index] = memo;
-    else {
-      if (entries.length === 4) entries.shift();
-      entries.push(memo);
+    // An incremental update reads both sides. Keep two versions per view so reading
+    // the previous table cannot evict the current structure and its width measurements.
+    const kept: Memo[] = [memo];
+    let sameView = 0;
+    for (const entry of entries) {
+      if (sameContext(entry, memo)) {
+        if (entry.table === memo.table || sameView++ > 0) continue;
+      }
+      if (kept.length < 8) kept.push(entry);
     }
-    latest.set(owner, entries);
+    latest.set(owner, kept);
   };
   return function cachedTableStructure(
     table: OoxmlNode,
@@ -72,7 +77,8 @@ function createStructureCache() {
     if (
       previous?.structure &&
       sameContext(previous, context) &&
-      drawingInputsUnchangedByTextEdit(previous.table, table)
+      (drawingInputsUnchangedByTextEdit(previous.table, table) ||
+        tableTextStructureUnchanged(previous.table, table))
     ) {
       const cells = new Map<string, OoxmlNode>();
       const visit = (before: OoxmlNode, after: OoxmlNode): void => {
