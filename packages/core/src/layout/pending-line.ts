@@ -334,6 +334,8 @@ function decorationsMatch(previous: StyleSpanRecord, current: StyleSpanRecord): 
   return true;
 }
 
+const isSoundMark = (codePoint: number) => codePoint === 0x3099 || codePoint === 0x309a;
+
 /** Whether one ideographic seam between two closed spans carries no information. */
 function seamIsMergeable(previous: StyleSpanRecord, current: StyleSpanRecord): boolean {
   if (previous.glyphOffsetPt || current.glyphOffsetPt) return false;
@@ -343,6 +345,8 @@ function seamIsMergeable(previous: StyleSpanRecord, current: StyleSpanRecord): b
   const before = lastCodePointOf(previous.text);
   const after = current.text.codePointAt(0);
   if (before === undefined || after === undefined) return false;
+  // A sound mark split into its own span (`sound-mark-pieces.ts`) must not rejoin its base.
+  if (isSoundMark(before) || isSoundMark(after)) return false;
   if (!isIdeographicForLineBreak(before) || !isIdeographicForLineBreak(after)) return false;
   if (previous.range.paragraphId !== current.range.paragraphId) return false;
   if (previous.range.end !== current.range.start) return false;

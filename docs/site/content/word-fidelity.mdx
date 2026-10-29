@@ -149,6 +149,8 @@ With punctuation overflow on (`w:overflowPunct`), a line-end mark can hang past 
 
 Justified and distributed paragraphs hang marks in compatibility mode 15 and later. With no compatibility mode, or in mode 11, 12, or 14, paragraphs hang marks at every alignment, whatever the kinsoku switch, and the text before a hanging mark fills the measure. If the styles part names no East Asian font in `w:rPrDefault`, only distributed paragraphs hang marks. In mode 14 and earlier, a Korean paragraph-final mark does not hang when `w:characterSpacingControl` compresses punctuation; it starts the next line.
 
+In mode 15 and later, a justified or distributed line shrinks its spaces before a half-width mark, such as `,` or `.`, hangs. The mark stays inside the margin when the spaces can make room for it within their shrink limit. Otherwise, a justified line hangs the mark when the spaces can make room for the text before it, and a distributed line moves the word to the next line. A mark at the end of a paragraph follows the same rule.
+
 When `w:characterSpacingControl` is `compressPunctuationAndJapaneseKana`, a full line can pull a following line-start-prohibited character, such as `。` or `」`, onto itself. The line compresses in this order:
 
 1. Blank sides of punctuation on the line, such as the trailing half of a mid-line `、`.
@@ -157,11 +159,13 @@ When `w:characterSpacingControl` is `compressPunctuationAndJapaneseKana`, a full
 
 If the trailing half of the final mark alone fits the line, only that half compresses. Without punctuation overflow, the trailing half compresses before the kana. The line-start list decides the fit, whatever the kinsoku switch. If the line still cannot fit the character, the mark hangs or the last character moves to the next line. Kanji, the prolonged sound mark `ー`, and half-width katakana keep their advances. Kana fitting applies where punctuation hangs, as the previous paragraph describes. It does not apply in Korean runs, or in Traditional Chinese runs in mode 15 and later.
 
-Pair kerning (`w:kern`) leaves kana, ideographs, CJK punctuation, and full-width and half-width forms at their own advances. Latin letters in the same run still kern. A combining voiced or semi-voiced sound mark (U+3099 or U+309A) adds no width, also in faces that give the mark a full character cell.
+Pair kerning (`w:kern`) leaves kana, ideographs, CJK punctuation, and full-width and half-width forms at their own advances. Latin letters in the same run still kern. A combining voiced or semi-voiced sound mark (U+3099 or U+309A) follows its face. If the face classes the mark as a mark, the mark joins the kana before it and adds no width. In a separate run, the mark paints over its base, unless the face draws a lone mark on a dotted circle. If the face gives the mark an advance of its own and no mark class, the mark takes a full character cell beside an uncomposed base. In both cases, the mark stays on the line of its base.
 
 ### Lists and numbering
 
 <FeatureMatrix category="lists" />
+
+Lists that share one abstract numbering definition (`w:abstractNum`) count on one shared number per level. A `w:startOverride` restarts that number once, at the first item of its list on an overridden level, and only on that level. Items of the other lists continue from the restarted number. If the same `w:lvlOverride` also replaces the level, the replacement's `w:start` is the restart value.
 
 ### Tables
 

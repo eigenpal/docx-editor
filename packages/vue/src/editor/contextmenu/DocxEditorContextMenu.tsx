@@ -65,6 +65,7 @@ import {
   useTableContextMenuVisible,
 } from './parts';
 import { useScopeClassName } from '../scope-context';
+import { MenuLinkRow } from '../menu/menu-link-row';
 import { chromeControlForSlot, chromeIcon } from '../toolbar/ToolbarButton';
 import { useChromeDir } from '../../i18n';
 
@@ -159,7 +160,8 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   {
     kind: 'row',
     id: 'text.link',
-    render: () => <MenuItem slotId="text.link" labelKey="formattingBar.insertLink" />,
+    // The label switches to Edit link on an existing link; see `MenuLinkRow`.
+    render: () => <MenuLinkRow />,
   },
   {
     kind: 'row',

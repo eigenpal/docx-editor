@@ -18,6 +18,12 @@ export function changesOnlyParagraphAlignment(part: OoxmlPart, op: TreeDocOp): b
   if (paragraph?.kind !== 'paragraph') return false;
   const container = propertyContainer(paragraph, 'paragraphProperties', 'pPr');
   const prior = container && container.kind !== 'textValue' ? container.children : [];
+  // A tracked write merges into the pending paragraph change. When that change already records
+  // other properties, the merged revision could never be rejected inside the lock.
+  if (op.revision) {
+    const pending = prior.find((node) => named(node, 'pPrChange'));
+    if (pending && !restoresOnlyParagraphAlignment(part, pending)) return false;
+  }
   const next = mergedPropertyChildren(prior, op.properties, PARAGRAPH_VOCABULARY, () => '');
   const keep = (nodes: readonly OoxmlNode[]) => nodes.filter((node) => !named(node, 'jc'));
   const before = keep(prior);

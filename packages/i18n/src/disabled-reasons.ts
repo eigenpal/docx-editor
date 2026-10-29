@@ -12,6 +12,10 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'editor is not ready': 'disabledReason.editorNotReady',
   // Keyed on `LOCKED_FORMAT_REASON` in the engine's content-lock admission.
   'this content is locked': 'disabledReason.contentLocked',
+  // Keyed on `LOCKED_PARAGRAPH_FORMAT_REASON` and `BOUND_PARAGRAPH_FORMAT_REASON` in the
+  // engine's `paragraph-format-lock-refusal.ts`; the sentences must stay the same.
+  'this content is locked; only alignment can change': 'disabledReason.lockedParagraphFormat',
+  'this content is bound to data and cannot change': 'disabledReason.boundParagraphFormat',
   'not wired to an editor command': 'disabledReason.notWired',
   'this document was opened for viewing': 'disabledReason.viewing',
   'the document is open for viewing': 'disabledReason.viewing',

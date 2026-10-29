@@ -13,9 +13,9 @@ import {
 } from '../../../../pro/src/collaboration/__tests__/document-peer-support.ts';
 import { DocxEditor } from '../../index.ts';
 
-function fixture(kind: 'footnote' | 'endnote') {
+function fixture(kind: 'footnote' | 'endnote', bodyRPr = '') {
   return zipDocument(
-    '<w:p><w:r><w:t>Body</w:t></w:r><w:r><w:rPr>' +
+    `<w:p><w:r>${bodyRPr}<w:t>Body</w:t></w:r><w:r><w:rPr>` +
       '<w:rStyle w:val="CustomReference"/><w:vertAlign w:val="superscript"/>' +
       `</w:rPr><w:${kind}Reference w:id="1"/></w:r></w:p><w:sectPr/>`,
     {
@@ -91,6 +91,40 @@ for (const kind of ['footnote', 'endnote'] as const) {
             expect(paragraph.text).toBe('Body#');
           });
         }
+      } finally {
+        runtime.dispose();
+      }
+    });
+  }
+}
+
+for (const kind of ['footnote', 'endnote'] as const) {
+  for (const tracked of [false, true]) {
+    test(`${kind}: ${tracked ? 'tracked' : 'plain'} Paragraph.insertText takes the face of the text before the reference`, async () => {
+      const runtime = await DocxEditor.createServer(fixture(kind, '<w:rPr><w:i/></w:rPr>'), {
+        author: 'Writer',
+      });
+      try {
+        await runtime.run(async (context) => {
+          if (tracked) {
+            context.document.changeTrackingMode = 'TrackMineOnly';
+            await context.sync();
+          }
+          const inserted = context.document.body.paragraphs.getFirst().insertText('#', 'End');
+          await context.sync();
+          inserted.font.load('italic,superscript');
+          await context.sync();
+          expect(inserted.font.italic).toBe(true);
+          expect(inserted.font.superscript).toBeNull();
+        });
+        const loaded = readOoxmlPackage(await runtime.save());
+        if (!loaded.ok) throw Error(loaded.reason);
+        const run = typedRun(loaded.package.parts.get(loaded.package.mainDocumentPart)!.root);
+        if (run?.kind !== 'run') throw Error('The inserted text run is missing');
+        const rPr = run.children.find((node) => node.kind === 'runProperties');
+        const names =
+          rPr?.kind === 'runProperties' ? rPr.children.map((node) => node.localName) : [];
+        expect(names).toEqual(['i']);
       } finally {
         runtime.dispose();
       }

@@ -19,7 +19,7 @@ React and Vue use the same `insert.footnote` and `insert.endnote` chrome slots. 
 
 Select a note reference to enter its note scope. Text, lists, tables, content controls, pictures, fonts, comments, and bookmarks work inside that scope.
 
-Text typed after a body reference uses the paragraph's normal formatting. It does not inherit the reference style or superscript. The text stays outside the reference run, so deleting the note keeps that text. Explicit caret formatting still applies. This rule also applies in suggesting mode and through `Paragraph.insertText` in the Editing API.
+Text typed after a body reference takes the formatting of the text before the reference, including deleted text in a suggestion and a run that holds only a tab. If no text comes before the reference, the typed text takes the formatting of the text after it. If the paragraph has no other text, it takes the paragraph mark's formatting. If the reference ends a hyperlink, the typed text goes after the link with no direct formatting. Typed text never inherits the reference style or superscript, and the toolbar shows the formatting that typing applies. The text stays outside the reference run, so deleting the note keeps that text. Explicit caret formatting still applies. This rule also applies in suggesting mode and through `Paragraph.insertText` in the Editing API.
 
 Comments need the review module and an EigenPal Pro License.
 

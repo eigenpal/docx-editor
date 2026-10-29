@@ -293,6 +293,12 @@
       "id": 20317665,
       "signed_at": "2026-10-21T12:45:29Z",
       "pull_request_no": 1463
+    },
+    {
+      "name": "ribeiroeder",
+      "id": 24439523,
+      "signed_at": "2026-10-29T00:23:56Z",
+      "pull_request_no": 1628
     }
   ]
 }

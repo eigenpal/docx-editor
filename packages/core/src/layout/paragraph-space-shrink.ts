@@ -122,6 +122,48 @@ export function fitsWithSpaceShrink(
   followingWidth = 0,
   passageStart?: number
 ): boolean {
+  return (
+    spaceShrinkFit(
+      spans,
+      candidate,
+      style,
+      measurer,
+      lineWidth,
+      available,
+      wordStart,
+      wordStartWidth,
+      wordEnds,
+      followingWidth,
+      passageStart
+    ) === 'inside'
+  );
+}
+
+/**
+ * How a word joins a justified line by shrinking its inter-word spaces:
+ * - `inside`: the whole word, its final mark too, fits between the margins.
+ * - `hangs`: the word joins, and its final mark hangs past the margin.
+ * - `false`: the word does not join the line.
+ *
+ * The join test is the one {@link fitsWithSpaceShrink} applies, with the final mark inside
+ * the measure. A word whose final mark may hang (`hangingMarkAdvance` is its advance) joins
+ * when the spaces reach the shrink floor before the mark fits, as long as they fit the
+ * text before the mark. Its mark then hangs.
+ */
+export function spaceShrinkFit(
+  spans: readonly StyleSpanRecord[],
+  candidate: string,
+  style: ResolvedRunStyle,
+  measurer: TextMeasurer,
+  lineWidth: number,
+  available: number,
+  wordStart: number = spans.length,
+  wordStartWidth: number = lineWidth,
+  wordEnds = false,
+  followingWidth = 0,
+  passageStart?: number,
+  hangingMarkAdvance = 0
+): 'inside' | 'hangs' | false {
   const ownSpace = SPACED_WORD.test(candidate);
   // Earlier passages own their spaces. The pen can already have stepped over a
   // float while this passage still has no spans, so an empty suffix cannot lend.
@@ -159,7 +201,10 @@ export function fitsWithSpaceShrink(
     capacities.push(slot);
     budget += slot;
   }
-  if (needed > budget + 0.001) return false;
+  // The spaces shrink to at most their floor: past it, only a mark that hangs can make room.
+  const markInside = needed <= budget + 0.001;
+  if (!markInside && (hangingMarkAdvance <= 0 || needed - hangingMarkAdvance > budget + 0.001))
+    return false;
   const spaceWidth = budget * 4;
   // Every space after the last word hangs there: a run of spaces as well as the word's own.
   let terminalSpace = 0;
@@ -177,7 +222,8 @@ export function fitsWithSpaceShrink(
   // Shrinking a space costs twice as much as stretching one: the word joins the line
   // when each space would lose at most half of what the shorter line would add to it.
   const shrink = needed / spaceWidth;
-  return 2 * shrink <= expansion - 1 + 1e-9;
+  if (2 * shrink > expansion - 1 + 1e-9) return false;
+  return markInside ? 'inside' : 'hangs';
 }
 
 /**

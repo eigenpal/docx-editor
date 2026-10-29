@@ -1,4 +1,5 @@
 import { paragraphsInCells } from '../layout/semantic-cell-selection.ts';
+import { partOfNodeId } from './surface-scope.ts';
 import { paragraphTextOf } from '../store/store/tree-op-apply.ts';
 import { isTableEditorCommand } from './table-command-plan.ts';
 import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
@@ -125,9 +126,7 @@ export function commandProtectionRefusal(
       break;
   }
   const selection = surface.state().selection;
-  const part = surface.session
-    .storyParts()
-    .find((part) => selection.head.paragraphId.startsWith(`${part.name}#`));
+  const part = partOfNodeId(surface.session, selection.head.paragraphId);
   if (!part) return { ok: false, code: 'locked', reason: FORMS_WRITE_REASON };
   const cells = surface.state().cellSelection;
   const selections =

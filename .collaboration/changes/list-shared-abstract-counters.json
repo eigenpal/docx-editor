@@ -1,0 +1,16 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Each w:num counted on its own counter, even when several w:num entries named one w:abstractNum. A list the editor or the automation API started on a reused w:abstractNum wrote a w:num with no level overrides, and a starting number from the automation API was written only as the w:start of a replacement w:lvl.",
+  "after": "Every w:num over one w:abstractNum counts on one shared counter, and a w:startOverride restarts it once at the first paragraph of that w:num on an overridden level. A list started on a reused w:abstractNum writes one w:lvlOverride with a w:startOverride for each level, and an automation starting number is written as a w:startOverride and as the level w:start.",
+  "reason": "List numbers are computed locally from the shared package and are not shared state. The new w:num carries ordinary w:lvlOverride and w:startOverride elements, which released participants already store, replicate, and lay out; shared nodes, operations, and package serialization are unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/list-counters.test.ts",
+    "packages/core/src/store/__tests__/numbering-part-schema.test.ts",
+    "packages/core/src/editor/__tests__/list-shared-abstract-restart.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-list-shared-abstract.test.ts",
+    "packages/editor-api/src/model/__tests__/model-list-shared-template.test.ts"
+  ],
+  "changeset": "list-shared-abstract-counters",
+  "migration": null
+}

@@ -984,6 +984,8 @@
     "tableGridUnplaceable": "Bu tabloda sütun ızgarasına sığmayan bir hücre var",
     "drawingLocked": "Bu resim kilitli",
     "contentLocked": "Bu içerik kilitli",
+    "lockedParagraphFormat": "Bu içerik kilitli; yalnızca hizalama değiştirilebilir",
+    "boundParagraphFormat": "Bu içerik verilere bağlı ve değiştirilemez",
     "editorNotReady": "Düzenleyici hazır değil",
     "imageSuggesting": "Öneri modunda resim değişiklikleri kullanılamaz",
     "equationSourceFormatting": "Doğrusal düzenleme bu denklemin biçimlendirmesini kaybeder",

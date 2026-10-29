@@ -5,6 +5,8 @@ import { directParagraphProperties } from '../store/direct-properties.ts';
 import { formsProtectionRefusal } from '../store/tree-op-content-controls.ts';
 import { ADA, apply, part, xml } from './tracked-edit-fixture.ts';
 
+const BOB = { author: 'Bob', date: '2026-01-03T03:04:05Z' };
+
 const run = '<w:r><w:t>LOCKED</w:t></w:r>';
 const control = (inner: string) =>
   '<w:sdt><w:sdtPr><w:tag w:val="field"/><w:lock w:val="contentLocked"/></w:sdtPr>' +
@@ -198,4 +200,57 @@ test('rejecting a pending indent change still meets a content lock', () => {
     reason: 'locked',
   });
   expect(xml(before)).toContain('<w:ind w:left="480"/>');
+});
+
+test('tracked alignment refuses to merge into a pending change that records other properties', () => {
+  const before = part(
+    control(
+      '<w:p><w:pPr><w:ind w:left="480"/>' +
+        '<w:pPrChange w:id="7" w:author="Ada"><w:pPr><w:ind w:left="240"/></w:pPr></w:pPrChange>' +
+        `</w:pPr>${run}</w:p>`
+    )
+  );
+  const id = storyParagraphs(bodyStoryRoot(before)!)[0]!.id;
+  const op = {
+    op: 'setParagraphProperties' as const,
+    paragraphId: id,
+    properties: [
+      ...directParagraphProperties(before, id),
+      { localName: 'jc', attributes: { val: 'center' } },
+    ],
+  };
+  // The merged revision would also record the indent, and the lock would refuse to reject it.
+  expect(applyTreeOp(before, { ...op, revision: BOB })).toMatchObject({
+    ok: false,
+    reason: 'locked',
+  });
+  const plain = xml(apply(before, op));
+  expect(plain).toContain('<w:jc w:val="center"/>');
+  expect(plain).toContain(
+    '<w:pPrChange w:author="Ada" w:id="7"><w:pPr><w:ind w:left="240"/></w:pPr></w:pPrChange>'
+  );
+});
+
+test('tracked alignment merges into a pending change that records only alignment', () => {
+  const before = part(
+    control(
+      '<w:p><w:pPr><w:ind w:left="480"/><w:jc w:val="right"/>' +
+        '<w:pPrChange w:id="7" w:author="Ada"><w:pPr><w:ind w:left="480"/></w:pPr></w:pPrChange>' +
+        `</w:pPr>${run}</w:p>`
+    )
+  );
+  const id = storyParagraphs(bodyStoryRoot(before)!)[0]!.id;
+  const after = apply(before, {
+    op: 'setParagraphProperties',
+    paragraphId: id,
+    properties: [
+      ...directParagraphProperties(before, id).filter((property) => property.localName !== 'jc'),
+      { localName: 'jc', attributes: { val: 'center' } },
+    ],
+    revision: BOB,
+  });
+  expect(xml(after)).toContain('<w:jc w:val="center"/>');
+  const rejected = xml(apply(after, { op: 'rejectAllRevisions' }));
+  expect(rejected).not.toContain('<w:jc');
+  expect(rejected).toContain('<w:ind w:left="480"/>');
 });

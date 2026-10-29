@@ -8,6 +8,7 @@ import {
   FORMS_WRITE_REASON,
 } from './command-protection.ts';
 import { contentLockFormatRefusal } from './content-lock-format-refusal.ts';
+import { paragraphFormatLockRefusal } from './paragraph-format-lock-refusal.ts';
 // Snapshot derivations for `createDocxEditor` (editor seam).
 //
 // The reads that turn a mounted surface into contract values: run formatting, page setup,
@@ -352,6 +353,12 @@ export function gateCommand(
   if (protection) return { ok: false, refusal: protection };
   const locked = contentLockFormatRefusal(command, surface, contentLockPolicyFor(surface));
   if (locked) return { ok: false, refusal: locked };
+  const paragraphLocked = paragraphFormatLockRefusal(
+    command,
+    surface,
+    contentLockPolicyFor(surface)
+  );
+  if (paragraphLocked) return { ok: false, refusal: paragraphLocked };
   if (command.type === 'insertTextBox') {
     const refusal = textboxInsertionRefusal(surface);
     return refusal ? { ok: false, refusal } : { ok: true };

@@ -27,6 +27,8 @@ Use your own Vue components for toolbars, menus, and panels. Connect them with [
 | Editor stylesheet | Every composed editor | Styles the viewport and packaged controls |
 | `.docx-editor` wrapper | Custom controls that use editor styles | Supplies scoped styles and tokens |
 | Container height | Every composed editor | Gives the viewport room to render |
+| Flex column to the viewport | When chrome shares the container height | Gives the viewport the height that the chrome does not use |
+| Popovers | When you use links, content controls, equations, or the context menu | Mounts the popovers that `<DocxEditor>` mounts for you |
 | Remount `:key` | When you change modules | Loads the new modules |
 | Positioned workspace row | When you place the navigation pane beside the viewport | Anchors the navigation pane |
 | Pro review module | When you use Pro review chrome | Enables comments, tracked changes, and custom-node review chrome |
@@ -57,6 +59,54 @@ defineProps<{ bytes: Uint8Array }>();
 ```
 
 You can place all optional chrome inside `DocxEditorRoot`.
+
+### Popovers
+
+`DocxEditorRoot` does not mount the hyperlink, content control, equation, or context menu popovers. `<DocxEditor>` mounts all four for you: `DocxEditorHyperLink`, `DocxEditorContentControl`, `DocxEditorEquation`, and `DocxEditorContextMenu`. In a composed editor, mount the popovers that you use. Without `DocxEditorHyperLink`, the link button, the context menu's **Insert link** row, and Ctrl+K (⌘+K on macOS) do not open a panel. Without `DocxEditorContextMenu`, a right-click opens the browser menu.
+
+You can mount a popover in one of two ways. The first way is to add it as a child of `DocxEditorViewport`, as in [Full composition](#full-composition):
+
+```vue
+<template>
+  <DocxEditorViewport>
+    <DocxEditorContent />
+    <DocxEditorHyperLink />
+    <DocxEditorContextMenu />
+  </DocxEditorViewport>
+</template>
+```
+
+The second way is to pass it to `DocxEditorRoot` in the `popups` prop, wrapped with `definePopup`. `DocxEditorContent` renders the `popups` entries:
+
+```vue
+<script setup lang="ts">
+import {
+  DocxEditorContentControl,
+  DocxEditorContextMenu,
+  DocxEditorEquation,
+  DocxEditorHyperLink,
+  DocxEditorRoot,
+  definePopup,
+} from '@docx-editor.dev/vue';
+
+defineProps<{ bytes: Uint8Array }>();
+
+const popups = {
+  hyperlink: definePopup(DocxEditorHyperLink),
+  contentControl: definePopup(DocxEditorContentControl),
+  equation: definePopup(DocxEditorEquation),
+  contextMenu: definePopup(DocxEditorContextMenu),
+};
+</script>
+
+<template>
+  <DocxEditorRoot :document="bytes" :popups="popups">
+    <!-- Toolbar, viewport, and content -->
+  </DocxEditorRoot>
+</template>
+```
+
+To customize a popover, pass your own component to `definePopup`.
 
 ### Root props
 
@@ -713,6 +763,23 @@ For more information, see [Pop-out windows and iframes](/docs/2.x/guides/pop-out
 ## Layout constraints
 
 Import the stylesheet once and give the editor container a height. Use a flex column when chrome shares that height. Packaged controls and the viewport apply their own `.docx-editor` scope. The wrapper in [Primitives](#primitives) also makes editor styles and tokens available to custom controls.
+
+`DocxEditorRoot` does not render a DOM element, so the chrome and the viewport are children of the flex column. Give the viewport `flex: 1` and `min-height: 0`. The viewport then takes the height that the chrome does not use, and the pages scroll inside it:
+
+```vue
+<template>
+  <div class="docx-editor" style="display: flex; flex-direction: column; height: 100vh">
+    <DocxEditorRoot :document="bytes" :popups="popups">
+      <DocxEditorToolbar />
+      <DocxEditorViewport style="flex: 1; min-height: 0">
+        <DocxEditorContent />
+      </DocxEditorViewport>
+    </DocxEditorRoot>
+  </div>
+</template>
+```
+
+If you put an element between the container and the viewport, give that element the same `flex: 1` and `min-height: 0`, and make it a flex column too.
 
 Inside `DocxEditorViewport`, the navigation pane is sticky and needs no positioning context. If you place the pane beside the viewport instead, put both in a row with `position: relative`. Beside the viewport, the pane uses that row as its positioning context.
 

@@ -3,6 +3,11 @@
 // produces; the projection allocates the numIds and this module renders the definitions.
 
 import { escapeXmlAttribute } from '../store/package/sinks.ts';
+import {
+  wordListLevelFormat,
+  wordListRuleDeclarations,
+  type ListLevelRuleFormat,
+} from './clipboard-html-list-level-rule.ts';
 import { parseInlineStyle } from './clipboard-html-styles.ts';
 
 const WML_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -24,6 +29,8 @@ export type HtmlListLevel = {
   readonly start: number;
   /** Word's `mso-level-number-position`; absent, the format decides. */
   readonly align?: HtmlListAlign;
+  /** Level text, marker format, and geometry from the `@list` level rule; absent, defaults. */
+  readonly format?: ListLevelRuleFormat;
 };
 
 export type HtmlListAllocation = {
@@ -40,28 +47,52 @@ const BULLET_LEVELS = [
   { text: '\uF0A7', font: 'Wingdings' },
 ] as const;
 
-/** One `w:lvl` in strict CT_Lvl order: start, numFmt, lvlText, lvlJc, pPr, rPr. */
-function levelXml({ kind, start, align }: HtmlListLevel, ilvl: number): string {
-  const left = 720 * (ilvl + 1);
+/** The level `w:pPr`: the `num` tab stop, then the indent. */
+function levelParagraphXml(
+  format: ListLevelRuleFormat | undefined,
+  ilvl: number,
+  hang: number
+): string {
+  const left = format?.leftTwips ?? 720 * (ilvl + 1);
+  const firstLine = format?.firstLineTwips ?? -hang;
+  const tabs =
+    format?.tabTwips !== undefined && format.tabTwips > 0
+      ? `<w:tabs><w:tab w:val="num" w:pos="${format.tabTwips}"/></w:tabs>`
+      : '';
+  const indent = firstLine < 0 ? `w:hanging="${-firstLine}"` : `w:firstLine="${firstLine}"`;
+  return `<w:pPr>${tabs}<w:ind w:left="${left}" ${indent}/></w:pPr>`;
+}
+
+/**
+ * One `w:lvl` in strict CT_Lvl order: start, numFmt, lvlText, lvlJc, pPr, rPr.
+ *
+ * The `@list` level rule, when the clipboard has one, gives the level text, the marker run
+ * properties, and the indents. What it leaves out takes the defaults below.
+ */
+function levelXml({ kind, start, align, format }: HtmlListLevel, ilvl: number): string {
   if (kind === 'bullet') {
     const bullet = BULLET_LEVELS[ilvl % BULLET_LEVELS.length]!;
+    // A stated glyph keeps the rule's own run properties: a Wingdings glyph names Wingdings.
+    const runXml =
+      format?.text !== undefined
+        ? (format.runXml ?? '')
+        : `<w:rPr><w:rFonts w:ascii="${bullet.font}" w:hAnsi="${bullet.font}" w:hint="default"/></w:rPr>`;
     return (
       `<w:lvl w:ilvl="${ilvl}"><w:start w:val="1"/><w:numFmt w:val="bullet"/>` +
-      `<w:lvlText w:val="${escapeXmlAttribute(bullet.text)}"/><w:lvlJc w:val="${align ?? 'left'}"/>` +
-      `<w:pPr><w:ind w:left="${left}" w:hanging="360"/></w:pPr>` +
-      `<w:rPr><w:rFonts w:ascii="${bullet.font}" w:hAnsi="${bullet.font}" w:hint="default"/></w:rPr>` +
-      '</w:lvl>'
+      `<w:lvlText w:val="${escapeXmlAttribute(format?.text ?? bullet.text)}"/>` +
+      `<w:lvlJc w:val="${align ?? 'left'}"/>${levelParagraphXml(format, ilvl, 360)}${runXml}</w:lvl>`
     );
   }
   // Without Word's stated position, roman markers right-align in a narrower 180-twip
   // hanging slot — the geometry the store's numbering writer synthesizes, so pasted and
   // toolbar-made lists match.
   const jc = align ?? (kind === 'lowerRoman' || kind === 'upperRoman' ? 'right' : 'left');
+  const text = format?.text ?? `%${ilvl + 1}.`;
   return (
     `<w:lvl w:ilvl="${ilvl}"><w:start w:val="${start}"/>` +
     `<w:numFmt w:val="${kind}"/>` +
-    `<w:lvlText w:val="%${ilvl + 1}."/><w:lvlJc w:val="${jc}"/>` +
-    `<w:pPr><w:ind w:left="${left}" w:hanging="${jc === 'right' ? 180 : 360}"/></w:pPr></w:lvl>`
+    `<w:lvlText w:val="${escapeXmlAttribute(text)}"/><w:lvlJc w:val="${jc}"/>` +
+    `${levelParagraphXml(format, ilvl, jc === 'right' ? 180 : 360)}${format?.runXml ?? ''}</w:lvl>`
   );
 }
 
@@ -90,6 +121,7 @@ export interface WordListLevelDefinition {
   readonly kind: HtmlListKind;
   readonly start: number | null;
   readonly align?: HtmlListAlign;
+  readonly format?: ListLevelRuleFormat;
 }
 
 const WORD_NUMBER_POSITIONS: ReadonlyMap<string, HtmlListAlign> = new Map([
@@ -123,14 +155,9 @@ export function wordListDefinitionsFromStyleText(
     let kind: HtmlListKind | null = 'decimal';
     let start: number | null = null;
     let align: HtmlListAlign | undefined;
-    for (const declaration of match[4]!.split(';')) {
-      const colon = declaration.indexOf(':');
-      if (colon <= 0) continue;
-      const name = declaration.slice(0, colon).trim().toLowerCase();
-      const value = declaration
-        .slice(colon + 1)
-        .trim()
-        .toLowerCase();
+    const declarations = wordListRuleDeclarations(match[4]!);
+    for (const [name, raw] of declarations) {
+      const value = raw.toLowerCase();
       if (name === 'mso-level-number-format') {
         kind = WORD_LEVEL_FORMATS.get(value) ?? null;
       } else if (name === 'mso-level-start-at' && /^\d{1,5}$/.test(value)) {
@@ -147,7 +174,10 @@ export function wordListDefinitionsFromStyleText(
       match[3] === undefined
         ? `l${match[1]}:level${match[2]}`
         : `l${match[1]}:level${match[2]}:lfo${match[3]}`;
-    if (!out.has(key)) out.set(key, { kind, start, ...(align ? { align } : {}) });
+    const format = wordListLevelFormat(declarations);
+    if (!out.has(key)) {
+      out.set(key, { kind, start, ...(align ? { align } : {}), ...(format ? { format } : {}) });
+    }
   }
   return out;
 }

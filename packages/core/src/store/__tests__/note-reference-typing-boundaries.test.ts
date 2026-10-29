@@ -106,19 +106,21 @@ for (const kind of ['footnote', 'endnote'] as const) {
       });
     }
 
-    test(`${kind}: ${mode} typing keeps the paragraph mark and leaves the reference face intact`, () => {
+    test(`${kind}: ${mode} typing takes the text face before the reference, not the mark`, () => {
       const before = part(
-        '<w:p><w:pPr><w:rPr><w:rStyle w:val="BodyFace"/><w:i/><w:cs/>' +
+        '<w:p><w:pPr><w:rPr><w:rStyle w:val="MarkFace"/><w:u w:val="single"/>' +
           '<w:color w:val="0000FF"/></w:rPr></w:pPr>' +
-          prefix +
+          '<w:r><w:rPr><w:rStyle w:val="BodyFace"/><w:i/><w:cs/></w:rPr><w:t>Text</w:t></w:r>' +
           reference(kind) +
           '</w:p>'
       );
       const pid = paragraphId(before);
       const caret = authoredRunPropertiesAt(before, pid, 5);
       expect(caret.some((p) => p.localName === 'i')).toBe(true);
+      expect(caret.some((p) => p.localName === 'u')).toBe(false);
       expect(caret.some((p) => p.localName === 'vertAlign')).toBe(false);
-      expect(formattingRunAt(paragraph(before), 5)).toBeNull();
+      const owner = formattingRunAt(paragraph(before), 5);
+      expect(owner && named(owner, `${kind}Reference`)).toBe(false);
       const after = apply(before, {
         op: 'insertText',
         paragraphId: pid,
@@ -130,9 +132,16 @@ for (const kind of ['footnote', 'endnote'] as const) {
       expect(named(run, 'i')).toBe(true);
       expect(named(run, 'rStyle')).toBe(true);
       expect(named(run, 'cs')).toBe(true);
+      expect(named(run, 'u')).toBe(false);
+      expect(named(run, 'color')).toBe(false);
       expect(named(run, 'vertAlign')).toBe(false);
       expect(named(run, 'b')).toBe(false);
-      expect(xml(after)).toContain('w:val="BodyFace"');
+      const style = find(run, (node) => node.kind !== 'textValue' && node.localName === 'rStyle');
+      expect(
+        style?.kind === 'textValue'
+          ? undefined
+          : style?.attributes.find((a) => a.localName === 'val')
+      ).toMatchObject({ value: 'BodyFace' });
       const original = find(
         paragraph(after),
         (node) => node.kind === 'run' && named(node, `${kind}Reference`)

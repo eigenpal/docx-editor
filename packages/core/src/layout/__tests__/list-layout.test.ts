@@ -110,7 +110,7 @@ describe('list layout markers and indents', () => {
     }
   });
 
-  test('two numIds sharing one abstractNum keep independent decimal streams', () => {
+  test('two numIds sharing one abstractNum without overrides count as one list', () => {
     const numbering = `
       <w:abstractNum w:abstractNumId="9">
         <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>
@@ -123,7 +123,7 @@ describe('list layout markers and indents', () => {
     const { part, numberingIndex } = loadDoc(body, numbering);
     const layout = layoutSemanticDocument(part, 1, { measurer, numberingIndex });
     const markers = paragraphFragmentsOf(layout.pages[0]!).map((f) => f.marker?.text);
-    expect(markers).toEqual(['1.', '2.', '1.', '2.', '3.']);
+    expect(markers).toEqual(['1.', '2.', '3.', '4.', '5.']);
   });
 });
 

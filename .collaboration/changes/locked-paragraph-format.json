@@ -1,0 +1,16 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Paragraph formatting other than alignment in a content lock returned success with no change or an invalid-argument code. A tracked alignment could merge into a pending paragraph change that the lock could not reject. Nodes created during a session have logical ids that name no part, so review decisions skipped changes on them with unknown-revision, and paragraph formatting, remote selections, content control writes, and forms protection checks on such nodes outside the body resolved to the body part.",
+  "after": "Those paragraph formats are refused with code locked before the write, and a tracked alignment that the lock could not reject is refused. Node lookups find the story part of a logical id in each story's node index, so every participant can edit, select, and accept or reject changes on session content in every story.",
+  "reason": "The change adds local admission checks and a local part lookup. It adds no shared field or operation shape. Remote changes still arrive through package application, and edits and review decisions use existing operations that every peer already applies.",
+  "tests": [
+    "packages/core/src/store/__tests__/content-control-paragraph-alignment.test.ts",
+    "packages/core/src/editor/__tests__/paragraph-format-lock-admission.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-locked-paragraph-alignment.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-session-format-review.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-session-story-ids.test.ts"
+  ],
+  "changeset": "locked-paragraph-format",
+  "migration": null
+}
