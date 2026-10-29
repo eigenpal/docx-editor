@@ -8,8 +8,8 @@ import { besideFloatWidth } from './legacy-inline-beside-float.ts';
 import { continuationPiecesWithRules } from './paragraph-continuation-pieces.ts';
 import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
 import { cellTabReplayScope, tabClosesLine, tabDestinationForFlow } from './paragraph-tab-flow.ts';
-import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-border-strokes.ts';
-import { equationSpacingBand } from './equation-line-spacing.ts';
+import { growRunBorderLineMetrics } from './run-border-strokes.ts';
+import { lineSpacingBand } from './equation-line-spacing.ts';
 import {
   clipLineDrawingsAtTop,
   growPendingLineDrawingExtent,
@@ -807,8 +807,7 @@ export function breakParagraph(
     // `auto` scales the TEXT band, not a tall inline drawing or equation (ECMA-376
     // 17.3.1.33). A drawing line above single spacing keeps the drawing's box and adds the
     // multiple's extra text band below it. An equation line keeps the equation's extent and
-    // adds or loses the multiple's share of its band (`equationSpacingBand`).
-    const equationBand = equationSpacingBand(line, lineSpacing, measurer, pageBreaksIgnored);
+    // adds or loses the multiple's share of its band (`lineSpacingBand`).
     const hasUnscaledInlineExtent =
       line.drawings.length > 0 ||
       line.spans.some((span) => span.equation !== undefined || span.unsupported !== undefined);
@@ -822,16 +821,13 @@ export function breakParagraph(
     // Below single spacing the multiple takes its missing text band off the line's top: the
     // line is the picture less that band, never less than the scaled text band.
     const removesTextBand = holdsUnscaledPicture && lineSpacing.value < 240;
-    const spacingBase = !scalesTextBandOnly
-      ? naturalHeight
-      : (equationBand?.height ??
-        textBandHeightWithBorders(
-          line.spans,
-          measurer,
-          pictureRunBand?.height ?? metrics.height,
-          pageBreaksIgnored
-        ));
-    const bandBaseline = equationBand?.baseline ?? line.baseline;
+    const fallbackBand = pictureRunBand?.height ?? metrics.height;
+    const band = scalesTextBandOnly
+      ? lineSpacingBand(line, lineSpacing, measurer, fallbackBand, pageBreaksIgnored)
+      : undefined;
+    const equationBand = band?.equation ? band : undefined;
+    const spacingBase = band?.height ?? naturalHeight;
+    const bandBaseline = band?.baseline ?? line.baseline;
     const spaced = spacedLine(lineSpacing, spacingBase, bandBaseline, line.spans, measurer);
     if (!scalesTextBandOnly) line.baseline = spaced.baseline;
     else if (equationBand) line.baseline += spaced.baseline - bandBaseline;

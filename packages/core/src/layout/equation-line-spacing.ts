@@ -2,7 +2,7 @@
 import { equationTextBand, type EquationTextBand } from './equation-line-extent.ts';
 import type { ParagraphLineSpacing } from './paragraph-style.ts';
 import type { PendingLine } from './pending-line.ts';
-import { textBandWithBorders } from './run-border-strokes.ts';
+import { textBandHeightWithBorders, textBandWithBorders } from './run-border-strokes.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 
 /**
@@ -40,4 +40,29 @@ export function equationSpacingBand(
     pageBreaksIgnored
   );
   return text.height > band.height ? text : band;
+}
+
+/** The band that `auto` spacing scales; `equation` marks a band from {@link equationSpacingBand}. */
+export interface LineSpacingBand {
+  readonly height: number;
+  /** The band's baseline from its top; undefined keeps the line's own baseline. */
+  readonly baseline?: number;
+  readonly equation?: true;
+}
+
+/**
+ * The band that `auto` line spacing scales on a line with an inline drawing, equation, or
+ * unsupported atom: the equation band when {@link equationSpacingBand} gives one, otherwise
+ * the text band of the line, or `fallback` for a line without text.
+ */
+export function lineSpacingBand(
+  line: Pick<PendingLine, 'spans' | 'drawings'>,
+  spacing: ParagraphLineSpacing,
+  measurer: TextMeasurer,
+  fallback: number,
+  pageBreaksIgnored: boolean
+): LineSpacingBand {
+  const equation = equationSpacingBand(line, spacing, measurer, pageBreaksIgnored);
+  if (equation) return { ...equation, equation: true };
+  return { height: textBandHeightWithBorders(line.spans, measurer, fallback, pageBreaksIgnored) };
 }
