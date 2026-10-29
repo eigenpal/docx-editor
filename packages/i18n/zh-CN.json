@@ -151,7 +151,9 @@
     "subtitle": "副标题",
     "heading1": "标题 1",
     "heading2": "标题 2",
-    "heading3": "标题 3"
+    "heading3": "标题 3",
+    "normal": "正文",
+    "headingLevel": "标题 {level}"
   },
   "font": {
     "selectAriaLabel": "选择字体",
@@ -1015,7 +1017,13 @@
     "suggestingNeedsAuthor": "建议模式需要作者。请在编辑器配置中设置作者。",
     "pictureSelected": "已选中一张图片。请将光标放在文本中以插入图片。",
     "chartDrawing": "这是一个图表。可以删除它，但不能像图片一样编辑它。",
-    "chartClipboard": "所选内容包含图表。无法复制、剪切或粘贴图表。"
+    "chartClipboard": "所选内容包含图表。无法复制、剪切或粘贴图表。",
+    "nothingToUndo": "没有可撤销的操作",
+    "nothingToRedo": "没有可恢复的操作",
+    "outermostLevel": "所选内容已位于最外层级别",
+    "cannotIndentFurther": "无法再增加所选内容的缩进",
+    "noGoToView": "此处无法使用定位",
+    "noBookmarkDialog": "无法在此处添加书签"
   },
   "equationPopup": {
     "apply": "应用",

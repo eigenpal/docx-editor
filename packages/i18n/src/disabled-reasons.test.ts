@@ -104,3 +104,16 @@ test.each([
 ] as const)('the table refusal %s is translatable', (reason, key) => {
   expect(localizeDisabledReason(reason, createT(en))).toBe(en.disabledReason[key]);
 });
+
+// The undo and indent buttons and the Go To and Bookmark rows show these when disabled. Without an
+// entry, a localized editor showed them in English.
+test.each([
+  'nothing to undo',
+  'nothing to redo',
+  'the selection is already at the outermost level',
+  'the selection cannot indent any further',
+  'no Go To view is registered',
+  'no bookmark dialog is registered',
+])('the chrome refusal "%s" is translatable', (reason) => {
+  expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);
+});
