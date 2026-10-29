@@ -3,7 +3,7 @@ import {
   rememberHangingPunctuation,
   spaceShrinkMarkAdvance,
 } from './paragraph-hanging-punctuation.ts';
-import { appendUnsupportedContent } from './unsupported-content-flow.ts';
+import { appendColumnBreak, appendUnsupportedContent } from './unsupported-content-flow.ts';
 import { besideFloatWidth } from './legacy-inline-beside-float.ts';
 import { continuationPiecesWithRules } from './paragraph-continuation-pieces.ts';
 import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
@@ -33,6 +33,7 @@ import {
   createShrinkProbe,
   opensWithHangingSpace,
   lineEndAt,
+  compressLineSpaces,
 } from './paragraph-space-shrink.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-walk.ts';
 import { bidiSourceBoundaries } from './bidi-piece-coalescing.ts';
@@ -949,27 +950,11 @@ export function breakParagraph(
     const piece = pieces[pieceIndex]!;
     if (piece.breakKind === 'column') {
       const opensParagraph: boolean = firstLineOpen && !line.spans.length && !line.drawings.length;
-      const breakMetrics = measurer.lineMetrics(piece.style);
-      line.spans.push({
-        range: { paragraphId, start: piece.start, end: piece.end },
-        text: piece.text,
-        props: piece.props,
-        style: piece.style,
-        box: { x: lineOrigin() + line.width, y: 0, width: 0, height: breakMetrics.height },
-        ...(piece.link ? { link: piece.link } : {}),
-        ...paragraphSpanMetadata(piece),
-      });
-      growLineMetrics(line, breakMetrics);
-      line.end = piece.end;
+      appendColumnBreak(line, piece, paragraphId, lineOrigin() + line.width, measurer);
       closeLine();
       lines[lines.length - 1]!.columnBreakAfter = true;
       firstLineOpen = opensParagraph;
-      // Like a trailing hard break, NOT like a page break: Word still lays out the
-      // paragraph's remainder after the column advance. The common authoring form
-      // `<w:p><w:r><w:br w:type="column"/></w:r></w:p>` therefore opens one empty line
-      // at the top of the next column before the following block — the paragraph mark
-      // after the break. Suppressing that remainder put "After Column Break" flush with
-      // the prior column's first line.
+      // Like a trailing hard break: the paragraph mark after it takes a line in the next column.
       trailingLineBreak = true;
       continue;
     }
@@ -1349,9 +1334,9 @@ export function breakParagraph(
       let clippedWordEnd = clipWordEndAtPen();
       width = clippedWordEnd?.width ?? width;
       const ends = paragraphFinal(pieceIndex, boundary);
-      const hangsAtLineEnd = () =>
+      const hangsAtLineEnd = (text = candidate, textWidth = width) =>
         (typography.hangingPunctuation ?? typography.overflowPunctuation) &&
-        canHangCjkPunctuation(candidate, piece, lineAvailable() - line.width, width, measurer, {
+        canHangCjkPunctuation(text, piece, lineAvailable() - line.width, textWidth, measurer, {
           paragraphFinal: ends,
           policy: typography,
         });
@@ -1406,47 +1391,55 @@ export function breakParagraph(
       }
       // A bearing shared across a line break is lost, so fit at the natural advance.
       const baseFitWidth = opticalFit ? width : (seamNaturalWidths.get(piece) ?? width);
-      const followingCluster = clusterTail?.(pieceIndex, boundary) ?? 0;
+      // An optical fit already holds the rest of its group, a cluster tail in the next run too.
+      const followingCluster = opticalFit ? 0 : (clusterTail?.(pieceIndex, boundary) ?? 0);
       const fitWidth =
         baseFitWidth + followingCluster + automaticGap() + (lineEndWhitespace ? 0 : endSpaces.room);
-      // A justified line shrinks its spaces before a half-width final mark hangs.
+      const pastMargin = line.width + fitWidth > lineAvailable() + OVERFLOW_TOLERANCE_PT;
+      // A justified line shrinks its spaces before a half-width final mark hangs. Only a word
+      // past the margin needs the mark's advance.
       const shrinkMark =
-        flow?.justifySpaceShrink && !opticalFit
+        flow?.spaceShrink && !opticalFit && pastMargin
           ? spaceShrinkMarkAdvance(candidate, piece, measurer, typography, ends)
           : 0;
       let overflows =
         (!hangs || shrinkMark > 0) &&
         // A space after a word that borrowed inter-word space hangs on its line.
-        !(lineEndWhitespace && flow?.justifySpaceShrink) &&
-        line.width + fitWidth > lineAvailable() + OVERFLOW_TOLERANCE_PT;
+        !(lineEndWhitespace && flow?.spaceShrink) &&
+        pastMargin;
       const followingWidth =
-        overflows && flow?.justifySpaceShrink ? shrinkTail(pieceIndex, boundary) : undefined;
+        overflows && flow?.spaceShrink ? shrinkTail(pieceIndex, boundary) : undefined;
       const shrinkFit =
         overflows &&
-        flow?.justifySpaceShrink === true &&
+        flow?.spaceShrink !== undefined &&
         // A word split across runs still borrows from the span where the word began.
         (opensWord || (openDecision === 'continues' && wordStartSpan > 0)) &&
         // Text after a right, center or decimal tab is placed against its stop, not justified.
         alignedTabRight === 0 &&
         line.drawings.length === 0 &&
+        !(flow.spaceShrink.everyAlignment && line.compressesSpaces) &&
         (placeableSuffixes[pieceIndex]![boundary] === 1 || endsParagraph(pieceIndex, boundary)) &&
         spaceShrinkFit(
           line.spans,
-          candidate,
-          faceStyle,
           measurer,
-          line.width + automaticGap(),
-          lineAvailable(),
-          opensWord ? line.spans.length : wordStartSpan,
-          opensWord ? line.width : wordStartWidth,
-          followingWidth !== undefined ||
-            endsParagraph(pieceIndex, boundary) ||
-            (boundary < piece.text.length
-              ? !layoutOwned && (piece.text[boundary] === ' ' || endsAtHyphenBreak(candidate))
-              : opensWithHangingSpace(pieces[pieceIndex + 1])),
-          followingWidth ?? 0,
-          probeX(lineOrigin() + line.width),
-          flow.spaceShrinkHangsMarks ? shrinkMark : 0
+          {
+            text: candidate,
+            style: faceStyle,
+            lineWidth: line.width + automaticGap(),
+            available: lineAvailable(),
+            wordStart: opensWord ? line.spans.length : wordStartSpan,
+            wordStartWidth: opensWord ? line.width : wordStartWidth,
+            wordEnds:
+              followingWidth !== undefined ||
+              endsParagraph(pieceIndex, boundary) ||
+              (boundary < piece.text.length
+                ? !layoutOwned && (piece.text[boundary] === ' ' || endsAtHyphenBreak(candidate))
+                : opensWithHangingSpace(pieces[pieceIndex + 1])),
+            followingWidth: followingWidth ?? 0,
+            passageStart: probeX(lineOrigin() + line.width),
+            hangingMarkAdvance: shrinkMark,
+          },
+          flow.spaceShrink
         );
       // The spaces make room for the mark, or it hangs beside spaces at their floor.
       if (shrinkMark > 0 && overflows)
@@ -1512,6 +1505,11 @@ export function breakParagraph(
         if (!ensurePlacementWidth(fitWidth)) continue;
       } else if (borrowsSpace) {
         line.borrowedSpace = true;
+        if (flow?.spaceShrink?.everyAlignment) {
+          const start = opensWord ? line.spans.length : wordStartSpan;
+          const gained = compressLineSpaces(line, start, measurer);
+          if (!opensWord) wordStartWidth += gained;
+        }
         // Only this admission may compress the paragraph's last line when it is aligned.
         if (endsParagraph(pieceIndex, boundary)) line.spaceShrink = true;
       }
@@ -1595,7 +1593,9 @@ export function breakParagraph(
           cutAllowedAt: textBreaks
             ? (_text, index) => textBreaks.cutAllowed(piece, consumed, index)
             : cjkChopCutAllowedAt,
+          finalMarkHangs: hangsAtLineEnd,
         });
+        if (chopped.finalMarkHangs) hangs = true;
         remaining = chopped.text;
         remainingStart = chopped.modelStart;
         remainingWidth = chopped.width;

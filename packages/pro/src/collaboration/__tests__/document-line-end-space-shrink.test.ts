@@ -47,7 +47,13 @@ const SOURCE = {
       '<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>',
   },
 };
-type Line = { spans: readonly { text: string; style: { shaping?: { wordSpacingPt?: number } } }[] };
+type Line = {
+  spans: readonly {
+    text: string;
+    box: { x: number; width: number };
+    style: { shaping?: { wordSpacingPt?: number } };
+  }[];
+};
 function paragraphLines(editor: Editor): Line[] {
   return editor
     .surface!.layout()
@@ -59,7 +65,13 @@ function paragraphLines(editor: Editor): Line[] {
 function lines(editor: Editor) {
   return paragraphLines(editor).map((line) => ({
     text: line.spans.map((span) => span.text).join(''),
-    shrink: line.spans.reduce((sum, span) => sum + (span.style.shaping?.wordSpacingPt ?? 0), 0),
+    // A shrunk space overlaps the next span, or carries negative word spacing on a bidi line.
+    shrink: line.spans.reduce((sum, span, index) => {
+      const next = line.spans[index + 1];
+      const overlap =
+        next && next.box.x > span.box.x ? Math.max(0, span.box.x + span.box.width - next.box.x) : 0;
+      return sum - overlap + (span.style.shaping?.wordSpacingPt ?? 0);
+    }, 0),
   }));
 }
 function select(editor: Editor, from: number, to = from) {

@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A word wider than its line that is cut right before its final mark moves the mark alone to a new line.",
+  "after": "The final mark stays on the line and hangs past the margin when the paragraph lets it hang.",
+  "reason": "Only derived layout and PDF text change. Canonical OOXML, source offsets, operations, and collaboration formats remain unchanged.",
+  "tests": ["packages/core/src/layout/__tests__/chopped-word-final-mark.test.ts"],
+  "changeset": "chopped-word-final-mark",
+  "migration": null
+}

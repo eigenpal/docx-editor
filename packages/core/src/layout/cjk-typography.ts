@@ -28,6 +28,12 @@ export interface CjkTypographySettings {
    * @internal
    */
   readonly legacyLineEndPunctuation?: true;
+  /**
+   * The compatibility setting `w:balanceSingleByteDoubleByteWidth`: lines in a legacy mode keep
+   * their natural inter-word spaces, also with punctuation compression.
+   * @internal
+   */
+  readonly balancedWidths?: true;
   /** Whitespace compression selected by `w:characterSpacingControl`. */
   readonly compression:
     | 'doNotCompress'
@@ -94,6 +100,7 @@ export function cjkTypographyFromSettings(root: OoxmlElement | null): CjkTypogra
   let strict = false;
   let punctuationKerning = true;
   let compression: CjkTypographySettings['compression'] = 'doNotCompress';
+  let balancedWidths = false;
   const before: Record<string, string> = Object.create(null);
   const after: Record<string, string> = Object.create(null);
   for (const child of root?.children ?? []) {
@@ -104,6 +111,7 @@ export function cjkTypographyFromSettings(root: OoxmlElement | null): CjkTypogra
       (attribute) => attribute.localName === 'val' && attribute.namespaceUri === child.namespaceUri
     )?.value;
     if (child.localName === 'strictFirstAndLastChars') strict = on(value);
+    if (child.localName === 'compat') balancedWidths = compatBalancesWidths(child);
     if (child.localName === 'noPunctuationKerning') punctuationKerning = !on(value);
     if (
       child.localName === 'characterSpacingControl' &&
@@ -130,9 +138,23 @@ export function cjkTypographyFromSettings(root: OoxmlElement | null): CjkTypogra
     strict,
     punctuationKerning,
     compression,
+    ...(balancedWidths ? { balancedWidths: true as const } : {}),
     before: Object.freeze(before),
     after: Object.freeze(after),
   });
+}
+
+/** Whether a `w:compat` element turns `w:balanceSingleByteDoubleByteWidth` on. */
+function compatBalancesWidths(compat: OoxmlElement): boolean {
+  for (const child of compat.children) {
+    if (!('localName' in child) || child.localName !== 'balanceSingleByteDoubleByteWidth') continue;
+    if (child.namespaceUri !== WML_NAMESPACE_URI) continue;
+    const value = child.attributes.find(
+      (attribute) => attribute.localName === 'val' && attribute.namespaceUri === child.namespaceUri
+    )?.value;
+    return on(value);
+  }
+  return false;
 }
 
 export function resolveCjkTypography(
@@ -192,12 +214,20 @@ export function koreanFinalMarkHangs(settings: CjkTypographySettings | undefined
   return !(settings?.legacyLineEndPunctuation === true && settings.compression !== 'doNotCompress');
 }
 
+const CJK_LANGUAGE = /^(ja|zh|ko)(-|$)/i;
+
 export function eastAsianLanguage(props: readonly OoxmlProperty[]): string | undefined {
   let language: string | undefined;
   for (const prop of props) {
     if (prop.localName !== 'lang') continue;
-    const value = prop.attributes?.eastAsia ?? prop.attributes?.val;
-    if (value && /^(ja|zh|ko)(-|$)/i.test(value)) language = value.toLowerCase();
+    const eastAsia = prop.attributes?.eastAsia;
+    // A later explicit East Asian language replaces an inherited one, a non-CJK one too: an
+    // `en-US` run in a Chinese document breaks and hangs as English text.
+    if (eastAsia) language = CJK_LANGUAGE.test(eastAsia) ? eastAsia.toLowerCase() : undefined;
+    else {
+      const value = prop.attributes?.val;
+      if (value && CJK_LANGUAGE.test(value)) language = value.toLowerCase();
+    }
   }
   return language;
 }

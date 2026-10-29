@@ -130,6 +130,9 @@ export interface PageChangeBars {
     readonly toggle: boolean;
 }
 
+// @internal
+export function paintedGapBetween(span: PlacedSpan, next: PlacedSpan): number;
+
 // @public
 export interface PaintOptions {
     readonly activeHeaderFooterPageIndex?: number;
@@ -181,6 +184,25 @@ export function paintSelectionOverlay(layer: HTMLElement, layout: SemanticLayout
 
 // @public
 export function paintSemanticLayout(container: HTMLElement, layout: SemanticLayout, options?: PaintOptions): void;
+
+// @internal
+export interface PlacedSpan {
+    // (undocumented)
+    readonly box: {
+        readonly width: number;
+        readonly x: number;
+    };
+    // (undocumented)
+    readonly style: {
+        readonly shaping?: {
+            readonly level?: number;
+        } | null;
+    };
+    // (undocumented)
+    readonly text: string;
+    // (undocumented)
+    readonly wrapAdvanceBefore?: number;
+}
 
 // @public
 export interface ReviewAuthorInfo {

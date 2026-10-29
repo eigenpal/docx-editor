@@ -9,6 +9,13 @@ import {
 import type { SourceRange, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { measureDisplayText } from './run-style.ts';
 import { automaticTextSpacingBefore } from './cjk-automatic-spacing.ts';
+import {
+  kanaFitCells,
+  kanaCapacityOf,
+  kanaShareLimit,
+  lineStartCharacter,
+  takeFinalSoundMarkShare,
+} from './kana-sound-mark-fit.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import { isDefaultGraphemeBoundary, segmentGraphemes, type GraphemeSegment } from './grapheme.ts';
 import { isCjk, type CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
@@ -389,11 +396,11 @@ const isFullWidthKana = (cell: Cell): boolean => FULL_WIDTH_KANA.test(cell.span.
 const kanaShare = (cell: Cell): number =>
   Math.max(
     0,
-    Math.min(cell.span.style.fontSizePt / 16 - cell.reduction, cell.span.box.width - cell.reduction)
+    Math.min(kanaShareLimit(cell.span) - cell.reduction, cell.span.box.width - cell.reduction)
   );
 /**
- * An upper bound on what a kana fit can absorb: a sixteenth of an em per kana and half an em
- * per punctuation mark or curly quote, from each span's own font size.
+ * An upper bound on what a kana fit can absorb: a sixteenth of an em per kana or sound mark,
+ * half an em per punctuation mark or curly quote, from each span's own font size.
  */
 function kanaFitBound(line: PendingLine, candidates: readonly StyleSpanRecord[]): number {
   let bound = TOLERANCE;
@@ -403,7 +410,7 @@ function kanaFitBound(line: PendingLine, candidates: readonly StyleSpanRecord[])
       const text = span.text;
       for (let index = 0; index < text.length; index++) {
         const unit = text.charCodeAt(index);
-        if ((unit >= 0x3041 && unit <= 0x3096) || (unit >= 0x30a1 && unit <= 0x30fa))
+        if ((unit >= 0x3041 && unit <= 0x309a) || (unit >= 0x30a1 && unit <= 0x30fa))
           bound += em / 16;
         else if (unit >= 0x2018 && (PUNCTUATION.test(text[index]!) || curlyRole(text[index]!)))
           bound += em / 2;
@@ -533,8 +540,11 @@ function fitCjkOptically(
       deficit -= last.reduction;
     }
   }
-  const kanaCells = kana ? cells.filter(isFullWidthKana) : [];
-  const kanaCapacity = kanaCells.reduce((sum, cell) => sum + kanaShare(cell), 0);
+  const kanaCells = kana ? kanaFitCells(cells, isFullWidthKana) : [];
+  const kanaCapacity = kanaCells.reduce(
+    (sum, cell) => sum + kanaCapacityOf(cell, kanaShare(cell)),
+    0
+  );
   // Check the expansion gate against an upper bound before any word is shaped for its ink.
   // The final mark's relief (its hang or its dropped trailing half) counts as capacity.
   const relief = fullDeficit - deficit;
@@ -634,6 +644,7 @@ function fitCjkOptically(
   // Kana take what punctuation leaves. When they cannot take it all, the final mark first
   // gives its whole trailing half.
   if (kana && deficit > TOLERANCE) {
+    deficit = takeFinalSoundMarkShare(last, deficit);
     if (deficit > kanaCapacity + TOLERANCE) {
       last.reduction += deferredFinal;
       deficit -= deferredFinal;
@@ -814,7 +825,8 @@ export function createCjkOpticalFitter(
     const language = languageOf(piece);
     if (/^ko(?:-|$)/.test(language)) return undefined;
     if (/^zh-(tw|hk|mo|hant)(-|$)/.test(language) && !legacy) return undefined;
-    if (!kinsokuCharacters(language, policy?.settings).before.includes(tail)) return undefined;
+    const lineStart = legacy ? tail : lineStartCharacter(tail, last);
+    if (!kinsokuCharacters(language, policy?.settings).before.includes(lineStart)) return undefined;
     const lone = candidates.length === 1 && tail.length === last.text.length;
     return lone && legacy ? { ...kanaFit.rules, ungated: true } : kanaFit.rules;
   };

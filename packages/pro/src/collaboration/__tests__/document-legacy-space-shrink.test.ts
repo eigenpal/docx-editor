@@ -1,0 +1,146 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+// A left-aligned line that shrinks its spaces under a legacy compatibility mode with
+// punctuation compression stays derived layout: two peers converge through edits, history,
+// remote selections, and save.
+import { afterEach, expect, test } from 'bun:test';
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import { applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness';
+import { collaborationModule } from '../collaboration-module.ts';
+import { createPeerHarness, zipDocument } from './document-peer-support.ts';
+import { packageFingerprint, saveReopenDigest } from './document-support.ts';
+
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+const harness = createPeerHarness('legacy-space-shrink-room', { offlineEditing: true });
+type Editor = ReturnType<typeof createDocxEditor>;
+const editors: Editor[] = [];
+afterEach(() => {
+  for (const editor of editors.splice(0)) editor.destroy();
+  harness.cleanup();
+});
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+// Every 11 pt character, a space too, is 6 pt on the 87 pt measure. `aaa aaa aaa aaa` is 90 pt:
+// its three spaces give up 1 pt each, within a fifth of their advance.
+const BODY =
+  '<w:p><w:pPr><w:jc w:val="left"/></w:pPr>' +
+  '<w:r><w:rPr><w:sz w:val="22"/><w:lang w:val="en-US" w:eastAsia="zh-CN"/></w:rPr>' +
+  '<w:t>aaa aaa aaa aaa aaa</w:t></w:r></w:p>' +
+  '<w:sectPr><w:pgSz w:w="2940" w:h="10000"/>' +
+  '<w:pgMar w:top="600" w:bottom="600" w:left="600" w:right="600"/></w:sectPr>';
+const CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml';
+const SOURCE = {
+  overrides:
+    `<Override PartName="/word/styles.xml" ContentType="${CT}.styles+xml"/>` +
+    `<Override PartName="/word/settings.xml" ContentType="${CT}.settings+xml"/>`,
+  documentRels:
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="styles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+    '<Relationship Id="settings" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>' +
+    '</Relationships>',
+  extraXml: {
+    'word/styles.xml': `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="SimSun"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`,
+    'word/settings.xml':
+      `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/>` +
+      '<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="14"/></w:compat></w:settings>',
+  },
+};
+type Line = {
+  spans: readonly {
+    text: string;
+    box: { x: number; width: number };
+    style: { shaping?: { wordSpacingPt?: number } };
+  }[];
+};
+function paragraphLines(editor: Editor): Line[] {
+  return editor
+    .surface!.layout()
+    .pages.flatMap((page) =>
+      page.fragments.flatMap((fragment) => (fragment.kind === 'paragraph' ? fragment.lines : []))
+    );
+}
+/** Each line's text, and the total spacing its spaces give up. */
+function lines(editor: Editor) {
+  return paragraphLines(editor).map((line) => ({
+    text: line.spans.map((span) => span.text).join(''),
+    // A shrunk space overlaps the next span, or carries negative word spacing on a bidi line.
+    shrink: line.spans.reduce((sum, span, index) => {
+      const next = line.spans[index + 1];
+      const overlap =
+        next && next.box.x > span.box.x ? Math.max(0, span.box.x + span.box.width - next.box.x) : 0;
+      return sum - overlap + (span.style.shaping?.wordSpacingPt ?? 0);
+    }, 0),
+  }));
+}
+function select(editor: Editor, from: number, to = from) {
+  const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+  editor.surface!.setSelection({
+    anchor: { paragraphId, offset: from },
+    head: { paragraphId, offset: to },
+  });
+}
+
+test('legacy space shrinking on a left-aligned line converges through edits, history, and save', async () => {
+  const peers = await harness.pair(zipDocument(BODY, SOURCE));
+  const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
+    peer.detach();
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: peer.room.document,
+      modules: [collaborationModule({ session: peer.room.session })],
+    });
+    editors.push(editor);
+    return editor;
+  }) as [Editor, Editor];
+  const converged = () => {
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+    const a = alice.surface!.session.currentPackage(),
+      b = bob.surface!.session.currentPackage();
+    expect(packageFingerprint(a)).toBe(packageFingerprint(b));
+    expect(saveReopenDigest(a)).toEqual(saveReopenDigest(b));
+    expect(lines(alice)).toEqual(lines(bob));
+  };
+  converged();
+  // The fourth word stays: the spaces give up the 3 pt it overflows by.
+  expect(lines(alice).map((line) => line.text)).toEqual(['aaa aaa aaa aaa ', 'aaa']);
+  expect(lines(alice)[0]!.shrink).toBeCloseTo(-3, 6);
+  const before = lines(alice);
+  select(alice, 14);
+  applyAwarenessUpdate(
+    peers.bob.awareness,
+    encodeAwarenessUpdate(peers.alice.awareness, [peers.alice.ydoc.clientID]),
+    'relay'
+  );
+  expect(peers.bob.room.session.remoteSelections()[0]!.head.offset).toBe(14);
+  peers.pause();
+  // Alice shortens the fourth word while Bob appends a word offline.
+  select(alice, 14, 15);
+  expect(alice.exec({ type: 'deleteText' }).ok).toBe(true);
+  select(bob, 19);
+  expect(bob.exec({ type: 'insertText', text: ' bb' }).ok).toBe(true);
+  peers.alice.room.session.flushPendingJournals();
+  peers.bob.room.session.flushPendingJournals();
+  peers.resume();
+  converged();
+  // The shorter line fits at its natural spacing.
+  expect(lines(alice).map((line) => line.text)).toEqual(['aaa aaa aaa aa ', 'aaa bb']);
+  expect(lines(alice)[0]!.shrink).toBe(0);
+  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+  converged();
+  expect(alice.exec({ type: 'redo' }).ok).toBe(true);
+  converged();
+  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+  expect(bob.exec({ type: 'undo' }).ok).toBe(true);
+  converged();
+  expect(lines(alice)).toEqual(before);
+  const reopened = createDocxEditor({
+    container: document.createElement('div'),
+    document: await alice.save(),
+  });
+  editors.push(reopened);
+  expect(lines(reopened)).toEqual(lines(alice));
+});

@@ -24,6 +24,7 @@ import {
 import { resolveCjkTypography } from './cjk-typography.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { holdsOnlyColumnBreak } from './body-flow-helpers.ts';
+import { resolveSpaceShrinkRule } from './space-shrink-rule.ts';
 
 /**
  * External values can change while the source paragraph retains its identity.
@@ -250,13 +251,11 @@ function breakPreparedParagraphLines(request: ParagraphBreakRequest): readonly P
     {
       ...request.flow,
       paragraphRtl: paragraphIsRtl(formatting.props),
-      // Modern justification is mode 15 and every newer mode. An absent mode stays legacy.
-      justifySpaceShrink:
-        hasCompatibilityRule(request.compatibilityMode, 'justifiedSpaceShrink') &&
-        paragraphAlignment(formatting.props) === 'both',
-      spaceShrinkHangsMarks:
-        formatting.props.filter((prop) => prop.localName === 'jc').at(-1)?.attributes?.val ===
-        'both',
+      spaceShrink: resolveSpaceShrinkRule(
+        request.compatibilityMode,
+        formatting.props,
+        styleCascade?.typography
+      ),
       leftTabsPastMargin: hasCompatibilityRule(request.compatibilityMode, 'leftTabStopsPastMargin'),
       inlineObjectsBesideFloats: hasCompatibilityRule(
         request.compatibilityMode,

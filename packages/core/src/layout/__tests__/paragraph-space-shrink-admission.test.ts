@@ -1,3 +1,4 @@
+import { spacingOf as spansSpacing } from './shrunk-space.ts';
 import { expect, test } from 'bun:test';
 import { layoutContext, load } from './anchored-drawing-test-fixtures.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
@@ -69,7 +70,7 @@ function layout(bodyXml: string, width: number, compatibilityMode: number | unde
   return linesOf(result)[0]!;
 }
 
-const spacingOf = (line: LineRecord) => line.spans.map((s) => s.style.shaping?.wordSpacingPt ?? 0);
+const spacingOf = (line: LineRecord) => spansSpacing(line.spans);
 const startOf = (line: LineRecord, text: string) =>
   line.spans.find((s) => s.text.startsWith(text))!.box.x - line.spans[0]!.box.x;
 

@@ -57,6 +57,19 @@ test('a span owns no gap past a float advance, a link change, or a scaled box', 
     expect(ownedGapAfter({ line: { ...record, spans: [left, right] }, span: left })).toBe(0);
 });
 
+test('a shrunk space ends its marks where the next span starts', () => {
+  const record = line(),
+    span = record.spans[0]!,
+    next = record.spans[1]!;
+  // Layout shrinks a space by moving the next span 1 pt into the span's natural box.
+  const shrunk = { ...next, box: { ...next.box, x: span.box.x + span.box.width - 1 } };
+  expect(ownedGapAfter({ line: { ...record, spans: [span, shrunk] }, span })).toBeCloseTo(-1, 6);
+  // A link change owns no stretch, but the shrunk space is still the span's own.
+  const link = { id: 'other', kind: 'external' as const, href: 'https://example.com' };
+  const linked = { ...shrunk, link };
+  expect(ownedGapAfter({ line: { ...record, spans: [span, linked] }, span })).toBeCloseTo(-1, 6);
+});
+
 test('a span owns its gap whatever the next span looks like', () => {
   const record = line(),
     span = record.spans[0]!,

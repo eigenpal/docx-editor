@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A distributed line in a modern compatibility mode keeps the next word when each space would lose at most half of the stretch the shorter line takes, and wraps a word whose final mark does not fit inside.",
+  "after": "A distributed line keeps the word only when each space would lose at most a third of that stretch, counting half of a final mark that may hang, and hangs the mark beside spaces at their floor.",
+  "reason": "Only derived layout and PDF text change. Canonical OOXML, source offsets, operations, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/distributed-space-shrink.test.ts",
+    "packages/core/src/layout/__tests__/hanging-punctuation-space-shrink.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-line-end-space-shrink.test.ts"
+  ],
+  "changeset": "distributed-space-shrink",
+  "migration": null
+}

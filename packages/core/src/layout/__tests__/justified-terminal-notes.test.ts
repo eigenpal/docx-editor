@@ -4,6 +4,7 @@ import { breakParagraph } from '../paragraph-flow.ts';
 import type { TextMeasurer } from '../semantic-records.ts';
 import { applyTreeOp, paragraphTextOf, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { isSpaceShrinkWordPiece } from '../space-shrink-piece.ts';
+import { JUSTIFIED_SPACE_SHRINK } from '../space-shrink-rule.ts';
 import { DEFAULT_RUN_STYLE } from '../run-style.ts';
 import { createLayoutSession, layoutSemanticDocument } from '../semantic-layout.ts';
 
@@ -49,7 +50,7 @@ function layoutPart(
     undefined,
     undefined,
     {
-      justifySpaceShrink: enabled,
+      ...(enabled ? { spaceShrink: JUSTIFIED_SPACE_SHRINK } : {}),
       noteMarks: {
         marks: new Map([
           ['footnote:1', mark],

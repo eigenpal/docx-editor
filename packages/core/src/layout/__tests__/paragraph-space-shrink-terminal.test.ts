@@ -1,3 +1,4 @@
+import { anyShrunk, spacingOf } from './shrunk-space.ts';
 import { expect, test } from 'bun:test';
 import { loadBody } from './float-over-table-harness.ts';
 import { createLayoutSession, layoutSemanticDocument } from '../semantic-layout.ts';
@@ -47,7 +48,7 @@ const content = (result: ReturnType<typeof layoutSemanticDocument>) =>
       .trimEnd()
   );
 const compressed = (result: ReturnType<typeof layoutSemanticDocument>) =>
-  linesOf(result).some((l) => l.spans.some((s) => (s.style.shaping?.wordSpacingPt ?? 0) < 0));
+  linesOf(result).some((l) => anyShrunk(l.spans));
 /** Where the last visible glyph of `word` ends, from the line's first span. */
 const wordEnd = (result: ReturnType<typeof layoutSemanticDocument>, word: string) => {
   const spans = linesOf(result)[0]!.spans;
@@ -59,18 +60,18 @@ test("a justified paragraph's last word borrows inter-word space, with measurabl
   const result = modern(paragraph(runs(['aa bb cc'])));
   expect(content(result)).toEqual(['aa bb cc']);
   const spans = linesOf(result)[0]!.spans;
-  expect(spans.map((s) => s.style.shaping?.wordSpacingPt ?? 0)).toEqual([-1, -1, 0]);
+  expect(spacingOf(spans)).toEqual([-1, -1, 0]);
   for (const span of spans)
     expect(measurer.measure(span.text, span.style)).toBeCloseTo(span.box.width, 6);
   for (let i = 1; i < spans.length; i++)
-    expect(spans[i]!.box.x).toBeCloseTo(spans[i - 1]!.box.x + spans[i - 1]!.box.width, 6);
+    expect(spans[i]!.box.x).toBeCloseTo(spans[i - 1]!.box.x + spans[i - 1]!.box.width - 1, 6);
   expect(wordEnd(result, 'cc')).toBeCloseTo(66, 6);
 });
 
 test('a last line that fits keeps its natural spacing and never stretches', () => {
   for (const text of ['aa bb', 'aa bb cc dd']) {
     const last = linesOf(modern(paragraph(runs([text])))).at(-1)!.spans;
-    expect(last.every((s) => !s.style.shaping?.wordSpacingPt)).toBe(true);
+    expect(anyShrunk(last)).toBe(false);
     for (let i = 1; i < last.length; i++)
       expect(last[i]!.box.x).toBeCloseTo(last[i - 1]!.box.x + last[i - 1]!.box.width, 6);
   }

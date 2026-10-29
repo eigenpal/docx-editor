@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "In a legacy compatibility mode, lines keep natural inter-word spaces, also with punctuation compression.",
+  "after": "With punctuation compression and an East Asian default face, a line at any alignment shrinks its spaces down to half the average character width of their face to keep one more word, unless w:balanceSingleByteDoubleByteWidth is set,, and alignment compresses that line to fill the measure.",
+  "reason": "Only derived layout and PDF text change. Canonical OOXML, source offsets, operations, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/legacy-compressed-space-shrink.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-legacy-space-shrink.test.ts"
+  ],
+  "changeset": "legacy-compressed-space-shrink",
+  "migration": null
+}

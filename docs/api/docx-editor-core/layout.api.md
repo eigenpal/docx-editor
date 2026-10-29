@@ -382,6 +382,8 @@ export type CellVerticalAlign = 'top' | 'center' | 'bottom';
 // @public
 export interface CjkTypographySettings {
     readonly after: Readonly<Record<string, string>>;
+    // @internal
+    readonly balancedWidths?: true;
     readonly before: Readonly<Record<string, string>>;
     readonly compression: 'doNotCompress' | 'compressPunctuation' | 'compressPunctuationAndJapaneseKana';
     // @internal

@@ -1,5 +1,6 @@
 import type { FieldAwarePiece } from './field-pieces.ts';
-import type { PendingLine } from './pending-line.ts';
+import { growLineMetrics, type PendingLine } from './pending-line.ts';
+import type { TextMeasurer } from './semantic-records.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
 
 /** Publish a component's reserved box without inventing model characters. */
@@ -25,5 +26,32 @@ export function appendUnsupportedContent(
     ...paragraphSpanMetadata(piece),
   });
   line.width += atomWidth;
+  line.end = piece.end;
+}
+
+/**
+ * Publish a column break's zero-width span; the caller closes the line. Like a trailing hard
+ * break, not like a page break, the break leaves the paragraph's remainder to lay out after
+ * the column advance: the common form `<w:p><w:r><w:br w:type="column"/></w:r></w:p>` opens one
+ * empty line, the paragraph mark, at the top of the next column before the following block.
+ */
+export function appendColumnBreak(
+  line: PendingLine,
+  piece: FieldAwarePiece,
+  paragraphId: string,
+  x: number,
+  measurer: TextMeasurer
+): void {
+  const metrics = measurer.lineMetrics(piece.style);
+  line.spans.push({
+    range: { paragraphId, start: piece.start, end: piece.end },
+    text: piece.text,
+    props: piece.props,
+    style: piece.style,
+    box: { x, y: 0, width: 0, height: metrics.height },
+    ...(piece.link ? { link: piece.link } : {}),
+    ...paragraphSpanMetadata(piece),
+  });
+  growLineMetrics(line, metrics);
   line.end = piece.end;
 }

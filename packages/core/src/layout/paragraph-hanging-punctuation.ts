@@ -30,7 +30,7 @@ export function paragraphFinalAt(
 /**
  * The advance of the half-width Latin mark (below U+2000) that ends `candidate` and may hang
  * past the margin, or 0. A justified line that may shrink its spaces
- * (`ParagraphFlowOptions.justifySpaceShrink`) shrinks them before such a mark hangs, and
+ * (`ParagraphFlowOptions.spaceShrink`) shrinks them before such a mark hangs, and
  * hangs it only when the spaces reach their floor first: see `spaceShrinkFit`. Full-width
  * marks hang as before.
  */

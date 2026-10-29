@@ -1,6 +1,7 @@
 import {
   fieldAnchorStart,
   followingGapPaint,
+  paintedGapBetween,
   letterGapSpacing,
 } from './semantic-paint-letter-gap.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
@@ -1249,14 +1250,14 @@ function paintLine(
         painted.style.wordSpacing = `${span.style.shaping.wordSpacingPt * scale}px`;
       logicalAdvance += span.box.width;
     }
-    const margin = pendingGap > 0 && !previousSpanAbsorbedGap ? pendingGap : slackAfterPicture;
-    if (margin > 0.001) painted.style.marginLeft = `${margin * scale}px`;
+    const margin = pendingGap !== 0 && !previousSpanAbsorbedGap ? pendingGap : slackAfterPicture;
+    if (Math.abs(margin) > 0.001) painted.style.marginLeft = `${margin * scale}px`;
     // A justify gap is drawn INSIDE the span before it wherever that span can stretch its
     // trailing space: the browser highlights a space's advance but never a margin, so a
     // margin gap broke the selection band into one block per word on justified lines.
     const next = line.spans[spanIndex + 1];
     const gapAfter = bidi ? 0 : interSpanGapBefore(line, spanIndex + 1, rankOf);
-    const owner = gapAfter > 0 && next !== undefined ? followingGapPaint(span, next) : null;
+    const owner = gapAfter !== 0 && next !== undefined ? followingGapPaint(span, next) : null;
     previousSpanAbsorbedGap = owner !== null;
     if (owner === 'wordSpacing') painted.style.wordSpacing = `${gapAfter * scale}px`;
     else if (owner === 'letterSpacing')
@@ -1359,9 +1360,7 @@ function interSpanGapBefore(
     return afterPrevious && beforeCurrent;
   });
   if (drawingOccupiesGap) return 0;
-  const gap =
-    current.box.x - (previous.box.x + previous.box.width) - (current.wrapAdvanceBefore ?? 0);
-  return gap > 0.001 ? gap : 0;
+  return paintedGapBetween(previous, current);
 }
 
 function paintFragment(

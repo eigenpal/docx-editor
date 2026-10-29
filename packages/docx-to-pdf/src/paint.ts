@@ -5,6 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { collectPageChangeBars } from '@docx-editor.dev/core/output';
 import { ownedGapAfter } from './owned-gap.ts';
+import { composeJoinedPairs, composeSoundMarks } from './sound-mark-text.ts';
 import { DEFAULT_REVISION_MARKUP, type ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
 import {
   indexRowRevisions,
@@ -56,6 +57,14 @@ function extractedText(span: SemanticSpanVisit['span']): string {
   if (span.optionalHyphenBreak) return '-';
   const element = span.projected === true && span.range.end - span.range.start === 1;
   return element ? span.text : span.text.replaceAll('\u00ad', '-');
+}
+
+/** A span's text in its ActualText region. Tabs and breaks paint no glyph, so they have none. */
+function spanLogicalText(visit: SemanticSpanVisit): string {
+  return (visit.span.equation?.fallbackText ?? extractedText(visit.span)).replace(
+    /[\t\n\r\f]/g,
+    ''
+  );
 }
 
 /** Border styles `rule()` draws as authored; any other style is drawn as an approximation. */
@@ -636,6 +645,10 @@ export async function paint(
   }
   // The first span of each line, and whether that line keeps logical text per span.
   const lineStarts = new Map<SemanticSpanVisit, boolean>();
+  // Logical text where a kana and its sound mark compose across or inside spans, and the spans
+  // whose text went to the span before them.
+  const composedTexts = new Map<SemanticSpanVisit, string>();
+  const absorbedSpans = new Set<SemanticSpanVisit>();
   spans.length = 0;
   for (const lines of pageGroups.values())
     for (const group of lines.values()) {
@@ -643,11 +656,27 @@ export async function paint(
       group.sort((a, b) => a.absoluteBox.x - b.absoluteBox.x);
       lineStarts.set(group[0]!, !rightToLeft);
       for (const visit of group) spans.push(visit);
+      if (!rightToLeft && group.some((visit) => /[\u3099\u309a]/u.test(visit.span.text))) {
+        // A mark span with no advance draws over its base: the face joins the pair.
+        const composed = composeSoundMarks(
+          group.map((visit) =>
+            composeJoinedPairs(
+              spanLogicalText(visit),
+              text.session.shapeLaidOutText(visit.span)?.run
+            )
+          ),
+          (index) => group[index]!.span.box.width <= 0.001
+        );
+        group.forEach((visit, index) => {
+          composedTexts.set(visit, composed.texts[index]!);
+          if (composed.absorbed.has(index)) absorbedSpans.add(visit);
+        });
+      }
     }
   let logicalText = false;
   /** Painted operators, with their logical text when the line keeps it. */
-  const withActualText = (painted: string, logical: string): string =>
-    logicalText && painted && logical
+  const withActualText = (painted: string, logical: string, absorbed = false): string =>
+    logicalText && painted && (logical || absorbed)
       ? `/Span << /ActualText <FEFF${unicodeHex(logical)}> >> BDC\n${painted}\nEMC`
       : painted;
   // The buffer of the line being painted, which receives that line's outline glyphs.
@@ -734,7 +763,9 @@ export async function paint(
       const band = text.bandBox(visit);
       const gap = ownedGapAfter(visit);
       const owned =
-        gap > 0 ? widenToGridEdge(band, -visit.page.box.x, band.x + band.width + gap) : band;
+        gap > 0
+          ? widenToGridEdge(band, -visit.page.box.x, band.x + band.width + gap)
+          : { ...band, width: band.width + gap };
       out.push(
         `${color(fill)} rg ${rect(owned, -visit.page.box.x, -visit.page.box.y, pageHeight(page), true)} f`
       );
@@ -747,8 +778,8 @@ export async function paint(
     out.push(
       withActualText(
         visit.span.equation ? paintEquation(visit, page, text, work) : text.paint(visit, page),
-        // Tabs and breaks paint no glyph, so they have no character in the region.
-        (visit.span.equation?.fallbackText ?? extractedText(visit.span)).replace(/[\t\n\r\f]/g, '')
+        composedTexts.get(visit) ?? spanLogicalText(visit),
+        absorbedSpans.has(visit)
       )
     );
     if (clipping) out.push('Q');

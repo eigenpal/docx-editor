@@ -682,14 +682,56 @@ In compatibility mode 15 and later, a justified or distributed line SHALL shrink
 
 ### Requirement: Hanging a mark beside shrunk spaces
 
-When the spaces reach their shrink floor before the mark fits, a justified line SHALL hang the mark if the space-shrink rule admits the word and the spaces make room for the text before the mark. A distributed line SHALL wrap the word instead.
+When the spaces reach their shrink floor before the mark fits, a justified or distributed line SHALL hang the mark if the space-shrink rule admits the word and the spaces make room for the text before the mark.
 
 #### Scenario: A comma hangs beside spaces at their floor
 
 - **GIVEN** the same line, where the spaces at their floor make room for the text before the comma but not for the comma
-- **WHEN** the paragraph is justified
+- **WHEN** the paragraph is justified, or distributed and the word passes the distributed test
 - **THEN** the comma hangs past the margin and the text before it fills the measure
-- **AND** a distributed paragraph moves the word to the next line
+
+### Requirement: Distributed space shrinking
+
+In compatibility mode 15 and later, a distributed line SHALL keep the word that overflows it by shrinking its spaces only when each space loses at most a third of what the line without the word would add to it. The test SHALL count half the advance of a final half-width mark that may hang, a measured fit. A justified line SHALL allow half instead, counting the whole mark.
+
+#### Scenario: A distributed line ends one word earlier
+
+- **GIVEN** a justified and a distributed mode 15 paragraph of English words with the same measure
+- **WHEN** keeping the next word costs each space more than a third, but at most half, of the stretch the line without it would take
+- **THEN** the justified line keeps the word and the distributed line moves it to the next line
+
+### Requirement: Legacy space shrinking with punctuation compression
+
+In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingControl` compresses punctuation and the document defaults name an East Asian face, a line at any alignment SHALL keep the word that overflows it when each space can shrink to fit it without going below half the average character width of its face. Only one word per line SHALL join this way. With `w:balanceSingleByteDoubleByteWidth`, spaces SHALL keep their advance.
+
+#### Scenario: A left-aligned line shrinks its spaces
+
+- **GIVEN** a mode 14 left-aligned paragraph of English words with `compressPunctuation` and an East Asian default face
+- **WHEN** a word fits only when each Times New Roman space gives up less than a fifth of its advance
+- **THEN** the word stays on the line and the line ends at the margin
+- **AND** without punctuation compression, in Calibri, or with `w:balanceSingleByteDoubleByteWidth`, the word moves to the next line
+- **AND** after that word joins, the next word that overflows opens the next line
+- **AND** a space cut at the margin before the word counts at its natural advance
+
+### Requirement: Legacy space shrinking before a final mark
+
+Under the legacy space shrinking rule, a final half-width mark SHALL stay inside when the spaces make room for it, and hang when they make room only for the text before it.
+
+#### Scenario: A comma hangs beside spaces at their floor in a legacy mode
+
+- **GIVEN** a mode 14 paragraph with `compressPunctuation`, an East Asian default face, and a final `,` that overflows
+- **WHEN** the spaces at their floor make room for the text before the comma but not for the comma
+- **THEN** the comma hangs past the margin and the text before it fills the measure
+
+### Requirement: A chopped word keeps its final mark
+
+When a word wider than its line breaks at its last fitting character, and that break would leave only the word's final mark for the next line, the mark SHALL hang past the margin if the paragraph lets it hang. A mark inside the word SHALL still open the next line.
+
+#### Scenario: A final period hangs after a long unbroken word
+
+- **GIVEN** a justified mode 15 paragraph of Latin words joined by commas, with no spaces, in a Chinese East Asian language run, that ends with a period
+- **WHEN** the period overflows the last full line
+- **THEN** the period hangs past the margin instead of opening a line alone
 
 ### Requirement: Combining kana sound marks follow their face
 
@@ -708,6 +750,20 @@ The layout engine SHALL measure and paint the combining kana sound marks (U+3099
 - **WHEN** the mark is in its own run after its base at the end of a full line
 - **THEN** the mark adds no width and stays on that line
 - **AND** it paints over its base, not past the margin
+
+#### Scenario: Kana compression keeps a spaced mark with its base
+
+- **GIVEN** a face that spaces the mark, `compressPunctuationAndJapaneseKana`, and a justified mode 15 line
+- **WHEN** the line ends with a kana and U+3099 that overflow it by less than the kana on the line can give
+- **THEN** the mark first gives a sixteenth of its em, and the kana share the rest
+- **AND** the base keeps its advance and gives its share through the mark
+
+#### Scenario: The PDF text of a kana and its mark
+
+- **GIVEN** a kana followed by U+3099 or U+309A that the face draws as one glyph with it, or in a separate run over its base
+- **WHEN** the paragraph is exported to PDF
+- **THEN** the text of the pair is the precomposed character, such as `が` (U+304C)
+- **AND** a mark that its face draws in a cell of its own keeps its own character
 
 ### Requirement: Language-specific hanging punctuation
 

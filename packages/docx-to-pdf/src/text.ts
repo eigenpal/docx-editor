@@ -34,6 +34,7 @@ import { colorGlyph, glyphOutline, type ColorGlyphLayer } from './color-glyphs.t
 import { color, flateStream, number as n, pageHeight, rect, Work } from './context.ts';
 import { outlineOperators, type OutlinePlacement } from './outline-placement.ts';
 import { missingGlyphHint } from './font-provisioning.ts';
+import { composedPairOr } from './sound-mark-text.ts';
 
 /** The named highlight colours. A run with one paints it in place of its shading. */
 const HIGHLIGHT_NAME =
@@ -464,7 +465,10 @@ export class TextWriter {
         // runs in visual order there either way, and without the spaces it merged the words.
         if (rightToLeft && /^ +$/.test(text) && rightToLeftOnly(line)) continue;
         if (i === textGlyph) {
-          batch.add(activeFace, activeSize, gx, gy, activeFace.encode(glyph.id, text));
+          // A kana and sound mark drawn as one glyph read as the precomposed character.
+          const glyphText =
+            cluster.glyphEnd - cluster.glyphStart === 1 ? composedPairOr(text) : text;
+          batch.add(activeFace, activeSize, gx, gy, activeFace.encode(glyph.id, glyphText));
           continue;
         }
         // A glyph without text of its own, such as the dots a face draws apart from an

@@ -13,6 +13,8 @@ export interface FixtureOptions {
   secondKern?: number;
   noPunctuation?: boolean | string;
   compression?: string;
+  /** Writes `w:balanceSingleByteDoubleByteWidth` in `w:compat`. */
+  balanceWidths?: boolean;
   compatibility?: 14 | 15;
   defaultFace?: string | null;
   face?: string;
@@ -95,7 +97,7 @@ export function loadFixture(options: FixtureOptions = {}) {
       (options.lineStartRule
         ? `<w:noLineBreaksBefore w:lang="${escape(options.lineStartRule.language)}" w:val="${escape(options.lineStartRule.characters)}"/>`
         : '') +
-      `<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${options.compatibility ?? 15}"/></w:compat>` +
+      `<w:compat>${options.balanceWidths ? '<w:balanceSingleByteDoubleByteWidth/>' : ''}<w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${options.compatibility ?? 15}"/></w:compat>` +
       '</w:settings>'
   );
   if (options.fontTableEntry) {
