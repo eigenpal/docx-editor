@@ -279,7 +279,7 @@ export function freshWmlElement(
   } as OoxmlElement;
 }
 
-function trackedRevisionAttributes(
+export function trackedRevisionAttributes(
   revisionId: string,
   revision: RevisionAttributionInput,
   wml: WmlFreshNamespaceContext

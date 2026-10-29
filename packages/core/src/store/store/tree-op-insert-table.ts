@@ -55,9 +55,12 @@ import {
 } from './tree-op-nodes.ts';
 import type { InsertTableOp } from './table-placement-op-types.ts';
 import type { TreeOpEffect, TreeOpRejection, TreeOpResult } from './tree-op-types.ts';
-import { invalidRevisionAttribution } from './tree-op-revision-attribution.ts';
+import {
+  invalidRevisionAttribution,
+  type RevisionAttributionInput,
+} from './tree-op-revision-attribution.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
-import { withTrackedRowMarker } from './tree-op-tables.ts';
+import { trackedRevisionAttributes } from './tree-op-tables.ts';
 
 /**
  * Story containers a block-level table may be inserted into.
@@ -209,6 +212,36 @@ export function emptyParagraph(
   } as OoxmlParagraphNode;
 }
 
+/** The attribution one tracked table insertion stamps on every marker it writes. */
+interface TableRevision {
+  readonly id: string;
+  readonly revision: RevisionAttributionInput;
+}
+
+function revisionMarker(
+  { id, revision }: TableRevision,
+  nextId: () => string,
+  wml: WmlFreshNamespaceContext
+): OoxmlElement {
+  return fresh('ins', nextId, wml, trackedRevisionAttributes(id, revision, wml));
+}
+
+/** `w:pPr` holding an inserted paragraph mark. */
+function insertedMarkProperties(
+  revision: TableRevision,
+  nextId: () => string,
+  wml: WmlFreshNamespaceContext
+): OoxmlParagraphPropertiesNode {
+  const rPr = {
+    ...fresh('rPr', nextId, wml, [], [revisionMarker(revision, nextId, wml)]),
+    kind: 'runProperties',
+  } as OoxmlElement;
+  return {
+    ...fresh('pPr', nextId, wml, [], [rPr]),
+    kind: 'paragraphProperties',
+  } as OoxmlParagraphPropertiesNode;
+}
+
 interface BuiltTable {
   readonly table: OoxmlTableNode;
   readonly cellIds: readonly string[];
@@ -221,7 +254,7 @@ function buildTable(
   usedParagraphIds: Set<string>,
   nextId: () => string,
   wml: WmlFreshNamespaceContext,
-  revisionId?: string
+  marked?: TableRevision
 ): BuiltTable {
   const cellIds: string[] = [];
   const paragraphIds: string[] = [];
@@ -234,13 +267,17 @@ function buildTable(
         attribute('type', 'dxa', wml),
       ]);
       const cellProperties = fresh('tcPr', nextId, wml, [], [cellWidth]);
-      const paragraph = emptyParagraph(
+      const empty = emptyParagraph(
         w14Prefix,
         `${op.beforeParagraphId}:r${rowIndex}c${colIndex}`,
         usedParagraphIds,
         nextId,
         wml
       );
+      // A tracked table marks each cell's paragraph mark inserted, as well as each row.
+      const paragraph = marked
+        ? { ...empty, children: [insertedMarkProperties(marked, nextId, wml)] }
+        : empty;
       paragraphIds.push(paragraph.id);
       const cell = {
         id: nextId(),
@@ -263,11 +300,13 @@ function buildTable(
       ...(wml.elementPrefix === undefined ? {} : { prefix: wml.elementPrefix }),
       namespaceBindings: [],
       attributes: [],
-      children: cells,
+      // No `w:cellIns` on the cells: a whole inserted row is its `w:trPr` marker. Cell
+      // insertion markers in a new row also made rejecting the table lose text.
+      children: marked
+        ? [fresh('trPr', nextId, wml, [], [revisionMarker(marked, nextId, wml)]), ...cells]
+        : cells,
     } as OoxmlTableRowNode;
-    rows.push(
-      op.revision ? withTrackedRowMarker(row, 'ins', revisionId!, op.revision, nextId, wml) : row
-    );
+    rows.push(row);
   }
   const table = {
     id: nextId(),
@@ -337,8 +376,10 @@ export function applyInsertTable(
   const wml = wmlFreshNamespaceContextAt(part, parent);
   const w14Prefix = w14PrefixInScopeAt(part, parent);
   const usedParagraphIds = new Set(usedParaIds(part.root));
-  const revisionId = op.revision ? (options?.revisionIds?.() ?? nextRevisionId(part)()) : undefined;
-  const built = buildTable(op, w14Prefix, usedParagraphIds, nextId, wml, revisionId);
+  const marked = op.revision
+    ? { id: options?.revisionIds?.() ?? nextRevisionId(part)(), revision: op.revision }
+    : undefined;
+  const built = buildTable(op, w14Prefix, usedParagraphIds, nextId, wml, marked);
 
   // Two `w:tbl` siblings are ONE table when Word reopens the file. An empty paragraph
   // between them is the separator Word itself authors, and it has to be minted here
@@ -349,22 +390,8 @@ export function applyInsertTable(
       ? emptyParagraph(w14Prefix, `${op.beforeParagraphId}:sep`, usedParagraphIds, nextId, wml)
       : null;
 
-  if (separator && op.revision) {
-    const marker = fresh('ins', nextId, wml, [
-      attribute('id', revisionId!, wml),
-      attribute('author', op.revision.author, wml),
-      ...(op.revision.date ? [attribute('date', op.revision.date, wml)] : []),
-    ]);
-    const rPr = {
-      ...fresh('rPr', nextId, wml, [], [marker]),
-      kind: 'runProperties',
-    } as OoxmlElement;
-    const pPr = {
-      ...fresh('pPr', nextId, wml, [], [rPr]),
-      kind: 'paragraphProperties',
-    } as OoxmlParagraphPropertiesNode;
-    separator = { ...separator, children: [pPr] };
-  }
+  if (separator && marked)
+    separator = { ...separator, children: [insertedMarkProperties(marked, nextId, wml)] };
 
   const inserted: OoxmlNode[] = separator ? [separator, built.table] : [built.table];
   const effect: TreeOpEffect = {
