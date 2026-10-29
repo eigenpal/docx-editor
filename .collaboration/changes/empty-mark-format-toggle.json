@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "An empty bold paragraph mark stayed bold after a toggle press.",
+  "after": "The toggle reads the empty paragraph mark face and arms the opposite format for local typing.",
+  "reason": "Only the local toggle-state read changes. Typed characters use existing run-property operations and shared fields. The paragraph mark and peer typing formats stay unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/empty-paragraph-mark-style-typing.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-empty-mark-toggle.test.ts"
+  ],
+  "changeset": "empty-mark-format-toggle",
+  "migration": null
+}

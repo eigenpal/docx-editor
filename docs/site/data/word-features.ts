@@ -125,7 +125,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Structural XML indentation does not hide run text. Authored spaces inside text elements remain part of the document.',
+      'Structural XML indentation does not hide run text. Authored spaces inside text elements remain part of the document. Bold at an empty caret toggles the paragraph mark face for the next typed text.',
   },
   {
     id: 'text.input-method',

@@ -56,6 +56,32 @@ const mark = (rPr: string, pPr = '') => `<w:pPr>${pPr}<w:rPr>${rPr}</w:rPr></w:p
 const BIG = '<w:rStyle w:val="Big"/>';
 const AFTER = '<w:p><w:r><w:t>after</w:t></w:r></w:p>';
 
+for (const rPr of ['<w:b/>', BIG]) {
+  test(`bold toggles off at an empty paragraph with mark properties ${rPr}`, () =>
+    withEditor(`<w:p>${mark(rPr)}</w:p>${AFTER}`, (editor) => {
+      caretAt(editor, 0, 0);
+      expect(editor.getSelectionFormatting()?.bold).toBe(true);
+      expect(editor.exec({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
+      expect(editor.getSelectionFormatting()?.bold).toBe(false);
+      editor.surface!.type('x');
+      expect(editor.getSelectionFormatting()?.bold).toBe(false);
+      expect(firstParagraphRuns(editor).flat()).toContain('b=0');
+    }));
+}
+
+test('two bold presses restore the empty mark face without changing the document', () =>
+  withEditor(`<w:p>${mark(BIG)}</w:p>${AFTER}`, (editor) => {
+    caretAt(editor, 0, 0);
+    const before = JSON.stringify(editor.surface!.session.part().root);
+    editor.exec({ type: 'toggleMark', mark: 'bold' });
+    expect(editor.getSelectionFormatting()?.bold).toBe(false);
+    editor.exec({ type: 'toggleMark', mark: 'bold' });
+    expect(editor.getSelectionFormatting()?.bold).toBe(true);
+    expect(JSON.stringify(editor.surface!.session.part().root)).toBe(before);
+    editor.surface!.type('x');
+    expect(firstParagraphRuns(editor)).toEqual([['rStyle=Big']]);
+  }));
+
 function withEditor(
   source: string | Uint8Array,
   run: (editor: DocxEditorInstance) => void | Promise<void>
@@ -91,7 +117,7 @@ function face(editor: DocxEditorInstance): [number | undefined, boolean | undefi
 /** The first paragraph's runs, as the `w:rPr` children each run authors. */
 function firstParagraphRuns(editor: DocxEditorInstance): string[][] {
   const root = editor.surface!.session.part().root;
-  const body = root.kind === 'textValue' ? null : root.children[0];
+  const body = root.children[0];
   const paragraph = body && body.kind !== 'textValue' ? body.children[0] : null;
   if (!paragraph || paragraph.kind === 'textValue') return [];
   return paragraph.children
@@ -111,7 +137,7 @@ function firstParagraphRuns(editor: DocxEditorInstance): string[][] {
 /** The attribute values of one `w:rPr` child in the first paragraph's last run. */
 function lastRunPropertyValues(editor: DocxEditorInstance, localName: string): string[] {
   const root = editor.surface!.session.part().root;
-  const body = root.kind === 'textValue' ? null : root.children[0];
+  const body = root.children[0];
   const paragraph = body && body.kind !== 'textValue' ? body.children[0] : null;
   if (!paragraph || paragraph.kind === 'textValue') return [];
   const run = paragraph.children.filter((child) => child.kind === 'run').at(-1);
