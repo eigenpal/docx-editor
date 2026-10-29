@@ -1383,7 +1383,8 @@ export function breakParagraph(
       }
       // A bearing shared across a line break is lost, so fit at the natural advance.
       const baseFitWidth = opticalFit ? width : (seamNaturalWidths.get(piece) ?? width);
-      const followingCluster = clusterTail?.(pieceIndex, boundary) ?? 0;
+      // An optical fit already holds the rest of its group, a cluster tail in the next run too.
+      const followingCluster = opticalFit ? 0 : (clusterTail?.(pieceIndex, boundary) ?? 0);
       const fitWidth =
         baseFitWidth + followingCluster + automaticGap() + (lineEndWhitespace ? 0 : endSpaces.room);
       // A justified line shrinks its spaces before a half-width final mark hangs.

@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Kana compression does not pull a kana and its spaced sound mark onto a full line, and PDF text gives a kana and a joined sound mark as the kana and the combining mark.",
+  "after": "Kana compression pulls the pair onto the line as a line-start-prohibited mark, and PDF text gives a joined pair as the precomposed character.",
+  "reason": "Only derived layout and PDF text change. Canonical OOXML, source offsets, operations, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/sound-mark-kana-fit.test.ts",
+    "packages/docx-to-pdf/test/sound-mark-actual-text.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-sound-mark.test.ts"
+  ],
+  "changeset": "kana-sound-mark-fit",
+  "migration": null
+}

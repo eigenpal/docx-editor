@@ -739,6 +739,20 @@ The layout engine SHALL measure and paint the combining kana sound marks (U+3099
 - **THEN** the mark adds no width and stays on that line
 - **AND** it paints over its base, not past the margin
 
+#### Scenario: Kana compression keeps a spaced mark with its base
+
+- **GIVEN** a face that spaces the mark, `compressPunctuationAndJapaneseKana`, and a justified mode 15 line
+- **WHEN** the line ends with a kana and U+3099 that overflow it by less than the kana on the line can give
+- **THEN** the mark first gives a sixteenth of its em, and the kana share the rest
+- **AND** the base keeps its advance and gives its share through the mark
+
+#### Scenario: The PDF text of a kana and its mark
+
+- **GIVEN** a kana followed by U+3099 or U+309A that the face draws as one glyph with it, or in a separate run over its base
+- **WHEN** the paragraph is exported to PDF
+- **THEN** the text of the pair is the precomposed character, such as `が` (U+304C)
+- **AND** a mark that its face draws in a cell of its own keeps its own character
+
 ### Requirement: Language-specific hanging punctuation
 
 When a justified paragraph enables hanging punctuation, the punctuation run's language SHALL select its hanging characters. Japanese `〕》〉！？：；・`, ASCII `! ? : ; ) ] }`, `％`, and `°`, Simplified Chinese `．`, and Korean punctuation SHALL NOT hang, except that a Korean paragraph-final mark other than `。` or `、` SHALL hang. Korean overflow punctuation SHALL start the next line.
