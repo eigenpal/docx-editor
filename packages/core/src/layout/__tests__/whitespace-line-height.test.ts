@@ -21,7 +21,7 @@ function lineHeights(runs: string): readonly number[] {
 const text = (props: string, value: string) =>
   `<w:r>${props}<w:t xml:space="preserve">${value}</w:t></w:r>`;
 
-// Spaces and tabs add no line height, in every compatibility mode.
+// Spaces, ideographic spaces, and tabs add no line height, in every compatibility mode.
 describe('spaces and tabs take no line height', () => {
   const empty = lineHeights('')[0]!;
   const small = lineHeights(text(SMALL, 'X'))[0]!;
@@ -37,6 +37,13 @@ describe('spaces and tabs take no line height', () => {
     expect(lineHeights(text(SMALL, 'X') + `<w:r>${BIG}<w:tab/></w:r>` + text(SMALL, 'Y'))).toEqual([
       small,
     ]);
+  });
+
+  test('large ideographic spaces take no line height either', () => {
+    expect(lineHeights(text(BIG, '\u3000\u3000\u3000'))).toEqual([empty]);
+    expect(
+      lineHeights(text(SMALL, 'X') + text(BIG_UNDERLINED, '\u3000\u3000') + text(SMALL, 'Y'))
+    ).toEqual([small]);
   });
 
   test('a no-break space and a line break still count', () => {
