@@ -12,6 +12,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import type { PaginatedSurface } from '@docx-editor.dev/core/editor';
 import {
+  findNode,
   parseNoteScopeId,
   type CustomNodePayloadWrite,
   type CustomNodeWriteResult,
@@ -260,7 +261,15 @@ export function storyScopeOfEditor(editor: Editor): StoryScope {
  */
 export function storyScopeOfId(editor: Editor, id: string | undefined): StoryScope {
   const surface = surfaceOf(editor);
-  const partName = id === undefined ? '' : id.slice(0, id.indexOf('#'));
+  const hash = id === undefined ? -1 : id.indexOf('#');
+  // A collaboration session names the nodes it creates by logical id, which carries no part
+  // name, so the story node indexes find its part.
+  const partName =
+    id === undefined
+      ? ''
+      : hash === -1
+        ? (surface?.session.storyParts().find((part) => findNode(part, id) !== null)?.name ?? '')
+        : id.slice(0, hash);
   if (!surface || partName.length === 0) return storyScopeOfEditor(editor);
   if (partName === surface.session.part().name) return { kind: 'body' };
   for (const section of surface.session.headerFooterResolutionBySection()) {

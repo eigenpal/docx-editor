@@ -213,7 +213,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
   const targetTextRef = useRef('');
   // Whether those words were already a pending deletion when the panel opened. Linking struck
   // words the user selected is allowed; words struck after the panel opened are gone.
-  const targetDeletedAtOpenRef = useRef(false);
+  const struckAtOpenRef = useRef(false);
   // The engine's gestures fire from listeners registered ONCE; reading the live state
   // through a ref keeps that registration off the render path, so opening the popover does
   // not tear down and rebind the surface's chrome handlers.
@@ -226,7 +226,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
 
   const releaseSelectionPin = useCallback(() => {
     targetTextRef.current = '';
-    targetDeletedAtOpenRef.current = false;
+    struckAtOpenRef.current = false;
     const retained = selectionPinRef.current;
     if (!retained) return;
     retained.editor.releaseSelection(retained.pin);
@@ -245,7 +245,8 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
       const target = targetTextRef.current;
       if (target === '' || !editor) return false;
       const struck =
-        !targetDeletedAtOpenRef.current && editor.surface?.hyperlinks.targetIsDeleted() === true;
+        !struckAtOpenRef.current &&
+        editor.surface?.hyperlinks.selectionIsPendingDeletion() === true;
       if (struck) return true;
       if (everyUpdate && target.length > TARGET_CHECK_LIMIT) return false;
       return editor.query({ type: 'selectedText' }) !== target;
@@ -322,7 +323,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     const pin = editor?.retainSelection() ?? null;
     if (editor && pin) selectionPinRef.current = { editor, pin };
     targetTextRef.current = selected;
-    targetDeletedAtOpenRef.current = editor?.surface?.hyperlinks.targetIsDeleted() === true;
+    struckAtOpenRef.current = editor?.surface?.hyperlinks.selectionIsPendingDeletion() === true;
     setState({
       mode: 'editing',
       link: null,

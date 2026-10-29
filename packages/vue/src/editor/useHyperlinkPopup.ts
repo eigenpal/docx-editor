@@ -112,11 +112,11 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
   // The words a create panel opened over; empty for a panel opened at a bare caret.
   let targetText = '';
   // Whether those words were already a pending deletion when the panel opened.
-  let targetDeletedAtOpen = false;
+  let struckAtOpen = false;
 
   const releaseSelectionPin = () => {
     targetText = '';
-    targetDeletedAtOpen = false;
+    struckAtOpen = false;
     const retained = selectionRetainer.value;
     if (!retained) return;
     retained.editor.releaseSelection(retained.pin);
@@ -130,7 +130,8 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
   const targetGone = (everyUpdate = false): boolean => {
     const editor = editorRef.value;
     if (targetText === '' || !editor) return false;
-    if (!targetDeletedAtOpen && editor.surface?.hyperlinks.targetIsDeleted() === true) return true;
+    if (!struckAtOpen && editor.surface?.hyperlinks.selectionIsPendingDeletion() === true)
+      return true;
     if (everyUpdate && targetText.length > TARGET_CHECK_LIMIT) return false;
     return editor.query({ type: 'selectedText' }) !== targetText;
   };
@@ -184,7 +185,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     const pin = editor?.retainSelection() ?? null;
     if (editor && pin) selectionRetainer.value = { editor, pin };
     targetText = selected;
-    targetDeletedAtOpen = editor?.surface?.hyperlinks.targetIsDeleted() === true;
+    struckAtOpen = editor?.surface?.hyperlinks.selectionIsPendingDeletion() === true;
     state.value = {
       mode: 'editing',
       link: null,

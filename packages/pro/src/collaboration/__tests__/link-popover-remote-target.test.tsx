@@ -310,7 +310,7 @@ const STRUCK_SOURCE = zipDocument(
 test('a panel opened on words already struck stays open, and Apply links them', async () => {
   const { view, alice, bob, sync } = await open(STRUCK_SOURCE);
   const input = openPanelOnWord(view, alice());
-  expect(alice().surface!.hyperlinks.targetIsDeleted()).toBe(true);
+  expect(alice().surface!.hyperlinks.selectionIsPendingDeletion()).toBe(true);
 
   const second = bob.surface!.session.paragraphIds()[1]!;
   bob.surface!.setSelection({

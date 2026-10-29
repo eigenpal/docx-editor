@@ -752,7 +752,7 @@ describe('whether a link target is a pending deletion', () => {
 
   test('struck words, across adjacent deletions, are deleted; live or partial words are not', () => {
     const mounted = mount(STRUCK);
-    const deleted = () => mounted.editor.surface!.hyperlinks.targetIsDeleted();
+    const deleted = () => mounted.editor.surface!.hyperlinks.selectionIsPendingDeletion();
     select(mounted, 0, 5, 9);
     expect(deleted()).toBe(true);
     select(mounted, 0, 12, 5);

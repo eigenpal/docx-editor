@@ -119,6 +119,11 @@ describe('paragraph direction', () => {
     caretIn(editor, 0);
     expect(editor.exec(LTR)).toEqual({ ok: true, changed: false });
     expect(xmlOf(editor)).not.toContain('bidi');
+    // The dialog's direction field agrees: `can` and `exec` both accept a no-op.
+    const dialog = { type: 'setParagraphFormat', direction: 'ltr' } as const;
+    expect(editor.can(dialog)).toEqual({ ok: true });
+    expect(editor.exec(dialog)).toEqual({ ok: true, changed: false });
+    expect(xmlOf(editor)).not.toContain('bidi');
   });
 
   test('explicit left-to-right overrides a right-to-left style and survives save', async () => {

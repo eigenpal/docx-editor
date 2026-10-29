@@ -350,9 +350,13 @@ export interface HyperlinkOps {
    *
    * A link panel opened over live words reads this to learn that a peer struck those words in
    * suggesting mode: the selected text is unchanged, but it is about to leave the document.
-   * False for a caret and for a selection that spans paragraphs.
+   *
+   * Reads the laid-out deletions, so it is true in All Markup and Original views. In Simple
+   * Markup and No Markup the struck text is hidden and the selection holds none of it, so it
+   * returns false; there the selected text itself changes, and a text comparison catches the
+   * strike instead. False for a caret and for a selection that spans paragraphs.
    */
-  targetIsDeleted(): boolean;
+  selectionIsPendingDeletion(): boolean;
   /**
    * Apply a link to the selection, or retarget the one the caret is already in.
    *
@@ -428,7 +432,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
 
   // A positional read from the layout's deleted ranges; it settles nothing, so it is safe on
   // every editor update. Adjacent deletions are merged, so struck words by two authors count.
-  const targetIsDeleted = (): boolean => {
+  const selectionIsPendingDeletion = (): boolean => {
     const { anchor, head } = deps.selection();
     if (anchor.paragraphId !== head.paragraphId || anchor.offset === head.offset) return false;
     const start = Math.min(anchor.offset, head.offset);
@@ -443,7 +447,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
     linkAtCaret,
     fieldLinkAtCaret,
     linkById,
-    targetIsDeleted,
+    selectionIsPendingDeletion,
 
     applyHyperlink(requested) {
       // Labels are shown and selected with visible hyphens; they write the hyphen elements.

@@ -12,10 +12,19 @@ import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core
 import { findNode, serializeOoxmlPart, type OoxmlNode } from '@docx-editor.dev/core/store';
 import { reviewModule } from '../../review/review-module.ts';
 import { collaborationModule } from '../collaboration-module.ts';
+import {
+  customNodesModule,
+  defineCustomNode,
+  insertCustomNode,
+  recognizeCustomNodes,
+  removeCustomNode,
+} from '../../index.ts';
 import { createPeerHarness, zipDocument, type Peer, W, R, REL } from './document-peer-support.ts';
 import { packageFingerprint } from './document-support.ts';
 import { offeredHit, partOfTableIn } from '../../../../core/src/editor/surface-table-story.ts';
 import { readEditableTableTopology } from '../../../../core/src/store/store/tree-op-table-topology.ts';
+
+const citation = defineCustomNode({ name: 'citation', tagPrefix: 'acme' });
 
 const harness = createPeerHarness('session-id-readers', { offlineEditing: true });
 const editors: DocxEditorInstance[] = [];
@@ -69,7 +78,11 @@ function mount(peer: Peer, author: string) {
     container,
     document: peer.room.document,
     author,
-    modules: [reviewModule(), collaborationModule({ session: peer.room.session })],
+    modules: [
+      reviewModule(),
+      customNodesModule({ nodes: [citation] }),
+      collaborationModule({ session: peer.room.session }),
+    ],
   });
   editors.push(editor);
   return editor;
@@ -274,4 +287,26 @@ test('the link at the caret is found in a line a peer added', async () => {
   expect(alice.query({ type: 'hyperlinkAt' })).toMatchObject({
     href: 'https://example.com/peer',
   });
+});
+
+test('a custom node a peer added to the body is removed while a header is open', async () => {
+  const { alice, bob, flush } = await peerBodyLine();
+  const bobLine = bodyParagraph(bob, 'PEERLINE');
+  expect(
+    insertCustomNode(bob, citation, {
+      attrs: { sourceId: 's1' },
+      text: 'CITE',
+      at: { paragraphId: bobLine, offset: 4 },
+    })
+  ).toMatchObject({ ok: true });
+  await flush();
+  const [node] = recognizeCustomNodes(alice.surface!.session.part(), [citation]);
+  expect(node?.nodeId.includes('#')).toBe(false);
+  expect(alice.exec({ type: 'editHeaderFooter', position: 'header' }).ok).toBe(true);
+  expect(removeCustomNode(alice, node!.nodeId)).toMatchObject({ ok: true });
+  await flush();
+  expect(recognizeCustomNodes(bob.surface!.session.part(), [citation])).toEqual([]);
+  expect(packageFingerprint(alice.surface!.session.currentPackage())).toBe(
+    packageFingerprint(bob.surface!.session.currentPackage())
+  );
 });
