@@ -18,7 +18,7 @@ import type {
 import { firstReviewRange, type ReviewItem } from '../layout/index.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
-import { setReviewCommentResolved } from './docx-editor-comment-resolution.ts';
+import { commentForKey, setReviewCommentResolved } from './docx-editor-comment-resolution.ts';
 import type { EditorHistoryGroups } from './editor-history-groups.ts';
 import { PRO_REVIEW_REASON } from './opening-editing-mode.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
@@ -204,6 +204,42 @@ export function createReviewWrites(deps: ReviewWriteDeps) {
     return { ok: true, changed: true };
   };
 
+  const setCommentText = (key: string, text: string): ExecResult => {
+    if (!deps.reviewEnabled) return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
+    const surface = deps.surface();
+    if (deps.editingMode() === 'viewing') {
+      // Refused THROUGH the surface, as resolving is, so it is recorded and reported once.
+      const viewing = 'the document is open for viewing';
+      const refused = surface?.commitReviewOps(
+        () => ({ committed: false, reason: viewing }),
+        'comment-edit'
+      );
+      return reviewWriteRefusal(refused ?? viewing, viewing, 'locked');
+    }
+    // `CT_Comment` allows an empty body, but a card with no words is not an edit anyone means;
+    // `addComment` refuses it for the same reason.
+    if (text.trim().length === 0) {
+      return { ok: false, code: 'invalidArgs', reason: 'a comment needs text' };
+    }
+    // Unpaired, so a reply's key names the reply itself rather than its thread.
+    const placements = deps.placements({ pairReplacements: false });
+    const item = commentForKey(placements, key);
+    if (!('kind' in item)) return item;
+    if (!surface) return { ok: false, code: 'notFound', reason: 'no review item with that key' };
+    // The store decides what is unchanged, so the result reports what the package did.
+    let ok = false;
+    let changed = false;
+    const refused = surface.commitReviewOps((historyToken) => {
+      const revision = surface.session.packageRevision();
+      ok = surface.session.setCommentText(item.id, text, { historyToken });
+      changed = ok && surface.session.packageRevision() !== revision;
+      return { committed: changed };
+    }, 'comment-edit');
+    if (!ok) return reviewWriteRefusal(refused, 'the comment could not be edited');
+    if (changed) deps.bump();
+    return { ok: true, changed };
+  };
+
   return {
     addComment: (
       text: string,
@@ -236,6 +272,8 @@ export function createReviewWrites(deps: ReviewWriteDeps) {
       ),
     deleteReviewItem: (key: string, options?: HistoryGroupOptions) =>
       grouped(options, () => deleteReviewItem(key)),
+    setCommentText: (key: string, text: string, options?: HistoryGroupOptions) =>
+      grouped(options, () => setCommentText(key, text)),
     replyToReviewItem: (
       key: string,
       text: string,
