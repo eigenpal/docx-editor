@@ -984,6 +984,8 @@
     "tableGridUnplaceable": "Ta tabela zawiera komórkę, która nie pasuje do siatki kolumn",
     "drawingLocked": "Ten obraz jest zablokowany",
     "contentLocked": "Ta zawartość jest zablokowana",
+    "lockedParagraphFormat": "Ta zawartość jest zablokowana; można zmienić tylko wyrównanie",
+    "boundParagraphFormat": "Ta zawartość jest powiązana z danymi i nie można jej zmienić",
     "editorNotReady": "Edytor nie jest gotowy",
     "imageSuggesting": "Zmiany obrazów są niedostępne w trybie sugerowania",
     "equationSourceFormatting": "Edycja liniowa usunęłaby formatowanie tego równania",

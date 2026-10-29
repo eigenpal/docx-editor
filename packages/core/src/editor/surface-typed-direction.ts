@@ -38,7 +38,10 @@ export function typedTextDirection(text: string): 'rtl' | 'ltr' | null {
  * the run the text joins, which keeps that run's bold, size, and fonts on the typed text.
  */
 export function createTypedDirectionOps(
-  session: Pick<TreeDocxSessionView, 'currentPackage' | 'part' | 'stylesRoot' | 'settingsRoot'>,
+  session: Pick<
+    TreeDocxSessionView,
+    'currentPackage' | 'part' | 'storyParts' | 'stylesRoot' | 'settingsRoot'
+  >,
   displayMode: () => RevisionDisplayMode,
   authorFilter: () => RevisionAuthorFilter | undefined
 ) {

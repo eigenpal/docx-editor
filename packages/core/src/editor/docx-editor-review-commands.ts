@@ -724,9 +724,7 @@ function nextFromCaret(
   step: number
 ): number {
   const caret = surface.state().selection.head;
-  const part = surface.session
-    .storyParts()
-    .find((candidate) => caret.paragraphId.startsWith(`${candidate.name}#`));
+  const part = partOfNodeId(surface.session, caret.paragraphId);
   const order = part ? deepParagraphOrderOfPart(part) : new Map<string, number>();
   const rank = order.get(caret.paragraphId);
   if (rank !== undefined) {

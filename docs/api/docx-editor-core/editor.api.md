@@ -3008,7 +3008,7 @@ export interface ParagraphTabStop {
 export function parseIsoDate(value: string): Date | null;
 
 // @public
-export function partOfNodeId(session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'>, nodeId: string | undefined): OoxmlPart | null;
+export function partOfNodeId(session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'> & Partial<Pick<TreeDocxSessionView, 'storyParts'>>, nodeId: string | undefined): OoxmlPart | null;
 
 // @internal
 export function placeSubmenu(row: {

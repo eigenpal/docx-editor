@@ -985,6 +985,8 @@
     "tableGridUnplaceable": "בטבלה יש תא שאינו מתאים לרשת העמודות שלה",
     "drawingLocked": "תמונה זו נעולה",
     "contentLocked": "תוכן זה נעול",
+    "lockedParagraphFormat": "תוכן זה נעול; ניתן לשנות רק את היישור",
+    "boundParagraphFormat": "תוכן זה מקושר לנתונים ולא ניתן לשנותו",
     "editorNotReady": "העורך אינו מוכן",
     "imageSuggesting": "שינויים בתמונות אינם זמינים במצב הצעות",
     "equationSourceFormatting": "עריכה לינארית תאבד את העיצוב של משוואה זו",

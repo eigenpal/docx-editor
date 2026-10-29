@@ -984,6 +984,8 @@
     "tableGridUnplaceable": "इस तालिका में एक सेल है जो उसके कॉलम ग्रिड में फिट नहीं होता",
     "drawingLocked": "यह चित्र लॉक है",
     "contentLocked": "यह सामग्री लॉक है",
+    "lockedParagraphFormat": "यह सामग्री लॉक है; केवल संरेखण बदला जा सकता है",
+    "boundParagraphFormat": "यह सामग्री डेटा से बंधी है और बदली नहीं जा सकती",
     "editorNotReady": "संपादक तैयार नहीं है",
     "imageSuggesting": "सुझाव मोड में चित्र परिवर्तन उपलब्ध नहीं हैं",
     "equationSourceFormatting": "रैखिक संपादन से इस समीकरण का स्वरूपण खो जाएगा",

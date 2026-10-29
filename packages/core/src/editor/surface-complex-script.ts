@@ -6,7 +6,10 @@ import { complexScriptAt } from '../store/store/direct-properties.ts';
 import { partOfNodeId } from './surface-scope.ts';
 
 export function createCaretComplexScriptResolver(
-  session: Pick<TreeDocxSessionView, 'currentPackage' | 'part' | 'stylesRoot' | 'settingsRoot'>,
+  session: Pick<
+    TreeDocxSessionView,
+    'currentPackage' | 'part' | 'storyParts' | 'stylesRoot' | 'settingsRoot'
+  >,
   displayMode: () => RevisionDisplayMode,
   authorFilter: () => RevisionAuthorFilter | undefined
 ) {

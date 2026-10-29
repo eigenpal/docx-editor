@@ -16,6 +16,8 @@
     "reviewLockedChanges": "Content controls lock every remaining change, so this action would change locked content. Ask the document owner to remove the locks.",
     "reviewBoundChanges": "Every remaining change is in a content control bound to external data, so the changes cannot be accepted or rejected here. Ask the document owner to update the linked data.",
     "contentLocked": "This content is locked",
+    "lockedParagraphFormat": "This content is locked; only alignment can change",
+    "boundParagraphFormat": "This content is bound to data and cannot change",
     "editorNotReady": "The editor is not ready",
     "notWired": "This control is not connected to an editor command",
     "viewing": "This document is open for viewing",
