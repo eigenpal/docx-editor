@@ -4,8 +4,8 @@
 // and table style names all start here, so they agree about which styles exist and how a name
 // compares.
 //
-// THE SAME DEFINITIONS THE PAGE RESOLVES. A light reader applies layout's own rules for what makes
-// a definition (`isValidStyleId`, the first child of each kind, the `w:default` on-spellings), over
+// THE SAME DEFINITIONS THE PAGE RESOLVES. Each definition is read with layout's own
+// `readStyleIdentity` (the id rules, the first child of each kind, the `w:default` spellings), over
 // the same direct `w:style` children of the root, under the same `MAX_STYLE_DEFINITIONS` bound. A
 // repeated `w:styleId` resolves the way layout's cascade table does: the last definition wins, and
 // the default paragraph style follows layout's rule. Formatting properties are not parsed: only
@@ -20,12 +20,7 @@
 
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { MAX_STYLE_DEFINITIONS } from '../layout/style-cascade.ts';
-import {
-  attributeValue,
-  childNamed,
-  isElement,
-  isValidStyleId,
-} from '../layout/style-definition-reader.ts';
+import { isElement, readStyleIdentity } from '../layout/style-definition-reader.ts';
 
 /** Longest style name automation reads or a write may carry. */
 export const MAX_STYLE_NAME = 255;
@@ -75,18 +70,6 @@ export function styleDefinitionsOf(part: OoxmlPart): StyleDefinitions {
   return built;
 }
 
-/** The validated id a child names, as layout reads `w:basedOn` and `w:next`. */
-function referenceOf(element: OoxmlElement, localName: string): string | null {
-  const child = childNamed(element, localName);
-  const raw = child ? attributeValue(child, 'val') : undefined;
-  return isValidStyleId(raw) ? raw : null;
-}
-
-/** `w:default` as layout reads it. */
-function isDefaultFlag(raw: string | undefined): boolean {
-  return raw === '1' || raw === 'true' || raw === 'on';
-}
-
 function build(root: OoxmlElement): StyleDefinitions {
   const read: StyleDefinitionEntry[] = [];
   const winner = new Map<string, StyleDefinitionEntry>();
@@ -97,16 +80,15 @@ function build(root: OoxmlElement): StyleDefinitions {
     if (!isElement(child) || child.localName !== 'style') continue;
     if (counted >= MAX_STYLE_DEFINITIONS) break;
     counted += 1;
-    const styleId = attributeValue(child, 'styleId');
-    if (!isValidStyleId(styleId)) continue;
-    const nameNode = childNamed(child, 'name');
-    const name = nameNode ? attributeValue(nameNode, 'val') : undefined;
+    const identity = readStyleIdentity(child, MAX_STYLE_NAME);
+    if (!identity) continue;
+    const { styleId } = identity;
     const entry: StyleDefinitionEntry = Object.freeze({
       styleId,
-      type: attributeValue(child, 'type') ?? '',
-      name: name !== undefined && name.length <= MAX_STYLE_NAME ? name : null,
-      basedOn: referenceOf(child, 'basedOn'),
-      next: referenceOf(child, 'next'),
+      type: identity.type,
+      name: identity.name ?? null,
+      basedOn: identity.basedOn,
+      next: identity.next,
       element: child,
     });
     read.push(entry);
@@ -114,7 +96,7 @@ function build(root: OoxmlElement): StyleDefinitions {
     // paragraph definition sets or clears it, so a later duplicate of another type keeps it.
     winner.set(styleId, entry);
     if (entry.type === 'paragraph') {
-      if (isDefaultFlag(attributeValue(child, 'default'))) defaultParagraphId = styleId;
+      if (identity.isDefault) defaultParagraphId = styleId;
       else if (defaultParagraphId === styleId) defaultParagraphId = null;
     }
   }

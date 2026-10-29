@@ -46,8 +46,11 @@ export interface QueuedAction {
   /**
    * The answer queues reads for the same sync: a listing whose items load properties named
    * with `items/`. A sync that writes sends such a listing, and those reads, before its writes.
+   *
+   * A function is asked when the sync takes the action: a collection load that a later load in
+   * the same sync joins can start naming item properties after it was queued.
    */
-  readonly continues?: boolean;
+  readonly continues?: boolean | (() => boolean);
   /** Detach coalesced setters when sync captures this action, before asynchronous reads. */
   capture?(): void;
   /** Release coalesced state when a batch completes or is discarded. */

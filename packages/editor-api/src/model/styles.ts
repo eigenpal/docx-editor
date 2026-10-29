@@ -111,7 +111,7 @@ function propertyOf(
  * @example Offer the paragraph styles a reader would see
  * ```ts
  * const styles = context.document.getStyles();
- * styles.load();
+ * styles.load('items/nameLocal,items/type,items/visibility,items/unhideWhenUsed,items/priority');
  * await context.sync();
  *
  * // Keep hidden styles that unhide once used, such as heading 2, so they can be applied too.
@@ -127,6 +127,11 @@ function propertyOf(
 export class Style extends ModelObject {
   /** The style id this object is found by in a later listing, once known. */
   #id: string | undefined;
+  /**
+   * Properties loaded on a looked-up style before its lookup answered. The lookup's own answer
+   * carries every property, so these are filled from it rather than by a second read.
+   */
+  #awaiting: Set<string> | undefined;
 
   /** @internal A member of a loaded collection. */
   static listed(
@@ -142,7 +147,9 @@ export class Style extends ModelObject {
 
   /** @internal A style a lookup is still looking for; a sync says whether it exists. */
   static promised(context: RequestContext, label: string): Style {
-    return new Style(context, ObjectPath.pending(label), true);
+    const style = new Style(context, ObjectPath.pending(label), true);
+    style.#awaiting = new Set();
+    return style;
   }
 
   private constructor(context: RequestContext, path: ObjectPath, nullable: boolean) {
@@ -229,11 +236,20 @@ export class Style extends ModelObject {
   hydrateFound(style: AutomationStyleRead): void {
     this.#id = style.id;
     this.path.resolveTo(this.internals.roots().document);
+    const awaiting = this.#awaiting;
+    this.#awaiting = undefined;
+    if (awaiting) this.hydrateProperties(style, [...awaiting]);
   }
 
   /** @internal The lookup found nothing. */
   hydrateNull(): void {
+    this.#awaiting = undefined;
     this.path.resolveNull();
+  }
+
+  /** @internal The lookup's batch ended; later loads read by id. */
+  lookupEnded(): void {
+    this.#awaiting = undefined;
   }
 
   /** @internal Record the selected properties from one listing entry. */
@@ -245,13 +261,17 @@ export class Style extends ModelObject {
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     const selected = this.selection(request, PROPERTIES);
+    // A lookup still on its way answers these properties itself, from the same entry.
+    if (this.#awaiting) {
+      for (const property of selected) this.#awaiting.add(property);
+      return;
+    }
     const target = this.path.label;
     this.read(
       target,
       () => {
-        // A listed style has its id from the start; a looked-up one gets it from the lookup,
-        // which the queue answers before this read is planned because this object's path waits
-        // on it. Asking by id answers one entry, not the whole listing.
+        // A listed style has its id from the start; a looked-up one has it once its lookup's
+        // sync answered. Asking by id answers one entry, not the whole listing.
         const id = this.#id;
         if (id === undefined) fail({ code: 'ItemNotFound', target });
         return { op: 'getStyles', id };
@@ -322,15 +342,18 @@ export class StyleCollection extends ModelObject {
     // Refused at the call, where the mistake is, rather than at the sync.
     if (typeof name !== 'string') fail({ code: 'InvalidArgument', target });
     const found = Style.promised(this.context, target);
-    this.read(
-      target,
-      () => ({ op: 'getStyles', name }),
-      (value) => {
+    this.enqueue({
+      sort: 'read',
+      label: target,
+      plan: () => ({ op: 'getStyles', name }),
+      // Loads on `found` in this sync are answered by this read's own entry.
+      settle: (value) => {
         const style = hydratedStyles(value, target)[0];
         if (style) found.hydrateFound(style);
         else found.hydrateNull();
-      }
-    );
+      },
+      dispose: () => found.lookupEnded(),
+    });
     return found;
   }
 
@@ -352,8 +375,8 @@ export class StyleCollection extends ModelObject {
     const skip = request.skip ?? 0;
     const top = request.top;
     // A repeated load in the same sync joins this one, so one listing answers every selection.
-    if (this.#loads.join(itemSelect, skip, top, false)) return;
-    const { load, release } = this.#loads.open(itemSelect, skip, top, false);
+    if (this.#loads.join(itemSelect, skip, top)) return;
+    const { load, release } = this.#loads.open(skip, top);
     this.enqueue({
       sort: 'read',
       label,
@@ -361,7 +384,6 @@ export class StyleCollection extends ModelObject {
       dispose: release,
       plan: () => ({ op: 'getStyles' }),
       settle: (value) => {
-        if (load.superseded) return;
         const styles = hydratedStyles(value, label);
         const names = [...load.names];
         const last = windowEnd(styles.length, skip, top);

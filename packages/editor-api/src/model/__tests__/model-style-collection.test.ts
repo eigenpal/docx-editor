@@ -16,7 +16,8 @@ import { describe, expect, test } from 'bun:test';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { strToU8, unzipSync, zipSync } from 'fflate';
 import { createBrowser } from '../../runtime/browser.ts';
-import type { DocxEditorRuntime } from '../../runtime/runtime.ts';
+import { createRuntime, type DocxEditorRuntime } from '../../runtime/runtime.ts';
+import { openHost, spyHost } from '../../runtime/__tests__/support/hosts.ts';
 import { isDocxEditorError } from '../../runtime/errors.ts';
 import { createServer } from '../../runtime/server.ts';
 import { StyleType } from '../../index.ts';
@@ -357,6 +358,86 @@ describe('Document.getStyles', () => {
       }
     });
   }
+
+  test('loads with mixed windows keep every name on the members that settle last', async () => {
+    const runtime = await createServer(STYLED);
+    try {
+      const read = await runtime.run(async (context) => {
+        const paragraphs = context.document.body.paragraphs;
+        paragraphs.load('items/text');
+        paragraphs.load({ select: 'items/style', top: 1 });
+        paragraphs.load('items/alignment');
+        const styles = context.document.getStyles();
+        styles.load('items/nameLocal');
+        styles.load({ select: 'items/type', top: 1 });
+        styles.load('items/builtIn');
+        await context.sync();
+        const paragraph = paragraphs.items[0]!;
+        const style = styles.items[0]!;
+        return {
+          paragraph: [paragraph.text, paragraph.style, paragraph.alignment],
+          style: [style.nameLocal, style.type, style.builtIn],
+        };
+      });
+      expect(read).toEqual({
+        paragraph: ['first', 'Normal', 'Unknown'],
+        style: ['Normal', 'Paragraph', true],
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  for (const writes of [false, true]) {
+    test(`one host read per window answers a bare load and a later item load ${writes ? 'with' : 'without'} a write`, async () => {
+      const spy = spyHost(openHost(STYLED));
+      const runtime = createRuntime({ host: spy.host, save: true });
+      try {
+        const read = await runtime.run(async (context) => {
+          const paragraphs = context.document.body.paragraphs;
+          const styles = context.document.getStyles();
+          paragraphs.load('items');
+          styles.load('items');
+          paragraphs.load('items/text');
+          styles.load('items/nameLocal');
+          if (writes) context.document.body.insertParagraph('third', 'End');
+          spy.reset();
+          await context.sync();
+          return [paragraphs.items[0]!.text, styles.items[0]!.nameLocal];
+        });
+        expect(read).toEqual(['first', 'Normal']);
+        const ops = spy.requests.flatMap((request) => request.operations.map((o) => o.op));
+        expect(ops.filter((op) => op === 'getParagraphs')).toHaveLength(1);
+        expect(ops.filter((op) => op === 'getStyles')).toHaveLength(1);
+      } finally {
+        runtime.dispose();
+      }
+    });
+  }
+
+  test('properties loaded on a looked-up style come from the lookup itself', async () => {
+    const spy = spyHost(openHost(STYLED));
+    const runtime = createRuntime({ host: spy.host, save: true });
+    try {
+      const read = await runtime.run(async (context) => {
+        const found = context.document.getStyles().getByNameOrNullObject('Clause Text');
+        found.load('nameLocal,builtIn');
+        const missing = context.document.getStyles().getByNameOrNullObject('Absent');
+        missing.load('nameLocal');
+        spy.reset();
+        await context.sync();
+        return [found.nameLocal, found.builtIn, missing.isNullObject];
+      });
+      expect(read).toEqual(['Clause Text', false, true]);
+      const ops = spy.requests.flatMap((request) => request.operations);
+      expect(ops).toEqual([
+        { op: 'getStyles', name: 'Clause Text' },
+        { op: 'getStyles', name: 'Absent' },
+      ]);
+    } finally {
+      runtime.dispose();
+    }
+  });
 
   test('a listed item loads its properties again in a later sync', async () => {
     const runtime = await createServer(STYLED);
@@ -782,6 +863,71 @@ test('a refused style name says so and points to getStyles()', async () => {
   } finally {
     runtime.dispose();
   }
+});
+
+async function refusalOf(
+  bytes: Uint8Array,
+  write: (context: import('../../runtime/request-context.ts').RequestContext) => Promise<void>
+): Promise<{ code: string; inner: string | undefined; message: string | undefined } | null> {
+  const runtime = await createServer(bytes);
+  try {
+    return await runtime.run(async (context) => {
+      try {
+        await write(context);
+        return null;
+      } catch (error) {
+        if (!isDocxEditorError(error)) throw error;
+        return {
+          code: error.code,
+          inner: error.debugInfo.innerError?.code,
+          message: error.debugInfo.innerError?.message,
+        };
+      }
+    });
+  } finally {
+    runtime.dispose();
+  }
+}
+
+test('a refused table style name reports edit.style-not-defined', async () => {
+  const refusal = await refusalOf(STYLED, async (context) => {
+    const table = context.document.body.getRange('Start').insertTable(1, 1, 'Before', [['A']]);
+    await context.sync();
+    table.style = 'Missing Table Style';
+    await context.sync();
+  });
+  expect(refusal?.inner).toBe('edit.style-not-defined');
+  expect(refusal?.message).toContain('document.getStyles()');
+});
+
+test('a table style name too long for any style is refused before it is compared', async () => {
+  const refusal = await refusalOf(STYLED, async (context) => {
+    const table = context.document.body.getRange('Start').insertTable(1, 1, 'Before', [['A']]);
+    await context.sync();
+    table.style = 'x'.repeat(256);
+    await context.sync();
+  });
+  expect(refusal?.code).toBe('InvalidArgument');
+  expect(refusal?.inner).not.toBe('edit.style-not-defined');
+});
+
+test('a document with no styles part says no style name applies, for paragraphs and tables', async () => {
+  const paragraph = await refusalOf(docx(p('plain')), async (context) => {
+    context.document.body.paragraphs.getFirst().style = 'Normal';
+    await context.sync();
+  });
+  expect(paragraph?.code).toBe('InvalidArgument');
+  expect(paragraph?.inner).toBe('edit.no-styles-defined');
+  expect(paragraph?.message).toContain('no style name applies');
+  expect(paragraph?.message).not.toContain('getStyles');
+
+  const table = await refusalOf(docx(p('plain')), async (context) => {
+    const inserted = context.document.body.getRange('Start').insertTable(1, 1, 'Before', [['A']]);
+    await context.sync();
+    inserted.style = 'Table Grid';
+    await context.sync();
+  });
+  expect(table?.inner).toBe('edit.no-styles-defined');
 });
 
 test('style references resolve only to a listed style of the allowed kind', async () => {

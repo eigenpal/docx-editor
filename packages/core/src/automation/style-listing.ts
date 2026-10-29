@@ -96,7 +96,8 @@ export interface AutomationStyleRead {
 }
 
 const STYLE_KINDS: ReadonlySet<string> = new Set(['paragraph', 'character', 'table', 'numbering']);
-const NO_STYLES: readonly AutomationStyleRead[] = Object.freeze([]);
+/** The one frozen empty listing, for a package with no styles part and a host with no document. */
+export const NO_STYLES: readonly AutomationStyleRead[] = Object.freeze([]);
 const listings = new WeakMap<OoxmlNode, readonly AutomationStyleRead[]>();
 interface ListingLookups {
   readonly byKey: ReadonlyMap<string, AutomationStyleRead>;
@@ -127,7 +128,7 @@ function lookupsOf(listing: readonly AutomationStyleRead[]): ListingLookups {
  * The listed style a name finds, or undefined. Names compare as `setStyle` compares them; where a
  * name belongs to several kinds, the paragraph style wins, otherwise the first in part order.
  */
-export function styleNamed(
+function styleNamed(
   listing: readonly AutomationStyleRead[],
   name: string
 ): AutomationStyleRead | undefined {

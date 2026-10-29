@@ -390,8 +390,9 @@ const documentReachesItsSections: Satisfies<Document['sections'], SectionCollect
 
 // The styles a document defines: read-only properties, a lookup that may answer a null object, and
 // a count that arrives with the sync.
-// `baseStyle` and `nextParagraphStyle` are assignable upstream and published read-only here, a
-// recorded divergence, so the read shape is what is compared.
+// `baseStyle`, `nextParagraphStyle`, `priority`, `quickStyle`, `unhideWhenUsed`, and `visibility`
+// are assignable upstream and published read-only here, recorded divergences, so the read shape is
+// what is compared.
 const styleMatchesTheDeclaredStyle: Satisfies<Style, Readonly<Declared.Style>> = true;
 const styleLookupTakesTheDeclaredName: TakesTheSameArguments<
   StyleCollection['getByNameOrNullObject'],

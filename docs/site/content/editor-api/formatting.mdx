@@ -174,7 +174,7 @@ A `Style` exposes these read-only properties:
 - `quickStyle`: `true` when the style states `w:qFormat`.
 - `unhideWhenUsed`: `true` when the style states `w:unhideWhenUsed`.
 
-The list follows the order of `styles.xml` and reads each style the way the page does. If two definitions share a `w:styleId`, the last one counts. Only the first 4096 `w:style` definitions count, and names longer than 255 characters are not read. It leaves out styles that have no `w:name`, an empty or invalid name, a later duplicate name of the same kind, or no recognized `w:type`. A document with no styles part lists no styles. Style definitions are read-only: the API does not add, delete, or change styles, and `Style` has no `font` or `paragraphFormat`.
+The list follows the order of `styles.xml` and reads each style the way the page does. If two definitions share a `w:styleId`, the last one counts. Only the first 4096 `w:style` definitions count, and names longer than 255 characters are not read. It leaves out styles that have no `w:name`, an empty or invalid name, a later duplicate name of the same kind, or no recognized `w:type`. A document with no styles part lists no styles, and a `style` write there refuses with the `edit.no-styles-defined` diagnostic. A write with a name the document does not define refuses with `edit.style-not-defined`. Style definitions are read-only: the API does not add, delete, or change styles, and `Style` has no `font` or `paragraphFormat`.
 
 `Table.style` is separate. It accepts the `nameLocal` of a listed style whose `type` is `Table`. See [Tables and cells](/docs/2.x/editor-api/tables).
 

@@ -50,78 +50,69 @@ export function collectionItemSelection(request: ResolvedLoadOptions): readonly 
   ];
 }
 
-/** One collection load queued in the current sync, which later loads in that sync can join. */
+/** One collection read queued in the current sync, for one `skip`/`top` window. */
 export interface QueuedCollectionLoad {
-  /** The item properties every joined load asked for. Read when the listing answers. */
+  /**
+   * The item properties every load of this collection in this sync asked for, whatever its
+   * window. Shared by every window's read and read when the listing answers.
+   */
   readonly names: Set<string>;
   readonly skip: number;
   readonly top: number | undefined;
-  /** Whether the queued read was marked as queueing item reads for the same sync. */
-  readonly continues: boolean;
-  /** Set when a later read answers this load's names too; its own answer is then ignored. */
-  superseded: boolean;
 }
 
 /**
  * The loads one collection has queued in the current sync.
  *
  * REPEATED LOADS ACCUMULATE. `load('items/text'); load('items/style'); sync()` must leave both
- * readable, so a second load with the same window joins the first: one listing answers both, with
- * every named property.
- *
- * A load that names item properties cannot join a queued read that was not marked as queueing
- * item reads (a bare `load('items')`), because a sync with writes sends only marked reads before
- * its writes. It queues its own marked read instead, carrying every name asked for so far, and the
- * earlier read is superseded: its answer no longer replaces `items`. A load with another window is
- * a different question; it queues its own read, and the answer that settles last sets `items`.
- * A load stops accepting joins once a sync takes it.
+ * readable. There is one read per window (`skip`, `top`) per sync: a later load with the same
+ * window joins the queued read instead of queueing another, and every load's item properties go
+ * into one set that every window's read uses. So whichever read settles last and sets `items`, its
+ * members carry every property this sync asked for. Whether a read queues item reads is asked when
+ * the sync takes it, so a bare `load('items')` that a later `load('items/text')` joins becomes one
+ * that does. A load stops accepting joins once a sync takes it.
  */
 export class CollectionLoads {
-  #open: QueuedCollectionLoad | undefined;
+  #names: Set<string> | undefined;
+  readonly #windows = new Map<string, QueuedCollectionLoad>();
 
-  /** The queued load this one joined, or undefined when a new read has to be queued. */
+  /**
+   * Add a load's item properties. Answers the queued read for its window, or undefined when the
+   * caller has to queue one with {@link CollectionLoads.open}.
+   */
   join(
     names: readonly string[],
     skip: number,
-    top: number | undefined,
-    continues: boolean
+    top: number | undefined
   ): QueuedCollectionLoad | undefined {
-    const open = this.#open;
-    if (!open || open.skip !== skip || open.top !== top || (continues && !open.continues))
-      return undefined;
-    for (const name of names) open.names.add(name);
-    return open;
+    this.#names ??= new Set();
+    for (const name of names) this.#names.add(name);
+    return this.#windows.get(windowKey(skip, top));
   }
 
-  /** Start a load a read is about to be queued for; `release` ends its joining window. */
+  /** Start the read for a window; `release` ends its joining window. */
   open(
-    names: readonly string[],
     skip: number,
-    top: number | undefined,
-    continues: boolean
+    top: number | undefined
   ): { readonly load: QueuedCollectionLoad; readonly release: () => void } {
-    const load: QueuedCollectionLoad = {
-      names: new Set(names),
-      skip,
-      top,
-      continues,
-      superseded: false,
-    };
-    const earlier = this.#open;
-    // Only a same-window load that could not join reaches here with an earlier one open: a bare
-    // load followed by item properties. This read answers both, so the earlier one stands down.
-    if (earlier && earlier.skip === skip && earlier.top === top) {
-      for (const name of earlier.names) load.names.add(name);
-      earlier.superseded = true;
-    }
-    this.#open = load;
+    this.#names ??= new Set();
+    const key = windowKey(skip, top);
+    const load: QueuedCollectionLoad = { names: this.#names, skip, top };
+    this.#windows.set(key, load);
     return {
       load,
       release: () => {
-        if (this.#open === load) this.#open = undefined;
+        if (this.#windows.get(key) !== load) return;
+        this.#windows.delete(key);
+        // The next sync's loads start a set of their own.
+        if (this.#windows.size === 0) this.#names = undefined;
       },
     };
   }
+}
+
+function windowKey(skip: number, top: number | undefined): string {
+  return `${String(skip)}:${top === undefined ? '' : String(top)}`;
 }
 
 /** The index after the last member a `skip`/`top` window covers in a listing of `total`. */
@@ -240,14 +231,14 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
       if (itemSelect.length > 0) for (const item of members) item.load(itemSelect);
       return;
     }
-    const continues = itemSelect.length > 0;
-    // A second load in the same sync joins the first: one listing, every named property.
-    if (this.#loads.join(itemSelect, skip, top, continues)) return;
-    const { load, release } = this.#loads.open(itemSelect, skip, top, continues);
+    // A later load in the same sync with this window joins this read: one listing, every name.
+    if (this.#loads.join(itemSelect, skip, top)) return;
+    const { load, release } = this.#loads.open(skip, top);
     this.enqueue({
       sort: 'read',
       label,
-      ...(continues ? { continues: true } : {}),
+      // Asked when the sync takes the read, after every load of this sync has joined.
+      continues: () => load.names.size > 0,
       capture: release,
       dispose: release,
       plan: () => {
@@ -256,8 +247,6 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
         return resolved;
       },
       settle: (value) => {
-        // A later read in this sync answers these names too, and settles after this one.
-        if (load.superseded) return;
         const members = this.#members(value, label, skip, top);
         this.setLoadedProperty('items', members);
         const names = [...load.names];

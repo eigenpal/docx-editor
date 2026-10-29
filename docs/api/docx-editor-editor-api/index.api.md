@@ -1588,6 +1588,8 @@ export class Style extends ModelObject {
     get linked(): boolean;
     // @internal
     static listed(context: RequestContext, label: string, owner: ObjectPath, style: AutomationStyleRead): Style;
+    // @internal
+    lookupEnded(): void;
     get nameLocal(): string;
     get nextParagraphStyle(): string;
     // @internal

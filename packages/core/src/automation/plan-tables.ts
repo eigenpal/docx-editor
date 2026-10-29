@@ -2,12 +2,14 @@
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { revisionDateNow } from './revision-date.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
-import { styleDefinitionsOf, styleNameKey } from './style-definitions.ts';
+import { MAX_STYLE_NAME, styleDefinitionsOf, styleNameKey } from './style-definitions.ts';
+import { answered, refused } from './plan-results.ts';
+import { isValidXmlText } from '../store/package/sinks.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import type { AutomationOperation } from './operations.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
-import type { AutomationErrorCode, AutomationHandle, AutomationValue } from './protocol.ts';
+import type { AutomationErrorCode, AutomationHandle } from './protocol.ts';
 import type { PlannedOperation } from './plan.ts';
 import { resolveSpanRef, storyOfSpanRef } from './spans.ts';
 import { mergeTargetCell } from '../store/store/tree-op-table-merge.ts';
@@ -32,11 +34,10 @@ export interface TablePlannerContext {
     affectedParagraphIds: readonly string[]
   ) => PlannedOperation | null;
 }
-const refuse = (code: AutomationErrorCode, detail: string): PlannedOperation => ({
-  ok: false,
-  error: { code, message: detail, detail },
-});
-const query = (value: AutomationValue): PlannedOperation => ({ ok: true, kind: 'query', value });
+// The shared frozen helpers; a table refusal's message is its detail, as it always was.
+const refuse = (code: AutomationErrorCode, detail: string): PlannedOperation =>
+  refused(code, detail, detail);
+const query = answered;
 const TABLE_OPS = new Set([
   'insertTableRows',
   'getTables',
@@ -284,8 +285,16 @@ export function planTableOperation(
               : { ...operation.properties, kind: 'cell', cellId: target.nodeId };
       if (mutation.kind === 'properties' && mutation.styleId !== undefined) {
         const wanted = mutation.styleId;
-        if (typeof wanted !== 'string' || wanted.trim().length === 0)
+        // The same checks the paragraph style setter makes, before any name is compared.
+        if (
+          typeof wanted !== 'string' ||
+          wanted.trim().length === 0 ||
+          wanted.length > MAX_STYLE_NAME ||
+          !isValidXmlText(wanted)
+        )
           return refuse('unsupported-content', 'invalid-table-style-name');
+        if (!(packages.package && stylesPartOf(packages.package)))
+          return refuse('unsupported-content', 'no-styles-defined: table');
         const key = styleNameKey(wanted);
         const style = styles(packages).find((s) => s.name !== null && styleNameKey(s.name) === key);
         if (!style) return refuse('unsupported-content', 'style-not-defined: table');

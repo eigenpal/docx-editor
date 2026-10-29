@@ -50,7 +50,7 @@ import { paragraphTextOf } from '../store/store/tree-ops.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import { sectionReads, type AutomationSectionRead } from './sections.ts';
 import { styleIndex, type AutomationStyleIndex } from './styles.ts';
-import { packageStyleListing, type AutomationStyleRead } from './style-listing.ts';
+import { NO_STYLES, packageStyleListing, type AutomationStyleRead } from './style-listing.ts';
 import {
   BODY_STORY,
   HEADER_FOOTER_VARIANTS,
@@ -208,7 +208,6 @@ const NO_STYLE_INDEX: AutomationStyleIndex = Object.freeze({
   present: false,
   inheritsRtl: () => false,
 });
-const NO_STYLE_LISTING: readonly AutomationStyleRead[] = Object.freeze([]);
 const NO_BLOCKS: readonly AutomationBlockRead[] = Object.freeze([]);
 const NO_SECTIONS: readonly AutomationSectionRead[] = Object.freeze([]);
 const NO_FURNITURE: readonly AutomationFurnitureRead[] = Object.freeze([]);
@@ -224,7 +223,7 @@ export const EMPTY_READS: AutomationPackageReads = Object.freeze({
   noteIds: (): AutomationNoteIdsRead => ({ ok: true, ids: NONE_NUMBERS }),
   shapes: (): AutomationShapesRead => NO_SHAPES,
   styles: () => NO_STYLE_INDEX,
-  styleListing: () => NO_STYLE_LISTING,
+  styleListing: () => NO_STYLES,
 });
 
 /** The story root's own children, each with what it holds and whether it can be removed. */

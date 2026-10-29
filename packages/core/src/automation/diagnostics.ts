@@ -89,6 +89,7 @@ type HostRejectionToken =
   | 'field-result-range-unsupported'
   | 'ooxml-unsupported'
   | 'style-not-defined'
+  | 'no-styles-defined'
   | 'refresh-in-progress'
   | 'preview-active'
   | 'preview-operation-unsupported'
@@ -124,6 +125,7 @@ const STORE_EDIT_CODES: Readonly<
   'field-result-range-unsupported': 'edit.field-result-unsupported',
   'ooxml-unsupported': 'edit.ooxml-unsupported',
   'style-not-defined': 'edit.style-not-defined',
+  'no-styles-defined': 'edit.no-styles-defined',
   'carries-section-mark': 'edit.section-mark',
   'table-has-merge': 'edit.table-structure-unsupported',
   'row-hides-cell': 'edit.table-structure-unsupported',
