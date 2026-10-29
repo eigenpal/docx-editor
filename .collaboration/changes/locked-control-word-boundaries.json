@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Word motions can skip a locked control and the surrounding word.",
+  "after": "Word motions stop at both edges of content-locked inline controls.",
+  "reason": "Only local word-navigation stops change. No operation, shared state, schema, or public signature changes. Two mounted editors verify body and header navigation, remote selections, concurrent edits, undo, redo, deletion during peer input, convergence, and save/reopen.",
+  "tests": [
+    "packages/core/src/editor/__tests__/locked-word-boundaries.test.ts",
+    "packages/core/src/editor/__tests__/atomic-navigation-edges.test.ts",
+    "packages/core/src/editor/__tests__/tracked-word-selection.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-locked-word-navigation.test.ts"
+  ],
+  "changeset": "locked-control-word-boundaries",
+  "migration": null
+}
