@@ -89,7 +89,9 @@ The engine SHALL publish equation geometry from DOM-free layout. Paint SHALL use
 
 - **WHEN** an equation lays out on its line
 - **THEN** a first text atom claims its full font box on the line, and a first structure claims the font box of its `m:ctrlPr` size, or of the size of the text around the equation
-- **AND** every later text atom, and every text part of a script or an inline fraction at any depth, claims its glyph ink, with 300/2048 em of the smaller of the first atom size and its own size above the ink, and never more than its own font box
+- **AND** every later text atom, and every text part of a script or an inline fraction at any depth, claims its glyph ink, with 300/2048 em of the smaller of the first atom size and its own size above the ink, and never more than the ascent of its own font box
+- **AND** a script of a script, and every part of a script argument that holds a structure, takes 300/2048 em of the first atom size
+- **AND** the limits and body of an inline n-ary operator other than an integral claim in the same way, and the operator claims its box
 - **AND** a later text atom that draws no ink, such as a run of spaces, claims no height
 - **AND** a display fraction and other structures claim their boxes, and text without measured ink keeps its box, so an equation whose runs share one size and face keeps its extent
 

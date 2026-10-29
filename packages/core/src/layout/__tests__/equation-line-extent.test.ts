@@ -192,6 +192,76 @@ function offsetOf(geometry: EquationGeometry, part: (node: EquationGeometry) => 
 const textOf = (text: string) => (node: EquationGeometry) =>
   node.kind === 'text' && node.text.normalize('NFKD') === text;
 
+/** The text part `text` and its size, at any depth below scripts and fractions. */
+function sizeOf(geometry: EquationGeometry, text: string): number {
+  const walk = (node: EquationGeometry | undefined): number | undefined => {
+    if (!node) return undefined;
+    if (textOf(text)(node) && node.kind === 'text') return node.fontSizePt;
+    const children =
+      node.kind === 'row'
+        ? node.items
+        : node.kind === 'script'
+          ? [node.base, node.subscript, node.superscript]
+          : node.kind === 'nary'
+            ? [node.operator, node.lowerLimit, node.upperLimit, node.body]
+            : [];
+    for (const child of children) {
+      const found = walk(child);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  };
+  const found = walk(geometry);
+  if (found === undefined) throw new Error('missing part');
+  return found;
+}
+
+test('a script of a script, and the parts of a structured script, take the first run leading', () => {
+  // x^{a^b}: the second-level b claims its ink and the 12pt leading, not the leading of its size.
+  const nested = layout(superscript(run('x', 12), superscript(run('a', 12), run('b', 12), 12), 12));
+  const b = sizeOf(nested, 'b');
+  expect(b).toBeLessThan(12 * 0.73);
+  const top = (geometry: EquationGeometry, text: string) =>
+    -offsetOf(geometry, textOf(text)) + sizeOf(geometry, text) * INK[text]!.top;
+  expect(ascent(nested)).toBeCloseTo(Math.max(12 * ASCENT, top(nested, 'b') + 12 * LEADING), 8);
+  // x^{b_2}: the superscript holds a structure, so its b also takes the 12pt leading.
+  const structured = layout(
+    superscript(run('x', 12), subscript(run('b', 12), run('2', 12), 12), 12)
+  );
+  expect(ascent(structured)).toBeCloseTo(
+    Math.max(12 * ASCENT, top(structured, 'b') + 12 * LEADING),
+    8
+  );
+  // x^b: a plain superscript takes the leading of its own smaller size.
+  const plain = layout(superscript(run('x', 12), run('b', 12), 12));
+  expect(ascent(plain)).toBeCloseTo(
+    Math.max(12 * ASCENT, top(plain, 'b') + sizeOf(plain, 'b') * LEADING),
+    8
+  );
+});
+
+const nary = (operator: string) =>
+  `<m:nary><m:naryPr><m:chr m:val="${operator}"/></m:naryPr>` +
+  `<m:sub>${run('a', 12)}</m:sub><m:sup>${run('b', 12)}</m:sup><m:e>${run('x', 12)}</m:e></m:nary>`;
+
+test('an inline sum claims its operator box and the ink of its limits', () => {
+  const geometry = layout(run('y', 12) + nary('\u2211'));
+  if (geometry.kind !== 'row') throw new Error(`expected a row, got ${geometry.kind}`);
+  const sum = geometry.items.find((item) => item.kind === 'nary');
+  if (sum?.kind !== 'nary') throw new Error('missing sum');
+  const sumTop = sum.box.y;
+  const operatorAscent = geometry.baseline - (sumTop + sum.operator.box.y);
+  const upper = sum.upperLimit!;
+  const upperBaseline = sumTop + upper.box.y + upper.baseline - geometry.baseline;
+  const upperClaim = -upperBaseline + sizeOf(sum, 'b') * INK.b!.top + sizeOf(sum, 'b') * LEADING;
+  expect(ascent(geometry)).toBeCloseTo(Math.max(12 * ASCENT, operatorAscent, upperClaim), 8);
+  // An integral keeps its whole box.
+  const integral = layout(run('y', 12) + nary('\u222b'));
+  if (integral.kind !== 'row') throw new Error(`expected a row, got ${integral.kind}`);
+  const box = integral.items.find((item) => item.kind === 'nary')!;
+  expect(ascent(integral)).toBeCloseTo(Math.max(12 * ASCENT, box.baseline), 8);
+});
+
 test('a script after the first run takes its offsets from the first run size', () => {
   // A 48pt base after a 12pt run: the superscript sits at most 460/2048 em of 12pt below the
   // base's lowercase top (976/2048 em of 48pt), not 750/2048 em of 48pt above the baseline.
@@ -243,13 +313,15 @@ test('runs without measured ink keep their boxes', () => {
 
 /** The line of a paragraph with `line` auto spacing, 1pt text, and the equation `body`. */
 function lineOf(body: string, line = 240, textPoints = 1) {
+  // A zero size leaves out the text run: the equation is alone on its line.
+  const text =
+    textPoints > 0 ? `<w:r><w:rPr><w:sz w:val="${textPoints * 2}"/></w:rPr><w:t>a</w:t></w:r>` : '';
   const W = WML_NAMESPACE_URI;
   const M = OFFICE_MATH_NAMESPACE_URI;
   const document = readOoxmlPart(
     `<w:document xmlns:w="${W}" xmlns:m="${M}"><w:body><w:p><w:pPr>` +
       `<w:spacing w:before="0" w:after="0" w:line="${line}" w:lineRule="auto"/></w:pPr>` +
-      `<w:r><w:rPr><w:sz w:val="${textPoints * 2}"/></w:rPr><w:t>a</w:t></w:r>` +
-      `<m:oMath>${body}</m:oMath></w:p></w:body></w:document>`,
+      `${text}<m:oMath>${body}</m:oMath></w:p></w:body></w:document>`,
     { name: '/word/document.xml', contentType: 'app/xml' }
   );
   const styles = readOoxmlPart(
@@ -288,6 +360,13 @@ test('multiple spacing adds or removes its share of the first run font box', () 
     expect(tighter.box.height).toBeCloseTo(single.box.height - box(first) / 5, 8);
     expect(tighter.baseline).toBeCloseTo(single.baseline - (first * ASCENT) / 5, 8);
   }
+  // Alone in a 12pt paragraph, an equation that opens with a 10pt run scales by the 10pt box:
+  // the 12pt style around the equation is not text on the line.
+  const alone = lineOf(run('x', 10) + run('x', 20), 240, 0);
+  expect(lineOf(run('x', 10) + run('x', 20), 360, 0).box.height).toBeCloseTo(
+    alone.box.height + box(10) / 2,
+    8
+  );
   // Text taller than the first run's box scales by its own band instead.
   const single = lineOf(run('x', 12) + run('x', 48), 240, 24);
   const text = lineOf(run('x', 1), 240, 24).box.height;

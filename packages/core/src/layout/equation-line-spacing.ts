@@ -33,6 +33,11 @@ export function equationSpacingBand(
     if (own && own.height > (band?.height ?? 0)) band = own;
   }
   if (!band) return undefined;
-  const text = textBandWithBorders(line.spans, measurer, pageBreaksIgnored);
+  // The equation span carries the style of the text around it, which is not text on the line.
+  const text = textBandWithBorders(
+    line.spans.filter((span) => span.equation === undefined),
+    measurer,
+    pageBreaksIgnored
+  );
   return text.height > band.height ? text : band;
 }

@@ -74,9 +74,9 @@ test('a fraction alone claims the font box of its size and the ink of its parts'
   const band = { ascent: 14 * 0.8, descent: 14 * 0.2 };
   // The parts draw at 8 pt: 73 percent of 11 pt, rounded down to a half point. The numerator
   // claims its digit ink, 0.7 em high, and the math leading of its own smaller size above it,
-  // but never more than its typographic ascent.
+  // up to the ascent of its 8pt font box (14 * 8 / 11 * 0.8), not its typographic box.
   expect(geometry.baseline).toBeCloseTo(
-    Math.max(band.ascent, em(1200) * 11 + Math.min(em(1593) * 8, 0.7 * 8 + em(300) * 8)),
+    Math.max(band.ascent, em(1200) * 11 + Math.min(((14 * 8) / 11) * 0.8, 0.7 * 8 + em(300) * 8)),
     9
   );
   // The denominator digits have no ink below their baseline.

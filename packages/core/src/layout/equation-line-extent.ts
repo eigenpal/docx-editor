@@ -2,7 +2,7 @@
 import type { EquationGeometry } from './equation-layout.ts';
 import { equationInk, isInvisibleEquationText } from './equation-ink.ts';
 import { box, shifted } from './equation-scripts.ts';
-import type { TextMeasurer } from './semantic-records.ts';
+import type { LayoutBox, TextMeasurer } from './semantic-records.ts';
 
 /** The space kept above the ink of the math, in ems of the first atom size (`MathLeading`). */
 const MATH_LEADING = 300 / 2048;
@@ -17,33 +17,73 @@ export interface EquationTextBand {
 interface Claimant {
   readonly node: EquationGeometry;
   readonly offset: number;
+  /** How many script levels the part sits below the equation: scripts and limits add one. */
+  readonly depth: number;
+  /** The part claims its whole box, as the operator of an n-ary structure does. */
+  readonly boxOnly?: true;
 }
 
 /**
+ * The script levels that a script argument adds: one for plain text, and two for an argument
+ * that holds a structure, whose parts then claim like a script of a script.
+ */
+function scriptLevels(part: EquationGeometry | undefined): number {
+  const plain = (node: EquationGeometry): boolean =>
+    node.kind === 'text' || (node.kind === 'row' && node.items.every(plain));
+  return part && !plain(part) ? 2 : 1;
+}
+
+/** Integral signs: an inline integral keeps its whole box on the line. */
+const INTEGRALS = /^[\u222b-\u2233\u2a0b-\u2a1c]$/u;
+
+/**
  * Collect the parts that claim height. Rows, scripts, and fractions open into their parts, so
- * every script and fraction part claims for itself. Other structures claim as one part.
+ * every script and fraction part claims for itself. An inline n-ary operator other than an
+ * integral opens too: its operator claims its box, and its limits and body claim for
+ * themselves. Other structures claim as one part.
  */
 function collectClaimants(
   node: EquationGeometry,
   top: number,
   baseline: number,
   display: boolean,
-  claimants: Claimant[]
+  claimants: Claimant[],
+  depth = 0
 ): void {
-  const parts =
-    node.kind === 'row'
-      ? node.items
-      : node.kind === 'script'
-        ? [node.base, node.subscript, node.superscript]
-        : node.kind === 'fraction' && !display
-          ? [node.numerator, node.denominator]
-          : null;
-  if (!parts) {
-    claimants.push({ node, offset: top + node.baseline - baseline });
-    return;
+  const offsetOf = (part: EquationGeometry) => top + part.box.y + part.baseline - baseline;
+  const open = (part: EquationGeometry | undefined, level: number) => {
+    if (part) collectClaimants(part, top + part.box.y, baseline, display, claimants, level);
+  };
+  switch (node.kind) {
+    case 'row':
+      for (const item of node.items) open(item, depth);
+      return;
+    case 'script':
+      open(node.base, depth);
+      open(node.subscript, depth + scriptLevels(node.subscript));
+      open(node.superscript, depth + scriptLevels(node.superscript));
+      return;
+    case 'fraction':
+      if (display) break;
+      open(node.numerator, depth);
+      open(node.denominator, depth);
+      return;
+    case 'nary':
+      if (display || INTEGRALS.test(node.operator.text)) break;
+      claimants.push({
+        node: node.operator,
+        offset: offsetOf(node.operator),
+        depth,
+        boxOnly: true,
+      });
+      open(node.lowerLimit, depth + 1);
+      open(node.upperLimit, depth + 1);
+      open(node.body, depth);
+      return;
+    default:
+      break;
   }
-  for (const part of parts)
-    if (part) collectClaimants(part, top + part.box.y, baseline, display, claimants);
+  claimants.push({ node, offset: top + node.baseline - baseline, depth });
 }
 
 /** `node` with a new `baseline` and `height`: its parts move down by the change in baseline. */
@@ -52,6 +92,7 @@ function withExtent(node: EquationGeometry, baseline: number, height: number): E
   const move = <T extends EquationGeometry>(part: T): T =>
     shifted(part, part.box.x, part.box.y + dy);
   const extent = { box: box(node.box.x, node.box.y, node.box.width, height), baseline };
+  const rule = (stroke: LayoutBox) => box(stroke.x, stroke.y + dy, stroke.width, stroke.height);
   switch (node.kind) {
     case 'row':
       return Object.freeze({ ...node, ...extent, items: Object.freeze(node.items.map(move)) });
@@ -69,11 +110,31 @@ function withExtent(node: EquationGeometry, baseline: number, height: number): E
         ...extent,
         numerator: move(node.numerator),
         denominator: move(node.denominator),
-        bar: box(node.bar.x, node.bar.y + dy, node.bar.width, node.bar.height),
+        bar: rule(node.bar),
+      });
+    case 'nary':
+      return Object.freeze({
+        ...node,
+        ...extent,
+        operator: move(node.operator),
+        body: move(node.body),
+        ...(node.lowerLimit ? { lowerLimit: move(node.lowerLimit) } : {}),
+        ...(node.upperLimit ? { upperLimit: move(node.upperLimit) } : {}),
+      });
+    case 'bar':
+      return Object.freeze({ ...node, ...extent, body: move(node.body), bar: rule(node.bar) });
+    case 'radical':
+      return Object.freeze({
+        ...node,
+        ...extent,
+        sign: move(node.sign),
+        radicand: move(node.radicand),
+        ...(node.degree ? { degree: move(node.degree) } : {}),
+        bar: rule(node.bar),
       });
     default:
-      // Other parts claim their own boxes, so their extent never changes.
-      return node;
+      // A text or fallback part moves inside a row of its own.
+      return Object.freeze({ kind: 'row', items: Object.freeze([move(node)]), ...extent });
   }
 }
 
@@ -95,9 +156,11 @@ export function equationTextBand(geometry: EquationGeometry): EquationTextBand |
  * The equation claims the font box `band` on its baseline: the box of its first text atom, or
  * of the structure size when a structure opens it. Every other part claims only its glyph
  * ink, plus the math leading above the ink, and never more than its own font box. The leading
- * takes the smaller of `leadingSizePt` and the part's own size. Script and fraction parts
- * claim for themselves at their own positions, so a large script raises the line by its ink,
- * not by its font box. A fraction of a `display` equation keeps its padded box. Text that draws nothing,
+ * takes the smaller of `leadingSizePt` and the part's own size, and `leadingSizePt` for a
+ * script of a script. Script and fraction parts claim for themselves at their own positions,
+ * so a large script raises the line by its ink, not by its font box. The limits and body of an
+ * inline n-ary structure other than an integral claim the same way, and its operator claims
+ * its box. A fraction of a `display` equation keeps its padded box. Text that draws nothing,
  * such as a space, claims no height. Other structures claim their boxes. A text part without
  * measured ink keeps its font box.
  *
@@ -118,18 +181,28 @@ export function fitEquationLineExtent(
   const opensWithText = first.node.kind === 'text' && first.offset === 0;
   let ascent = band.baseline;
   let descent = band.height - band.baseline;
-  for (const [index, { node, offset }] of claimants.entries()) {
+  for (const [index, { node, offset, depth, boxOnly }] of claimants.entries()) {
     if (index === 0 && opensWithText) continue;
     // Later text that draws nothing, such as a larger space, claims no height.
     if (node.kind === 'text' && isInvisibleEquationText(node.text)) continue;
     let nodeAscent = node.baseline;
     let nodeDescent = node.box.height - node.baseline;
+    // A fraction part stands in a box of the face's typographic ascent; its claim may still
+    // reach the ascent of its font box.
+    if (node.kind === 'text' && !boxOnly && node.runStyle)
+      nodeAscent = Math.max(nodeAscent, measurer.lineMetrics(node.runStyle).baseline);
     // Ink can only lower a claim, so read it only for a box that reaches past the extent.
-    if (node.kind === 'text' && (nodeAscent - offset > ascent || nodeDescent + offset > descent)) {
+    if (
+      node.kind === 'text' &&
+      !boxOnly &&
+      (nodeAscent - offset > ascent || nodeDescent + offset > descent)
+    ) {
       const ink = equationInk(node, measurer);
       if (!ink.fromFontBox) {
-        // The leading takes the smaller of the first atom size and the part's own size.
-        const leading = MATH_LEADING * Math.min(leadingSizePt, node.fontSizePt);
+        // The leading takes the smaller of the first atom size and the part's own size. A
+        // script of a script takes the leading of the first atom size.
+        const sizePt = depth >= 2 ? leadingSizePt : Math.min(leadingSizePt, node.fontSizePt);
+        const leading = MATH_LEADING * sizePt;
         nodeAscent = Math.min(nodeAscent, ink.ascent + leading);
         nodeDescent = Math.min(nodeDescent, ink.descent);
       }
