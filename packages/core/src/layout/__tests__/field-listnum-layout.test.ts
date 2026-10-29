@@ -4,6 +4,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import { createLayoutSession } from '../layout-session.ts';
 import { buildNumberingIndex } from '../numbering-index.ts';
 import { paragraphFragmentsOf, type SemanticLayout } from '../index.ts';
 import { parseListNumInstruction } from '../field-listnum.ts';
@@ -240,6 +241,25 @@ describe('LISTNUM fields number from the list walk', () => {
         NUMBERING
       )
     ).toEqual(['U1. real 1. x U2)']);
+  });
+
+  test('a second layout session over the same story keeps the numbers', () => {
+    const body =
+      para(text('real'), numPr('2', 0)) +
+      para(field('LISTNUM', 'saved') + text(' one')) +
+      para(field('LISTNUM', 'saved') + text(' two'));
+    const { part, numberingIndex } = load(body, NUMBERING);
+    const texts = () =>
+      textsOf(
+        layoutSemanticDocument(part, 1, {
+          measurer,
+          numberingIndex: numberingIndex!,
+          session: createLayoutSession(),
+        })
+      );
+    expect(texts()).toEqual(['U1. real', 'U2. one', 'U3. two']);
+    // The next session starts from the first one's list walk.
+    expect(texts()).toEqual(['U1. real', 'U2. one', 'U3. two']);
   });
 
   test('an edit before a field renumbers it', () => {

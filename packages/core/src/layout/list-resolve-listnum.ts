@@ -48,6 +48,17 @@ export interface ListNumValues {
 
 const valuesByItems = new WeakMap<object, ListNumValues>();
 
+/**
+ * A copy of a resolved item map that keeps the LISTNUM values recorded for the original. The
+ * values are keyed by map identity, so a plain copy would lose them.
+ */
+export function copyListItemsWithListNum<K, V>(items: ReadonlyMap<K, V>): Map<K, V> {
+  const copy = new Map(items);
+  const values = valuesByItems.get(items);
+  if (values) valuesByItems.set(copy, values);
+  return copy;
+}
+
 /** The LISTNUM values recorded for a resolved item map, or undefined for none. */
 export function listNumValuesOf(items: object | undefined): ListNumValues | undefined {
   return items ? valuesByItems.get(items) : undefined;

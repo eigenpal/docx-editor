@@ -50,7 +50,7 @@ import {
   listNumSignatureOf,
   storyHasListNumFields,
 } from './field-listnum-scan.ts';
-import { createListNumWalker } from './list-resolve-listnum.ts';
+import { copyListItemsWithListNum, createListNumWalker } from './list-resolve-listnum.ts';
 
 export { readNumPr };
 
@@ -814,7 +814,7 @@ function resolveStoryListItemsStable(
       : undefined;
   const last = memoOwner
     ? (lastStoryResolvesBySession.get(memoOwner) ??
-      (seed && { ...seed, listItems: new Map(seed.listItems) }))
+      (seed && { ...seed, listItems: copyListItemsWithListNum(seed.listItems) }))
     : ((first ? lastStoryResolvesByAnchor.get(first) : undefined) ??
       (lastBlock ? lastStoryResolvesByAnchor.get(lastBlock) : undefined));
   const evidence = memoOwner ? consumeListResolveChangeEvidence(memoOwner) : undefined;

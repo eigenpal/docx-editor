@@ -18,8 +18,8 @@
 
 import { normalizeFieldInstruction } from './field-instruction.ts';
 
-/** The highest value `\s` may set; a larger one clamps here. */
-const MAX_LISTNUM_START = 32_767;
+/** The highest value `\s` may set; a larger one clamps here, as a list level's start does. */
+const MAX_LISTNUM_START = 9_999;
 /** Longest list name compared. */
 const MAX_LISTNUM_NAME_CHARS = 255;
 
