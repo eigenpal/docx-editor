@@ -116,6 +116,16 @@ async function revisionCount(runtime: Runtime): Promise<number> {
   });
 }
 
+/** The unique local ID of the first paragraph, which names the paragraph across peers. */
+async function firstParagraphId(runtime: Runtime): Promise<string> {
+  return runtime.run(async (context) => {
+    const paragraph = context.document.body.paragraphs.getFirst();
+    paragraph.load('uniqueLocalId');
+    await context.sync();
+    return paragraph.uniqueLocalId;
+  });
+}
+
 async function rejectAll(runtime: Runtime): Promise<void> {
   await runtime.run(async (context) => {
     context.document.body.revisions.rejectAll();
@@ -209,6 +219,66 @@ describe('rejecting every change of a paragraph that holds a break and a new par
       }
     });
   }
+});
+
+describe('rejecting a tracked split while its author undoes it offline', () => {
+  // Both take the split back. Rejecting the mark joins the second paragraph into the first,
+  // as the undo does, so both keep the first paragraph and the whole text.
+  const orders = [
+    { label: 'Alice inserts first', ids: { alice: 1_000, bob: 2_000 } },
+    { label: 'Bob inserts first', ids: { alice: 2_000, bob: 1_000 } },
+  ];
+  for (const { name, split } of [
+    {
+      name: 'a tracked paragraph break',
+      split: (runtime: Runtime) => trackedNewline(runtime, 'One; '),
+    },
+    {
+      name: 'a tracked split',
+      split: (runtime: Runtime) => splitAt(runtime, 'One; ', true),
+    },
+  ]) {
+    for (const { label, ids } of orders) {
+      test(`${name} keeps the paragraph (${label})`, async () => {
+        const r = await room(ids);
+        try {
+          await split(r.alice.runtime);
+          r.sync();
+          later();
+          r.pause();
+          await rejectAll(r.bob.runtime);
+          later();
+          expect(r.alice.editor.exec({ type: 'undo' }).ok).toBe(true);
+          r.sync();
+          r.resume();
+          r.sync();
+          await r.expectBoth(ORIGINAL, 0);
+          // Undoing the rejection brings the proposed split back with all of its text.
+          later();
+          expect(r.bob.editor.exec({ type: 'undo' }).ok).toBe(true);
+          r.sync();
+          await r.expectBoth(['One; ', 'two; three', 'Signed']);
+        } finally {
+          r.close();
+        }
+      });
+    }
+  }
+
+  test('a rejected tracked split joins into the first paragraph, which keeps its identity', async () => {
+    const r = await room();
+    try {
+      await trackedNewline(r.alice.runtime, 'One; ');
+      r.sync();
+      const first = await firstParagraphId(r.bob.runtime);
+      await rejectAll(r.bob.runtime);
+      r.sync();
+      await r.expectBoth(ORIGINAL, 0);
+      expect(await firstParagraphId(r.alice.runtime)).toBe(first);
+    } finally {
+      r.close();
+    }
+  });
 });
 
 describe('undoing a split into three paragraphs while a peer types in the middle one', () => {
