@@ -49,6 +49,7 @@ import { useImageInsertOptional } from '../images/ImageInsert';
 import { MenuTableGrid } from './menu-flyouts';
 import { MenuWatermark } from './menu-watermark';
 import { MenuBookmark, MenuGoToBookmarkRow } from './menu-bookmark';
+import { MenuLinkRow } from './menu-link-row';
 
 export { MenuTableGrid, type MenuTableGridProps } from './menu-flyouts';
 
@@ -275,6 +276,13 @@ export function menuItemSlotId(props: {
  * @public
  */
 export function MenuItem(props: MenuItemProps) {
+  // `text.link` runs no command; it opens the link popover. A separate component, so neither
+  // row calls hooks conditionally.
+  if ((props.slotId ?? props.slot) === 'text.link') return <MenuLinkRow {...props} />;
+  return <MenuCommandItem {...props} />;
+}
+
+function MenuCommandItem(props: MenuItemProps) {
   const { labelKey, shortcutKey, className, hidden } = props;
   const slot = menuItemSlotId(props) ?? ('' as ChromeSlotId);
   const { execute, isActive, isEnabled, disabledReason, value } = useEditorCommand(slot);
