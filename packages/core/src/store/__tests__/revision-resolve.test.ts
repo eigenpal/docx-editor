@@ -10,6 +10,7 @@ import {
   applyTreeOp,
   readOoxmlPart,
   serializeOoxmlPart,
+  type OoxmlNode,
   type OoxmlPart,
   type TreeDocOp,
 } from '../index.ts';
@@ -469,6 +470,33 @@ describe('accept-all and reject-all', () => {
     expect(refuse(part, { op: 'acceptAllRevisions', scopeRootId: body.id })).toBe(
       'invalid-property-value'
     );
+  });
+
+  test('a standalone VML text box is a scope; its copy under mc:Fallback is not', () => {
+    const box = (text: string) =>
+      '<w:pict xmlns:v="urn:schemas-microsoft-com:vml"><v:shape><v:textbox><w:txbxContent>' +
+      `<w:p>${wrap('ins', QA, run(text))}</w:p></w:txbxContent></v:textbox></v:shape></w:pict>`;
+    const part = load(
+      `<w:p>${wrap('ins', QA, run('owner'))}<w:r>${box('boxed')}</w:r>` +
+        '<w:r><mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">' +
+        `<mc:Choice Requires="w14"><w:t>x</w:t></mc:Choice><mc:Fallback>${box('copy')}</mc:Fallback>` +
+        '</mc:AlternateContent></w:r></w:p>'
+    );
+    const stories: string[] = [];
+    const visit = (node: OoxmlNode) => {
+      if (node.kind === 'textValue') return;
+      if (node.localName === 'txbxContent') stories.push(node.id);
+      node.children.forEach(visit);
+    };
+    visit(part.root);
+    const [standalone, fallback] = stories;
+    expect(refuse(part, { op: 'acceptAllRevisions', scopeRootId: fallback! })).toBe(
+      'invalid-property-value'
+    );
+    const out = xml(apply(part, { op: 'acceptAllRevisions', scopeRootId: standalone! }));
+    // Only the box's own change is decided; the owner and the fallback copy keep theirs.
+    expect(out.match(/<w:ins\b/g) ?? []).toHaveLength(2);
+    expect(out).toMatch(/<w:txbxContent><w:p[^>]*><w:r><w:t>boxed<\/w:t>/);
   });
 });
 

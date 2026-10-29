@@ -18,6 +18,34 @@ export function children(node: OoxmlElement): OoxmlElement[] {
   const values: readonly OoxmlNode[] = node.children;
   return values.filter(element);
 }
+/** The VML elements that draw a shape; `v:shapetype` is a template, not a shape. @internal */
+export const VML_SHAPE_ELEMENTS: ReadonlySet<string> = new Set([
+  'shape',
+  'rect',
+  'roundrect',
+  'oval',
+  'line',
+  'polyline',
+  'curve',
+  'arc',
+  'image',
+  'group',
+]);
+/** Word's VML shape id: `_x0000_` and a letter, then the shape number (`xsd:unsignedInt`). */
+const SHAPE_ID = /^_x0000_[a-z](\d{1,10})$/i;
+/**
+ * The number Word names a VML shape by: the one in `o:spid`, or in `id` when the file writes no
+ * `o:spid`, spelled `_x0000_s1025` floating and `_x0000_i1025` on the line. Null when the id
+ * has no number, or for an element that draws no shape. @internal
+ */
+export function vmlShapeNumber(shape: OoxmlElement): number | null {
+  if (shape.namespaceUri !== VML || !VML_SHAPE_ELEMENTS.has(shape.localName)) return null;
+  const raw = attribute(shape, 'spid', OFFICE) ?? attribute(shape, 'id');
+  const digits = raw?.trim().match(SHAPE_ID)?.[1];
+  if (digits === undefined) return null;
+  const value = Number(digits);
+  return value <= 0xffffffff ? value : null;
+}
 /** Whether a VML boolean is false (`f`, `false`, `0`). @internal */
 export const off = (value: string | undefined) => /^(f|false|0)$/i.test(value ?? '');
 export const escapeXml = (value: string) =>

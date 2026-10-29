@@ -114,6 +114,29 @@ await runtime.run(async (context) => {
 
 Each write sync creates a separate transaction. Earlier successful transactions remain if a later transaction fails. Linked headers or footers can share content. Re-read that content before making a dependent edit through another section.
 
+### Read text boxes before you edit an empty-looking body
+
+A text box is its own story, so `body.text` and `body.search()` do not include its text. Some documents keep all of their visible text in floating text boxes, anchored by empty body paragraphs. If `body.text` is empty or short, read the shapes before you choose an edit target. Text inserted into an empty anchor paragraph usually appears behind the boxes.
+
+```ts
+const texts = await runtime.run(async (context) => {
+  const shapes = context.document.body.shapes.getByTypes([
+    ShapeType.textBox,
+    ShapeType.geometricShape,
+  ]);
+  shapes.load('items/id');
+  await context.sync();
+  const bodies = shapes.items.map((shape) => {
+    shape.body.load('text');
+    return shape.body;
+  });
+  await context.sync();
+  return shapes.items.map((shape, index) => ({ id: shape.id, text: bodies[index]!.text }));
+});
+```
+
+A shape that the file gives no text story reads as empty text. A write to it refuses with `InvalidArgument` and `edit.unsupported-story`. Edit a text box through its own `body` in its own sync, as with any other story.
+
 ## Preserve Office.js enum property types
 
 Like Office.js, `Document.changeTrackingMode` and `PageSetup.orientation` use unions of the enum and its string literals for both reads and writes. Enum constants and the corresponding string literals are accepted by the type system. This matches Microsoft's [change-tracking declaration](https://learn.microsoft.com/en-us/javascript/api/word/word.document#word-word-document-changetrackingmode-member) and [page-orientation declaration](https://learn.microsoft.com/en-us/javascript/api/word/word.pagesetup#word-word-pagesetup-orientation-member).
