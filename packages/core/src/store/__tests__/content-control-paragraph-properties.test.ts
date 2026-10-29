@@ -108,26 +108,42 @@ test('removing direct alignment keeps the other paragraph properties', () => {
 });
 
 for (const lock of ['contentLocked', 'sdtContentLocked']) {
-  test(`nested ${lock} permits only alignment, with every other property unchanged`, () => {
+  test(`nested ${lock} permits placement properties and keeps style, list, and direction`, () => {
     const before = part(
       control(control(`<w:p>${properties}${run}</w:p>`)).replaceAll('contentLocked', lock)
     );
     const id = storyParagraphs(bodyStoryRoot(before)!)[0]!.id;
     const kept = directParagraphProperties(before, id);
-    expect(
-      applyTreeOp(before, {
-        op: 'setParagraphProperties',
-        paragraphId: id,
-        properties: [...kept, { localName: 'jc', attributes: { val: 'center' } }],
-      }).ok
-    ).toBe(true);
-    for (const changed of [
-      [{ localName: 'jc', attributes: { val: 'center' } }],
-      [...kept, { localName: 'spacing', attributes: { before: '120' } }],
+    for (const allowed of [
+      [...kept, { localName: 'jc', attributes: { val: 'center' } }],
+      [...kept, { localName: 'spacing', attributes: { before: '120', line: '360' } }],
       [
         ...kept.filter((property) => property.localName !== 'ind'),
-        { localName: 'ind', attributes: { left: '480' } },
+        { localName: 'ind', attributes: { left: '480', right: '120', firstLine: '240' } },
       ],
+      [
+        ...kept,
+        { localName: 'keepNext' },
+        { localName: 'keepLines' },
+        { localName: 'pageBreakBefore' },
+        { localName: 'widowControl', attributes: { val: '0' } },
+      ],
+    ]) {
+      expect(
+        applyTreeOp(before, { op: 'setParagraphProperties', paragraphId: id, properties: allowed })
+          .ok
+      ).toBe(true);
+    }
+    for (const changed of [
+      // Dropping the style along with the indent.
+      [{ localName: 'jc', attributes: { val: 'center' } }],
+      [
+        ...kept.filter((property) => property.localName !== 'pStyle'),
+        { localName: 'pStyle', attributes: { val: 'Quote' } },
+      ],
+      [...kept, { localName: 'bidi' }],
+      [...kept, { localName: 'contextualSpacing' }],
+      [...kept, { localName: 'numPr', attributes: {} }],
     ]) {
       expect(
         applyTreeOp(before, {
@@ -187,12 +203,26 @@ test('alignment does not relax a data binding or forms protection', () => {
   ).toBe('locked');
 });
 
-test('rejecting a pending indent change still meets a content lock', () => {
+test('rejecting a pending indent and spacing change passes a content lock', () => {
   const before = part(
     control(
-      '<w:p><w:pPr><w:ind w:left="480"/>' +
+      '<w:p><w:pPr><w:spacing w:before="240"/><w:ind w:left="480"/>' +
         '<w:pPrChange w:id="7" w:author="Ada"><w:pPr><w:ind w:left="240"/></w:pPr></w:pPrChange>' +
         `</w:pPr>${run}</w:p>`
+    )
+  );
+  const rejected = xml(apply(before, { op: 'rejectAllRevisions' }));
+  expect(rejected).toContain('<w:pPr><w:ind w:left="240"/></w:pPr>');
+  expect(rejected).not.toContain('<w:pPrChange');
+  expect(rejected).toContain(run);
+});
+
+test('rejecting a pending style change still meets a content lock', () => {
+  const before = part(
+    control(
+      '<w:p><w:pPr><w:pStyle w:val="Quote"/><w:ind w:left="480"/>' +
+        '<w:pPrChange w:id="7" w:author="Ada"><w:pPr><w:pStyle w:val="BodyText"/>' +
+        `<w:ind w:left="240"/></w:pPr></w:pPrChange></w:pPr>${run}</w:p>`
     )
   );
   expect(applyTreeOp(before, { op: 'rejectAllRevisions' })).toMatchObject({
@@ -202,12 +232,48 @@ test('rejecting a pending indent change still meets a content lock', () => {
   expect(xml(before)).toContain('<w:ind w:left="480"/>');
 });
 
-test('tracked alignment refuses to merge into a pending change that records other properties', () => {
+test('tracked placement in a lock records one change that accepts and rejects', () => {
+  const before = part(control(`<w:p>${properties}${run}</w:p>`));
+  const id = storyParagraphs(bodyStoryRoot(before)!)[0]!.id;
+  const indented = apply(before, {
+    op: 'setParagraphProperties',
+    paragraphId: id,
+    properties: [
+      ...directParagraphProperties(before, id).filter((property) => property.localName !== 'ind'),
+      { localName: 'ind', attributes: { left: '720' } },
+    ],
+    revision: ADA,
+  });
+  const after = apply(indented, {
+    op: 'setParagraphProperties',
+    paragraphId: id,
+    properties: [
+      ...directParagraphProperties(indented, id),
+      { localName: 'spacing', attributes: { before: '240' } },
+      { localName: 'keepNext' },
+    ],
+    revision: ADA,
+  });
+  const saved = xml(after);
+  expect(saved.match(/<w:pPrChange /g)?.length).toBe(1);
+  expect(saved).toContain(
+    '><w:pPr><w:pStyle w:val="BodyText"/><w:ind w:left="240"/></w:pPr></w:pPrChange>'
+  );
+  const reopened = part(saved.replace(/^.*?<w:body>/s, '').replace(/<\/w:body>.*$/s, ''));
+  expect(xml(reopened)).toBe(saved);
+  const accepted = xml(apply(after, { op: 'acceptAllRevisions' }));
+  expect(accepted).toContain('<w:keepNext/>');
+  expect(accepted).toContain('<w:ind w:left="720"/>');
+  expect(accepted).not.toContain('<w:pPrChange');
+  expect(xml(apply(after, { op: 'rejectAllRevisions' }))).toBe(xml(before));
+});
+
+test('tracked alignment refuses to merge into a pending change that records a style', () => {
   const before = part(
     control(
-      '<w:p><w:pPr><w:ind w:left="480"/>' +
-        '<w:pPrChange w:id="7" w:author="Ada"><w:pPr><w:ind w:left="240"/></w:pPr></w:pPrChange>' +
-        `</w:pPr>${run}</w:p>`
+      '<w:p><w:pPr><w:pStyle w:val="Quote"/>' +
+        '<w:pPrChange w:id="7" w:author="Ada"><w:pPr><w:pStyle w:val="BodyText"/></w:pPr>' +
+        `</w:pPrChange></w:pPr>${run}</w:p>`
     )
   );
   const id = storyParagraphs(bodyStoryRoot(before)!)[0]!.id;
@@ -219,7 +285,7 @@ test('tracked alignment refuses to merge into a pending change that records othe
       { localName: 'jc', attributes: { val: 'center' } },
     ],
   };
-  // The merged revision would also record the indent, and the lock would refuse to reject it.
+  // The merged revision would also record the style, and the lock would refuse to reject it.
   expect(applyTreeOp(before, { ...op, revision: BOB })).toMatchObject({
     ok: false,
     reason: 'locked',
@@ -227,7 +293,7 @@ test('tracked alignment refuses to merge into a pending change that records othe
   const plain = xml(apply(before, op));
   expect(plain).toContain('<w:jc w:val="center"/>');
   expect(plain).toContain(
-    '<w:pPrChange w:author="Ada" w:id="7"><w:pPr><w:ind w:left="240"/></w:pPr></w:pPrChange>'
+    '<w:pPrChange w:author="Ada" w:id="7"><w:pPr><w:pStyle w:val="BodyText"/></w:pPr></w:pPrChange>'
   );
 });
 

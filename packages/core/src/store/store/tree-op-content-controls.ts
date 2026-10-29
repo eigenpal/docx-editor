@@ -69,9 +69,9 @@ import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
 import { strikesWholeControl } from './tree-op-control-strike.ts';
 import { holdsRevisionContainer } from './revision-container-presence.ts';
 import {
-  changesOnlyParagraphAlignment,
-  restoresOnlyParagraphAlignment,
-} from './content-lock-paragraph-alignment.ts';
+  changesOnlyLockFreeParagraphProperties,
+  restoresOnlyLockFreeParagraphProperties,
+} from './content-lock-paragraph-properties.ts';
 import { attributionTargets } from './revision-author-change.ts';
 import { revisionStructuralReach, type RevisionOpAction } from './tree-op-revisions.ts';
 import {
@@ -976,7 +976,7 @@ function resolveRevisionReach(
       if (controls.length === 0) unprotected.push(node.id);
       const keepsContent =
         revisionDecisionKeepsContent(node, action) ||
-        (action === 'reject' && restoresOnlyParagraphAlignment(part, node));
+        (action === 'reject' && restoresOnlyLockFreeParagraphProperties(part, node));
       for (let index = 0; index < controls.length; index += 1) {
         touches.push({
           control: controls[index]!,
@@ -1063,8 +1063,9 @@ const MAX_REVISION_NODES = 50_000;
  * inside it or retarget the link it holds has not been stopped by anything.
  */
 export function contentControlLockRefusal(part: OoxmlPart, op: TreeDocOp): TreeOpRejection | null {
-  // Alignment changes the paragraph around the locked text; binding and forms checks still run.
-  if (changesOnlyParagraphAlignment(part, op)) return null;
+  // Alignment, indents, and spacing place the paragraph around the locked text; binding and
+  // forms checks still run.
+  if (changesOnlyLockFreeParagraphProperties(part, op)) return null;
   const reach = treeOpReach(op);
   // Changing a control's METADATA and REMOVING it are refused by different halves of `ST_Lock`
   // than an edit is — `contentLocked` protects the contents and lets the control go, `sdtLocked`

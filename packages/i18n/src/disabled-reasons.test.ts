@@ -52,7 +52,7 @@ describe('every refusal the section-break lane publishes is translatable', () =>
 });
 
 test.each([
-  'this content is locked; only alignment can change',
+  'this content is locked; only alignment, indents, spacing, and line and page breaks can change',
   'this content is bound to data and cannot change',
 ])('the paragraph format refusal "%s" is translatable', (reason) => {
   expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);

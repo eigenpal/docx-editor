@@ -984,7 +984,7 @@
     "tableGridUnplaceable": "此表格中有一个单元格不符合其列网格",
     "drawingLocked": "此图片已锁定",
     "contentLocked": "此内容已锁定",
-    "lockedParagraphFormat": "此内容已锁定；只能更改对齐方式",
+    "lockedParagraphFormat": "此内容已锁定；只能更改对齐方式、缩进、间距以及换行和分页",
     "boundParagraphFormat": "此内容已绑定到数据，无法更改",
     "editorNotReady": "编辑器尚未就绪",
     "imageSuggesting": "建议模式下无法更改图片",
