@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Fix bold toggling in empty paragraphs with a bold paragraph mark. Fixes #1626.
+Formatting at the caret of an empty paragraph applies to its paragraph mark, so Bold and other toggles turn off a format the mark already has. Fixes #1626.

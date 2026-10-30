@@ -1,11 +1,12 @@
 {
   "impact": "compatible",
   "fields": [],
-  "before": "An empty bold paragraph mark stayed bold after a toggle press.",
-  "after": "The toggle reads the empty paragraph mark face and arms the opposite format for local typing.",
-  "reason": "Only the local toggle-state read changes. Typed characters use existing run-property operations and shared fields. The paragraph mark and peer typing formats stay unchanged.",
+  "before": "Formatting at a caret in an empty paragraph armed a local typing format, and a toggle read the format as off when the mark had it.",
+  "after": "Formatting at a caret in an empty paragraph writes the paragraph mark through the existing setParagraphMarkProperties operation, and a toggle reads the mark face.",
+  "reason": "The change uses an existing shared operation and adds no field. Two mounted editors cover the mark change crossing peer typing, undo, redo, deletion during peer input, tracked mark changes, remote selections, reconnect, and save/reopen.",
   "tests": [
     "packages/core/src/editor/__tests__/empty-paragraph-mark-style-typing.test.ts",
+    "packages/core/src/editor/__tests__/caret-format-history.test.ts",
     "packages/pro/src/collaboration/__tests__/document-empty-mark-toggle.test.ts"
   ],
   "changeset": "empty-mark-format-toggle",

@@ -60,44 +60,45 @@ for (const tracked of [false, true]) {
         saveReopenDigest(bob.surface!.session.currentPackage())
       );
     };
+    const markXml = () => {
+      const xml = serializeOoxmlPart(mainPart(alice.surface!.session.currentPackage()));
+      return /<w:pPr>.*?<\/w:pPr>/.exec(xml)?.[0] ?? '';
+    };
     caret(alice);
     caret(bob);
-    const before = packageFingerprint(alice.surface!.session.currentPackage());
     expect(alice.getSelectionFormatting()?.bold).toBe(true);
+    // The mark change and the peer's typing cross while the transport is paused.
+    pair.pause();
     expect(alice.exec({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
     expect(alice.getSelectionFormatting()?.bold).toBe(false);
-    expect(packageFingerprint(alice.surface!.session.currentPackage())).toBe(before);
-    expect(bob.getSelectionFormatting()?.bold).toBe(true);
-    pair.pause();
-    alice.surface!.type('A');
     bob.surface!.type('B');
     flush();
     pair.resume();
     converge();
-    expect(alice.surface!.session.bodyText()).toMatch(/^(AB|BA)$/);
-    const xml = serializeOoxmlPart(mainPart(alice.surface!.session.currentPackage()));
-    expect(xml).toContain('<w:b w:val="0"/>');
-    expect(xml).toContain('<w:pPr><w:rPr><w:b/></w:rPr></w:pPr>');
+    expect(alice.surface!.session.bodyText()).toBe('B');
+    expect(markXml()).toContain('<w:b w:val="0"/>');
+    if (tracked) expect(markXml()).toContain('w:rPrChange');
     expect(alice.exec({ type: 'undo' }).ok).toBe(true);
     converge();
+    expect(markXml()).not.toContain('<w:b w:val="0"/>');
     expect(bob.surface!.session.bodyText()).toBe('B');
     expect(alice.exec({ type: 'redo' }).ok).toBe(true);
     converge();
-    expect(alice.surface!.session.bodyText()).toMatch(/^(AB|BA)$/);
+    expect(markXml()).toContain('<w:b w:val="0"/>');
+    // One participant deletes the text while the other types beside it.
     pair.pause();
-    const text = alice.surface!.session.bodyText();
-    caret(alice, text.indexOf('A') + 1);
+    caret(alice, 1);
     const paragraphId = bob.surface!.session.paragraphIds()[0]!;
     bob.surface!.setSelection({
-      anchor: { paragraphId, offset: text.indexOf('B') },
-      head: { paragraphId, offset: text.indexOf('B') + 1 },
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 1 },
     });
-    alice.surface!.type('C');
+    alice.surface!.type('A');
     bob.surface!.deleteBackward();
     flush();
     pair.resume();
     converge();
-    expect(alice.surface!.session.bodyText()).toBe('AC');
+    expect(alice.surface!.session.bodyText()).toBe('A');
     for (let attempt = 0; attempt < 100; attempt += 1) {
       if (
         [alice, bob].every(
