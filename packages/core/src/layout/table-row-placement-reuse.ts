@@ -21,6 +21,8 @@
 // The previous rows of a table are offered by the session only when its table update refused,
 // and the paginator takes them once.
 
+import { deferredWidthRecipe } from './table-deferred-width-fragment.ts';
+import type { BodyWidthRow } from './table-body-width-group.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { sharedCellContentInsets } from './cell-content-insets-memo.ts';
 import { exactTerminalBorderPt } from './table-exact-terminal-border.ts';
@@ -39,6 +41,18 @@ import type {
   TableFragmentRecord,
   TableRowFragmentRecord,
 } from './semantic-records.ts';
+
+/** Compact offers are metadata, never published row geometry. */
+export interface CompactPreviousRow {
+  readonly compact: BodyWidthRow;
+  readonly baseline: TableRowFragmentRecord;
+}
+export type PreviousRow = TableRowFragmentRecord | CompactPreviousRow;
+
+/** Read vertical metadata without constructing old horizontal geometry. */
+export function previousRowRecord(row: PreviousRow): TableRowFragmentRecord {
+  return 'compact' in row ? row.baseline : row;
+}
 
 interface RowPlacement {
   readonly top: number;
@@ -138,12 +152,15 @@ export function isSettledPreviousRow(row: TableRowFragmentRecord): boolean {
  */
 export function placementFromPrevious(
   row: SemanticTableRow,
-  previous: TableRowFragmentRecord,
+  candidate: PreviousRow,
   cols: readonly number[],
   left: number,
   top: number,
   deps: TableFlowDeps
 ): LayoutRowBoundedResult | null {
+  const compact = 'compact' in candidate ? candidate.compact : undefined;
+  const previous = previousRowRecord(candidate);
+  if (compact && (compact.source !== row || previous.box.y !== top)) return null;
   const key = keyOf(previous);
   const known = key ? placements.get(key) : undefined;
   if (
@@ -170,7 +187,7 @@ export function placementFromPrevious(
       nestedSplitBlocked: false,
     };
   }
-  const record = moveRowToWidths(row, previous, cols, left, deps);
+  const record = moveRowToWidths(row, previous, cols, left, deps, undefined, compact?.cells);
   if (!record) return null;
   settledPreviousRows.add(record);
   return {
@@ -184,7 +201,7 @@ export function placementFromPrevious(
 
 // A cancelled or alternate flow may not consume its offer. Undo history can keep the table
 // node alive, so the offer must not keep its previous row geometry alive with it.
-const offered = new WeakMap<OoxmlElement, WeakRef<ReadonlyMap<string, TableRowFragmentRecord>>>();
+const offered = new WeakMap<OoxmlElement, WeakRef<ReadonlyMap<string, PreviousRow>>>();
 
 /**
  * Offer the previous layout's complete rows of `table` to its next pagination. Rows that
@@ -199,13 +216,31 @@ export function offerPreviousRows(table: OoxmlElement, pages: readonly PageRecor
 function previousRowsOf(
   table: OoxmlElement,
   pages: readonly PageRecord[]
-): ReadonlyMap<string, TableRowFragmentRecord> | undefined {
-  const rows = new Map<string, TableRowFragmentRecord>();
+): ReadonlyMap<string, PreviousRow> | undefined {
+  const rows = new Map<string, PreviousRow>();
   const repeated = new Set<string>();
   for (const page of pages)
     for (const fragment of page.fragments as readonly BlockFragmentRecord[]) {
       if (fragment.kind !== 'table' || fragment.tableId !== table.id) continue;
       if (!finalizedWithHeadroom(fragment as TableFragmentRecord)) return;
+      const deferred = deferredWidthRecipe(fragment as TableFragmentRecord);
+      if (deferred && Object.getOwnPropertyDescriptor(fragment, 'rows')?.get) {
+        for (const source of deferred.sources.slice(0, deferred.headers.length))
+          repeated.add(source.id);
+        for (const compact of deferred.body.rows) {
+          const id = compact.source.id;
+          if (rows.has(id)) repeated.add(id);
+          else
+            rows.set(id, {
+              compact,
+              baseline: {
+                ...compact.baseline,
+                cells: compact.cells.map((cell) => cell.baseline),
+              },
+            });
+        }
+        continue;
+      }
       for (const record of fragment.rows) {
         if (record.isHeaderRepeat || record.isContinuation || record.hasContinuation) {
           repeated.add(record.id);
@@ -250,7 +285,7 @@ export function offerUnchangedTableRows(
 export function takePreviousRows(
   table: OoxmlElement,
   deps?: TableFlowDeps
-): ReadonlyMap<string, TableRowFragmentRecord> | undefined {
+): ReadonlyMap<string, PreviousRow> | undefined {
   const rows = offered.get(table)?.deref();
   offered.delete(table);
   if (rows) return rows;

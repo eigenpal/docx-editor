@@ -1,15 +1,11 @@
+import { storePendingLines } from './paragraph-break-cache-store.ts';
 import { paragraphAlignment } from './paragraph-alignment.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 /** Internal contract shared by body flow and bounded/table stories. */
 import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { FieldPageContext } from './field-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
-import {
-  breakParagraph,
-  frozenLine,
-  type ParagraphFlowOptions,
-  type PendingLine,
-} from './paragraph-flow.ts';
+import { breakParagraph, type ParagraphFlowOptions, type PendingLine } from './paragraph-flow.ts';
 import {
   tabStopsFingerprint,
   withDefaultTabInterval,
@@ -209,8 +205,7 @@ export function breakPreparedParagraphLazily(
   if (reused) return reused;
   const lines = breakPreparedParagraph({ ...prepare(), cache: undefined, cacheKey: null });
   // Preserve the breaker's snapshot ownership and single lookup on a cache miss.
-  if (cache && cacheKey !== null)
-    cache.set(cacheKey, cache.retainAcrossPasses === false ? lines : lines.map(frozenLine));
+  storePendingLines(cache, cacheKey, lines);
   return lines;
 }
 

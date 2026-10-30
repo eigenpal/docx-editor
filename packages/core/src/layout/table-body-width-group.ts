@@ -1,3 +1,4 @@
+import { numericWidthProofOf } from './numeric-width-proof-cache.ts';
 import {
   createTableWidthFitEnvelope,
   tableWidthEnvelopeHolds,
@@ -52,7 +53,9 @@ export function createBodyWidthGroup(
         cell.constraint.gridSpan !== cell.baseline.gridSpan ||
         cell.constraint.gridColumn !== source.cells[index]!.gridColumn ||
         cell.constraint.gridSpan !== source.cells[index]!.gridSpan ||
-        !builder.add(cell.pending, cell.constraint)
+        !(cell.numericLines
+          ? builder.addNumeric(numericWidthProofOf(cell.numericLines)!, cell.constraint)
+          : builder.add(cell.pending, cell.constraint))
       )
         return null;
     }
@@ -67,7 +70,7 @@ export function createBodyWidthGroup(
         baseline: {
           ...cell.baseline,
           borders: undefined,
-          blocks: [{ ...block, lines: [{ ...block.lines[0]!, spans: [] }] }],
+          blocks: [{ ...block, lines: block.lines.map((line) => ({ ...line, spans: [] })) }],
         },
       };
     });

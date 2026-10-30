@@ -6,7 +6,7 @@ import { frozenLine } from '../pending-line.ts';
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import { createParagraphLayoutCache, type ParagraphKeyInputs } from '../layout-cache.ts';
-import { lineTiedToPlacement, reuseSingleLineAtWidth } from '../paragraph-cache-width-reuse.ts';
+import { lineTiedToPlacement, reuseParagraphAtWidth } from '../paragraph-cache-width-reuse.ts';
 import { breakParagraph, type PendingLine } from '../paragraph-flow.ts';
 import { createFixedMeasurer } from '../semantic-layout.ts';
 
@@ -33,7 +33,7 @@ test('a complete fitting token transfers to a different width without growing th
   const measured = cache.get(key);
   for (const width of [120, 60, 150, 40]) {
     const next = cache.keyFor!({ ...inputs, width });
-    const reused = reuseSingleLineAtWidth(cache, paragraph, next, width);
+    const reused = reuseParagraphAtWidth(cache, paragraph, next, width);
     expect(reused).toBe(measured);
     expect(reused).toEqual(
       breakParagraph(paragraph, paragraph.id, 0, width, measurer, undefined, null)
@@ -52,20 +52,20 @@ for (const changed of [
   test(`a width alternative rejects changed dependencies ${JSON.stringify(changed)}`, () => {
     const { paragraph, cache, inputs } = fixture();
     const next = cache.keyFor!({ ...inputs, width: 120, ...changed });
-    expect(reuseSingleLineAtWidth(cache, paragraph, next, 120)).toBeUndefined();
+    expect(reuseParagraphAtWidth(cache, paragraph, next, 120)).toBeUndefined();
   });
 
 for (const text of ['Token ', 'Two\u00a0words', 'tab\tstop', 'אבג', '漢字', 'LongToken'.repeat(10)])
   test(`width reuse refuses spacing, script, or wrapping dependencies: ${text.slice(0, 12)}`, () => {
     const { paragraph, cache, inputs } = fixture(text);
     const next = cache.keyFor!({ ...inputs, width: 120 });
-    expect(reuseSingleLineAtWidth(cache, paragraph, next, 120)).toBeUndefined();
+    expect(reuseParagraphAtWidth(cache, paragraph, next, 120)).toBeUndefined();
   });
 
 test('a token that no longer fits requires a fresh break', () => {
   const { paragraph, cache, inputs } = fixture();
   const next = cache.keyFor!({ ...inputs, width: 10 });
-  expect(reuseSingleLineAtWidth(cache, paragraph, next, 10)).toBeUndefined();
+  expect(reuseParagraphAtWidth(cache, paragraph, next, 10)).toBeUndefined();
 });
 
 test('hanging punctuation retains its width-dependent alignment decision in the cache', () => {

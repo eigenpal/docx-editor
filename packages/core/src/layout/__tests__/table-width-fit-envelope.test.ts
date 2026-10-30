@@ -178,3 +178,78 @@ test('the cell budget bounds certificate construction', () => {
   expect(accepted).toBe(65536);
   expect(builder.finish()).toBeNull();
 });
+
+test('numeric groups intersect both cut bounds without subtracting tolerance', () => {
+  const c = { ...constraint(), insetLeft: 0, insetRight: 0 };
+  const first = { acceptedWidth: 20, rejectedWidth: 25, tolerance: 0.001, minimumAvailable: 1 };
+  const second = { acceptedWidth: 21, rejectedWidth: 24, tolerance: 0.001, minimumAvailable: 22 };
+  const builder = createTableWidthFitEnvelope(1);
+  expect(builder.addNumeric(first, c)).toBe(true);
+  const snapshot = builder.finish()!;
+  expect(builder.addNumeric(second, c)).toBe(true);
+  const result = builder.finish()!;
+  expect(result.groups).toHaveLength(1);
+  expect(result.cellCount).toBe(2);
+  expect(snapshot.groups[0]!.required).toBe(20);
+  expect(snapshot.groups[0]!.rejected).toBe(25);
+  for (const width of [
+    20,
+    21,
+    21.999,
+    22,
+    23,
+    24 - 0.001 - 1e-10,
+    24 - 0.001,
+    24 - 0.001 + 1e-10,
+    25,
+    2 ** 20,
+    2 ** 20 + 1,
+  ]) {
+    expect(tableWidthEnvelopeHolds(result, [width], 0)).toBe(
+      [first, second].every(
+        (proof) =>
+          width >= proof.minimumAvailable &&
+          width <= 2 ** 20 &&
+          proof.acceptedWidth <= width + proof.tolerance &&
+          proof.rejectedWidth > width + proof.tolerance
+      )
+    );
+  }
+  // Different tolerances keep separate comparisons, even for the same cell geometry.
+  expect(builder.add(line(22), c)).toBe(true);
+  expect(builder.finish()!.groups).toHaveLength(2);
+  for (let width = 20; width < 26; width += 0.03125)
+    expect(tableWidthEnvelopeHolds(builder.finish()!, [width], 0)).toBe(
+      width >= 22 && 21 <= width + 0.001 && 24 > width + 0.001 && 22 <= width + 0.0005
+    );
+});
+
+test('numeric bounds refuse invalid proofs and preserve the room domain', () => {
+  const c = { ...constraint(), insetLeft: 0, insetRight: 0 };
+  const proof = {
+    acceptedWidth: 1,
+    rejectedWidth: Infinity,
+    tolerance: 0.001,
+    minimumAvailable: 1,
+  };
+  const valid = createTableWidthFitEnvelope(1);
+  expect(valid.addNumeric(proof, c)).toBe(true);
+  expect(tableWidthEnvelopeHolds(valid.finish()!, [2 ** 20], 0)).toBe(true);
+  expect(tableWidthEnvelopeHolds(valid.finish()!, [2 ** 20 + 1], 0)).toBe(false);
+  for (const changed of [
+    { acceptedWidth: NaN },
+    { acceptedWidth: -1 },
+    { acceptedWidth: 2 ** 21 },
+    { rejectedWidth: NaN },
+    { rejectedWidth: 1 },
+    { tolerance: -1 },
+    { tolerance: Infinity },
+    { minimumAvailable: NaN },
+    { minimumAvailable: 0 },
+    { minimumAvailable: Infinity },
+  ]) {
+    const builder = createTableWidthFitEnvelope(1);
+    expect(builder.addNumeric({ ...proof, ...changed }, c)).toBe(false);
+    expect(builder.finish()).toBeNull();
+  }
+});

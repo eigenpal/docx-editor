@@ -31,24 +31,36 @@ const HEADER = 'review-header-demo.docx';
 const TABLE = 'table-cell-selection-drag.docx';
 const TOC = 'paragraph-acceptance.docx';
 
-for (const repeatedHeaders of [false, true]) {
-  test(`tracked table edits converge through concurrent deletion, undo, redo, reconnect, and reopen${repeatedHeaders ? ' with repeated merged headers' : ''}`, async ({
+for (const variant of ['ordinary', 'headers', 'numeric']) {
+  const repeatedHeaders = variant !== 'ordinary';
+  const numericCells = variant === 'numeric';
+  test(`tracked table edits converge through concurrent deletion, undo, redo, reconnect, and reopen${numericCells ? ' with wrapped numeric cells' : repeatedHeaders ? ' with repeated merged headers' : ''}`, async ({
     browser,
     page: creator,
   }) => {
     const fixture = repeatedHeaders ? 'repeated-table.docx' : TABLE;
     if (repeatedHeaders)
       await creator.route('**/repeated-table.docx', (route) =>
-        route.fulfill({ body: collaborationTableWidthFixture() })
+        route.fulfill({ body: collaborationTableWidthFixture(numericCells) })
       );
     const joiner = await connectedPeers(browser, creator, fixture);
     const target = creator
       .locator('.docx-table-cell .docx-paragraph-fragment[data-paragraph-id]')
       .filter({ hasText: 'Row0Cell1' })
       .first();
+    const targetId = repeatedHeaders ? (await target.getAttribute('data-paragraph-id'))! : '';
     const source = repeatedHeaders
-      ? { locator: target, id: (await target.getAttribute('data-paragraph-id'))! }
+      ? { locator: paragraphById(creator, targetId), id: targetId }
       : await firstTableCellParagraph(creator);
+    if (numericCells) {
+      for (const participant of [creator, joiner]) {
+        const numeric = participant
+          .locator('.docx-table-cell .docx-paragraph-fragment')
+          .filter({ hasText: '123456789012345678901234567890123456789012345678' })
+          .first();
+        await expect.poll(() => numeric.locator('.docx-line').count()).toBeGreaterThan(1);
+      }
+    }
     const remote = paragraphById(joiner, source.id);
     await setEditingMode(creator, 'suggesting');
     await setEditingMode(joiner, 'suggesting');

@@ -10,6 +10,7 @@ import { createLayoutSession } from '../layout-session.ts';
 import { caretAt } from '../semantic-interaction.ts';
 import { createParagraphLayoutCache, tableCellBreakKeysOf } from '../layout-cache.ts';
 import { readTableStructure } from '../semantic-table.ts';
+import { offerPreviousRows, takePreviousRows } from '../table-row-placement-reuse.ts';
 import { movedRowsTestRecorder } from '../table-row-geometry-reuse.ts';
 import {
   captureDeferredWidthRecipe,
@@ -92,12 +93,21 @@ afterEach(() => {
 });
 
 /** Type `text` into a cell through a retained session, checking every step against cold. */
-function burst(start: OoxmlPart, paragraphId: string, text: string) {
-  const session = createLayoutSession();
-  const cache = createParagraphLayoutCache();
+function burst(
+  start: OoxmlPart,
+  paragraphId: string,
+  text: string,
+  retained?: {
+    session: ReturnType<typeof createLayoutSession>;
+    cache: ReturnType<typeof createParagraphLayoutCache>;
+  }
+) {
+  const session = retained?.session ?? createLayoutSession();
+  const cache = retained?.cache ?? createParagraphLayoutCache();
   let part = start;
   let previous = lay(part, 15, { session, cache });
   let widthChanges = 0;
+  const compactBefore = recorder.compact;
   let deferredFragments = 0;
   let deferredUnread = 0;
   const moved: number[] = [];
@@ -140,7 +150,16 @@ function burst(start: OoxmlPart, paragraphId: string, text: string) {
     }
     previous = updated;
   }
-  return { widthChanges, deferredFragments, deferredUnread, moved, part, session, cache };
+  return {
+    widthChanges,
+    deferredFragments,
+    deferredUnread,
+    moved,
+    part,
+    session,
+    cache,
+    compactMoved: recorder.compact - compactBefore,
+  };
 }
 
 test('ordinary single-line rows move to new widths with cold-layout geometry', () => {
@@ -592,4 +611,221 @@ test('a body-group certificate rebuilds exact finalized rows from its original r
       'dependencies'
     )
   ).toBeNull();
+});
+
+test('numeric multiline cells move only while every automatic cut remains unchanged', async () => {
+  const { layoutRowFragment } = await import('../semantic-table-layout.ts');
+  const { moveRowToWidths } = await import('../table-row-geometry-reuse.ts');
+  const { bodyLineId } = await import('../body-line-id.ts');
+  const { measurer } = await import('./table-row-keep-fixtures.ts');
+  const part = load(autofit([tr([tc(p('123456789')), tc(p('Short')), tc(p('End'))])]));
+  const row = readTableStructure(tableNode(part), 310, 0, styleCascade)!.rows[0]!;
+  const deps = {
+    measurer,
+    styleCascade,
+    cache: createParagraphLayoutCache<never>(),
+    producer: 'numeric-test',
+    nextLineId: bodyLineId,
+    compatibilityMode: 15,
+    displayMode: 'all-markup' as const,
+  };
+  const baseline = layoutRowFragment(row, [27, 100, 100], 3, 40, false, 0, deps).record;
+  const block = baseline.cells[0]!.blocks[0]!;
+  expect(block.kind).toBe('paragraph');
+  if (block.kind !== 'paragraph') throw Error('Expected paragraph');
+  expect(block.lines.length).toBeGreaterThan(1);
+  for (const columns of [
+    [27.125, 100, 100],
+    [27.5, 100, 100],
+    [28, 100, 100],
+  ]) {
+    const moved = moveRowToWidths(row, baseline, columns, 2.5, deps);
+    expect(moved).not.toBeNull();
+    expect(moved).toEqual(
+      layoutRowFragment(row, columns, 2.5, 40, false, 0, {
+        ...deps,
+        cache: createParagraphLayoutCache<never>(),
+      }).record
+    );
+  }
+  expect(moveRowToWidths(row, baseline, [100, 100, 100], 2.5, deps)).toBeNull();
+  expect(moveRowToWidths(row, baseline, [10, 100, 100], 2.5, deps)).toBeNull();
+});
+
+test('numeric multiline movement preserves horizontal and vertical alignment after finalization', async () => {
+  const { layoutRowFragment } = await import('../semantic-table-layout.ts');
+  const { moveRowToWidths } = await import('../table-row-geometry-reuse.ts');
+  const { createBodyWidthGroup, materializeBodyWidthGroup, bodyWidthGroupHolds } =
+    await import('../table-body-width-group.ts');
+  const { placeCellFromWidthRecipe } = await import('../table-cell-width-placement.ts');
+  const { finalizeTableRows } = await import('../table-fragment-finalize.ts');
+  const { bodyLineId } = await import('../body-line-id.ts');
+  const { measurer } = await import('./table-row-keep-fixtures.ts');
+  for (const alignment of ['left', 'center', 'right'])
+    for (const vertical of ['center', 'bottom']) {
+      const part = load(
+        autofit([
+          tr(
+            [
+              tc(
+                p('123456789', `<w:jc w:val="${alignment}"/><w:ind w:left="-15"/>`),
+                `<w:vAlign w:val="${vertical}"/>`
+              ),
+              tc(p('Short')),
+              tc(p('End')),
+            ],
+            '<w:trHeight w:val="1600" w:hRule="atLeast"/>'
+          ),
+        ])
+      );
+      const structure = readTableStructure(tableNode(part), 310, 0, styleCascade)!;
+      const row = structure.rows[0]!;
+      const deps = {
+        measurer,
+        styleCascade,
+        cache: createParagraphLayoutCache<never>(),
+        producer: 'numeric-test',
+        nextLineId: bodyLineId,
+        compatibilityMode: 15,
+        displayMode: 'all-markup' as const,
+      };
+      const oldStructure = { ...structure, columnWidthsPt: [27, 100, 100] };
+      const raw = layoutRowFragment(row, oldStructure.columnWidthsPt, 3, 40, false, 0, deps).record;
+      const baseline = finalizeTableRows([raw], oldStructure, structure.rows)[0]!;
+      const columns = [27.5, 100, 100];
+      const recipes: import('../table-cell-width-placement.ts').CellWidthPlacement[] = [];
+      const moved = moveRowToWidths(row, baseline, columns, 2.5, deps, (recipe) => {
+        expect(recipe).not.toBeNull();
+        recipes.push(recipe!);
+      });
+      expect(moved).not.toBeNull();
+      expect(recipes).toHaveLength(3);
+      expect(recipes[0]!.numericLines!.length).toBeGreaterThan(1);
+      for (let index = 0; index < recipes.length; index++)
+        expect(placeCellFromWidthRecipe(recipes[index]!, columns, 2.5)).toEqual(
+          moved!.cells[index]
+        );
+      const group = createBodyWidthGroup(
+        [{ source: row, baseline, cells: recipes }],
+        3,
+        'numeric'
+      )!;
+      expect(group).not.toBeNull();
+      const compact = group.rows[0]!.cells[0]!.baseline.blocks[0]!;
+      if (compact.kind !== 'paragraph') throw Error('Expected paragraph');
+      expect(compact.lines.every((line) => line.spans.length === 0)).toBe(true);
+      for (const refused of [
+        [10, 100, 100],
+        [100, 100, 100],
+      ])
+        expect(bodyWidthGroupHolds(group, [row], refused, 2.5, 'numeric')).toBe(false);
+      const grouped = materializeBodyWidthGroup(group, [row], columns, 2.5, 'numeric')!;
+      expect(grouped).not.toBeNull();
+      const nextStructure = { ...structure, columnWidthsPt: columns };
+      const actual = finalizeTableRows(
+        [moved!],
+        nextStructure,
+        structure.rows,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        new Set([moved!])
+      );
+      const fresh = layoutRowFragment(row, columns, 2.5, 40, false, 0, {
+        ...deps,
+        cache: createParagraphLayoutCache<never>(),
+      }).record;
+      const expected = finalizeTableRows([fresh], nextStructure, structure.rows);
+      expect(actual).toEqual(expected);
+      expect(
+        finalizeTableRows(
+          grouped,
+          nextStructure,
+          structure.rows,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          new Set(grouped)
+        )
+      ).toEqual(expected);
+    }
+});
+
+test('deferred body groups preserve wrapped numeric cells through typing and undo', () => {
+  const headers = [
+    tr([tc(p('Head'), '<w:vMerge w:val="restart"/>'), tc(p('A')), tc(p('B'))], '<w:tblHeader/>'),
+    tr([tc(p(''), '<w:vMerge/>'), tc(p('C')), tc(p('D'))], '<w:tblHeader/>'),
+  ];
+  const rows = Array.from({ length: 60 }, (_, index) =>
+    tr(
+      [
+        tc(p('1234567890123456789012345678901234567890', '<w:ind w:left="-15"/>')),
+        tc(p('9876543210987654321098765432109876543210')),
+        tc(index === 9 ? p('End').replace('w:line="280"', 'w:line="560"') : p('End')),
+      ],
+      '<w:cantSplit/>'
+    )
+  );
+  const part = load(autofit([...headers, ...rows]));
+  const initial = burst(part, paragraphAt(part, 31, 2), 'WIDTHWIDTHWIDTH');
+  expect(initial.widthChanges).toBeGreaterThan(3);
+  expect(initial.deferredFragments).toBeGreaterThan(0);
+  expect(initial.deferredUnread).toBeGreaterThan(0);
+  const retained = lay(initial.part, 15, { session: initial.session, cache: initial.cache });
+  const recipes = retained.pages
+    .flatMap((page) => page.fragments)
+    .filter((fragment): fragment is TableFragmentRecord => fragment.kind === 'table')
+    .map(deferredWidthRecipe)
+    .filter((recipe) => recipe !== undefined);
+  expect(
+    recipes.some((recipe) =>
+      recipe.body.rows.some((row) => row.cells.some((cell) => (cell.numericLines?.length ?? 0) > 1))
+    )
+  ).toBe(true);
+  const deferred = retained.pages
+    .flatMap((page) => page.fragments)
+    .filter(
+      (fragment): fragment is TableFragmentRecord =>
+        fragment.kind === 'table' && !!Object.getOwnPropertyDescriptor(fragment, 'rows')?.get
+    );
+  expect(deferred.length).toBeGreaterThan(0);
+  const descriptors = deferred.map(
+    (fragment) => Object.getOwnPropertyDescriptor(fragment, 'rows')!
+  );
+  try {
+    for (const fragment of deferred)
+      Object.defineProperty(fragment, 'rows', {
+        configurable: true,
+        enumerable: true,
+        get() {
+          throw Error('An offer must not materialize deferred rows');
+        },
+      });
+    offerPreviousRows(tableNode(initial.part), retained.pages);
+    const offered = takePreviousRows(tableNode(initial.part));
+    for (const fragment of deferred)
+      for (const row of deferredWidthRecipe(fragment)!.body.rows) {
+        const candidate = offered?.get(row.source.id);
+        expect(candidate && 'compact' in candidate).toBe(true);
+      }
+    const repeatedPage = retained.pages.find((page) => page.fragments.includes(deferred[0]!))!;
+    offerPreviousRows(tableNode(initial.part), [...retained.pages, repeatedPage]);
+    const repeatedOffer = takePreviousRows(tableNode(initial.part));
+    for (const row of deferredWidthRecipe(deferred[0]!)!.body.rows)
+      expect(repeatedOffer?.has(row.source.id) ?? false).toBe(false);
+  } finally {
+    deferred.forEach((fragment, index) =>
+      Object.defineProperty(fragment, 'rows', descriptors[index]!)
+    );
+  }
+  const result = burst(initial.part, paragraphAt(initial.part, 11, 2), 'WWWWWWWWWW', initial);
+  expect(result.compactMoved).toBeGreaterThan(0);
+  const undone = lay(part, 15, { session: result.session, cache: result.cache });
+  expect(undone.pages).toEqual(lay(reparsed(part)).pages);
 });

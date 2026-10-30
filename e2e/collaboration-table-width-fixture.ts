@@ -1,12 +1,13 @@
 import { strToU8, zipSync } from 'fflate';
 
 /** Anonymous AutoFit table with merged repeated headers and a page-count footer. */
-export function collaborationTableWidthFixture(): Buffer {
+export function collaborationTableWidthFixture(numericCells = false): Buffer {
   const w = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
   const r = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
   const rel = 'http://schemas.openxmlformats.org/package/2006/relationships';
   const paragraph = (text: string) =>
     '<w:p><w:pPr><w:widowControl w:val="0"/>' +
+    (numericCells && /^[0-9]+$/.test(text) ? '<w:ind w:left="-15"/>' : '') +
     '<w:spacing w:before="0" w:after="0" w:line="280" w:lineRule="exact"/>' +
     `</w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
   const cell = (text: string, props = '') =>
@@ -24,7 +25,16 @@ export function collaborationTableWidthFixture(): Buffer {
     '</w:tr>';
   const rows = Array.from(
     { length: 80 },
-    (_, row) => `<w:tr>${[0, 1, 2].map((column) => cell(`Row${row}Cell${column}`)).join('')}</w:tr>`
+    (_, row) =>
+      `<w:tr>${[0, 1, 2]
+        .map((column) =>
+          cell(
+            numericCells && column === 2
+              ? '123456789012345678901234567890123456789012345678'
+              : `Row${row}Cell${column}`
+          )
+        )
+        .join('')}</w:tr>`
   ).join('');
   const borders = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
     .map((edge) => `<w:${edge} w:val="single" w:sz="4"/>`)

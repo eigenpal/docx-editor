@@ -1,5 +1,6 @@
-// A pure placement recipe for an already validated, complete single-line cell.
+// A pure placement recipe for an already validated, complete ordinary or numeric cell.
 // It holds source tokens and one baseline cell, never a previous recipe or live layout sinks.
+import { numericLinesHoldAtWidth, numericWidthProofOf } from './numeric-width-proof-cache.ts';
 import { ordinaryCellLineEligible, placeOrdinaryCellLine } from './ordinary-cell-line.ts';
 import { cellWidthAfterIndents } from './cell-paragraph-inputs.ts';
 import { cellFlowBox } from './table-cell-text-direction.ts';
@@ -15,6 +16,7 @@ export interface CellWidthPlacement {
   readonly breakKey: string;
   readonly baseline: TableCellFragmentRecord;
   readonly pending: PendingLine;
+  readonly numericLines?: readonly PendingLine[];
   readonly constraint: CellWidthConstraint;
   readonly firstLineOffset: number;
   readonly alignment: Alignment;
@@ -27,13 +29,20 @@ export function captureCellWidthPlacement(
   constraint: CellWidthConstraint,
   firstLineOffset: number,
   alignment: Alignment,
-  breakKey = ''
+  breakKey = '',
+  numericLines?: readonly PendingLine[]
 ): CellWidthPlacement | null {
   const block = baseline.blocks[0];
   if (
     baseline.blocks.length !== 1 ||
     block?.kind !== 'paragraph' ||
-    block.lines.length !== 1 ||
+    block.lines.length !== (numericLines?.length ?? 1) ||
+    (numericLines &&
+      (numericLines.length < 2 ||
+        numericLines[0] !== pending ||
+        firstLineOffset !== 0 ||
+        !numericWidthProofOf(numericLines) ||
+        !numericLines.every(ordinaryCellLineEligible))) ||
     baseline.rowSpan !== 1 ||
     baseline.vMergeContinue ||
     baseline.paintInert ||
@@ -48,6 +57,7 @@ export function captureCellWidthPlacement(
     breakKey,
     baseline,
     pending,
+    ...(numericLines ? { numericLines } : {}),
     firstLineOffset,
     alignment,
     constraint: {
@@ -70,7 +80,6 @@ export function placeCellFromWidthRecipe(
   const { baseline, pending, constraint: c } = recipe;
   const block = baseline.blocks[0]!;
   if (block.kind !== 'paragraph') return null;
-  const old = block.lines[0]!;
   if (
     !Number.isFinite(left) ||
     !Number.isInteger(c.gridColumn) ||
@@ -99,42 +108,49 @@ export function placeCellFromWidthRecipe(
     c.indentRight
   );
   if (
-    !(
-      pending.width + Math.max(0, pending.firstLineOffset ?? 0) <=
-      available + LINE_HOLD_TOLERANCE_PT
-    )
+    recipe.numericLines
+      ? !numericLinesHoldAtWidth(recipe.numericLines, available)
+      : !(
+          pending.width + Math.max(0, pending.firstLineOffset ?? 0) <=
+          available + LINE_HOLD_TOLERANCE_PT
+        )
   )
     return null;
   const lineIndent = flow.flowLeft + c.indentLeft + recipe.firstLineOffset;
   const lineWidth = Math.max(1, available - recipe.firstLineOffset);
-  const ordinary = pending.spans.length
-    ? placeOrdinaryCellLine(
-        pending,
-        block.paragraphId,
-        flow.flowLeft,
-        old.box.y,
-        lineIndent,
-        lineWidth,
-        recipe.alignment
-      )
-    : null;
-  if (pending.spans.length && !ordinary) return null;
-  const spans = ordinary?.spans ?? [];
-  const measure = ordinary
-    ? null
-    : lineAlignmentMeasure(pending, flow.flowLeft, lineIndent, lineWidth);
-  const offset =
-    ordinary?.offset ??
-    lineAlignOffset([], [], recipe.alignment, measure!.available, measure!.used);
-  const line = {
-    ...old,
-    spans,
-    contentX: lineContentX(spans, [], lineIndent + offset),
-    box: { ...old.box, x: flow.flowLeft + c.indentLeft, width: available },
-  };
+  const movedLines = [];
+  for (let index = 0; index < (recipe.numericLines?.length ?? 1); index++) {
+    const old = block.lines[index]!;
+    const pending = recipe.numericLines?.[index] ?? recipe.pending;
+    const ordinary = pending.spans.length
+      ? placeOrdinaryCellLine(
+          pending,
+          block.paragraphId,
+          flow.flowLeft,
+          old.box.y,
+          lineIndent,
+          lineWidth,
+          recipe.alignment
+        )
+      : null;
+    if (pending.spans.length && !ordinary) return null;
+    const spans = ordinary?.spans ?? [];
+    const measure = ordinary
+      ? null
+      : lineAlignmentMeasure(pending, flow.flowLeft, lineIndent, lineWidth);
+    const offset =
+      ordinary?.offset ??
+      lineAlignOffset([], [], recipe.alignment, measure!.available, measure!.used);
+    movedLines.push({
+      ...old,
+      spans,
+      contentX: lineContentX(spans, [], lineIndent + offset),
+      box: { ...old.box, x: flow.flowLeft + c.indentLeft, width: available },
+    });
+  }
   const moved = {
     ...block,
-    lines: [line],
+    lines: movedLines,
     box: { ...block.box, x: flow.flowLeft + c.indentLeft, width: available },
   };
   return { ...baseline, blocks: [moved], box: { ...baseline.box, x, width } };

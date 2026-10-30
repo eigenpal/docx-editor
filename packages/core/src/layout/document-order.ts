@@ -20,23 +20,25 @@ const documentOrderIndexCache = new WeakMap<SemanticLayout, Map<string, number>>
 const everyStoryOrderCache = new WeakMap<SemanticLayout, string[]>();
 
 /**
- * Paragraph ids on ONE page, in order, remembered on the page record.
+ * Paragraph ids on ONE page, in order, remembered on its immutable body fragments.
  *
  * Incremental layout hands an untouched page back as the same object, so a keystroke only
  * ever walks the lines of the page it landed on. The whole-document walk this replaces ran
  * on every commit — the order is rebuilt each revision because the layout object is new —
  * and at several hundred pages that walk cost more than the edit itself.
  */
-const pageOrderCache = new WeakMap<PageRecord, readonly string[]>();
+// Footer completion can replace a page before its first order read. Body ownership
+// lets that later read serve the retained page too, without retaining page geometry.
+const pageOrderCache = new WeakMap<readonly BlockFragmentRecord[], readonly string[]>();
 
 /** @internal Caller proves both pages name the same paragraphs in the same logical order. */
 export function carryPageOrder(from: PageRecord, to: PageRecord): void {
-  const order = pageOrderCache.get(from);
-  if (order) pageOrderCache.set(to, order);
+  const order = pageOrderCache.get(from.fragments);
+  if (order) pageOrderCache.set(to.fragments, order);
 }
 
 function pageOrder(page: PageRecord): readonly string[] {
-  const cached = pageOrderCache.get(page);
+  const cached = pageOrderCache.get(page.fragments);
   if (cached) return cached;
   const seen = new Set<string>();
   const order: string[] = [];
@@ -56,7 +58,7 @@ function pageOrder(page: PageRecord): readonly string[] {
       order.push(fragment.paragraphId);
     }
   }
-  pageOrderCache.set(page, order);
+  pageOrderCache.set(page.fragments, order);
   return order;
 }
 

@@ -1,3 +1,4 @@
+import { rememberRowPlacement } from './table-row-placement-reuse.ts';
 import {
   captureDeferredWidthRecipe,
   deferredWidthRecipe,
@@ -377,7 +378,12 @@ function compareRowHeights(
       !sameStrokeHeights(x, y)
     )
       return false;
-    if (moved && y.blocks === moved.cells[index]?.blocks) {
+    if (
+      moved &&
+      y.blocks === moved.cells[index]?.blocks &&
+      x.blocks[0]?.kind === 'paragraph' &&
+      x.blocks[0].lines.length === 1
+    ) {
       if (observer) observer.movedCells += 1;
       if (!sameMovedBlockHeights(x.blocks[0]!)) return false;
       continue;
@@ -707,6 +713,7 @@ export function updateTableWidths(
         0
       );
       if (result.remainder !== null) return null;
+      rememberRowPlacement(source, result, old.box.y, placementDeps);
       return { record: result.record, insets: rowDeps.cellContentInsets };
     };
     let grown = false;

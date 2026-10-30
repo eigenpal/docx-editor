@@ -542,3 +542,62 @@ test('a footer projector that moves paragraph membership invalidates caret route
     paragraphLinesIndex({ ...after }).get('footer-a')
   );
 });
+
+test('body order first read after footer completion reaches the retained body', () => {
+  const furniture: PageFurniture = {
+    titlePage: false,
+    evenAndOddHeaders: false,
+    headers: new Map(),
+    footers: new Map([
+      ['default', layoutHeaderFooterStory(footerPart(), CONTENT_WIDTH, measurer, 'test')],
+    ]),
+  };
+  const session = createLayoutSession();
+  const options = { measurer, producer: 'test', session, furniture };
+  layoutSemanticDocument(partOf(filler(30) + tightSectPr), 1, options);
+  const retained = withFurnitureLater(
+    () => true,
+    () => layoutSemanticDocument(partOf(filler(60) + tightSectPr), 2, options)
+  );
+  const completed = completeFurniture(retained);
+  expect(completed).not.toBe(retained);
+  const order = documentOrder(completed);
+  let reads = 0;
+  const observed = retained.pages
+    .flatMap((page) => paragraphFragmentsOf(page))
+    .map((fragment) => {
+      const descriptor = Object.getOwnPropertyDescriptor(fragment, 'lines')!;
+      Object.defineProperty(fragment, 'lines', {
+        configurable: true,
+        enumerable: true,
+        get() {
+          reads++;
+          return descriptor.value;
+        },
+      });
+      return { fragment, descriptor };
+    });
+  try {
+    expect(documentOrder(retained)).toBe(order);
+    expect(reads).toBe(0);
+  } finally {
+    for (const { fragment, descriptor } of observed)
+      Object.defineProperty(fragment, 'lines', descriptor);
+  }
+  const changed = {
+    ...retained,
+    pages: retained.pages.map((page) => ({
+      ...page,
+      fragments: [...page.fragments].reverse(),
+    })),
+  };
+  const expected = [
+    ...new Set(
+      changed.pages.flatMap((page) =>
+        paragraphFragmentsOf(page).map((fragment) => fragment.paragraphId)
+      )
+    ),
+  ];
+  expect(documentOrder(changed)).toEqual(expected);
+  expect(documentOrder(changed)).not.toEqual(order);
+});
