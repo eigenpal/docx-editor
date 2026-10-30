@@ -317,20 +317,22 @@ function orderOf(
 interface OrderEntry {
   readonly ranks: SiblingRanks;
   readonly shown: readonly LogicalId[];
-  /** The paragraphs of the concurrent runs the order read. */
-  readonly heads: readonly LogicalId[];
+  /**
+   * The paragraphs of the concurrent runs that held neither copies nor split points when the
+   * order was read: their text can still be on its way. Usually empty.
+   */
+  readonly waiting: readonly LogicalId[];
   /** Their text lengths, a cheap sign that one of them changed. */
   readonly lengths: string;
-  /** The copies they held. */
-  readonly copies: string;
 }
 
 /**
  * The rule's ranks per parent, read once per listing. A replica can list a paragraph before
  * its text or its marks arrive, when an update waits for another one, so a listing that did
  * not change can still need another order: `takeChanged`, which a view calls once per build,
- * reads the copies of a run again when one of its paragraphs changed length. Every other read,
- * such as each comparison of document order, uses the stored order.
+ * reads a run again when one of its paragraphs that held nothing to order by changed length.
+ * Every other read, such as each comparison of document order or each keystroke in a run
+ * paragraph, uses the stored order.
  */
 export class SplitSiblingOrders {
   private readonly built = new WeakMap<readonly LogicalId[], OrderEntry>();
@@ -370,11 +372,7 @@ export class SplitSiblingOrders {
         this.withRuns.delete(parentId);
         continue;
       }
-      if (this.lengthsKey(known.heads) === known.lengths) continue;
-      if (this.copiesKey(known.heads) === known.copies) {
-        this.built.set(listing, { ...known, lengths: this.lengthsKey(known.heads) });
-        continue;
-      }
+      if (known.waiting.length === 0 || this.lengthsKey(known.waiting) === known.lengths) continue;
       const next = this.build(parentId, listing);
       if (!next || next.shown.some((id, at) => known.shown[at] !== id)) changed.push(parentId);
     }
@@ -383,10 +381,6 @@ export class SplitSiblingOrders {
 
   private lengthsKey(heads: readonly LogicalId[]): string {
     return heads.map((id) => this.textOf(id)?.length ?? -1).join(',');
-  }
-
-  private copiesKey(heads: readonly LogicalId[]): string {
-    return heads.map((id) => copiesOf(id, this.textOf).join(',')).join(';');
   }
 
   private read(parentId: LogicalId): OrderEntry | null {
@@ -404,10 +398,12 @@ export class SplitSiblingOrders {
     const ids = listing ?? children.toArray();
     const order = splitSiblingOrder(ids, ranks);
     const shown = order ? order.map((index) => ids[index]!) : ids;
-    const lengths = this.lengthsKey(heads);
-    const entry = { ranks, shown, heads, lengths, copies: this.copiesKey(heads) };
+    const waiting = heads.filter(
+      (id) => splitPointsOf(this.nodeOf(id)).length === 0 && copiesOf(id, this.textOf).length === 0
+    );
+    const entry = { ranks, shown, waiting, lengths: this.lengthsKey(waiting) };
     if (listing) this.built.set(listing, entry);
-    if (heads.length > 0 && listing) this.withRuns.add(parentId);
+    if (waiting.length > 0 && listing) this.withRuns.add(parentId);
     else this.withRuns.delete(parentId);
     return entry;
   }
