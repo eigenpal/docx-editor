@@ -251,7 +251,7 @@ export interface PaginatedSurface {
    * Both answer false when they did not handle the key, so the caller splits or joins.
    */
   exitListOnEmptyItem(): boolean;
-  /** Backspace at the start of `paragraphId`: drop its list number; false when it did not. */
+  /** Backspace at the start of `paragraphId`: drop its list number; false if it is not one. */
   removeListNumber(paragraphId: string): boolean;
   /** Whether the paragraph at the caret is a list item, for Tab's Word-like fallback. */
   isListParagraph(): boolean;

@@ -43,7 +43,9 @@ const STYLES =
   '<w:style w:type="paragraph" w:styleId="ListBullet"><w:name w:val="List Bullet"/>' +
   `<w:basedOn w:val="Normal"/><w:pPr>${numPr(0, 2)}<w:ind w:left="720" w:hanging="360"/></w:pPr></w:style>` +
   '<w:style w:type="paragraph" w:styleId="Hang"><w:name w:val="Hang"/>' +
-  '<w:basedOn w:val="Normal"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:style>';
+  '<w:basedOn w:val="Normal"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:style>' +
+  '<w:style w:type="paragraph" w:styleId="Body"><w:name w:val="Body"/>' +
+  '<w:basedOn w:val="Normal"/><w:pPr><w:ind w:left="720" w:firstLineChars="200"/></w:pPr></w:style>';
 
 function docx(body: string): Uint8Array {
   return zipSync({
@@ -243,6 +245,12 @@ describe('Backspace at the start of a list item', () => {
     const left = (entry: typeof fragment) =>
       entry && entry.kind === 'paragraph' ? entry.lines[0]!.box.x : NaN;
     expect(left(fragment)).toBeCloseTo(left(three), 3);
+  });
+
+  test('a first line a style sets in characters is cancelled in both units', () => {
+    const editor = mount(docx(list('Two', '<w:pStyle w:val="Body"/>' + numPr())));
+    backspaceAt(editor, 2);
+    expect(own(editor, 2)).toEqual(['pStyle(val=Body)', 'ind(firstLine=0,firstLineChars=0)']);
   });
 
   test('once the number is gone, Backspace in the Original view still reaches the join', () => {

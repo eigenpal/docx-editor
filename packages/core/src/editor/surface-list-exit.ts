@@ -57,11 +57,13 @@ export function createListExit(deps: ListExitDeps) {
     const fromStyle = deps.listNumbering.styleNumbered(paragraphId);
     const style = deps.listNumbering.styleIndent(paragraphId);
     const writeLeft = fromStyle || authored !== undefined || style.left !== textLeft;
-    const cancelFirstLine = !fromStyle && style.firstLine !== 0;
+    const cancelFirstLine = !fromStyle && (style.firstLine !== 0 || style.inChars);
     if (!writeLeft && !cancelFirstLine) return null;
     const attributes: Record<string, string> = { ...(authored ?? {}) };
     for (const name of FIRST_LINE_ATTRIBUTES) delete attributes[name];
     if (cancelFirstLine) attributes.firstLine = '0';
+    // A style's character-unit first line supersedes the twips, so it is cancelled too.
+    if (cancelFirstLine && style.inChars) attributes.firstLineChars = '0';
     if (writeLeft) {
       // The character-unit twin supersedes the twips (§17.3.1.12), so it goes with the write.
       delete attributes.leftChars;
@@ -126,7 +128,10 @@ export function createListExit(deps: ListExitDeps) {
       // left to remove falls through to the join instead of committing a no-op forever.
       if (!deps.markerOf(paragraphId) || !deps.listNumbering.numbered(paragraphId)) return false;
       const held = heldIndentOp(paragraphId);
-      return deps.commitOps([...(held ? [held] : []), deps.listNumbering.leaveOp(paragraphId)]);
+      // A refused write still answers true: the key is spent on the refusal the commit
+      // published, rather than joining the paragraph the user asked to keep.
+      deps.commitOps([...(held ? [held] : []), deps.listNumbering.leaveOp(paragraphId)]);
+      return true;
     },
   };
 }

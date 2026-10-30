@@ -60,25 +60,29 @@ export function createListNumberingOps(deps: ListNumberingDeps) {
     /**
      * The indent the paragraph's style chain gives it without its list, in twips: the left
      * edge and the signed first-line offset (negative hangs). Each attribute cascades on its
-     * own, so the last tier that states it wins.
+     * own, so the last tier that states it wins. `inChars` says the style also states the
+     * first line in character units, which supersede the twips (§17.3.1.12).
      */
-    styleIndent(paragraphId: string): { left: number; firstLine: number } {
+    styleIndent(paragraphId: string): { left: number; firstLine: number; inChars: boolean } {
       const styles = deps.styleCascade();
       const paragraph = findNode(deps.storyPart(), paragraphId);
-      if (!styles || !paragraph) return { left: 0, firstLine: 0 };
+      if (!styles || !paragraph) return { left: 0, firstLine: 0, inChars: false };
       const pPr = paragraphPropertiesNodeOf(paragraph);
       const tiers = cascadeParagraphFormatting(styles, pPr).paragraphPropertyNodes;
       const stated = tiers
         .filter((tier) => tier !== pPr)
         .flatMap((tier) => authoredProperties(tier, INDENT));
       let firstLine = 0;
+      let inChars = false;
       for (const { attributes } of stated) {
         const hanging = readTwipsMeasure(attributes?.hanging);
         const first = readTwipsMeasure(attributes?.firstLine);
         if (hanging !== null) firstLine = -hanging;
         else if (first !== null) firstLine = first;
+        const chars = Number(attributes?.hangingChars ?? attributes?.firstLineChars ?? NaN);
+        if (Number.isFinite(chars)) inChars = chars !== 0;
       }
-      return { left: leftIndentTwipsOf(stated), firstLine };
+      return { left: leftIndentTwipsOf(stated), firstLine, inChars };
     },
 
     /** Whether the paragraph's numbering comes from its style, so leaving writes `numId` 0. */
