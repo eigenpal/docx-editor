@@ -887,7 +887,13 @@ export function applyInlinePlan(
     const record = registry.schema.nodes.get(id);
     if (!record || adopted.has(id)) continue;
     const tokens = encoded.get(id) ?? tokensOfParagraph(after, registry.limits);
+    // A paragraph this edit removes shows nothing afterwards. A journal that removes a
+    // paragraph leaves what it held where it was, as an inline element another decision of
+    // the same edit took out, so its last tokens do not keep an embed alive: the embed goes
+    // unless another paragraph shows it.
+    const removedHere = registry.isTombstoned(id);
     for (const token of tokens) {
+      if (removedHere) break;
       if (typeof token.insert !== 'string' && 'n' in token.insert) embedsAfter.add(token.insert.n);
     }
     const text = registry.inline.textOf(id);
