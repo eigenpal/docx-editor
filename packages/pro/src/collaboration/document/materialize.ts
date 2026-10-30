@@ -56,6 +56,7 @@ import { NodeCache } from './materialize-node-cache.ts';
 import { dedupeIssues, ListingContests } from './materialize-contests.ts';
 import { splitWinnerOrder } from './split-dedup.ts';
 import { splitSiblingOrder } from './split-sibling-order.ts';
+import { splitMarkMoves, splitSiblingChanges } from './split-mark-moves.ts';
 import { AdoptionTracker } from './materialize-adoption.ts';
 import { inlineChildren, reuseEqualNodes } from './paragraph-text-view.ts';
 import { reportOrphans } from './materialize-orphans.ts';
@@ -230,10 +231,6 @@ export class PackageMaterializer {
     // delivered yet, so it disqualifies the package projections exactly as the flag does.
     if (packageChanged || unobserved) this.packageCache.invalidate();
     for (const survivor of this.adoption.changes(this.registry)) rawDirty.add(survivor);
-    // Concurrent split siblings whose text came after their listing can show in a new order.
-    const reordered = this.registry.splitSiblings.takeChanged();
-    if (reordered.length > 0) this.registry.inline.orderChanged();
-    for (const parent of reordered) rawDirty.add(parent);
     // A paragraph shows other IDs, or hides other moved text, when another paragraph's text
     // changes what they share.
     for (const paragraph of this.registry.inline.takeAffected()) rawDirty.add(paragraph);
@@ -250,6 +247,8 @@ export class PackageMaterializer {
       }
     }
     for (const id of this.splitProjection.update(this.registry)) rawDirty.add(id);
+    // Concurrent split siblings: a new order, and proposals shown on another paragraph mark.
+    splitSiblingChanges(this.registry, rawDirty);
     const dirty = expandAncestors(this.registry, rawDirty);
     // Every ancestor of a changed node has to rebuild. The registry's parent index says
     // where a node lives NOW; a node a peer moved or detached is still shown
@@ -474,7 +473,7 @@ export class PackageMaterializer {
     path.add(logicalId);
     const issuesAtStart = this.issues.length;
     const seenChildren = new Set<LogicalId>();
-    let childIds = [...record.childIds];
+    let childIds = splitMarkMoves(this.registry).shownChildIds(logicalId, record.childIds);
     // A set for membership: a peer can give a merged copy as many children as a record holds.
     const listed = new Set(childIds);
     const addChild = (extra: LogicalId): void => {

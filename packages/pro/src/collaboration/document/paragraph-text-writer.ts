@@ -36,6 +36,7 @@ import { rejectDangerousKey } from './limits.ts';
 import type { DocumentRegistry } from './registry.ts';
 import { inlineChildren } from './paragraph-text-view.ts';
 import { partitionChildIds, sharedChildShell } from './singleton-children.ts';
+import { splitMarkMoves } from './split-mark-moves.ts';
 
 interface ScratchNode {
   readonly id: LogicalId;
@@ -378,9 +379,10 @@ export function routeInlineEffects(
       root.localName = 'p';
       // Block children as a replica shows them: concurrent property copies show as one.
       const record = registry.record(paragraphId);
+      const listed = record && 'childIds' in record ? record.childIds : [];
       const { shown } = partitionChildIds(
         'paragraph',
-        record && 'childIds' in record ? record.childIds : [],
+        splitMarkMoves(registry).shownChildIds(paragraphId, listed),
         (id) => sharedChildShell(registry, id)
       );
       for (const childId of shown) {

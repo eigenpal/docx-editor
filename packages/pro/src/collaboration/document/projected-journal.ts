@@ -24,6 +24,7 @@ import {
 import { PACKAGE_NODES_KEY, NODE_TEXT_FIELD, makeTextRecord, type SharedRecord } from './schema.ts';
 import { splitWinnerOrder } from './split-dedup.ts';
 import { splitSiblingOrder } from './split-sibling-order.ts';
+import { splitMarkMoves } from './split-mark-moves.ts';
 import { typedInsertOf, type TypedInsert } from './paragraph-text-typing.ts';
 import type { DocumentRegistry } from './registry.ts';
 import type { LogicalId } from './identity.ts';
@@ -275,7 +276,8 @@ class VisibleJournalProjection extends JournalProjection {
       const adopted = [...this.shared.adoptedChildren(id), ...this.mergedOf(id)].filter(
         (child, at, all) => !node.children.includes(child) && all.indexOf(child) === at
       );
-      const children = adopted.length > 0 ? [...node.children, ...adopted] : node.children;
+      const listed = adopted.length > 0 ? [...node.children, ...adopted] : node.children;
+      const children = splitMarkMoves(this.shared).shownChildIds(id, listed);
       node.children =
         this.shownOf(id)?.slice() ??
         this.visibleIndexes(id, children).map((index) => children[index]!);
@@ -545,6 +547,34 @@ export function projectJournalToShared(
       childLogicalIds: [...shown, ...kept],
     });
   };
+  // A proposal of a concurrent split shows on another paragraph mark than the one that lists
+  // it (`split-mark-moves.ts`). Before a journal addresses either, list it where it shows.
+  const marksWhereShown = new Set<LogicalId>();
+  const listMarksWhereShown = (parentId: LogicalId): void => {
+    for (const move of splitMarkMoves(registry).movesAt(parentId)) {
+      if (marksWhereShown.has(move.node)) continue;
+      marksWhereShown.add(move.node);
+      const from = raw.node(move.from);
+      const to = raw.node(move.to);
+      if (!from || from.isText || !to || to.isText) continue;
+      const at = from.children.indexOf(move.node);
+      if (at < 0 || to.children.includes(move.node)) continue;
+      emit({
+        kind: 'spliceChildren',
+        parentLogicalId: move.from,
+        start: at,
+        deleteCount: 1,
+        childLogicalIds: [],
+      });
+      emit({
+        kind: 'spliceChildren',
+        parentLogicalId: move.to,
+        start: move.first ? 0 : raw.node(move.to)!.children.length,
+        deleteCount: 0,
+        childLogicalIds: [move.node],
+      });
+    }
+  };
   const listedWhereShown = new Set<LogicalId>();
   const listAdoptedWhereShown = (parentId: LogicalId): void => {
     if (listedWhereShown.has(parentId)) return;
@@ -696,6 +726,7 @@ export function projectJournalToShared(
         );
       } else if (effect.kind === 'spliceChildren') {
         listPartMembersAsShown(effect.parentLogicalId);
+        listMarksWhereShown(effect.parentLogicalId);
         listAdoptedWhereShown(effect.parentLogicalId);
         listMergedWhereShown(effect.parentLogicalId);
         const parent = raw.node(effect.parentLogicalId);
@@ -767,6 +798,7 @@ export function projectJournalToShared(
       } else if (effect.kind === 'moveNode') {
         // moveNode's destination index is measured AFTER unlinking the source.
         listPartMembersAsShown(effect.destinationParentLogicalId);
+        listMarksWhereShown(effect.destinationParentLogicalId);
         listAdoptedWhereShown(effect.destinationParentLogicalId);
         listMergedWhereShown(effect.destinationParentLogicalId);
         const parent = raw.node(effect.destinationParentLogicalId);

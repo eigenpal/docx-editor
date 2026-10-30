@@ -45,6 +45,16 @@ export interface SiblingRank {
   readonly rank: number;
 }
 
+/**
+ * One run of concurrent split siblings after the paragraph they split: the run's paragraphs
+ * as shown, with the first paragraph of each block in `heads` and every one in `shown`.
+ */
+export interface SiblingGroup {
+  readonly source: LogicalId;
+  readonly heads: readonly LogicalId[];
+  readonly shown: readonly LogicalId[];
+}
+
 /** The ranks of the children of one parent that move, or null when none does. */
 export type SiblingRanks = ReadonlyMap<LogicalId, SiblingRank> | null;
 
@@ -109,7 +119,9 @@ export function splitSiblingRanks(
   /** Collects every paragraph the order of a concurrent run reads, moved or not. */
   heads: LogicalId[] = [],
   /** The split points recorded on a paragraph (`split-points.ts`). */
-  pointsOf: (id: LogicalId) => readonly SplitPoint[] = () => []
+  pointsOf: (id: LogicalId) => readonly SplitPoint[] = () => [],
+  /** Collects every concurrent run that follows a listed paragraph, moved or not. */
+  groups: SiblingGroup[] = []
 ): SiblingRanks {
   let ranks: Map<LogicalId, SiblingRank> | null = null;
   let group = 0;
@@ -148,6 +160,19 @@ export function splitSiblingRanks(
     for (const block of blocks)
       for (const item of block.items) if (!item.deleted) heads.push(headId(item));
     const order = orderOf(blocks, textOf, children.doc, pointsOf);
+    const source = items[start - 1];
+    if (source && !source.deleted && inItem(head.origin, source)) {
+      const shown = order ?? blocks;
+      groups.push({
+        source: (source.content.getContent() as LogicalId[])[head.origin!.clock - source.id.clock]!,
+        heads: shown.filter((block) => !block.head.deleted).map((block) => headId(block.head)),
+        shown: shown.flatMap((block) =>
+          block.items
+            .filter((item) => !item.deleted)
+            .flatMap((item) => item.content.getContent() as LogicalId[])
+        ),
+      });
+    }
     if (order) {
       group += 1;
       ranks ??= new Map();
@@ -324,6 +349,8 @@ interface OrderEntry {
   readonly waiting: readonly LogicalId[];
   /** Their text lengths, a cheap sign that one of them changed. */
   readonly lengths: string;
+  /** The concurrent runs that follow a listed paragraph. */
+  readonly groups: readonly SiblingGroup[];
 }
 
 /**
@@ -338,6 +365,8 @@ export class SplitSiblingOrders {
   private readonly built = new WeakMap<readonly LogicalId[], OrderEntry>();
   /** Parents whose last order read a concurrent run. */
   private readonly withRuns = new Set<LogicalId>();
+  /** Parents whose last order found a concurrent run after a listed paragraph. */
+  private readonly grouped = new Set<LogicalId>();
 
   constructor(
     /** A node's shared record. */
@@ -350,6 +379,18 @@ export class SplitSiblingOrders {
   /** The ranks of a parent's children that move, or null. */
   ranksOf(parentId: LogicalId): SiblingRanks {
     return this.read(parentId)?.ranks ?? null;
+  }
+
+  /** The concurrent runs of split siblings among a parent's children, moved or not. */
+  groupsOf(parentId: LogicalId): readonly SiblingGroup[] {
+    return this.read(parentId)?.groups ?? [];
+  }
+
+  /** Parents whose last order read a concurrent run. */
+  parentsWithRuns(): readonly LogicalId[] {
+    for (const parentId of [...this.grouped])
+      if (!this.listingOf(parentId)) this.grouped.delete(parentId);
+    return [...this.grouped];
   }
 
   /** A parent's listing in the order the rule shows it. */
@@ -392,8 +433,13 @@ export class SplitSiblingOrders {
     const children = childArrayOf(this.nodeOf(parentId)) as Y.Array<LogicalId> | null;
     if (!children || children.length < 2) return null;
     const heads: LogicalId[] = [];
-    const ranks = splitSiblingRanks(children, this.textOf, heads, (id) =>
-      splitPointsOf(this.nodeOf(id))
+    const groups: SiblingGroup[] = [];
+    const ranks = splitSiblingRanks(
+      children,
+      this.textOf,
+      heads,
+      (id) => splitPointsOf(this.nodeOf(id)),
+      groups
     );
     const ids = listing ?? children.toArray();
     const order = splitSiblingOrder(ids, ranks);
@@ -401,7 +447,9 @@ export class SplitSiblingOrders {
     const waiting = heads.filter(
       (id) => splitPointsOf(this.nodeOf(id)).length === 0 && copiesOf(id, this.textOf).length === 0
     );
-    const entry = { ranks, shown, waiting, lengths: this.lengthsKey(waiting) };
+    const entry = { ranks, shown, waiting, lengths: this.lengthsKey(waiting), groups };
+    if (groups.length > 0) this.grouped.add(parentId);
+    else this.grouped.delete(parentId);
     if (listing) this.built.set(listing, entry);
     if (waiting.length > 0 && listing) this.withRuns.add(parentId);
     else this.withRuns.delete(parentId);
