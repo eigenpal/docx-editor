@@ -31,6 +31,7 @@ import {
 import type { CSSProperties, ReactElement } from 'react';
 import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
 import { contextMenuRowId } from './row-alias';
+import { isDocumentContextMenuTarget } from './menu-target';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import { ReviewRailContext, useDocxEditor } from '../context';
 import { useAddCommentState } from '../toolbar/add-comment-state';
@@ -398,6 +399,13 @@ export function DocxEditorContextMenu({
     const scroller = scrollerFor(hostRef.current);
     if (!scroller) return undefined;
     const onContextMenu = (event: MouseEvent) => {
+      // A second right-click on the open panel neither moves it nor shows the browser's menu.
+      if (panelRef.current?.contains(event.target as Node | null)) {
+        event.preventDefault();
+        return;
+      }
+      // Chrome in the scroller, such as the link popover, keeps the browser's own menu.
+      if (!isDocumentContextMenuTarget(scroller, event.target)) return;
       event.preventDefault();
       // A keyboard-triggered menu (Shift+F10, the Menu key) reports no pointer position.
       // Anchoring at the window's origin would drop the panel in the corner, so it opens at
