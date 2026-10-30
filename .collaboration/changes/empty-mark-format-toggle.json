@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Formatting at a caret in an empty paragraph armed a local typing format, and a toggle read the format as off when the mark had it.",
+  "after": "Formatting at a caret in an empty paragraph writes the paragraph mark through the existing setParagraphMarkProperties operation, and a toggle reads the mark face.",
+  "reason": "The change uses an existing shared operation and adds no field. Two mounted editors cover the mark change crossing peer typing, undo, redo, deletion during peer input, tracked mark changes, remote selections, reconnect, and save/reopen.",
+  "tests": [
+    "packages/core/src/editor/__tests__/empty-paragraph-mark-style-typing.test.ts",
+    "packages/core/src/editor/__tests__/caret-format-history.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-empty-mark-toggle.test.ts"
+  ],
+  "changeset": "empty-mark-format-toggle",
+  "migration": null
+}

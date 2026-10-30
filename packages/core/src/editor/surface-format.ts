@@ -395,6 +395,41 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   };
 
   /**
+   * The empty paragraph a collapsed caret formats through its mark, or null.
+   *
+   * An empty paragraph has no run for an armed format to wait on: its mark is the only
+   * character there, and the next text typed takes the mark's face. So a format picked there
+   * goes onto the mark as one undoable change, the line shows it at once, and it is saved
+   * even if nothing is typed. An armed format already waiting at the caret keeps the
+   * stored-marks lane, so the press flips what the toolbar shows.
+   */
+  const emptyParagraphAtCaret = (from: SemanticPosition, to: SemanticPosition): string | null =>
+    from.paragraphId === to.paragraphId &&
+    from.offset === to.offset &&
+    textOf(from.paragraphId).length === 0 &&
+    deps.paragraphMarkVisible(from.paragraphId) &&
+    !deps.pendingFormats()?.length
+      ? from.paragraphId
+      : null;
+
+  const writeEmptyParagraphMark = (paragraphId: string, incoming: SurfaceProperty) => {
+    const part = storyPart();
+    const properties = mergedParagraphMarkProperties(part, paragraphId, incoming);
+    // A pick the mark already states changes nothing, so it is not an undo step either.
+    if (
+      JSON.stringify(properties) ===
+      JSON.stringify(directParagraphMarkProperties(part, paragraphId))
+    )
+      return null;
+    return commit(() =>
+      applyOps(
+        [{ op: 'setParagraphMarkProperties' as const, paragraphId, properties }],
+        selectionMark()
+      )
+    );
+  };
+
+  /**
    * Write paragraph properties over every paragraph the selection touches, in ONE commit.
    *
    * Shared by `setParagraphProperty` (one entry) and `setParagraphProperties` (a dialog's
@@ -484,6 +519,8 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       const cells = deps.selectedCells?.();
       if (cells && cells.length > 0) return writeRunPropertyOverCells(cells, incoming);
       const { from, to } = orderedRange();
+      const empty = emptyParagraphAtCaret(from, to);
+      if (empty) return writeEmptyParagraphMark(empty, incoming);
       if (from.paragraphId === to.paragraphId && from.offset === to.offset) {
         // A collapsed caret arms the value for the NEXT characters typed — picking a font
         // with nothing selected is how Word starts typing in that font.
@@ -567,6 +604,8 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         : { localName, ...(attributes ? { attributes } : {}) };
       if (cells && cells.length > 0) return writeRunPropertyOverCells(cells, incoming);
       const { from, to } = orderedRange();
+      const empty = emptyParagraphAtCaret(from, to);
+      if (empty) return writeEmptyParagraphMark(empty, incoming);
       if (from.paragraphId === to.paragraphId && from.offset === to.offset) {
         // The stored-marks lane: a collapsed caret has no range to format, so the toggle is
         // remembered and applied to the next characters typed at this position (Word's

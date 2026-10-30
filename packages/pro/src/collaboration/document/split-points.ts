@@ -11,7 +11,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * order: a paragraph a run holds can be deleted, so its text cannot be read alike on every
  * replica, and a paragraph split off it later holds text from elsewhere. So each split also
  * records, on the paragraph it creates, the split point: the paragraph it split and the
- * offset in that paragraph's text where the moved text started. It keeps the split points of
+ * identity of the first character it moved (`paragraph-text-identity.ts`). An identity names
+ * one character on every replica, whatever text each peer typed or deleted before it, so the
+ * order compares where those characters stand in the text they came from, not offsets that
+ * each peer counted in its own view. It keeps the split points of
  * the paragraph it split as well, so a paragraph split off a split paragraph still names the
  * split point of the paragraph it came from. Any other paragraph an edit creates, as a break at
  * a paragraph's end does, counts as split off the end of the paragraph listed right before
@@ -22,6 +25,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * creates it, so no two peers write it.
  */
 import type * as Y from 'yjs';
+import { firstItem } from './yjs-items.ts';
+import { itemIdentity } from './paragraph-text-identity.ts';
 import type { LogicalId } from './identity.ts';
 import { ORIGIN_KEY } from './paragraph-text-moves.ts';
 
@@ -31,10 +36,26 @@ export const NODE_SPLIT_POINTS_FIELD = 'splitPoints';
 /** How many split points a paragraph keeps: its own and those of its nearest ancestors. */
 const MAX_SPLIT_POINTS = 4;
 
-/** One split point: the paragraph split, and where in its text the moved text started. */
+/**
+ * One split point: the paragraph split, and the identity of the first character moved, or of
+ * the last character kept with a `+` after it for a split at the end of the paragraph.
+ */
 export interface SplitPoint {
   readonly source: LogicalId;
-  readonly offset: number;
+  readonly at: string;
+}
+
+const IDENTITY = /^\d{1,16}:\d{1,16}$/;
+const SPLIT_AT = /^\d{1,16}:\d{1,16}\+?$/;
+
+/** The last character of a paragraph text that is still there, by identity, or null. */
+export function lastIdentityOf(text: Y.Text | null): string | null {
+  if (!text) return null;
+  let last: Y.Item | null = null;
+  for (let item = firstItem(text); item; item = item.right) {
+    if (!item.deleted && typeof (item.content as { str?: unknown }).str === 'string') last = item;
+  }
+  return last ? itemIdentity(text, last, last.length - 1) : null;
 }
 
 /** A paragraph's split points, nearest last, or an empty list for none or a malformed value. */
@@ -43,10 +64,10 @@ export function splitPointsOf(record: Y.Map<unknown> | undefined): SplitPoint[] 
   if (typeof value !== 'string' || value.length > 4096) return [];
   const points: SplitPoint[] = [];
   for (const entry of value.split('\n').slice(-MAX_SPLIT_POINTS)) {
-    const at = entry.lastIndexOf('@');
-    const offset = Number(entry.slice(at + 1));
-    if (at <= 0 || !Number.isSafeInteger(offset) || offset < 0) return [];
-    points.push({ source: entry.slice(0, at) as LogicalId, offset });
+    const split = entry.lastIndexOf('@');
+    const at = entry.slice(split + 1);
+    if (split <= 0 || !SPLIT_AT.test(at)) return [];
+    points.push({ source: entry.slice(0, split) as LogicalId, at });
   }
   return points;
 }
@@ -54,7 +75,7 @@ export function splitPointsOf(record: Y.Map<unknown> | undefined): SplitPoint[] 
 function serialized(points: readonly SplitPoint[]): string {
   return points
     .slice(-MAX_SPLIT_POINTS)
-    .map((point) => `${point.source}@${point.offset}`)
+    .map((point) => `${point.source}@${point.at}`)
     .join('\n');
 }
 
@@ -73,7 +94,7 @@ export function noteMintedParagraph(record: Y.Map<unknown> | undefined): void {
  */
 export function inheritSplitPoints(
   nodeOf: (id: LogicalId) => Y.Map<unknown> | undefined,
-  lengthOf: (id: LogicalId) => number,
+  lastOf: (id: LogicalId) => string | null,
   children: Y.Array<LogicalId> | null,
   ids: readonly LogicalId[]
 ): void {
@@ -86,15 +107,17 @@ export function inheritSplitPoints(
     const at = listed.indexOf(id);
     if (at <= 0) continue;
     const leftId = listed[at - 1]!;
-    const points = [...splitPointsOf(nodeOf(leftId)), { source: leftId, offset: lengthOf(leftId) }];
-    record.set(NODE_SPLIT_POINTS_FIELD, serialized(points));
+    const last = lastOf(leftId);
+    const inherited = splitPointsOf(nodeOf(leftId));
+    const points = last ? [...inherited, { source: leftId, at: `${last}+` }] : inherited;
+    if (points.length > 0) record.set(NODE_SPLIT_POINTS_FIELD, serialized(points));
   }
 }
 
-/** The offset a paragraph's split points give for a split of `source`, or null. */
-export function splitOffsetIn(points: readonly SplitPoint[], source: LogicalId): number | null {
+/** The first moved character a paragraph's split points give for a split of `source`. */
+export function splitAtIn(points: readonly SplitPoint[], source: LogicalId): string | null {
   for (let at = points.length - 1; at >= 0; at -= 1) {
-    if (points[at]!.source === source) return points[at]!.offset;
+    if (points[at]!.source === source) return points[at]!.at;
   }
   return null;
 }
@@ -118,17 +141,17 @@ export function recordSplitPoints(writes: readonly SplitWrite[]): void {
       ORIGIN_KEY
     ];
     if (!origin) continue;
+    if (!IDENTITY.test(origin)) continue;
     for (const source of writes) {
       if (source === write) continue;
-      const offset = source.identities.indexOf(origin);
-      if (offset < 0) continue;
+      if (!source.identities.includes(origin)) continue;
       // Written by the edit that creates the paragraph, over what the listing gave it.
       const inherited = splitPointsOf(source.record);
       if (write.record.has(NODE_SPLIT_POINTS_FIELD) && !minted.has(write.record)) break;
       minted.delete(write.record);
       write.record.set(
         NODE_SPLIT_POINTS_FIELD,
-        serialized([...inherited, { source: source.id, offset }])
+        serialized([...inherited, { source: source.id, at: origin }])
       );
       break;
     }

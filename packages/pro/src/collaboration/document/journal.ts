@@ -45,7 +45,7 @@ import { SharedTextValueRefused } from './paragraph-text-codec.ts';
 import { tokensOfParagraph, type Token } from './paragraph-text-diff.ts';
 import { JournalProjection, projectEffect } from './journal-projection.ts';
 import type { DocumentRegistry } from './registry.ts';
-import { inheritSplitPoints, noteMintedParagraph } from './split-points.ts';
+import { inheritSplitPoints, lastIdentityOf, noteMintedParagraph } from './split-points.ts';
 
 export type JournalRefusalCode =
   | LimitCode
@@ -362,7 +362,7 @@ function applyEffect(
       // A paragraph this edit created takes the split points of the one listed before it.
       inheritSplitPoints(
         (id) => registry.schema.nodes.get(id),
-        (id) => registry.inline.textOf(id)?.length ?? 0,
+        (id) => lastIdentityOf(registry.inline.textOf(id)),
         childArrayOf(registry.schema.nodes.get(effect.parentLogicalId)),
         effect.childLogicalIds
       );

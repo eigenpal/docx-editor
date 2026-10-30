@@ -275,7 +275,7 @@ If your servers run a release from 2.28.0 to 2.31.0, the procedure changes in th
 
 ### Upgrade rooms to format 1.5.3.1
 
-Format `docx-collaboration:1.5.3.1` stores shared data the same way as format `docx-collaboration:1.5.2.1`, plus one field: a paragraph that a split creates records the paragraph it split and where. It changes two rules that decide what participants show after concurrent edits:
+Format `docx-collaboration:1.5.3.1` stores shared data the same way as format `docx-collaboration:1.5.2.1`, plus one field. A paragraph that a split creates records the paragraph it split and the first character it moved. A paragraph that an edit creates in another way, such as a break at the end of a paragraph, takes the record of the paragraph listed before it. The shared schema version does not change: the field is an optional key that only this format writes, no stored field changes meaning, and a paragraph without the field orders as before. It changes two rules that decide what participants show after concurrent edits:
 
 - If participants split one paragraph at the same time, the new paragraphs show in the order of their text, also with several splits per participant and after an undo or redo. Earlier formats ordered the new paragraphs by an internal participant number, so one split could look lost and an empty paragraph could appear.
 - If those splits are tracked changes, each proposed paragraph break shows on its own paragraph, so rejecting every change restores the paragraph. Earlier formats kept one proposal on the split paragraph, and rejecting every change left a split.

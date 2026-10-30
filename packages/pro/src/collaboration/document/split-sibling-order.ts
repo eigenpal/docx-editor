@@ -28,7 +28,7 @@ import { firstItem, structAt } from './yjs-items.ts';
 import { itemIdentity, type Identity } from './paragraph-text-identity.ts';
 import { marksOfText } from './paragraph-text-marks.ts';
 import { childArrayOf } from './schema.ts';
-import { splitOffsetIn, splitPointsOf, type SplitPoint } from './split-points.ts';
+import { splitAtIn, splitPointsOf, type SplitPoint } from './split-points.ts';
 
 /**
  * How many clocks of one paragraph's text the rule reads. It counts clocks, which every
@@ -181,7 +181,7 @@ export function splitSiblingRanks(
       );
     const listed = idsOf(blocks);
     const byText = orderOf(blocks, textOf, children.doc, pointsOf);
-    const order = idsByPoints(listed, pointsOf) ?? (byText ? idsOf(byText) : null);
+    const order = idsByPoints(listed, pointsOf, children.doc) ?? (byText ? idsOf(byText) : null);
     const shown = order ?? listed;
     const source = items[first - 1];
     if (source && !source.deleted && inItem(head.origin, source)) {
@@ -213,23 +213,27 @@ export function splitSiblingRanks(
 
 /**
  * The paragraphs of one concurrent run in the order of their split points, or null when they
- * do not all name a split of one paragraph. Each paragraph goes by the offset of that split,
- * so pieces that several peers split off at once interleave in text order; paragraphs with
- * one offset, as a paragraph and the paragraph that took its split points, keep their listed
+ * do not all name a split of one paragraph. Each paragraph goes by where that split fell, so
+ * pieces that several peers split off at once interleave in text order; paragraphs with one
+ * split point, as a paragraph and the paragraph that took its split points, keep their listed
  * order.
  */
 function idsByPoints(
   listed: readonly LogicalId[],
-  pointsOf: (id: LogicalId) => readonly SplitPoint[]
+  pointsOf: (id: LogicalId) => readonly SplitPoint[],
+  doc: Y.Doc | null
 ): LogicalId[] | null {
   if (listed.length < 2) return null;
   const points = listed.map((id) => pointsOf(id));
+  const places = new Map<Y.Text, Map<string, number>>();
   for (let at = points[0]!.length - 1; at >= 0; at -= 1) {
     const source = points[0]![at]!.source;
-    const offsets = points.map((list) => splitOffsetIn(list, source));
-    if (offsets.some((offset) => offset === null)) continue;
+    const splits = points.map((list) => splitAtIn(list, source));
+    if (splits.some((split) => split === null)) continue;
+    const keys = splitKeys(doc, splits as string[], places);
+    if (!keys) return null;
     const order = listed.map((_, index) => index);
-    order.sort((a, b) => offsets[a]! - offsets[b]! || a - b);
+    order.sort((a, b) => keys[a]! - keys[b]! || a - b);
     return order.map((index) => listed[index]!);
   }
   return null;
@@ -339,15 +343,61 @@ function blockPoints(
 }
 
 /**
- * Whether block `first` goes before block `second` by the split points they recorded: the
- * nearest split of one paragraph both name decides, the earlier offset first. Null when they
- * name none in common or the same offset, as a release without the field leaves them.
+ * Whether the character `first` names comes before the one `second` names, or null when
+ * this replica cannot tell alike with every other: both stand in one live text, or one author
+ * typed or loaded both, whose clocks go up in text order within one insert.
  */
-function splitBefore(first: readonly SplitPoint[], second: readonly SplitPoint[]): boolean | null {
+function identityBefore(
+  doc: Y.Doc | null,
+  first: string,
+  second: string,
+  places: Map<Y.Text, Map<string, number>>
+): boolean | null {
+  if (first === second) return null;
+  const keys = splitKeys(doc, [first, second], places);
+  return keys && keys[0] !== keys[1] ? keys[0]! < keys[1]! : null;
+}
+
+/**
+ * Comparable places for split points (`client:clock`, or `client:clock+` for just after that
+ * character), or null when this replica cannot place them alike with every other: all stand
+ * in one live text, or one author typed or loaded all of them, whose clocks go up in text order
+ * within one insert.
+ */
+function splitKeys(
+  doc: Y.Doc | null,
+  points: readonly string[],
+  places: Map<Y.Text, Map<string, number>>
+): number[] | null {
+  const parsed = points.map((point) => ({
+    identity: point.endsWith('+') ? point.slice(0, -1) : point,
+    after: point.endsWith('+') ? 0.5 : 0,
+  }));
+  const placed = parsed.map(({ identity }) => (doc ? sourcePlace(doc, identity, places) : null));
+  if (placed.every((place) => place && place.text === placed[0]!.text))
+    return placed.map((place, at) => place!.at + parsed[at]!.after);
+  const clocks = parsed.map(({ identity }) => identity.split(':').map(Number));
+  if (clocks.every(([client]) => client === clocks[0]![0]))
+    return clocks.map(([, clock], at) => clock! + parsed[at]!.after);
+  return null;
+}
+
+/**
+ * Whether block `first` goes before block `second` by the split points they recorded: the
+ * nearest split of one paragraph both name decides, by where its first moved character stands.
+ * Null when they name none in common, the same character, or characters this replica cannot
+ * order, as a release without the field leaves them.
+ */
+function splitBefore(
+  doc: Y.Doc | null,
+  first: readonly SplitPoint[],
+  second: readonly SplitPoint[],
+  places: Map<Y.Text, Map<string, number>>
+): boolean | null {
   for (let at = first.length - 1; at >= 0; at -= 1) {
-    const offset = splitOffsetIn(second, first[at]!.source);
-    if (offset === null) continue;
-    return first[at]!.offset === offset ? null : first[at]!.offset < offset;
+    const other = splitAtIn(second, first[at]!.source);
+    if (other === null) continue;
+    return identityBefore(doc, first[at]!.at, other, places);
   }
   return null;
 }
@@ -371,7 +421,7 @@ function orderOf(
     for (let back = at; back > 0; back -= 1) {
       const later = order[back]!;
       const earlier = order[back - 1]!;
-      const recorded = splitBefore(points[later]!, points[earlier]!);
+      const recorded = splitBefore(doc, points[later]!, points[earlier]!, places);
       const before =
         recorded ?? blockBefore(copies[later]!, copies[earlier]!, starts[later]!, starts[earlier]!);
       if (!before) break;
