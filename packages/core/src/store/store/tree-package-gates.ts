@@ -7,6 +7,7 @@ import { resolveNotesPart } from '../package/note-references.ts';
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { segmentsOf } from './tree-op-segments.ts';
 import type { TreeDocOp } from './tree-ops.ts';
+import { transactionStoryPart, type TreeDocumentStore } from './tree-store.ts';
 
 /** Cap on nodes visited while probing one `deleteBlock` subtree for note refs. */
 export const MAX_DELETE_BLOCK_NOTE_GATE_NODES = 4_000;
@@ -22,17 +23,20 @@ export function hasNotesPart(pkg: OoxmlPackage): boolean {
 /**
  * Whether one text delete can strand a note body and therefore needs a package cascade.
  * Ambiguous repeated deletes in one paragraph fail closed into the bounded cascade.
+ *
+ * The gates in this file read the story as the open transaction has left it. Its node index
+ * moves with each op, so a batch of deletes finds each target without walking the part again.
  */
 export function deleteMayStrandNote(
   pkg: OoxmlPackage,
-  part: OoxmlPart,
+  store: TreeDocumentStore,
   op: Extract<TreeDocOp, { op: 'deleteText' }>,
   seenParagraphs: Set<string>
 ): boolean {
   if (!hasNotesPart(pkg)) return false;
   if (seenParagraphs.has(op.paragraphId)) return true;
   seenParagraphs.add(op.paragraphId);
-  const paragraph = findNode(part, op.paragraphId);
+  const paragraph = findNode(transactionStoryPart(store), op.paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return true;
   return segmentsOf(paragraph).some(
     (segment) =>
@@ -49,14 +53,14 @@ export function deleteMayStrandNote(
  */
 export function deleteBlockMayStrandNote(
   pkg: OoxmlPackage,
-  part: OoxmlPart,
+  store: TreeDocumentStore,
   op: Extract<TreeDocOp, { op: 'deleteBlock' }>,
   seenBlocks: Set<string>
 ): boolean {
   if (!hasNotesPart(pkg)) return false;
   if (seenBlocks.has(op.blockId)) return true;
   seenBlocks.add(op.blockId);
-  const block = findNode(part, op.blockId);
+  const block = findNode(transactionStoryPart(store), op.blockId);
   if (!block || block.kind === 'textValue') return true;
 
   let visited = 0;
@@ -117,7 +121,7 @@ function subtreeHasCommentMarker(
  */
 export function deleteMayEmptyCommentRange(
   anyComment: () => boolean,
-  part: OoxmlPart,
+  store: TreeDocumentStore,
   op: Extract<TreeDocOp, { op: 'deleteText' | 'deleteBlock' }>,
   seenTargets: Set<string>
 ): boolean {
@@ -125,7 +129,7 @@ export function deleteMayEmptyCommentRange(
   const targetId = op.op === 'deleteText' ? op.paragraphId : op.blockId;
   if (seenTargets.has(targetId)) return true;
   seenTargets.add(targetId);
-  const target = findNode(part, targetId);
+  const target = findNode(transactionStoryPart(store), targetId);
   if (!target || target.kind === 'textValue') return true;
   return subtreeHasCommentMarker(target, 0, { count: 0 });
 }

@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A transaction walked the whole story part again after each content control or paragraph split between tracked edits, and after the first delete in a document with notes or comments.",
+  "after": "A transaction keeps its revision id counter across ops that add no revision ids, and its delete gates read the working story part.",
+  "reason": "The change affects how a local transaction finds free revision ids and existing nodes. It mints the same ids and writes the same document bytes, so shared operations, room data, and serialization stay unchanged.",
+  "tests": ["packages/core/src/store/__tests__/tracked-batch-part-walks.test.ts"],
+  "changeset": "tracked-batch-part-walks",
+  "migration": null
+}

@@ -40,32 +40,11 @@ import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { PROPERTY_CHANGE_WRAPPER_OF_OP } from './tree-op-tracked-properties.ts';
 import type { ContentLockPolicy, TransactionRevisionIds } from '../package/ooxml-edit.ts';
 
-/**
- * The ops whose tracked appliers write a revision wrapper. They get the transaction's
- * bookkeeping — the shared counter, and the record of what it has written, which is what
- * tells a replacement's insertion from a keystroke after Backspace.
- */
-const TRACKED_WRAPPER_OPS: ReadonlySet<string> = new Set([
-  'insertText',
-  'insertTab',
-  'insertHardBreak',
-  'insertPageBreak',
-  'insertPageField',
-  'insertComplexField',
-  'insertEquation',
-  'insertDrawing',
-  'deleteText',
-  'setParagraphMarkRevision', // Mints from the same counter, so it does not reset it.
-]);
-
-/**
- * Of those, the ones whose content comes from the CALLER and can carry revision ids in with
- * it: an anchored text box holds `w:txbxContent` paragraphs that may already be revised. They
- * still get the record — they write a wrapper, and the next op has to know it — but the
- * counter is dropped around them, so nothing after them draws from a walk taken before the
- * content arrived.
- */
-const IMPORTS_REVISION_IDS: ReadonlySet<string> = new Set(['insertDrawing']);
+import {
+  IMPORTS_REVISION_IDS,
+  keepsRevisionCounter,
+  TRACKED_WRAPPER_OPS,
+} from './tree-store-revision-counter.ts';
 import { applyTreeOp } from './tree-ops.ts';
 import { contentLockPolicyOf } from './content-lock-policy.ts';
 import type { ImpactClass, TreeDocOp, TreeOpRejection } from './tree-op-types.ts';
@@ -246,6 +225,13 @@ export interface TreeDocumentCheckpoint {
  * as they were. That all-or-nothing property is what lets a caller compose ops without having to
  * reason about partial application.
  */
+const openTransactions = new WeakMap<TreeDocumentStore, () => OoxmlPart>();
+
+/** @internal The story part as the open transaction has left it so far, else the published one. */
+export function transactionStoryPart(store: TreeDocumentStore): OoxmlPart {
+  return openTransactions.get(store)?.() ?? store.part;
+}
+
 export class TreeDocumentStore {
   private current: OoxmlPackage;
   /** The part `apply` targets and `part` returns: the story this store is editing. */
@@ -553,7 +539,8 @@ export class TreeDocumentStore {
 
     /**
      * The tracked TEXT ops' bookkeeping. The COUNTER is dropped, like the property group, the
-     * moment anything else runs (`applyPackage` included): a paste re-mints the ids it carries
+     * moment anything else runs (`applyPackage` included), except the ops in
+     * `KEEPS_REVISION_COUNTER`: a paste re-mints the ids it carries
      * against the part as it stands, and a walk taken before it would hand out an id the paste
      * just used. What this transaction WROTE survives all of it — a record of the past cannot
      * go stale, and the replacement rule reads it after ops that mint nothing.
@@ -565,7 +552,9 @@ export class TreeDocumentStore {
       const writes = TRACKED_WRAPPER_OPS.has(op.op);
       // A property op keeps the counter: its group takes one id and imports none.
       if (!writes && PROPERTY_CHANGE_WRAPPER_OF_OP.get(op.op) !== undefined) return null;
-      if (!writes || IMPORTS_REVISION_IDS.has(op.op)) resetRevisionCounters();
+      if (writes ? IMPORTS_REVISION_IDS.has(op.op) : !keepsRevisionCounter(op)) {
+        resetRevisionCounters();
+      }
       return writes ? revisionIdsFor(part) : null;
     };
 
@@ -666,60 +655,69 @@ export class TreeDocumentStore {
       return true;
     };
 
-    build({
-      apply: (op) => applyToPart(this.storyPartName, op),
-      applyTo: (partName, op) => applyToPart(partName, op),
-      applyPackage: (edit) => {
-        if (failure) return false;
-        // The package channel imports and rewrites whole parts, so it needs the document-wide
-        // refusal as much as the per-op one does: comment deletion and thread resolution reach
-        // the story's own `w:commentRangeStart` through here, and nothing else would stop them
-        // in a document protected read-only.
-        // `documentProtectionRefusal`, NOT the lifecycle one: forms protection is not
-        // document-scoped here. A story transaction carries a package edit whenever it
-        // touches resources, and the collaboration and automation lanes append one
-        // unconditionally — judging those document-scoped refused every collaborative and
-        // scripted fill of the very fields forms protection exists to permit.
-        const settings = this.settingsPartOverride?.() ?? settingsPartOf(working);
-        const packageProtection = isCommentPackageEdit(edit)
-          ? lifecycleProtectionRefusal(settings, { op: 'comment' })
-          : documentProtectionRefusal(settings);
-        if (packageProtection) {
-          failure = { reason: packageProtection };
-          return false;
-        }
-        // The SECOND write channel, and it imports whole parts — a pasted fragment carries
-        // its own revision ids. The shared id is taken from the part it first saw, so it goes
-        // here for the same reason a non-property op drops it.
-        revisionIdOfGroup.clear();
-        resetRevisionCounters();
-        let next: OoxmlPackage;
-        try {
-          next = edit(working);
-        } catch (error) {
-          if (!isPackageEditRefusal(error)) throw error;
-          failure = { reason: error.reason, detail: error.message };
-          return false;
-        }
-        if (next === working) return true;
-        for (const [name, part] of next.parts) {
-          if (working.parts.get(name) !== part) touched.add(name);
-        }
-        working = next;
-        applied += 1;
-        // A new or removed part re-flows nothing by itself, but the caller pairs it with the
-        // story edit that references it, and that edit reports its own impact.
-        if (IMPACT_RANK['flow-structural'] > IMPACT_RANK[impact]) impact = 'flow-structural';
-        return true;
-      },
-      selectionBefore: (selection) => {
-        selectionBefore = selection;
-      },
-      selectionAfter: (selection) => {
-        selectionAfterExplicit = true;
-        explicitSelectionAfter = selection;
-      },
-    });
+    // Gates outside the store read the working story: each op moves the node index to its
+    // new root, so a lookup on the published root after the first op re-walked the part.
+    const outer = openTransactions.get(this);
+    openTransactions.set(this, () => working.parts.get(this.storyPartName) ?? this.part);
+    try {
+      build({
+        apply: (op) => applyToPart(this.storyPartName, op),
+        applyTo: (partName, op) => applyToPart(partName, op),
+        applyPackage: (edit) => {
+          if (failure) return false;
+          // The package channel imports and rewrites whole parts, so it needs the document-wide
+          // refusal as much as the per-op one does: comment deletion and thread resolution reach
+          // the story's own `w:commentRangeStart` through here, and nothing else would stop them
+          // in a document protected read-only.
+          // `documentProtectionRefusal`, NOT the lifecycle one: forms protection is not
+          // document-scoped here. A story transaction carries a package edit whenever it
+          // touches resources, and the collaboration and automation lanes append one
+          // unconditionally — judging those document-scoped refused every collaborative and
+          // scripted fill of the very fields forms protection exists to permit.
+          const settings = this.settingsPartOverride?.() ?? settingsPartOf(working);
+          const packageProtection = isCommentPackageEdit(edit)
+            ? lifecycleProtectionRefusal(settings, { op: 'comment' })
+            : documentProtectionRefusal(settings);
+          if (packageProtection) {
+            failure = { reason: packageProtection };
+            return false;
+          }
+          // The SECOND write channel, and it imports whole parts — a pasted fragment carries
+          // its own revision ids. The shared id is taken from the part it first saw, so it goes
+          // here for the same reason a non-property op drops it.
+          revisionIdOfGroup.clear();
+          resetRevisionCounters();
+          let next: OoxmlPackage;
+          try {
+            next = edit(working);
+          } catch (error) {
+            if (!isPackageEditRefusal(error)) throw error;
+            failure = { reason: error.reason, detail: error.message };
+            return false;
+          }
+          if (next === working) return true;
+          for (const [name, part] of next.parts) {
+            if (working.parts.get(name) !== part) touched.add(name);
+          }
+          working = next;
+          applied += 1;
+          // A new or removed part re-flows nothing by itself, but the caller pairs it with the
+          // story edit that references it, and that edit reports its own impact.
+          if (IMPACT_RANK['flow-structural'] > IMPACT_RANK[impact]) impact = 'flow-structural';
+          return true;
+        },
+        selectionBefore: (selection) => {
+          selectionBefore = selection;
+        },
+        selectionAfter: (selection) => {
+          selectionAfterExplicit = true;
+          explicitSelectionAfter = selection;
+        },
+      });
+    } finally {
+      if (outer) openTransactions.set(this, outer);
+      else openTransactions.delete(this);
+    }
 
     if (failure) {
       const rejection = failure as { reason: TreeOpRejection; detail?: string };
