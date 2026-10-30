@@ -34,16 +34,22 @@ export function wordMotionBoundaries(
   layout: SemanticLayout,
   paragraphId: string
 ): ReadonlySet<number> {
-  return inlineControlEdges(layout, paragraphId, deletedTextBoundaries(layout, paragraphId));
+  const stops = new Set(deletedTextBoundaries(layout, paragraphId));
+  for (const edge of inlineControlEdges(layout, paragraphId)) stops.add(edge);
+  return stops;
 }
 
-/** Both edges of every inline control in a paragraph, added to `base` when given. */
+/**
+ * Both edges of every inline control in a paragraph, without deletion edges.
+ *
+ * The format painter's word uses these alone: it paints only the runs the view renders, so a
+ * tracked deletion's edge must not split the word it paints.
+ */
 export function inlineControlEdges(
   layout: SemanticLayout,
-  paragraphId: string,
-  base: ReadonlySet<number> = new Set()
+  paragraphId: string
 ): ReadonlySet<number> {
-  const stops = new Set(base);
+  const stops = new Set<number>();
   for (const control of contentControlsOfLayout(layout)) {
     if (
       control.level !== 'inline' ||

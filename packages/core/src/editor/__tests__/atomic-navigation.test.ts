@@ -13,7 +13,11 @@ import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import type { LockedControlNavigation } from '../paginated-surface-options.ts';
 import { createDocxEditor } from '../docx-editor.ts';
-import { controlEdgeSide } from '../../layout/word-navigation-boundaries.ts';
+import {
+  controlEdgeSide,
+  inlineControlEdges,
+  wordMotionBoundaries,
+} from '../../layout/word-navigation-boundaries.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -473,6 +477,20 @@ describe('a double click selects a word up to an inline control edge', () => {
       click(m, x(b), b.y + b.height / 2, 2);
       expect([...offsets(m)].sort((a, c) => a - c)).toEqual([...expected]);
     }
+  });
+
+  test('the painter word keeps control edges and drops tracked deletion edges', () => {
+    const mark = 'w:author="A" w:date="2026-01-01T00:00:00Z"';
+    const m = mount(
+      `<w:p>${run('t')}<w:del w:id="1" ${mark}><w:r><w:delText>eh</w:delText></w:r></w:del>` +
+        `${run('he')}${control(TOKEN, 'none')}</w:p>`,
+      null
+    );
+    const layout = m.surface.layout();
+    expect([...wordMotionBoundaries(layout, m.paragraphId)].sort((a, b) => a - b)).toEqual([
+      1, 3, 5, 10,
+    ]);
+    expect([...inlineControlEdges(layout, m.paragraphId)].sort((a, b) => a - b)).toEqual([5, 10]);
   });
 
   test('an empty control inside a word never decides the side', () => {
