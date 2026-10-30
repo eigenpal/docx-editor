@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A data-bound content control refused every paragraph property write and every decision on a paragraph property change inside it.",
+  "after": "A data binding lets paragraph property writes (properties, tab stops, list numbering, list level) and decisions on paragraph property changes through. A content lock on the same control applies its own rule. Text edits in bound content stay refused.",
+  "reason": "Only local admission widens. The ops, the shared fields, and their encoding are unchanged, and the writes travel through the existing paragraph property path.",
+  "tests": [
+    "packages/core/src/store/__tests__/content-control-paragraph-properties.test.ts",
+    "packages/core/src/editor/__tests__/paragraph-format-lock-admission.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-locked-paragraph-format.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-session-bound-paragraph-format.test.ts"
+  ],
+  "changeset": "bound-control-paragraph-format",
+  "migration": null
+}

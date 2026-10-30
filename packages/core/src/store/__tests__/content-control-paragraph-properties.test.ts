@@ -165,26 +165,11 @@ for (const lock of ['contentLocked', 'sdtContentLocked']) {
   });
 }
 
-test('alignment does not relax a data binding or forms protection', () => {
-  const before = part(control(`<w:p>${run}</w:p>`));
-  const id = storyParagraphs(bodyStoryRoot(before)!)[0]!.id;
+test('alignment does not relax forms protection', () => {
   const op = {
     op: 'setParagraphProperties' as const,
-    paragraphId: id,
     properties: [{ localName: 'jc', attributes: { val: 'center' } }],
   };
-  const bound = part(
-    xml(before)
-      .replace(/^.*?<w:body>/s, '')
-      .replace(/<\/w:body>.*$/s, '')
-      .replace(
-        '<w:lock w:val="contentLocked"/>',
-        '<w:dataBinding w:storeItemID="{1}" w:xpath="/root/value"/>'
-      )
-  );
-  expect(
-    applyTreeOp(bound, { ...op, paragraphId: storyParagraphs(bodyStoryRoot(bound)!)[0]!.id })
-  ).toMatchObject({ ok: false, reason: 'bound' });
   const settings = readOoxmlPart(
     '<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:documentProtection w:edit="forms" w:enforcement="1"/></w:settings>',
     {
@@ -319,4 +304,90 @@ test('tracked alignment merges into a pending change that records only alignment
   const rejected = xml(apply(after, { op: 'rejectAllRevisions' }));
   expect(rejected).not.toContain('<w:jc');
   expect(rejected).toContain('<w:ind w:left="480"/>');
+});
+
+const bound = (inner: string, lock = '') =>
+  '<w:sdt><w:sdtPr><w:tag w:val="field"/>' +
+  `${lock}<w:dataBinding w:storeItemID="{1}" w:xpath="/root/value"/><w:text/></w:sdtPr>` +
+  `<w:sdtContent>${inner}</w:sdtContent></w:sdt>`;
+
+test('a data binding lets every paragraph property op through and keeps its text', () => {
+  const before = part(bound(`<w:p>${properties}${run}</w:p>`));
+  const id = storyParagraphs(bodyStoryRoot(before)!)[0]!.id;
+  const ops = [
+    {
+      op: 'setParagraphProperties' as const,
+      paragraphId: id,
+      properties: [
+        { localName: 'pStyle', attributes: { val: 'Heading1' } },
+        { localName: 'jc', attributes: { val: 'center' } },
+        { localName: 'shd', attributes: { val: 'clear', color: 'auto', fill: 'C0C0C0' } },
+        { localName: 'bidi' },
+      ],
+    },
+    {
+      op: 'setParagraphTabStops' as const,
+      paragraphId: id,
+      stops: [{ positionTwips: 1440, alignment: 'left' as const }],
+    },
+    { op: 'setListNumbering' as const, paragraphId: id, numId: '1', level: 0 },
+    { op: 'setListLevel' as const, paragraphId: id, level: 1 },
+  ];
+  let after = before;
+  for (const op of ops) after = apply(after, op);
+  const saved = xml(after);
+  for (const element of ['<w:pStyle w:val="Heading1"/>', '<w:jc w:val="center"/>', '<w:bidi/>'])
+    expect(saved).toContain(element);
+  expect(saved).toContain('<w:tab w:pos="1440" w:val="left"/>');
+  expect(saved).toContain('<w:ilvl w:val="1"/>');
+  expect(saved).toContain('w:fill="C0C0C0"');
+  expect(saved).toContain('<w:dataBinding');
+  expect(saved).toContain(run);
+});
+
+test('a tracked paragraph property change in a data binding can be accepted and rejected', () => {
+  const before = part(bound(`<w:p>${properties}${run}</w:p>`));
+  const id = storyParagraphs(bodyStoryRoot(before)!)[0]!.id;
+  const after = apply(before, {
+    op: 'setParagraphProperties',
+    paragraphId: id,
+    properties: [
+      ...directParagraphProperties(before, id),
+      { localName: 'spacing', attributes: { before: '240' } },
+    ],
+    revision: ADA,
+  });
+  expect(xml(after)).toContain('<w:pPrChange ');
+  expect(xml(apply(after, { op: 'rejectAllRevisions' }))).toBe(xml(before));
+  const accepted = xml(apply(after, { op: 'acceptAllRevisions' }));
+  expect(accepted).toContain('<w:spacing w:before="240"/>');
+  expect(accepted).not.toContain('<w:pPrChange');
+  expect(accepted).toContain(run);
+});
+
+test('a data binding still refuses its text, and a lock on it still keeps its style', () => {
+  const free = part(bound(`<w:p>${properties}${run}</w:p>`));
+  const freeId = storyParagraphs(bodyStoryRoot(free)!)[0]!.id;
+  expect(
+    applyTreeOp(free, { op: 'insertText', paragraphId: freeId, offset: 1, text: 'X' })
+  ).toMatchObject({ ok: false, reason: 'bound' });
+  const locked = part(bound(`<w:p>${properties}${run}</w:p>`, '<w:lock w:val="contentLocked"/>'));
+  const lockedId = storyParagraphs(bodyStoryRoot(locked)!)[0]!.id;
+  expect(
+    applyTreeOp(locked, {
+      op: 'setParagraphProperties',
+      paragraphId: lockedId,
+      properties: [{ localName: 'pStyle', attributes: { val: 'Heading1' } }],
+    })
+  ).toMatchObject({ ok: false, reason: 'locked' });
+  expect(
+    applyTreeOp(locked, {
+      op: 'setParagraphProperties',
+      paragraphId: lockedId,
+      properties: [
+        ...directParagraphProperties(locked, lockedId),
+        { localName: 'jc', attributes: { val: 'center' } },
+      ],
+    })
+  ).toMatchObject({ ok: true });
 });
