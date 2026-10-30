@@ -159,15 +159,17 @@ export function splitSiblingRanks(
       start += 1;
       continue;
     }
-    // An undo puts a removed sibling back right before the sibling it was listed before: its
-    // left origin is the paragraph the run follows, or a sibling, and its right origin is in
-    // the run. It belongs to the run, in a block of its own.
+    // An undo puts a removed sibling back right before the removed sibling it was listed
+    // before: its left origin is the paragraph the run follows, and its right origin is a
+    // deleted member of the run. It belongs to the run, in a block of its own. A paragraph
+    // listed before a live member, as a break typed at the end of the split paragraph, does
+    // not: it shows where its author put it.
     let first = start;
     while (first > 1) {
       const item = items[first - 1]!;
-      const inRun = (id: Y.ID | null) =>
-        blocks.some((block) => block.items.some((member) => inItem(id, member)));
-      if (!inRun(item.rightOrigin) || !inItem(item.origin, items[first - 2]!)) break;
+      const deletedMember = (id: Y.ID | null) =>
+        blocks.some((block) => block.items.some((member) => member.deleted && inItem(id, member)));
+      if (!deletedMember(item.rightOrigin) || !inItem(item.origin, items[first - 2]!)) break;
       blocks.unshift({ head: item, items: [item] });
       first -= 1;
     }
