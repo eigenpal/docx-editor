@@ -1167,6 +1167,13 @@ A single-spaced line drawn in a face that lists the Chinese, Japanese, or Korean
 - **THEN** the run draws in `Meiryo` and takes its 1.3 times face box line
 - **AND** a bold run in a family whose host supplies only the regular face draws in that face with a synthesized bold, not in the packaged CJK face
 
+#### Scenario: A stand-in for the symbol fallback face keeps its line
+
+- **GIVEN** a ballot box (U+2610) that neither the East Asian nor the Latin face of its run can draw
+- **WHEN** a packaged symbol face stands in for the missing symbol fallback face
+- **THEN** the glyph draws in the packaged face with its own advance
+- **AND** the line is the 1.33 em line of the symbol fallback face, not the packaged face's 1.7 em
+
 ### Requirement: Fitted text takes its stated width
 
 Consecutive runs whose `w:fitText` carries one `w:id` SHALL form one group that takes the `w:val` width of its first run. Narrower text SHALL give every character except the last the same extra advance. Wider text SHALL compress every character advance by one factor. The group SHALL NOT open a new line inside it.

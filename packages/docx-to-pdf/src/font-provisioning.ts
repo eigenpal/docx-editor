@@ -8,7 +8,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL, URL as NodeURL } from 'node:url';
-import type { FontSource } from '@docx-editor.dev/core';
+import type { FontSource, FontSourceSubstitution } from '@docx-editor.dev/core';
 import { createFontSource, defineFontResolver } from '@docx-editor.dev/core/editor';
 import type { FontRequest } from '@docx-editor.dev/core/export';
 import { FONT_ASSET_ROOT } from '@docx-editor.dev/fonts';
@@ -248,6 +248,18 @@ export function genericSubstituteFor(family: string): string {
     return 'Liberation Serif';
   return 'Liberation Sans';
 }
+
+/**
+ * The line box of a missing family whose stand-in has another one, as em ratios of the font
+ * size. Symbols that the text faces lack draw in Segoe UI Symbol, at the head of the glyph
+ * fallback list: its line is 1.33 em, where Noto Sans Symbols 2, which stands in for it, is
+ * 1.7 em. A missing ballot box would otherwise make its line a third taller.
+ */
+const standInLineBoxes: Record<string, { readonly heightEm: number; readonly baselineEm: number }> =
+  {
+    // hhea ascender 2210 and descender 514 of a 2048-unit em, no line gap.
+    'Segoe UI Symbol': { heightEm: 2724 / 2048, baselineEm: 2210 / 2048 },
+  };
 
 /**
  * The families the generic stand-in must not touch: the ones this package answers for by
@@ -493,7 +505,7 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
       [400, 'italic'],
       [700, 'italic'],
     ] as const;
-    const substitutions: { from: FontRequest; to: FontRequest }[] = [];
+    const substitutions: FontSourceSubstitution[] = [];
     const wanted = new Set<string>();
     for (const family of families) {
       if (has(family, 400, 'normal')) {
@@ -509,6 +521,9 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
       const target = genericSubstituteFor(family);
       wanted.add(target);
       const { bold, italic } = canonicalFamily(family);
+      const lineBox = Object.hasOwn(standInLineBoxes, canonical)
+        ? { lineMetrics: standInLineBoxes[canonical]! }
+        : {};
       for (const [weight, style] of faces)
         substitutions.push({
           from: face(family, weight, style),
@@ -517,6 +532,7 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
             bold || weight === 700 ? 700 : 400,
             italic || style === 'italic' ? 'italic' : 'normal'
           ),
+          ...lineBox,
         });
     }
     const sources = await readFaces(
