@@ -214,7 +214,7 @@ For supported commands, inspect `result.history?.kind`. A _story_ in this table 
 | Undo or redo | Next committed frame starts a separate entry; `exec` undo/redo reports reason `undo-redo` |
 | Read-only command without a group, such as `selectAll` | Does not close the group |
 | Caret formatting changes the next typing format | Starts or extends a local undo entry |
-| Caret formatting in an empty paragraph | Formats the paragraph mark; `changed: true` and a document undo entry |
+| Caret formatting in an empty paragraph that changes its mark | Formats the paragraph mark; `changed: true` and a document undo entry |
 | No effective formatting change at a collapsed caret | `none`; no undo entry |
 | Command rejected before a store transaction | No history change |
 | Ungrouped store transaction, even if empty or refused | Closes the local group |
