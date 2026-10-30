@@ -174,4 +174,69 @@ describe('Table.mergeCells and TableCell.split', () => {
       runtime.dispose();
     }
   });
+  test('columnWidth resizes the grid columns under a cell in a merged table', async () => {
+    const runtime = await serverRuntime(docx(p('x')));
+    try {
+      await runtime.run(async (context) => {
+        const table = context.document.body.getRange('Start').insertTable(2, 3, 'Before', [
+          ['Header', '', ''],
+          ['a', 'b', 'c'],
+        ]);
+        await context.sync();
+        table.mergeCells(0, 0, 0, 1);
+        await context.sync();
+        // A one-column cell resizes its own grid column.
+        table.getCell(1, 0).columnWidth = 100;
+        await context.sync();
+        // The merged cell spans columns 0 and 1; column 1 takes the change.
+        const header = table.getCell(0, 0);
+        header.columnWidth = 250;
+        await context.sync();
+        const cells = [header, table.getCell(1, 0), table.getCell(1, 1), table.getCell(0, 1)];
+        for (const cell of cells) cell.load('columnWidth');
+        await context.sync();
+        expect(cells.map((cell) => cell.columnWidth)).toEqual([250, 100, 150, 156]);
+      });
+      const xml = await mainXmlOf(runtime);
+      expect(xml).toContain(
+        '<w:gridCol w:w="2000"/><w:gridCol w:w="3000"/><w:gridCol w:w="3120"/>'
+      );
+      const reopened = await reopen(runtime);
+      try {
+        await reopened.run(async (context) => {
+          const header = context.document.body.tables.getFirst().getCell(0, 0);
+          header.load('columnWidth');
+          await context.sync();
+          expect(header.columnWidth).toBe(250);
+        });
+      } finally {
+        reopened.dispose();
+      }
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('columnWidth narrower than the other columns a merged cell spans refuses', async () => {
+    const runtime = await serverRuntime(docx(p('x')));
+    try {
+      await runtime.run(async (context) => {
+        const table = context.document.body.getRange('Start').insertTable(1, 3, 'Before');
+        await context.sync();
+        table.mergeCells(0, 0, 0, 1);
+        await context.sync();
+      });
+      const before = await mainXmlOf(runtime);
+      await expect(
+        runtime.run(async (context) => {
+          // Grid column 0 is 156 points wide, so a 100-point cell would need a negative column.
+          context.document.body.tables.getFirst().getCell(0, 0).columnWidth = 100;
+          await context.sync();
+        })
+      ).rejects.toMatchObject({ code: 'InvalidArgument' });
+      expect(await mainXmlOf(runtime)).toBe(before);
+    } finally {
+      runtime.dispose();
+    }
+  });
 });

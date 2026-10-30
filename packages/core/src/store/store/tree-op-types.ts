@@ -687,6 +687,8 @@ export type TreeDocOp =
       readonly op: 'mergeTableCells';
       readonly tableId: string;
       readonly cellIds: readonly string[];
+      /** Merge inside this author's own pending table insertion; new structure joins it. */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /** Split one cell into `rows` by `columns` equal cells; a one-row cell adds rows. */
@@ -695,6 +697,8 @@ export type TreeDocOp =
       readonly cellId: string;
       readonly rows: number;
       readonly columns: number;
+      /** Split inside this author's own pending table insertion; new structure joins it. */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /**

@@ -5500,11 +5500,13 @@ export type TreeDocOp = SetFieldCodeOp | {
 } | {
     readonly cellIds: readonly string[];
     readonly op: 'mergeTableCells';
+    readonly revision?: RevisionAttributionInput;
     readonly tableId: string;
 } | {
     readonly cellId: string;
     readonly columns: number;
     readonly op: 'splitTableCell';
+    readonly revision?: RevisionAttributionInput;
     readonly rows: number;
     readonly tableId: string;
 } | {

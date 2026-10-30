@@ -88,7 +88,8 @@ export function supportsTrackedAutomationOperation(operation: AutomationOperatio
   // refuses the forms it has no tracked shape for.
   if (['insertField', 'insertOoxml', 'setFieldResult', 'deleteField'].includes(operation.op))
     return true;
-  if (operation.op === 'updateTable' || operation.op === 'updateTableCell') return true;
+  // The table planner allows structure only inside the author's own pending table.
+  if (['updateTable', 'updateTableCell', 'splitTableCell'].includes(operation.op)) return true;
   if (operation.op === 'replaceSpan' && !('body' in operation.span)) return true;
   // Strikes the paragraph's text and mark; the planner refuses a paragraph with no next one.
   if (operation.op === 'deleteParagraph') return true;

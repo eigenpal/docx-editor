@@ -63,6 +63,7 @@ class Body_2 extends ModelObject {
     hydrateAddress(address: ObjectAddress): void;
     get inlinePictures(): InlinePictureCollection;
     insertParagraph(paragraphText: string, insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End'): Paragraph;
+    insertTable(rowCount: number, columnCount: number, insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End', values?: string[][]): Table;
     insertText(text: string, insertLocation: InsertLocation.replace | InsertLocation.start | InsertLocation.end | 'Replace' | 'Start' | 'End'): Range_2;
     get lists(): ListCollection;
     // @internal
@@ -1145,6 +1146,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
     // @internal
     hydrateNull(): void;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
+    insertTable(rowCount: number, columnCount: number, insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After', values?: string[][]): Table;
     insertText(text: string, insertLocation: InsertLocation.replace | InsertLocation.start | InsertLocation.end | 'Replace' | 'Start' | 'End'): Range_2;
     get leftIndent(): number;
     set leftIndent(value: number);

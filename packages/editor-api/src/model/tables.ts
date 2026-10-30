@@ -9,6 +9,7 @@ import {
   fail,
   hydratedHandle,
   type AutomationOperation,
+  type AutomationValue,
   type ObjectAddress,
   type RequestContext,
   type ResolvedLoadOptions,
@@ -29,6 +30,44 @@ function matrix(value: string[][], target: string): string[][] {
   )
     fail({ code: 'InvalidArgument', target });
   return value.map((r) => [...r]);
+}
+/**
+ * @internal One table insertion at either edge of `span`, after the Office.js argument checks.
+ * Range, Body, and Paragraph share it, so they refuse the same arguments the same way. The
+ * caller queues `plan` and `settle` as the command that creates `table`.
+ */
+export function tableInsertion(
+  context: RequestContext,
+  target: string,
+  span: () => AutomationSpanRef,
+  where: 'Before' | 'After',
+  rowCount: number,
+  columnCount: number,
+  values: string[][] | undefined
+): {
+  readonly table: Table;
+  readonly plan: () => AutomationOperation;
+  readonly settle: (answer: AutomationValue) => void;
+} {
+  integer(rowCount, target, 1);
+  integer(columnCount, target, 1);
+  const copied = values === undefined ? undefined : matrix(values, target);
+  const table = Table.promised(context, target);
+  return {
+    table,
+    plan: () => ({
+      op: 'insertTable',
+      span: span(),
+      location: where,
+      rowCount,
+      columnCount,
+      ...(copied ? { values: copied } : {}),
+    }),
+    settle: (answer) => {
+      if (answer.kind !== 'handle') fail({ code: 'GeneralException', target });
+      table.hydrateAddress({ kind: 'handle', handle: answer.handle });
+    },
+  };
 }
 function location(value: 'Start' | 'End', target: string): 'start' | 'end' {
   if (value !== 'Start' && value !== 'End') fail({ code: 'InvalidArgument', target });

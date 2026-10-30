@@ -11,6 +11,8 @@ import type {
   TableCell,
   TableRowCollection,
   Range,
+  Body,
+  Paragraph,
   InsertLocation,
 } from '../index.ts';
 
@@ -22,6 +24,15 @@ test('table editing has matching public server/browser types and Office-shaped c
       rowCount: number,
       columnCount: number,
       insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After',
+      values?: string[][]
+    ) => Table
+  >();
+  expectTypeOf<Paragraph['insertTable']>().toEqualTypeOf<Range['insertTable']>();
+  expectTypeOf<Body['insertTable']>().toEqualTypeOf<
+    (
+      rowCount: number,
+      columnCount: number,
+      insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End',
       values?: string[][]
     ) => Table
   >();

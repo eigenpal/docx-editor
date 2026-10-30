@@ -624,7 +624,7 @@ await runtime.run(async (context) => {
 
 ## Merge and split cells
 
-`Table.mergeCells(topRow, firstCell, bottomRow, lastCell)` merges a rectangle and returns the merged cell. Edits to that cell can share the sync. `TableCell.split(rowCount, columnCount)` splits one cell. A ragged rectangle refuses with `InvalidArgument` and `innerError.code` `edit.table-merge-not-rectangle`. A split the cell cannot take refuses with `InvalidArgument` and `edit.table-split-unsupported`. Both refuse with `NotSupported` in a tracking mode. Do not turn tracking off to make them succeed.
+`Table.mergeCells(topRow, firstCell, bottomRow, lastCell)` merges a rectangle and returns the merged cell. Edits to that cell can share the sync. `TableCell.split(rowCount, columnCount)` splits one cell. A ragged rectangle refuses with `InvalidArgument` and `innerError.code` `edit.table-merge-not-rectangle`. A split the cell cannot take refuses with `InvalidArgument` and `edit.table-split-unsupported`. With `TrackMineOnly`, both work inside your own proposed table, and the new shape joins that proposal: reject removes the whole table. Any other table refuses with `NotSupported`. Do not turn tracking off to make them succeed. Insert a table at the edge of the body with `body.insertTable(rows, columns, 'Start' | 'End', values)`, or beside a paragraph with `paragraph.insertTable(rows, columns, 'Before' | 'After', values)`.
 
 ```ts
 import { DocxEditor, isDocxEditorError } from '@docx-editor.dev/editor-api';
