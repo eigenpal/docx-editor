@@ -41,12 +41,13 @@ test.each(['edit', 'suggest'] as const)(
   }
 );
 
-test('formatting an empty document has local history without changing its bytes', () => {
+test('formatting an empty document formats its paragraph mark as one undo step', () => {
   const surface = setup();
   const before = surface.session.currentPackage();
   expect(surface.state().canUndo).toBe(false);
   surface.toggleRunProperty('b');
-  expect(surface.session.currentPackage()).toBe(before);
+  expect(surface.session.currentPackage()).not.toBe(before);
+  expect(surface.formatting().bold).toBe(true);
   expect(surface.state().canUndo).toBe(true);
   surface.undo();
   expect(surface.state().canUndo).toBe(false);
@@ -54,7 +55,6 @@ test('formatting an empty document has local history without changing its bytes'
   expect(surface.formatting().bold).toBe(false);
   surface.redo();
   expect(surface.formatting().bold).toBe(true);
-  expect(surface.session.currentPackage()).toBe(before);
 });
 
 test('new caret formatting abandons document redo', () => {

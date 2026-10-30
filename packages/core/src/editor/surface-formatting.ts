@@ -426,29 +426,39 @@ export function isRunPropertyActive(
   paragraphOrder?: readonly string[]
 ): boolean {
   const spans = selectionSpans(layout, selection, cells, paragraphOrder);
-  if (spans.length === 0) return false;
-  const flagOf = (span: (typeof spans)[number]): boolean => {
+  // A collapsed caret in an empty paragraph has no text span. Read its mark face,
+  // as the toolbar does, so the toggle and the next typed character agree.
+  const empty =
+    spans.length === 0 &&
+    !cells?.length &&
+    selection.anchor.paragraphId === selection.head.paragraphId &&
+    selection.anchor.offset === selection.head.offset
+      ? emptyParagraphStyleOf(layout, selection.head.paragraphId)
+      : undefined;
+  const styles = spans.length > 0 ? spans.map((span) => span.style) : empty ? [empty] : [];
+  if (styles.length === 0) return false;
+  const flagOf = (style: ResolvedRunStyle): boolean => {
     switch (localName) {
       case 'b':
-        return span.style.bold;
+        return style.bold;
       case 'i':
-        return span.style.italic;
+        return style.italic;
       case 'u':
-        return span.style.underline !== null;
+        return style.underline !== null;
       case 'strike':
-        return span.style.strike;
+        return style.strike;
       case 'vertAlign':
         // Its OWN value, not "is raised or lowered at all". Presence alone would make
         // Subscript over superscripted text read as already on, so the press would write
         // `baseline` and un-raise the text instead of lowering it.
-        return span.style.verticalAlign === value;
+        return style.verticalAlign === value;
       default:
         // Every toggleable mark MUST be listed: answering false for one that is
         // active makes its toggle re-apply forever instead of clearing.
         return false;
     }
   };
-  return spans.every(flagOf);
+  return styles.every(flagOf);
 }
 
 /**
