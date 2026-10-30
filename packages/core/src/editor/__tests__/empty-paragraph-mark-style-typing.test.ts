@@ -56,6 +56,69 @@ const mark = (rPr: string, pPr = '') => `<w:pPr>${pPr}<w:rPr>${rPr}</w:rPr></w:p
 const BIG = '<w:rStyle w:val="Big"/>';
 const AFTER = '<w:p><w:r><w:t>after</w:t></w:r></w:p>';
 
+describe('formatting at the caret of an empty paragraph formats its mark', () => {
+  for (const rPr of ['<w:b/>', BIG]) {
+    test(`bold turns off on a mark with ${rPr}, and one undo restores it`, () =>
+      withEditor(`<w:p>${mark(rPr)}</w:p>${AFTER}`, (editor) => {
+        caretAt(editor, 0, 0);
+        expect(editor.getSelectionFormatting()?.bold).toBe(true);
+        expect(editor.exec({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
+        expect(editor.getSelectionFormatting()?.bold).toBe(false);
+        expect(firstParagraphMark(editor)).toContain('b=0');
+        expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+        expect(editor.getSelectionFormatting()?.bold).toBe(true);
+        expect(firstParagraphMark(editor)).not.toContain('b=0');
+        expect(editor.exec({ type: 'redo' }).ok).toBe(true);
+        caretAt(editor, 0, 0);
+        editor.surface!.type('x');
+        expect(editor.getSelectionFormatting()?.bold).toBe(false);
+        expect(firstParagraphRuns(editor).flat()).toContain('b=0');
+      }));
+  }
+
+  test('a second bold press turns bold back on for the mark and the typed text', () =>
+    withEditor(`<w:p>${mark(BIG)}</w:p>${AFTER}`, (editor) => {
+      caretAt(editor, 0, 0);
+      editor.exec({ type: 'toggleMark', mark: 'bold' });
+      expect(editor.getSelectionFormatting()?.bold).toBe(false);
+      editor.exec({ type: 'toggleMark', mark: 'bold' });
+      expect(editor.getSelectionFormatting()?.bold).toBe(true);
+      expect(firstParagraphMark(editor)).toEqual(['rStyle=Big', 'b']);
+      editor.surface!.type('x');
+      expect(face(editor)).toEqual([24, true]);
+    }));
+
+  test('a font size sets the mark, so the empty line takes the size before typing', () =>
+    withEditor(`<w:p/>${AFTER}`, (editor) => {
+      caretAt(editor, 0, 0);
+      expect(
+        editor.exec({ type: 'setMarkAttr', mark: 'fontSize', attr: 'val', value: 40 }).ok
+      ).toBe(true);
+      expect(firstParagraphMark(editor)).toEqual(['sz=40']);
+      expect(face(editor)).toEqual([20, false]);
+      editor.surface!.type('x');
+      expect(firstParagraphRuns(editor)).toEqual([['sz=40']]);
+    }));
+
+  test('a size the mark already has is not an undo step', () =>
+    withEditor(`<w:p>${mark('<w:sz w:val="40"/>')}</w:p>${AFTER}`, (editor) => {
+      caretAt(editor, 0, 0);
+      const before = editor.surface!.session.packageRevision();
+      editor.exec({ type: 'setMarkAttr', mark: 'fontSize', attr: 'val', value: 40 });
+      expect(editor.surface!.session.packageRevision()).toBe(before);
+      expect(editor.surface!.state().canUndo).toBe(false);
+    }));
+
+  test('a caret inside text still arms the format and leaves the document unchanged', () =>
+    withEditor('<w:p><w:r><w:t>abcd</w:t></w:r></w:p>', (editor) => {
+      caretAt(editor, 0, 2);
+      const before = JSON.stringify(editor.surface!.session.part().root);
+      editor.exec({ type: 'toggleMark', mark: 'bold' });
+      expect(editor.getSelectionFormatting()?.bold).toBe(true);
+      expect(JSON.stringify(editor.surface!.session.part().root)).toBe(before);
+    }));
+});
+
 function withEditor(
   source: string | Uint8Array,
   run: (editor: DocxEditorInstance) => void | Promise<void>
@@ -91,7 +154,7 @@ function face(editor: DocxEditorInstance): [number | undefined, boolean | undefi
 /** The first paragraph's runs, as the `w:rPr` children each run authors. */
 function firstParagraphRuns(editor: DocxEditorInstance): string[][] {
   const root = editor.surface!.session.part().root;
-  const body = root.kind === 'textValue' ? null : root.children[0];
+  const body = root.children[0];
   const paragraph = body && body.kind !== 'textValue' ? body.children[0] : null;
   if (!paragraph || paragraph.kind === 'textValue') return [];
   return paragraph.children
@@ -108,10 +171,27 @@ function firstParagraphRuns(editor: DocxEditorInstance): string[][] {
     });
 }
 
+/** The first paragraph's mark, as the `w:pPr/w:rPr` children it authors. */
+function firstParagraphMark(editor: DocxEditorInstance): string[] {
+  const root = editor.surface!.session.part().root;
+  const body = root.children[0];
+  const paragraph = body && body.kind !== 'textValue' ? body.children[0] : null;
+  if (!paragraph || paragraph.kind === 'textValue') return [];
+  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  if (!pPr || pPr.kind === 'textValue') return [];
+  const rPr = pPr.children.find((child) => child.kind === 'runProperties');
+  if (!rPr || rPr.kind === 'textValue') return [];
+  return rPr.children.flatMap((child: OoxmlNode) => {
+    if (child.kind === 'textValue') return [];
+    const val = child.attributes.find((entry) => entry.localName === 'val')?.value;
+    return [val === undefined ? child.localName : `${child.localName}=${val}`];
+  });
+}
+
 /** The attribute values of one `w:rPr` child in the first paragraph's last run. */
 function lastRunPropertyValues(editor: DocxEditorInstance, localName: string): string[] {
   const root = editor.surface!.session.part().root;
-  const body = root.kind === 'textValue' ? null : root.children[0];
+  const body = root.children[0];
   const paragraph = body && body.kind !== 'textValue' ? body.children[0] : null;
   if (!paragraph || paragraph.kind === 'textValue') return [];
   const run = paragraph.children.filter((child) => child.kind === 'run').at(-1);
