@@ -209,6 +209,35 @@ describe('rejecting every change of a paragraph that holds a break and a new par
       }
     });
   }
+
+  test('a break on each side of the new paragraph mark, rejected by the other peer', async () => {
+    // Whichever paragraph the join keeps, the one it removes holds a break the same decision
+    // removes, and that break must not move into the joined paragraph.
+    const r = await room();
+    try {
+      await trackedBreak(r.alice.runtime, 'One', 'Line');
+      later();
+      await trackedNewline(r.alice.runtime, 'two; ');
+      later();
+      await trackedBreak(r.alice.runtime, 'thr', 'Page');
+      r.sync();
+      later();
+      expect(await revisionCount(r.bob.runtime)).toBe(3);
+      await rejectAll(r.bob.runtime);
+      r.sync();
+      await r.expectBoth(ORIGINAL, 0);
+      later();
+      expect(r.bob.editor.exec({ type: 'undo' }).ok).toBe(true);
+      r.sync();
+      expect(await revisionCount(r.alice.runtime)).toBe(3);
+      later();
+      expect(r.bob.editor.exec({ type: 'redo' }).ok).toBe(true);
+      r.sync();
+      await r.expectBoth(ORIGINAL, 0);
+    } finally {
+      r.close();
+    }
+  });
 });
 
 describe('undoing a split into three paragraphs while a peer types in the middle one', () => {
@@ -253,4 +282,8 @@ describe('undoing a split into three paragraphs while a peer types in the middle
       }
     });
   }
+
+  // `split(['; '], true)` trims the delimiters, so the pieces do not spell the text the split
+  // removed and are not moved text: the typing has nothing to follow on undo (#1653).
+  test.todo('a split that trims its delimiters keeps the typing on undo and on redo');
 });
