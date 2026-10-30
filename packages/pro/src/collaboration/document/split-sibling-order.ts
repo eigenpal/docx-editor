@@ -28,7 +28,7 @@ import { firstItem, structAt } from './yjs-items.ts';
 import { itemIdentity, type Identity } from './paragraph-text-identity.ts';
 import { marksOfText } from './paragraph-text-marks.ts';
 import { childArrayOf } from './schema.ts';
-import { splitOffsetIn, splitPointsOf, type SplitPoint } from './split-points.ts';
+import { splitAtIn, splitPointsOf, type SplitPoint } from './split-points.ts';
 
 /**
  * How many clocks of one paragraph's text the rule reads. It counts clocks, which every
@@ -271,15 +271,41 @@ function blockPoints(
 }
 
 /**
- * Whether block `first` goes before block `second` by the split points they recorded: the
- * nearest split of one paragraph both name decides, the earlier offset first. Null when they
- * name none in common or the same offset, as a release without the field leaves them.
+ * Whether the character `first` names comes before the one `second` names, or null when
+ * this replica cannot tell alike with every other: both stand in one live text, or one author
+ * typed or loaded both, whose clocks go up in text order within one insert.
  */
-function splitBefore(first: readonly SplitPoint[], second: readonly SplitPoint[]): boolean | null {
+function identityBefore(
+  doc: Y.Doc | null,
+  first: string,
+  second: string,
+  places: Map<Y.Text, Map<string, number>>
+): boolean | null {
+  if (first === second) return null;
+  const a = doc ? sourcePlace(doc, first, places) : null;
+  const b = doc ? sourcePlace(doc, second, places) : null;
+  if (a && b && a.text === b.text) return a.at < b.at;
+  const [aClient, aClock] = first.split(':').map(Number);
+  const [bClient, bClock] = second.split(':').map(Number);
+  return aClient === bClient ? aClock! < bClock! : null;
+}
+
+/**
+ * Whether block `first` goes before block `second` by the split points they recorded: the
+ * nearest split of one paragraph both name decides, by where its first moved character stands.
+ * Null when they name none in common, the same character, or characters this replica cannot
+ * order, as a release without the field leaves them.
+ */
+function splitBefore(
+  doc: Y.Doc | null,
+  first: readonly SplitPoint[],
+  second: readonly SplitPoint[],
+  places: Map<Y.Text, Map<string, number>>
+): boolean | null {
   for (let at = first.length - 1; at >= 0; at -= 1) {
-    const offset = splitOffsetIn(second, first[at]!.source);
-    if (offset === null) continue;
-    return first[at]!.offset === offset ? null : first[at]!.offset < offset;
+    const other = splitAtIn(second, first[at]!.source);
+    if (other === null) continue;
+    return identityBefore(doc, first[at]!.at, other, places);
   }
   return null;
 }
@@ -303,7 +329,7 @@ function orderOf(
     for (let back = at; back > 0; back -= 1) {
       const later = order[back]!;
       const earlier = order[back - 1]!;
-      const recorded = splitBefore(points[later]!, points[earlier]!);
+      const recorded = splitBefore(doc, points[later]!, points[earlier]!, places);
       const before =
         recorded ?? blockBefore(copies[later]!, copies[earlier]!, starts[later]!, starts[earlier]!);
       if (!before) break;

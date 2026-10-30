@@ -11,7 +11,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * order: a paragraph a run holds can be deleted, so its text cannot be read alike on every
  * replica, and a paragraph split off it later holds text from elsewhere. So each split also
  * records, on the paragraph it creates, the split point: the paragraph it split and the
- * offset in that paragraph's text where the moved text started. It keeps the split points of
+ * identity of the first character it moved (`paragraph-text-identity.ts`). An identity names
+ * one character on every replica, whatever text each peer typed or deleted before it, so the
+ * order compares where those characters stand in the text they came from, not offsets that
+ * each peer counted in its own view. It keeps the split points of
  * the paragraph it split as well, so a paragraph split off a split paragraph still names the
  * split point of the paragraph it came from. Any other paragraph an edit creates, as a break at
  * a paragraph's end does, takes the split points of the paragraph listed right before it. The order reads these first, and reads the text
@@ -30,11 +33,13 @@ export const NODE_SPLIT_POINTS_FIELD = 'splitPoints';
 /** How many split points a paragraph keeps: its own and those of its nearest ancestors. */
 const MAX_SPLIT_POINTS = 4;
 
-/** One split point: the paragraph split, and where in its text the moved text started. */
+/** One split point: the paragraph split, and the identity of the first character moved. */
 export interface SplitPoint {
   readonly source: LogicalId;
-  readonly offset: number;
+  readonly at: string;
 }
+
+const IDENTITY = /^\d{1,16}:\d{1,16}$/;
 
 /** A paragraph's split points, nearest last, or an empty list for none or a malformed value. */
 export function splitPointsOf(record: Y.Map<unknown> | undefined): SplitPoint[] {
@@ -42,10 +47,10 @@ export function splitPointsOf(record: Y.Map<unknown> | undefined): SplitPoint[] 
   if (typeof value !== 'string' || value.length > 4096) return [];
   const points: SplitPoint[] = [];
   for (const entry of value.split('\n').slice(-MAX_SPLIT_POINTS)) {
-    const at = entry.lastIndexOf('@');
-    const offset = Number(entry.slice(at + 1));
-    if (at <= 0 || !Number.isSafeInteger(offset) || offset < 0) return [];
-    points.push({ source: entry.slice(0, at) as LogicalId, offset });
+    const split = entry.lastIndexOf('@');
+    const at = entry.slice(split + 1);
+    if (split <= 0 || !IDENTITY.test(at)) return [];
+    points.push({ source: entry.slice(0, split) as LogicalId, at });
   }
   return points;
 }
@@ -53,7 +58,7 @@ export function splitPointsOf(record: Y.Map<unknown> | undefined): SplitPoint[] 
 function serialized(points: readonly SplitPoint[]): string {
   return points
     .slice(-MAX_SPLIT_POINTS)
-    .map((point) => `${point.source}@${point.offset}`)
+    .map((point) => `${point.source}@${point.at}`)
     .join('\n');
 }
 
@@ -89,10 +94,10 @@ export function inheritSplitPoints(
   }
 }
 
-/** The offset a paragraph's split points give for a split of `source`, or null. */
-export function splitOffsetIn(points: readonly SplitPoint[], source: LogicalId): number | null {
+/** The first moved character a paragraph's split points give for a split of `source`. */
+export function splitAtIn(points: readonly SplitPoint[], source: LogicalId): string | null {
   for (let at = points.length - 1; at >= 0; at -= 1) {
-    if (points[at]!.source === source) return points[at]!.offset;
+    if (points[at]!.source === source) return points[at]!.at;
   }
   return null;
 }
@@ -116,10 +121,10 @@ export function recordSplitPoints(writes: readonly SplitWrite[]): void {
       ORIGIN_KEY
     ];
     if (!origin) continue;
+    if (!IDENTITY.test(origin)) continue;
     for (const source of writes) {
       if (source === write) continue;
-      const offset = source.identities.indexOf(origin);
-      if (offset < 0) continue;
+      if (!source.identities.includes(origin)) continue;
       // Written once: a paragraph holds no field yet, or only what it took from the paragraph
       // it was listed after, which is the paragraph it was split off.
       const inherited = splitPointsOf(source.record);
@@ -127,7 +132,7 @@ export function recordSplitPoints(writes: readonly SplitWrite[]): void {
       if (held !== undefined && held !== serialized(inherited)) break;
       write.record.set(
         NODE_SPLIT_POINTS_FIELD,
-        serialized([...inherited, { source: source.id, offset }])
+        serialized([...inherited, { source: source.id, at: origin }])
       );
       break;
     }

@@ -40,9 +40,14 @@ const paragraph = (text: string) => `<w:p><w:r><w:t xml:space="preserve">${text}
  * Yjs client IDs, which order concurrent inserts at one place, so a test can run both orders.
  * `offline()` holds every update back until `online()`.
  */
-async function room(first: string, clientIds: Readonly<Record<string, number>>) {
+async function room(first: string, clientIds: Readonly<Record<string, number>>, gc = true) {
   later();
-  const harness = createPeerHarness('concurrent-split-order', { offlineEditing: true }, clientIds);
+  const harness = createPeerHarness(
+    'concurrent-split-order',
+    { offlineEditing: true },
+    clientIds,
+    gc
+  );
   const pair = await harness.pair(zipDocument(paragraph(first) + paragraph('Signed')));
   const carol = await harness.joinDetached(pair.alice, 'carol');
   let connected = true;
@@ -196,6 +201,66 @@ const EDITS = [
   { name: 'Paragraph.split', edit: splitAfter },
   { name: 'a typed paragraph break', edit: newlineAfter },
 ];
+
+describe('concurrent splits after a peer changed the text before its split', () => {
+  // A split records the first character it moved, not an offset each peer counts in its own
+  // view, so text one peer typed or deleted before its split does not change the order.
+  const typeAtStart = (runtime: Runtime, text: string) =>
+    runtime.run(async (context) => {
+      context.document.body.paragraphs.getFirst().insertText(text, 'Start');
+      await context.sync();
+    });
+  const deleteText = (runtime: Runtime, find: string) =>
+    runtime.run(async (context) => {
+      const found = context.document.body.search(find).getFirst();
+      await context.sync();
+      found.insertText('', 'Replace');
+      await context.sync();
+    });
+  for (const gc of [true, false])
+    for (const { label, ids } of ORDERS) {
+      const mode = gc ? 'garbage collection on' : 'garbage collection off';
+      test(`text typed before the split (${mode}, ${label})`, async () => {
+        const r = await room('One; two; three', ids, gc);
+        try {
+          r.offline();
+          await typeAtStart(r.alice.runtime, 'A long prefix typed offline here; ');
+          later();
+          await splitAfter(r.alice.runtime, 'One; ', false);
+          later();
+          await splitAfter(r.bob.runtime, 'two; ', false);
+          later();
+          r.online();
+          const expected = ['A long prefix typed offline here; One; ', 'two; ', 'three', 'Signed'];
+          await r.expectAll(expected);
+          await typeAt(r.carol.runtime, 1, 'C ');
+          r.sync();
+          await r.expectAll([expected[0]!, 'C two; ', 'three', 'Signed']);
+        } finally {
+          r.close();
+        }
+      });
+      test(`text deleted before the split (${mode}, ${label})`, async () => {
+        const r = await room('Zero zero zero zero; One; two; three', ids, gc);
+        try {
+          r.offline();
+          await deleteText(r.bob.runtime, 'Zero zero zero zero; ');
+          later();
+          await splitAfter(r.bob.runtime, 'two; ', false);
+          later();
+          await splitAfter(r.alice.runtime, 'One; ', false);
+          later();
+          r.online();
+          await r.expectAll(['One; ', 'two; ', 'three', 'Signed']);
+          await typeAt(r.carol.runtime, 2, 'C ');
+          r.sync();
+          await r.expectAll(['One; ', 'two; ', 'C three', 'Signed']);
+        } finally {
+          r.close();
+        }
+      });
+    }
+});
 
 describe('splitting a paragraph that concurrent splits added', () => {
   // A new paragraph goes right after the paragraph it splits, also when the paragraph it
