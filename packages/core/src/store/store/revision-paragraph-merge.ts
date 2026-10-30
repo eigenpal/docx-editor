@@ -58,24 +58,6 @@ function prepend(paragraph: OoxmlElement, content: readonly OoxmlNode[]): OoxmlE
     ],
   } as OoxmlElement;
 }
-/**
- * A run of paragraphs whose marks a decision removed, joined into the paragraph after them.
- * The joined paragraph is the first one that brings content, with its attributes, as a join by deleting a mark
- * keeps the paragraph before it: an undo of the split that inserted the mark removes the
- * paragraph after it, and a decision and that undo made at the same time then keep the same
- * paragraph. It takes the properties of the mark that remains, the last paragraph's, and the
- * content of every paragraph in order.
- */
-function joinedInto(
-  first: OoxmlElement,
-  last: OoxmlElement,
-  carried: readonly OoxmlNode[]
-): OoxmlElement {
-  const merged = prepend(last, carried);
-  const { id, attributes, namespaceBindings } = first;
-  return { ...merged, id, attributes, namespaceBindings } as OoxmlElement;
-}
-
 function replaceIn(node: OoxmlNode, target: OoxmlElement): OoxmlNode {
   if (node.id === target.id) return target;
   if (node.kind === 'textValue') return node;
@@ -114,8 +96,6 @@ export function mergeRevisionParagraphs(
   const tail = lastTwoBlocks(children);
   const out: OoxmlNode[] = [];
   let carried: OoxmlNode[] = [];
-  /** The first paragraph of a run of joined ones: the joined paragraph keeps its identity. */
-  let carrier: OoxmlElement | null = null;
   for (const [index, node] of children.entries()) {
     if (node.kind === 'paragraph') {
       // A paragraph the decision emptied and whose mark it removed, with no paragraph to join,
@@ -138,20 +118,14 @@ export function mergeRevisionParagraphs(
         // A dropped paragraph only adds to the carried content; the one that keeps its mark
         // is built once, so a long run of joins stays linear.
         for (const child of node.children) if (!properties(child)) carried.push(child);
-        // Only a paragraph that brings content is the one the join keeps. A paragraph the
-        // decision emptied, as accepting a deleted paragraph does, goes, and the paragraph
-        // after it keeps its own identity.
-        if (!carrier && node.children.some(bringsContent)) carrier = node as OoxmlElement;
         continue;
       }
-      out.push(carrier ? joinedInto(carrier, node as OoxmlElement, carried) : node);
+      out.push(carried.length ? prepend(node, carried) : node);
       carried = [];
-      carrier = null;
     } else if (node.kind === 'table' && carried.length) {
       const target = tableParagraphMergeTarget(node)!;
       out.push(replaceIn(node, prepend(target, carried)));
       carried = [];
-      carrier = null;
     } else if (carried.length && isInertMarker(node)) {
       // A bookmark or comment boundary between the joined paragraphs marks the join point,
       // so it goes after the carried text, not before the whole joined paragraph. It is a new
@@ -353,10 +327,6 @@ function lastTwoBlocks(children: readonly OoxmlNode[]): readonly OoxmlNode[] {
 
 /** Containers whose emptied last paragraph goes with its content. */
 const DROPS_LAST_PARAGRAPH: ReadonlySet<string> = new Set(['txbxContent', 'customXml']);
-
-/** A child a joined paragraph carries that is content: not properties, a marker, or empty. */
-const bringsContent = (node: OoxmlNode) =>
-  !properties(node) && !emptyRun(node) && (node.kind === 'textValue' || !isInertMarker(node));
 
 const emptyRun = (node: OoxmlNode) =>
   node.kind === 'run' && node.children.every((child) => isNamed(child, 'rPr'));
