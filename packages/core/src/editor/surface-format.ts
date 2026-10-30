@@ -551,7 +551,9 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       const { from, to } = orderedRange();
       const empty = emptyParagraphAtCaret(from, to);
       if (empty) return writeEmptyParagraphMark(empty, incoming);
-      const word = caretWordAt(from, to);
+      // A highlight is a pen, not a word format: with nothing selected it marks what is typed
+      // next and leaves the word under the caret alone.
+      const word = localName === 'highlight' ? null : caretWordAt(from, to);
       if (word) return writeRunProperty(word.from, word.to, incoming);
       if (from.paragraphId === to.paragraphId && from.offset === to.offset) {
         // A collapsed caret arms the value for the NEXT characters typed — picking a font
@@ -690,8 +692,11 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
           ? [...paragraphsInCells(layout, cells)]
           : paragraphsInRange(order, orderedRange());
       if (paragraphIds.length === 0) return;
-      const { from, to } = orderedRange();
       const rectangular = cells !== undefined && cells.length > 0;
+      // A caret inside a word clears the word's character formatting, as a format there
+      // formats the whole word.
+      const range = orderedRange();
+      const { from, to } = (!rectangular && caretWordAt(range.from, range.to)) || range;
       const part = storyPart();
       const ops: TreeDocOp[] = [];
       for (const paragraphId of paragraphIds) {

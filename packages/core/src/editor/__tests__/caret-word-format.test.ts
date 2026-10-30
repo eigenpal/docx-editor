@@ -189,6 +189,24 @@ describe('a caret format inside a word formats the whole word', () => {
     expect(marked(editor)).toBe('[𠮷野家] ok');
   });
 
+  test('a color reaches the whole word, a highlight only arms the next typed text', () => {
+    const editor = open(`<w:p>${run('abcd efgh')}</w:p>`);
+    caret(editor, 2);
+    editor.exec({ type: 'setMarkAttr', mark: 'color', attr: 'val', value: 'FF0000' });
+    expect(marked(editor, '<w:color w:val="FF0000"/>')).toBe('[abcd] efgh');
+    const revision = editor.surface!.session.packageRevision();
+    caret(editor, 7);
+    editor.exec({ type: 'setMarkAttr', mark: 'highlight', attr: 'val', value: 'yellow' });
+    expect(editor.surface!.session.packageRevision()).toBe(revision);
+  });
+
+  test('clear formatting at a caret inside a word clears that word only', () => {
+    const editor = open(`<w:p>${run('abcd efgh', '<w:rPr><w:b/><w:i/></w:rPr>')}</w:p>`);
+    caret(editor, 2);
+    editor.exec({ type: 'clearFormatting' });
+    expect(marked(editor, '<w:b/>')).toBe('abcd[ efgh]');
+  });
+
   test('a control edge ends the word', () => {
     const control = `<w:sdt><w:sdtPr><w:text/></w:sdtPr><w:sdtContent>${run('TOKEN')}</w:sdtContent></w:sdt>`;
     const editor = open(`<w:p>${run('aa')}${control}${run('zz')}</w:p>`);
