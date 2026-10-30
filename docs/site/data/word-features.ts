@@ -452,7 +452,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Lists that share one abstract numbering definition count together. A start override restarts that shared count once, at the first item of its list on an overridden level, and the other lists continue from the restarted count. A new list that the editor starts on an existing definition writes its own start overrides, so it begins at its first number. Headers and footers share one count, separate from the body: it runs over each section in order, through the even header, default header, even footer, default footer, first-page header, and first-page footer that the section references. A footer list therefore continues the header list, with the same numbers on every page.',
+      'Lists that share one abstract numbering definition count together. An item on a deeper level counts each parent level that has no item yet once, at its start, so a level 1 item before the first level 0 item makes that level 0 item number 2. A count continues past 9999, the largest start value. A start override restarts that shared count once, at the first item of its list on an overridden level, and the other lists continue from the restarted count. A new list that the editor starts on an existing definition writes its own start overrides, so it begins at its first number. Headers and footers share one count, separate from the body: it runs over each section in order, through the even header, default header, even footer, default footer, first-page header, and first-page footer that the section references. A footer list therefore continues the header list, with the same numbers on every page.',
   },
   {
     id: 'lists.picture-bullets',

@@ -33,13 +33,20 @@ const ROMAN_TABLE: readonly { readonly value: number; readonly glyph: string }[]
   { value: 1, glyph: 'I' },
 ];
 
-/** Clamp a list counter into a safe non-negative integer Word can format. */
+/**
+ * Largest list value a marker displays. Starts are capped at 9999, but a list counts on past
+ * that one item at a time (`9999)` then `10000)`), so the display cap sits far above any count a
+ * real document reaches. It still bounds every formatter below.
+ */
+export const MAX_LIST_VALUE = 999_999;
+
+/** Clamp a list counter into a safe non-negative integer that every format can display. */
 export function clampListValue(value: number): number {
   if (!Number.isFinite(value)) return 1;
   const n = Math.trunc(value);
   if (n < 0) return 1;
-  // 3999 is the conventional roman ceiling; letters wrap past 26 via multi-letter form.
-  if (n > 9999) return 9999;
+  // Roman numerals stop at 3999 and letters cap their length in their own formatters.
+  if (n > MAX_LIST_VALUE) return MAX_LIST_VALUE;
   return n;
 }
 
@@ -176,7 +183,7 @@ const CARDINAL_TENS: readonly string[] = [
   'ninety',
 ];
 
-/** English words for 0…9999 — the whole range `clampListValue` admits, so never unbounded. */
+/** English words for 0…999999, the whole range `clampListValue` admits, so never unbounded. */
 function cardinalWords(value: number): string {
   const n = clampListValue(value);
   if (n < 20) return CARDINAL_ONES[n]!;
@@ -189,7 +196,7 @@ function cardinalWords(value: number): string {
     return `${CARDINAL_ONES[Math.floor(n / 100)]!} hundred${rest === 0 ? '' : ` ${cardinalWords(rest)}`}`;
   }
   const rest = n % 1000;
-  return `${CARDINAL_ONES[Math.floor(n / 1000)]!} thousand${rest === 0 ? '' : ` ${cardinalWords(rest)}`}`;
+  return `${cardinalWords(Math.floor(n / 1000))} thousand${rest === 0 ? '' : ` ${cardinalWords(rest)}`}`;
 }
 
 function capitalize(text: string): string {
