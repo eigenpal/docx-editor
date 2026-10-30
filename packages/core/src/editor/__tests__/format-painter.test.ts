@@ -942,3 +942,20 @@ describe('the drag gesture', () => {
     }
   });
 });
+
+describe('a click with the painter armed beside an inline control', () => {
+  test('paints the word up to the control edge, never into the control', () => {
+    const control = `<w:sdt><w:sdtPr><w:text/></w:sdtPr><w:sdtContent>${textRun('TOKEN')}</w:sdtContent></w:sdt>`;
+    const body =
+      p(textRun('src', '<w:rPr><w:b/></w:rPr>')) + p(textRun('aa') + control + textRun('zz'));
+    withEditor(body, (editor) => {
+      select(editor, [0, 0], [0, 3]);
+      expect(editor.exec({ type: 'copyFormatting' })).toMatchObject({ ok: true });
+      caretAt(editor, 1, 1);
+      expect(editor.exec({ type: 'pasteFormatting' })).toMatchObject({ ok: true });
+      expect(runProperties(editor, 1, 0)).toContain('b=1');
+      caretAt(editor, 1, 4);
+      expect(editor.getSelectionFormatting()?.bold).toBe(false);
+    });
+  });
+});

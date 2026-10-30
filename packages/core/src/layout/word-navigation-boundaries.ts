@@ -66,6 +66,8 @@ export function controlEdgeSide(
   for (const control of controls) {
     const range = control.range;
     if (control.level !== 'inline' || range?.paragraphId !== position.paragraphId) continue;
+    // An empty control has no box a pointer can land in, so it never tells the sides apart.
+    if (range.start === range.end) continue;
     // Inside when the hit control is this control or one nested in it.
     const inside =
       hit?.range?.paragraphId === range.paragraphId &&

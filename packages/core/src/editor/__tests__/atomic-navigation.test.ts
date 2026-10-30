@@ -13,6 +13,7 @@ import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import type { LockedControlNavigation } from '../paginated-surface-options.ts';
 import { createDocxEditor } from '../docx-editor.ts';
+import { controlEdgeSide } from '../../layout/word-navigation-boundaries.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -460,4 +461,23 @@ describe('a double click selects a word up to an inline control edge', () => {
       });
     }
   }
+
+  test('atomic: just outside the edges selects the neighbour word, inside the control', () => {
+    for (const [x, expected] of [
+      [(b: { x: number }) => b.x - 1, [0, 2]],
+      [(b: { x: number }) => b.x + 1, [2, 7]],
+      [(b: { x: number; width: number }) => b.x + b.width + 1, [7, 9]],
+    ] as const) {
+      const m = mount(line('contentLocked'), 'atomic');
+      const b = box(m);
+      click(m, x(b), b.y + b.height / 2, 2);
+      expect([...offsets(m)].sort((a, c) => a - c)).toEqual([...expected]);
+    }
+  });
+
+  test('an empty control inside a word never decides the side', () => {
+    const m = mount(`<w:p>${run('ab')}${control('', 'none')}${run('cd')}</w:p>`, null);
+    const at = { paragraphId: m.paragraphId, offset: 2 };
+    expect(controlEdgeSide(m.surface.layout(), at, null)).toBe('after');
+  });
 });

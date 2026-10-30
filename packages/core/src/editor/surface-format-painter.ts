@@ -31,6 +31,7 @@ import {
   type SurfaceProperty,
 } from './surface-formatting.ts';
 import { wordRangeAt } from './surface-selection-ops.ts';
+import { wordMotionBoundaries } from '../layout/word-navigation-boundaries.ts';
 
 /**
  * No struck-half seams for the painter's own word expansion.
@@ -40,7 +41,6 @@ import { wordRangeAt } from './surface-selection-ops.ts';
  * pointed at. A paint has no such problem: `runPropertyEdits` clips to the runs this view
  * RENDERS, so a hidden half is never reached whatever the range says.
  */
-const EMPTY_STOPS: ReadonlySet<number> = new Set();
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import type {
   FormatPainterMode,
@@ -314,7 +314,9 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
     // means in Word. Without it the click painted no text at all: the character half went to
     // the stored-marks lane, the painter had nothing to spend its arming on, and it stayed
     // live with the copy cursor on the pages until the user pressed Escape.
-    const word = caret ? wordRangeAt(deps.layout(), from, EMPTY_STOPS) : null;
+    const word = caret
+      ? wordRangeAt(deps.layout(), from, wordMotionBoundaries(deps.layout(), from.paragraphId))
+      : null;
     const spanFrom = word?.from ?? from;
     const spanTo = word?.to ?? to;
     // Still a caret for the stored-marks lane when the word came back empty — a click in the
