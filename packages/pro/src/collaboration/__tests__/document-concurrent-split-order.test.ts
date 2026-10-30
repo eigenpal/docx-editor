@@ -230,6 +230,37 @@ describe('splitting a paragraph that concurrent splits added', () => {
       });
 });
 
+describe('deleting a reordered paragraph that a split shortened', () => {
+  // The paragraph split off the deleted one keeps its place before the later sibling.
+  for (const { label, ids } of ORDERS)
+    test(`the split-off paragraph stays in place (${label})`, async () => {
+      const r = await room('One; two; three', ids);
+      try {
+        r.offline();
+        await splitAfter(r.bob.runtime, 'two; ', false);
+        later();
+        await splitAfter(r.alice.runtime, 'One; ', false);
+        later();
+        r.online();
+        later();
+        await newlineAfter(r.alice.runtime, 'tw', false);
+        r.sync();
+        later();
+        await r.carol.runtime.run(async (context) => {
+          const paragraphs = context.document.body.paragraphs;
+          paragraphs.load('items');
+          await context.sync();
+          paragraphs.items[1]!.delete();
+          await context.sync();
+        });
+        r.sync();
+        await r.expectAll(['One; ', 'o; ', 'three', 'Signed']);
+      } finally {
+        r.close();
+      }
+    });
+});
+
 describe('three peers splitting one paragraph at different points while offline', () => {
   // Every new paragraph goes in right after the split paragraph, and Yjs orders them by client
   // ID. The paragraphs show in the order of the text they hold, whichever peer made each one.

@@ -24,7 +24,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import * as Y from 'yjs';
 import type { LogicalId } from './identity.ts';
-import { firstItem } from './yjs-items.ts';
+import { firstItem, structAt } from './yjs-items.ts';
 import { itemIdentity, type Identity } from './paragraph-text-identity.ts';
 import { marksOfText } from './paragraph-text-marks.ts';
 
@@ -104,7 +104,7 @@ const originsKey = (item: Y.Item): string => `${idKey(item.origin)} ${idKey(item
 export function splitSiblingRanks(
   children: Y.Array<LogicalId>,
   textOf: (id: LogicalId) => Y.Text | null,
-  /** Collects the paragraph of each block of every concurrent run, moved or not. */
+  /** Collects every paragraph the order of a concurrent run reads, moved or not. */
   heads: LogicalId[] = []
 ): SiblingRanks {
   let ranks: Map<LogicalId, SiblingRank> | null = null;
@@ -141,8 +141,9 @@ export function splitSiblingRanks(
       start += 1;
       continue;
     }
-    for (const block of blocks) heads.push(headId(block.head));
-    const order = orderOf(blocks, textOf);
+    for (const block of blocks)
+      for (const item of block.items) if (!item.deleted) heads.push(headId(item));
+    const order = orderOf(blocks, textOf, children.doc);
     if (order) {
       group += 1;
       ranks ??= new Map();
@@ -172,17 +173,92 @@ function copiesOf(id: LogicalId, textOf: (id: LogicalId) => Y.Text | null): Iden
   return text ? copiedIdentities(text) : [];
 }
 
+/** Where a character stands: its text, and its place among the text's clocks. */
+interface SourcePlace {
+  readonly text: Y.Text;
+  readonly at: number;
+}
+
+/**
+ * Where the character an identity names stands in the text that holds it, deleted or not, or
+ * null when this replica collected it. Every copy of one character resolves to the identity
+ * of the character first typed, so the pieces of one split paragraph, however often split
+ * again, compare in the order of the text they came from.
+ */
+function sourcePlace(
+  doc: Y.Doc,
+  identity: Identity | undefined,
+  places: Map<Y.Text, Map<string, number>>
+): SourcePlace | null {
+  const match = identity ? /^(\d+):(\d+)$/.exec(identity) : null;
+  if (!match) return null;
+  const client = Number(match[1]);
+  const clock = Number(match[2]);
+  const item = structAt(doc, { client, clock });
+  const text = item?.parent;
+  if (!item || !(text instanceof Y.Text)) return null;
+  let starts = places.get(text);
+  if (!starts) {
+    starts = new Map();
+    let at = 0;
+    for (let next = firstItem(text); next; next = next.right) {
+      starts.set(`${next.id.client}:${next.id.clock}`, at);
+      at += next.length;
+    }
+    places.set(text, starts);
+  }
+  const start = starts.get(`${item.id.client}:${item.id.clock}`);
+  return start === undefined ? null : { text, at: start + clock - item.id.clock };
+}
+
+/**
+ * What one block shows first: the copies of its first paragraph that is still listed. A
+ * deleted paragraph has no text to read, so a paragraph split off it stands for it.
+ */
+function blockCopies(block: Block, textOf: (id: LogicalId) => Y.Text | null): Identity[] {
+  for (const item of block.items) {
+    if (item.deleted) continue;
+    const copies = copiesOf(headId(item), textOf);
+    if (copies.length > 0) return copies;
+  }
+  return [];
+}
+
+/**
+ * Whether block `first` goes before block `second`. When both start with a copy of a
+ * character of one text, the one whose character comes first does. Otherwise, the pairwise
+ * rule: `first` holds the start of `second`, after its own.
+ */
+function blockBefore(
+  first: readonly Identity[],
+  second: readonly Identity[],
+  firstPlace: SourcePlace | null,
+  secondPlace: SourcePlace | null
+): boolean {
+  if (firstPlace && secondPlace && firstPlace.text === secondPlace.text)
+    return firstPlace.at < secondPlace.at;
+  return splitEarlier(first, second);
+}
+
 /** The blocks of one concurrent run in the order the rule shows them, or null when unchanged. */
-function orderOf(run: readonly Block[], textOf: (id: LogicalId) => Y.Text | null): Block[] | null {
-  const copies = run.map(({ head }) => copiesOf(headId(head), textOf));
-  // Insertion sort by the pairwise rule, from the order Yjs gives: every replica starts from
-  // the same order and reads the same copies, so every replica ends in the same order.
+function orderOf(
+  run: readonly Block[],
+  textOf: (id: LogicalId) => Y.Text | null,
+  doc: Y.Doc | null
+): Block[] | null {
+  const copies = run.map((block) => blockCopies(block, textOf));
+  const places = new Map<Y.Text, Map<string, number>>();
+  const starts = copies.map((list) => (doc ? sourcePlace(doc, list[0], places) : null));
+  // Insertion sort by the rule, from the order Yjs gives: every replica starts from the same
+  // order and reads the same copies, so every replica ends in the same order.
   const order = run.map((_, index) => index);
   let moved = false;
   for (let at = 1; at < order.length; at += 1) {
     for (let back = at; back > 0; back -= 1) {
-      if (!splitEarlier(copies[order[back]!]!, copies[order[back - 1]!]!)) break;
-      [order[back - 1], order[back]] = [order[back]!, order[back - 1]!];
+      const later = order[back]!;
+      const earlier = order[back - 1]!;
+      if (!blockBefore(copies[later]!, copies[earlier]!, starts[later]!, starts[earlier]!)) break;
+      [order[back - 1], order[back]] = [later, earlier];
       moved = true;
     }
   }
