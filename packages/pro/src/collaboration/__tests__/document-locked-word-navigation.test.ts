@@ -133,3 +133,33 @@ for (const header of [false, true]) {
     );
   });
 }
+
+test('word deletion at an editable control edge converges with typing inside the control', async () => {
+  const pair = await harness.pair(zipDocument(paragraph.replace('sdtContentLocked', 'sdtLocked')));
+  const alice = mount(pair.alice),
+    bob = mount(pair.bob);
+  const paragraphId = alice.surface!.session.paragraphIds()[0]!;
+  const caret = (editor: DocxEditorInstance, offset: number) =>
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset },
+      head: { paragraphId, offset },
+    });
+  const converge = () => {
+    pair.alice.room.session.flushPendingJournals();
+    pair.bob.room.session.flushPendingJournals();
+    expect(packageFingerprint(alice.surface!.session.currentPackage())).toBe(
+      packageFingerprint(bob.surface!.session.currentPackage())
+    );
+  };
+  pair.pause();
+  caret(alice, 9);
+  caret(bob, 4);
+  alice.surface!.deleteWordBackward();
+  bob.surface!.type('X');
+  pair.resume();
+  converge();
+  expect(alice.surface!.session.bodyText()).toBe('aaTOXKEN');
+  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+  converge();
+  expect(bob.surface!.session.bodyText()).toBe('aaTOXKENzz');
+});

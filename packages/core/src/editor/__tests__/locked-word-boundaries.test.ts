@@ -118,6 +118,21 @@ for (const navigation of ['normal', 'atomic'] as const) {
       });
     });
   }
+  for (const lock of ['none', 'sdtLocked', 'contentLocked', 'sdtContentLocked']) {
+    test(`${navigation} ${lock} word deletion stops at the control edge`, () => {
+      withSurface(lock, navigation, (surface, paragraphId) => {
+        caret(surface, paragraphId, 9);
+        surface.deleteWordBackward();
+        expect(surface.session.bodyText()).toBe('aaTOKEN');
+        caret(surface, paragraphId, 0);
+        surface.deleteWordForward();
+        expect(surface.session.bodyText()).toBe('TOKEN');
+        surface.undo();
+        surface.undo();
+        expect(surface.session.bodyText()).toBe('aaTOKENzz');
+      });
+    });
+  }
   test(`${navigation} word motions follow RTL physical direction at control edges`, () => {
     withSurface(
       'sdtContentLocked',

@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Moving the caret by word stops at both edges of every inline content control, including Shift selection and header navigation. Fixes #1300.
+Moving, deleting, and double-click selecting by word stop at both edges of every inline content control, including Shift selection and headers and footers. Fixes #1300.

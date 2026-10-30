@@ -430,3 +430,20 @@ describe('createDocxEditor takes the option', () => {
     container.remove();
   });
 });
+
+describe('a double click selects a word up to an inline control edge', () => {
+  for (const lock of ['none', 'sdtLocked', 'contentLocked']) {
+    for (const [side, expected] of [
+      ['after', [7, 9]],
+      ['before', [0, 2]],
+    ] as const) {
+      test(`${lock}: the word ${side} the control`, () => {
+        const m = mount(line(lock), null);
+        const b = box(m);
+        const x = side === 'after' ? b.x + b.width + 2 : 1;
+        click(m, x, b.y + b.height / 2, 2);
+        expect([...offsets(m)].sort((a, c) => a - c)).toEqual([...expected]);
+      });
+    }
+  }
+});

@@ -1,11 +1,12 @@
 {
-  "impact": "no-impact",
+  "impact": "compatible",
   "fields": [],
-  "before": "Word motions can skip an inline control and the surrounding word.",
-  "after": "Word motions stop at both edges of every inline control, whatever its lock.",
-  "reason": "Only local word-navigation stops change. No operation, shared state, schema, or public signature changes. Two mounted editors verify body and header navigation, remote selections, concurrent edits, undo, redo, deletion during peer input, convergence, and save/reopen.",
+  "before": "Word motion, word deletion, and double-click word selection could cross an inline control edge.",
+  "after": "Word motion, word deletion, and double-click word selection stop at both edges of every inline control, whatever its lock.",
+  "reason": "Word deletion sends the existing deleteText operation over a shorter range; no field or format changes. Two mounted editors cover body and header navigation, remote selections, concurrent edits, undo, redo, deletion during peer input, word deletion beside a peer typing inside the control, convergence, and save/reopen.",
   "tests": [
     "packages/core/src/editor/__tests__/locked-word-boundaries.test.ts",
+    "packages/core/src/editor/__tests__/atomic-navigation.test.ts",
     "packages/core/src/editor/__tests__/atomic-navigation-edges.test.ts",
     "packages/core/src/editor/__tests__/tracked-word-selection.test.ts",
     "packages/pro/src/collaboration/__tests__/document-locked-word-navigation.test.ts"

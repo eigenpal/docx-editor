@@ -28,12 +28,12 @@ import {
 } from '../layout/semantic-hit-test.ts';
 import {
   documentOrder,
-  deletedTextBoundaries,
   paragraphTextFromLayout,
   type SemanticPosition,
   type CaretGeometry,
   type SemanticSelection,
 } from '../layout/semantic-interaction.ts';
+import { wordMotionBoundaries } from '../layout/word-navigation-boundaries.ts';
 import { wordRangeAt } from './surface-selection-ops.ts';
 import {
   absorbAtomicControls,
@@ -416,9 +416,9 @@ export function createPointerController(
       const text = paragraphTextFromLayout(layout, id);
       return { from: { paragraphId: id, offset: 0 }, to: { paragraphId: id, offset: text.length } };
     }
-    // A word stops at a struck half's edge: a replacement paints the old text and the new
-    // with nothing between them, so without this a double-click on either took both.
-    return wordRangeAt(layout, position, deletedTextBoundaries(layout, id));
+    // A word stops at a struck half's edge and at an inline control's edge: a replacement paints
+    // the old text and the new with nothing between them, and a control edge splits a word.
+    return wordRangeAt(layout, position, wordMotionBoundaries(layout, id));
   }
 
   /** Anchor range plus the range under the pointer, oriented so the head follows the drag. */
