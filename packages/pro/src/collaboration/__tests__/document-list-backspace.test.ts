@@ -7,7 +7,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // It is an ordinary numbering write, so two collaborating editors must converge on it through
 // concurrent typing, a remote deletion in the item, a concurrent press on the same item,
 // undo, redo, reconnect, and save and reopen. A suggested list toggle is the same write as a
-// tracked property change, which the other participant can reject or accept.
+// tracked property change, which the other participant can reject or accept. Backspace at the
+// start of an indented paragraph removes the indent the same way, as an ordinary paragraph
+// property write.
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { afterEach, expect, test } from 'bun:test';
@@ -245,4 +247,92 @@ test('suggested list toggles converge, and the other participant can reject or a
 
   const reopened = await peer('Carol', undefined, new Uint8Array(await a.editor.save()));
   expect(markers(reopened)).toEqual(['1.', '2.', null]);
+});
+
+const INDENTED = zipDocument(
+  '<w:p><w:r><w:t>Intro</w:t></w:r></w:p>' +
+    '<w:p><w:pPr><w:ind w:left="1440" w:right="720"/></w:pPr>' +
+    '<w:r><w:t xml:space="preserve">Indented words</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t>Tail</w:t></w:r></w:p>'
+);
+const indentOf = (xml: string) =>
+  /<w:p\b[^>]*>(?:<w:pPr>(.*?)<\/w:pPr>)?<w:r><w:t[^>]*>Indented/.exec(xml)?.[1] ?? '';
+
+test('a removed indent converges through typing, undo, redo, a later join and reopen', async () => {
+  const a = await peer('Alice', undefined, INDENTED);
+  const b = await peer('Bob', a);
+
+  caret(a, 1, 0);
+  caret(b, 1, 8);
+  a.editor.surface!.deleteBackward();
+  expect(b.editor.exec({ type: 'insertText', text: ' more' }).ok).toBe(true);
+  sync(a, b);
+  const after = await converged(a, b);
+  expect(indentOf(after)).toBe('<w:ind w:right="720"/>');
+  expect(after).toContain('Indented more words');
+
+  expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
+  sync(a, b);
+  const undone = await converged(a, b);
+  expect(indentOf(undone)).toBe('<w:ind w:left="1440" w:right="720"/>');
+  expect(undone).toContain('Indented more words');
+  expect(a.editor.exec({ type: 'redo' }).ok).toBe(true);
+  sync(a, b);
+  expect(await converged(a, b)).toBe(after);
+
+  // With the indent gone, the next press joins, while Bob deletes in the same paragraph.
+  caret(a, 1, 0);
+  caret(b, 1, 0);
+  b.editor.surface!.setSelection({
+    anchor: { paragraphId: b.editor.surface!.session.paragraphIds()[1]!, offset: 9 },
+    head: { paragraphId: b.editor.surface!.session.paragraphIds()[1]!, offset: 14 },
+  });
+  b.editor.surface!.deleteSelection();
+  a.editor.surface!.deleteBackward();
+  sync(a, b);
+  const joined = await converged(a, b);
+  expect(joined.replaceAll('</w:t></w:r><w:r><w:t>', '')).toContain(
+    '<w:t>IntroIndented words</w:t>'
+  );
+
+  const reopened = await peer('Carol', undefined, new Uint8Array(await a.editor.save()));
+  expect(await converged(a, reopened)).toBe(joined);
+});
+
+test('a removed indent converges with a peer deleting that paragraph', async () => {
+  const a = await peer('Alice', undefined, INDENTED);
+  const b = await peer('Bob', a);
+
+  caret(a, 1, 0);
+  const ids = b.editor.surface!.session.paragraphIds();
+  b.editor.surface!.setSelection({
+    anchor: { paragraphId: ids[0]!, offset: 5 },
+    head: { paragraphId: ids[2]!, offset: 0 },
+  });
+  b.editor.surface!.deleteSelection();
+  a.editor.surface!.deleteBackward();
+  sync(a, b);
+  const settled = await converged(a, b);
+  expect(settled).not.toContain('Indented');
+  expect(settled.replaceAll('</w:t></w:r><w:r><w:t>', '')).toContain('<w:t>IntroTail</w:t>');
+
+  expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
+  sync(a, b);
+  expect(await converged(a, b)).not.toContain('Indented');
+});
+
+test('a suggested indent removal converges, and the other participant can reject it', async () => {
+  const a = await peer('Alice', undefined, INDENTED);
+  const b = await peer('Bob', a);
+
+  a.editor.surface!.setEditingMode('suggest');
+  caret(a, 1, 0);
+  a.editor.surface!.deleteBackward();
+  sync(a, b);
+  const suggested = await converged(a, b);
+  expect(indentOf(suggested)).toMatch(/^<w:ind w:right="720"\/><w:pPrChange /);
+
+  b.editor.surface!.session.applyTreeOps([{ op: 'rejectAllRevisions' }]);
+  sync(a, b);
+  expect(indentOf(await converged(a, b))).toBe('<w:ind w:left="1440" w:right="720"/>');
 });

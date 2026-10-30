@@ -177,6 +177,7 @@ type StructureMethods = Pick<
   | 'canAdjustIndent'
   | 'exitListOnEmptyItem'
   | 'removeListNumber'
+  | 'removeParagraphIndent'
   | 'sectionProperties'
   | 'sectionPropertiesAt'
   | 'sectionAnchorParagraphAt'
@@ -599,6 +600,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
 
     exitListOnEmptyItem: listExit.exitListOnEmptyItem,
     removeListNumber: listExit.removeListNumber,
+    removeParagraphIndent: listExit.removeParagraphIndent,
 
     isListParagraph() {
       const { paragraphId } = orderedStart();
