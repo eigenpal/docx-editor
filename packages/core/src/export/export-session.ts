@@ -408,7 +408,7 @@ export function openDocumentForExport(
     sessions: new Map(),
     completed: new Map(),
     inFlight: new Map(),
-    styles: createDocumentStyleDependencies(initialView),
+    styles: createDocumentStyleDependencies(initialView, { measurer: () => activeState?.measurer }),
     fieldLinks: new Map(),
     links: createDocumentLinkProjectors(initialView),
     drawingBundle: initialDrawingBundle,

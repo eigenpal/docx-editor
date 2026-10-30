@@ -55,6 +55,13 @@ export interface TextMeasurer {
    */
   faceCovers?(text: string, style: ResolvedRunStyle): boolean | undefined;
   /**
+   * Optional: whether the face resolved for `style` is a Chinese, Japanese, or Korean font: it
+   * draws as the family that `style` names, and it lists the CJK code pages. Undefined when no
+   * face draws as that family, so that the family's name and the font table decide.
+   * @internal
+   */
+  eastAsianFace?(style: ResolvedRunStyle): boolean | undefined;
+  /**
    * Optional `OS/2` strikeout stroke for the resolved face, at the drawn size. Word paints
    * `w:separator` as a strikeout, so the note rule reads its thickness and offset here rather
    * than assuming one face's numbers. Undefined keeps the caller's own default.

@@ -3,7 +3,8 @@ import { createResolvedCjkAutoSpacingGapMetric } from './sfnt-auto-spacing-metri
 import { isRunKerningEnabled } from './run-kerning.ts';
 import { runLigatureFeatureKey } from './run-ligatures.ts';
 import { fontMapsCodePoint } from './sfnt-cmap-coverage.ts';
-import { createShapedLineMetrics } from './shaped-line-metrics.ts';
+import { createShapedLineMetrics, drawsAsNamedFace } from './shaped-line-metrics.ts';
+import { hasCjkCodePages } from './cjk-line-metrics.ts';
 import { withSymbolFaceMetrics } from './symbol-face-metrics.ts';
 import {
   countAsciiSpaces,
@@ -303,6 +304,10 @@ export function createShapedMeasurer(
   const measurer: TextMeasurer = {
     hasResolvedFont(style) {
       return resolveFontCached(style) !== null;
+    },
+    eastAsianFace(style) {
+      const font = resolveFontCached(style);
+      return font && drawsAsNamedFace(font, style) ? hasCjkCodePages(font) : undefined;
     },
     faceCovers(text, style) {
       const font = resolveFontCached(style);

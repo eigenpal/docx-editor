@@ -721,6 +721,14 @@ In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingCo
 - **AND** a Times New Roman or Calibri space, a quarter em or narrower, keeps its advance
 - **AND** with `w:useWord97LineBreakRules` as well, spaces in proportional faces keep their advance
 
+#### Scenario: The default East Asian face counts by the face that draws it
+
+- **GIVEN** a document whose defaults name an East Asian font that no name list knows, with no font table entry
+- **WHEN** the face is available and lists a Chinese, Japanese, or Korean code page
+- **THEN** the defaults name an East Asian face, so spaces shrink and punctuation hangs
+- **AND** an available face without those code pages does not count, even with an East Asian `w:charset`
+- **AND** a missing face counts only by a known name or an East Asian `w:charset` in the font table
+
 ### Requirement: Legacy space shrinking before a final mark
 
 Under the legacy space shrinking rule, a final half-width mark SHALL stay inside when the spaces make room for it, and hang when they make room only for the text before it.

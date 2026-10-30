@@ -14,7 +14,7 @@ import { faceLineGapPt, takesLegacyLineGap } from './times-new-roman-leading.ts'
 const NAMED_FACE_KEY = 0.5;
 
 /** True when `font` is the family that `style` names, not a substitute or a glyph fallback. */
-function drawsAsNamedFace(font: ResolvedFont, style: ResolvedRunStyle): boolean {
+export function drawsAsNamedFace(font: ResolvedFont, style: ResolvedRunStyle): boolean {
   if (style.fontFamily === null) return false;
   // A bold or italic request answered by the same family's regular face (a synthesized
   // style) still draws as the named family. A stand-in from another family does not.

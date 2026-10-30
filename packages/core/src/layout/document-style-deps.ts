@@ -5,6 +5,8 @@ import { buildNumberingIndex, type NumberingIndex } from './numbering-index.ts';
 import { defaultTabIntervalFromSettings } from './paragraph-tabs.ts';
 import { compatibilityModeFromSettings } from './compatibility/compatibility-profile.ts';
 import { buildStyleCascadeTable, type StyleCascadeTable } from './style-cascade.ts';
+import { withMeasuredEastAsianDefaults } from './east-asian-default-face.ts';
+import type { TextMeasurer } from './semantic-records.ts';
 
 /** Memoized style inputs shared by every story in one document view. @public */
 export interface DocumentStyleDependencies {
@@ -14,9 +16,19 @@ export interface DocumentStyleDependencies {
   readonly numberingIndex: () => NumberingIndex;
 }
 
+/** Options of {@link createDocumentStyleDependencies}. @public */
+export interface DocumentStyleDependencyOptions {
+  /**
+   * The measurer layout uses now. Its fonts decide whether the East Asian font the document
+   * defaults name is a Chinese, Japanese, or Korean face.
+   */
+  readonly measurer?: () => TextMeasurer | undefined;
+}
+
 /** Build the cascade and numbering projections layout consumes. @public */
 export function createDocumentStyleDependencies(
-  view: HeadlessDocumentView
+  view: HeadlessDocumentView,
+  options: DocumentStyleDependencyOptions = {}
 ): DocumentStyleDependencies {
   let numberingRoot: OoxmlElement | null | undefined;
   let numbering: NumberingIndex | undefined;
@@ -65,7 +77,7 @@ export function createDocumentStyleDependencies(
         typographyRoot = currentSettings;
         styles = buildStyleCascadeTable(current, theme, currentSettings);
       }
-      return styles;
+      return withMeasuredEastAsianDefaults(styles, options.measurer?.());
     },
     defaultTabStopPt() {
       const current = view.settingsRoot();
