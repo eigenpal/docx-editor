@@ -65,6 +65,143 @@ const NUMBER_FORMATS = ['decimal', 'lowerLetter', 'lowerRoman'] as const;
 /** Nine levels, the count `w:ilvl` allows (ECMA-376 17.9.24). */
 const LEVEL_COUNT = 9;
 
+/** `ST_SignedTwipsMeasure` bound the layout index also clamps level indents to (22"). */
+const MAX_LEVEL_INDENT_TWIPS = 31_680;
+
+/**
+ * Where one level puts its marker and text, in twips, as the list being converted resolved it.
+ *
+ * Switching a list item between bullets and numbers changes what the marker SAYS, never
+ * where the item sits. A field left out is one the old level did not state, so the new level
+ * does not state it either and the paragraph style's value keeps applying.
+ */
+export interface ListLevelGeometry {
+  /** `w:left`: the leading indent of the text, in either paragraph direction. */
+  readonly left?: number;
+  /** `w:right`: the trailing indent. */
+  readonly right?: number;
+  /** `w:hanging`; exclusive with {@link firstLine}, and preferred when both are given. */
+  readonly hanging?: number;
+  /** `w:firstLine`: how far the first line starts past the leading indent. */
+  readonly firstLine?: number;
+  /** `w:suff`: what separates the marker from the text. Omitted means a tab. */
+  readonly suffix?: 'tab' | 'space' | 'nothing';
+  /** `w:lvlJc`: how the marker aligns at its position. */
+  readonly align?: 'left' | 'center' | 'right';
+  /**
+   * The old level's own `w:pPr`, carried for everything it states besides the indent above:
+   * direction (`w:bidi`), tab stops, spacing and alignment move the item as surely as `w:ind`.
+   * Must be a node of this package's numbering part; it is copied, never shared.
+   */
+  readonly paragraphProperties?: OoxmlElement;
+}
+
+/**
+ * Geometry for each of the nine levels, indexed by `w:ilvl`. A missing entry takes the stock
+ * geometry, which is what a level the old list never declared would have been given anyway.
+ */
+export type ListDefinitionGeometry = readonly (ListLevelGeometry | undefined)[];
+
+const indentValue = (value: number | undefined, min: number): number | undefined =>
+  value !== undefined && Number.isInteger(value) && value >= min && value <= MAX_LEVEL_INDENT_TWIPS
+    ? value
+    : undefined;
+
+/** The `w:pPr` a level authors for `geometry`, or '' when it states no indent at all. */
+function geometryPPrXml(geometry: ListLevelGeometry): string {
+  const left = indentValue(geometry.left, -MAX_LEVEL_INDENT_TWIPS);
+  const right = indentValue(geometry.right, -MAX_LEVEL_INDENT_TWIPS);
+  const hanging = indentValue(geometry.hanging, 0);
+  const firstLine = hanging === undefined ? indentValue(geometry.firstLine, 0) : undefined;
+  const attributes = [
+    left !== undefined ? ` w:left="${left}"` : '',
+    right !== undefined ? ` w:right="${right}"` : '',
+    hanging !== undefined ? ` w:hanging="${hanging}"` : '',
+    firstLine !== undefined ? ` w:firstLine="${firstLine}"` : '',
+  ].join('');
+  // A carried `w:pPr` needs its container even without an indent; an empty one is dropped
+  // once the carried children are in (`withCarriedParagraphProperties`).
+  if (!attributes) return geometry.paragraphProperties ? '<w:pPr></w:pPr>' : '';
+  return `<w:pPr><w:ind${attributes}/></w:pPr>`;
+}
+
+/**
+ * `CT_PPrBase` children that precede `w:ind` (ECMA-376 17.3.1.26), where a carried property
+ * list takes the authored indent. ORDER IS LOAD-BEARING: it is a strict `xsd:sequence`.
+ */
+const PPR_BEFORE_IND = new Set([
+  'pStyle',
+  'keepNext',
+  'keepLines',
+  'pageBreakBefore',
+  'framePr',
+  'widowControl',
+  'numPr',
+  'suppressLineNumbers',
+  'pBdr',
+  'shd',
+  'tabs',
+  'suppressAutoHyphens',
+  'kinsoku',
+  'wordWrap',
+  'overflowPunct',
+  'topLinePunct',
+  'autoSpaceDE',
+  'autoSpaceDN',
+  'bidi',
+  'adjustRightInd',
+  'snapToGrid',
+  'spacing',
+]);
+
+/**
+ * Carried `w:pPr` children a minted level must not take: the indent is authored from the
+ * geometry, and the rest name a style, a list, a section or a revision that belong to the
+ * old definition, not to a level.
+ */
+const PPR_NOT_CARRIED = new Set(['ind', 'pStyle', 'numPr', 'rPr', 'sectPr', 'pPrChange']);
+
+/**
+ * Fill each authored level's `w:pPr` with the carried children of its old level, around the
+ * authored `w:ind`. Levels without carried properties are returned as authored.
+ */
+function withCarriedParagraphProperties(
+  abstract: OoxmlElement,
+  geometry: ListDefinitionGeometry | undefined
+): OoxmlElement {
+  if (!geometry?.some((level) => level?.paragraphProperties)) return abstract;
+  const children = abstract.children.map((child) => {
+    if (child.kind === 'textValue' || child.localName !== 'lvl') return child;
+    const level = child as OoxmlElement;
+    const carried = geometry[parsedIlvl(level) ?? -1]?.paragraphProperties;
+    if (!carried) return level;
+    return {
+      ...level,
+      children: level.children.flatMap((part) => {
+        if (part.kind === 'textValue' || part.localName !== 'pPr') return [part];
+        const authored = part as OoxmlElement;
+        const kept = carried.children.filter(
+          (node) =>
+            node.kind !== 'textValue' &&
+            node.namespaceUri === W &&
+            !PPR_NOT_CARRIED.has(node.localName)
+        );
+        const at = kept.reduce(
+          (index, node, position) =>
+            PPR_BEFORE_IND.has((node as OoxmlElement).localName) ? position + 1 : index,
+          0
+        );
+        const merged = [...kept.slice(0, at), ...authored.children, ...kept.slice(at)];
+        return merged.length === 0 ? [] : [{ ...authored, children: merged } as OoxmlNode];
+      }),
+    } as OoxmlElement;
+  });
+  return { ...abstract, children } as OoxmlElement;
+}
+
+const SUFFIXES = new Set(['space', 'nothing']);
+const ALIGNMENTS = new Set(['left', 'center', 'right']);
+
 /**
  * One `w:lvl`, with its children in `CT_Lvl` order.
  *
@@ -78,17 +215,25 @@ const LEVEL_COUNT = 9;
  * `w:lvlJc="left"` and `w:ind w:left=` are the TRANSITIONAL spellings Word writes. The
  * schema copy under `reference/` is ISO 29500 Strict, where those same slots read
  * `start`/`end`; that is a namespace difference, not a defect here.
+ *
+ * `geometry` replaces the stock indent, suffix and marker alignment: the marker format
+ * comes from `kind`, the position from the list the item is leaving.
  */
-function levelXml(kind: ListKind, ilvl: number): string {
-  // 0.25" per level, with the marker in a 0.25" hanging slot — Word's own list geometry.
+function levelXml(kind: ListKind, ilvl: number, geometry?: ListLevelGeometry): string {
+  // 0.5" per level, with the marker in a 0.25" hanging slot.
   const left = 720 * (ilvl + 1);
   const start = '<w:start w:val="1"/>';
+  const suffix =
+    geometry?.suffix && SUFFIXES.has(geometry.suffix) ? `<w:suff w:val="${geometry.suffix}"/>` : '';
+  const align = geometry?.align && ALIGNMENTS.has(geometry.align) ? geometry.align : undefined;
   if (kind === 'bullet') {
     const bullet = BULLETS[ilvl % BULLETS.length]!;
     return (
-      `<w:lvl w:ilvl="${ilvl}">${start}<w:numFmt w:val="bullet"/>` +
-      `<w:lvlText w:val="${bullet.text}"/><w:lvlJc w:val="left"/>` +
-      `<w:pPr><w:ind w:left="${left}" w:hanging="360"/></w:pPr>` +
+      `<w:lvl w:ilvl="${ilvl}">${start}<w:numFmt w:val="bullet"/>${suffix}` +
+      `<w:lvlText w:val="${bullet.text}"/><w:lvlJc w:val="${align ?? 'left'}"/>` +
+      (geometry
+        ? geometryPPrXml(geometry)
+        : `<w:pPr><w:ind w:left="${left}" w:hanging="360"/></w:pPr>`) +
       `<w:rPr><w:rFonts w:ascii="${bullet.font}" w:hAnsi="${bullet.font}" w:hint="default"/></w:rPr>` +
       '</w:lvl>'
     );
@@ -100,14 +245,23 @@ function levelXml(kind: ListKind, ilvl: number): string {
   const roman = format === 'lowerRoman';
   // `%N` is the placeholder for level N+1's counter; each level shows only its own.
   return (
-    `<w:lvl w:ilvl="${ilvl}">${start}<w:numFmt w:val="${format}"/>` +
-    `<w:lvlText w:val="%${ilvl + 1}."/><w:lvlJc w:val="${roman ? 'right' : 'left'}"/>` +
-    `<w:pPr><w:ind w:left="${left}" w:hanging="${roman ? 180 : 360}"/></w:pPr></w:lvl>`
+    `<w:lvl w:ilvl="${ilvl}">${start}<w:numFmt w:val="${format}"/>${suffix}` +
+    `<w:lvlText w:val="%${ilvl + 1}."/><w:lvlJc w:val="${align ?? (roman ? 'right' : 'left')}"/>` +
+    (geometry
+      ? geometryPPrXml(geometry)
+      : `<w:pPr><w:ind w:left="${left}" w:hanging="${roman ? 180 : 360}"/></w:pPr>`) +
+    '</w:lvl>'
   );
 }
 
-function abstractNumXml(kind: ListKind, abstractNumId: number): string {
-  const levels = Array.from({ length: LEVEL_COUNT }, (_, ilvl) => levelXml(kind, ilvl)).join('');
+function abstractNumXml(
+  kind: ListKind,
+  abstractNumId: number,
+  geometry?: ListDefinitionGeometry
+): string {
+  const levels = Array.from({ length: LEVEL_COUNT }, (_, ilvl) =>
+    levelXml(kind, ilvl, geometry?.[ilvl])
+  ).join('');
   return (
     `<w:abstractNum w:abstractNumId="${abstractNumId}">` +
     `<w:multiLevelType w:val="${kind === 'bullet' ? 'hybridMultilevel' : 'multilevel'}"/>` +
@@ -275,6 +429,62 @@ function restartOverridesXml(abstract: OoxmlElement): string {
     .join('');
 }
 
+/** The `w:numFmt` of an abstract definition's first level, if it states one. */
+function firstLevelFormat(abstract: OoxmlElement): string | undefined {
+  const firstLevel = childrenNamed(abstract, 'lvl').find(
+    (level) => attribute(level, 'ilvl') === '0' || attribute(level, 'ilvl') === undefined
+  );
+  const format = firstLevel ? childrenNamed(firstLevel, 'numFmt')[0] : undefined;
+  return format ? attribute(format, 'val') : undefined;
+}
+
+/** Element equality without node ids: names, attributes, then element children in order. */
+function sameElement(left: OoxmlElement, right: OoxmlElement): boolean {
+  if (left.namespaceUri !== right.namespaceUri || left.localName !== right.localName) return false;
+  if (left.attributes.length !== right.attributes.length) return false;
+  for (const entry of left.attributes) {
+    const match = right.attributes.find(
+      (other) => other.namespaceUri === entry.namespaceUri && other.localName === entry.localName
+    );
+    if (match?.value !== entry.value) return false;
+  }
+  const leftChildren = left.children.filter((child) => child.kind !== 'textValue');
+  const rightChildren = right.children.filter((child) => child.kind !== 'textValue');
+  return (
+    leftChildren.length === rightChildren.length &&
+    leftChildren.every((child, index) =>
+      sameElement(child as OoxmlElement, rightChildren[index] as OoxmlElement)
+    )
+  );
+}
+
+/**
+ * An existing definition whose levels are exactly the ones `geometry` would author.
+ *
+ * Switching an item back and forth then reuses one definition per kind and geometry instead
+ * of adding two definitions to `numbering.xml` on every press.
+ */
+function sameLevelsAbstract(
+  abstractNums: readonly OoxmlElement[],
+  kind: ListKind,
+  geometry: ListDefinitionGeometry
+): OoxmlElement | undefined {
+  const authored = authoredElements(abstractNumXml(kind, 0, geometry), [
+    { localName: 'abstractNum' },
+  ])?.[0];
+  if (!authored) return undefined;
+  const candidate = withCarriedParagraphProperties(authored, geometry);
+  const wanted = childrenNamed(candidate, 'lvl');
+  return abstractNums.find((abstract) => {
+    if (childrenNamed(abstract, 'numStyleLink').length > 0) return false;
+    const levels = childrenNamed(abstract, 'lvl');
+    return (
+      levels.length === wanted.length &&
+      levels.every((level, index) => sameElement(level, wanted[index]!))
+    );
+  });
+}
+
 export interface EnsuredListDefinition {
   readonly pkg: OoxmlPackage;
   /** The `w:numId` a paragraph's `w:numPr` should name. */
@@ -289,32 +499,34 @@ export interface EnsuredListDefinition {
  * `w:num` over it, so the fresh instance restarts each level with a
  * `w:startOverride` (see {@link restartOverridesXml}). Returns null only when the part cannot
  * be built at all.
+ *
+ * With `geometry`, the definition is the one a list item SWITCHING kind needs: `kind`'s
+ * markers at the positions its old list gave each level, so the item does not move. Only a
+ * definition with exactly those levels is reused; any other one is created.
  */
 export function ensureListDefinition(
   pkg: OoxmlPackage,
-  kind: ListKind
+  kind: ListKind,
+  geometry?: ListDefinitionGeometry
 ): EnsuredListDefinition | null {
   const existingPart = pkg.parts.get(NUMBERING_PART);
   const numbering = existingPart ?? emptyNumberingPart();
   if (!numbering) return null;
   const root = numbering.root;
 
-  const abstractNums = childrenNamed(root, 'abstractNum');
+  const abstractNums = childrenNamed(root, 'abstractNum').filter((abstract) =>
+    /^\d{1,9}$/.test(attribute(abstract, 'abstractNumId') ?? '')
+  );
   const nums = childrenNamed(root, 'num');
 
   // Reuse the first matching TEMPLATE, not its counter instance. Two disconnected lists
   // can share one `w:abstractNum`, but each needs its own `w:num` with restart overrides to
   // start at the authored level baseline. Without them a new list after 39 items began at 40.
-  const wantedFormat = kind === 'bullet' ? 'bullet' : 'decimal';
-  const matchingAbstract = abstractNums.find((abstract) => {
-    const abstractId = attribute(abstract, 'abstractNumId');
-    if (!abstractId || !/^\d{1,9}$/.test(abstractId)) return false;
-    const firstLevel = childrenNamed(abstract, 'lvl').find(
-      (level) => attribute(level, 'ilvl') === '0' || attribute(level, 'ilvl') === undefined
-    );
-    const format = firstLevel ? childrenNamed(firstLevel, 'numFmt')[0] : undefined;
-    return format !== undefined && attribute(format, 'val') === wantedFormat;
-  });
+  const matchingAbstract = geometry
+    ? sameLevelsAbstract(abstractNums, kind, geometry)
+    : abstractNums.find(
+        (abstract) => firstLevelFormat(abstract) === (kind === 'bullet' ? 'bullet' : 'decimal')
+      );
 
   const matchingAbstractId = matchingAbstract
     ? Number(attribute(matchingAbstract, 'abstractNumId'))
@@ -325,7 +537,7 @@ export function ensureListDefinition(
   // fresh node ids. A matching template needs only a new counter instance.
   const createsAbstract = matchingAbstract === undefined;
   const authored = authoredElements(
-    (createsAbstract ? abstractNumXml(kind, abstractNumId) : '') +
+    (createsAbstract ? abstractNumXml(kind, abstractNumId, geometry) : '') +
       `<w:num w:numId="${numId}"><w:abstractNumId w:val="${abstractNumId}"/>` +
       `${matchingAbstract ? restartOverridesXml(matchingAbstract) : ''}</w:num>`,
     createsAbstract
@@ -340,7 +552,12 @@ export function ensureListDefinition(
   );
   if (!authored) return null;
   const nextId = createNodeIdAllocator(numbering);
-  const fresh = authored.map((node) => withFreshIds(node, nextId));
+  const fresh = authored.map((node, index) =>
+    withFreshIds(
+      createsAbstract && index === 0 ? withCarriedParagraphProperties(node, geometry) : node,
+      nextId
+    )
+  );
   const newAbstract = createsAbstract ? fresh[0] : undefined;
   const newNum = fresh[createsAbstract ? 1 : 0];
   if ((createsAbstract && !newAbstract) || !newNum) return null;

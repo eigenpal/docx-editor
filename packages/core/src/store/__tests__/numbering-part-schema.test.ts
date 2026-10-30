@@ -29,7 +29,11 @@ import {
   actorStripe,
   runWithTransactionActor,
 } from '../package/actor-scoped-ids.ts';
-import { ensureListDefinition, type ListKind } from '../package/numbering-part.ts';
+import {
+  ensureListDefinition,
+  type ListDefinitionGeometry,
+  type ListKind,
+} from '../package/numbering-part.ts';
 import { serializeOoxmlPart } from '../package/ooxml-tree.ts';
 import type { OoxmlElement, OoxmlNode } from '../package/ooxml-tree.ts';
 
@@ -571,3 +575,86 @@ function stripedNumberingId(actorId: string): string {
   const stripe = actorStripe(actorId);
   return String(stripe === 0 ? ACTOR_ID_STRIPE : stripe);
 }
+
+// ── A6: definitions that keep an existing list's geometry ───────────────────────────────
+
+describe('A6 — a definition minted with level geometry', () => {
+  const indentOf = (level: OoxmlElement): Record<string, string> | null => {
+    const ind = named(named(level, 'pPr')[0] ?? level, 'ind')[0];
+    if (!ind || named(level, 'pPr').length === 0) return null;
+    return Object.fromEntries(ind.attributes.map((entry) => [entry.localName, entry.value]));
+  };
+
+  const minted = (kind: ListKind, geometry: ListDefinitionGeometry, pkg = load()) => {
+    const result = ensureListDefinition(pkg, kind, geometry);
+    if (!result) throw new Error('ensureListDefinition refused');
+    const abstracts = named(numberingRoot(result.pkg), 'abstractNum');
+    return { ...result, levels: named(abstracts[abstracts.length - 1]!, 'lvl') };
+  };
+
+  test('writes the stated indent, suffix and alignment in CT_Lvl order', () => {
+    const { levels } = minted('ordered', [
+      { left: 360, hanging: 360, suffix: 'space', align: 'right' },
+      { left: 1000, firstLine: 200 },
+      {},
+    ]);
+    expect(childNames(levels[0]!)).toEqual(['start', 'numFmt', 'suff', 'lvlText', 'lvlJc', 'pPr']);
+    expect(levels.every((level) => isSequenceOrdered(childNames(level), CT_LVL_SEQUENCE))).toBe(
+      true
+    );
+    expect(indentOf(levels[0]!)).toEqual({ left: '360', hanging: '360' });
+    expect(attribute(named(levels[0]!, 'lvlJc')[0]!, 'val')).toBe('right');
+    expect(indentOf(levels[1]!)).toEqual({ left: '1000', firstLine: '200' });
+    // A level that stated no indent leaves the paragraph style's indent in charge.
+    expect(named(levels[2]!, 'pPr')).toHaveLength(0);
+    // A level the old list never declared takes the stock geometry.
+    expect(indentOf(levels[3]!)).toEqual({ left: '2880', hanging: '360' });
+  });
+
+  test('drops values outside the schema range instead of writing them', () => {
+    const { levels } = minted('bullet', [
+      { left: 0.5, hanging: -10, right: 99_999 },
+      { left: -720, hanging: 360, firstLine: 100 },
+    ]);
+    expect(named(levels[0]!, 'pPr')).toHaveLength(0);
+    // `w:hanging` and `w:firstLine` are one slot: the hanging indent wins.
+    expect(indentOf(levels[1]!)).toEqual({ left: '-720', hanging: '360' });
+  });
+
+  test('carries the old level paragraph properties around the authored indent', () => {
+    const source = load({
+      numbering:
+        `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0">` +
+        '<w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>' +
+        '<w:pPr><w:pStyle w:val="Heading1"/><w:numPr><w:numId w:val="9"/></w:numPr><w:bidi/>' +
+        '<w:ind w:left="9999"/><w:jc w:val="both"/><w:rPr><w:b/></w:rPr></w:pPr></w:lvl>' +
+        '</w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>',
+    });
+    const level = named(named(numberingRoot(source), 'abstractNum')[0]!, 'lvl')[0]!;
+    const paragraphProperties = named(level, 'pPr')[0]!;
+    const { levels } = minted('bullet', [{ left: 360, hanging: 360, paragraphProperties }], source);
+    expect(childNames(named(levels[0]!, 'pPr')[0]!)).toEqual(['bidi', 'ind', 'jc']);
+    expect(indentOf(levels[0]!)).toEqual({ left: '360', hanging: '360' });
+    // Copied, not shared: the old level keeps its own properties.
+    expect(childNames(paragraphProperties)).toContain('numPr');
+  });
+
+  test('reuses a definition with the same levels, never one with other geometry', () => {
+    const geometry: ListDefinitionGeometry = [{ left: 360, hanging: 360 }];
+    const stock = ensured(load(), 'bullet');
+    const first = minted('bullet', geometry, stock.pkg);
+    const again = minted('bullet', geometry, first.pkg);
+    const abstracts = (pkg: OoxmlPackage) => named(numberingRoot(pkg), 'abstractNum');
+    expect(abstracts(first.pkg)).toHaveLength(2);
+    expect(abstracts(again.pkg)).toHaveLength(2);
+    expect(again.numId).not.toBe(first.numId);
+    const num = named(numberingRoot(again.pkg), 'num').find(
+      (node) => attribute(node, 'numId') === again.numId
+    )!;
+    expect(attribute(named(num, 'abstractNumId')[0]!, 'val')).toBe(
+      attribute(abstracts(first.pkg)[1]!, 'abstractNumId')
+    );
+    // The reused definition still restarts its counters for the new list.
+    expect(named(num, 'lvlOverride').length).toBeGreaterThan(0);
+  });
+});

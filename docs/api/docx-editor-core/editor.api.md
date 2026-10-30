@@ -4354,8 +4354,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     // (undocumented)
     endComposition(): void;
     ensureHyperlinkRelationship(url: string, scope?: StoryScope): string | null;
-    // (undocumented)
-    ensureListDefinition(kind: ListKind): string | null;
+    ensureListDefinition(kind: ListKind, geometry?: ListDefinitionGeometry): string | null;
     ensureNumberingLevel(numId: string, level: number, kind: ListKind): boolean;
     findText(query: string, options?: DocumentSearchOptions_2): DocumentSearchResult;
     findText(queries: readonly string[], options?: DocumentSearchOptions_2): readonly DocumentSearchResult[];
