@@ -603,7 +603,7 @@ Native color controls differ between browsers. Native `change` means a committed
 
 ### Read command results
 
-`execute(value, options?)` returns `ExecResult`. If `ok` is `false`, use `code` for application logic and `reason` for feedback. If `ok` is `true`, `changed` tells you whether the document changed. At a collapsed caret in text, a formatting command can set the next typing format without changing the document. The change still creates a local undo entry. In an empty paragraph, the command formats the paragraph mark instead. When the mark changes, `changed` is `true` and the change is a document undo step.
+`execute(value, options?)` returns `ExecResult`. If `ok` is `false`, use `code` for application logic and `reason` for feedback. If `ok` is `true`, `changed` tells you whether the document changed. At a collapsed caret at the edge of a word, a formatting command can set the next typing format without changing the document. The change still creates a local undo entry. Inside a word, the command formats the whole word. In an empty paragraph, the command formats the paragraph mark instead. When the word or the mark changes, `changed` is `true` and the change is a document undo step.
 
 For grouped writes, `result.history?.kind` is `started`, `extended`, `split`, or `none`. A split means another history boundary interrupted the gesture; it does not mean the formatting failed. See the [boundary table and supported commands](/docs/2.x/core#group-one-gesture-into-one-undo-step).
 

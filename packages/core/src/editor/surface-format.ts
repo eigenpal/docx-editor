@@ -1,5 +1,6 @@
 import { createContextualRunFormatting } from '../layout/complex-script-formatting.ts';
 import { paragraphMarkFace } from '../layout/paragraph-mark-face.ts';
+import { caretWordAt as layoutCaretWordAt } from '../layout/caret-word.ts';
 
 // Run and paragraph property edits at the selection (paginated-surface seam).
 //
@@ -430,6 +431,28 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   };
 
   /**
+   * The word a collapsed caret strictly inside it formats, as a range, or null.
+   *
+   * A format picked inside a word formats the whole word as one undoable change, and the caret
+   * stays where it is. At a word's edge there is no word to format, so the format is armed for
+   * the next typed text instead. An armed format already waiting at the caret keeps the
+   * stored-marks lane, as at an empty paragraph.
+   */
+  const caretWordAt = (
+    from: SemanticPosition,
+    to: SemanticPosition
+  ): { from: SemanticPosition; to: SemanticPosition } | null => {
+    if (from.paragraphId !== to.paragraphId || from.offset !== to.offset) return null;
+    if (deps.pendingFormats()?.length) return null;
+    const word = layoutCaretWordAt(currentLayout.value, from.paragraphId, from.offset);
+    if (!word) return null;
+    return {
+      from: { paragraphId: from.paragraphId, offset: word.start },
+      to: { paragraphId: from.paragraphId, offset: word.end },
+    };
+  };
+
+  /**
    * Write paragraph properties over every paragraph the selection touches, in ONE commit.
    *
    * Shared by `setParagraphProperty` (one entry) and `setParagraphProperties` (a dialog's
@@ -521,6 +544,8 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       const { from, to } = orderedRange();
       const empty = emptyParagraphAtCaret(from, to);
       if (empty) return writeEmptyParagraphMark(empty, incoming);
+      const word = caretWordAt(from, to);
+      if (word) return writeRunProperty(word.from, word.to, incoming);
       if (from.paragraphId === to.paragraphId && from.offset === to.offset) {
         // A collapsed caret arms the value for the NEXT characters typed — picking a font
         // with nothing selected is how Word starts typing in that font.
@@ -580,16 +605,21 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       // The document answers from the same selection the toolbar reads, so a press after a
       // note reference toggles the face typing takes there, not the reference's face.
       const read = formattingSelection(selectionNow.value);
-      const documentActive = read.caretSpan
-        ? isRunPropertyActive(
-            currentLayout.value,
-            read.selection,
-            localName,
-            cells,
-            value,
-            deps.paragraphOrder()
-          )
-        : pendingPropertyState(read.markFace ?? null, localName, value) === true;
+      const { from, to } = orderedRange();
+      // Inside a word the press formats the whole word, so the word answers for its state: a
+      // partly bold word goes fully bold, as a selection over it would.
+      const word = cells && cells.length > 0 ? null : caretWordAt(from, to);
+      const documentActive =
+        word || read.caretSpan
+          ? isRunPropertyActive(
+              currentLayout.value,
+              word ? { anchor: word.from, head: word.to } : read.selection,
+              localName,
+              cells,
+              value,
+              deps.paragraphOrder()
+            )
+          : pendingPropertyState(read.markFace ?? null, localName, value) === true;
       // A pending entry answers for the toggle state ahead of the document — pressing Bold
       // twice at a caret must cancel, not double-arm.
       const active =
@@ -603,9 +633,9 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         ? { localName, attributes: { val: OFF_VALUES[localName] ?? '0' } }
         : { localName, ...(attributes ? { attributes } : {}) };
       if (cells && cells.length > 0) return writeRunPropertyOverCells(cells, incoming);
-      const { from, to } = orderedRange();
       const empty = emptyParagraphAtCaret(from, to);
       if (empty) return writeEmptyParagraphMark(empty, incoming);
+      if (word) return writeRunProperty(word.from, word.to, incoming);
       if (from.paragraphId === to.paragraphId && from.offset === to.offset) {
         // The stored-marks lane: a collapsed caret has no range to format, so the toggle is
         // remembered and applied to the next characters typed at this position (Word's

@@ -100,7 +100,8 @@ describe('a run-formatting control never looks live over a selection it cannot w
   });
 
   test('a collapsed caret arms pending formatting instead of disabling the marks', () => {
-    const editor = mount(p('alpha'));
+    // At a word's edge: inside a word a press formats the whole word instead.
+    const editor = mount(p('al pha'));
     select(editor, [0, 2], [0, 2]);
     const revision = editor.surface!.session.revision();
 
@@ -139,7 +140,7 @@ describe('a run-formatting control never looks live over a selection it cannot w
     expect(editor.snapshot().formatting?.bold).toBe(false);
 
     // Moving the caret discards an armed format instead of applying it somewhere else.
-    select(editor, [0, 1], [0, 1]);
+    select(editor, [0, 0], [0, 0]);
     editor.exec({ type: 'toggleMark', mark: 'italic' });
     expect(editor.snapshot().formatting?.italic).toBe(true);
     select(editor, [0, 6], [0, 6]);

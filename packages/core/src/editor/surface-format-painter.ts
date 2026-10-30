@@ -32,6 +32,7 @@ import {
 } from './surface-formatting.ts';
 import { wordRangeAt } from './surface-selection-ops.ts';
 import { inlineControlEdges } from '../layout/word-navigation-boundaries.ts';
+import { wordTextFromLayout } from '../layout/caret-word.ts';
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import type {
   FormatPainterMode,
@@ -308,9 +309,16 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
     //
     // The word stops at inline control edges, as a double-click does, but not at a tracked
     // deletion's edges: `runPropertyEdits` clips to the runs this view RENDERS, so a hidden
-    // half is never reached whatever the range says, and a replaced word paints whole.
+    // half is never reached whatever the range says, and a replaced word paints whole. Text the
+    // view hides joins the letters around it, so a hidden deletion does not split the word.
     const word = caret
-      ? wordRangeAt(deps.layout(), from, inlineControlEdges(deps.layout(), from.paragraphId))
+      ? wordRangeAt(
+          deps.layout(),
+          from,
+          inlineControlEdges(deps.layout(), from.paragraphId),
+          'after',
+          wordTextFromLayout(deps.layout(), from.paragraphId)
+        )
       : null;
     const spanFrom = word?.from ?? from;
     const spanTo = word?.to ?? to;
