@@ -1,7 +1,7 @@
 // The East Asian font the document defaults name counts as a Chinese, Japanese, or Korean face
 // by the face that draws it: a face that resolves as itself decides by its CJK code pages,
 // whatever its name or the font table's `w:charset`. A face that does not resolve keeps the
-// name lists, the East Asian families hosts commonly serve, and the font table. The legacy space rule shows the answer: in mode 14 with
+// name lists and the font table. The legacy space rule shows the answer: in mode 14 with
 // punctuation compression, spaces shrink only when the defaults name an East Asian face.
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
@@ -54,11 +54,11 @@ const firstLine = (options: FixtureOptions) =>
 
 describe('the document defaults name an East Asian face', () => {
   test('a CJK face on no name list counts when it resolves', () => {
-    expect(firstLine({ defaultFace: 'Fooming Sans' })).toBe(SIX);
+    expect(firstLine({ defaultFace: 'Fooming Sans CJK' })).toBe(SIX);
     expect(
       firstLine({
-        defaultFace: 'Fooming Sans',
-        measurer: resolving({ 'Fooming Sans': true }),
+        defaultFace: 'Fooming Sans CJK',
+        measurer: resolving({ 'Fooming Sans CJK': true }),
       })
     ).toBe(SEVEN);
   });
@@ -77,10 +77,7 @@ describe('the document defaults name an East Asian face', () => {
 
   test('a face that does not resolve keeps the name lists and the font table', () => {
     const none = resolving({});
-    expect(firstLine({ defaultFace: 'Fooming Sans', measurer: none })).toBe(SIX);
-    // A family hosts commonly serve counts by its name, so hosts with and without it agree.
-    expect(firstLine({ defaultFace: 'Noto Sans CJK SC', measurer: none })).toBe(SEVEN);
-    expect(firstLine({ defaultFace: 'Noto Sans JP', measurer: none })).toBe(SEVEN);
+    expect(firstLine({ defaultFace: 'Noto Sans CJK SC', measurer: none })).toBe(SIX);
     expect(firstLine({ defaultFace: 'Yu Mincho', measurer: none })).toBe(SEVEN);
     expect(
       firstLine({
@@ -102,13 +99,13 @@ describe('the document defaults name an East Asian face', () => {
         compatibility: 15,
         compression: 'compressPunctuation',
         paragraphProperties: '<w:jc w:val="both"/>',
-        defaultFace: 'Fooming Sans',
+        defaultFace: 'Fooming Sans CJK',
         measurer: resolving(faces),
       })
         .lines[0]!.spans.map((span) => span.text)
         .join('');
-    expect(word({ 'Fooming Sans': true })).toBe('abcdefg. ');
-    expect(word({ 'Fooming Sans': false })).toBe('abcdefg');
+    expect(word({ 'Fooming Sans CJK': true })).toBe('abcdefg. ');
+    expect(word({ 'Fooming Sans CJK': false })).toBe('abcdefg');
   });
 });
 
