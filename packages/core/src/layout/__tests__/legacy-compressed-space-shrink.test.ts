@@ -201,6 +201,21 @@ describe('balanced single-byte and double-byte widths: a space shrinks down to a
     expect(texts(result)[0]).toBe(SIX);
   });
 
+  test('a line that opens with spaces keeps natural spaces', () => {
+    // The same Century line that joins its seventh word, behind three spaces of 6.67 pt.
+    const lead = 3 * 24 * SPACE_EM['Century']!;
+    const opened = (options: FixtureOptions) =>
+      texts(
+        inFace('Century', natural('Century') + lead - 4.03 + 0.4, {
+          text: `   ${WORDS}`,
+          ...options,
+        })
+      )[0];
+    expect(opened({ balanceWidths: true })).toBe(`   ${SIX}`);
+    // Half the average width, without balanced widths, still shrinks such a line.
+    expect(opened({})).toBe(`   ${SEVEN}`);
+  });
+
   test('Times New Roman: a space of a quarter em keeps its advance', () => {
     expect(balanced('Times New Roman', natural('Times New Roman') - 0.1)).toBe(SIX);
   });

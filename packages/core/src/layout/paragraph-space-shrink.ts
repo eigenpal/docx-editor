@@ -261,6 +261,9 @@ export function spaceShrinkFit(
     passageStart === undefined ? 0 : spans.findIndex((span) => span.box.x >= passageStart - 0.001);
   if (
     !(ownSpace || (word.wordEnds && BARE_WORD.test(candidate))) ||
+    // With balanced widths, spaces that open a line take half an em each, which leaves a
+    // proportional face no room; such a line keeps natural spaces.
+    (rule.floor === 'quarterEm' && spans[0]?.text.startsWith(' ')) ||
     passageFirst < 0 ||
     wordStart < passageFirst ||
     spans.some(
