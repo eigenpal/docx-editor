@@ -1722,6 +1722,7 @@ function* layoutBlocksPass(
       flowColumn: () => (columns.count > 1 ? flowColumnIndex : undefined),
       contentHeight,
       unreservedContentHeight,
+      carriesNoteContinuation: () => reserveResume.carriesNoteAt(pages.length),
       advanceColumn: () => {
         cursorY = flow.cursorY;
         advanceColumn();

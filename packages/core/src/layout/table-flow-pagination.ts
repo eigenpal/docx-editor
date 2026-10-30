@@ -856,16 +856,9 @@ export function* paginateTableInFlowSteps(
           admitSpans(bodyRowIndex, row);
           continue;
         }
-        // A footnote continued onto this page keeps a whole tall row off it.
-        if (
-          staysWhole &&
-          tallRow.yieldsToNoteContinuation(
-            flow.cursorY - bandTop,
-            contentHeight(),
-            pageBand(),
-            noteYields++
-          )
-        ) {
+        // Before mode 15 a footnote continued onto this page keeps a row that cannot split off it.
+        const keptWhole = staysWhole || (tallRowStaysWhole && row.cantSplit && !tall);
+        if (keptWhole && tallRow.yieldsToNoteContinuation(flow, bandTop, noteYields++)) {
           breakForContinuation(admitsRepeatedHeaders);
           continue;
         }

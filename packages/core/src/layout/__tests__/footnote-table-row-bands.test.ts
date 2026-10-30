@@ -957,12 +957,36 @@ describe('a whole row taller than the page before mode 15', () => {
   test('from mode 15 a carried note does not move a tall row', () => {
     const laid = layoutProbe(
       cite('INTRO', 1) + tbl(tall(para('R3c', 15))) + TAIL,
-      new Map([[1, 20]]),
+      new Map([[1, 40]]),
       undefined,
       1,
       15
     );
-    expect(laid.layout.pages[1]!.fragments.length).toBeGreaterThan(0);
+    const at = rowPage(laid.layout);
+    // The row starts on a page that the carried note reaches.
+    expect(notesOn(laid.layout, at)).toContain('1c:-');
+  });
+
+  test('a carried note keeps a row that fits only the whole page off its page', () => {
+    // Row 3 has w:cantSplit and 12 lines (168pt): it fits the 170pt band only without notes.
+    const fullPage = rows(5, new Map(), (n, spec) =>
+      n === 3
+        ? { ...spec, trPr: '<w:cantSplit/>', first: para('R3a', 12), second: para('R3c', 1) }
+        : spec
+    );
+    for (const mode of [undefined, 14]) {
+      const laid = layoutProbe(
+        cite('INTRO', 1) + tbl(fullPage) + TAIL,
+        new Map([[1, 40]]),
+        undefined,
+        1,
+        mode
+      );
+      const at = rowPage(laid.layout);
+      expect(notesOn(laid.layout, at - 1)).toEqual(['1c:-']);
+      expect(notesOn(laid.layout, at).some((note) => note.startsWith('1'))).toBe(false);
+      expect(laid.fixedPoint).toBe(true);
+    }
   });
 
   test('a single note referenced past the bottom margin stays on the row page', () => {

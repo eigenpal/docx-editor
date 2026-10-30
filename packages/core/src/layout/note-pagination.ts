@@ -64,6 +64,7 @@ import {
   growFootnoteReserves,
   MIN_FOOTNOTE_BODY_BAND_PT,
   noteColumnBudgetPt,
+  markCarriedNotePage,
   notesReserveContextKey,
   pageNoteColumnPt,
   recordFootnoteReserve,
@@ -962,11 +963,11 @@ function buildFootnoteArea(
   // re-derives the same test without knowing this page's carry state, and the two must be
   // exact complements or a note is neither evicted nor held out and the loop orbits. Only
   // reserve mode evicts, so only reserve mode pays the plain-separator fetch.
-  const keepWholeBudget = !options?.reserveBandOf
-    ? 0
-    : separatorKind === 'separator'
-      ? columnBudget
-      : noteColumnBudgetPt(page.contentBox.height, fetchSeparator('separator').flowHeight);
+  const plainSeparator = () =>
+    separatorKind === 'separator' ? separator : fetchSeparator('separator');
+  const keepWholeBudget = options?.reserveBandOf
+    ? noteColumnBudgetPt(page.contentBox.height, plainSeparator().flowHeight)
+    : 0;
   const firstContentTop = options?.reserveBandOf ? firstBodyContentTopPt(page) : 0;
 
   // Continuations from the previous page place first.
@@ -2227,7 +2228,6 @@ function computeFootnoteReservesWithPolicy(
       }
     }
 
-    // Column budget for the note stack (separator is added inside buildFootnoteArea).
     // Each reference keeps the body band down to ITS OWN line (Word starts a footnote on
     // the page that references it): a reserve that ignores the reference evicts its own
     // line to the next page, and the reflow loop then oscillates between the two
@@ -2235,6 +2235,7 @@ function computeFootnoteReservesWithPolicy(
     // reservation nothing fills. Per reference and never the page's lowest one, whose
     // floor would stably strangle every note above it on a multi-reference page.
     const carryWasEmpty = carry.size === 0;
+    if (!carryWasEmpty) markCarriedNotePage(reserves, page.index);
     const reasonsBefore = reasons.length;
     const { area, nextCarry, evictionTopPt, overRow } = buildFootnoteArea(
       bodyPage,
@@ -2269,7 +2270,6 @@ function computeFootnoteReservesWithPolicy(
       evictionTopPt !== undefined
         ? Math.max(0, bodyPage.contentBox.height - evictionTopPt - RESERVE_BOUNDARY_BACKOFF_PT)
         : 0;
-    // An area over a whole row past the bottom margin gains no room (`overRowAreaPt`).
     const areaHeight = overRowAreaPt(overRow, !carryWasEmpty, area?.box.height ?? 0, maxArea);
     const localNeeded = Math.min(Math.max(areaHeight, evictionNeed), maxArea);
     if (memo && carryWasEmpty && carry.size === 0) {

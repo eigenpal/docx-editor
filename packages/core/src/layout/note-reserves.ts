@@ -56,6 +56,52 @@ export const RESERVE_BOUNDARY_BACKOFF_PT = 0.5;
 export const HELD_RESERVE_TOLERANCE_PT = 2 * RESERVE_BOUNDARY_BACKOFF_PT;
 
 /**
+ * The pages of a reserve map that a footnote continued from an earlier page reaches, keyed by
+ * DOCUMENT page index. The notes pass records them beside the heights
+ * (`markCarriedNotePage`), so the body pass can tell a continued note's reserve from one for
+ * the page's own notes (`table-tall-row.ts`). Kept off the map's entries so every reader of
+ * heights stays as it is; the map helpers below carry the pages over.
+ */
+const carriedNotePages = new WeakMap<ReadonlyMap<number, number>, Set<number>>();
+
+/** Record that a footnote continued from an earlier page reaches `pageIndex`. */
+export function markCarriedNotePage(
+  reserves: ReadonlyMap<number, number>,
+  pageIndex: number
+): void {
+  let pages = carriedNotePages.get(reserves);
+  if (!pages) carriedNotePages.set(reserves, (pages = new Set()));
+  pages.add(pageIndex);
+}
+
+/** Whether a footnote continued from an earlier page reaches `pageIndex` in `reserves`. */
+export function carriesNoteTo(
+  reserves: ReadonlyMap<number, number> | undefined,
+  pageIndex: number
+): boolean {
+  return reserves !== undefined && carriedNotePages.get(reserves)?.has(pageIndex) === true;
+}
+
+/** Copy the carried pages of every map in `from` onto `to`. */
+function keepCarriedPages(
+  to: ReadonlyMap<number, number>,
+  ...from: ReadonlyMap<number, number>[]
+): void {
+  for (const map of from)
+    for (const page of carriedNotePages.get(map) ?? []) markCarriedNotePage(to, page);
+}
+
+/** The carried pages of `reserves`, sorted, as a key fragment; empty when there are none. */
+function carriedPagesKey(
+  reserves: ReadonlyMap<number, number>,
+  include: (page: number) => boolean = () => true,
+  slotOf: (page: number) => number = (page) => page
+): string {
+  const pages = [...(carriedNotePages.get(reserves) ?? [])].filter(include).map(slotOf);
+  return pages.length === 0 ? '' : `|nc:${pages.sort((a, b) => a - b).join(',')}`;
+}
+
+/**
  * The note-reserve slice of one section's layout context key.
  *
  * The reserve map is keyed by DOCUMENT page index (`computeFootnoteReserves`), while a
@@ -91,9 +137,14 @@ export function notesReserveContextKey(
     const localSlot = pageSlot - pageIndexStart;
     if (localSlot >= 0 && localSlot < pageBound) entries.push([localSlot, height]);
   }
-  if (entries.length === 0) return '';
+  const carried = carriedPagesKey(
+    reserves,
+    (page) => page - pageIndexStart >= 0 && page - pageIndexStart < pageBound,
+    (page) => page - pageIndexStart
+  );
+  if (entries.length === 0) return carried;
   entries.sort((a, b) => a[0] - b[0]);
-  return `|nr:${entries.map(([localSlot, height]) => `${localSlot}=${height}`).join(',')}`;
+  return `|nr:${entries.map(([localSlot, height]) => `${localSlot}=${height}`).join(',')}${carried}`;
 }
 
 /**
@@ -118,6 +169,7 @@ export function compactFootnoteReserves(
   for (const [pageIndex, height] of reserves) {
     if (height > 0) next.set(pageIndex, height);
   }
+  keepCarriedPages(next, reserves);
   return next;
 }
 
@@ -128,7 +180,7 @@ export function footnoteReservesEqual(
 ): boolean {
   const left = compactFootnoteReserves(a);
   const right = compactFootnoteReserves(b);
-  if (left.size !== right.size) return false;
+  if (left.size !== right.size || carriedPagesKey(a) !== carriedPagesKey(b)) return false;
   for (const [pageIndex, height] of left) {
     if ((right.get(pageIndex) ?? 0) !== height) return false;
   }
@@ -145,15 +197,18 @@ export function growFootnoteReserves(
     if (height <= 0) continue;
     next.set(pageIndex, Math.max(next.get(pageIndex) ?? 0, height));
   }
+  keepCarriedPages(next, computed);
   return next;
 }
 
 /** Canonical content fingerprint, for cycle detection over adopted maps. */
 export function footnoteReservesFingerprint(reserves: ReadonlyMap<number, number>): string {
-  return [...compactFootnoteReserves(reserves)]
-    .map(([pageIndex, height]) => `${pageIndex}=${height}`)
-    .sort()
-    .join(',');
+  return (
+    [...compactFootnoteReserves(reserves)]
+      .map(([pageIndex, height]) => `${pageIndex}=${height}`)
+      .sort()
+      .join(',') + carriedPagesKey(reserves)
+  );
 }
 
 /** Seed reserves a multi-section pass moved to its own page indices, per layout session. */
