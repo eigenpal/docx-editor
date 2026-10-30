@@ -37,6 +37,7 @@ import {
   type DocxEditorRootProps,
 } from './useDocxEditorRoot';
 import { useDocxEditor } from './context';
+import { ChromeDarkContext, useResolvedDark } from './color-mode-context';
 
 export { docxEditorFacadeListenerCount, type DocxEditorRootProps } from './useDocxEditorRoot';
 
@@ -151,6 +152,7 @@ export const DocxEditorRoot = defineComponent({
       default: undefined,
     },
     imageDecodePort: { type: Object as PropType<ImageDecodePort>, default: undefined },
+    colorMode: { type: String as PropType<'light' | 'dark' | 'system'>, default: undefined },
   },
   emits: {
     ready: (_editor: Editor) => true,
@@ -159,6 +161,11 @@ export const DocxEditorRoot = defineComponent({
     revisionMarkupChange: (_settings: ResolvedRevisionMarkup) => true,
   },
   setup(props, { emit, slots }) {
+    // The resolved colour mode, for the parts that put `.docx-editor` on themselves.
+    provide(
+      ChromeDarkContext,
+      useResolvedDark(() => props.colorMode)
+    );
     const ownedAbove = useDocxEditorRootOwned();
     const hostEmit = inject(docxEditorRootHostEmitKey, null);
     if (ownedAbove && hostEmit) {

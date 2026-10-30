@@ -151,7 +151,13 @@
     "subtitle": "Sous-titre",
     "heading1": "Titre 1",
     "heading2": "Titre 2",
-    "heading3": "Titre 3"
+    "heading3": "Titre 3",
+    "normal": "Normal",
+    "headingLevel": "Titre {level}",
+    "noSpacing": "Sans interligne",
+    "quote": "Citation",
+    "intenseQuote": "Citation intense",
+    "listParagraph": "Paragraphe de liste"
   },
   "font": {
     "selectAriaLabel": "Sélectionner une police",
@@ -1015,7 +1021,13 @@
     "suggestingNeedsAuthor": "Les suggestions nécessitent un auteur. Définissez l’auteur dans la configuration de l’éditeur.",
     "pictureSelected": "Une image est sélectionnée. Placez le curseur dans le texte pour insérer une image.",
     "chartDrawing": "Ceci est un graphique. Vous pouvez le supprimer, mais pas le modifier comme une image.",
-    "chartClipboard": "La sélection contient un graphique. Les graphiques ne peuvent pas être copiés, coupés ni collés."
+    "chartClipboard": "La sélection contient un graphique. Les graphiques ne peuvent pas être copiés, coupés ni collés.",
+    "nothingToUndo": "Il n’y a rien à annuler",
+    "nothingToRedo": "Il n’y a rien à rétablir",
+    "outermostLevel": "La sélection est déjà au niveau le plus externe",
+    "cannotIndentFurther": "Impossible d’augmenter davantage le retrait de la sélection",
+    "noGoToView": "Atteindre n’est pas disponible ici",
+    "noBookmarkDialog": "Impossible d’ajouter des signets ici"
   },
   "equationPopup": {
     "apply": "Appliquer",

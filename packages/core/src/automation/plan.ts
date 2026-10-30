@@ -34,6 +34,7 @@ import { ownsInsertedControl } from './tracked-content-controls.ts';
 import { isInlineAtomOperation, planInlineAtoms } from './plan-fields.ts';
 import { planTableOperation } from './plan-tables.ts';
 import { planVirtualFurniture } from './virtual-furniture.ts';
+import { emptyFrameWriteRefusal } from './empty-text-frame.ts';
 import { isAutomationCommand } from './operations.ts';
 import { planPictures } from './plan-pictures.ts';
 import {
@@ -2851,7 +2852,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         return refuse('conflicting-operations', 'header/footer creation must commit alone');
       const conflict = commandPolicy.conflict(operation);
       if (conflict) return refuse('conflicting-operations', conflict.message, conflict.detail);
-      const planned = plan(operation, trackingAuthor);
+      const planned = emptyFrameWriteRefusal(
+        operation,
+        () => plan(operation, trackingAuthor),
+        handles,
+        packageReads
+      );
       if (planned.ok && planned.kind === 'command' && planned.solitary) {
         if (commandPolicy.hasCommands)
           return refuse('conflicting-operations', 'header/footer creation must commit alone');

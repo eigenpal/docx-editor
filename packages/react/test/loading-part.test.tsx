@@ -102,19 +102,26 @@ const SLICED_OPEN_TEST_TIMEOUT_MS = 45_000;
 
 /**
  * Resolves when the editor reports that the opening document laid out its last page
- * (`document.open`, outcome `opened`). The tests await this instead of polling the DOM while the
- * open runs: a failed DOM assertion formats the element it received, with the whole page tree
- * behind it, and a poll re-ran that after every slice, which on a slow runner stalled each slice
- * for seconds.
+ * (`document.open`, outcome `opened`), and rejects with the open's code on any other outcome.
+ * The tests await this instead of polling the DOM while the open runs: a failed DOM assertion
+ * formats the element it received, with the whole page tree behind it, and a poll re-ran that
+ * after every slice, which on a slow runner stalled each slice for seconds.
  */
 function openSettled(): { module: EditorModule; settled: Promise<void> } {
   let resolve!: () => void;
-  const settled = new Promise<void>((done) => (resolve = done));
+  let reject!: (error: Error) => void;
+  const settled = new Promise<void>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
   return {
     module: {
       id: 'test-open-settled',
       onDiagnostic: (event) => {
-        if (event.kind === 'document.open' && event.outcome === 'opened') resolve();
+        if (event.kind !== 'document.open') return;
+        if (event.outcome === 'opened') resolve();
+        // A refused or crashed open ends at once, with its code, instead of at the test budget.
+        else reject(new Error(`the open was rejected: ${event.code}`));
       },
     },
     settled,
@@ -161,6 +168,15 @@ function trackedIndicator(places: string[]) {
 
 const LOADING = '.docx-editor__loading';
 const SPINNER = '.docx-editor__loading-spinner';
+
+/**
+ * Whether `selector` matches nothing in `container`. Inside `waitFor`, assert on this and not on
+ * the element: every failed retry formats the received element, and formatting a painted
+ * document walks the whole window, which costs seconds per retry on a slow runner.
+ */
+function absent(container: HTMLElement, selector: string): boolean {
+  return container.querySelector(selector) === null;
+}
 
 afterEach(() => {
   cleanup();
@@ -357,7 +373,7 @@ describe('DocxEditor.Loading', () => {
       expect(view.container.textContent).toContain('large body');
     });
     await waitFor(() => {
-      expect(view.container.querySelector(LOADING)).toBeNull();
+      expect(absent(view.container, LOADING)).toBe(true);
     });
   });
 
@@ -387,7 +403,7 @@ describe('DocxEditor.Loading', () => {
     await act(async () => {});
     expect(view.container.querySelector(LOADING)).toBe(overlay);
     await waitFor(() => expect(view.container.textContent).toContain('large body'));
-    await waitFor(() => expect(view.container.querySelector(LOADING)).toBeNull());
+    await waitFor(() => expect(absent(view.container, LOADING)).toBe(true));
     observer.disconnect();
     // Removed once, when the pages arrive, and never replaced on the way.
     expect(removed.filter((node) => node === overlay)).toHaveLength(1);
@@ -637,9 +653,9 @@ describe('DocxEditor.Loading', () => {
       await act(() => open.settled);
       expect(places[0]).toBe('screen');
       expect(places).toContain('below the pages');
-      expect(view.container.querySelector(LOADING) === null).toBe(true);
-      expect(view.container.querySelector('.docx-opening-indicator') === null).toBe(true);
-      expect(view.container.querySelector('.mine') === null).toBe(true);
+      expect(absent(view.container, LOADING)).toBe(true);
+      expect(absent(view.container, '.docx-opening-indicator')).toBe(true);
+      expect(absent(view.container, '.mine')).toBe(true);
     },
     SLICED_OPEN_TEST_TIMEOUT_MS
   );
@@ -710,10 +726,21 @@ describe('packaged DocxEditor loading screen', () => {
       expect(view.container.querySelector(SPINNER)).toBeNull();
       await act(() => open.settled);
       expect(places).toContain('below the pages');
-      expect(view.container.querySelector('.mine') === null).toBe(true);
+      expect(absent(view.container, '.mine')).toBe(true);
     },
     SLICED_OPEN_TEST_TIMEOUT_MS
   );
+
+  test('a file that cannot be opened ends the wait at once, with the open code', async () => {
+    const open = openSettled();
+    const started = performance.now();
+    render(<DocxEditor document={strToU8('not a docx package')} modules={[open.module]} />);
+    await act(async () => {
+      await expect(open.settled).rejects.toThrow(/the open was rejected: open\./);
+    });
+    // Ends with the refusal itself, far inside any test budget.
+    expect(performance.now() - started).toBeLessThan(5_000);
+  });
 
   test('loadingIndicator without chrome warns once in development', () => {
     const warn = console.warn;

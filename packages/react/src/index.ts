@@ -41,6 +41,11 @@ export { useDocxEditor, ReviewRailContext, type ReviewRailRegistry } from './edi
 export { useEditorState, editorStateActiveSubscriptionCount } from './editor/useEditorState';
 export { notificationYieldsToTask } from './editor/deferred-notifier';
 export { useScopeClassName } from './editor/scope-context';
+export {
+  useEditorColorMode,
+  type ResolvedColorMode,
+  type UseEditorColorModeReturn,
+} from './editor/color-mode-context';
 export { LOADING_SNAPSHOT } from './editor/loading-snapshot';
 // Context-fed chrome parts (also reachable as `DocxEditor.HorizontalRuler` /
 // `.VerticalRuler` / `.DocumentOutline`): thin reactive wrappers over the props-driven

@@ -38,6 +38,12 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'a comment needs a selected range': 'disabledReason.commentSelection',
   // Keyed on `NO_COMMENT_DRAFT_VIEW` in the engine's comment draft chrome.
   'no comment draft view is registered': 'disabledReason.noCommentDraftView',
+  'no Go To view is registered': 'disabledReason.noGoToView',
+  'no bookmark dialog is registered': 'disabledReason.noBookmarkDialog',
+  'nothing to undo': 'disabledReason.nothingToUndo',
+  'nothing to redo': 'disabledReason.nothingToRedo',
+  'the selection is already at the outermost level': 'disabledReason.outermostLevel',
+  'the selection cannot indent any further': 'disabledReason.cannotIndentFurther',
   // Sentences earlier releases gave; hosts that override their keys keep working.
   // Earlier releases refused paragraph formatting inside a data-bound control with this one.
   'this content is bound to data and cannot change': 'disabledReason.boundParagraphFormat',

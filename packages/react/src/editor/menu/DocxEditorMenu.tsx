@@ -72,7 +72,7 @@ import {
   type MenuId,
   type MenuOverflowValue,
 } from './menu-context';
-import { FIXED_ATTRIBUTE, useToolbarOverflow } from '../toolbar/useToolbarOverflow';
+import { FIXED_ATTRIBUTE, useToolbarGroupOverflow } from '../toolbar/useToolbarOverflow';
 import { MORE_PATHS } from '../toolbar/ToolbarOverflow';
 import { download, downloadName } from './download';
 import { barTriggers, isPoppedOutEditorTarget, restoreExportFocus } from './menu-keyboard';
@@ -99,7 +99,7 @@ import {
   type MenuPartComponent,
 } from './parts';
 import { MenuHelp, MenuReportIssue } from './menu-help';
-import { useScopeClassName } from '../scope-context';
+import { useChromeScopeClassName } from '../color-mode-context';
 import { MenuReview, MenuReviewers } from './Reviewers';
 import { usePopupEscape } from '../toolbar/usePopupEscape';
 
@@ -242,7 +242,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
   const dialogs = useDialogHost();
   const popups = usePopupConfig();
   // Skip the scope class when the packaged wrapper already carries it.
-  const scopeClassName = useScopeClassName();
+  const scopeClassName = useChromeScopeClassName();
   const chromeDir = useChromeDir();
   const {
     className,
@@ -516,7 +516,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
   }
   // The end of the bar leaves first: Help, then Review, and so on toward File.
   const collapseIds = [...menuIds].reverse();
-  const { attach, overflow } = useToolbarOverflow(overflowEnabled, menuIds, collapseIds);
+  const { attach, overflow } = useToolbarGroupOverflow(overflowEnabled, menuIds, collapseIds);
   const overflowValue = useMemo<MenuOverflowValue>(
     () => ({ measuring: overflowEnabled, overflow, inMore: false }),
     [overflowEnabled, overflow]

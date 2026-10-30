@@ -122,7 +122,7 @@ The legacy `Document.footnotes` and `Document.endnotes` accessors enumerate note
 
 A text box's `body` is its own story. Read, search, and edit it with supported `Body` members. The main body's text, search, comments, and tracked changes exclude text-box content. Use the text-box body's tracked changes to review changes there. Text-box `insertComment` refuses with `InvalidArgument`.
 
-Supported text-bearing shapes in the main body, headers, and footers expose their own `body`. This includes geometric shapes with their own text story. Pictures and linked text boxes without their own story refuse `body` with `InvalidArgument`. Shapes inside notes and text boxes are listed, but their `body` refuses with `InvalidArgument`.
+Text boxes and geometric shapes in the main body, headers, and footers expose their own `body`. If the file stores no text story for such a shape, its `body` reads as an empty story. Writes to that empty story refuse with `InvalidArgument`, and `debugInfo.innerError.code` is `edit.unsupported-story`. Pictures, groups, lines, connectors, and linked text boxes that continue another box refuse `body` with `InvalidArgument`. Shapes inside notes and text boxes are listed, but their `body` refuses with `InvalidArgument`.
 
 The following example replaces a client name when the main body contains exactly one text box:
 
@@ -150,9 +150,48 @@ await runtime.run(async (context) => {
 
 Sync after accessing `shape.body` and before searching it. Separate writes to different stories with `context.sync()`. Shape geometry, text frames, and shape insertion or deletion are not exposed.
 
-Repeated `getByTypes()` calls keep only types allowed by every filter. Unknown type values refuse with `InvalidArgument`. Duplicate or missing drawing IDs refuse shape enumeration.
+### Find text that lives in text boxes
 
-The API reads alternate drawing content through the branch selected for layout. Shapes selected through a legacy VML fallback are not listed. A standalone legacy VML shape has no drawing ID, so the API does not list it, and its text box story is not reachable through `shape.body`. For supported DrawingML text-box stories, saving also updates the retained VML copy.
+Some documents keep their visible text in floating text boxes. Converted web pages and forms often have this layout. The main body of such a document can hold only empty paragraphs that anchor the boxes. If `body.text` is empty or short, read the text boxes before you choose where to edit. Do not insert text into an empty anchor paragraph: its text appears behind or under the boxes.
+
+The following example reads every text box and geometric shape in one sync, then redlines one match:
+
+```ts
+import { ShapeType } from '@docx-editor.dev/editor-api';
+
+await runtime.run(async (context) => {
+  const shapes = context.document.body.shapes.getByTypes([
+    ShapeType.textBox,
+    ShapeType.geometricShape,
+  ]);
+  shapes.load('items/id');
+  await context.sync();
+
+  const bodies = shapes.items.map((shape) => {
+    shape.body.load('text');
+    return shape.body;
+  });
+  await context.sync();
+
+  const target = bodies.find((body) => body.text.includes('Acme Holdings'));
+  if (!target) throw new Error('No text box holds the phrase.');
+  const matches = target.search('Acme Holdings', { matchCase: true });
+  matches.load('items');
+  await context.sync();
+
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  matches.items[0]!.insertText('Beta Logistics', 'Replace');
+  await context.sync();
+});
+```
+
+Repeated `getByTypes()` calls keep only types allowed by every filter. Unknown type values refuse with `InvalidArgument`. Duplicate or missing DrawingML drawing IDs refuse shape enumeration.
+
+The API reads alternate drawing content through the branch selected for layout. Shapes selected through a legacy VML fallback are not listed. For supported DrawingML text-box stories, saving also updates the retained VML copy.
+
+A standalone legacy VML shape (`w:pict`) is listed with the number in its shape ID. For example, `o:spid="_x0000_s1025"`, or `id="_x0000_s1025"` without `o:spid`, gives `id` 1025. Its `name` is the `id` attribute. A text box shape (`#_x0000_t202`) is a `TextBox`, another shape with text is a `GeometricShape`, and a VML picture is a `Picture`. WordArt, horizontal rules, and an embedded object preview inside `w:pict` are `Unsupported`. An embedded object in `w:object` is not listed. Tracked changes in a listed VML text box belong to its `body`, so the main body's `acceptAll()` and `rejectAll()` leave them pending, as they do for DrawingML text boxes.
+
+A VML shape without a numbered shape ID is not listed. Inline and floating VML shapes number separately, so two shapes can share a number. A VML shape whose number another shape also uses is not listed either. The text of a VML text box that is not listed is not reachable through the API, and its tracked changes stay with the owner story.
 
 ## Next steps
 

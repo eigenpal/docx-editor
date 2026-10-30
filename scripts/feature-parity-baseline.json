@@ -305,6 +305,7 @@
       "propsAddedInReact": [
         "author",
         "children",
+        "colorMode",
         "contentLockPolicy",
         "document",
         "fieldResults",
@@ -553,6 +554,7 @@
         "author",
         "change",
         "children",
+        "colorMode",
         "contentLockPolicy",
         "document",
         "editorRef",
