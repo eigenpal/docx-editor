@@ -285,5 +285,5 @@ describe('undoing a split into three paragraphs while a peer types in the middle
 
   // `split(['; '], true)` trims the delimiters, so the pieces do not spell the text the split
   // removed and are not moved text: the typing has nothing to follow on undo (#1653).
-  test.todo('a split that trims its delimiters keeps the typing on undo and on redo');
+  test.todo('a split that trims its delimiters keeps the typing on undo and on redo', () => {});
 });
