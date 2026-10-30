@@ -33,6 +33,7 @@ import {
 } from './limits.ts';
 import type * as Y from 'yjs';
 import {
+  childArrayOf,
   hasPendingUpdates,
   isNodeMap,
   JOURNAL_ORIGIN,
@@ -44,6 +45,7 @@ import { SharedTextValueRefused } from './paragraph-text-codec.ts';
 import { tokensOfParagraph, type Token } from './paragraph-text-diff.ts';
 import { JournalProjection, projectEffect } from './journal-projection.ts';
 import type { DocumentRegistry } from './registry.ts';
+import { inheritSplitPoints, noteMintedParagraph } from './split-points.ts';
 
 export type JournalRefusalCode =
   | LimitCode
@@ -312,6 +314,8 @@ function applyEffect(
           attributes: [],
           bindings: [],
         });
+        if (effect.descriptor.kind === 'paragraph')
+          noteMintedParagraph(registry.schema.nodes.get(effect.descriptor.logicalId));
       }
       return;
     case 'spliceText':
@@ -353,6 +357,12 @@ function applyEffect(
         effect.parentLogicalId,
         appendsToPartRoot(registry, effect, length) ? length : effect.start,
         effect.deleteCount,
+        effect.childLogicalIds
+      );
+      // A paragraph this edit created takes the split points of the one listed before it.
+      inheritSplitPoints(
+        (id) => registry.schema.nodes.get(id),
+        childArrayOf(registry.schema.nodes.get(effect.parentLogicalId)),
         effect.childLogicalIds
       );
       return;
