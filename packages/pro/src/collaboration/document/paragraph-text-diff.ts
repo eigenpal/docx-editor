@@ -249,8 +249,10 @@ function diffCodePoints(
   // of the next. Of the two tie-breaks, keep the one that keeps more, and of two that keep as
   // much, the one with fewer separate changes: typing "lore" before "on" is one insert, not
   // an "l", the existing "o", and then "re" with a new "o".
-  const first = scriptOf(before, after, strongMatches(before, after, false));
-  const second = scriptOf(before, after, strongMatches(before, after, true));
+  const firstStrong = strongMatches(before, after, false);
+  const secondStrong = strongMatches(before, after, true);
+  const first = scriptOf(before, after, firstStrong);
+  const second = scriptOf(before, after, secondStrong);
   const [firstKept, secondKept] = [equalCount(first), equalCount(second)];
   let chosen =
     secondKept !== firstKept
@@ -260,13 +262,35 @@ function diffCodePoints(
       : changeCount(second) < changeCount(first)
         ? second
         : first;
-  // A run split by formatting can keep its text element on a later piece, so one strong match
-  // pairs a letter with an equal letter further on and leaves the text between to be written
-  // again. Matched by value from the ends instead, the same letters all stay; that alignment
-  // wins only when it keeps more.
-  const ends = scriptOf(before, after, strongMatches(before, after, false, false));
-  if (equalCount(ends) > Math.max(firstKept, secondKept)) chosen = ends;
+  // Two more ways keep letters an alignment can leave. A gap that only deletes keeps every
+  // token the edit kept, wherever it stands in the gap. And a run split by formatting can keep
+  // its text element on a later piece, so one strong match pairs a letter with an equal letter
+  // further on and leaves the text between to be written again; matched by value from the ends
+  // instead, the same letters all stay. Either wins only when it keeps more, so an edit whose
+  // alignment keeps every token it can, as typing does, never pays for them.
+  let kept = Math.max(firstKept, secondKept);
+  if (kept < Math.min(before.length, after.length) && writesAgain(chosen, before, after)) {
+    const endsStrong = strongMatches(before, after, false, false);
+    for (const strong of [firstStrong, secondStrong, endsStrong]) {
+      const candidate = scriptOf(before, after, strong, true);
+      const count = equalCount(candidate);
+      if (count > kept) [chosen, kept] = [candidate, count];
+    }
+  }
   return dropScatteredLetters(joinInserts(chosen, after), before);
+}
+
+/**
+ * Whether a script inserts a token equal to one it deletes: only then can another alignment
+ * keep more. Typing inserts new letters and deletes nothing, so it never asks for one.
+ */
+function writesAgain(steps: readonly Step[], before: readonly Token[], after: readonly Token[]) {
+  const deleted = new Set<string>();
+  for (const step of steps) if (step.op === 'del') deleted.add(before[step.before]!.key);
+  if (deleted.size === 0) return false;
+  for (const step of steps)
+    if (step.op === 'ins' && deleted.has(after[step.after]!.key)) return true;
+  return false;
 }
 
 /**
@@ -472,7 +496,9 @@ function equalCount(steps: readonly Step[]): number {
 function scriptOf(
   before: readonly Token[],
   after: readonly Token[],
-  strong: readonly (readonly [number, number])[]
+  strong: readonly (readonly [number, number])[],
+  /** Whether a gap that only deletes keeps the tokens the edit kept (`keptByDeletion`). */
+  keepDeleted = false
 ): Step[] {
   const steps: Step[] = [];
   let i = 0;
@@ -514,7 +540,7 @@ function scriptOf(
         }
       }
     }
-    const onlyDeleted = keptByDeletion(before, i, bEnd, after, j, aEnd);
+    const onlyDeleted = keepDeleted ? keptByDeletion(before, i, bEnd, after, j, aEnd) : null;
     if (onlyDeleted) {
       for (const step of onlyDeleted) steps.push(step);
       i = bEnd;
@@ -555,13 +581,16 @@ function keptByDeletion(
     for (let k = j; k < aEnd; k += 1) {
       const token = after[k]!;
       let found = -1;
+      // The first equal token, or one a few places on that stays in its revisions: the look
+      // ahead is short, so the match stays linear in the gap.
       for (let candidate = at; candidate < bEnd; candidate += 1) {
+        if (found >= 0 && candidate - found > PREFERRED_LOOKAHEAD) break;
         if (before[candidate]!.key !== token.key) continue;
-        if (found < 0) found = candidate;
         if (!prefer || keepsRevisions(before[candidate]!.trail ?? '', token.trail ?? '')) {
           found = candidate;
           break;
         }
+        if (found < 0) found = candidate;
       }
       if (found < 0) return null;
       for (; at < found; at += 1) steps.push({ op: 'del', before: at });
@@ -571,8 +600,12 @@ function keptByDeletion(
     for (; at < bEnd; at += 1) steps.push({ op: 'del', before: at });
     return steps;
   };
-  return match(true) ?? match(false);
+  const preferred = (aEnd - j) * (bEnd - i) <= MAX_DIFF_CELLS ? match(true) : null;
+  return preferred ?? match(false);
 }
+
+/** How far past the first equal token a gap that only deletes looks for one in its revisions. */
+const PREFERRED_LOOKAHEAD = 16;
 
 /** The weak matches at the ends of one gap, and the gap they leave. */
 interface WeakEnds {
@@ -677,9 +710,21 @@ function inRevision(
  */
 function keepsRevisions(from: string, to: string): boolean {
   if (from === to) return true;
+  const key = `${from}\u0000${to}`;
+  const cached = keptRevisions.get(key);
+  if (cached !== undefined) return cached;
   const kept = new Set((JSON.parse(to || '[]') as unknown[]).map((entry) => JSON.stringify(entry)));
-  return (JSON.parse(from || '[]') as unknown[]).every((entry) => kept.has(JSON.stringify(entry)));
+  const answer = (JSON.parse(from || '[]') as unknown[]).every((entry) =>
+    kept.has(JSON.stringify(entry))
+  );
+  // A paragraph holds few revision trails, so the answers repeat; the bound keeps it small.
+  if (keptRevisions.size >= MAX_KEPT_REVISIONS) keptRevisions.clear();
+  keptRevisions.set(key, answer);
+  return answer;
 }
+
+const MAX_KEPT_REVISIONS = 1024;
+const keptRevisions = new Map<string, boolean>();
 
 /**
  * The strong matches of a longest common subsequence, as index pairs in order. On a tie the

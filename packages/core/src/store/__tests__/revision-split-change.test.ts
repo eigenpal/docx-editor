@@ -235,3 +235,29 @@ test('a tracked deletion over two runs in a content control is one deletion ther
   expect(nodesNamed(source, 'del')).toHaveLength(1);
   expect(textOf(source)).toContain('<w:delText>bc</w:delText>');
 });
+
+test('pieces that disagree on an attribute stay apart, and one-sided attributes are kept', () => {
+  const W16DU = 'http://schemas.microsoft.com/office/word/2023/wordml/word16du';
+  const piece = (text: string, utc: string) =>
+    `<w:del w:id="7" w:author="A" w:date="2026-01-01T00:00:00Z"${utc}><w:r><w:delText>${text}</w:delText></w:r></w:del>`;
+  const unlinked = (left: string, right: string): OoxmlPart => {
+    const parsed = readOoxmlPart(
+      `<w:document xmlns:w="${W}" xmlns:w16du="${W16DU}"><w:body><w:p>` +
+        `${piece('ab', left)}<w:hyperlink w:anchor="a">${piece('cd', right)}</w:hyperlink>` +
+        '</w:p></w:body></w:document>',
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!parsed.ok) throw new Error(parsed.reason);
+    return applied(parsed.part, {
+      op: 'removeHyperlink',
+      linkId: nodesNamed(parsed.part, 'hyperlink')[0]!.id,
+    });
+  };
+  const utc = (value: string) => ` w16du:dateUtc="${value}"`;
+  expect(
+    nodesNamed(unlinked(utc('2026-01-01T01:00:00Z'), utc('2026-01-01T02:00:00Z')), 'del')
+  ).toHaveLength(2);
+  const oneSided = unlinked('', utc('2026-01-01T02:00:00Z'));
+  expect(nodesNamed(oneSided, 'del')).toHaveLength(1);
+  expect(textOf(oneSided)).toContain('dateUtc="2026-01-01T02:00:00Z"');
+});

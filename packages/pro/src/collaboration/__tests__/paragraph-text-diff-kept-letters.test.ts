@@ -69,3 +69,35 @@ test('a run split whose text element stays on its tail keeps every letter', () =
   ];
   expect(keptFrom(diffTokens(before, after), after.length)).toEqual([0, 1, 2, 3, 4, 5]);
 });
+
+test('accepting a long insertion between two deletions costs time in proportion to its length', () => {
+  const STRUCK_BY_ALICE = JSON.stringify([{ l: 'del', a: 'Alice' }]);
+  const TEXT = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod. ';
+  const acceptAll = (length: number): { before: Token[]; after: Token[] } => {
+    const body = [...TEXT.repeat(Math.ceil(length / TEXT.length)).slice(0, length)];
+    return {
+      before: [
+        letter('Q', 'q', STRUCK_BY_ALICE),
+        ...body.map((value, at) => letter(value, `run${Math.floor(at / 50)}`, INSERTED_BY_CAROL)),
+        letter('Z', 'z', STRUCK_BY_ALICE),
+      ],
+      after: body.map((value) => letter(value, 'joined')),
+    };
+  };
+  const timed = (length: number): number => {
+    const { before, after } = acceptAll(length);
+    // Every letter stays: the decision only removes the two deletions.
+    expect(keptFrom(diffTokens(before, after), after.length).includes(-1)).toBe(false);
+    let best = Infinity;
+    for (let round = 0; round < 5; round += 1) {
+      const started = performance.now();
+      for (let repeat = 0; repeat < 4; repeat += 1) diffTokens(before, after);
+      best = Math.min(best, performance.now() - started);
+    }
+    return best;
+  };
+  const short = timed(300);
+  const long = timed(3000);
+  // Ten times the text: a linear diff takes about ten times as long, a quadratic one a hundred.
+  expect(long).toBeLessThan(Math.max(short * 30, 5));
+});

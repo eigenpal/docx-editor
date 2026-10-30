@@ -7,7 +7,7 @@
 // every peer does: typing inside a deletion lands after all of it, and a decision on the
 // change's site reaches all of it. Pieces that were already neighbours stay as they are.
 
-import type { OoxmlNode } from '../package/ooxml-tree.ts';
+import type { OoxmlElement, OoxmlNode } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
 import { sameRevision } from './same-revision.ts';
 import { mergedRevisions } from './tree-op-tracked.ts';
@@ -19,11 +19,34 @@ import { mergedRevisions } from './tree-op-tracked.ts';
 function joinedPieces(mint: () => string, left: OoxmlNode, right: OoxmlNode): OoxmlNode | null {
   if (left.kind === 'textValue' || right.kind === 'textValue') return null;
   if (left.kind !== right.kind || !isContentRevisionKind(left.kind)) return null;
-  if (!sameRevision(left, right)) return null;
+  const attributes = sameRevision(left, right) ? joinedAttributes(left, right) : null;
+  if (attributes === null) return null;
   if (left.kind === 'revisionInsert' || left.kind === 'revisionDelete') {
-    return mergedRevisions(mint, [left, right])[0] ?? null;
+    const joined = mergedRevisions(mint, [left, right])[0];
+    if (joined === undefined || joined.kind === 'textValue') return null;
+    return { ...joined, attributes } as OoxmlNode;
   }
-  return { ...left, children: [...left.children, ...right.children] } as OoxmlNode;
+  return { ...left, attributes, children: [...left.children, ...right.children] } as OoxmlNode;
+}
+
+type Attribute = OoxmlElement['attributes'][number];
+
+/**
+ * The attributes one wrapper for both pieces carries: the left piece's and any only the right
+ * one has. Null when the two disagree on one, such as another UTC date or session id, which a
+ * join would lose.
+ */
+function joinedAttributes(left: OoxmlElement, right: OoxmlElement): readonly Attribute[] | null {
+  const extra: Attribute[] = [];
+  for (const attribute of right.attributes) {
+    const match = left.attributes.find(
+      (entry) =>
+        entry.namespaceUri === attribute.namespaceUri && entry.localName === attribute.localName
+    );
+    if (match === undefined) extra.push(attribute);
+    else if (match.value !== attribute.value) return null;
+  }
+  return extra.length === 0 ? left.attributes : [...left.attributes, ...extra];
 }
 
 /**
