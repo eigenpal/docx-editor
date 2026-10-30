@@ -702,16 +702,25 @@ In compatibility mode 15 and later, a distributed line SHALL keep the word that 
 
 ### Requirement: Legacy space shrinking with punctuation compression
 
-In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingControl` compresses punctuation and the document defaults name an East Asian face, a line at any alignment SHALL keep the word that overflows it when each space can shrink to fit it without going below half the average character width of its face. Only one word per line SHALL join this way. With `w:balanceSingleByteDoubleByteWidth`, spaces SHALL keep their advance.
+In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingControl` compresses punctuation and the document defaults name an East Asian face, a line at any alignment SHALL keep the word that overflows it when each space can shrink to fit it without going below half the average character width of its face. Only one word per line SHALL join this way. With `w:balanceSingleByteDoubleByteWidth`, each space SHALL shrink down to a quarter of its font size instead.
 
 #### Scenario: A left-aligned line shrinks its spaces
 
 - **GIVEN** a mode 14 left-aligned paragraph of English words with `compressPunctuation` and an East Asian default face
 - **WHEN** a word fits only when each Times New Roman space gives up less than a fifth of its advance
 - **THEN** the word stays on the line and the line ends at the margin
-- **AND** without punctuation compression, in Calibri, or with `w:balanceSingleByteDoubleByteWidth`, the word moves to the next line
+- **AND** without punctuation compression, or in Calibri, the word moves to the next line
 - **AND** after that word joins, the next word that overflows opens the next line
 - **AND** a space cut at the margin before the word counts at its natural advance
+
+#### Scenario: Balanced widths shrink spaces to a quarter em
+
+- **GIVEN** the same paragraph with `w:balanceSingleByteDoubleByteWidth` in `w:compat`
+- **WHEN** a word fits only when each space shrinks to just above a quarter of its font size
+- **THEN** the word stays on the line, in Courier New, Arial, or Century alike
+- **AND** a Times New Roman or Calibri space, a quarter em or narrower, keeps its advance
+- **AND** with `w:useWord97LineBreakRules` as well, spaces in proportional faces keep their advance
+- **AND** a line in a proportional face that starts with spaces keeps natural spaces and hangs no final mark
 
 ### Requirement: Legacy space shrinking before a final mark
 
@@ -1143,6 +1152,20 @@ A single-spaced line drawn in a face that lists the Chinese, Japanese, or Korean
 - **WHEN** layout measures the line
 - **THEN** a taller stand-in or fallback face keeps its own box
 - **AND** a one-em face takes 1.3 em in either role
+
+#### Scenario: A localized name or a synthesized style draws as the family
+
+- **GIVEN** a run that names `メイリオ`, and a host that supplies the `Meiryo` face
+- **WHEN** layout measures the line
+- **THEN** the run draws in `Meiryo` and takes its 1.3 times face box line
+- **AND** a bold run in a family whose host supplies only the regular face draws in that face with a synthesized bold, not in the packaged CJK face
+
+#### Scenario: A stand-in for the symbol fallback face keeps its line
+
+- **GIVEN** a ballot box (U+2610) that neither the East Asian nor the Latin face of its run can draw
+- **WHEN** a packaged symbol face stands in for the missing symbol fallback face
+- **THEN** the glyph draws in the packaged face with its own advance
+- **AND** the line is the 1.33 em line of the symbol fallback face, not the packaged face's 1.7 em
 
 ### Requirement: Fitted text takes its stated width
 

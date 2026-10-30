@@ -618,7 +618,10 @@ function collectContentControlsIn(
       if (
         composeFromSubtrees &&
         depth === 0 &&
-        (child.kind === 'paragraph' || child.kind === 'table')
+        (child.kind === 'paragraph' ||
+          child.kind === 'table' ||
+          child.kind === 'tableRow' ||
+          child.kind === 'tableCell')
       ) {
         for (const entry of contentControlsIn(child)) {
           if (entries.length >= limit) return;

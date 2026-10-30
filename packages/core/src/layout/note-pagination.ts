@@ -2466,12 +2466,11 @@ export function attachNotesToLayout(
         reserve: 0,
         reasons: reasons.slice(reasonsBefore),
       };
-      // Keyed under the OUTPUT page: the next pass's body layout hands back the ATTACHED
-      // page by identity (it is what the session publishes), so an entry keyed on this
-      // pass's input would be one generation behind and never hit — every pass then
-      // republished a fresh page object for every footnote-bearing page, and the painter
-      // rebuilt their DOM on every keystroke. The reserve entry forwards for the same
-      // reason: the next reserve pass reads the published page too.
+      // Both owners can return on the next pass: body layout can retain its input,
+      // while a resumed session can retain the attached output. Keep both identities
+      // so unchanged footnote pages do not invalidate downstream page caches.
+      // The marks and reference checks above still guard each reuse.
+      memo.pageAttach.set(page, entry);
       memo.pageAttach.set(attached, entry);
       if (attached !== page) {
         const reserveEntry = memo.pageReserve.get(page);

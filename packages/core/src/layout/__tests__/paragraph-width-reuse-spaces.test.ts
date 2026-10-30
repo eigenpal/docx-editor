@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import { createParagraphLayoutCache, type ParagraphKeyInputs } from '../layout-cache.ts';
 import {
-  reuseSingleLineAtWidth,
+  reuseParagraphAtWidth,
   tokenLineHoldsAtWidth,
   tokenLineMovable,
 } from '../paragraph-cache-width-reuse.ts';
@@ -107,7 +107,7 @@ test('a spaced line moves through the cache width transfer like a token', () => 
   const measured = cache.get(key)!;
   for (const width of [measured[0]!.width + 0.5, 200, 400]) {
     const next = cache.keyFor!({ ...inputs, width });
-    const reused = reuseSingleLineAtWidth(cache, paragraph, next, width);
+    const reused = reuseParagraphAtWidth(cache, paragraph, next, width);
     expect(reused).toBe(measured);
     expect(reused).toEqual(
       breakParagraph(paragraph, paragraph.id, 0, width, shaped, undefined, null)

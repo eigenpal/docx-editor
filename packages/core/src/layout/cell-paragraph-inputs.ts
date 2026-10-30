@@ -68,7 +68,12 @@ export function cellParagraphInputs(
 
 /** The line width `inputs` leave at a cell content `width`; the one formula resolve also uses. */
 export function cellAvailableWidth(inputs: ParagraphLayoutInputs, width: number): number {
-  return Math.max(1, width - inputs.indent.left - inputs.indent.right);
+  return cellWidthAfterIndents(width, inputs.indent.left, inputs.indent.right);
+}
+
+/** The width expression shared by placement and grouped width-fit proofs. */
+export function cellWidthAfterIndents(width: number, left: number, right: number): number {
+  return Math.max(1, width - left - right);
 }
 
 /**

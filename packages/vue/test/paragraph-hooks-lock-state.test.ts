@@ -1,3 +1,4 @@
+// oxlint-disable react-hooks/rules-of-hooks -- Vue composables run in setup.
 // The ruler and paragraph dialog composables follow the caret into and out of protected content.
 import './dom-setup.ts';
 

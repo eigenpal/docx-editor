@@ -1,3 +1,4 @@
+import { createTableReadCache } from './table-read-cache.ts';
 // Shared reads and property patches for cell merge and split.
 //
 // Both operations rebuild one table and publish it with a single `replaceNode`. Cells and
@@ -87,6 +88,11 @@ function readGridWidths(topology: EditableTableTopology, columnCount: number): n
   return widths;
 }
 
+type MergeableTableResult =
+  | { readonly ok: true; readonly table: MergeableTable }
+  | { readonly ok: false; readonly reason: TreeOpRejection };
+const cachedMergeableTable = createTableReadCache<EditableTableTopology, MergeableTableResult>();
+
 /** Read a table for merge or split, or say why its grid cannot be trusted. */
 export function readMergeableTable(
   part: OoxmlPart,
@@ -102,6 +108,15 @@ export function readMergeableTable(
   const read = readEditableTableTopology(part.root, tableId, resolved);
   if (!read.ok) return { ok: false, reason: mapTopologyRejection(read.reason) };
   const { topology } = read;
+  return cachedMergeableTable(topology, topology, resolved, () =>
+    readMergeableTopology(topology, resolved)
+  );
+}
+
+function readMergeableTopology(
+  topology: EditableTableTopology,
+  resolved: TableTopologyLimits
+): MergeableTableResult {
   if (topology.rows.length === 0) return { ok: false, reason: 'tree-invariant' };
   if (hidesStructure(topology)) return { ok: false, reason: 'row-hides-cell' };
   if (hasLegacyHorizontalMerge(topology)) return { ok: false, reason: 'table-has-merge' };

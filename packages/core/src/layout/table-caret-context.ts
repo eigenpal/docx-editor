@@ -10,7 +10,7 @@ type Contribution = {
 };
 const pageContributions = new WeakMap<PageRecord, Contribution>();
 
-/** @internal `to` holds the same tables and paragraphs as `from`; only marker labels moved. */
+/** @internal Both pages have identical paragraph membership in tables, rows, and columns. */
 export function carryPageTableContributions(from: PageRecord, to: PageRecord): void {
   const known = pageContributions.get(from);
   if (known) pageContributions.set(to, known);

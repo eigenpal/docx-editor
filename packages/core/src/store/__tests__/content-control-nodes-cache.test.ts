@@ -43,6 +43,32 @@ function nestedDoc(): OoxmlPart {
 }
 
 describe('contentControlsIn default-option cache', () => {
+  test('table row reuse preserves control ancestry and invalidates edited cells', () => {
+    const control = (tag: string, content: string) =>
+      `<w:sdt><w:sdtPr><w:tag w:val="${tag}"/></w:sdtPr><w:sdtContent>${content}</w:sdtContent></w:sdt>`;
+    const paragraph = '<w:p><w:r><w:t>Cell</w:t></w:r></w:p>';
+    const table =
+      '<w:tbl><w:tr><w:tc>' +
+      control('inner', paragraph) +
+      '</w:tc></w:tr><w:tr><w:tc>' +
+      paragraph +
+      '</w:tc></w:tr></w:tbl>';
+    for (const content of [table, control('outer', table)]) {
+      const part = parseDoc(content);
+      const before = contentControlsIn(part.root);
+      expect(before).toEqual(contentControlsIn(part.root, {}));
+      const body = bodyStoryRoot(part)!;
+      const edited = apply(part, {
+        op: 'insertText',
+        paragraphId: storyParagraphs(body)[0]!.id,
+        offset: 0,
+        text: 'Changed',
+      });
+      expect(contentControlsIn(edited.root)).toEqual(contentControlsIn(edited.root, {}));
+      expect(contentControlsIn(part.root)).toBe(before);
+    }
+  });
+
   test('same root returns the cached array on a second default call', () => {
     const part = nestedDoc();
     const first = contentControlsIn(part.root);

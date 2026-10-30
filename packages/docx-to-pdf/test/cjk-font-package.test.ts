@@ -24,6 +24,7 @@ import {
   type CjkFaceLocator,
 } from '../src/font-provisioning.ts';
 import { exportPdf } from '../src/index.ts';
+import { LOCALIZED_EAST_ASIAN_FAMILIES } from '../../core/src/store/package/default-font-faces.ts';
 import { docx, paragraph } from './fixture.ts';
 
 const CJK = 'Noto Sans CJK JP';
@@ -268,4 +269,8 @@ test('a CJK document exports in the installed package face', async () => {
 test('PDF export and the editor stand the CJK face in for the same families', () => {
   expect([...CJK_SUBSTITUTED_FAMILIES]).toEqual([...PACKAGE_CJK_FAMILIES]);
   expect(Object.entries(localizedFamilies)).toEqual([...LOCALIZED_CJK_FAMILIES.entries()]);
+  // Layout reads the same names as one family with their English names.
+  expect([...LOCALIZED_EAST_ASIAN_FAMILIES.entries()]).toEqual([
+    ...LOCALIZED_CJK_FAMILIES.entries(),
+  ]);
 });

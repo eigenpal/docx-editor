@@ -233,6 +233,51 @@ export function isEastAsianFace(
 }
 
 /**
+ * Localized names that documents saved in a Chinese, Japanese, or Korean locale write for
+ * common East Asian families, each mapped to the family's English name. Both name one face.
+ * A `Map`, not an object: the key is file-derived.
+ */
+export const LOCALIZED_EAST_ASIAN_FAMILIES: ReadonlyMap<string, string> = new Map([
+  ['宋体', 'SimSun'],
+  ['新宋体', 'NSimSun'],
+  ['黑体', 'SimHei'],
+  ['仿宋', 'FangSong'],
+  ['楷体', 'KaiTi'],
+  ['等线', 'DengXian'],
+  ['微软雅黑', 'Microsoft YaHei'],
+  ['微軟正黑體', 'Microsoft JhengHei'],
+  ['新細明體', 'PMingLiU'],
+  ['細明體', 'MingLiU'],
+  ['ＭＳ 明朝', 'MS Mincho'],
+  ['ＭＳ Ｐ明朝', 'MS PMincho'],
+  ['ＭＳ ゴシック', 'MS Gothic'],
+  ['ＭＳ Ｐゴシック', 'MS PGothic'],
+  ['ＭＳ ＵＩ Ｇｏｔｈｉｃ', 'MS UI Gothic'],
+  ['メイリオ', 'Meiryo'],
+  ['游ゴシック', 'Yu Gothic'],
+  ['游明朝', 'Yu Mincho'],
+  ['맑은 고딕', 'Malgun Gothic'],
+  ['바탕', 'Batang'],
+  ['굴림', 'Gulim'],
+  ['돋움', 'Dotum'],
+]);
+
+/** The English name of a family: a localized East Asian name maps to it, others stay. */
+export function englishFamily(family: string): string {
+  const trimmed = family.trim();
+  return LOCALIZED_EAST_ASIAN_FAMILIES.get(trimmed) ?? trimmed;
+}
+
+/**
+ * Whether two family names name one face: equal apart from case and surrounding spaces, or a
+ * localized East Asian name and its English name (`メイリオ` and `Meiryo`).
+ */
+export function sameFontFamily(a: string, b: string): boolean {
+  if (a === b) return true;
+  return englishFamily(a).toLowerCase() === englishFamily(b).toLowerCase();
+}
+
+/**
  * Region words East Asian family names carry (`Noto Sans Mono CJK SC`, `BIZ UDGothic JP`).
  * Not `SC`, `TC`, or `HK`: Latin names use them too (`Alegreya SC`, `HK Grotesk`).
  */

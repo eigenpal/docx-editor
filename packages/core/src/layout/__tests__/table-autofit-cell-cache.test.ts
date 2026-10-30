@@ -25,6 +25,24 @@ function fixture() {
 }
 const value = { least: 10, most: 20, left: 1, right: 1, wideLeft: 2, wideRight: 2 };
 
+test('paragraph tokens stay local to one immutable flow context', () => {
+  const { cell } = fixture();
+  const paragraph = cell.blocks[0] as OoxmlElement;
+  let reads = 0;
+  const first = autofitContextOf({
+    measurer,
+    projectionTokenForParagraph: () => {
+      reads++;
+      return 'first';
+    },
+  });
+  const token = first.paragraphToken!(paragraph);
+  expect(first.paragraphToken!(paragraph)).toBe(token);
+  expect(reads).toBe(1);
+  const second = autofitContextOf({ measurer, projectionTokenForParagraph: () => 'second' });
+  expect(second.paragraphToken!(paragraph)).not.toBe(token);
+});
+
 test('unchanged cells reuse widths across verified section revisions', () => {
   const { cell, view } = fixture();
   const first = {};
@@ -135,4 +153,107 @@ test('a reference value that changes elsewhere keeps the measurements of other c
   carryTableAutofitScope(second, {}, true, own);
   cachedAutofitCellWidths(cell, true, autofitContextOf(own), view, read);
   expect(reads).toBe(2);
+});
+
+test('complete section proofs skip unchanged paragraph tokens across revisions', async () => {
+  const { registerTableWidthReuseScope } = await import('../table-width-reuse-scope.ts');
+  const { bodyLineId } = await import('../body-line-id.ts');
+  const { cell, view } = fixture();
+  let tokenReads = 0;
+  let measurements = 0;
+  const deps = () => ({
+    measurer,
+    producer: 'same',
+    styleCascade,
+    nextLineId: bodyLineId,
+    projectionTokenForParagraph: () => {
+      tokenReads++;
+      return 'same';
+    },
+  });
+  const read = () => {
+    measurements++;
+    return value;
+  };
+  let previous = {};
+  const initial = deps();
+  carryTableAutofitScope(null, previous, false, initial);
+  registerTableWidthReuseScope(initial, false);
+  cachedAutofitCellWidths(cell, true, autofitContextOf(initial), view, read);
+  for (let revision = 0; revision < 4; revision++) {
+    const next = {};
+    const flow = deps();
+    const same = carryTableAutofitScope(previous, next, true, flow);
+    registerTableWidthReuseScope(flow, same);
+    cachedAutofitCellWidths(cell, true, autofitContextOf(flow), view, read);
+    previous = next;
+  }
+  // One initial token and one admission into the complete proof. Later flows skip it.
+  expect(tokenReads).toBe(2);
+  expect(measurements).toBe(1);
+  const changed = deps();
+  registerTableWidthReuseScope(changed, carryTableAutofitScope(previous, {}, true, changed));
+  cachedAutofitCellWidths({ ...cell }, true, autofitContextOf(changed), view, read);
+  expect(measurements).toBe(2);
+  expect(tokenReads).toBe(3);
+});
+
+test('withdrawing the section proof restores per-paragraph validation', async () => {
+  const { registerTableWidthReuseScope } = await import('../table-width-reuse-scope.ts');
+  const { bodyLineId } = await import('../body-line-id.ts');
+  const { cell, view } = fixture();
+  let previous: object | null = null;
+  let measurements = 0;
+  const read = () => {
+    measurements++;
+    return value;
+  };
+  for (const [token, equal, listOnly] of [
+    ['before', false, false],
+    ['before', true, false],
+    ['after', false, true],
+  ] as const) {
+    const next = {};
+    const flow = {
+      measurer,
+      producer: 'same',
+      nextLineId: bodyLineId,
+      projectionTokenForParagraph: () => token,
+    };
+    registerTableWidthReuseScope(
+      flow,
+      carryTableAutofitScope(previous, next, equal, flow, listOnly)
+    );
+    cachedAutofitCellWidths(cell, true, autofitContextOf(flow), view, read);
+    previous = next;
+  }
+  expect(measurements).toBe(2);
+});
+
+test('changed reference values invalidate a registered complete proof', async () => {
+  const { registerTableWidthReuseScope } = await import('../table-width-reuse-scope.ts');
+  const { bodyLineId } = await import('../body-line-id.ts');
+  const { cell, view } = fixture();
+  let previous: object | null = null;
+  let measurements = 0;
+  const read = () => {
+    measurements++;
+    return value;
+  };
+  for (const token of ['one', 'one', 'two']) {
+    const next = {};
+    const flow = {
+      measurer,
+      producer: 'same',
+      nextLineId: bodyLineId,
+      refFields: { valuesToken: token, tokenForParagraph: () => token } as never,
+    };
+    registerTableWidthReuseScope(
+      flow,
+      carryTableAutofitScope(previous, next, previous !== null, flow)
+    );
+    cachedAutofitCellWidths(cell, true, autofitContextOf(flow), view, read);
+    previous = next;
+  }
+  expect(measurements).toBe(2);
 });

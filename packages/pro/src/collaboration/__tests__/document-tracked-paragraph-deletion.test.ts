@@ -741,48 +741,73 @@ test('collaboration still refuses a tracked replacement across paragraphs', asyn
   }
 });
 
-test('a tracked deletion of a paragraph with many runs costs time linear in its runs', async () => {
-  const runs = Array.from(
-    { length: 2000 },
-    (_, index) =>
-      `<w:r>${index % 2 ? '<w:rPr><w:b/></w:rPr>' : ''}<w:t xml:space="preserve">w${index} </w:t></w:r>`
-  ).join('');
-  const r = await room(fixture(p('First clause') + `<w:p>${runs}</w:p>` + p('Last clause')));
-  try {
-    const started = performance.now();
-    await r.peers[0]!.runtime.run(deleteMiddleParagraph);
-    r.sync();
-    // About 1 s here. A cost that grows with runs times struck text would take over 10 s.
-    expect(performance.now() - started).toBeLessThan(6000);
-    await converged(r);
-  } finally {
-    r.close();
+/**
+ * How much slower the large size is than the small one, as a multiple of how much larger it is.
+ *
+ * A test shard runs several files at once, so one run's wall clock measures its neighbors as
+ * much as this code. Both sizes run in this process, interleaved, and each keeps its fastest
+ * of two runs, so shared load cancels out of the ratio. A cost linear in the size answers
+ * about 1 or less; a cost that grows with its square answers about the size ratio.
+ */
+async function growthBeyondLinear(
+  [small, large]: readonly [number, number],
+  timed: (size: number) => Promise<number>
+): Promise<number> {
+  const fastest = { [small]: Infinity, [large]: Infinity };
+  for (let round = 0; round < 2; round += 1) {
+    for (const size of [small, large]) fastest[size] = Math.min(fastest[size]!, await timed(size));
   }
-}, 120_000);
+  return fastest[large]! / fastest[small]! / (large / small);
+}
 
-test('a tracked deletion of 2000 paragraphs in a room stays fast', async () => {
-  const count = 2000;
-  const body = Array.from({ length: count }, (_, index) => p(`Paragraph ${index}`)).join('');
-  const r = await room(fixture(body));
-  try {
-    const started = performance.now();
-    await r.peers[0]!.runtime.run(
-      tracked(async (c) => {
-        const range = c.document.body.getRange('Content');
-        await c.sync();
-        range.delete();
-        await c.sync();
-      })
-    );
-    r.sync();
-    // About 1.5 s here, and close to linear in paragraphs; it took 7.5 to 11 s before. The
-    // budget leaves room for a suite that runs files in parallel.
-    expect(performance.now() - started).toBeLessThan(15_000);
-    await converged(r);
-    const xml = await mainXml(r.peers[1]!.editor);
-    expect(xml.match(/<w:rPr><w:del /g)).toHaveLength(count - 1);
-    expect(xml.match(/<w:delText>/g)).toHaveLength(count);
-  } finally {
-    r.close();
-  }
+test('a tracked deletion of a paragraph with many runs costs time linear in its runs', async () => {
+  const deleteRuns = async (count: number) => {
+    const runs = Array.from(
+      { length: count },
+      (_, index) =>
+        `<w:r>${index % 2 ? '<w:rPr><w:b/></w:rPr>' : ''}<w:t xml:space="preserve">w${index} </w:t></w:r>`
+    ).join('');
+    const r = await room(fixture(p('First clause') + `<w:p>${runs}</w:p>` + p('Last clause')));
+    try {
+      const started = performance.now();
+      await r.peers[0]!.runtime.run(deleteMiddleParagraph);
+      r.sync();
+      const elapsed = performance.now() - started;
+      await converged(r);
+      return elapsed;
+    } finally {
+      r.close();
+    }
+  };
+  // A cost that grows with runs times struck text answers about 4 here.
+  expect(await growthBeyondLinear([500, 2000], deleteRuns)).toBeLessThan(2.5);
+}, 300_000);
+
+test('a tracked deletion of a whole story in a room costs time linear in paragraphs', async () => {
+  const deleteParagraphs = async (count: number) => {
+    const body = Array.from({ length: count }, (_, index) => p(`Paragraph ${index}`)).join('');
+    const r = await room(fixture(body));
+    try {
+      const started = performance.now();
+      await r.peers[0]!.runtime.run(
+        tracked(async (c) => {
+          const range = c.document.body.getRange('Content');
+          await c.sync();
+          range.delete();
+          await c.sync();
+        })
+      );
+      r.sync();
+      const elapsed = performance.now() - started;
+      await converged(r);
+      const xml = await mainXml(r.peers[1]!.editor);
+      expect(xml.match(/<w:rPr><w:del /g)).toHaveLength(count - 1);
+      expect(xml.match(/<w:delText>/g)).toHaveLength(count);
+      return elapsed;
+    } finally {
+      r.close();
+    }
+  };
+  // A cost that grows with the square of the paragraphs answers about 4 here.
+  expect(await growthBeyondLinear([250, 1000], deleteParagraphs)).toBeLessThan(2.5);
 }, 300_000);

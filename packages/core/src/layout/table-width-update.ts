@@ -1,3 +1,13 @@
+import { rememberRowPlacement } from './table-row-placement-reuse.ts';
+import {
+  captureDeferredWidthRecipe,
+  deferredWidthRecipe,
+  deferredWidthRecipeHolds,
+  deferredWidthFragment,
+  rememberDeferredWidthRecipe,
+  sameWidthHeaderInsets,
+  type WidthHeaderPlacement,
+} from './table-deferred-width-fragment.ts';
 // Re-placing a table whose AutoFit column widths changed, without paginating it again.
 //
 // Typing into an AutoFit cell can move every column edge of the table. When each row keeps
@@ -13,7 +23,17 @@
 // floats, drawings, RTL or nested tables) returns null and the caller runs the full table
 // layout instead.
 
-import { ordinaryTableParagraph } from './table-ordinary-paragraph.ts';
+import { carryBodyReviewAnchors } from './body-review-anchors.ts';
+import { carryBlockMetadataIdentity } from './block-metadata-identity.ts';
+import { markTableWithoutListMarkers } from './list-marker-reuse.ts';
+import { tableWidthReuseScope } from './table-width-reuse-scope.ts';
+import {
+  createBodyWidthGroup,
+  materializeBodyWidthGroup,
+  type BodyWidthGroup,
+} from './table-body-width-group.ts';
+import type { CellWidthPlacement } from './table-cell-width-placement.ts';
+import { editableTableParagraph } from './table-ordinary-paragraph.ts';
 import { noteRowFactRead, rowFacts } from './table-row-facts.ts';
 import { firstRowContentDeps, lastRowContentDeps } from './table-fragment-content-insets.ts';
 import { bodyLineId } from './body-line-id.ts';
@@ -36,7 +56,7 @@ import { moveRowToWidths } from './table-row-geometry-reuse.ts';
 import { createRepeatedHeaderPlacements } from './table-header-repeat-reuse.ts';
 import { shareTableFragmentFacts } from './table-fragment-facts.ts';
 import { markHorizontalTableFragment } from './table-cell-text-direction.ts';
-import { createSplitRowPlacements } from './table-width-split-rows.ts';
+import { createSplitRowPlacements, markTableWithoutSplitRows } from './table-width-split-rows.ts';
 import {
   closeGrownRow,
   growthBandOf,
@@ -59,6 +79,8 @@ import type {
 } from './semantic-records.ts';
 
 type TableFragment = Extract<BlockFragmentRecord, { kind: 'table' }>;
+
+const bodyWidthGroups = new WeakMap<TableFragment, BodyWidthGroup>();
 
 /** Same result shape as `updateTableText`. */
 export interface TableWidthUpdate {
@@ -95,7 +117,7 @@ function eligibleRow(row: SemanticTableRow): boolean {
         cell.textDirection === 'horizontal' &&
         // A merge is planned here only inside the leading header group.
         (!cell.vMergeContinue || row.isHeader) &&
-        cell.blocks.every((block) => block.kind === 'paragraph' && ordinaryTableParagraph(block))
+        cell.blocks.every((block) => block.kind === 'paragraph' && editableTableParagraph(block))
     );
   }
   return facts.eligible;
@@ -356,7 +378,12 @@ function compareRowHeights(
       !sameStrokeHeights(x, y)
     )
       return false;
-    if (moved && y.blocks === moved.cells[index]?.blocks) {
+    if (
+      moved &&
+      y.blocks === moved.cells[index]?.blocks &&
+      x.blocks[0]?.kind === 'paragraph' &&
+      x.blocks[0].lines.length === 1
+    ) {
       if (observer) observer.movedCells += 1;
       if (!sameMovedBlockHeights(x.blocks[0]!)) return false;
       continue;
@@ -417,6 +444,8 @@ export function updateTableWidths(
   deps: TableFlowDeps,
   pageBand?: TablePageBand
 ): TableWidthUpdate | null {
+  const widthScope = tableWidthReuseScope(deps);
+  const metadataUnchanged = new Set<BlockFragmentRecord>();
   if (!sameGrid(oldStructure, structure)) return null;
   if (!eligibleStructure(structure, deps) || !eligibleStructure(oldStructure, deps)) return null;
   // Single-column sections only reach this lane, so the column starts at 0.
@@ -511,56 +540,34 @@ export function updateTableWidths(
     return band === null || !opening ? null : { band, opening };
   };
 
-  const replaceFragment = (fragment: TableFragment): TableFragmentRecord | null => {
-    if (fragment.nestingDepth !== 0 || fragment.box.x !== oldLeft) return null;
-    const rows = fragment.rows;
-    if (rows.length === 0) return null;
-    const leadingHeaders = rows.findIndex(
-      (row) => !row.isHeaderRow || !sources.get(row.id)?.isHeader
-    );
-    const headerCount = leadingHeaders < 0 ? rows.length : leadingHeaders;
-    // A header group is placed whole; anything else was laid out as body rows.
-    if (headerCount !== 0 && headerCount !== headers.length) return null;
+  const placeHeaders = (rows: readonly TableRowFragmentRecord[]): WidthHeaderPlacement[] | null => {
+    const placed: WidthHeaderPlacement[] = [];
     let plan: HeaderGroupPlan | undefined;
-    const placed: RowPlacement[] = [];
-    let terminal: RowPlacement | undefined;
-    const place = (index: number, rowDeps: TableFlowDeps): RowPlacement | null => {
-      const old = rows[index]!;
-      const source = sources.get(old.id);
-      if (!source) return null;
-      if (old.isContinuation || old.hasContinuation) {
-        if (index < headerCount) return null;
-        return splitRow(old);
-      }
-      const header = index < headerCount;
-      // Most rows only move: same lines, same heights, new x. See table-row-geometry-reuse.ts.
-      const moved = header ? null : moveRowToWidths(source, old, columnWidthsPt, left, rowDeps);
-      if (moved) return { record: moved, insets: rowDeps.cellContentInsets, moved: true };
-      let placementDeps = rowDeps;
-      let occurrence: string | undefined;
-      if (old.isHeaderRepeat) {
-        const stamp = headerOccurrence(old);
-        if (stamp === undefined) return null;
-        occurrence = stamp;
-        placementDeps = { ...rowDeps, pageOccurrenceKey: () => stamp };
-      }
-      if (header && headerMerges && index === 0) {
-        // Continuation pages open the group at the same top; its plan is the same.
+    for (const [index, old] of rows.entries()) {
+      const source = headers[index];
+      if (!source || source.id !== old.id || old.isContinuation || old.hasContinuation) return null;
+      let placementDeps = headerDeps;
+      const occurrence = old.isHeaderRepeat ? headerOccurrence(old) : undefined;
+      if (old.isHeaderRepeat && occurrence === undefined) return null;
+      if (occurrence !== undefined)
+        placementDeps = { ...headerDeps, pageOccurrenceKey: () => occurrence };
+      if (headerMerges && index === 0) {
         plan = headerPlans.get(old.box.y);
         if (!plan) {
           plan = planFixedHeaderGroup(structure, headers, left, old.box.y, base, rowHeightOf);
           headerPlans.set(old.box.y, plan);
         }
       }
-      // Read for every page: a plan read can withdraw a merge, which later reads observe.
-      const options = header ? plan?.optionsAt(index, old.box.y) : undefined;
-      // A repeated header row places as on every other page but for its occurrence stamp.
+      const options = plan?.optionsAt(index, old.box.y);
       const repeat =
-        header && occurrence !== undefined
-          ? { index, source, top: old.box.y, deps: rowDeps, options, occurrence }
+        occurrence !== undefined
+          ? { index, source, top: old.box.y, deps: headerDeps, options, occurrence }
           : undefined;
       const reused = repeat && headerRepeats.take(repeat);
-      if (reused) return { record: reused, insets: rowDeps.cellContentInsets };
+      if (reused) {
+        placed.push({ record: reused, insets: headerDeps.cellContentInsets });
+        continue;
+      }
       const reported = keys.length;
       const result = layoutRowFragment(
         source,
@@ -575,6 +582,138 @@ export function updateTableWidths(
       );
       if (result.remainder !== null) return null;
       if (repeat) headerRepeats.remember(repeat, result.record, keys.slice(reported));
+      placed.push({ record: result.record, insets: headerDeps.cellContentInsets });
+    }
+    return placed;
+  };
+
+  const replaceFragment = (fragment: TableFragment): TableFragmentRecord | null => {
+    if (fragment.nestingDepth !== 0 || fragment.box.x !== oldLeft) return null;
+    const deferred = deferredWidthRecipe(fragment);
+    if (
+      deferred &&
+      widthScope &&
+      !terminalRows &&
+      deferredWidthRecipeHolds(deferred, sources, structure, left, widthScope)
+    ) {
+      const reported = keys.length;
+      const nextHeaders = placeHeaders(deferred.headers.map((header) => header.record));
+      if (
+        nextHeaders &&
+        nextHeaders.every(
+          (header, index) =>
+            sameWidthHeaderInsets(deferred.headers[index]!, header) &&
+            sameRowHeights(deferred.headers[index]!.record, header.record)
+        )
+      ) {
+        const candidate = deferredWidthFragment({
+          recipe: deferred,
+          headers: nextHeaders,
+          structure: { ...structure, rows: [] },
+          left,
+          scope: widthScope,
+          id: fragment.id,
+          tableId: fragment.tableId,
+          fragmentIndex: fragment.fragmentIndex,
+          top: fragment.box.y,
+          height: fragment.box.height,
+        });
+        for (const row of deferred.body.rows)
+          for (const cell of row.cells) if (cell.breakKey) keys.push(cell.breakKey);
+        bodyWidthGroups.set(candidate, deferred.body);
+        rememberDeferredWidthRecipe(candidate, deferred);
+        markTableWithoutSplitRows(candidate);
+        shareTableFragmentFacts(fragment, candidate);
+        metadataUnchanged.add(fragment);
+        return candidate;
+      }
+      keys.length = reported;
+    }
+    const rows = fragment.rows;
+    if (rows.length === 0) return null;
+    const leadingHeaders = rows.findIndex(
+      (row) => !row.isHeaderRow || !sources.get(row.id)?.isHeader
+    );
+    const headerCount = leadingHeaders < 0 ? rows.length : leadingHeaders;
+    // A header group is placed whole; anything else was laid out as body rows.
+    if (headerCount !== 0 && headerCount !== headers.length) return null;
+    const bodySources = widthScope
+      ? rows.slice(headerCount).map((row) => sources.get(row.id)!)
+      : [];
+    const knownGroup = widthScope ? bodyWidthGroups.get(fragment) : undefined;
+    const cachedRows =
+      knownGroup && widthScope
+        ? materializeBodyWidthGroup(knownGroup, bodySources, columnWidthsPt, left, widthScope)
+        : null;
+    const captured = widthScope ? new Map<string, readonly CellWidthPlacement[]>() : null;
+    let groupEligible = widthScope !== undefined;
+    const preparedHeaders = placeHeaders(rows.slice(0, headerCount));
+    if (!preparedHeaders) return null;
+    const placed: RowPlacement[] = [];
+    let terminal: RowPlacement | undefined;
+    const place = (index: number, rowDeps: TableFlowDeps): RowPlacement | null => {
+      const old = rows[index]!;
+      const source = sources.get(old.id);
+      if (!source) return null;
+      if (old.isContinuation || old.hasContinuation) {
+        if (index < headerCount) return null;
+        return splitRow(old);
+      }
+      const header = index < headerCount;
+      if (header) return preparedHeaders[index]!;
+      // Most rows only move: same lines, same heights, new x. See table-row-geometry-reuse.ts.
+      const plainOccurrence =
+        !rowDeps.cellContentInsets &&
+        !rowDeps.cellMinimumContentInsets &&
+        !rowDeps.exactTerminalBorder &&
+        !rowDeps.exactOpeningExtension;
+      if (!header && !plainOccurrence) groupEligible = false;
+      if (!header && plainOccurrence && cachedRows) {
+        for (const recipe of knownGroup!.rows[index - headerCount]!.cells)
+          if (recipe.breakKey) keys.push(recipe.breakKey);
+        return { record: cachedRows[index - headerCount]!, insets: undefined, moved: true };
+      }
+      const recipes: (CellWidthPlacement | null)[] | null =
+        groupEligible && plainOccurrence ? [] : null;
+      const moved = header
+        ? null
+        : moveRowToWidths(
+            source,
+            old,
+            columnWidthsPt,
+            left,
+            rowDeps,
+            recipes ? (recipe) => recipes.push(recipe) : undefined
+          );
+      if (!header) {
+        if (
+          moved &&
+          recipes &&
+          recipes.length === old.cells.length &&
+          recipes.every((recipe) => recipe !== null)
+        )
+          captured!.set(old.id, recipes as CellWidthPlacement[]);
+        else groupEligible = false;
+      }
+      if (moved) return { record: moved, insets: rowDeps.cellContentInsets, moved: true };
+      let placementDeps = rowDeps;
+      if (old.isHeaderRepeat) {
+        const stamp = headerOccurrence(old);
+        if (stamp === undefined) return null;
+        placementDeps = { ...rowDeps, pageOccurrenceKey: () => stamp };
+      }
+      const result = layoutRowFragment(
+        source,
+        columnWidthsPt,
+        left,
+        old.box.y,
+        old.isHeaderRepeat,
+        0,
+        placementDeps,
+        0
+      );
+      if (result.remainder !== null) return null;
+      rememberRowPlacement(source, result, old.box.y, placementDeps);
       return { record: result.record, insets: rowDeps.cellContentInsets };
     };
     let grown = false;
@@ -659,6 +798,44 @@ export function updateTableWidths(
         // Row for row: same ids, header repeats, cells, paragraph ids and line counts, and
         // paragraphs only. So the fragment holds what it held.
         shareTableFragmentFacts(fragment, candidate);
+        if (groupEligible && widthScope) {
+          const group = cachedRows
+            ? knownGroup
+            : createBodyWidthGroup(
+                rows.slice(headerCount).map((baseline, index) => ({
+                  source: bodySources[index]!,
+                  baseline,
+                  cells: captured!.get(baseline.id) ?? [],
+                })),
+                columnWidthsPt.length,
+                widthScope
+              );
+          if (group) {
+            bodyWidthGroups.set(candidate, group);
+            markTableWithoutSplitRows(candidate);
+            captureDeferredWidthRecipe(
+              candidate,
+              group,
+              chosen.slice(0, headerCount),
+              headers,
+              structure
+            );
+            // Cached body recipes preserve attribution order and contain no drawings.
+            // Repeated headers omit text attribution; unchanged sources preserve their
+            // cell attribution. First header occurrences keep the ordinary metadata walk.
+            if (
+              cachedRows &&
+              rows.every((row, index) => {
+                const ordinal = ordinals.get(row.id)!;
+                return (
+                  oldStructure.rows[ordinal] === structure.rows[ordinal] &&
+                  (index >= headerCount || row.isHeaderRepeat)
+                );
+              })
+            )
+              metadataUnchanged.add(fragment);
+          }
+        }
         return candidate;
       }
     }
@@ -767,9 +944,13 @@ export function updateTableWidths(
 
   // The edited rows decide most refusals, so their fragments go first.
   const edited = editedRows(oldStructure, structure);
+  const holdsEditedRow = (fragment: TableFragment) => {
+    const recipe = deferredWidthRecipe(fragment);
+    return (recipe?.sources ?? fragment.rows).some((row) => edited.has(row.id));
+  };
   const order = [
-    ...fragments.filter((fragment) => fragment.rows.some((row) => edited.has(row.id))),
-    ...fragments.filter((fragment) => !fragment.rows.some((row) => edited.has(row.id))),
+    ...fragments.filter(holdsEditedRow),
+    ...fragments.filter((fragment) => !holdsEditedRow(fragment)),
   ];
   const replacements = new Map<BlockFragmentRecord, BlockFragmentRecord>();
   for (const fragment of order) {
@@ -778,6 +959,7 @@ export function updateTableWidths(
     // Both structures passed `eligibleStructure`: every cell, header rows included, is
     // horizontal and holds paragraphs only, so no row of the replacement reads bottom to top.
     markHorizontalTableFragment(replacement);
+    markTableWithoutListMarkers(replacement);
     replacements.set(fragment, withBudgetProof(replacement, true));
   }
   registerTableCellBreakKeys(after, keys);
@@ -787,11 +969,20 @@ export function updateTableWidths(
     // keeps the original rows on their original page fragments.
     paragraphPagesUnchanged: true,
     lineDelta,
-    pages: pages.map((page) =>
-      page.fragments.some((fragment) => replacements.has(fragment))
-        ? { ...page, fragments: page.fragments.map((f) => replacements.get(f) ?? f) }
-        : page
-    ),
+    pages: pages.map((page) => {
+      if (!page.fragments.some((fragment) => replacements.has(fragment))) return page;
+      const fragments = page.fragments.map((fragment) => replacements.get(fragment) ?? fragment);
+      const replacement = { ...page, fragments };
+      if (
+        page.fragments.every(
+          (fragment) => !replacements.has(fragment) || metadataUnchanged.has(fragment)
+        )
+      ) {
+        carryBlockMetadataIdentity(page.fragments, fragments);
+        carryBodyReviewAnchors(page, replacement);
+      }
+      return replacement;
+    }),
     replacements,
   };
 }

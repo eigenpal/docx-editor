@@ -5,6 +5,10 @@
 // backs `ooxmlTreesEqual`. It is a projection of the tree in ooxml-tree.ts; the read path
 // stays there, and importers keep reaching everything through that module's re-exports.
 
+import {
+  assertSerializableName,
+  assertSerializableNamespace,
+} from './ooxml-serialize-validation.ts';
 import { isXmlNCName } from './qname.ts';
 import { escapeXmlAttributeChecked, escapeXmlChecked } from './sinks.ts';
 import {
@@ -34,17 +38,6 @@ import {
   isQNameValuedAttribute,
 } from './ooxml-serialize-namespaces.ts';
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
-
-function assertSerializableName(localName: string): void {
-  if (!isXmlNCName(localName))
-    throw new Error(`invalid local name for OOXML serialization: ${JSON.stringify(localName)}`);
-}
-
-function assertSerializableNamespace(namespaceUri: string): void {
-  if (namespaceUri === XMLNS_NAMESPACE_URI)
-    throw new Error('the XMLNS namespace cannot name an OOXML element or authored attribute');
-  escapeXmlChecked(namespaceUri, 'namespace URI');
-}
 
 export interface ControlledPrefixes {
   /** Element-name prefixes; may map a root-default URI to `''`. */
@@ -180,8 +173,8 @@ function controlledQualifiedName(
   prefixes: ControlledPrefixes,
   attribute: boolean
 ): string {
-  assertSerializableName(localName);
-  assertSerializableNamespace(namespaceUri);
+  assertSerializableName(localName, prefixes);
+  assertSerializableNamespace(namespaceUri, prefixes);
   if (namespaceUri === '') return localName;
   if (attribute) {
     const prefix = prefixForAttributeOrQName(namespaceUri, prefixes);
@@ -194,13 +187,16 @@ function controlledQualifiedName(
   return `${prefix}:${localName}`;
 }
 
-function sortedAttributes(attributes: readonly OoxmlAttribute[]): readonly OoxmlAttribute[] {
+function sortedAttributes(
+  attributes: readonly OoxmlAttribute[],
+  prefixes?: ControlledPrefixes
+): readonly OoxmlAttribute[] {
   if (attributes.length === 0) return attributes;
   // A single attribute cannot collide or need ordering; skip the set and the sort copy.
   const seen = attributes.length > 1 ? new Set<string>() : null;
   for (const attribute of attributes) {
-    assertSerializableName(attribute.localName);
-    assertSerializableNamespace(attribute.namespaceUri);
+    assertSerializableName(attribute.localName, prefixes);
+    assertSerializableNamespace(attribute.namespaceUri, prefixes);
     if (!seen) continue;
     const key = expandedKey(attribute.namespaceUri, attribute.localName);
     if (seen.has(key))
@@ -241,8 +237,8 @@ function controlledQNameValue(
     .filter(Boolean)
     .map((token) => {
       const [namespaceUri, localName] = resolvedQNameToken(token, bindings);
-      assertSerializableName(localName);
-      assertSerializableNamespace(namespaceUri);
+      assertSerializableName(localName, prefixes);
+      assertSerializableNamespace(namespaceUri, prefixes);
       if (namespaceUri === '') return localName;
       const prefix = prefixForAttributeOrQName(namespaceUri, prefixes);
       return `${prefix}:${localName}`;
@@ -359,7 +355,7 @@ function serializeElement(
           throw new Error(
             `invalid or duplicate namespace prefix ${JSON.stringify(binding.prefix)}`
           );
-        assertSerializableNamespace(binding.namespaceUri);
+        assertSerializableNamespace(binding.namespaceUri, prefixes);
         seenDeclarationPrefixes.add(binding.prefix);
         const declaredByControlledRoot =
           rootDeclarations !== '' && controlledRootDeclares(binding, own, prefixes);
@@ -376,7 +372,7 @@ function serializeElement(
   const preserve = inheritedPreserveOf(elementAttributes, inheritedPreserve);
   const name = controlledQualifiedName(node.namespaceUri, node.localName, prefixes, false);
   out.push(`<${name}${rootDeclarations}${declarations}`);
-  for (const attribute of sortedAttributes(elementAttributes)) {
+  for (const attribute of sortedAttributes(elementAttributes, prefixes)) {
     const attributeName = controlledQualifiedName(
       attribute.namespaceUri,
       attribute.localName,

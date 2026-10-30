@@ -4,7 +4,8 @@
 
 import { expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlElement } from '@docx-editor.dev/core/store';
-import { walkStoryParagraphs } from '../story-paragraph-walk.ts';
+import { storyRowParagraphs, walkStoryParagraphs } from '../story-paragraph-walk.ts';
+import { load } from './table-row-keep-fixtures.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -62,4 +63,21 @@ test('a spanned cell moves the grid column of the cells after it', () => {
     row(cell('x'), cell('y'), cell('below', '')) +
     '</w:tbl>';
   expect(walkedText(xml)).toEqual(['', 'top', 'x', 'y']);
+});
+
+test('plain and merged walks keep independent answers for unchanged rows', () => {
+  const part = load(
+    table(row(cell('head', ' w:val="restart"'), cell('a')), row(cell('hidden', ''), cell('b')))
+  );
+  const body = part.root.children.find((node) => node.kind === 'body') as OoxmlElement;
+  const source = body.children[0] as OoxmlElement;
+  const rows = source.children.filter((node) => node.kind === 'tableRow');
+  rows.forEach((node) => storyRowParagraphs(node, 8));
+  const before = rows.map((node) => storyRowParagraphs(node, 8));
+  for (let index = 0; index < 3; index++) {
+    expect(walkStoryParagraphs([source], 8, true)).toHaveLength(3);
+    expect(walkStoryParagraphs([source], 8, false)).toHaveLength(4);
+    rows.forEach((node, at) => expect(storyRowParagraphs(node, 8)).toBe(before[at]!));
+  }
+  expect(walkStoryParagraphs([source], 0, true)).toEqual([]);
 });

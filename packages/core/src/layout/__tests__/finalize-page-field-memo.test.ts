@@ -17,6 +17,7 @@
 // footer, and an edit that changes the page count.
 
 import { describe, expect, test } from 'bun:test';
+import { documentOrder } from '../document-order.ts';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   createFixedMeasurer,
@@ -34,7 +35,14 @@ import {
   completeFurniture,
   pageFurnitureStale,
   withFurnitureLater,
+  strippedStoryProjections,
 } from '../published-story-projections.ts';
+import {
+  paragraphLinesFor,
+  paragraphLinesIndex,
+  paragraphLinesPageTraversals,
+} from '../paragraph-lines.ts';
+import { paragraphFragmentsOf } from '../semantic-records.ts';
 import { layoutHeaderFooterStory, type HeaderFooterStoryLayout } from '../hf-layout.ts';
 import type { HeaderFooterStoryRecord } from '../semantic-records.ts';
 
@@ -443,4 +451,153 @@ describe('headers and footers an edit leaves for later', () => {
       expect(page.footer).toBe(completed.pages[index]!.footer);
     });
   });
+});
+
+test('completed footer projections retain body caret routes without retaining old lines', () => {
+  const furniture: PageFurniture = {
+    titlePage: false,
+    evenAndOddHeaders: false,
+    headers: new Map(),
+    footers: new Map([
+      ['default', layoutHeaderFooterStory(footerPart(), CONTENT_WIDTH, measurer, 'test')],
+    ]),
+  };
+  const session = createLayoutSession();
+  const options = { measurer, producer: 'test', session, furniture };
+  layoutSemanticDocument(partOf(filler(30) + tightSectPr), 1, options);
+  const before = withFurnitureLater(
+    () => true,
+    () => layoutSemanticDocument(partOf(filler(60) + tightSectPr), 2, options)
+  );
+  const id = paragraphFragmentsOf(before.pages.at(-1)!)[0]!.paragraphId;
+  paragraphLinesFor(before, id);
+  const order = documentOrder(before);
+  let lineReads = 0;
+  const observed = before.pages
+    .flatMap((page) => paragraphFragmentsOf(page))
+    .map((fragment) => {
+      const descriptor = Object.getOwnPropertyDescriptor(fragment, 'lines')!;
+      Object.defineProperty(fragment, 'lines', {
+        configurable: true,
+        enumerable: true,
+        get() {
+          lineReads++;
+          return descriptor.value;
+        },
+      });
+      return { fragment, descriptor };
+    });
+  let after: typeof before;
+  try {
+    after = completeFurniture(before);
+    expect(documentOrder(after)).toBe(order);
+    expect(lineReads).toBe(0);
+  } finally {
+    for (const { fragment, descriptor } of observed)
+      Object.defineProperty(fragment, 'lines', descriptor);
+  }
+  expect(after).not.toBe(before);
+  const visits = paragraphLinesPageTraversals();
+  const lines = paragraphLinesFor(after, id);
+  expect(paragraphLinesPageTraversals() - visits).toBe(1);
+  expect(lines).toEqual(paragraphLinesIndex({ ...after }).get(id));
+});
+
+test('a footer projector that moves paragraph membership invalidates caret routes', () => {
+  const base = fieldFooterRecord(footerPart());
+  const renamed = (id: string): HeaderFooterStoryRecord => ({
+    ...base,
+    fragments: base.fragments.map((block) => {
+      if (block.kind !== 'paragraph') throw Error('Expected paragraph');
+      return {
+        ...block,
+        paragraphId: id,
+        range: { ...block.range, paragraphId: id },
+        lines: block.lines.map((line) => ({
+          ...line,
+          range: { ...line.range, paragraphId: id },
+          spans: line.spans.map((span) => ({ ...span, range: { ...span.range, paragraphId: id } })),
+        })),
+      };
+    }),
+  });
+  const a = renamed('footer-a');
+  const b = renamed('footer-b');
+  const context = { pageNumber: -1, pageCount: -1 };
+  strippedStoryProjections.set(a, { context, dy: 0, projector: () => b });
+  strippedStoryProjections.set(b, { context, dy: 0, projector: () => a });
+  const body = layoutSemanticDocument(partOf(filler(60) + tightSectPr), 1, { measurer });
+  expect(body.pages.length).toBeGreaterThan(2);
+  const before = {
+    ...body,
+    pages: body.pages.map((page, index) => ({
+      ...page,
+      footer: index === 0 ? a : index === 1 ? b : undefined,
+    })),
+  };
+  expect(paragraphLinesFor(before, 'footer-a')[0]!.pageIndex).toBe(0);
+  const after = completeFurniture(before);
+  expect(paragraphLinesFor(after, 'footer-a')[0]!.pageIndex).toBe(1);
+  expect(paragraphLinesFor(after, 'footer-a')).toEqual(
+    paragraphLinesIndex({ ...after }).get('footer-a')
+  );
+});
+
+test('body order first read after footer completion reaches the retained body', () => {
+  const furniture: PageFurniture = {
+    titlePage: false,
+    evenAndOddHeaders: false,
+    headers: new Map(),
+    footers: new Map([
+      ['default', layoutHeaderFooterStory(footerPart(), CONTENT_WIDTH, measurer, 'test')],
+    ]),
+  };
+  const session = createLayoutSession();
+  const options = { measurer, producer: 'test', session, furniture };
+  layoutSemanticDocument(partOf(filler(30) + tightSectPr), 1, options);
+  const retained = withFurnitureLater(
+    () => true,
+    () => layoutSemanticDocument(partOf(filler(60) + tightSectPr), 2, options)
+  );
+  const completed = completeFurniture(retained);
+  expect(completed).not.toBe(retained);
+  const order = documentOrder(completed);
+  let reads = 0;
+  const observed = retained.pages
+    .flatMap((page) => paragraphFragmentsOf(page))
+    .map((fragment) => {
+      const descriptor = Object.getOwnPropertyDescriptor(fragment, 'lines')!;
+      Object.defineProperty(fragment, 'lines', {
+        configurable: true,
+        enumerable: true,
+        get() {
+          reads++;
+          return descriptor.value;
+        },
+      });
+      return { fragment, descriptor };
+    });
+  try {
+    expect(documentOrder(retained)).toBe(order);
+    expect(reads).toBe(0);
+  } finally {
+    for (const { fragment, descriptor } of observed)
+      Object.defineProperty(fragment, 'lines', descriptor);
+  }
+  const changed = {
+    ...retained,
+    pages: retained.pages.map((page) => ({
+      ...page,
+      fragments: [...page.fragments].reverse(),
+    })),
+  };
+  const expected = [
+    ...new Set(
+      changed.pages.flatMap((page) =>
+        paragraphFragmentsOf(page).map((fragment) => fragment.paragraphId)
+      )
+    ),
+  ];
+  expect(documentOrder(changed)).toEqual(expected);
+  expect(documentOrder(changed)).not.toEqual(order);
 });

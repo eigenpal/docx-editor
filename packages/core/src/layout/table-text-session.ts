@@ -1,4 +1,7 @@
-import { carryParagraphPageRoutes } from './paragraph-lines.ts';
+import { carryLayoutReadCaches } from './layout-read-caches.ts';
+import { carryFragmentPageRoutes } from './fragment-page-routes.ts';
+import { carryParagraphPageRoutes, carryPageParagraphNames } from './paragraph-lines.ts';
+import { carryPageOrder } from './document-order.ts';
 import type { LayoutSession } from './layout-session.ts';
 import type { SectionPrepass } from './section-prepass-types.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
@@ -8,9 +11,11 @@ import { autofitContextMatches } from './autofit-context-reuse.ts';
 import { valueDigest } from './autofit-value-token.ts';
 import { autofitContextOf, carryTableAutofitScope } from './table-autofit-widths.ts';
 import { updateTableText } from './table-text-update.ts';
+import { registerTableWidthReuseScope } from './table-width-reuse-scope.ts';
 import type { TablePageBand } from './table-width-update.ts';
-import { carryTableCaretContexts } from './table-caret-context.ts';
+import { carryPageTableContributions, carryTableCaretContexts } from './table-caret-context.ts';
 import { offerPreviousRows, offerUnchangedTableRows } from './table-row-placement-reuse.ts';
+import { tableTextStructureUnchanged } from './table-text-change.ts';
 import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
 
 type Result = Omit<BlockLayoutResult, 'overflowShellAt'>;
@@ -32,7 +37,7 @@ export function reuseUnchangedLayout(
 ): Result {
   const previous = session.previous!;
   session.previous = withContentControlMetadata({ revision, pages: previous.pages }, previous);
-  carryTableCaretContexts(previous, session.previous);
+  carryLayoutReadCaches(previous, session.previous);
   session.endLineCounter = lineCounterStart + session.endLineCounter - session.startLineCounter;
   session.startLineCounter = lineCounterStart;
   session.stats = {
@@ -70,6 +75,7 @@ export function tryUpdateTableSession(input: {
     deps,
     input.rowInputsEqual === true
   );
+  registerTableWidthReuseScope(deps, sameInputs);
   const rowInputsEqual =
     sameInputs ||
     (input.rowInputsEqual &&
@@ -108,7 +114,10 @@ export function tryUpdateTableSession(input: {
   if (!update) {
     // The full pagination that follows can still reuse every row that keeps its place. A
     // moved row keeps its old cell and row properties, so only a text-only edit offers rows.
-    if (drawingInputsUnchangedByTextEdit(oldEntry.table, entry.table))
+    if (
+      drawingInputsUnchangedByTextEdit(oldEntry.table, entry.table) ||
+      tableTextStructureUnchanged(oldEntry.table, entry.table)
+    )
       offerPreviousRows(entry.table, session.previous.pages);
     return null;
   }
@@ -123,7 +132,18 @@ export function tryUpdateTableSession(input: {
   );
   // updateTableText proves ordinary text edits and preserves all table occurrences.
   carryTableCaretContexts(oldLayout, session.previous);
-  if (update.paragraphPagesUnchanged) carryParagraphPageRoutes(oldLayout, session.previous);
+  if (update.paragraphPagesUnchanged) {
+    carryParagraphPageRoutes(oldLayout, session.previous);
+    carryFragmentPageRoutes(oldLayout, session.previous);
+    for (let index = 0; index < update.pages.length; index++) {
+      const before = oldLayout.pages[index]!;
+      const after = update.pages[index]!;
+      if (before === after) continue;
+      carryPageParagraphNames(before, after);
+      carryPageTableContributions(before, after);
+      carryPageOrder(before, after);
+    }
+  }
   session.keys = prepass.flowKeys;
   session.checkpoints = session.checkpoints.map((mark, index) => {
     // Checkpoints precede their block. A table edit cannot change an earlier checkpoint.

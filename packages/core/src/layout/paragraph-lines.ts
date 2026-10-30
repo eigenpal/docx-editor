@@ -71,12 +71,11 @@ const paragraphPageRoutes = new WeakMap<SemanticLayout, Map<string, ReadonlySet<
 /** @internal Caller proves every paragraph keeps its page membership. */
 export function carryParagraphPageRoutes(previous: SemanticLayout, next: SemanticLayout): void {
   if (previous === next || previous.pages.length !== next.pages.length) return;
-  const routes = new Map(paragraphPageRoutes.get(previous));
-  for (const [id, placed] of requestedParagraphLines.get(previous) ?? []) {
-    if (placed.length) routes.set(id, new Set(placed.map((entry) => entry.pageIndex)));
-  }
-  while (routes.size > LAZY_PARAGRAPH_READS) routes.delete(routes.keys().next().value!);
-  if (routes.size) paragraphPageRoutes.set(next, routes);
+  let routes = paragraphPageRoutes.get(previous);
+  if (!routes) paragraphPageRoutes.set(previous, (routes = new Map()));
+  // Wrappers can publish before their consumers read lines. Share bounded scalar routes
+  // so those later reads also reach the session that supplies the next width-only update.
+  paragraphPageRoutes.set(next, routes);
 }
 
 /**
@@ -95,19 +94,38 @@ export function paragraphLinesPageTraversals(): number {
   return pageTraversals;
 }
 
+function rememberParagraphRoute(
+  layout: SemanticLayout,
+  paragraphId: string,
+  lines: readonly PlacedLine[]
+): readonly PlacedLine[] {
+  if (!lines.length) return lines;
+  let routes = paragraphPageRoutes.get(layout);
+  if (!routes) paragraphPageRoutes.set(layout, (routes = new Map()));
+  if (!routes.has(paragraphId)) {
+    if (routes.size >= LAZY_PARAGRAPH_READS) routes.delete(routes.keys().next().value!);
+    routes.set(paragraphId, new Set(lines.map((entry) => entry.pageIndex)));
+  }
+  return lines;
+}
+
 /** Read one paragraph without copying every page index into a document-wide map. */
 export function paragraphLinesFor(
   layout: SemanticLayout,
   paragraphId: string
 ): readonly PlacedLine[] {
   const complete = paragraphLinesCache.get(layout);
-  if (complete) return complete.get(paragraphId) ?? [];
+  if (complete) return rememberParagraphRoute(layout, paragraphId, complete.get(paragraphId) ?? []);
   let requested = requestedParagraphLines.get(layout);
   if (!requested) requestedParagraphLines.set(layout, (requested = new Map()));
   const known = requested.get(paragraphId);
-  if (known) return known;
+  if (known) return rememberParagraphRoute(layout, paragraphId, known);
   if (requested.size >= LAZY_PARAGRAPH_READS) {
-    return paragraphLinesIndex(layout).get(paragraphId) ?? [];
+    return rememberParagraphRoute(
+      layout,
+      paragraphId,
+      paragraphLinesIndex(layout).get(paragraphId) ?? []
+    );
   }
   const result: PlacedLine[] = [];
   const route = paragraphPageRoutes.get(layout)?.get(paragraphId);
@@ -118,7 +136,7 @@ export function paragraphLinesFor(
     if (placed) for (const line of placed) result.push(line);
   }
   requested.set(paragraphId, result);
-  return result;
+  return rememberParagraphRoute(layout, paragraphId, result);
 }
 
 const requestedPageLines = new WeakMap<
@@ -144,6 +162,12 @@ export function carryPageLines(from: PageRecord, to: PageRecord): void {
  * paragraph walked every line of every page before the caret could be placed.
  */
 const namedParagraphsCache = new WeakMap<PageRecord, ReadonlySet<string>>();
+
+/** @internal Caller proves that every line names the same paragraphs on this page. */
+export function carryPageParagraphNames(from: PageRecord, to: PageRecord): void {
+  const named = namedParagraphsCache.get(from);
+  if (named) namedParagraphsCache.set(to, named);
+}
 
 function pageNamedParagraphs(page: PageRecord): ReadonlySet<string> {
   const cached = namedParagraphsCache.get(page);

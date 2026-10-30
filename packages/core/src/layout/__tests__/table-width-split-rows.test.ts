@@ -12,6 +12,7 @@ import { readTableStructure } from '../semantic-table.ts';
 import { updateTableText } from '../table-text-update.ts';
 import {
   admissibleSplitChain,
+  markTableWithoutSplitRows,
   createSplitRowPlacements,
   splitRowWidthTestRecorder,
   type SplitRowOccurrence,
@@ -432,8 +433,32 @@ test('an exact-height source is refused before any placement', () => {
   };
   // Control (assumption: the base deps place the row as the paginator did at these widths).
   const control = splitRowWidthTestRecorder();
-  const placed = createSplitRowPlacements(input)(chain[0]!.old);
-  control.dispose();
+  const complete = fragments.filter((fragment) =>
+    fragment.rows.every((row) => !row.isContinuation && !row.hasContinuation)
+  );
+  expect(complete.length).toBeGreaterThan(0);
+  const descriptors = complete.map(
+    (fragment) => Object.getOwnPropertyDescriptor(fragment, 'rows')!
+  );
+  for (const fragment of complete) {
+    markTableWithoutSplitRows(fragment);
+    Object.defineProperty(fragment, 'rows', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw Error('Complete fragment geometry must not be read by split planning');
+      },
+    });
+  }
+  let placed;
+  try {
+    placed = createSplitRowPlacements(input)(chain[0]!.old);
+  } finally {
+    complete.forEach((fragment, index) =>
+      Object.defineProperty(fragment, 'rows', descriptors[index]!)
+    );
+    control.dispose();
+  }
   expect(placed).not.toBeNull();
   expect([control.placed, control.refused]).toEqual([1, 0]);
   // The same chain with an exact row height: such a row never splits, so it is refused.

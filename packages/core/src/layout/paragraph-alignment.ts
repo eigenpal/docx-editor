@@ -1,3 +1,4 @@
+import { OVERFLOW_TOLERANCE_PT, SLACK_RESIDUE_PT } from './paragraph-alignment-tolerance.ts';
 import { lineHangingPunctuationAdvance } from './line-hanging-punctuation.ts';
 import type { PendingLine } from './pending-line.ts';
 import { shrinkJustifiedSpans } from './paragraph-space-shrink.ts';
@@ -10,6 +11,7 @@ import { styleForFontSlot } from './script-itemization.ts';
 import { justifyCjkSpans } from './cjk-justify.ts';
 import { distributeLineCharacters, spacesAbsorbSlack } from './distributed-character-spacing.ts';
 import type { DistributedSpacing } from './distributed-spacing.ts';
+import type { SpaceShrinkFloor } from './space-shrink-rule.ts';
 import {
   endsWithSpaceSlot,
   withoutLineEndWhitespace,
@@ -25,9 +27,6 @@ import {
   type LinePassage,
   type MirroredLinePassage,
 } from './passage-alignment.ts';
-
-const OVERFLOW_TOLERANCE_PT = 0.001;
-const SLACK_RESIDUE_PT = 1e-9;
 
 /** Horizontal alignment of a paragraph (`w:jc`, ECMA-376 §17.3.1.13). */
 export type Alignment = 'left' | 'center' | 'right' | 'both';
@@ -140,7 +139,7 @@ function alignLogicalSpans(
   distributed: DistributedSpacing | undefined,
   eastAsianSpacing: boolean,
   hangingPunctuationAdvance: number,
-  halfAverageFloor = false
+  floor?: SpaceShrinkFloor
 ): readonly StyleSpanRecord[] {
   if (spans.length === 0) return spans;
   // An unbounded line (a measuring pass) has no far edge to align or justify against.
@@ -161,7 +160,7 @@ function alignLogicalSpans(
         distributed,
         eastAsianSpacing,
         hangingPunctuationAdvance,
-        halfAverageFloor
+        floor
       )
     );
     if (aligned) return aligned;
@@ -325,7 +324,7 @@ function alignLogicalSpans(
       -slack,
       measurer,
       hangsAfterOwnSpace ? trailingStart - 1 : Math.max(0, contentLast),
-      halfAverageFloor,
+      floor,
       paragraphRtl
     );
   // A line that fills its measure can leave a rounding residue, which must not become spacing.
@@ -563,7 +562,7 @@ export function alignSpans(
   // legacy compatibility modes hang marks outside justified paragraphs, and only they compress
   // the spaces of a line at every alignment.
   const effective =
-    hangingPunctuationAdvance > 0 || pendingLine?.compressesSpaces === true
+    hangingPunctuationAdvance > 0 || pendingLine?.compressesSpaces !== undefined
       ? 'both'
       : alignment === 'both' && isLastLine && paragraphRtl && !lastLineShrinks
         ? 'right'
@@ -586,7 +585,7 @@ export function alignSpans(
         distributed,
         eastAsianSpacing,
         isLastPart ? hangingPunctuationAdvance : 0,
-        pendingLine?.compressesSpaces === true
+        pendingLine?.compressesSpaces
       )
     );
     if (aligned) return reorderBidiSpans(aligned, false, pageBreaksIgnored);
@@ -627,7 +626,7 @@ export function alignSpans(
       distributed,
       eastAsianSpacing,
       hangingPunctuationAdvance,
-      pendingLine?.compressesSpaces === true
+      pendingLine?.compressesSpaces
     );
   const trailing = bidiTrailingSpaces(split, paragraphRtl, isLastLine, pageBreaksIgnored);
   if (trailing) {

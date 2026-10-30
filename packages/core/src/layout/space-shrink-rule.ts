@@ -5,6 +5,13 @@ import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import type { CjkTypographySettings } from './cjk-typography.ts';
 
 /**
+ * How far each space may shrink under a legacy compatibility rule: down to half its face's
+ * average character width (OS/2 `xAvgCharWidth`, the metric of the reverse automatic spacing
+ * gap), or down to a quarter of its font size.
+ */
+export type SpaceShrinkFloor = 'halfAverage' | 'quarterEm';
+
+/**
  * How a line may borrow inter-word space to keep the word that overflows it: how much of
  * each space can go, how the shrink is weighed against the stretch the shorter line would
  * take, and whether a final half-width mark may hang beside spaces at their limit.
@@ -34,11 +41,10 @@ export interface SpaceShrinkRule {
    */
   readonly everyAlignment?: true;
   /**
-   * Each space shrinks down to half its face's average character width, the metric of the
-   * reverse automatic spacing gap, rather than by `limit`. `limit` applies when that width is
-   * unknown.
+   * Each space shrinks down to this floor rather than by `limit`. `limit` applies when the
+   * floor is unknown, as a half-average floor is for a face without a known average width.
    */
-  readonly halfAverageFloor?: true;
+  readonly floor?: SpaceShrinkFloor;
 }
 
 /** Justified lines (`w:jc` `both`) in a modern compatibility mode. */
@@ -74,14 +80,25 @@ const OTHER_JUSTIFIED_SPACE_SHRINK: SpaceShrinkRule = Object.freeze({
  * face whose half-average width is wider than its space, such as Calibri, keeps natural spaces;
  * Times New Roman gives about a fifth, Courier New half. Without a known average width, a space
  * gives up a fifth. Only one word per line joins this way, and a space cut at the margin before
- * it counts at its natural advance. `w:balanceSingleByteDoubleByteWidth` turns the rule off.
+ * it counts at its natural advance.
  */
 export const COMPRESSED_LEGACY_SPACE_SHRINK: SpaceShrinkRule = Object.freeze({
   limit: 0.2,
   cost: 0,
   hangsMarks: true,
   everyAlignment: true,
-  halfAverageFloor: true,
+  floor: 'halfAverage',
+});
+
+/**
+ * The legacy rule with `w:balanceSingleByteDoubleByteWidth`: each space shrinks down to a
+ * quarter of its font size, whatever its face. A face whose space is a quarter em or less, such
+ * as Times New Roman or Calibri, keeps natural spaces; Arial and Century give about a tenth,
+ * Courier New more than half.
+ */
+export const COMPRESSED_BALANCED_SPACE_SHRINK: SpaceShrinkRule = Object.freeze({
+  ...COMPRESSED_LEGACY_SPACE_SHRINK,
+  floor: 'quarterEm',
 });
 
 /** The space-shrink rule of a paragraph, or undefined when its lines keep natural spaces. */
@@ -95,8 +112,13 @@ export function resolveSpaceShrinkRule(
     settings.compression !== 'doNotCompress' &&
     settings.sourceEastAsianFont === true
   )
-    // `w:balanceSingleByteDoubleByteWidth` keeps natural spaces in a legacy mode.
-    return settings.balancedWidths ? undefined : COMPRESSED_LEGACY_SPACE_SHRINK;
+    // With `w:useWord97LineBreakRules` as well, proportional faces keep natural spaces.
+    // Monospaced faces then shrink further, by a rule not modeled here; they keep theirs too.
+    return !settings.balancedWidths
+      ? COMPRESSED_LEGACY_SPACE_SHRINK
+      : settings.word97LineBreaks
+        ? undefined
+        : COMPRESSED_BALANCED_SPACE_SHRINK;
   // Modern justification is mode 15 and every newer mode. An absent mode stays legacy.
   if (
     !hasCompatibilityRule(compatibilityMode, 'justifiedSpaceShrink') ||

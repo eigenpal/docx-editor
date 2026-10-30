@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A packaged stand-in for the symbol fallback face sets a line from its own 1.7 em box.",
+  "after": "The stand-in keeps the 1.33 em line box of the symbol fallback face it replaces.",
+  "reason": "Only derived layout changes. Shared nodes, canonical UTF-16 offsets, operations, and package serialization remain unchanged. Peers with the same fonts lay out the same lines.",
+  "tests": ["packages/docx-to-pdf/test/symbol-fallback-line-height.test.ts"],
+  "changeset": "symbol-fallback-line-height",
+  "migration": null
+}

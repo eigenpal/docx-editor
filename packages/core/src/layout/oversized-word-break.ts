@@ -61,6 +61,8 @@ export function chopOversizedWord(
     /** Closes a line that ends inside the word, after a cut. Defaults to `closeLine`. */
     readonly closeCutLine?: () => void;
     readonly overflowTolerancePt: number;
+    /** @internal Observe actual width decisions without another room or measurement read. */
+    readonly onWidthComparison?: (width: number, room: number, fits: boolean) => void;
     /** Advance after this candidate in the same cross-run grapheme. */
     readonly followingWidth?: number;
     /** Keep the leading fragment with the preceding text when their seam is protected. */
@@ -81,10 +83,11 @@ export function chopOversizedWord(
     readonly finalMarkHangs?: (text: string, width: number) => boolean;
   }
 ): OversizedWordRemainder {
-  if (
-    width + (options.followingWidth ?? 0) <=
-    options.remainingLineWidth() + options.overflowTolerancePt
-  ) {
+  const initialWidth = width + (options.followingWidth ?? 0);
+  const initialRoom = options.remainingLineWidth();
+  const initialFits = initialWidth <= initialRoom + options.overflowTolerancePt;
+  options.onWidthComparison?.(initialWidth, initialRoom, initialFits);
+  if (initialFits) {
     return { text, modelStart, width, brokeLine: false };
   }
   const graphemes = segmentGraphemes(text);
@@ -93,11 +96,12 @@ export function chopOversizedWord(
   let remainingWidth = width;
   let brokeLine = false;
 
-  while (
-    graphemeFrom < graphemes.length &&
-    remainingWidth + (options.followingWidth ?? 0) >
-      options.remainingLineWidth() + options.overflowTolerancePt
-  ) {
+  while (graphemeFrom < graphemes.length) {
+    const testedWidth = remainingWidth + (options.followingWidth ?? 0);
+    const room = options.remainingLineWidth();
+    const overflows = testedWidth > room + options.overflowTolerancePt;
+    options.onWidthComparison?.(testedWidth, room, !overflows);
+    if (!overflows) break;
     const graphemesLeft = graphemes.length - graphemeFrom;
     if (graphemesLeft === 1) {
       if (options.lineHasText() && !(utf16From === 0 && options.keepWithPrevious)) {
@@ -117,7 +121,9 @@ export function chopOversizedWord(
       const mid = (low + high) >> 1;
       const utf16To = graphemes[mid - 1]!.utf16To;
       const prefixWidth = options.measureText(text.slice(utf16From, utf16To));
-      if (prefixWidth <= available + options.overflowTolerancePt) {
+      const fits = prefixWidth <= available + options.overflowTolerancePt;
+      options.onWidthComparison?.(prefixWidth, available, fits);
+      if (fits) {
         fitTo = mid;
         low = mid + 1;
       } else {

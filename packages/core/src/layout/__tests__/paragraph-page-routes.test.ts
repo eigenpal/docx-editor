@@ -4,6 +4,7 @@ import { createLayoutSession } from '../layout-session.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { paragraphFragmentsOf } from '../semantic-records.ts';
 import {
+  carryParagraphPageRoutes,
   paragraphLinesFor,
   paragraphLinesIndex,
   paragraphLinesPageTraversals,
@@ -26,6 +27,8 @@ test('width-only table edits route caret reads to fresh lines on the same pages'
   let previous = paragraphLinesFor(layout, id);
   let narrowed = 0;
   for (let offset = 0; offset < 6; offset++) {
+    // A no-change publication between edits must retain routes read by the surface.
+    layout = lay(part, 15, { session, cache });
     const edit = applyTreeOp(part, { op: 'insertText', paragraphId: id, offset, text: 'W' });
     if (!edit.ok) throw Error(edit.reason);
     part = edit.part;
@@ -102,3 +105,19 @@ test('a routed paragraph pushed to the next page is still found after a height e
   layout = lay(part, 15, { session, cache });
   check();
 });
+
+for (const readAfterCarry of [false, true]) {
+  test(`complete-index reads preserve routes through wrappers, late=${readAfterCarry}`, () => {
+    const layout = lay(load('<w:p><w:r><w:t>A</w:t></w:r></w:p>'.repeat(80)));
+    expect(layout.pages.length).toBeGreaterThan(2);
+    const all = paragraphLinesIndex(layout);
+    const id = [...all.keys()].at(-1)!;
+    const next = { ...layout, pages: layout.pages.map((page) => ({ ...page })) };
+    if (!readAfterCarry) paragraphLinesFor(layout, id);
+    carryParagraphPageRoutes(layout, next);
+    if (readAfterCarry) paragraphLinesFor(layout, id);
+    const before = paragraphLinesPageTraversals();
+    expect(paragraphLinesFor(next, id)).toEqual(all.get(id));
+    expect(paragraphLinesPageTraversals() - before).toBe(1);
+  });
+}

@@ -68,6 +68,13 @@ export interface SplitRowInput {
   readonly base: TableFlowDeps;
 }
 
+const completeFragments = new WeakSet<TableFragmentRecord>();
+
+/** The caller proves every row is complete, including repeated headers. */
+export function markTableWithoutSplitRows(fragment: TableFragmentRecord): void {
+  completeFragments.add(fragment);
+}
+
 let observer: { placed: number; refused: number } | null = null;
 
 /** @internal Counts split rows placed again and refused, for tests that must see the lane. */
@@ -100,13 +107,15 @@ export function createSplitRowPlacements(
   input: SplitRowInput
 ): (old: TableRowFragmentRecord) => SplitRowPlacement | null {
   const chains = new Map<string, SplitRowOccurrence[]>();
-  for (const [listPosition, fragment] of input.fragments.entries())
+  for (const [listPosition, fragment] of input.fragments.entries()) {
+    if (completeFragments.has(fragment)) continue;
     fragment.rows.forEach((old, index) => {
       if (!old.isContinuation && !old.hasContinuation) return;
       let chain = chains.get(old.id);
       if (!chain) chains.set(old.id, (chain = []));
       chain.push({ listPosition, fragment, index, old });
     });
+  }
   const placed = new Map<TableRowFragmentRecord, SplitRowPlacement | null>();
   return (old) => {
     const known = placed.get(old);
