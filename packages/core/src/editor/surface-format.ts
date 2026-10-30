@@ -1,6 +1,6 @@
 import { createContextualRunFormatting } from '../layout/complex-script-formatting.ts';
 import { paragraphMarkFace } from '../layout/paragraph-mark-face.ts';
-import { caretWordAt as layoutCaretWordAt } from '../layout/caret-word.ts';
+import { caretWordAt as layoutCaretWordAt, hiddenRevisionRanges } from '../layout/caret-word.ts';
 
 // Run and paragraph property edits at the selection (paginated-surface seam).
 //
@@ -444,7 +444,14 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   ): { from: SemanticPosition; to: SemanticPosition } | null => {
     if (from.paragraphId !== to.paragraphId || from.offset !== to.offset) return null;
     if (deps.pendingFormats()?.length) return null;
-    const word = layoutCaretWordAt(currentLayout.value, from.paragraphId, from.offset);
+    const hidden = hiddenRevisionRanges(
+      storyPart(),
+      from.paragraphId,
+      textOf(from.paragraphId).length,
+      displayMode(),
+      authorFilter()
+    );
+    const word = layoutCaretWordAt(currentLayout.value, from.paragraphId, from.offset, hidden);
     if (!word) return null;
     return {
       from: { paragraphId: from.paragraphId, offset: word.start },
@@ -606,20 +613,20 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       // note reference toggles the face typing takes there, not the reference's face.
       const read = formattingSelection(selectionNow.value);
       const { from, to } = orderedRange();
-      // Inside a word the press formats the whole word, so the word answers for its state: a
-      // partly bold word goes fully bold, as a selection over it would.
+      // Inside a word the press formats the whole word, but the caret answers for its state,
+      // as the toolbar shows it: in a partly bold word, a press after a bold letter turns bold
+      // off for the whole word, and a press after a plain letter turns it on.
       const word = cells && cells.length > 0 ? null : caretWordAt(from, to);
-      const documentActive =
-        word || read.caretSpan
-          ? isRunPropertyActive(
-              currentLayout.value,
-              word ? { anchor: word.from, head: word.to } : read.selection,
-              localName,
-              cells,
-              value,
-              deps.paragraphOrder()
-            )
-          : pendingPropertyState(read.markFace ?? null, localName, value) === true;
+      const documentActive = read.caretSpan
+        ? isRunPropertyActive(
+            currentLayout.value,
+            read.selection,
+            localName,
+            cells,
+            value,
+            deps.paragraphOrder()
+          )
+        : pendingPropertyState(read.markFace ?? null, localName, value) === true;
       // A pending entry answers for the toggle state ahead of the document — pressing Bold
       // twice at a caret must cancel, not double-arm.
       const active =

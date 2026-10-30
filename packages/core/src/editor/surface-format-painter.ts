@@ -32,7 +32,7 @@ import {
 } from './surface-formatting.ts';
 import { wordRangeAt } from './surface-selection-ops.ts';
 import { inlineControlEdges } from '../layout/word-navigation-boundaries.ts';
-import { wordTextFromLayout } from '../layout/caret-word.ts';
+import { hiddenRevisionRanges, wordTextFromLayout } from '../layout/caret-word.ts';
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import type {
   FormatPainterMode,
@@ -317,7 +317,17 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
           from,
           inlineControlEdges(deps.layout(), from.paragraphId),
           'after',
-          wordTextFromLayout(deps.layout(), from.paragraphId)
+          wordTextFromLayout(
+            deps.layout(),
+            from.paragraphId,
+            hiddenRevisionRanges(
+              storyPart(),
+              from.paragraphId,
+              deps.textOf(from.paragraphId).length,
+              deps.displayMode(),
+              deps.authorFilter()
+            )
+          )
         )
       : null;
     const spanFrom = word?.from ?? from;

@@ -1,62 +1,105 @@
 // The word a caret format or a format painter click reaches.
 //
 // A format picked at a caret strictly inside a word formats the whole word; at a word's edge
-// it only arms the next typed text. The word here is letters, digits, combining marks, and
-// apostrophes: a hyphen, an underscore, a period, or a comma ends it. Text a revision view
-// hides (a tracked deletion in the proposed view) owns offsets but paints nothing, so it
-// joins the visible letters on either side instead of splitting the word.
+// it only arms the next typed text. The word here is letters, digits, combining marks,
+// apostrophes, optional hyphens, and zero-width joiners: a hyphen, an underscore, a period, or
+// a comma ends it, and so does any object a run holds, such as a picture or a note reference.
+// Revision text the view hides (a tracked deletion in the proposed view) owns offsets but
+// paints nothing, so it joins the visible letters on either side instead of splitting them.
 
+import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { formattableRanges } from '../store/store/direct-properties.ts';
+import type {
+  FormattingDisplayMode,
+  FormattingRevisionAuthorFilter,
+} from '../store/store/formattable-runs.ts';
 import { paragraphLinesFor } from './paragraph-lines.ts';
 import { lineSegmentFor } from './line-segments.ts';
 import { paragraphTextFromLayout } from './semantic-interaction.ts';
 import type { SemanticLayout } from './semantic-records.ts';
 import { inlineControlEdges } from './word-navigation-boundaries.ts';
+import { segmentWords } from './word-segment.ts';
 
-const CARET_WORD_CHARACTER = /[\p{L}\p{M}\p{N}'’]/u;
+// U+001F is the model's optional hyphen; U+00AD, ZWNJ and ZWJ also stay inside a word.
+const CARET_WORD_CHARACTER = new RegExp(
+  "^[\\p{L}\\p{M}\\p{N}'\\u2019\\u001F\\u00AD\\u200C\\u200D]$",
+  'u'
+);
 /** Scripts written without spaces between words, segmented by dictionary. */
 const DICTIONARY_SCRIPT = /[\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
 
-/** A word as canonical offsets: `start` inclusive, `end` exclusive. */
+/** A range of canonical offsets: `start` inclusive, `end` exclusive. */
 export interface CaretWordRange {
   readonly start: number;
   readonly end: number;
 }
 
+/** Whether the UTF-16 unit at `index` belongs to a word character, surrogate pairs whole. */
+function isWordAt(text: string, index: number): boolean {
+  const unit = text.charCodeAt(index);
+  if (Number.isNaN(unit)) return false;
+  // A low surrogate belongs to the code point that starts one unit earlier.
+  const start = unit >= 0xdc00 && unit <= 0xdfff && index > 0 ? index - 1 : index;
+  const codePoint = text.codePointAt(start);
+  return codePoint !== undefined && CARET_WORD_CHARACTER.test(String.fromCodePoint(codePoint));
+}
+
 /**
- * Paragraph text for word walks, with hidden revision text bridged.
- *
- * An offset no span paints reads as a word character when the painted characters on both
- * sides of its gap are word characters, so a walk crosses it. Every other offset reads as
- * `paragraphTextFromLayout` gives it.
+ * The ranges of a paragraph that the view hides: gaps between the runs a formatting write
+ * may reach. Pictures, note references, and other objects in runs are not gaps.
  */
-export function wordTextFromLayout(layout: SemanticLayout, paragraphId: string): string {
-  const text = paragraphTextFromLayout(layout, paragraphId);
-  const painted = new Uint8Array(text.length);
+export function hiddenRevisionRanges(
+  part: OoxmlPart,
+  paragraphId: string,
+  length: number,
+  displayMode: FormattingDisplayMode,
+  authorFilter?: FormattingRevisionAuthorFilter
+): readonly CaretWordRange[] {
+  const hidden: CaretWordRange[] = [];
+  let cursor = 0;
+  for (const slice of formattableRanges(part, paragraphId, 0, length, displayMode, authorFilter)) {
+    if (slice.start > cursor) hidden.push({ start: cursor, end: slice.start });
+    cursor = Math.max(cursor, slice.end);
+  }
+  if (cursor < length) hidden.push({ start: cursor, end: length });
+  return hidden;
+}
+
+/**
+ * Paragraph text for word walks: objects spelled as one object character, hidden revision
+ * text bridged.
+ *
+ * A note reference, a field, or an equation paints text of its own, such as a note number,
+ * but it is one object, so it ends a word like a picture does. An offset in `hidden` reads as
+ * a word character when the characters on both sides of its range are word characters, so a
+ * walk crosses it. Every other offset reads as `paragraphTextFromLayout` gives it.
+ */
+export function wordTextFromLayout(
+  layout: SemanticLayout,
+  paragraphId: string,
+  hidden: readonly CaretWordRange[]
+): string {
+  const characters = paragraphTextFromLayout(layout, paragraphId).split('');
   for (const { line } of paragraphLinesFor(layout, paragraphId) ?? []) {
     const segment = lineSegmentFor(line, paragraphId);
     if (!segment) continue;
     for (const span of segment.spans) {
-      const end = Math.min(span.range.end, text.length);
-      for (let offset = span.range.start; offset < end; offset += 1) painted[offset] = 1;
+      if (!(span.fieldAtom || span.noteNav || span.equation || span.unsupported)) continue;
+      const end = Math.min(span.range.end, characters.length);
+      for (let offset = span.range.start; offset < end; offset += 1) characters[offset] = OBJECT;
     }
   }
-  const characters = text.split('');
-  let index = 0;
-  while (index < characters.length) {
-    if (painted[index]) {
-      index += 1;
-      continue;
-    }
-    let gapEnd = index;
-    while (gapEnd < characters.length && !painted[gapEnd]) gapEnd += 1;
-    const joins =
-      CARET_WORD_CHARACTER.test(text[index - 1] ?? ' ') &&
-      CARET_WORD_CHARACTER.test(text[gapEnd] ?? ' ');
-    if (joins) for (let offset = index; offset < gapEnd; offset += 1) characters[offset] = 'a';
-    index = gapEnd;
+  const text = characters.join('');
+  for (const { start, end } of hidden) {
+    const to = Math.min(end, characters.length);
+    if (start <= 0 || to >= characters.length || start >= to) continue;
+    if (!isWordAt(text, start - 1) || !isWordAt(text, to)) continue;
+    for (let offset = start; offset < to; offset += 1) characters[offset] = 'a';
   }
   return characters.join('');
 }
+
+const OBJECT = '￼';
 
 /**
  * The word a format at a collapsed caret reaches, or null when the caret is not inside one.
@@ -69,7 +112,7 @@ export function caretWordRange(
   offset: number,
   stops: ReadonlySet<number>
 ): CaretWordRange | null {
-  const isWord = (index: number) => CARET_WORD_CHARACTER.test(text[index] ?? ' ');
+  const isWord = (index: number) => isWordAt(text, index);
   if (offset <= 0 || offset >= text.length || stops.has(offset)) return null;
   if (!isWord(offset - 1) || !isWord(offset)) return null;
   let start = offset - 1;
@@ -83,17 +126,18 @@ export function caretWordRange(
 /**
  * The word a format at a collapsed caret formats in a laid-out paragraph, or null.
  *
- * Null as well when the caret sits inside tracked deleted text: a format picked there is for
- * the text typed next, which lands past the deletion, not for the deleted word.
+ * Null as well when the caret sits inside visible tracked deleted text: a format picked there
+ * is for the text typed next, which lands past the deletion, not for the deleted word.
  */
 export function caretWordAt(
   layout: SemanticLayout,
   paragraphId: string,
-  offset: number
+  offset: number,
+  hidden: readonly CaretWordRange[]
 ): CaretWordRange | null {
   if (insideDeletion(layout, paragraphId, offset)) return null;
   return caretWordRange(
-    wordTextFromLayout(layout, paragraphId),
+    wordTextFromLayout(layout, paragraphId, hidden),
     offset,
     inlineControlEdges(layout, paragraphId)
   );
@@ -128,13 +172,14 @@ function dictionaryWord(
   offset: number
 ): CaretWordRange | null | undefined {
   const run = text.slice(start, end);
-  if (!DICTIONARY_SCRIPT.test(run) || typeof Intl.Segmenter !== 'function') return undefined;
-  for (const segment of new Intl.Segmenter(undefined, { granularity: 'word' }).segment(run)) {
-    const segmentStart = start + segment.index;
-    const segmentEnd = segmentStart + segment.segment.length;
+  if (!DICTIONARY_SCRIPT.test(run)) return undefined;
+  for (const segment of segmentWords(run)) {
+    const segmentStart = start + segment.utf16From;
+    const segmentEnd = start + segment.utf16To;
     if (offset === segmentStart) return null;
-    if (offset > segmentStart && offset < segmentEnd)
+    if (offset > segmentStart && offset < segmentEnd) {
       return { start: segmentStart, end: segmentEnd };
+    }
   }
   return null;
 }

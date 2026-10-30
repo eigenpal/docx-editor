@@ -17,13 +17,20 @@ import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const MARK = 'w:author="A" w:date="2026-01-01T00:00:00Z"';
 
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 function docx(body: string): Uint8Array {
   return zipSync({
     '[Content_Types].xml': strToU8(
-      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/></Types>'
     ),
     '_rels/.rels': strToU8(
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId8" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+    ),
+    'word/footnotes.xml': strToU8(
+      `<w:footnotes xmlns:w="${W}"><w:footnote w:id="1"><w:p><w:r><w:footnoteRef/></w:r><w:r><w:t xml:space="preserve"> note</w:t></w:r></w:p></w:footnote></w:footnotes>`
     ),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
@@ -133,13 +140,53 @@ describe('a caret format inside a word formats the whole word', () => {
     expect(marked(editor)).toBe('[abxcd] efgh');
   });
 
-  test('a partly bold word goes fully bold, and a second press turns it off', () => {
-    const editor = open(`<w:p>${run('ab')}${run('cd', '<w:rPr><w:b/></w:rPr>')}${run(' z')}</w:p>`);
-    caret(editor, 1);
-    editor.exec({ type: 'toggleMark', mark: 'bold' });
-    expect(marked(editor, '<w:b/>')).toBe('[abcd] z');
-    editor.exec({ type: 'toggleMark', mark: 'bold' });
-    expect(marked(editor, '<w:b w:val="0"/>')).toBe('[abcd] z');
+  test.each([
+    [1, '<w:b/>', '[abcd] z'],
+    [3, '<w:b w:val="0"/>', '[abcd] z'],
+  ])(
+    'in a partly bold word, the caret at %i decides the toggle for the whole word',
+    (offset, match, expected) => {
+      const editor = open(
+        `<w:p>${run('ab')}${run('cd', '<w:rPr><w:b/></w:rPr>')}${run(' z')}</w:p>`
+      );
+      caret(editor, offset);
+      const before = editor.getSelectionFormatting()?.bold;
+      editor.exec({ type: 'toggleMark', mark: 'bold' });
+      expect(marked(editor, match)).toBe(expected);
+      expect(editor.getSelectionFormatting()?.bold).toBe(!before);
+    }
+  );
+
+  test('a note reference ends the word before it', () => {
+    const reference = '<w:r><w:footnoteReference w:id="1"/></w:r>';
+    const editor = open(`<w:p>${run('claim')}${reference}${run(' next')}</w:p>`);
+    const revision = editor.surface!.session.packageRevision();
+    caret(editor, 5);
+    size(editor);
+    expect(editor.surface!.session.packageRevision()).toBe(revision);
+    caret(editor, 2);
+    size(editor);
+    expect(marked(editor)).toBe('[claim] next');
+  });
+
+  test('an optional hyphen stays inside the word', () => {
+    const editor = open(
+      `<w:p><w:r><w:t>Versi</w:t><w:softHyphen/><w:t xml:space="preserve">cherung ok</w:t></w:r></w:p>`
+    );
+    caret(editor, 2);
+    size(editor);
+    // "Versi" 0-5, the optional hyphen at 5, "cherung" 6-13, " ok" after.
+    caret(editor, 10);
+    expect(editor.getSelectionFormatting()?.fontSizeHalfPoints).toBe(40);
+    caret(editor, 16);
+    expect(editor.getSelectionFormatting()?.fontSizeHalfPoints).not.toBe(40);
+  });
+
+  test('a letter outside the basic plane stays inside the word', () => {
+    const editor = open(`<w:p>${run('𠮷野家 ok')}</w:p>`);
+    caret(editor, 2);
+    size(editor);
+    expect(marked(editor)).toBe('[𠮷野家] ok');
   });
 
   test('a control edge ends the word', () => {
