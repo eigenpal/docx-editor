@@ -454,6 +454,17 @@ export function projectJournalToShared(
   ): number => {
     const positions = visibleIndexes(parentId, children);
     const before = positions[visibleAt] ?? children.length;
+    // Beside concurrent split siblings shown in another order than listed, a child goes right
+    // after the one shown before it: it then follows that sibling wherever the rule puts it.
+    const ranks = registry.splitSiblings.ranksOf(parentId);
+    const left = visibleAt > 0 ? positions[visibleAt - 1] : undefined;
+    const shownAt = positions[visibleAt];
+    if (
+      ranks &&
+      left !== undefined &&
+      (ranks.has(children[left]!) || (shownAt !== undefined && ranks.has(children[shownAt]!)))
+    )
+      return left + 1;
     if (!permuted(positions)) return before;
     const after = visibleAt > 0 ? positions[visibleAt - 1]! + 1 : 0;
     for (const at of [before, after, children.length]) {

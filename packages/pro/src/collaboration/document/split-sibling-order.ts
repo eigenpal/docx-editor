@@ -16,8 +16,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * character another paragraph copied, after characters of its own, its split fell earlier, so
  * it comes first. Only paragraphs a parent lists side by side, inserted concurrently at the
  * same place, are reordered, and only by what every replica reads alike: item IDs and order,
- * and the marks that name what each insert copies. The materializer, the projection of local
- * edits, and the document order that decides where a copy shows all use this one rule.
+ * and the marks that name what each insert copies. Each paragraph moves with the items listed
+ * after it later from its own place, such as a paragraph split off it, and the projection of a
+ * local edit lists a new paragraph beside such a sibling right after the one shown before it.
+ * The materializer, the projection of local edits, and the document order that decides where
+ * a copy shows all use this one rule.
  */
 import * as Y from 'yjs';
 import type { LogicalId } from './identity.ts';
@@ -70,10 +73,29 @@ function splitEarlier(first: readonly Identity[], second: readonly Identity[]): 
   return first.indexOf(start) > 0 && second.indexOf(first[0]!) <= 0;
 }
 
-function sameId(left: Y.ID | null, right: Y.ID | null): boolean {
-  if (left === null || right === null) return left === right;
-  return left.client === right.client && left.clock === right.clock;
+/** Whether `id` names an element of `item`. */
+function inItem(id: Y.ID | null, item: Y.Item): boolean {
+  return (
+    id !== null &&
+    id.client === item.id.client &&
+    id.clock >= item.id.clock &&
+    id.clock < item.id.clock + item.length
+  );
 }
+
+/**
+ * One concurrent split sibling and the items listed after it later, whose left origin is in
+ * it: a paragraph split off it, or inserted after it, goes with it, so it shows right after
+ * it wherever the rule puts it. Deleted items count, so a follower of a deleted paragraph
+ * keeps that paragraph's place.
+ */
+interface Block {
+  readonly head: Y.Item;
+  readonly items: Y.Item[];
+}
+
+const idKey = (id: Y.ID | null): string => (id ? `${id.client}:${id.clock}` : '-');
+const originsKey = (item: Y.Item): string => `${idKey(item.origin)} ${idKey(item.rightOrigin)}`;
 
 /**
  * The concurrent split siblings of a parent's child array that the rule moves, with their
@@ -81,31 +103,53 @@ function sameId(left: Y.ID | null, right: Y.ID | null): boolean {
  */
 export function splitSiblingRanks(
   children: Y.Array<LogicalId>,
-  textOf: (id: LogicalId) => Y.Text | null
+  textOf: (id: LogicalId) => Y.Text | null,
+  /** Collects the paragraph of each block of every concurrent run, moved or not. */
+  heads: LogicalId[] = []
 ): SiblingRanks {
   let ranks: Map<LogicalId, SiblingRank> | null = null;
   let group = 0;
-  // Live items in list order; a run of items with the same two origins went in concurrently.
   const items: Y.Item[] = [];
+  // Items that went in at one place at once have the same two origins. Only such items start
+  // a group, so a listing without concurrent inserts is read once.
+  const sharing = new Map<string, number>();
   for (let item = firstItem(children); item; item = item.right) {
-    if (!item.deleted) items.push(item);
+    items.push(item);
+    const key = originsKey(item);
+    sharing.set(key, (sharing.get(key) ?? 0) + 1);
   }
   for (let start = 0; start < items.length; ) {
-    let end = start + 1;
-    while (
-      end < items.length &&
-      sameId(items[end]!.origin, items[start]!.origin) &&
-      sameId(items[end]!.rightOrigin, items[start]!.rightOrigin)
-    ) {
-      end += 1;
+    const head = items[start]!;
+    const key = originsKey(head);
+    if (sharing.get(key)! < 2) {
+      start += 1;
+      continue;
     }
-    if (end - start > 1) {
-      const order = orderOf(items.slice(start, end), textOf);
-      if (order) {
-        group += 1;
-        ranks ??= new Map();
-        let rank = 0;
-        for (const item of order) {
+    // Blocks in list order: each item with the head's origins starts one, and an item whose
+    // left origin is in the current block follows it.
+    const blocks: Block[] = [{ head, items: [head] }];
+    let end = start + 1;
+    for (; end < items.length; end += 1) {
+      const item = items[end]!;
+      const current = blocks.at(-1)!;
+      if (originsKey(item) === key) blocks.push({ head: item, items: [item] });
+      else if (current.items.some((member) => inItem(item.origin, member)))
+        current.items.push(item);
+      else break;
+    }
+    if (blocks.length < 2) {
+      start += 1;
+      continue;
+    }
+    for (const block of blocks) heads.push(headId(block.head));
+    const order = orderOf(blocks, textOf);
+    if (order) {
+      group += 1;
+      ranks ??= new Map();
+      let rank = 0;
+      for (const block of order) {
+        for (const item of block.items) {
+          if (item.deleted) continue;
           for (const id of item.content.getContent() as LogicalId[]) {
             ranks.set(id, { group, rank });
             rank += 1;
@@ -118,16 +162,19 @@ export function splitSiblingRanks(
   return ranks;
 }
 
-/** The items of one concurrent run in the order the rule shows them, or null when unchanged. */
-function orderOf(
-  run: readonly Y.Item[],
-  textOf: (id: LogicalId) => Y.Text | null
-): Y.Item[] | null {
-  const copies = run.map((item) => {
-    const first = (item.content.getContent() as unknown[])[0];
-    const text = typeof first === 'string' ? textOf(first as LogicalId) : null;
-    return text ? copiedIdentities(text) : [];
-  });
+/** The paragraph a listing item names first. */
+function headId(item: Y.Item): LogicalId {
+  return (item.content.getContent() as unknown[])[0] as LogicalId;
+}
+
+function copiesOf(id: LogicalId, textOf: (id: LogicalId) => Y.Text | null): Identity[] {
+  const text = typeof id === 'string' ? textOf(id) : null;
+  return text ? copiedIdentities(text) : [];
+}
+
+/** The blocks of one concurrent run in the order the rule shows them, or null when unchanged. */
+function orderOf(run: readonly Block[], textOf: (id: LogicalId) => Y.Text | null): Block[] | null {
+  const copies = run.map(({ head }) => copiesOf(headId(head), textOf));
   // Insertion sort by the pairwise rule, from the order Yjs gives: every replica starts from
   // the same order and reads the same copies, so every replica ends in the same order.
   const order = run.map((_, index) => index);
@@ -142,16 +189,25 @@ function orderOf(
   return moved ? order.map((index) => run[index]!) : null;
 }
 
+interface OrderEntry {
+  readonly ranks: SiblingRanks;
+  readonly shown: readonly LogicalId[];
+  /** The paragraphs of the concurrent runs the order read, and the copies they held. */
+  readonly heads: readonly LogicalId[];
+  readonly copies: string;
+}
+
 /**
- * The rule's ranks per parent, read again only when the parent's listing changes. The texts
- * the rule reads hold the copies a split wrote when it listed its paragraph, in the same
- * transaction, so a listing that did not change keeps its order.
+ * The rule's ranks per parent, read again when the parent's listing changes, or when a
+ * paragraph of a concurrent run holds other copies than the order read. A replica can list a
+ * paragraph before its text or its marks arrive, when an update waits for another one, so a
+ * listing that did not change can still need another order. A listing without concurrent
+ * inserts has no paragraph to read again.
  */
 export class SplitSiblingOrders {
-  private readonly built = new WeakMap<
-    readonly LogicalId[],
-    { readonly ranks: SiblingRanks; readonly shown: readonly LogicalId[] }
-  >();
+  private readonly built = new WeakMap<readonly LogicalId[], OrderEntry>();
+  /** Parents whose last order read a concurrent run. */
+  private readonly withRuns = new Set<LogicalId>();
 
   constructor(
     private readonly childArrayOf: (parentId: LogicalId) => Y.Array<LogicalId> | null,
@@ -170,17 +226,43 @@ export class SplitSiblingOrders {
     return this.read(parentId)?.shown ?? this.listingOf(parentId);
   }
 
-  private read(parentId: LogicalId) {
+  /**
+   * Parents whose shown order changed since the last call while their listing stayed: a
+   * paragraph of a concurrent run got its text or marks. A view rebuilds them, and the order
+   * that decides where a moved copy shows changed with them.
+   */
+  takeChanged(): LogicalId[] {
+    const changed: LogicalId[] = [];
+    for (const parentId of [...this.withRuns]) {
+      const listing = this.listingOf(parentId);
+      const known = listing ? this.built.get(listing) : undefined;
+      if (!known || this.copiesKey(known.heads) === known.copies) continue;
+      const next = this.read(parentId);
+      if (!next || next.shown.some((id, at) => known.shown[at] !== id)) changed.push(parentId);
+    }
+    return changed;
+  }
+
+  private copiesKey(heads: readonly LogicalId[]): string {
+    return heads.map((id) => copiesOf(id, this.textOf).join(',')).join(';');
+  }
+
+  private read(parentId: LogicalId): OrderEntry | null {
     const listing = this.listingOf(parentId);
     const known = listing ? this.built.get(listing) : undefined;
-    if (known) return known;
+    if (known && (known.heads.length === 0 || this.copiesKey(known.heads) === known.copies))
+      return known;
     const children = this.childArrayOf(parentId);
     if (!children || children.length < 2) return null;
-    const ranks = splitSiblingRanks(children, this.textOf);
+    const heads: LogicalId[] = [];
+    const ranks = splitSiblingRanks(children, this.textOf, heads);
     const ids = listing ?? children.toArray();
     const order = splitSiblingOrder(ids, ranks);
-    const entry = { ranks, shown: order ? order.map((index) => ids[index]!) : ids };
+    const shown = order ? order.map((index) => ids[index]!) : ids;
+    const entry = { ranks, shown, heads, copies: this.copiesKey(heads) };
     if (listing) this.built.set(listing, entry);
+    if (heads.length > 0) this.withRuns.add(parentId);
+    else this.withRuns.delete(parentId);
     return entry;
   }
 }

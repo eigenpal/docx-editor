@@ -230,6 +230,10 @@ export class PackageMaterializer {
     // delivered yet, so it disqualifies the package projections exactly as the flag does.
     if (packageChanged || unobserved) this.packageCache.invalidate();
     for (const survivor of this.adoption.changes(this.registry)) rawDirty.add(survivor);
+    // Concurrent split siblings whose text came after their listing can show in a new order.
+    const reordered = this.registry.splitSiblings.takeChanged();
+    if (reordered.length > 0) this.registry.inline.orderChanged();
+    for (const parent of reordered) rawDirty.add(parent);
     // A paragraph shows other IDs, or hides other moved text, when another paragraph's text
     // changes what they share.
     for (const paragraph of this.registry.inline.takeAffected()) rawDirty.add(paragraph);

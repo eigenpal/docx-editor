@@ -197,6 +197,39 @@ const EDITS = [
   { name: 'a typed paragraph break', edit: newlineAfter },
 ];
 
+describe('splitting a paragraph that concurrent splits added', () => {
+  // A new paragraph goes right after the paragraph it splits, also when the paragraph it
+  // splits shows in another place than Yjs lists it.
+  for (const { label, ids } of ORDERS)
+    for (const { by, find, expected } of [
+      { by: 'alice', find: 'tw', expected: ['One; ', 'tw', 'o; ', 'three', 'Signed'] },
+      { by: 'bob', find: 'thr', expected: ['One; ', 'two; ', 'thr', 'ee', 'Signed'] },
+      { by: 'carol', find: 'One', expected: ['One', '; ', 'two; ', 'three', 'Signed'] },
+    ] as const)
+      test(`${by} splits after "${find}" (${label})`, async () => {
+        const r = await room('One; two; three', ids);
+        try {
+          r.offline();
+          await splitAfter(r.bob.runtime, 'two; ', false);
+          later();
+          await splitAfter(r.alice.runtime, 'One; ', false);
+          later();
+          r.online();
+          await r.expectAll(['One; ', 'two; ', 'three', 'Signed']);
+          later();
+          await newlineAfter(r[by].runtime, find, false);
+          r.sync();
+          await r.expectAll(expected);
+          later();
+          expect(r[by].editor.exec({ type: 'undo' }).ok).toBe(true);
+          r.sync();
+          await r.expectAll(['One; ', 'two; ', 'three', 'Signed']);
+        } finally {
+          r.close();
+        }
+      });
+});
+
 describe('three peers splitting one paragraph at different points while offline', () => {
   // Every new paragraph goes in right after the split paragraph, and Yjs orders them by client
   // ID. The paragraphs show in the order of the text they hold, whichever peer made each one.
