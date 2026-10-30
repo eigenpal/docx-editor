@@ -152,7 +152,13 @@
     "subtitle": "כותרת משנה",
     "heading1": "כותרת 1",
     "heading2": "כותרת 2",
-    "heading3": "כותרת 3"
+    "heading3": "כותרת 3",
+    "normal": "רגיל",
+    "headingLevel": "כותרת {level}",
+    "noSpacing": "ללא מרווח",
+    "quote": "ציטוט",
+    "intenseQuote": "ציטוט חזק",
+    "listParagraph": "פיסקת רשימה"
   },
   "font": {
     "selectAriaLabel": "בחר סוג גופן",
@@ -1016,7 +1022,13 @@
     "suggestingNeedsAuthor": "מצב הצעות מחייב מחבר. הגדר את המחבר בתצורת העורך.",
     "pictureSelected": "תמונה נבחרה. מקמו את הסמן בטקסט כדי להוסיף תמונה.",
     "chartDrawing": "זהו תרשים. אפשר למחוק אותו, אבל לא לערוך אותו כתמונה.",
-    "chartClipboard": "הבחירה מכילה תרשים. אי אפשר להעתיק, לגזור או להדביק תרשימים."
+    "chartClipboard": "הבחירה מכילה תרשים. אי אפשר להעתיק, לגזור או להדביק תרשימים.",
+    "nothingToUndo": "אין מה לבטל",
+    "nothingToRedo": "אין מה לבצע שוב",
+    "outermostLevel": "הבחירה כבר ברמה החיצונית ביותר",
+    "cannotIndentFurther": "לא ניתן להגדיל עוד את הכניסה של הבחירה",
+    "noGoToView": "מעבר אינו זמין כאן",
+    "noBookmarkDialog": "לא ניתן להוסיף סימניות כאן"
   },
   "equationPopup": {
     "apply": "החלה",

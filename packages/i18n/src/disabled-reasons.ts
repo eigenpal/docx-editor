@@ -12,11 +12,10 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'editor is not ready': 'disabledReason.editorNotReady',
   // Keyed on `LOCKED_FORMAT_REASON` in the engine's content-lock admission.
   'this content is locked': 'disabledReason.contentLocked',
-  // Keyed on `LOCKED_PARAGRAPH_FORMAT_REASON` and `BOUND_PARAGRAPH_FORMAT_REASON` in the
-  // engine's `paragraph-format-lock-refusal.ts`; the sentences must stay the same.
+  // Keyed on `LOCKED_PARAGRAPH_FORMAT_REASON` in the engine's
+  // `paragraph-format-lock-refusal.ts`; the sentences must stay the same.
   'this content is locked; only alignment, indents, spacing, and line and page breaks can change':
     'disabledReason.lockedParagraphFormat',
-  'this content is bound to data and cannot change': 'disabledReason.boundParagraphFormat',
   'not wired to an editor command': 'disabledReason.notWired',
   'this document was opened for viewing': 'disabledReason.viewing',
   'the document is open for viewing': 'disabledReason.viewing',
@@ -39,7 +38,15 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'a comment needs a selected range': 'disabledReason.commentSelection',
   // Keyed on `NO_COMMENT_DRAFT_VIEW` in the engine's comment draft chrome.
   'no comment draft view is registered': 'disabledReason.noCommentDraftView',
+  'no Go To view is registered': 'disabledReason.noGoToView',
+  'no bookmark dialog is registered': 'disabledReason.noBookmarkDialog',
+  'nothing to undo': 'disabledReason.nothingToUndo',
+  'nothing to redo': 'disabledReason.nothingToRedo',
+  'the selection is already at the outermost level': 'disabledReason.outermostLevel',
+  'the selection cannot indent any further': 'disabledReason.cannotIndentFurther',
   // Sentences earlier releases gave; hosts that override their keys keep working.
+  // Earlier releases refused paragraph formatting inside a data-bound control with this one.
+  'this content is bound to data and cannot change': 'disabledReason.boundParagraphFormat',
   'cell merge is not supported yet': 'disabledReason.mergeUnsupported',
   'cell split is not supported yet': 'disabledReason.splitUnsupported',
   // Keyed on the cell merge and split refusals in the engine's `table-cell-structure-plan.ts`

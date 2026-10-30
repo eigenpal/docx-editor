@@ -27,6 +27,9 @@ import { createContext, useContext } from 'react';
 /** True when an ancestor element already carries `.docx-editor`. */
 export const ScopedByAncestorContext = createContext(false);
 
+/** True when the enclosing `Root` resolved a dark chrome. */
+export const ChromeDarkContext = createContext(false);
+
 /**
  * The scope class a chrome part should add to its own root element: the class
  * when nothing above it is scoped, an empty string when something already is.
@@ -36,8 +39,14 @@ export const ScopedByAncestorContext = createContext(false);
  * <div className={`${scope}docx-toolbar`} />
  * ```
  *
+ * Under a `Root` whose `colorMode` resolved dark, the class is `'docx-editor dark '`, so a part
+ * you build with the editor's `--doc-*` tokens follows the editor theme.
+ *
  * Returns a trailing space so it concatenates cleanly, and `''` collapses away.
  */
-export function useScopeClassName(): '' | 'docx-editor ' {
-  return useContext(ScopedByAncestorContext) ? '' : 'docx-editor ';
+export function useScopeClassName(): '' | 'docx-editor ' | 'docx-editor dark ' {
+  const scoped = useContext(ScopedByAncestorContext);
+  const dark = useContext(ChromeDarkContext);
+  if (scoped) return '';
+  return dark ? 'docx-editor dark ' : 'docx-editor ';
 }

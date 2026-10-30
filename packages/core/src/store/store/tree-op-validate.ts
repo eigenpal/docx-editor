@@ -665,7 +665,7 @@ export function validateTreeOp(
       if (op.revision !== undefined && invalidRevisionAttribution(op.revision))
         return 'invalid-property-value';
       if (!Number.isInteger(op.level) || op.level < 0 || op.level > 8) return 'invalid-range';
-      if (isBoundAt(part, op.paragraphId)) return 'bound';
+      // A data binding mirrors text only, so it lets paragraph properties change.
       if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
       return null;
     }
@@ -748,7 +748,7 @@ export function validateTreeOp(
           if (!Number.isInteger(position) || Math.abs(position) > 31680) return 'invalid-range';
         }
       }
-      if (isBoundAt(part, op.paragraphId)) return 'bound';
+      // A data binding mirrors text only, so it lets paragraph properties change.
       if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
       return null;
     }
@@ -759,7 +759,7 @@ export function validateTreeOp(
       if (!Number.isInteger(level) || level < 0 || level > 8) return 'invalid-range';
       // A numId is file-addressable and becomes an attribute value: digits only.
       if (op.numId !== null && !/^\d{1,9}$/.test(op.numId)) return 'invalid-range';
-      if (isBoundAt(part, op.paragraphId)) return 'bound';
+      // A data binding mirrors text only, so it lets paragraph properties change.
       if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
       return null;
     }
@@ -852,7 +852,7 @@ export function validateTreeOp(
       if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {
         return 'invalid-property-value';
       }
-      if (isBoundAt(part, op.paragraphId)) return 'bound';
+      // A data binding mirrors text only, so it lets paragraph properties change.
       if (
         effectiveContentLockAt(part, op.paragraphId).content &&
         !changesOnlyLockFreeParagraphProperties(part, op)

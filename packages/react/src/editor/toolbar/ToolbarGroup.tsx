@@ -115,7 +115,7 @@ export interface DocxEditorToolbarSlotProps {
    */
   hidden?: boolean;
   /**
-   * Content for the slot's "⋯" panel row when its group collapses. Without it the panel row
+   * Content for the slot's "⋯" panel row when the slot leaves the bar. Without it the panel row
    * shows the children under the slot's label.
    */
   overflowContent?: () => DocxEditorChildren;

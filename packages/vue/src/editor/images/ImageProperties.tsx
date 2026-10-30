@@ -17,6 +17,7 @@ import {
   hostDocumentOf,
 } from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../../i18n';
+import { useChromeDark } from '../color-mode-context';
 import { useStableDocxId } from '../../lib/stable-id';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
@@ -38,14 +39,27 @@ function dialogFocusables(root: HTMLElement): HTMLElement[] {
 
 /**
  * A host may render this public dialog from its own chrome, outside the editor. The
- * packaged rules are anchored to `.docx-editor`, so the overlay carries that class
- * itself when nothing above it does, the way `NativeDialog` does for native dialogs.
+ * packaged rules are anchored to `.docx-editor`, so the overlay carries that class, and
+ * `dark` under a dark `Root`, when nothing above it is scoped, the way `NativeDialog` does
+ * for native dialogs.
  *
- * This runs as an element ref, not a watcher: the panel mounts only once its draft
- * exists, which is a later tick than the one that sets `open`. The React twin matches.
+ * Decided in an element ref, not a watcher: the panel mounts only once its draft exists,
+ * which is a later tick than the one that sets `open`. Rendered through `class`, so a
+ * colour-mode change re-renders it. The React twin matches.
  */
-function scopeOverlay(node: unknown): void {
-  if (isHTMLElementNode(node) && !node.closest('.docx-editor')) node.classList.add('docx-editor');
+function useOverlayScope(): {
+  readonly ref: (node: unknown) => void;
+  readonly className: () => string;
+} {
+  const dark = useChromeDark();
+  const own = ref(false);
+  return {
+    ref: (node: unknown) => {
+      if (isHTMLElementNode(node))
+        own.value = !node.parentElement?.closest(dark.value ? '.docx-editor.dark' : '.docx-editor');
+    },
+    className: () => (own.value ? `docx-editor ${dark.value ? 'dark ' : ''}` : ''),
+  };
 }
 
 function guardDialogMousedown(event: MouseEvent): void {
@@ -240,6 +254,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
     const packageRevisionRef = ref<number | null>(null);
     const draft = ref<DraftState | null>(null);
     const errorKey = ref<string | null>(null);
+    const overlayScope = useOverlayScope();
 
     watch(
       [
@@ -532,8 +547,8 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
       const positionLocked = target?.kind === 'anchored' && target.canMove === false;
       return (
         <div
-          ref={scopeOverlay}
-          class={`docx-dialog-overlay${props.className ? ` ${props.className}` : ''}`}
+          ref={overlayScope.ref}
+          class={`${overlayScope.className()}docx-dialog-overlay${props.className ? ` ${props.className}` : ''}`}
           onClick={dismiss}
           onMousedown={(event) => {
             event.stopPropagation();

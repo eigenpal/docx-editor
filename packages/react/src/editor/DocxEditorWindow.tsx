@@ -6,6 +6,7 @@ import { createPortal, flushSync } from 'react-dom';
 import { openEditorWindow, type EditorWindow } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useTranslation } from '../i18n';
+import { useChromeDark } from './color-mode-context';
 
 /** Props for `DocxEditor.Window`. @public */
 export interface DocxEditorWindowProps {
@@ -72,6 +73,8 @@ export function DocxEditorWindow({
   // The window's own document has no host direction to inherit, so a right-to-left
   // catalog sets it on the window's editor root.
   const { dir } = useTranslation();
+  // The window's editor root carries `Root`'s colour mode, as the composed parts do.
+  const dark = useChromeDark();
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   // Read when the window opens: changing them later does not reopen it.
@@ -142,7 +145,7 @@ export function DocxEditorWindow({
   // window closes.
   if (!popup || !open) return <>{children}</>;
   return createPortal(
-    <div className="docx-editor" style={{ height: '100%' }} dir={dir}>
+    <div className={`docx-editor${dark ? ' dark' : ''}`} style={{ height: '100%' }} dir={dir}>
       {children}
     </div>,
     popup.element

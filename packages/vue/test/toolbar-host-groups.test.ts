@@ -65,6 +65,79 @@ const t = (key: string) => (key === 'formattingBar.more' ? 'More' : key);
 const toolbarOf = (container: HTMLElement) =>
   container.querySelector<HTMLElement>('[data-testid="docx-toolbar"]')!;
 
+describe('Vue toolbar per-control collapse', () => {
+  test('controls leave one at a time from the end of a group, and More holds exactly those', async () => {
+    useMockObserver();
+    const view = mountEditorTree(() => h(T, { t }));
+    await flush();
+    const toolbar = toolbarOf(view.container);
+    const full = new Map<string, string[]>();
+    for (const group of toolbar.querySelectorAll<HTMLElement>('[data-toolbar-group]')) {
+      full.set(
+        group.getAttribute('data-toolbar-group')!,
+        [...group.querySelectorAll<HTMLElement>(':scope > [data-toolbar-item]')].map(
+          (item) => item.getAttribute('data-toolbar-item')!
+        )
+      );
+    }
+    // 30 px per control, no gaps (no stylesheet here), a 1 px separator, 100 px fixed.
+    for (const item of toolbar.querySelectorAll<HTMLElement>('[data-toolbar-item]')) {
+      Object.defineProperty(item, 'offsetWidth', { configurable: true, get: () => 30 });
+    }
+    for (const group of toolbar.querySelectorAll<HTMLElement>('[data-toolbar-group]')) {
+      // As wide as the controls it still draws, as in a browser.
+      Object.defineProperty(group, 'offsetWidth', {
+        configurable: true,
+        get: () => group.querySelectorAll(':scope > [data-toolbar-item]').length * 30,
+      });
+    }
+    for (const fixed of toolbar.querySelectorAll<HTMLElement>('[data-toolbar-fixed]')) {
+      Object.defineProperty(fixed, 'offsetWidth', { configurable: true, get: () => 100 });
+    }
+    const separator = toolbar.querySelector<HTMLElement>('.docx-toolbar__separator')!;
+    Object.defineProperty(separator, 'offsetWidth', { configurable: true, get: () => 1 });
+    let total = 100;
+    for (const items of full.values()) total += items.length * 30 + 1;
+    const barWidth = total - 31 + 34 - 10;
+    Object.defineProperty(toolbar, 'clientWidth', { configurable: true, get: () => barWidth });
+    for (const observer of [...MockResizeObserver.instances]) observer.flush();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await flush();
+
+    const hidden: string[] = [];
+    const partial: string[] = [];
+    for (const [id, items] of full) {
+      const group = toolbar.querySelector<HTMLElement>(`[data-toolbar-group="${id}"]`);
+      const shown = group
+        ? [...group.querySelectorAll<HTMLElement>(':scope > [data-toolbar-item]')].map(
+            (item) => item.getAttribute('data-toolbar-item')!
+          )
+        : [];
+      expect(shown).toEqual(items.slice(0, shown.length));
+      hidden.push(...items.slice(shown.length));
+      if (shown.length > 0 && shown.length < items.length) partial.push(id);
+    }
+    expect(hidden[0]).toBe('zoom.level');
+    expect(hidden.length).toBe(2);
+    expect(partial.length).toBe(1);
+
+    toolbar.querySelector<HTMLButtonElement>('[aria-label="More"]')!.click();
+    await flush();
+    const panel = view.container.querySelector('[data-testid="toolbar-overflow-panel"]')!;
+    expect(
+      [...panel.querySelectorAll<HTMLElement>('[data-slot]')].map((element) =>
+        element.getAttribute('data-slot')
+      )
+    ).toEqual(hidden);
+    expect(
+      [...panel.querySelectorAll('.docx-toolbar__more-section')].map((section) =>
+        section.getAttribute('aria-label')
+      )
+    ).toEqual(['formattingBar.groups.zoom', `formattingBar.groups.${partial[0]}`]);
+    view.unmount();
+  });
+});
+
 describe('Vue Toolbar.Group', () => {
   test('a host group is measured, collapses, and shows its actions as panel rows', async () => {
     useMockObserver();

@@ -23,7 +23,8 @@ import {
   useReviewGutter,
 } from './review-gutter';
 import { zoomLevelForShortcut } from './zoom-levels';
-import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
+import { ScopedByAncestorContext } from './scope-context';
+import { useChromeScopeClassName } from './color-mode-context';
 import { InsideViewportContext } from './viewport-context';
 import { isElementNode, keepScrollAtInlineEnd } from '@docx-editor.dev/core/editor';
 
@@ -47,7 +48,7 @@ export interface DocxEditorViewportProps {
  */
 export function DocxEditorViewport({ className, style, children }: DocxEditorViewportProps) {
   const { t } = useTranslation();
-  const scopeClassName = useScopeClassName();
+  const scopeClassName = useChromeScopeClassName();
   const editor = useDocxEditor();
   // The open pane is given its own gutter rather than allowed to overlap: the page centres
   // inside the padding box, so reserving the rail's width shifts the sheet left by half of

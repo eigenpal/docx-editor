@@ -64,7 +64,7 @@ import {
   ContextMenuRefreshTocPageNumbers,
   useTableContextMenuVisible,
 } from './parts';
-import { useScopeClassName } from '../scope-context';
+import { useChromeScopeClassName } from '../color-mode-context';
 import { MenuLinkRow } from '../menu/menu-link-row';
 import { chromeControlForSlot, chromeIcon } from '../toolbar/ToolbarButton';
 import { useChromeDir } from '../../i18n';
@@ -299,7 +299,7 @@ export const DocxEditorContextMenu = defineComponent({
     onOpenChange: { type: Function as PropType<(open: boolean) => void>, default: undefined },
   },
   setup(props, { slots }) {
-    const scopeClassName = useScopeClassName();
+    const scopeClassName = useChromeScopeClassName();
     const chromeDir = useChromeDir();
     const editorRef = useDocxEditor();
     const stateTick = useEditorStateTick();
@@ -537,7 +537,7 @@ export const DocxEditorContextMenu = defineComponent({
                     props.t?.('contextMenu.ariaLabel') ??
                     catalogT('contextMenu.ariaLabel' as TranslationKey),
                   tabindex: -1,
-                  class: `${scopeClassName}docx-toolbar__menu docx-contextmenu${props.className ? ` ${props.className}` : ''}`,
+                  class: `${scopeClassName()}docx-toolbar__menu docx-contextmenu${props.className ? ` ${props.className}` : ''}`,
                   dir: chromeDir.value,
                   style,
                   onKeydown: (event: KeyboardEvent) => {

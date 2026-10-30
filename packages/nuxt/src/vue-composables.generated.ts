@@ -14,6 +14,7 @@ export const VUE_COMPOSABLES = [
   'useDocxEditor',
   'useDocxSource',
   'useEditorCaret',
+  'useEditorColorMode',
   'useEditorCommand',
   'useEditorEvent',
   'useEditorHostDocument',

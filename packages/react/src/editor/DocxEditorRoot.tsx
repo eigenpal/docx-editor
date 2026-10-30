@@ -19,6 +19,7 @@ import { warnFieldResultsChanged } from './field-results-warning';
 import { warnContentLockPolicyChanged } from './content-lock-policy-warning';
 import { warnLockedControlNavigationChanged } from './locked-control-navigation-warning';
 import type { DocxEditorChildren } from '../docx-editor-children';
+import { ChromeDarkContext, useResolvedDark } from './color-mode-context';
 // Provider-first host for the docx editor facade.
 //
 // `DocxEditorRoot` renders no DOM of its own: it creates the facade WITHOUT a container
@@ -187,6 +188,14 @@ export interface DocxEditorRootProps {
   tableInteractionLabel?: (key: TableInteractionLabelKey) => string;
   /** Optional decode port for embedded image insertion and paint in tests or custom hosts. */
   imageDecodePort?: ImageDecodePort;
+  /**
+   * Colour theme of the composed chrome, as on `<DocxEditor>`. `'dark'` puts `.dark` beside
+   * `.docx-editor` on every part that scopes itself (toolbar, menu bar, viewport, dialogs),
+   * and `'system'` follows the OS setting as it changes. Defaults to `'light'`. The page
+   * content in the viewport is shown inverted in dark mode, as in `<DocxEditor>`. Changes
+   * apply without a remount.
+   */
+  colorMode?: 'light' | 'dark' | 'system';
   children?: DocxEditorChildren;
 }
 
@@ -279,8 +288,10 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     zoomMode,
     tableInteractionLabel,
     imageDecodePort,
+    colorMode,
     children,
   } = props;
+  const chromeDark = useResolvedDark(colorMode);
   const { t: catalogT } = useTranslation();
   const defaultTranslate = useCallback(
     (key: string, params?: Record<string, string | number>) =>
@@ -585,31 +596,34 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   }, [unsupportedRegistry, editor]);
 
   return (
-    <UnsupportedElementRegistryContext.Provider value={unsupportedRegistry}>
-      <FormControlTranslateProvider value={translate ?? defaultTranslate}>
-        <ReviewRailContext.Provider value={railRegistry}>
-          <DocxEditorContext.Provider value={editor}>
-            <NavigationLayoutContext.Provider value={navigationLayout}>
-              <RevisionStyleRegistryContext.Provider value={revisionStyleRegistry}>
-                {/* ONE link-popover state per editor, published here so a TOOLBAR button and the
+    // The resolved colour mode, for the parts that put `.docx-editor` on themselves.
+    <ChromeDarkContext.Provider value={chromeDark}>
+      <UnsupportedElementRegistryContext.Provider value={unsupportedRegistry}>
+        <FormControlTranslateProvider value={translate ?? defaultTranslate}>
+          <ReviewRailContext.Provider value={railRegistry}>
+            <DocxEditorContext.Provider value={editor}>
+              <NavigationLayoutContext.Provider value={navigationLayout}>
+                <RevisionStyleRegistryContext.Provider value={revisionStyleRegistry}>
+                  {/* ONE link-popover state per editor, published here so a TOOLBAR button and the
                 popover panel — which are siblings, not ancestor and descendant — see the same
                 open/closed state and only one of them registers with the engine's gestures. */}
-                <HyperlinkPopupProvider>
-                  <ContentControlProvider>
-                    {/* Outside the picture insert, which shows its refusal through the registry. */}
-                    <PopupConfigProvider value={props.popups}>
-                      <ImageInsertProvider>
-                        <DialogProvider popups={props.popups}>{children}</DialogProvider>
-                      </ImageInsertProvider>
-                    </PopupConfigProvider>
-                  </ContentControlProvider>
-                </HyperlinkPopupProvider>
-              </RevisionStyleRegistryContext.Provider>
-            </NavigationLayoutContext.Provider>
-          </DocxEditorContext.Provider>
-        </ReviewRailContext.Provider>
-      </FormControlTranslateProvider>
-    </UnsupportedElementRegistryContext.Provider>
+                  <HyperlinkPopupProvider>
+                    <ContentControlProvider>
+                      {/* Outside the picture insert, which shows its refusal through the registry. */}
+                      <PopupConfigProvider value={props.popups}>
+                        <ImageInsertProvider>
+                          <DialogProvider popups={props.popups}>{children}</DialogProvider>
+                        </ImageInsertProvider>
+                      </PopupConfigProvider>
+                    </ContentControlProvider>
+                  </HyperlinkPopupProvider>
+                </RevisionStyleRegistryContext.Provider>
+              </NavigationLayoutContext.Provider>
+            </DocxEditorContext.Provider>
+          </ReviewRailContext.Provider>
+        </FormControlTranslateProvider>
+      </UnsupportedElementRegistryContext.Provider>
+    </ChromeDarkContext.Provider>
   );
 }
 

@@ -270,7 +270,11 @@ A new dropdown or combo box has no items. Add its items in Word, or fill a contr
 
 A content lock (`contentLocked` or `sdtContentLocked`) refuses text edits and character formatting inside a control. It also refuses paragraph styles, lists, text direction, tab stops, and contextual spacing. A formatting command over such a selection fails with code `locked`, and the selection keeps its formatting. `editor.can()` gives the same answer first, so the toolbar shows the button as unavailable and gives the reason.
 
-You can change the alignment, indents, spacing, line spacing, line and page break settings, outline level, and hyphenation of paragraphs inside locked controls. These changes place the paragraph around the locked text without changing the text. In suggesting mode, they record one paragraph format revision that you can accept or reject inside the lock. If the paragraph already has a suggested paragraph format change that records a locked property, such as a style, a suggested change is refused, because the lock could not reject the combined change. This also applies to the paragraph members of the document API. Rejecting a suggested style, list, direction, or tab change inside a lock is refused. Binding and document protection checks still apply. Paragraph formatting in a control with `w:dataBinding` fails with code `bound`.
+You can change the alignment, indents, spacing, line spacing, line and page break settings, outline level, and hyphenation of paragraphs inside locked controls. These changes place the paragraph around the locked text without changing the text. In suggesting mode, they record one paragraph format revision that you can accept or reject inside the lock. If the paragraph already has a suggested paragraph format change that records a locked property, such as a style, a suggested change is refused, because the lock could not reject the combined change. This also applies to the paragraph members of the document API. Rejecting a suggested style, list, direction, or tab change inside a lock is refused. Document protection checks still apply.
+
+## Formatting data-bound controls
+
+A data binding (`w:dataBinding`) mirrors the control's text, so it refuses text edits and character formatting with code `bound`. It doesn't refuse paragraph formatting. In a block control with a data binding, you can change every paragraph property, including the style, list, direction, tab stops, and shading. The bound text and the binding stay unchanged. In suggesting mode, indents, spacing, alignment, and styles record one paragraph format revision that you can accept or reject. If the control also has a content lock, the content lock rules apply to its paragraphs.
 
 If authors must style placeholder text without editing it, set `contentLockPolicy` when you create the editor:
 
@@ -295,7 +299,7 @@ With the option, run formatting passes the content lock: bold, italic, color, fo
 - Removing a control whose wrapper is locked.
 - Tracked character formatting in suggesting mode. Its revision would sit inside the lock, where nobody could accept or reject it.
 
-A control with `w:dataBinding` still refuses formatting with `bound`. The option does not change the document: the saved `w:lock` value stays the same. The option applies only to local edits. In a collaboration session, every participant receives formatting from a participant that set the option.
+A control with `w:dataBinding` still refuses character formatting with `bound`. The option does not change the document: the saved `w:lock` value stays the same. The option applies only to local edits. In a collaboration session, every participant receives formatting from a participant that set the option.
 
 ## Checkbox, dropdown, date, gallery, and picture interactions
 

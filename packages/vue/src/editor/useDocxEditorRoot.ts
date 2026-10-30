@@ -125,6 +125,14 @@ export interface DocxEditorRootProps {
 
   tableInteractionLabel?: (key: TableInteractionLabelKey) => string;
   imageDecodePort?: ImageDecodePort;
+  /**
+   * Colour theme of the composed chrome, as on `DocxEditor`. `'dark'` puts `.dark` beside
+   * `.docx-editor` on every part that scopes itself (toolbar, menu bar, viewport, dialogs),
+   * and `'system'` follows the OS setting as it changes. Defaults to `'light'`. The page
+   * content in the viewport is shown inverted in dark mode, as in `DocxEditor`. Changes
+   * apply without a remount.
+   */
+  colorMode?: 'light' | 'dark' | 'system';
   onReady?: (editor: Editor) => void;
   onChange?: (change: DocumentChange) => void;
   onFontError?: (error: EditorFontError) => void;

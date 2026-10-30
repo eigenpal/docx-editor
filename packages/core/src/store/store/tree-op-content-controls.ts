@@ -72,6 +72,10 @@ import {
   changesOnlyLockFreeParagraphProperties,
   restoresOnlyLockFreeParagraphProperties,
 } from './content-lock-paragraph-properties.ts';
+import {
+  isParagraphPropertyChange,
+  writesOnlyParagraphProperties,
+} from './bound-paragraph-properties.ts';
 import { attributionTargets } from './revision-author-change.ts';
 import { revisionStructuralReach, type RevisionOpAction } from './tree-op-revisions.ts';
 import {
@@ -655,6 +659,8 @@ interface ControlTouch {
   readonly survivingLocks?: readonly ContentControlLock[];
   /** A revision decision that keeps the content as it reads: no content lock refuses it. */
   readonly keepsContent?: boolean;
+  /** A decision on a paragraph property change: it leaves a bound control's text alone. */
+  readonly paragraphPropertiesOnly?: boolean;
   /** A removed control locked only against removal stays as an empty shell. */
   readonly shellKept?: boolean;
 }
@@ -984,6 +990,7 @@ function resolveRevisionReach(
           removed: false,
           discarded: false,
           keepsContent,
+          paragraphPropertiesOnly: isParagraphPropertyChange(node),
         });
       }
       // Only the direction that removes a revision wrapper's content removes nested controls.
@@ -1130,9 +1137,11 @@ export function contentControlBindingRefusal(
   // cannot desync a custom XML part, and refusing them would make a bound field freeze the
   // document's own layout.
   if (reach.kind === 'part' || reach.kind === 'documentProperties') return null;
+  // The binding mirrors text, so paragraph properties stay free (`bound-paragraph-properties.ts`).
+  if (writesOnlyParagraphProperties(op)) return null;
   for (const touch of resolveReach(part, reach).touches) {
     if (namedControlAnswersForItself && !touch.discarded) continue;
-    if (touch.removed) continue;
+    if (touch.removed || touch.paragraphPropertiesOnly) continue;
     if (contentControlPropertiesOf(touch.control).dataBinding) return 'bound';
   }
   return null;

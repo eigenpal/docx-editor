@@ -6,10 +6,11 @@
 // are listed and decided through `Shape.body` and are left out of the owner's.
 //
 // Only a story `Shape.body` can reach is indexed: one the owner's shape listing answers, a
-// floating DrawingML shape on the branch layout selects. Its VML fallback copy is a shadow
-// of that story, rewritten from it on export (`textbox-fallback-export.ts`), so the copy's sites
-// map to the same story. A legacy VML-only box, an inline box, or a fallback branch that layout
-// paints is no reachable story, so its changes stay with the owner.
+// DrawingML shape on the branch layout selects or a standalone legacy VML shape with a shape
+// number. A DrawingML story's VML fallback copy is a shadow of that story, rewritten from it on
+// export (`textbox-fallback-export.ts`), so the copy's sites map to the same story. A VML shape
+// with no shape number, or a fallback branch that layout paints, is no reachable story, so its
+// changes stay with the owner.
 
 import { MC_NAMESPACE_URI, WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';

@@ -99,6 +99,8 @@ await runtime.run(async (context) => {
 
 `leftIndent`, `rightIndent`, `firstLineIndent`, `lineSpacing`, `spaceBefore`, and `spaceAfter` accept finite values within their supported bounds. A negative first-line indent creates a hanging indent. `ParagraphAlignment` and `Alignment` provide `Left`, `Centered`, `Right`, and `Justified` writes. `Mixed` and `Unknown` are read values; the runtime rejects them on writes. Assignments on one paragraph proxy coalesce per sync.
 
+These paragraph writes and `style` also apply inside a data-bound content control (`w:dataBinding`) that has no content lock, tracked or not. The bound text stays unchanged.
+
 Justified paragraphs in compatibility mode 15 or later can compress ordinary spaces to fit a word. Latin words retain their complete-word fit across formatting runs, including separate terminal punctuation.
 
 ### Right-to-left paragraphs
