@@ -45,22 +45,31 @@ export function createListExit(deps: ListExitDeps) {
    * The paragraph's own `w:ind` after its marker goes, holding the text where it was.
    *
    * Word writes the left indent the list gave the text as the paragraph's own, and drops the
-   * hanging indent that made room for the marker. It writes nothing when the style alone
-   * already puts the text there, as List Paragraph does at the first level.
+   * hanging indent that made room for the marker. A style that numbers the paragraph always
+   * gets the left indent written. Otherwise Word writes it only when the style alone would
+   * put the text elsewhere, and cancels a first-line or hanging indent the style carries with
+   * `w:firstLine="0"`. List Paragraph at the first level needs neither, so nothing is written.
    */
   function heldIndentOp(paragraphId: string): TreeDocOp | null {
     const textLeft = leftIndentTwipsOf(paragraphPropertiesOf(deps.layout(), paragraphId));
     const direct = directParagraphProperties(deps.storyPart(), paragraphId);
     const authored = direct.find((property) => property.localName === 'ind')?.attributes;
-    if (!authored && deps.listNumbering.styleLeftIndent(paragraphId) === textLeft) return null;
+    const fromStyle = deps.listNumbering.styleNumbered(paragraphId);
+    const style = deps.listNumbering.styleIndent(paragraphId);
+    const writeLeft = fromStyle || authored !== undefined || style.left !== textLeft;
+    const cancelFirstLine = !fromStyle && style.firstLine !== 0;
+    if (!writeLeft && !cancelFirstLine) return null;
     const attributes: Record<string, string> = { ...(authored ?? {}) };
     for (const name of FIRST_LINE_ATTRIBUTES) delete attributes[name];
-    // The character-unit twin supersedes the twips (§17.3.1.12), so it goes with the write.
-    delete attributes.leftChars;
-    delete attributes.startChars;
-    const value = String(textLeft);
-    if (authored?.start !== undefined) attributes.start = value;
-    if (authored?.start === undefined || authored.left !== undefined) attributes.left = value;
+    if (cancelFirstLine) attributes.firstLine = '0';
+    if (writeLeft) {
+      // The character-unit twin supersedes the twips (§17.3.1.12), so it goes with the write.
+      delete attributes.leftChars;
+      delete attributes.startChars;
+      const value = String(textLeft);
+      if (authored?.start !== undefined) attributes.start = value;
+      if (authored?.start === undefined || authored.left !== undefined) attributes.left = value;
+    }
     return {
       op: 'setParagraphProperties',
       paragraphId,
@@ -113,7 +122,9 @@ export function createListExit(deps: ListExitDeps) {
      * run after it.
      */
     removeListNumber(paragraphId: string): boolean {
-      if (!deps.markerOf(paragraphId)) return false;
+      // The tree decides, not the painted marker: see `numbered`. A paragraph with nothing
+      // left to remove falls through to the join instead of committing a no-op forever.
+      if (!deps.markerOf(paragraphId) || !deps.listNumbering.numbered(paragraphId)) return false;
       const held = heldIndentOp(paragraphId);
       return deps.commitOps([...(held ? [held] : []), deps.listNumbering.leaveOp(paragraphId)]);
     },

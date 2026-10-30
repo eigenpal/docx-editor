@@ -39,7 +39,11 @@ const STYLES =
   '<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/>' +
   '<w:basedOn w:val="Normal"/><w:pPr><w:ind w:left="720"/><w:contextualSpacing/></w:pPr></w:style>' +
   '<w:style w:type="paragraph" w:styleId="Numbered"><w:name w:val="Numbered"/>' +
-  `<w:basedOn w:val="Normal"/><w:pPr>${numPr()}</w:pPr></w:style>`;
+  `<w:basedOn w:val="Normal"/><w:pPr>${numPr()}</w:pPr></w:style>` +
+  '<w:style w:type="paragraph" w:styleId="ListBullet"><w:name w:val="List Bullet"/>' +
+  `<w:basedOn w:val="Normal"/><w:pPr>${numPr(0, 2)}<w:ind w:left="720" w:hanging="360"/></w:pPr></w:style>` +
+  '<w:style w:type="paragraph" w:styleId="Hang"><w:name w:val="Hang"/>' +
+  '<w:basedOn w:val="Normal"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:style>';
 
 function docx(body: string): Uint8Array {
   return zipSync({
@@ -211,7 +215,45 @@ describe('Backspace at the start of a list item', () => {
     );
     backspaceAt(editor, 1);
     expect(texts(editor)).toEqual(['One', 'Two', '']);
-    expect(markers(editor).filter((marker) => marker !== null)).toEqual([]);
+    expect(own(editor, 0)).toContain('numPr');
+    expect(own(editor, 1)).toEqual(['pStyle(val=ListParagraph)']);
+  });
+
+  test('a style that numbers the item keeps the text left with numId 0', () => {
+    const bullet = (text: string) => paragraph(text, '<w:pStyle w:val="ListBullet"/>');
+    const editor = mount(docx(paragraph('Intro') + bullet('One') + bullet('Two')));
+    backspaceAt(editor, 2);
+    expect(own(editor, 2)).toEqual(['pStyle(val=ListBullet)', 'numPr', 'ind(left=720)']);
+    expect(markers(editor)).toEqual([null, '\u2022', null]);
+  });
+
+  test('a hanging indent from a style that does not number the item is cancelled', () => {
+    const editor = mount(docx(list('Two', '<w:pStyle w:val="Hang"/>' + numPr())));
+    backspaceAt(editor, 2);
+    expect(own(editor, 2)).toEqual(['pStyle(val=Hang)', 'ind(firstLine=0)']);
+    // The first line starts where the list put the text, not 360 twips to its left.
+    const fragment = editor
+      .surface!.layout()
+      .pages.flatMap((page) => page.fragments)
+      .find((entry) => entry.kind === 'paragraph' && entry.paragraphId === ids(editor)[2]);
+    const three = editor
+      .surface!.layout()
+      .pages.flatMap((page) => page.fragments)
+      .find((entry) => entry.kind === 'paragraph' && entry.paragraphId === ids(editor)[3]);
+    const left = (entry: typeof fragment) =>
+      entry && entry.kind === 'paragraph' ? entry.lines[0]!.box.x : NaN;
+    expect(left(fragment)).toBeCloseTo(left(three), 3);
+  });
+
+  test('once the number is gone, Backspace in the Original view still reaches the join', () => {
+    const editor = mount(docx(list('Two')), 'Reviewer');
+    editor.surface!.setEditingMode('suggest');
+    backspaceAt(editor, 2);
+    editor.surface!.setRevisionDisplayMode('original');
+    backspaceAt(editor, 2);
+    editor.surface!.setRevisionDisplayMode('all-markup');
+    expect(own(editor, 2)).not.toContain('numPr');
+    expect(JSON.stringify(editor.surface!.session.part().root)).toContain('"localName":"del"');
   });
 
   test('in suggesting mode the removal is a tracked change that reject undoes', async () => {

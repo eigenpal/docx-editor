@@ -1,4 +1,9 @@
-import { findNode, type OoxmlPart, type TreeDocOp } from '@docx-editor.dev/core/store';
+import {
+  findNode,
+  readTwipsMeasure,
+  type OoxmlPart,
+  type TreeDocOp,
+} from '@docx-editor.dev/core/store';
 import {
   cascadeParagraphFormatting,
   readNumPr,
@@ -52,16 +57,49 @@ export function createListNumberingOps(deps: ListNumberingDeps) {
         : { op: 'setListLevel', paragraphId, level };
     },
 
-    /** The left indent the paragraph's style chain gives it, in twips, its own `w:pPr` aside. */
-    styleLeftIndent(paragraphId: string): number {
+    /**
+     * The indent the paragraph's style chain gives it without its list, in twips: the left
+     * edge and the signed first-line offset (negative hangs). Each attribute cascades on its
+     * own, so the last tier that states it wins.
+     */
+    styleIndent(paragraphId: string): { left: number; firstLine: number } {
       const styles = deps.styleCascade();
       const paragraph = findNode(deps.storyPart(), paragraphId);
-      if (!styles || !paragraph) return 0;
+      if (!styles || !paragraph) return { left: 0, firstLine: 0 };
       const pPr = paragraphPropertiesNodeOf(paragraph);
       const tiers = cascadeParagraphFormatting(styles, pPr).paragraphPropertyNodes;
-      return leftIndentTwipsOf(
-        tiers.filter((tier) => tier !== pPr).flatMap((tier) => authoredProperties(tier, INDENT))
-      );
+      const stated = tiers
+        .filter((tier) => tier !== pPr)
+        .flatMap((tier) => authoredProperties(tier, INDENT));
+      let firstLine = 0;
+      for (const { attributes } of stated) {
+        const hanging = readTwipsMeasure(attributes?.hanging);
+        const first = readTwipsMeasure(attributes?.firstLine);
+        if (hanging !== null) firstLine = -hanging;
+        else if (first !== null) firstLine = first;
+      }
+      return { left: leftIndentTwipsOf(stated), firstLine };
+    },
+
+    /** Whether the paragraph's numbering comes from its style, so leaving writes `numId` 0. */
+    styleNumbered(paragraphId: string): boolean {
+      return !absorbed(paragraphId) && styleNumbering(paragraphId) !== null;
+    },
+
+    /**
+     * Whether the paragraph's OWN tree still numbers it: its `w:numPr`, or its style's.
+     *
+     * Asked of the tree, not the painted marker. An absorbed paragraph is drawn with its
+     * survivor's marker, and the Original view paints a removed number from its revision
+     * record, so a marker on screen does not mean there is numbering left to remove.
+     */
+    numbered(paragraphId: string): boolean {
+      if (absorbed(paragraphId)) return false;
+      const paragraph = findNode(deps.storyPart(), paragraphId);
+      if (!paragraph) return false;
+      const numId = namedChild(namedChild(paragraphPropertiesNodeOf(paragraph), 'numPr'), 'numId');
+      const value = numId?.attributes.find((attribute) => attribute.localName === 'val')?.value;
+      return value !== undefined ? value !== '0' : styleNumbering(paragraphId) !== null;
     },
 
     /** `w:numId="0"` switches off the style's numbering (§17.9.18); removal alone would not. */

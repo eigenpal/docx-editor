@@ -105,7 +105,9 @@ const markers = (peer: Peer) =>
     .pages.flatMap((page) => page.fragments)
     .filter((fragment) => fragment.kind === 'paragraph')
     .map((fragment) => fragment.marker?.text ?? null);
-const numbered = (xml: string) => (xml.match(/<w:numPr>/g) ?? []).length;
+/** Items numbered now; a `w:pPrChange` record holds the prior numbering and is not counted. */
+const numbered = (xml: string) =>
+  (xml.replace(/<w:pPrChange\b.*?<\/w:pPrChange>/g, '').match(/<w:numPr>/g) ?? []).length;
 
 test('a removed number converges through typing, undo, redo and reconnect', async () => {
   const a = await peer('Alice');
@@ -180,4 +182,29 @@ test('two participants pressing Backspace on the same item converge without a jo
   expect(after).toContain('>One<');
   expect(after).toContain('Two words');
   expect(numbered(after)).toBe(2);
+});
+
+test('a suggested number removal converges, and the other participant can reject it', async () => {
+  const a = await peer('Alice');
+  const b = await peer('Bob', a);
+
+  a.editor.surface!.setEditingMode('suggest');
+  caret(a, 1, 0);
+  caret(b, 2, 5);
+  a.editor.surface!.deleteBackward();
+  expect(b.editor.exec({ type: 'insertText', text: ' more' }).ok).toBe(true);
+  sync(a, b);
+  const suggested = await converged(a, b);
+  expect(suggested).toContain('<w:pPrChange');
+  expect(numbered(suggested)).toBe(2);
+
+  b.editor.surface!.session.applyTreeOps([{ op: 'rejectAllRevisions' }]);
+  sync(a, b);
+  const rejected = await converged(a, b);
+  expect(rejected).not.toContain('<w:pPrChange');
+  expect(numbered(rejected)).toBe(3);
+  expect(rejected).toContain('Three more');
+
+  const reopened = await peer('Carol', undefined, new Uint8Array(await a.editor.save()));
+  expect(markers(reopened)).toEqual(['1.', '2.', '3.']);
 });
