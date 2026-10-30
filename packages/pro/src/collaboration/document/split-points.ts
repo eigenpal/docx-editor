@@ -79,12 +79,21 @@ function serialized(points: readonly SplitPoint[]): string {
     .join('\n');
 }
 
-/** Paragraph records the current edit created, by the peer that runs it. */
-const minted = new WeakSet<Y.Map<unknown>>();
+/**
+ * Paragraph records the current edit created, by the peer that runs it. Only that edit writes
+ * their split points: `endSplitPointEdit` forgets them when it ends, so a later edit of the
+ * paragraph, as text pasted into a paragraph a break left empty, never rewrites the field.
+ */
+let minted = new WeakSet<Y.Map<unknown>>();
 
 /** Note a paragraph record this edit created, before it is listed. */
 export function noteMintedParagraph(record: Y.Map<unknown> | undefined): void {
   if (record) minted.add(record);
+}
+
+/** The edit that noted new paragraphs ended: their split points are final. */
+export function endSplitPointEdit(): void {
+  minted = new WeakSet();
 }
 
 /**

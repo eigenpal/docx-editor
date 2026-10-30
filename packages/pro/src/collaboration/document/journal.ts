@@ -45,7 +45,12 @@ import { SharedTextValueRefused } from './paragraph-text-codec.ts';
 import { tokensOfParagraph, type Token } from './paragraph-text-diff.ts';
 import { JournalProjection, projectEffect } from './journal-projection.ts';
 import type { DocumentRegistry } from './registry.ts';
-import { inheritSplitPoints, lastIdentityOf, noteMintedParagraph } from './split-points.ts';
+import {
+  endSplitPointEdit,
+  inheritSplitPoints,
+  lastIdentityOf,
+  noteMintedParagraph,
+} from './split-points.ts';
 
 export type JournalRefusalCode =
   | LimitCode
@@ -613,6 +618,21 @@ export function applyPrimitiveJournal(
     if (!(error instanceof SharedTextValueRefused)) throw error;
     return { ok: false, code: error.code, detail: error.detail };
   }
+  try {
+    applyPlannedJournal(registry, effects, planned, plan, tokens);
+  } finally {
+    endSplitPointEdit();
+  }
+  return { ok: true };
+}
+
+function applyPlannedJournal(
+  registry: DocumentRegistry,
+  effects: ReturnType<typeof sharedEffect>[],
+  planned: Exclude<ReturnType<typeof planJournal>, { ok: unknown }>,
+  plan: InlinePlan | null | undefined,
+  tokens: ReadonlyMap<LogicalId, Token[]>
+): void {
   registry.doc.transact(() => {
     // Inside the transaction, so the flag is set before Yjs can deliver the events that clear
     // it. A flush that runs while a remote update is still being processed opens a DEFERRED
@@ -664,7 +684,6 @@ export function applyPrimitiveJournal(
     recordDeletions(registry, written, removed.shown);
     deleteEmbedsOfRemoved(registry, removed.embeds, planned.removed, written);
   }, JOURNAL_ORIGIN);
-  return { ok: true };
 }
 
 /**

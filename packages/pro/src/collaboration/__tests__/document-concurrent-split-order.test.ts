@@ -751,3 +751,115 @@ describe('rejecting every change after concurrent tracked splits', () => {
       }
     });
 });
+
+describe('several separate breaks by each peer while offline', () => {
+  // Each peer's later break splits a paragraph its own earlier break added, so it lists its new
+  // paragraph after that paragraph. Every piece still shows in text order.
+  const splitWhere = (runtime: Runtime, find: string, tracked: boolean) =>
+    runtime.run(async (context) => {
+      if (tracked) context.document.changeTrackingMode = 'TrackMineOnly';
+      const paragraphs = context.document.body.paragraphs;
+      paragraphs.load('items/text');
+      await context.sync();
+      const holder = paragraphs.items.find((item) => item.text.includes(find))!;
+      holder.split([find]);
+      await context.sync();
+    });
+  const BREAKS = [
+    { name: 'typed paragraph breaks', edit: newlineAfter },
+    { name: 'Paragraph.split calls', edit: splitWhere },
+  ];
+  const CASES = [
+    {
+      count: 'two',
+      text: 'a1; b2; c3; d4; e5',
+      alice: ['a1; ', 'c3; '],
+      bob: ['b2; ', 'd4; '],
+      pieces: ['a1; ', 'b2; ', 'c3; ', 'd4; ', 'e5'],
+    },
+    {
+      count: 'three',
+      text: 'a1; b2; c3; d4; e5; f6; g7',
+      alice: ['a1; ', 'c3; ', 'e5; '],
+      bob: ['b2; ', 'd4; ', 'f6; '],
+      pieces: ['a1; ', 'b2; ', 'c3; ', 'd4; ', 'e5; ', 'f6; ', 'g7'],
+    },
+  ];
+  for (const { count, text, alice, bob, pieces } of CASES)
+    for (const { name, edit } of BREAKS)
+      for (const tracked of [false, true])
+        for (const gc of [true, false])
+          for (const { label, ids } of ORDERS)
+            test(`${count} ${name} by each of two peers (${tracked ? 'tracked' : 'untracked'}, garbage collection ${gc ? 'on' : 'off'}, ${label})`, async () => {
+              const r = await room(text, ids, '', gc);
+              try {
+                r.offline();
+                for (const find of bob) {
+                  await edit(r.bob.runtime, find, tracked);
+                  later();
+                }
+                for (const find of alice) {
+                  await edit(r.alice.runtime, find, tracked);
+                  later();
+                }
+                r.online();
+                // The review groups one author's adjacent breaks, so the count is read live.
+                const revisions = tracked ? await revisionCount(r.alice.runtime) : 0;
+                if (tracked) expect(revisions).toBeGreaterThan(0);
+                await r.expectAll([...pieces, 'Signed'], revisions);
+                await r.expectReopens([...pieces, 'Signed'], revisions);
+                if (!tracked) return;
+                later();
+                await rejectAll(r.carol.runtime);
+                r.sync();
+                await r.expectAll([text, 'Signed'], 0);
+              } finally {
+                r.close();
+              }
+            });
+});
+
+describe('undoing and redoing concurrent splits while offline', () => {
+  // Both peers undo their splits offline and reconnect, then both redo offline and reconnect.
+  for (const tracked of [false, true])
+    for (const gc of [true, false])
+      for (const { name, edit } of EDITS)
+        for (const swap of [false, true])
+          for (const bobFirst of [false, true])
+            for (const { label, ids } of ORDERS)
+              test(`${tracked ? 'tracked' : 'untracked'} ${name}, ${swap ? 'Bob splits first' : 'Alice splits first'}, ${bobFirst ? 'Bob' : 'Alice'} undoes first (garbage collection ${gc ? 'on' : 'off'}, ${label})`, async () => {
+                const r = await room('One; two; three', ids, '', gc);
+                const [early, late] = swap ? [r.bob, r.alice] : [r.alice, r.bob];
+                const [one, two] = bobFirst ? [r.bob, r.alice] : [r.alice, r.bob];
+                const split = ['One; ', 'two; ', 'three', 'Signed'];
+                try {
+                  r.offline();
+                  await edit(early.runtime, 'One; ', tracked);
+                  later();
+                  await edit(late.runtime, 'two; ', tracked);
+                  later();
+                  r.online();
+                  await r.expectAll(split);
+                  r.offline();
+                  later();
+                  expect(one.editor.exec({ type: 'undo' }).ok).toBe(true);
+                  later();
+                  expect(two.editor.exec({ type: 'undo' }).ok).toBe(true);
+                  later();
+                  r.online();
+                  await r.expectAll(['One; two; three', 'Signed'], 0);
+                  r.offline();
+                  later();
+                  expect(one.editor.exec({ type: 'redo' }).ok).toBe(true);
+                  later();
+                  expect(two.editor.exec({ type: 'redo' }).ok).toBe(true);
+                  later();
+                  r.online();
+                  const revisions = tracked ? await revisionCount(r.alice.runtime) : 0;
+                  await r.expectAll(split, revisions);
+                  await r.expectReopens(split, revisions);
+                } finally {
+                  r.close();
+                }
+              });
+});

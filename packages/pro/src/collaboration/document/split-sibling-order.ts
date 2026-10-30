@@ -222,10 +222,12 @@ export function splitSiblingRanks(
 
 /**
  * The paragraphs of one concurrent run in the order of their split points, or null when they
- * do not all name a split of one paragraph. Each paragraph goes by where that split fell, so
- * pieces that several peers split off at once interleave in text order; paragraphs with one
- * split point, as a paragraph and the paragraph that took its split points, keep their listed
- * order.
+ * do not all name a split of one paragraph. Each paragraph goes by where its own last split
+ * fell, so pieces that several peers split off at once, each peer's later pieces split off its
+ * earlier ones included, interleave in text order. When those splits do not all stand in one
+ * live text, as a split of text typed after the first split, each paragraph goes by its split
+ * of that one paragraph; paragraphs with one split point, as
+ * a paragraph and the paragraph that took its split points, keep their listed order.
  */
 function idsByPoints(
   listed: readonly LogicalId[],
@@ -236,15 +238,27 @@ function idsByPoints(
   if (listed.length < 2) return null;
   const points = listed.map((id) => pointsOf(id));
   const places = new Map<Y.Text, Map<string, number>>();
+  const sorted = (keys: readonly number[]): LogicalId[] => {
+    const order = listed.map((_, index) => index);
+    order.sort((a, b) => keys[a]! - keys[b]! || a - b);
+    return order.map((index) => listed[index]!);
+  };
   for (let at = points[0]!.length - 1; at >= 0; at -= 1) {
     const source = points[0]![at]!.source;
     const splits = points.map((list) => splitAtIn(list, source));
     if (splits.some((split) => split === null)) continue;
+    const waiting = missing.length;
+    const own = splitKeys(
+      doc,
+      points.map((list) => list.at(-1)!.at),
+      places,
+      missing,
+      false
+    );
+    if (own) return sorted(own);
+    if (missing.length > waiting) return null;
     const keys = splitKeys(doc, splits as string[], places, missing);
-    if (!keys) return null;
-    const order = listed.map((_, index) => index);
-    order.sort((a, b) => keys[a]! - keys[b]! || a - b);
-    return order.map((index) => listed[index]!);
+    return keys ? sorted(keys) : null;
   }
   return null;
 }
@@ -410,7 +424,9 @@ function splitKeys(
   doc: Y.Doc | null,
   points: readonly string[],
   places: Map<Y.Text, Map<string, number>>,
-  missing: string[]
+  missing: string[],
+  /** Whether one author's clocks may decide when the places are in different texts. */
+  byClock = true
 ): number[] | null {
   if (!doc) return null;
   const parsed = points.map((point) => ({
@@ -427,6 +443,7 @@ function splitKeys(
   const placed = parsed.map(({ identity }) => sourcePlace(doc, identity, places));
   if (placed.every((place) => place && place.text === placed[0]!.text))
     return placed.map((place, at) => place!.at + parsed[at]!.after);
+  if (!byClock) return null;
   const clocks = parsed.map(({ identity }) => identity.split(':').map(Number));
   if (clocks.every(([client]) => client === clocks[0]![0]))
     return clocks.map(([, clock], at) => clock! + parsed[at]!.after);
