@@ -151,7 +151,13 @@
     "subtitle": "Subjudul",
     "heading1": "Judul 1",
     "heading2": "Judul 2",
-    "heading3": "Judul 3"
+    "heading3": "Judul 3",
+    "normal": "Normal",
+    "headingLevel": "Judul {level}",
+    "noSpacing": "Tanpa Spasi",
+    "quote": "Kutipan",
+    "intenseQuote": "Kutipan Intens",
+    "listParagraph": "Paragraf Daftar"
   },
   "font": {
     "selectAriaLabel": "Pilih font",
@@ -481,6 +487,7 @@
     "deleteShortcut": "Del",
     "selectAll": "Pilih Semua",
     "selectAllShortcut": "Ctrl+A",
+    "insertLinkShortcut": "Ctrl+K",
     "editCustomNode": "Sunting {label}",
     "removeCustomNode": "Hapus {label}",
     "pasteWithoutFormatting": "Tempel tanpa pemformatan",
@@ -966,6 +973,7 @@
     "reviewBoundChanges": "Semua perubahan yang tersisa ada di kontrol konten yang terhubung ke data eksternal, sehingga tidak dapat diterima atau ditolak di sini. Minta pemilik dokumen untuk memperbarui data yang terhubung.",
     "commentSelection": "Pilih rentang sebelum menambahkan komentar",
     "noCommentDraftView": "Komentar tidak dapat ditambahkan di sini",
+    "noLinkView": "Tautan tidak dapat ditambahkan di sini",
     "mergeUnsupported": "Penggabungan sel tidak didukung",
     "splitUnsupported": "Pemisahan sel tidak didukung",
     "mergeNeedsRectangle": "Pilih dua sel atau lebih yang membentuk persegi panjang untuk menggabungkannya",
@@ -1015,7 +1023,13 @@
     "suggestingNeedsAuthor": "Mode saran memerlukan penulis. Tetapkan penulis dalam konfigurasi editor.",
     "pictureSelected": "Sebuah gambar dipilih. Letakkan kursor di teks untuk menyisipkan gambar.",
     "chartDrawing": "Ini adalah bagan. Anda dapat menghapusnya, tetapi tidak dapat mengeditnya sebagai gambar.",
-    "chartClipboard": "Pilihan berisi bagan. Bagan tidak dapat disalin, dipotong, atau ditempel."
+    "chartClipboard": "Pilihan berisi bagan. Bagan tidak dapat disalin, dipotong, atau ditempel.",
+    "nothingToUndo": "Tidak ada yang dapat dibatalkan",
+    "nothingToRedo": "Tidak ada yang dapat diulang",
+    "outermostLevel": "Pilihan sudah berada di tingkat terluar",
+    "cannotIndentFurther": "Indentasi pilihan tidak dapat ditambah lagi",
+    "noGoToView": "Buka tidak tersedia di sini",
+    "noBookmarkDialog": "Penanda tidak dapat ditambahkan di sini"
   },
   "equationPopup": {
     "apply": "Terapkan",

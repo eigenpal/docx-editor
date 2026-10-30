@@ -151,7 +151,13 @@
     "subtitle": "Untertitel",
     "heading1": "Überschrift 1",
     "heading2": "Überschrift 2",
-    "heading3": "Überschrift 3"
+    "heading3": "Überschrift 3",
+    "normal": "Standard",
+    "headingLevel": "Überschrift {level}",
+    "noSpacing": "Kein Leerraum",
+    "quote": "Zitat",
+    "intenseQuote": "Intensives Zitat",
+    "listParagraph": "Listenabsatz"
   },
   "font": {
     "selectAriaLabel": "Schriftart auswählen",
@@ -428,6 +434,7 @@
     "deleteShortcut": "Entf",
     "selectAll": "Alles markieren",
     "selectAllShortcut": "Strg+A",
+    "insertLinkShortcut": "Strg+K",
     "editCustomNode": "{label} bearbeiten",
     "removeCustomNode": "{label} entfernen",
     "pasteWithoutFormatting": "Ohne Formatierung einfügen",
@@ -966,6 +973,7 @@
     "reviewBoundChanges": "Alle verbleibenden Änderungen liegen in Inhaltssteuerelementen, die an externe Daten gebunden sind. Sie können hier nicht angenommen oder abgelehnt werden. Bitten Sie den Besitzer des Dokuments, die verknüpften Daten zu aktualisieren.",
     "commentSelection": "Wählen Sie einen Bereich aus, bevor Sie einen Kommentar hinzufügen",
     "noCommentDraftView": "Hier können keine Kommentare hinzugefügt werden",
+    "noLinkView": "Hier können keine Links hinzugefügt werden",
     "mergeUnsupported": "Das Verbinden von Zellen wird nicht unterstützt",
     "splitUnsupported": "Das Teilen von Zellen wird nicht unterstützt",
     "mergeNeedsRectangle": "Wählen Sie zwei oder mehr Zellen aus, die ein Rechteck bilden, um sie zu verbinden",
@@ -1015,7 +1023,13 @@
     "suggestingNeedsAuthor": "Vorschläge benötigen einen Autor. Legen Sie den Autor in der Editorkonfiguration fest.",
     "pictureSelected": "Ein Bild ist ausgewählt. Setzen Sie den Cursor in den Text, um ein Bild einzufügen.",
     "chartDrawing": "Dies ist ein Diagramm. Sie können es löschen, aber nicht wie ein Bild bearbeiten.",
-    "chartClipboard": "Die Auswahl enthält ein Diagramm. Diagramme können nicht kopiert, ausgeschnitten oder eingefügt werden."
+    "chartClipboard": "Die Auswahl enthält ein Diagramm. Diagramme können nicht kopiert, ausgeschnitten oder eingefügt werden.",
+    "nothingToUndo": "Es gibt nichts rückgängig zu machen",
+    "nothingToRedo": "Es gibt nichts wiederherzustellen",
+    "outermostLevel": "Die Auswahl ist bereits auf der äußersten Ebene",
+    "cannotIndentFurther": "Der Einzug der Auswahl kann nicht weiter vergrößert werden",
+    "noGoToView": "Gehe zu ist hier nicht verfügbar",
+    "noBookmarkDialog": "Textmarken können hier nicht hinzugefügt werden"
   },
   "equationPopup": {
     "apply": "Übernehmen",

@@ -31,6 +31,7 @@
     "drawingLocked": "この画像はロックされています",
     "commentSelection": "コメントを追加する範囲を選択してください",
     "noCommentDraftView": "ここではコメントを追加できません",
+    "noLinkView": "ここではリンクを追加できません",
     "mergeUnsupported": "セルの結合はサポートされていません",
     "splitUnsupported": "セルの分割はサポートされていません",
     "mergeNeedsRectangle": "結合するには、四角形になる 2 つ以上のセルを選択してください",
@@ -66,7 +67,13 @@
     "nothingToPaint": "書式の適用先のテキストを選択してください",
     "pictureSelected": "画像が選択されています。画像を挿入するには、テキスト内にカーソルを置いてください。",
     "chartDrawing": "これはグラフです。削除はできますが、画像として編集することはできません。",
-    "chartClipboard": "選択範囲にグラフが含まれています。グラフはコピー、切り取り、貼り付けできません。"
+    "chartClipboard": "選択範囲にグラフが含まれています。グラフはコピー、切り取り、貼り付けできません。",
+    "nothingToUndo": "元に戻す操作はありません",
+    "nothingToRedo": "やり直す操作はありません",
+    "outermostLevel": "選択範囲はすでに最も外側のレベルです",
+    "cannotIndentFurther": "選択範囲のインデントをこれ以上増やせません",
+    "noGoToView": "ここではジャンプを使用できません",
+    "noBookmarkDialog": "ここにはブックマークを追加できません"
   },
   "toolbar": {
     "ariaLabel": "書式設定ツールバー",
@@ -216,7 +223,13 @@
     "subtitle": "副題",
     "heading1": "見出し 1",
     "heading2": "見出し 2",
-    "heading3": "見出し 3"
+    "heading3": "見出し 3",
+    "normal": "標準",
+    "headingLevel": "見出し {level}",
+    "noSpacing": "行間詰め",
+    "quote": "引用文",
+    "intenseQuote": "引用文 2",
+    "listParagraph": "リスト段落"
   },
   "font": {
     "selectAriaLabel": "フォントの選択",
@@ -552,6 +565,7 @@
     "deleteShortcut": "Del",
     "selectAll": "すべて選択",
     "selectAllShortcut": "Ctrl+A",
+    "insertLinkShortcut": "Ctrl+K",
     "editCustomNode": "{label}を編集",
     "removeCustomNode": "{label}を削除"
   },

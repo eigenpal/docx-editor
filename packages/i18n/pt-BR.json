@@ -151,7 +151,13 @@
     "subtitle": "Subtítulo",
     "heading1": "Título 1",
     "heading2": "Título 2",
-    "heading3": "Título 3"
+    "heading3": "Título 3",
+    "normal": "Normal",
+    "headingLevel": "Título {level}",
+    "noSpacing": "Sem Espaçamento",
+    "quote": "Citação",
+    "intenseQuote": "Citação Intensa",
+    "listParagraph": "Parágrafo da Lista"
   },
   "font": {
     "selectAriaLabel": "Selecionar família da fonte",
@@ -428,6 +434,7 @@
     "deleteShortcut": "Del",
     "selectAll": "Selecionar tudo",
     "selectAllShortcut": "Ctrl+A",
+    "insertLinkShortcut": "Ctrl+K",
     "editCustomNode": "Editar {label}",
     "removeCustomNode": "Remover {label}",
     "pasteWithoutFormatting": "Colar sem formatação",
@@ -966,6 +973,7 @@
     "reviewBoundChanges": "Todas as alterações restantes estão em controles de conteúdo vinculados a dados externos, então não podem ser aceitas nem rejeitadas aqui. Peça ao proprietário do documento para atualizar os dados vinculados.",
     "commentSelection": "Selecione um trecho antes de adicionar um comentário",
     "noCommentDraftView": "Não é possível adicionar comentários aqui",
+    "noLinkView": "Não é possível adicionar links aqui",
     "mergeUnsupported": "A mesclagem de células não é compatível",
     "splitUnsupported": "A divisão de células não é compatível",
     "mergeNeedsRectangle": "Selecione duas ou mais células que formem um retângulo para mesclá-las",
@@ -1015,7 +1023,13 @@
     "suggestingNeedsAuthor": "O modo de sugestão precisa de um autor. Defina o autor na configuração do editor.",
     "pictureSelected": "Uma imagem está selecionada. Coloque o cursor no texto para inserir uma imagem.",
     "chartDrawing": "Isto é um gráfico. Você pode excluí-lo, mas não pode editá-lo como uma imagem.",
-    "chartClipboard": "A seleção contém um gráfico. Gráficos não podem ser copiados, recortados nem colados."
+    "chartClipboard": "A seleção contém um gráfico. Gráficos não podem ser copiados, recortados nem colados.",
+    "nothingToUndo": "Não há nada para desfazer",
+    "nothingToRedo": "Não há nada para refazer",
+    "outermostLevel": "A seleção já está no nível mais externo",
+    "cannotIndentFurther": "Não é possível aumentar mais o recuo da seleção",
+    "noGoToView": "Ir para não está disponível aqui",
+    "noBookmarkDialog": "Não é possível adicionar indicadores aqui"
   },
   "equationPopup": {
     "apply": "Aplicar",

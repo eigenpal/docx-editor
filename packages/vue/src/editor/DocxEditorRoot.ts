@@ -26,7 +26,7 @@ import type {
   ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
 import type { EditorModule, ImageDecodePort } from '@docx-editor.dev/core/editor';
-import { HyperlinkPopupContext, useHyperlinkPopupInstance } from './useHyperlinkPopup';
+import { provideHyperlinkPopup } from './useHyperlinkPopup';
 import { ContentControlContext, useContentControlInstance } from './useContentControl';
 import { ImageInsertProvider } from './images/ImageInsert';
 import {
@@ -45,8 +45,7 @@ export { docxEditorFacadeListenerCount, type DocxEditorRootProps } from './useDo
 const HyperlinkPopupProvider = defineComponent({
   name: 'HyperlinkPopupProvider',
   setup(_, { slots }) {
-    const popup = useHyperlinkPopupInstance(true);
-    provide(HyperlinkPopupContext, popup);
+    provideHyperlinkPopup();
     return () => slots.default?.();
   },
 });

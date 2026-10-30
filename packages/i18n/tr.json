@@ -151,7 +151,13 @@
     "subtitle": "Altyazı",
     "heading1": "Başlık 1",
     "heading2": "Başlık 2",
-    "heading3": "Başlık 3"
+    "heading3": "Başlık 3",
+    "normal": "Normal",
+    "headingLevel": "Başlık {level}",
+    "noSpacing": "Aralık Yok",
+    "quote": "Alıntı",
+    "intenseQuote": "Güçlü Alıntı",
+    "listParagraph": "Liste Paragraf"
   },
   "font": {
     "selectAriaLabel": "Yazı tipi ailesini seç",
@@ -428,6 +434,7 @@
     "deleteShortcut": "Del",
     "selectAll": "Tümünü seç",
     "selectAllShortcut": "Ctrl+A",
+    "insertLinkShortcut": "Ctrl+K",
     "editCustomNode": "{label} öğesini düzenle",
     "removeCustomNode": "{label} öğesini kaldır",
     "pasteWithoutFormatting": "Biçimlendirmeden yapıştır",
@@ -966,6 +973,7 @@
     "reviewBoundChanges": "Kalan tüm değişiklikler dış verilere bağlı içerik denetimlerinde olduğu için burada kabul edilemez veya reddedilemez. Belge sahibinden bağlı verileri güncellemesini isteyin.",
     "commentSelection": "Açıklama eklemeden önce bir aralık seçin",
     "noCommentDraftView": "Buraya açıklama eklenemez",
+    "noLinkView": "Buraya bağlantı eklenemez",
     "mergeUnsupported": "Hücre birleştirme desteklenmiyor",
     "splitUnsupported": "Hücre bölme desteklenmiyor",
     "mergeNeedsRectangle": "Birleştirmek için dikdörtgen oluşturan iki veya daha fazla hücre seçin",
@@ -1015,7 +1023,13 @@
     "suggestingNeedsAuthor": "Öneri modu için bir yazar gerekir. Düzenleyici yapılandırmasında yazarı ayarlayın.",
     "pictureSelected": "Bir resim seçili. Resim eklemek için imleci metne yerleştirin.",
     "chartDrawing": "Bu bir grafik. Silebilirsiniz ancak resim olarak düzenleyemezsiniz.",
-    "chartClipboard": "Seçim bir grafik içeriyor. Grafikler kopyalanamaz, kesilemez veya yapıştırılamaz."
+    "chartClipboard": "Seçim bir grafik içeriyor. Grafikler kopyalanamaz, kesilemez veya yapıştırılamaz.",
+    "nothingToUndo": "Geri alınacak bir şey yok",
+    "nothingToRedo": "Yinelenecek bir şey yok",
+    "outermostLevel": "Seçim zaten en dış düzeyde",
+    "cannotIndentFurther": "Seçimin girintisi daha fazla artırılamaz",
+    "noGoToView": "Git burada kullanılamıyor",
+    "noBookmarkDialog": "Buraya yer işareti eklenemez"
   },
   "equationPopup": {
     "apply": "Uygula",

@@ -1079,6 +1079,22 @@ Every `w:num` that names one `w:abstractNum` SHALL count on one shared counter p
 - **WHEN** two items of the first `w:num` precede one item of the second, then one more item of the first
 - **THEN** the items number `1.`, `2.`, `3.`, and `4.`
 
+### Requirement: A deeper item counts the parent levels it skips
+
+An item on a deeper level SHALL count each parent level that has no item since that level last started, once, at that level's start. The next item on such a parent level SHALL continue from that count. A count SHALL continue past 9999, and its marker SHALL show the whole number.
+
+#### Scenario: A level 1 item before the first level 0 item
+
+- **GIVEN** one list whose levels 0, 1, and 2 use `%1.`, `%2)`, and `%3]`
+- **WHEN** its items are on levels 1, 0, 0, 2, 1, and 0
+- **THEN** the items number `1)`, `2.`, `3.`, `1]`, `2)`, and `4.`
+
+#### Scenario: A list counts past 9999
+
+- **GIVEN** a decimal list level that starts at 9998
+- **WHEN** it has four items
+- **THEN** the items number `9998`, `9999`, `10000`, and `10001`
+
 ### Requirement: A start override restarts a shared list once
 
 A `w:num` with a `w:startOverride` SHALL restart the shared counter once, at its first paragraph on an overridden level. The restart SHALL apply to that level alone and SHALL then be spent. When the same `w:lvlOverride` also replaces the level, the restart value SHALL be the replacement's `w:start`.

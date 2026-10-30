@@ -151,7 +151,13 @@
     "subtitle": "副标题",
     "heading1": "标题 1",
     "heading2": "标题 2",
-    "heading3": "标题 3"
+    "heading3": "标题 3",
+    "normal": "正文",
+    "headingLevel": "标题 {level}",
+    "noSpacing": "无间隔",
+    "quote": "引用",
+    "intenseQuote": "明显引用",
+    "listParagraph": "列表段落"
   },
   "font": {
     "selectAriaLabel": "选择字体",
@@ -428,6 +434,7 @@
     "deleteShortcut": "Del",
     "selectAll": "全选",
     "selectAllShortcut": "Ctrl+A",
+    "insertLinkShortcut": "Ctrl+K",
     "editCustomNode": "编辑{label}",
     "removeCustomNode": "删除{label}",
     "pasteWithoutFormatting": "粘贴而不带格式",
@@ -966,6 +973,7 @@
     "reviewBoundChanges": "所有剩余更改都位于绑定到外部数据的内容控件中，因此无法在此接受或拒绝。请让文档所有者更新链接的数据。",
     "commentSelection": "请先选择文本范围，再添加批注",
     "noCommentDraftView": "此处无法添加批注",
+    "noLinkView": "此处无法添加链接",
     "mergeUnsupported": "不支持合并单元格",
     "splitUnsupported": "不支持拆分单元格",
     "mergeNeedsRectangle": "请选择组成矩形的两个或更多单元格以合并",
@@ -1015,7 +1023,13 @@
     "suggestingNeedsAuthor": "建议模式需要作者。请在编辑器配置中设置作者。",
     "pictureSelected": "已选中一张图片。请将光标放在文本中以插入图片。",
     "chartDrawing": "这是一个图表。可以删除它，但不能像图片一样编辑它。",
-    "chartClipboard": "所选内容包含图表。无法复制、剪切或粘贴图表。"
+    "chartClipboard": "所选内容包含图表。无法复制、剪切或粘贴图表。",
+    "nothingToUndo": "没有可撤销的操作",
+    "nothingToRedo": "没有可恢复的操作",
+    "outermostLevel": "所选内容已位于最外层级别",
+    "cannotIndentFurther": "无法再增加所选内容的缩进",
+    "noGoToView": "此处无法使用定位",
+    "noBookmarkDialog": "无法在此处添加书签"
   },
   "equationPopup": {
     "apply": "应用",

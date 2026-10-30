@@ -42,6 +42,7 @@ import { absolutePointInScroller } from './scroller-geometry.ts';
 import {
   HyperlinkPopupContext,
   isFieldLink,
+  useHyperlinkPopupView,
   type UseHyperlinkPopupResult,
 } from './useHyperlinkPopup';
 import { Slot } from './toolbar/Slot';
@@ -126,6 +127,8 @@ function HyperLinkRoot({ className, asChild, hidden, children, preset = true }: 
   // leave the button opening a popover nothing renders — and, worse, the button's own
   // instance would win the engine's chrome registration.
   const popup = useHyperlinkPopup();
+  // The panel is what shows the shared state, so link gestures reach it while it is mounted.
+  useHyperlinkPopupView();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const { state, close } = popup;
   const returnFocus = useReturnFocus();

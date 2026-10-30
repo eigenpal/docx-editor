@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A deeper list item did not count the parent levels it skipped, and markers stopped at 9999.",
+  "after": "A deeper list item counts each skipped parent level once at its start, and markers show counts past 9999.",
+  "reason": "Only the computed list markers change. Shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/list-counters.test.ts",
+    "packages/core/src/layout/__tests__/numbering-format.test.ts",
+    "packages/core/src/layout/__tests__/field-listnum-layout.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-list-skipped-parent.test.ts"
+  ],
+  "changeset": "list-skipped-parent-levels",
+  "migration": null
+}

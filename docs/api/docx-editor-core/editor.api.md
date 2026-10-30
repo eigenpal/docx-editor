@@ -2625,6 +2625,7 @@ export interface PaginatedSurface {
     refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
     releaseSelection(pin: SelectionPin): void;
     remotePresenceColor(name: string): string | undefined;
+    removeListNumber(paragraphId: string): boolean;
     repaintHighlights(): void;
     // (undocumented)
     replaceImage(drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, options: {
@@ -2764,7 +2765,7 @@ export interface PaginatedSurfaceOptions {
     // (undocumented)
     readonly onRequestContentControlWidget?: (session: ContentControlWidgetSession) => boolean;
     readonly onRequestGoTo?: () => boolean;
-    readonly onRequestHyperlink?: () => void;
+    readonly onRequestHyperlink?: () => boolean | void;
     // (undocumented)
     readonly onRequestInvalidTextFormField?: (session: InvalidTextFormFieldSession) => boolean;
     readonly onRequestTextFormField?: (session: TextFormFieldDialogSession) => boolean;

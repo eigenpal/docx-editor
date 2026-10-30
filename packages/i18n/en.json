@@ -31,6 +31,7 @@
     "drawingLocked": "This image is locked",
     "commentSelection": "Select a range before adding a comment",
     "noCommentDraftView": "Comments can't be added here",
+    "noLinkView": "Links can't be added here",
     "mergeUnsupported": "Cell merge is not supported",
     "splitUnsupported": "Cell split is not supported",
     "mergeNeedsRectangle": "Select two or more cells that form a rectangle to merge them",
@@ -66,7 +67,13 @@
     "lockedSectionBreak": "A locked or linked content control holds the next section, so this break can't change it.",
     "lockedContentBreak": "A content control locks this text, so you can't break a section here.",
     "nothingToCopyFormatting": "Select some text to copy its formatting",
-    "nothingToPaint": "Select some text to paint"
+    "nothingToPaint": "Select some text to paint",
+    "nothingToUndo": "There is nothing to undo",
+    "nothingToRedo": "There is nothing to redo",
+    "outermostLevel": "The selection is already at the outermost level",
+    "cannotIndentFurther": "The selection can't be indented any further",
+    "noGoToView": "Go To isn't available here",
+    "noBookmarkDialog": "Bookmarks can't be added here"
   },
   "toolbar": {
     "ariaLabel": "Formatting toolbar",
@@ -216,7 +223,13 @@
     "subtitle": "Subtitle",
     "heading1": "Heading 1",
     "heading2": "Heading 2",
-    "heading3": "Heading 3"
+    "heading3": "Heading 3",
+    "normal": "Normal",
+    "headingLevel": "Heading {level}",
+    "noSpacing": "No Spacing",
+    "quote": "Quote",
+    "intenseQuote": "Intense Quote",
+    "listParagraph": "List Paragraph"
   },
   "font": {
     "selectAriaLabel": "Select font family",
@@ -552,6 +565,7 @@
     "deleteShortcut": "Del",
     "selectAll": "Select All",
     "selectAllShortcut": "Ctrl+A",
+    "insertLinkShortcut": "Ctrl+K",
     "editCustomNode": "Edit {label}",
     "removeCustomNode": "Remove {label}"
   },

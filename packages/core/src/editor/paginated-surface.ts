@@ -4610,6 +4610,8 @@ export function mountPaginatedSurface(
           );
           return;
         }
+        // A list item's first Backspace removes its number, not the paragraph break.
+        if (surface.removeListNumber(position.paragraphId)) return;
         const order = paragraphOrder();
         const index = order.indexOf(position.paragraphId);
         const previous = order[index - 1];

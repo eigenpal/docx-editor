@@ -151,7 +151,13 @@
     "subtitle": "उपशीर्षक",
     "heading1": "शीर्षक 1",
     "heading2": "शीर्षक 2",
-    "heading3": "शीर्षक 3"
+    "heading3": "शीर्षक 3",
+    "normal": "सामान्य",
+    "headingLevel": "शीर्षक {level}",
+    "noSpacing": "कोई रिक्ति नहीं",
+    "quote": "उद्धरण",
+    "intenseQuote": "गहन उद्धरण",
+    "listParagraph": "सूची अनुच्छेद"
   },
   "font": {
     "selectAriaLabel": "फ़ॉन्ट फैमिली चुनें",
@@ -428,6 +434,7 @@
     "deleteShortcut": "Del",
     "selectAll": "सभी चुनें",
     "selectAllShortcut": "Ctrl+A",
+    "insertLinkShortcut": "Ctrl+K",
     "editCustomNode": "{label} संपादित करें",
     "removeCustomNode": "{label} निकालें",
     "pasteWithoutFormatting": "स्वरूपण के बिना चिपकाएँ",
@@ -966,6 +973,7 @@
     "reviewBoundChanges": "बाकी सभी बदलाव बाहरी डेटा से जुड़े कंटेंट कंट्रोल में हैं, इसलिए उन्हें यहाँ स्वीकार या अस्वीकार नहीं किया जा सकता। दस्तावेज़ के स्वामी से जुड़े डेटा को अपडेट करने के लिए कहें।",
     "commentSelection": "टिप्पणी जोड़ने से पहले कोई पाठ क्षेत्र चुनें",
     "noCommentDraftView": "यहाँ टिप्पणियाँ नहीं जोड़ी जा सकतीं",
+    "noLinkView": "यहाँ लिंक नहीं जोड़े जा सकते",
     "mergeUnsupported": "कक्ष मर्ज समर्थित नहीं है",
     "splitUnsupported": "कक्ष विभाजन समर्थित नहीं है",
     "mergeNeedsRectangle": "सेल मर्ज करने के लिए आयत बनाने वाले दो या अधिक सेल चुनें",
@@ -1015,7 +1023,13 @@
     "suggestingNeedsAuthor": "सुझाव मोड के लिए लेखक आवश्यक है। संपादक कॉन्फ़िगरेशन में लेखक सेट करें।",
     "pictureSelected": "एक चित्र चुना गया है। चित्र डालने के लिए कर्सर को टेक्स्ट में रखें।",
     "chartDrawing": "यह एक चार्ट है। आप इसे हटा सकते हैं, लेकिन इसे चित्र की तरह संपादित नहीं कर सकते।",
-    "chartClipboard": "चयन में एक चार्ट है। चार्ट को कॉपी, कट या पेस्ट नहीं किया जा सकता।"
+    "chartClipboard": "चयन में एक चार्ट है। चार्ट को कॉपी, कट या पेस्ट नहीं किया जा सकता।",
+    "nothingToUndo": "पूर्ववत करने के लिए कुछ नहीं है",
+    "nothingToRedo": "फिर से करने के लिए कुछ नहीं है",
+    "outermostLevel": "चयन पहले से ही सबसे बाहरी स्तर पर है",
+    "cannotIndentFurther": "चयन का इंडेंट और नहीं बढ़ाया जा सकता",
+    "noGoToView": "यहाँ जाएं उपलब्ध नहीं है",
+    "noBookmarkDialog": "यहाँ बुकमार्क नहीं जोड़े जा सकते"
   },
   "equationPopup": {
     "apply": "लागू करें",

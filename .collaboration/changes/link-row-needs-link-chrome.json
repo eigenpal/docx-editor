@@ -1,0 +1,16 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The Insert link controls asked only whether the engine accepts a link, and opened a popover state even when no link panel was mounted.",
+  "after": "The Insert link controls are enabled only while a link panel is registered, and they open it through the same request as Ctrl+K or Cmd+K.",
+  "reason": "Only local chrome registration and control state change. The link panel commits the same link operations as before, so shared nodes, operations, and serialization are unchanged. The two-peer link popover tests still converge.",
+  "tests": [
+    "packages/core/src/editor/__tests__/toolbar-honesty.test.ts",
+    "packages/react/test/link-row-chrome.test.tsx",
+    "packages/vue/test/link-row-chrome.test.ts",
+    "packages/pro/src/collaboration/__tests__/link-popover-remote-target.test.tsx",
+    "packages/pro/src/collaboration/__tests__/link-popover-remote-target-vue.test.ts"
+  ],
+  "changeset": "link-controls-need-link-panel",
+  "migration": null
+}

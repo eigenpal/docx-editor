@@ -1,3 +1,4 @@
+// oxlint-disable react-hooks/rules-of-hooks -- Vue composables run in setup.
 // The ruler and paragraph dialog composables follow the caret into and out of protected content.
 import './dom-setup.ts';
 
@@ -35,6 +36,10 @@ const LOCKED =
 const BOUND =
   '<w:sdt><w:sdtPr><w:tag w:val="t"/><w:dataBinding w:storeItemID="{1}" w:xpath="/a"/></w:sdtPr>' +
   '<w:sdtContent><w:p><w:r><w:t>Bound title</w:t></w:r></w:p></w:sdtContent></w:sdt>';
+const BOUND_LOCKED =
+  '<w:sdt><w:sdtPr><w:tag w:val="t"/><w:lock w:val="contentLocked"/>' +
+  '<w:dataBinding w:storeItemID="{1}" w:xpath="/a"/></w:sdtPr>' +
+  '<w:sdtContent><w:p><w:r><w:t>Bound title</w:t></w:r></w:p></w:sdtContent></w:sdt>';
 const FREE = '<w:p><w:r><w:t>Free text</w:t></w:r></w:p>';
 
 async function flush(): Promise<void> {
@@ -47,9 +52,12 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-for (const [name, first, enabledInFirst] of [
-  ['a content lock', LOCKED, true],
-  ['a data binding', BOUND, false],
+// Indents and alignment pass a content lock, and a data binding mirrors only the text, so the
+// ruler and the dialog stay available in both, as in a binding that also locks its content.
+for (const [name, first] of [
+  ['a content lock', LOCKED],
+  ['a data binding', BOUND],
+  ['a data binding with a content lock', BOUND_LOCKED],
 ] as const) {
   test(`ruler and dialog state follow the caret out of and back into ${name}`, async () => {
     let state: { indent: boolean; format: boolean } = { indent: false, format: false };
@@ -92,10 +100,14 @@ for (const [name, first, enabledInFirst] of [
       await flush();
       return state;
     };
-    // Indents and alignment pass a content lock, so the ruler and the dialog stay available there.
-    expect(await put(0)).toEqual({ indent: enabledInFirst, format: enabledInFirst });
+    expect(await put(0)).toEqual({ indent: true, format: true });
     expect(await put(1)).toEqual({ indent: true, format: true });
-    expect(await put(0)).toEqual({ indent: enabledInFirst, format: enabledInFirst });
+    expect(await put(0)).toEqual({ indent: true, format: true });
+    // A real refusal: the document open for viewing takes both away, in and out of the control.
+    expect(mounted.exec({ type: 'setEditingMode', mode: 'viewing' }).ok).toBe(true);
+    await flush();
+    expect(await put(0)).toEqual({ indent: false, format: false });
+    expect(await put(1)).toEqual({ indent: false, format: false });
     app.unmount();
   });
 }

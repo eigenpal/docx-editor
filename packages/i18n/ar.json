@@ -31,6 +31,7 @@
     "drawingLocked": "هذه الصورة مقفلة",
     "commentSelection": "حدد نطاقًا قبل إضافة تعليق",
     "noCommentDraftView": "لا يمكن إضافة تعليقات هنا",
+    "noLinkView": "لا يمكن إضافة ارتباطات هنا",
     "mergeUnsupported": "دمج الخلايا غير مدعوم",
     "splitUnsupported": "تقسيم الخلايا غير مدعوم",
     "mergeNeedsRectangle": "حدد خليتين أو أكثر تشكّل مستطيلاً لدمجها",
@@ -66,7 +67,13 @@
     "lockedSectionBreak": "يحتوي عنصر تحكم محتوى مقفل أو مرتبط على المقطع التالي، لذا لا يمكن لهذا الفاصل تغييره.",
     "lockedContentBreak": "يقفل عنصر تحكم محتوى هذا النص، لذا لا يمكنك إدراج فاصل مقطع هنا.",
     "nothingToCopyFormatting": "حدد نصًا لنسخ تنسيقه",
-    "nothingToPaint": "حدد نصًا لتطبيق التنسيق عليه"
+    "nothingToPaint": "حدد نصًا لتطبيق التنسيق عليه",
+    "nothingToUndo": "لا يوجد ما يمكن التراجع عنه",
+    "nothingToRedo": "لا يوجد ما يمكن إعادته",
+    "outermostLevel": "التحديد في المستوى الخارجي بالفعل",
+    "cannotIndentFurther": "لا يمكن زيادة المسافة البادئة للتحديد أكثر",
+    "noGoToView": "الانتقال إلى غير متاح هنا",
+    "noBookmarkDialog": "لا يمكن إضافة إشارات مرجعية هنا"
   },
   "toolbar": {
     "ariaLabel": "شريط أدوات التنسيق",
@@ -216,7 +223,13 @@
     "subtitle": "العنوان الفرعي",
     "heading1": "عنوان 1",
     "heading2": "عنوان 2",
-    "heading3": "عنوان 3"
+    "heading3": "عنوان 3",
+    "normal": "عادي",
+    "headingLevel": "عنوان {level}",
+    "noSpacing": "بلا تباعد",
+    "quote": "اقتباس",
+    "intenseQuote": "اقتباس مكثف",
+    "listParagraph": "فقرة قائمة"
   },
   "font": {
     "selectAriaLabel": "تحديد عائلة الخطوط",
@@ -552,6 +565,7 @@
     "deleteShortcut": "Del",
     "selectAll": "تحديد الكل",
     "selectAllShortcut": "Ctrl+A",
+    "insertLinkShortcut": "Ctrl+K",
     "editCustomNode": "تحرير {label}",
     "removeCustomNode": "إزالة {label}"
   },

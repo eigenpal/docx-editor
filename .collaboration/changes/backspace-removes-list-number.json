@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Backspace at the start of a list item joined it to the previous paragraph, and list numbering edits in suggesting mode landed untracked.",
+  "after": "Backspace at the start of a list item removes its number with the existing numbering and paragraph property operations, and suggesting mode attributes those operations as paragraph property changes.",
+  "reason": "The gesture emits the existing setParagraphProperties and setListNumbering operations, and the tracked form uses the existing w:pPrChange record those operations already support. No shared field or operation shape changes. Two collaborating editors converge through concurrent typing, a remote deletion in the item, concurrent presses, undo, redo, reconnect, and save and reopen.",
+  "tests": [
+    "packages/core/src/editor/__tests__/list-backspace.test.ts",
+    "packages/core/src/editor/__tests__/suggesting-keystrokes.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-list-backspace.test.ts"
+  ],
+  "changeset": "backspace-removes-list-number",
+  "migration": null
+}

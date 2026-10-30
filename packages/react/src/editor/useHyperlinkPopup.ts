@@ -179,17 +179,33 @@ function caretViewportAnchor(owner: Node | null): HyperlinkPopupAnchor | null {
 export const HyperlinkPopupContext = createContext<UseHyperlinkPopupResult | null>(null);
 
 /**
+ * Counts what shows the shared popover state: `DocxEditor.HyperLink`, or a host panel that
+ * reads `useHyperlinkPopup()`. The shared state answers link clicks, Ctrl/Cmd+K and the
+ * `text.link` control only while one is mounted, so with nothing to show the panel those
+ * controls are disabled instead of opening a panel no one sees.
+ */
+export const HyperlinkPopupViewsContext = createContext<(() => () => void) | null>(null);
+
+/** Count the calling component as a view of the shared popover state while it is mounted. */
+export function useHyperlinkPopupView(): void {
+  const attach = useContext(HyperlinkPopupViewsContext);
+  useEffect(() => attach?.(), [attach]);
+}
+
+/**
  * The hyperlink popover's behavior.
  *
- * Inside a `DocxEditor.HyperLink` (which the packaged editor mounts by default) this is the
- * SHARED state that compound is driving, so a custom toolbar button and the popover agree.
- * Outside one it is a standalone instance that registers with the engine itself — a host
- * building its own link UI from scratch needs nothing else.
+ * Inside `DocxEditor.Root` this is the SHARED state that `DocxEditor.HyperLink` renders, so
+ * a custom panel and the toolbar agree. Calling it marks the component as a view of that
+ * state: while one is mounted, link clicks, Ctrl/Cmd+K and the Insert link controls open
+ * it. Outside a root it is a standalone instance that registers with the engine itself — a
+ * host building its own link UI from scratch needs nothing else.
  *
  * @public
  */
 export function useHyperlinkPopup(): UseHyperlinkPopupResult {
   const provided = useContext(HyperlinkPopupContext);
+  useHyperlinkPopupView();
   // Both hooks run every render, in the same order: `standalone` only decides whether the
   // instance below registers with the engine, never whether it exists.
   const own = useHyperlinkPopupInstance(provided === null);

@@ -151,7 +151,13 @@
     "subtitle": "Podtytuł",
     "heading1": "Nagłówek 1",
     "heading2": "Nagłówek 2",
-    "heading3": "Nagłówek 3"
+    "heading3": "Nagłówek 3",
+    "normal": "Normalny",
+    "headingLevel": "Nagłówek {level}",
+    "noSpacing": "Bez odstępów",
+    "quote": "Cytat",
+    "intenseQuote": "Cytat intensywny",
+    "listParagraph": "Akapit z listą"
   },
   "font": {
     "selectAriaLabel": "Wybierz rodzinę czcionek",
@@ -428,6 +434,7 @@
     "deleteShortcut": "Del",
     "selectAll": "Zaznacz wszystko",
     "selectAllShortcut": "Ctrl+A",
+    "insertLinkShortcut": "Ctrl+K",
     "editCustomNode": "Edytuj {label}",
     "removeCustomNode": "Usuń {label}",
     "pasteWithoutFormatting": "Wklej bez formatowania",
@@ -966,6 +973,7 @@
     "reviewBoundChanges": "Wszystkie pozostałe zmiany znajdują się w kontrolkach zawartości powiązanych z danymi zewnętrznymi, więc nie można ich tu zaakceptować ani odrzucić. Poproś właściciela dokumentu o zaktualizowanie powiązanych danych.",
     "commentSelection": "Zaznacz zakres przed dodaniem komentarza",
     "noCommentDraftView": "Tutaj nie można dodawać komentarzy",
+    "noLinkView": "Tutaj nie można dodawać linków",
     "mergeUnsupported": "Scalanie komórek nie jest obsługiwane",
     "splitUnsupported": "Dzielenie komórek nie jest obsługiwane",
     "mergeNeedsRectangle": "Zaznacz co najmniej dwie komórki tworzące prostokąt, aby je scalić",
@@ -1015,7 +1023,13 @@
     "suggestingNeedsAuthor": "Sugerowanie wymaga autora. Ustaw autora w konfiguracji edytora.",
     "pictureSelected": "Zaznaczono obraz. Umieść kursor w tekście, aby wstawić obraz.",
     "chartDrawing": "To jest wykres. Możesz go usunąć, ale nie możesz edytować go jak obrazu.",
-    "chartClipboard": "Zaznaczenie zawiera wykres. Wykresów nie można kopiować, wycinać ani wklejać."
+    "chartClipboard": "Zaznaczenie zawiera wykres. Wykresów nie można kopiować, wycinać ani wklejać.",
+    "nothingToUndo": "Nie ma nic do cofnięcia",
+    "nothingToRedo": "Nie ma nic do ponowienia",
+    "outermostLevel": "Zaznaczenie jest już na najwyższym poziomie",
+    "cannotIndentFurther": "Nie można bardziej zwiększyć wcięcia zaznaczenia",
+    "noGoToView": "Przejdź do jest tutaj niedostępne",
+    "noBookmarkDialog": "Nie można tutaj dodawać zakładek"
   },
   "equationPopup": {
     "apply": "Zastosuj",

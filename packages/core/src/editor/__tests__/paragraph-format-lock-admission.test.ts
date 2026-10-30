@@ -1,6 +1,7 @@
 // `can`, the toolbar and `exec` agree on paragraph formatting over a content lock or a data
 // binding: alignment, indents, spacing, and the keep settings pass a lock; styles, lists,
-// direction, and tab stops are refused before the write.
+// direction, and tab stops are refused before the write. A data binding mirrors text, so it
+// lets every paragraph format through, tracked or not, and keeps the bound text.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -13,11 +14,9 @@ import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { toolbarCommandState } from '../toolbar-commands.ts';
 import type { EditorCommand } from '../../contracts/editor.ts';
 import { directParagraphProperties } from '../../store/store/direct-properties.ts';
+import { serializeOoxmlPart } from '../../store/package/ooxml-tree.ts';
 import { LOCKED_FORMAT_REASON } from '../content-lock-format-refusal.ts';
-import {
-  BOUND_PARAGRAPH_FORMAT_REASON,
-  LOCKED_PARAGRAPH_FORMAT_REASON,
-} from '../paragraph-format-lock-refusal.ts';
+import { LOCKED_PARAGRAPH_FORMAT_REASON } from '../paragraph-format-lock-refusal.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -225,26 +224,83 @@ test('a locked inline control leaves the formatting of its paragraph available',
   editor.destroy();
 });
 
-test('a data binding refuses paragraph formats, including alignment, with code bound', () => {
-  const binding = '<w:dataBinding w:storeItemID="{1}" w:xpath="/root/value"/>';
-  const { editor, id } = mount(block(binding, INDENT) + FREE);
+const BINDING = '<w:dataBinding w:storeItemID="{1}" w:xpath="/root/value"/><w:text/>';
+
+/** The bound control's text and whether it still declares its binding. */
+const boundControl = (editor: DocxEditorInstance) => {
+  const xml = serializeOoxmlPart(editor.surface!.session.part());
+  return {
+    text: /<w:t>([^<]*)<\/w:t>/.exec(xml)?.[1],
+    binding: xml.includes('w:dataBinding'),
+  };
+};
+
+const pendingChanges = (editor: DocxEditorInstance) =>
+  serializeOoxmlPart(editor.surface!.session.part()).split('<w:pPrChange').length - 1;
+
+test('a data binding lets every paragraph format through and keeps the bound text', () => {
+  const { editor, id } = mount(block(BINDING, INDENT) + FREE, { numbering: true });
   select(editor, id(0));
-  const before = properties(editor, id(0));
-  for (const command of [...LOCKED, ...PLACEMENT, ...ALIGNMENT]) {
-    const refusal = { ok: false, code: 'bound', reason: BOUND_PARAGRAPH_FORMAT_REASON };
-    expect(editor.can(command)).toEqual(refusal);
-    expect(editor.exec(command)).toEqual(refusal);
+  for (const slot of ['list.bullet', 'direction.rtl', 'alignment.center', 'list.indent'] as const) {
+    expect(toolbarCommandState(editor, slot).enabled).toBe(true);
   }
-  expect(properties(editor, id(0))).toBe(before);
+  for (const command of [...LOCKED, ...PLACEMENT, ...ALIGNMENT]) {
+    expect(editor.can(command)).toEqual({ ok: true });
+    expect(editor.exec(command)).toMatchObject({ ok: true, changed: true });
+  }
+  expect(names(editor, id(0))).toEqual(
+    expect.arrayContaining(['numPr', 'tabs', 'contextualSpacing', 'ind', 'jc', 'spacing'])
+  );
+  expect(boundControl(editor)).toEqual({ text: 'locked text', binding: true });
   editor.destroy();
 });
 
-test('both paragraph format refusals reach the user in their own language', () => {
-  const t = createT(en);
-  for (const reason of [LOCKED_PARAGRAPH_FORMAT_REASON, BOUND_PARAGRAPH_FORMAT_REASON]) {
-    expect(localizeDisabledReason(reason, t)).not.toBe(reason);
-    expect(diagnosticCodeOfRefusal(reason)).toBe('edit.protected-content');
+test('a data binding with a content lock follows the lock', () => {
+  const { editor, id } = mount(block(BINDING + LOCK, INDENT) + FREE);
+  select(editor, id(0));
+  const refusal = { ok: false, code: 'locked', reason: LOCKED_PARAGRAPH_FORMAT_REASON };
+  for (const command of LOCKED) {
+    expect(editor.can(command)).toEqual(refusal);
+    expect(editor.exec(command)).toEqual(refusal);
   }
+  for (const command of [...PLACEMENT, ...ALIGNMENT]) {
+    expect(editor.can(command)).toEqual({ ok: true });
+    expect(editor.exec(command)).toMatchObject({ ok: true, changed: true });
+  }
+  expect(boundControl(editor)).toEqual({ text: 'locked text', binding: true });
+  editor.destroy();
+});
+
+test('a suggested paragraph format in a data binding can be rejected and accepted', () => {
+  const { editor, id } = mount(block(BINDING, INDENT) + FREE, { author: 'Reviewer' });
+  const surface = editor.surface!;
+  surface.setEditingMode('suggest');
+  select(editor, id(0));
+  const before = properties(editor, id(0));
+  expect(editor.exec({ type: 'setIndent', left: 720 })).toMatchObject({ ok: true, changed: true });
+  expect(pendingChanges(editor)).toBe(1);
+  expect(surface.applyAutomationOps(() => [{ op: 'rejectAllRevisions' as const }]).rejected).toBe(
+    false
+  );
+  expect(properties(editor, id(0))).toBe(before);
+  expect(pendingChanges(editor)).toBe(0);
+  expect(editor.exec({ type: 'setParagraphSpacing', beforePt: 12 })).toMatchObject({ ok: true });
+  expect(pendingChanges(editor)).toBe(1);
+  expect(surface.applyAutomationOps(() => [{ op: 'acceptAllRevisions' as const }]).rejected).toBe(
+    false
+  );
+  expect(pendingChanges(editor)).toBe(0);
+  expect(names(editor, id(0))).toEqual(['spacing', 'ind']);
+  expect(boundControl(editor)).toEqual({ text: 'locked text', binding: true });
+  editor.destroy();
+});
+
+test('the paragraph format refusal reaches the user in their own language', () => {
+  const t = createT(en);
+  expect(localizeDisabledReason(LOCKED_PARAGRAPH_FORMAT_REASON, t)).not.toBe(
+    LOCKED_PARAGRAPH_FORMAT_REASON
+  );
+  expect(diagnosticCodeOfRefusal(LOCKED_PARAGRAPH_FORMAT_REASON)).toBe('edit.protected-content');
 });
 
 test('suggested placement is refused where its revision could not be rejected in the lock', () => {

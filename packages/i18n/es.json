@@ -31,6 +31,7 @@
     "drawingLocked": "Esta imagen está bloqueada",
     "commentSelection": "Selecciona un texto antes de añadir un comentario",
     "noCommentDraftView": "Aquí no se pueden añadir comentarios",
+    "noLinkView": "Aquí no se pueden añadir vínculos",
     "mergeUnsupported": "No se admite combinar celdas",
     "splitUnsupported": "No se admite dividir celdas",
     "mergeNeedsRectangle": "Selecciona dos o más celdas que formen un rectángulo para combinarlas",
@@ -66,7 +67,13 @@
     "nothingToPaint": "Selecciona texto para aplicar el formato",
     "pictureSelected": "Hay una imagen seleccionada. Coloque el cursor en el texto para insertar una imagen.",
     "chartDrawing": "Esto es un gráfico. Puede eliminarlo, pero no editarlo como una imagen.",
-    "chartClipboard": "La selección contiene un gráfico. Los gráficos no se pueden copiar, cortar ni pegar."
+    "chartClipboard": "La selección contiene un gráfico. Los gráficos no se pueden copiar, cortar ni pegar.",
+    "nothingToUndo": "No hay nada que deshacer",
+    "nothingToRedo": "No hay nada que rehacer",
+    "outermostLevel": "La selección ya está en el nivel más externo",
+    "cannotIndentFurther": "No se puede aumentar más la sangría de la selección",
+    "noGoToView": "Ir a no está disponible aquí",
+    "noBookmarkDialog": "No se pueden agregar marcadores aquí"
   },
   "toolbar": {
     "ariaLabel": "Barra de formato",
@@ -216,7 +223,13 @@
     "subtitle": "Subtítulo",
     "heading1": "Título 1",
     "heading2": "Título 2",
-    "heading3": "Título 3"
+    "heading3": "Título 3",
+    "normal": "Normal",
+    "headingLevel": "Título {level}",
+    "noSpacing": "Sin espaciado",
+    "quote": "Cita",
+    "intenseQuote": "Cita destacada",
+    "listParagraph": "Párrafo de lista"
   },
   "font": {
     "selectAriaLabel": "Seleccionar fuente",
@@ -552,6 +565,7 @@
     "deleteShortcut": "Supr",
     "selectAll": "Seleccionar todo",
     "selectAllShortcut": "Ctrl+A",
+    "insertLinkShortcut": "Ctrl+K",
     "editCustomNode": "Editar {label}",
     "removeCustomNode": "Quitar {label}"
   },

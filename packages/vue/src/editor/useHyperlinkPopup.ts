@@ -1,4 +1,14 @@
-import { computed, inject, ref, shallowRef, watch, type ComputedRef, type InjectionKey } from 'vue';
+import {
+  computed,
+  getCurrentScope,
+  inject,
+  provide,
+  ref,
+  shallowRef,
+  watch,
+  type ComputedRef,
+  type InjectionKey,
+} from 'vue';
 import { hostDocumentOf, hostWindowOf } from '@docx-editor.dev/core/editor';
 import { scopeDispose } from './scope-dispose';
 import type { SurfaceHyperlink } from '@docx-editor.dev/core/editor';
@@ -91,15 +101,61 @@ function caretViewportAnchor(doc: Document | null): HyperlinkPopupAnchor | null 
 export const HyperlinkPopupContext: InjectionKey<UseHyperlinkPopupResult> =
   Symbol('HyperlinkPopupContext');
 
-/** @public */
+/**
+ * Counts what shows the shared popover state: `DocxEditor.HyperLink`, or a host panel that
+ * calls `useHyperlinkPopup()`. The shared state answers link clicks, Ctrl/Cmd+K and the
+ * `text.link` control only while one is mounted, so with nothing to show the panel those
+ * controls are disabled instead of opening a panel no one sees.
+ *
+ * @internal
+ */
+export const HyperlinkPopupViews: InjectionKey<() => () => void> = Symbol('HyperlinkPopupViews');
+
+/**
+ * The hyperlink popover's behavior. Inside `DocxEditor.Root` it is the shared state that
+ * `DocxEditor.HyperLink` renders, and calling it marks the component as a view of that
+ * state. Outside a root it is a standalone instance that registers with the engine itself.
+ *
+ * @public
+ */
 export function useHyperlinkPopup(): UseHyperlinkPopupResult {
   const provided = inject(HyperlinkPopupContext, null);
+  const attach = inject(HyperlinkPopupViews, null);
+  // Counted only where a scope can uncount it again, or the controls would stay enabled
+  // after the panel was gone.
+  if (provided && attach && getCurrentScope()) scopeDispose(attach());
   const own = useHyperlinkPopupInstance(provided === null);
   return provided ?? own;
 }
 
+/**
+ * The shared popover state a root provides: registered with the engine only while a view
+ * shows it.
+ *
+ * @internal
+ */
+export function provideHyperlinkPopup(): UseHyperlinkPopupResult {
+  const views = ref(0);
+  provide(HyperlinkPopupViews, () => {
+    views.value += 1;
+    let attached = true;
+    return () => {
+      if (!attached) return;
+      attached = false;
+      views.value -= 1;
+    };
+  });
+  const popup = hyperlinkPopupInstance(() => views.value > 0);
+  provide(HyperlinkPopupContext, popup);
+  return popup;
+}
+
 /** @public */
 export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResult {
+  return hyperlinkPopupInstance(() => active);
+}
+
+function hyperlinkPopupInstance(active: () => boolean): UseHyperlinkPopupResult {
   const editorRef = useDocxEditor();
   const contentElement = useEditorContentElement();
   const state = ref<HyperlinkPopupState>(CLOSED);
@@ -200,7 +256,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
 
   scopeDispose(
     watch(
-      () => [editorRef.value, active] as const,
+      () => [editorRef.value, active()] as const,
       ([editor, isActive], _prev, onCleanup) => {
         if (!editor || !isActive) return;
         const off = editor.setHyperlinkChrome({
