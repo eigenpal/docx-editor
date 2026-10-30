@@ -1,0 +1,19 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Local edits rebuilt unchanged table rows, note pages, and the document-wide review anchor index.",
+  "after": "Local edits reuse validated table rows, note pages, and review anchors, and update only what changed.",
+  "reason": "The change affects local layout, table validation, and review reads only. Document operations, shared state, room data, and serialization output stay unchanged.",
+  "tests": [
+    "e2e/collaboration.reviewwrites.spec.ts",
+    "packages/core/src/layout/__tests__/note-projection-memo.test.ts",
+    "packages/core/src/layout/__tests__/story-blocks-carry.test.ts",
+    "packages/core/src/layout/__tests__/table-tracked-text-update.test.ts",
+    "packages/core/src/layout/__tests__/cell-line-alignment.test.ts",
+    "packages/core/src/store/__tests__/table-read-cache.test.ts",
+    "packages/core/src/editor/__tests__/review-anchor-stories-carry.test.ts",
+    "packages/core/src/editor/__tests__/review-anchor-index.test.ts"
+  ],
+  "changeset": "typing-layout-reuse",
+  "migration": null
+}
