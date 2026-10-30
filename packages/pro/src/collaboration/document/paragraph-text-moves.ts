@@ -286,11 +286,15 @@ export function markMoves<T extends MoveToken>(
     if (source) take(run, { source, from: 0, to: 0, length: run.indexes.length });
   }
   // A split into three or more paragraphs moves the tail in pieces, one run in each new
-  // paragraph: runs inserted one after another in other paragraphs that together spell a
-  // deleted run are that run moved, piece by piece.
-  for (const source of deleted) {
+  // paragraph: runs inserted one after another in paragraphs this edit creates that together
+  // spell a deleted run are that run moved, piece by piece. Each source looks at every
+  // candidate once, so the pass spends the edit's budget like the other passes.
+  const candidates = inserted.filter((run) => writes[run.paragraph]!.before.length === 0);
+  for (const source of candidates.length < 2 ? [] : deleted) {
+    if (budget.cells < candidates.length) break;
+    budget.cells -= candidates.length;
     if (taken.get(source)!.some(Boolean)) continue;
-    const pieces = piecesOf(source, inserted, taken, sameScope);
+    const pieces = piecesOf(source, candidates, taken, sameScope);
     let from = 0;
     for (const piece of pieces) {
       take(piece, { source, from, to: 0, length: piece.indexes.length });
@@ -342,7 +346,8 @@ export function markMoves<T extends MoveToken>(
 /**
  * Untaken inserted runs, one after another in `inserted` and each in another paragraph than
  * `source`, whose values together spell `source` exactly, or none. Two pieces at least: one
- * run equal to the whole source is the first pass's match.
+ * run equal to the whole source is the first pass's match. The value is compared first, so a
+ * run that cannot continue the source costs one comparison.
  */
 function piecesOf(
   source: Run,
@@ -350,18 +355,19 @@ function piecesOf(
   taken: ReadonlyMap<Run, readonly boolean[]>,
   sameScope: (left: number, right: number) => boolean
 ): readonly Run[] {
-  const fits = (run: Run): boolean =>
+  const fits = (run: Run, offset: number): boolean =>
+    run.value.length > 0 &&
+    source.value.startsWith(run.value, offset) &&
     run.paragraph !== source.paragraph &&
     sameScope(source.paragraph, run.paragraph) &&
-    run.value.length > 0 &&
     !taken.get(run)!.some(Boolean);
   for (let first = 0; first < inserted.length; first += 1) {
-    if (!fits(inserted[first]!) || !source.value.startsWith(inserted[first]!.value)) continue;
+    if (!fits(inserted[first]!, 0)) continue;
     const pieces: Run[] = [];
     let offset = 0;
     for (let at = first; at < inserted.length && offset < source.value.length; at += 1) {
       const run = inserted[at]!;
-      if (!fits(run) || !source.value.startsWith(run.value, offset)) break;
+      if (!fits(run, offset)) break;
       pieces.push(run);
       offset += run.value.length;
     }
