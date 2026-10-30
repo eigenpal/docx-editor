@@ -1,0 +1,10 @@
+{
+  "impact": "migration-required",
+  "fields": ["repairVersion"],
+  "before": "Concurrent tracked splits of one paragraph each wrote their proposed paragraph mark on the paragraph they split, so the merged paragraph showed one proposal, the other new paragraph mark showed none, and Reject All left a split. Two splits by each of two peers, a break at a paragraph's end beside a split, and siblings an undo or redo listed again could show out of text order with an empty paragraph.",
+  "after": "Each proposed paragraph mark a concurrent split wrote shows on the paragraph shown right before that split's new paragraph: the materializer shows it there and the projection of a local edit lists it there before the edit addresses either paragraph. Paragraphs of a run of concurrent splits order one by one by their split points, a break at a paragraph's end records a split at that end, and a sibling an undo or redo lists again right before a run member belongs to the run. Reject All restores the paragraph, and every split shows in text order.",
+  "reason": "Where a proposal shows and which paragraphs a run holds are rules over the same shared state, so they belong to repairVersion 3, which these records already introduce; replicas with repairVersion 2 refuse these rooms. The projection moves a proposal with ordinary child splices, as merged property copies and adoption already do.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-concurrent-split-order.test.ts"],
+  "changeset": "collab-reject-all-splits",
+  "migration": "upgrade-rooms-to-format-1531"
+}
