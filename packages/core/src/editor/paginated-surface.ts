@@ -296,6 +296,7 @@ import { createReviewViewState } from './surface-review-view.ts';
 import { selectionsEqual } from './dom-selection.ts';
 import { createSurfaceSelectionSync } from './surface-selection-sync.ts';
 import { createSurfaceStructure } from './surface-structure.ts';
+import { listDefinitionReads } from './list-level-geometry.ts';
 // Deep import, not the store barrel: re-exporting a bound from there pulls the whole store
 // namespace into the published editor-api surface for one number.
 import { MIN_TABLE_COLUMN_WIDTH_TWIPS } from '../store/store/table-constraints.ts';
@@ -1084,9 +1085,9 @@ export function mountPaginatedSurface(
     // List definitions mint `numId` on the package before the paragraph op names it, so
     // the typing transaction never binds an actor for that scan. Same wrap the hyperlink
     // mint uses.
-    ensureListDefinition: (kind) =>
+    ensureListDefinition: (kind, geometry) =>
       runWithTransactionActor(collaborationSession?.identity.actorId, () =>
-        session.ensureListDefinition(kind)
+        session.ensureListDefinition(kind, geometry)
       ),
     applyPmDoc: (doc) => {
       if (editingMode === 'view') {
@@ -1302,6 +1303,7 @@ export function mountPaginatedSurface(
         numId,
         level
       ) !== null,
+    ...listDefinitionReads(() => withNumberingStyleLinks(numberingIndex(), styleCascade())),
     styleCascade,
   });
   /** The contract's `replacementLanding`; the hyperlink lane reads the same rule. */

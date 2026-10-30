@@ -1592,7 +1592,7 @@ export interface EnsuredHyperlinkRelationship {
 export function ensureHyperlinkRelationship(pkg: OoxmlPackage, url: string, ownerPart?: string): EnsuredHyperlinkRelationship | null;
 
 // @public
-export function ensureListDefinition(pkg: OoxmlPackage, kind: ListKind): EnsuredListDefinition | null;
+export function ensureListDefinition(pkg: OoxmlPackage, kind: ListKind, geometry?: ListDefinitionGeometry): EnsuredListDefinition | null;
 
 // @public
 export function ensureNumberingLevel(pkg: OoxmlPackage, numId: string, level: number, kind: ListKind): OoxmlPackage | null;
@@ -2742,7 +2742,21 @@ export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonl
 export function listBookmarks(part: OoxmlPart): readonly BookmarkRecord[];
 
 // @public
+export type ListDefinitionGeometry = readonly (ListLevelGeometry | undefined)[];
+
+// @public
 export type ListKind = 'bullet' | 'ordered';
+
+// @public
+export interface ListLevelGeometry {
+    readonly align?: 'left' | 'center' | 'right';
+    readonly firstLine?: number;
+    readonly hanging?: number;
+    readonly left?: number;
+    readonly paragraphProperties?: OoxmlElement;
+    readonly right?: number;
+    readonly suffix?: 'tab' | 'space' | 'nothing';
+}
 
 // @public
 export function liveDrawingReferenceCount(pkg: OoxmlPackage, partName: string): number;

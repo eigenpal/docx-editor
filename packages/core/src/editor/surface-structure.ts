@@ -7,7 +7,12 @@
 // composition root.
 
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import type { TreeDocOp, StoryScope } from '@docx-editor.dev/core/store';
+import {
+  findNode,
+  type OoxmlElement,
+  type TreeDocOp,
+  type StoryScope,
+} from '@docx-editor.dev/core/store';
 import {
   enumerateDocumentSections,
   paragraphsInCells,
@@ -20,6 +25,12 @@ import {
   type StyleCascadeTable,
 } from '@docx-editor.dev/core/layout';
 import { createListNumberingOps } from './list-numbering-ops.ts';
+import {
+  switchedListNumIds,
+  type ListSwitchDeps,
+  type ListSwitchReads,
+} from './surface-list-switch.ts';
+import { indentSidesOf, styleNumberedIndentSides } from './list-level-geometry.ts';
 import { sectionAnchorParagraphFor, sectionIndexForCaret } from './section-scope.ts';
 import { isTableNested } from '../store/store/tree-op-section-address.ts';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
@@ -34,6 +45,7 @@ import {
 import {
   directParagraphProperties,
   mergedProperties,
+  paragraphIndentOf,
   paragraphPropertiesOf,
 } from './surface-formatting.ts';
 import { createListStyleWrites } from './surface-list-style.ts';
@@ -75,7 +87,7 @@ import {
 } from './surface-section-breaks.ts';
 
 /** What the composition root lends this lane: its session, its layout, and its commit. */
-export interface SurfaceStructureDeps {
+export interface SurfaceStructureDeps extends ListSwitchReads {
   readonly session: TreeDocxSessionView;
   /** Active story for content mutations — body or open furniture. */
   storyScope(): StoryScope;
@@ -389,31 +401,22 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     return marker.numFmt === 'bullet' ? 'bullet' : 'ordered';
   }
 
-  /**
-   * The `w:numId` an adjacent paragraph of the same kind already uses, if any.
-   *
-   * Turning a list back on rejoins the list around it rather than minting a second
-   * definition — otherwise re-bulleting one item in the middle of a list gave it a
-   * different glyph from its neighbours.
-   */
-  function adjacentListNumId(
-    touched: readonly string[],
-    kind: 'bullet' | 'ordered'
-  ): string | null {
-    const order = orderOf();
-    const first = order.indexOf(touched[0] ?? '');
-    const last = order.indexOf(touched[touched.length - 1] ?? '');
-    if (first === -1 || last === -1) return null;
-    // The paragraph BEFORE the selection, then the one after.
-    for (const index of [first - 1, last + 1]) {
-      const neighbour = order[index];
-      if (!neighbour) continue;
-      const marker = markerOf(neighbour);
-      if (!marker) continue;
-      if ((marker.numFmt === 'bullet' ? 'bullet' : 'ordered') === kind) return marker.numId;
-    }
-    return null;
-  }
+  const listSwitch: ListSwitchDeps = {
+    listGeometryOf: deps.listGeometryOf,
+    listLevelKindOf: deps.listLevelKindOf,
+    order: orderOf,
+    markerOf,
+    ensureListDefinition: (kind, geometry) => session.ensureListDefinition(kind, geometry),
+    indentOf: (paragraphId) => paragraphIndentOf(currentLayout.value, paragraphId)?.indent ?? null,
+    directIndentSides: (paragraphId) =>
+      indentSidesOf(directParagraphProperties(storyPart(), paragraphId)),
+    styleNumberedIndentSides: (paragraphId) => {
+      const paragraph = findNode(storyPart(), paragraphId);
+      return paragraph && paragraph.kind !== 'textValue'
+        ? styleNumberedIndentSides(deps.styleCascade(), paragraph as OoxmlElement)
+        : null;
+    },
+  };
 
   /**
    * Whether a list paragraph could move to `level` WITHOUT touching `numbering.xml`.
@@ -617,10 +620,8 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // Word toggles OFF only when the whole selection is already that list; a mixed
       // selection becomes one list rather than clearing half of it.
       const turningOff = touched.every((paragraphId) => listKindOf(paragraphId) === kind);
-      const numId = turningOff
-        ? null
-        : (adjacentListNumId(touched, kind) ?? session.ensureListDefinition(kind));
-      if (!turningOff && numId === null) return false;
+      const numIds = turningOff ? null : switchedListNumIds(listSwitch, touched, kind);
+      if (!turningOff && numIds === null) return false;
       // Turning a list OFF leaves the style alone, as Word does: an outdented item stays
       // in List Paragraph until the user picks another style.
       const ops: TreeDocOp[] = turningOff ? [] : listStyle.applyOps(touched);
@@ -637,7 +638,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         ops.push({
           op: 'setListNumbering',
           paragraphId,
-          numId,
+          numId: numIds?.get(paragraphId) ?? null,
           ...(level !== null ? { level } : {}),
         });
       }
