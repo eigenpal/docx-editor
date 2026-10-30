@@ -177,8 +177,7 @@ export interface SectionReserveResume {
   reserveAt(page: number): number | undefined;
   /**
    * Whether a footnote continued from an earlier page reaches section-local page `page`. A
-   * seeded pass answers false: its reserves sit where the previous pass had them, and the
-   * next round of the reserve search marks the pages again.
+   * seeded pass reads the mark where it reads the page's reserve (`reserveAt`).
    */
   carriesNoteAt(page: number): boolean;
   /** The whole pages the flow now runs ahead of the previous pass; a seeded pass reads by it. */
@@ -310,7 +309,7 @@ export function sectionReserveResume(
   return {
     context,
     moved,
-    carriesNoteAt: (page) => !reading && carriesNoteTo(reserves, pageIndexStart + page),
+    carriesNoteAt: (page) => carriesNoteTo(reserves, pageIndexStart + page - (reading ? shift : 0)),
     // At least the last block is placed again. The previous layout a session holds can be the
     // published one, with note sheets minted after the body; handing it back unchanged would
     // pass those sheets off as body pages.
