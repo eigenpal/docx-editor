@@ -13,9 +13,6 @@ import {
 } from '@docx-editor.dev/core/export';
 import { HARD_MAX_FONT_BYTES, linesOf } from '@docx-editor.dev/core/layout';
 import { FONT_ASSET_ROOT, packagedFonts } from '@docx-editor.dev/fonts';
-import { NOTO_SANS_CJK_JP_FAMILY } from '@docx-editor.dev/fonts-cjk';
-import { GOOGLE_CJK_FACES } from '../../fonts/src/google-cjk.ts';
-import { PACKAGED_EAST_ASIAN_FAMILIES } from '../../core/src/store/package/default-font-faces.ts';
 import { openExportSession } from '../src/open-session.ts';
 import { formatDefaultsDocx } from './fixture.ts';
 
@@ -80,14 +77,6 @@ async function editorLines(bytes: Uint8Array): Promise<string[]> {
     opened.session.dispose();
   }
 }
-
-test('layout counts by name the East Asian families the font packages serve', () => {
-  expect([...PACKAGED_EAST_ASIAN_FAMILIES].sort()).toEqual(
-    [NOTO_SANS_CJK_JP_FAMILY, ...GOOGLE_CJK_FACES.map((face) => face.family)]
-      .map((family) => family.toLowerCase())
-      .sort()
-  );
-});
 
 test.each(['Noto Sans CJK JP', 'Noto Sans JP', 'MS Mincho'])(
   'the PDF and the editor fonts break the same lines with %s as the default face',

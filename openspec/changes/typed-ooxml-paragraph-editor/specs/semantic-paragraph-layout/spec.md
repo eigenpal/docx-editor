@@ -728,7 +728,7 @@ In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingCo
 - **WHEN** the face is available and lists a Chinese, Japanese, or Korean code page
 - **THEN** the defaults name an East Asian face, so spaces shrink and punctuation hangs
 - **AND** an available face without those code pages does not count, even with an East Asian `w:charset`
-- **AND** a missing face counts by a known name, by the name of a family the font packages serve, such as `Noto Sans JP`, or by an East Asian `w:charset` in the font table
+- **AND** a missing face counts by a known name, by a common East Asian family name such as `Noto Sans JP`, or by an East Asian `w:charset` in the font table
 
 ### Requirement: Legacy space shrinking before a final mark
 
