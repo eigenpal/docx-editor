@@ -162,7 +162,8 @@ export function trackPlannedChanges(
   return {
     ...plan,
     ops: plan.ops.map((op) => {
-      if (op.op === 'insertText') return { ...op, revision };
+      if (op.op === 'insertText' || op.op === 'insertParagraphBesideTable')
+        return { ...op, revision };
       if (op.op === 'splitParagraph')
         return {
           op: 'splitParagraphMany' as const,
