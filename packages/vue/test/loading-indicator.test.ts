@@ -6,6 +6,7 @@ import './dom-setup.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { createApp, h, nextTick } from 'vue';
+import type { EditorModule } from '@docx-editor.dev/core/editor';
 import { DocxEditorLoading } from '../src/editor/DocxEditorLoading';
 import { mountSugarAsync } from './helpers/mount';
 import { slicedSource } from './helpers/fixtures';
@@ -14,12 +15,34 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-async function until(check: () => boolean, timeoutMs = 20_000): Promise<void> {
-  const start = Date.now();
-  while (!check()) {
-    if (Date.now() - start > timeoutMs) throw new Error('condition not reached in time');
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
+/** Bounds an open that never ends, as the React twin does. */
+const SLICED_OPEN_TEST_TIMEOUT_MS = 45_000;
+
+/**
+ * Resolves when the editor reports that the opening document laid out its last page
+ * (`document.open`, outcome `opened`), and rejects with the open's code on any other outcome: the
+ * engine's own completion signal, so the test takes as long as the open does and never depends on
+ * a wall-clock limit.
+ */
+function openSettled(): { module: EditorModule; settled: Promise<void> } {
+  let resolve!: () => void;
+  let reject!: (error: Error) => void;
+  const settled = new Promise<void>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return {
+    module: {
+      id: 'test-open-settled',
+      onDiagnostic: (event) => {
+        if (event.kind !== 'document.open') return;
+        if (event.outcome === 'opened') resolve();
+        // A refused or crashed open ends at once, with its code, instead of at the test budget.
+        else reject(new Error(`the open was rejected: ${event.code}`));
+      },
+    },
+    settled,
+  };
 }
 
 /** Records where each mount of the indicator landed: the first screen or below the laid-out pages. */
@@ -53,19 +76,39 @@ describe('the loading indicator slot', () => {
     app.unmount();
   });
 
-  test('loadingIndicator shows on the loading page, then below the laid-out pages', async () => {
-    const places: string[] = [];
-    const view = await mountSugarAsync(
-      { document: slicedSource() },
-      { loadingIndicator: trackedIndicator(places) }
-    );
-    await nextTick();
-    expect(view.container.querySelector('.docx-editor__loading-page .mine')).not.toBeNull();
-    expect(view.container.querySelector('.docx-editor__loading-spinner')).toBeNull();
-    await until(() => places.includes('below the pages'));
-    expect(places[0]).toBe('screen');
-    await until(() => view.container.querySelector('.mine') === null);
-    expect(view.container.querySelector('.docx-opening-indicator')).toBeNull();
+  test(
+    'loadingIndicator shows on the loading page, then below the laid-out pages',
+    async () => {
+      const places: string[] = [];
+      const open = openSettled();
+      const view = await mountSugarAsync(
+        { document: slicedSource(), modules: [open.module] },
+        { loadingIndicator: trackedIndicator(places) }
+      );
+      await nextTick();
+      expect(view.container.querySelector('.docx-editor__loading-page .mine')).not.toBeNull();
+      expect(view.container.querySelector('.docx-editor__loading-spinner')).toBeNull();
+      await open.settled;
+      await nextTick();
+      expect(places[0]).toBe('screen');
+      expect(places).toContain('below the pages');
+      expect(view.container.querySelector('.mine') === null).toBe(true);
+      expect(view.container.querySelector('.docx-opening-indicator') === null).toBe(true);
+      view.unmount();
+    },
+    // Bounds only an open that never ends; the test itself takes as long as the open does.
+    SLICED_OPEN_TEST_TIMEOUT_MS
+  );
+
+  test('a file that cannot be opened ends the wait at once, with the open code', async () => {
+    const open = openSettled();
+    const started = performance.now();
+    const view = await mountSugarAsync({
+      document: new TextEncoder().encode('not a docx package'),
+      modules: [open.module],
+    });
+    await expect(open.settled).rejects.toThrow(/the open was rejected: open\./);
+    expect(performance.now() - started).toBeLessThan(5_000);
     view.unmount();
   });
 

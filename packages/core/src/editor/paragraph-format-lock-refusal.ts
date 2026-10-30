@@ -14,7 +14,6 @@ import {
   lockForbidsEdit,
 } from '../store/package/content-control-nodes.ts';
 import { directParagraphProperties, propertyContainer } from '../store/store/direct-properties.ts';
-import { isBoundContentControl } from '../store/store/tree-op-nodes.ts';
 import { validateTreeOp } from '../store/store/tree-op-validate.ts';
 import type { TreeDocOp } from '../store/store/tree-op-types.ts';
 import { paragraphsInCells } from '../layout/semantic-cell-selection.ts';
@@ -30,9 +29,6 @@ import { partOfNodeId, storyScopeOfNodeId } from './surface-scope.ts';
  */
 export const LOCKED_PARAGRAPH_FORMAT_REASON =
   'this content is locked; only alignment, indents, spacing, and line and page breaks can change';
-
-/** A data binding mirrors another part, so the engine cannot change the paragraph either. */
-export const BOUND_PARAGRAPH_FORMAT_REASON = 'this content is bound to data and cannot change';
 
 type ParagraphFormatCommand = Extract<
   EditorCommand,
@@ -118,44 +114,29 @@ function selectedParagraphIds(surface: PaginatedSurface): readonly string[] {
 }
 
 /**
- * Per story root: the paragraphs inside a control that locks content or binds data. Every
- * paragraph the store can protect is in this set, so the store is asked only about these.
+ * Per story root: the paragraphs inside a control that locks content. Every paragraph the
+ * store can refuse a paragraph format for is in this set, so the store is asked only about
+ * these. A data binding is not here: it mirrors text, so it lets paragraph properties change.
  * Canonical roots are immutable per revision, so the root identity is a safe key.
  */
-interface ProtectedParagraphs {
-  /** Inside a control that locks content or binds data. */
-  readonly guarded: ReadonlySet<string>;
-  /** Inside a control that binds data, which refuses every paragraph format. */
-  readonly bound: ReadonlySet<string>;
-}
+const LOCKED_PARAGRAPHS = new WeakMap<object, ReadonlySet<string>>();
 
-const PROTECTED_PARAGRAPHS = new WeakMap<object, ProtectedParagraphs>();
-
-function protectedParagraphs(part: OoxmlPart): ProtectedParagraphs {
-  const known = PROTECTED_PARAGRAPHS.get(part.root);
+function lockedParagraphs(part: OoxmlPart): ReadonlySet<string> {
+  const known = LOCKED_PARAGRAPHS.get(part.root);
   if (known) return known;
-  const guarded = new Set<string>();
-  const bound = new Set<string>();
+  const locked = new Set<string>();
   for (const entry of contentControlsIn(part.root)) {
-    const properties = contentControlPropertiesOf(entry.node);
-    const binds = isBoundContentControl(entry.node);
-    if (!lockForbidsEdit(properties.lock) && properties.dataBinding === undefined && !binds) {
-      continue;
-    }
+    if (!lockForbidsEdit(contentControlPropertiesOf(entry.node).lock)) continue;
     const pending: OoxmlNode[] = [entry.node];
     while (pending.length > 0) {
       const node = pending.pop()!;
       if (node.kind === 'textValue') continue;
-      if (node.kind === 'paragraph') {
-        guarded.add(node.id);
-        if (binds) bound.add(node.id);
-      }
+      if (node.kind === 'paragraph') locked.add(node.id);
       for (const child of node.children) pending.push(child);
     }
   }
-  const sets = { guarded, bound };
-  PROTECTED_PARAGRAPHS.set(part.root, sets);
-  return sets;
+  LOCKED_PARAGRAPHS.set(part.root, locked);
+  return locked;
 }
 
 /**
@@ -239,12 +220,13 @@ function probeOp(
 
 /**
  * The refusal a paragraph formatting command meets because the selection reaches a
- * paragraph that a content lock or a data binding protects, or null.
+ * paragraph that a content lock protects, or null.
  *
  * Alignment, indents, spacing, and the keep settings pass a content lock, so they are refused
- * only where the store refuses the write: a data binding, or a pending tracked change the
- * write would merge into that records a locked property. Styles, lists, direction, and tab
- * stops are refused wherever the lock reaches.
+ * only where the store refuses the write: a pending tracked change the write would merge into
+ * that records a locked property. Styles, lists, direction, and tab stops are refused wherever
+ * the lock reaches. A data binding refuses none of them: it mirrors text, not paragraph
+ * properties.
  */
 export function paragraphFormatLockRefusal(
   command: EditorCommand,
@@ -263,11 +245,11 @@ export function paragraphFormatLockRefusal(
   // A selection stays in one story, and the writer writes every paragraph into that part.
   const head = surface.state().selection.head.paragraphId;
   const part = partOfNodeId(surface.session, head) ?? surface.session.part();
-  const { guarded, bound } = protectedParagraphs(part);
-  if (guarded.size === 0) return null;
+  const locked = lockedParagraphs(part);
+  if (locked.size === 0) return null;
   const listItems = commandReach === 'indentStep' ? listItemParagraphs(surface.layout()) : null;
   for (const paragraphId of selectedParagraphIds(surface)) {
-    if (!guarded.has(paragraphId)) continue;
+    if (!locked.has(paragraphId)) continue;
     // Increase Indent moves a list item's level, which the lock keeps, and indents the rest.
     const reach: Exclude<LockReach, 'indentStep'> =
       commandReach !== 'indentStep'
@@ -275,11 +257,10 @@ export function paragraphFormatLockRefusal(
         : listItems?.has(paragraphId)
           ? 'locked'
           : 'placement';
-    // A lock lets these through, so only a binding or a pending tracked change that the
-    // write would merge into can refuse them: skip the store for every other paragraph.
+    // A lock lets these through, so only a pending tracked change that the write would merge
+    // into can refuse them: skip the store for every other paragraph.
     if (
       reach !== 'locked' &&
-      !bound.has(paragraphId) &&
       (author === undefined || !hasPendingParagraphChange(part, paragraphId))
     ) {
       continue;
@@ -287,9 +268,6 @@ export function paragraphFormatLockRefusal(
     const refused = validateTreeOp(part, probeOp(part, paragraphId, reach, author), {
       contentLockPolicy: policy,
     });
-    if (refused === 'bound') {
-      return { ok: false, code: 'bound', reason: BOUND_PARAGRAPH_FORMAT_REASON };
-    }
     if (refused === 'locked') {
       return {
         ok: false,
