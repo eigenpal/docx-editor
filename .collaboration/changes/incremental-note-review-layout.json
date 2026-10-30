@@ -1,0 +1,16 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Local layout rebuilt unchanged footnote pages and document-wide review indexes during edits.",
+  "after": "Local layout reuses unchanged note pages and updates review geometry without copying the complete index.",
+  "reason": "The change affects local layout caches only. Shared operations, room data, and document serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/note-projection-memo.test.ts",
+    "packages/core/src/layout/__tests__/story-blocks-carry.test.ts",
+    "packages/core/src/editor/__tests__/review-anchor-stories-carry.test.ts",
+    "packages/core/src/editor/__tests__/review-anchor-index.test.ts",
+    "e2e/collaboration.reviewwrites.spec.ts"
+  ],
+  "changeset": "incremental-note-review-layout",
+  "migration": null
+}

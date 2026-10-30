@@ -10,7 +10,12 @@ import {
 import { createFixedMeasurer } from '../fixed-measurer.ts';
 import { createLayoutSession } from '../layout-session.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
-import type { NotesLayoutInput } from '../note-pagination.ts';
+import {
+  attachNotesToLayout,
+  buildPageRefHits,
+  type NotesLayoutInput,
+} from '../note-pagination.ts';
+import { collectBodyNoteReferences } from '../note-reference-visibility.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -151,4 +156,42 @@ test('compatibility-only changes invalidate the note geometry fingerprint', () =
   expect(legacy).not.toBeNull();
   expect(fingerprintNotesInput({ ...notes, compatibilityMode: 15 })).not.toBe(legacy);
   expect(fingerprintNotesInput({ ...notes, compatibilityMode: 14 })).toBe(legacy);
+});
+
+test('repeated attachment to the same body page retains the note page', () => {
+  const { part, notes } = fixture();
+  const session = createLayoutSession();
+  const complete = layoutSemanticDocument(part, 1, {
+    measurer: notes.measurer,
+    producer: notes.producer,
+    notes,
+    session,
+  });
+  const body = { ...complete, pages: complete.pages.map(({ footnotes: _notes, ...page }) => page) };
+  const refs = buildPageRefHits(collectBodyNoteReferences(part, 'all-markup'), new Map());
+  const first = attachNotesToLayout(body, refs, notes, { memo: session.notes });
+  expect(first.layout.pages[0]!.footnotes).toBeDefined();
+  const second = attachNotesToLayout(body, refs, notes, { memo: session.notes });
+  expect(second.layout.pages[0]).toBe(first.layout.pages[0]);
+  const attached = attachNotesToLayout(first.layout, refs, notes, { memo: session.notes });
+  expect(attached.layout.pages[0]).toBe(first.layout.pages[0]);
+  expect(second.layout).toEqual(attachNotesToLayout(body, refs, notes).layout);
+
+  // A changed page shell must not receive the old note position.
+  const moved = {
+    ...body,
+    pages: body.pages.map((page) => ({
+      ...page,
+      contentBox: { ...page.contentBox, height: page.contentBox.height - 20 },
+    })),
+  };
+  const movedResult = attachNotesToLayout(moved, refs, notes, { memo: session.notes });
+  expect(movedResult.layout.pages[0]).not.toBe(first.layout.pages[0]);
+  expect(movedResult.layout).toEqual(attachNotesToLayout(moved, refs, notes).layout);
+
+  // An unchanged page record alone cannot prove unchanged reference offsets.
+  const changedRefs = refs.map((ref) => ({ ...ref, atomOffset: ref.atomOffset + 1 }));
+  const changed = attachNotesToLayout(body, changedRefs, notes, { memo: session.notes });
+  expect(changed.layout.pages[0]).not.toBe(first.layout.pages[0]);
+  expect(changed.layout).toEqual(attachNotesToLayout(body, changedRefs, notes).layout);
 });

@@ -123,3 +123,59 @@ describe('the paragraphs that hold an ordinary move range', () => {
     expect(paragraphsWithOrdinaryMoves(root)).toBe('everywhere');
   });
 });
+
+describe('story blocks after a table edit', () => {
+  const table =
+    '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
+    '<w:tr><w:tc>' +
+    plain('cell') +
+    '</w:tc></w:tr></w:tbl>';
+
+  test('does not revisit unrelated paragraphs when a visible table changes', () => {
+    const source = part(plain('before') + hiddenNumbered + table + plain('after'));
+    const body = source.root.children.find((node) => node.kind === 'body') as OoxmlElement;
+    let siblingReads = 0;
+    const watched = new Proxy(body.children[0]!, {
+      get(target, property, receiver) {
+        if (property === 'kind') siblingReads += 1;
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const before: OoxmlPart = {
+      ...source,
+      root: {
+        ...source.root,
+        children: source.root.children.map((node) =>
+          node === body
+            ? {
+                ...body,
+                children: [watched, ...body.children.slice(1)],
+              }
+            : node
+        ),
+      },
+    };
+    const first = storyBlocks(before);
+    const tableBlock = first.find((block) => block.kind === 'table')!;
+    const findParagraph = (node: OoxmlNode): OoxmlNode | undefined =>
+      node.kind === 'paragraph'
+        ? node
+        : node.kind === 'textValue'
+          ? undefined
+          : node.children.map(findParagraph).find(Boolean);
+    const edited = applyTreeOp(before, {
+      op: 'insertText',
+      paragraphId: findParagraph(tableBlock)!.id,
+      offset: 2,
+      text: 'x',
+    });
+    if (!edited.ok) throw Error(edited.reason);
+    siblingReads = 0;
+    const carried = storyBlocks(edited.part);
+    expect(siblingReads).toBe(0);
+    const fresh = storyBlocks(cold(edited.part));
+    expect(carried).toEqual(fresh);
+    expect(numberingFlowBlocks(carried)).toEqual(numberingFlowBlocks(fresh));
+    expect(carried[0]).toBe(first[0]);
+  });
+});

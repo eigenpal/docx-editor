@@ -1,3 +1,7 @@
+import {
+  collaborationTableNotesFixture,
+  footnotesXml,
+} from './collaboration-table-notes-fixture.ts';
 import { expect, test } from '@playwright/test';
 import { collaborationTableWidthFixture } from './collaboration-table-width-fixture.ts';
 import {
@@ -31,17 +35,22 @@ const HEADER = 'review-header-demo.docx';
 const TABLE = 'table-cell-selection-drag.docx';
 const TOC = 'paragraph-acceptance.docx';
 
-for (const variant of ['ordinary', 'headers', 'numeric']) {
+for (const variant of ['ordinary', 'headers', 'numeric', 'notes']) {
   const repeatedHeaders = variant !== 'ordinary';
   const numericCells = variant === 'numeric';
-  test(`tracked table edits converge through concurrent deletion, undo, redo, reconnect, and reopen${numericCells ? ' with wrapped numeric cells' : repeatedHeaders ? ' with repeated merged headers' : ''}`, async ({
+  const withNotes = variant === 'notes';
+  test(`tracked table edits converge through concurrent deletion, undo, redo, reconnect, and reopen${withNotes ? ' with footnotes' : numericCells ? ' with wrapped numeric cells' : repeatedHeaders ? ' with repeated merged headers' : ''}`, async ({
     browser,
     page: creator,
   }) => {
     const fixture = repeatedHeaders ? 'repeated-table.docx' : TABLE;
     if (repeatedHeaders)
       await creator.route('**/repeated-table.docx', (route) =>
-        route.fulfill({ body: collaborationTableWidthFixture(numericCells) })
+        route.fulfill({
+          body: withNotes
+            ? collaborationTableNotesFixture()
+            : collaborationTableWidthFixture(numericCells),
+        })
       );
     const joiner = await connectedPeers(browser, creator, fixture);
     const target = creator
@@ -96,6 +105,10 @@ for (const variant of ['ordinary', 'headers', 'numeric']) {
         savePackageBytes(joiner),
       ]);
       expect(documentXml(localBytes)).toBe(documentXml(remoteBytes));
+      if (withNotes) {
+        expect(footnotesXml(localBytes)).toBe(footnotesXml(remoteBytes));
+        expect(footnotesXml(localBytes)).toContain('Shared note text');
+      }
       saved = localBytes;
     }).toPass();
     const invite = joiner.url();
@@ -105,7 +118,9 @@ for (const variant of ['ordinary', 'headers', 'numeric']) {
       const rejoined = await rejoinedContext.newPage();
       await joinRoom(rejoined, invite, 'Bob');
       await expect(async () => {
-        expect(documentXml(await savePackageBytes(rejoined))).toBe(documentXml(saved!));
+        const rejoinedBytes = await savePackageBytes(rejoined);
+        expect(documentXml(rejoinedBytes)).toBe(documentXml(saved!));
+        if (withNotes) expect(footnotesXml(rejoinedBytes)).toBe(footnotesXml(saved!));
       }).toPass();
     } finally {
       await rejoinedContext.close();
@@ -116,7 +131,9 @@ for (const variant of ['ordinary', 'headers', 'numeric']) {
         route.fulfill({ body: Buffer.from(saved!) })
       );
       await waitForEditor(reopened, `${ORIGIN}/?fixture=tracked-cache-reopen.docx`);
-      expect(documentXml(await savePackageBytes(reopened))).toBe(documentXml(saved!));
+      const reopenedBytes = await savePackageBytes(reopened);
+      expect(documentXml(reopenedBytes)).toBe(documentXml(saved!));
+      if (withNotes) expect(footnotesXml(reopenedBytes)).toBe(footnotesXml(saved!));
     } finally {
       await reopened.close();
       await joiner.context().close();

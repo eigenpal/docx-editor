@@ -1640,7 +1640,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const visible = reviewAuthorVisibility.filterItems(surface?.session.reviewItems() ?? []);
     const items = narrowReviewItems(visible, query);
     const withPlacement = query?.placement !== false;
-    let anchors: Map<string, ReviewParagraphAnchor> | null = null;
+    let anchors: ReadonlyMap<string, ReviewParagraphAnchor> | null = null;
     if (withPlacement && items.length > 0) {
       const layout = surface?.publishedLayout() ?? null;
       if (layout) anchors = anchorIndexOf(layout);
