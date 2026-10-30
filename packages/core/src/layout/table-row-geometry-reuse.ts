@@ -478,7 +478,6 @@ function moveCellParagraph(
   if (compact) {
     const c = compact.constraint;
     if (
-      rowTop !== undefined ||
       compact.baseline !== placed ||
       compact.breakKey !== known.key ||
       !lines ||
@@ -496,30 +495,31 @@ function moveCellParagraph(
         directionalListFirstLineShift(undefined, indent, deps.measurer, tabStops, available, false)
     )
       return null;
-    const materialized = placeCellFromWidthRecipe(compact, context.cols, context.left);
-    const moved = materialized?.blocks[0];
-    if (
-      !materialized ||
-      moved?.kind !== 'paragraph' ||
-      materialized.box.x !== x ||
-      materialized.box.width !== width
-    )
-      return null;
-    movableBlocks.add(moved);
-    deps.onCellBreakKey?.(known.key);
-    return {
-      block: moved,
-      x,
-      width,
-      insets,
-      flowWidth: flowRight - flowLeft,
-      contentTop: Number.NaN,
-      contentBottom: Number.NaN,
-    };
+    if (rowTop === undefined) {
+      const materialized = placeCellFromWidthRecipe(compact, context.cols, context.left);
+      const moved = materialized?.blocks[0];
+      if (
+        !materialized ||
+        moved?.kind !== 'paragraph' ||
+        materialized.box.x !== x ||
+        materialized.box.width !== width
+      )
+        return null;
+      movableBlocks.add(moved);
+      deps.onCellBreakKey?.(known.key);
+      return {
+        block: moved,
+        x,
+        width,
+        insets,
+        flowWidth: flowRight - flowLeft,
+        contentTop: Number.NaN,
+        contentBottom: Number.NaN,
+      };
+    }
   }
   if (lines && lines.length > 1) {
     if (
-      rowTop !== undefined ||
       inputs.alignment === 'both' ||
       block.lines.length !== lines.length ||
       !numericLinesHoldAtWidth(lines, available) ||
@@ -536,13 +536,24 @@ function moveCellParagraph(
       return null;
     const lineIndent = flowLeft + indent.left;
     const movedLines: LineRecord[] = [];
+    let probeY =
+      rowTop === undefined
+        ? Number.NaN
+        : cellParagraphFirstTop(
+            flowBox.contentTop,
+            known.vertical.appliedBefore,
+            known.vertical.topExtent
+          );
     for (const [index, pending] of lines.entries()) {
       const old = block.lines[index]!;
+      const skip =
+        rowTop === undefined ? 0 : pendingLineExclusionSkipAtPlacement(pending, probeY, NO_ZONES);
+      const lineTop = rowTop === undefined ? old.box.y : probeY + skip;
       const content = alignCellLine(
         pending,
         paragraph.id,
         flowLeft,
-        old.box.y,
+        lineTop,
         [],
         lineIndent,
         Math.max(1, available),
@@ -557,21 +568,34 @@ function moveCellParagraph(
         }
       );
       if (
-        content.spans.length !== old.spans.length ||
-        content.spans.some((span, at) => span.box.y !== old.spans[at]!.box.y)
+        content.spans.length !== (compact ? pending.spans.length : old.spans.length) ||
+        content.spans.some(
+          (span, at) => span.box.y !== (rowTop === undefined ? old.spans[at]!.box.y : lineTop)
+        )
       )
         return null;
       movedLines.push({
         ...old,
         spans: content.spans,
         contentX: lineContentX(content.spans, [], lineIndent + content.offset),
-        box: { ...old.box, x: lineIndent, width: available },
+        box: { ...old.box, x: lineIndent, y: lineTop, width: available },
       });
+      probeY += skip + pending.height;
     }
+    const bottom = probeY + known.vertical.appliedAfter;
     const moved = {
       ...block,
       lines: movedLines,
-      box: { ...block.box, x: lineIndent, width: available },
+      box:
+        rowTop === undefined
+          ? { ...block.box, x: lineIndent, width: available }
+          : {
+              ...block.box,
+              x: lineIndent,
+              y: flowBox.contentTop,
+              width: available,
+              height: bottom - flowBox.contentTop,
+            },
     };
     movableBlocks.add(moved);
     context.capture?.(
@@ -599,8 +623,8 @@ function moveCellParagraph(
       width,
       insets,
       flowWidth: flowRight - flowLeft,
-      contentTop: Number.NaN,
-      contentBottom: Number.NaN,
+      contentTop: rowTop === undefined ? Number.NaN : flowBox.contentTop,
+      contentBottom: rowTop === undefined ? Number.NaN : bottom,
     };
   }
   const old = block.lines[0]!;
@@ -644,7 +668,7 @@ function moveCellParagraph(
   );
   const spans = content.spans;
   // Alignment moves spans along x only; anything else is not this line any more.
-  if (spans.length !== old.spans.length) return null;
+  if (spans.length !== (compact ? pending.spans.length : old.spans.length)) return null;
   for (let index = 0; index < spans.length; index += 1)
     if (spans[index]!.box.y !== (rowTop === undefined ? old.spans[index]!.box.y : lineTop))
       return null;
@@ -770,23 +794,29 @@ export type ShiftedRowRefusal = 'record' | 'row' | 'height' | 'cell' | 'floor';
 
 let shiftedRowsObserver: {
   moved: number;
+  compact: number;
   refused: Record<ShiftedRowRefusal, number>;
 } | null = null;
 
 /** @internal Counts rows rebuilt at a new top and refusals by first reason, for tests and probes. */
 export function shiftedRowsTestRecorder(): {
   readonly moved: number;
+  readonly compact: number;
   readonly refused: Readonly<Record<ShiftedRowRefusal, number>>;
   dispose(): void;
 } {
   const observer = {
     moved: 0,
+    compact: 0,
     refused: { record: 0, row: 0, height: 0, cell: 0, floor: 0 },
   };
   shiftedRowsObserver = observer;
   return {
     get moved() {
       return observer.moved;
+    },
+    get compact() {
+      return observer.compact;
     },
     get refused() {
       return observer.refused;
@@ -820,7 +850,8 @@ export function moveRowToTop(
   cols: readonly number[],
   left: number,
   top: number,
-  deps: TableFlowDeps
+  deps: TableFlowDeps,
+  compact?: readonly CellWidthPlacement[]
 ): { readonly record: TableRowFragmentRecord; readonly bottom: number } | null {
   if (
     row.isHeader ||
@@ -829,6 +860,7 @@ export function moveRowToTop(
     placed.hasContinuation ||
     row.cells.length === 0 ||
     row.cells.length !== placed.cells.length ||
+    (compact && compact.length !== row.cells.length) ||
     !deps.cache
   )
     return noteShiftedRowRefusal('row');
@@ -859,7 +891,7 @@ export function moveRowToTop(
       before.paintInert
     )
       return noteShiftedRowRefusal('cell');
-    const moved = moveCellParagraph(cell, before, context, top);
+    const moved = moveCellParagraph(cell, before, context, top, compact?.[index]);
     if (!moved) return noteShiftedRowRefusal('cell');
     // A complete paragraph cell: its mark floor applies when its box has height.
     const { markFloor } = cellReservedMarkHeights(cell, moved.flowWidth, deps, {
@@ -913,7 +945,10 @@ export function moveRowToTop(
       box: { x: moved.x, y: top, width: moved.width, height: rowHeight },
     };
   });
-  if (shiftedRowsObserver) shiftedRowsObserver.moved += 1;
+  if (shiftedRowsObserver) {
+    shiftedRowsObserver.moved += 1;
+    if (compact) shiftedRowsObserver.compact += 1;
+  }
   return {
     record: {
       ...placed,

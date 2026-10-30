@@ -160,7 +160,7 @@ export function placementFromPrevious(
 ): LayoutRowBoundedResult | null {
   const compact = 'compact' in candidate ? candidate.compact : undefined;
   const previous = previousRowRecord(candidate);
-  if (compact && (compact.source !== row || previous.box.y !== top)) return null;
+  if (compact && compact.source !== row) return null;
   const key = keyOf(previous);
   const known = key ? placements.get(key) : undefined;
   if (
@@ -177,7 +177,7 @@ export function placementFromPrevious(
   if (known.top !== top) {
     // The row moved down or up: rebuilt as a fresh placement at `top` gives it. It is not
     // settled, so finalize treats it exactly as it treats that fresh placement.
-    const shifted = moveRowToTop(row, previous, cols, left, top, deps);
+    const shifted = moveRowToTop(row, previous, cols, left, top, deps, compact?.cells);
     if (!shifted) return null;
     return {
       record: shifted.record,

@@ -11,7 +11,7 @@ import { caretAt } from '../semantic-interaction.ts';
 import { createParagraphLayoutCache, tableCellBreakKeysOf } from '../layout-cache.ts';
 import { readTableStructure } from '../semantic-table.ts';
 import { offerPreviousRows, takePreviousRows } from '../table-row-placement-reuse.ts';
-import { movedRowsTestRecorder } from '../table-row-geometry-reuse.ts';
+import { movedRowsTestRecorder, shiftedRowsTestRecorder } from '../table-row-geometry-reuse.ts';
 import {
   captureDeferredWidthRecipe,
   deferredWidthRecipe,
@@ -654,7 +654,7 @@ test('numeric multiline cells move only while every automatic cut remains unchan
 
 test('numeric multiline movement preserves horizontal and vertical alignment after finalization', async () => {
   const { layoutRowFragment } = await import('../semantic-table-layout.ts');
-  const { moveRowToWidths } = await import('../table-row-geometry-reuse.ts');
+  const { moveRowToWidths, moveRowToTop } = await import('../table-row-geometry-reuse.ts');
   const { createBodyWidthGroup, materializeBodyWidthGroup, bodyWidthGroupHolds } =
     await import('../table-body-width-group.ts');
   const { placeCellFromWidthRecipe } = await import('../table-cell-width-placement.ts');
@@ -662,13 +662,16 @@ test('numeric multiline movement preserves horizontal and vertical alignment aft
   const { bodyLineId } = await import('../body-line-id.ts');
   const { measurer } = await import('./table-row-keep-fixtures.ts');
   for (const alignment of ['left', 'center', 'right'])
-    for (const vertical of ['center', 'bottom']) {
+    for (const vertical of ['top', 'center', 'bottom']) {
       const part = load(
         autofit([
           tr(
             [
               tc(
-                p('123456789', `<w:jc w:val="${alignment}"/><w:ind w:left="-15"/>`),
+                p('123456789', `<w:jc w:val="${alignment}"/><w:ind w:left="-15"/>`).replace(
+                  'w:before="0" w:after="0" w:line="280"',
+                  'w:before="13" w:after="17" w:line="277"'
+                ),
                 `<w:vAlign w:val="${vertical}"/>`
               ),
               tc(p('Short')),
@@ -722,6 +725,39 @@ test('numeric multiline movement preserves horizontal and vertical alignment aft
       const grouped = materializeBodyWidthGroup(group, [row], columns, 2.5, 'numeric')!;
       expect(grouped).not.toBeNull();
       const nextStructure = { ...structure, columnWidthsPt: columns };
+      const compactRow = group.rows[0]!;
+      const compactBaseline = {
+        ...compactRow.baseline,
+        cells: compactRow.cells.map((cell) => cell.baseline),
+      };
+      for (const top of [0, 0.1, 41.17, 311.125]) {
+        const freshShifted = layoutRowFragment(row, columns, 2.5, top, false, 0, {
+          ...deps,
+          cache: createParagraphLayoutCache<never>(),
+        });
+        const expectedShifted = finalizeTableRows(
+          [freshShifted.record],
+          nextStructure,
+          structure.rows
+        );
+        for (const compact of [false, true]) {
+          const shifted = moveRowToTop(
+            row,
+            compact ? compactBaseline : baseline,
+            columns,
+            2.5,
+            top,
+            deps,
+            compact ? compactRow.cells : undefined
+          );
+          expect(shifted).not.toBeNull();
+          expect(shifted!.bottom).toBe(freshShifted.bottom);
+          expect(finalizeTableRows([shifted!.record], nextStructure, structure.rows)).toEqual(
+            expectedShifted
+          );
+        }
+      }
+
       const actual = finalizeTableRows(
         [moved!],
         nextStructure,
@@ -824,8 +860,14 @@ test('deferred body groups preserve wrapped numeric cells through typing and und
       Object.defineProperty(fragment, 'rows', descriptors[index]!)
     );
   }
-  const result = burst(initial.part, paragraphAt(initial.part, 11, 2), 'WWWWWWWWWW', initial);
-  expect(result.compactMoved).toBeGreaterThan(0);
-  const undone = lay(part, 15, { session: result.session, cache: result.cache });
-  expect(undone.pages).toEqual(lay(reparsed(part)).pages);
+  const shifted = shiftedRowsTestRecorder();
+  try {
+    const result = burst(initial.part, paragraphAt(initial.part, 11, 2), 'WWWWWWWWWW', initial);
+    expect(result.compactMoved).toBeGreaterThan(0);
+    expect(shifted.compact).toBeGreaterThan(0);
+    const undone = lay(part, 15, { session: result.session, cache: result.cache });
+    expect(undone.pages).toEqual(lay(reparsed(part)).pages);
+  } finally {
+    shifted.dispose();
+  }
 });

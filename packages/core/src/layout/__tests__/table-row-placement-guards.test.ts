@@ -122,7 +122,16 @@ for (const numeric of [false, true])
       cache: createParagraphLayoutCache<never>(),
     });
     expect(JSON.stringify(reused!.record)).toBe(JSON.stringify(fresh.record));
-    expect(placementFromPrevious(row, candidate, wide, 2.5, top + 1, deps)).toBeNull();
+    for (const shiftedTop of [0, top + 1, 311.125]) {
+      const shifted = placementFromPrevious(row, candidate, wide, 2.5, shiftedTop, deps);
+      expect(shifted).not.toBeNull();
+      const freshShifted = layoutRowFragment(row, wide, 2.5, shiftedTop, false, 0, {
+        ...deps,
+        cache: createParagraphLayoutCache<never>(),
+      });
+      expect(shifted!.record).toEqual(freshShifted.record);
+      expect(shifted!.bottom).toBe(freshShifted.bottom);
+    }
     expect(placementFromPrevious({ ...row }, candidate, wide, 2.5, top, deps)).toBeNull();
     for (const changed of [
       { cache: createParagraphLayoutCache<never>() },
@@ -131,9 +140,10 @@ for (const numeric of [false, true])
       { compatibilityMode: 14 },
       { measurer: { ...measurer } },
     ])
-      expect(
-        placementFromPrevious(row, candidate, wide, 2.5, top, { ...deps, ...changed })
-      ).toBeNull();
+      for (const at of [top, top + 1])
+        expect(
+          placementFromPrevious(row, candidate, wide, 2.5, at, { ...deps, ...changed })
+        ).toBeNull();
     const target = row.cells[0]!;
     const base = cellContentInsets(target, true);
     for (const side of ['left', 'right', 'top', 'bottom'] as const)
@@ -143,7 +153,8 @@ for (const numeric of [false, true])
           cellContentInsets: new Map([[target.id, { ...base, [side]: base[side] + 1 }]]),
         })
       ).toBeNull();
-    expect(placementFromPrevious(row, candidate, [10, 10, 10], 2.5, top, deps)).toBeNull();
+    for (const at of [top, top + 1])
+      expect(placementFromPrevious(row, candidate, [10, 10, 10], 2.5, at, deps)).toBeNull();
     if (numeric)
       expect(placementFromPrevious(row, candidate, [100, 100, 110], 2.5, top, deps)).toBeNull();
   });

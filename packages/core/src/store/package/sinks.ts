@@ -62,13 +62,10 @@ export function escapeXmlAttribute(value: string): string {
   return value.replace(/[&<>"'\r\n\t]/g, (c) => XML_ATTRIBUTE_ESCAPES[c]);
 }
 
-/** True for a UTF-16 code unit forbidden in XML 1.0 character data: a control char other than
- *  tab/LF/CR, or the non-characters U+FFFE/U+FFFF. (Surrogates are validated as pairs below.) */
-function isForbiddenXmlUnit(cu: number): boolean {
-  if (cu === 0x9 || cu === 0xa || cu === 0xd) return false;
-  if (cu < 0x20) return true;
-  return cu === 0xfffe || cu === 0xffff;
-}
+// XML 1.0 character ranges. Unicode matching treats a valid surrogate pair as one
+// code point and rejects lone halves. One character class has no backtracking paths.
+const INVALID_XML_CHARACTER =
+  /[^\u0009\u000A\u000D\u0020-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/u;
 
 /**
  * Validate that a string contains only characters legal in XML 1.0 text/attributes. escapeXml
@@ -82,33 +79,25 @@ function isForbiddenXmlUnit(cu: number): boolean {
 export function isValidXmlText(value: string): boolean {
   // Objects/arrays must never reach serialization: `String({})` is "[object Object]".
   if (typeof value !== 'string') return false;
-  for (let i = 0; i < value.length; i++) {
-    const cu = value.charCodeAt(i);
-    if (isForbiddenXmlUnit(cu)) return false;
-    if (cu >= 0xd800 && cu <= 0xdbff) {
-      const next = value.charCodeAt(i + 1);
-      if (!(next >= 0xdc00 && next <= 0xdfff)) return false; // unpaired high surrogate
-      i++; // consume the valid low surrogate
-    } else if (cu >= 0xdc00 && cu <= 0xdfff) {
-      return false; // unpaired low surrogate
-    }
-  }
-  return true;
+  return !INVALID_XML_CHARACTER.test(value);
+}
+
+/** Reject non-string scalars and characters outside XML 1.0. @internal */
+export function assertValidXmlText(value: string, what: string): void {
+  if (typeof value !== 'string')
+    throw new Error(`${what} must be a string scalar (got ${typeof value})`);
+  if (!isValidXmlText(value)) throw new Error(`${what} contains a character not valid in XML 1.0`);
 }
 
 /** Validate (fail-closed) then XML-escape an authored value bound for an owned attribute/text node. */
 export function escapeXmlChecked(value: string, what: string): string {
-  if (typeof value !== 'string')
-    throw new Error(`${what} must be a string scalar (got ${typeof value})`);
-  if (!isValidXmlText(value)) throw new Error(`${what} contains a character not valid in XML 1.0`);
+  assertValidXmlText(value, what);
   return escapeXml(value);
 }
 
 /** Validate (fail-closed) then XML-escape an authored value bound for an owned attribute. */
 export function escapeXmlAttributeChecked(value: string, what: string): string {
-  if (typeof value !== 'string')
-    throw new Error(`${what} must be a string scalar (got ${typeof value})`);
-  if (!isValidXmlText(value)) throw new Error(`${what} contains a character not valid in XML 1.0`);
+  assertValidXmlText(value, what);
   return escapeXmlAttribute(value);
 }
 
