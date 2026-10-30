@@ -11,6 +11,7 @@ import {
   recordSetNamespaceBinding,
   recordSpliceChildren,
   recordSpliceText,
+  textSpliceHint,
 } from './canonical-primitive-capture.ts';
 import type {
   CanonicalAttributeName,
@@ -36,12 +37,25 @@ function attributeKey(attribute: OoxmlAttribute): string {
 
 function textSplice(
   previous: string,
-  next: string
+  next: string,
+  hint?: number
 ): {
   readonly utf16Start: number;
   readonly deleteCount: number;
   readonly insert: string;
 } {
+  // Beside equal letters, an insert could stand at several places; the edit says which one.
+  // A peer's caret follows letters by identity, so the wrong one moves it into the new text.
+  const added = next.length - previous.length;
+  if (
+    hint !== undefined &&
+    added > 0 &&
+    hint <= previous.length &&
+    next.startsWith(previous.slice(0, hint)) &&
+    next.endsWith(previous.slice(hint))
+  ) {
+    return { utf16Start: hint, deleteCount: 0, insert: next.slice(hint, hint + added) };
+  }
   let prefix = 0;
   const shared = Math.min(previous.length, next.length);
   while (prefix < shared && previous.charCodeAt(prefix) === next.charCodeAt(prefix)) prefix += 1;
@@ -177,7 +191,7 @@ function lowerSameIdentity(
   if (previous.kind === 'textValue' || next.kind === 'textValue') {
     const before = previous.kind === 'textValue' ? previous.value : '';
     const after = next.kind === 'textValue' ? next.value : '';
-    const splice = textSplice(before, after);
+    const splice = textSplice(before, after, textSpliceHint(previous.id));
     recordSpliceText(previous.id, splice.utf16Start, splice.deleteCount, splice.insert);
     return;
   }

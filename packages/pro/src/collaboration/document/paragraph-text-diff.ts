@@ -86,6 +86,27 @@ export function tokensOfText(
   return tokens;
 }
 
+/** Characters typed into one text value: a journal that only inserts at one place. */
+export interface TypedSplice {
+  readonly textValueId: string;
+  readonly utf16Start: number;
+}
+
+/**
+ * Where typed characters start among a paragraph's tokens, from the text value the author typed
+ * into. Undefined when the paragraph does not hold that value.
+ */
+export function typedStartIn(after: OoxmlElement, typed: TypedSplice): number | undefined {
+  const items = linearizeParagraph(after).items;
+  for (let at = 0; at < items.length; at += 1) {
+    const item = items[at]!;
+    if (item.kind === 'char' && item.attributes.textValueId === typed.textValueId) {
+      return at + typed.utf16Start;
+    }
+  }
+  return undefined;
+}
+
 export function tokensOfParagraph(after: OoxmlElement, limits: DocumentLimits): Token[] {
   const paragraphId = after.id;
   // Characters of one run share one attributes object, so each is encoded once.
@@ -153,14 +174,16 @@ export function diffTokens(
   before: readonly Token[],
   after: readonly Token[],
   /** Whether typing at one place skips the full diff. Tests compare both answers. */
-  shortcut = true
+  shortcut = true,
+  /** Where typed characters start in `after`, when the edit only typed them. */
+  typedAt?: number
 ): Step[] {
   // A character outside the basic plane is two code units, and shared text replaces a half
   // that an edit cuts off with U+FFFD. So the script compares whole code points, and each
   // step on a pair covers both halves.
   const left = codePoints(before);
   const right = codePoints(after);
-  if (left === null && right === null) return diffCodePoints(before, after, shortcut);
+  if (left === null && right === null) return diffCodePoints(before, after, shortcut, typedAt);
   const beforeAt = left?.starts ?? null;
   const afterAt = right?.starts ?? null;
   const unitsOf = (starts: readonly number[] | null, index: number, length: number): number[] => {
@@ -240,9 +263,10 @@ function codePoints(
 function diffCodePoints(
   before: readonly Token[],
   after: readonly Token[],
-  shortcut: boolean
+  shortcut: boolean,
+  typedAt?: number
 ): Step[] {
-  const inserted = shortcut ? pureInsertion(before, after) : null;
+  const inserted = shortcut ? pureInsertion(before, after, typedAt) : null;
   if (inserted) return inserted;
   // Equal strong alignments can differ in what their gaps keep: runs merged by a join give the
   // same letters a new text element, and an early tie can pair letters of one word with those
@@ -271,9 +295,19 @@ function diffCodePoints(
  * paragraph's text sees. Where the stretch could stand is decided as the full diff decides
  * it, and a test compares the two answers.
  */
-function pureInsertion(before: readonly Token[], after: readonly Token[]): Step[] | null {
+function pureInsertion(
+  before: readonly Token[],
+  after: readonly Token[],
+  typedAt?: number
+): Step[] | null {
   const added = after.length - before.length;
   if (added <= 0) return null;
+  // Typed beside equal letters, the stretch could stand at several places that keep as much.
+  // Where the author typed it is the one their view shows, so their caret and shared order
+  // agree; a concurrent peer's same letter is then not taken for their own.
+  if (typedAt !== undefined && insertsAt(before, after, typedAt, added)) {
+    return insertionSteps(before.length, typedAt, added);
+  }
   let prefix = 0;
   while (prefix < before.length && before[prefix]!.strong === after[prefix]!.strong) prefix += 1;
   let suffix = 0;
@@ -292,11 +326,32 @@ function pureInsertion(before: readonly Token[], after: readonly Token[]): Step[
   const previous = prefix > 0 ? before[prefix - 1]! : null;
   if (previous && previous.key === last.key && previous.strong !== last.strong) return null;
   if (prefix < before.length && before[prefix]!.key === first.key) return null;
+  return insertionSteps(before.length, prefix, added);
+}
+
+/** Whether `after` is `before` with `added` tokens inserted at `at`. */
+function insertsAt(
+  before: readonly Token[],
+  after: readonly Token[],
+  at: number,
+  added: number
+): boolean {
+  if (!Number.isSafeInteger(at) || at < 0 || at > before.length) return false;
+  for (let index = 0; index < at; index += 1) {
+    if (before[index]!.strong !== after[index]!.strong) return false;
+  }
+  for (let index = at; index < before.length; index += 1) {
+    if (before[index]!.strong !== after[index + added]!.strong) return false;
+  }
+  return true;
+}
+
+function insertionSteps(length: number, at: number, added: number): Step[] {
   const steps: Step[] = [];
-  for (let at = 0; at < prefix; at += 1) steps.push({ op: 'eq', before: at, after: at });
-  for (let at = prefix; at < prefix + added; at += 1) steps.push({ op: 'ins', after: at });
-  for (let at = prefix; at < before.length; at += 1) {
-    steps.push({ op: 'eq', before: at, after: at + added });
+  for (let index = 0; index < at; index += 1) steps.push({ op: 'eq', before: index, after: index });
+  for (let index = at; index < at + added; index += 1) steps.push({ op: 'ins', after: index });
+  for (let index = at; index < length; index += 1) {
+    steps.push({ op: 'eq', before: index, after: index + added });
   }
   return steps;
 }

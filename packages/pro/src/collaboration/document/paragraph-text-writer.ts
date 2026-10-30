@@ -35,6 +35,7 @@ import { sharedEffect, type SharedEffect } from './shared-effect.ts';
 import { rejectDangerousKey } from './limits.ts';
 import type { DocumentRegistry } from './registry.ts';
 import { inlineChildren } from './paragraph-text-view.ts';
+import type { TypedSplice } from './paragraph-text-diff.ts';
 import { partitionChildIds, sharedChildShell } from './singleton-children.ts';
 
 interface ScratchNode {
@@ -63,6 +64,8 @@ export interface InlinePlan {
   readonly paragraphs: readonly { readonly id: LogicalId; readonly after: OoxmlElement }[];
   /** Embedded nodes the touched paragraphs held before the journal. */
   readonly embedsBefore: ReadonlySet<LogicalId>;
+  /** The characters the journal typed, when that is all it did. */
+  readonly typed?: TypedSplice;
 }
 
 const INLINE_SHELL_KINDS = new Set(['run', 'runProperties']);
@@ -452,7 +455,12 @@ export function routeInlineEffects(
   const paragraphs = [...touched]
     .filter((id) => scratch.nodes.get(id)?.paragraph)
     .map((id) => ({ id, after: expectElement(scratch.toTree(id)) }));
-  return { passThrough, plan: { paragraphs, embedsBefore } };
+  const [only, ...more] = effects;
+  const typed =
+    more.length === 0 && only?.kind === 'spliceText' && only.deleteCount === 0
+      ? { textValueId: only.logicalId, utf16Start: only.utf16Start }
+      : undefined;
+  return { passThrough, plan: { paragraphs, embedsBefore, ...(typed ? { typed } : {}) } };
 }
 
 /**
