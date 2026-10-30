@@ -2,7 +2,10 @@
 // producer fingerprint invalidates all stories when document typography changes.
 // References: ECMA-376 §17.3.1.16, §17.3.1.21, §17.15.1.18, §17.15.1.58–59, §17.15.1.82.
 import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
-import { isEastAsianFace, isEastAsianFontFamily } from '../store/package/default-font-faces.ts';
+import {
+  isEastAsianFace,
+  PACKAGED_EAST_ASIAN_FAMILIES,
+} from '../store/package/default-font-faces.ts';
 import { omittedDocDefaults } from '../store/package/application-doc-defaults.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-tree.ts';
 import { resolveRunStyle, type ThemeFonts } from './run-style.ts';
@@ -333,13 +336,13 @@ export function defaultsTypography(
 > {
   // Adjacent full-width punctuation compression, hanging punctuation, and the legacy space
   // rule need the face to be a Chinese, Japanese, or Korean font. By name and the font table
-  // here (`isEastAsianFace`), and by the East Asian families hosts commonly serve
-  // (`isEastAsianFontFamily`), so that a host with the face and a host without it agree on
-  // such names. Layout replaces the answer with the measured face's when the face is available.
+  // here (`isEastAsianFace`), and by the families this project's font packages serve
+  // (`PACKAGED_EAST_ASIAN_FAMILIES`), so that a host with such a face and a host without it
+  // agree. Layout replaces the answer with the measured face's when the face is available.
   const face = defaultEastAsianFace(defaultRun, themeFonts);
   const sourceEastAsianFont =
     isEastAsianFace(face, themeFonts.eastAsianFontTableFaces) ||
-    (face !== null && isEastAsianFontFamily(face));
+    (face !== null && PACKAGED_EAST_ASIAN_FAMILIES.has(face.trim().toLowerCase()));
   const named = face?.trim() ? { eastAsianDefaultFace: face } : {};
   const spacing =
     stylesRoot.namespaceUri !== WML_NAMESPACE_URI ||

@@ -233,6 +233,20 @@ export function isEastAsianFace(
 }
 
 /**
+ * East Asian families that this project's own font packages serve under their own names: the
+ * packaged CJK face, and the regional faces of the Google Fonts CJK catalog. Whether a host
+ * draws one of them depends on which packages it installs, so their names alone count them as
+ * East Asian faces, and every host breaks a document that names one the same way. Lower-cased.
+ */
+export const PACKAGED_EAST_ASIAN_FAMILIES: ReadonlySet<string> = new Set([
+  'noto sans cjk jp',
+  'noto sans jp',
+  'noto sans sc',
+  'noto sans tc',
+  'noto sans kr',
+]);
+
+/**
  * Localized names that documents saved in a Chinese, Japanese, or Korean locale write for
  * common East Asian families, each mapped to the family's English name. Both name one face.
  * A `Map`, not an object: the key is file-derived.
