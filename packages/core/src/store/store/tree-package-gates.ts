@@ -1,4 +1,8 @@
 // Cheap package-level gates for `TreePackageStore`.
+//
+// The delete gates read the story as the open transaction has left it, which is the tree the
+// op edits. The node index moves to that tree with each op, so a batch of deletes finds every
+// target without walking the part again.
 
 import { findNode } from '../package/ooxml-edit.ts';
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
@@ -23,9 +27,6 @@ export function hasNotesPart(pkg: OoxmlPackage): boolean {
 /**
  * Whether one text delete can strand a note body and therefore needs a package cascade.
  * Ambiguous repeated deletes in one paragraph fail closed into the bounded cascade.
- *
- * The gates in this file read the story as the open transaction has left it. Its node index
- * moves with each op, so a batch of deletes finds each target without walking the part again.
  */
 export function deleteMayStrandNote(
   pkg: OoxmlPackage,

@@ -217,6 +217,13 @@ export interface TreeDocumentCheckpoint {
   } | null;
 }
 
+const openTransactions = new WeakMap<TreeDocumentStore, () => OoxmlPart>();
+
+/** @internal The story part as the open transaction has left it so far, else the published one. */
+export function transactionStoryPart(store: TreeDocumentStore): OoxmlPart {
+  return openTransactions.get(store)?.() ?? store.part;
+}
+
 /**
  * The document store: one transaction is one atomic publication and one history entry.
  *
@@ -225,13 +232,6 @@ export interface TreeDocumentCheckpoint {
  * as they were. That all-or-nothing property is what lets a caller compose ops without having to
  * reason about partial application.
  */
-const openTransactions = new WeakMap<TreeDocumentStore, () => OoxmlPart>();
-
-/** @internal The story part as the open transaction has left it so far, else the published one. */
-export function transactionStoryPart(store: TreeDocumentStore): OoxmlPart {
-  return openTransactions.get(store)?.() ?? store.part;
-}
-
 export class TreeDocumentStore {
   private current: OoxmlPackage;
   /** The part `apply` targets and `part` returns: the story this store is editing. */
@@ -539,11 +539,11 @@ export class TreeDocumentStore {
 
     /**
      * The tracked TEXT ops' bookkeeping. The COUNTER is dropped, like the property group, the
-     * moment anything else runs (`applyPackage` included), except the ops in
-     * `KEEPS_REVISION_COUNTER`: a paste re-mints the ids it carries
+     * moment anything else runs (`applyPackage` included): a paste re-mints the ids it carries
      * against the part as it stands, and a walk taken before it would hand out an id the paste
-     * just used. What this transaction WROTE survives all of it — a record of the past cannot
-     * go stale, and the replacement rule reads it after ops that mint nothing.
+     * just used. Only `keepsRevisionCounter` ops, which add no id, leave it standing. What this
+     * transaction WROTE survives all of it — a record of the past cannot go stale, and the
+     * replacement rule reads it after ops that mint nothing.
      */
     const trackedRevisionIdsFor = (
       op: TreeDocOp,
