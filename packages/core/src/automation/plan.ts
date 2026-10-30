@@ -30,6 +30,7 @@ import type { PlannedOperation } from './plan-types.ts';
 export type { PlannedOperation } from './plan-types.ts';
 import { delimitedText, anchorForSection, placeable, trimmed } from './plan-read-helpers.ts';
 import { planContentControlInsertion } from './plan-content-control-insert.ts';
+import { planCheckboxGlyphReplacement } from './plan-checkbox-glyph.ts';
 import { ownsInsertedControl } from './tracked-content-controls.ts';
 import { isInlineAtomOperation, planInlineAtoms } from './plan-fields.ts';
 import { planTableOperation } from './plan-tables.ts';
@@ -621,6 +622,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
     const pin = pinWrite(plan);
     if (pin) return pin;
+    const checkbox = planCheckboxGlyphReplacement(reads, range, text, () => ({
+      kind: 'span',
+      span: spanOf(range),
+    }));
+    if (checkbox) return claim(plan, first) ?? checkbox;
 
     const struckEnd = ids.length === 1 ? range.end.offset : (reads.rawText(first) ?? '').length;
     const landing = host.replacementLanding?.(first, range.start.offset, struckEnd);
