@@ -31,6 +31,7 @@
     "drawingLocked": "この画像はロックされています",
     "commentSelection": "コメントを追加する範囲を選択してください",
     "noCommentDraftView": "ここではコメントを追加できません",
+    "noLinkView": "ここではリンクを追加できません",
     "mergeUnsupported": "セルの結合はサポートされていません",
     "splitUnsupported": "セルの分割はサポートされていません",
     "mergeNeedsRectangle": "結合するには、四角形になる 2 つ以上のセルを選択してください",
@@ -564,6 +565,7 @@
     "deleteShortcut": "Del",
     "selectAll": "すべて選択",
     "selectAllShortcut": "Ctrl+A",
+    "insertLinkShortcut": "Ctrl+K",
     "editCustomNode": "{label}を編集",
     "removeCustomNode": "{label}を削除"
   },

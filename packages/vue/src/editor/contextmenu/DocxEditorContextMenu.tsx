@@ -38,6 +38,7 @@ import {
 } from '../menu/parts';
 import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
 import { contextMenuRowId } from './row-alias';
+import { isDocumentContextMenuTarget } from './menu-target';
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
 import {
   ContextMenuCopy,
@@ -161,7 +162,7 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
     kind: 'row',
     id: 'text.link',
     // The label switches to Edit link on an existing link; see `MenuLinkRow`.
-    render: () => <MenuLinkRow />,
+    render: () => <MenuLinkRow shortcutKey="contextMenu.insertLinkShortcut" />,
   },
   {
     kind: 'row',
@@ -355,6 +356,13 @@ export const DocxEditorContextMenu = defineComponent({
           : null);
       if (!scroller) return;
       const onContextMenu = (event: MouseEvent) => {
+        // A second right-click on the open panel neither moves it nor shows the browser's menu.
+        if (panelRef.value?.contains(event.target as Node | null)) {
+          event.preventDefault();
+          return;
+        }
+        // Chrome in the scroller, such as the link popover, keeps the browser's own menu.
+        if (!isDocumentContextMenuTarget(scroller, event.target)) return;
         event.preventDefault();
         const keyboard = event.button === -1 || (event.clientX === 0 && event.clientY === 0);
         const box = scroller.getBoundingClientRect();

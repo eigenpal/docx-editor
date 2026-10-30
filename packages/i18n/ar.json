@@ -31,6 +31,7 @@
     "drawingLocked": "هذه الصورة مقفلة",
     "commentSelection": "حدد نطاقًا قبل إضافة تعليق",
     "noCommentDraftView": "لا يمكن إضافة تعليقات هنا",
+    "noLinkView": "لا يمكن إضافة ارتباطات هنا",
     "mergeUnsupported": "دمج الخلايا غير مدعوم",
     "splitUnsupported": "تقسيم الخلايا غير مدعوم",
     "mergeNeedsRectangle": "حدد خليتين أو أكثر تشكّل مستطيلاً لدمجها",
@@ -564,6 +565,7 @@
     "deleteShortcut": "Del",
     "selectAll": "تحديد الكل",
     "selectAllShortcut": "Ctrl+A",
+    "insertLinkShortcut": "Ctrl+K",
     "editCustomNode": "تحرير {label}",
     "removeCustomNode": "إزالة {label}"
   },

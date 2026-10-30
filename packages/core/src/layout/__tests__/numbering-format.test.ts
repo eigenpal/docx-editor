@@ -44,6 +44,17 @@ describe('numbering formatters', () => {
     expect(formatDecimal(-5)).toBe('1');
     expect(formatDecimal(Number.POSITIVE_INFINITY)).toBe('1');
     expect(formatUpperRoman(50_000).length).toBeLessThanOrEqual(MAX_MARKER_TEXT_LENGTH);
+    expect(formatDecimal(5_000_000)).toBe('999999');
+  });
+
+  test('a list that counts past 9999 shows the whole number', () => {
+    expect(formatDecimal(10_000)).toBe('10000');
+    expect(formatNumFmt('decimalZero', 10_001)).toBe('10001');
+    expect(formatNumFmt('ordinal', 10_001)).toBe('10001st');
+    expect(formatNumFmt('hex', 10_000)).toBe('2710');
+    expect(formatNumFmt('cardinalText', 10_000)).toBe('Ten thousand');
+    expect(formatNumFmt('cardinalText', 10_001)).toBe('Ten thousand one');
+    expect(formatNumFmt('ordinalText', 21_000)).toBe('Twenty-one thousandth');
   });
 });
 

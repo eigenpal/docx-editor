@@ -1,9 +1,12 @@
 import { defineComponent, h, type PropType, type VNode } from 'vue';
-import { chromeProbeForSlot, type ChromeSlotId } from '@docx-editor.dev/core/editor';
+import {
+  runToolbarCommand,
+  toolbarCommandState,
+  type ChromeSlotId,
+} from '@docx-editor.dev/core/editor';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor, useEditorStateTick } from '../context';
-import { useHyperlinkPopup } from '../useHyperlinkPopup';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { mergeHostClass } from '../../lib/mergeHostClass';
 import { useToolbarContext, useToolbarLabel } from './toolbar-context';
@@ -95,20 +98,15 @@ export const ToolbarLink = defineComponent({
   setup(props, { slots }) {
     const editorRef = useDocxEditor();
     const stateTick = useEditorStateTick();
-    const { openAtCaret } = useHyperlinkPopup();
     const label = useToolbarLabel();
     const shortcut = usePlatformShortcut();
     const { t } = useTranslation();
     return () => {
       if (props.hidden) return null;
       void stateTick.value;
-      const probe = chromeProbeForSlot('text.link');
-      const allowed = editorRef.value && probe ? editorRef.value.can(probe) : null;
-      const isEnabled = allowed?.ok === true;
-      const disabledReason = localizeDisabledReason(
-        allowed && !allowed.ok ? allowed.reason : null,
-        t
-      );
+      const state = toolbarCommandState(editorRef.value, 'text.link');
+      const isEnabled = state.enabled;
+      const disabledReason = localizeDisabledReason(state.disabledReason, t);
       const control = chromeControlForSlot('text.link');
       const text = shortcut(label(control?.labelKey ?? 'text.link'));
       const shared = {
@@ -119,7 +117,7 @@ export const ToolbarLink = defineComponent({
         'aria-label': text,
         title: disabledReason ?? text,
         onMousedown: guardToolbarMousedown,
-        onClick: () => openAtCaret(),
+        onClick: () => runToolbarCommand(editorRef.value, 'text.link'),
       };
       const content = props.icon ?? slots.default?.() ?? chromeIcon(control?.paths);
       if (props.asChild) return h(Slot, shared, slots.default);

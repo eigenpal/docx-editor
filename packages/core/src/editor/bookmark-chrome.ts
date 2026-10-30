@@ -32,20 +32,25 @@ export interface BookmarkMarkOptionsSource {
   readonly reportError: (error: unknown) => void;
 }
 
+/** What every kind of request chrome registers. */
+export interface RequestChromeHandlers {
+  readonly onRequest?: () => void;
+  readonly shortcut?: boolean;
+}
+
 /**
- * One kind of host UI the editor opens on request: the Bookmark dialog, Go To, or a comment
- * draft.
+ * One kind of host UI the editor opens on request: the Bookmark dialog, Go To, a comment
+ * draft, or the link popover.
  *
  * Whether one is registered is published as a change, so chrome that asks `can` re-renders. A
  * registration publishes at once. A removal waits for the end of the task: a host that
  * registers again (a prop change re-runs its effect) removes and registers in one task, the
  * answer does not change, and nothing is published.
  */
-export function createRequestChrome(changed: (() => void) | undefined) {
-  const stack = createChromeHandlerStack<{
-    readonly onRequest?: () => void;
-    readonly shortcut?: boolean;
-  }>({});
+export function createRequestChrome<Handlers extends RequestChromeHandlers = RequestChromeHandlers>(
+  changed: (() => void) | undefined
+) {
+  const stack = createChromeHandlerStack<Handlers>({} as Handlers);
   let published = false;
   let pending = false;
   const canOpen = (): boolean => stack.current().onRequest !== undefined;
@@ -71,10 +76,9 @@ export function createRequestChrome(changed: (() => void) | undefined) {
       request?.();
       return request !== undefined;
     },
-    register(handlers: {
-      readonly onRequest?: () => void;
-      readonly shortcut?: boolean;
-    }): () => void {
+    /** The registration that answers now, for handlers beyond `onRequest`. */
+    current: (): Handlers => stack.current(),
+    register(handlers: Handlers): () => void {
       const dispose = stack.push(handlers);
       publish();
       return () => {

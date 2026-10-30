@@ -146,6 +146,13 @@ describe('LISTNUM fields number from the list walk', () => {
     ).toEqual(['a)', '2)', 'a)', 'i)', 'i.', '7)']);
   });
 
+  test('the count goes on past the largest \\s value', () => {
+    expect(layoutOf(para(field('LISTNUM \\s 99999')) + para(field('LISTNUM')))).toEqual([
+      '9999)',
+      '10000)',
+    ]);
+  });
+
   test('the built-in names share one counter and pick their own formats', () => {
     expect(
       layoutOf(

@@ -89,7 +89,7 @@ These props control the packaged frame around the document.
 | `rulers` | `boolean` | Shows or hides the horizontal and vertical rulers. |
 | `renderOpenFailureActions` | `(context) => ReactNode` | Adds your own buttons to the dialog for a file that does not open. Build them from `DocxEditor.OpenFailure.Action`. |
 | `openFailure` | `boolean \| DocxEditorOpenFailureProps` | Shows, hides, or configures the dialog for a file that does not open. For more information, see [Handle files that do not open](/docs/2.x/guides/open-failures). |
-| `hyperlinkPopup` | `boolean` | Shows or hides the packaged hyperlink popover. |
+| `hyperlinkPopup` | `boolean` | Shows or hides the packaged hyperlink popover. If you hide it, mount a panel that calls `useHyperlinkPopup()`, or the Insert link controls are disabled. |
 | `contextMenu` | `boolean \| DocxEditorContextMenuProps` | Shows, hides, or configures the packaged context menu. |
 | `children` | `DocxEditorChildren` | Renders extra chrome inside the viewport after the document pages. |
 | `t` | `(key, params?) => string` | Resolves live chrome and drawing labels. |

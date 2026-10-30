@@ -45,6 +45,7 @@ import { IMAGE_WRAP_TARGETS, type ImageWrapTarget } from '../store/package/drawi
 import type { ReviewAuthorInfo } from '../output/revision-presentation.ts';
 
 import { NO_COMMENT_DRAFT_VIEW, commentDraftRequestsOf } from './comment-draft-chrome.ts';
+import { LINK_PROBE, NO_LINK_VIEW, linkControlState, linkRequestsOf } from './link-chrome.ts';
 
 /** Instance-only surface on the concrete facade — not part of the public `Editor` contract. */
 function surfaceOf(editor: Editor): PaginatedSurface | null {
@@ -123,15 +124,9 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
  * command needs an argument the slot itself cannot supply.
  *
  * `text.link` is the case: whether this selection could become a link is the engine's
- * question, but WHICH link is a URL field's. Chrome that owns a link UI (React's
- * `ToolbarLink`) asks with this and dispatches through that UI.
- *
- * DELIBERATELY NOT in `SLOT_COMMANDS`. Enabled state has one source, and putting the probe
- * there would enable the control in EVERY adapter — including Vue, which has grown no link
- * UI, where the result is an enabled button whose click can only be refused. A dead button
- * is the worse lie: `file.save` was a disabled control for a capability that works, and this
- * would be an enabled control for one that is not reachable. Vue's slot therefore keeps
- * reporting the honest "not wired to an editor command" until its popover lands.
+ * question, but WHICH link is a URL field's. `toolbarCommandState` answers the slot from
+ * this probe and from whether a link UI is registered, and `runToolbarCommand` opens that
+ * UI, so chrome reads the slot like any other.
  *
  * @public
  */
@@ -158,7 +153,7 @@ const DIALOG_SLOT_REASONS: Partial<Record<ChromeSlotId, string>> = {
 };
 
 const CHROME_PROBES: Partial<Record<ChromeSlotId, EditorCommand>> = {
-  'text.link': { type: 'insertHyperlink', href: 'https://example.com' },
+  'text.link': LINK_PROBE,
   // Both carry a real command whose ARGUMENTS come from chrome the registry does not own —
   // bytes from a file picker, a size from the insert grid. The probe asks the engine whether
   // a well-formed one would be honored AT THE CARET, which is exactly the enabled question;
@@ -471,6 +466,7 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
         };
   }
   if (id === 'review.addComment') return addCommentState(editor);
+  if (id === 'text.link') return linkControlState(editor);
   if (id === 'review.authors') {
     const capability = editor.can({ type: 'toggleReviewPane' });
     if (!capability.ok) {
@@ -538,8 +534,7 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
     // command can be dispatched from a bare click. When the engine REFUSES the probe, that
     // refusal is the honest reason and it is the engine's own words — quote it rather than
     // inventing one. When the engine ALLOWS it, payload-aware image chrome is wired through
-    // the probe rather than a fixed `SLOT_COMMANDS` row; link chrome is the opposite case
-    // and keeps falling through below so an adapter without a popover stays honestly unwired.
+    // the probe rather than a fixed `SLOT_COMMANDS` row. `text.link` returned above.
     const shapeProbe = CHROME_PROBES[id];
     if (shapeProbe) {
       if (id === 'image.insert' && shapeProbe.type === 'insertImage') {
@@ -835,6 +830,16 @@ export function runToolbarCommand(
     return surface.formatPainter.press()
       ? { ok: true, changed: false }
       : { ok: false, code: 'notFound', reason: NOTHING_TO_COPY_FORMATTING };
+  }
+  if (id === 'text.link') {
+    // Can before exec, then the registered link UI opens insert-or-edit, as Ctrl/Cmd+K does.
+    const state = linkControlState(editor);
+    if (!state.enabled) {
+      return { ok: false, code: 'unsupported', reason: state.disabledReason ?? NO_LINK_VIEW };
+    }
+    return linkRequestsOf(editor)?.open()
+      ? { ok: true, changed: false }
+      : { ok: false, code: 'unsupported', reason: NO_LINK_VIEW };
   }
   if (id === 'review.addComment') {
     // Can before exec, with the same answer the enabled state gives; then the registered

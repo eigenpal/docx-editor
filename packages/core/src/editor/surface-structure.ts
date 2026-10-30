@@ -37,6 +37,7 @@ import {
   paragraphPropertiesOf,
 } from './surface-formatting.ts';
 import { createListStyleWrites } from './surface-list-style.ts';
+import { commitListOps, createListExit } from './surface-list-exit.ts';
 import {
   layoutTabIndentReads,
   selectsOnlyPlaceholder,
@@ -163,6 +164,7 @@ type StructureMethods = Pick<
   | 'setParagraphFormat'
   | 'canAdjustIndent'
   | 'exitListOnEmptyItem'
+  | 'removeListNumber'
   | 'sectionProperties'
   | 'sectionPropertiesAt'
   | 'sectionAnchorParagraphAt'
@@ -287,6 +289,17 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     storyPart,
     styleCascade: deps.styleCascade,
     layout: deps.layout,
+  });
+  const listExit = createListExit({
+    orderedRange,
+    layout: deps.layout,
+    storyPart,
+    markerOf,
+    listLevelExists,
+    paragraphTextOf: deps.paragraphTextOf,
+    listNumbering,
+    listStyle,
+    commitOps: (ops) => commitListOps(commit, (next) => applyOps(next, selectionMark()), ops),
   });
   const orderOf = () => deps.paragraphOrder();
   const currentLayout = {
@@ -581,45 +594,8 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       );
     },
 
-    /**
-     * Enter on an EMPTY list item leaves the list, the way Word does.
-     *
-     * Pressing Enter at the end of a list makes another item; pressing it again on that
-     * still-empty item is how a user says "I am done with this list". Word outdents one
-     * level per press and drops the numbering at level 0. Answers whether it handled the
-     * key, so the caller falls through to an ordinary split when it did not.
-     */
-    exitListOnEmptyItem() {
-      const { from, to } = orderedRange();
-      if (from.paragraphId !== to.paragraphId || from.offset !== to.offset) return false;
-      const marker = markerOf(from.paragraphId);
-      if (!marker) return false;
-      // Only an EMPTY item: Enter inside text still splits the paragraph.
-      const text = deps.paragraphTextOf(from.paragraphId);
-      if (text.length > 0) return false;
-
-      const outdented = marker.level > 0 && listLevelExists(marker, marker.level - 1);
-      // Outdenting stays in the list, so it keeps the style. Leaving the list sheds it, or
-      // the paragraph keeps List Paragraph's half-inch indent with no marker beside it —
-      // see `clearListParagraphStyleOp`. The style write goes first for the same reason it
-      // does in `toggleList`: it carries the authored `w:numPr` forward, so running it
-      // after the numbering op would put back what that op had just removed.
-      const ops: TreeDocOp[] = [];
-      if (outdented) {
-        ops.push(listNumbering.levelOp(from.paragraphId, marker.numId, marker.level - 1));
-      } else {
-        const cleared = listStyle.clearOp(from.paragraphId);
-        if (cleared) ops.push(cleared);
-        ops.push(listNumbering.leaveOp(from.paragraphId));
-      }
-      let committed = false;
-      commit(() => {
-        const result = applyOps(ops, selectionMark());
-        committed = result.committed;
-        return result;
-      });
-      return committed;
-    },
+    exitListOnEmptyItem: listExit.exitListOnEmptyItem,
+    removeListNumber: listExit.removeListNumber,
 
     isListParagraph() {
       const { paragraphId } = orderedStart();

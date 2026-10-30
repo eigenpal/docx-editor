@@ -477,7 +477,7 @@ Prefer this component to a loading screen controlled only by `isLoading || isOpe
 </DocxEditorHyperLink>
 ```
 
-Its parts are `Url`, `Fields`, `Edit`, `Apply`, `Cancel`, `Copy`, `Unlink`, and `Error`. Use `useHyperlinkPopup()` when you need different markup.
+Its parts are `Url`, `Fields`, `Edit`, `Apply`, `Cancel`, `Copy`, `Unlink`, and `Error`. Use `useHyperlinkPopup()` when you need different markup. While a component that calls it is mounted, link clicks, Ctrl+K or Cmd+K, the toolbar **Link** button, and the context menu **Insert link** row open its state. If no link panel is mounted, those controls are disabled.
 
 ## Rulers
 

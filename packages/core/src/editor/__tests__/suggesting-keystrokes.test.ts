@@ -222,6 +222,11 @@ describe('Enter then Backspace, in suggesting mode', () => {
       surface.splitParagraph();
       expect(surface.session.paragraphIds()).toHaveLength(3);
 
+      // The new item is a list item, so the first Backspace removes its number.
+      surface.deleteBackward();
+      expect(surface.session.paragraphIds()).toHaveLength(3);
+      expect(surface.isListParagraph()).toBe(false);
+
       surface.deleteBackward();
       expect(surface.state().lastRejection).toBeNull();
       expect(surface.session.paragraphIds()).toHaveLength(2);
@@ -243,6 +248,9 @@ describe('Enter then Backspace, in suggesting mode', () => {
         listItem('Analysis'),
       (surface) => {
         caretTo(surface, 1, 0);
+        // The first Backspace removes the list number; the second reaches the break.
+        surface.deleteBackward();
+        expect(surface.isListParagraph()).toBe(false);
         surface.deleteBackward();
         expect(surface.state().lastRejection).toBeNull();
         expect(surface.session.paragraphIds()).toHaveLength(2);

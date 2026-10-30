@@ -87,7 +87,7 @@ These props control the packaged frame:
 | `navigation` | `boolean \| DocxEditorNavigationProps` | Toggles or configures the navigation pane. |
 | `openFailure` | `boolean \| DocxEditorOpenFailureProps` | Shows, hides, or configures the dialog for a file that does not open. For more information, see [Handle files that do not open](/docs/2.x/guides/open-failures). |
 | `rulers` | `boolean` | Toggles both packaged rulers. |
-| `hyperlinkPopup` | `boolean` | Toggles the hyperlink popover. |
+| `hyperlinkPopup` | `boolean` | Toggles the hyperlink popover. If you hide it, mount a panel that calls `useHyperlinkPopup()`, or the Insert link controls are disabled. |
 | `contextMenu` | `boolean \| DocxEditorContextMenuProps` | Toggles or configures the context menu. |
 | `t` | `(key, params?) => string` | Resolves live chrome and drawing labels. |
 | `i18n` | `Translations` | Supplies a live catalog to this editor. |

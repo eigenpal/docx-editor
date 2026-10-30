@@ -62,7 +62,11 @@ import type {
 import { useTranslation, type TranslationKey } from '../i18n';
 import { DocxEditorContext, ReviewRailContext, type ReviewRailRegistry } from './context';
 import type { useDocxEditor } from './context';
-import { HyperlinkPopupContext, useHyperlinkPopupInstance } from './useHyperlinkPopup';
+import {
+  HyperlinkPopupContext,
+  HyperlinkPopupViewsContext,
+  useHyperlinkPopupInstance,
+} from './useHyperlinkPopup';
 import { ContentControlContext, useContentControlInstance } from './useContentControl';
 import { ImageInsertProvider } from './images/ImageInsert';
 import {
@@ -632,8 +636,19 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
  * itself, because it consumes that context and a component cannot read its own provider.
  */
 function HyperlinkPopupProvider({ children }: { children?: DocxEditorChildren }) {
-  const popup = useHyperlinkPopupInstance(true);
-  return <HyperlinkPopupContext.Provider value={popup}>{children}</HyperlinkPopupContext.Provider>;
+  // Registered with the engine only while a view shows the state; see
+  // `HyperlinkPopupViewsContext`.
+  const [views, setViews] = useState(0);
+  const attach = useCallback(() => {
+    setViews((count) => count + 1);
+    return () => setViews((count) => count - 1);
+  }, []);
+  const popup = useHyperlinkPopupInstance(views > 0);
+  return (
+    <HyperlinkPopupViewsContext.Provider value={attach}>
+      <HyperlinkPopupContext.Provider value={popup}>{children}</HyperlinkPopupContext.Provider>
+    </HyperlinkPopupViewsContext.Provider>
+  );
 }
 
 /** One content-control chrome state per editor — inspector open + mode toggles. */

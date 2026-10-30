@@ -3,8 +3,13 @@ import type { TextFormFieldDialogSession } from './text-form-field-session.ts';
 import type { PopupChromeRegistrationOptions } from './popup-sessions.ts';
 import { createBookmarkChrome, type BookmarkChromeHost } from './bookmark-chrome.ts';
 import type { EquationChromeHandlers, HyperlinkChromeHandlers } from './docx-editor-types.ts';
+import { bindLinkRequests, createLinkChrome, type LinkRequests } from './link-chrome.ts';
 import { createChromeHandlerStack } from './chrome-handler-stack.ts';
-import { createCommentDraftChrome } from './comment-draft-chrome.ts';
+import {
+  bindCommentDraftRequests,
+  createCommentDraftChrome,
+  type CommentDraftRequests,
+} from './comment-draft-chrome.ts';
 
 /**
  * Manual renderers take priority over automatic adapter fallbacks in either mount order.
@@ -66,7 +71,7 @@ export const createTextFormFieldChrome = () => createSessionChrome<TextFormField
  * host's chrome wired to the surface it replaced.
  */
 export function createEditorPopupChrome(host: BookmarkChromeHost = {}) {
-  const hyperlink = createChromeHandlerStack<HyperlinkChromeHandlers>({});
+  const hyperlink = createLinkChrome(host.changed);
   const equation = createChromeHandlerStack<EquationChromeHandlers>({});
   const bookmark = createBookmarkChrome(host);
   const commentDraft = createCommentDraftChrome(host);
@@ -89,7 +94,7 @@ export function createEditorPopupChrome(host: BookmarkChromeHost = {}) {
       onHyperlinkPopover: (
         activation: Parameters<NonNullable<HyperlinkChromeHandlers['onPopover']>>[0]
       ) => hyperlink.current().onPopover?.(activation),
-      onRequestHyperlink: () => hyperlink.current().onRequest?.(),
+      onRequestHyperlink: (): boolean => hyperlink.open(),
       onEquationPopover: (
         activation: Parameters<NonNullable<EquationChromeHandlers['onPopover']>>[0]
       ) => equation.current().onPopover?.(activation),
@@ -99,14 +104,25 @@ export function createEditorPopupChrome(host: BookmarkChromeHost = {}) {
     goTo: bookmark.goTo,
     /** What the `review.addComment` control asks of the registered comment draft chrome. */
     commentDraft: commentDraft.requests,
+    /** What the `text.link` control asks of the registered link chrome. */
+    link: hyperlink.requests,
     setters: {
       setTextFormFieldChrome: text.register,
       setContentControlWidgetChrome: widget.register,
       setInvalidTextFormFieldChrome: invalid.register,
-      setHyperlinkChrome: hyperlink.push,
+      setHyperlinkChrome: hyperlink.register,
       setEquationChrome: equation.push,
       ...bookmark.setters,
       ...commentDraft.setters,
     },
   };
+}
+
+/** Make a facade's comment draft and link requests reachable from the toolbar commands. */
+export function bindPopupChromeRequests(
+  editor: object,
+  chrome: { readonly commentDraft: CommentDraftRequests; readonly link: LinkRequests }
+): void {
+  bindCommentDraftRequests(editor, chrome.commentDraft);
+  bindLinkRequests(editor, chrome.link);
 }

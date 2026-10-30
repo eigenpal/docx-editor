@@ -26,6 +26,7 @@ import { CHROME_GROUPS, chromeSlotId, type ChromeSlotId } from '../chrome-contro
 import {
   commandForSlot,
   runTableCommand,
+  runToolbarCommand,
   tableCommandToolbarState,
   toolbarCommandState,
 } from '../toolbar-commands.ts';
@@ -273,16 +274,50 @@ describe('no wired toggle is a lie of omission', () => {
     );
   });
 
-  test('the link capability is real even though the shared slot is unwired', () => {
-    // `text.link` reports "not wired" because it is not in the shared command table — a
-    // deliberate choice, so an adapter with no link UI does not grow an enabled button it
-    // cannot serve. The CAPABILITY is nonetheless there, and chrome that owns a link UI
-    // asks the engine directly. This pins both halves, so neither can rot alone.
+  test('the link slot is enabled exactly while a link UI is registered', async () => {
+    // `text.link` runs no command: the registered link UI supplies the target. So the slot
+    // is enabled only while one is registered, and running it opens that UI, as Ctrl/Cmd+K
+    // does. A host with no link UI gets a disabled control with a reason, never a button
+    // that does nothing.
     const editor = mount(p('alpha'));
     expect(toolbarCommandState(editor, 'text.link').disabledReason).toBe(
-      'not wired to an editor command'
+      'no link view is registered'
     );
     expect(editor.can({ type: 'insertHyperlink', href: 'https://example.com' }).ok).toBe(true);
+
+    let requests = 0;
+    const before = editor.snapshot();
+    const unregister = editor.setHyperlinkChrome({ onRequest: () => (requests += 1) });
+    // Registration moves the snapshot, so chrome that reads the slot re-renders.
+    expect(editor.snapshot()).not.toBe(before);
+    expect(toolbarCommandState(editor, 'text.link')).toEqual({
+      id: 'text.link',
+      enabled: true,
+      disabledReason: null,
+      active: false,
+    });
+    expect(runToolbarCommand(editor, 'text.link')).toEqual({ ok: true, changed: false });
+    expect(requests).toBe(1);
+
+    // A popover-only registration on top cannot open insert-or-edit.
+    const popoverOnly = editor.setHyperlinkChrome({ onPopover: () => undefined });
+    expect(toolbarCommandState(editor, 'text.link').enabled).toBe(false);
+    popoverOnly();
+
+    // The engine's refusal comes first: it is the reason a person can act on.
+    editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+    expect(toolbarCommandState(editor, 'text.link').disabledReason).toBe(
+      'the document is open for viewing'
+    );
+    expect(runToolbarCommand(editor, 'text.link').ok).toBe(false);
+    expect(requests).toBe(1);
+    editor.exec({ type: 'setEditingMode', mode: 'editing' });
+
+    unregister();
+    await Promise.resolve();
+    expect(toolbarCommandState(editor, 'text.link').disabledReason).toBe(
+      'no link view is registered'
+    );
   });
 });
 
