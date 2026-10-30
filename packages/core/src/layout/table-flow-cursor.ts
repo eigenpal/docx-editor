@@ -31,11 +31,6 @@ export interface TableFlowCursor {
    * pushes that page's footnotes forward. Absent means the two bands are the same.
    */
   readonly unreservedContentHeight?: () => number;
-  /**
-   * Whether a footnote continued from an earlier page reaches the page being filled, so that
-   * its reserve belongs to that note and not to the page's own notes. Absent means no.
-   */
-  readonly carriesNoteContinuation?: () => boolean;
   /** Move to the next column, or the next page when this was the last one. */
   readonly advanceColumn: () => void;
   /** End the page being filled, skipping any columns left on it. */

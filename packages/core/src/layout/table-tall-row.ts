@@ -5,13 +5,12 @@
 // Before mode 15 such a row stays whole on a fresh page and runs past the bottom margin
 // (`tallRowStaysWhole`). It does not start on a page that a footnote continued from an earlier
 // page reaches: that page keeps only the continued note and any content placed before the row,
-// and the row starts on the next page. A row that fits only the whole page, without the note,
-// moves the same way. The notes pass marks the pages a continued note reaches
-// (`markCarriedNotePage` in `note-reserves.ts`).
+// and the row starts on the next page. The notes pass marks such a page with a footnote reserve
+// (`overRowAreaPt` in `note-overflow-row.ts`), so the row yields to any reserve at the top of
+// its band.
 
 import type { SemanticTableRow, SemanticTableStructure } from './semantic-table.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
-import type { TableFlowCursor } from './table-flow-cursor.ts';
 import { bottomToTopTextKeepsRowWhole } from './table-cell-text-direction.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
 
@@ -52,21 +51,20 @@ export function staysWholeAt(row: SemanticTableRow, at: TallRowPlacement): boole
 const MAX_NOTE_CONTINUATION_YIELDS = 64;
 
 /**
- * Whether a row that cannot split, at the top of its band, leaves the page to a footnote
- * continued from an earlier page. Before mode 15 such a row does not start on a page that the
- * continued note reaches, whether it is taller than the page or fits only the whole page
- * without the note. The notes pass marks those pages (`carriesNoteContinuation`), so a reserve
- * for the page's own notes never moves the row.
+ * Whether a whole tall row at the top of its band leaves the page to a footnote continued from
+ * an earlier page. The row's own notes never reserve room on its page, so any reserve there
+ * belongs to a continuation.
  */
 export function yieldsToNoteContinuation(
-  flow: Pick<TableFlowCursor, 'cursorY' | 'carriesNoteContinuation'>,
-  bandTop: number,
+  belowBandTop: number,
+  reservedBand: number,
+  fullBand: number,
   yieldsSoFar: number
 ): boolean {
   return (
     yieldsSoFar < MAX_NOTE_CONTINUATION_YIELDS &&
-    flow.cursorY - bandTop <= 0.001 &&
-    flow.carriesNoteContinuation?.() === true
+    belowBandTop <= 0.001 &&
+    reservedBand < fullBand - 0.001
   );
 }
 

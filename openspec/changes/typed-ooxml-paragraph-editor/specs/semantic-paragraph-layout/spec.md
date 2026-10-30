@@ -932,13 +932,6 @@ Semantic layout SHALL place a supported terminal exact row's simple bottom rule 
 - **AND** the row starts on the first page after the continued footnote ends, also when the footnote needs more than one page
 - **AND** a page without body content gives the continued footnote its whole column
 
-#### Scenario: A carried footnote also moves a row that fits only the whole page
-
-- **WHEN** compatibility mode is 14 or earlier, or absent
-- **AND** a row that cannot split fits a fresh page only without footnotes, and starts at the top of a page that a footnote continued from an earlier page reaches
-- **THEN** that page holds only the continued footnote, and the row starts on the first page after the footnote ends
-- **AND** a footnote reserve for the page's own notes does not move the row
-
 #### Scenario: A row kept whole below repeated header rows keeps none of its footnotes
 
 - **WHEN** compatibility mode is 14 or earlier, or absent

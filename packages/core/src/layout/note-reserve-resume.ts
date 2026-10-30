@@ -7,7 +7,7 @@
 // pages are the only ones it has read, so it stays valid while they are unchanged.
 
 import type { FlowCheckpoint, LayoutSession } from './layout-session.ts';
-import { carriesNoteTo, notesReserveContextKey } from './note-reserves.ts';
+import { notesReserveContextKey } from './note-reserves.ts';
 
 interface ReserveContext {
   /** The pass context without its reserve part. */
@@ -175,11 +175,6 @@ export interface SectionReserveResume {
    * {@link takeReadReserves}.
    */
   reserveAt(page: number): number | undefined;
-  /**
-   * Whether a footnote continued from an earlier page reaches section-local page `page`. A
-   * seeded pass reads the mark where it reads the page's reserve (`reserveAt`).
-   */
-  carriesNoteAt(page: number): boolean;
   /** The whole pages the flow now runs ahead of the previous pass; a seeded pass reads by it. */
   followShift(shift: number): void;
   /**
@@ -309,7 +304,6 @@ export function sectionReserveResume(
   return {
     context,
     moved,
-    carriesNoteAt: (page) => carriesNoteTo(reserves, pageIndexStart + page - (reading ? shift : 0)),
     // At least the last block is placed again. The previous layout a session holds can be the
     // published one, with note sheets minted after the body; handing it back unchanged would
     // pass those sheets off as body pages.
