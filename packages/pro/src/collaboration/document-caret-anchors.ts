@@ -60,6 +60,12 @@ export class CaretAnchors {
   } | null = null;
   private stale = true;
   private carried: CollaborationSelectionMove | null = null;
+  /**
+   * A remote change started and its carry is not computed yet. The editor can lay out while
+   * the change publishes, when its host reads state on every change, and asks for the carry
+   * then: the one the previous change left would move the caret by that change instead.
+   */
+  private carryOwed = false;
 
   constructor(private readonly deps: CaretAnchorDeps) {}
 
@@ -82,6 +88,7 @@ export class CaretAnchors {
     this.stale = true;
     this.anchored = null;
     this.carried = null;
+    this.carryOwed = false;
   }
 
   /**
@@ -93,10 +100,13 @@ export class CaretAnchors {
     this.stale = true;
     this.anchored = null;
     this.carried = null;
+    this.carryOwed = false;
   }
 
   /** Shared state is about to change: anchor the selection on what the editor shows. */
   beforeChange(): void {
+    this.carried = null;
+    this.carryOwed = true;
     if (!this.stale) return;
     this.stale = false;
     this.anchored = null;
@@ -109,6 +119,7 @@ export class CaretAnchors {
 
   /** The editor shows the change: carry the selection onto the characters it was beside. */
   afterPublish(): void {
+    this.carryOwed = false;
     const { anchored, selection } = this;
     if (!anchored || !selection || !this.deps.viewIsCurrent()) {
       this.carried = null;
@@ -121,6 +132,8 @@ export class CaretAnchors {
 
   /** Where the last remote change carried the selection, or null to map it by text. */
   move(): CollaborationSelectionMove | null {
+    // Asked while the change publishes: the editor already shows it, so carry now.
+    if (this.carryOwed) this.afterPublish();
     return this.carried;
   }
 

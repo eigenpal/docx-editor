@@ -1,5 +1,4 @@
 import { sameResourceSubstrate } from './package-resource-substrate.ts';
-import { groupTextboxesLayoutToken } from './group-textbox-layout.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import { drawingInputsUnchangedByParagraphEdit } from './drawing-paragraph-change.ts';
 // Package-backed inline drawing layout source (typed-drawings-and-images task 6).
@@ -7,8 +6,8 @@ import { drawingInputsUnchangedByParagraphEdit } from './drawing-paragraph-chang
 // ancestor xmlns bindings. Field projection consumes the atom-id map; it never re-walks MC
 // with an empty namespace scope.
 
-import { textboxLayoutToken } from './textbox-layout-token.ts';
-import { pointsDigest, vectorShapeLayoutToken } from './drawing-geometry-digest.ts';
+import { vectorShapeLayoutToken } from './drawing-geometry-digest.ts';
+import { drawingProjectionLayoutToken } from './drawing-projection-layout-token.ts';
 import { isLegacyVmlAtom } from '../store/package/legacy-vml-projection.ts';
 import type {
   OoxmlDrawingNode,
@@ -57,10 +56,7 @@ import {
   FOOTPRINT_RESOURCE,
   pendingResourceKey,
 } from './drawing-resource-keys.ts';
-import {
-  groupPictureLayerResources,
-  groupPictureLayoutToken,
-} from './drawing-group-picture-layers.ts';
+import { groupPictureLayerResources } from './drawing-group-picture-layers.ts';
 
 /** Layout-owned read surface for inline drawing package state (no binding/session lane). */
 export interface InlineDrawingPackageReader {
@@ -110,6 +106,11 @@ interface PartDrawingContextSlot {
   readonly isCompatibleWith: (part: OoxmlPart, pkg: OoxmlPackage) => boolean;
   readonly pendingResourceCount: () => number;
   readonly resolveChartFallback: (atomId: string) => Promise<ImageResourceState | undefined>;
+  /**
+   * Remove and return the settled resources that follow from the package alone, with their
+   * picture handles still retained, for the slot that replaces this one.
+   */
+  readonly takeSettledResources: () => ReadonlyMap<string, ImageResourceState>;
   readonly dispose: () => void;
 }
 
@@ -266,142 +267,6 @@ export function drawingSourceOrderInPart(
   return order;
 }
 
-function drawingProjectionLayoutToken(projection: DrawingProjection): string {
-  const position = projection.position;
-  const anchor = projection.anchor;
-  const picture = projection.picture;
-  const wrap = projection.wrapGeometry;
-  const vector = projection.vectorShape;
-  const groupPicture = projection.groupPicture;
-  // Length-framed (`framedTokenJoin`): relationship ids, part names, and preset geometry
-  // are verbatim file values, so a printable field separator would let two different
-  // picture references serialize to one token — and `isCompatibleWith` compares
-  // projections by this token alone when the resource substrate is unchanged.
-  // This also validates retained projections used by paint and drawing controls. Every
-  // top-level field needs a token decision, including diagnostics used for placeholders.
-  const fields = {
-    drawingNodeId: projection.drawingNodeId,
-    ownerPartName: projection.ownerPartName,
-    kind: projection.kind,
-    diagnostics: framedTokenJoin(
-      projection.diagnostics.map((diagnostic) =>
-        framedTokenJoin([diagnostic.code, diagnostic.nodeId, diagnostic.detail ?? ''])
-      )
-    ),
-    relationshipId: projection.relationshipId ?? '',
-    docPrId: String(projection.docPrId ?? ''),
-    name: projection.name,
-    title: projection.title,
-    description: projection.description,
-    hyperlinkHref: projection.hyperlinkHref ?? '',
-    hidden: String(projection.hidden),
-    extentEmu: framedTokenJoin([String(projection.extentEmu.cx), String(projection.extentEmu.cy)]),
-    effectExtentEmu: framedTokenJoin([
-      String(projection.effectExtentEmu.top),
-      String(projection.effectExtentEmu.right),
-      String(projection.effectExtentEmu.bottom),
-      String(projection.effectExtentEmu.left),
-    ]),
-    inlineDistancesEmu: framedTokenJoin([
-      String(projection.inlineDistancesEmu.top),
-      String(projection.inlineDistancesEmu.right),
-      String(projection.inlineDistancesEmu.bottom),
-      String(projection.inlineDistancesEmu.left),
-    ]),
-    wrap: projection.wrap,
-    textboxStory: projection.textboxStory ? textboxLayoutToken(projection.textboxStory) : '',
-    groupTextboxes: groupTextboxesLayoutToken(projection.groupTextboxes),
-    chartSummary: projection.chartSummary
-      ? framedTokenJoin([
-          projection.chartSummary.title ?? '',
-          projection.chartSummary.shownAs,
-          ...projection.chartSummary.plotTypes,
-        ])
-      : '',
-    chartFallbackPicture: framedTokenJoin([
-      projection.chartFallbackPicture?.embeddedRelationshipId ?? '',
-      projection.chartFallbackPicture?.linkedRelationshipId ?? '',
-    ]),
-    compatibilityBranchNodeId: projection.compatibilityBranchNodeId ?? '',
-    footprintOnly: projection.footprintOnly ? 'footprint' : '',
-    anchor: anchor
-      ? framedTokenJoin([
-          String(anchor.simplePos),
-          String(anchor.relativeHeight),
-          String(anchor.layoutInCell),
-          String(anchor.allowOverlap),
-          String(anchor.behindDocument),
-        ])
-      : '',
-    locks: framedTokenJoin([
-      String(projection.locks.select),
-      String(projection.locks.move),
-      String(projection.locks.resize),
-      String(projection.locks.changeAspect),
-    ]),
-    effects: framedTokenJoin([
-      String(projection.effects.grayscale),
-      String(projection.effects.brightness),
-      String(projection.effects.contrast),
-      String(projection.effects.bilevel ?? ''),
-    ]),
-    picture: picture
-      ? framedTokenJoin([
-          String(picture.crop.left),
-          String(picture.crop.top),
-          String(picture.crop.right),
-          String(picture.crop.bottom),
-          String(picture.transform.rotationDegrees),
-          String(picture.transform.flipHorizontal),
-          String(picture.transform.flipVertical),
-          String(picture.transform.offsetEmu.x),
-          String(picture.transform.offsetEmu.y),
-          String(picture.transform.extentEmu.cx),
-          String(picture.transform.extentEmu.cy),
-          picture.embeddedRelationshipId ?? '',
-          picture.linkedRelationshipId ?? '',
-          picture.presetGeometry ?? '',
-          picture.clipUnit?.map((point) => `${point.x},${point.y}`).join(' ') ?? '',
-          picture.frameEffects ? JSON.stringify(picture.frameEffects) : '',
-          picture.fillMode,
-        ])
-      : '',
-    groupPicture: groupPicture ? groupPictureLayoutToken(groupPicture) : '',
-    groupPictureLayers: framedTokenJoin(
-      (projection.groupPictureLayers ?? []).map(groupPictureLayoutToken)
-    ),
-    legacyGraphic: projection.legacyGraphic ? JSON.stringify(projection.legacyGraphic) : '',
-    textArt: JSON.stringify(projection.textArt) ?? '',
-    horizontalRule: JSON.stringify(projection.horizontalRule) ?? '',
-    vectorShape: vector ? vectorShapeLayoutToken(vector) : '',
-    wrapGeometry: wrap
-      ? framedTokenJoin([
-          wrap.element,
-          wrap.textSide,
-          String(wrap.distancesEmu.top),
-          String(wrap.distancesEmu.right),
-          String(wrap.distancesEmu.bottom),
-          String(wrap.distancesEmu.left),
-          String(wrap.polygon.length),
-          pointsDigest(wrap.polygon),
-        ])
-      : '',
-    position: position
-      ? framedTokenJoin([
-          position.horizontal.relativeFrom,
-          position.horizontal.align ?? '',
-          String(position.horizontal.offsetEmu ?? ''),
-          position.vertical.relativeFrom,
-          position.vertical.align ?? '',
-          String(position.vertical.offsetEmu ?? ''),
-          String(position.simplePosition.xEmu),
-          String(position.simplePosition.yEmu),
-        ])
-      : '',
-  } satisfies Record<keyof DrawingProjection, string>;
-  return framedTokenJoin(Object.values(fields));
-}
-
 /**
  * Story levels folded into a paragraph's drawing token.
  *
@@ -439,6 +304,8 @@ function createPartDrawingContextSlot(options: {
   readonly rememberReadyHandle: (handle: ValidatedImageBytesHandle) => void;
   readonly forgetReadyHandle: (handle: ValidatedImageBytesHandle) => void;
   readonly pictureBulletResource: NonNullable<InlineDrawingLayoutContext['pictureBulletResource']>;
+  /** Settled pictures of the slot this one replaces; their handles stay retained. */
+  readonly carried?: ReadonlyMap<string, ImageResourceState>;
 }): PartDrawingContextSlot {
   const {
     ownerPartName,
@@ -451,7 +318,12 @@ function createPartDrawingContextSlot(options: {
   } = options;
   let disposed = false;
   let generation = 0;
-  const resourceByKey = new Map<string, ImageResourceState>();
+  const resourceByKey = new Map<string, ImageResourceState>(options.carried);
+  /**
+   * Keys whose state follows from the package alone: an embedded picture, or a shape with no
+   * picture. A replacement slot over the same images and relationships may reuse them.
+   */
+  const carriableKeys = new Set<string>(options.carried?.keys());
   const inFlight = new Set<string>();
   const resourceEpochByKey = new Map<string, number>();
   const drawingTokensByParagraph = new WeakMap<
@@ -531,10 +403,20 @@ function createPartDrawingContextSlot(options: {
       return FOOTPRINT_RESOURCE;
     }
     const key = pendingResourceKey(projection);
+    const shown = projection.picture ?? projection.groupPicture;
+    // A legacy graphic resolves from its own geometry, not from the relationship alone.
+    if (projection.legacyGraphic) {
+      const carried = options.carried?.get(key);
+      if (carriableKeys.delete(key) && carried && resourceByKey.get(key) === carried) {
+        resourceByKey.delete(key);
+        if (carried.kind === 'ready') forgetReadyHandle(carried.validatedHandle);
+      }
+    } else if ((!shown || shown.embeddedRelationshipId) && !resourceByKey.has(key)) {
+      carriableKeys.add(key);
+    }
     const cached = resourceByKey.get(key);
     if (cached) return cached;
 
-    const shown = projection.picture ?? projection.groupPicture;
     const linked = shown?.embeddedRelationshipId ? null : shown?.linkedRelationshipId;
     if (linked) {
       const linkedState = lookup.resolveLinked(ownerPartName, linked);
@@ -703,6 +585,20 @@ function createPartDrawingContextSlot(options: {
       lastCompatiblePart = nextPart;
       return true;
     },
+    takeSettledResources: () => {
+      const taken = new Map<string, ImageResourceState>();
+      for (const key of carriableKeys) {
+        const state = resourceByKey.get(key);
+        // A failure can be transient (a decode that threw), so the next slot asks again.
+        const fixed =
+          state?.kind === 'ready' ||
+          (state?.kind === 'unrenderable' && state.reason === 'non-picture-graphic');
+        if (!state || !fixed) continue;
+        taken.set(key, state);
+        resourceByKey.delete(key);
+      }
+      return taken;
+    },
     dispose: () => {
       disposed = true;
       generation += 1;
@@ -758,6 +654,17 @@ export function createInlineDrawingLayoutBundle(
       releaseTokensByKey.delete(handle.resourceKey);
     }
   };
+  /** Settled pictures handed from a replaced part slot to the next slot for that part. */
+  const carriedByPart = new Map<string, ReadonlyMap<string, ImageResourceState>>();
+  const releaseCarried = (keep: (ownerPartName: string) => boolean = () => false): void => {
+    for (const [ownerPartName, carried] of carriedByPart) {
+      if (keep(ownerPartName)) continue;
+      for (const state of carried.values()) {
+        if (state.kind === 'ready') forgetReadyHandle(state.validatedHandle);
+      }
+      carriedByPart.delete(ownerPartName);
+    }
+  };
 
   const pictureBullets = createPictureBulletResourceResolver({
     currentPackage: () => pkgSnapshot,
@@ -786,6 +693,8 @@ export function createInlineDrawingLayoutBundle(
     if (existing) return existing;
     const part = resolvePart(ownerPartName, reader);
     partByName.set(ownerPartName, part);
+    const carried = carriedByPart.get(ownerPartName);
+    carriedByPart.delete(ownerPartName);
     const slot = createPartDrawingContextSlot({
       ownerPartName,
       part,
@@ -795,6 +704,7 @@ export function createInlineDrawingLayoutBundle(
       rememberReadyHandle,
       forgetReadyHandle,
       pictureBulletResource: pictureBullets.resolve,
+      ...(carried ? { carried } : {}),
     });
     slots.set(ownerPartName, slot);
     slotMintCounter += 1;
@@ -806,6 +716,11 @@ export function createInlineDrawingLayoutBundle(
     const nextPkg = reader.currentPackage();
     const resourceSubstrateUnchanged = sameResourceSubstrate(nextPkg, pkgSnapshot);
     if (resourceSubstrateUnchanged) {
+      // A part laid out only now and then (a header, say) may not have rebuilt its slot
+      // since the last edit. Its carried pictures stay valid while the part exists.
+      releaseCarried(
+        (ownerPartName) => nextPkg.parts.has(ownerPartName) || ownerPartName === reader.part().name
+      );
       // The numbering part's bytes and rels are unchanged too, so resolved bullets stand.
       for (const [ownerPartName, slot] of slots) {
         const nextPart =
@@ -815,6 +730,10 @@ export function createInlineDrawingLayoutBundle(
           partByName.set(ownerPartName, nextPart);
           continue;
         }
+        // Text typed into a text box changes its projection, so the slot is replaced. The
+        // part's images and relationships are unchanged: keep each decoded picture, or every
+        // picture in the part goes pending and repaints from a new URL on each keystroke.
+        if (nextPart) carriedByPart.set(ownerPartName, slot.takeSettledResources());
         slot.dispose();
         slots.delete(ownerPartName);
         partByName.delete(ownerPartName);
@@ -823,6 +742,7 @@ export function createInlineDrawingLayoutBundle(
       pkgSnapshot = nextPkg;
       return;
     }
+    releaseCarried();
     for (const slot of slots.values()) slot.dispose();
     slots.clear();
     partByName.clear();
@@ -883,6 +803,7 @@ export function createInlineDrawingLayoutBundle(
     },
     dispose() {
       pictureBullets.reset();
+      releaseCarried();
       for (const slot of slots.values()) slot.dispose();
       slots.clear();
       partByName.clear();

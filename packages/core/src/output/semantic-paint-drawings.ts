@@ -196,8 +196,14 @@ export function drawingUrlRegistryFor(
       imagesByElementKey.set(elementKey, { ...cached, readyElement: element });
     },
     reconcile(usedResourceKeys: ReadonlySet<string>, usedElementKeys: ReadonlySet<string>): void {
+      // A pending picture paints its retained image, so that image's URL stays live too.
+      // Revoked, the retained image blanks, and the next ready paint loads it again.
+      const retainedResourceKeys = new Set<string>();
+      for (const [key, entry] of imagesByElementKey) {
+        if (usedElementKeys.has(key)) retainedResourceKeys.add(entry.resourceKey);
+      }
       for (const [key, url] of urlsByKey) {
-        if (usedResourceKeys.has(key)) continue;
+        if (usedResourceKeys.has(key) || retainedResourceKeys.has(key)) continue;
         port.revoke(url);
         urlsByKey.delete(key);
       }

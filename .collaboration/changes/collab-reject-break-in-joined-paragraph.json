@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "When one decision removed a paragraph by joining it into the next one and also removed an inline element the paragraph held, such as a tracked line or page break, the writer kept the element's record because the removed paragraph's last content still listed it. The element then followed the moved text into the joined paragraph, so the decision applied only in part, and a second decision was needed.",
+  "after": "A paragraph that an edit removes no longer keeps the inline elements it held. An element that no other paragraph shows is deleted with the paragraph, so one decision removes the break and joins the paragraphs on every replica, and an undo of the decision puts both back.",
+  "reason": "The writer writes an ordinary deleted value on the element's record, which released replicas already honor. No stored field, identity, conflict rule, or canonical mapping changes, so a mixed room converges. A released replica keeps its released behavior for its own decisions until it upgrades.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-split-collaboration.test.ts"],
+  "changeset": "collab-reject-break-in-joined-paragraph",
+  "migration": null
+}
