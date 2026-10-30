@@ -161,7 +161,7 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
     kind: 'row',
     id: 'text.link',
     // The label switches to Edit link on an existing link; see `MenuLinkRow`.
-    render: () => <MenuLinkRow />,
+    render: () => <MenuLinkRow shortcutKey="contextMenu.insertLinkShortcut" />,
   },
   {
     kind: 'row',

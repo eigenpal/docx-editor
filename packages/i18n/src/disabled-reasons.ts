@@ -38,6 +38,8 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'a comment needs a selected range': 'disabledReason.commentSelection',
   // Keyed on `NO_COMMENT_DRAFT_VIEW` in the engine's comment draft chrome.
   'no comment draft view is registered': 'disabledReason.noCommentDraftView',
+  // Keyed on `NO_LINK_VIEW` in the engine's link chrome.
+  'no link view is registered': 'disabledReason.noLinkView',
   'no Go To view is registered': 'disabledReason.noGoToView',
   'no bookmark dialog is registered': 'disabledReason.noBookmarkDialog',
   'nothing to undo': 'disabledReason.nothingToUndo',

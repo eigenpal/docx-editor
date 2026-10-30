@@ -197,9 +197,9 @@ export interface DocxEditorProps {
   /**
    * Render the packaged hyperlink popover (`false` removes it).
    *
-   * The engine's link GESTURES stay wired either way — a click on a link and Ctrl/Cmd+K
-   * still reach `useHyperlinkPopup()` — so a host that turns this off to render its own
-   * panel loses the packaged UI and nothing else.
+   * A host that turns this off to render its own panel reads `useHyperlinkPopup()`: while
+   * that panel is mounted, a click on a link, Ctrl/Cmd+K, and the Insert link controls open
+   * it. With no link panel at all, the Insert link controls are disabled.
    */
   hyperlinkPopup?: boolean;
   /**

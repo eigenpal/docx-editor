@@ -600,7 +600,7 @@
       "vueOnly": []
     },
     "shortcuts": {
-      "reactOnly": ["\"Ctrl+K\"", "'Ctrl+E'", "'Ctrl+J'", "'Ctrl+L'", "'Ctrl+R'"],
+      "reactOnly": ["'Ctrl+E'", "'Ctrl+J'", "'Ctrl+L'", "'Ctrl+R'"],
       "vueOnly": []
     },
     "sidebarKinds": {

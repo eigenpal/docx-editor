@@ -31,6 +31,7 @@
     "drawingLocked": "This image is locked",
     "commentSelection": "Select a range before adding a comment",
     "noCommentDraftView": "Comments can't be added here",
+    "noLinkView": "Links can't be added here",
     "mergeUnsupported": "Cell merge is not supported",
     "splitUnsupported": "Cell split is not supported",
     "mergeNeedsRectangle": "Select two or more cells that form a rectangle to merge them",
@@ -564,6 +565,7 @@
     "deleteShortcut": "Del",
     "selectAll": "Select All",
     "selectAllShortcut": "Ctrl+A",
+    "insertLinkShortcut": "Ctrl+K",
     "editCustomNode": "Edit {label}",
     "removeCustomNode": "Remove {label}"
   },
