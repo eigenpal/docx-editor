@@ -677,9 +677,9 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       // and the rest survive, because an op that cannot say a thing cannot mean to delete it
       // (see `mergedPropertyChildren`).
       //
-      // The armed typing format goes FIRST, and unconditionally: nothing is selected at a
-      // caret, so the existing text keeps what it has and the pending entry is the only
-      // formatting the press can actually clear there. Retiring it after the early return
+      // The armed typing format goes FIRST, and unconditionally: at a caret outside a word
+      // the existing text keeps what it has, so the pending entry is the only formatting the
+      // press can clear there; inside a word the word clears below as well. Retiring it after the early return
       // below meant an eraser pressed on a paragraph the layout had not published yet left
       // the armed format standing, and the next characters typed came out in exactly the
       // formatting the user had just asked to be rid of.
