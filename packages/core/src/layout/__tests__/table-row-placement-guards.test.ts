@@ -24,8 +24,8 @@ const tableNode = (part: OoxmlPart): OoxmlElement =>
     .find((node) => node.kind === 'body')!
     .children.find((node) => node.kind === 'table')! as OoxmlElement;
 
-function setup() {
-  const part = load(table);
+function setup(numeric = false) {
+  const part = load(numeric ? table.replace('A1', '123456789') : table);
   lay(part);
   const row = readTableStructure(tableNode(part), 310, 0, styleCascade)!.rows[0]!;
   const deps: TableFlowDeps = {
@@ -38,8 +38,8 @@ function setup() {
     compatibilityMode: 15,
     displayMode: 'all-markup',
   } as TableFlowDeps;
-  const narrow = [90, 100, 110];
-  const wide = [100.5, 95.25, 104.125];
+  const narrow = numeric ? [27, 100, 110] : [90, 100, 110];
+  const wide = numeric ? [27.125, 100, 110] : [100.5, 95.25, 104.125];
   const top = 40;
   const probe = layoutRowFragment(row, narrow, 3, top, false, 0, deps);
   rememberRowPlacement(row, probe, top, deps);
@@ -95,3 +95,66 @@ test('each vertical input of any cell refuses when it differs', () => {
   };
   expect(placementFromPrevious(realigned, previous, wide, 2.5, top, deps)).toBeNull();
 });
+
+for (const numeric of [false, true])
+  test(`compact ${numeric ? 'numeric' : 'ordinary'} offers validate inputs before direct placement`, async () => {
+    const { moveRowToWidths } = await import('../table-row-geometry-reuse.ts');
+    const { createBodyWidthGroup } = await import('../table-body-width-group.ts');
+    const { row, deps, wide, top, previous } = setup(numeric);
+    const cells: import('../table-cell-width-placement.ts').CellWidthPlacement[] = [];
+    expect(
+      moveRowToWidths(row, previous, wide, 2.5, deps, (recipe) => {
+        expect(recipe).not.toBeNull();
+        cells.push(recipe!);
+      })
+    ).not.toBeNull();
+    const group = createBodyWidthGroup([{ source: row, baseline: previous, cells }], 3, 'test')!;
+    expect(group).not.toBeNull();
+    const compact = group.rows[0]!;
+    const candidate = {
+      compact,
+      baseline: { ...compact.baseline, cells: compact.cells.map((cell) => cell.baseline) },
+    };
+    const reused = placementFromPrevious(row, candidate, wide, 2.5, top, deps);
+    expect(reused).not.toBeNull();
+    const fresh = layoutRowFragment(row, wide, 2.5, top, false, 0, {
+      ...deps,
+      cache: createParagraphLayoutCache<never>(),
+    });
+    expect(JSON.stringify(reused!.record)).toBe(JSON.stringify(fresh.record));
+    for (const shiftedTop of [0, top + 1, 311.125]) {
+      const shifted = placementFromPrevious(row, candidate, wide, 2.5, shiftedTop, deps);
+      expect(shifted).not.toBeNull();
+      const freshShifted = layoutRowFragment(row, wide, 2.5, shiftedTop, false, 0, {
+        ...deps,
+        cache: createParagraphLayoutCache<never>(),
+      });
+      expect(shifted!.record).toEqual(freshShifted.record);
+      expect(shifted!.bottom).toBe(freshShifted.bottom);
+    }
+    expect(placementFromPrevious({ ...row }, candidate, wide, 2.5, top, deps)).toBeNull();
+    for (const changed of [
+      { cache: createParagraphLayoutCache<never>() },
+      { defaultTabStopPt: 72 },
+      { displayMode: 'original' as const },
+      { compatibilityMode: 14 },
+      { measurer: { ...measurer } },
+    ])
+      for (const at of [top, top + 1])
+        expect(
+          placementFromPrevious(row, candidate, wide, 2.5, at, { ...deps, ...changed })
+        ).toBeNull();
+    const target = row.cells[0]!;
+    const base = cellContentInsets(target, true);
+    for (const side of ['left', 'right', 'top', 'bottom'] as const)
+      expect(
+        placementFromPrevious(row, candidate, wide, 2.5, top, {
+          ...deps,
+          cellContentInsets: new Map([[target.id, { ...base, [side]: base[side] + 1 }]]),
+        })
+      ).toBeNull();
+    for (const at of [top, top + 1])
+      expect(placementFromPrevious(row, candidate, [10, 10, 10], 2.5, at, deps)).toBeNull();
+    if (numeric)
+      expect(placementFromPrevious(row, candidate, [100, 100, 110], 2.5, top, deps)).toBeNull();
+  });

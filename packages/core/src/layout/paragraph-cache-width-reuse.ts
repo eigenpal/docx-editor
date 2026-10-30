@@ -1,3 +1,4 @@
+import { numericLinesHoldAtWidth } from './numeric-width-proof-cache.ts';
 import { lineHangingPunctuationAdvance } from './line-hanging-punctuation.ts';
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import { endsWithSpaceSlot } from './trailing-spaces.ts';
@@ -83,8 +84,8 @@ export function tokenLineHoldsAtWidth(line: PendingLine, available: number): boo
   );
 }
 
-/** A complete ordinary token keeps its measured line when the new width still holds it. */
-export function reuseSingleLineAtWidth(
+/** Reuse a complete ordinary line or a numeric paragraph with an exact break proof. */
+export function reuseParagraphAtWidth(
   cache: ParagraphLayoutCache<readonly PendingLine[]>,
   paragraph: OoxmlNode,
   key: string,
@@ -93,7 +94,9 @@ export function reuseSingleLineAtWidth(
   return readers.get(cache)?.(paragraph, key, (value) => {
     const lines = value as readonly PendingLine[];
     return (
-      Array.isArray(lines) && lines.length === 1 && tokenLineHoldsAtWidth(lines[0]!, available)
+      Array.isArray(lines) &&
+      ((lines.length === 1 && tokenLineHoldsAtWidth(lines[0]!, available)) ||
+        numericLinesHoldAtWidth(lines, available))
     );
   }) as readonly PendingLine[] | undefined;
 }

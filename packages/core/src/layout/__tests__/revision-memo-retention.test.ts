@@ -82,7 +82,7 @@ function tableXml(rows: number, text: string): string {
   return `${xml}</w:tbl>`;
 }
 
-test('an edited table keeps no structure for its older revision', () => {
+test('an edited table keeps only its two latest structures', () => {
   const table = (text: string) => {
     const read = readOoxmlPart(
       `<w:document xmlns:w="${W}"><w:body>${tableXml(40, text)}</w:body></w:document>`,
@@ -102,10 +102,20 @@ test('an edited table keeps no structure for its older revision', () => {
     ),
   } as OoxmlElement;
   const gone = released(() => readTableStructure(before, 400, 0)!);
-  expect(readTableStructure(after, 400, 0)).not.toBeNull();
-  // `before` is still alive, as the undo history keeps it.
+  const previousGone = released(() => readTableStructure(after, 400, 0)!);
+  const third = table('Newest');
+  const newest = {
+    ...third,
+    children: third.children.map((child) =>
+      child.localName === 'tblPr' ? before.children[0]! : child
+    ),
+  } as OoxmlElement;
+  expect(readTableStructure(newest, 400, 0)).not.toBeNull();
+  // The two update inputs stay cached. Older structures leave even while undo holds their trees.
   expect(before.kind).toBe('table');
+  expect(after.kind).toBe('table');
   expect(gone()).toBe(true);
+  expect(previousGone()).toBe(false);
 });
 
 function headerDocument() {

@@ -1,3 +1,4 @@
+import { createTableReadCache } from './table-read-cache.ts';
 // Selected-cell border and fill TreeDocOps (table-editing task 6).
 //
 // Physical grid ownership drives edge planning; property patches are in-place and lossless.
@@ -300,7 +301,19 @@ function createPlacedCell(
   return cell;
 }
 
+type PlacedCellIndexResult =
+  | { readonly ok: true; readonly index: PlacedCellIndex }
+  | { readonly ok: false; readonly reason: TreeOpRejection };
+const cachedCellIndex = createTableReadCache<EditableTableTopology, PlacedCellIndexResult>();
+
 export function buildPlacedCellIndex(
+  topology: EditableTableTopology,
+  limits: TableTopologyLimits
+): PlacedCellIndexResult {
+  return cachedCellIndex(topology, topology, limits, () => readPlacedCellIndex(topology, limits));
+}
+
+function readPlacedCellIndex(
   topology: EditableTableTopology,
   limits: TableTopologyLimits
 ):

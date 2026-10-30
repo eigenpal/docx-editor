@@ -25,6 +25,7 @@ import type {
   PageRecord,
   SemanticLayout,
   TextMeasurer,
+  TableFragmentRecord,
 } from './semantic-records.ts';
 
 /** Each item's `cacheToken` without its marker text; recorded where the token is built. */
@@ -103,6 +104,13 @@ function relabeledMarker(
   };
 }
 
+const tablesWithoutMarkers = new WeakSet<TableFragmentRecord>();
+
+/** The caller proves no paragraph at any depth publishes a list marker. */
+export function markTableWithoutListMarkers(table: TableFragmentRecord): void {
+  tablesWithoutMarkers.add(table);
+}
+
 function relabeledBlocks(
   blocks: readonly BlockFragmentRecord[],
   listItems: ReadonlyMap<string, ResolvedListItem>,
@@ -116,7 +124,7 @@ function relabeledBlocks(
       const item = block.marker ? listItems.get(block.paragraphId) : undefined;
       const marker = item && block.marker ? relabeledMarker(block.marker, item, measurer) : null;
       if (marker && marker !== block.marker) replaced = { ...block, marker };
-    } else {
+    } else if (!tablesWithoutMarkers.has(block)) {
       let rows: (typeof block.rows)[number][] | null = null;
       for (let rowIndex = 0; rowIndex < block.rows.length; rowIndex += 1) {
         const row = block.rows[rowIndex]!;

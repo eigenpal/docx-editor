@@ -405,21 +405,20 @@ function edgesEqual(
   return a.style === b.style && a.color === b.color && a.widthPt === b.widthPt;
 }
 
-function mergeRawIntervals(raw: readonly RawInterval[]): RawInterval[] {
-  if (raw.length === 0) return [];
-  const out: RawInterval[] = [];
-  let current = { ...raw[0]! };
-  for (let i = 1; i < raw.length; i += 1) {
-    const next = raw[i]!;
-    if (current.gridEnd === next.gridStart && edgesEqual(current.edge, next.edge)) {
-      current = { ...current, gridEnd: next.gridEnd };
-    } else {
-      out.push(current);
-      current = { ...next };
-    }
+/** Append ordered intervals, merging only the unpublished contiguous winner. */
+function appendInterval(
+  intervals: RawInterval[],
+  gridStart: number,
+  gridEnd: number,
+  side: TableBorderSide
+): void {
+  const edge = side.state === 'edge' ? side : undefined;
+  const previous = intervals[intervals.length - 1];
+  if (previous && previous.gridEnd === gridStart && edgesEqual(previous.edge, edge)) {
+    previous.gridEnd = gridEnd;
+  } else {
+    intervals.push({ gridStart, gridEnd, edge: asResolved(side) });
   }
-  out.push(current);
-  return out;
 }
 
 function convenienceEdge(
@@ -878,30 +877,22 @@ export function resolveTableCellBorderGrid(
       const lastCol = cell.gridColumn + cell.gridSpan - 1;
 
       // --- top (outer only; interior owned by row above) — per grid column ---
-      const topRaw: RawInterval[] = [];
+      const top: RawInterval[] = [];
       if (isTop) {
         for (let col = cell.gridColumn; col <= lastCol; col += 1) {
-          topRaw.push({
-            gridStart: col,
-            gridEnd: col + 1,
-            edge: asResolved(effective(cell, 'top', false)),
-          });
+          appendInterval(top, col, col + 1, effective(cell, 'top', false));
         }
       }
 
       // Row perimeters can move inward after skipped grid columns.
-      const leftRaw: RawInterval[] = [];
+      const left: RawInterval[] = [];
       for (let r = rowIndex; r <= lastMergeRow; r += 1) {
         if (cell.gridColumn !== rowExtents[r]?.start) continue;
-        leftRaw.push({
-          gridStart: r,
-          gridEnd: r + 1,
-          edge: asResolved(effective(cell, 'left', false)),
-        });
+        appendInterval(left, r, r + 1, effective(cell, 'left', false));
       }
 
       // --- bottom (owned here; conflict with below.top per grid column) ---
-      const bottomRaw: RawInterval[] = [];
+      const bottom: RawInterval[] = [];
       for (let col = cell.gridColumn; col <= lastCol; col += 1) {
         let edge: TableBorderSide;
         if (isBottom) {
@@ -918,11 +909,11 @@ export function resolveTableCellBorderGrid(
             );
           }
         }
-        bottomRaw.push({ gridStart: col, gridEnd: col + 1, edge: asResolved(edge) });
+        appendInterval(bottom, col, col + 1, edge);
       }
 
       // --- right (owned here; conflict with neighbor.left per merge row) ---
-      const rightRaw: RawInterval[] = [];
+      const right: RawInterval[] = [];
       for (let r = rowIndex; r <= lastMergeRow; r += 1) {
         let edge: TableBorderSide;
         if (lastCol >= (rowExtents[r]?.end ?? columnCount) - 1) {
@@ -936,13 +927,8 @@ export function resolveTableCellBorderGrid(
               : (cell.rowTableBorders ?? table).insideV
           );
         }
-        rightRaw.push({ gridStart: r, gridEnd: r + 1, edge: asResolved(edge) });
+        appendInterval(right, r, r + 1, edge);
       }
-
-      const top = mergeRawIntervals(topRaw);
-      const left = mergeRawIntervals(leftRaw);
-      const bottom = mergeRawIntervals(bottomRaw);
-      const right = mergeRawIntervals(rightRaw);
 
       if (!geometry) {
         // Geometry-free path (unit tests of conflict only): publish convenience edges when

@@ -8,7 +8,6 @@ import { computed, shallowRef, watch, type ComputedRef, type Ref } from 'vue';
 import { adoptReviewItems, type ReviewAdoptOptions } from '../review/review-item-author.ts';
 import { stackReviewPositions } from '../review/rail-stack.ts';
 import {
-  reviewAuthorFilterKey,
   reviewRefusalStore,
   type ReviewWriteAction,
   type ReviewWriteRefusal,
@@ -37,7 +36,9 @@ function unwrapMaybeRefOrGetter<T>(source: MaybeRefOrGetter<T> | undefined): T |
 }
 
 function reviewRevisionKey(editor: Editor): string {
-  return `${editor.getReviewRevision()}:${editor.getEditingMode()}:${reviewAuthorFilterKey(editor)}`;
+  // The review revision already includes author visibility. A snapshot read here
+  // forces layout while the document transaction still holds the previous caret.
+  return `${editor.getReviewRevision()}:${editor.getEditingMode()}`;
 }
 
 /** @public */

@@ -1,4 +1,9 @@
+import {
+  collaborationTableNotesFixture,
+  footnotesXml,
+} from './collaboration-table-notes-fixture.ts';
 import { expect, test } from '@playwright/test';
+import { collaborationTableWidthFixture } from './collaboration-table-width-fixture.ts';
 import {
   addCommentThroughUi,
   commentCard,
@@ -18,6 +23,9 @@ import {
   savePackageBytes,
   setEditingMode,
   tocEntriesFromDocument,
+  ORIGIN,
+  waitForEditor,
+  joinRoom,
 } from './collaboration-review-helpers.ts';
 
 const AUTHOR = 'Alice';
@@ -26,6 +34,112 @@ const EDITABLE = 'editable-sample.docx';
 const HEADER = 'review-header-demo.docx';
 const TABLE = 'table-cell-selection-drag.docx';
 const TOC = 'paragraph-acceptance.docx';
+
+for (const variant of ['ordinary', 'headers', 'numeric', 'notes']) {
+  const repeatedHeaders = variant !== 'ordinary';
+  const numericCells = variant === 'numeric';
+  const withNotes = variant === 'notes';
+  test(`tracked table edits converge through concurrent deletion, undo, redo, reconnect, and reopen${withNotes ? ' with footnotes' : numericCells ? ' with wrapped numeric cells' : repeatedHeaders ? ' with repeated merged headers' : ''}`, async ({
+    browser,
+    page: creator,
+  }) => {
+    const fixture = repeatedHeaders ? 'repeated-table.docx' : TABLE;
+    if (repeatedHeaders)
+      await creator.route('**/repeated-table.docx', (route) =>
+        route.fulfill({
+          body: withNotes
+            ? collaborationTableNotesFixture()
+            : collaborationTableWidthFixture(numericCells),
+        })
+      );
+    const joiner = await connectedPeers(browser, creator, fixture);
+    const target = creator
+      .locator('.docx-table-cell .docx-paragraph-fragment[data-paragraph-id]')
+      .filter({ hasText: 'Row0Cell1' })
+      .first();
+    const targetId = repeatedHeaders ? (await target.getAttribute('data-paragraph-id'))! : '';
+    const source = repeatedHeaders
+      ? { locator: paragraphById(creator, targetId), id: targetId }
+      : await firstTableCellParagraph(creator);
+    if (numericCells) {
+      for (const participant of [creator, joiner]) {
+        const numeric = participant
+          .locator('.docx-table-cell .docx-paragraph-fragment')
+          .filter({ hasText: '123456789012345678901234567890123456789012345678' })
+          .first();
+        await expect.poll(() => numeric.locator('.docx-line').count()).toBeGreaterThan(1);
+      }
+    }
+    const remote = paragraphById(joiner, source.id);
+    await setEditingMode(creator, 'suggesting');
+    await setEditingMode(joiner, 'suggesting');
+    await source.locator.click();
+    await creator.keyboard.press('End');
+    await remote.click();
+    await joiner.keyboard.press('End');
+    await Promise.all([
+      creator.keyboard.insertText(' AliceEdit'),
+      joiner.keyboard.insertText(' BobEdit'),
+    ]);
+    for (const paragraph of [source.locator, remote]) {
+      await expect(paragraph).toContainText('AliceEdit');
+      await expect(paragraph).toContainText('BobEdit');
+    }
+    await creator.keyboard.press('ControlOrMeta+z');
+    await expect(remote).not.toContainText('AliceEdit');
+    await expect(remote).toContainText('BobEdit');
+    await creator.keyboard.press('ControlOrMeta+Shift+z');
+    await expect(remote).toContainText('AliceEdit');
+    await creator.keyboard.press('Home');
+    await joiner.keyboard.press('Home');
+    await Promise.all([creator.keyboard.press('Delete'), joiner.keyboard.insertText('Concurrent')]);
+    await expect(remote).toContainText('Concurrent');
+    await expect.poll(async () => source.locator.textContent()).toBe(await remote.textContent());
+    await expect(
+      joiner.locator('.docx-remote-caret-label').filter({ hasText: 'Alice' })
+    ).toBeVisible();
+    let saved: Uint8Array;
+    await expect(async () => {
+      const [localBytes, remoteBytes] = await Promise.all([
+        savePackageBytes(creator),
+        savePackageBytes(joiner),
+      ]);
+      expect(documentXml(localBytes)).toBe(documentXml(remoteBytes));
+      if (withNotes) {
+        expect(footnotesXml(localBytes)).toBe(footnotesXml(remoteBytes));
+        expect(footnotesXml(localBytes)).toContain('Shared note text');
+      }
+      saved = localBytes;
+    }).toPass();
+    const invite = joiner.url();
+    await joiner.context().close();
+    const rejoinedContext = await browser.newContext();
+    try {
+      const rejoined = await rejoinedContext.newPage();
+      await joinRoom(rejoined, invite, 'Bob');
+      await expect(async () => {
+        const rejoinedBytes = await savePackageBytes(rejoined);
+        expect(documentXml(rejoinedBytes)).toBe(documentXml(saved!));
+        if (withNotes) expect(footnotesXml(rejoinedBytes)).toBe(footnotesXml(saved!));
+      }).toPass();
+    } finally {
+      await rejoinedContext.close();
+    }
+    const reopened = await browser.newPage();
+    try {
+      await reopened.route('**/tracked-cache-reopen.docx', (route) =>
+        route.fulfill({ body: Buffer.from(saved!) })
+      );
+      await waitForEditor(reopened, `${ORIGIN}/?fixture=tracked-cache-reopen.docx`);
+      const reopenedBytes = await savePackageBytes(reopened);
+      expect(documentXml(reopenedBytes)).toBe(documentXml(saved!));
+      if (withNotes) expect(footnotesXml(reopenedBytes)).toBe(footnotesXml(saved!));
+    } finally {
+      await reopened.close();
+      await joiner.context().close();
+    }
+  });
+}
 
 test('opening a comment changes only the local review display', async ({
   browser,

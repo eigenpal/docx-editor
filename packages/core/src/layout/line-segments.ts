@@ -1,3 +1,4 @@
+import { fragmentPageRoute, rememberFragmentPageRoute } from './fragment-page-routes.ts';
 // Which paragraph a line's offsets count in.
 //
 // Two lanes need this and neither may import the other: the interaction lane resolves a
@@ -359,9 +360,25 @@ export function fragmentHolding(
   layout: SemanticLayout,
   paragraphId: string
 ): ParagraphFragmentRecord | null {
+  const route = fragmentPageRoute(layout, paragraphId);
+  if (route !== undefined) {
+    const page = layout.pages.find((candidate) => candidate.index === route);
+    if (page) {
+      const fragments = paragraphFragmentsOnPage(page);
+      const named = fragments.find((fragment) => fragment.paragraphId === paragraphId);
+      if (named) return named;
+      const drawn = fragments.find((fragment) =>
+        fragmentParagraphs(fragment).includes(paragraphId)
+      );
+      if (drawn) return drawn;
+    }
+  }
   const index = holdingIndexOf(layout);
   const named = namedFragment(layout, index, paragraphId);
-  if (named) return named;
+  if (named) {
+    rememberFragmentPageRoute(layout, paragraphId, index.pages.get(named)!);
+    return named;
+  }
   if (!index.drawn) {
     // Built once, on the first read that no fragment claims by name: the merged case.
     const drawn = new Map<string, ParagraphFragmentRecord>();
@@ -372,7 +389,9 @@ export function fragmentHolding(
     }
     index.drawn = drawn;
   }
-  return index.drawn.get(paragraphId) ?? null;
+  const drawn = index.drawn.get(paragraphId);
+  if (drawn) rememberFragmentPageRoute(layout, paragraphId, index.pages.get(drawn)!);
+  return drawn ?? null;
 }
 
 /**
@@ -388,6 +407,7 @@ interface HoldingIndex {
   /** Pages `0..loadedPages - 1` are in `named`. */
   loadedPages: number;
   readonly named: Map<string, ParagraphFragmentRecord>;
+  readonly pages: WeakMap<ParagraphFragmentRecord, number>;
   drawn: ReadonlyMap<string, ParagraphFragmentRecord> | null;
 }
 
@@ -396,7 +416,7 @@ const HOLDING_INDEXES = new WeakMap<SemanticLayout, HoldingIndex>();
 function holdingIndexOf(layout: SemanticLayout): HoldingIndex {
   let index = HOLDING_INDEXES.get(layout);
   if (!index) {
-    index = { loadedPages: 0, named: new Map(), drawn: null };
+    index = { loadedPages: 0, named: new Map(), pages: new WeakMap(), drawn: null };
     HOLDING_INDEXES.set(layout, index);
   }
   return index;
@@ -409,7 +429,9 @@ function namedFragment(
 ): ParagraphFragmentRecord | undefined {
   let found = index.named.get(paragraphId);
   while (!found && index.loadedPages < layout.pages.length) {
-    for (const fragment of paragraphFragmentsOnPage(layout.pages[index.loadedPages++]!)) {
+    const page = layout.pages[index.loadedPages++]!;
+    for (const fragment of paragraphFragmentsOnPage(page)) {
+      if (!index.pages.has(fragment)) index.pages.set(fragment, page.index);
       if (!index.named.has(fragment.paragraphId)) index.named.set(fragment.paragraphId, fragment);
     }
     found = index.named.get(paragraphId);

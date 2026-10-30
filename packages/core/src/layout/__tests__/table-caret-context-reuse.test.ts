@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { applyTreeOp } from '../../store/store/tree-ops.ts';
 import { createLayoutSession } from '../layout-session.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
+import { fragmentHolding } from '../line-segments.ts';
 import { tableContextAt } from '../semantic-cell-selection.ts';
 import { paragraphFragmentsOf } from '../semantic-records.ts';
 import { lay, load } from './table-row-keep-fixtures.ts';
@@ -38,6 +39,9 @@ test('table context survives width edits and refreshes after a paragraph split',
   const cold = lay(split.part);
   for (const page of after.pages) {
     for (const paragraph of paragraphFragmentsOf(page)) {
+      expect(fragmentHolding(after, paragraph.paragraphId)).toEqual(
+        fragmentHolding(cold, paragraph.paragraphId)
+      );
       expect(tableContextAt(after, paragraph.paragraphId)).toEqual(
         tableContextAt(cold, paragraph.paragraphId)
       );

@@ -1,3 +1,6 @@
+import { syncPendingDrawingBaselines, repositionPendingDrawings } from './pending-line-drawings.ts';
+import { numericWidthTrace } from './numeric-width-proof.ts';
+import { storePendingLines } from './paragraph-break-cache-store.ts';
 import {
   paragraphFinalAt,
   rememberHangingPunctuation,
@@ -92,8 +95,6 @@ import {
   buildInlineDrawingRecord,
   inlineDrawingVerticalLayout,
   measureInlineDrawing,
-  repositionInlineDrawingsForBaseline,
-  type InlineDrawingRecord,
 } from './drawing-layout.ts';
 import {
   remainingWidthAtX,
@@ -332,6 +333,25 @@ export function breakParagraph(
     ...topAndBottomAnchorStarts,
     ...wrapAnchorStarts,
   ];
+
+  const numericTrace =
+    rawPieces.length === 1 &&
+    allPieces.length === 1 &&
+    startOffset === 0 &&
+    sameParagraphAnchorStarts.length === 0 &&
+    deletedRanges.length === 0 &&
+    changeSites.length === 0 &&
+    !preserveColonAdvances
+      ? numericWidthTrace(
+          pieces,
+          available,
+          indentLeft,
+          firstLineOffset,
+          paragraphRtl,
+          flow,
+          OVERFLOW_TOLERANCE_PT
+        )
+      : undefined;
 
   const anchorLineStartByOffset = anchorLineStartsByModelOffset({
     seamNaturalWidths,
@@ -750,28 +770,6 @@ export function breakParagraph(
     return { extentTopY: layout.extentTopY };
   };
 
-  const syncDrawingBaselinesBeforeSpacing = (): void => {
-    if (line.drawings.length === 0) return;
-    if (line.spans.every((span) => pageBreaksIgnored && span.text === PAGE_BREAK_CHAR)) {
-      line.baseline = Math.max(
-        line.baseline,
-        ...line.drawings.map((drawing) => drawing.y + drawing.height)
-      );
-    }
-    const repositioned = repositionInlineDrawingsForBaseline(line.drawings, line.baseline);
-    (line.drawings as InlineDrawingRecord[]).splice(0, line.drawings.length, ...repositioned);
-    line.baseline = Math.max(
-      line.baseline,
-      ...line.drawings.map((drawing) => drawing.y + drawing.height)
-    );
-  };
-
-  const repositionDrawingsToFinalBaseline = (): void => {
-    if (line.drawings.length === 0) return;
-    const repositioned = repositionInlineDrawingsForBaseline(line.drawings, line.baseline);
-    (line.drawings as InlineDrawingRecord[]).splice(0, line.drawings.length, ...repositioned);
-  };
-
   const closeLine = (): void => {
     previousLineCut = false; // Only the oversized-word cut sets it again.
     placeLeadingIgnoredBreaks(line, pageBreaksIgnored);
@@ -800,7 +798,7 @@ export function breakParagraph(
       glyphBaseline += raised;
     }
     growRunBorderLineMetrics(line, measurer);
-    syncDrawingBaselinesBeforeSpacing();
+    syncPendingDrawingBaselines(line, pageBreaksIgnored);
     growPendingLineDrawingExtent(line);
     // Apply paragraph line spacing once to the finished box.
     const naturalHeight = line.height;
@@ -855,7 +853,7 @@ export function breakParagraph(
     // Baseline shifts from line spacing must move inline drawings too, or authored distT/distB
     // and the text baseline drift apart. For `exact`, keep the authored box — tall drawings
     // clip/overflow per content-clip policy; auto/atLeast still grow to contain distB.
-    repositionDrawingsToFinalBaseline();
+    repositionPendingDrawings(line);
     // A picture taller than a shortened line paints only below the line's top.
     if (removesTextBand) clipLineDrawingsAtTop(line);
     if (lineSpacing.rule !== 'exact') growPendingLineDrawingExtent(line);
@@ -1587,6 +1585,7 @@ export function breakParagraph(
             previousLineCut = true;
           },
           overflowTolerancePt: OVERFLOW_TOLERANCE_PT,
+          onWidthComparison: numericTrace?.observe,
           followingWidth: followingCluster,
           keepWithPrevious: openDecision === 'forbidden',
           // Kinsoku vetoes measured cuts: 天。地。人。 must not chop onto a leading 。.
@@ -1694,7 +1693,7 @@ export function breakParagraph(
       : null;
   if (!settled) claimTrailingChangeSites(lines);
   const result = settled ?? lines;
-  if (cacheKey !== null && cache)
-    cache.set(cacheKey, cache.retainAcrossPasses === false ? result : result.map(frozenLine));
+  if (!settled) numericTrace?.finish(result);
+  storePendingLines(cache, cacheKey, result);
   return result;
 }

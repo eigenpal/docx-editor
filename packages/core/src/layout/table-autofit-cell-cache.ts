@@ -1,5 +1,6 @@
 import { sharedCellContentInsets, widenedCellContentInsets } from './cell-content-insets-memo.ts';
 import { autofitReuseScope } from './autofit-context-reuse.ts';
+import { verifiedAutofitScope } from './autofit-verified-scope.ts';
 import type { AutofitView, TableAutofitContext } from './table-autofit-widths.ts';
 import type { SemanticTableCell } from './semantic-table.ts';
 import { listItemToken } from './list-marker-reuse.ts';
@@ -15,6 +16,7 @@ export interface AutofitCellWidths {
   readonly wideRight: number;
 }
 interface Memo {
+  verifiedScope: string | undefined;
   readonly scope: object;
   readonly cascade: AutofitView['styleCascade'];
   readonly mode: AutofitView['displayMode'];
@@ -55,18 +57,23 @@ export function cachedAutofitCellWidths(
   if (!scope || cell.blocks.some((block) => block.kind === 'table')) return read();
   const known = memos.get(cell);
   const authors = view.authorFilter?.cacheKey ?? '';
-  const lists = cellParagraphTokens(cell, context);
-  if (
+  const verifiedScope = verifiedAutofitScope(context);
+  const sameInputs =
     known?.scope === scope &&
-    known.lists === lists &&
     known.cascade === view.styleCascade &&
     known.mode === view.displayMode &&
     known.authors === authors &&
-    known.collapsed === collapsed
-  )
+    known.collapsed === collapsed;
+  if (sameInputs && verifiedScope !== undefined && known.verifiedScope === verifiedScope)
     return known.value;
+  const lists = cellParagraphTokens(cell, context);
+  if (sameInputs && known.lists === lists) {
+    known.verifiedScope = verifiedScope;
+    return known.value;
+  }
   const value = read();
   memos.set(cell, {
+    verifiedScope,
     scope,
     cascade: view.styleCascade,
     mode: view.displayMode,

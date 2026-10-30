@@ -1,6 +1,6 @@
 import { withStoryLineGrid } from './line-grid.ts';
 import { listLayoutToken } from './list-marker-reuse.ts';
-import { reuseSingleLineAtWidth } from './paragraph-cache-width-reuse.ts';
+import { reuseParagraphAtWidth } from './paragraph-cache-width-reuse.ts';
 import { cellParagraphInputs, cellParagraphBreakInputs } from './cell-paragraph-inputs.ts';
 import { adjustedBreakIndex, paragraphKeeps } from './pagination-keeps.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
@@ -566,7 +566,7 @@ function placeCellParagraph(
       }),
       () =>
         deps.cache && !rtl && startOffset === 0 && pageZones.length === 0 && !listItem
-          ? reuseSingleLineAtWidth(deps.cache, paragraph, key, available)
+          ? reuseParagraphAtWidth(deps.cache, paragraph, key, available)
           : undefined
     );
   };

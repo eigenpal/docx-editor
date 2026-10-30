@@ -518,7 +518,9 @@ const MAX_CARRIED_CHANGES = 8;
  * that carries none of those rules. A table of contents hides paragraphs by what its field
  * holds, so a paragraph that holds a field character or sits in one does not qualify either. Its old and new block must each be what the paragraph
  * produces on its own, and the old one must stand unmerged in the previous list. Anything
- * else builds the list again.
+ * else builds the list again. Tables are merge boundaries; replacing one visible table
+ * with another under the same id cannot change its neighbours. The isolated projection
+ * checks below still reject a table whose visibility changes.
  */
 function carriedBlocks(
   key: string,
@@ -549,12 +551,15 @@ function carriedBlocks(
     const before = previous[index]!;
     const after = children[index]!;
     if (
-      before.kind !== 'paragraph' ||
-      after.kind !== 'paragraph' ||
       before.id !== after.id ||
-      paragraphProperties(before) !== paragraphProperties(after) ||
-      markReachesNeighbours(paragraphProperties(after)) ||
-      reachesFields(before, after)
+      !(
+        (before.kind === 'table' && after.kind === 'table') ||
+        (before.kind === 'paragraph' &&
+          after.kind === 'paragraph' &&
+          paragraphProperties(before) === paragraphProperties(after) &&
+          !markReachesNeighbours(paragraphProperties(after)) &&
+          !reachesFields(before, after))
+      )
     )
       return undefined;
     const position = positions.get(before.id);

@@ -2,6 +2,7 @@
 // beside them: what lets a reused sheet re-project when the pagination moves, and what lets an
 // edit leave the headers and footers away from the screen for later (`withFurnitureLater`).
 
+import { carryFurnitureReadCaches } from './furniture-read-caches.ts';
 import type { FieldPageContext } from './field-page-furniture.ts';
 import type { HeaderFooterStoryRecord, PageRecord, SemanticLayout } from './semantic-records.ts';
 
@@ -197,5 +198,8 @@ export function completeFurniture(layout: SemanticLayout, from = 0, to = Infinit
       ...(footer !== undefined ? { footer } : {}),
     };
   }
-  return pages ? { ...layout, pages } : layout;
+  if (!pages) return layout;
+  const completed = { ...layout, pages };
+  carryFurnitureReadCaches(layout, completed);
+  return completed;
 }

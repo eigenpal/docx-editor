@@ -16,7 +16,7 @@ import {
 } from '../layout-cache.ts';
 import { estimatedParagraphCacheEntryBytes } from '../paragraph-cache-weight.ts';
 import { paragraphCacheDiagnostics } from '../paragraph-cache-diagnostics.ts';
-import { reuseSingleLineAtWidth } from '../paragraph-cache-width-reuse.ts';
+import { reuseParagraphAtWidth } from '../paragraph-cache-width-reuse.ts';
 import { breakParagraph, type PendingLine } from '../paragraph-flow.ts';
 import {
   createFixedMeasurer,
@@ -442,7 +442,7 @@ test('a width transfer moves its bytes with the entry', () => {
   const key = cache.keyFor!(inputs);
   breakParagraph(paragraph, paragraph.id, 0, 100, createFixedMeasurer(6, 14), cache, key);
   const next = cache.keyFor!({ ...inputs, width: 120 });
-  const moved = reuseSingleLineAtWidth(cache, paragraph, next, 120)!;
+  const moved = reuseParagraphAtWidth(cache, paragraph, next, 120)!;
   expect(cache.stats.size).toBe(1);
   expect(diagnostics(cache).estimatedBytes).toBe(bytesOf(next, moved));
 });
@@ -471,7 +471,7 @@ test('width transfers move bytes without asking for an early sweep', () => {
   cache.retain(new Set(keys));
   // A column widens: every cell keeps its measured line under its new key.
   for (const paragraph of tokens) {
-    expect(reuseSingleLineAtWidth(cache, paragraph, keyAt(paragraph, 120), 120)).toBeDefined();
+    expect(reuseParagraphAtWidth(cache, paragraph, keyAt(paragraph, 120), 120)).toBeDefined();
   }
   expect(cache.stats.size).toBe(tokens.length);
   expect(cache.retentionPassDue!()).toBe(false);

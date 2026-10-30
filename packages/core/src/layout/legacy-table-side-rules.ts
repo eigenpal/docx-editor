@@ -1,3 +1,4 @@
+import { weakRefOf, type WeakRefOf } from '../store/package/weak-ref.ts';
 import type { SemanticTableCell, SemanticTableRow, TableAlignment } from './semantic-table.ts';
 import type { PreferredWidthType } from './table-widths.ts';
 import type { TableBorderSide } from './table-borders.ts';
@@ -62,23 +63,51 @@ function sharesSideRuleGridLine(
   return true;
 }
 
+type SideRuleFlag = 'centeredSideRules' | 'centeredSidePaint';
+
+// One variant per immutable source row. A mode change replaces the entry instead of
+// retaining every flag combination or an earlier table revision. Weak values also prevent
+// chained flag transformations from keeping old row copies alive through their sources.
+const mappedSideRuleRows = new WeakMap<
+  SemanticTableRow,
+  {
+    readonly flag: SideRuleFlag;
+    readonly simpleSidesOnly: boolean;
+    readonly unequalSides: boolean;
+    readonly row: WeakRefOf<SemanticTableRow>;
+  }
+>();
+
 function mapCells(
   rows: readonly SemanticTableRow[],
-  extend: (cell: SemanticTableCell) => SemanticTableCell,
+  flag: SideRuleFlag,
   simpleSidesOnly = false,
   unequalSides = false
 ): readonly SemanticTableRow[] {
-  const mapped = rows.map((row) =>
-    shareRowFacts(
+  const mapped = rows.map((row) => {
+    const cached = mappedSideRuleRows.get(row);
+    if (
+      cached?.flag === flag &&
+      cached.simpleSidesOnly === simpleSidesOnly &&
+      cached.unequalSides === unequalSides
+    ) {
+      const previous = cached.row.deref();
+      if (previous) return previous;
+    }
+    const copy = shareRowFacts(
       row,
       carryUniformRow(row, {
         ...row,
         cells: row.cells.map((cell) =>
-          sharesSideRuleGridLine(cell, simpleSidesOnly, unequalSides) ? extend(cell) : cell
+          sharesSideRuleGridLine(cell, simpleSidesOnly, unequalSides)
+            ? { ...cell, [flag]: true as const }
+            : cell
         ),
       })
-    )
-  );
+    );
+    mappedSideRuleRows.set(row, { flag, simpleSidesOnly, unequalSides, row: weakRefOf(copy) });
+    return copy;
+  });
   return carryUniformTable(rows, mapped);
 }
 
@@ -97,12 +126,7 @@ export function withCentredSideRulePaint(
   simpleSidesOnly = false,
   unequalSides = false
 ): readonly SemanticTableRow[] {
-  return mapCells(
-    rows,
-    (cell) => ({ ...cell, centeredSidePaint: true as const }),
-    simpleSidesOnly,
-    unequalSides
-  );
+  return mapCells(rows, 'centeredSidePaint', simpleSidesOnly, unequalSides);
 }
 
 /** Legacy simple side rules share the grid line with padding, rather than adding to it. */
@@ -111,12 +135,7 @@ export function withLegacyTableSideRules(
   simpleSidesOnly = false,
   unequalSides = false
 ): readonly SemanticTableRow[] {
-  return mapCells(
-    rows,
-    (cell) => ({ ...cell, centeredSideRules: true as const }),
-    simpleSidesOnly,
-    unequalSides
-  );
+  return mapCells(rows, 'centeredSideRules', simpleSidesOnly, unequalSides);
 }
 
 /** The table-level facts that decide whether its side rules share the grid line. */

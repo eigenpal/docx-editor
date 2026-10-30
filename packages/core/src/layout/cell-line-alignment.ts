@@ -1,3 +1,4 @@
+import { placeOrdinaryCellLine } from './ordinary-cell-line.ts';
 // Placing and aligning one cell line in its line box.
 //
 // Shared by cell placement and row geometry reuse, so a reused line goes through exactly the
@@ -41,6 +42,19 @@ export function alignCellLine(
   shared: CellLineAlignment
 ): ReturnType<typeof alignLineWithPictures> {
   const { alignment } = shared;
+  const ordinary =
+    !shared.rtl && placedDrawings.length === 0
+      ? placeOrdinaryCellLine(
+          pendingLine,
+          paragraphId,
+          penX,
+          y,
+          lineIndent,
+          lineAvailableWidth,
+          alignment
+        )
+      : null;
+  if (ordinary) return { spans: ordinary.spans, offset: ordinary.offset, drawings: placedDrawings };
   const placedSpans = pendingLine.spans.map((span) => ({
     ...span,
     // A cell paragraph breaks under its own id, so its spans share the broken range.

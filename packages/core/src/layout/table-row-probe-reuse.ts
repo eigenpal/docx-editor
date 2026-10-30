@@ -6,8 +6,12 @@ import {
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
 import type { SemanticTableRow } from './semantic-table.ts';
-import type { TableRowFragmentRecord } from './semantic-records.ts';
-import { placementFromPrevious, rememberRowPlacement } from './table-row-placement-reuse.ts';
+import {
+  placementFromPrevious,
+  rememberRowPlacement,
+  previousRowRecord,
+  type PreviousRow,
+} from './table-row-placement-reuse.ts';
 import { withLines } from './table-row-geometry-reuse.ts';
 import { noteRowFactRead, rowFacts } from './table-row-facts.ts';
 
@@ -42,7 +46,7 @@ export function createRowProbeReuse(
   cols: readonly number[],
   cellSpacingPt: number,
   /** The previous layout's rows of this table, offered after a refused table update. */
-  previous?: ReadonlyMap<string, TableRowFragmentRecord>
+  previous?: ReadonlyMap<string, PreviousRow>
 ) {
   let probe:
     | { row: SemanticTableRow; result: Placement; deps: TableFlowDeps; left: number; top: number }
@@ -97,7 +101,7 @@ export function createRowProbeReuse(
           cellSpacingPt
         );
       // A row rebuilt at a new top is remembered there, so the next pass can move it in place.
-      if (cellSpacingPt === 0 && (!reused || before!.box.y !== top))
+      if (cellSpacingPt === 0 && (!reused || previousRowRecord(before!).box.y !== top))
         rememberRowPlacement(row, result, top, deps);
       if (result.remainder === null) probe = { row, result, deps, left, top };
       return result.record.box.height;

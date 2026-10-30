@@ -1,3 +1,4 @@
+import { placeOrdinaryCellLine } from '../ordinary-cell-line.ts';
 import { describe, expect, test } from 'bun:test';
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { alignCellLine, type CellLineAlignment } from '../cell-line-alignment.ts';
@@ -192,4 +193,43 @@ test('boxLineSetsLikeLastLine reads only the breaks a box line keeps', () => {
                 setsLikeLastLine(props, kept, isLastLine, compatibility)
               );
             }
+});
+
+test('ordinary placement preserves alignment bits at width and coordinate boundaries', () => {
+  for (const texts of [['42'], ['Alpha ', 'beta'], ['  A', ' B'], ['12.50', '%']]) {
+    const line = lineOf('p1', texts);
+    for (const penX of [-0, -13.7, 3.3, 1e8])
+      for (const delta of [-0.001, -1e-9, 0, 1e-10, 1e-9, 0.001, 100.25])
+        for (const alignment of ['left', 'center', 'right'] as const) {
+          const width = line.width + delta;
+          const indent = penX + 2.15;
+          const actual = placeOrdinaryCellLine(line, 'p2', penX, 7.3, indent, width, alignment);
+          expect(actual).not.toBeNull();
+          const expected = copiedThenAligned(line, 'p2', penX, indent, width, true, {
+            measurer,
+            styleCascade: undefined,
+            props: [],
+            alignment,
+            rtl: false,
+            inTableCell: true,
+          });
+          expectSameBits({ ...actual, drawings: [] }, expected);
+        }
+  }
+});
+
+test('ordinary placement refuses lines with width-dependent or bidi content', () => {
+  for (const line of [
+    lineOf('p1', ['Text ']),
+    lineOf('p1', ['A\tB']),
+    lineOf('p1', ['漢字']),
+    lineOf('p1', ['123'], { rtl: true }),
+    lineOf('p1', ['Text'], { closing: { compressesSpaces: true } }),
+    lineOf('p1', ['Text'], { closing: { wrapMirrored: true } }),
+    lineOf('p1', ['Text'], { closing: { manualBreakAfter: true } }),
+  ])
+    expect(placeOrdinaryCellLine(line, 'p1', 0, 0, 0, 100, 'center')).toBeNull();
+  const line = lineOf('p1', ['Text']);
+  expect(placeOrdinaryCellLine(line, 'p1', 0, 0, 0, 100, 'both')).toBeNull();
+  expect(placeOrdinaryCellLine(line, 'p1', 0, 0, 0, Infinity, 'right')).toBeNull();
 });
