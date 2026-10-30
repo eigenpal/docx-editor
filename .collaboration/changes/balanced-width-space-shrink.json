@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "With w:balanceSingleByteDoubleByteWidth, legacy compressed-punctuation lines keep natural inter-word spaces.",
+  "after": "With w:balanceSingleByteDoubleByteWidth, legacy compressed-punctuation lines shrink each space down to a quarter of its font size to keep one more word.",
+  "reason": "Only derived layout changes. Shared nodes, canonical UTF-16 offsets, operations, and package serialization remain unchanged. Peers with the same fonts lay out the same lines.",
+  "tests": [
+    "packages/core/src/layout/__tests__/legacy-compressed-space-shrink.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-legacy-space-shrink.test.ts"
+  ],
+  "changeset": "balanced-width-space-shrink",
+  "migration": null
+}

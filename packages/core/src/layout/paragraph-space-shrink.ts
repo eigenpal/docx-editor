@@ -10,7 +10,7 @@ import type { ResolvedRunStyle } from './run-style.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 import { isSpaceShrinkWordPiece } from './space-shrink-piece.ts';
-import type { SpaceShrinkRule } from './space-shrink-rule.ts';
+import type { SpaceShrinkFloor, SpaceShrinkRule } from './space-shrink-rule.ts';
 import { withoutTrailingZeroWidthSpaces } from './trailing-spaces.ts';
 import { authoredCjkGapMetric } from './cjk-auto-spacing-metric-port.ts';
 import { knownFamilyReverseGap } from './authored-average-widths.ts';
@@ -75,21 +75,21 @@ function firstShrinkSlot(spans: readonly StyleSpanRecord[]): number {
 }
 
 /**
- * What the space closing `span` can give up: `limit` of its natural advance, or with
- * `halfAverageFloor` everything above half its face's average character width.
+ * What the space closing `span` can give up: `limit` of its natural advance, or with a `floor`
+ * everything above it.
  */
 function capacity(
   span: StyleSpanRecord,
   measurer: TextMeasurer,
   limit: number,
-  halfAverageFloor = false
+  floorKind?: SpaceShrinkFloor
 ): number {
   // The spaces of a fitted group keep the group's own spacing.
   if (span.lineEndWhitespace || span.equation || fitTextGroupOf(span) !== undefined) return 0;
   const style = styleForFontSlot(span.style, span.fontSlot);
-  // A face whose space is no wider than half its average width lends nothing: answer before
-  // the text tests, so a line in such a face pays one lookup per span.
-  const floor = halfAverageFloor ? halfAverageWidth(style, measurer) : undefined;
+  // A face whose space is no wider than its floor lends nothing: answer before the text
+  // tests, so a line in such a face pays one lookup per span.
+  const floor = floorKind ? spaceFloor(style, measurer, floorKind) : undefined;
   if (floor?.noRoom) return 0;
   if (
     (!span.style.shaping &&
@@ -107,30 +107,37 @@ function capacity(
   return space * limit;
 }
 
-/** Half-average widths by face style; one style serves every span and line that uses it. */
-const halfAverageWidths = new WeakMap<
+/** Space floors by face style and kind; one style serves every span and line that uses it. */
+const spaceFloors = new WeakMap<
   ResolvedRunStyle,
-  { value: number | undefined; noRoom: boolean }
+  Partial<Record<SpaceShrinkFloor, { value: number | undefined; noRoom: boolean }>>
 >();
 
 /**
- * Half the face's average character width, the same metric as the reverse automatic gap, and
- * whether it is at least the face's plain space, so that no space of the style can shrink.
+ * The narrowest a space of `style` may become, and whether it is at least the face's plain
+ * space, so that no space of the style can shrink. Half the face's average character width
+ * is the same metric as the reverse automatic gap; a quarter em is a quarter of the font size.
  */
-function halfAverageWidth(
+function spaceFloor(
   style: ResolvedRunStyle,
-  measurer: TextMeasurer
+  measurer: TextMeasurer,
+  kind: SpaceShrinkFloor
 ): { value: number | undefined; noRoom: boolean } {
-  let known = halfAverageWidths.get(style);
+  let byKind = spaceFloors.get(style);
+  if (!byKind) spaceFloors.set(style, (byKind = {}));
+  let known = byKind[kind];
   if (!known) {
-    const value = authoredCjkGapMetric(measurer, style) ?? knownFamilyReverseGap(style);
+    const value =
+      kind === 'quarterEm'
+        ? style.fontSizePt / 4
+        : (authoredCjkGapMetric(measurer, style) ?? knownFamilyReverseGap(style));
     const plain = !style.shaping?.wordSpacingPt && !style.characterSpacingPt;
     known = {
       value,
       noRoom:
         value !== undefined && plain && measureDisplayText(' ', style, measurer) <= value + 1e-9,
     };
-    halfAverageWidths.set(style, known);
+    byKind[kind] = known;
   }
   return known;
 }
@@ -163,11 +170,12 @@ function clippedSpacesBefore(
  * right by the same amount. Answers the width the line gains.
  */
 export function compressLineSpaces(
-  line: { spans: StyleSpanRecord[]; width: number; compressesSpaces?: true },
+  line: { spans: StyleSpanRecord[]; width: number; compressesSpaces?: SpaceShrinkFloor },
   end: number,
-  measurer: TextMeasurer
+  measurer: TextMeasurer,
+  floor: SpaceShrinkFloor
 ): number {
-  line.compressesSpaces = true;
+  line.compressesSpaces = floor;
   const spans = line.spans;
   let gained = 0;
   const restored = clippedSpacesBefore(spans, end, 0, measurer).reverse();
@@ -279,7 +287,7 @@ export function spaceShrinkFit(
   const capacities: number[] = [];
   let budget = 0;
   for (let index = first; index < spans.length; index += 1) {
-    const slot = capacity(spans[index]!, measurer, rule.limit, rule.halfAverageFloor);
+    const slot = capacity(spans[index]!, measurer, rule.limit, rule.floor);
     capacities.push(slot);
     budget += slot;
   }
@@ -287,7 +295,7 @@ export function spaceShrinkFit(
     for (const space of clippedSpacesBefore(spans, beforeEnd, first, measurer)) {
       // Inside the line again, the space takes back its natural advance and lends as any other.
       needed += space.box.width - spans[space.index]!.box.width;
-      budget += capacity(space, measurer, rule.limit, rule.halfAverageFloor);
+      budget += capacity(space, measurer, rule.limit, rule.floor);
     }
   // The spaces shrink to at most their limit: past it, only a mark that hangs can make room.
   const markInside = needed <= budget + 0.001;
@@ -407,13 +415,13 @@ export function shrinkJustifiedSpans(
   needed: number,
   measurer: TextMeasurer,
   slotEnd: number = spans.length - 1,
-  halfAverageFloor = false,
+  floor?: SpaceShrinkFloor,
   paragraphRtl = false
 ): readonly StyleSpanRecord[] {
   const first = firstShrinkSlot(spans);
   // Admission kept `needed` within the paragraph's rule; equal shares never pass a quarter.
   const capacities = spans.map((span, index) =>
-    index >= first && index < slotEnd ? capacity(span, measurer, 0.25, halfAverageFloor) : 0
+    index >= first && index < slotEnd ? capacity(span, measurer, 0.25, floor) : 0
   );
   if (needed <= 0 || needed > capacities.reduce((a, b) => a + b, 0) + 0.001) return spans;
   const amounts = capacities.map(() => 0);

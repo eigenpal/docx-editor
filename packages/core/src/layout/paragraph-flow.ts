@@ -1507,7 +1507,7 @@ export function breakParagraph(
         line.borrowedSpace = true;
         if (flow?.spaceShrink?.everyAlignment) {
           const start = opensWord ? line.spans.length : wordStartSpan;
-          const gained = compressLineSpaces(line, start, measurer);
+          const gained = compressLineSpaces(line, start, measurer, flow.spaceShrink.floor!);
           if (!opensWord) wordStartWidth += gained;
         }
         // Only this admission may compress the paragraph's last line when it is aligned.
