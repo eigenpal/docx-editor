@@ -265,3 +265,31 @@ test('a peer rejecting the proposal while it is reshaped removes the whole table
     a.destroy();
   }
 });
+
+test('a merge suggested in the editor joins the proposal on the other participant', async () => {
+  const a = await peer('Alice');
+  const b = await peer('Bob', a);
+  try {
+    await propose(a);
+    sync(a, b);
+    a.editor.surface!.setEditingMode('suggest');
+    const { selectCellRectangle } =
+      await import('../../../../core/src/editor/__tests__/paginated-surface-fixtures.ts');
+    selectCellRectangle(a.editor.surface!, { row: 0, column: 0 }, { row: 0, column: 2 });
+    expect(a.editor.exec({ type: 'mergeCells' }).ok).toBe(true);
+    sync(a, b);
+    await converged(a, b);
+    expect((await values(b))?.[0]).toEqual(['Results']);
+    // Rejecting the proposal takes the merged structure with it.
+    await b.runtime.run(async (context) => {
+      context.document.body.revisions.rejectAll();
+      await context.sync();
+    });
+    sync(a, b);
+    await converged(a, b);
+    expect(await values(a)).toBeNull();
+  } finally {
+    b.destroy();
+    a.destroy();
+  }
+});

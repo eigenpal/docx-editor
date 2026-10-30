@@ -40,13 +40,14 @@ export type CommandGate =
 import { tableContextAt } from '@docx-editor.dev/core/layout';
 import { tableAnchorAt } from '../layout/semantic-cell-selection.ts';
 import { splitCellLimits } from '../store/store/tree-op-table-split.ts';
-import { suggestingStructureRefusal } from './surface-suggesting-structure.ts';
+import { ownProposedTableIn, suggestingStructureRefusal } from './surface-suggesting-structure.ts';
 import {
   isTableEditorCommand,
   planTableCommand,
   type TableCommandPlan,
   type TableCommandPlannerInput,
 } from './table-command-plan.ts';
+import { suggestingAuthorOf } from './table-cell-structure-plan.ts';
 import { findNode, paragraphTextOf, parentNodeOf } from '@docx-editor.dev/core/store';
 import { allParagraphs } from '../binding/tree-binding.ts';
 import { paragraphStyleId } from '../binding/document-outline.ts';
@@ -263,6 +264,7 @@ export function buildTableCommandPlannerInput(
     themeColors: surface.session.documentThemeColors(),
     editable: surface.session.editable,
     viewing: surface.editingMode() === 'view',
+    ...suggestingAuthorOf(surface),
   };
 }
 
@@ -281,7 +283,8 @@ export function tableCommandState(
   if (plan.ok && surface.editingMode() === 'suggest') {
     const reason = suggestingStructureRefusal(
       plan.ops,
-      (id) => findNode(input.part, id)?.kind === 'table'
+      (id) => findNode(input.part, id)?.kind === 'table',
+      ownProposedTableIn(surface.session, surface.author())
     );
     if (reason) plan = { ok: false, code: 'unsupported', reason };
   }
