@@ -6,6 +6,8 @@ import { isEastAsianFace } from '../store/package/default-font-faces.ts';
 import { omittedDocDefaults } from '../store/package/application-doc-defaults.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-tree.ts';
 import { resolveRunStyle, type ThemeFonts } from './run-style.ts';
+import { opensWithWidenedSpaces } from './balanced-line-start.ts';
+import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 
 /** Document-wide East Asian line-break and whitespace policy. @public */
 export interface CjkTypographySettings {
@@ -34,6 +36,12 @@ export interface CjkTypographySettings {
    * @internal
    */
   readonly balancedWidths?: true;
+  /**
+   * The compatibility setting `w:useWord97LineBreakRules`. With `balancedWidths`, lines in a
+   * legacy mode keep natural inter-word spaces in proportional faces.
+   * @internal
+   */
+  readonly word97LineBreaks?: true;
   /** Whitespace compression selected by `w:characterSpacingControl`. */
   readonly compression:
     | 'doNotCompress'
@@ -101,6 +109,7 @@ export function cjkTypographyFromSettings(root: OoxmlElement | null): CjkTypogra
   let punctuationKerning = true;
   let compression: CjkTypographySettings['compression'] = 'doNotCompress';
   let balancedWidths = false;
+  let word97LineBreaks = false;
   const before: Record<string, string> = Object.create(null);
   const after: Record<string, string> = Object.create(null);
   for (const child of root?.children ?? []) {
@@ -111,7 +120,10 @@ export function cjkTypographyFromSettings(root: OoxmlElement | null): CjkTypogra
       (attribute) => attribute.localName === 'val' && attribute.namespaceUri === child.namespaceUri
     )?.value;
     if (child.localName === 'strictFirstAndLastChars') strict = on(value);
-    if (child.localName === 'compat') balancedWidths = compatBalancesWidths(child);
+    if (child.localName === 'compat') {
+      balancedWidths = compatFlag(child, 'balanceSingleByteDoubleByteWidth');
+      word97LineBreaks = compatFlag(child, 'useWord97LineBreakRules');
+    }
     if (child.localName === 'noPunctuationKerning') punctuationKerning = !on(value);
     if (
       child.localName === 'characterSpacingControl' &&
@@ -139,15 +151,16 @@ export function cjkTypographyFromSettings(root: OoxmlElement | null): CjkTypogra
     punctuationKerning,
     compression,
     ...(balancedWidths ? { balancedWidths: true as const } : {}),
+    ...(word97LineBreaks ? { word97LineBreaks: true as const } : {}),
     before: Object.freeze(before),
     after: Object.freeze(after),
   });
 }
 
-/** Whether a `w:compat` element turns `w:balanceSingleByteDoubleByteWidth` on. */
-function compatBalancesWidths(compat: OoxmlElement): boolean {
+/** Whether a `w:compat` element turns the on/off setting `name` on. */
+function compatFlag(compat: OoxmlElement, name: string): boolean {
   for (const child of compat.children) {
-    if (!('localName' in child) || child.localName !== 'balanceSingleByteDoubleByteWidth') continue;
+    if (!('localName' in child) || child.localName !== name) continue;
     if (child.namespaceUri !== WML_NAMESPACE_URI) continue;
     const value = child.attributes.find(
       (attribute) => attribute.localName === 'val' && attribute.namespaceUri === child.namespaceUri
@@ -204,6 +217,19 @@ export function resolveCjkTypography(
       ? { kanaLineFit: true as const }
       : {}),
   };
+}
+
+/**
+ * Whether a mark may hang at the end of this line: the paragraph allows it, and the line does
+ * not open with spaces that balanced widths widen (`opensWithWidenedSpaces`).
+ */
+export function lineEndMarksMayHang(
+  typography: CjkParagraphTypography,
+  spans: readonly StyleSpanRecord[],
+  measurer: TextMeasurer
+): boolean {
+  if (!(typography.hangingPunctuation ?? typography.overflowPunctuation)) return false;
+  return !(typography.settings?.balancedWidths === true && opensWithWidenedSpaces(spans, measurer));
 }
 
 /**

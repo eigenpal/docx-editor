@@ -9,11 +9,15 @@ import {
 } from './layout-run-shape.ts';
 import type { TextShaper } from './shaped-run.ts';
 import { faceLineGapPt, takesLegacyLineGap } from './times-new-roman-leading.ts';
+import { sameFontFamily } from '../store/package/default-font-faces.ts';
 
 /** Half-point keys are integers, so a half step marks the named-face entry of a size. */
 const NAMED_FACE_KEY = 0.5;
 
-/** True when `font` is the family that `style` names, not a substitute or a glyph fallback. */
+/**
+ * True when `font` is the family that `style` names, not a substitute or a glyph fallback. A
+ * localized East Asian name and its English name name one family (`メイリオ` and `Meiryo`).
+ */
 function drawsAsNamedFace(font: ResolvedFont, style: ResolvedRunStyle): boolean {
   if (style.fontFamily === null) return false;
   // A bold or italic request answered by the same family's regular face (a synthesized
@@ -22,15 +26,11 @@ function drawsAsNamedFace(font: ResolvedFont, style: ResolvedRunStyle): boolean 
   if (
     substitution !== null &&
     (substitution.lineMetrics !== undefined ||
-      substitution.requested.family.trim().toLowerCase() !==
-        substitution.resolved.family.trim().toLowerCase())
+      !sameFontFamily(substitution.requested.family, substitution.resolved.family))
   )
     return false;
   // The exact comparison answers almost every call on this per-span path without allocating.
-  return (
-    font.family === style.fontFamily ||
-    font.family.trim().toLowerCase() === style.fontFamily.trim().toLowerCase()
-  );
+  return font.family === style.fontFamily || sameFontFamily(font.family, style.fontFamily);
 }
 
 /** Cached face metrics, independent of the glyph fallback selected by a run. */

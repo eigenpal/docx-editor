@@ -12,6 +12,7 @@ import { clipInlineDrawingRecordVertically, type InlineDrawingRecord } from './d
 import { topAndBottomSkipBeforeLine, type ExclusionZone } from './drawing-exclusion.ts';
 import type { ModelRange } from './field-pieces.ts';
 import type { WrapSegment } from './line-wrap-passages.ts';
+import type { SpaceShrinkFloor } from './space-shrink-rule.ts';
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 
 export interface PendingLine {
@@ -57,9 +58,9 @@ export interface PendingLine {
   /**
    * The line borrowed inter-word space under a rule for every alignment
    * (`SpaceShrinkRule.everyAlignment`), so alignment compresses it to fill the measure as it
-   * does a justified line.
+   * does a justified line, each space down to this floor.
    */
-  compressesSpaces?: true;
+  compressesSpaces?: SpaceShrinkFloor;
   /** Model ranges on this line covering deleted content; see {@link LineRecord.deletedRanges}. */
   deletedRanges?: readonly ModelRange[];
   /** Vertical gap inserted before this line to clear a drawing exclusion band. */
@@ -492,7 +493,7 @@ export function frozenLine(line: PendingLine): PendingLine {
       ...(line.columnBreakAfter ? { columnBreakAfter: true } : {}),
       ...(line.manualBreakAfter ? { manualBreakAfter: true } : {}),
       ...(line.spaceShrink ? { spaceShrink: true } : {}),
-      ...(line.compressesSpaces ? { compressesSpaces: true } : {}),
+      ...(line.compressesSpaces ? { compressesSpaces: line.compressesSpaces } : {}),
       ...(line.deletedRanges ? { deletedRanges: Object.freeze(line.deletedRanges) } : {}),
       ...(line.exclusionSkipBefore ? { exclusionSkipBefore: line.exclusionSkipBefore } : {}),
       ...(line.breakClearance ? { breakClearance: true } : {}),

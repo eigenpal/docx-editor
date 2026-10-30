@@ -393,6 +393,8 @@ export interface CjkTypographySettings {
     readonly punctuationKerning?: boolean;
     readonly sourceEastAsianFont?: boolean;
     readonly strict: boolean;
+    // @internal
+    readonly word97LineBreaks?: true;
 }
 
 // @public

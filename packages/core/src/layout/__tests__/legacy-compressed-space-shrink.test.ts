@@ -3,7 +3,7 @@
 // average character width of their face to keep one more word, with no other test. A face with
 // no known average width gives up a fifth of each space. A final half-width mark stays inside
 // when the spaces make room for it, and hangs beside spaces at that limit.
-// `w:balanceSingleByteDoubleByteWidth` keeps natural spaces.
+// With `w:balanceSingleByteDoubleByteWidth`, each space shrinks down to a quarter of its font size.
 import { describe, expect, test } from 'bun:test';
 import { loadFixture, measurer, type FixtureOptions } from './punctuation-kerning-fixture.ts';
 import type { TextMeasurer } from '../semantic-records.ts';
@@ -65,15 +65,6 @@ describe('a legacy mode that compresses punctuation shrinks spaces', () => {
   test('a modern mode keeps natural spaces on a left-aligned line', () => {
     expect(texts(load(WORDS, 452, { compatibility: 15 }))[0]).toBe(SIX);
   });
-
-  test('balancing single-byte and double-byte widths keeps natural spaces', () => {
-    expect(texts(load(WORDS, 452, { balanceWidths: true }))[0]).toBe(SIX);
-    expect(
-      texts(
-        load(WORDS, 452, { balanceWidths: true, paragraphProperties: '<w:jc w:val="both"/>' })
-      )[0]
-    ).toBe(SIX);
-  });
 });
 
 describe('a final half-width mark beside shrinking spaces', () => {
@@ -120,7 +111,7 @@ const faceMeasurer: TextMeasurer = {
     ),
   lineMetrics: (style) => ({ height: style.fontSizePt * 1.2, baseline: style.fontSizePt }),
 };
-const inFace = (face: string, available: number) =>
+const inFace = (face: string, available: number, options: FixtureOptions = {}) =>
   loadFixture({
     text: WORDS,
     available,
@@ -130,6 +121,7 @@ const inFace = (face: string, available: number) =>
     paragraphProperties: '<w:jc w:val="left"/>',
     face,
     measurer: faceMeasurer,
+    ...options,
   });
 const lineEnd = (result: ReturnType<typeof loadFixture>) => {
   const line = result.lines[0]!;
@@ -171,6 +163,96 @@ describe('a space shrinks down to half its face average character width', () => 
     expect(texts(result)[0]).toBe(SEVEN);
     expect(lineEnd(result)).toBeCloseTo(available, 4);
     expect(texts(inFace('Courier New', natural('Courier New') - 6 * 7.2 - 0.5))[0]).toBe(SIX);
+  });
+});
+
+// With `w:balanceSingleByteDoubleByteWidth`, the floor is a quarter of the font size, 6 pt here,
+// whatever the face's average width.
+describe('balanced single-byte and double-byte widths: a space shrinks down to a quarter em', () => {
+  const natural = (face: string) => 7 * 48 + 6 * 24 * SPACE_EM[face]!;
+  const balanced = (face: string, available: number, jc = 'left') =>
+    texts(
+      inFace(face, available, {
+        balanceWidths: true,
+        paragraphProperties: `<w:jc w:val="${jc}"/>`,
+      })
+    )[0];
+
+  for (const jc of ['left', 'both']) {
+    test(`Courier New, ${jc}: each space lends all but 6 pt, more than half`, () => {
+      // 14.4 pt spaces lend 8.4 pt each, 50.4 pt in all; half the average width would lend 43.2.
+      expect(balanced('Courier New', natural('Courier New') - 50.4 + 0.5, jc)).toBe(SEVEN);
+      expect(balanced('Courier New', natural('Courier New') - 50.4 - 0.5, jc)).toBe(SIX);
+    });
+  }
+
+  test('Century: each space lends less than half the average width would', () => {
+    // 6.67 pt spaces lend 0.67 pt each, 4.03 pt in all; half the average width would lend 6.6.
+    expect(balanced('Century', natural('Century') - 4.03 + 0.4)).toBe(SEVEN);
+    expect(balanced('Century', natural('Century') - 5)).toBe(SIX);
+    expect(texts(inFace('Century', natural('Century') - 5))[0]).toBe(SEVEN);
+  });
+
+  test('with w:useWord97LineBreakRules as well, a proportional face keeps its spaces', () => {
+    const result = inFace('Century', natural('Century') - 4.03 + 0.4, {
+      balanceWidths: true,
+      word97LineBreaks: true,
+    });
+    expect(texts(result)[0]).toBe(SIX);
+  });
+
+  test('a line that opens with spaces keeps natural spaces', () => {
+    // The same Century line that joins its seventh word, behind three spaces of 6.67 pt.
+    const lead = 3 * 24 * SPACE_EM['Century']!;
+    const opened = (options: FixtureOptions) =>
+      texts(
+        inFace('Century', natural('Century') + lead - 4.03 + 0.4, {
+          text: `   ${WORDS}`,
+          ...options,
+        })
+      )[0];
+    expect(opened({ balanceWidths: true })).toBe(`   ${SIX}`);
+    // Half the average width, without balanced widths, still shrinks such a line.
+    expect(opened({})).toBe(`   ${SEVEN}`);
+  });
+
+  test('a Courier New line that opens with spaces still shrinks: its space is over half an em', () => {
+    const lead = 3 * 24 * SPACE_EM['Courier New']!;
+    const line = texts(
+      inFace('Courier New', natural('Courier New') + lead - 50.4 + 0.5, {
+        text: `   ${WORDS}`,
+        balanceWidths: true,
+      })
+    )[0];
+    expect(line).toBe(`   ${SEVEN}`);
+  });
+
+  test('a line that opens with spaces does not hang its final mark', () => {
+    // The period overflows by half its advance; the spaces cannot make that room, so it hangs.
+    const lead = 3 * 24 * SPACE_EM['Century']!;
+    const text = 'aa aa aa aa aa aa aa. aa';
+    const available = 7 * 48 + 24 + 6 * 24 * SPACE_EM['Century']! - 12;
+    const line = (prefix: string) =>
+      texts(
+        inFace('Century', available + (prefix ? lead : 0), {
+          text: prefix + text,
+          balanceWidths: true,
+        })
+      )[0];
+    expect(line('')).toBe('aa aa aa aa aa aa aa. ');
+    expect(line('   ')).toBe(`   ${SIX}`);
+  });
+
+  test('Times New Roman: a space of a quarter em keeps its advance', () => {
+    expect(balanced('Times New Roman', natural('Times New Roman') - 0.1)).toBe(SIX);
+  });
+
+  test('without punctuation compression the spaces keep their advance', () => {
+    const result = inFace('Courier New', natural('Courier New') - 20, {
+      balanceWidths: true,
+      compression: 'doNotCompress',
+    });
+    expect(texts(result)[0]).toBe(SIX);
   });
 });
 

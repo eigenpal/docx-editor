@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A localized East Asian family name and a missing bold or italic East Asian face resolve to the packaged CJK face in PDF export.",
+  "after": "A localized name resolves to the supplied face of its English name; a missing bold or italic face resolves to the family regular face.",
+  "reason": "Only derived layout changes. Shared nodes, canonical UTF-16 offsets, operations, and package serialization remain unchanged. Peers with the same fonts lay out the same lines.",
+  "tests": [
+    "packages/core/src/layout/__tests__/localized-east-asian-family.test.ts",
+    "packages/docx-to-pdf/test/cjk-family-faces.test.ts",
+    "packages/docx-to-pdf/test/cjk-font-package.test.ts"
+  ],
+  "changeset": "east-asian-family-faces",
+  "migration": null
+}

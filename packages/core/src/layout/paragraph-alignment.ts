@@ -11,6 +11,7 @@ import { styleForFontSlot } from './script-itemization.ts';
 import { justifyCjkSpans } from './cjk-justify.ts';
 import { distributeLineCharacters, spacesAbsorbSlack } from './distributed-character-spacing.ts';
 import type { DistributedSpacing } from './distributed-spacing.ts';
+import type { SpaceShrinkFloor } from './space-shrink-rule.ts';
 import {
   endsWithSpaceSlot,
   withoutLineEndWhitespace,
@@ -138,7 +139,7 @@ function alignLogicalSpans(
   distributed: DistributedSpacing | undefined,
   eastAsianSpacing: boolean,
   hangingPunctuationAdvance: number,
-  halfAverageFloor = false
+  floor?: SpaceShrinkFloor
 ): readonly StyleSpanRecord[] {
   if (spans.length === 0) return spans;
   // An unbounded line (a measuring pass) has no far edge to align or justify against.
@@ -159,7 +160,7 @@ function alignLogicalSpans(
         distributed,
         eastAsianSpacing,
         hangingPunctuationAdvance,
-        halfAverageFloor
+        floor
       )
     );
     if (aligned) return aligned;
@@ -323,7 +324,7 @@ function alignLogicalSpans(
       -slack,
       measurer,
       hangsAfterOwnSpace ? trailingStart - 1 : Math.max(0, contentLast),
-      halfAverageFloor,
+      floor,
       paragraphRtl
     );
   // A line that fills its measure can leave a rounding residue, which must not become spacing.
@@ -561,7 +562,7 @@ export function alignSpans(
   // legacy compatibility modes hang marks outside justified paragraphs, and only they compress
   // the spaces of a line at every alignment.
   const effective =
-    hangingPunctuationAdvance > 0 || pendingLine?.compressesSpaces === true
+    hangingPunctuationAdvance > 0 || pendingLine?.compressesSpaces !== undefined
       ? 'both'
       : alignment === 'both' && isLastLine && paragraphRtl && !lastLineShrinks
         ? 'right'
@@ -584,7 +585,7 @@ export function alignSpans(
         distributed,
         eastAsianSpacing,
         isLastPart ? hangingPunctuationAdvance : 0,
-        pendingLine?.compressesSpaces === true
+        pendingLine?.compressesSpaces
       )
     );
     if (aligned) return reorderBidiSpans(aligned, false, pageBreaksIgnored);
@@ -625,7 +626,7 @@ export function alignSpans(
       distributed,
       eastAsianSpacing,
       hangingPunctuationAdvance,
-      pendingLine?.compressesSpaces === true
+      pendingLine?.compressesSpaces
     );
   const trailing = bidiTrailingSpaces(split, paragraphRtl, isLastLine, pageBreaksIgnored);
   if (trailing) {

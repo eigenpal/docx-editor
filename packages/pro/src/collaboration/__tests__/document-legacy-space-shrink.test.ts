@@ -5,7 +5,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // A left-aligned line that shrinks its spaces under a legacy compatibility mode with
 // punctuation compression stays derived layout: two peers converge through edits, history,
-// remote selections, and save.
+// remote selections, and save. With balanced single-byte and double-byte widths the spaces
+// shrink down to a quarter em instead, which also lends the 3 pt.
 import { afterEach, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
@@ -32,7 +33,7 @@ const BODY =
   '<w:sectPr><w:pgSz w:w="2940" w:h="10000"/>' +
   '<w:pgMar w:top="600" w:bottom="600" w:left="600" w:right="600"/></w:sectPr>';
 const CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml';
-const SOURCE = {
+const source = (balanced: boolean) => ({
   overrides:
     `<Override PartName="/word/styles.xml" ContentType="${CT}.styles+xml"/>` +
     `<Override PartName="/word/settings.xml" ContentType="${CT}.settings+xml"/>`,
@@ -45,9 +46,10 @@ const SOURCE = {
     'word/styles.xml': `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="SimSun"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`,
     'word/settings.xml':
       `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/>` +
-      '<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="14"/></w:compat></w:settings>',
+      `<w:compat>${balanced ? '<w:balanceSingleByteDoubleByteWidth/>' : ''}` +
+      '<w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="14"/></w:compat></w:settings>',
   },
-};
+});
 type Line = {
   spans: readonly {
     text: string;
@@ -83,8 +85,11 @@ function select(editor: Editor, from: number, to = from) {
   });
 }
 
-test('legacy space shrinking on a left-aligned line converges through edits, history, and save', async () => {
-  const peers = await harness.pair(zipDocument(BODY, SOURCE));
+test.each([
+  ['', false],
+  [' with balanced widths', true],
+] as const)('legacy space shrinking on a left-aligned line converges%s', async (_, balanced) => {
+  const peers = await harness.pair(zipDocument(BODY, source(balanced)));
   const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
     peer.detach();
     const editor = createDocxEditor({

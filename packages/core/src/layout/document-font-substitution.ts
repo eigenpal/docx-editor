@@ -10,6 +10,7 @@ import { fontFamilyName } from '../store/package/font-family-name.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import { SYMBOL_ENCODED_FAMILIES } from '../store/package/symbol-encoding.ts';
+import { englishFamily } from '../store/package/default-font-faces.ts';
 import { applicationRunDefaults } from './application-run-defaults.ts';
 import { readDocDefaults } from './style-definition-reader.ts';
 import { resolveRunStyle } from './run-style.ts';
@@ -292,6 +293,9 @@ export function applyDocumentFontSubstitutions(
     const key = family.trim().toLowerCase();
     const alternate = plan.alternates.get(key);
     const fallback = fallbackFamilies.get(key);
+    // A localized East Asian name (`メイリオ`) is its English family (`Meiryo`), so a face the
+    // host supplies under that name comes before any other candidate.
+    const english = englishFamily(family);
     for (const weight of [400, 700]) {
       for (const style of ['normal', 'italic'] as const) {
         const from = { family, weight, style };
@@ -300,7 +304,7 @@ export function applyDocumentFontSubstitutions(
         // the document names a face the host supplies directly, as before: following the host's
         // substitutions for a fallback is only for families the host has no answer for.
         const hostAnswered = hostSubstitutions.has(fontRequestKey(from));
-        for (const candidate of [alternate, fallback]) {
+        for (const candidate of [english, alternate, fallback]) {
           if (!candidate || candidate.trim().toLowerCase() === key) continue;
           const request = { family: candidate, weight, style };
           const direct = sources.get(fontRequestKey(request));
