@@ -720,6 +720,7 @@ In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingCo
 - **THEN** the word stays on the line, in Courier New, Arial, or Century alike
 - **AND** a Times New Roman or Calibri space, a quarter em or narrower, keeps its advance
 - **AND** with `w:useWord97LineBreakRules` as well, spaces in proportional faces keep their advance
+- **AND** a line that starts with spaces keeps natural spaces
 
 #### Scenario: The default East Asian face counts by the face that draws it
 
@@ -727,7 +728,7 @@ In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingCo
 - **WHEN** the face is available and lists a Chinese, Japanese, or Korean code page
 - **THEN** the defaults name an East Asian face, so spaces shrink and punctuation hangs
 - **AND** an available face without those code pages does not count, even with an East Asian `w:charset`
-- **AND** a missing face counts only by a known name or an East Asian `w:charset` in the font table
+- **AND** a missing face counts by a known name, by a common East Asian family name such as `Noto Sans JP`, or by an East Asian `w:charset` in the font table
 
 ### Requirement: Legacy space shrinking before a final mark
 
