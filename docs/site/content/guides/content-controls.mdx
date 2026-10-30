@@ -274,7 +274,7 @@ You can change the alignment, indents, spacing, line spacing, line and page brea
 
 ## Formatting data-bound controls
 
-A data binding (`w:dataBinding`) mirrors the control's text, so it refuses text edits and character formatting with code `bound`. It doesn't refuse paragraph formatting. In a block control with a data binding, you can change every paragraph property, including the style, list, direction, tab stops, and shading. The bound text and the binding stay unchanged. In suggesting mode, the change records one paragraph format revision that you can accept or reject. If the control also has a content lock, the content lock rules apply to its paragraphs.
+A data binding (`w:dataBinding`) mirrors the control's text, so it refuses text edits and character formatting with code `bound`. It doesn't refuse paragraph formatting. In a block control with a data binding, you can change every paragraph property, including the style, list, direction, tab stops, and shading. The bound text and the binding stay unchanged. In suggesting mode, indents, spacing, alignment, and styles record one paragraph format revision that you can accept or reject. If the control also has a content lock, the content lock rules apply to its paragraphs.
 
 If authors must style placeholder text without editing it, set `contentLockPolicy` when you create the editor:
 

@@ -72,8 +72,10 @@ import {
   changesOnlyLockFreeParagraphProperties,
   restoresOnlyLockFreeParagraphProperties,
 } from './content-lock-paragraph-properties.ts';
-import { isParagraphPropertyChange } from './bound-paragraph-properties.ts';
-import { writesOnlyParagraphProperties } from './bound-paragraph-properties.ts';
+import {
+  isParagraphPropertyChange,
+  writesOnlyParagraphProperties,
+} from './bound-paragraph-properties.ts';
 import { attributionTargets } from './revision-author-change.ts';
 import { revisionStructuralReach, type RevisionOpAction } from './tree-op-revisions.ts';
 import {
