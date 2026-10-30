@@ -42,6 +42,7 @@ import {
   encodeAttributes,
   type InlineAttributes,
 } from './paragraph-text.ts';
+import { recordSplitPoints } from './split-points.ts';
 import {
   insertCopy,
   markMoves,
@@ -925,6 +926,7 @@ export function applyInlinePlan(
       decodeAttributes(token.attributes, registry.limits, writes[paragraph]!.id).text?.id ?? '',
     (paragraph) => storyRootOf(registry, writes[paragraph]!.id)
   );
+  recordSplitPoints(writes);
   for (const write of writes) {
     const text = write.text ?? writeInlineText(write.record, []);
     writeParagraphText(

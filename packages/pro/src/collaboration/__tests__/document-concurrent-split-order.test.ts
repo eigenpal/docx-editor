@@ -308,6 +308,47 @@ describe('deleting a reordered paragraph that a split shortened', () => {
         r.close();
       }
     });
+
+  // The paragraph split off holds only typed text, so its text no longer tells where it came
+  // from; the split point it recorded does.
+  for (const { label, ids } of ORDERS)
+    test(`a split-off paragraph of typed text stays in place (${label})`, async () => {
+      const r = await room('One; two; three', ids);
+      try {
+        r.offline();
+        await splitAfter(r.bob.runtime, 'two; ', false);
+        later();
+        await splitAfter(r.alice.runtime, 'One; ', false);
+        later();
+        r.online();
+        await r.expectAll(['One; ', 'two; ', 'three', 'Signed']);
+        later();
+        await r.alice.runtime.run(async (context) => {
+          const paragraphs = context.document.body.paragraphs;
+          paragraphs.load('items');
+          await context.sync();
+          paragraphs.items[1]!.insertText('Typed', 'End');
+          await context.sync();
+        });
+        r.sync();
+        later();
+        await newlineAfter(r.alice.runtime, 'two; ', false);
+        r.sync();
+        await r.expectAll(['One; ', 'two; ', 'Typed', 'three', 'Signed']);
+        later();
+        await r.carol.runtime.run(async (context) => {
+          const paragraphs = context.document.body.paragraphs;
+          paragraphs.load('items');
+          await context.sync();
+          paragraphs.items[1]!.delete();
+          await context.sync();
+        });
+        r.sync();
+        await r.expectAll(['One; ', 'Typed', 'three', 'Signed']);
+      } finally {
+        r.close();
+      }
+    });
 });
 
 describe('three peers splitting one paragraph at different points while offline', () => {

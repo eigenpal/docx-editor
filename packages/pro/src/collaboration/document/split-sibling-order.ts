@@ -27,6 +27,8 @@ import type { LogicalId } from './identity.ts';
 import { firstItem, structAt } from './yjs-items.ts';
 import { itemIdentity, type Identity } from './paragraph-text-identity.ts';
 import { marksOfText } from './paragraph-text-marks.ts';
+import { childArrayOf } from './schema.ts';
+import { splitOffsetIn, splitPointsOf, type SplitPoint } from './split-points.ts';
 
 /**
  * How many clocks of one paragraph's text the rule reads. It counts clocks, which every
@@ -105,7 +107,9 @@ export function splitSiblingRanks(
   children: Y.Array<LogicalId>,
   textOf: (id: LogicalId) => Y.Text | null,
   /** Collects every paragraph the order of a concurrent run reads, moved or not. */
-  heads: LogicalId[] = []
+  heads: LogicalId[] = [],
+  /** The split points recorded on a paragraph (`split-points.ts`). */
+  pointsOf: (id: LogicalId) => readonly SplitPoint[] = () => []
 ): SiblingRanks {
   let ranks: Map<LogicalId, SiblingRank> | null = null;
   let group = 0;
@@ -143,7 +147,7 @@ export function splitSiblingRanks(
     }
     for (const block of blocks)
       for (const item of block.items) if (!item.deleted) heads.push(headId(item));
-    const order = orderOf(blocks, textOf, children.doc);
+    const order = orderOf(blocks, textOf, children.doc, pointsOf);
     if (order) {
       group += 1;
       ranks ??= new Map();
@@ -250,12 +254,44 @@ function blockBefore(
   return splitEarlier(first, second);
 }
 
+/**
+ * The split points of one block: those of its first paragraph that is still listed and holds
+ * any. A paragraph split off a deleted one keeps the deleted one's split point.
+ */
+function blockPoints(
+  block: Block,
+  pointsOf: (id: LogicalId) => readonly SplitPoint[]
+): readonly SplitPoint[] {
+  for (const item of block.items) {
+    if (item.deleted) continue;
+    const points = pointsOf(headId(item));
+    if (points.length > 0) return points;
+  }
+  return [];
+}
+
+/**
+ * Whether block `first` goes before block `second` by the split points they recorded: the
+ * nearest split of one paragraph both name decides, the earlier offset first. Null when they
+ * name none in common or the same offset, as a release without the field leaves them.
+ */
+function splitBefore(first: readonly SplitPoint[], second: readonly SplitPoint[]): boolean | null {
+  for (let at = first.length - 1; at >= 0; at -= 1) {
+    const offset = splitOffsetIn(second, first[at]!.source);
+    if (offset === null) continue;
+    return first[at]!.offset === offset ? null : first[at]!.offset < offset;
+  }
+  return null;
+}
+
 /** The blocks of one concurrent run in the order the rule shows them, or null when unchanged. */
 function orderOf(
   run: readonly Block[],
   textOf: (id: LogicalId) => Y.Text | null,
-  doc: Y.Doc | null
+  doc: Y.Doc | null,
+  pointsOf: (id: LogicalId) => readonly SplitPoint[]
 ): Block[] | null {
+  const points = run.map((block) => blockPoints(block, pointsOf));
   const copies = run.map((block) => blockCopies(block, textOf));
   const places = new Map<Y.Text, Map<string, number>>();
   const starts = copies.map((list) => (doc ? sourcePlace(doc, list[0], places) : null));
@@ -267,7 +303,10 @@ function orderOf(
     for (let back = at; back > 0; back -= 1) {
       const later = order[back]!;
       const earlier = order[back - 1]!;
-      if (!blockBefore(copies[later]!, copies[earlier]!, starts[later]!, starts[earlier]!)) break;
+      const recorded = splitBefore(points[later]!, points[earlier]!);
+      const before =
+        recorded ?? blockBefore(copies[later]!, copies[earlier]!, starts[later]!, starts[earlier]!);
+      if (!before) break;
       [order[back - 1], order[back]] = [later, earlier];
       moved = true;
     }
@@ -299,7 +338,8 @@ export class SplitSiblingOrders {
   private readonly withRuns = new Set<LogicalId>();
 
   constructor(
-    private readonly childArrayOf: (parentId: LogicalId) => Y.Array<LogicalId> | null,
+    /** A node's shared record. */
+    private readonly nodeOf: (id: LogicalId) => Y.Map<unknown> | undefined,
     private readonly textOf: (id: LogicalId) => Y.Text | null,
     /** The listing the registry last indexed for a parent; a new array when it changes. */
     private readonly listingOf: (parentId: LogicalId) => readonly LogicalId[] | undefined
@@ -355,10 +395,12 @@ export class SplitSiblingOrders {
   }
 
   private build(parentId: LogicalId, listing: readonly LogicalId[] | undefined): OrderEntry | null {
-    const children = this.childArrayOf(parentId);
+    const children = childArrayOf(this.nodeOf(parentId)) as Y.Array<LogicalId> | null;
     if (!children || children.length < 2) return null;
     const heads: LogicalId[] = [];
-    const ranks = splitSiblingRanks(children, this.textOf, heads);
+    const ranks = splitSiblingRanks(children, this.textOf, heads, (id) =>
+      splitPointsOf(this.nodeOf(id))
+    );
     const ids = listing ?? children.toArray();
     const order = splitSiblingOrder(ids, ranks);
     const shown = order ? order.map((index) => ids[index]!) : ids;

@@ -120,7 +120,7 @@ export class DocumentRegistry {
   readonly inline: InlineIndex;
   /** The order concurrent splits of one paragraph show their new paragraphs in. */
   readonly splitSiblings = new SplitSiblingOrders(
-    (id) => childArrayOf(this.schema.nodes.get(id)),
+    (id) => this.schema.nodes.get(id),
     (id) => this.inline.textOf(id),
     (id) => this.childrenSnapshot.get(id)
   );
