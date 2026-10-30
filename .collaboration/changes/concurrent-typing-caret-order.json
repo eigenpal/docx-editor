@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "While a host read editor state inside a remote change, the local caret could move by the previous remote change's carry, so concurrent typing at one place reversed one person's characters.",
+  "after": "A carry owed for a remote change is computed when the editor asks for it, so the local caret follows the change being shown.",
+  "reason": "Only the local caret mapping changes. Shared nodes, text, operations, presence encoding, and package serialization are unchanged.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-concurrent-typing-caret.test.ts"],
+  "changeset": "concurrent-typing-caret-order",
+  "migration": null
+}
