@@ -13,6 +13,11 @@ import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import type { LockedControlNavigation } from '../paginated-surface-options.ts';
 import { createDocxEditor } from '../docx-editor.ts';
+import {
+  controlEdgeSide,
+  inlineControlEdges,
+  wordMotionBoundaries,
+} from '../../layout/word-navigation-boundaries.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -428,5 +433,69 @@ describe('createDocxEditor takes the option', () => {
     expect(surface.state().selection.head.offset).toBe(expected);
     editor.destroy();
     container.remove();
+  });
+});
+
+describe('a double click selects a word up to an inline control edge', () => {
+  for (const lock of ['none', 'sdtLocked', 'contentLocked']) {
+    for (const [side, expected] of [
+      ['after', [7, 9]],
+      ['before', [0, 2]],
+    ] as const) {
+      test(`${lock}: the word ${side} the control`, () => {
+        const m = mount(line(lock), null);
+        const b = box(m);
+        const x = side === 'after' ? b.x + b.width + 2 : 1;
+        click(m, x, b.y + b.height / 2, 2);
+        expect([...offsets(m)].sort((a, c) => a - c)).toEqual([...expected]);
+      });
+    }
+    // One point either side of each edge: the clicked letter's word, never its neighbour's.
+    for (const [where, dx, expected] of [
+      ['just before the start edge', (b: { x: number }) => b.x - 1, [0, 2]],
+      ['just after the start edge', (b: { x: number }) => b.x + 1, [2, 7]],
+      ['just before the end edge', (b: { x: number; width: number }) => b.x + b.width - 1, [2, 7]],
+      ['just after the end edge', (b: { x: number; width: number }) => b.x + b.width + 1, [7, 9]],
+    ] as const) {
+      test(`${lock}: a double click ${where}`, () => {
+        const m = mount(line(lock), null);
+        const b = box(m);
+        click(m, dx(b), b.y + b.height / 2, 2);
+        expect([...offsets(m)].sort((a, c) => a - c)).toEqual([...expected]);
+      });
+    }
+  }
+
+  test('atomic: just outside the edges selects the neighbour word, inside the control', () => {
+    for (const [x, expected] of [
+      [(b: { x: number }) => b.x - 1, [0, 2]],
+      [(b: { x: number }) => b.x + 1, [2, 7]],
+      [(b: { x: number; width: number }) => b.x + b.width + 1, [7, 9]],
+    ] as const) {
+      const m = mount(line('contentLocked'), 'atomic');
+      const b = box(m);
+      click(m, x(b), b.y + b.height / 2, 2);
+      expect([...offsets(m)].sort((a, c) => a - c)).toEqual([...expected]);
+    }
+  });
+
+  test('the painter word keeps control edges and drops tracked deletion edges', () => {
+    const mark = 'w:author="A" w:date="2026-01-01T00:00:00Z"';
+    const m = mount(
+      `<w:p>${run('t')}<w:del w:id="1" ${mark}><w:r><w:delText>eh</w:delText></w:r></w:del>` +
+        `${run('he')}${control(TOKEN, 'none')}</w:p>`,
+      null
+    );
+    const layout = m.surface.layout();
+    expect([...wordMotionBoundaries(layout, m.paragraphId)].sort((a, b) => a - b)).toEqual([
+      1, 3, 5, 10,
+    ]);
+    expect([...inlineControlEdges(layout, m.paragraphId)].sort((a, b) => a - b)).toEqual([5, 10]);
+  });
+
+  test('an empty control inside a word never decides the side', () => {
+    const m = mount(`<w:p>${run('ab')}${control('', 'none')}${run('cd')}</w:p>`, null);
+    const at = { paragraphId: m.paragraphId, offset: 2 };
+    expect(controlEdgeSide(m.surface.layout(), at, null)).toBe('after');
   });
 });

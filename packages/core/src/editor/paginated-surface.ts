@@ -156,7 +156,6 @@ import {
   resolveNumberingLevel,
   positionPastDeletion,
   withNumberingStyleLinks,
-  deletedTextBoundaries,
   wordBoundary,
   type CellSelection,
   type ContentControlBoundaryRecord,
@@ -169,6 +168,7 @@ import {
   type SemanticPosition,
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
+import { wordMotionBoundaries } from '../layout/word-navigation-boundaries.ts';
 import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
 import { rangesOnPages } from '../layout/selection-rects.ts';
 import { refreshSurfaceRefFieldResults } from './surface-ref-field-refresh.ts';
@@ -4922,7 +4922,7 @@ export function mountPaginatedSurface(
         textOf(head.paragraphId),
         head.offset,
         -1,
-        deletedTextBoundaries(editingLayout(), head.paragraphId)
+        wordMotionBoundaries(editingLayout(), head.paragraphId)
       );
       if (target === head.offset) {
         surface.deleteBackward();
@@ -4946,7 +4946,7 @@ export function mountPaginatedSurface(
         textOf(head.paragraphId),
         head.offset,
         1,
-        deletedTextBoundaries(editingLayout(), head.paragraphId)
+        wordMotionBoundaries(editingLayout(), head.paragraphId)
       );
       if (target === head.offset) {
         surface.deleteForward();

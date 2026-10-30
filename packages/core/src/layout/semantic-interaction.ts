@@ -58,6 +58,8 @@ import {
   paragraphLinesFor,
 } from './paragraph-lines.ts';
 import { wordBoundary } from './semantic-word-navigation.ts';
+import { wordMotionBoundaries } from './word-navigation-boundaries.ts';
+export { deletedTextBoundaries } from './word-navigation-boundaries.ts';
 import {
   laterLineOwns,
   nextLineStartsAt,
@@ -593,27 +595,6 @@ export function paragraphTextFromLayout(layout: SemanticLayout, paragraphId: str
   return text;
 }
 
-/** Visible deletion boundaries split words without changing canonical text offsets. */
-export function deletedTextBoundaries(
-  layout: SemanticLayout,
-  paragraphId: string
-): ReadonlySet<number> {
-  const stops = new Set<number>();
-  for (const { line } of paragraphLinesFor(layout, paragraphId) ?? []) {
-    const segment = lineSegmentFor(line, paragraphId);
-    if (!segment) continue;
-    for (const span of segment.spans) {
-      if (span.range.end === span.range.start) continue;
-      if (!span.revisions?.some((entry) => entry.kind === 'delete' || entry.kind === 'moveFrom')) {
-        continue;
-      }
-      stops.add(span.range.start);
-      stops.add(span.range.end);
-    }
-  }
-  return stops;
-}
-
 /** Story-scoped stops are required when navigating inside an open header or footer. */
 export type { MoveCaretOptions } from './caret-line-edge-navigation.ts';
 
@@ -696,7 +677,7 @@ export function moveCaret(
     const indexed = navigationCaretStops(layout, position.paragraphId, options.measurer);
     const stopIndex = indexed.index.get(position.paragraphId)?.get(position.offset);
     const text = paragraphTextFromLayout(layout, position.paragraphId);
-    const boundaries = deletedTextBoundaries(layout, position.paragraphId);
+    const boundaries = wordMotionBoundaries(layout, position.paragraphId);
     const target =
       stopIndex === undefined
         ? wordBoundary(
@@ -816,7 +797,7 @@ export function moveCaret(
         index,
         command === 'wordLeft' ? -1 : 1,
         directionOf,
-        deletedTextBoundaries(layout, position.paragraphId)
+        wordMotionBoundaries(layout, position.paragraphId)
       );
       // Already at the paragraph edge: step into the neighbouring paragraph the way a plain
       // arrow would, so the key is never a dead press at a boundary.

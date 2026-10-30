@@ -28,12 +28,12 @@ import {
 } from '../layout/semantic-hit-test.ts';
 import {
   documentOrder,
-  deletedTextBoundaries,
   paragraphTextFromLayout,
   type SemanticPosition,
   type CaretGeometry,
   type SemanticSelection,
 } from '../layout/semantic-interaction.ts';
+import { controlEdgeSide, wordMotionBoundaries } from '../layout/word-navigation-boundaries.ts';
 import { wordRangeAt } from './surface-selection-ops.ts';
 import {
   absorbAtomicControls,
@@ -408,7 +408,8 @@ export function createPointerController(
   function rangeAt(
     layout: SemanticLayout,
     position: SemanticPosition,
-    granularity: Granularity
+    granularity: Granularity,
+    hitControlId: string | null = null
   ): PositionRange {
     if (granularity === 'character') return { from: position, to: position };
     const id = position.paragraphId;
@@ -416,9 +417,10 @@ export function createPointerController(
       const text = paragraphTextFromLayout(layout, id);
       return { from: { paragraphId: id, offset: 0 }, to: { paragraphId: id, offset: text.length } };
     }
-    // A word stops at a struck half's edge: a replacement paints the old text and the new
-    // with nothing between them, so without this a double-click on either took both.
-    return wordRangeAt(layout, position, deletedTextBoundaries(layout, id));
+    // A word stops at a struck half's edge and at an inline control's edge: a replacement paints
+    // the old text and the new with nothing between them, and a control edge splits a word.
+    const side = controlEdgeSide(layout, position, hitControlId);
+    return wordRangeAt(layout, position, wordMotionBoundaries(layout, id), side);
   }
 
   /** Anchor range plus the range under the pointer, oriented so the head follows the drag. */
@@ -431,8 +433,9 @@ export function createPointerController(
   ): SemanticSelection {
     const placeholder = hit ? placeholderAtHit(layout, hit) : null;
     const headRange = placeholder
-      ? (placeholderSelectionRange(layout, placeholder) ?? rangeAt(layout, head, granularity))
-      : rangeAt(layout, head, granularity);
+      ? (placeholderSelectionRange(layout, placeholder) ??
+        rangeAt(layout, head, granularity, hit?.contentControlId))
+      : rangeAt(layout, head, granularity, hit?.contentControlId);
     const raw = isBefore(layout, headRange.from, anchorRange.from)
       ? { anchor: anchorRange.to, head: headRange.from }
       : { anchor: anchorRange.from, head: headRange.to };
@@ -896,7 +899,7 @@ export function createPointerController(
       const anchorRange =
         (atomicInlineControls && granularity === 'word'
           ? atomicRangeAt(layout, hit.position)
-          : null) ?? rangeAt(layout, hit.position, granularity);
+          : null) ?? rangeAt(layout, hit.position, granularity, hit.contentControlId);
       gesture = {
         pointerId: event.pointerId,
         granularity,
