@@ -1,22 +1,22 @@
 // The `text.link` slot as a menu row.
 //
-// `text.link` has no engine command: a link needs a target, and only the link popover can
-// supply one. So this row does what `Toolbar.Link` and Ctrl/Cmd+K do: it opens the one shared
-// popover for the selection. `MenuItem` routes `slotId="text.link"` here, so the context
-// menu's packaged row, `<ContextMenu.Slot slotId="text.link" />` and
+// `text.link` runs no engine command: a link needs a target, and only a link UI can supply
+// one. The engine answers the slot like any other: it is enabled while the selection could
+// become a link AND a link UI is registered, and running it asks that UI to open, which is
+// what `Toolbar.Link` and Ctrl/Cmd+K do. `MenuItem` routes `slotId="text.link"` here, so the
+// context menu's packaged row, `<ContextMenu.Slot slotId="text.link" />` and
 // `<Menu.Item slotId="text.link" />` are all the same working row.
 
-import { chromeProbeForSlot } from '@docx-editor.dev/core/editor';
-import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import { runToolbarCommand, toolbarCommandState } from '@docx-editor.dev/core/editor';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
-import { useHyperlinkPopup } from '../useHyperlinkPopup';
 import { chromeControlForSlot, chromeIcon } from '../toolbar/ToolbarButton';
 import { useMenuContext, useMenuLabel } from './menu-context';
 import { MenuRow, type MenuItemBaseProps } from './parts';
 
-const selectSelection = (snapshot: EditorSnapshot) => snapshot.selection;
+// Mounted only while its menu is open, so following every snapshot costs nothing.
+const wholeSnapshot = <T,>(snapshot: T): T => snapshot;
 
 /**
  * Insert link, or Edit link when the caret is inside a link.
@@ -31,13 +31,12 @@ export function MenuLinkRow({ labelKey, shortcutKey, className, hidden }: MenuIt
   const editor = useDocxEditor();
   const menu = useMenuContext();
   const label = useMenuLabel();
-  const { openAtCaret } = useHyperlinkPopup();
-  // The label and the enabled state both depend on where the caret is.
-  useEditorState(selectSelection);
+  // The label and the enabled state both depend on where the caret is. A link UI that
+  // registers or goes away moves the snapshot too.
+  useEditorState(wholeSnapshot);
   if (hidden) return null;
-  const probe = chromeProbeForSlot('text.link');
-  const allowed = editor && probe ? editor.can(probe) : null;
-  const reason = localizeDisabledReason(allowed && !allowed.ok ? allowed.reason : null, label);
+  const state = toolbarCommandState(editor, 'text.link');
+  const reason = localizeDisabledReason(state.disabledReason, label);
   const control = chromeControlForSlot('text.link');
   const onLink = editor?.surface?.hyperlinks.linkAtCaret() != null;
   const text = label(labelKey ?? (onLink ? 'hyperlinkPopup.editLink' : 'formattingBar.insertLink'));
@@ -46,13 +45,13 @@ export function MenuLinkRow({ labelKey, shortcutKey, className, hidden }: MenuIt
       icon={chromeIcon(control?.paths)}
       slot="text.link"
       {...(shortcutKey ? { shortcut: label(shortcutKey) } : {})}
-      disabled={allowed?.ok !== true}
+      disabled={!state.enabled}
       title={reason ?? undefined}
       onSelect={() => {
         // Close first: closing puts focus back in the document, and the popover then moves
         // it to its URL field. The other order would take focus away from the open panel.
         menu.setOpenMenu(null);
-        openAtCaret();
+        runToolbarCommand(editor, 'text.link');
       }}
       {...(className ? { className } : {})}
     >

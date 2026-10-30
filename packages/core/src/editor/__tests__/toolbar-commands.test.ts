@@ -154,23 +154,24 @@ describe('toolbar command wiring (task M4.0)', () => {
     expect(calls.exec).toEqual([]);
   });
 
-  test('a chrome-driven slot stays out of the shared table, and offers a probe instead', () => {
+  test('the link slot stays out of the shared table, and needs a registered link UI', () => {
     const { editor, calls } = fakeEditor(ALLOW);
-    // `text.link` is NOT in `SLOT_COMMANDS`. Putting it there would enable the control in
-    // EVERY adapter — including one with no link UI, where an enabled button can only be
-    // refused, which is the worse lie. Chrome that owns a link UI asks with the probe and
-    // dispatches through that UI; chrome that does not gets the honest unwired answer.
+    // `text.link` is NOT in `SLOT_COMMANDS`: a link needs a target, which only a link UI can
+    // supply. The slot asks the engine with the probe, then whether a link UI is registered.
+    // This fake editor has none, so an allowed probe still leaves the control disabled.
     expect(commandForSlot('text.link')).toBeNull();
     expect(toolbarCommandState(editor, 'text.link')).toEqual({
       id: 'text.link',
       enabled: false,
-      disabledReason: 'not wired to an editor command',
+      disabledReason: 'no link view is registered',
       active: false,
     });
-    // The shared table DOES consult the probe — `can` is a pure predicate — but an
-    // ALLOWED probe never enables the control: the gap is the adapter's UI, not the
-    // engine's capability, so the answer stays the unwired one.
     expect(calls.can).toEqual([{ type: 'insertHyperlink', href: 'https://example.com' }]);
+    expect(runToolbarCommand(editor, 'text.link')).toEqual({
+      ok: false,
+      code: 'unsupported',
+      reason: 'no link view is registered',
+    });
 
     const probe = chromeProbeForSlot('text.link');
     expect(probe).toEqual({ type: 'insertHyperlink', href: 'https://example.com' });

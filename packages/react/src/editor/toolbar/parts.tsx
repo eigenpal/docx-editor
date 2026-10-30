@@ -12,11 +12,9 @@
 //   registry's parity rule (visible, never dropped, never faked).
 
 import { useContext } from 'react';
-import { chromeProbeForSlot, type ChromeSlotId } from '@docx-editor.dev/core/editor';
-import { localizeDisabledReason } from '@docx-editor.dev/i18n';
-import { useTranslation } from '../../i18n';
+import type { ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
-import { useHyperlinkPopup } from '../useHyperlinkPopup';
+import { useEditorCommand } from '../useEditorCommand';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { ToolbarContext, useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
@@ -93,23 +91,13 @@ export const ToolbarComments = definePart('review.comments');
 /**
  * Insert Link.
  *
- * Enabled state comes from the engine like every other control — `text.link` is wired, and
- * `toolbarCommandState` asks whether this selection could become a link. The CLICK does not
- * run the command, because a link needs a target and only the popover can supply one; it
- * opens the same panel Ctrl/Cmd+K opens, seeded from the link at the caret when there is one.
+ * Enabled state comes from the engine like every other control: `text.link` is enabled while
+ * the selection could become a link and a link UI is registered. The CLICK runs no edit,
+ * because a link needs a target and only that UI can supply one; it opens the same panel
+ * Ctrl/Cmd+K opens, seeded from the link at the caret when there is one.
  */
 function ToolbarLinkImpl({ className, hidden, icon, asChild, children }: ToolbarPartProps) {
-  const editor = useDocxEditor();
-  const { openAtCaret } = useHyperlinkPopup();
-  // Enabled state comes from the ENGINE, like every other control — but through a probe
-  // this part owns rather than through the shared command table. `text.link` is deliberately
-  // absent from `SLOT_COMMANDS`: putting it there would enable the control in every adapter,
-  // including one with no link UI, where an enabled button can only be refused.
-  const probe = chromeProbeForSlot('text.link');
-  const allowed = editor && probe ? editor.can(probe) : null;
-  const isEnabled = allowed?.ok === true;
-  const { t } = useTranslation();
-  const disabledReason = localizeDisabledReason(allowed && !allowed.ok ? allowed.reason : null, t);
+  const { execute, isEnabled, disabledReason } = useEditorCommand('text.link');
   const label = useToolbarLabel();
   const shortcut = usePlatformShortcut();
   if (hidden) return null;
@@ -127,7 +115,7 @@ function ToolbarLinkImpl({ className, hidden, icon, asChild, children }: Toolbar
     // Exactly what Ctrl/Cmd+K does — one behaviour, so the button and the shortcut cannot
     // drift: edit mode pre-filled when the caret is in a link, a fresh insert seeded with
     // the selected text otherwise, anchored at the caret either way.
-    onClick: () => openAtCaret(),
+    onClick: () => execute(),
   };
   if (asChild) return <Slot {...shared}>{children}</Slot>;
   return <button {...shared}>{icon ?? children ?? chromeIcon(control?.paths)}</button>;

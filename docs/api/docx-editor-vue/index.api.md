@@ -7956,7 +7956,7 @@ export interface UseHistoryGroupReturn {
     readonly ref: (element: HTMLElement | null) => void;
 }
 
-// @public (undocumented)
+// @public
 export function useHyperlinkPopup(): UseHyperlinkPopupResult;
 
 // @public (undocumented)

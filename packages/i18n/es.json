@@ -31,6 +31,7 @@
     "drawingLocked": "Esta imagen está bloqueada",
     "commentSelection": "Selecciona un texto antes de añadir un comentario",
     "noCommentDraftView": "Aquí no se pueden añadir comentarios",
+    "noLinkView": "Aquí no se pueden añadir vínculos",
     "mergeUnsupported": "No se admite combinar celdas",
     "splitUnsupported": "No se admite dividir celdas",
     "mergeNeedsRectangle": "Selecciona dos o más celdas que formen un rectángulo para combinarlas",
@@ -564,6 +565,7 @@
     "deleteShortcut": "Supr",
     "selectAll": "Seleccionar todo",
     "selectAllShortcut": "Ctrl+A",
+    "insertLinkShortcut": "Ctrl+K",
     "editCustomNode": "Editar {label}",
     "removeCustomNode": "Quitar {label}"
   },

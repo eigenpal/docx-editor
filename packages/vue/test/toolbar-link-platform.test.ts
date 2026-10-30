@@ -45,6 +45,15 @@ function tree() {
   );
 }
 
+/** The toolbar with the link popover mounted, so the Link button has a panel to open. */
+function mountToolbar(t?: (key: string) => string): MountedEditor {
+  return mountEditorTree(
+    () => toolbar(t),
+    SOURCE,
+    () => [h(DocxEditorHyperLink)]
+  );
+}
+
 function link(container: HTMLElement): HTMLButtonElement {
   const button = container.querySelector<HTMLButtonElement>('[data-slot="text.link"]');
   if (!button) throw new Error('The named link control is missing');
@@ -66,7 +75,7 @@ afterEach(() => {
 
 test('the named link control uses the same Mac modifier as ordinary buttons', async () => {
   platform('MacIntel');
-  mounted = mountEditorTree(() => toolbar());
+  mounted = mountToolbar();
   await flush();
   expect(mounted.container.querySelector('[data-slot="text.bold"]')!.getAttribute('title')).toBe(
     'Bold (⌘+B)'
@@ -77,7 +86,7 @@ test('the named link control uses the same Mac modifier as ordinary buttons', as
 
 test('the named link control keeps Ctrl on Windows', async () => {
   platform('Win32');
-  mounted = mountEditorTree(() => toolbar());
+  mounted = mountToolbar();
   await flush();
   expect(link(mounted.container).getAttribute('title')).toBe('Insert link (Ctrl+K)');
   expect(link(mounted.container).getAttribute('aria-label')).toBe('Insert link (Ctrl+K)');
@@ -85,8 +94,8 @@ test('the named link control keeps Ctrl on Windows', async () => {
 
 test('the named link control normalizes the host translation', async () => {
   platform('MacIntel');
-  mounted = mountEditorTree(() =>
-    toolbar((key) => (key === 'formattingBar.insertLinkShortcut' ? 'Lien (Ctrl+K)' : key))
+  mounted = mountToolbar((key) =>
+    key === 'formattingBar.insertLinkShortcut' ? 'Lien (Ctrl+K)' : key
   );
   await flush();
   expect(link(mounted.container).getAttribute('title')).toBe('Lien (⌘+K)');

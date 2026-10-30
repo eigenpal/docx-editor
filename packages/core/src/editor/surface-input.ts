@@ -107,9 +107,10 @@ export function createKeyDownHandler(
      * Ctrl/Cmd+K — Word's Insert Hyperlink. The keymap does not know what a link dialog
      * looks like, so it reports the request and the host's chrome answers it; a host with
      * no hyperlink UI simply does not pass this, and the key falls through to the browser
-     * rather than doing something surprising.
+     * rather than doing something surprising. Answering `false` (no link UI took it) lets
+     * the key through too.
      */
-    readonly onRequestHyperlink?: () => void;
+    readonly onRequestHyperlink?: () => boolean | void;
     /**
      * Ctrl/Cmd+Shift+F5 opens the host's bookmark dialog. Answers whether chrome took the
      * request; when none did, the key is left to the browser.
@@ -371,7 +372,7 @@ export function createKeyDownHandler(
     if (accel && !event.shiftKey && event.key.toLowerCase() === 'k' && hooks.onRequestHyperlink) {
       // Word's Insert Hyperlink. On an existing link this opens EDIT mode seeded from it,
       // which is the host's job — the keymap only says the user asked.
-      hooks.onRequestHyperlink();
+      if (hooks.onRequestHyperlink() === false) return;
       event.preventDefault();
       return;
     }
