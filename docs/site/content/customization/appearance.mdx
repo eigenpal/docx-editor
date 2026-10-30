@@ -6,7 +6,7 @@ category: 'Customization'
 
 Set `--doc-*` properties on your `.docx-editor` wrapper. Load application CSS after the editor stylesheet.
 
-Add the `dark` class to a composed wrapper for dark controls. Use `colorMode` on the packaged editor. Dark mode also adjusts the document preview. Saved document colors remain unchanged.
+Set `colorMode` on the packaged editor or on `DocxEditor.Root` for dark controls. Dark mode also adjusts the document preview. Saved document colors remain unchanged.
 
 <CustomizationDemo topic="appearance" />
 
@@ -61,7 +61,7 @@ Use these controls to adapt the DOCX editor interface to your application. Inter
 | --- | --- | --- |
 | Interface palette | Override `--doc-*` properties on your wrapper. | Controls, panels, menus, and review cards. |
 | Utility palette | Override the HSL properties used by the controls. | Utility classes such as `bg-primary` and `text-foreground`. |
-| Dark mode | Add `.dark`, or set packaged `colorMode`. | Interface and document preview. |
+| Dark mode | Set `colorMode` on the packaged editor or on `DocxEditor.Root`. | Interface and document preview. |
 | Typography | Set `--doc-font-ui` and dialog font properties. | Supported interface parts, not document fonts. |
 | Control shape | Add `className` to named parts. | The selected part and its interaction states. |
 | Custom elements | Use a supported part's `asChild`. | Your element receives the part's behavior. |
@@ -140,9 +140,9 @@ Keep visible focus indicators and readable text in each theme. Use text, icons, 
 
 ### Dark mode behavior
 
-The packaged DOCX editor accepts `colorMode="light"`, `"dark"`, or `"system"`. Its default is `"light"`. The `"system"` value follows changes to the operating system preference.
+The packaged DOCX editor and `DocxEditor.Root` accept `colorMode="light"`, `"dark"`, or `"system"`. The default is `"light"`. The `"system"` value follows changes to the operating system preference.
 
-For a composed editor, your application controls the `.dark` class on the `.docx-editor` wrapper. Declare dark theme overrides with `.docx-editor.contract-workspace.dark` after the editor stylesheet. This selector also lets your application override the library's dark palette.
+In a composed editor, `colorMode` on `DocxEditor.Root` adds `.dark` beside `.docx-editor` on every part that scopes itself, including dialogs and a pop-out window. Declare dark theme overrides with `.docx-editor.contract-workspace.dark` after the editor stylesheet. This selector also lets your application override the library's dark palette.
 
 Dark mode changes the on-screen page background and content presentation. It does not write these display colors into the DOCX file. Use document formatting commands when you need a saved document color.
 

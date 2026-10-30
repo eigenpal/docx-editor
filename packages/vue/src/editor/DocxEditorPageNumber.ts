@@ -15,7 +15,7 @@ import { useTranslation } from '../i18n';
 import { useDocxEditor } from './context';
 import { useNavigationViewportElement } from './navigation/navigation-layout';
 import { useEditorState } from './useEditorState';
-import { useScopeClassName } from './scope-context';
+import { useChromeDark, useChromeScopeClassName } from './color-mode-context';
 import { useViewportOverlayHost } from './viewport-context';
 
 const HIDE_DELAY_MS = 600;
@@ -63,7 +63,8 @@ export const DocxEditorPageNumber = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props) {
-    const ancestorScope = useScopeClassName();
+    const ancestorScope = useChromeScopeClassName();
+    const chromeDark = useChromeDark();
     const editorRef = useDocxEditor();
     const viewport = useNavigationViewportElement();
     // Inside the scroll container, an absolute overlay scrolls away with the pages.
@@ -106,8 +107,8 @@ export const DocxEditorPageNumber = defineComponent({
       const scopeClassName = target
         ? overlayTarget.value?.scoped
           ? ''
-          : 'docx-editor '
-        : ancestorScope;
+          : `docx-editor ${chromeDark.value ? 'dark ' : ''}`
+        : ancestorScope();
       const label = translate
         ? translate('viewer.pageIndicator')
             .replace(/\{current\}/g, String(current.value))

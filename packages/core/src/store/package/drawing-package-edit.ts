@@ -10,6 +10,7 @@ import {
   resolveAllocationActor,
 } from './actor-scoped-ids.ts';
 import { resolveContentType } from './content-types.ts';
+import { VML, vmlShapeNumber } from './legacy-vml-values.ts';
 import { removeNode } from './ooxml-edit.ts';
 import { normalizePartName, partNameKey, resolveInternalTarget } from './opc-names.ts';
 import {
@@ -136,6 +137,9 @@ function walkNodes(node: OoxmlNode, visit: (node: OoxmlNode) => void): void {
 /**
  * Every valid `wp:docPr/@id` the package holds, and the highest of them.
  *
+ * Legacy VML shape numbers are marked used too, without raising `highest`. Shape automation
+ * names a VML shape by that number, so a minted drawing id must not take it.
+ *
  * `0` is seeded as used. It is a legal `xsd:unsignedInt` but names no drawing here —
  * {@link parseValidDocPrId} refuses it, so an id nothing can read back must never be minted.
  * The solo walk is `highest + 1` and cannot reach it; a striped residue of 0 would.
@@ -152,6 +156,11 @@ export function drawingPropertyIdOccupancy(pkg: OoxmlPackage): {
   const used = new Set<string>(['0']);
   for (const part of pkg.parts.values()) {
     walkNodes(part.root, (node) => {
+      if (node.kind !== 'textValue' && node.namespaceUri === VML) {
+        const number = vmlShapeNumber(node);
+        if (number !== null) used.add(String(number));
+        return;
+      }
       if (!isDocPrNode(node)) return;
       const parsed = parseValidDocPrId(docPrIdAttributeValue(node));
       if (parsed === null) return;
@@ -189,6 +198,8 @@ export function allocateDrawingPropertyId(
   } catch {
     return { ok: false, reason: 'invalidArgs' };
   }
+  // Only VML shape numbers can sit above `highest`; the walk ends within `used.size` steps.
+  while (!actor && used.has(String(next))) next += 1;
   if (next <= 0 || next > MAX_UNSIGNED_INT) {
     return { ok: false, reason: 'invalidArgs' };
   }

@@ -385,6 +385,24 @@ describe('allocates docPr ids', () => {
     expect(allocateDrawingPropertyId(pkg)).toEqual({ ok: true, id: 6 });
   });
 
+  test('never takes a legacy VML shape number', () => {
+    const vml = (id: string) =>
+      `<w:p><w:r><w:pict xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">` +
+      `<v:shape ${id} style="width:10pt;height:10pt"/></w:pict></w:r></w:p>`;
+    const pkg = buildPackage({
+      document:
+        `<w:document xmlns:w="${W}" xmlns:wp="${WP}">` +
+        drawingBody('id="1025" name="a"').replace(
+          '</w:body>',
+          `${vml('id="_x0000_s1026"')}${vml('id="Text Box 3" o:spid="_x0000_s1027"')}` +
+            `${vml('id="_x0000_i4000"')}</w:body>`
+        ) +
+        '</w:document>',
+    });
+    // The numbers are skipped, not raised past: the next drawing id stays dense.
+    expect(allocateDrawingPropertyId(pkg)).toEqual({ ok: true, id: 1028 });
+  });
+
   test('counts valid ids in headers and footers', () => {
     const pkg = buildPackage({
       document: `<w:document xmlns:w="${W}" xmlns:wp="${WP}">${drawingBody('id="3" name="body"')}</w:document>`,

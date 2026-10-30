@@ -142,6 +142,15 @@ function trackedIndicator(places: string[]) {
 const LOADING = '.docx-editor__loading';
 const SPINNER = '.docx-editor__loading-spinner';
 
+/**
+ * Whether `selector` matches nothing in `container`. Inside `waitFor`, assert on this and not on
+ * the element: every failed retry formats the received element, and formatting a painted
+ * document walks the whole window, which costs seconds per retry on a slow runner.
+ */
+function absent(container: HTMLElement, selector: string): boolean {
+  return container.querySelector(selector) === null;
+}
+
 afterEach(() => {
   cleanup();
 });
@@ -337,7 +346,7 @@ describe('DocxEditor.Loading', () => {
       expect(view.container.textContent).toContain('large body');
     });
     await waitFor(() => {
-      expect(view.container.querySelector(LOADING)).toBeNull();
+      expect(absent(view.container, LOADING)).toBe(true);
     });
   });
 
@@ -367,7 +376,7 @@ describe('DocxEditor.Loading', () => {
     await act(async () => {});
     expect(view.container.querySelector(LOADING)).toBe(overlay);
     await waitFor(() => expect(view.container.textContent).toContain('large body'));
-    await waitFor(() => expect(view.container.querySelector(LOADING)).toBeNull());
+    await waitFor(() => expect(absent(view.container, LOADING)).toBe(true));
     observer.disconnect();
     // Removed once, when the pages arrive, and never replaced on the way.
     expect(removed.filter((node) => node === overlay)).toHaveLength(1);
@@ -617,9 +626,9 @@ describe('DocxEditor.Loading', () => {
       // last slice lands. Wait for that end state, not for the screen alone.
       await waitFor(
         () => {
-          expect(view.container.querySelector(LOADING)).toBeNull();
-          expect(view.container.querySelector('.docx-opening-indicator')).toBeNull();
-          expect(view.container.querySelector('.mine')).toBeNull();
+          expect(absent(view.container, LOADING)).toBe(true);
+          expect(absent(view.container, '.docx-opening-indicator')).toBe(true);
+          expect(absent(view.container, '.mine')).toBe(true);
         },
         { timeout: 20_000 }
       );
@@ -687,7 +696,7 @@ describe('packaged DocxEditor loading screen', () => {
       expect(view.container.querySelector('.docx-editor__loading-page .mine')).not.toBeNull();
       expect(view.container.querySelector(SPINNER)).toBeNull();
       await waitFor(() => expect(places).toContain('below the pages'), { timeout: 20_000 });
-      await waitFor(() => expect(view.container.querySelector('.mine')).toBeNull(), {
+      await waitFor(() => expect(absent(view.container, '.mine')).toBe(true), {
         timeout: 20_000,
       });
     },

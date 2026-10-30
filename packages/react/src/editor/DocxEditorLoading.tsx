@@ -44,6 +44,7 @@ import { useTranslation } from '../i18n';
 import { isDevelopment } from '../lib/is-development';
 import { twipsToPixels } from '../lib/units';
 import { useEditorState } from './useEditorState';
+import { useChromeDark } from './color-mode-context';
 
 /**
  * A scalar slice on purpose: `useEditorState` bails out on `Object.is`, so this part
@@ -196,6 +197,7 @@ function DocxEditorLoadingImpl({
     if (bridging) recheck();
   }, [visible, editor, bridging]);
   const { t } = useTranslation();
+  const chromeDark = useChromeDark();
   const status = indicator ?? (
     <>
       <DocxEditorLoadingSpinner />
@@ -207,7 +209,7 @@ function DocxEditorLoadingImpl({
   if (below) return createPortal(status, below);
   if (!visible) return null;
 
-  const classes = `docx-editor docx-editor__loading${
+  const classes = `docx-editor${chromeDark ? ' dark' : ''} docx-editor__loading${
     overlay ? ' docx-editor__loading--overlay' : ''
   }${className ? ` ${className}` : ''}`;
   return (

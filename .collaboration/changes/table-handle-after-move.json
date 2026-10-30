@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "After a table was dragged to another page, the select handle kept a hover target on the old page and stopped showing.",
+  "after": "A hover target that no longer finds its table is dropped, so the handle follows the caret's table.",
+  "reason": "Only local chrome state for the select handle changes. Shared nodes, operations, and serialization are unchanged.",
+  "tests": ["packages/core/src/editor/__tests__/surface-table-drag.test.ts"],
+  "changeset": "table-handle-after-move",
+  "migration": null
+}

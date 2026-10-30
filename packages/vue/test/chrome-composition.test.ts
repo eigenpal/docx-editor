@@ -78,10 +78,15 @@ function toolbarArrangement(toolbar: Element): string[] {
       child.classList.contains('docx-toolbar__group') ||
       child.classList.contains('docx-toolbar__contextual')
     ) {
-      return [...child.children].map(
-        (entry) =>
-          entry.getAttribute('data-slot') ?? entry.getAttribute('aria-label') ?? entry.className
-      );
+      // Each control sits in its own `docx-toolbar__item` collapse wrapper.
+      return [...child.children]
+        .flatMap((entry) =>
+          entry.classList.contains('docx-toolbar__item') ? [...entry.children] : [entry]
+        )
+        .map(
+          (entry) =>
+            entry.getAttribute('data-slot') ?? entry.getAttribute('aria-label') ?? entry.className
+        );
     }
     return child.getAttribute('data-slot') ?? child.getAttribute('aria-label') ?? child.className;
   });

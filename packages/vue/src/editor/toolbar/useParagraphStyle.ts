@@ -4,7 +4,8 @@ import { commandForSlotValue } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
-import { paragraphStyleDisplayName } from '../../lib/stylePreview';
+import { builtInParagraphStyleLabel, paragraphStyleDisplayName } from '../../lib/stylePreview';
+import { useTranslation } from '../../i18n';
 
 /** @public */
 export interface ParagraphStyleOption {
@@ -36,16 +37,23 @@ export function useParagraphStyle(): UseParagraphStyleResult {
   const editorRef = useDocxEditor();
   const value = useEditorState(selectStyleId);
   const snapshot = useEditorState(selectSnapshot);
+  const translation = useTranslation();
   const options = computed(() =>
     editorRef.value && !snapshot.value.isLoading
       ? editorRef.value
           .getDocumentStyles()
           .filter((style) => style.type === 'paragraph')
-          .map((style) => ({
-            styleId: style.styleId,
-            name: paragraphStyleDisplayName(style.name, style.styleId),
-            preview: style.preview,
-          }))
+          .map((style) => {
+            // A built-in style takes its label in the UI language.
+            const builtIn = builtInParagraphStyleLabel(style.name);
+            return {
+              styleId: style.styleId,
+              name: builtIn
+                ? translation.t(builtIn.key, builtIn.vars)
+                : paragraphStyleDisplayName(style.name, style.styleId),
+              preview: style.preview,
+            };
+          })
       : EMPTY_OPTIONS
   );
   const command = useEditorCommand('styles.style');

@@ -222,7 +222,7 @@ const modules = [reviewModule()];
 
 ## Group your own controls
 
-Put your controls in a `Toolbar.Group`. A group collapses into the **More** panel as a whole when the toolbar runs out of width, and its label becomes the heading of its panel section. Give a host group a `label`, or a `labelKey` from your translation catalog. The `id` of a built-in group, such as `review` or `zoom`, changes that group instead. TypeScript suggests the built-in ids through the `ChromeGroupId` type.
+Put your controls in a `Toolbar.Group`. When the toolbar runs out of width, the children of a host group move into the **More** panel together, as one control, and the group's label becomes the heading of its panel section. Built-in groups give up one control at a time, from the end of the group. Give a host group a `label`, or a `labelKey` from your translation catalog. The `id` of a built-in group, such as `review` or `zoom`, changes that group instead. TypeScript suggests the built-in ids through the `ChromeGroupId` type.
 
 <FrameworkTabs>
 <Framework value="react">

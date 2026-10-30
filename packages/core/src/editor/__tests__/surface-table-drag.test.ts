@@ -164,6 +164,76 @@ describe('dragging a table by its handle', () => {
     pointer(handle(), 'pointerup', 400);
     expect(surface.session.packageRevision()).toBe(revision);
   });
+
+  test('still shows for the caret after the table moves to another page', async () => {
+    const pageBreak = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+    const { surface, handle, paragraphWith, caretIn } = mount(
+      p('one') + table() + p('two') + pageBreak + p('three')
+    );
+    const pageOf = (text: string) =>
+      surface
+        .layout()
+        .pages.findIndex((page) =>
+          page.fragments.some(
+            (fragment) =>
+              fragment.kind === 'paragraph' && fragment.paragraphId === paragraphWith(text)
+          )
+        );
+    const sheetTopOf = (text: string) => {
+      const page = surface.layout().pages[pageOf(text)]!;
+      const fragment = page.fragments.find(
+        (candidate) =>
+          candidate.kind === 'paragraph' && candidate.paragraphId === paragraphWith(text)
+      )!;
+      return page.contentBox.y + fragment.box.y;
+    };
+    expect(pageOf('three')).toBe(1);
+    // The pointer crosses the table on page 1 to reach the handle, and rests there.
+    const page = surface.layout().pages[0]!;
+    const tableBox = page.fragments.find((fragment) => fragment.kind === 'table')!.box;
+    document.dispatchEvent(
+      new PointerEvent('pointermove', {
+        bubbles: true,
+        clientX: page.contentBox.x + tableBox.x + 5,
+        clientY: page.contentBox.y + tableBox.y + 5,
+      })
+    );
+    handle().dispatchEvent(new PointerEvent('pointerenter'));
+    const target = sheetTopOf('three');
+    const tableId = handle().dataset.tableId;
+    pointer(handle(), 'pointerdown', 100);
+    pointer(handle(), 'pointermove', 110);
+    pointer(handle(), 'pointermove', target + 2);
+    pointer(handle(), 'pointerup', target + 2);
+    expect(order(surface)).not.toContain('[T]');
+
+    // The table is on page 2 now. With the caret in it, its handle shows at its new corner.
+    caretIn('cell');
+    const moved = surface.layout().pages[1]!;
+    const movedTable = moved.fragments.find((fragment) => fragment.kind === 'table');
+    expect(movedTable).toBeDefined();
+    expect(handle()).not.toBeNull();
+    expect(handle().dataset.tableId).toBe(tableId);
+    const top = moved.contentBox.y + movedTable!.box.y;
+    expect(parseFloat(handle().style.top)).toBeCloseTo(top - 18);
+
+    // Hover tracking resumes: the pointer leaves for empty space and the caret moves out of the
+    // table, then a hover over the moved table shows its handle again.
+    caretIn('one');
+    document.dispatchEvent(
+      new PointerEvent('pointermove', { bubbles: true, clientX: 2, clientY: 2 })
+    );
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(handle()).toBeNull();
+    document.dispatchEvent(
+      new PointerEvent('pointermove', {
+        bubbles: true,
+        clientX: moved.contentBox.x + movedTable!.box.x + 5,
+        clientY: top + 5,
+      })
+    );
+    expect(handle()).not.toBeNull();
+  });
 });
 
 describe('choosing a drop slot', () => {

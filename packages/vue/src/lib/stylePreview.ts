@@ -120,6 +120,47 @@ export function paragraphStyleDisplayName(name: string, styleId: string): string
   return heading ? `Heading ${heading[1]}` : label;
 }
 
+/** A catalogue key for a built-in paragraph style. */
+type BuiltInStyleKey =
+  | 'styles.normal'
+  | 'styles.title'
+  | 'styles.subtitle'
+  | 'styles.noSpacing'
+  | 'styles.quote'
+  | 'styles.intenseQuote'
+  | 'styles.listParagraph';
+
+/** The lowercased `w:name` of each built-in style the picker labels from the catalogue. */
+const BUILT_IN_STYLE_KEYS: ReadonlyMap<string, BuiltInStyleKey> = new Map([
+  ['normal', 'styles.normal'],
+  ['title', 'styles.title'],
+  ['subtitle', 'styles.subtitle'],
+  ['no spacing', 'styles.noSpacing'],
+  ['quote', 'styles.quote'],
+  ['intense quote', 'styles.intenseQuote'],
+  ['list paragraph', 'styles.listParagraph'],
+]);
+
+/**
+ * The catalogue label for a built-in paragraph style, from its `w:name`, or null for any other
+ * style. A document stores the English `w:name` of a built-in style whatever language wrote it,
+ * so a picker in another locale needs the catalogue label. The match uses the name, not the
+ * style id, because a style id can be localized (`Ttulo1`), and it ignores case (`heading 1`
+ * and `Heading 1` both occur). The adapters call `t()` with the answer, so this file stays free
+ * of i18n.
+ * @internal
+ */
+export function builtInParagraphStyleLabel(name: string): {
+  readonly key: BuiltInStyleKey | 'styles.headingLevel';
+  readonly vars?: { readonly level: number };
+} | null {
+  const lower = name.toLowerCase();
+  const key = BUILT_IN_STYLE_KEYS.get(lower);
+  if (key) return { key };
+  const heading = BUILT_IN_HEADING_NAME.exec(lower);
+  return heading ? { key: 'styles.headingLevel', vars: { level: Number(heading[1]) } } : null;
+}
+
 /**
  * Filter the engine's document-style summaries to the paragraph styles and
  * shape them for the picker, keeping the catalog's own order. The summary

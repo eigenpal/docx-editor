@@ -30,7 +30,8 @@ import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
 import { Slot } from './Slot';
-import { paragraphStyleDisplayName } from '../../lib/stylePreview';
+import { builtInParagraphStyleLabel, paragraphStyleDisplayName } from '../../lib/stylePreview';
+import { useTranslation } from '../../i18n';
 
 /** One pickable paragraph style, as the document defines it. @public */
 export interface ParagraphStyleOption {
@@ -100,19 +101,26 @@ export function useParagraphStyle(): UseParagraphStyleResult {
   // document state is the version-cached snapshot's identity, and the per-revision
   // memoized derivation makes the re-read cheap.
   const snapshot = useEditorState(selectSnapshot);
+  const { t } = useTranslation();
   const options = useMemo(
     () =>
       editor && !snapshot.isLoading
         ? editor
             .getDocumentStyles()
             .filter((style) => style.type === 'paragraph')
-            .map((style) => ({
-              styleId: style.styleId,
-              name: paragraphStyleDisplayName(style.name, style.styleId),
-              preview: style.preview,
-            }))
+            .map((style) => {
+              // A built-in style takes its label in the UI language.
+              const builtIn = builtInParagraphStyleLabel(style.name);
+              return {
+                styleId: style.styleId,
+                name: builtIn
+                  ? t(builtIn.key, builtIn.vars)
+                  : paragraphStyleDisplayName(style.name, style.styleId),
+                preview: style.preview,
+              };
+            })
         : EMPTY_OPTIONS,
-    [editor, snapshot]
+    [editor, snapshot, t]
   );
   const { isEnabled } = useEditorCommand('styles.style');
   const setValue = useCallback(

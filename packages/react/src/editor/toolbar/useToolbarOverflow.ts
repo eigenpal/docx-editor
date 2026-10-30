@@ -1,4 +1,4 @@
-// The toolbar's own measurement: how wide each group is, and how much room the bar has.
+// The toolbar's own measurement: how wide each control is, and how much room the bar has.
 //
 // MEASURED, NOT BREAKPOINTED. A media query knows the window's width and nothing about the
 // bar: the same 1200px window holds a different toolbar with a navigation pane open, at
@@ -8,29 +8,31 @@
 // MEASUREMENT IS FREE HERE. Everything is read inside a ResizeObserver callback, which the
 // browser delivers after layout has already been computed — so nothing in this file
 // forces a reflow. The one exception is the mount pass, which reads once against the fully
-// rendered bar to learn every group's width; that is also what makes a group that has been
-// in the overflow menu since the first frame still have a known width to come back on.
+// rendered bar to learn every control's width; that is also what makes a control that has
+// been in the overflow menu since the first frame still have a known width to come back on.
+//
+// The reading (`readToolbarRow`) and the fit (`toolbarOverflowItems`) live in core, so the
+// React and Vue bars collapse the same controls at the same widths.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   hostWindowOf,
-  sameOverflow,
+  readToolbarRow,
+  sameItemOverflow,
   TOOLBAR_OVERFLOW_HYSTERESIS,
-  toolbarOverflowGroups,
-  type ToolbarFitInput,
-} from '@docx-editor.dev/core/editor';
-import {
-  collapsibleGroupCost,
-  controlsOverflow,
-  readAvailableWidth,
-  readColumnGap,
-  readInlineMargins,
-  separatorLeadingCost,
-  trailingGapCost,
+  TOOLBAR_ITEM_ATTRIBUTE,
+  toolbarGroupsKey,
+  toolbarItemKey,
+  toolbarOverflowItems,
+  type ToolbarFitGroup,
+  type ToolbarItemOverflow,
+  type ToolbarRowMemory,
 } from '@docx-editor.dev/core/editor';
 
 /** Marks a collapsible group wrapper; the value is the group id. */
 export const GROUP_ATTRIBUTE = 'data-toolbar-group';
+/** Marks one control of a collapsible group; the value is the control id. */
+export const ITEM_ATTRIBUTE = TOOLBAR_ITEM_ATTRIBUTE;
 /** Marks anything that stays in the bar at every width (pinned groups, host children). */
 export const FIXED_ATTRIBUTE = 'data-toolbar-fixed';
 /** Marks the "⋯" trigger. */
@@ -39,32 +41,35 @@ export const MORE_ATTRIBUTE = 'data-toolbar-more';
 /** Assumed trigger width before one has ever been rendered: the icon-button size. */
 const ASSUMED_MORE_WIDTH = 34;
 
-const NONE: ReadonlySet<string> = new Set<string>();
+const NONE: ToolbarItemOverflow = new Map<string, number>();
 
 export interface UseToolbarOverflowResult {
   /** Attach to the bar element. */
   readonly attach: (element: HTMLElement | null) => void;
-  /** Group ids that must render in the "⋯" menu instead of the bar. */
-  readonly overflow: ReadonlySet<string>;
+  /** Group id -> how many controls, from the end of the group, render in the "⋯" menu. */
+  readonly overflow: ToolbarItemOverflow;
 }
 
 /**
- * Measures the bar and answers which groups have to move into the overflow menu.
+ * Measures the bar and answers which controls have to move into the overflow menu.
  *
  * `enabled` false is inert: no observer, no reads, and an empty answer, which renders the
  * complete bar exactly as it did before overflow existed.
  */
 export function useToolbarOverflow(
   enabled: boolean,
-  groups: readonly string[],
+  groups: readonly ToolbarFitGroup[],
   order: readonly string[]
 ): UseToolbarOverflowResult {
   const barRef = useRef<HTMLElement | null>(null);
-  // Widths SURVIVE a group leaving the bar. A group in the overflow menu renders nothing to
-  // measure, and forgetting its width would mean never knowing whether it could come back.
-  const widths = useRef(new Map<string, number>());
-  const moreWidth = useRef(ASSUMED_MORE_WIDTH);
-  const [overflow, setOverflow] = useState<ReadonlySet<string>>(NONE);
+  // Widths SURVIVE a control leaving the bar. See `ToolbarRowMemory`.
+  const memory = useRef<ToolbarRowMemory>({
+    itemWidths: new Map(),
+    groupBases: new Map(),
+    groupGaps: new Map(),
+    more: ASSUMED_MORE_WIDTH,
+  });
+  const [overflow, setOverflow] = useState<ToolbarItemOverflow>(NONE);
   const overflowRef = useRef(overflow);
   overflowRef.current = overflow;
 
@@ -72,69 +77,38 @@ export function useToolbarOverflow(
   // observer) whenever a parent re-renders with a fresh array literal.
   const inputs = useRef({ groups, order });
   inputs.current = { groups, order };
-  const groupsKey = groups.join('\u0000');
+  const groupsKey = toolbarGroupsKey(groups);
+  // The controls the previous answer counted from. A count from the end names other controls
+  // once a group gains or loses one, so the slack only applies to the same controls.
+  const answeredKey = useRef(groupsKey);
   const orderKey = order.join('\u0000');
 
   const measure = useCallback(() => {
     const bar = barRef.current;
     if (!bar || !enabled) return;
-    const view = hostWindowOf(bar);
-    const style = view.getComputedStyle(bar);
-    const gap = readColumnGap(style);
-    const available = readAvailableWidth(bar, style);
-    // Every collapsible group is costed WITH a leading separator slot — width, inline
-    // margins, and flex gaps — including the first one, which does not have a separator.
-    // That overstates the row by one separator and makes the bar collapse a few px early,
-    // the safe direction, since the other one clips.
-    const separator = bar.querySelector<HTMLElement>('.docx-toolbar__separator');
-    let separatorLeading = gap * 2;
-    if (separator) {
-      const sepStyle = view.getComputedStyle(separator);
-      const margins = readInlineMargins(sepStyle);
-      separatorLeading = separatorLeadingCost(
-        separator.offsetWidth,
-        margins.start,
-        margins.end,
-        gap
-      );
-    }
-
-    for (const element of bar.querySelectorAll<HTMLElement>(`[${GROUP_ATTRIBUTE}]`)) {
-      const id = element.getAttribute(GROUP_ATTRIBUTE);
-      // A group mid-transition can measure zero; keeping the last real width beats
-      // recording a zero that would make it look free forever.
-      if (id && element.offsetWidth > 0) {
-        widths.current.set(id, collapsibleGroupCost(element.offsetWidth, separatorLeading));
-      }
-    }
-    let fixed = 0;
-    for (const element of bar.querySelectorAll<HTMLElement>(`[${FIXED_ATTRIBUTE}]`)) {
-      if (element.offsetWidth > 0) fixed += trailingGapCost(element.offsetWidth, gap);
-    }
-    const more = bar.querySelector<HTMLElement>(`[${MORE_ATTRIBUTE}]`);
-    if (more && more.offsetWidth > 0) {
-      // More follows flex content; it is not preceded by a separator rule.
-      moreWidth.current = trailingGapCost(more.offsetWidth, gap);
-    }
-
-    const input: ToolbarFitInput = {
-      available,
-      widths: widths.current,
-      groups: inputs.current.groups,
-      order: inputs.current.order,
-      fixed,
-      more: moreWidth.current,
-      previous: overflowRef.current,
-      hysteresis: TOOLBAR_OVERFLOW_HYSTERESIS,
-    };
+    const reading = readToolbarRow(bar, memory.current, toolbarItemKey);
     // The arithmetic charges every group a few px of gap and separator it may not use, so on
-    // a bar sized to its content it can call a bar that fits too narrow. Collapsing one group
-    // then shrinks that bar and the next measurement collapses another, until every group is
-    // in "⋯". So the first collapse waits for a control that really runs past the bar's box.
-    // Without layout to read (null), the arithmetic decides alone.
-    const fits = overflowRef.current.size === 0 && controlsOverflow(bar, style) === false;
-    const next = fits ? NONE : toolbarOverflowGroups(input);
-    if (!sameOverflow(next, overflowRef.current)) {
+    // a bar sized to its content it can call a bar that fits too narrow. Collapsing one
+    // control then shrinks that bar and the next measurement collapses another, until every
+    // control is in "⋯". So the first collapse waits for a control that really runs past the
+    // bar's box. Without layout to read (null), the arithmetic decides alone.
+    const fits = overflowRef.current.size === 0 && reading.overflowing === false;
+    const key = toolbarGroupsKey(inputs.current.groups);
+    const same = answeredKey.current === key;
+    answeredKey.current = key;
+    const next = fits
+      ? NONE
+      : toolbarOverflowItems({
+          ...reading,
+          groups: inputs.current.groups,
+          order: inputs.current.order,
+          itemWidths: memory.current.itemWidths,
+          groupBases: memory.current.groupBases,
+          groupGaps: memory.current.groupGaps,
+          ...(same ? { previous: overflowRef.current } : {}),
+          hysteresis: TOOLBAR_OVERFLOW_HYSTERESIS,
+        });
+    if (!sameItemOverflow(next, overflowRef.current)) {
       overflowRef.current = next;
       setOverflow(next);
     }
@@ -145,7 +119,7 @@ export function useToolbarOverflow(
   }, []);
 
   // The mount pass, against the complete bar: the only forced read in the file, and the one
-  // that gives every group a width before any of them can be hidden. In a layout effect so
+  // that gives every control a width before any of them can be hidden. In a layout effect so
   // the collapsed bar is what the browser paints — measuring after paint shows the user one
   // frame of the three-row toolbar this exists to remove.
   useLayoutEffect(() => {
@@ -179,7 +153,7 @@ export function useToolbarOverflow(
     });
     observer.observe(bar);
     // The parent too: a bar as wide as its content does not resize when the room around
-    // it grows, so only the parent reports the space a collapsed group can come back into.
+    // it grows, so only the parent reports the space a collapsed control can come back into.
     if (bar.parentElement) observer.observe(bar.parentElement);
     for (const element of bar.querySelectorAll<HTMLElement>(
       `[${GROUP_ATTRIBUTE}], [${FIXED_ATTRIBUTE}]`
@@ -196,4 +170,23 @@ export function useToolbarOverflow(
   }, [enabled, groupsKey, measure, orderKey, overflow]);
 
   return { attach, overflow };
+}
+
+/**
+ * The same measurement for a bar whose groups leave whole (the menu bar): each group is one
+ * control, and the answer is the set of group ids in the "⋯" menu.
+ */
+export function useToolbarGroupOverflow(
+  enabled: boolean,
+  groups: readonly string[],
+  order: readonly string[]
+): {
+  readonly attach: (element: HTMLElement | null) => void;
+  readonly overflow: ReadonlySet<string>;
+} {
+  // A fresh list each render is fine: the measurement keys its inputs by value.
+  const fitGroups = groups.map((id) => ({ id, items: [id] }));
+  const { attach, overflow } = useToolbarOverflow(enabled, fitGroups, order);
+  const ids = useMemo<ReadonlySet<string>>(() => new Set(overflow.keys()), [overflow]);
+  return { attach, overflow: ids };
 }

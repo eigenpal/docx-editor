@@ -113,7 +113,8 @@ export function planShapes(
     const { id, name, type } = found.shape;
     return query({ kind: 'shape', shape: { id, name, type } });
   }
-  if (!found.shape.textboxRoot)
+  // A text box the file gives no story still has an empty body (`empty-text-frame.ts`).
+  if (!found.shape.textboxRoot && !found.shape.emptyFrame)
     return refuse(
       'unsupported-content',
       'that shape holds no text story of its own',

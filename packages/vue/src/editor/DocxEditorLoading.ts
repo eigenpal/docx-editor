@@ -19,6 +19,7 @@ import { useDocxEditor } from './context';
 import { yieldTask } from './deferred-notifier';
 import { twipsToPixels } from '../lib/units';
 import { useEditorState } from './useEditorState';
+import { useChromeDark } from './color-mode-context';
 
 const selectShowLoading = (snapshot: EditorSnapshot) =>
   snapshot.isLoading || snapshot.isOpening === true;
@@ -122,6 +123,7 @@ const DocxEditorLoadingImpl = defineComponent({
     const showLoading = useEditorState(selectShowLoading);
     const pageSize = useEditorState(selectLoadingPageSize);
     const below = useOpeningIndicator(() => props.overlay);
+    const chromeDark = useChromeDark();
     const editor = useDocxEditor();
     // Whether the last render in the document showed the screen. Recorded after the render
     // lands: a render under a pending `Suspense` is not on screen yet.
@@ -170,7 +172,7 @@ const DocxEditorLoadingImpl = defineComponent({
       // below the laid-out pages until the last one is laid out.
       if (below.value) return h(Teleport, { to: below.value }, status());
       if (!visible) return null;
-      const classes = `docx-editor docx-editor__loading${
+      const classes = `docx-editor${chromeDark.value ? ' dark' : ''} docx-editor__loading${
         props.overlay ? ' docx-editor__loading--overlay' : ''
       }${props.className ? ` ${props.className}` : ''}`;
       return h(
