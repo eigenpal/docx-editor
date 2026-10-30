@@ -216,6 +216,33 @@ describe('balanced single-byte and double-byte widths: a space shrinks down to a
     expect(opened({})).toBe(`   ${SEVEN}`);
   });
 
+  test('a Courier New line that opens with spaces still shrinks: its space is over half an em', () => {
+    const lead = 3 * 24 * SPACE_EM['Courier New']!;
+    const line = texts(
+      inFace('Courier New', natural('Courier New') + lead - 50.4 + 0.5, {
+        text: `   ${WORDS}`,
+        balanceWidths: true,
+      })
+    )[0];
+    expect(line).toBe(`   ${SEVEN}`);
+  });
+
+  test('a line that opens with spaces does not hang its final mark', () => {
+    // The period overflows by half its advance; the spaces cannot make that room, so it hangs.
+    const lead = 3 * 24 * SPACE_EM['Century']!;
+    const text = 'aa aa aa aa aa aa aa. aa';
+    const available = 7 * 48 + 24 + 6 * 24 * SPACE_EM['Century']! - 12;
+    const line = (prefix: string) =>
+      texts(
+        inFace('Century', available + (prefix ? lead : 0), {
+          text: prefix + text,
+          balanceWidths: true,
+        })
+      )[0];
+    expect(line('')).toBe('aa aa aa aa aa aa aa. ');
+    expect(line('   ')).toBe(`   ${SIX}`);
+  });
+
   test('Times New Roman: a space of a quarter em keeps its advance', () => {
     expect(balanced('Times New Roman', natural('Times New Roman') - 0.1)).toBe(SIX);
   });

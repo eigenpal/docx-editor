@@ -65,7 +65,7 @@ import {
   cjkSeamNaturalWidths,
   type LineLocalAdvances,
 } from './cjk-spacing.ts';
-import { resolveCjkTypography } from './cjk-typography.ts';
+import { lineEndMarksMayHang, resolveCjkTypography } from './cjk-typography.ts';
 import {
   automaticLineTextGap,
   automaticTextSpan,
@@ -1335,7 +1335,7 @@ export function breakParagraph(
       width = clippedWordEnd?.width ?? width;
       const ends = paragraphFinal(pieceIndex, boundary);
       const hangsAtLineEnd = (text = candidate, textWidth = width) =>
-        (typography.hangingPunctuation ?? typography.overflowPunctuation) &&
+        lineEndMarksMayHang(typography, line.spans, measurer) &&
         canHangCjkPunctuation(text, piece, lineAvailable() - line.width, textWidth, measurer, {
           paragraphFinal: ends,
           policy: typography,

@@ -9,6 +9,8 @@ import {
 import { omittedDocDefaults } from '../store/package/application-doc-defaults.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-tree.ts';
 import { resolveRunStyle, type ThemeFonts } from './run-style.ts';
+import { opensWithWidenedSpaces } from './balanced-line-start.ts';
+import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 
 /** Document-wide East Asian line-break and whitespace policy. @public */
 export interface CjkTypographySettings {
@@ -225,6 +227,19 @@ export function resolveCjkTypography(
       ? { kanaLineFit: true as const }
       : {}),
   };
+}
+
+/**
+ * Whether a mark may hang at the end of this line: the paragraph allows it, and the line does
+ * not open with spaces that balanced widths widen (`opensWithWidenedSpaces`).
+ */
+export function lineEndMarksMayHang(
+  typography: CjkParagraphTypography,
+  spans: readonly StyleSpanRecord[],
+  measurer: TextMeasurer
+): boolean {
+  if (!(typography.hangingPunctuation ?? typography.overflowPunctuation)) return false;
+  return !(typography.settings?.balancedWidths === true && opensWithWidenedSpaces(spans, measurer));
 }
 
 /**

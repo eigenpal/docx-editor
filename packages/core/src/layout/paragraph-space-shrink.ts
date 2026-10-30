@@ -14,6 +14,7 @@ import type { SpaceShrinkFloor, SpaceShrinkRule } from './space-shrink-rule.ts';
 import { withoutTrailingZeroWidthSpaces } from './trailing-spaces.ts';
 import { authoredCjkGapMetric } from './cjk-auto-spacing-metric-port.ts';
 import { knownFamilyReverseGap } from './authored-average-widths.ts';
+import { opensWithWidenedSpaces } from './balanced-line-start.ts';
 
 // No-break spaces join their neighbours into one word. They have width, never break the
 // line, and never hang, so the word-shape tests read them as word characters.
@@ -263,7 +264,7 @@ export function spaceShrinkFit(
     !(ownSpace || (word.wordEnds && BARE_WORD.test(candidate))) ||
     // With balanced widths, spaces that open a line take half an em each, which leaves a
     // proportional face no room; such a line keeps natural spaces.
-    (rule.floor === 'quarterEm' && spans[0]?.text.startsWith(' ')) ||
+    (rule.floor === 'quarterEm' && opensWithWidenedSpaces(spans, measurer)) ||
     passageFirst < 0 ||
     wordStart < passageFirst ||
     spans.some(

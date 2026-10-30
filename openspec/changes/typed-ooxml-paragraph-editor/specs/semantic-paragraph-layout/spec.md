@@ -720,7 +720,7 @@ In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingCo
 - **THEN** the word stays on the line, in Courier New, Arial, or Century alike
 - **AND** a Times New Roman or Calibri space, a quarter em or narrower, keeps its advance
 - **AND** with `w:useWord97LineBreakRules` as well, spaces in proportional faces keep their advance
-- **AND** a line that starts with spaces keeps natural spaces
+- **AND** a line in a proportional face that starts with spaces keeps natural spaces and hangs no final mark
 
 #### Scenario: The default East Asian face counts by the face that draws it
 
