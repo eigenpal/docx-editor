@@ -102,7 +102,7 @@ function fixture(shared = false, firstResource?: ImageResourceState) {
     host.querySelector<HTMLImageElement>(`[data-page-index="${index}"] img`);
   const key = (index: number) =>
     [...collectUsedDrawingElementKeys({ ...layout, pages: [layout.pages[index]!] })][0]!;
-  return { host, registry, layout, resources, created, revoked, paint, image, key, xml };
+  return { host, registry, layout, resources, created, revoked, port, paint, image, key, xml };
 }
 
 function packageFor(xml: string) {
@@ -165,6 +165,31 @@ describe('materialized drawing resource lifecycle', () => {
     expect(f.revoked).toEqual([url]);
     expect(f.image(1)).not.toBeNull();
     detachDrawingUrlRegistry(f.host);
+  });
+
+  test('a picture that goes pending keeps its retained image and URL', () => {
+    const f = fixture();
+    f.paint(0);
+    const image = f.image(0)!;
+    const url = image.getAttribute('src');
+    const revalidating = fixture(false, {
+      kind: 'pending',
+      resourceKey: `embed:${OWNER}:rId0`,
+    });
+    paintSemanticLayout(f.host, revalidating.layout, {
+      scale: 1,
+      imageUrlPort: f.port,
+      materialize: new Set([0]),
+    });
+    expect(f.image(0)).toBe(image);
+    expect(image.getAttribute('src')).toBe(url);
+    expect(f.revoked).toEqual([]);
+    // Ready again: the same URL, so the picture does not load a second time.
+    f.paint(0);
+    expect(f.image(0)!.getAttribute('src')).toBe(url);
+    expect(f.created).toHaveLength(1);
+    detachDrawingUrlRegistry(f.host);
+    detachDrawingUrlRegistry(revalidating.host);
   });
 
   test('revisiting creates a new image and URL with unchanged geometry', () => {
