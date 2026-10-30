@@ -125,7 +125,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Structural XML indentation does not hide run text. Authored spaces inside text elements remain part of the document. Formatting at the caret of an empty paragraph applies to its paragraph mark, so the empty line and the next typed text take it.',
+      'Structural XML indentation does not hide run text. Authored spaces inside text elements remain part of the document. Formatting at the caret of an empty paragraph applies to its paragraph mark, so the empty line and the next typed text take it. Formatting at a caret inside a word applies to the whole word, and clear formatting there clears the word; at the edge of a word, and for a highlight, it applies to the next typed text. A format painter click on a word with a tracked replacement paints the whole visible word.',
   },
   {
     id: 'text.input-method',

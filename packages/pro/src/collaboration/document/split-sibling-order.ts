@@ -123,7 +123,9 @@ export function splitSiblingRanks(
   /** The split points recorded on a paragraph (`split-points.ts`). */
   pointsOf: (id: LogicalId) => readonly SplitPoint[] = () => [],
   /** Collects every concurrent run that follows a listed paragraph, moved or not. */
-  groups: SiblingGroup[] = []
+  groups: SiblingGroup[] = [],
+  /** Collects the characters an order named that this replica has not received yet. */
+  missing: string[] = []
 ): SiblingRanks {
   let ranks: Map<LogicalId, SiblingRank> | null = null;
   let group = 0;
@@ -182,8 +184,9 @@ export function splitSiblingRanks(
           .flatMap((item) => item.content.getContent() as LogicalId[])
       );
     const listed = idsOf(blocks);
-    const byText = orderOf(blocks, textOf, children.doc, pointsOf);
-    const order = idsByPoints(listed, pointsOf, children.doc) ?? (byText ? idsOf(byText) : null);
+    const byText = orderOf(blocks, textOf, children.doc, pointsOf, missing);
+    const order =
+      idsByPoints(listed, pointsOf, children.doc, missing) ?? (byText ? idsOf(byText) : null);
     const shown = order ?? listed;
     const source = items[first - 1];
     if (source && !source.deleted && inItem(head.origin, source)) {
@@ -223,7 +226,8 @@ export function splitSiblingRanks(
 function idsByPoints(
   listed: readonly LogicalId[],
   pointsOf: (id: LogicalId) => readonly SplitPoint[],
-  doc: Y.Doc | null
+  doc: Y.Doc | null,
+  missing: string[]
 ): LogicalId[] | null {
   if (listed.length < 2) return null;
   const points = listed.map((id) => pointsOf(id));
@@ -232,7 +236,7 @@ function idsByPoints(
     const source = points[0]![at]!.source;
     const splits = points.map((list) => splitAtIn(list, source));
     if (splits.some((split) => split === null)) continue;
-    const keys = splitKeys(doc, splits as string[], places);
+    const keys = splitKeys(doc, splits as string[], places, missing);
     if (!keys) return null;
     const order = listed.map((_, index) => index);
     order.sort((a, b) => keys[a]! - keys[b]! || a - b);
@@ -345,18 +349,31 @@ function blockPoints(
 }
 
 /**
+ * Whether this replica holds the character an identity names, live, deleted, or collected.
+ * One it does not hold yet can still arrive and stand in a live text.
+ */
+export function identityArrived(doc: Y.Doc, identity: string): boolean {
+  const [client, clock] = identity.split(':').map(Number);
+  return clock! < Y.getState(doc.store, client!);
+}
+
+/**
  * Whether the character `first` names comes before the one `second` names, or null when
  * this replica cannot tell alike with every other: both stand in one live text, or one author
- * typed or loaded both, whose clocks go up in text order within one insert.
+ * typed or loaded both, whose clocks go up in text order within one insert. The clocks decide
+ * only when this replica holds both characters and they do not stand in one live text, so
+ * every replica that holds all updates reads the same answer, whatever their arrival order.
+ * A character not received yet goes to `missing`, and the answer is null until it arrives.
  */
 function identityBefore(
   doc: Y.Doc | null,
   first: string,
   second: string,
-  places: Map<Y.Text, Map<string, number>>
+  places: Map<Y.Text, Map<string, number>>,
+  missing: string[]
 ): boolean | null {
   if (first === second) return null;
-  const keys = splitKeys(doc, [first, second], places);
+  const keys = splitKeys(doc, [first, second], places, missing);
   return keys && keys[0] !== keys[1] ? keys[0]! < keys[1]! : null;
 }
 
@@ -364,18 +381,30 @@ function identityBefore(
  * Comparable places for split points (`client:clock`, or `client:clock+` for just after that
  * character), or null when this replica cannot place them alike with every other: all stand
  * in one live text, or one author typed or loaded all of them, whose clocks go up in text order
- * within one insert.
+ * within one insert. The clocks decide only when this replica holds every character and they
+ * do not all stand in one live text, so every replica that holds all updates reads the same
+ * places, whatever their arrival order. A character not received yet goes to `missing`, and
+ * the answer is null until it arrives.
  */
 function splitKeys(
   doc: Y.Doc | null,
   points: readonly string[],
-  places: Map<Y.Text, Map<string, number>>
+  places: Map<Y.Text, Map<string, number>>,
+  missing: string[]
 ): number[] | null {
+  if (!doc) return null;
   const parsed = points.map((point) => ({
     identity: point.endsWith('+') ? point.slice(0, -1) : point,
     after: point.endsWith('+') ? 0.5 : 0,
   }));
-  const placed = parsed.map(({ identity }) => (doc ? sourcePlace(doc, identity, places) : null));
+  const absent = parsed
+    .map(({ identity }) => identity)
+    .filter((identity) => !identityArrived(doc, identity));
+  if (absent.length > 0) {
+    missing.push(...absent);
+    return null;
+  }
+  const placed = parsed.map(({ identity }) => sourcePlace(doc, identity, places));
   if (placed.every((place) => place && place.text === placed[0]!.text))
     return placed.map((place, at) => place!.at + parsed[at]!.after);
   const clocks = parsed.map(({ identity }) => identity.split(':').map(Number));
@@ -394,12 +423,13 @@ function splitBefore(
   doc: Y.Doc | null,
   first: readonly SplitPoint[],
   second: readonly SplitPoint[],
-  places: Map<Y.Text, Map<string, number>>
+  places: Map<Y.Text, Map<string, number>>,
+  missing: string[]
 ): boolean | null {
   for (let at = first.length - 1; at >= 0; at -= 1) {
     const other = splitAtIn(second, first[at]!.source);
     if (other === null) continue;
-    return identityBefore(doc, first[at]!.at, other, places);
+    return identityBefore(doc, first[at]!.at, other, places, missing);
   }
   return null;
 }
@@ -409,7 +439,8 @@ function orderOf(
   run: readonly Block[],
   textOf: (id: LogicalId) => Y.Text | null,
   doc: Y.Doc | null,
-  pointsOf: (id: LogicalId) => readonly SplitPoint[]
+  pointsOf: (id: LogicalId) => readonly SplitPoint[],
+  missing: string[]
 ): Block[] | null {
   const points = run.map((block) => blockPoints(block, pointsOf));
   const copies = run.map((block) => blockCopies(block, textOf));
@@ -423,7 +454,7 @@ function orderOf(
     for (let back = at; back > 0; back -= 1) {
       const later = order[back]!;
       const earlier = order[back - 1]!;
-      const recorded = splitBefore(doc, points[later]!, points[earlier]!, places);
+      const recorded = splitBefore(doc, points[later]!, points[earlier]!, places, missing);
       const before =
         recorded ?? blockBefore(copies[later]!, copies[earlier]!, starts[later]!, starts[earlier]!);
       if (!before) break;
@@ -446,13 +477,16 @@ interface OrderEntry {
   readonly lengths: string;
   /** The concurrent runs that follow a listed paragraph. */
   readonly groups: readonly SiblingGroup[];
+  /** The split characters the order named that had not arrived. Usually empty. */
+  readonly missing: readonly string[];
 }
 
 /**
  * The rule's ranks per parent, read once per listing. A replica can list a paragraph before
  * its text or its marks arrive, when an update waits for another one, so a listing that did
  * not change can still need another order: `takeChanged`, which a view calls once per build,
- * reads a run again when one of its paragraphs that held nothing to order by changed length.
+ * reads a run again when one of its paragraphs that held nothing to order by changed length,
+ * or when a split character its order named arrived.
  * Every other read, such as each comparison of document order or each keystroke in a run
  * paragraph, uses the stored order.
  */
@@ -508,7 +542,10 @@ export class SplitSiblingOrders {
         this.withRuns.delete(parentId);
         continue;
       }
-      if (known.waiting.length === 0 || this.lengthsKey(known.waiting) === known.lengths) continue;
+      const doc = this.nodeOf(parentId)?.doc ?? null;
+      const arrived = doc !== null && known.missing.some((id) => identityArrived(doc, id));
+      const grew = known.waiting.length > 0 && this.lengthsKey(known.waiting) !== known.lengths;
+      if (!arrived && !grew) continue;
       const next = this.build(parentId, listing);
       if (!next || next.shown.some((id, at) => known.shown[at] !== id)) changed.push(parentId);
     }
@@ -529,12 +566,14 @@ export class SplitSiblingOrders {
     if (!children || children.length < 2) return null;
     const heads: LogicalId[] = [];
     const groups: SiblingGroup[] = [];
+    const missing: string[] = [];
     const ranks = splitSiblingRanks(
       children,
       this.textOf,
       heads,
       (id) => splitPointsOf(this.nodeOf(id)),
-      groups
+      groups,
+      missing
     );
     const ids = listing ?? children.toArray();
     const order = splitSiblingOrder(ids, ranks);
@@ -542,11 +581,11 @@ export class SplitSiblingOrders {
     const waiting = heads.filter(
       (id) => splitPointsOf(this.nodeOf(id)).length === 0 && copiesOf(id, this.textOf).length === 0
     );
-    const entry = { ranks, shown, waiting, lengths: this.lengthsKey(waiting), groups };
+    const entry = { ranks, shown, waiting, lengths: this.lengthsKey(waiting), groups, missing };
     if (groups.length > 0) this.grouped.add(parentId);
     else this.grouped.delete(parentId);
     if (listing) this.built.set(listing, entry);
-    if (waiting.length > 0 && listing) this.withRuns.add(parentId);
+    if ((waiting.length > 0 || missing.length > 0) && listing) this.withRuns.add(parentId);
     else this.withRuns.delete(parentId);
     return entry;
   }

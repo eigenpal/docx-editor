@@ -349,7 +349,8 @@ describe('clear formatting', () => {
 
   test('a caret resets the paragraph and disarms the typing format', () => {
     withEditor(p(textRun('text'), '<w:pPr><w:jc w:val="center"/></w:pPr>'), (editor) => {
-      select(editor, [0, 2], [0, 2]);
+      // At the word's end, so the press arms a typing format rather than formatting the word.
+      select(editor, [0, 4], [0, 4]);
       editor.exec({ type: 'toggleMark', mark: 'bold' });
       expect(editor.snapshot().formatting?.bold).toBe(true);
       editor.exec({ type: 'clearFormatting' });
