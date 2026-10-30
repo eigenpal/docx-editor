@@ -471,12 +471,12 @@ export class TreePackageStore {
             if (!mayDeleteNoteAtoms) {
               if (
                 op.op === 'deleteText' &&
-                deleteMayStrandNote(this.pkg, store.part, op, deleteTargets)
+                deleteMayStrandNote(this.pkg, store, op, deleteTargets)
               ) {
                 mayDeleteNoteAtoms = true;
               } else if (
                 op.op === 'deleteBlock' &&
-                deleteBlockMayStrandNote(this.pkg, store.part, op, deleteTargets)
+                deleteBlockMayStrandNote(this.pkg, store, op, deleteTargets)
               ) {
                 mayDeleteNoteAtoms = true;
               } else if (RESOLUTION_OPS.has(op.op) || CONTENT_REMOVING_OPS.has(op.op)) {
@@ -489,10 +489,10 @@ export class TreePackageStore {
             }
             if (!mayEmptyComments) {
               if (op.op === 'deleteText' || op.op === 'deleteBlock') {
-                // The package as the transaction found it: one walk answers every op.
+                // One package walk answers every op; the target is read from the working story.
                 mayEmptyComments = deleteMayEmptyCommentRange(
                   () => (anyComment ??= hasAnyComment(this.pkg)),
-                  store.part,
+                  store,
                   op,
                   commentTargets
                 );
