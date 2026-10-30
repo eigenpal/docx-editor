@@ -24,10 +24,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import * as Y from 'yjs';
 import type { LogicalId } from './identity.ts';
-import { firstItem, structAt } from './yjs-items.ts';
+import { firstItem, mapEntry, structAt } from './yjs-items.ts';
 import { itemIdentity, type Identity } from './paragraph-text-identity.ts';
 import { marksOfText } from './paragraph-text-marks.ts';
-import { childArrayOf } from './schema.ts';
+import { childArrayOf, PACKAGE_NODES_KEY } from './schema.ts';
 import { splitAtIn, splitPointsOf, type SplitPoint } from './split-points.ts';
 
 /**
@@ -130,6 +130,7 @@ export function splitSiblingRanks(
   let ranks: Map<LogicalId, SiblingRank> | null = null;
   let group = 0;
   const items: Y.Item[] = [];
+  const nodes = children.doc?.getMap<unknown>(PACKAGE_NODES_KEY) ?? null;
   // Items that went in at one place at once have the same two origins. Only such items start
   // a group, so a listing without concurrent inserts is read once.
   const sharing = new Map<string, number>();
@@ -161,17 +162,20 @@ export function splitSiblingRanks(
       start += 1;
       continue;
     }
-    // An undo puts a removed sibling back right before the removed sibling it was listed
-    // before: its left origin is the paragraph the run follows, and its right origin is a
-    // deleted member of the run. It belongs to the run, in a block of its own. A paragraph
-    // listed before a live member, as a break typed at the end of the split paragraph, does
-    // not: it shows where its author put it.
+    // An undo or redo puts a removed sibling back right before its own removed entry: its
+    // left origin is the paragraph the run follows, its right origin is a deleted member of
+    // the run, and that member listed a paragraph whose record was already there. It belongs
+    // to the run, in a block of its own. A paragraph listed there anew, as a split made later
+    // or a break typed at the end of the split paragraph, does not: it shows where its author
+    // put it.
     let first = start;
     while (first > 1) {
       const item = items[first - 1]!;
-      const deletedMember = (id: Y.ID | null) =>
-        blocks.some((block) => block.items.some((member) => member.deleted && inItem(id, member)));
-      if (!deletedMember(item.rightOrigin) || !inItem(item.origin, items[first - 2]!)) break;
+      const removed = blocks
+        .flatMap((block) => block.items)
+        .find((member) => member.deleted && inItem(item.rightOrigin, member));
+      if (!removed || !inItem(item.origin, items[first - 2]!)) break;
+      if (!listedAgain(nodes, item, removed)) break;
       blocks.unshift({ head: item, items: [item] });
       first -= 1;
     }
@@ -243,6 +247,22 @@ function idsByPoints(
     return order.map((index) => listed[index]!);
   }
   return null;
+}
+
+/**
+ * Whether `item` lists again the paragraph `removed` listed, as an undo or redo does, and not
+ * a paragraph listed anew. Only the paragraph's record tells, because a collected entry keeps
+ * no ID: the record the removed entry's author wrote before that entry is still the record.
+ * A new paragraph's record comes with its first entry, after every entry its author saw.
+ */
+function listedAgain(nodes: Y.Map<unknown> | null, item: Y.Item, removed: Y.Item): boolean {
+  if (!nodes || item.deleted) return false;
+  const record = mapEntry(nodes, headId(item) as string);
+  return (
+    record !== undefined &&
+    record.id.client === removed.id.client &&
+    record.id.clock < removed.id.clock
+  );
 }
 
 /** The paragraph a listing item names first. */
