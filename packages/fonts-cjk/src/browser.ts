@@ -316,32 +316,51 @@ function loadFace(fetcher: typeof fetch, url: string, signal?: AbortSignal): Pro
  */
 export function cjkFonts(options: CjkFontsOptions = {}): CjkFontsResolver {
   async function resolveCjkFonts(request: CjkFontsRequest): Promise<CjkFontsFragment> {
-    const painted = new Set(
-      (request.resolvedFaces ?? [])
-        .filter((face) => face.weight === 400 && face.style === 'normal')
-        .map((face) => face.family.trim().toLowerCase())
+    const faces = new Set(
+      (request.resolvedFaces ?? []).map(
+        (face) => `${face.family.trim().toLowerCase()}/${face.weight}/${face.style}`
+      )
     );
+    const isPainted = (family: string, weight = 400, style = 'normal') =>
+      faces.has(`${family.trim().toLowerCase()}/${weight}/${style}`);
+    // A localized name whose English family an earlier origin paints is that family: it takes
+    // the painted face, not the packaged one.
+    const aliases: CjkFontsFragment['substitutions'][number][] = [];
     const planned = request.families.filter((family) => {
       const key = family.trim().toLowerCase();
-      return SUBSTITUTED.has(key) && !painted.has(key);
+      if (!SUBSTITUTED.has(key) || isPainted(family)) return false;
+      const english = LOCALIZED_CJK_FAMILIES.get(family.trim());
+      if (english === undefined || !isPainted(english)) return true;
+      for (const [weight, style] of FACES)
+        aliases.push({
+          from: { family, weight, style },
+          to: isPainted(english, weight, style)
+            ? { family: english, weight, style }
+            : { family: english, weight: 400, style: 'normal' },
+        });
+      return false;
     });
     const named = request.families.some(
       (family) => family.trim().toLowerCase() === NOTO_SANS_CJK_JP_FAMILY.toLowerCase()
     );
-    if (planned.length === 0 && !named) return { sources: [], substitutions: [] };
-    if (painted.has(NOTO_SANS_CJK_JP_FAMILY.toLowerCase())) {
-      return { sources: [], substitutions: substitutionsFor(planned) };
+    if (planned.length === 0 && !named) return { sources: [], substitutions: aliases };
+    if (isPainted(NOTO_SANS_CJK_JP_FAMILY)) {
+      return { sources: [], substitutions: [...aliases, ...substitutionsFor(planned)] };
     }
     if ((options.loading ?? 'background') === 'background') {
       // Settles, never rejects: a cancelled load answers nothing instead.
-      const deferred = downloadFace(planned, request).catch(() => EMPTY);
-      return { sources: [], substitutions: [], deferred };
+      const deferred = downloadFace(planned, request, aliases).catch(() => ({
+        sources: [],
+        substitutions: aliases,
+      }));
+      return { sources: [], substitutions: aliases, deferred };
     }
-    return downloadFace(planned, request);
+    return downloadFace(planned, request, aliases);
   }
   async function downloadFace(
     planned: readonly string[],
-    request: CjkFontsRequest
+    request: CjkFontsRequest,
+    aliases: CjkFontsFragment['substitutions']
   ): Promise<CjkFontsFragment> {
     const fetcher = options.fetcher ?? defaultFetch;
     let url = '';
@@ -359,7 +378,7 @@ export function cjkFonts(options: CjkFontsOptions = {}): CjkFontsResolver {
       };
       if (options.onFailure) options.onFailure(failure);
       else console.warn(`[fonts-cjk] ${failure.family} (${failure.url}): ${failure.diagnostic}`);
-      return { sources: [], substitutions: [] };
+      return { sources: [], substitutions: aliases };
     }
     if (request.signal?.aborted) throw request.signal.reason;
     return {
@@ -372,7 +391,7 @@ export function cjkFonts(options: CjkFontsOptions = {}): CjkFontsResolver {
           faceIndex: 0,
         },
       ],
-      substitutions: substitutionsFor(planned),
+      substitutions: [...aliases, ...substitutionsFor(planned)],
     };
   }
   const descriptor = { value: true, enumerable: false, configurable: true } as const;
@@ -380,8 +399,6 @@ export function cjkFonts(options: CjkFontsOptions = {}): CjkFontsResolver {
   Object.defineProperty(resolveCjkFonts, FONT_RESOLVER_MARK_KEY, descriptor);
   return resolveCjkFonts as CjkFontsResolver;
 }
-
-const EMPTY: CjkFontsFragment = Object.freeze({ sources: [], substitutions: [] });
 
 function substitutionsFor(families: readonly string[]): CjkFontsFragment['substitutions'] {
   return families.flatMap((family) =>

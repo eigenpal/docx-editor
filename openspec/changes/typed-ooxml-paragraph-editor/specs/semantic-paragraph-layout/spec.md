@@ -1160,6 +1160,13 @@ A single-spaced line drawn in a face that lists the Chinese, Japanese, or Korean
 - **THEN** a taller stand-in or fallback face keeps its own box
 - **AND** a one-em face takes 1.3 em in either role
 
+#### Scenario: A localized name or a synthesized style draws as the family
+
+- **GIVEN** a run that names `メイリオ`, and a host that supplies the `Meiryo` face
+- **WHEN** layout measures the line
+- **THEN** the run draws in `Meiryo` and takes its 1.3 times face box line
+- **AND** a bold run in a family whose host supplies only the regular face draws in that face with a synthesized bold, not in the packaged CJK face
+
 ### Requirement: Fitted text takes its stated width
 
 Consecutive runs whose `w:fitText` carries one `w:id` SHALL form one group that takes the `w:val` width of its first run. Narrower text SHALL give every character except the last the same extra advance. Wider text SHALL compress every character advance by one factor. The group SHALL NOT open a new line inside it.

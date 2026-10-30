@@ -322,24 +322,43 @@ export async function importCjkFace(): Promise<NodeURL | null> {
 const CJK_TEXT =
   /[\u1100-\u11ff\u2e80-\u2fdf\u3000-\u9fff\ua960-\ua97f\uac00-\ud7ff\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef]|[\u{20000}-\u{3ffff}]/u;
 
+/** Whether an earlier origin paints a face, by family (ignoring case), weight, and style. */
+const paintedFaces = (resolvedFaces: readonly FontRequest[] | undefined) => {
+  const covered = new Set(
+    (resolvedFaces ?? []).map((face) => `${face.family.toLowerCase()}/${face.weight}/${face.style}`)
+  );
+  return (family: string, weight: number, style: FaceStyle): boolean =>
+    covered.has(`${family.toLowerCase()}/${weight}/${style}`);
+};
+
 /**
  * Substitutions that point every face of `family` at `target`: at the one packaged face when
- * the target is a single-face Noto family, at the matching weight and style otherwise.
+ * the target is a single-face Noto family, at the matching weight and style otherwise. With
+ * `painted`, a matching face that is not painted falls back to the target's regular face.
  */
-const substitutionsTo = (family: string, target: string) => {
+const substitutionsTo = (
+  family: string,
+  target: string,
+  painted?: (family: string, weight: number, style: FaceStyle) => boolean
+) => {
   const { bold, italic } = canonicalFamily(family);
   return [400, 700].flatMap((weight) =>
-    (['normal', 'italic'] as const).map((style) => ({
-      from: face(family, weight, style),
-      // The packaged CJK, symbol and mathematics faces come in one weight and one style.
-      to: target.startsWith('Noto')
-        ? face(target)
-        : face(
-            target,
-            bold || weight === 700 ? 700 : 400,
-            italic || style === 'italic' ? 'italic' : 'normal'
-          ),
-    }))
+    (['normal', 'italic'] as const).map((style) => {
+      const matching = face(
+        target,
+        bold || weight === 700 ? 700 : 400,
+        italic || style === 'italic' ? 'italic' : 'normal'
+      );
+      return {
+        from: face(family, weight, style),
+        // The packaged CJK, symbol and mathematics faces come in one weight and one style.
+        to:
+          target.startsWith('Noto') ||
+          (painted && !painted(target, matching.weight, matching.style))
+            ? face(target)
+            : matching,
+      };
+    })
   );
 };
 
@@ -414,14 +433,28 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
    * The CJK face from `@docx-editor.dev/fonts-cjk`, with the substitutions that point the
    * Word CJK families at it.
    *
+   * Only a family no earlier origin paints goes to the CJK face. A family whose regular face is
+   * painted keeps it: its missing bold or italic resolves to that face through the stand-in,
+   * as a synthesized style. A localized name whose English family is painted resolves to that
+   * family, which is the same font.
+   *
    * Its own origin, so a package that is installed but cannot supply its face (a broken
    * install, a deployment without its `assets/`, a failed read) fails here alone and is
    * reported as a font origin failure. Every other packaged face still resolves, and the
    * stand-in covers the CJK families in that export.
    */
-  const cjkFonts = defineFontResolver(async ({ families, signal }) => {
-    const planned = families.filter((family) => substituteFor(family) === CJK_FAMILY);
-    if (!families.includes(CJK_FAMILY) && planned.length === 0) return { sources: [] };
+  const cjkFonts = defineFontResolver(async ({ families, signal, resolvedFaces }) => {
+    const painted = paintedFaces(resolvedFaces);
+    const aliases: { from: FontRequest; to: FontRequest }[] = [];
+    const planned = families.filter((family) => {
+      if (substituteFor(family) !== CJK_FAMILY || painted(family, 400, 'normal')) return false;
+      const english = canonicalFamily(family).family;
+      if (english === family || !painted(english, 400, 'normal')) return true;
+      aliases.push(...substitutionsTo(family, english, painted));
+      return false;
+    });
+    if (!families.includes(CJK_FAMILY) && planned.length === 0)
+      return { sources: [], substitutions: aliases };
     let sources;
     try {
       const file = await cjkFace();
@@ -434,7 +467,10 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
     }
     return {
       sources,
-      substitutions: planned.flatMap((family) => substitutionsTo(family, CJK_FAMILY)),
+      substitutions: [
+        ...aliases,
+        ...planned.flatMap((family) => substitutionsTo(family, CJK_FAMILY)),
+      ],
     };
   });
 
@@ -450,13 +486,7 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
    * glyph fallback path.
    */
   const standInFonts = defineFontResolver(async ({ families, signal, resolvedFaces }) => {
-    const covered = new Set(
-      (resolvedFaces ?? []).map(
-        (face) => `${face.family.toLowerCase()}/${face.weight}/${face.style}`
-      )
-    );
-    const has = (family: string, weight: number, style: FaceStyle) =>
-      covered.has(`${family.toLowerCase()}/${weight}/${style}`);
+    const has = paintedFaces(resolvedFaces);
     const faces = [
       [400, 'normal'],
       [700, 'normal'],
