@@ -23,6 +23,7 @@ import {
 } from './singleton-children.ts';
 import { PACKAGE_NODES_KEY, NODE_TEXT_FIELD, makeTextRecord, type SharedRecord } from './schema.ts';
 import { splitWinnerOrder } from './split-dedup.ts';
+import { splitSiblingOrder } from './split-sibling-order.ts';
 import { typedInsertOf, type TypedInsert } from './paragraph-text-typing.ts';
 import type { DocumentRegistry } from './registry.ts';
 import type { LogicalId } from './identity.ts';
@@ -389,7 +390,7 @@ export function projectJournalToShared(
     const seen = new Map<LogicalId, number>();
     const repeats = new Map<number, number[]>();
     const base: number[] = [];
-    const order =
+    const winners =
       hidden.size === 0
         ? null
         : splitWinnerOrder(
@@ -397,7 +398,13 @@ export function projectJournalToShared(
             (id) => hidden.has(id),
             (id) => registry.splitLineageOf(id)
           );
-    (order ?? children.map((_, index) => index)).forEach((index) => {
+    const shared = winners ?? children.map((_, index) => index);
+    // Then the materializer's order of concurrent split siblings, over the same ids.
+    const siblings = splitSiblingOrder(
+      shared.map((index) => children[index]!),
+      registry.splitSiblings.ranksOf(parentId)
+    );
+    (siblings ? siblings.map((at) => shared[at]!) : shared).forEach((index) => {
       const id = children[index]!;
       if (id === parentId || hidden.has(id)) return;
       const first = seen.get(id);

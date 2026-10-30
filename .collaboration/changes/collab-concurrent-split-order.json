@@ -1,0 +1,14 @@
+{
+  "impact": "migration-required",
+  "fields": ["repairVersion"],
+  "before": "Two participants who split one paragraph at different points at the same time each listed a new paragraph right after it, and Yjs ordered the new paragraphs by client ID. When the paragraph that holds the later tail came first, a moved copy showed in the last paragraph that held it, so the earlier tail showed in the later paragraph, the earlier paragraph showed nothing, and one split looked lost.",
+  "after": "Paragraphs that a parent lists side by side and that went in concurrently at one place show in the order of the text they copy: a paragraph that holds the first character another one copied, after characters of its own, comes first. The materializer, the projection of local edits, and the document order that decides where a moved copy shows read this one rule, so every split shows, in text order, and later edits land where they show. Concurrent tracked splits show every paragraph in text order too.",
+  "reason": "The rule changes which paragraph shows a moved copy for the same shared state, so it is repair semantics: a replica with repairVersion 2 shows other text in other paragraphs for the same state, and local edits on the two would address different paragraphs. repairVersion increases to 3, so a replica refuses a room that another repair version created before it applies any update. A room created with repairVersion 2 keeps the earlier rules, because only replicas with that version edit it. The rule reads only shared state every replica holds alike and writes nothing, so no stored field or identity changes. The tracked form still keeps one of the concurrent proposed paragraph marks on the split paragraph, so one proposed break has no revision; Reject All then leaves that break.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-split-collaboration.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-concurrent-split-order.test.ts",
+    "packages/pro/src/collaboration/__tests__/read-collaboration-document.test.ts"
+  ],
+  "changeset": "collab-concurrent-split-order",
+  "migration": "upgrade-rooms-to-format-1531"
+}

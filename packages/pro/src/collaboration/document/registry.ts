@@ -11,6 +11,7 @@ import { RegistryHistory } from './registry-history.ts';
 import { observeDirtyPaths } from './registry-dirty-paths.ts';
 import { captureInsertionBoundary } from './split-text-boundaries.ts';
 import { SplitTextSources, type SplitTextRange } from './split-text-sources.ts';
+import { SplitSiblingOrders } from './split-sibling-order.ts';
 import * as Y from 'yjs';
 import type { CanonicalBinaryDescriptor } from '@docx-editor.dev/core/collaboration/replication';
 import { partNameKey } from '@docx-editor.dev/core/store';
@@ -112,6 +113,12 @@ export class DocumentRegistry {
   private readonly adoption: AdoptionIndex;
   /** Which paragraph's shared text holds each inline ID. */
   readonly inline: InlineIndex;
+  /** The order concurrent splits of one paragraph show their new paragraphs in. */
+  readonly splitSiblings = new SplitSiblingOrders(
+    (id) => childArrayOf(this.schema.nodes.get(id)),
+    (id) => this.inline.textOf(id),
+    (id) => this.childrenSnapshot.get(id)
+  );
   private readonly stopMarks: () => void;
   private readonly stopKeepingMarkers: () => void;
   private readonly markListeners = new Set<(ids: ReadonlySet<LogicalId>) => void>();
@@ -150,7 +157,7 @@ export class DocumentRegistry {
         compareDocumentOrder(
           {
             parentOf: (id) => this.parentIndex.get(id),
-            childrenOf: (id) => this.childrenSnapshot.get(id),
+            childrenOf: (id) => this.splitSiblings.shownChildren(id),
             maxDepth: this.limits.maxTreeDepth,
           },
           a,
@@ -319,11 +326,7 @@ export class DocumentRegistry {
     if (!rec) return null;
     const shared = this.record(logicalId);
     const attributes = shared && isElementRecord(shared) ? shared.attributes : [];
-    return {
-      logicalId,
-      yjsItemKey: itemKeyOf(rec),
-      wordFacingIds: wordFacingIdsOf(attributes),
-    };
+    return { logicalId, yjsItemKey: itemKeyOf(rec), wordFacingIds: wordFacingIdsOf(attributes) };
   }
 
   isTombstoned(logicalId: LogicalId): boolean {
@@ -341,10 +344,9 @@ export class DocumentRegistry {
   /**
    * Every survivor that adopts children from a tombstone, and what it adopts.
    *
-   * Adoption is DERIVED from the tombstone edge and is not a child array, so tombstoning a
-   * node dirties the tombstone alone while the survivor is the node that has to grow a
-   * child. A consumer that caches per node has to compare this index, or the adopted
-   * children silently disappear from the survivor.
+   * Adoption is DERIVED from the tombstone edge and is not a child array, so tombstoning a node
+   * dirties the tombstone alone while the survivor has to grow a child. A consumer that caches
+   * per node compares this index, or the adopted children silently leave the survivor.
    */
   adoptionIndex(): ReadonlyMap<LogicalId, readonly LogicalId[]> {
     return this.adoption.adoptees;

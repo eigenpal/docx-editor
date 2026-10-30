@@ -34,7 +34,7 @@ A collaboration deployment includes every program that reads or writes shared ro
 
 ### Understand the format value
 
-The releases from 2.18.0 to 2.27.0 use `docx-collaboration:1.3.1.1`. Format `docx-collaboration:1.4.2.1` follows it, and format `docx-collaboration:1.5.2.1` follows that. The four numbers identify synchronization rules, shared storage structure, conflict-repair rules, and the editor's document model, in that order.
+The releases from 2.18.0 to 2.27.0 use `docx-collaboration:1.3.1.1`. Formats `docx-collaboration:1.4.2.1`, `docx-collaboration:1.5.2.1`, and `docx-collaboration:1.5.3.1` follow it, in that order. The four numbers identify synchronization rules, shared storage structure, conflict-repair rules, and the editor's document model, in that order.
 
 Treat the complete value as one compatibility identifier. Import it from the installed package; do not construct it yourself. Changing the stored value does not convert the data or make incompatible code safe to use.
 
@@ -48,7 +48,7 @@ Package versions and room compatibility have separate policies. A minor package 
 
 ## Published collaboration formats
 
-This table lists published package releases. For deployments that use format `docx-collaboration:1.4.2.1`, see [Upgrade rooms to format 1.4.2.1](#upgrade-rooms-to-format-1421). For deployments that use format `docx-collaboration:1.5.2.1`, see [Upgrade rooms to format 1.5.2.1](#upgrade-rooms-to-format-1521).
+This table lists published package releases. For deployments that use format `docx-collaboration:1.4.2.1`, see [Upgrade rooms to format 1.4.2.1](#upgrade-rooms-to-format-1421). For deployments that use format `docx-collaboration:1.5.2.1`, see [Upgrade rooms to format 1.5.2.1](#upgrade-rooms-to-format-1521). For deployments that use format `docx-collaboration:1.5.3.1`, see [Upgrade rooms to format 1.5.3.1](#upgrade-rooms-to-format-1531).
 
 The upgrade column describes moving from the previous stable release. Matching formats allow synchronization; older releases can still have bugs fixed in newer releases.
 
@@ -79,7 +79,7 @@ The upgrade column describes moving from the previous stable release. Matching f
 
 ## Choose the upgrade path
 
-Upgrading from 2.17.0 to 2.18.0 requires a saved-room migration. Upgrading from 2.27.0 or earlier to a release with format `docx-collaboration:1.4.2.1` also requires one, and so does upgrading from 2.31.0 or earlier to a release with format `docx-collaboration:1.5.2.1`. In each case, export with the compatible previous build, then follow [Upgrade saved rooms](#upgrade-saved-rooms).
+Upgrading from 2.17.0 to 2.18.0 requires a saved-room migration. Upgrading from 2.27.0 or earlier to a release with format `docx-collaboration:1.4.2.1` also requires one, upgrading from 2.31.0 or earlier to a release with format `docx-collaboration:1.5.2.1` requires one, and so does upgrading from 2.33.0 or earlier to a release with format `docx-collaboration:1.5.3.1`. In each case, export with the compatible previous build, then follow [Upgrade saved rooms](#upgrade-saved-rooms).
 
 | Situation | What you do |
 | --- | --- |
@@ -272,6 +272,25 @@ If your servers run a release from 2.28.0 to 2.31.0, the procedure changes in th
 - Your servers already call `prepareCollaborationServerDocument` and `checkCollaborationRoomGeneration`. Keep both calls. A client that still holds the earlier room is refused with `room-generation-changed`, as in the earlier migration.
 - If your app keeps room updates in browser storage, change the storage key again, so that the new build does not load updates of the earlier room.
 - Edits that never reached the room before the migration do not transfer. Ask users with offline edits to reconnect before you stop the servers.
+
+### Upgrade rooms to format 1.5.3.1
+
+Format `docx-collaboration:1.5.3.1` stores shared data the same way as format `docx-collaboration:1.5.2.1`. It changes two rules that decide what participants show after concurrent edits:
+
+- If two or more participants split one paragraph at different points at the same time, every split stays, and the new paragraphs show in the order of their text. Earlier formats ordered the new paragraphs by an internal participant number, so one split could look lost and an empty paragraph could appear.
+- If one participant rejects a proposed paragraph break while its author undoes the same break, the paragraph and its text stay. Rejecting a proposed paragraph break now keeps the paragraph before the break, which is the paragraph that undoing the break keeps. Earlier formats kept the paragraph after the break, so each edit removed the paragraph that the other one kept.
+
+A participant with format `docx-collaboration:1.5.2.1` applies the earlier rules to the same shared data. In one room, the two formats could show the same edits differently, and two concurrent rejections of one proposed paragraph break could remove the paragraph. So the formats refuse to share a room: each participant refuses a room that another format created, before it applies any update. A room that a release with format `docx-collaboration:1.5.2.1` created keeps the earlier rules, because only participants with that format can edit it.
+
+If your servers run 2.32.0 or 2.33.0, the procedure changes in these ways:
+
+- Export each room with the release your servers run. In the export commands, replace `2.27.0` with that release.
+- Keep your calls to `prepareCollaborationServerDocument` and `checkCollaborationRoomGeneration`. A client that still holds the earlier room is refused with `room-generation-changed`.
+- If your app keeps room updates in browser storage, change the storage key, so that the new build does not load updates of the earlier room.
+- Edits that never reached the room before the migration do not transfer. Ask users with offline edits to reconnect before you stop the servers.
+- Update clients, servers, export workers, and background agents together. Your connection check refuses a client that sends `docx-collaboration:1.5.2.1`.
+
+Saved DOCX files do not change. In a document without collaboration, rejecting a proposed paragraph break keeps the paragraph before the break. The paragraph keeps the properties of the paragraph mark that remains, as before. Only its `w14:paraId` and the identity that automation reads as `Paragraph.uniqueLocalId` come from the paragraph before the break.
 
 ### Migrate rooms on a server
 
