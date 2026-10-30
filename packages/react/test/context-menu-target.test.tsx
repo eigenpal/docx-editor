@@ -29,7 +29,8 @@ const SOURCE = zipSync({
     `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
   ),
   'word/document.xml': strToU8(
-    `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>Visit example today</w:t></w:r></w:p></w:body></w:document>`
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>Visit example today</w:t></w:r></w:p>` +
+      `<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Color"/><w:enabled/><w:ddList><w:result w:val="1"/><w:listEntry w:val="Red"/><w:listEntry w:val="Green"/><w:listEntry w:val="Blue"/></w:ddList></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMDROPDOWN </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Green</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p></w:body></w:document>`
   ),
 });
 const PID = '/word/document.xml#0.0.0';
@@ -161,6 +162,24 @@ test('the pages and the canvas around them still open the document menu', async 
   const canvas = view.getByTestId('docx-editor-scroll');
   expect(rightClick(canvas).defaultPrevented).toBe(true);
   expect(menu(view)).not.toBeNull();
+});
+
+test('painted text, a painted drop-down field, and the mount beside the page open it', async () => {
+  const { view } = await mount();
+  const select = view.container.querySelector('.docx-pages select[data-docx-form-dropdown]');
+  expect(select).not.toBeNull();
+  const targets = [
+    view.container.querySelector('.docx-pages [data-start]')!,
+    select!,
+    view.container.querySelector('.docx-content-mount')!,
+  ];
+  for (const target of targets) {
+    expect(rightClick(target).defaultPrevented).toBe(true);
+    expect(menu(view)).not.toBeNull();
+    act(() => {
+      fireEvent.keyDown(document, { key: 'Escape' });
+    });
+  }
 });
 
 test('a right-click on the open menu keeps it in place and suppresses the browser menu', async () => {

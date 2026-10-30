@@ -7,7 +7,10 @@ import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditor } from '../src/components/DocxEditor';
 import { docx, flush } from './helpers/fixtures';
 
-const SOURCE = docx('<w:p><w:r><w:t>Visit example today</w:t></w:r></w:p>');
+const SOURCE = docx(
+  '<w:p><w:r><w:t>Visit example today</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Color"/><w:enabled/><w:ddList><w:result w:val="1"/><w:listEntry w:val="Red"/><w:listEntry w:val="Green"/><w:listEntry w:val="Blue"/></w:ddList></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMDROPDOWN </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Green</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+);
 const PID = '/word/document.xml#0.0.0';
 const SELECTION = {
   anchor: { paragraphId: PID, offset: 6 },
@@ -140,6 +143,22 @@ test('the pages and the canvas around them still open the document menu', async 
   const canvas = container.querySelector('.docx-editor__scroll-container')!;
   expect((await rightClick(canvas)).defaultPrevented).toBe(true);
   expect(menu(container)).not.toBeNull();
+});
+
+test('painted text, a painted drop-down field, and the mount beside the page open it', async () => {
+  const { container } = await mount();
+  const select = container.querySelector('.docx-pages select[data-docx-form-dropdown]');
+  expect(select).not.toBeNull();
+  const targets = [
+    container.querySelector('.docx-pages [data-start]')!,
+    select!,
+    container.querySelector('.docx-content-mount')!,
+  ];
+  for (const target of targets) {
+    expect((await rightClick(target)).defaultPrevented).toBe(true);
+    expect(menu(container)).not.toBeNull();
+    await keyDown(document.body, { key: 'Escape' });
+  }
 });
 
 test('a right-click on the open menu keeps it in place and suppresses the browser menu', async () => {
