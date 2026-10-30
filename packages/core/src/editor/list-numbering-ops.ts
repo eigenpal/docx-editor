@@ -7,6 +7,10 @@ import {
 } from '@docx-editor.dev/core/layout';
 import { fragmentHolding } from '../layout/line-segments.ts';
 import { namedChild, paragraphPropertiesNodeOf } from '../store/store/tree-op-nodes.ts';
+import { authoredProperties } from '../store/store/direct-properties.ts';
+import { leftIndentTwipsOf } from './surface-indent-step.ts';
+
+const INDENT = new Set(['ind']);
 
 export interface ListNumberingDeps {
   storyPart(): OoxmlPart;
@@ -46,6 +50,18 @@ export function createListNumberingOps(deps: ListNumberingDeps) {
       return styleNumbered
         ? { op: 'setListNumbering', paragraphId, numId, level }
         : { op: 'setListLevel', paragraphId, level };
+    },
+
+    /** The left indent the paragraph's style chain gives it, in twips, its own `w:pPr` aside. */
+    styleLeftIndent(paragraphId: string): number {
+      const styles = deps.styleCascade();
+      const paragraph = findNode(deps.storyPart(), paragraphId);
+      if (!styles || !paragraph) return 0;
+      const pPr = paragraphPropertiesNodeOf(paragraph);
+      const tiers = cascadeParagraphFormatting(styles, pPr).paragraphPropertyNodes;
+      return leftIndentTwipsOf(
+        tiers.filter((tier) => tier !== pPr).flatMap((tier) => authoredProperties(tier, INDENT))
+      );
     },
 
     /** `w:numId="0"` switches off the style's numbering (§17.9.18); removal alone would not. */

@@ -246,12 +246,13 @@ export interface PaginatedSurface {
    */
   canAdjustIndent(direction: 'increase' | 'decrease'): boolean;
   /**
-   * Enter on an empty list item: outdent a level, or leave the list at level 0.
-   *
-   * Answers false when the caret is not on an empty list item, so the caller falls
-   * through to an ordinary paragraph split.
+   * Enter on an empty list item: outdent a level, or leave the list at level 0. Backspace
+   * at an item's start (`removeListNumber`): drop its number and keep the text in place.
+   * Both answer false when they did not handle the key, so the caller splits or joins.
    */
   exitListOnEmptyItem(): boolean;
+  /** Backspace at the start of `paragraphId`: drop its list number; false when it did not. */
+  removeListNumber(paragraphId: string): boolean;
   /** Whether the paragraph at the caret is a list item, for Tab's Word-like fallback. */
   isListParagraph(): boolean;
   /**
