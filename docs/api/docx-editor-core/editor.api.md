@@ -4119,8 +4119,6 @@ export interface TextMatch {
 export interface TextMeasurer {
     caretAdvances?(text: string, style: ResolvedRunStyle): readonly number[] | undefined;
     // @internal
-    eastAsianFace?(style: ResolvedRunStyle): boolean | undefined;
-    // @internal
     faceCovers?(text: string, style: ResolvedRunStyle): boolean | undefined;
     hasResolvedFont?(style: ResolvedRunStyle): boolean;
     inkBounds?(text: string, style: ResolvedRunStyle): {

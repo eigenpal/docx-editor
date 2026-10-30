@@ -101,10 +101,8 @@ test('a localized name takes the line of the English face it draws in', () => {
   expect(english.height).toBeCloseTo(10 * 1.5 * 1.3, 2);
   expect(measure.lineMetrics(style('メイリオ'))).toEqual(english);
   expect(measure.lineMetrics(style('メイリオ', true))).toEqual(english);
-  expect(measure.eastAsianFace!(style('メイリオ'))).toBe(true);
   // A stand-in of another family keeps the one-em CJK floor of the face's own box.
   expect(measure.lineMetrics(style('Stand In')).height).toBeLessThan(english.height);
-  expect(measure.eastAsianFace!(style('Stand In'))).toBeUndefined();
 });
 
 test('a localized name takes its supplied English face before the script default', () => {

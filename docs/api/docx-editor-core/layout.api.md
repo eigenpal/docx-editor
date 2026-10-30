@@ -387,8 +387,6 @@ export interface CjkTypographySettings {
     readonly before: Readonly<Record<string, string>>;
     readonly compression: 'doNotCompress' | 'compressPunctuation' | 'compressPunctuationAndJapaneseKana';
     // @internal
-    readonly eastAsianDefaultFace?: string;
-    // @internal
     readonly eastAsianSpacing?: false;
     // @internal
     readonly legacyLineEndPunctuation?: true;
@@ -665,7 +663,7 @@ export interface CreateDocumentNotesInputOptions {
 }
 
 // @public
-export function createDocumentStyleDependencies(view: HeadlessDocumentView, options?: DocumentStyleDependencyOptions): DocumentStyleDependencies;
+export function createDocumentStyleDependencies(view: HeadlessDocumentView): DocumentStyleDependencies;
 
 // @public
 export function createFieldLinkRegistry(): FieldLinkRegistry;
@@ -830,11 +828,6 @@ export interface DocumentStyleDependencies {
     readonly numberingIndex: () => NumberingIndex;
     // (undocumented)
     readonly styleCascade: () => StyleCascadeTable | undefined;
-}
-
-// @public
-export interface DocumentStyleDependencyOptions {
-    readonly measurer?: () => TextMeasurer | undefined;
 }
 
 // @public (undocumented)
@@ -4905,8 +4898,6 @@ export type TextDirection = 'ltr' | 'rtl';
 // @public
 export interface TextMeasurer {
     caretAdvances?(text: string, style: ResolvedRunStyle): readonly number[] | undefined;
-    // @internal
-    eastAsianFace?(style: ResolvedRunStyle): boolean | undefined;
     // @internal
     faceCovers?(text: string, style: ResolvedRunStyle): boolean | undefined;
     hasResolvedFont?(style: ResolvedRunStyle): boolean;

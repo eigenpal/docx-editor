@@ -127,12 +127,11 @@ export function loadFixture(options: FixtureOptions = {}) {
   const opened = openHeadlessDocument(bytes);
   if (!opened.ok) throw new Error(opened.reason);
   const view = opened.view;
-  const layoutMeasurer = options.measurer ?? measurer;
-  const dependencies = createDocumentStyleDependencies(view, { measurer: () => layoutMeasurer });
+  const dependencies = createDocumentStyleDependencies(view);
   const pkg = view.currentPackage();
   const before = [...pkg.parts].map(([name, part]) => [name, JSON.stringify(part.root)]);
   const layout = layoutSemanticDocument(pkg.parts.get(pkg.mainDocumentPart)!, 0, {
-    measurer: layoutMeasurer,
+    measurer: options.measurer ?? measurer,
     styleCascade: dependencies.styleCascade(),
     ...(options.compatibility === undefined ? {} : { compatibilityMode: options.compatibility }),
     geometry: {

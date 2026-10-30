@@ -18,7 +18,7 @@ const NAMED_FACE_KEY = 0.5;
  * True when `font` is the family that `style` names, not a substitute or a glyph fallback. A
  * localized East Asian name and its English name name one family (`メイリオ` and `Meiryo`).
  */
-export function drawsAsNamedFace(font: ResolvedFont, style: ResolvedRunStyle): boolean {
+function drawsAsNamedFace(font: ResolvedFont, style: ResolvedRunStyle): boolean {
   if (style.fontFamily === null) return false;
   // A bold or italic request answered by the same family's regular face (a synthesized
   // style) still draws as the named family. A stand-in from another family does not.

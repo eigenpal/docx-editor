@@ -918,10 +918,9 @@ export function mountPaginatedSurface(
     if (timedPress(event)) options.onTiming?.('input', event.timeStamp);
   };
 
-  // Style and numbering indexes are identity-memoized and shared by every story. The current
-  // measurer's fonts decide whether the defaults' East Asian font is a CJK face.
+  // Style and numbering indexes are identity-memoized and shared by every story.
   const { styleCascade, numberingIndex, defaultTabStopPt, compatibilityMode } =
-    createSurfaceStyleDeps(session, { measurer: () => measurer });
+    createSurfaceStyleDeps(session);
   // Word's "style for following paragraph". Its own lane, because it is a question about
   // `styles.xml` rather than about the selection an Enter is standing in.
   const nextStyle = createNextStyleWrites({

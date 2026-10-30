@@ -6,8 +6,7 @@
 import { trustedFontBytes, type ResolvedFont } from './font-resource.ts';
 
 const cjkFaces = new WeakMap<ResolvedFont, boolean>();
-/** Whether the face lists a Chinese, Japanese, or Korean Windows code page in `OS/2`. */
-export function hasCjkCodePages(font: ResolvedFont): boolean {
+function hasCjkCodePages(font: ResolvedFont): boolean {
   const cached = cjkFaces.get(font);
   if (cached !== undefined) return cached;
   const bytes = trustedFontBytes(font);

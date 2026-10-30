@@ -284,7 +284,6 @@ export type { ShapeReflection } from '../store/package/drawing-shape-effects.ts'
 export {
   createDocumentStyleDependencies,
   type DocumentStyleDependencies,
-  type DocumentStyleDependencyOptions,
 } from './document-style-deps.ts';
 export {
   createDocumentFurnitureSource,

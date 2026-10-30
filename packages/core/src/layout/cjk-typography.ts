@@ -18,13 +18,6 @@ export interface CjkTypographySettings {
   /** The document defaults explicitly select an East Asian face as the East Asian font. */
   readonly sourceEastAsianFont?: boolean;
   /**
-   * The East Asian font the document defaults name. Layout asks the measurer whether the face
-   * it resolves for this family is an East Asian font, and that answer replaces
-   * `sourceEastAsianFont` ({@link withMeasuredEastAsianDefaults}).
-   * @internal
-   */
-  readonly eastAsianDefaultFace?: string;
-  /**
    * False when the document defaults turn off inter-character East Asian justification on
    * justified lines and automatic spacing between East Asian and other text
    * ({@link defaultsTypography}). Absent means both apply.
@@ -310,16 +303,19 @@ export function kinsokuCharacters(
 }
 
 /**
- * The East Asian font the authored document defaults select, or null when they name none.
- * Only `w:rPrDefault` counts: an application or theme fallback alone does not. An empty theme
- * slot resolves to a built-in East Asian face.
+ * Whether the authored document defaults select an East Asian face as the East Asian font.
+ * Adjacent full-width punctuation compression needs one. Only `w:rPrDefault` counts: an
+ * application or theme fallback alone does not. The resolved face must be a Chinese,
+ * Japanese, or Korean font (`isEastAsianFace`). An empty theme slot resolves to a built-in
+ * East Asian face.
  */
-function defaultEastAsianFace(
+export function defaultsSelectEastAsianFace(
   defaultRun: readonly OoxmlProperty[],
   themeFonts: ThemeFonts
-): string | null {
-  if (!namesEastAsianFont(defaultRun)) return null;
-  return resolveRunStyle(defaultRun, themeFonts).fontFamilyEastAsia;
+): boolean {
+  if (!namesEastAsianFont(defaultRun)) return false;
+  const face = resolveRunStyle(defaultRun, themeFonts).fontFamilyEastAsia;
+  return isEastAsianFace(face, themeFonts.eastAsianFontTableFaces);
 }
 
 /** Whether run defaults name an East Asian face slot (`w:eastAsia` or `w:eastAsiaTheme`). */
@@ -342,22 +338,11 @@ export function defaultsTypography(
   stylesRoot: OoxmlElement,
   defaultRun: readonly OoxmlProperty[],
   themeFonts: ThemeFonts
-): Pick<
-  CjkTypographySettings,
-  'sourceEastAsianFont' | 'eastAsianDefaultFace' | 'eastAsianSpacing'
-> {
-  // Adjacent full-width punctuation compression, hanging punctuation, and the legacy space
-  // rule need the face to be a Chinese, Japanese, or Korean font. By name and the font table
-  // here (`isEastAsianFace`); layout replaces the answer with the measured face's when the face
-  // is available.
-  const face = defaultEastAsianFace(defaultRun, themeFonts);
-  const sourceEastAsianFont = isEastAsianFace(face, themeFonts.eastAsianFontTableFaces);
-  const named = face?.trim() ? { eastAsianDefaultFace: face } : {};
+): Pick<CjkTypographySettings, 'sourceEastAsianFont' | 'eastAsianSpacing'> {
+  const sourceEastAsianFont = defaultsSelectEastAsianFace(defaultRun, themeFonts);
   const spacing =
     stylesRoot.namespaceUri !== WML_NAMESPACE_URI ||
     omittedDocDefaults(stylesRoot).run ||
     namesEastAsianFont(defaultRun);
-  return spacing
-    ? { sourceEastAsianFont, ...named }
-    : { sourceEastAsianFont, ...named, eastAsianSpacing: false };
+  return spacing ? { sourceEastAsianFont } : { sourceEastAsianFont, eastAsianSpacing: false };
 }
