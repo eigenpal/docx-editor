@@ -13,6 +13,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 import { projectTypingOrJournal } from './document/projected-journal.ts';
+import { prepareMemberRootJournal } from './document/prepare-member-root-journal.ts';
 import { editWaits } from './document/journal.ts';
 import { markRestoredText } from './document/paragraph-text-restore.ts';
 import { awaitingUpdates } from './document/yjs-items.ts';
@@ -560,10 +561,14 @@ class DocumentSession implements DocumentCollaborationSession {
     // Enforce admission here too, before minting identities or publishing document/blob data.
     if (!this.canWriteSharedState()) return;
     this.registry.inline.takeDrift();
-    const projected = projectTypingOrJournal(
-      this.registry,
-      this.identityMap.translate(journal),
-      (id) => this.materializer.shownPartChildren(id)
+    const translated = this.identityMap.translate(journal);
+    const memberFailure = prepareMemberRootJournal(this.materializer, translated);
+    if (memberFailure) {
+      this.refuseLocalJournal(memberFailure);
+      return;
+    }
+    const projected = projectTypingOrJournal(this.registry, translated, (id) =>
+      this.materializer.shownPartChildren(id)
     );
     if (!projected.ok) {
       this.refuseLocalJournal({

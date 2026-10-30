@@ -135,7 +135,7 @@ async function pairedEditors(numberingXml = NUMBERING, styledFirst = false, styl
       expect(placementsOf(editor)).toEqual(coldPlacementsOf(editor));
     return placementsOf(alice);
   };
-  return { alice, bob, converged, pause: peers.pause, resume: peers.resume };
+  return { alice, bob, peers, converged, pause: peers.pause, resume: peers.resume };
 }
 
 const caret = (editor: Editor, index: number, offset = 1) => {
@@ -269,3 +269,105 @@ test.each([false, true])(
     expect(positions(converged())).toEqual(before);
   }
 );
+
+test.each([false, true])(
+  'mixed style indents survive a session remount (styled second: %s)',
+  async (styledSecond) => {
+    const { alice, bob, peers, converged } = await pairedEditors(NUMBERING, true, styledSecond);
+    const before = positions(converged());
+    const ids = alice.surface!.session.paragraphIds();
+    alice.surface!.setSelection({
+      anchor: { paragraphId: ids[0]!, offset: 0 },
+      head: { paragraphId: ids[1]!, offset: 2 },
+    });
+    expect(alice.surface!.toggleList('bullet')).toBe(true);
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+    expect(placementsOf(bob)).toEqual(placementsOf(alice));
+    expect(positions(placementsOf(alice))).toEqual(before);
+    expect(coldPlacementsOf(bob)).toEqual(coldPlacementsOf(alice));
+    expect(saveReopenDigest(bob.surface!.session.currentPackage())).toEqual(
+      saveReopenDigest(alice.surface!.session.currentPackage())
+    );
+    expect(positions(converged())).toEqual(before);
+
+    // Destroy Bob's editor and session, then join again from his retained Y.Doc.
+    // This exercises session bootstrap, not merely delayed update delivery.
+    bob.destroy();
+    editors.splice(editors.indexOf(bob), 1);
+    const rejoined = await harness.remount(peers.bob);
+    rejoined.detach();
+    const returning = createDocxEditor({
+      container: document.createElement('div'),
+      document: rejoined.room.document,
+      modules: [collaborationModule({ session: rejoined.room.session })],
+    });
+    editors.push(returning);
+    expect(rejoined.room.session).not.toBe(peers.bob.room.session);
+
+    const check = () => {
+      peers.alice.room.session.flushPendingJournals();
+      rejoined.room.session.flushPendingJournals();
+      const left = alice.surface!.session.currentPackage();
+      const right = returning.surface!.session.currentPackage();
+      expect(packageFingerprint(right)).toBe(packageFingerprint(left));
+      expect(saveReopenDigest(right)).toEqual(saveReopenDigest(left));
+      expect(placementsOf(returning)).toEqual(placementsOf(alice));
+      expect(positions(placementsOf(returning))).toEqual(before);
+      expect(placementsOf(returning)).toEqual(coldPlacementsOf(returning));
+    };
+    check();
+    expect(markers(placementsOf(returning))).toEqual([BULLET, BULLET, '1)', '2)']);
+
+    // The rebuilt session can still publish and receive numbering edits.
+    caret(returning, 3);
+    expect(returning.surface!.toggleList('bullet')).toBe(true);
+    check();
+    returning.surface!.undo();
+    check();
+    returning.surface!.redo();
+    check();
+    caret(alice, 2);
+    expect(alice.surface!.toggleList('bullet')).toBe(true);
+    check();
+    expect(markers(placementsOf(returning))).toEqual([BULLET, BULLET, BULLET, BULLET]);
+  }
+);
+
+test('consecutive definitions in a newly created numbering part converge', async () => {
+  const paragraph = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+  const peers = await harness.pair(
+    zipDocument(paragraph('alpha') + paragraph('gap') + paragraph('bravo'))
+  );
+  const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
+    peer.detach();
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: peer.room.document,
+      modules: [collaborationModule({ session: peer.room.session })],
+    });
+    editors.push(editor);
+    return editor;
+  }) as [Editor, Editor];
+  const check = () => {
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+    const left = alice.surface!.session.currentPackage();
+    const right = bob.surface!.session.currentPackage();
+    expect(packageFingerprint(right)).toBe(packageFingerprint(left));
+    expect(saveReopenDigest(right)).toEqual(saveReopenDigest(left));
+    expect(placementsOf(bob)).toEqual(placementsOf(alice));
+    expect(placementsOf(bob)).toEqual(coldPlacementsOf(bob));
+  };
+  caret(alice, 0);
+  expect(alice.surface!.toggleList('ordered')).toBe(true);
+  check();
+  caret(alice, 2);
+  expect(alice.surface!.toggleList('bullet')).toBe(true);
+  check();
+  expect(markers(placementsOf(bob))).toEqual(['1.', null, BULLET]);
+  alice.surface!.undo();
+  check();
+  alice.surface!.redo();
+  check();
+});
