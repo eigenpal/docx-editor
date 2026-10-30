@@ -14,7 +14,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * offset in that paragraph's text where the moved text started. It keeps the split points of
  * the paragraph it split as well, so a paragraph split off a split paragraph still names the
  * split point of the paragraph it came from. Any other paragraph an edit creates, as a break at
- * a paragraph's end does, takes the split points of the paragraph listed right before it. The order reads these first, and reads the text
+ * a paragraph's end does, counts as split off the end of the paragraph listed right before
+ * it. The order reads these first, and reads the text
  * only when a paragraph holds none, as one a release without this field wrote.
  *
  * The field is written once, by the peer that creates the paragraph, in the transaction that
@@ -67,10 +68,12 @@ export function noteMintedParagraph(record: Y.Map<unknown> | undefined): void {
 
 /**
  * Give each paragraph this edit created and just listed the split points of the paragraph
- * listed right before it.
+ * listed right before it, plus a split at that paragraph's end. A split that moves text into
+ * the paragraph names its own split point afterwards (`recordSplitPoints`).
  */
 export function inheritSplitPoints(
   nodeOf: (id: LogicalId) => Y.Map<unknown> | undefined,
+  lengthOf: (id: LogicalId) => number,
   children: Y.Array<LogicalId> | null,
   ids: readonly LogicalId[]
 ): void {
@@ -78,14 +81,13 @@ export function inheritSplitPoints(
   let listed: LogicalId[] | null = null;
   for (const id of ids) {
     const record = nodeOf(id);
-    if (!record || !minted.has(record)) continue;
-    minted.delete(record);
-    if (record.has(NODE_SPLIT_POINTS_FIELD)) continue;
+    if (!record || !minted.has(record) || record.has(NODE_SPLIT_POINTS_FIELD)) continue;
     listed ??= children.toArray();
     const at = listed.indexOf(id);
-    const left = at > 0 ? nodeOf(listed[at - 1]!) : undefined;
-    const points = splitPointsOf(left);
-    if (points.length > 0) record.set(NODE_SPLIT_POINTS_FIELD, serialized(points));
+    if (at <= 0) continue;
+    const leftId = listed[at - 1]!;
+    const points = [...splitPointsOf(nodeOf(leftId)), { source: leftId, offset: lengthOf(leftId) }];
+    record.set(NODE_SPLIT_POINTS_FIELD, serialized(points));
   }
 }
 
@@ -120,11 +122,10 @@ export function recordSplitPoints(writes: readonly SplitWrite[]): void {
       if (source === write) continue;
       const offset = source.identities.indexOf(origin);
       if (offset < 0) continue;
-      // Written once: a paragraph holds no field yet, or only what it took from the paragraph
-      // it was listed after, which is the paragraph it was split off.
+      // Written by the edit that creates the paragraph, over what the listing gave it.
       const inherited = splitPointsOf(source.record);
-      const held = write.record.get(NODE_SPLIT_POINTS_FIELD);
-      if (held !== undefined && held !== serialized(inherited)) break;
+      if (write.record.has(NODE_SPLIT_POINTS_FIELD) && !minted.has(write.record)) break;
+      minted.delete(write.record);
       write.record.set(
         NODE_SPLIT_POINTS_FIELD,
         serialized([...inherited, { source: source.id, offset }])

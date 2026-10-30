@@ -127,7 +127,7 @@ async function room(
       expect(xml[2]).toBe(xml[0]!);
     },
     /** Every peer's saved document opens again with `expected` and no pending change. */
-    async expectReopens(expected: readonly string[]) {
+    async expectReopens(expected: readonly string[], revisions = 0) {
       for (const peer of peers) {
         const reopened = createDocxEditor({
           container: document.createElement('div'),
@@ -137,7 +137,7 @@ async function room(
         const runtime = DocxEditor.createBrowser(reopened, { author: 'Reader' });
         try {
           expect(await texts(runtime)).toEqual([...expected]);
-          expect(await revisionCount(runtime)).toBe(0);
+          expect(await revisionCount(runtime)).toBe(revisions);
         } finally {
           runtime.dispose();
           reopened.destroy();
@@ -287,20 +287,90 @@ describe('rejecting a tracked break at a paragraph start while its author undoes
 });
 
 describe('more concurrent splits of one paragraph', () => {
-  // Cases the order of concurrent split siblings does not settle yet (#1652).
-  test.todo('two splits by each of two peers keep four breaks in text order', async () => {
-    // "a1; b2; c3; d4; e5": Bob splits after "b2; " and "d4; ", Alice after "a1; " and
-    // "c3; ", both offline. Expected: "a1; ", "b2; ", "c3; ", "d4; ", "e5". Shows an empty
-    // paragraph and "c3; d4; " instead.
-  });
-  test.todo('a break at the end and a split in the middle add no empty paragraph', async () => {
-    // One peer types a break at the end of "One; two; three" while the other splits after
-    // "two; ". Expected: "One; two; ", "three", "". Shows "One; two; ", "", "three".
-  });
-  test.todo('redoing both splits after both undos keeps them in text order', async () => {
-    // Both peers undo their concurrent splits, then redo them. In the Carol, Bob, Alice client
-    // order this shows "One; ", "", "two; three".
-  });
+  // Each new paragraph records where its split fell, so pieces that several peers split off
+  // at once show in text order.
+  const splitAll = (runtime: Runtime, delimiters: string[], tracked: boolean) =>
+    runtime.run(async (context) => {
+      if (tracked) context.document.changeTrackingMode = 'TrackMineOnly';
+      const first = context.document.body.paragraphs.getFirst();
+      await context.sync();
+      first.split(delimiters);
+      await context.sync();
+    });
+
+  for (const tracked of [false, true])
+    for (const { label, ids } of ORDERS)
+      test(`two splits by each of two peers keep four breaks in text order (${tracked ? 'tracked' : 'untracked'}, ${label})`, async () => {
+        const r = await room('a1; b2; c3; d4; e5', ids);
+        try {
+          r.offline();
+          await splitAll(r.bob.runtime, ['b2; ', 'd4; '], tracked);
+          later();
+          await splitAll(r.alice.runtime, ['a1; ', 'c3; '], tracked);
+          later();
+          r.online();
+          // One split call proposes its breaks as one revision, so two peers propose two.
+          const split = ['a1; ', 'b2; ', 'c3; ', 'd4; ', 'e5', 'Signed'];
+          await r.expectAll(split, tracked ? 2 : undefined);
+          await r.expectReopens(split, tracked ? 2 : 0);
+          if (!tracked) return;
+          later();
+          await rejectAll(r.carol.runtime);
+          r.sync();
+          await r.expectAll(['a1; b2; c3; d4; e5', 'Signed'], 0);
+          await r.expectReopens(['a1; b2; c3; d4; e5', 'Signed']);
+        } finally {
+          r.close();
+        }
+      });
+
+  for (const { label, ids } of ORDERS)
+    test(`a break at the end and a split in the middle add no empty paragraph between them (${label})`, async () => {
+      const r = await room('One; two; three', ids);
+      try {
+        r.offline();
+        await newlineAfter(r.alice.runtime, 'three', false);
+        later();
+        await splitAfter(r.bob.runtime, 'two; ', false);
+        later();
+        r.online();
+        await r.expectAll(['One; two; ', 'three', '', 'Signed']);
+        await r.expectReopens(['One; two; ', 'three', '', 'Signed']);
+      } finally {
+        r.close();
+      }
+    });
+
+  for (const { label, ids } of ORDERS)
+    test(`redoing both splits after both undos keeps them in text order (${label})`, async () => {
+      const r = await room('One; two; three', ids);
+      try {
+        r.offline();
+        await splitAfter(r.alice.runtime, 'One; ', false);
+        later();
+        await splitAfter(r.bob.runtime, 'two; ', false);
+        later();
+        r.online();
+        await r.expectAll(['One; ', 'two; ', 'three', 'Signed']);
+        later();
+        expect(r.alice.editor.exec({ type: 'undo' }).ok).toBe(true);
+        r.sync();
+        later();
+        expect(r.bob.editor.exec({ type: 'undo' }).ok).toBe(true);
+        r.sync();
+        await r.expectAll(['One; two; three', 'Signed']);
+        later();
+        expect(r.alice.editor.exec({ type: 'redo' }).ok).toBe(true);
+        r.sync();
+        later();
+        expect(r.bob.editor.exec({ type: 'redo' }).ok).toBe(true);
+        r.sync();
+        await r.expectAll(['One; ', 'two; ', 'three', 'Signed']);
+        await r.expectReopens(['One; ', 'two; ', 'three', 'Signed']);
+      } finally {
+        r.close();
+      }
+    });
 });
 
 describe('deleting a reordered paragraph that a split shortened', () => {

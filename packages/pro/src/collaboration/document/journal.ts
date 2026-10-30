@@ -362,6 +362,7 @@ function applyEffect(
       // A paragraph this edit created takes the split points of the one listed before it.
       inheritSplitPoints(
         (id) => registry.schema.nodes.get(id),
+        (id) => registry.inline.textOf(id)?.length ?? 0,
         childArrayOf(registry.schema.nodes.get(effect.parentLogicalId)),
         effect.childLogicalIds
       );

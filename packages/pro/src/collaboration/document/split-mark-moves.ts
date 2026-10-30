@@ -65,58 +65,88 @@ function childrenAt(registry: DocumentRegistry, parent: LogicalId, level: Level)
   );
 }
 
-/**
- * The proposals of the splits of one paragraph, by the replica that wrote them, and the
- * container that lists them. Null when the paragraph holds no concurrent proposals.
- */
-function proposals(
+/** The children of `parent` that show, at `level`, leaving out those moving away. */
+function shownAt(
   registry: DocumentRegistry,
-  paragraph: LogicalId
-): { readonly container: LogicalId; readonly byReplica: Map<string, LogicalId> } | null {
-  let container = paragraph;
-  let level: Level = 'paragraphProperties';
-  for (;;) {
-    const copies = childrenAt(registry, container, level);
-    if (copies.length >= 2) {
-      const byReplica = new Map<string, LogicalId>();
-      for (const id of copies) {
-        const replica = replicaOfLogicalId(id);
-        // Two copies from one replica are not concurrent splits: leave the conflict as is.
-        if (replica === null) continue;
-        if (byReplica.has(replica)) return null;
-        byReplica.set(replica, id);
-      }
-      return byReplica.size >= 2 ? { container, byReplica } : null;
-    }
-    if (copies.length === 0 || level === 'ins') return null;
-    container = copies[0]!;
-    level = CHILD_LEVEL[level]!;
-  }
+  parent: LogicalId,
+  level: Level,
+  leaving: ReadonlySet<LogicalId>
+): LogicalId[] {
+  return childrenAt(registry, parent, level).filter((id) => !leaving.has(id));
+}
+
+function onlyChild(registry: DocumentRegistry, parent: LogicalId, child: LogicalId): boolean {
+  const record = registry.record(parent);
+  if (!record || !isElementRecord(record)) return false;
+  const shown = record.childIds.filter((id) => registry.showsAsChild(id));
+  return shown.length === 1 && shown[0] === child;
+}
+
+/** A proposal to move: its top element, the parent that lists it, and its level. */
+interface Proposal {
+  readonly node: LogicalId;
+  readonly from: LogicalId;
+  readonly level: Level;
 }
 
 /**
- * Where `node`, a proposal element, shows on `target`, a paragraph: as the paragraph's own
- * element at that level when it has none, or one level down inside the one it has.
+ * The mark proposal `replica` wrote on `paragraph`'s mark: its `w:ins`, raised to the highest
+ * element `replica` minted that holds nothing else, so a container that only carries the
+ * proposal moves with it and a container with other properties stays.
+ */
+function proposalOf(
+  registry: DocumentRegistry,
+  paragraph: LogicalId,
+  replica: string
+): Proposal | null {
+  const chain: { node: LogicalId; from: LogicalId; level: Level }[] = [];
+  let parent = paragraph;
+  for (const level of ['paragraphProperties', 'runProperties', 'ins'] as const) {
+    const copies = childrenAt(registry, parent, level);
+    const own = copies.filter((id) => replicaOfLogicalId(id) === replica);
+    const node = own.length === 1 ? own[0]! : copies.length === 1 ? copies[0]! : null;
+    if (!node) return null;
+    chain.push({ node, from: parent, level });
+    parent = node;
+  }
+  const ins = chain[2]!;
+  if (replicaOfLogicalId(ins.node) !== replica) return null;
+  let top: Proposal = ins;
+  for (let at = 1; at >= 0; at -= 1) {
+    const holder = chain[at]!;
+    if (replicaOfLogicalId(holder.node) !== replica) break;
+    if (!onlyChild(registry, holder.node, chain[at + 1]!.node)) break;
+    top = holder;
+  }
+  return top;
+}
+
+/**
+ * Where a proposal shows on `target`, a paragraph: as the paragraph's own element at that
+ * level when it has none (leaving out elements that move away), or one level down inside the
+ * one it has.
  */
 function placeOn(
   registry: DocumentRegistry,
-  node: LogicalId,
-  from: LogicalId,
+  proposal: Proposal,
   target: LogicalId,
+  leaving: ReadonlySet<LogicalId>,
   out: MarkMove[]
 ): void {
-  let level = levelOf(registry, node);
-  let parent = target;
-  let moving = node;
-  let movingFrom = from;
-  while (level) {
-    const own = childrenAt(registry, parent, level);
+  let { node: moving, from: movingFrom, level } = proposal;
+  // The target's element at the level above the proposal.
+  let parent: LogicalId | undefined = target;
+  if (level !== 'paragraphProperties') {
+    parent = shownAt(registry, target, 'paragraphProperties', leaving)[0];
+    if (parent && level === 'ins') parent = shownAt(registry, parent, 'runProperties', leaving)[0];
+  }
+  while (parent) {
+    const own = shownAt(registry, parent, level, leaving);
     if (own.length === 0) {
       out.push({ node: moving, from: movingFrom, to: parent, first: level !== 'runProperties' });
       return;
     }
     if (level === 'ins') return; // The paragraph already proposes its own mark.
-    // Go one level down on both sides: the proposal's own child into the target's element.
     const next = CHILD_LEVEL[level]!;
     const inner = childrenAt(registry, moving, next);
     if (inner.length !== 1) return;
@@ -127,21 +157,27 @@ function placeOn(
   }
 }
 
-/** The proposal moves one run of concurrent split siblings needs. */
+/**
+ * The proposal moves one run of concurrent split siblings needs. Each paragraph of the run
+ * was split off the paragraph its author listed right before it (`group.before`), and the
+ * proposal for its split point sits on that paragraph's mark; it shows on the paragraph shown
+ * right before it instead, when that is another one.
+ */
 export function markMovesOf(registry: DocumentRegistry, group: SiblingGroup): MarkMove[] {
-  const found = proposals(registry, group.source);
-  if (!found) return [];
-  const moves: MarkMove[] = [];
-  const heads = new Set(group.heads);
-  let before = group.source;
+  const wanted: { proposal: Proposal; target: LogicalId }[] = [];
+  let shownBefore = group.source;
   for (const id of group.shown) {
-    if (heads.has(id) && id !== group.heads[0]) {
-      const replica = replicaOfLogicalId(id);
-      const proposal = replica ? found.byReplica.get(replica) : undefined;
-      if (proposal) placeOn(registry, proposal, found.container, before, moves);
+    const before = group.before.get(id);
+    const replica = replicaOfLogicalId(id);
+    if (before && replica && before !== shownBefore) {
+      const proposal = proposalOf(registry, before, replica);
+      if (proposal) wanted.push({ proposal, target: shownBefore });
     }
-    before = id;
+    shownBefore = id;
   }
+  const leaving = new Set(wanted.map(({ proposal }) => proposal.node));
+  const moves: MarkMove[] = [];
+  for (const { proposal, target } of wanted) placeOn(registry, proposal, target, leaving, moves);
   return moves;
 }
 

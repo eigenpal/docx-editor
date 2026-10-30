@@ -53,6 +53,8 @@ export interface SiblingGroup {
   readonly source: LogicalId;
   readonly heads: readonly LogicalId[];
   readonly shown: readonly LogicalId[];
+  /** For each paragraph, the one its author listed it right after: the source or a sibling. */
+  readonly before: ReadonlyMap<LogicalId, LogicalId>;
 }
 
 /** The ranks of the children of one parent that move, or null when none does. */
@@ -157,39 +159,80 @@ export function splitSiblingRanks(
       start += 1;
       continue;
     }
+    // An undo puts a removed sibling back right before the sibling it was listed before: its
+    // left origin is the paragraph the run follows, or a sibling, and its right origin is in
+    // the run. It belongs to the run, in a block of its own.
+    let first = start;
+    while (first > 1) {
+      const item = items[first - 1]!;
+      const inRun = (id: Y.ID | null) =>
+        blocks.some((block) => block.items.some((member) => inItem(id, member)));
+      if (!inRun(item.rightOrigin) || !inItem(item.origin, items[first - 2]!)) break;
+      blocks.unshift({ head: item, items: [item] });
+      first -= 1;
+    }
     for (const block of blocks)
       for (const item of block.items) if (!item.deleted) heads.push(headId(item));
-    const order = orderOf(blocks, textOf, children.doc, pointsOf);
-    const source = items[start - 1];
+    const idsOf = (list: readonly Block[]): LogicalId[] =>
+      list.flatMap((block) =>
+        block.items
+          .filter((item) => !item.deleted)
+          .flatMap((item) => item.content.getContent() as LogicalId[])
+      );
+    const listed = idsOf(blocks);
+    const byText = orderOf(blocks, textOf, children.doc, pointsOf);
+    const order = idsByPoints(listed, pointsOf) ?? (byText ? idsOf(byText) : null);
+    const shown = order ?? listed;
+    const source = items[first - 1];
     if (source && !source.deleted && inItem(head.origin, source)) {
-      const shown = order ?? blocks;
-      groups.push({
-        source: (source.content.getContent() as LogicalId[])[head.origin!.clock - source.id.clock]!,
-        heads: shown.filter((block) => !block.head.deleted).map((block) => headId(block.head)),
-        shown: shown.flatMap((block) =>
-          block.items
-            .filter((item) => !item.deleted)
-            .flatMap((item) => item.content.getContent() as LogicalId[])
-        ),
-      });
-    }
-    if (order) {
-      group += 1;
-      ranks ??= new Map();
-      let rank = 0;
-      for (const block of order) {
-        for (const item of block.items) {
-          if (item.deleted) continue;
-          for (const id of item.content.getContent() as LogicalId[]) {
-            ranks.set(id, { group, rank });
-            rank += 1;
-          }
+      const heads = new Set(
+        blocks.filter((block) => !block.head.deleted).map((b) => headId(b.head))
+      );
+      const sourceId = (source.content.getContent() as LogicalId[])[
+        head.origin!.clock - source.id.clock
+      ]!;
+      const before = new Map<LogicalId, LogicalId>();
+      for (const block of blocks) {
+        let previous = sourceId;
+        for (const id of idsOf([block])) {
+          before.set(id, previous);
+          previous = id;
         }
       }
+      groups.push({ source: sourceId, heads: shown.filter((id) => heads.has(id)), shown, before });
+    }
+    if (order && order.some((id, at) => listed[at] !== id)) {
+      group += 1;
+      ranks ??= new Map();
+      order.forEach((id, rank) => ranks!.set(id, { group, rank }));
     }
     start = end;
   }
   return ranks;
+}
+
+/**
+ * The paragraphs of one concurrent run in the order of their split points, or null when they
+ * do not all name a split of one paragraph. Each paragraph goes by the offset of that split,
+ * so pieces that several peers split off at once interleave in text order; paragraphs with
+ * one offset, as a paragraph and the paragraph that took its split points, keep their listed
+ * order.
+ */
+function idsByPoints(
+  listed: readonly LogicalId[],
+  pointsOf: (id: LogicalId) => readonly SplitPoint[]
+): LogicalId[] | null {
+  if (listed.length < 2) return null;
+  const points = listed.map((id) => pointsOf(id));
+  for (let at = points[0]!.length - 1; at >= 0; at -= 1) {
+    const source = points[0]![at]!.source;
+    const offsets = points.map((list) => splitOffsetIn(list, source));
+    if (offsets.some((offset) => offset === null)) continue;
+    const order = listed.map((_, index) => index);
+    order.sort((a, b) => offsets[a]! - offsets[b]! || a - b);
+    return order.map((index) => listed[index]!);
+  }
+  return null;
 }
 
 /** The paragraph a listing item names first. */
