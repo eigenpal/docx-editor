@@ -464,6 +464,31 @@ describe('more concurrent splits of one paragraph', () => {
         r.close();
       }
     });
+
+  for (const { label, ids } of ORDERS)
+    test(`undoing and redoing the second split after both merge keeps text order (${label})`, async () => {
+      const r = await room('One; two; three', ids);
+      try {
+        r.offline();
+        await splitAfter(r.alice.runtime, 'One; ', false);
+        later();
+        await splitAfter(r.bob.runtime, 'two; ', false);
+        later();
+        r.online();
+        await r.expectAll(['One; ', 'two; ', 'three', 'Signed']);
+        later();
+        expect(r.bob.editor.exec({ type: 'undo' }).ok).toBe(true);
+        r.sync();
+        await r.expectAll(['One; ', 'two; three', 'Signed']);
+        later();
+        expect(r.bob.editor.exec({ type: 'redo' }).ok).toBe(true);
+        r.sync();
+        await r.expectAll(['One; ', 'two; ', 'three', 'Signed']);
+        await r.expectReopens(['One; ', 'two; ', 'three', 'Signed']);
+      } finally {
+        r.close();
+      }
+    });
 });
 
 describe('deleting a reordered paragraph that a split shortened', () => {

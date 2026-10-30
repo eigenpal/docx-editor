@@ -44,6 +44,11 @@ export function markRestoredText(doc: Y.Doc, from: number): void {
         if (!restored || restored.deleted) continue;
         const identity = itemIdentity(text, item, 0);
         marks.markCopy('restore', item.redone.client, item.redone.clock, item.length, identity);
+        // A moved copy put back, as a redo of a split writes it, is that moved copy again: it
+        // shows by document order among the other moved copies of its characters, as it did,
+        // and does not hide behind a copy a peer split off at the same time.
+        if (marks.origin('move', item.id.client, item.id.clock) !== null)
+          marks.markCopy('move', item.redone.client, item.redone.clock, item.length, identity);
       }
     }
   }, RESTORE_ORIGIN);
