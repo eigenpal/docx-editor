@@ -84,29 +84,34 @@ const LIST_NUMBER_STYLES =
   '<w:ind w:left="1800" w:hanging="360"/></w:pPr></w:style></w:styles>';
 
 /** With `styledFirst`, the first item is numbered by the List Number style instead. */
-async function pairedEditors(numberingXml = NUMBERING, styledFirst = false) {
+async function pairedEditors(numberingXml = NUMBERING, styledFirst = false, styledSecond = false) {
   const first = styledFirst
     ? '<w:p><w:pPr><w:pStyle w:val="ListNumber"/></w:pPr><w:r><w:t>alpha</w:t></w:r></w:p>'
     : item('alpha', 0);
   const peers = await harness.pair(
-    zipDocument(first + item('bravo', 0) + item('charlie', 3) + item('delta', 0), {
-      overrides:
-        '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>' +
-        (styledFirst
-          ? '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
-          : ''),
-      documentRels:
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        '<Relationship Id="rIdNum" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>' +
-        (styledFirst
-          ? '<Relationship Id="rIdSty" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
-          : '') +
-        '</Relationships>',
-      extraXml: {
-        'word/numbering.xml': numberingXml,
-        ...(styledFirst ? { 'word/styles.xml': LIST_NUMBER_STYLES } : {}),
-      },
-    })
+    zipDocument(
+      (styledSecond ? item('bravo', 0) + first : first + item('bravo', 0)) +
+        item('charlie', 3) +
+        item('delta', 0),
+      {
+        overrides:
+          '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>' +
+          (styledFirst
+            ? '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
+            : ''),
+        documentRels:
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+          '<Relationship Id="rIdNum" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>' +
+          (styledFirst
+            ? '<Relationship Id="rIdSty" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+            : '') +
+          '</Relationships>',
+        extraXml: {
+          'word/numbering.xml': numberingXml,
+          ...(styledFirst ? { 'word/styles.xml': LIST_NUMBER_STYLES } : {}),
+        },
+      }
+    )
   );
   const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
     peer.detach();
@@ -233,27 +238,34 @@ test('carried level tabs and spacing replicate with concurrent switches', async 
   expect(markers(converged())).toEqual(['1)', BULLET, '1)', '2)']);
 });
 
-test('one press that mints two definitions converges with a concurrent switch', async () => {
-  const { alice, bob, converged, pause, resume } = await pairedEditors(NUMBERING, true);
-  const before = positions(converged());
+test.each([false, true])(
+  'mixed style indents converge with a concurrent switch (styled second: %s)',
+  async (styledSecond) => {
+    const { alice, bob, converged, pause, resume } = await pairedEditors(
+      NUMBERING,
+      true,
+      styledSecond
+    );
+    const before = positions(converged());
 
-  // The styled item and a plain one switch together: each keeps its own place.
-  pause();
-  const ids = alice.surface!.session.paragraphIds();
-  alice.surface!.setSelection({
-    anchor: { paragraphId: ids[0]!, offset: 0 },
-    head: { paragraphId: ids[1]!, offset: 2 },
-  });
-  expect(alice.surface!.toggleList('bullet')).toBe(true);
-  caret(bob, 3);
-  expect(bob.surface!.toggleList('bullet')).toBe(true);
-  resume();
-  const switched = converged();
-  expect(markers(switched)).toEqual([BULLET, BULLET, '1)', BULLET]);
-  expect(positions(switched)).toEqual(before);
+    // The styled item and a plain one switch together: each keeps its own place.
+    pause();
+    const ids = alice.surface!.session.paragraphIds();
+    alice.surface!.setSelection({
+      anchor: { paragraphId: ids[0]!, offset: 0 },
+      head: { paragraphId: ids[1]!, offset: 2 },
+    });
+    expect(alice.surface!.toggleList('bullet')).toBe(true);
+    caret(bob, 3);
+    expect(bob.surface!.toggleList('bullet')).toBe(true);
+    resume();
+    const switched = converged();
+    expect(markers(switched)).toEqual([BULLET, BULLET, '1)', BULLET]);
+    expect(positions(switched)).toEqual(before);
 
-  alice.surface!.undo();
-  expect(positions(converged())).toEqual(before);
-  alice.surface!.redo();
-  expect(positions(converged())).toEqual(before);
-});
+    alice.surface!.undo();
+    expect(positions(converged())).toEqual(before);
+    alice.surface!.redo();
+    expect(positions(converged())).toEqual(before);
+  }
+);
