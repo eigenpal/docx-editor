@@ -16,29 +16,9 @@ export const MIN_FOOTNOTE_BODY_BAND_PT = 14;
  * the eviction guard ("could this note fit whole on a page?") and the hold-out's
  * oversized-note test must be exact complements, or a note is neither evicted nor held
  * out and the reflow loop orbits.
- *
- * A page without body content, such as the page a whole tall row leaves to a continued
- * footnote, keeps no body band: its notes take the whole column, as they do when the notes
- * attach to the laid-out pages.
  */
-export function noteColumnBudgetPt(
-  contentHeight: number,
-  separatorHeight: number,
-  holdsBody = true
-): number {
-  const bodyBand = holdsBody ? MIN_FOOTNOTE_BODY_BAND_PT : 0;
-  return Math.max(0, contentHeight - bodyBand - separatorHeight);
-}
-
-/** {@link noteColumnBudgetPt} of one laid-out page, which holds a body when it has fragments. */
-export function pageNoteColumnPt(
-  page: {
-    readonly contentBox: { readonly height: number };
-    readonly fragments: readonly unknown[];
-  },
-  separatorHeight: number
-): number {
-  return noteColumnBudgetPt(page.contentBox.height, separatorHeight, page.fragments.length > 0);
+export function noteColumnBudgetPt(contentHeight: number, separatorHeight: number): number {
+  return Math.max(0, contentHeight - MIN_FOOTNOTE_BODY_BAND_PT - separatorHeight);
 }
 
 /**

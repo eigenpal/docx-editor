@@ -62,10 +62,9 @@ import {
   footnoteReservesEqual,
   footnoteReservesFingerprint,
   growFootnoteReserves,
+  notesReserveContextKey,
   MIN_FOOTNOTE_BODY_BAND_PT,
   noteColumnBudgetPt,
-  notesReserveContextKey,
-  pageNoteColumnPt,
   recordFootnoteReserve,
   RESERVE_BOUNDARY_BACKOFF_PT,
 } from './note-reserves.ts';
@@ -105,7 +104,7 @@ import { DEFAULT_RUN_STYLE, resolveRunStyle, type ResolvedRunStyle } from './run
 import { finalizePageFieldProjection } from './field-projection.ts';
 import type { LayoutSteps } from './layout-steps.ts';
 import { withNoteAreasOnProgress, type NotesBodyOptions } from './note-progress.ts';
-import { overflowRowNote, overRowAreaPt, referenceRowOverflowsPage } from './note-overflow-row.ts';
+import { overflowRowNote, referenceRowOverflowsPage } from './note-overflow-row.ts';
 import { overflowPageShellAt, type OverflowPageShell } from './page-furniture-insets.ts';
 import { resettleParitySheets } from './page-parity-sheet.ts';
 import {
@@ -951,7 +950,7 @@ function buildFootnoteArea(
   const paragraphSplitAllowed = paragraphNoteSplitsAllowed(page);
   const textBottom = bodyFitBottomPt(page);
   const slackBudget = Math.max(0, page.contentBox.height - textBottom - separator.flowHeight);
-  const columnBudget = pageNoteColumnPt(page, separator.flowHeight);
+  const columnBudget = noteColumnBudgetPt(page.contentBox.height, separator.flowHeight);
   const availableForNotes = Math.max(
     0,
     (options?.reserveColumnBudget ? columnBudget : slackBudget) - noticeHeight
@@ -961,12 +960,12 @@ function buildFootnoteArea(
   // The keep-whole guard's budget is carry-INDEPENDENT: the hold-out on the previous page
   // re-derives the same test without knowing this page's carry state, and the two must be
   // exact complements or a note is neither evicted nor held out and the loop orbits. Only
-  // reserve mode evicts, so only reserve mode pays the plain-separator fetch (with the body band).
-  const plainSeparator = () =>
-    separatorKind === 'separator' ? separator : fetchSeparator('separator');
-  const keepWholeBudget = options?.reserveBandOf
-    ? noteColumnBudgetPt(page.contentBox.height, plainSeparator().flowHeight)
-    : 0;
+  // reserve mode evicts, so only reserve mode pays the plain-separator fetch.
+  const keepWholeBudget = !options?.reserveBandOf
+    ? 0
+    : separatorKind === 'separator'
+      ? columnBudget
+      : noteColumnBudgetPt(page.contentBox.height, fetchSeparator('separator').flowHeight);
   const firstContentTop = options?.reserveBandOf ? firstBodyContentTopPt(page) : 0;
 
   // Continuations from the previous page place first.
@@ -2163,7 +2162,8 @@ function computeFootnoteReservesWithPolicy(
     const holdOutOpts = noteStoryOptions(input, noteMarks, sectionIndex);
     const nextPage = layout.pages[pageAt + (layout.pages[pageAt + 1]?.parityBlank ? 2 : 1)];
     const usedReservePt = previousReserves ? (previousReserves.get(page.index) ?? 0) : undefined;
-    const maxArea = pageNoteColumnPt(bodyPage, 0); // the reserve ceiling
+    // The reserve ceiling: the note column beside the minimum body band.
+    const maxArea = noteColumnBudgetPt(bodyPage.contentBox.height, 0);
     // The eviction's fixed point ({@link holdOutReserveNeed}). Deliberately NOT memoized:
     // it reads the NEIGHBOUR page, and a memo entry that must enumerate foreign inputs by
     // hand is how stale reserves happen; the scan starts from a memoized page-refs answer
@@ -2269,8 +2269,8 @@ function computeFootnoteReservesWithPolicy(
       evictionTopPt !== undefined
         ? Math.max(0, bodyPage.contentBox.height - evictionTopPt - RESERVE_BOUNDARY_BACKOFF_PT)
         : 0;
-    // An area over a whole row past the bottom margin gains no room (`overRowAreaPt`).
-    const areaHeight = overRowAreaPt(overRow, !carryWasEmpty, area?.box.height ?? 0, maxArea);
+    // An area over a whole row past the bottom margin cannot gain room from the body.
+    const areaHeight = overRow ? 0 : (area?.box.height ?? 0);
     const localNeeded = Math.min(Math.max(areaHeight, evictionNeed), maxArea);
     if (memo && carryWasEmpty && carry.size === 0) {
       memo.pageReserve.set(page, {

@@ -83,22 +83,3 @@ export function overflowRowNote(
       : {}),
   };
 }
-
-/**
- * The footnote area a page reserves when it holds a whole row past the bottom margin.
- *
- * Such a page gains no room from the body, so it reserves nothing for the row's own notes. A
- * footnote continued from an earlier page is different: the row does not start on that page.
- * The page then reserves the whole note column, which makes the body pass move the row on
- * (`table-tall-row.ts`). On the next round the page holds only the continuation and reserves
- * what that needs.
- */
-export function overRowAreaPt(
-  overRow: boolean | undefined,
-  carried: boolean,
-  areaHeight: number,
-  noteColumnBudget: number
-): number {
-  if (!overRow) return areaHeight;
-  return carried ? noteColumnBudget : 0;
-}
