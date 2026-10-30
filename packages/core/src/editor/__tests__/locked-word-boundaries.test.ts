@@ -104,13 +104,17 @@ for (const navigation of ['normal', 'atomic'] as const) {
     });
   }
   for (const lock of ['none', 'sdtLocked']) {
-    test(`${navigation} ${lock} keeps an editable control in the surrounding word`, () => {
+    test(`${navigation} ${lock} stops word motions at both edges of an editable control`, () => {
       withSurface(lock, navigation, (surface, paragraphId) => {
         caret(surface, paragraphId, 0);
-        surface.navigate('wordRight');
-        expect(surface.state().selection.head.offset).toBe(9);
-        surface.navigate('wordLeft');
-        expect(surface.state().selection.head.offset).toBe(0);
+        for (const expected of [2, 7, 9]) {
+          surface.navigate('wordRight');
+          expect(surface.state().selection.head.offset).toBe(expected);
+        }
+        for (const expected of [7, 2, 0]) {
+          surface.navigate('wordLeft');
+          expect(surface.state().selection.head.offset).toBe(expected);
+        }
       });
     });
   }

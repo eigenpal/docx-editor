@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Stop word-wise caret movement at locked inline content control edges, including Shift selection and header navigation. Fixes #1300.
+Moving the caret by word stops at both edges of every inline content control, including Shift selection and header navigation. Fixes #1300.

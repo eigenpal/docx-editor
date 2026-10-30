@@ -173,7 +173,7 @@ A press inside a computed field, such as `PAGE`, places the caret at the nearer 
 
 The option applies in the document body, headers, and footers. Footnotes, endnotes, and text boxes keep character navigation, because the layout does not publish control boundaries there. The option applies to keyboard navigation and to pointer gestures that the editor handles. A selection that your code sets, for example with `setSelection` or a search, stays where you put it. With `pointer: 'native'`, the browser places the caret. The option changes navigation only, and locks refuse the same edits as before.
 
-Word-wise arrows stop at each edge of a content-locked inline control in the body, headers, and footers. Use Option+Left/Right on macOS or Ctrl+Left/Right; add Shift to extend the selection. This applies with either `lockedControlNavigation` value.
+Moving the caret by word stops at both edges of every inline control, whatever its lock, in the body, headers, and footers. On macOS, press Option+Left Arrow or Option+Right Arrow. On other platforms, press Ctrl+Left Arrow or Ctrl+Right Arrow. Add Shift to extend the selection. This rule applies with both `lockedControlNavigation` values.
 
 ### Deleting content-locked controls
 

@@ -23,7 +23,13 @@ export function deletedTextBoundaries(
   return stops;
 }
 
-/** Locked inline controls split word motions at each authored control edge. */
+/**
+ * Word-motion stops: deletion edges plus both edges of every inline control.
+ *
+ * A control edge splits a word whatever the control's lock, so a word motion never carries
+ * the caret into or out of a control in one step. An edge that already falls on a word edge
+ * is still a stop of its own.
+ */
 export function wordMotionBoundaries(
   layout: SemanticLayout,
   paragraphId: string
@@ -33,8 +39,7 @@ export function wordMotionBoundaries(
     if (
       control.level !== 'inline' ||
       control.placeholder ||
-      control.range?.paragraphId !== paragraphId ||
-      (control.effectiveLock !== 'contentLocked' && control.effectiveLock !== 'sdtContentLocked')
+      control.range?.paragraphId !== paragraphId
     )
       continue;
     stops.add(control.range.start);
