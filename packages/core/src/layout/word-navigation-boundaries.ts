@@ -34,7 +34,16 @@ export function wordMotionBoundaries(
   layout: SemanticLayout,
   paragraphId: string
 ): ReadonlySet<number> {
-  const stops = new Set(deletedTextBoundaries(layout, paragraphId));
+  return inlineControlEdges(layout, paragraphId, deletedTextBoundaries(layout, paragraphId));
+}
+
+/** Both edges of every inline control in a paragraph, added to `base` when given. */
+export function inlineControlEdges(
+  layout: SemanticLayout,
+  paragraphId: string,
+  base: ReadonlySet<number> = new Set()
+): ReadonlySet<number> {
+  const stops = new Set(base);
   for (const control of contentControlsOfLayout(layout)) {
     if (
       control.level !== 'inline' ||

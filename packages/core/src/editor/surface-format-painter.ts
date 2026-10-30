@@ -31,16 +31,7 @@ import {
   type SurfaceProperty,
 } from './surface-formatting.ts';
 import { wordRangeAt } from './surface-selection-ops.ts';
-import { wordMotionBoundaries } from '../layout/word-navigation-boundaries.ts';
-
-/**
- * No struck-half seams for the painter's own word expansion.
- *
- * A double-click stops a word at the boundary between a tracked deletion and the text
- * replacing it, because selecting both halves of a replacement is not what the reader
- * pointed at. A paint has no such problem: `runPropertyEdits` clips to the runs this view
- * RENDERS, so a hidden half is never reached whatever the range says.
- */
+import { inlineControlEdges } from '../layout/word-navigation-boundaries.ts';
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import type {
   FormatPainterMode,
@@ -314,8 +305,12 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
     // means in Word. Without it the click painted no text at all: the character half went to
     // the stored-marks lane, the painter had nothing to spend its arming on, and it stayed
     // live with the copy cursor on the pages until the user pressed Escape.
+    //
+    // The word stops at inline control edges, as a double-click does, but not at a tracked
+    // deletion's edges: `runPropertyEdits` clips to the runs this view RENDERS, so a hidden
+    // half is never reached whatever the range says, and a replaced word paints whole.
     const word = caret
-      ? wordRangeAt(deps.layout(), from, wordMotionBoundaries(deps.layout(), from.paragraphId))
+      ? wordRangeAt(deps.layout(), from, inlineControlEdges(deps.layout(), from.paragraphId))
       : null;
     const spanFrom = word?.from ?? from;
     const spanTo = word?.to ?? to;
