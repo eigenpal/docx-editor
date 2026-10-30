@@ -4,6 +4,7 @@
 // POSITION and the hit-test lane resolves a POINT, and they already meet through the records.
 
 import type { InlineDrawingRecord } from './drawing-layout.ts';
+import { fragmentPageRoute, rememberFragmentPageRoute } from './fragment-page-routes.ts';
 import { documentOrderIndex } from './document-order.ts';
 import { paragraphFragmentsOf } from './semantic-records.ts';
 import { paragraphFragmentsOnPage } from './story-fragments.ts';
@@ -359,14 +360,23 @@ export function fragmentHolding(
   layout: SemanticLayout,
   paragraphId: string
 ): ParagraphFragmentRecord | null {
+  const route = fragmentPageRoute(layout, paragraphId);
   for (const page of layout.pages) {
+    if (route !== undefined && page.index !== route) continue;
     for (const fragment of paragraphFragmentsOnPage(page)) {
-      if (fragment.paragraphId === paragraphId) return fragment;
+      if (fragment.paragraphId === paragraphId) {
+        rememberFragmentPageRoute(layout, paragraphId, page.index);
+        return fragment;
+      }
     }
   }
   for (const page of layout.pages) {
+    if (route !== undefined && page.index !== route) continue;
     for (const fragment of paragraphFragmentsOnPage(page)) {
-      if (fragmentParagraphs(fragment).includes(paragraphId)) return fragment;
+      if (fragmentParagraphs(fragment).includes(paragraphId)) {
+        rememberFragmentPageRoute(layout, paragraphId, page.index);
+        return fragment;
+      }
     }
   }
   return null;

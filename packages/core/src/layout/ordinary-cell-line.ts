@@ -15,7 +15,8 @@ function ordinaryShaping(span: StyleSpanRecord): boolean {
   );
 }
 
-function ordinary(line: PendingLine): boolean {
+/** Whether placement can use ordinary left-to-right span arithmetic. */
+export function ordinaryCellLineEligible(line: PendingLine): boolean {
   return (
     tokenLineMovable(line) &&
     !line.compressesSpaces &&
@@ -40,7 +41,7 @@ export function placeOrdinaryCellLine(
     !Number.isFinite(y) ||
     !Number.isFinite(indent) ||
     !Number.isFinite(available) ||
-    !ordinary(line)
+    !ordinaryCellLineEligible(line)
   )
     return null;
   let offset = 0;

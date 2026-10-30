@@ -1,6 +1,9 @@
+import { weakRefOf } from '../../store/package/weak-ref.ts';
 import { expect, test } from 'bun:test';
 import {
   retargetSharedGridLineSideRules,
+  withCentredSideRulePaint,
+  withLegacyTableSideRules,
   withSharedGridLineSideRules,
   type SideRuleTableShape,
 } from '../legacy-table-side-rules.ts';
@@ -106,4 +109,45 @@ test('carried answers keep the content-border fallback', () => {
   );
   expect(plainBack.outerRuleOffsetPt).toBe(2);
   expect(flags(plainBack)).toEqual(flags(plain));
+});
+
+test('unchanged source rows reuse the latest identical side-rule variant', () => {
+  const source = rows(1);
+  const first = withLegacyTableSideRules(source);
+  sideReads = 0;
+  const second = withLegacyTableSideRules([...source]);
+  expect(second).not.toBe(first);
+  for (let index = 0; index < source.length; index++) expect(second[index]).toBe(first[index]);
+  expect(sideReads).toBe(0);
+  const painted = withCentredSideRulePaint(source);
+  expect(painted[0]).not.toBe(first[0]);
+  expect(painted[0]!.cells[0]!.centeredSideRules).toBeUndefined();
+  expect(painted[0]!.cells[0]!.centeredSidePaint).toBe(true);
+  // One latest variant is retained, rather than every historical combination.
+  const revisited = withLegacyTableSideRules(source);
+  expect(revisited[0]).not.toBe(first[0]);
+  expect(revisited).toEqual(first);
+});
+
+test('changed side-rule options and source rows invalidate only their entries', () => {
+  const source = rows(1);
+  const first = withLegacyTableSideRules(source, false, false);
+  const simple = withLegacyTableSideRules(source, true, false);
+  expect(simple[0]).not.toBe(first[0]);
+  const unequal = withLegacyTableSideRules(source, true, true);
+  expect(unequal[0]).not.toBe(simple[0]);
+  const changed = [{ ...source[0]!, id: 'replacement' }, ...source.slice(1)];
+  const next = withLegacyTableSideRules(changed, true, true);
+  expect(next[0]).not.toBe(unequal[0]);
+  expect(next[1]).toBe(unequal[1]);
+  expect(next[2]).toBe(unequal[2]);
+});
+
+test('live source rows do not retain discarded side-rule copies', () => {
+  const source = rows(1);
+  const discarded = (() => weakRefOf(withLegacyTableSideRules(source)[0]!))();
+  Bun.gc(true);
+  expect(discarded.deref()).toBeUndefined();
+  expect(source[0]!.cells.length).toBe(2);
+  expect(withLegacyTableSideRules(source)[0]!.cells[0]!.centeredSideRules).toBe(true);
 });

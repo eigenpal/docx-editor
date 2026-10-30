@@ -18,6 +18,10 @@
 //   is drawn from the line box (borders, shading, markers, mark revisions).
 // Anything else returns null, and the row is laid out normally.
 
+import {
+  captureCellWidthPlacement,
+  type CellWidthPlacement,
+} from './table-cell-width-placement.ts';
 import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
 import {
   cellAvailableWidth,
@@ -91,6 +95,7 @@ export interface CellLineVertical {
 
 /** Per row: the identities every cell of it compares, read once. */
 interface MoveContext {
+  readonly capture?: (recipe: CellWidthPlacement | null) => void;
   readonly deps: TableFlowDeps;
   readonly cache: NonNullable<TableFlowDeps['cache']>;
   readonly measurer: number;
@@ -526,6 +531,25 @@ function moveCellParagraph(
             height: bottom - flowBox.contentTop,
           },
   };
+  if (context.capture && rowTop === undefined) {
+    context.capture(
+      captureCellWidthPlacement(
+        placed,
+        pending,
+        {
+          gridColumn,
+          gridSpan,
+          insetLeft: insets.left,
+          insetRight: insets.right,
+          indentLeft: indent.left,
+          indentRight: indent.right,
+        },
+        firstLineOffset,
+        inputs.alignment,
+        known.key
+      )
+    );
+  }
   movableBlocks.add(moved);
   deps.onCellBreakKey?.(known.key);
   return {
@@ -548,7 +572,8 @@ export function moveRowToWidths(
   placed: TableRowFragmentRecord,
   cols: readonly number[],
   left: number,
-  deps: TableFlowDeps
+  deps: TableFlowDeps,
+  capture?: (recipe: CellWidthPlacement | null) => void
 ): TableRowFragmentRecord | null {
   if (
     row.isHeader ||
@@ -561,6 +586,7 @@ export function moveRowToWidths(
     return null;
   const geometry = columnGeometryOf(cols);
   const context: MoveContext = {
+    capture,
     deps,
     cache: deps.cache,
     measurer: identityOf(deps.measurer),

@@ -12,12 +12,11 @@
 // cannot place.
 
 import {
-  paragraphFragmentsOf,
   paragraphFragmentsOfBlocks,
-  reviewAnchorIndex,
   type ReviewParagraphAnchor,
   type SemanticLayout,
 } from '@docx-editor.dev/core/layout';
+import { bodyReviewAnchors } from '../layout/body-review-anchors.ts';
 import { fragmentParagraphs } from '../layout/line-segments.ts';
 import { weakRefOf, type WeakRefOf } from '../store/package/weak-ref.ts';
 
@@ -27,7 +26,6 @@ import { weakRefOf, type WeakRefOf } from '../store/package/weak-ref.ts';
  * A published layout is immutable, so the index is valid for exactly as long as that object
  * is the current one, and a new revision brings a new one.
  */
-const bodyFragmentsOf = (page: SemanticLayout['pages'][number]) => paragraphFragmentsOf(page);
 
 export function createAnchorIndex(): (
   layout: SemanticLayout
@@ -46,10 +44,9 @@ export function createAnchorIndex(): (
       last = { pages: weakRefOf(layout.pages), index: weakRefOf(carried) };
       return carried;
     }
-    // The projection is passed as a STABLE reference, not an inline arrow: the index caches
-    // each page's anchors under the projection that produced them, and a fresh closure per
-    // call would miss that cache on every commit.
-    const index = reviewAnchorIndex(layout, bodyFragmentsOf);
+    const index = new Map<string, ReviewParagraphAnchor>();
+    for (const page of layout.pages)
+      for (const [id, anchor] of bodyReviewAnchors(page)) if (!index.has(id)) index.set(id, anchor);
     for (const page of layout.pages) {
       // Header/footer stories join the same index so their cards get real geometry. A story's
       // box is sheet-absolute like a page's content box, and its fragments are story-relative
@@ -92,8 +89,7 @@ function noteAnchorsOf(page: SemanticLayout['pages'][number]): Map<string, Revie
 }
 
 /** One page's body anchors, from the per-page cache the full index reads. */
-const bodyAnchorsOf = (page: SemanticLayout['pages'][number]) =>
-  reviewAnchorIndex({ pages: [page] }, bodyFragmentsOf);
+const bodyAnchorsOf = (page: SemanticLayout['pages'][number]) => bodyReviewAnchors(page);
 
 /**
  * The previous index with each changed page's anchors swapped in, when nothing else can have

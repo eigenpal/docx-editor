@@ -11,6 +11,12 @@ import { caretAt } from '../semantic-interaction.ts';
 import { createParagraphLayoutCache, tableCellBreakKeysOf } from '../layout-cache.ts';
 import { readTableStructure } from '../semantic-table.ts';
 import { movedRowsTestRecorder } from '../table-row-geometry-reuse.ts';
+import {
+  captureDeferredWidthRecipe,
+  deferredWidthRecipe,
+  deferredWidthRecipeHolds,
+  sameWidthHeaderInsets,
+} from '../table-deferred-width-fragment.ts';
 import type { SemanticLayout, TableFragmentRecord } from '../semantic-records.ts';
 import { lay, load, styleCascade } from './table-row-keep-fixtures.ts';
 
@@ -92,6 +98,8 @@ function burst(start: OoxmlPart, paragraphId: string, text: string) {
   let part = start;
   let previous = lay(part, 15, { session, cache });
   let widthChanges = 0;
+  let deferredFragments = 0;
+  let deferredUnread = 0;
   const moved: number[] = [];
   for (const [index, character] of [...text].entries()) {
     const edit = applyTreeOp(part, {
@@ -103,7 +111,28 @@ function burst(start: OoxmlPart, paragraphId: string, text: string) {
     if (!edit.ok) throw Error(edit.reason);
     part = edit.part;
     const before = recorder.moved;
+    const reads: { count: number }[] = [];
+    for (const page of previous.pages)
+      for (const fragment of page.fragments) {
+        if (fragment.kind !== 'table') continue;
+        const descriptor = Object.getOwnPropertyDescriptor(fragment, 'rows');
+        if (!descriptor?.get) continue;
+        const counter = { count: 0 };
+        reads.push(counter);
+        Object.defineProperty(fragment, 'rows', {
+          ...descriptor,
+          get() {
+            counter.count++;
+            return descriptor.get!.call(fragment);
+          },
+        });
+      }
     const updated = lay(part, 15, { session, cache });
+    deferredUnread += reads.filter((counter) => counter.count === 0).length;
+    for (const page of updated.pages)
+      for (const fragment of page.fragments)
+        if (fragment.kind === 'table' && Object.getOwnPropertyDescriptor(fragment, 'rows')?.get)
+          deferredFragments++;
     expect(updated.pages).toEqual(lay(reparsed(part)).pages);
     if (edges(previous) !== edges(updated)) {
       widthChanges += 1;
@@ -111,7 +140,7 @@ function burst(start: OoxmlPart, paragraphId: string, text: string) {
     }
     previous = updated;
   }
-  return { widthChanges, moved, part, session, cache };
+  return { widthChanges, deferredFragments, deferredUnread, moved, part, session, cache };
 }
 
 test('ordinary single-line rows move to new widths with cold-layout geometry', () => {
@@ -135,6 +164,98 @@ test('empty cells and repeated header rows', () => {
   expect(result.widthChanges).toBeGreaterThan(1);
   // Body rows move; header rows and their repeats are placed again.
   expect(result.moved.every((count) => count >= 38)).toBe(true);
+});
+
+test('cached complete body groups preserve geometry and break keys across width revisions', () => {
+  const headers = [
+    tr([tc(p('Head'), '<w:vMerge w:val="restart"/>'), tc(p('A')), tc(p('B'))], '<w:tblHeader/>'),
+    tr([tc(p(''), '<w:vMerge/>'), tc(p('C')), tc(p('D'))], '<w:tblHeader/>'),
+  ];
+  const rows = Array.from({ length: 60 }, (_, index) =>
+    tr([0, 1, 2].map((cell) => tc(p(`R${index}C${cell}`))))
+  );
+  const part = load(autofit([...headers, ...rows]));
+  const result = burst(part, paragraphAt(part, 31, 1), 'WIDTHWIDTHWIDTH');
+  expect(result.widthChanges).toBeGreaterThan(3);
+  expect(result.deferredFragments).toBeGreaterThan(0);
+  expect(result.deferredUnread).toBeGreaterThan(0);
+  expect(result.moved[0]).toBeGreaterThan(50);
+  expect(result.moved.slice(1).some((count) => count < 30)).toBe(true);
+  const keys = new Set(tableCellBreakKeysOf(tableNode(result.part)));
+  expect(keys.size).toBeGreaterThanOrEqual(60 * 3 - 1);
+  const retained = lay(result.part, 15, { session: result.session, cache: result.cache });
+  const fragment = retained.pages
+    .flatMap((page) => page.fragments)
+    .find(
+      (fragment): fragment is TableFragmentRecord =>
+        fragment.kind === 'table' && !!deferredWidthRecipe(fragment)
+    )!;
+  const recipe = deferredWidthRecipe(fragment)!;
+  expect(recipe).toBeDefined();
+  const structure = {
+    ...readTableStructure(tableNode(result.part), 310, 0, styleCascade)!,
+    columnWidthsPt: fragment
+      .columnEdges!.slice(1)
+      .map((edge, index) => edge - fragment.columnEdges![index]!),
+  };
+  const sourceMap = new Map(recipe.sources.map((row) => [row.id, row]));
+  const scope = recipe.body.dependencyKey;
+  expect(deferredWidthRecipeHolds(recipe, sourceMap, structure, fragment.box.x, scope)).toBe(true);
+  expect(
+    deferredWidthRecipeHolds(recipe, sourceMap, structure, fragment.box.x, scope + 'changed')
+  ).toBe(false);
+  const changedSources = new Map(sourceMap);
+  changedSources.set(recipe.sources[0]!.id, { ...recipe.sources[0]! });
+  expect(deferredWidthRecipeHolds(recipe, changedSources, structure, fragment.box.x, scope)).toBe(
+    false
+  );
+  for (const columnWidthsPt of [
+    [0, 100, 100],
+    [Infinity, 100, 100],
+    [100, 100],
+  ])
+    expect(
+      deferredWidthRecipeHolds(
+        recipe,
+        sourceMap,
+        { ...structure, columnWidthsPt },
+        fragment.box.x,
+        scope
+      )
+    ).toBe(false);
+  const header = recipe.headers[0]!;
+  const insets = new Map([['cell', { top: 1, right: 2, bottom: 3, left: 4 }]]);
+  const sample = { ...header, insets };
+  expect(sameWidthHeaderInsets(sample, { ...header, insets: new Map(insets) })).toBe(true);
+  for (const side of ['top', 'right', 'bottom', 'left'] as const)
+    expect(
+      sameWidthHeaderInsets(sample, {
+        ...header,
+        insets: new Map([['cell', { ...insets.get('cell')!, [side]: 9 }]]),
+      })
+    ).toBe(false);
+  expect(sameWidthHeaderInsets(sample, { ...header, insets: undefined })).toBe(false);
+  for (const height of [Infinity, -Infinity, NaN]) {
+    const candidate = { ...fragment };
+    const badHeaders = recipe.headers.map((value, index) =>
+      index
+        ? value
+        : {
+            ...value,
+            record: { ...value.record, box: { ...value.record.box, height } },
+          }
+    );
+    captureDeferredWidthRecipe(
+      candidate,
+      recipe.body,
+      badHeaders,
+      recipe.sources.slice(0, recipe.headers.length),
+      structure
+    );
+    expect(deferredWidthRecipe(candidate)).toBeUndefined();
+  }
+  const undone = lay(part, 15, { session: result.session, cache: result.cache });
+  expect(undone.pages).toEqual(lay(reparsed(part)).pages);
 });
 
 test('undo moves rows back to the original widths', () => {
@@ -276,4 +397,199 @@ test('saved pagination markers preserve moved rows and caret geometry', () => {
     expect(caretAt(retained, position)).not.toBeNull();
     expect(caretAt(retained, position)).toEqual(caretAt(cold, position));
   }
+});
+
+test('captured width recipes reproduce moved cells without live layout dependencies', async () => {
+  const { layoutRowFragment } = await import('../semantic-table-layout.ts');
+  const { moveRowToWidths } = await import('../table-row-geometry-reuse.ts');
+  const { captureCellWidthPlacement, placeCellFromWidthRecipe } =
+    await import('../table-cell-width-placement.ts');
+  const { bodyLineId } = await import('../body-line-id.ts');
+  const { measurer } = await import('./table-row-keep-fixtures.ts');
+  const part = load(autofit(Array.from({ length: 12 }, (_, i) => tokenRow(i))));
+  const structure = readTableStructure(tableNode(part), 310, 0, styleCascade)!;
+  const deps = {
+    measurer,
+    styleCascade,
+    cache: createParagraphLayoutCache<never>(),
+    producer: 'unit',
+    nextLineId: bodyLineId,
+    compatibilityMode: 15,
+    displayMode: 'all-markup' as const,
+  };
+  let captured = 0;
+  let empty = 0;
+  let refused = 0;
+  for (const row of structure.rows) {
+    const placed = layoutRowFragment(row, [90, 100, 110], 3, 40, false, 0, deps).record;
+    const recipes: (import('../table-cell-width-placement.ts').CellWidthPlacement | null)[] = [];
+    const moved = moveRowToWidths(row, placed, [100.5, 95.25, 104.125], 2.5, deps, (recipe) =>
+      recipes.push(recipe)
+    );
+    expect(moved).not.toBeNull();
+    expect(recipes).toHaveLength(row.cells.length);
+    for (let cell = 0; cell < recipes.length; cell++) {
+      const recipe = recipes[cell];
+      if (!recipe) {
+        refused++;
+        continue;
+      }
+      captured++;
+      if (!recipe.pending.spans.length) empty++;
+      expect(placeCellFromWidthRecipe(recipe, [100.5, 95.25, 104.125], 2.5)).toEqual(
+        moved!.cells[cell]
+      );
+      expect(Object.keys(recipe)).toEqual([
+        'breakKey',
+        'baseline',
+        'pending',
+        'firstLineOffset',
+        'alignment',
+        'constraint',
+      ]);
+      for (const columns of [
+        [110.125, 102.375, 117.25],
+        [125, 130, 135],
+      ]) {
+        const fresh = layoutRowFragment(row, columns, -3.125, 40, false, 0, deps).record;
+        const pure = placeCellFromWidthRecipe(recipe, columns, -3.125);
+        expect(pure).toEqual(fresh.cells[cell]);
+        expect(JSON.stringify(pure)).toBe(JSON.stringify(fresh.cells[cell]));
+      }
+      expect(placeCellFromWidthRecipe(recipe, [Infinity, 100, 100], 0)).toBeNull();
+      expect(placeCellFromWidthRecipe(recipe, [-1, 100, 100], 0)).toBeNull();
+      if (recipe.pending.spans.length) {
+        for (const metadata of [
+          { fieldAtom: { formField: false } },
+          { noteNav: { scopeId: 'note', direction: 'to-note' as const } },
+          { noteSeparator: 'separator' as const },
+        ]) {
+          const pending = {
+            ...recipe.pending,
+            spans: recipe.pending.spans.map((span) => ({ ...span, ...metadata })),
+          };
+          expect(
+            captureCellWidthPlacement(
+              recipe.baseline,
+              pending,
+              recipe.constraint,
+              recipe.firstLineOffset,
+              recipe.alignment
+            )
+          ).toBeNull();
+        }
+      }
+    }
+  }
+  expect(captured).toBeGreaterThan(20);
+  expect(empty).toBeGreaterThan(0);
+  expect(refused).toBeGreaterThan(0);
+});
+
+test('a body-group certificate rebuilds exact finalized rows from its original recipes', async () => {
+  const { layoutRowFragment } = await import('../semantic-table-layout.ts');
+  const { moveRowToWidths } = await import('../table-row-geometry-reuse.ts');
+  const { finalizeTableRows } = await import('../table-fragment-finalize.ts');
+  const { createBodyWidthGroup, bodyWidthGroupHolds, materializeBodyWidthGroup } =
+    await import('../table-body-width-group.ts');
+  const { bodyLineId } = await import('../body-line-id.ts');
+  const { measurer } = await import('./table-row-keep-fixtures.ts');
+  const part = load(
+    autofit(
+      Array.from({ length: 35 }, (_, row) =>
+        tr([0, 1, 2].map((cell) => tc(p((row + cell) % 7 ? `R${row}C${cell}` : '', FORMATS[cell]))))
+      )
+    )
+  );
+  const structure = readTableStructure(tableNode(part), 310, 0, styleCascade)!;
+  const deps = {
+    measurer,
+    styleCascade,
+    cache: createParagraphLayoutCache<never>(),
+    producer: 'unit',
+    nextLineId: bodyLineId,
+    compatibilityMode: 15,
+    displayMode: 'all-markup' as const,
+  };
+  const narrow = [90, 100, 110];
+  const place = (columns: number[], left: number) =>
+    structure.rows.map(
+      (row, index) => layoutRowFragment(row, columns, left, 40 + index * 20, false, 0, deps).record
+    );
+  const baseline = finalizeTableRows(
+    place(narrow, 3),
+    { ...structure, columnWidthsPt: narrow },
+    structure.rows
+  );
+  const captured: import('../table-body-width-group.ts').BodyWidthRow[] = [];
+  for (let index = 0; index < structure.rows.length; index++) {
+    const source = structure.rows[index]!;
+    const cells: import('../table-cell-width-placement.ts').CellWidthPlacement[] = [];
+    expect(
+      moveRowToWidths(source, baseline[index]!, [100, 110, 120], 2.5, deps, (recipe) => {
+        expect(recipe).not.toBeNull();
+        cells.push(recipe!);
+      })
+    ).not.toBeNull();
+    captured.push({ source, baseline: baseline[index]!, cells });
+  }
+  for (const field of ['gridColumn', 'gridSpan'] as const) {
+    const first = captured[0]!;
+    const cells = first.cells.map((cell, index) =>
+      index
+        ? cell
+        : {
+            ...cell,
+            constraint: { ...cell.constraint, [field]: cell.constraint[field] + 1 },
+          }
+    );
+    expect(createBodyWidthGroup([{ ...first, cells }], 3, 'dependencies')).toBeNull();
+  }
+  const group = createBodyWidthGroup(captured, 3, 'dependencies')!;
+  expect(group.fit.cellCount).toBe(105);
+  expect(group.fit.groups.length).toBeLessThanOrEqual(3);
+  for (const columns of [[100.5, 110.25, 120.125], [125, 130, 135], narrow]) {
+    const rebuilt = materializeBodyWidthGroup(
+      group,
+      structure.rows,
+      columns,
+      -3.125,
+      'dependencies'
+    )!;
+    expect(rebuilt).not.toBeNull();
+    const finalized = finalizeTableRows(
+      rebuilt,
+      { ...structure, columnWidthsPt: columns },
+      structure.rows
+    );
+    const fresh = finalizeTableRows(
+      place(columns, -3.125),
+      { ...structure, columnWidthsPt: columns },
+      structure.rows
+    );
+    expect(finalized).toEqual(fresh);
+    expect(JSON.stringify(finalized)).toBe(JSON.stringify(fresh));
+    expect(group.rows[0]!.baseline.cells).toHaveLength(0);
+    const template = group.rows[0]!.cells[0]!.baseline.blocks[0]!;
+    expect(template.kind).toBe('paragraph');
+    if (template.kind === 'paragraph') expect(template.lines[0]!.spans).toHaveLength(0);
+  }
+  expect(bodyWidthGroupHolds(group, structure.rows, [100, 110, 120], 0, 'changed')).toBe(false);
+  expect(
+    bodyWidthGroupHolds(
+      group,
+      [{ ...structure.rows[0]! }, ...structure.rows.slice(1)],
+      [100, 110, 120],
+      0,
+      'dependencies'
+    )
+  ).toBe(false);
+  expect(bodyWidthGroupHolds(group, structure.rows, [1, 1, 1], 0, 'dependencies')).toBe(false);
+  expect(
+    createBodyWidthGroup(
+      [{ ...captured[0]!, source: { ...captured[0]!.source, isHeader: true } }],
+      3,
+      'dependencies'
+    )
+  ).toBeNull();
 });

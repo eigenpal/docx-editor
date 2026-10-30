@@ -1,3 +1,5 @@
+import { carryLayoutReadCaches } from './layout-read-caches.ts';
+import { carryFragmentPageRoutes } from './fragment-page-routes.ts';
 import { carryParagraphPageRoutes, carryPageParagraphNames } from './paragraph-lines.ts';
 import { carryPageOrder } from './document-order.ts';
 import type { LayoutSession } from './layout-session.ts';
@@ -9,8 +11,9 @@ import { autofitContextMatches } from './autofit-context-reuse.ts';
 import { valueDigest } from './autofit-value-token.ts';
 import { autofitContextOf, carryTableAutofitScope } from './table-autofit-widths.ts';
 import { updateTableText } from './table-text-update.ts';
+import { registerTableWidthReuseScope } from './table-width-reuse-scope.ts';
 import type { TablePageBand } from './table-width-update.ts';
-import { carryTableCaretContexts } from './table-caret-context.ts';
+import { carryPageTableContributions, carryTableCaretContexts } from './table-caret-context.ts';
 import { offerPreviousRows, offerUnchangedTableRows } from './table-row-placement-reuse.ts';
 import { tableTextStructureUnchanged } from './table-text-change.ts';
 import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
@@ -34,7 +37,7 @@ export function reuseUnchangedLayout(
 ): Result {
   const previous = session.previous!;
   session.previous = withContentControlMetadata({ revision, pages: previous.pages }, previous);
-  carryTableCaretContexts(previous, session.previous);
+  carryLayoutReadCaches(previous, session.previous);
   session.endLineCounter = lineCounterStart + session.endLineCounter - session.startLineCounter;
   session.startLineCounter = lineCounterStart;
   session.stats = {
@@ -72,6 +75,7 @@ export function tryUpdateTableSession(input: {
     deps,
     input.rowInputsEqual === true
   );
+  registerTableWidthReuseScope(deps, sameInputs);
   const rowInputsEqual =
     sameInputs ||
     (input.rowInputsEqual &&
@@ -130,11 +134,13 @@ export function tryUpdateTableSession(input: {
   carryTableCaretContexts(oldLayout, session.previous);
   if (update.paragraphPagesUnchanged) {
     carryParagraphPageRoutes(oldLayout, session.previous);
+    carryFragmentPageRoutes(oldLayout, session.previous);
     for (let index = 0; index < update.pages.length; index++) {
       const before = oldLayout.pages[index]!;
       const after = update.pages[index]!;
       if (before === after) continue;
       carryPageParagraphNames(before, after);
+      carryPageTableContributions(before, after);
       carryPageOrder(before, after);
     }
   }
