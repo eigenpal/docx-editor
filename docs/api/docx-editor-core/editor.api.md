@@ -2764,7 +2764,7 @@ export interface PaginatedSurfaceOptions {
     // (undocumented)
     readonly onRequestContentControlWidget?: (session: ContentControlWidgetSession) => boolean;
     readonly onRequestGoTo?: () => boolean;
-    readonly onRequestHyperlink?: () => void;
+    readonly onRequestHyperlink?: () => boolean | void;
     // (undocumented)
     readonly onRequestInvalidTextFormField?: (session: InvalidTextFormFieldSession) => boolean;
     readonly onRequestTextFormField?: (session: TextFormFieldDialogSession) => boolean;

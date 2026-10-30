@@ -96,6 +96,18 @@ test('without a link UI, the row and the button are disabled with a reason', asy
     fireEvent.click(row);
   });
   expect(view.queryByTestId('hyperlink-popup')).toBeNull();
+  // Nothing could open, so Ctrl/Cmd+K is left to the browser.
+  const key = new KeyboardEvent('keydown', {
+    key: 'k',
+    ctrlKey: true,
+    metaKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  act(() => {
+    view.container.querySelector('.docx-pages')!.dispatchEvent(key);
+  });
+  expect(key.defaultPrevented).toBe(false);
 });
 
 test("a host's own link UI enables both controls, and they open it", async () => {

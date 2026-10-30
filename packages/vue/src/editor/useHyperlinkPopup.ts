@@ -1,5 +1,6 @@
 import {
   computed,
+  getCurrentScope,
   inject,
   provide,
   ref,
@@ -120,7 +121,9 @@ export const HyperlinkPopupViews: InjectionKey<() => () => void> = Symbol('Hyper
 export function useHyperlinkPopup(): UseHyperlinkPopupResult {
   const provided = inject(HyperlinkPopupContext, null);
   const attach = inject(HyperlinkPopupViews, null);
-  if (provided && attach) scopeDispose(attach());
+  // Counted only where a scope can uncount it again, or the controls would stay enabled
+  // after the panel was gone.
+  if (provided && attach && getCurrentScope()) scopeDispose(attach());
   const own = useHyperlinkPopupInstance(provided === null);
   return provided ?? own;
 }

@@ -94,7 +94,7 @@ export function createEditorPopupChrome(host: BookmarkChromeHost = {}) {
       onHyperlinkPopover: (
         activation: Parameters<NonNullable<HyperlinkChromeHandlers['onPopover']>>[0]
       ) => hyperlink.current().onPopover?.(activation),
-      onRequestHyperlink: () => void hyperlink.open(),
+      onRequestHyperlink: (): boolean => hyperlink.open(),
       onEquationPopover: (
         activation: Parameters<NonNullable<EquationChromeHandlers['onPopover']>>[0]
       ) => equation.current().onPopover?.(activation),

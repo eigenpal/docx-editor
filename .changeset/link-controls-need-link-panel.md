@@ -4,4 +4,4 @@
 '@docx-editor.dev/vue': patch
 ---
 
-The Insert link context menu row and toolbar button now open the mounted link panel and show the Ctrl+K shortcut. If no link panel is mounted, they are disabled with a reason. Fixes #1592.
+The Insert link context menu row and toolbar button now open the mounted link panel, and the context menu row shows the Ctrl+K shortcut. If no link panel is mounted, both are disabled with a reason and Ctrl+K is left to the browser. Fixes #1592.

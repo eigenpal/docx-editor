@@ -2,9 +2,14 @@
 
 import './dom-setup.ts';
 import { afterEach, expect, test } from 'bun:test';
-import { createApp, h } from 'vue';
+import { createApp, defineComponent, h } from 'vue';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditor } from '../src/components/DocxEditor';
+import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
+import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
+import { DocxEditorContent } from '../src/editor/DocxEditorContent';
+import { DocxEditorToolbar } from '../src/editor/toolbar';
+import { useHyperlinkPopup } from '../src/editor/useHyperlinkPopup';
 import { docx, flush } from './helpers/fixtures';
 
 const SOURCE = docx('<w:p><w:r><w:t>Visit example today</w:t></w:r></w:p>');
@@ -96,4 +101,57 @@ test("a host's own link UI enables both controls, and they open it", async () =>
   unregister();
   await flush();
   expect(toolbarLink(container).disabled).toBe(true);
+});
+
+const HostLinkPanel = defineComponent({
+  setup() {
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- a Vue composable in setup
+    const { state } = useHyperlinkPopup();
+    return () => h('output', { 'data-testid': 'host-link-panel' }, state.value.mode);
+  },
+});
+
+test('a host panel that calls useHyperlinkPopup() keeps the controls working', async () => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  let instance: DocxEditorInstance | null = null;
+  const app = createApp({
+    render: () =>
+      h(
+        DocxEditorRoot,
+        {
+          document: SOURCE,
+          onReady: (editor: unknown) => {
+            instance = editor as DocxEditorInstance;
+          },
+        },
+        {
+          default: () => [
+            h(
+              DocxEditorToolbar,
+              { preset: false, overflow: false },
+              { default: () => [h(DocxEditorToolbar.Link)] }
+            ),
+            h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }),
+            h(HostLinkPanel),
+          ],
+        }
+      ),
+  });
+  app.mount(container);
+  cleanups.push(() => {
+    app.unmount();
+    container.remove();
+  });
+  await flush();
+  instance!.surface!.setSelection({
+    anchor: { paragraphId: PID, offset: 6 },
+    head: { paragraphId: PID, offset: 13 },
+  });
+  await flush();
+  const button = container.querySelector<HTMLButtonElement>('button[data-slot="text.link"]')!;
+  expect(button.disabled).toBe(false);
+  button.click();
+  await flush();
+  expect(container.querySelector('[data-testid="host-link-panel"]')!.textContent).toBe('editing');
 });
