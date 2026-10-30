@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Formatting at a caret inside a word armed a local typing format, and a format painter click split a word at hidden tracked deletion text.",
+  "after": "Formatting at a caret inside a word writes the whole word through the existing setRunProperties operation, and a format painter click covers the whole visible word.",
+  "reason": "The change uses existing shared run-property operations and adds no field. Two mounted editors cover a word format crossing peer typing inside the word, undo, redo, tracked format changes, deletion of the word during the format, convergence, and save/reopen.",
+  "tests": [
+    "packages/core/src/editor/__tests__/caret-word-format.test.ts",
+    "packages/core/src/editor/__tests__/pending-caret-formatting.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-caret-word-format.test.ts"
+  ],
+  "changeset": "caret-word-format",
+  "migration": null
+}

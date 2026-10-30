@@ -1,5 +1,6 @@
 import { createContextualRunFormatting } from '../layout/complex-script-formatting.ts';
 import { paragraphMarkFace } from '../layout/paragraph-mark-face.ts';
+import { caretWordAt as layoutCaretWordAt, hiddenRevisionRanges } from '../layout/caret-word.ts';
 
 // Run and paragraph property edits at the selection (paginated-surface seam).
 //
@@ -430,6 +431,35 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   };
 
   /**
+   * The word a collapsed caret strictly inside it formats, as a range, or null.
+   *
+   * A format picked inside a word formats the whole word as one undoable change, and the caret
+   * stays where it is. At a word's edge there is no word to format, so the format is armed for
+   * the next typed text instead. An armed format already waiting at the caret keeps the
+   * stored-marks lane, as at an empty paragraph.
+   */
+  const caretWordAt = (
+    from: SemanticPosition,
+    to: SemanticPosition
+  ): { from: SemanticPosition; to: SemanticPosition } | null => {
+    if (from.paragraphId !== to.paragraphId || from.offset !== to.offset) return null;
+    if (deps.pendingFormats()?.length) return null;
+    const hidden = hiddenRevisionRanges(
+      storyPart(),
+      from.paragraphId,
+      textOf(from.paragraphId).length,
+      displayMode(),
+      authorFilter()
+    );
+    const word = layoutCaretWordAt(currentLayout.value, from.paragraphId, from.offset, hidden);
+    if (!word) return null;
+    return {
+      from: { paragraphId: from.paragraphId, offset: word.start },
+      to: { paragraphId: from.paragraphId, offset: word.end },
+    };
+  };
+
+  /**
    * Write paragraph properties over every paragraph the selection touches, in ONE commit.
    *
    * Shared by `setParagraphProperty` (one entry) and `setParagraphProperties` (a dialog's
@@ -521,6 +551,10 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       const { from, to } = orderedRange();
       const empty = emptyParagraphAtCaret(from, to);
       if (empty) return writeEmptyParagraphMark(empty, incoming);
+      // A highlight is a pen, not a word format: with nothing selected it marks what is typed
+      // next and leaves the word under the caret alone.
+      const word = localName === 'highlight' ? null : caretWordAt(from, to);
+      if (word) return writeRunProperty(word.from, word.to, incoming);
       if (from.paragraphId === to.paragraphId && from.offset === to.offset) {
         // A collapsed caret arms the value for the NEXT characters typed — picking a font
         // with nothing selected is how Word starts typing in that font.
@@ -580,6 +614,11 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       // The document answers from the same selection the toolbar reads, so a press after a
       // note reference toggles the face typing takes there, not the reference's face.
       const read = formattingSelection(selectionNow.value);
+      const { from, to } = orderedRange();
+      // Inside a word the press formats the whole word, but the caret answers for its state,
+      // as the toolbar shows it: in a partly bold word, a press after a bold letter turns bold
+      // off for the whole word, and a press after a plain letter turns it on.
+      const word = cells && cells.length > 0 ? null : caretWordAt(from, to);
       const documentActive = read.caretSpan
         ? isRunPropertyActive(
             currentLayout.value,
@@ -603,9 +642,9 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         ? { localName, attributes: { val: OFF_VALUES[localName] ?? '0' } }
         : { localName, ...(attributes ? { attributes } : {}) };
       if (cells && cells.length > 0) return writeRunPropertyOverCells(cells, incoming);
-      const { from, to } = orderedRange();
       const empty = emptyParagraphAtCaret(from, to);
       if (empty) return writeEmptyParagraphMark(empty, incoming);
+      if (word) return writeRunProperty(word.from, word.to, incoming);
       if (from.paragraphId === to.paragraphId && from.offset === to.offset) {
         // The stored-marks lane: a collapsed caret has no range to format, so the toggle is
         // remembered and applied to the next characters typed at this position (Word's
@@ -638,9 +677,9 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       // and the rest survive, because an op that cannot say a thing cannot mean to delete it
       // (see `mergedPropertyChildren`).
       //
-      // The armed typing format goes FIRST, and unconditionally: nothing is selected at a
-      // caret, so the existing text keeps what it has and the pending entry is the only
-      // formatting the press can actually clear there. Retiring it after the early return
+      // The armed typing format goes FIRST, and unconditionally: at a caret outside a word
+      // the existing text keeps what it has, so the pending entry is the only formatting the
+      // press can clear there; inside a word the word clears below as well. Retiring it after the early return
       // below meant an eraser pressed on a paragraph the layout had not published yet left
       // the armed format standing, and the next characters typed came out in exactly the
       // formatting the user had just asked to be rid of.
@@ -653,8 +692,11 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
           ? [...paragraphsInCells(layout, cells)]
           : paragraphsInRange(order, orderedRange());
       if (paragraphIds.length === 0) return;
-      const { from, to } = orderedRange();
       const rectangular = cells !== undefined && cells.length > 0;
+      // A caret inside a word clears the word's character formatting, as a format there
+      // formats the whole word.
+      const range = orderedRange();
+      const { from, to } = (!rectangular && caretWordAt(range.from, range.to)) || range;
       const part = storyPart();
       const ops: TreeDocOp[] = [];
       for (const paragraphId of paragraphIds) {

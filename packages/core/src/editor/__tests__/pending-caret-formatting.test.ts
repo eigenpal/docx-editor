@@ -205,7 +205,8 @@ describe('pending caret formatting', () => {
   });
 
   test('a second press cancels, and an armed format survives re-adopting the same caret', () => {
-    withSurface(paragraph(textRun('hello')), (surface) => {
+    // At a word's edge: inside a word the press formats the whole word instead.
+    withSurface(paragraph(textRun('he llo')), (surface) => {
       caretAt(surface, 2);
       surface.toggleRunProperty('b');
       expect(surface.formatting().bold).toBe(true);
@@ -213,38 +214,38 @@ describe('pending caret formatting', () => {
       expect(surface.formatting().bold).toBe(false);
       // Cancelled all the way: typing writes nothing pending.
       surface.type('z');
-      expect(runsOf(surface)).toEqual([['hezllo']]);
+      expect(runsOf(surface)).toEqual([['hez llo']]);
     });
   });
 
   test('moving the caret discards the armed format', () => {
-    withSurface(paragraph(textRun('hello')), (surface) => {
+    withSurface(paragraph(textRun('he llo')), (surface) => {
       caretAt(surface, 2);
       surface.toggleRunProperty('b');
       caretAt(surface, 4);
       surface.type('x');
-      expect(runsOf(surface)).toEqual([['hellxo']]);
+      expect(runsOf(surface)).toEqual([['he lxlo']]);
     });
   });
 
   test('Backspace and Delete keep the armed format, re-anchored where the caret lands', () => {
     // Word's rule: the typing format survives character deletes — arm bold, backspace a
     // character, and the next character typed still comes out bold.
-    withSurface(paragraph(textRun('hello')), (surface) => {
+    withSurface(paragraph(textRun('he llo')), (surface) => {
       caretAt(surface, 2);
       surface.toggleRunProperty('i');
       surface.deleteBackward();
       expect(surface.formatting().italic).toBe(true);
       surface.type('y');
-      expect(runsOf(surface)).toEqual([['h'], ['y', 'i'], ['llo']]);
+      expect(runsOf(surface)).toEqual([['h'], ['y', 'i'], [' llo']]);
     });
-    withSurface(paragraph(textRun('hello')), (surface) => {
+    withSurface(paragraph(textRun('he llo')), (surface) => {
       caretAt(surface, 2);
       surface.toggleRunProperty('i');
       surface.deleteForward();
       // Delete does not move the caret; the anchor stays put.
       surface.type('y');
-      expect(runsOf(surface)).toEqual([['he'], ['y', 'i'], ['lo']]);
+      expect(runsOf(surface)).toEqual([['he'], ['y', 'i'], ['llo']]);
     });
   });
 
@@ -398,7 +399,7 @@ describe('pending caret formatting', () => {
   });
 
   test('the armed format is reported as state, so a host can reflect it', () => {
-    withSurface(paragraph(textRun('hello')), (surface) => {
+    withSurface(paragraph(textRun('he llo')), (surface) => {
       caretAt(surface, 2);
       expect(surface.state().pendingFormat).toBeNull();
       surface.toggleRunProperty('b');

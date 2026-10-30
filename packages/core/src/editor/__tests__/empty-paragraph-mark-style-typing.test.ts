@@ -109,9 +109,9 @@ describe('formatting at the caret of an empty paragraph formats its mark', () =>
       expect(editor.surface!.state().canUndo).toBe(false);
     }));
 
-  test('a caret inside text still arms the format and leaves the document unchanged', () =>
-    withEditor('<w:p><w:r><w:t>abcd</w:t></w:r></w:p>', (editor) => {
-      caretAt(editor, 0, 2);
+  test('a caret at a word edge still arms the format and leaves the document unchanged', () =>
+    withEditor('<w:p><w:r><w:t xml:space="preserve">abcd efgh</w:t></w:r></w:p>', (editor) => {
+      caretAt(editor, 0, 4);
       const before = JSON.stringify(editor.surface!.session.part().root);
       editor.exec({ type: 'toggleMark', mark: 'bold' });
       expect(editor.getSelectionFormatting()?.bold).toBe(true);
