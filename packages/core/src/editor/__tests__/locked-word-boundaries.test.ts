@@ -133,6 +133,17 @@ for (const navigation of ['normal', 'atomic'] as const) {
       });
     });
   }
+  for (const lock of ['contentLocked', 'sdtContentLocked']) {
+    test(`${navigation} ${lock} word deletion into the control deletes nothing`, () => {
+      withSurface(lock, navigation, (surface, paragraphId) => {
+        caret(surface, paragraphId, 7);
+        surface.deleteWordBackward();
+        caret(surface, paragraphId, 2);
+        surface.deleteWordForward();
+        expect(surface.session.bodyText()).toBe('aaTOKENzz');
+      });
+    });
+  }
   test(`${navigation} word motions follow RTL physical direction at control edges`, () => {
     withSurface(
       'sdtContentLocked',

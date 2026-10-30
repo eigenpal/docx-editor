@@ -445,5 +445,19 @@ describe('a double click selects a word up to an inline control edge', () => {
         expect([...offsets(m)].sort((a, c) => a - c)).toEqual([...expected]);
       });
     }
+    // One point either side of each edge: the clicked letter's word, never its neighbour's.
+    for (const [where, dx, expected] of [
+      ['just before the start edge', (b: { x: number }) => b.x - 1, [0, 2]],
+      ['just after the start edge', (b: { x: number }) => b.x + 1, [2, 7]],
+      ['just before the end edge', (b: { x: number; width: number }) => b.x + b.width - 1, [2, 7]],
+      ['just after the end edge', (b: { x: number; width: number }) => b.x + b.width + 1, [7, 9]],
+    ] as const) {
+      test(`${lock}: a double click ${where}`, () => {
+        const m = mount(line(lock), null);
+        const b = box(m);
+        click(m, dx(b), b.y + b.height / 2, 2);
+        expect([...offsets(m)].sort((a, c) => a - c)).toEqual([...expected]);
+      });
+    }
   }
 });

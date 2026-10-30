@@ -47,3 +47,32 @@ export function wordMotionBoundaries(
   }
   return stops;
 }
+
+/**
+ * The side of an inline control edge that a pointer at `position` was on.
+ *
+ * A hit resolves to the nearest caret offset, so a click on the half of a letter next to a
+ * control edge reports the edge itself. The control the hit lands in tells the two sides
+ * apart: just outside a start edge, or just inside an end edge, the clicked letter is the one
+ * BEFORE the offset.
+ */
+export function controlEdgeSide(
+  layout: SemanticLayout,
+  position: { readonly paragraphId: string; readonly offset: number },
+  hitControlId: string | null
+): 'before' | 'after' {
+  const controls = contentControlsOfLayout(layout);
+  const hit = hitControlId === null ? undefined : controls.find((c) => c.id === hitControlId);
+  for (const control of controls) {
+    const range = control.range;
+    if (control.level !== 'inline' || range?.paragraphId !== position.paragraphId) continue;
+    // Inside when the hit control is this control or one nested in it.
+    const inside =
+      hit?.range?.paragraphId === range.paragraphId &&
+      hit.range.start >= range.start &&
+      hit.range.end <= range.end;
+    if (range.start === position.offset && !inside) return 'before';
+    if (range.end === position.offset && inside) return 'before';
+  }
+  return 'after';
+}
