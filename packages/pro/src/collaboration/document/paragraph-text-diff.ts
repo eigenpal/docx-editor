@@ -252,7 +252,7 @@ function diffCodePoints(
   const first = scriptOf(before, after, strongMatches(before, after, false));
   const second = scriptOf(before, after, strongMatches(before, after, true));
   const [firstKept, secondKept] = [equalCount(first), equalCount(second)];
-  const chosen =
+  let chosen =
     secondKept !== firstKept
       ? secondKept > firstKept
         ? second
@@ -260,6 +260,12 @@ function diffCodePoints(
       : changeCount(second) < changeCount(first)
         ? second
         : first;
+  // A run split by formatting can keep its text element on a later piece, so one strong match
+  // pairs a letter with an equal letter further on and leaves the text between to be written
+  // again. Matched by value from the ends instead, the same letters all stay; that alignment
+  // wins only when it keeps more.
+  const ends = scriptOf(before, after, strongMatches(before, after, false, false));
+  if (equalCount(ends) > Math.max(firstKept, secondKept)) chosen = ends;
   return dropScatteredLetters(joinInserts(chosen, after), before);
 }
 
@@ -508,6 +514,12 @@ function scriptOf(
         }
       }
     }
+    const onlyDeleted = keptByDeletion(before, i, bEnd, after, j, aEnd);
+    if (onlyDeleted) {
+      for (const step of onlyDeleted) steps.push(step);
+      i = bEnd;
+      j = aEnd;
+    }
     for (; i < bEnd; i += 1) steps.push({ op: 'del', before: i });
     for (; j < aEnd; j += 1) steps.push({ op: 'ins', after: j });
     for (const step of tail) steps.push(step);
@@ -520,6 +532,46 @@ function scriptOf(
     }
   }
   return steps;
+}
+
+/**
+ * The script of a gap where the edit only deletes: every token after it is a token before it,
+ * in order. Those tokens stay, so a decision that removes text on both sides of a kept letter
+ * never writes that letter again, and a peer's concurrent decision on it still reaches it. A
+ * letter in two places keeps the copy that stays in its revisions. Null when the gap inserts.
+ */
+function keptByDeletion(
+  before: readonly Token[],
+  i: number,
+  bEnd: number,
+  after: readonly Token[],
+  j: number,
+  aEnd: number
+): Step[] | null {
+  if (j === aEnd || aEnd - j >= bEnd - i) return null;
+  const match = (prefer: boolean): Step[] | null => {
+    const steps: Step[] = [];
+    let at = i;
+    for (let k = j; k < aEnd; k += 1) {
+      const token = after[k]!;
+      let found = -1;
+      for (let candidate = at; candidate < bEnd; candidate += 1) {
+        if (before[candidate]!.key !== token.key) continue;
+        if (found < 0) found = candidate;
+        if (!prefer || keepsRevisions(before[candidate]!.trail ?? '', token.trail ?? '')) {
+          found = candidate;
+          break;
+        }
+      }
+      if (found < 0) return null;
+      for (; at < found; at += 1) steps.push({ op: 'del', before: at });
+      steps.push({ op: 'eq', before: found, after: k });
+      at = found + 1;
+    }
+    for (; at < bEnd; at += 1) steps.push({ op: 'del', before: at });
+    return steps;
+  };
+  return match(true) ?? match(false);
 }
 
 /** The weak matches at the ends of one gap, and the gap they leave. */
@@ -610,20 +662,36 @@ function inRevision(
     for (const step of steps) {
       if (step.op !== 'eq') continue;
       equal += 1;
-      if ((before[step.before]!.trail ?? '') === (after[step.after]!.trail ?? '')) kept += 1;
+      if (keepsRevisions(before[step.before]!.trail ?? '', after[step.after]!.trail ?? '')) {
+        kept += 1;
+      }
     }
   }
   return { equal, inRevision: kept };
 }
 
 /**
+ * Whether a letter is still in every revision it was in. A strike adds a deletion and keeps
+ * the letter in its insertion, so of two equal letters the one a strike keeps is the one the
+ * insertion holds, and a peer's concurrent decision on that insertion still reaches it.
+ */
+function keepsRevisions(from: string, to: string): boolean {
+  if (from === to) return true;
+  const kept = new Set((JSON.parse(to || '[]') as unknown[]).map((entry) => JSON.stringify(entry)));
+  return (JSON.parse(from || '[]') as unknown[]).every((entry) => kept.has(JSON.stringify(entry)));
+}
+
+/**
  * The strong matches of a longest common subsequence, as index pairs in order. On a tie the
  * walk skips a character of `before` first, or of `after` first when `skipAfter` is set.
+ * Without `middle`, only the equal tokens at both ends.
  */
 function strongMatches(
   before: readonly Token[],
   after: readonly Token[],
-  skipAfter: boolean
+  skipAfter: boolean,
+  /** Whether to align the middle between the equal ends too. */
+  middle = true
 ): [number, number][] {
   const pairs: [number, number][] = [];
   let low = 0;
@@ -646,7 +714,7 @@ function strongMatches(
   const rows = beforeEnd - low;
   const columns = afterEnd - low;
   // Too large to align: the middle is replaced whole, which stays correct.
-  if (rows > 0 && columns > 0 && rows * columns <= MAX_DIFF_CELLS) {
+  if (middle && rows > 0 && columns > 0 && rows * columns <= MAX_DIFF_CELLS) {
     const width = columns + 1;
     const score = new Uint32Array((rows + 1) * width);
     const same = (r: number, c: number): boolean =>

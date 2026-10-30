@@ -93,6 +93,9 @@ export function comparableBody(pkg: OoxmlPackage): string {
       .replace(/\sw:id="[^"]*"/g, '')
       // A new content control takes a random `w:id`, different in every store.
       .replace(/<w:id w:val="[^"]*"\/>/g, '<w:id/>')
+      // An empty text element is one element in either lexical form: a store can hold it with
+      // an empty value, and shared text holds no characters for it.
+      .replace(/<w:(t|delText)( [^>]*)?><\/w:\1>/g, '<w:$1$2/>')
   );
 }
 

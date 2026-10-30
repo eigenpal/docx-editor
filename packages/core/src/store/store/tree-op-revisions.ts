@@ -58,6 +58,7 @@ import {
 } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
 import { mergeRevisionParagraphs, tableParagraphMergeTarget } from './revision-paragraph-merge.ts';
+import { joinedAtSeams } from './revision-piece-seams.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import {
   rebuildReach,
@@ -539,7 +540,12 @@ function rebuildChildren(
 ): OoxmlNode[] {
   const out: OoxmlNode[] = [];
   let decided: DecidedSpan | null = null;
+  // Where a child left nothing or was unwrapped: pieces of one change that met there join.
+  const seams: number[] = [];
+  let pushed = -1;
   for (const child of children) {
+    if (pushed === out.length) seams.push(out.length);
+    pushed = out.length;
     const before = decided;
     decided = null;
     if (child.kind !== 'textValue' && !plan.reach.has(child.id)) {
@@ -567,7 +573,9 @@ function rebuildChildren(
       const kept = rebuildChildren(child.children, plan).map((node) =>
         action === 'restore' ? withDeletedTextRestored(node) : node
       );
+      seams.push(out.length);
       decided = pushDecidedContent(out, child, kept, before, plan.mint);
+      seams.push(out.length);
       continue;
     }
 
@@ -626,7 +634,8 @@ function rebuildChildren(
     out.push(...rebuilt);
   }
 
-  return mergeRevisionParagraphs(out, plan.mergeForward, plan.mint, cell, container);
+  const joined = joinedAtSeams(plan.mint, out, seams);
+  return mergeRevisionParagraphs(joined, plan.mergeForward, plan.mint, cell, container);
 }
 
 function rebuild(node: OoxmlNode, plan: RebuildPlan): OoxmlNode[] {

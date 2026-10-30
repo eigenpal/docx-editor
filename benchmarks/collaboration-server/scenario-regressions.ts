@@ -152,6 +152,18 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
   // A card addressed its change among every wrapper, and a plain store that kept an empty
   // wrapper of a change bound it to another change.
   { config: 'trackedStructuresSequential', delivery: 'in-order', seed: 4 },
+  // A plain store kept pieces of one change apart after an unlink or a decision removed what
+  // stood between them, so typing or a card decision reached one piece (in-order 48, 87). A
+  // strike, a reject of every change, and a formatting split wrote kept letters again, and a
+  // peer's concurrent decision missed the copies (server 58 and 100, peer 100 and 23). The
+  // comparison read an empty text element with an empty value as another document (79).
+  { config: 'trackedSequential', delivery: 'in-order', seed: 48 },
+  { config: 'trackedStructuresSequential', delivery: 'in-order', seed: 87 },
+  { config: 'trackedStructuresSequential', delivery: 'in-order', seed: 79 },
+  { config: 'tracked', delivery: 'server', seed: 58 },
+  { config: 'tracked', delivery: 'server', seed: 100 },
+  { config: 'tracked', delivery: 'peer', seed: 100 },
+  { config: 'trackedEverything', delivery: 'peer', seed: 23 },
   // A block moved toward the start of its container in one transaction removed the block
   // after its old place on every replica, and a block two peers moved at once showed at its
   // old place after a later move.

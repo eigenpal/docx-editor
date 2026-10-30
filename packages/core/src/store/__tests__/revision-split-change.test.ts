@@ -115,3 +115,123 @@ test('typing between two wrappers of one insertion lands as typing inside one wr
     expect(wrappers).toBe(one);
   }
 });
+
+// An edit that removes what stood between two pieces of one change leaves one wrapper, as a
+// peer shows at once. The next edit then reads one change on every replica.
+
+type Node = { id: string; localName?: string; children?: Node[] };
+
+function nodesNamed(source: OoxmlPart, localName: string): Node[] {
+  const found: Node[] = [];
+  const walk = (node: Node): void => {
+    if (node.localName === localName) found.push(node);
+    for (const child of node.children ?? []) walk(child);
+  };
+  walk(source.root as unknown as Node);
+  return found;
+}
+
+function applied(source: OoxmlPart, op: Parameters<typeof applyTreeOp>[1]): OoxmlPart {
+  const result = applyTreeOp(source, op);
+  if (!result.ok || !result.part) throw new Error(result.reason);
+  return result.part;
+}
+
+const textOf = (source: OoxmlPart): string => paragraphOf(serializeOoxmlPart(source));
+const other = (tag: 'ins' | 'del', inner: string) =>
+  `<w:${tag} w:id="8" w:author="B" w:date="2026-01-02T00:00:00Z">${inner}</w:${tag}>`;
+
+test('a rejected change between two pieces of one insertion leaves one insertion to decide', () => {
+  let source = part(
+    `<w:r><w:t>a</w:t></w:r>${insertion('<w:r><w:t>lo</w:t></w:r>')}` +
+      `${other('ins', '<w:r><w:t>X</w:t></w:r>')}${insertion('<w:r><w:t>r</w:t></w:r>')}`
+  );
+  source = applied(source, {
+    op: 'rejectRevision',
+    revision: { id: '8', author: 'B', date: '2026-01-02T00:00:00Z' },
+    localName: 'ins',
+  });
+  expect(nodesNamed(source, 'ins')).toHaveLength(1);
+  // A card decision names the site its reader sees, and reaches the whole insertion.
+  const site = nodesNamed(source, 'ins')[0]!.id;
+  source = applied(source, { op: 'rejectAllRevisions', siteNodeIds: [site] });
+  expect(textOf(source)).toBe('<w:r><w:t>a</w:t></w:r>');
+});
+
+test('an accepted insertion that held a piece of a deletion joins it to the piece beside it', () => {
+  const source = applied(
+    part(
+      `<w:r><w:t>t</w:t></w:r>${deletion('<w:r><w:delText>o</w:delText></w:r>')}` +
+        other('ins', deletion('<w:r><w:delText>r</w:delText></w:r>'))
+    ),
+    {
+      op: 'acceptRevision',
+      revision: { id: '8', author: 'B', date: '2026-01-02T00:00:00Z' },
+      localName: 'ins',
+    }
+  );
+  expect(nodesNamed(source, 'del')).toHaveLength(1);
+  expect(textOf(source)).toContain('<w:r><w:delText>or</w:delText></w:r></w:del>');
+});
+
+test('typing in a deletion that a removed link or control had split lands after all of it', () => {
+  for (const removal of ['link', 'control'] as const) {
+    const wrap = (inner: string) =>
+      removal === 'link'
+        ? `<w:hyperlink w:anchor="a">${inner}</w:hyperlink>`
+        : `<w:sdt><w:sdtPr/><w:sdtContent>${inner}</w:sdtContent></w:sdt>`;
+    let source = part(
+      `<w:r><w:t>a</w:t></w:r>${deletion('<w:r><w:delText xml:space="preserve">the </w:delText></w:r>')}` +
+        wrap(deletion('<w:r><w:delText>r</w:delText></w:r>')) +
+        `${deletion('<w:r><w:delText>est</w:delText></w:r>')}<w:r><w:t>b</w:t></w:r>`
+    );
+    const holder = nodesNamed(source, removal === 'link' ? 'hyperlink' : 'sdt')[0]!.id;
+    source = applied(
+      source,
+      removal === 'link'
+        ? { op: 'removeHyperlink', linkId: holder }
+        : { op: 'removeContentControl', controlId: holder }
+    );
+    expect(nodesNamed(source, 'del')).toHaveLength(1);
+    source = applied(source, {
+      op: 'insertText',
+      paragraphId: nodesNamed(source, 'p')[0]!.id,
+      offset: 4,
+      text: 'X',
+      revision: { author: 'C', date: '2026-01-03T00:00:00Z' },
+    });
+    expect(textOf(source)).toMatch(/>the rest<\/w:delText><\/w:r><\/w:del><w:ins /);
+  }
+});
+
+test('a removed link between two pieces of a move leaves one move wrapper', () => {
+  const move = (inner: string) =>
+    `<w:moveFrom w:id="9" w:author="A" w:date="2026-01-01T00:00:00Z">${inner}</w:moveFrom>`;
+  let source = part(
+    `${move('<w:r><w:t>mo</w:t></w:r>')}<w:hyperlink w:anchor="a">${move('<w:r><w:t>ved</w:t></w:r>')}</w:hyperlink>`
+  );
+  source = applied(source, {
+    op: 'removeHyperlink',
+    linkId: nodesNamed(source, 'hyperlink')[0]!.id,
+  });
+  expect(nodesNamed(source, 'moveFrom')).toHaveLength(1);
+  expect(textOf(source)).toContain(
+    '<w:r><w:t>mo</w:t></w:r><w:r><w:t>ved</w:t></w:r></w:moveFrom>'
+  );
+});
+
+test('a tracked deletion over two runs in a content control is one deletion there', () => {
+  let source = part(
+    '<w:sdt><w:sdtPr/><w:sdtContent><w:r><w:t>ab</w:t></w:r><w:r><w:t>cd</w:t></w:r>' +
+      '</w:sdtContent></w:sdt>'
+  );
+  source = applied(source, {
+    op: 'deleteText',
+    paragraphId: nodesNamed(source, 'p')[0]!.id,
+    start: 1,
+    end: 3,
+    revision: { author: 'C', date: '2026-01-03T00:00:00Z' },
+  });
+  expect(nodesNamed(source, 'del')).toHaveLength(1);
+  expect(textOf(source)).toContain('<w:delText>bc</w:delText>');
+});
