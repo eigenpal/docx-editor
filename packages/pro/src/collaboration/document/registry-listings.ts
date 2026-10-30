@@ -3,6 +3,7 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
+import type * as Y from 'yjs';
 import type { LogicalId } from './identity.ts';
 import { sameChildOrder } from './registry-node-reads.ts';
 
@@ -60,4 +61,25 @@ export function syncChildListings(
   }
   index.childrenSnapshot.set(parentId, next);
   return affected;
+}
+
+/**
+ * Delete each of `childIds` from a child array as many times as it is given, newest
+ * occurrence first, so the delete stays item-level: an id a peer inserted concurrently is a
+ * different Yjs item and keeps its place.
+ */
+export function unlistChildIds(
+  children: Y.Array<LogicalId> | null | undefined,
+  childIds: readonly LogicalId[]
+): void {
+  if (!children || childIds.length === 0) return;
+  const remaining = new Map<LogicalId, number>();
+  for (const childId of childIds) remaining.set(childId, (remaining.get(childId) ?? 0) + 1);
+  for (let index = children.length - 1; index >= 0; index -= 1) {
+    const value = children.get(index);
+    const left = remaining.get(value) ?? 0;
+    if (left === 0) continue;
+    remaining.set(value, left - 1);
+    children.delete(index, 1);
+  }
 }

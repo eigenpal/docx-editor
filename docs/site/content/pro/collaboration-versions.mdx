@@ -277,7 +277,7 @@ If your servers run a release from 2.28.0 to 2.31.0, the procedure changes in th
 
 Format `docx-collaboration:1.5.3.1` stores shared data the same way as format `docx-collaboration:1.5.2.1`. It changes two rules that decide what participants show after concurrent edits:
 
-- If two or more participants split one paragraph at different points at the same time, every split stays, and the new paragraphs show in the order of their text. Earlier formats ordered the new paragraphs by an internal participant number, so one split could look lost and an empty paragraph could appear.
+- If two participants split one paragraph at different points at the same time, the new paragraphs show in the order of their text. Earlier formats ordered the new paragraphs by an internal participant number, so one split could look lost and an empty paragraph could appear.
 - If one participant rejects a proposed paragraph break while its author undoes the same break, the paragraph and its text stay. Rejecting a proposed paragraph break now keeps the paragraph before the break, which is the paragraph that undoing the break keeps. Earlier formats kept the paragraph after the break, so each edit removed the paragraph that the other one kept.
 
 A participant with format `docx-collaboration:1.5.2.1` applies the earlier rules to the same shared data. In one room, the two formats could show the same edits differently, and two concurrent rejections of one proposed paragraph break could remove the paragraph. So the formats refuse to share a room: each participant refuses a room that another format created, before it applies any update. A room that a release with format `docx-collaboration:1.5.2.1` created keeps the earlier rules, because only participants with that format can edit it.
@@ -290,7 +290,7 @@ If your servers run 2.32.0 or 2.33.0, the procedure changes in these ways:
 - Edits that never reached the room before the migration do not transfer. Ask users with offline edits to reconnect before you stop the servers.
 - Update clients, servers, export workers, and background agents together. Your connection check refuses a client that sends `docx-collaboration:1.5.2.1`.
 
-Saved DOCX files do not change. In a document without collaboration, rejecting a proposed paragraph break keeps the paragraph before the break. The paragraph keeps the properties of the paragraph mark that remains, as before. Only its `w14:paraId` and the identity that automation reads as `Paragraph.uniqueLocalId` come from the paragraph before the break.
+Saved DOCX files do not change. In a document without collaboration, rejecting a proposed paragraph break keeps the paragraph before the break. The paragraph keeps the properties of the paragraph mark that remains, as before. Only its `w14:paraId` and the identity that automation reads as `Paragraph.uniqueLocalId` come from the paragraph before the break, so `Paragraph` objects of the paragraph after the break stop resolving.
 
 ### Migrate rooms on a server
 

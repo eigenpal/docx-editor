@@ -57,7 +57,11 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
-import { mergeRevisionParagraphs, tableParagraphMergeTarget } from './revision-paragraph-merge.ts';
+import {
+  holdsContent,
+  mergeRevisionParagraphs,
+  tableParagraphMergeTarget,
+} from './revision-paragraph-merge.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import {
   rebuildReach,
@@ -513,7 +517,7 @@ interface RebuildPlan {
    */
   readonly mergeForward: ReadonlySet<string>;
   /** Rejected inserted marks: their join keeps the first paragraph, as undoing the split does. */
-  readonly first: ReadonlySet<string>;
+  readonly first: ReadonlyMap<string, boolean>;
   /** Accepting: a cell's emptied last paragraph joins the one before (rejecting keeps it). */
   readonly accepting: boolean;
   /** Removed cells, rows, and tables, including containers emptied by this decision. */
@@ -820,7 +824,7 @@ export function resolveRevisions(
     for (const id of implicitTableRowProperties(part, matched).keys()) dropMarks.add(id);
   const restoreProperties = new Set<string>();
   const mergeForward = new Set<string>();
-  const first = new Set<string>();
+  const first = new Map<string, boolean>();
   const removeStructures = new Set([
     ...tableRevisionRemovals(part, matched, action).keys(),
     ...movePlan.remove,
@@ -913,7 +917,8 @@ export function resolveRevisions(
         const paragraph = paragraphOwning(part, site.node.id);
         if (paragraph === null) return { ok: false, reason: 'unsupported-revision' };
         mergeForward.add(paragraph);
-        if (action === 'reject' && site.node.localName === 'ins') first.add(paragraph);
+        if (action === 'reject' && site.node.localName === 'ins')
+          first.set(paragraph, !holdsContent(findNode(part, paragraph)));
       }
       continue;
     }

@@ -121,3 +121,21 @@ test('accepting a deleted paragraph keeps its bookmark and comment start', () =>
   expect(xml).toContain('<w:commentRangeStart w:id="3"/>');
   expect(xml.indexOf('commentRangeStart')).toBeLessThan(xml.indexOf('<w:t>kept'));
 });
+
+test('rejecting an inserted mark of an empty paragraph keeps that paragraph', () => {
+  // A tracked break at a paragraph's start leaves the paragraph empty before its mark.
+  const part = load(
+    `<w:p w14:paraId="00000001"><w:pPr><w:rPr><w:ins w:id="1" w:author="Ada"/></w:rPr></w:pPr></w:p>` +
+      `<w:p w14:paraId="00000002"><w:r><w:t>kept</w:t></w:r></w:p>`
+  );
+  const first = paragraphs(part.root)[0]!;
+  const result = applyTreeOp(part, { op: 'rejectAllRevisions' });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  const after = paragraphs(result.part.root);
+  expect(after).toHaveLength(1);
+  expect(after[0]!.id).toBe(first.id);
+  expect(serializeOoxmlPart(result.part)).toContain(
+    '<w:p w14:paraId="00000001"><w:r><w:t>kept</w:t></w:r></w:p>'
+  );
+});

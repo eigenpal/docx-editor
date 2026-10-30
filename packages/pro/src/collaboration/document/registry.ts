@@ -81,7 +81,12 @@ import {
   readString,
   type NodeShape,
 } from './registry-node-reads.ts';
-import { addListing, syncChildListings, type ChildListings } from './registry-listings.ts';
+import {
+  addListing,
+  syncChildListings,
+  unlistChildIds,
+  type ChildListings,
+} from './registry-listings.ts';
 import { AdoptionIndex } from './registry-adoption.ts';
 import { InlineIndex } from './paragraph-inline-index.ts';
 import { INLINE_FIELD } from './paragraph-text.ts';
@@ -326,7 +331,11 @@ export class DocumentRegistry {
     if (!rec) return null;
     const shared = this.record(logicalId);
     const attributes = shared && isElementRecord(shared) ? shared.attributes : [];
-    return { logicalId, yjsItemKey: itemKeyOf(rec), wordFacingIds: wordFacingIdsOf(attributes) };
+    return {
+      logicalId,
+      yjsItemKey: itemKeyOf(rec),
+      wordFacingIds: wordFacingIdsOf(attributes),
+    };
   }
 
   isTombstoned(logicalId: LogicalId): boolean {
@@ -344,9 +353,10 @@ export class DocumentRegistry {
   /**
    * Every survivor that adopts children from a tombstone, and what it adopts.
    *
-   * Adoption is DERIVED from the tombstone edge and is not a child array, so tombstoning a node
-   * dirties the tombstone alone while the survivor has to grow a child. A consumer that caches
-   * per node compares this index, or the adopted children silently leave the survivor.
+   * Adoption is DERIVED from the tombstone edge and is not a child array, so tombstoning a
+   * node dirties the tombstone alone while the survivor is the node that has to grow a
+   * child. A consumer that caches per node has to compare this index, or the adopted
+   * children silently disappear from the survivor.
    */
   adoptionIndex(): ReadonlyMap<LogicalId, readonly LogicalId[]> {
     return this.adoption.adoptees;
@@ -622,19 +632,8 @@ export class DocumentRegistry {
    * its place in the array, and still reaches the survivor.
    */
   unlistChildren(parentId: LogicalId, childIds: readonly LogicalId[]): void {
-    if (childIds.length === 0) return;
     const rec = this.schema.nodes.get(parentId);
-    const children = rec ? childArrayOf(rec) : null;
-    if (!children) return;
-    const remaining = new Map<LogicalId, number>();
-    for (const childId of childIds) remaining.set(childId, (remaining.get(childId) ?? 0) + 1);
-    for (let index = children.length - 1; index >= 0; index -= 1) {
-      const value = children.get(index);
-      const left = remaining.get(value) ?? 0;
-      if (left === 0) continue;
-      remaining.set(value, left - 1);
-      children.delete(index, 1);
-    }
+    unlistChildIds(rec ? childArrayOf(rec) : null, childIds);
   }
 
   putXmlPart(entry: PartDirectoryEntry): void {

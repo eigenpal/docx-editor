@@ -95,9 +95,10 @@ export function mergeRevisionParagraphs(
   container = '',
   /**
    * Paragraphs whose inserted mark the decision rejects. A join they start keeps the first
-   * paragraph that brings content; every other join keeps the last paragraph.
+   * paragraph that brings content, or one that held nothing before the decision (`true`), as
+   * a split at its start leaves; every other join keeps the last paragraph.
    */
-  keepsFirst: ReadonlySet<string> = NO_PARAGRAPHS
+  keepsFirst: ReadonlyMap<string, boolean> = NO_PARAGRAPHS
 ): OoxmlNode[] {
   if (
     !children.some((n) => marks.has(n.id) || (isNamed(n, 'customXml') && emptiedBlock(n, marks)))
@@ -145,7 +146,11 @@ export function mergeRevisionParagraphs(
         for (const child of node.children) if (!properties(child)) carried.push(child);
         // Only a paragraph that brings content is the one a rejected insertion keeps. A
         // paragraph the decision emptied goes, and the paragraph after it keeps its identity.
-        if (!carrier && keepsFirst.has(node.id) && node.children.some(bringsContent))
+        if (
+          !carrier &&
+          keepsFirst.has(node.id) &&
+          (keepsFirst.get(node.id) || node.children.some(bringsContent))
+        )
           carrier = node as OoxmlElement;
         continue;
       }
@@ -364,7 +369,7 @@ function lastTwoBlocks(children: readonly OoxmlNode[]): readonly OoxmlNode[] {
   return tail;
 }
 
-const NO_PARAGRAPHS: ReadonlySet<string> = new Set();
+const NO_PARAGRAPHS: ReadonlyMap<string, boolean> = new Map();
 
 /** Containers whose emptied last paragraph goes with its content. */
 const DROPS_LAST_PARAGRAPH: ReadonlySet<string> = new Set(['txbxContent', 'customXml']);
@@ -372,6 +377,10 @@ const DROPS_LAST_PARAGRAPH: ReadonlySet<string> = new Set(['txbxContent', 'custo
 /** A child a joined paragraph carries that is content: not properties, a marker, or empty. */
 const bringsContent = (node: OoxmlNode) =>
   !properties(node) && !emptyRun(node) && (node.kind === 'textValue' || !isInertMarker(node));
+
+/** Whether a paragraph holds content: not only properties, markers, or empty runs. */
+export const holdsContent = (paragraph: OoxmlNode | null): boolean =>
+  paragraph !== null && paragraph.kind !== 'textValue' && paragraph.children.some(bringsContent);
 
 const emptyRun = (node: OoxmlNode) =>
   node.kind === 'run' && node.children.every((child) => isNamed(child, 'rPr'));

@@ -180,10 +180,14 @@ interface SourcePlace {
 }
 
 /**
- * Where the character an identity names stands in the text that holds it, deleted or not, or
- * null when this replica collected it. Every copy of one character resolves to the identity
- * of the character first typed, so the pieces of one split paragraph, however often split
- * again, compare in the order of the text they came from.
+ * Where the character an identity names stands in the text that holds it, deleted or not.
+ * Every copy of one character resolves to the identity of the character first typed, so the
+ * pieces of one split paragraph, however often split again, compare in the order of the text
+ * they came from.
+ *
+ * Null when that text, or a record above it, is deleted, whether or not this replica's Yjs
+ * collected it: a replica with garbage collection off still holds the text, one with it on
+ * holds only a collected struct, and both then fall back to the pairwise rule alike.
  */
 function sourcePlace(
   doc: Y.Doc,
@@ -197,6 +201,12 @@ function sourcePlace(
   const item = structAt(doc, { client, clock });
   const text = item?.parent;
   if (!item || !(text instanceof Y.Text)) return null;
+  for (
+    let holder = text._item;
+    holder;
+    holder = holder.parent instanceof Y.AbstractType ? holder.parent._item : null
+  )
+    if (holder.deleted) return null;
   let starts = places.get(text);
   if (!starts) {
     starts = new Map();
@@ -268,17 +278,20 @@ function orderOf(
 interface OrderEntry {
   readonly ranks: SiblingRanks;
   readonly shown: readonly LogicalId[];
-  /** The paragraphs of the concurrent runs the order read, and the copies they held. */
+  /** The paragraphs of the concurrent runs the order read. */
   readonly heads: readonly LogicalId[];
+  /** Their text lengths, a cheap sign that one of them changed. */
+  readonly lengths: string;
+  /** The copies they held. */
   readonly copies: string;
 }
 
 /**
- * The rule's ranks per parent, read again when the parent's listing changes, or when a
- * paragraph of a concurrent run holds other copies than the order read. A replica can list a
- * paragraph before its text or its marks arrive, when an update waits for another one, so a
- * listing that did not change can still need another order. A listing without concurrent
- * inserts has no paragraph to read again.
+ * The rule's ranks per parent, read once per listing. A replica can list a paragraph before
+ * its text or its marks arrive, when an update waits for another one, so a listing that did
+ * not change can still need another order: `takeChanged`, which a view calls once per build,
+ * reads the copies of a run again when one of its paragraphs changed length. Every other read,
+ * such as each comparison of document order, uses the stored order.
  */
 export class SplitSiblingOrders {
   private readonly built = new WeakMap<readonly LogicalId[], OrderEntry>();
@@ -305,18 +318,31 @@ export class SplitSiblingOrders {
   /**
    * Parents whose shown order changed since the last call while their listing stayed: a
    * paragraph of a concurrent run got its text or marks. A view rebuilds them, and the order
-   * that decides where a moved copy shows changed with them.
+   * that decides where a moved copy shows changed with them. A parent no longer listed, or
+   * whose listing changed, leaves the set until it is read again.
    */
   takeChanged(): LogicalId[] {
     const changed: LogicalId[] = [];
     for (const parentId of [...this.withRuns]) {
       const listing = this.listingOf(parentId);
       const known = listing ? this.built.get(listing) : undefined;
-      if (!known || this.copiesKey(known.heads) === known.copies) continue;
-      const next = this.read(parentId);
+      if (!listing || !known) {
+        this.withRuns.delete(parentId);
+        continue;
+      }
+      if (this.lengthsKey(known.heads) === known.lengths) continue;
+      if (this.copiesKey(known.heads) === known.copies) {
+        this.built.set(listing, { ...known, lengths: this.lengthsKey(known.heads) });
+        continue;
+      }
+      const next = this.build(parentId, listing);
       if (!next || next.shown.some((id, at) => known.shown[at] !== id)) changed.push(parentId);
     }
     return changed;
+  }
+
+  private lengthsKey(heads: readonly LogicalId[]): string {
+    return heads.map((id) => this.textOf(id)?.length ?? -1).join(',');
   }
 
   private copiesKey(heads: readonly LogicalId[]): string {
@@ -325,9 +351,10 @@ export class SplitSiblingOrders {
 
   private read(parentId: LogicalId): OrderEntry | null {
     const listing = this.listingOf(parentId);
-    const known = listing ? this.built.get(listing) : undefined;
-    if (known && (known.heads.length === 0 || this.copiesKey(known.heads) === known.copies))
-      return known;
+    return (listing && this.built.get(listing)) || this.build(parentId, listing);
+  }
+
+  private build(parentId: LogicalId, listing: readonly LogicalId[] | undefined): OrderEntry | null {
     const children = this.childArrayOf(parentId);
     if (!children || children.length < 2) return null;
     const heads: LogicalId[] = [];
@@ -335,9 +362,10 @@ export class SplitSiblingOrders {
     const ids = listing ?? children.toArray();
     const order = splitSiblingOrder(ids, ranks);
     const shown = order ? order.map((index) => ids[index]!) : ids;
-    const entry = { ranks, shown, heads, copies: this.copiesKey(heads) };
+    const lengths = this.lengthsKey(heads);
+    const entry = { ranks, shown, heads, lengths, copies: this.copiesKey(heads) };
     if (listing) this.built.set(listing, entry);
-    if (heads.length > 0) this.withRuns.add(parentId);
+    if (heads.length > 0 && listing) this.withRuns.add(parentId);
     else this.withRuns.delete(parentId);
     return entry;
   }

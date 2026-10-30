@@ -230,6 +230,55 @@ describe('splitting a paragraph that concurrent splits added', () => {
       });
 });
 
+describe('rejecting a tracked break at a paragraph start while its author undoes it', () => {
+  // The break leaves an empty first paragraph. The rejection still keeps it, as the undo does,
+  // so the text and a third peer's typing stay.
+  for (const { label, ids } of ORDERS)
+    test(`the text and the typing stay (${label})`, async () => {
+      const r = await room('One; two; three', ids);
+      try {
+        await r.alice.runtime.run(async (context) => {
+          context.document.changeTrackingMode = 'TrackMineOnly';
+          const found = context.document.body.search('One').getFirst();
+          await context.sync();
+          found.insertText('\n', 'Before');
+          await context.sync();
+        });
+        r.sync();
+        await r.expectAll(['', 'One; two; three', 'Signed'], 1);
+        later();
+        r.offline();
+        await rejectAll(r.bob.runtime);
+        later();
+        expect(r.alice.editor.exec({ type: 'undo' }).ok).toBe(true);
+        later();
+        await typeAt(r.carol.runtime, 1, 'C ');
+        later();
+        r.online();
+        await r.expectAll(['C One; two; three', 'Signed'], 0);
+      } finally {
+        r.close();
+      }
+    });
+});
+
+describe('more concurrent splits of one paragraph', () => {
+  // Cases the order of concurrent split siblings does not settle yet (#1652).
+  test.todo('two splits by each of two peers keep four breaks in text order', async () => {
+    // "a1; b2; c3; d4; e5": Bob splits after "b2; " and "d4; ", Alice after "a1; " and
+    // "c3; ", both offline. Expected: "a1; ", "b2; ", "c3; ", "d4; ", "e5". Shows an empty
+    // paragraph and "c3; d4; " instead.
+  });
+  test.todo('a break at the end and a split in the middle add no empty paragraph', async () => {
+    // One peer types a break at the end of "One; two; three" while the other splits after
+    // "two; ". Expected: "One; two; ", "three", "". Shows "One; two; ", "", "three".
+  });
+  test.todo('redoing both splits after both undos keeps them in text order', async () => {
+    // Both peers undo their concurrent splits, then redo them. In the Carol, Bob, Alice client
+    // order this shows "One; ", "", "two; three".
+  });
+});
+
 describe('deleting a reordered paragraph that a split shortened', () => {
   // The paragraph split off the deleted one keeps its place before the later sibling.
   for (const { label, ids } of ORDERS)
