@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A shading or vertical alignment write to a cell returned by a vertical mergeCells failed in the same sync. A paragraph that the merge moved up could not be found by later edits in the same transaction.",
+  "after": "Shading and vertical alignment apply to every row of the merged cell. The moved paragraph stays addressable.",
+  "reason": "The edit writes the same cell properties that ordinary cell formatting already writes, on cells that already exist. Released participants read and merge these nodes with their current rules, so shared data keeps its meaning.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-api-vertical-merge-same-sync.test.ts",
+    "packages/editor-api/src/model/__tests__/model-table-merge-split.test.ts",
+    "packages/core/src/store/__tests__/table-merge-split-ops.test.ts"
+  ],
+  "changeset": "vertical-merge-same-sync",
+  "migration": null
+}
