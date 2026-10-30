@@ -412,19 +412,22 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       ? from.paragraphId
       : null;
 
-  const writeEmptyParagraphMark = (paragraphId: string, incoming: SurfaceProperty) =>
-    commit(() =>
+  const writeEmptyParagraphMark = (paragraphId: string, incoming: SurfaceProperty) => {
+    const part = storyPart();
+    const properties = mergedParagraphMarkProperties(part, paragraphId, incoming);
+    // A pick the mark already states changes nothing, so it is not an undo step either.
+    if (
+      JSON.stringify(properties) ===
+      JSON.stringify(directParagraphMarkProperties(part, paragraphId))
+    )
+      return null;
+    return commit(() =>
       applyOps(
-        [
-          {
-            op: 'setParagraphMarkProperties' as const,
-            paragraphId,
-            properties: mergedParagraphMarkProperties(storyPart(), paragraphId, incoming),
-          },
-        ],
+        [{ op: 'setParagraphMarkProperties' as const, paragraphId, properties }],
         selectionMark()
       )
     );
+  };
 
   /**
    * Write paragraph properties over every paragraph the selection touches, in ONE commit.

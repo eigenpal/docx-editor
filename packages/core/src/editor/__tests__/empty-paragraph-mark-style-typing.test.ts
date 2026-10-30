@@ -100,6 +100,15 @@ describe('formatting at the caret of an empty paragraph formats its mark', () =>
       expect(firstParagraphRuns(editor)).toEqual([['sz=40']]);
     }));
 
+  test('a size the mark already has is not an undo step', () =>
+    withEditor(`<w:p>${mark('<w:sz w:val="40"/>')}</w:p>${AFTER}`, (editor) => {
+      caretAt(editor, 0, 0);
+      const before = editor.surface!.session.packageRevision();
+      editor.exec({ type: 'setMarkAttr', mark: 'fontSize', attr: 'val', value: 40 });
+      expect(editor.surface!.session.packageRevision()).toBe(before);
+      expect(editor.surface!.state().canUndo).toBe(false);
+    }));
+
   test('a caret inside text still arms the format and leaves the document unchanged', () =>
     withEditor('<w:p><w:r><w:t>abcd</w:t></w:r></w:p>', (editor) => {
       caretAt(editor, 0, 2);
