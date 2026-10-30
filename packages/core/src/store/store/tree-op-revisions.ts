@@ -512,6 +512,8 @@ interface RebuildPlan {
    * class of error as removing a `w:trPr/w:del` and leaving the row.
    */
   readonly mergeForward: ReadonlySet<string>;
+  /** Rejected inserted marks: their join keeps the first paragraph, as undoing the split does. */
+  readonly first: ReadonlySet<string>;
   /** Accepting: a cell's emptied last paragraph joins the one before (rejecting keeps it). */
   readonly accepting: boolean;
   /** Removed cells, rows, and tables, including containers emptied by this decision. */
@@ -626,7 +628,7 @@ function rebuildChildren(
     out.push(...rebuilt);
   }
 
-  return mergeRevisionParagraphs(out, plan.mergeForward, plan.mint, cell, container);
+  return mergeRevisionParagraphs(out, plan.mergeForward, plan.mint, cell, container, plan.first);
 }
 
 function rebuild(node: OoxmlNode, plan: RebuildPlan): OoxmlNode[] {
@@ -818,6 +820,7 @@ export function resolveRevisions(
     for (const id of implicitTableRowProperties(part, matched).keys()) dropMarks.add(id);
   const restoreProperties = new Set<string>();
   const mergeForward = new Set<string>();
+  const first = new Set<string>();
   const removeStructures = new Set([
     ...tableRevisionRemovals(part, matched, action).keys(),
     ...movePlan.remove,
@@ -910,6 +913,7 @@ export function resolveRevisions(
         const paragraph = paragraphOwning(part, site.node.id);
         if (paragraph === null) return { ok: false, reason: 'unsupported-revision' };
         mergeForward.add(paragraph);
+        if (action === 'reject' && site.node.localName === 'ins') first.add(paragraph);
       }
       continue;
     }
@@ -943,6 +947,7 @@ export function resolveRevisions(
     acceptedMarks,
     restoreProperties,
     mergeForward,
+    first,
     accepting: action === 'accept',
     removeStructures,
     mergeCells,
