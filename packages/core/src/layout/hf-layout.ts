@@ -476,6 +476,7 @@ export function layoutHeaderFooterStory(
         (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : ''),
       nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
       styleCascade,
+      keepsStoryEndAutoSpacing: true as const,
       ...(listItems ? { listItems } : {}),
       pageContext: effectiveCtx,
       ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),

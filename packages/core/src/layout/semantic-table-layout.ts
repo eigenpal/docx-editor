@@ -215,6 +215,8 @@ export interface TableFlowDeps {
   readonly paragraphLineUnitPt?: number;
   /** Story paragraphs outside cells snap to `paragraphLineUnitPt`; see {@link withStoryLineGrid}. */
   readonly snapsStoryLines?: true;
+  /** A header or footer keeps its last paragraph's automatic space after; a cell drops it. */
+  readonly keepsStoryEndAutoSpacing?: true;
   /** Whether a positioned table of this story carries `w:tblOverlap w:val="never"`. */
   readonly floatRefusesOverlap?: (tableId: string) => boolean;
   readonly measurer: TextMeasurer;
@@ -1144,7 +1146,8 @@ function flowBlocksInBoxBounded(
         includeAfter: true,
         includeBottomBorder: true,
         firstInCell: blockIndex === 0,
-        lastInCell: blockIndex === blocks.length - 1,
+        lastInCell:
+          blockIndex === blocks.length - 1 && (inTableCell || !deps.keepsStoryEndAutoSpacing),
         cellEndMark:
           (hideEndMark || cellEndMarkMinBottom !== undefined) && blockIndex === blocks.length - 1,
         hideEndMark: hideEndMark && blockIndex === blocks.length - 1,
