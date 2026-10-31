@@ -137,6 +137,7 @@ const STORE_EDIT_CODES: Readonly<
   'cell-too-narrow': 'edit.table-split-unsupported',
   'split-needs-grid': 'edit.table-split-unsupported',
   'cell-has-revision': 'edit.revision-unsupported',
+  'unsupported-cell-content': 'edit.unsupported-content',
   trackedDrawingDeletionUnsupported: 'edit.tracked-drawing-delete-unsupported',
   packageTransactionRequired: 'edit.tracked-structure-unsupported',
   'automation-structural-tracking-unsupported': 'edit.tracked-structure-unsupported',

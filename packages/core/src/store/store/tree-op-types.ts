@@ -1265,6 +1265,8 @@ export type TreeOpRejection =
   | 'cell-has-revision'
   /** The split cells would be narrower than the minimum column width. */
   | 'cell-too-narrow'
+  /** A whole-cell value write addresses a cell that is not one plain paragraph. */
+  | 'unsupported-cell-content'
   /** Without `w:tblGrid`, a cell splits only into a divisor of the columns it spans. */
   | 'split-needs-grid'
   /** The addressed grid column id is missing or ambiguous without `w:tblGrid`. */
