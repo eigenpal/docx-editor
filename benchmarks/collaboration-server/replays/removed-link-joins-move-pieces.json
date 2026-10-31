@@ -1,0 +1,78 @@
+{
+  "config": "trackedStructuresSequential",
+  "seed": 79,
+  "replicas": 3,
+  "delivery": "in-order",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertTable",
+          "beforeParagraphId": "",
+          "rows": 2,
+          "cols": 1,
+          "columnWidthTwips": 2000
+        },
+        "paragraphs": [
+          0
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertHyperlink",
+          "start": 1,
+          "end": 4,
+          "anchor": "_fuzz"
+        },
+        "paragraphs": [
+          6
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertHyperlink",
+          "start": 6,
+          "end": 8,
+          "anchor": "_fuzz"
+        },
+        "paragraphs": [
+          6
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "removeHyperlink",
+          "linkId": ""
+        },
+        "targets": [
+          {
+            "field": "linkId",
+            "localName": "hyperlink",
+            "index": 1
+          }
+        ]
+      }
+    }
+  ]
+}

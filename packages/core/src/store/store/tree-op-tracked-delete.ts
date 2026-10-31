@@ -215,10 +215,10 @@ export function applyDeleteTracked(
           node.kind === 'contentControl' ||
           node.kind === 'contentControlContent')
       ) {
-        const rebuilt = rebuild(
-          node.children,
-          [...stack, node],
-          nextInlineContainerDepth(node, containerDepth)
+        // Runs struck one by one inside the container are one deletion there too, as at the top.
+        const rebuilt = mergedRevisions(
+          mint,
+          rebuild(node.children, [...stack, node], nextInlineContainerDepth(node, containerDepth))
         );
         // A wrapper emptied by the removal of our own insertion goes with it; one that
         // still holds content stays, because it is still saying something about that

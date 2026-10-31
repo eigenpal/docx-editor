@@ -71,6 +71,7 @@ import {
   applyInsertTrackedElements,
   insertedRunProperties,
 } from './tree-op-tracked.ts';
+import { splicedJoined } from './revision-piece-seams.ts';
 import {
   applyParagraphMarkRevision,
   applyProposeParagraphMerge,
@@ -2042,8 +2043,11 @@ function applyRemoveHyperlink(
   if (!link || link.kind !== 'hyperlink') return { ok: false, reason: 'tree-invariant' };
   const owner = parentOf(part, link.id);
   if (!owner) return { ok: false, reason: 'tree-invariant' };
-  const children = owner.children.flatMap((child) =>
-    child.id === link.id ? [...link.children] : [child]
+  const children = splicedJoined(
+    createNodeIdAllocator(part),
+    owner.children,
+    link.id,
+    link.children
   );
   const effect: TreeOpEffect = {
     dirty: [owner.id],
@@ -2074,7 +2078,7 @@ function applyRemoveContentControl(
   if (!owner) return { ok: false, reason: 'tree-invariant' };
   const kept = contentControlUnwrapPayload(control);
   if (!kept) return { ok: false, reason: 'tree-invariant' };
-  const children = owner.children.flatMap((child) => (child.id === control.id ? kept : [child]));
+  const children = splicedJoined(createNodeIdAllocator(part), owner.children, control.id, kept);
   const effect: TreeOpEffect = {
     dirty: [owner.id],
     created: [],

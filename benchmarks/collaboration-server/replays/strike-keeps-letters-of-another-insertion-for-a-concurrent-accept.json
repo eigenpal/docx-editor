@@ -1,0 +1,91 @@
+{
+  "config": "tracked",
+  "seed": 58,
+  "replicas": 3,
+  "delivery": "server",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 1,
+          "text": "orem",
+          "revision": {
+            "author": "Author 1",
+            "date": "2026-01-01T05:25:18Z"
+          }
+        },
+        "paragraphs": [
+          1
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 4,
+          "text": "m ",
+          "revision": {
+            "author": "Author 0",
+            "date": "2026-01-01T10:59:45Z"
+          }
+        },
+        "paragraphs": [
+          1
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 3,
+          "end": 8,
+          "revision": {
+            "author": "Author 0",
+            "date": "2026-01-01T13:24:27Z"
+          }
+        },
+        "paragraphs": [
+          1
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "acceptAllRevisions"
+        },
+        "paragraphs": [
+          3
+        ]
+      }
+    }
+  ]
+}
