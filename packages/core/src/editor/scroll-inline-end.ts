@@ -1,4 +1,5 @@
 // Keep a left-to-right scroller at its right end while the reader leaves it there.
+// A right-to-left scroller does this by itself, so it needs no help.
 //
 // A right-to-left interface puts a sideways-scrolling review column on the left, so the
 // page sits at the scroller's right end. The content keeps growing after the column first
@@ -20,6 +21,8 @@ const END_SLACK = 1;
  */
 export function keepScrollAtInlineEnd(scroller: HTMLElement): () => void {
   const view = hostWindowOf(scroller);
+  // A right-to-left scroller starts at its right end and keeps it in view as content grows.
+  if (view.getComputedStyle(scroller).direction === 'rtl') return () => {};
   const end = () => scroller.scrollWidth - scroller.clientWidth;
   let pinned = true;
   // The offset this helper wrote last. Its own write arrives as a scroll event a frame
