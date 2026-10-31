@@ -50,6 +50,7 @@ import { isRunKerningEnabled, kernsText } from './run-kerning.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { glyphSizeFactorOf, type ResolvedRunStyle } from './run-style.ts';
 import { createFixedMeasurer } from './fixed-measurer.ts';
+import { authoredLineBox } from './authored-line-boxes.ts';
 import { segmentGraphemes } from './grapheme.ts';
 import { fontFamilyClassFromName } from '../store/package/font-family-class.ts';
 
@@ -436,6 +437,9 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
       return { path: null, ink: { left, top, right, bottom } };
     },
     lineMetrics(style) {
+      // A recorded family keeps its authored box whichever face the browser falls back to.
+      const authored = authoredLineBox(style);
+      if (authored) return authored;
       const size = style.fontSizePt * glyphSizeFactorOf(style);
       const font = fontOf(style);
       const cached = metricsCache.get(font);
