@@ -163,6 +163,19 @@ export class CopyHolderOrder {
     return this.order(a, b);
   }
 
+  /**
+   * The paragraph of `paragraphs` whose copy of `identity` shows: for a moved copy by
+   * `compare`, and for a copy an undo put back by document order alone.
+   */
+  lastOf(paragraphs: readonly LogicalId[], identity: Identity, moved: boolean): LogicalId | null {
+    const source = moved && paragraphs.length > 1 ? this.sourceOf(paragraphs[0]!, identity) : null;
+    let last: LogicalId | null = null;
+    for (const id of paragraphs) {
+      if (last === null || this.compare(id, last, source) > 0) last = id;
+    }
+    return last;
+  }
+
   /** A paragraph's text or marks changed: read its keys, and its text as a source, again. */
   forget(paragraphId: LogicalId): void {
     this.keys.delete(paragraphId);

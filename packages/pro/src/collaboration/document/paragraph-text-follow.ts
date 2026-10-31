@@ -265,7 +265,7 @@ export class TextFollow {
   constructor(
     private readonly textOf: (paragraphId: LogicalId) => Y.Text | null,
     private readonly isDeleted: (paragraphId: LogicalId) => boolean,
-    private readonly order: DocumentOrder,
+    order: DocumentOrder,
     /** Paragraphs whose view changed when waiting sources were placed. */
     private readonly viewsChanged: (paragraphs: ReadonlySet<LogicalId>) => void,
     /** The paragraph whose text holds the item of an identity, deleted or not. */
@@ -278,36 +278,6 @@ export class TextFollow {
 
   /** Which of two holders of one moved copy shows it (`copy-holder-order.ts`). */
   private readonly holders: CopyHolderOrder;
-
-  /**
-   * Negative when `a`'s copy of `identity` gives way to `b`'s: by where each moved copy
-   * starts, and by document order for a copy an undo put back.
-   */
-  private holderOrder(
-    kind: 'move' | 'restore',
-    a: LogicalId,
-    b: LogicalId,
-    source: Y.Text | null
-  ): number {
-    return kind === 'move' ? this.holders.compare(a, b, source) : this.order(a, b);
-  }
-
-  /** The paragraph of `paragraphs` whose copy of `identity` shows. */
-  private lastOf(
-    kind: 'move' | 'restore',
-    paragraphs: readonly LogicalId[],
-    identity: Identity
-  ): LogicalId | null {
-    let last: LogicalId | null = null;
-    const source =
-      kind === 'move' && paragraphs.length > 1
-        ? this.holders.sourceOf(paragraphs[0]!, identity)
-        : null;
-    for (const id of paragraphs) {
-      if (last === null || this.holderOrder(kind, id, last, source) > 0) last = id;
-    }
-    return last;
-  }
 
   /**
    * Read one paragraph's text again. Returns the other paragraphs whose view changed now;
@@ -550,7 +520,7 @@ export class TextFollow {
         const start = Math.max(first, piece.start);
         const end = Math.min(last, piece.end);
         if (start >= end) continue;
-        if (this.holderOrder(kind, entry.paragraph, paragraphId, piece.source) > 0) {
+        if (this.holders.compare(entry.paragraph, paragraphId, piece.source) > 0) {
           later[start]! += 1;
           later[end]! -= 1;
         }
@@ -586,8 +556,8 @@ export class TextFollow {
     // Typing asks this of every character it was typed after; most clients have no copies.
     if (!this.index.hasCopies(client)) return null;
     return (
-      this.lastOf('move', this.index.holdersOf('move', client, clock), identity) ??
-      this.lastOf('restore', this.index.holdersOf('restore', client, clock), identity)
+      this.holders.lastOf(this.index.holdersOf('move', client, clock), identity, true) ??
+      this.holders.lastOf(this.index.holdersOf('restore', client, clock), identity, false)
     );
   }
 
