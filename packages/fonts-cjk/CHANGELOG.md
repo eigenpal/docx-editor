@@ -1,5 +1,7 @@
 # @docx-editor.dev/fonts-cjk
 
+## 2.34.0
+
 ## 2.33.0
 
 ## 2.32.0
