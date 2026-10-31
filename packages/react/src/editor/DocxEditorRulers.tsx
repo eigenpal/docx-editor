@@ -230,9 +230,9 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
       className={`docx-ruler-frame${opening ? ' docx-ruler-frame--opening' : ''}`}
       {...(rtl ? { 'data-chrome-dir': 'rtl' } : {})}
       style={{
-        // PHYSICAL sides, like the scroll container they mirror: it keeps a left-to-right
-        // base, adds the navigation shift on the pane's side (the right in a right-to-left
-        // interface), and pads the review column's side by the full reservation.
+        // PHYSICAL sides, like the scroll container they mirror: it adds the navigation
+        // shift on the pane's side (the right in a right-to-left interface), and pads the
+        // review column's side by the full reservation.
         paddingLeft: (rtl ? 0 : shift) + reserved.left,
         paddingRight: (rtl ? shift : 0) + reserved.right,
       }}
@@ -256,9 +256,14 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
           // The ruler lives above the scroller, so mirror its horizontal movement explicitly.
           transform: `${props.style?.transform ? `${props.style.transform} ` : ''}translateX(${-scrollLeft}px)`,
           // Navigation is below this row and cannot physically cover the ruler. Clip the
-          // scrolled portion at the same boundary so ticks never show above the pane.
+          // scrolled portion at the same boundary so ticks never show above the pane: on
+          // the right in a right-to-left interface, whose scroller counts below zero.
           clipPath:
-            shift > 0 && scrollLeft > 0 ? `inset(0 0 0 ${scrollLeft}px)` : props.style?.clipPath,
+            shift > 0 && scrollLeft !== 0
+              ? scrollLeft > 0
+                ? `inset(0 0 0 ${scrollLeft}px)`
+                : `inset(0 ${-scrollLeft}px 0 0)`
+              : props.style?.clipPath,
         }}
       />
     </div>

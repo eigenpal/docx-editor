@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A local caret that a remote edit moved could go back to its old place when the browser reported a selection change before the next paint.",
+  "after": "The surface treats a caret that a remote edit moved as a model move, so the old browser caret does not replace it before the next paint.",
+  "reason": "The change is local to each editor's selection handling. It writes nothing to the shared document and adds no field or message.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-remote-caret-stale-dom.test.ts"],
+  "changeset": "remote-caret-stale-dom",
+  "migration": null
+}
