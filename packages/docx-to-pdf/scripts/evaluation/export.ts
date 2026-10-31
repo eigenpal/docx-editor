@@ -6,24 +6,15 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 /** Eval protocol, version 1. No document-model API additions. */
 import { readFile, writeFile } from 'node:fs/promises';
 import { exportPdf } from '../../src/index.ts';
+import { EVALUATION_FONT_PROFILE } from './font-profile.ts';
 
 const [input, output] = process.argv.slice(2);
 if (!input || !output) throw new Error('Expected input.docx output.pdf');
 try {
   const result = await exportPdf(new Uint8Array(await readFile(input)), {
     fidelityPolicy: 'best-effort',
-    displayMode: 'proposed',
     comments: false,
-    useSystemFonts: false,
-    glyphFallbacks: [
-      'Noto Sans Symbols 2',
-      'Noto Sans Math',
-      'Noto Sans Arabic',
-      'Times New Roman',
-      'Noto Sans CJK JP',
-      'Twemoji Mozilla',
-      'Noto Emoji',
-    ].map((family) => ({ family, weight: 400, style: 'normal' as const })),
+    ...EVALUATION_FONT_PROFILE,
     timeoutMs: 60_000,
   });
   await writeFile(output, result.bytes);
