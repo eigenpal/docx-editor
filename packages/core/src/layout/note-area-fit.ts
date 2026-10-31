@@ -81,6 +81,24 @@ export function droppableSpacingPt(
  * the body end in place must leave this room, or it pushes that paragraph out.
  */
 export function chargedSpaceAfterPt(page: PageRecord): number {
+  // No reserve check: this answer only matters while a hold-out sizes this page's reserve,
+  // and a page it holds always has one.
+  return pageCitesFootnote(page) ? closingSpaceAfterOf(page) : 0;
+}
+
+/**
+ * The space after below the page's last line when the next page's opening lines return to
+ * it. Those lines start a new paragraph below the closing paragraph's space after, whether
+ * or not the page cites a footnote yet; {@link chargedSpaceAfterPt} counts it only once the
+ * page does. The published space after already reflects contextual spacing, and the next
+ * paragraph's own space before can only widen the gap, so this is the least gap there is.
+ */
+export function rejoinSpaceAfterPt(page: PageRecord): number {
+  return closingSpaceAfterOf(page);
+}
+
+/** The space after of the paragraph that ends the page's body, or 0. */
+function closingSpaceAfterOf(page: PageRecord): number {
   let last: BlockFragmentRecord | undefined;
   let lastBottom = -Infinity;
   for (const fragment of page.fragments) {
@@ -91,9 +109,7 @@ export function chargedSpaceAfterPt(page: PageRecord): number {
     }
   }
   if (last?.kind !== 'paragraph' || !last.paragraphEnd) return 0;
-  // No reserve check: this answer only matters while a hold-out sizes this page's reserve,
-  // and a page it holds always has one.
-  return pageCitesFootnote(page) ? last.spacing.after : 0;
+  return last.spacing.after;
 }
 
 /**
