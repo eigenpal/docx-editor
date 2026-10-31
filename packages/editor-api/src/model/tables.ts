@@ -261,7 +261,9 @@ export class Table extends ModelObject implements PromisedItem {
    * cell can lie further left. The rectangle grows to whole merged cells; a cell that crosses
    * its edge, or a rectangle of one cell, refuses with `InvalidArgument` and the diagnostic
    * code `edit.table-merge-not-rectangle`. The merged cell keeps every non-empty cell's content
-   * in reading order. Edits to the returned cell can share the sync. A pending cell revision
+   * in reading order. The returned cell's `value`, `shadingColor`, and `verticalAlignment` can
+   * share the sync; a text edit in the table refuses with `ConflictingChanges` until a sync,
+   * because the merge moves paragraphs between cells. A pending cell revision
    * refuses with `NotImplemented`; tracking modes refuse with `NotSupported`, because a merge
    * has no tracked form.
    */

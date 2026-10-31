@@ -89,8 +89,8 @@ async function cells(peer: Peer): Promise<string[]> {
   return rows.map((tr) =>
     (tr.match(/<w:tc>[\s\S]*?<\/w:tc>/g) ?? [])
       .map((tc) => {
-        const text = (tc.match(/<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g) ?? [])
-          .map((t) => t.replace(/<[^>]+>/g, ''))
+        const text = [...tc.matchAll(/<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g)]
+          .map((match) => match[1])
           .join('');
         const mark = tc.includes('w:vMerge w:val="restart"')
           ? '^'

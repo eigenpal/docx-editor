@@ -1546,14 +1546,18 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       trackedRangeReplacement: host.trackedRangeReplacement,
       handles,
       reads: packageReads,
-      admitWrite: (reads, count, paragraphIds) => {
+      admitWrite: (reads, count, paragraphIds, reshaped = []) => {
         const plan = planFor(reads);
         const refusal = pinWrite(plan);
         if (refusal) return refusal;
         for (const id of paragraphIds) {
+          // A cell write plans again on what an earlier merge made, so only the merge's mark
+          // (restructured, never touched) gives way to it. A text edit still refuses.
+          if (!plan.touched.has(id)) plan.restructured.delete(id);
           const conflict = claim(plan, id);
           if (conflict) return conflict;
         }
+        for (const id of reshaped) plan.restructured.add(id);
         plan.externalCreatedCount += count;
         return null;
       },

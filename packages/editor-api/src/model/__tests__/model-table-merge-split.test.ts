@@ -118,14 +118,57 @@ describe('Table.mergeCells and TableCell.split', () => {
         await context.sync();
       });
       const before = await mainXmlOf(runtime);
+      const refusal = {
+        code: 'InvalidArgument',
+        debugInfo: { innerError: { code: 'edit.unsupported-content' } },
+      };
+      // In the merge's own sync the refusal comes at commit, with the code a later sync gives.
       await expect(
         runtime.run(async (context) => {
           const merged = context.document.body.tables.getFirst().mergeCells(0, 0, 1, 0);
           merged.value = 'merged';
           await context.sync();
         })
-      ).rejects.toThrow();
+      ).rejects.toMatchObject(refusal);
       expect(await mainXmlOf(runtime)).toBe(before);
+      await expect(
+        runtime.run(async (context) => {
+          const merged = context.document.body.tables.getFirst().mergeCells(0, 0, 1, 0);
+          await context.sync();
+          merged.value = 'merged';
+          await context.sync();
+        })
+      ).rejects.toMatchObject(refusal);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('a text edit in the merge sync refuses; after a sync it reaches the merged content', async () => {
+    const runtime = await serverRuntime(docx(p('x')));
+    try {
+      await runtime.run(async (context) => {
+        context.document.body.getRange('Start').insertTable(2, 1, 'Before', [['a'], ['c']]);
+        await context.sync();
+      });
+      const before = await mainXmlOf(runtime);
+      // Before the merge commits, the cell's end is still after `a`, not after `c`.
+      await expect(
+        runtime.run(async (context) => {
+          const merged = context.document.body.tables.getFirst().mergeCells(0, 0, 1, 0);
+          merged.body.insertText('!', 'End');
+          await context.sync();
+        })
+      ).rejects.toMatchObject({ code: 'ConflictingChanges' });
+      expect(await mainXmlOf(runtime)).toBe(before);
+      await runtime.run(async (context) => {
+        const merged = context.document.body.tables.getFirst().mergeCells(0, 0, 1, 0);
+        await context.sync();
+        merged.body.insertText('!', 'End');
+        await context.sync();
+      });
+      const xml = await mainXmlOf(runtime);
+      expect(xml).toContain('<w:t>c!</w:t>');
     } finally {
       runtime.dispose();
     }
