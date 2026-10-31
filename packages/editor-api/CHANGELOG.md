@@ -1,5 +1,22 @@
 # @docx-editor.dev/editor-api
 
+## 2.34.0
+
+### Minor Changes
+
+- e3a5a01: Add `Document.getStyles()`, which lists the styles a document defines with read-only `Style` properties such as `nameLocal` and `type`, so you can find a paragraph style name that `paragraph.style` accepts. Fixes #1616.
+- 6aaf2ab: Add `Body.insertTable` and `Paragraph.insertTable`, allow `Table.mergeCells` and `TableCell.split` in suggesting mode inside your own proposed table, and allow `TableCell.columnWidth` in tables with merged cells. Fixes #1454.
+
+### Patch Changes
+
+- eda635d: `Body.insertParagraph` at `Start` or `End` now inserts the paragraph before or after a table that opens or closes the body, instead of inside its first or last cell.
+- 7539b23: A load on an object that a write returns, such as the range from `insertText()`, can share that write's `context.sync()` and reports the inserted content. Fixes #1625.
+- 33248af: In suggesting mode, Merge cells and Split cells now work in a table you proposed that is still pending, and the new cells and rows join that proposal.
+- 7539b23: With change tracking on, `Paragraph.split()` proposes each new paragraph mark, and `Range.insertBreak()` proposes page and next-page section breaks, as tracked changes that reject removes. Fixes #1617.
+- 13ddcf5: A cell returned by a vertical `Table.mergeCells()` now accepts `shadingColor` and `verticalAlignment` writes in the same sync, and they apply to every row of the merged cell. A text edit in that table in the same sync now refuses with `ConflictingChanges` instead of landing before the merged text.
+- 1d2fa86: `Body.shapes` and `Paragraph.shapes` now list legacy VML shapes, so `Shape.body` reads, edits, and reviews the text of VML text boxes, whose tracked changes no longer belong to the main body. A text box or closed shape with no text story now answers an empty `body` that refuses writes, instead of failing the read.
+- Updated dependencies: @docx-editor.dev/core@2.34.0
+
 ## 2.33.0
 
 ### Patch Changes

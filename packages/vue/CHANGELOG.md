@@ -1,5 +1,21 @@
 # @docx-editor.dev/vue
 
+## 2.34.0
+
+### Minor Changes
+
+- f182c70: Close the link panel when another participant strikes its selected words in suggesting mode, and add `hyperlinks.selectionIsPendingDeletion()` to tell whether a selection is a pending deletion. Fixes #1643.
+
+### Patch Changes
+
+- 0ea7e91: The context menu's Insert link row opens the link popover for the selection, as the toolbar button and Ctrl+K do, instead of staying disabled. Fixes #1611.
+- 445382d: The Insert link context menu row and toolbar button now open the mounted link panel, and the context menu row shows the Ctrl+K shortcut. If no link panel is mounted, both are disabled with a reason and Ctrl+K is left to the browser. Fixes #1592.
+- b996a85: Closing the link popover with Escape, Cancel, or Apply returns the keyboard to the document, and the context menu row reads Edit link on an existing link. The panel also closes when another participant deletes the words it was about to link.
+- d85ce82: The paragraph style pickers show the built-in styles (Normal, Title, Subtitle, Heading 1 to 9, No Spacing, Quote, Intense Quote, and List Paragraph) in the UI language, and the undo, redo, indent, Go To, and bookmark controls give their disabled reason in the UI language.
+- c99eefb: Right-clicking a text field, popover, or dialog inside the editor, such as the link popover, now shows the browser menu instead of the document context menu. Fixes #1624.
+- dbe57b9: Footnote and endnote numbering comes from each section's own note properties, including its start value, instead of the document-wide settings, and applying note properties to the whole document updates every section and keeps the values you did not change. Fixes #1527.
+- Updated dependencies: @docx-editor.dev/core@2.34.0, @docx-editor.dev/i18n@2.34.0
+
 ## 2.33.0
 
 ### Patch Changes
