@@ -29,7 +29,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * sibling's entry, which hands its points to the block listed after it.
  */
 import * as Y from 'yjs';
-import { firstItem } from './yjs-items.ts';
+import { firstItem, itemsWrittenSince, structAt } from './yjs-items.ts';
 import { itemIdentity } from './paragraph-text-identity.ts';
 import type { LogicalId } from './identity.ts';
 import { ORIGIN_KEY } from './paragraph-text-moves.ts';
@@ -219,6 +219,39 @@ export function handOnSplitPoints(
     const held = own && inItem(own, next) ? splitPointsOf(record) : [];
     if (held.some((point) => point.source === points.at(-1)!.source)) continue;
     record.set(NODE_SPLIT_POINTS_FIELD, serialized([...points, ...held], entry));
+  }
+}
+
+/**
+ * After this replica's undo or redo, which wrote since its clock stood at `from`: a paragraph
+ * whose split points name an entry that the undo or redo put back as a new entry names the new
+ * entry, keeping its points. Only the replica that put the entry back knows which entry it
+ * replaces (`Y.Item.redone`), so it writes this for every replica. The order then counts the
+ * new entry as the split, and tells it from a block that a move lists right before its own
+ * removed entry, which keeps naming the removed entry and shows where its author put it.
+ */
+export function relistSplitEntries(
+  doc: Y.Doc,
+  nodeOf: (id: LogicalId) => Y.Map<unknown> | undefined,
+  from: number
+): void {
+  for (const item of itemsWrittenSince(doc, from)) {
+    if (item.deleted || !(item.parent instanceof Y.Array)) continue;
+    if (!(item.content instanceof Y.ContentAny)) continue;
+    for (const value of item.content.getContent()) {
+      if (typeof value !== 'string') continue;
+      const id = value as LogicalId;
+      const record = nodeOf(id);
+      const entry = splitEntryOf(record);
+      if (!record || !entry || inItem(entry, item)) continue;
+      // The removed entry, then each entry an earlier undo or redo put back for it.
+      let at = structAt(doc, entry);
+      for (let step = 0; at && at !== item && at.redone && step < 64; step += 1) {
+        at = structAt(doc, at.redone);
+      }
+      const key = at === item ? entryKey(item, id) : null;
+      if (key) record.set(NODE_SPLIT_POINTS_FIELD, serialized(splitPointsOf(record), key));
+    }
   }
 }
 

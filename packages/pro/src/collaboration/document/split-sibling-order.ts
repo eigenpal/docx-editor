@@ -171,7 +171,8 @@ export function splitSiblingRanks(
     // to the run, in a block of its own. A paragraph listed there anew, as a split made later
     // or a break typed at the end of the split paragraph, does not: it shows where its author
     // put it. A redo of a redo goes in right before the removed entry of the first redo, so
-    // the walk passes such removed entries too.
+    // the walk passes such removed entries too. A move that lists a sibling right before its
+    // own removed entry leaves it where its author put it.
     let first = start;
     let relistings = 0;
     const members = blocks.flatMap((block) => block.items);
@@ -201,11 +202,26 @@ export function splitSiblingRanks(
     const listed = idsOf(blocks);
     // A paragraph an undo or redo put back in the run stands for its block as a split does.
     const relisted = new Set(blocks.slice(0, relistings).map((block) => block.head));
-    const keyed = (item: Y.Item): boolean => relisted.has(item) || listedBySplit(nodes, item);
+    const keyed = blocks.flatMap((block) =>
+      block.items
+        .filter((item) => !item.deleted)
+        .flatMap((item) =>
+          (item.content.getContent() as LogicalId[]).map(
+            (id, at) => (at === 0 && relisted.has(item)) || splitAt(nodes, id, item, at)
+          )
+        )
+    );
     const blockOf = blocks.flatMap((block, index) => idsOf([block]).map(() => index));
-    const byText = orderOf(blocks, textOf, children.doc, pointsOf, missing, keyed);
+    const byText = orderOf(
+      blocks,
+      textOf,
+      children.doc,
+      pointsOf,
+      missing,
+      (item) => relisted.has(item) || listedBySplit(nodes, item)
+    );
     const order =
-      idsByPoints(listed, blockOf, pointsOf, children.doc, missing) ??
+      idsByPoints(listed, keyed, blockOf, pointsOf, children.doc, missing) ??
       (byText ? idsOf(byText) : null);
     const shown = order ?? listed;
     const source = items[first - 1];
@@ -255,30 +271,51 @@ export function splitSiblingRanks(
  */
 function idsByPoints(
   listed: readonly LogicalId[],
+  /** Whether each listed paragraph is a split at its entry (`splitAt`). */
+  keyed: readonly boolean[],
   /** The block of the run that lists each paragraph, in listed order. */
   blockOf: readonly number[],
   pointsOf: (id: LogicalId) => readonly SplitPoint[],
   doc: Y.Doc | null,
   missing: string[]
 ): LogicalId[] | null {
-  if (listed.length < 2) return null;
-  const points = listed.map((id) => pointsOf(id));
+  // A block a move listed after a paragraph keeps its points but follows that paragraph, and
+  // so does one a move put right after a sibling, whose points it took (`split-points.ts`).
+  const units: LogicalId[][] = [];
+  /** The block of the run that lists each unit's first paragraph. */
+  const unitBlocks: number[] = [];
+  const pointsKeys = new Set<string>();
+  for (const [at, id] of listed.entries()) {
+    const key = pointsOf(id)
+      .map((point) => `${point.source}@${point.at}`)
+      .join('\n');
+    const taken = pointsKeys.has(key);
+    if (keyed[at]) pointsKeys.add(key);
+    if (keyed[at] && !taken) {
+      units.push([id]);
+      unitBlocks.push(blockOf[at]!);
+    } else if (units.length > 0) units.at(-1)!.push(id);
+    else return null;
+  }
+  if (units.length < 2) return null;
+  const points = units.map((unit) => pointsOf(unit[0]!));
   const places = new Map<Y.Text, Map<string, number>>();
   const sorted = (keys: readonly number[]): LogicalId[] => {
-    // Where each block shows: by the key of the first paragraph it lists.
+    // Where each block shows: by the key of the first unit it lists.
     const heads = new Map<number, number>();
-    blockOf.forEach((block, index) => {
+    unitBlocks.forEach((block, index) => {
       if (!heads.has(block)) heads.set(block, index);
     });
     const blocks = [...heads.keys()].sort(
       (a, b) => keys[heads.get(a)!]! - keys[heads.get(b)!]! || a - b
     );
     const shown = new Map(blocks.map((block, rank) => [block, rank]));
-    const order = listed.map((_, index) => index);
+    const order = units.map((_, index) => index);
     order.sort(
-      (a, b) => keys[a]! - keys[b]! || shown.get(blockOf[a]!)! - shown.get(blockOf[b]!)! || a - b
+      (a, b) =>
+        keys[a]! - keys[b]! || shown.get(unitBlocks[a]!)! - shown.get(unitBlocks[b]!)! || a - b
     );
-    return order.map((index) => listed[index]!);
+    return order.flatMap((index) => units[index]!);
   };
   for (let at = points[0]!.length - 1; at >= 0; at -= 1) {
     const source = points[0]![at]!.source;
@@ -302,29 +339,21 @@ function idsByPoints(
 
 /**
  * Whether `item` lists again the paragraph `removed` listed, as an undo or redo does, and not
- * a paragraph listed anew. A paragraph's split points name the entry they were written for
- * (`split-points.ts`), so a paragraph whose points name the removed entry is listed again.
- * Without points, only the paragraph's record tells, because a collected entry keeps no ID:
- * the record the removed entry's author wrote before that entry is still the record. A new
- * paragraph's record comes with its first entry, after every entry its author saw.
+ * a paragraph listed anew or a block a move put there. The undo or redo names the new entry in
+ * the paragraph's split points (`relistSplitEntries`), which a move does not. A split made
+ * later names its own entry as well, so the record tells it apart, because a collected entry
+ * keeps no ID: the record the removed entry's author wrote before that entry is still the
+ * record, and a new paragraph's record comes with its first entry, after every entry its
+ * author saw.
  */
 function listedAgain(nodes: Y.Map<unknown> | null, item: Y.Item, removed: Y.Item): boolean {
-  if (!nodes || item.deleted) return false;
+  if (!nodes || item.deleted || !listedBySplit(nodes, item)) return false;
   const record = mapEntry(nodes, headId(item) as string);
-  if (record === undefined) return false;
-  const value = nodes.get(headId(item) as string);
-  const entry = value instanceof Y.Map ? splitEntryOf(value as Y.Map<unknown>) : null;
-  if (entry) {
-    // The removed entry, or an earlier one a redo put it back before.
-    let at: Y.Item | null = removed;
-    for (let step = 0; at && step < 64; step += 1) {
-      if (inItem(entry, at)) return true;
-      if (!at.deleted || !at.rightOrigin || !nodes.doc) return false;
-      at = structAt(nodes.doc, at.rightOrigin);
-    }
-    return false;
-  }
-  return record.id.client === removed.id.client && record.id.clock < removed.id.clock;
+  return (
+    record !== undefined &&
+    record.id.client === removed.id.client &&
+    record.id.clock < removed.id.clock
+  );
 }
 
 /**
@@ -338,6 +367,14 @@ function listedBySplit(nodes: Y.Map<unknown> | null, item: Y.Item): boolean {
   if (!(record instanceof Y.Map)) return false;
   const entry = splitEntryOf(record as Y.Map<unknown>);
   return entry !== null && inItem(entry, item);
+}
+
+/** Whether `id`, element `at` of `item`, is listed there by the entry its split points name. */
+function splitAt(nodes: Y.Map<unknown> | null, id: LogicalId, item: Y.Item, at: number): boolean {
+  const record = nodes?.get(id as string);
+  if (!(record instanceof Y.Map)) return false;
+  const entry = splitEntryOf(record as Y.Map<unknown>);
+  return entry !== null && entry.client === item.id.client && entry.clock === item.id.clock + at;
 }
 
 /** The paragraph a listing item names first. */
