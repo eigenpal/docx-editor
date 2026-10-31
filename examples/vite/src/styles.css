@@ -631,8 +631,8 @@
   pointer-events: none;
 }
 
-/* The scroller stays left to right, so the inline start of the interface is spelled out:
-   a right-to-left interface keeps the vertical ruler on its right, beside the pane. */
+/* A right-to-left interface keeps the vertical ruler on its right, beside the pane. The
+   scroller's own content stays left to right, so the edge is spelled out. */
 .demo-app[dir='rtl'] .demo-vruler {
   left: auto;
   right: 0;

@@ -7,7 +7,7 @@
 
 import { hostTimers, isDomNode, isElementNode, isHTMLElementNode } from './host-realm.ts';
 import type { SurfaceHostListenerRegistry } from './surface-host-listeners.ts';
-import { surfaceScroller } from './surface-pages.ts';
+import { inlineScrollOffset, setInlineScrollOffset, surfaceScroller } from './surface-pages.ts';
 import type { SurfaceViewportBinding } from './surface-viewport-binding.ts';
 
 /** Host-element classes the surface toggles. */
@@ -140,7 +140,7 @@ export function createSurfaceHosting(deps: SurfaceHostingDeps): SurfaceHosting {
     const scale = deps.scale();
     reading = scroller
       ? {
-          x: (scroller.scrollLeft - from.offsetLeft) / scale,
+          x: (inlineScrollOffset(scroller) - from.offsetLeft) / scale,
           y: (scroller.scrollTop - from.offsetTop) / scale,
         }
       : null;
@@ -160,7 +160,7 @@ export function createSurfaceHosting(deps: SurfaceHostingDeps): SurfaceHosting {
       if (!scroller) return false;
       const scale = deps.scale();
       scroller.scrollTop = Math.max(0, at.y * scale + into.offsetTop);
-      scroller.scrollLeft = Math.max(0, at.x * scale + into.offsetLeft);
+      setInlineScrollOffset(scroller, at.x * scale + into.offsetLeft);
       return true;
     };
     apply();
