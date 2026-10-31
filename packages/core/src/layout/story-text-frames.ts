@@ -10,6 +10,7 @@
 import {
   WML_NAMESPACE_URI as W,
   type OoxmlElement,
+  type OoxmlGenericElementNode,
   type OoxmlNode,
 } from '../store/package/ooxml-tree.ts';
 import {
@@ -82,7 +83,6 @@ function plainFrameProperties(paragraph: OoxmlElement): boolean {
   if (properties?.kind !== 'paragraphProperties') return true;
   return properties.children.every(
     (child) =>
-      child.kind !== 'textValue' &&
       child.namespaceUri === W &&
       (PAGE_NUMBER_PROPERTIES.has(child.localName) ||
         // A right indent only trims the self-sized frame's far edge.
@@ -118,7 +118,7 @@ const SKIPPED = new Set(['del', 'moveFrom', 'bookmarkStart', 'bookmarkEnd', 'pro
  * The paragraph as its visible runs, with inserted runs unwrapped and deletions, bookmarks and
  * proofing marks left out, so a tracked edit does not change whether it holds a page number.
  */
-function visibleRuns(paragraph: OoxmlElement): OoxmlElement {
+function visibleRuns(paragraph: OoxmlElement): OoxmlGenericElementNode {
   const children: OoxmlNode[] = [];
   for (const child of paragraph.children) {
     if (child.kind === 'textValue' || child.namespaceUri !== W) children.push(child);
@@ -129,7 +129,8 @@ function visibleRuns(paragraph: OoxmlElement): OoxmlElement {
       }
     else children.push(child);
   }
-  return { ...paragraph, children };
+  const { id, namespaceUri, localName, namespaceBindings, attributes } = paragraph;
+  return { id, kind: 'generic', namespaceUri, localName, namespaceBindings, attributes, children };
 }
 
 function digitCount(text: string): number {
