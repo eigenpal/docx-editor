@@ -1,6 +1,7 @@
 // Body fit above a footnote area: a paragraph's space after must fit there too.
 import { fragmentCursorBottomPt } from './note-fragment-geometry.ts';
 import type { BlockFragmentRecord, LineRecord, PageRecord } from './semantic-records.ts';
+import type { KeepNextLine, KeepNoteClosing } from './pagination-keeps.ts';
 
 type SpannedLine = Pick<LineRecord, 'spans'>;
 
@@ -27,6 +28,22 @@ export function pageHoldsFootnoteReference(
   if (citesFootnote(line) || pending.some(citesFootnote)) return true;
   return fragments.some(fragmentCitesFootnote);
 }
+
+/**
+ * What a keep group priced before placement needs to charge closing space after as
+ * {@link closingSpaceAfterPt} does: undefined without a note reserve, else whether the page
+ * already cites a footnote and how to tell when a member's lines cite one.
+ */
+export function keepNoteClosing(
+  reservePt: number | undefined,
+  fragments: readonly BlockFragmentRecord[]
+): KeepNoteClosing | undefined {
+  if ((reservePt ?? 0) <= 0) return undefined;
+  return { cited: fragments.some(fragmentCitesFootnote), cites: linesCiteFootnote };
+}
+
+const linesCiteFootnote = (lines: readonly KeepNextLine[]): boolean =>
+  lines.some((line) => 'spans' in line && citesFootnote(line as SpannedLine));
 
 /** Fragments are immutable records, so each is scanned once per pass however often asked. */
 const fragmentCitations = new WeakMap<BlockFragmentRecord, boolean>();
