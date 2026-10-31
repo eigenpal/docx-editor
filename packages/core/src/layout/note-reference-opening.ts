@@ -48,7 +48,8 @@ export function noteReferenceOpeningBottom(
 
 /**
  * New paragraph split admission requires one vertically stacked, full-width body column. A
- * paragraph's column is its box widened by its own indents, so indented text still counts.
+ * paragraph's column is the width it was laid out in, its box plus its own indents, so
+ * indented text still counts and a narrower column of a multi-column section does not.
  */
 export function paragraphNoteSplitsAllowed(page: PageRecord): boolean {
   let bottom = Number.NEGATIVE_INFINITY;
