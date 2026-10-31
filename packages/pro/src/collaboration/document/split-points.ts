@@ -172,6 +172,16 @@ export function handOnSplitPoints(
       if (!next.deleted && !removed.includes(next)) break;
       chain.push(next);
     }
+    // When none stays after it and the entry it was listed after is removed too, the nearest
+    // entry that stays between the two takes them: a block moved in there showed with it, and
+    // keeps its place.
+    if (!next) {
+      let prev = gone.left;
+      let nearest: Y.Item | null = null;
+      for (; prev && !inItem(gone.origin, prev); prev = prev.left)
+        if (!nearest && !prev.deleted && !removed.includes(prev)) nearest = prev;
+      if (prev?.deleted) next = nearest;
+    }
     if (!next) continue;
     const nextId = (next.content.getContent() as LogicalId[])[0]!;
     const record = nodeOf(nextId);
