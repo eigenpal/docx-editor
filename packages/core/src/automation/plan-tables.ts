@@ -30,7 +30,9 @@ export interface TablePlannerContext {
   readonly admitWrite: (
     reads: AutomationStoryReads,
     expectedNewParagraphs: number,
-    affectedParagraphIds: readonly string[]
+    affectedParagraphIds: readonly string[],
+    /** Paragraphs a merge moves, which later text edits in the batch cannot address. */
+    reshapedParagraphIds?: readonly string[]
   ) => PlannedOperation | null;
 }
 // The shared frozen helpers; a table refusal's message is its detail, as it always was.
@@ -344,7 +346,9 @@ export function planTableOperation(
           ? [...paragraphs(table)]
           : mutation.kind === 'cell' && mutation.value !== undefined
             ? [...paragraphs(node)]
-            : []
+            : [],
+        // A merge moves paragraphs between cells, so a later text edit in the table refuses.
+        mutation.kind === 'mergeCells' ? [...paragraphs(table)] : []
       );
       if (admission) return admission;
       const oldRows = new Set(data.rowIds);

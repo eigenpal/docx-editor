@@ -462,15 +462,22 @@ export function carryIndexToHistoryRoot(oldRoot: OoxmlElement, restoredRoot: Oox
   stealPatchedIndex(oldRoot, restoredRoot);
 }
 
-function removeIndexedSubtree(index: PartIndex, node: OoxmlNode): void {
-  // Only when the entry still names THIS object: a moved node re-indexed under its new
-  // parent must survive the removal sweep of its old position.
+function removeIndexedSubtree(
+  index: PartIndex,
+  node: OoxmlNode,
+  parentId: string | undefined
+): void {
+  // Only when the entry still names THIS object under THIS parent: a moved node re-indexed
+  // under its new parent must survive the removal sweep of its old position. A move into an
+  // earlier branch (a merge carrying a lower cell's paragraph up) is indexed before the sweep
+  // reaches its old place, and its subtree stays indexed with it.
   if (index.nodes.get(node.id) === node) {
+    if (parentIdOf(index, node.id) !== parentId) return;
     index.nodes.delete(node.id);
     index.parents.delete(node.id);
   }
   if (node.kind === 'textValue') return;
-  for (const child of node.children) removeIndexedSubtree(index, child);
+  for (const child of node.children) removeIndexedSubtree(index, child, node.id);
 }
 
 function addIndexedSubtree(index: PartIndex, node: OoxmlNode, parentId: string): void {
@@ -497,7 +504,7 @@ function diffPatch(
     return;
   }
   if (oldNode.id !== newNode.id) {
-    removeIndexedSubtree(index, oldNode);
+    removeIndexedSubtree(index, oldNode, newParentId ?? undefined);
     if (newParentId !== null) addIndexedSubtree(index, newNode, newParentId);
     return;
   }
@@ -540,7 +547,8 @@ function diffPatch(
   }
   // REMOVALS FIRST: a node moved between siblings appears in both a removed child's old
   // position and a new child's subtree, and deleting after adding would strip it.
-  for (const [id, child] of oldById) if (!kept.has(id)) removeIndexedSubtree(index, child);
+  for (const [id, child] of oldById)
+    if (!kept.has(id)) removeIndexedSubtree(index, child, newNode.id);
   for (let at = first; at < newPast; at += 1) {
     const child = newChildren[at]!;
     const previous = oldById.get(child.id);

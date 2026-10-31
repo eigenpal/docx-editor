@@ -2577,15 +2577,32 @@ a.docx-hyperlink:focus-visible {
   padding-inline-start: 18px;
 }
 
-/* The scroller keeps a left-to-right base whatever the host page declares. Under an
- * inherited `rtl`, `scrollLeft` runs from 0 to negative values and overflow grows
- * leftward, which breaks every horizontal offset the editor derives from it: zoom
- * anchoring, rulers, the review rail and popups. Document text direction comes only
- * from the document; the pages pin their own base as well. */
+/* The scroller keeps a left-to-right base whatever the host page declares: an inherited
+ * `rtl` must not move the scroll bar of a left-to-right interface. Document text direction
+ * comes only from the document; the pages pin their own base as well. */
 .docx-editor__scroll-container {
   display: flex;
   flex-direction: column;
   direction: ltr;
+}
+
+/* A right-to-left interface puts the vertical scroll bar on the left, which only the
+ * scroller's own `direction` does. Its content keeps a left-to-right base. `scrollLeft` then
+ * runs from 0 at the right end to negative values. Absolute positions inside the scroller use
+ * that same origin; `inlineScrollOffset` converts it for offsets taken inside the mount. */
+.docx-editor__scroll-container[data-chrome-dir='rtl'] {
+  direction: rtl;
+}
+
+/* A child with its own `dir` keeps it, as it did under the left-to-right scroller. */
+.docx-editor__scroll-container[data-chrome-dir='rtl'] > :not([dir]) {
+  direction: ltr;
+}
+
+/* A right-to-left scroller reaches overflow on its left only. The mount grows to the pages'
+ * width, so a page wider than the viewport overflows leftward instead of out of reach. */
+.docx-editor__scroll-container[data-chrome-dir='rtl'] > .docx-content-mount {
+  min-width: max-content;
 }
 
 /* Controls that mount inside the scroller are chrome, not pages: they take back the
@@ -5984,7 +6001,8 @@ a.docx-hyperlink:focus-visible {
  * at the right, so its shift and the review gutter's start value pad the right edge, and the
  * review column pads the left. The custom properties keep their logical meaning (start, end),
  * so every reader of them stays direction-free; only these rules know the physical edges.
- * The scroller keeps a left-to-right base, so `padding-inline-start` is still the left. */
+ * These rules set both physical edges, so the scroller's own `rtl` direction, which maps
+ * `padding-inline-start` to the right, changes nothing here. */
 .docx-editor .docx-editor__scroll-container[data-chrome-dir='rtl'],
 .docx-editor.docx-editor__scroll-container[data-chrome-dir='rtl'] {
   padding-left: 0;

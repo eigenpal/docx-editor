@@ -80,6 +80,100 @@ describe('Table.mergeCells and TableCell.split', () => {
     }
   });
 
+  test('a vertical merge takes edits of its returned cell in the same sync', async () => {
+    const runtime = await serverRuntime(docx(p('x')));
+    try {
+      await runtime.run(async (context) => {
+        const table = context.document.body.getRange('Start').insertTable(3, 2, 'Before', [
+          ['a', 'b'],
+          ['', 'd'],
+          ['e', 'f'],
+        ]);
+        await context.sync();
+        const merged = table.mergeCells(0, 0, 1, 0);
+        merged.value = 'merged';
+        merged.verticalAlignment = 'Center';
+        merged.shadingColor = '#FFEE00';
+        await context.sync();
+        merged.load('value,verticalAlignment,shadingColor');
+        await context.sync();
+        expect(merged.value).toBe('merged');
+        expect(merged.verticalAlignment).toBe('Center');
+        expect(merged.shadingColor).toBe('#FFEE00');
+      });
+      const xml = await mainXmlOf(runtime);
+      expect(xml).toContain('<w:vMerge w:val="restart"/>');
+      // Cell formatting covers both rows of the merge.
+      expect(xml.match(/<w:vAlign w:val="center"\/>/g)?.length).toBe(2);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('a value write to a merged cell with several paragraphs refuses', async () => {
+    const runtime = await serverRuntime(docx(p('x')));
+    try {
+      await runtime.run(async (context) => {
+        context.document.body.getRange('Start').insertTable(2, 1, 'Before', [['a'], ['c']]);
+        await context.sync();
+      });
+      const before = await mainXmlOf(runtime);
+      const refusal = {
+        code: 'InvalidArgument',
+        debugInfo: { innerError: { code: 'edit.unsupported-content' } },
+      };
+      // In the merge's own sync the refusal comes at commit, with the code a later sync gives.
+      await expect(
+        runtime.run(async (context) => {
+          const merged = context.document.body.tables.getFirst().mergeCells(0, 0, 1, 0);
+          merged.value = 'merged';
+          await context.sync();
+        })
+      ).rejects.toMatchObject(refusal);
+      expect(await mainXmlOf(runtime)).toBe(before);
+      await expect(
+        runtime.run(async (context) => {
+          const merged = context.document.body.tables.getFirst().mergeCells(0, 0, 1, 0);
+          await context.sync();
+          merged.value = 'merged';
+          await context.sync();
+        })
+      ).rejects.toMatchObject(refusal);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('a text edit in the merge sync refuses; after a sync it reaches the merged content', async () => {
+    const runtime = await serverRuntime(docx(p('x')));
+    try {
+      await runtime.run(async (context) => {
+        context.document.body.getRange('Start').insertTable(2, 1, 'Before', [['a'], ['c']]);
+        await context.sync();
+      });
+      const before = await mainXmlOf(runtime);
+      // Before the merge commits, the cell's end is still after `a`, not after `c`.
+      await expect(
+        runtime.run(async (context) => {
+          const merged = context.document.body.tables.getFirst().mergeCells(0, 0, 1, 0);
+          merged.body.insertText('!', 'End');
+          await context.sync();
+        })
+      ).rejects.toMatchObject({ code: 'ConflictingChanges' });
+      expect(await mainXmlOf(runtime)).toBe(before);
+      await runtime.run(async (context) => {
+        const merged = context.document.body.tables.getFirst().mergeCells(0, 0, 1, 0);
+        await context.sync();
+        merged.body.insertText('!', 'End');
+        await context.sync();
+      });
+      const xml = await mainXmlOf(runtime);
+      expect(xml).toContain('<w:t>c!</w:t>');
+    } finally {
+      runtime.dispose();
+    }
+  });
+
   test('split adds columns and rows; a merged cell splits back', async () => {
     const runtime = await serverRuntime(docx(p('x')));
     try {

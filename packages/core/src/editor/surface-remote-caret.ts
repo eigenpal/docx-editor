@@ -222,108 +222,111 @@ export function createRemoteCaret(deps: RemoteCaretDeps): RemoteCaret {
       capture = null;
     },
     map(selection) {
-      const taken = capture;
-      capture = null;
-      if (!taken) return selection;
-      // The session carried the caret on the characters beside it: exact wherever text
-      // moved, and with no guess among equal letters. It answers for the selection it saw,
-      // and reads no screen text, so it answers too when the screen was behind the model.
-      const carried = deps.carried?.() ?? null;
-      const carriedTo = (seen: SemanticSelection): SemanticSelection | null =>
-        carried &&
-        sameSelection(carried.from, seen) &&
-        sameSelection(selection, seen) &&
-        // Any story's paragraph, as a text box's, which the active story's order leaves out.
-        deps.textOf(carried.to.anchor.paragraphId) !== null &&
-        deps.textOf(carried.to.head.paragraphId) !== null
-          ? carried.to
-          : null;
-      if (taken === STALE) return carriedTo(selection) ?? selection;
-      const after = deps.order();
-      // Undo and redo put the caret where the text changed: after restored words, or where
-      // removed words were.
-      const onScreen = new Set(after);
-      for (const { id, text } of taken.history) {
-        if (!onScreen.has(id)) continue;
-        const now = deps.textOf(id) ?? text;
-        if (now === text) continue;
-        let start = 0;
-        while (start < text.length && start < now.length && text[start] === now[start]) {
-          start += 1;
-        }
-        const site = { paragraphId: id, offset: start + Math.max(0, now.length - text.length) };
-        return { anchor: site, head: site };
-      }
-      const present = new Set(after);
-      const moved = carriedTo(taken.selection);
-      if (moved) return moved;
-      const known = new Set(taken.order);
-      // A peer pressed Enter before the caret: the paragraph keeps the head of its text and a
-      // new paragraph right after it starts with the rest. The caret goes with its characters.
-      const followSplit = (position: SemanticPosition): SemanticPosition | null => {
-        const beforeText = taken.before.get(position.paragraphId);
-        const head = deps.textOf(position.paragraphId);
-        if (beforeText === undefined || head === null || head.length >= beforeText.length) {
-          return null;
-        }
-        if (!beforeText.startsWith(head) || position.offset <= head.length) return null;
-        const next = after[after.indexOf(position.paragraphId) + 1];
-        if (next === undefined || known.has(next)) return null;
-        if (!(deps.textOf(next) ?? '').startsWith(beforeText.slice(head.length))) return null;
-        return { paragraphId: next, offset: position.offset - head.length };
-      };
-      const anchorSplit = followSplit(selection.anchor);
-      const headSplit = followSplit(selection.head);
-      let mapped = selection;
-      for (const [id, beforeText] of taken.before) {
-        if (!present.has(id)) continue;
-        mapped = mapSelectionAcrossText(mapped, id, beforeText, deps.textOf(id) ?? beforeText);
-      }
-      mapped = { anchor: anchorSplit ?? mapped.anchor, head: headSplit ?? mapped.head };
-      const survive = (position: SemanticPosition): SemanticPosition => {
-        if (present.has(position.paragraphId)) return position;
-        const at = taken.order.indexOf(position.paragraphId);
-        let previous: string | null = null;
-        for (let index = at - 1; index >= 0 && previous === null; index -= 1) {
-          if (present.has(taken.order[index]!)) previous = taken.order[index]!;
-        }
-        // A join: the paragraph's text now ends the one before it, so the caret follows it.
-        const removedText = taken.before.get(position.paragraphId);
-        const previousText = previous === null ? '' : (deps.textOf(previous) ?? '');
-        if (previous !== null && removedText !== undefined && previousText.endsWith(removedText)) {
-          const offset = previousText.length - removedText.length + position.offset;
-          return { paragraphId: previous, offset };
-        }
-        // A removal: land where the paragraph was, at the start of the next surviving one,
-        // or at the end of the previous one when it was the last.
-        for (let index = at + 1; at >= 0 && index < taken.order.length; index += 1) {
-          const id = taken.order[index]!;
-          if (present.has(id)) return { paragraphId: id, offset: 0 };
-        }
-        return previous === null
-          ? position
-          : { paragraphId: previous, offset: previousText.length };
-      };
-      // The text around the caret names its place only when the paragraphs themselves changed:
-      // a split or a join the checks above missed. An edit inside one paragraph is the
-      // alignment's to place, and a caret the user moved meanwhile is the user's.
-      const structural =
-        after.length !== taken.order.length || after.some((id, at) => id !== taken.order[at]);
-      if (!structural || !sameSelection(selection, taken.selection)) {
-        return { anchor: survive(mapped.anchor), head: survive(mapped.head) };
-      }
-      return {
-        anchor: reanchored(
-          survive(mapped.anchor),
-          selection.anchor,
-          taken.context.anchor,
-          deps,
-          after
-        ),
-        head: reanchored(survive(mapped.head), selection.head, taken.context.head, deps, after),
-      };
+      const next = carry(selection);
+      // The same selection when nothing moved: a caller treats a new one as a caret move.
+      return sameSelection(next, selection) ? selection : next;
     },
   };
+  function carry(selection: SemanticSelection): SemanticSelection {
+    const taken = capture;
+    capture = null;
+    if (!taken) return selection;
+    // The session carried the caret on the characters beside it: exact wherever text
+    // moved, and with no guess among equal letters. It answers for the selection it saw,
+    // and reads no screen text, so it answers too when the screen was behind the model.
+    const carried = deps.carried?.() ?? null;
+    const carriedTo = (seen: SemanticSelection): SemanticSelection | null =>
+      carried &&
+      sameSelection(carried.from, seen) &&
+      sameSelection(selection, seen) &&
+      // Any story's paragraph, as a text box's, which the active story's order leaves out.
+      deps.textOf(carried.to.anchor.paragraphId) !== null &&
+      deps.textOf(carried.to.head.paragraphId) !== null
+        ? carried.to
+        : null;
+    if (taken === STALE) return carriedTo(selection) ?? selection;
+    const after = deps.order();
+    // Undo and redo put the caret where the text changed: after restored words, or where
+    // removed words were.
+    const onScreen = new Set(after);
+    for (const { id, text } of taken.history) {
+      if (!onScreen.has(id)) continue;
+      const now = deps.textOf(id) ?? text;
+      if (now === text) continue;
+      let start = 0;
+      while (start < text.length && start < now.length && text[start] === now[start]) {
+        start += 1;
+      }
+      const site = { paragraphId: id, offset: start + Math.max(0, now.length - text.length) };
+      return { anchor: site, head: site };
+    }
+    const present = new Set(after);
+    const moved = carriedTo(taken.selection);
+    if (moved) return moved;
+    const known = new Set(taken.order);
+    // A peer pressed Enter before the caret: the paragraph keeps the head of its text and a
+    // new paragraph right after it starts with the rest. The caret goes with its characters.
+    const followSplit = (position: SemanticPosition): SemanticPosition | null => {
+      const beforeText = taken.before.get(position.paragraphId);
+      const head = deps.textOf(position.paragraphId);
+      if (beforeText === undefined || head === null || head.length >= beforeText.length) {
+        return null;
+      }
+      if (!beforeText.startsWith(head) || position.offset <= head.length) return null;
+      const next = after[after.indexOf(position.paragraphId) + 1];
+      if (next === undefined || known.has(next)) return null;
+      if (!(deps.textOf(next) ?? '').startsWith(beforeText.slice(head.length))) return null;
+      return { paragraphId: next, offset: position.offset - head.length };
+    };
+    const anchorSplit = followSplit(selection.anchor);
+    const headSplit = followSplit(selection.head);
+    let mapped = selection;
+    for (const [id, beforeText] of taken.before) {
+      if (!present.has(id)) continue;
+      mapped = mapSelectionAcrossText(mapped, id, beforeText, deps.textOf(id) ?? beforeText);
+    }
+    mapped = { anchor: anchorSplit ?? mapped.anchor, head: headSplit ?? mapped.head };
+    const survive = (position: SemanticPosition): SemanticPosition => {
+      if (present.has(position.paragraphId)) return position;
+      const at = taken.order.indexOf(position.paragraphId);
+      let previous: string | null = null;
+      for (let index = at - 1; index >= 0 && previous === null; index -= 1) {
+        if (present.has(taken.order[index]!)) previous = taken.order[index]!;
+      }
+      // A join: the paragraph's text now ends the one before it, so the caret follows it.
+      const removedText = taken.before.get(position.paragraphId);
+      const previousText = previous === null ? '' : (deps.textOf(previous) ?? '');
+      if (previous !== null && removedText !== undefined && previousText.endsWith(removedText)) {
+        const offset = previousText.length - removedText.length + position.offset;
+        return { paragraphId: previous, offset };
+      }
+      // A removal: land where the paragraph was, at the start of the next surviving one,
+      // or at the end of the previous one when it was the last.
+      for (let index = at + 1; at >= 0 && index < taken.order.length; index += 1) {
+        const id = taken.order[index]!;
+        if (present.has(id)) return { paragraphId: id, offset: 0 };
+      }
+      return previous === null ? position : { paragraphId: previous, offset: previousText.length };
+    };
+    // The text around the caret names its place only when the paragraphs themselves changed:
+    // a split or a join the checks above missed. An edit inside one paragraph is the
+    // alignment's to place, and a caret the user moved meanwhile is the user's.
+    const structural =
+      after.length !== taken.order.length || after.some((id, at) => id !== taken.order[at]);
+    if (!structural || !sameSelection(selection, taken.selection)) {
+      return { anchor: survive(mapped.anchor), head: survive(mapped.head) };
+    }
+    return {
+      anchor: reanchored(
+        survive(mapped.anchor),
+        selection.anchor,
+        taken.context.anchor,
+        deps,
+        after
+      ),
+      head: reanchored(survive(mapped.head), selection.head, taken.context.head, deps, after),
+    };
+  }
 }
 
 /**

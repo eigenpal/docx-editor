@@ -13,6 +13,8 @@ import {
 import { safeRowInsertion } from './table-authoring-row-insertion.ts';
 import { readEditableTableTopology, type EditableTableTopology } from './tree-op-table-topology.ts';
 import { readMergeableTable } from './tree-op-table-cell-shape.ts';
+import { buildPlacedCellIndex } from './tree-op-table-cell-properties.ts';
+import { DEFAULT_TABLE_TOPOLOGY_LIMITS } from './table-constraints.ts';
 import { readTwipsMeasure } from '../units.ts';
 import { wmlAttributeValue, wmlChildNamed } from './tree-op-table-shared.ts';
 import { applyTreeOp, type TreeDocOp, type TreeOpEffect } from './tree-ops.ts';
@@ -473,6 +475,13 @@ export function planTableMutation(
       if (!matrix([[mutation.value]], 1, 1)) return { ok: false, reason: 'invalid-cell-value' };
       error = writeCell(cell, mutation.value);
     }
+    // Cell formatting covers the whole merged cell: a vertical merge's lower parts take it too.
+    const visual = (): string[] => {
+      const t = topo();
+      const placed = t && buildPlacedCellIndex(t, DEFAULT_TABLE_TOPOLOGY_LIMITS);
+      const members = placed?.ok ? placed.index.visualMembersByOwnerId.get(cell.id) : undefined;
+      return members ? [...members] : [cell.id];
+    };
     if (!error && mutation.shadingColor !== undefined) {
       const color = mutation.shadingColor.replace(/^#/, '');
       if (color !== 'auto' && !/^[a-fA-F0-9]{6}$/.test(color))
@@ -480,7 +489,7 @@ export function planTableMutation(
       error = apply({
         op: 'setTableCellFill',
         tableId,
-        cellIds: [cell.id],
+        cellIds: visual(),
         color: color === 'auto' ? null : { kind: 'hex', value: color },
       });
     }
@@ -488,7 +497,7 @@ export function planTableMutation(
       error = apply({
         op: 'setTableCellVerticalAlignment',
         tableId,
-        cellIds: [cell.id],
+        cellIds: visual(),
         alignment: mutation.verticalAlignment.toLowerCase() as 'top' | 'center' | 'bottom',
       });
     if (!error && mutation.columnWidth !== undefined) {
