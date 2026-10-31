@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A setListLevel write changed w:ilvl and kept the paragraph's own w:ind, so an item with its own left or hanging indent stayed in place at its new level.",
+  "after": "A setListLevel write that changes the level also removes the paragraph's own leading and first-line w:ind attributes in the same write; the right indent stays.",
+  "reason": "Replicas exchange the resulting paragraph properties, not the op, so released readers apply the shorter w:ind like any other paragraph property change and converge on it; no new op or shared field.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-list-level-own-indent.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-style-numbered-list-level.test.ts",
+    "packages/core/src/editor/__tests__/list-level-own-indent.test.ts"
+  ],
+  "changeset": "list-level-own-indent",
+  "migration": null
+}

@@ -195,7 +195,14 @@ export function createListExit(deps: ListExitDeps) {
       // after the numbering op would put back what that op had just removed.
       const ops: TreeDocOp[] = [];
       if (outdented) {
-        ops.push(deps.listNumbering.levelOp(position.paragraphId, marker.numId, marker.level - 1));
+        ops.push(
+          ...deps.listNumbering.levelOps(
+            position.paragraphId,
+            marker.numId,
+            marker.level,
+            marker.level - 1
+          )
+        );
       } else {
         const cleared = deps.listStyle.clearOp(position.paragraphId);
         if (cleared) ops.push(cleared);

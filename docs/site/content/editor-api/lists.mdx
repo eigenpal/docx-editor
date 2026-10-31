@@ -68,7 +68,7 @@ paragraph.attachToList(list.id, 1);
 await context.sync();
 ```
 
-`Paragraph.attachToList(listId, level)` returns the addressed `List`. `Paragraph.detachFromList()` removes that paragraph's list membership. `Paragraph.list` returns its existing list. If the paragraph has no list, the operation fails with `InvalidArgument`. `Paragraph.listItem.level` reads or writes its level. Existing lists can omit levels. The runtime rejects assignments to a missing level. There is no marker-text `listString` or `siblingIndex` property in this subset.
+`Paragraph.attachToList(listId, level)` returns the addressed `List`. `Paragraph.detachFromList()` removes that paragraph's list membership. `Paragraph.list` returns its existing list. If the paragraph has no list, the operation fails with `InvalidArgument`. `Paragraph.listItem.level` reads or writes its level. A new level removes the paragraph’s own left and first-line or hanging indents, so the item takes the indents of that level. Its right indent stays. Existing lists can omit levels. The runtime rejects assignments to a missing level. There is no marker-text `listString` or `siblingIndex` property in this subset.
 
 ## Choose level markers
 
