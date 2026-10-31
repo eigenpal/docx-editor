@@ -24,7 +24,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import * as Y from 'yjs';
 import type { LogicalId } from './identity.ts';
-import { firstItem, structAt } from './yjs-items.ts';
+import { firstItem, mapEntry, structAt } from './yjs-items.ts';
 import { itemIdentity, type Identity } from './paragraph-text-identity.ts';
 import { marksOfText } from './paragraph-text-marks.ts';
 import { childArrayOf, PACKAGE_NODES_KEY } from './schema.ts';
@@ -43,6 +43,18 @@ export interface SiblingRank {
   readonly group: number;
   /** Its place in the group, first is 0. */
   readonly rank: number;
+}
+
+/**
+ * One run of concurrent split siblings after the paragraph they split: the run's paragraphs
+ * as shown, with the first paragraph of each block in `heads` and every one in `shown`.
+ */
+export interface SiblingGroup {
+  readonly source: LogicalId;
+  readonly heads: readonly LogicalId[];
+  readonly shown: readonly LogicalId[];
+  /** For each paragraph, the one its author listed it right after: the source or a sibling. */
+  readonly before: ReadonlyMap<LogicalId, LogicalId>;
 }
 
 /** The ranks of the children of one parent that move, or null when none does. */
@@ -110,6 +122,8 @@ export function splitSiblingRanks(
   heads: LogicalId[] = [],
   /** The split points recorded on a paragraph (`split-points.ts`). */
   pointsOf: (id: LogicalId) => readonly SplitPoint[] = () => [],
+  /** Collects every concurrent run that follows a listed paragraph, moved or not. */
+  groups: SiblingGroup[] = [],
   /** Collects the characters an order named that this replica has not received yet. */
   missing: string[] = []
 ): SiblingRanks {
@@ -151,28 +165,67 @@ export function splitSiblingRanks(
       start += 1;
       continue;
     }
+    // An undo or redo puts a removed sibling back right before its own removed entry: its
+    // left origin is the paragraph the run follows, its right origin is a deleted member of
+    // the run, and that member listed a paragraph whose record was already there. It belongs
+    // to the run, in a block of its own. A paragraph listed there anew, as a split made later
+    // or a break typed at the end of the split paragraph, does not: it shows where its author
+    // put it.
+    let first = start;
+    while (first > 1) {
+      const item = items[first - 1]!;
+      const removed = blocks
+        .flatMap((block) => block.items)
+        .find((member) => member.deleted && inItem(item.rightOrigin, member));
+      if (!removed || !inItem(item.origin, items[first - 2]!)) break;
+      if (!listedAgain(nodes, item, removed)) break;
+      blocks.unshift({ head: item, items: [item] });
+      first -= 1;
+    }
     for (const block of blocks)
       for (const item of block.items) if (!item.deleted) heads.push(headId(item));
-    const order = orderOf(blocks, textOf, children.doc, pointsOf, missing, (item) =>
-      listedBySplit(nodes, item)
-    );
-    if (order) {
-      group += 1;
-      ranks ??= new Map();
-      let rank = 0;
-      for (const block of order) {
-        for (const item of block.items) {
-          if (item.deleted) continue;
-          for (const id of item.content.getContent() as LogicalId[]) {
-            ranks.set(id, { group, rank });
-            rank += 1;
-          }
+    // A paragraph stands for its place in the run only where a split listed it, or where an
+    // undo or redo listed it again in its run, as above.
+    const relisted = new Set(blocks.slice(0, start - first).map((block) => block.head));
+    const keyed = (item: Y.Item): boolean => relisted.has(item) || listedBySplit(nodes, item);
+    const idsOf = (list: readonly Block[]): LogicalId[] =>
+      list.flatMap((block) =>
+        block.items
+          .filter((item) => !item.deleted)
+          .flatMap((item) => item.content.getContent() as LogicalId[])
+      );
+    const listed = idsOf(blocks);
+    const byText = orderOf(blocks, textOf, children.doc, pointsOf, missing, keyed);
+    const order =
+      idsByPoints(listed, pointsOf, children.doc, missing) ?? (byText ? idsOf(byText) : null);
+    const shown = order ?? listed;
+    const source = items[first - 1];
+    if (source && !source.deleted && inItem(head.origin, source)) {
+      const heads = new Set(
+        blocks.filter((block) => !block.head.deleted).map((b) => headId(b.head))
+      );
+      const sourceId = (source.content.getContent() as LogicalId[])[
+        head.origin!.clock - source.id.clock
+      ]!;
+      const before = new Map<LogicalId, LogicalId>();
+      for (const block of blocks) {
+        let previous = sourceId;
+        for (const id of idsOf([block])) {
+          before.set(id, previous);
+          previous = id;
         }
       }
+      groups.push({ source: sourceId, heads: shown.filter((id) => heads.has(id)), shown, before });
+    }
+    const moves = order !== null && order.some((id, at) => listed[at] !== id);
+    if (moves) {
+      group += 1;
+      ranks ??= new Map();
+      order.forEach((id, rank) => ranks!.set(id, { group, rank }));
     }
     // A run that moves nothing leaves its blocks as listed, so a run inside one of them, as
     // splits of a paragraph a moved block carries, is read on its own.
-    start = order ? end : start + 1;
+    start = moves ? end : start + 1;
   }
   return ranks;
 }
@@ -188,6 +241,65 @@ function listedBySplit(nodes: Y.Map<unknown> | null, item: Y.Item): boolean {
   if (!(record instanceof Y.Map)) return false;
   const entry = splitEntryOf(record as Y.Map<unknown>);
   return entry !== null && inItem(entry, item);
+}
+
+/**
+ * The paragraphs of one concurrent run in the order of their split points, or null when they
+ * do not all name a split of one paragraph. Each paragraph goes by where its own last split
+ * fell, so pieces that several peers split off at once, each peer's later pieces split off its
+ * earlier ones included, interleave in text order. When those splits do not all stand in one
+ * live text, as a split of text typed after the first split, each paragraph goes by its split
+ * of that one paragraph; paragraphs with one split point, as
+ * a paragraph and the paragraph that took its split points, keep their listed order.
+ */
+function idsByPoints(
+  listed: readonly LogicalId[],
+  pointsOf: (id: LogicalId) => readonly SplitPoint[],
+  doc: Y.Doc | null,
+  missing: string[]
+): LogicalId[] | null {
+  if (listed.length < 2) return null;
+  const points = listed.map((id) => pointsOf(id));
+  const places = new Map<Y.Text, Map<string, number>>();
+  const sorted = (keys: readonly number[]): LogicalId[] => {
+    const order = listed.map((_, index) => index);
+    order.sort((a, b) => keys[a]! - keys[b]! || a - b);
+    return order.map((index) => listed[index]!);
+  };
+  for (let at = points[0]!.length - 1; at >= 0; at -= 1) {
+    const source = points[0]![at]!.source;
+    const splits = points.map((list) => splitAtIn(list, source));
+    if (splits.some((split) => split === null)) continue;
+    const waiting = missing.length;
+    const own = splitKeys(
+      doc,
+      points.map((list) => list.at(-1)!.at),
+      places,
+      missing,
+      false
+    );
+    if (own) return sorted(own);
+    if (missing.length > waiting) return null;
+    const keys = splitKeys(doc, splits as string[], places, missing);
+    return keys ? sorted(keys) : null;
+  }
+  return null;
+}
+
+/**
+ * Whether `item` lists again the paragraph `removed` listed, as an undo or redo does, and not
+ * a paragraph listed anew. Only the paragraph's record tells, because a collected entry keeps
+ * no ID: the record the removed entry's author wrote before that entry is still the record.
+ * A new paragraph's record comes with its first entry, after every entry its author saw.
+ */
+function listedAgain(nodes: Y.Map<unknown> | null, item: Y.Item, removed: Y.Item): boolean {
+  if (!nodes || item.deleted) return false;
+  const record = mapEntry(nodes, headId(item) as string);
+  return (
+    record !== undefined &&
+    record.id.client === removed.id.client &&
+    record.id.clock < removed.id.clock
+  );
 }
 
 /** The paragraph a listing item names first. */
@@ -323,18 +435,48 @@ function identityBefore(
   places: Map<Y.Text, Map<string, number>>,
   missing: string[]
 ): boolean | null {
-  if (first === second || !doc) return null;
-  const absent = [first, second].filter((identity) => !identityArrived(doc, identity));
+  if (first === second) return null;
+  const keys = splitKeys(doc, [first, second], places, missing);
+  return keys && keys[0] !== keys[1] ? keys[0]! < keys[1]! : null;
+}
+
+/**
+ * Comparable places for split points (`client:clock`, or `client:clock+` for just after that
+ * character), or null when this replica cannot place them alike with every other: all stand
+ * in one live text, or one author typed or loaded all of them, whose clocks go up in text order
+ * within one insert. The clocks decide only when this replica holds every character and they
+ * do not all stand in one live text, so every replica that holds all updates reads the same
+ * places, whatever their arrival order. A character not received yet goes to `missing`, and
+ * the answer is null until it arrives.
+ */
+function splitKeys(
+  doc: Y.Doc | null,
+  points: readonly string[],
+  places: Map<Y.Text, Map<string, number>>,
+  missing: string[],
+  /** Whether one author's clocks may decide when the places are in different texts. */
+  byClock = true
+): number[] | null {
+  if (!doc) return null;
+  const parsed = points.map((point) => ({
+    identity: point.endsWith('+') ? point.slice(0, -1) : point,
+    after: point.endsWith('+') ? 0.5 : 0,
+  }));
+  const absent = parsed
+    .map(({ identity }) => identity)
+    .filter((identity) => !identityArrived(doc, identity));
   if (absent.length > 0) {
     missing.push(...absent);
     return null;
   }
-  const a = sourcePlace(doc, first, places);
-  const b = sourcePlace(doc, second, places);
-  if (a && b && a.text === b.text) return a.at < b.at;
-  const [aClient, aClock] = first.split(':').map(Number);
-  const [bClient, bClock] = second.split(':').map(Number);
-  return aClient === bClient ? aClock! < bClock! : null;
+  const placed = parsed.map(({ identity }) => sourcePlace(doc, identity, places));
+  if (placed.every((place) => place && place.text === placed[0]!.text))
+    return placed.map((place, at) => place!.at + parsed[at]!.after);
+  if (!byClock) return null;
+  const clocks = parsed.map(({ identity }) => identity.split(':').map(Number));
+  if (clocks.every(([client]) => client === clocks[0]![0]))
+    return clocks.map(([, clock], at) => clock! + parsed[at]!.after);
+  return null;
 }
 
 /**
@@ -406,6 +548,8 @@ interface OrderEntry {
   readonly waiting: readonly LogicalId[];
   /** Their text lengths, a cheap sign that one of them changed. */
   readonly lengths: string;
+  /** The concurrent runs that follow a listed paragraph. */
+  readonly groups: readonly SiblingGroup[];
   /** The split characters the order named that had not arrived. Usually empty. */
   readonly missing: readonly string[];
 }
@@ -425,6 +569,8 @@ export class SplitSiblingOrders {
   private readonly withRuns = new Set<LogicalId>();
   /** Parents whose child array changed, with the order they showed before. */
   private readonly recheck = new Map<LogicalId, readonly LogicalId[]>();
+  /** Parents whose last order found a concurrent run after a listed paragraph. */
+  private readonly grouped = new Set<LogicalId>();
 
   constructor(
     /** A node's shared record. */
@@ -437,6 +583,18 @@ export class SplitSiblingOrders {
   /** The ranks of a parent's children that move, or null. */
   ranksOf(parentId: LogicalId): SiblingRanks {
     return this.read(parentId)?.ranks ?? null;
+  }
+
+  /** The concurrent runs of split siblings among a parent's children, moved or not. */
+  groupsOf(parentId: LogicalId): readonly SiblingGroup[] {
+    return this.read(parentId)?.groups ?? [];
+  }
+
+  /** Parents whose last order read a concurrent run. */
+  parentsWithRuns(): readonly LogicalId[] {
+    for (const parentId of [...this.grouped])
+      if (!this.listingOf(parentId)) this.grouped.delete(parentId);
+    return [...this.grouped];
   }
 
   /** A parent's listing in the order the rule shows it. */
@@ -501,12 +659,14 @@ export class SplitSiblingOrders {
     const children = childArrayOf(this.nodeOf(parentId)) as Y.Array<LogicalId> | null;
     if (!children || children.length < 2) return null;
     const heads: LogicalId[] = [];
+    const groups: SiblingGroup[] = [];
     const missing: string[] = [];
     const ranks = splitSiblingRanks(
       children,
       this.textOf,
       heads,
       (id) => splitPointsOf(this.nodeOf(id)),
+      groups,
       missing
     );
     const ids = listing ?? children.toArray();
@@ -515,7 +675,9 @@ export class SplitSiblingOrders {
     const waiting = heads.filter(
       (id) => splitPointsOf(this.nodeOf(id)).length === 0 && copiesOf(id, this.textOf).length === 0
     );
-    const entry = { ranks, shown, waiting, lengths: this.lengthsKey(waiting), missing };
+    const entry = { ranks, shown, waiting, lengths: this.lengthsKey(waiting), groups, missing };
+    if (groups.length > 0) this.grouped.add(parentId);
+    else this.grouped.delete(parentId);
     if (listing) this.built.set(listing, entry);
     if ((waiting.length > 0 || missing.length > 0) && listing) this.withRuns.add(parentId);
     else this.withRuns.delete(parentId);

@@ -17,7 +17,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * each peer counted in its own view. It keeps the split points of
  * the paragraph it split as well, so a paragraph split off a split paragraph still names the
  * split point of the paragraph it came from. Any other paragraph an edit creates, as a break at
- * a paragraph's end does, takes the split points of the paragraph listed right before it. The order reads these first, and reads the text
+ * a paragraph's end does, counts as split off the end of the paragraph listed right before
+ * it. The order reads these first, and reads the text
  * only when a paragraph holds none, as one a release without this field wrote.
  *
  * The value starts with the listing entry it was written for (`#client:clock`): the order
@@ -28,6 +29,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * sibling's entry, which hands its points to the block listed after it.
  */
 import * as Y from 'yjs';
+import { firstItem } from './yjs-items.ts';
+import { itemIdentity } from './paragraph-text-identity.ts';
 import type { LogicalId } from './identity.ts';
 import { ORIGIN_KEY } from './paragraph-text-moves.ts';
 
@@ -37,13 +40,27 @@ export const NODE_SPLIT_POINTS_FIELD = 'splitPoints';
 /** How many split points a paragraph keeps: its own and those of its nearest ancestors. */
 const MAX_SPLIT_POINTS = 4;
 
-/** One split point: the paragraph split, and the identity of the first character moved. */
+/**
+ * One split point: the paragraph split, and the identity of the first character moved, or of
+ * the last character kept with a `+` after it for a split at the end of the paragraph.
+ */
 export interface SplitPoint {
   readonly source: LogicalId;
   readonly at: string;
 }
 
 const IDENTITY = /^\d{1,16}:\d{1,16}$/;
+const SPLIT_AT = /^\d{1,16}:\d{1,16}\+?$/;
+
+/** The last character of a paragraph text that is still there, by identity, or null. */
+export function lastIdentityOf(text: Y.Text | null): string | null {
+  if (!text) return null;
+  let last: Y.Item | null = null;
+  for (let item = firstItem(text); item; item = item.right) {
+    if (!item.deleted && typeof (item.content as { str?: unknown }).str === 'string') last = item;
+  }
+  return last ? itemIdentity(text, last, last.length - 1) : null;
+}
 
 /** The lines of a paragraph's split points field, or null for none or a malformed value. */
 function fieldLines(record: Y.Map<unknown> | undefined): string[] | null {
@@ -66,7 +83,7 @@ export function splitPointsOf(record: Y.Map<unknown> | undefined): SplitPoint[] 
   for (const entry of lines.filter((line) => !line.startsWith('#')).slice(-MAX_SPLIT_POINTS)) {
     const split = entry.lastIndexOf('@');
     const at = entry.slice(split + 1);
-    if (split <= 0 || !IDENTITY.test(at)) return [];
+    if (split <= 0 || !SPLIT_AT.test(at)) return [];
     points.push({ source: entry.slice(0, split) as LogicalId, at });
   }
   return points;
@@ -87,20 +104,31 @@ const entryKey = (item: Y.Item, id: LogicalId): string | null => {
   return at < 0 ? null : `${item.id.client}:${item.id.clock + at}`;
 };
 
-/** Paragraph records the current edit created, by the peer that runs it. */
-const minted = new WeakSet<Y.Map<unknown>>();
+/**
+ * Paragraph records the current edit created, by the peer that runs it. Only that edit writes
+ * their split points: `endSplitPointEdit` forgets them when it ends, so a later edit of the
+ * paragraph, as text pasted into a paragraph a break left empty, never rewrites the field.
+ */
+let minted = new WeakSet<Y.Map<unknown>>();
 
 /** Note a paragraph record this edit created, before it is listed. */
 export function noteMintedParagraph(record: Y.Map<unknown> | undefined): void {
   if (record) minted.add(record);
 }
 
+/** The edit that noted new paragraphs ended: their split points are final. */
+export function endSplitPointEdit(): void {
+  minted = new WeakSet();
+}
+
 /**
  * Give each paragraph this edit created and just listed the split points of the paragraph
- * listed right before it.
+ * listed right before it, plus a split at that paragraph's end. A split that moves text into
+ * the paragraph names its own split point afterwards (`recordSplitPoints`).
  */
 export function inheritSplitPoints(
   nodeOf: (id: LogicalId) => Y.Map<unknown> | undefined,
+  lastOf: (id: LogicalId) => string | null,
   children: Y.Array<LogicalId> | null,
   ids: readonly LogicalId[],
   /** The items this edit wrote into `children`. */
@@ -120,14 +148,17 @@ export function inheritSplitPoints(
     let entry: string | null = null;
     for (const item of written) if (!item.deleted && (entry = entryKey(item, id))) break;
     if (!entry) continue;
-    const created = minted.delete(record);
+    const created = minted.has(record);
     if (created) entries.set(record, entry);
     if (created && record.has(NODE_SPLIT_POINTS_FIELD)) continue;
     listed ??= children.toArray();
     const at = listed.indexOf(id);
     const leftId = at > 0 ? listed[at - 1]! : undefined;
     if (!created && (leftId === undefined || !reordered(leftId))) continue;
-    const points = splitPointsOf(leftId === undefined ? undefined : nodeOf(leftId));
+    const inherited = splitPointsOf(leftId === undefined ? undefined : nodeOf(leftId));
+    // A paragraph this edit created also counts as split off the end of the one before it.
+    const last = created && leftId !== undefined ? lastOf(leftId) : null;
+    const points = last ? [...inherited, { source: leftId!, at: `${last}+` }] : inherited;
     if (points.length > 0) record.set(NODE_SPLIT_POINTS_FIELD, serialized(points, entry));
   }
 }
@@ -227,13 +258,12 @@ export function recordSplitPoints(writes: readonly SplitWrite[]): void {
     for (const source of writes) {
       if (source === write) continue;
       if (!source.identities.includes(origin)) continue;
-      // Written once: a paragraph holds no field yet, or only what it took from the paragraph
-      // it was listed after, which is the paragraph it was split off.
+      // Written by the edit that creates the paragraph, over what the listing gave it.
       const inherited = splitPointsOf(source.record);
       const entry = entries.get(write.record);
       if (!entry) break;
-      const held = write.record.get(NODE_SPLIT_POINTS_FIELD);
-      if (held !== undefined && held !== serialized(inherited, entry)) break;
+      if (write.record.has(NODE_SPLIT_POINTS_FIELD) && !minted.has(write.record)) break;
+      minted.delete(write.record);
       write.record.set(
         NODE_SPLIT_POINTS_FIELD,
         serialized([...inherited, { source: source.id, at: origin }], entry)
