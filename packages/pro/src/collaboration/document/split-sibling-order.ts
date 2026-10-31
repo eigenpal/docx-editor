@@ -380,6 +380,11 @@ function orderOf(
     for (let back = at; back > 0; back -= 1) {
       const later = order[back]!;
       const earlier = order[back - 1]!;
+      // A block whose entries are all removed shows nothing, so nothing orders past it.
+      if (run[earlier]!.items.every((item) => item.deleted)) {
+        [order[back - 1], order[back]] = [later, earlier];
+        continue;
+      }
       const recorded = splitBefore(doc, points[later]!, points[earlier]!, places, missing);
       const before =
         recorded ?? blockBefore(copies[later]!, copies[earlier]!, starts[later]!, starts[earlier]!);
