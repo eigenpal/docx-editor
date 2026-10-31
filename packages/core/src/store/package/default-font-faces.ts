@@ -173,6 +173,7 @@ const JAPANESE_KOREAN_FACES: ReadonlySet<string> = new Set([
   'hiragino mincho pron',
   'hiragino kaku gothic pron',
   'hiragino sans',
+  'noto sans cjk jp',
   'ｍｓ 明朝',
   'ｍｓ ゴシック',
   'メイリオ',
@@ -218,8 +219,8 @@ export function isChineseFace(
 
 /**
  * Whether a face is an East Asian font: Chinese, Japanese, or Korean. A known face answers by
- * its own character set. Any other face answers by the font table's `w:charset`. A
- * vertical-writing name is not one.
+ * its own character set, also when it is not installed. Any other face answers by the font
+ * table's `w:charset`. A vertical-writing name is not one.
  */
 export function isEastAsianFace(
   face: string | null | undefined,

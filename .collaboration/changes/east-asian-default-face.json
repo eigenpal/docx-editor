@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The East Asian default face check did not count Noto Sans CJK JP without an East Asian font table entry.",
+  "after": "Noto Sans CJK JP counts as a Japanese face by name.",
+  "reason": "The check is a pure function of the styles and font table parts that each participant lays out locally. It writes nothing to the shared document and adds no field or message, so every participant computes the same layout from the same shared parts.",
+  "tests": ["packages/core/src/layout/__tests__/default-font-faces.test.ts"],
+  "changeset": "east-asian-default-face",
+  "migration": null
+}
