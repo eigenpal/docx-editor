@@ -120,6 +120,19 @@ export function planTableOperation(
     if (!['Before', 'After'].includes(operation.location))
       return refuse('unsupported-content', 'table-insertion-location');
     const point = operation.location === 'Before' ? resolved.value.start : resolved.value.end;
+    // A cell's body is a story rooted at the cell, so look for the table around it in the part.
+    const around = parentTable(reads.part.root, point.paragraphId);
+    if (around) {
+      // A body's edge inside one of its own top-level tables: the body starts or ends with a
+      // table. A new table there needs a paragraph between the two, which this call does not add.
+      const edge =
+        'body' in operation.span &&
+        reads.root.kind !== 'textValue' &&
+        reads.root.children.some(
+          (child) => child.kind === 'table' && paragraphs(child).has(point.paragraphId)
+        );
+      return refuse('unsupported-content', edge ? 'table-at-body-edge' : 'nested-table-authoring');
+    }
     const planned = planInsertTable(
       reads,
       point.paragraphId,
@@ -234,6 +247,8 @@ export function planTableOperation(
       const last = data.cellIds[operation.bottomRow]?.[operation.lastCell];
       if (!first || !last || operation.bottomRow < operation.topRow)
         return refuse('unsupported-content', 'invalid-table-index');
+      // This read can run before a tracking-mode write in the same sync, so it answers the
+      // rectangle only. The merge itself refuses pending revisions under the right mode.
       const merged = mergeTargetCell(
         reads.part,
         table.id,
@@ -242,11 +257,7 @@ export function planTableOperation(
       if (merged.ok) {
         return query({ kind: 'handle', handle: handles.tableCell(merged.cellId, reads.story) });
       }
-      // The same codes the merge itself refuses with, though this read runs first.
-      return refuse(
-        merged.reason === 'cell-has-revision' ? 'unsupported-revision' : 'unsupported-content',
-        merged.reason
-      );
+      return refuse('unsupported-content', merged.reason);
     }
     case 'getTableCellBody':
       return query({ kind: 'handle', handle: handles.body(reads.story, target.nodeId) });
@@ -313,12 +324,17 @@ export function planTableOperation(
       const planned = planTableMutation(reads, table.id, mutation, revision);
       if (!planned.ok)
         return refuse(
-          planned.reason === 'unsupported-revision' || planned.reason === 'cell-has-revision'
-            ? 'unsupported-revision'
-            : planned.reason === 'tracked-table-deletion-unsupported' ||
-                planned.reason === 'unsupported-tracked-table-operation'
-              ? 'unsupported-capability'
-              : 'unsupported-content',
+          // Under tracking, a merge or split that meets a pending revision has no tracked form.
+          revision &&
+            planned.reason === 'cell-has-revision' &&
+            (mutation.kind === 'mergeCells' || mutation.kind === 'splitCell')
+            ? 'unsupported-capability'
+            : planned.reason === 'unsupported-revision' || planned.reason === 'cell-has-revision'
+              ? 'unsupported-revision'
+              : planned.reason === 'tracked-table-deletion-unsupported' ||
+                  planned.reason === 'unsupported-tracked-table-operation'
+                ? 'unsupported-capability'
+                : 'unsupported-content',
           planned.reason
         );
       const admission = context.admitWrite(

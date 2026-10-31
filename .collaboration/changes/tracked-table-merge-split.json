@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Under tracking, cell merge and split refused in every table, including the author's own pending table insertion.",
+  "after": "Under tracking, cell merge and split work inside a table that is the author's own pending insertion. Rows, cells, and paragraph marks they add carry copies of that insertion's existing w:ins and w:cellIns markers.",
+  "reason": "The edit writes only existing table, row, cell, paragraph, and revision-marker nodes, in the same shape that a tracked table insertion and an untracked merge or split already write. Released participants read, merge, and resolve these nodes with their current rules, so shared data keeps its meaning.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-api-tracked-table-structure.test.ts",
+    "packages/editor-api/src/model/__tests__/model-tracked-table-merge-split.test.ts"
+  ],
+  "changeset": "tracked-table-merge-split",
+  "migration": null
+}

@@ -18,7 +18,7 @@ import { Field, FieldCollection } from './fields.ts';
 import { fieldResultRead, fieldResultWrite } from './field-result-range.ts';
 import type { FieldType, FieldTypeLiteral } from './field-types.ts';
 import { InlinePicture, InlinePictureCollection } from './pictures.ts';
-import { Table, TableCollection } from './tables.ts';
+import { Table, TableCollection, tableInsertion } from './tables.ts';
 import {
   ObjectPath,
   fail,
@@ -865,38 +865,18 @@ export class Range extends ModelObject implements PromisedItem {
     values?: string[][]
   ): Table {
     const target = `${this.path.label}.insertTable`;
-    if (
-      !Number.isInteger(rowCount) ||
-      !Number.isInteger(columnCount) ||
-      rowCount < 1 ||
-      columnCount < 1 ||
-      !['Before', 'After'].includes(insertLocation)
-    )
+    if (insertLocation !== 'Before' && insertLocation !== 'After')
       fail({ code: 'InvalidArgument', target });
-    if (
-      values !== undefined &&
-      (!Array.isArray(values) ||
-        values.some((row) => !Array.isArray(row) || row.some((cell) => typeof cell !== 'string')))
-    )
-      fail({ code: 'InvalidArgument', target });
-    const copied = values?.map((row) => [...row]);
-    const table = Table.promised(this.context, target);
-    this.commandCreating(
-      table,
+    const { table, plan, settle } = tableInsertion(
+      this.context,
       target,
-      () => ({
-        op: 'insertTable',
-        span: spanRefOf(this.path, 'span'),
-        location: insertLocation,
-        rowCount,
-        columnCount,
-        ...(copied ? { values: copied } : {}),
-      }),
-      (answer) => {
-        if (answer.kind !== 'handle') fail({ code: 'GeneralException', target });
-        table.hydrateAddress({ kind: 'handle', handle: answer.handle });
-      }
+      () => spanRefOf(this.path, 'span'),
+      insertLocation,
+      rowCount,
+      columnCount,
+      values
     );
+    this.commandCreating(table, target, plan, settle);
     return table;
   }
 

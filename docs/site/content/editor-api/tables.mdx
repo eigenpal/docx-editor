@@ -17,16 +17,20 @@ Imported cell borders can include `w:tl2br` and `w:tr2bl` diagonals. Table style
 
 ## Insert a table
 
-`Range.insertTable(rowCount, columnCount, location, values?)` accepts `Before` or `After`. Counts must be positive integers. Supplied values must form a matching rectangular string matrix. Resolve the range, create the table, then configure it after sync:
+Insert a table with one of these members. Counts must be positive integers. Supplied values must form a matching rectangular string matrix.
+
+| Member | Location |
+| --- | --- |
+| `Body.insertTable(rowCount, columnCount, location, values?)` | `Start` or `End` of the body |
+| `Paragraph.insertTable(rowCount, columnCount, location, values?)` | `Before` or `After` the paragraph |
+| `Range.insertTable(rowCount, columnCount, location, values?)` | `Before` or `After` the range |
+
+A table at the end of the body is followed by an empty paragraph, because a body ends with a paragraph. A table inside a table cell refuses with `InvalidArgument`. If the body starts with a table, `Body.insertTable()` at `Start` refuses with `InvalidArgument`, because two tables need a paragraph between them. Create the table, then configure it after sync:
 
 ```ts
 await runtime.run(async (context) => {
-  const paragraph = context.document.paragraphs.getFirst();
-  paragraph.load('text');
-  await context.sync();
-  const anchor = paragraph.getRange('Content');
-  await context.sync();
-  const table = anchor.insertTable(2, 2, 'After', [
+  const paragraph = context.document.body.paragraphs.getFirst();
+  const table = paragraph.insertTable(2, 2, 'After', [
     ['Item', 'Amount'],
     ['License', '$100'],
   ]);
@@ -36,7 +40,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-You can load the returned `Table` in the same sync. Edits to it require a completed sync first. Table insertion is not a `Body.insertTable()` operation in this subset. Use a body paragraph's range as the anchor.
+You can load the returned `Table` in the same sync. Edits to it require a completed sync first.
 
 ## Read table values and cells
 
@@ -117,9 +121,25 @@ header.verticalAlignment = 'Center';
 await context.sync();
 ```
 
-Merge and split have no tracked form. In `TrackAll` or `TrackMineOnly` mode, both refuse with `NotSupported`. Cells with a pending cell revision refuse with `NotImplemented`.
+Merge and split have no tracked form of their own. In `TrackMineOnly` mode, they work only inside a table that is your own pending insertion, with no pending edits from another author. The rows, cells, and paragraph marks that they add join that insertion. Accepting the insertion keeps the new shape, and rejecting it removes the whole table. In any other table, both refuse with `NotSupported` and the diagnostic code `edit.tracked-structure-unsupported`. With tracking off, cells with a pending row or cell revision refuse with `NotImplemented`.
 
-In collaboration, merge and split synchronize, undo, and survive reconnect and reopen. Text that a participant types into an empty cell while another participant merges it away is discarded. Concurrent merges, splits, and column edits of one table converge, but they can leave a row that ends before the last grid column. Column edits keep that row ending where it does. A merge or split that needs the missing part of that row refuses. Merged tables still accept `addRows()`, `insertRows()`, `addColumns()` without values, `deleteRows()`, and `deleteColumns()`. A deleted column narrows a merged cell that spans it.
+For example, propose a table with a merged header row:
+
+```ts
+await runtime.run(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const table = context.document.body.insertTable(3, 3, 'End', [
+    ['Quarterly results', '', ''],
+    ['Region', 'Q1', 'Q2'],
+    ['North', '10', '12'],
+  ]);
+  await context.sync();
+  table.mergeCells(0, 0, 0, 2);
+  await context.sync();
+});
+```
+
+In collaboration, merge and split synchronize, undo, and survive reconnect and reopen, also inside a proposed table. Text that a participant types into an empty cell while another participant merges it away is discarded. Concurrent merges, splits, and column edits of one table converge, but they can leave a row that ends before the last grid column. Column edits keep that row ending where it does. A merge or split that needs the missing part of that row refuses. Merged tables still accept `addRows()`, `insertRows()`, `addColumns()` without values, `deleteRows()`, and `deleteColumns()`. A deleted column narrows a merged cell that spans it.
 
 ## Format tables and cells
 
@@ -131,7 +151,7 @@ In collaboration, merge and split synchronize, undo, and survive reconnect and r
 | `shadingColor`       | Six-digit RGB hex, optional `#`; `auto` removes direct shading      |
 | `verticalAlignment`  | `Top`, `Center`, or `Bottom`; the runtime rejects `Mixed` on writes |
 
-`VerticalAlignment` exports the corresponding enum values. For character or paragraph formatting, use `cell.body.font` or `cell.body.paragraphs`. A width write changes the entire grid column, matching cell widths, and total table width. It also sets fixed table layout. The runtime rejects width changes for tables with missing grids or merged cells.
+`VerticalAlignment` exports the corresponding enum values. For character or paragraph formatting, use `cell.body.font` or `cell.body.paragraphs`. A width write changes the entire grid column, matching cell widths, and total table width. It also sets fixed table layout. In a table with merged cells, a cell can span several grid columns. The write makes the cell the given width, and the last grid column that it spans takes the change. Other cells over that column change width too. A width that would make that column narrower than the minimum column width refuses with `InvalidArgument`. The runtime rejects width changes for tables without a grid and for legacy horizontal merges.
 
 For example, format a resolved header cell:
 
@@ -143,7 +163,7 @@ await context.sync();
 
 ## Handle unsupported structures
 
-Structural edits can fail on legacy horizontal merges, protected content, nested preserved structures, and pending revisions. Value matrices and column widths refuse on tables with merged cells. Adding columns or deleting some columns requires an existing table grid. Deleting all columns can still remove a table without a grid. A matching TypeScript signature does not guarantee an edit works on every table. Table value replacement does not silently discard unsupported cell content. Inspect and edit a smaller cell-body range when that preserves the intended structure.
+Structural edits can fail on legacy horizontal merges, protected content, nested preserved structures, and pending revisions. Value matrices refuse on tables with merged cells. Adding columns or deleting some columns requires an existing table grid. Deleting all columns can still remove a table without a grid. A matching TypeScript signature does not guarantee an edit works on every table. Table value replacement does not silently discard unsupported cell content. Inspect and edit a smaller cell-body range when that preserves the intended structure.
 
 Complete table insertion, cell value replacement, row additions, and partial row deletions support native revisions. A tracked table insertion marks each row, each cell paragraph mark, and the initial values as inserted. At the end of a non-empty paragraph that has a next paragraph, with at most bookmark or comment range ends between them, the table goes in front of that next paragraph without a split, so no paragraph outside the table changes, and rejecting the table restores the document. A paragraph whose mark ends a section, or has a pending revision, is still split, so the table stays in that section and later decisions keep its text out of the table. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require permanent edits. Tracked table and cell value replacement refuse in collaboration. In collaboration, a tracked replacement must remain within one paragraph. Tracked text and font edits can operate inside eligible cell paragraphs. A pending tracked row insertion or deletion blocks tracked text edits throughout that row. See [Tracked changes](/docs/2.x/editor-api/revisions).
 

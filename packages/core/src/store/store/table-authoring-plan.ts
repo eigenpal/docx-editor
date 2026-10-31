@@ -11,7 +11,8 @@ import {
   type OoxmlParagraphNode,
 } from '../package/ooxml-tree.ts';
 import { safeRowInsertion } from './table-authoring-row-insertion.ts';
-import { readEditableTableTopology } from './tree-op-table-topology.ts';
+import { readEditableTableTopology, type EditableTableTopology } from './tree-op-table-topology.ts';
+import { readMergeableTable } from './tree-op-table-cell-shape.ts';
 import { readTwipsMeasure } from '../units.ts';
 import { wmlAttributeValue, wmlChildNamed } from './tree-op-table-shared.ts';
 import { applyTreeOp, type TreeDocOp, type TreeOpEffect } from './tree-ops.ts';
@@ -144,6 +145,25 @@ export function tableRead(
     columnCount: gridColumns.length || rows[0]?.cells.length || 0,
   };
 }
+function gridWidthUnder(
+  reads: AutomationStoryReads,
+  topology: EditableTableTopology,
+  tableId: string,
+  cellId: string,
+  index: number
+): number | null {
+  const placed = topology.hasMerge ? readMergeableTable(reads.part, tableId) : null;
+  const entry = placed?.ok ? placed.table.index.byId.get(cellId) : undefined;
+  let sum = 0;
+  for (let column = entry?.startCol ?? index; column <= (entry?.endCol ?? index); column++) {
+    const grid = topology.gridColumns[column];
+    const width = grid ? readTwipsMeasure(wmlAttributeValue(grid, 'w')) : null;
+    if (width === null) return null;
+    sum += width;
+  }
+  return sum;
+}
+
 export function tableCellRead(
   reads: AutomationStoryReads,
   tableId: string,
@@ -155,10 +175,9 @@ export function tableCellRead(
     const index = cells.findIndex((c) => c.id === cellId);
     if (index < 0) continue;
     const cell = cells[index]!;
-    const grid = result.topology.gridColumns[index];
-    const width = readTwipsMeasure(
-      prop(cell, 'tcPr', 'tcW', 'w') ?? (grid && wmlAttributeValue(grid, 'w'))
-    );
+    // Without its own width, a cell is as wide as the grid columns it spans.
+    const own = readTwipsMeasure(prop(cell, 'tcPr', 'tcW', 'w'));
+    const width = own ?? gridWidthUnder(reads, result.topology, tableId, cellId, index);
     const align = prop(cell, 'tcPr', 'vAlign');
     return {
       nodeId: cellId,
@@ -259,6 +278,28 @@ function hasForeignRevision(root: OoxmlNode, author: string): boolean {
   return false;
 }
 
+/**
+ * Whether every row of the table is `author`'s pending insertion and no other author has a
+ * pending edit inside it: the table is that author's own proposal.
+ */
+export function isOwnPendingTableInsertion(
+  root: OoxmlNode,
+  tableId: string,
+  author: string
+): boolean {
+  const topology = readEditableTableTopology(root as OoxmlElement, tableId);
+  return (
+    topology.ok &&
+    topology.topology.rows.length > 0 &&
+    !hasForeignRevision(topology.topology.table, author) &&
+    topology.topology.rows.every(({ row }) => {
+      const trPr = wmlChildNamed(row, 'trPr');
+      const ins = trPr && wmlChildNamed(trPr, 'ins');
+      return ins && wmlAttributeValue(ins, 'author') === author;
+    })
+  );
+}
+
 /** Simulate ordered canonical operations privately so newly allocated cells can receive values atomically. */
 export function planTableMutation(
   reads: AutomationStoryReads,
@@ -270,21 +311,20 @@ export function planTableMutation(
   const topology = readEditableTableTopology(reads.root as OoxmlElement, tableId);
   // Properties and structure belong to an author's complete pending table insertion.
   // Rejecting that insertion removes them with the table; existing tables still refuse.
+  // Cell merge and split keep the attribution: the cells, rows, and paragraph marks they add
+  // join that insertion, so rejecting it still removes the whole table.
   const ownInsertion =
-    revision &&
-    topology.ok &&
-    topology.topology.rows.length > 0 &&
-    !hasForeignRevision(topology.topology.table, revision.author) &&
-    topology.topology.rows.every(({ row }) => {
-      const trPr = wmlChildNamed(row, 'trPr');
-      const ins = trPr && wmlChildNamed(trPr, 'ins');
-      return ins && wmlAttributeValue(ins, 'author') === revision!.author;
-    });
-  if (ownInsertion && !['addRows', 'insertRows', 'deleteRows', 'values'].includes(mutation.kind))
+    revision !== undefined && isOwnPendingTableInsertion(reads.root, tableId, revision.author);
+  const ownStructure = ['mergeCells', 'splitCell'];
+  if (
+    ownInsertion &&
+    !['addRows', 'insertRows', 'deleteRows', 'values', ...ownStructure].includes(mutation.kind)
+  )
     revision = undefined;
   if (
     revision &&
-    !['addRows', 'insertRows', 'deleteRows', 'values', 'cell'].includes(mutation.kind)
+    !['addRows', 'insertRows', 'deleteRows', 'values', 'cell'].includes(mutation.kind) &&
+    !(ownInsertion && ownStructure.includes(mutation.kind))
   )
     return { ok: false, reason: 'unsupported-tracked-table-operation' };
   if (
@@ -315,8 +355,7 @@ export function planTableMutation(
       'mergeCells',
       'splitCell',
     ].includes(mutation.kind) ||
-      (mutation.kind === 'addColumns' && mutation.values !== undefined) ||
-      (mutation.kind === 'cell' && mutation.columnWidth !== undefined))
+      (mutation.kind === 'addColumns' && mutation.values !== undefined))
   )
     return { ok: false, reason: 'table-has-merge' };
   let part: OoxmlPart = reads.part;
@@ -399,7 +438,7 @@ export function planTableMutation(
       return { ok: false, reason: 'invalid-table-index' };
     // One cell named twice is a rectangle of one cell, which the merge refuses as such.
     const cellIds = first.id === last.id ? [first.id] : [first.id, last.id];
-    error = apply({ op: 'mergeTableCells', tableId, cellIds });
+    error = apply({ op: 'mergeTableCells', tableId, cellIds, ...(revision ? { revision } : {}) });
   } else if (mutation.kind === 'splitCell') {
     if (!current.rows.some(({ cells }) => cells.some((cell) => cell.id === mutation.cellId)))
       return { ok: false, reason: 'unknown-cell' };
@@ -409,6 +448,7 @@ export function planTableMutation(
       cellId: mutation.cellId,
       rows: mutation.rowCount,
       columns: mutation.columnCount,
+      ...(revision ? { revision } : {}),
     });
   } else if (mutation.kind === 'delete') error = apply({ op: 'deleteBlock', blockId: tableId });
   else if (mutation.kind === 'properties')
@@ -455,7 +495,16 @@ export function planTableMutation(
       const widths = current.gridColumns.map(
         (c) => readTwipsMeasure(wmlAttributeValue(c, 'w')) ?? 0
       );
-      widths[index] = Math.round(mutation.columnWidth * 20);
+      // The grid columns under the cell: a merged cell spans several, and its index in the
+      // row is not its grid column. The last column it spans takes the change.
+      const placed = merged ? readMergeableTable(part, tableId) : null;
+      if (placed && !placed.ok) return { ok: false, reason: placed.reason };
+      const entry = placed?.table.index.byId.get(cell.id);
+      const from = entry ? entry.startCol : index;
+      const to = entry ? entry.endCol : index;
+      let others = 0;
+      for (let column = from; column < to; column++) others += widths[column] ?? 0;
+      widths[to] = Math.round(mutation.columnWidth * 20) - others;
       error = apply({ op: 'setTableProperties', tableId, columnWidthsTwips: widths });
     }
   } else if (mutation.kind === 'deleteRows' || mutation.kind === 'deleteColumns') {
