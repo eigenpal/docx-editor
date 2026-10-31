@@ -1245,7 +1245,8 @@ function paintLine(
       // Paint hosts may reserve a pre-scaled width plus a compensating margin.
       if (!painted.style.width) painted.style.width = `${span.box.width * scale}px`;
       painted.style.direction = span.style.shaping?.direction ?? 'ltr';
-      painted.style.unicodeBidi = 'isolate';
+      // A `w:bdo` override keeps every character in the span's direction, as layout placed it.
+      painted.style.unicodeBidi = span.style.shaping?.override ? 'isolate-override' : 'isolate';
       if (span.style.shaping?.wordSpacingPt)
         painted.style.wordSpacing = `${span.style.shaping.wordSpacingPt * scale}px`;
       logicalAdvance += span.box.width;

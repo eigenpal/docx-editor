@@ -90,6 +90,8 @@ export interface ResolvedRunStyle {
     readonly baseLevel: number;
     /** Resolved w:rtl context; absent when authored Unicode controls govern the paragraph. */
     readonly runDirection?: 'ltr' | 'rtl';
+    /** A `w:bdo` override: every character reads in this direction, whatever its class. */
+    readonly override?: 'ltr' | 'rtl';
     readonly wordSpacingPt?: number;
     /** Neighbouring text a joining script reads across a formatting-run boundary. */
     readonly context?: import('./shaped-run.ts').ShapingContext;
@@ -553,6 +555,7 @@ export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolea
     a.shaping?.level === b.shaping?.level &&
     a.shaping?.baseLevel === b.shaping?.baseLevel &&
     a.shaping?.runDirection === b.shaping?.runDirection &&
+    a.shaping?.override === b.shaping?.override &&
     a.shaping?.wordSpacingPt === b.shaping?.wordSpacingPt &&
     a.shaping?.context?.before === b.shaping?.context?.before &&
     a.shaping?.context?.after === b.shaping?.context?.after &&

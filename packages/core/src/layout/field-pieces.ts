@@ -137,6 +137,16 @@ export interface FieldAtomMarker {
 }
 
 /**
+ * A `w:dir` (directional embedding) or `w:bdo` (directional override) wrapper around run
+ * content. Layout resolves it as the matching Unicode embedding or override; the store keeps
+ * the wrapper unchanged.
+ */
+export interface BidiDirective {
+  readonly kind: 'embedding' | 'override';
+  readonly direction: 'ltr' | 'rtl';
+}
+
+/**
  * One measurable piece produced while walking runs (including projected field results).
  *
  * Projected page-field text covers the single atomic model unit for a well-formed field
@@ -217,6 +227,8 @@ export interface FieldAwarePiece {
    * `styleForFontSlot` while the piece's `style` stays the run's real resolution.
    */
   readonly fontSlot?: FontSlot;
+  /** The `w:dir` and `w:bdo` wrappers enclosing this text, outermost first; absent when none. */
+  readonly bidiDirectives?: readonly BidiDirective[];
 }
 
 /** A half-open model-offset range, in the paragraph's own UTF-16 offset space. */

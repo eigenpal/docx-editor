@@ -430,6 +430,7 @@ export interface InlineDrawingRecord {
     // (undocumented)
     readonly baselineOffset: number;
     readonly bidiLevel?: number;
+    readonly bidiRunDirection?: 'ltr' | 'rtl';
     readonly chart?: DrawingChartSummary;
     // @internal
     readonly chartFallbackResource?: ImageResourceState;
