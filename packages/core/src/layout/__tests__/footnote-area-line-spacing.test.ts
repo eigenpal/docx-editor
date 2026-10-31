@@ -34,7 +34,7 @@ const double = (lines: readonly string[]) =>
     .join('')}</w:p>`;
 const REF = '<w:footnoteReference w:id="1"/>';
 
-function layout(body: string) {
+function layout(body: string, compatibilityMode = 15) {
   const entries = {
     '[Content_Types].xml': `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/></Types>`,
     '_rels/.rels': `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`,
@@ -53,6 +53,7 @@ function layout(body: string) {
   const measurer = createFixedMeasurer(5, LINE);
   return layoutSemanticDocument(part, 1, {
     measurer,
+    compatibilityMode,
     session: createLayoutSession(),
     notes: {
       footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
@@ -62,6 +63,7 @@ function layout(body: string) {
       documentEndnoteProps: en,
       endnotePropsBySection: [en],
       measurer,
+      compatibilityMode,
       producer: 'footnote-area-line-spacing-test',
     },
   }).pages;
@@ -93,14 +95,15 @@ describe('line spacing above a footnote area', () => {
     return line.box.height;
   })();
 
-  function secondLinePage(cross: number, cites = true, lines = 3): number {
+  function secondLinePage(cross: number, cites = true, lines = 3, mode = 15): number {
     const spacer = AREA_TOP + cross - 2 * doubled - LINE - (cites ? 0 : AREA_TOP - PAGE);
     const words = ['<w:t>First</w:t>', '<w:t>Second</w:t>', '<w:t>Third</w:t>'].slice(0, lines);
     return pageOf(
       layout(
         exact(`<w:t>Opening</w:t>${cites ? REF : ''}`) +
           exact('<w:t>Spacer</w:t>', spacer) +
-          double(words)
+          double(words),
+        mode
       ),
       'Second'
     );
@@ -115,6 +118,12 @@ describe('line spacing above a footnote area', () => {
   test('the rule holds for the closing line of a paragraph too', () => {
     expect(secondLinePage(2, true, 2)).toBe(1);
     expect(secondLinePage(0, true, 2)).toBe(0);
+  });
+
+  test('legacy modes let the spacing cross the note area as it crosses a bottom margin', () => {
+    expect(secondLinePage(2, true, 3, 14)).toBe(0);
+    expect(secondLinePage(2, true, 2, 14)).toBe(0);
+    expect(secondLinePage(2, true, 3, 12)).toBe(0);
   });
 
   test('the same spacing may still cross the bottom margin of a page without notes', () => {

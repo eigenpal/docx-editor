@@ -8,6 +8,7 @@ import { footnoteContinuationNotice } from './note-continuation-notice.ts';
 
 import { splitNoteHead, splitNoteKeepsParagraphReference } from './note-eviction-guard.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { chargedSpaceAfterPt, pageCitesFootnote } from './note-area-fit.ts';
 import { fragmentOwnsPosition } from './line-segments.ts';
 import {
@@ -204,7 +205,8 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
       nextBody.fragments,
       owningAt,
       frontier.top,
-      pageCitesFootnote(bodyPage)
+      pageCitesFootnote(bodyPage) &&
+        hasCompatibilityRule(args.opts.compatibilityMode, 'noteAreaHoldsLineSpacing')
     );
     if (head !== null && flowBottom + head + ownReserve <= contentHeight + 0.001) {
       if (independentAhead) return 0;
@@ -404,13 +406,14 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   // would reject every such split, including a valid single-line opening without widows.
   // A reference on the closing line of its paragraph has no later line to bring back, so it
   // needs no headroom either, unless the paragraph keeps with the next one or returns a
-  // successor's reference.
+  // successor's reference. A one-line paragraph keeps the headroom.
   const closesParagraph =
     owningBlock.paragraphEnd === true &&
     !keeps.keepNext &&
     !pullsSuccessorReference &&
     frontier.bottom >=
-      owningBlock.box.y + owningBlock.box.height - owningBlock.spacing.after - 0.001;
+      owningBlock.box.y + owningBlock.box.height - owningBlock.spacing.after - 0.001 &&
+    frontier.top > owningBlock.lines[0]!.box.y + 0.001;
   const headroom = admitsSplit || closesParagraph ? 0 : refLineHeight;
   // Backed off by half a point like the eviction reserve: the last kept body line's bottom
   // is exactly `bodyBottom`, and a budget equal to it flips on float drift.
@@ -591,8 +594,14 @@ function orphanPairNoteStrands(
   if (!line) return false;
   const contentHeight = args.bodyPage.contentBox.height;
   const shift = flowBottom - firstBodyContentTopPt(nextBody);
-  // The pair cites the note, so the whole line box must fit above the footnote area.
-  if (shift + line.box.y + line.box.height + ownReserve > contentHeight + 0.001) return false;
+  // The pair cites the note, so the whole line box must fit above the footnote area. Legacy
+  // modes let the spacing below the glyph band cross it.
+  const trailing = hasCompatibilityRule(args.opts.compatibilityMode, 'noteAreaHoldsLineSpacing')
+    ? 0
+    : Math.min(line.trailingSpacing ?? 0, line.box.height);
+  if (shift + line.box.y + line.box.height - trailing + ownReserve > contentHeight + 0.001) {
+    return false;
+  }
   const laid = layoutNoteCached(
     args.footnotesPart,
     frontierRef.noteId,

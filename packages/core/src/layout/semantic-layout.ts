@@ -2237,7 +2237,7 @@ function* layoutBlocksPass(
     const closingAfter = (line: PendingLine): number =>
       closingSpaceAfterPt(noteReserveHere(), pageFragments, pending, line, spacing.after);
     const droppedBelow = (line: PendingLine): number =>
-      droppableSpacingPt(noteReserveHere(), pageFragments, pending, line);
+      droppableSpacingPt(noteReserveHere(), pageFragments, pending, line, options);
     let fragmentStart = lines[0]?.start ?? 0;
     let fragmentBefore = appliedBefore;
     // Reserved above the FIRST fragment only: a paragraph continued onto the next page opens

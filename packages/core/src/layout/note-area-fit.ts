@@ -1,4 +1,5 @@
 // Body fit above a footnote area: a paragraph's space after must fit there too.
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { fragmentCursorBottomPt } from './note-fragment-geometry.ts';
 import type { BlockFragmentRecord, LineRecord, PageRecord } from './semantic-records.ts';
 
@@ -57,15 +58,20 @@ export function closingSpaceAfterPt(
 /**
  * The auto line spacing below a line's glyph band that the body pass leaves out of the
  * budget. At the bottom of a plain page it may cross the text margin. Above a footnote
- * area it must fit, the same as {@link closingSpaceAfterPt}, so none of it is dropped.
+ * area it must fit, the same as {@link closingSpaceAfterPt}, so none of it is dropped. Legacy
+ * modes drop it there too.
  */
 export function droppableSpacingPt(
   reservePt: number | undefined,
   fragments: readonly BlockFragmentRecord[],
   pending: readonly SpannedLine[],
-  line: SpannedLine & { readonly trailingSpacing: number }
+  line: SpannedLine & { readonly trailingSpacing: number },
+  layout: { readonly compatibilityMode?: number | undefined }
 ): number {
   if (line.trailingSpacing <= 0 || (reservePt ?? 0) <= 0) return line.trailingSpacing;
+  if (!hasCompatibilityRule(layout.compatibilityMode, 'noteAreaHoldsLineSpacing')) {
+    return line.trailingSpacing;
+  }
   return pageHoldsFootnoteReference(fragments, pending, line) ? 0 : line.trailingSpacing;
 }
 
