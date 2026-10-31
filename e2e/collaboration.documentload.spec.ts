@@ -1,4 +1,11 @@
-import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
+import {
+  expect,
+  test,
+  type Browser,
+  type BrowserContext,
+  type Locator,
+  type Page,
+} from '@playwright/test';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -61,7 +68,7 @@ async function joinRoomByPaste(page: Page, invite: string, name: string): Promis
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Display name').fill(name);
   await dialog.getByRole('button', { name: /Join an existing room/i }).click();
-  await dialog.getByLabel('Room ID or link').fill(invite);
+  await dialog.getByLabel(/^Full room link/).fill(invite);
   await dialog.getByRole('button', { name: 'Join room' }).click();
   await expect(dialog).toHaveCount(0, { timeout: 45_000 });
 }
@@ -84,9 +91,7 @@ async function disposePeer(peer: Peer): Promise<void> {
 }
 
 function visibleParagraphs(page: Page): Locator {
-  return page.locator(
-    '.docx-page-content .docx-paragraph-fragment[data-paragraph-id]:visible'
-  );
+  return page.locator('.docx-page-content .docx-paragraph-fragment[data-paragraph-id]:visible');
 }
 
 async function firstBodyText(page: Page): Promise<string> {
@@ -169,17 +174,14 @@ test('Open DOCX, New, join-with-own-file, and concurrent Open stay honest', asyn
     const fileOpen = creator.getByRole('menuitem', { name: /^Open$/ });
     await expect(fileOpen).toBeVisible();
     const openBlocked =
-      (await fileOpen.getAttribute('aria-disabled')) === 'true' ||
-      (await fileOpen.isDisabled());
+      (await fileOpen.getAttribute('aria-disabled')) === 'true' || (await fileOpen.isDisabled());
     if (!openBlocked) {
       // The packaged File › Open still calls editor.load() while the room lives.
       // Either the new file must reach both peers, or the room must stop claiming
       // they are editing the same document.
       const menuInput = creator.locator('[data-testid="docx-menubar"] ~ input[type="file"]');
       await menuInput.setInputFiles(OTHER);
-      await expect
-        .poll(async () => firstBodyText(creator), { timeout: 20_000 })
-        .not.toBe(before);
+      await expect.poll(async () => firstBodyText(creator), { timeout: 20_000 }).not.toBe(before);
     }
     await creator.keyboard.press('Escape');
     await expectNoSilentDivergence(creator, remote.page);
@@ -296,7 +298,7 @@ async function timeJoin(
     const dialog = joiner.getByRole('dialog', { name: /Collaborate on this document/i });
     await dialog.getByLabel('Display name').fill('Bob');
     await dialog.getByRole('button', { name: /Join an existing room/i }).click();
-    await dialog.getByLabel('Room ID or link').fill(invite);
+    await dialog.getByLabel(/^Full room link/).fill(invite);
     const joinStarted = Date.now();
     await dialog.getByRole('button', { name: 'Join room' }).click();
     try {
