@@ -212,6 +212,16 @@ test('a page number that wraps text keeps room for a longer number beside right-
     'ftr'
   );
   expect(wide.paragraphs.some((paragraph) => paragraph.outOfFlow)).toBe(false);
+  // Digits in that text are not the number's own: "Rev 2 - 1" still reserves four more.
+  const revision = framed(
+    framePr,
+    '<w:r><w:t xml:space="preserve">Rev 2 - </w:t></w:r>' + pageField('PAGE', '1')
+  );
+  const revised = lay(
+    revision + text('Version 9', '<w:jc w:val="right"/><w:ind w:right="1160"/>'),
+    'ftr'
+  );
+  expect(revised.paragraphs.some((paragraph) => paragraph.outOfFlow)).toBe(false);
   const far = lay(number + text('Version 9', '<w:jc w:val="right"/><w:ind w:right="800"/>'), 'ftr');
   expect(far.paragraphs[0]!.outOfFlow).toBe(true);
   expect(far.paragraphs[1]!.box.y).toBe(0);
