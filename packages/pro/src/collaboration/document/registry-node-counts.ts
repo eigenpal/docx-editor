@@ -27,7 +27,7 @@ export class NodeCounts {
   /** Tombstoned record IDs. `null` means "not counted yet". */
   private tombstoned: Set<string> | null = null;
 
-  constructor(private readonly nodes: Y.Map<unknown>) {}
+  constructor(private readonly nodes: Y.Map<Y.Map<unknown>>) {}
 
   /** Every node record, tombstones included. */
   total(): number {
