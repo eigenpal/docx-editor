@@ -1055,7 +1055,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The document API inserts inert TOC fields with supported switches; API entry calculation remains unavailable. Insert a body TOC from the shared Insert menu, then refresh it from document headings or TC entry fields. Unsupported source switches preserve the cached table and refuse refresh. A refresh can update the page numbers only. Tab leaders, section-formatted page numbers, and bookmark links all work. The generated rows are read-only navigation links. Ordinary text outside the field boundaries remains editable, including text in the same paragraph. Formatting a selection that includes generated rows changes only the ordinary text.',
+      'The document API inserts inert TOC fields with supported switches; API entry calculation remains unavailable. Insert a body TOC from the shared Insert menu, then refresh it from document headings or TC entry fields. Unsupported source switches preserve the cached table and refuse refresh. A refresh can update the page numbers only. Tab leaders, section-formatted page numbers, and bookmark links all work. The generated rows are read-only navigation links. Ordinary text outside the field boundaries remains editable, including text in the same paragraph. Formatting a selection that includes generated rows changes only the ordinary text. The context menu and the removeToc command remove a table of contents in one undo step: its table of contents control with the heading when the field fills the control, and otherwise the field. Removal is refused while suggesting, and the Delete key does not remove generated rows.',
   },
   {
     id: 'fields.cross-references',

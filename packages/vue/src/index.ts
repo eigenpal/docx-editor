@@ -227,6 +227,7 @@ export {
   ContextMenuInsertRowBelow,
   ContextMenuRefreshToc,
   ContextMenuRefreshTocPageNumbers,
+  ContextMenuRemoveToc,
   type ContextMenuAnchor,
   type ContextMenuCommandProps,
   type ContextMenuContextValue,

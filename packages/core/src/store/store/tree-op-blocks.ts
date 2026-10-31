@@ -32,7 +32,7 @@ export function paragraphIdsWithin(node: OoxmlNode): string[] {
 }
 
 /** Story-order paragraph ids for caret recovery after a block removal. */
-function paragraphIdsInDocumentOrder(part: OoxmlPart): string[] {
+export function paragraphIdsInDocumentOrder(part: OoxmlPart): string[] {
   const ids: string[] = [];
   const walkBlocks = (children: readonly OoxmlNode[]): void => {
     // A block content control is not a block of its own — the paragraphs it wraps are the

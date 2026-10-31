@@ -174,6 +174,7 @@ import {
   applyReplaceTocResult,
   applyRewriteTocPageNumbers,
 } from './tree-op-toc.ts';
+import { applyRemoveToc } from './tree-op-toc-remove.ts';
 import { applyInsertTable } from './tree-op-insert-table.ts';
 import { applyMoveTable } from './tree-op-move-table.ts';
 import { applyInsertParagraphBesideTable } from './tree-op-paragraph-beside-table.ts';
@@ -324,7 +325,6 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
     return applyTableCellPropertyOp(part, op, options);
   }
   if (isDrawingTreeDocOp(op)) return applyDrawingContentEdit(part, op, options);
-
   if (op.op === 'insertFragment') return applyInsertFragment(part, op, options);
   if (op.op === 'insertBuildingBlock') return applyInsertBuildingBlock(part, op, options);
   if (isBookmarkTreeOp(op)) return applyBookmarkOp(part, op, options);
@@ -335,6 +335,7 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
   if (op.op === 'deleteBlock') return applyDeleteBlock(part, op.blockId, options);
   if (op.op === 'insertToc') return applyInsertToc(part, op, options);
   if (op.op === 'replaceTocResult') return applyReplaceTocResult(part, op, options);
+  if (op.op === 'removeToc') return applyRemoveToc(part, op, options);
   if (op.op === 'rewriteTocPageNumbers') return applyRewriteTocPageNumbers(part, op, options);
   if (isFieldResultOp(op)) return applyFieldResultOp(part, op, options);
   if (op.op === 'setFieldCode') return applySetFieldCode(part, op, options);

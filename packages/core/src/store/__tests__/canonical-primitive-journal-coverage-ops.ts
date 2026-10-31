@@ -761,6 +761,10 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
         bookmarksToCreate: [],
       };
     }),
+    story('removeToc', zipDoc({ body: TOC_BODY }), (store) => ({
+      op: 'removeToc',
+      tocId: detectBodyTocs(store.bodyStore().part)[0]!.id,
+    })),
     story('rewriteTocPageNumbers', zipDoc({ body: TOC_BODY }), (store) => {
       const toc = detectBodyTocs(store.bodyStore().part)[0]!;
       return {
