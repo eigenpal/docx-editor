@@ -53,17 +53,43 @@ async function editCost(count: number, concurrent: boolean): Promise<number> {
   }
 }
 
+/**
+ * The median of three interleaved measurements of each room, so a pause of a loaded machine
+ * during one measurement does not decide a ratio.
+ */
+async function medianCosts(): Promise<
+  Record<'small' | 'large' | 'smallPlain' | 'largePlain', number>
+> {
+  const runs = {
+    small: [] as number[],
+    large: [] as number[],
+    smallPlain: [] as number[],
+    largePlain: [] as number[],
+  };
+  for (let round = 0; round < 3; round += 1) {
+    runs.small.push(await editCost(100, true));
+    runs.smallPlain.push(await editCost(100, false));
+    runs.large.push(await editCost(1_000, true));
+    runs.largePlain.push(await editCost(1_000, false));
+  }
+  const median = (values: number[]) => [...values].sort((a, b) => a - b)[1]!;
+  return {
+    small: median(runs.small),
+    large: median(runs.large),
+    smallPlain: median(runs.smallPlain),
+    largePlain: median(runs.largePlain),
+  };
+}
+
 test('edits after concurrent splits grow with the room as edits without them do', async () => {
   // Warm up the code paths once, so the first measurement does not pay for compilation.
   await editCost(20, true);
-  const small = await editCost(100, true);
-  const large = await editCost(1_000, true);
-  const smallPlain = await editCost(100, false);
-  const largePlain = await editCost(1_000, false);
+  await editCost(20, false);
+  const { small, large, smallPlain, largePlain } = await medianCosts();
   // An edit beside the run costs about what one without it does, in a small and a large room.
   // Reading the order once per comparison made it about 100 times dearer at both sizes.
   expect(small / smallPlain).toBeLessThan(5);
   expect(large / largePlain).toBeLessThan(5);
   // And the large room grows from the small one as a room without the run does.
   expect(large / small).toBeLessThan(Math.max(3 * (largePlain / smallPlain), 15));
-});
+}, 60_000);

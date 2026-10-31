@@ -214,6 +214,13 @@ export class TextFollow {
   /** For each paragraph, the deleted paragraphs whose following text it shows. */
   private readonly incomingOf = new Map<LogicalId, FollowingText[]>();
   private readonly targetsOf = new Map<LogicalId, Set<LogicalId>>();
+  /**
+   * For each source, the copies its following text shows. A copy that shows as following
+   * text hides its original, as a moved copy does, also in the paragraph that shows it.
+   */
+  private readonly followingCopiesOf = new Map<LogicalId, Set<Identity>>();
+  /** For each identity, how many sources show a following copy of it. */
+  private readonly followingCopies = new Map<Identity, number>();
   /** For each source, the identities its following text depends on (`dependencyRuns`). */
   private readonly dependencies = new IdentityIndex();
   /**
@@ -385,6 +392,16 @@ export class TextFollow {
     }
     const outgoing = this.outgoingOf.get(paragraphId);
     if (outgoing) for (const position of positionsNow(outgoing, identities)) hidden.add(position);
+    // An original whose copy shows as following text hides too. Two peers that join one
+    // paragraph at once, one into the paragraph before it and one taking in the paragraph
+    // after it, leave the only copy in a removed paragraph, and it shows where that one's
+    // text follows.
+    if (this.followingCopies.size > 0) {
+      identities.ids.forEach((id, position) => {
+        if (id === null || isCopyAt(identities, position)) return;
+        if (this.followingCopies.has(id)) hidden.add(position);
+      });
+    }
     identities.deleted.forEach((deleted, position) => {
       if (deleted) hidden.add(position);
     });
@@ -603,6 +620,8 @@ export class TextFollow {
     this.outgoingOf.clear();
     this.incomingOf.clear();
     this.targetsOf.clear();
+    this.followingCopiesOf.clear();
+    this.followingCopies.clear();
     this.dependencies.clear();
     this.pending.clear();
     this.ownChanges.clear();
@@ -634,9 +653,20 @@ export class TextFollow {
       if (kept.length > 0) this.incomingOf.set(target, kept);
       else this.incomingOf.delete(target);
     }
+    // Whether each identity had a following copy before this placement: only one that gains
+    // its first or loses its last copy changes what its holders show.
+    const hadCopy = new Map<Identity, boolean>();
+    const touch = (identity: Identity): void => {
+      if (!hadCopy.has(identity)) hadCopy.set(identity, this.followingCopies.has(identity));
+    };
     for (const source of sources) {
       this.targetsOf.delete(source);
       this.outgoingOf.delete(source);
+      for (const identity of this.followingCopiesOf.get(source) ?? []) {
+        touch(identity);
+        this.countFollowingCopy(identity, -1);
+      }
+      this.followingCopiesOf.delete(source);
       const text = this.sources.has(source) ? this.textOf(source) : null;
       const identities = text ? this.identitiesOf(source, text) : null;
       this.dependencies.update(source, identities ? dependencyRuns(identities) : []);
@@ -651,7 +681,15 @@ export class TextFollow {
         targets.add(target);
         this.targetsOf.set(source, targets);
         following.positions.forEach((position, at) => {
-          outgoing.set(position, following.identities[at] ?? null);
+          const identity = following.identities[at] ?? null;
+          outgoing.set(position, identity);
+          if (identity === null || !isCopyAt(identities, position)) return;
+          const copies = this.followingCopiesOf.get(source) ?? new Set<Identity>();
+          if (copies.has(identity)) return;
+          copies.add(identity);
+          this.followingCopiesOf.set(source, copies);
+          touch(identity);
+          this.countFollowingCopy(identity, 1);
         });
         if (!before.has(target)) before.set(target, '[]');
       }
@@ -684,7 +722,17 @@ export class TextFollow {
     for (const [target, json] of before) {
       if (JSON.stringify(this.incomingOf.get(target) ?? []) !== json) changed.add(target);
     }
+    for (const [identity, had] of hadCopy) {
+      if (had === this.followingCopies.has(identity)) continue;
+      for (const holder of this.holdersOf(identity)) changed.add(holder);
+    }
     return changed;
+  }
+
+  private countFollowingCopy(identity: Identity, by: 1 | -1): void {
+    const count = (this.followingCopies.get(identity) ?? 0) + by;
+    if (count > 0) this.followingCopies.set(identity, count);
+    else this.followingCopies.delete(identity);
   }
 
   /**
@@ -730,9 +778,6 @@ export class TextFollow {
         open !== null &&
         (!identities.starts[position] ||
           (position > 0 && identities.lefts[position] === identities.ids[position - 1]));
-      // A copy in a gone paragraph whose character another paragraph holds shows there: a
-      // join copied text a peer typed while its original stayed. What follows it comes along.
-      if (!live && continues && isCopy && id !== null && this.holdersOf(id).length > 0) continue;
       const anchor: Placement | undefined =
         identities.anchors[position]?.find((candidate) => this.leadsOut(source, live, candidate)) ??
         (live || continues ? undefined : this.movedAfter(source, identities, position));
@@ -827,10 +872,12 @@ export class TextFollow {
     identities: TextIdentities,
     position: number
   ): Placement | undefined {
-    // Moved text another paragraph still holds, a copy or its original, shows there, and an
-    // original typed in another source follows by its own anchors.
+    // Moved text another paragraph still holds shows there, and an original typed in another
+    // source follows by its own anchors. A copy's original does not hold it back: the copy
+    // that shows hides its original (`shown`), and a shown copy elsewhere stopped it already.
     const id = identities.ids[position];
-    if (!id || this.holdersOf(id).length > 0) return undefined;
+    if (!id) return undefined;
+    if (!isCopyAt(identities, position) && this.holdersOf(id).length > 0) return undefined;
     // The original follows by its anchors only when one leads to a copy that shows; otherwise
     // this copy is the only place the text can show. What another source holds can change
     // this, so this source is placed again with every placement.

@@ -130,6 +130,7 @@ export function splitSiblingRanks(
   let ranks: Map<LogicalId, SiblingRank> | null = null;
   let group = 0;
   const items: Y.Item[] = [];
+  const nodes = children.doc?.getMap<unknown>(PACKAGE_NODES_KEY) ?? null;
   // Items that went in at one place at once have the same two origins. Only such items start
   // a group, so a listing without concurrent inserts is read once.
   const sharing = new Map<string, number>();
@@ -138,7 +139,6 @@ export function splitSiblingRanks(
     const key = originsKey(item);
     sharing.set(key, (sharing.get(key) ?? 0) + 1);
   }
-  const nodes = children.doc?.getMap<unknown>(PACKAGE_NODES_KEY) ?? null;
   // A paragraph a split added at this place, not one a move or an undo listed here again: two
   // moves to one place share both origins too, and they show where their authors put them.
   const splitHere = (item: Y.Item): boolean => item.deleted || listedBySplit(nodes, item);
@@ -170,24 +170,29 @@ export function splitSiblingRanks(
     // the run, and that member listed a paragraph whose record was already there. It belongs
     // to the run, in a block of its own. A paragraph listed there anew, as a split made later
     // or a break typed at the end of the split paragraph, does not: it shows where its author
-    // put it.
+    // put it. A redo of a redo goes in right before the removed entry of the first redo, so
+    // the walk passes such removed entries too. A move that lists a sibling right before its
+    // own removed entry leaves it where its author put it.
     let first = start;
-    while (first > 1) {
-      const item = items[first - 1]!;
-      const removed = blocks
-        .flatMap((block) => block.items)
-        .find((member) => member.deleted && inItem(item.rightOrigin, member));
-      if (!removed || !inItem(item.origin, items[first - 2]!)) break;
+    let relistings = 0;
+    const members = blocks.flatMap((block) => block.items);
+    for (let at = start; at > 1; ) {
+      const item = items[at - 1]!;
+      const removed = members.find((member) => member.deleted && inItem(item.rightOrigin, member));
+      if (!removed) break;
+      at -= 1;
+      if (item.deleted) {
+        members.push(item);
+        continue;
+      }
+      if (!inItem(item.origin, items[at - 1]!)) break;
       if (!listedAgain(nodes, item, removed)) break;
       blocks.unshift({ head: item, items: [item] });
-      first -= 1;
+      relistings += 1;
+      first = at;
     }
     for (const block of blocks)
       for (const item of block.items) if (!item.deleted) heads.push(headId(item));
-    // A paragraph stands for its place in the run only where a split listed it, or where an
-    // undo or redo listed it again in its run, as above.
-    const relisted = new Set(blocks.slice(0, start - first).map((block) => block.head));
-    const keyed = (item: Y.Item): boolean => relisted.has(item) || listedBySplit(nodes, item);
     const idsOf = (list: readonly Block[]): LogicalId[] =>
       list.flatMap((block) =>
         block.items
@@ -195,10 +200,47 @@ export function splitSiblingRanks(
           .flatMap((item) => item.content.getContent() as LogicalId[])
       );
     const listed = idsOf(blocks);
+    // A paragraph an undo or redo put back in the run stands for its block as a split does.
+    const relisted = new Set(blocks.slice(0, relistings).map((block) => block.head));
+    const keyed = blocks.flatMap((block) =>
+      block.items
+        .filter((item) => !item.deleted)
+        .flatMap((item) =>
+          (item.content.getContent() as LogicalId[]).map(
+            (id, at) => (at === 0 && relisted.has(item)) || splitAt(nodes, id, item, at)
+          )
+        )
+    );
+    // Whether each listed paragraph went in right before a member of the run: its author
+    // saw that member, so it stays with the paragraph listed before it. An undo or redo that
+    // goes in right before its own removed entry stands for the split it puts back.
+    const saw = blocks.flatMap((block) =>
+      block.items
+        .filter((item) => !item.deleted)
+        .flatMap((item) =>
+          (item.content.getContent() as LogicalId[]).map(
+            (_, at) =>
+              at === 0 &&
+              !relisted.has(item) &&
+              members.some(
+                (member) =>
+                  inItem(item.rightOrigin, member) &&
+                  !(member.deleted && listedAgain(nodes, item, member))
+              )
+          )
+        )
+    );
     const blockOf = blocks.flatMap((block, index) => idsOf([block]).map(() => index));
-    const byText = orderOf(blocks, textOf, children.doc, pointsOf, missing, keyed);
+    const byText = orderOf(
+      blocks,
+      textOf,
+      children.doc,
+      pointsOf,
+      missing,
+      (item) => relisted.has(item) || listedBySplit(nodes, item)
+    );
     const order =
-      idsByPoints(listed, blockOf, pointsOf, children.doc, missing) ??
+      idsByPoints(listed, keyed, saw, blockOf, pointsOf, children.doc, missing) ??
       (byText ? idsOf(byText) : null);
     const shown = order ?? listed;
     const source = items[first - 1];
@@ -233,19 +275,6 @@ export function splitSiblingRanks(
 }
 
 /**
- * Whether `item` is the entry a paragraph's split points were written for (`split-points.ts`):
- * the entry a split made when it added the paragraph, or one that took a moved sibling's points.
- * A paragraph listed again by a move, an undo, or a redo names its earlier entry, and a
- * paragraph that names no split point is no split.
- */
-function listedBySplit(nodes: Y.Map<unknown> | null, item: Y.Item): boolean {
-  const record = nodes?.get(headId(item) as string);
-  if (!(record instanceof Y.Map)) return false;
-  const entry = splitEntryOf(record as Y.Map<unknown>);
-  return entry !== null && inItem(entry, item);
-}
-
-/**
  * The paragraphs of one concurrent run in the order of their split points, or null when they
  * do not all name a split of one paragraph. Each paragraph goes by where its own last split
  * fell, so pieces that several peers split off at once, each peer's later pieces split off its
@@ -261,30 +290,69 @@ function listedBySplit(nodes: Y.Map<unknown> | null, item: Y.Item): boolean {
  */
 function idsByPoints(
   listed: readonly LogicalId[],
+  /** Whether each listed paragraph is a split at its entry (`splitAt`). */
+  keyed: readonly boolean[],
+  /** Whether each listed paragraph went in right before a member of the run. */
+  saw: readonly boolean[],
   /** The block of the run that lists each paragraph, in listed order. */
   blockOf: readonly number[],
   pointsOf: (id: LogicalId) => readonly SplitPoint[],
   doc: Y.Doc | null,
   missing: string[]
 ): LogicalId[] | null {
-  if (listed.length < 2) return null;
-  const points = listed.map((id) => pointsOf(id));
+  // A block a move listed after a paragraph keeps its points but follows that paragraph, and
+  // so does one a move put right after a sibling, whose points it took (`split-points.ts`).
+  const units: LogicalId[][] = [];
+  /** The block of the run that lists each unit's first paragraph. */
+  const unitBlocks: number[] = [];
+  const pointsKeys = new Set<string>();
+  const unitOf = new Map<LogicalId, LogicalId[]>();
+  const followers = new Set<LogicalId>();
+  for (const [at, id] of listed.entries()) {
+    const key = pointsOf(id)
+      .map((point) => `${point.source}@${point.at}`)
+      .join('\n');
+    const taken = pointsKeys.has(key);
+    if (keyed[at]) pointsKeys.add(key);
+    // A paragraph split off one that follows another goes with it: its split point tells
+    // where it stands in the text the follower holds, not in the run.
+    const source = pointsOf(id).at(-1)?.source;
+    const unit = saw[at]
+      ? unitOf.get(listed[at - 1]!)
+      : keyed[at] && !taken && !(source && followers.has(source))
+        ? null
+        : source && followers.has(source)
+          ? unitOf.get(source)!
+          : units.at(-1);
+    if (unit === undefined) return null;
+    if (unit) followers.add(id);
+    const into = unit ?? [];
+    if (!unit) {
+      units.push(into);
+      unitBlocks.push(blockOf[at]!);
+    }
+    into.push(id);
+    unitOf.set(id, into);
+  }
+  if (units.length < 2) return null;
+  const points = units.map((unit) => pointsOf(unit[0]!));
   const places = new Map<Y.Text, Map<string, number>>();
   const sorted = (keys: readonly number[]): LogicalId[] => {
-    // Where each block shows: by the key of the first paragraph it lists.
+    // Where each block shows: by the key of the first unit it lists.
     const heads = new Map<number, number>();
-    blockOf.forEach((block, index) => {
+    unitBlocks.forEach((block, index) => {
       if (!heads.has(block)) heads.set(block, index);
     });
     const blocks = [...heads.keys()].sort(
       (a, b) => keys[heads.get(a)!]! - keys[heads.get(b)!]! || a - b
     );
     const shown = new Map(blocks.map((block, rank) => [block, rank]));
-    const order = listed.map((_, index) => index);
+    const order = units.map((_, index) => index);
     order.sort(
-      (a, b) => keys[a]! - keys[b]! || shown.get(blockOf[a]!)! - shown.get(blockOf[b]!)! || a - b
+      (a, b) =>
+        keys[a]! - keys[b]! || shown.get(unitBlocks[a]!)! - shown.get(unitBlocks[b]!)! || a - b
     );
-    return order.map((index) => listed[index]!);
+    return order.flatMap((index) => units[index]!);
   };
   for (let at = points[0]!.length - 1; at >= 0; at -= 1) {
     const source = points[0]![at]!.source;
@@ -308,18 +376,42 @@ function idsByPoints(
 
 /**
  * Whether `item` lists again the paragraph `removed` listed, as an undo or redo does, and not
- * a paragraph listed anew. Only the paragraph's record tells, because a collected entry keeps
- * no ID: the record the removed entry's author wrote before that entry is still the record.
- * A new paragraph's record comes with its first entry, after every entry its author saw.
+ * a paragraph listed anew or a block a move put there. The undo or redo names the new entry in
+ * the paragraph's split points (`relistSplitEntries`), which a move does not. A split made
+ * later names its own entry as well, so the record tells it apart, because a collected entry
+ * keeps no ID: the record the removed entry's author wrote before that entry is still the
+ * record, and a new paragraph's record comes with its first entry, after every entry its
+ * author saw.
  */
 function listedAgain(nodes: Y.Map<unknown> | null, item: Y.Item, removed: Y.Item): boolean {
-  if (!nodes || item.deleted) return false;
+  if (!nodes || item.deleted || !listedBySplit(nodes, item)) return false;
   const record = mapEntry(nodes, headId(item) as string);
   return (
     record !== undefined &&
     record.id.client === removed.id.client &&
     record.id.clock < removed.id.clock
   );
+}
+
+/**
+ * Whether `item` is the entry a paragraph's split points were written for (`split-points.ts`):
+ * the entry a split made when it added the paragraph, or one that took a moved sibling's points.
+ * A paragraph listed again by a move, an undo, or a redo names its earlier entry, and a
+ * paragraph that names no split point is no split.
+ */
+function listedBySplit(nodes: Y.Map<unknown> | null, item: Y.Item): boolean {
+  const record = nodes?.get(headId(item) as string);
+  if (!(record instanceof Y.Map)) return false;
+  const entry = splitEntryOf(record as Y.Map<unknown>);
+  return entry !== null && inItem(entry, item);
+}
+
+/** Whether `id`, element `at` of `item`, is listed there by the entry its split points name. */
+function splitAt(nodes: Y.Map<unknown> | null, id: LogicalId, item: Y.Item, at: number): boolean {
+  const record = nodes?.get(id as string);
+  if (!(record instanceof Y.Map)) return false;
+  const entry = splitEntryOf(record as Y.Map<unknown>);
+  return entry !== null && entry.client === item.id.client && entry.clock === item.id.clock + at;
 }
 
 /** The paragraph a listing item names first. */
@@ -592,10 +684,10 @@ export class SplitSiblingOrders {
   private readonly built = new WeakMap<readonly LogicalId[], OrderEntry>();
   /** Parents whose last order read a concurrent run. */
   private readonly withRuns = new Set<LogicalId>();
-  /** Parents whose child array changed, with the order they showed before. */
-  private readonly recheck = new Map<LogicalId, readonly LogicalId[]>();
   /** Parents whose last order found a concurrent run after a listed paragraph. */
   private readonly grouped = new Set<LogicalId>();
+  /** Parents whose child array changed, with the order they showed before. */
+  private readonly recheck = new Map<LogicalId, readonly LogicalId[]>();
 
   constructor(
     /** A node's shared record. */

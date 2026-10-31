@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The session carried the local caret across a remote change on the character beside it, and looked for that character in its own paragraph, in the paragraph that shows a moved copy of it, and in the paragraphs that hold it. Text typed in a paragraph a peer removed at the same time shows only as following text of that removed paragraph, so the session carried nothing, and the editor mapped the caret by text, which put it in the wrong place when the text around it changed too.",
+  "after": "The session also looks for the character in the paragraphs that show the following text of the caret's paragraph, so the caret stays right after the typed text.",
+  "reason": "Only the local caret and the presence this replica publishes change; shared document state, identities, conflict rules, and canonical mapping do not. Presence already names a character, which every replica resolves, so a mixed room shows the caret consistently.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-remote-caret.test.ts"],
+  "changeset": "collab-concurrent-split-order",
+  "migration": null
+}

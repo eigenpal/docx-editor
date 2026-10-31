@@ -202,6 +202,10 @@ export class CaretAnchors {
     const shown = follow.shownCopy(identity);
     if (shown) candidates.add(shown);
     for (const holder of follow.holdersOf(identity)) candidates.add(holder);
+    // Text typed in a paragraph a peer removed shows where it follows the move.
+    if (point.paragraph) {
+      for (const target of follow.targetsFor(point.paragraph)) candidates.add(target);
+    }
     for (const candidate of candidates) {
       if (registry.inline.isDeletedParagraph(candidate)) continue;
       // After a publish, the editor's node id of a paragraph is its logical id.

@@ -12,6 +12,7 @@ import { observeDirtyPaths } from './registry-dirty-paths.ts';
 import { captureInsertionBoundary } from './split-text-boundaries.ts';
 import { SplitTextSources, type SplitTextRange } from './split-text-sources.ts';
 import { SplitSiblingOrders } from './split-sibling-order.ts';
+import { NODE_SPLIT_POINTS_FIELD } from './split-points.ts';
 import * as Y from 'yjs';
 import type { CanonicalBinaryDescriptor } from '@docx-editor.dev/core/collaboration/replication';
 import { partNameKey } from '@docx-editor.dev/core/store';
@@ -844,21 +845,17 @@ export class DocumentRegistry {
         }
         continue;
       }
-      if (
-        event.target instanceof Y.Map &&
-        event.path.length === 1 &&
-        event.changes.keys.has(NODE_UNDONE_FIELD)
-      ) {
-        this.history.noteMarkChanged(keyId(event.path[0]!));
-      }
-      // Undo retains record containers. Redo restores scalar provenance on those existing
-      // maps, so a late joiner must index field changes as well as new map entries.
-      if (
-        event.target instanceof Y.Map &&
-        event.path.length === 1 &&
-        (event.changes.keys.has('splitFrom') || event.changes.keys.has('splitLineage'))
-      ) {
-        this.splitDedup.indexExisting(keyId(event.path[0]!));
+      if (event.target instanceof Y.Map && event.path.length === 1) {
+        const id = keyId(event.path[0]!);
+        const keys = event.changes.keys;
+        if (keys.has(NODE_UNDONE_FIELD)) this.history.noteMarkChanged(id);
+        // Undo retains record containers. Redo restores scalar provenance on those existing
+        // maps, so a late joiner must index field changes as well as new map entries.
+        if (keys.has('splitFrom') || keys.has('splitLineage')) this.splitDedup.indexExisting(id);
+        // An undo or redo can name a paragraph's new listing entry in its split points after
+        // it listed the paragraph, so the order of each parent that lists it is read again.
+        if (keys.has(NODE_SPLIT_POINTS_FIELD))
+          for (const parentId of this.listings.get(id) ?? []) this.splitSiblings.forget(parentId);
       }
       if (event.target instanceof Y.Array && event.path.length > 0) {
         structural = true;

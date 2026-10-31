@@ -29,7 +29,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * sibling's entry, which hands its points to the block listed after it.
  */
 import * as Y from 'yjs';
-import { firstItem } from './yjs-items.ts';
+import { firstItem, itemsWrittenSince, structAt } from './yjs-items.ts';
 import { itemIdentity } from './paragraph-text-identity.ts';
 import type { LogicalId } from './identity.ts';
 import { ORIGIN_KEY } from './paragraph-text-moves.ts';
@@ -111,20 +111,20 @@ function indexOfEntry(children: Y.Array<LogicalId>, entry: Y.Item, id: LogicalId
   return -1;
 }
 
-/** The listing entry this edit gave each record it listed, for the fields it writes later. */
-const entries = new WeakMap<Y.Map<unknown>, string>();
-
-const entryKey = (item: Y.Item, id: LogicalId): string | null => {
-  const at = (item.content.getContent() as unknown[]).indexOf(id);
-  return at < 0 ? null : `${item.id.client}:${item.id.clock + at}`;
-};
-
 /**
  * Paragraph records the current edit created, by the peer that runs it. Only that edit writes
  * their split points: `endSplitPointEdit` forgets them when it ends, so a later edit of the
  * paragraph, as text pasted into a paragraph a break left empty, never rewrites the field.
  */
 let minted = new WeakSet<Y.Map<unknown>>();
+
+/** The listing entry this edit gave each record it created, for the fields it writes later. */
+let entries = new WeakMap<Y.Map<unknown>, string>();
+
+const entryKey = (item: Y.Item, id: LogicalId): string | null => {
+  const at = (item.content.getContent() as unknown[]).indexOf(id);
+  return at < 0 ? null : `${item.id.client}:${item.id.clock + at}`;
+};
 
 /** Note a paragraph record this edit created, before it is listed. */
 export function noteMintedParagraph(record: Y.Map<unknown> | undefined): void {
@@ -134,6 +134,7 @@ export function noteMintedParagraph(record: Y.Map<unknown> | undefined): void {
 /** The edit that noted new paragraphs ended: their split points are final. */
 export function endSplitPointEdit(): void {
   minted = new WeakSet();
+  entries = new WeakMap();
 }
 
 /**
@@ -169,18 +170,22 @@ export function inheritSplitPoints(
       }
     }
     if (!entry || !entryItem) continue;
-    const created = minted.has(record);
+    // Created by this edit and listed for the first time.
+    const created = minted.has(record) && !entries.has(record);
     if (created) entries.set(record, entry);
-    if (created && record.has(NODE_SPLIT_POINTS_FIELD)) continue;
+    if (created && record.has(NODE_SPLIT_POINTS_FIELD)) {
+      // It carries its own points: no split of this edit rewrites them.
+      minted.delete(record);
+      continue;
+    }
     listed ??= children.toArray();
     // Where this edit's entry stands: a block can be listed twice after concurrent moves.
     const at = indexOfEntry(children, entryItem, id);
     const leftId = at > 0 ? listed[at - 1]! : undefined;
     if (!created && (leftId === undefined || !reordered(leftId))) continue;
-    const inherited = splitPointsOf(leftId === undefined ? undefined : nodeOf(leftId));
-    // A paragraph this edit created also counts as split off the end of the one before it.
+    let points = splitPointsOf(leftId === undefined ? undefined : nodeOf(leftId));
     const last = created && leftId !== undefined ? lastOf(leftId) : null;
-    const points = last ? [...inherited, { source: leftId!, at: `${last}+` }] : inherited;
+    if (last) points = [...points, { source: leftId!, at: `${last}+` }];
     if (points.length > 0) record.set(NODE_SPLIT_POINTS_FIELD, serialized(points, entry));
   }
 }
@@ -255,6 +260,39 @@ export function handOnSplitPoints(
   }
 }
 
+/**
+ * After this replica's undo or redo, which wrote since its clock stood at `from`: a paragraph
+ * whose split points name an entry that the undo or redo put back as a new entry names the new
+ * entry, keeping its points. Only the replica that put the entry back knows which entry it
+ * replaces (`Y.Item.redone`), so it writes this for every replica. The order then counts the
+ * new entry as the split, and tells it from a block that a move lists right before its own
+ * removed entry, which keeps naming the removed entry and shows where its author put it.
+ */
+export function relistSplitEntries(
+  doc: Y.Doc,
+  nodeOf: (id: LogicalId) => Y.Map<unknown> | undefined,
+  from: number
+): void {
+  for (const item of itemsWrittenSince(doc, from)) {
+    if (item.deleted || !(item.parent instanceof Y.Array)) continue;
+    if (!(item.content instanceof Y.ContentAny)) continue;
+    for (const value of item.content.getContent()) {
+      if (typeof value !== 'string') continue;
+      const id = value as LogicalId;
+      const record = nodeOf(id);
+      const entry = splitEntryOf(record);
+      if (!record || !entry || inItem(entry, item)) continue;
+      // The removed entry, then each entry an earlier undo or redo put back for it.
+      let at = structAt(doc, entry);
+      for (let step = 0; at && at !== item && at.redone && step < 64; step += 1) {
+        at = structAt(doc, at.redone);
+      }
+      const key = at === item ? entryKey(item, id) : null;
+      if (key) record.set(NODE_SPLIT_POINTS_FIELD, serialized(splitPointsOf(record), key));
+    }
+  }
+}
+
 /** Whether `id` names an element of `item`. */
 export function inItem(id: Y.ID | null, item: Y.Item): boolean {
   return (
@@ -299,10 +337,7 @@ export function recordSplitPoints(writes: readonly SplitWrite[]): void {
       // Written by the edit that creates the paragraph, over what the listing gave it.
       const inherited = splitPointsOf(source.record);
       const entry = entries.get(write.record);
-      if (!entry) break;
-      // Only the edit that created the paragraph writes them: a later join into it does not.
-      if (!minted.has(write.record)) break;
-      minted.delete(write.record);
+      if (!entry || !minted.delete(write.record)) break;
       write.record.set(
         NODE_SPLIT_POINTS_FIELD,
         serialized([...inherited, { source: source.id, at: origin }], entry)
