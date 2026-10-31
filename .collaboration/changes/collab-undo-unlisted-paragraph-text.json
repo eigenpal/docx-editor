@@ -1,0 +1,13 @@
+{
+  "impact": "migration-required",
+  "fields": ["repairVersion"],
+  "before": "An undo of an edit that listed a paragraph, such as a split, removed the paragraph's listing entry, and characters another participant typed there showed nowhere unless they stood beside a moved character whose copy showed elsewhere. When the split's source paragraph was deleted, the undo put the moved text back into that deleted paragraph, where it showed nowhere. A copy that an undo or redo wrote of typed text showed where Yjs placed it, so a redo of typing beside text a peer's split moved showed the typing in the paragraph the text came from, and a redo of typing into a paragraph a peer deleted showed it after the moved text.",
+  "after": "Before an undo runs, the undoing replica records on each paragraph the step listed, in its shared record field undoneInto, where the undo joins that paragraph's text: the nearest paragraph before it that the step did not list, or, with a leading '^', the start of the nearest paragraph after it. While the paragraph is unlisted and not deleted, characters in it that follow no other move show at the end of that paragraph, or at its start, also when they arrive after the undo. When every paragraph a step deleted text from is deleted, its undo keeps each paragraph the step listed that holds moved copies: the listing entry and the copies stay, and text the step typed still goes. A copy that an undo or redo wrote of typed text that stood in the same paragraph text follows a move as the typing did: by the typing's follow anchor, or by the deleted characters it went in after.",
+  "reason": "The rules change which paragraph shows a character for the same shared state, so they are repair semantics that ride the repairVersion 3 change these records already make; replicas with repairVersion 2 refuse these rooms. The field is a new optional key on a paragraph record, written under an origin that no undo stack tracks, in a transaction before the undo that unlists the paragraph, so every replica reads it with the unlisting. A paragraph without the field, or one that is listed or deleted, shows as before. The keep rule only changes which items the undoing replica deletes, which every replica receives as ordinary updates. sharedSchemaVersion does not change: no existing field changes meaning. A peer that deletes the split's source paragraph at the same time as the undo still loses the moved text, as before.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-undo-inserted-paragraph.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-undo-groups-fuzz.test.ts"
+  ],
+  "changeset": "collab-concurrent-split-order",
+  "migration": "upgrade-rooms-to-format-1531"
+}

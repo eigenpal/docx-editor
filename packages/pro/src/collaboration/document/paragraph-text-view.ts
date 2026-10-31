@@ -89,7 +89,11 @@ function inlineItems(
   for (const [position, slot] of placement.atPosition) at.set(position, slotOf(slot));
   return decodeItems(delta, embedOf, limits, paragraphId, {
     hidden: shown.hidden,
-    following: { at, atEnd: placement.atEnd.map(pieceOf) },
+    following: {
+      at,
+      atEnd: placement.atEnd.map(pieceOf),
+      atStart: placement.atStart.map(pieceOf),
+    },
     onRepair: () => view.noteDrift(),
     ...(onCharacter
       ? {

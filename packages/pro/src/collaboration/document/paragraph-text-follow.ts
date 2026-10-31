@@ -29,6 +29,7 @@ import {
   type TextIdentities,
 } from './paragraph-text-identity.ts';
 import type { FollowAnchor } from './paragraph-text-moves.ts';
+import type { UndoneInto } from './undo-unlisted-text.ts';
 
 const EMPTY: ReadonlySet<LogicalId> = new Set();
 
@@ -69,6 +70,9 @@ function dependencyRuns(identities: TextIdentities): IdentityRun[] {
   return runs;
 }
 
+/** Where following text shows: by an anchor, or in a paragraph that `target` names. */
+type Placement = FollowAnchor & { readonly target?: LogicalId; readonly atStart?: true };
+
 /** Text typed in a source with the anchors it can follow by. */
 interface TypedOriginal {
   readonly source: LogicalId;
@@ -101,6 +105,8 @@ export interface FollowingText extends PlacedText {
   readonly before: boolean;
   /** Where it shows, when not where a copy of `after` shows: its original's paragraph. */
   readonly target?: LogicalId;
+  /** It shows at the start of `target`, where an undo joins it (`undo-unlisted-text.ts`). */
+  readonly atStart?: true;
 }
 
 /**
@@ -220,6 +226,8 @@ export class TextFollow {
   private readonly ownChanges = new Set<LogicalId>();
   /** Sources whose placement read what other sources hold (`movedAfter`). */
   private readonly readsOtherSources = new Set<LogicalId>();
+  /** For each paragraph an undo joins text into, the sources whose placement read it. */
+  private readonly joinedFrom = new Map<LogicalId, Set<LogicalId>>();
   /**
    * `typedSources`, kept per source: a source's entries change only with its own text, so a
    * change reads that source again and nothing else. Every keystroke in a document with a
@@ -249,7 +257,9 @@ export class TextFollow {
     /** Paragraphs whose view changed when waiting sources were placed. */
     private readonly viewsChanged: (paragraphs: ReadonlySet<LogicalId>) => void,
     /** The paragraph whose text holds the item of an identity, deleted or not. */
-    private readonly originalParagraph: (identity: Identity) => LogicalId | null
+    private readonly originalParagraph: (identity: Identity) => LogicalId | null,
+    /** The paragraph an undo joins an unlisted paragraph's text into (`undo-unlisted-text.ts`). */
+    private readonly undoneInto: (paragraphId: LogicalId) => UndoneInto | null = () => null
   ) {}
 
   /** The paragraph of `paragraphs` that comes last in the document. */
@@ -294,6 +304,8 @@ export class TextFollow {
       this.pending.add(paragraphId);
       this.ownChanges.add(paragraphId);
     }
+    // Text an undo joins into this paragraph shows only while it is live.
+    for (const source of this.joinedFrom.get(paragraphId) ?? []) this.pending.add(source);
     for (const target of this.targetsOf.get(paragraphId) ?? []) affected.add(target);
     affected.delete(paragraphId);
     return affected;
@@ -594,6 +606,7 @@ export class TextFollow {
     this.dependencies.clear();
     this.pending.clear();
     this.ownChanges.clear();
+    this.joinedFrom.clear();
     this.typedAnchored.clear();
     this.typedOf.clear();
     this.typedStale.clear();
@@ -684,6 +697,7 @@ export class TextFollow {
       after: Identity;
       before: boolean;
       target?: LogicalId;
+      atStart?: true;
       positions: number[];
       identities: (Identity | null)[];
       items: string[];
@@ -696,9 +710,13 @@ export class TextFollow {
       // A character that already has a shown copy shows there, not as following text, and an
       // original goes nowhere when this paragraph holds a copy of it, which follows instead.
       const isCopy = isCopyAt(identities, position);
+      // A copy an undo or redo wrote is a holder of its character itself: it follows like
+      // the typing it copies while no other paragraph shows that character.
+      const shownIn = id === null ? null : this.shownCopy(id);
+      const elsewhere = shownIn !== null && !(shownIn === source && identities.restored[position]);
       if (
         identities.deleted[position] ||
-        (id !== null && (this.shownCopy(id) !== null || (!isCopy && ownCopies.has(id))))
+        (id !== null && (elsewhere || (!isCopy && ownCopies.has(id))))
       ) {
         open = null;
         continue;
@@ -712,7 +730,7 @@ export class TextFollow {
         open !== null &&
         (!identities.starts[position] ||
           (position > 0 && identities.lefts[position] === identities.ids[position - 1]));
-      const anchor: (FollowAnchor & { readonly target?: LogicalId }) | undefined =
+      const anchor: Placement | undefined =
         identities.anchors[position]?.find((candidate) => this.leadsOut(source, live, candidate)) ??
         (live || continues ? undefined : this.movedAfter(source, identities, position));
       if (anchor) {
@@ -721,6 +739,7 @@ export class TextFollow {
           after: anchor.identity,
           before: anchor.before,
           ...(anchor.target ? { target: anchor.target } : {}),
+          ...(anchor.atStart ? { atStart: true as const } : {}),
           positions: [position],
           identities: [id],
           items: [identities.items[position]!],
@@ -804,7 +823,7 @@ export class TextFollow {
     source: LogicalId,
     identities: TextIdentities,
     position: number
-  ): (FollowAnchor & { readonly target?: LogicalId }) | undefined {
+  ): Placement | undefined {
     // Moved text another paragraph still holds, a copy or its original, shows there, and an
     // original typed in another source follows by its own anchors.
     const id = identities.ids[position];
@@ -824,9 +843,27 @@ export class TextFollow {
     // Last, a copy that would show nowhere goes back to where its original stood, when that
     // paragraph is live: every paragraph around it was deleted or undone. A paragraph's own
     // text, and text a participant deleted, never come back this way.
-    if (!identities.moved[position]) return undefined;
-    const original = this.originalParagraph(id);
-    if (original === null || original === source || this.isDeleted(original)) return undefined;
-    return { identity: id, before: false, target: original };
+    if (identities.moved[position]) {
+      const original = this.originalParagraph(id);
+      if (original !== null && original !== source && !this.isDeleted(original)) {
+        return { identity: id, before: false, target: original };
+      }
+    }
+    // What is left of a paragraph an undo took out shows where the undo joins it: at the end
+    // of the paragraph before it, or at the start of the one after it. Only an undo of the
+    // edit that listed it records that place, so a paragraph that a participant deleted, or
+    // that held this text from the start, does not come back.
+    const into = this.undoneInto(source);
+    if (into === null || into.paragraph === source) return undefined;
+    const sources = this.joinedFrom.get(into.paragraph) ?? new Set<LogicalId>();
+    sources.add(source);
+    this.joinedFrom.set(into.paragraph, sources);
+    if (this.isDeleted(into.paragraph)) return undefined;
+    return {
+      identity: id,
+      before: false,
+      target: into.paragraph,
+      ...(into.atStart ? { atStart: true as const } : {}),
+    };
   }
 }
