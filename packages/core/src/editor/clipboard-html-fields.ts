@@ -7,13 +7,47 @@
 // pasted content its fields again: a table of contents stays a TOC field that can be updated,
 // and its page numbers stay PAGEREF fields.
 //
-// SECURITY: the comment text is clipboard-supplied. It is scanned with a bounded tokenizer and
-// never parsed as markup or executed; instruction text is escaped into `w:instrText`, and field
-// instructions stay inert in the engine. Comment size, marker count and instruction length are
-// capped. Markers that do not nest into complete fields are all dropped, so the result text
-// stays and no half field reaches the document.
+// SECURITY: the comment text is clipboard-supplied, and any web page can write it. It is scanned
+// with a bounded tokenizer and never parsed as markup or executed; instruction text is escaped
+// into `w:instrText`, and field instructions stay inert in the engine. Comment size, marker
+// count and instruction length are capped. Only inert field types survive the paste: a field
+// that runs a command or loads a file or address when a word processor updates it (`DDEAUTO`,
+// `INCLUDETEXT`, `INCLUDEPICTURE`, `LINK`) keeps its result text and loses its field. Markers
+// that do not nest into complete fields are all dropped, so the result text stays and no half
+// field reaches the document.
 
-import { escapeXml } from '../store/package/sinks.ts';
+import { escapeXml, isEvaluableField } from '../store/package/sinks.ts';
+
+/** Field types a paste keeps besides the ones the engine evaluates: none fetches or runs. */
+const INERT_FIELDS = new Set([
+  'HYPERLINK',
+  'NOTEREF',
+  'IF',
+  'MERGEFIELD',
+  'SECTIONPAGES',
+  'SECTION',
+  'NUMWORDS',
+  'NUMCHARS',
+  'AUTHOR',
+  'TITLE',
+  'SUBJECT',
+  'CREATEDATE',
+  'SAVEDATE',
+  'PRINTDATE',
+  'DOCPROPERTY',
+  'SYMBOL',
+  'EQ',
+  'LISTNUM',
+  'SET',
+  'XE',
+  'TC',
+  'INDEX',
+]);
+
+function pasteKeepsField(instruction: string): boolean {
+  const keyword = instruction.trim().split(/\s+/)[0]?.toUpperCase() ?? '';
+  return isEvaluableField(instruction) || INERT_FIELDS.has(keyword);
+}
 
 /** A Word field comment longer than this is not field markup; it is ignored. */
 const MAX_FIELD_COMMENT_LENGTH = 16_384;
@@ -25,8 +59,9 @@ const MAX_FIELD_MARKERS = 30_000;
 const BEGIN = '<w:r><w:fldChar w:fldCharType="begin"/></w:r>';
 const SEPARATE = '<w:r><w:fldChar w:fldCharType="separate"/></w:r>';
 const END = '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
-const INSTRUCTION = /<w:r><w:instrText xml:space="preserve">[^<]*<\/w:instrText><\/w:r>/g;
-const MARKER = /<w:r><w:fldChar w:fldCharType="(begin|separate|end)"\/><\/w:r>/g;
+/** A marker run (group 1 is its type) or an instruction run (group 2 is its text). */
+const FIELD_RUN =
+  /<w:r><w:fldChar w:fldCharType="(begin|separate|end)"\/><\/w:r>|<w:r><w:instrText xml:space="preserve">([^<]*)<\/w:instrText><\/w:r>/g;
 
 const ENTITIES: Readonly<Record<string, string>> = {
   amp: '&',
@@ -61,6 +96,11 @@ function instructionRun(text: string): string {
 
 /** Markers left per paste, keyed by the paste's projection. */
 const markersLeft = new WeakMap<object, number>();
+/**
+ * Per paste, for each open field, whether its instruction is still being read. A field's
+ * instruction can continue after a nested field ends, in a later comment.
+ */
+const openFields = new WeakMap<object, boolean[]>();
 
 /**
  * The field runs one Word `supportFields` comment stands for, in order. Empty for any other
@@ -72,10 +112,13 @@ export function wordFieldRuns(comment: string, paste: object): string[] {
   const body = comment.slice('[if supportFields]>'.length).replace(/<!\[endif\]\s*$/, '');
   const runs: string[] = [];
   let instruction = '';
-  let instructionOpen = false;
+  let open = openFields.get(paste);
+  if (!open) openFields.set(paste, (open = []));
+  const fields = open;
+  const reading = () => fields.length > 0 && fields[fields.length - 1] === true;
   const flush = (): boolean => {
     if (instruction.length > MAX_INSTRUCTION_LENGTH) return false;
-    const run = instructionOpen ? instructionRun(instruction) : '';
+    const run = reading() ? instructionRun(instruction) : '';
     if (run) runs.push(run);
     instruction = '';
     return true;
@@ -83,7 +126,7 @@ export function wordFieldRuns(comment: string, paste: object): string[] {
   // Tags and text alternate; neither class can match the other, so the scan is linear.
   for (const match of body.matchAll(/<([^<>]{0,1024})>|([^<]+)/g)) {
     if (match[2] !== undefined) {
-      if (instructionOpen) instruction += match[2];
+      if (reading()) instruction += match[2];
       if (instruction.length > MAX_INSTRUCTION_LENGTH) return [];
       continue;
     }
@@ -95,32 +138,91 @@ export function wordFieldRuns(comment: string, paste: object): string[] {
     markersLeft.set(paste, left - 1);
     const kind = marker.toLowerCase();
     runs.push(kind === 'begin' ? BEGIN : kind === 'separator' ? SEPARATE : END);
-    instructionOpen = kind === 'begin';
+    if (kind === 'begin') fields.push(true);
+    else if (kind === 'separator') fields[fields.length - 1] = false;
+    else fields.pop();
   }
   if (!flush()) return [];
   return runs;
 }
 
+/** One field run in the pasted blocks, in document order. */
+interface FieldRun {
+  readonly kind: 'begin' | 'separate' | 'end' | 'instruction';
+  readonly text: string;
+}
+
 /**
- * The blocks unchanged when every field marker nests into complete fields, or with every field
- * marker and instruction removed when any does not: a selection that starts or ends inside a
- * field carries half of it, and only the result text can be kept.
+ * Which field runs of `blocks` stay, in document order. Every run goes when the markers do not
+ * nest into complete fields: a selection that starts or ends inside a field carries half of
+ * it, and only the result text can be kept. Otherwise the runs of a field whose type a paste
+ * does not keep go, and its result text stays.
+ */
+function keptFieldRuns(runs: readonly FieldRun[]): readonly boolean[] {
+  const keep = runs.map(() => true);
+  // Each open field: whether its separator has been seen, the runs that belong to it, and its
+  // instruction text.
+  const open: { separated: boolean; own: number[]; instruction: string }[] = [];
+  for (const [index, run] of runs.entries()) {
+    const top = open[open.length - 1];
+    if (run.kind === 'begin') {
+      open.push({ separated: false, own: [index], instruction: '' });
+    } else if (run.kind === 'instruction') {
+      if (top && !top.separated) {
+        top.own.push(index);
+        top.instruction += run.text;
+      } else {
+        // Instruction text belongs between a begin and its separator, nowhere else.
+        keep[index] = false;
+      }
+    } else if (run.kind === 'separate') {
+      if (!top || top.separated) return runs.map(() => false);
+      top.separated = true;
+      top.own.push(index);
+    } else {
+      const field = open.pop();
+      if (!field) return runs.map(() => false);
+      field.own.push(index);
+      if (!pasteKeepsField(field.instruction)) for (const own of field.own) keep[own] = false;
+    }
+  }
+  return open.length === 0 ? keep : runs.map(() => false);
+}
+
+function fieldRunsOf(blocks: readonly string[]): FieldRun[] {
+  const runs: FieldRun[] = [];
+  for (const block of blocks)
+    for (const match of block.matchAll(FIELD_RUN))
+      runs.push(
+        match[1] !== undefined
+          ? { kind: match[1] as FieldRun['kind'], text: '' }
+          : { kind: 'instruction', text: match[2]! }
+      );
+  return runs;
+}
+
+/**
+ * The blocks with only complete fields of a type a paste keeps. Unchanged when every field
+ * qualifies; see {@link keptFieldRuns}.
  */
 export function withCompleteFields(blocks: readonly string[]): readonly string[] {
-  const xml = blocks.join('');
-  if (!xml.includes('w:fldCharType=')) return blocks;
-  // Each open field: whether its separator has been seen.
-  const open: boolean[] = [];
-  let valid = true;
-  for (const match of xml.matchAll(MARKER)) {
-    const kind = match[1];
-    if (kind === 'begin') open.push(false);
-    else if (kind === 'separate') {
-      if (open.length === 0 || open[open.length - 1]) valid = false;
-      else open[open.length - 1] = true;
-    } else if (open.pop() === undefined) valid = false;
-    if (!valid) break;
+  if (!blocks.some((block) => block.includes('<w:fldChar') || block.includes('<w:instrText')))
+    return blocks;
+  const keep = keptFieldRuns(fieldRunsOf(blocks));
+  if (keep.every(Boolean)) return blocks;
+  let index = 0;
+  return blocks.map((block) => block.replace(FIELD_RUN, (whole) => (keep[index++] ? whole : '')));
+}
+
+/** {@link withCompleteFields} for each pasted note, which must hold whole fields on its own. */
+export function withCompleteNoteFields<Kind extends string>(
+  notes: Readonly<Record<Kind, ReadonlyMap<number, readonly string[]>>>
+): Record<Kind, ReadonlyMap<number, readonly string[]>> {
+  const out = {} as Record<Kind, ReadonlyMap<number, readonly string[]>>;
+  for (const kind of Object.keys(notes) as Kind[]) {
+    const checked = new Map<number, readonly string[]>();
+    for (const [id, blocks] of notes[kind]) checked.set(id, withCompleteFields(blocks));
+    out[kind] = checked;
   }
-  if (valid && open.length === 0) return blocks;
-  return blocks.map((block) => block.replace(MARKER, '').replace(INSTRUCTION, ''));
+  return out;
 }

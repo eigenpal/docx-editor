@@ -7,10 +7,13 @@
 // shape as one set through the API: the first run's formatting kept, placeholder state,
 // `w:lastValue`, `w:fullDate` and the checkbox state updated with it.
 //
-// Only the kinds whose value is plain text refresh: plain text and untyped controls, combo boxes,
-// dropdowns, dates and checkboxes. A rich text binding holds a whole document fragment, and a
-// value this pass cannot place (an unknown dropdown item, a date it cannot read, a text with
-// characters a run cannot hold) leaves the cached content as the file wrote it.
+// Only the kinds whose value is plain text refresh: plain text controls, combo boxes, dropdowns,
+// dates and checkboxes. A rich text control, which a file writes as a control with no type
+// element, holds formatted paragraphs that a store string cannot stand for. A value this pass
+// cannot place (an unknown dropdown item, a date it cannot read, a text with characters a run
+// cannot hold) leaves the cached content as the file wrote it. An empty value shows the
+// control's prompt, as a value write does. A date whose stored day matches `w:fullDate` keeps
+// the text the file wrote, which follows the control's own language and calendar.
 
 import {
   contentControlPropertiesOf as contentControlSummaryOf,
@@ -31,6 +34,7 @@ import {
   contentWithText,
   editedProperties,
   planValue,
+  promptFor,
   type ContentControlValueInput,
   type PlannedValue,
 } from './tree-op-content-controls.ts';
@@ -77,7 +81,6 @@ function inputFor(
   const text = raw.replace(/\r\n?/g, '\n');
   switch (properties.type) {
     case 'plainText':
-    case 'untyped':
       return {
         kind: 'text',
         text: text.replaceAll('\n', properties.multiLine ? LINE_BREAK_TEXT : ' '),
@@ -105,9 +108,8 @@ function planFor(properties: ContentControlProperties, raw: string): PlannedValu
   if (raw.length > MAX_BOUND_VALUE_LENGTH) return null;
   const input = inputFor(properties, raw);
   if (!input) return null;
-  // An empty value shows the control's prompt. The glossary pass that runs after this one fills
-  // it from the prompt the control names, so the content is left empty here.
-  if (input.kind === 'text' && input.text === '') return { text: '', showingPlaceholder: true };
+  if (input.kind === 'text' && input.text === '')
+    return { text: promptFor(properties.type), showingPlaceholder: true };
   if (properties.type === 'checkbox') {
     const checked = parseCheckbox(input.kind === 'text' ? input.text : '');
     if (checked === null) return null;
@@ -132,24 +134,35 @@ function alreadyShows(
 ): boolean {
   if (planned.showingPlaceholder) return properties.showingPlaceholder;
   if (properties.showingPlaceholder) return false;
+  // The cached date text is in the control's own format, language and calendar.
+  if (planned.fullDate !== undefined)
+    return properties.date?.fullDate?.slice(0, 10) === planned.fullDate.slice(0, 10);
   if (planned.checked !== undefined && properties.checkbox?.checked !== planned.checked)
     return false;
   if (planned.lastValue !== undefined && properties.lastValue !== planned.lastValue) return false;
   return contentControlTextOf(control, LINE_BREAK_TEXT) === planned.text;
 }
 
-function refreshControl(part: OoxmlPart, control: OoxmlElement, value: string): OoxmlPart {
+/**
+ * `current` with `control` showing `value`. `source` is the part the controls were found in,
+ * which still answers where each sits; `nextId` is one allocator for the whole part.
+ */
+function refreshControl(
+  current: OoxmlPart,
+  source: OoxmlPart,
+  control: OoxmlElement,
+  value: string,
+  nextId: () => string
+): OoxmlPart {
+  const part = current;
   const properties = contentControlSummaryOf(control);
   const planned = planFor(properties, value);
   if (!planned || alreadyShows(control, properties, planned)) return part;
-  const nextId = createNodeIdAllocator(part, 'paste');
   const content = contentControlContentOf(control);
-  const inline = isInlineControl(part, control.id);
-  const children = planned.showingPlaceholder
-    ? []
-    : planned.symbol
-      ? checkboxContent(content, planned.symbol, planned.text, nextId, inline)
-      : contentWithText(content, planned.text, nextId, inline);
+  const inline = isInlineControl(source, control.id);
+  const children = planned.symbol
+    ? checkboxContent(content, planned.symbol, planned.text, nextId, inline)
+    : contentWithText(content, planned.text, nextId, inline);
   if (!children || !content) return part;
   const sdtPr = contentControlPropertiesOf(control);
   const nextProperties = editedProperties(
@@ -179,14 +192,18 @@ function refreshControl(part: OoxmlPart, control: OoxmlElement, value: string): 
 /** Refresh every bound control in one story part. Returns `part` itself when nothing changes. */
 export function refreshBoundContentControls(
   part: OoxmlPart,
-  stores: ReadonlyMap<string, OoxmlElement>
+  stores: ReadonlyMap<string, OoxmlElement>,
+  controls: readonly OoxmlElement[] = boundControls(part.root)
 ): OoxmlPart {
-  if (stores.size === 0) return part;
+  if (stores.size === 0 || controls.length === 0) return part;
   let current = part;
-  for (const control of boundControls(part.root)) {
+  let nextId: (() => string) | null = null;
+  for (const control of controls) {
     const binding = contentControlSummaryOf(control).dataBinding!;
     const value = boundValueOf(stores, binding);
-    if (value !== null) current = refreshControl(current, control, value);
+    if (value === null) continue;
+    nextId ??= createNodeIdAllocator(part, 'paste');
+    current = refreshControl(current, part, control, value, nextId);
   }
   return current;
 }
@@ -196,19 +213,25 @@ export function refreshBoundContentControls(
  * showing its store's current value. Returns `pkg` itself when nothing changes.
  */
 export function refreshBoundContent(pkg: OoxmlPackage): OoxmlPackage {
-  const stores = bindingStores(pkg);
-  if (stores.size === 0) return pkg;
   const names = [pkg.mainDocumentPart];
   for (const rel of pkg.relationships.get(pkg.mainDocumentPart) ?? []) {
     if (!STORY_RELS.has(rel.type) || rel.targetMode === 'External') continue;
     const target = resolveInternalTarget(pkg.mainDocumentPart, rel.rawTarget);
     if (target.ok && !names.includes(target.partName)) names.push(target.partName);
   }
-  let next = pkg;
+  // Most documents bind nothing, and then no store part is read.
+  const found: { readonly part: OoxmlPart; readonly controls: OoxmlElement[] }[] = [];
   for (const name of names) {
-    const part = next.parts.get(name);
-    if (!part) continue;
-    const refreshed = refreshBoundContentControls(part, stores);
+    const part = pkg.parts.get(name);
+    const controls = part ? boundControls(part.root) : [];
+    if (part && controls.length > 0) found.push({ part, controls });
+  }
+  if (found.length === 0) return pkg;
+  const stores = bindingStores(pkg);
+  if (stores.size === 0) return pkg;
+  let next = pkg;
+  for (const { part, controls } of found) {
+    const refreshed = refreshBoundContentControls(part, stores, controls);
     if (refreshed !== part) next = withPart(next, refreshed);
   }
   return next;

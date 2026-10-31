@@ -50,9 +50,6 @@ export function wordParagraphStyleId(element: Element, wordHtml: boolean): strin
     if (heading) return `Heading${heading[1]}`;
     const onlineHeading = /^Heading([1-9])$/.exec(className);
     if (onlineHeading) return `Heading${onlineHeading[1]}`;
-    const toc = /^MsoToc([1-9])$/.exec(className);
-    if (toc) return `TOC${toc[1]}`;
-    if (className === 'MsoTocHeading') return 'TOCHeading';
     // One canonical pair table with the write lane, so the two cannot drift.
     const paired = WORD_CLASS_PARAGRAPH_STYLES.get(className);
     if (paired !== undefined) return paired;

@@ -154,7 +154,8 @@ export function evaluateBindingXPath(root: OoxmlElement, steps: readonly Step[])
       const attribute = current.attributes.find(
         (entry) => entry.localName === step.localName && entry.namespaceUri === step.namespaceUri
       );
-      return attribute ? attribute.value.slice(0, MAX_BOUND_VALUE_LENGTH) : null;
+      if (!attribute || attribute.value.length > MAX_BOUND_VALUE_LENGTH) return null;
+      return attribute.value;
     }
     if (step.kind === 'text') {
       let text = '';

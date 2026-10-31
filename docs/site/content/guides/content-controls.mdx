@@ -158,7 +158,7 @@ The inspector state carries `tag`, `alias`, `id`, `controlType`, `locked`, `remo
 
 A data-bound control rejects a direct write: its content comes from the Custom XML store, so writing it here would not persist in Word. `setValueDisabledReason` reports the reason instead of dropping the write.
 
-When a document opens, a data-bound control shows the current value of the node its binding names, not the text saved in the control. The editor reads custom XML parts in the package and the core and extended document properties. It reads a binding whose `w:xpath` is an absolute path of child elements, with optional positions such as `[2]`, that ends in an element, an attribute, or `text()`. Plain text, untyped, combo box, dropdown, date, and checkbox controls refresh. An empty value shows the control's prompt. A rich text control, a dropdown value that matches no list item, a date the editor cannot read, and any other XPath keep the saved content.
+When a document opens, a data-bound control shows the current value of the node its binding names, not the text saved in the control. The editor reads custom XML parts in the package and the core and extended document properties. It reads a binding whose `w:xpath` is an absolute path of child elements, with optional positions such as `[2]`, that ends in an element, an attribute, or `text()`. Plain text, combo box, dropdown, date, and checkbox controls refresh. An empty value shows the control's prompt. A date control whose saved date is the bound date keeps its saved text. A rich text control, including a control with no type, a dropdown value that matches no list item, a date the editor cannot read, and any other XPath keep the saved content.
 
 ### Caret movement in content-locked controls
 

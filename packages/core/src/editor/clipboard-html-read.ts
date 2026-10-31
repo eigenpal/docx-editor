@@ -13,7 +13,11 @@ import {
 } from './clipboard-html-numbering.ts';
 import { clipboardBookmarkName, isClipboardHyperlink } from './clipboard-html-links.ts';
 import { createGestureMemo } from './clipboard-html-memo.ts';
-import { withCompleteFields, wordFieldRuns } from './clipboard-html-fields.ts';
+import {
+  withCompleteFields,
+  withCompleteNoteFields,
+  wordFieldRuns,
+} from './clipboard-html-fields.ts';
 import { reconcileUnreachableNotes } from './clipboard-html-note-reconcile.ts';
 import { allocateList, msoListNumPr } from './clipboard-html-list-alloc.ts';
 import { writeProjectedHtmlPackage } from './clipboard-html-package.ts';
@@ -780,7 +784,7 @@ function assembleFragment(p: Projection, blocks: readonly string[]): Uint8Array 
     blocks: withCompleteFields(blocks),
     rels: p.rels,
     lists: [...p.lists.values()],
-    notes: p.notes,
+    notes: withCompleteNoteFields(p.notes),
     noteRels: p.noteRels,
     media: p.media,
     mediaExtensions: p.mediaExtensions,

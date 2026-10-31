@@ -13,7 +13,7 @@ import { strFromU8, unzipSync } from 'fflate';
 import { detectBodyTocs, readOoxmlPackage } from '@docx-editor.dev/core/store';
 import { createDocxEditor } from '../docx-editor.ts';
 import { projectExternalHtml } from '../clipboard-html-read.ts';
-import { wordFieldRuns } from '../clipboard-html-fields.ts';
+import { withCompleteNoteFields, wordFieldRuns } from '../clipboard-html-fields.ts';
 import { docx, paragraph } from './paginated-surface-fixtures.ts';
 
 const field = (inner: string) => `<!--[if supportFields]>${inner}<![endif]-->`;
@@ -81,6 +81,53 @@ describe('word field comments', () => {
     expect(xml).toContain('PAGEREF _Toc100000002 \\h');
     expect(xml).toContain('<w:pStyle w:val="TOC1"/>');
     expect(xml).toContain('<w:pStyle w:val="TOC2"/>');
+  });
+
+  test('an instruction that continues after a nested field keeps its tail', () => {
+    const html =
+      '<html xmlns:w="urn:schemas-microsoft-com:office:word"><body><p class=MsoNormal>' +
+      field(`${begin} IF `) +
+      field(`${begin} MERGEFIELD Region ${separator}`) +
+      'North' +
+      field(end) +
+      field(` = &quot;North&quot; &quot;yes&quot; &quot;no&quot; ${separator}`) +
+      'yes' +
+      field(end) +
+      '</p></body></html>';
+    const xml = fragmentXml(html);
+    expect(xml).toContain(' MERGEFIELD Region ');
+    expect(xml).toContain(' = &quot;North&quot; &quot;yes&quot; &quot;no&quot; ');
+    expect(xml.match(/w:fldCharType="begin"/g)?.length).toBe(2);
+  });
+
+  test('a field that runs or loads something keeps its result text and loses the field', () => {
+    const html =
+      '<html><body><p style="mso-x:1">' +
+      field(`${begin} DDEAUTO cmd &quot;/c calc&quot; ${separator}`) +
+      'Shown' +
+      field(end) +
+      ' and ' +
+      field(`${begin} INCLUDEPICTURE &quot;https://example.invalid/a.png&quot; ${separator}`) +
+      'picture' +
+      field(end) +
+      '</p></body></html>';
+    const xml = fragmentXml(html);
+    expect(xml).not.toContain('DDEAUTO');
+    expect(xml).not.toContain('INCLUDEPICTURE');
+    expect(xml).not.toContain('w:fldChar');
+    expect(xml).toContain('Shown');
+    expect(xml).toContain('picture');
+  });
+
+  test('a note holds whole fields on its own', () => {
+    const begin = '<w:r><w:fldChar w:fldCharType="begin"/></w:r>';
+    const page = '<w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>';
+    const text = '<w:r><w:t>3</w:t></w:r>';
+    const notes = withCompleteNoteFields({
+      footnote: new Map([[1, [`<w:p>${begin}${page}${text}</w:p>`]]]),
+      endnote: new Map<number, readonly string[]>(),
+    });
+    expect(notes.footnote.get(1)).toEqual([`<w:p>${text}</w:p>`]);
   });
 
   test('a selection that holds half a field keeps the text and drops the field', () => {

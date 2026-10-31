@@ -1337,7 +1337,7 @@ export interface PlannedValue {
  * forms from becoming two answers to "what is this control's value" — a string routed to one
  * applier and an object to another is already two code paths, and it must not be two meanings.
  */
-export function valueInputOf(
+function valueInputOf(
   properties: ContentControlProperties,
   value: string | ContentControlValueInput
 ): ContentControlValueInput | TreeOpRejection {

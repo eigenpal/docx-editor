@@ -111,6 +111,8 @@ describe('bound content refresh', () => {
     );
     expect(xml).not.toContain('Old note');
     expect(xml).toContain('<w:showingPlcHdr/>');
+    // The prompt is real content, as a value write leaves it, never an empty control.
+    expect(xml).toContain('Click here to enter text.');
     expect(xml).toMatch(/1 Main St<\/w:t><w:br\/><w:t>Suite 2/);
     expect(xml).toContain('1 Main St Suite 2');
   });
@@ -133,8 +135,39 @@ describe('bound content refresh', () => {
         paragraph(bound('/ns0:contract/ns0:party', '', 'Rich kept'))
     );
     const xml = mainXml(bytes);
-    for (const kept of ['>East<', 'Kept one', 'Kept two', 'Kept three'])
+    // A control with no type element is rich text: its paragraphs stay as the file wrote them.
+    for (const kept of ['>East<', 'Kept one', 'Kept two', 'Kept three', 'Rich kept'])
       expect(xml).toContain(kept);
+  });
+
+  test('a date whose stored day matches keeps the text in its own format', () => {
+    const date = (fullDate: string) =>
+      `<w:date w:fullDate="${fullDate}"><w:dateFormat w:val="dddd, d MMMM yyyy"/><w:lid w:val="fr-FR"/></w:date>`;
+    const xml = mainXml(
+      docWith(
+        paragraph(
+          bound('/ns0:contract/ns0:signed', date('2026-03-04T00:00:00Z'), 'mercredi 4 mars 2026')
+        ) +
+          paragraph(
+            bound(
+              '/ns0:contract/ns0:signed',
+              date('2020-01-01T00:00:00Z'),
+              'mercredi 1 janvier 2020'
+            )
+          )
+      )
+    );
+    expect(xml).toContain('mercredi 4 mars 2026');
+    // A different stored day is rewritten.
+    expect(xml).not.toContain('janvier 2020');
+  });
+
+  test('an attribute value past the bound keeps the cached content', () => {
+    const store = `<ns0:contract xmlns:ns0="${NS}"><ns0:party role="${'r'.repeat(40_000)}"/></ns0:contract>`;
+    const xml = mainXml(
+      docWith(paragraph(bound('/ns0:contract/ns0:party/@role', '<w:text/>', 'Kept role')), store)
+    );
+    expect(xml).toContain('Kept role');
   });
 
   test('a control already showing the value leaves the package untouched', () => {
