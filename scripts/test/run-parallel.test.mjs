@@ -1,6 +1,15 @@
 import { expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import {
+  closeSync,
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -12,7 +21,7 @@ test('fail-fast stops dispatch after the first failure; normal mode reports both
     for (const dir of ['scripts/test', 'packages', 'docs', 'examples', 'benchmarks']) {
       mkdirSync(join(root, dir), { recursive: true });
     }
-    for (const file of ['run-parallel.mjs', 'shard.mjs']) {
+    for (const file of ['run-parallel.mjs', 'shard.mjs', 'output-capture.mjs']) {
       copyFileSync(new URL(file, import.meta.url), join(root, 'scripts/test', file));
     }
     for (const name of ['first', 'second']) {
@@ -99,6 +108,36 @@ test('fail-fast stops dispatch after the first failure; normal mode reports both
     expect(onlyRun.stdout).toContain('FAIL packages/second.test.ts');
     expect(onlyRun.stdout).not.toContain('FAIL packages/first.test.ts');
 
+    // A file that floods its output without end is stopped and fails with the start and end of
+    // its output; the runner survives and still runs and reports the other files.
+    writeFileSync(
+      join(root, 'packages', 'flood.test.ts'),
+      `import { test } from 'bun:test';
+       test('floods stderr', () => {
+         console.error('FLOOD_START');
+         const line = 'x'.repeat(1023);
+         for (;;) console.error(line);
+       });`
+    );
+    // To a file: on macOS a pipe is asynchronous, and the runner's exit cuts a long report.
+    const floodOut = join(root, 'flood-out.txt');
+    const floodFd = openSync(floodOut, 'w');
+    const flooded = spawnSync(
+      process.execPath.includes('bun') ? 'node' : process.execPath,
+      [join(root, 'scripts/test/run-parallel.mjs'), '--jobs', '1', '--exclude', 'packages/first'],
+      { stdio: ['ignore', floodFd, floodFd], timeout: 15000 }
+    );
+    closeSync(floodFd);
+    const floodReport = readFileSync(floodOut, 'utf8');
+    expect(flooded.status).toBe(1);
+    expect(floodReport).toContain('FAIL packages/flood.test.ts');
+    expect(floodReport).toContain('FAIL packages/second.test.ts');
+    expect(floodReport).toContain('FLOOD_START');
+    expect(floodReport).toContain('bytes of output omitted');
+    expect(floodReport).toContain('more than the 67108864-byte limit, and was stopped');
+    expect(floodReport.length).toBeLessThan(8 * 1024 * 1024);
+    rmSync(join(root, 'packages', 'flood.test.ts'));
+
     const emptyExclude = run('--exclude=');
     expect(emptyExclude.status).toBe(1);
     expect(emptyExclude.stderr).toContain('non-empty path prefix');
@@ -125,7 +164,7 @@ test.skipIf(process.platform === 'win32')(
       for (const dir of ['scripts/test', 'packages', 'docs', 'examples', 'benchmarks']) {
         mkdirSync(join(root, dir), { recursive: true });
       }
-      for (const file of ['run-parallel.mjs', 'shard.mjs']) {
+      for (const file of ['run-parallel.mjs', 'shard.mjs', 'output-capture.mjs']) {
         copyFileSync(new URL(file, import.meta.url), join(root, 'scripts/test', file));
       }
       writeFileSync(
