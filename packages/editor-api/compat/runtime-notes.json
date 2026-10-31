@@ -513,7 +513,7 @@
   },
   "Word.Body#insertParagraph": {
     "status": "partial",
-    "notes": "Inserts a canonical paragraph at the supported endpoint (Body Start/End; Range Before/After). The returned proxy requires a sync before configuration. Newline-containing text and unsupported structural boundaries refuse; adjacent content is preserved. TrackMineOnly records inserted text and paragraph marks. Reject restores the original paragraph boundaries. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse. When a table opens or closes the body, Start inserts before the table and End inserts after it, never inside a cell."
+    "notes": "Inserts a canonical paragraph at the supported endpoint (Body Start/End; Range Before/After). The returned proxy requires a sync before configuration. Newline-containing text and unsupported structural boundaries refuse; adjacent content is preserved. TrackMineOnly records inserted text and paragraph marks. Reject restores the original paragraph boundaries. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse. When a table opens or closes the body, Start inserts before the table and End inserts after it, never inside a cell. A second edit at that edge in the same batch refuses with ConflictingChanges."
   },
   "Word.Range#insertParagraph": {
     "status": "partial",

@@ -1871,24 +1871,26 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         if (!story) return refuse('invalid-handle', 'that story is not in this document');
         const edgeTable = edgeTableOf(operation.anchor, handles, packageReads);
         if (edgeTable) {
-          // The first or last paragraph is in the table's cell, so the new one goes beside it.
+          // The edge paragraph is in the table's cell, so the new one goes beside the table.
+          // Another edit at that edge in this batch would land out of order, so it refuses.
           const plan = planFor(story);
-          const refusal = paragraphTextRefusal(operation.text) ?? pinWrite(plan);
-          if (refusal) return refusal;
           const { where, text } = operation;
-          // The anchor is the table's first or last paragraph, which the new one sits beside.
+          const refusal =
+            paragraphTextRefusal(text) ??
+            pinWrite(plan) ??
+            claim(plan, `${edgeTable}:${where}`) ??
+            claim(plan, anchor.value.paragraphId);
+          if (refusal) return refusal;
           const edgeSlot = plan.slotById.get(anchor.value.paragraphId);
           if (!edgeSlot) return refuse('invalid-handle', 'that paragraph is not in the body');
           const edge = positionOf(plan, edgeSlot);
           const fresh = insertSlot(plan, where === 'before' ? edge : edge + 1);
-          const ops: TreeDocOp[] = [
-            { op: 'insertParagraphBesideTable', tableId: edgeTable, where, text },
-          ];
+          const op = { op: 'insertParagraphBesideTable', tableId: edgeTable, where, text } as const;
           const answer = (): AutomationValue =>
             fresh.id === null
               ? APPLIED
               : { kind: 'handle', handle: handles.paragraph(fresh.id, story.story) };
-          return { ok: true, kind: 'command', ops, story: story.story, answer };
+          return { ok: true, kind: 'command', ops: [op], story: story.story, answer };
         }
         const error =
           tracked && trackedParagraphInsertError(story, anchor.value.paragraphId, trackingAuthor!);

@@ -69,7 +69,7 @@ The exported aliases are `BodyInsertTextLocation`, `BodyInsertParagraphLocation`
 
 `insertText()` returns the inserted `Range`. `insertParagraph()` returns the created `Paragraph`. You can load the returned object in the same sync; the load reports the inserted content. Sync before configuring the returned object. `insertParagraph()` and `ContentControl.insertText()` refuse paragraph separators such as `\r` and `\n`.
 
-If a table opens a body, `Body.insertParagraph(text, 'Start')` inserts the paragraph before the table. If a table closes a body, `'End'` inserts it after the table. This also applies to the body of a table cell.
+If a table opens a body, `Body.insertParagraph(text, 'Start')` inserts the paragraph before the table. If a table closes a body, `'End'` inserts it after the table. This also applies to the body of a table cell. A second edit at the same edge in one sync refuses with `ConflictingChanges`, so sync between them.
 
 To keep lines in one paragraph, write a manual line break as `\v` (U+000B). `insertText()` and `insertParagraph()` write each `\v` as a line break. Text reads report that break as `\v`. A single-line content control refuses a line break. You can also insert one break with `Range.insertBreak('Line', location)`.
 
