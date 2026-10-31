@@ -43,6 +43,7 @@ import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'nod
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { createOutputCapture } from './output-capture.mjs';
 import { selectShard } from './shard.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -389,9 +390,11 @@ function runFile(file, passthrough, failFast, onRss) {
         onRss(rss);
       });
     }, PEAK_SAMPLE_INTERVAL_MS);
-    let output = '';
-    child.stdout.on('data', (chunk) => (output += chunk));
-    child.stderr.on('data', (chunk) => (output += chunk));
+    // Bounded: a file that logs in a loop fails with its output's start and end, instead of
+    // growing one string until it throws and takes the runner down with it.
+    const output = createOutputCapture();
+    child.stdout.on('data', (chunk) => output.write(chunk));
+    child.stderr.on('data', (chunk) => output.write(chunk));
     child.on('error', (error) => {
       children.delete(child);
       clearInterval(sampler);
@@ -415,7 +418,7 @@ function runFile(file, passthrough, failFast, onRss) {
       // A file that finished before the sampler ever fired cannot have grown large; record the
       // floor so it is charged as small next time instead of falling back to "unknown" forever.
       if (peak === 0 && code !== null && ms <= PEAK_SAMPLE_INTERVAL_MS * 2) peak = PEAK_FLOOR_BYTES;
-      settle({ file, output, code: code ?? 1, ms, peak });
+      settle({ file, output: output.text(), code: output.overLimit ? 1 : (code ?? 1), ms, peak });
     });
   });
 }
