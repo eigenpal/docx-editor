@@ -701,6 +701,18 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
         };
       }
       return { supported: true, mutating: true };
+    case 'removeToc':
+      if (
+        command.tocId !== undefined &&
+        (typeof command.tocId !== 'string' || command.tocId.length === 0)
+      ) {
+        return {
+          supported: false,
+          code: 'invalidArgs',
+          reason: 'removeToc tocId must be a non-empty string',
+        };
+      }
+      return { supported: true, mutating: true };
     case 'editHeaderFooter': {
       if (command.position !== 'header' && command.position !== 'footer') {
         return {

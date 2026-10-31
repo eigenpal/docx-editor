@@ -132,7 +132,8 @@
   },
   "toc": {
     "refresh": "目次の更新",
-    "refreshPageNumbers": "ページ番号の更新"
+    "refreshPageNumbers": "ページ番号の更新",
+    "remove": "目次の削除"
   },
   "formattingBar": {
     "label": "書式設定",

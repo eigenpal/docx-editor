@@ -223,3 +223,40 @@ test('Vue field context action opens and saves the shared options dialog', async
     host.unmount();
   }
 });
+
+test('Vue TOC context rows include Remove, and selecting it removes the TOC', async () => {
+  const host = mountMenu(
+    docx(
+      '<w:p><w:r><w:t>Before</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> TOC \\o "1-1" \\h </w:instrText><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Old entry</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
+        '<w:p><w:r><w:t>After</w:t></w:r></w:p>'
+    )
+  );
+  try {
+    await flush();
+    const row = host.container.querySelector<HTMLElement>('[data-docx-read-only]')!;
+    row.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+        clientX: 30,
+        clientY: 30,
+      })
+    );
+    await flush();
+    const slots = rows(host.container).map((item) => item.dataset.slot);
+    expect(slots.slice(-3)).toEqual(['toc.refresh', 'toc.refreshPageNumbers', 'toc.remove']);
+    const remove = host.container.querySelector<HTMLElement>('[data-slot="toc.remove"]')!;
+    expect(remove.textContent).toContain('toc.remove');
+    expect(remove.querySelector('svg')).not.toBeNull();
+    remove.click();
+    await flush();
+    expect(panel(host.container)).toBeNull();
+    expect(host.container.querySelector('[data-docx-read-only]')).toBeNull();
+    expect(host.editor().surface!.session.bodyText()).toBe('Before\nAfter');
+  } finally {
+    host.unmount();
+  }
+});

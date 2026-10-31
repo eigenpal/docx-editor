@@ -732,7 +732,8 @@
   },
   "toc": {
     "refresh": "Perbarui seluruh tabel",
-    "refreshPageNumbers": "Perbarui nomor halaman saja"
+    "refreshPageNumbers": "Perbarui nomor halaman saja",
+    "remove": "Hapus daftar isi"
   },
   "reviewers": {
     "label": "Peninjau",

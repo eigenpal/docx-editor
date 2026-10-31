@@ -115,6 +115,7 @@ export function commandProtectionRefusal(
     case 'convertAllNotes':
     case 'insertToc':
     case 'refreshToc':
+    case 'removeToc':
     case 'replaceAllMatches':
     case 'resolveAllReviewChanges':
     case 'setReviewChangesAuthor':

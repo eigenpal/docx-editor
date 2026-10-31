@@ -1059,6 +1059,14 @@ export type TreeDocOp =
     }
   | {
       /**
+       * Remove a detected table of contents: its field, or the whole control the field fills.
+       * Text before and after the field stays, in one paragraph. One undo unit.
+       */
+      readonly op: 'removeToc';
+      readonly tocId: string;
+    }
+  | {
+      /**
        * Rewrite page-number text runs inside existing TOC result paragraphs.
        * One undo unit (phase B of TOC refresh).
        */
@@ -1145,8 +1153,8 @@ export interface TreeOpEffect {
   readonly join?: { readonly kept: string; readonly removed: string };
   readonly dependencyKeys: readonly string[];
   readonly impact: ImpactClass;
-  /** First post-edit caret paragraph for table column structural ops. */
-  readonly caret?: { readonly paragraphId: string };
+  /** Post-edit caret paragraph for structural ops, at `offset` (default 0). */
+  readonly caret?: { readonly paragraphId: string; readonly offset?: number };
 }
 
 /** Post-edit caret target published by a committed store transaction. */

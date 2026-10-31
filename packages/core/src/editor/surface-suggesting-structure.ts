@@ -64,6 +64,10 @@ export function suggestingStructureRefusal(
   if (ops.some(removesControl)) {
     return 'suggesting cannot remove a content control outright';
   }
+  // Removing a table of contents has no tracked form either.
+  if (ops.some((op) => op.op === 'removeToc')) {
+    return 'suggesting cannot remove a table of contents outright';
+  }
   // Cell merge and split track only inside the author's own proposed table, where the new
   // structure joins that insertion. Anywhere else, applying them would be untracked.
   const restructuresCells = (op: TreeDocOp) =>
