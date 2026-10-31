@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A write of a paragraph that showed text following a move copied that text into the paragraph and deleted the originals from a removed source paragraph. An undo of that write took the copies out and put the originals back as new characters without the follow anchors of the text they replaced, so text a peer typed into a paragraph that an undone split removed showed nowhere after an undo of a later format change.",
+  "after": "The write copies the following text and keeps the originals in every source paragraph, removed or live. The copies hide the originals while they show, and the originals follow their anchors again when an undo takes the copies out.",
+  "reason": "No stored field, identity, mark, conflict rule, or canonical mapping changes. Released replicas already hide characters behind a shown copy of them, and they read the kept originals as text that follows a move, so a mixed room converges. A released replica still deletes the originals when it writes such a paragraph, until it upgrades.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-undo-format-rejoined.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-undo-groups-fuzz.test.ts"
+  ],
+  "changeset": "collab-adopted-text-keeps-originals",
+  "migration": null
+}
