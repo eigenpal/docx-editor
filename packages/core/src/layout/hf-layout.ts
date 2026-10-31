@@ -309,6 +309,8 @@ export function layoutHeaderFooterStory(
   let baseline: HeaderFooterStoryLayout | undefined;
   // Whether the header frame lane holds, decided once by the layout without a page context.
   let frameAdmitted: boolean | undefined;
+  // Likewise for text-anchored story frames, so longer page numbers never move the story text.
+  let storyFramesAdmitted: boolean | undefined;
 
   const layoutOnce = (ctx: HeaderFooterLayoutPageContext | undefined): HeaderFooterStoryLayout => {
     const effectiveCtx =
@@ -712,14 +714,18 @@ export function layoutHeaderFooterStory(
       styleCascade?.fixedParagraphSpacing
     );
     // Text-anchored frames that no fixed lane describes take their place beside the story.
-    if (plainStory && flow === unframed)
-      layoutStoryWithTextFrames(
+    if (plainStory && flow === unframed && storyFramesAdmitted !== false) {
+      if (effectiveCtx && storyFramesAdmitted === undefined) layoutOnce(undefined);
+      const placed = layoutStoryWithTextFrames(
         flowBlocks,
         (source) => (flowStory(source, 0), flow),
         (paragraphs, width) => flowBlocksInBox(paragraphs, 0, width, 0, 0, plainDeps()),
         { contentWidth, ...hfPageContext },
-        (framed) => (flow = framed)
+        (framed) => (flow = framed),
+        effectiveCtx !== undefined && storyFramesAdmitted === true
       );
+      if (!effectiveCtx) storyFramesAdmitted = placed ?? false;
+    }
     const story: HeaderFooterStoryLayout = {
       partName: part.name,
       part,

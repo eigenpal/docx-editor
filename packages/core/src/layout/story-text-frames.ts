@@ -81,6 +81,8 @@ function plainContent(paragraph: OoxmlElement, fields: boolean): boolean {
     if (++count > MAX_NODES || node.namespaceUri !== W) return false;
     if (node.kind !== 'paragraphProperties' && REFUSED.has(node.localName)) return false;
     if (!fields && FIELDS.has(node.localName)) return false;
+    // A simple field shows its result even before the file caches one.
+    visible ||= node.localName === 'fldSimple';
     if (
       node.localName === 'br' &&
       node.attributes.some((item) => item.localName === 'type' && item.value !== 'textWrapping')
@@ -148,12 +150,32 @@ function sizedFrame(
   );
   if (fragments.length !== flow.blocks.length) return null;
   if (!auto) return { frame: group.frame, fragments, contentHeight: flow.bottom };
-  const fitted = shrinkSingleLineFrame(fragments[0]!);
+  const fitted = shrinkSingleLineFrame(fragments[0]!) ?? emptyFrame(fragments[0]!);
   if (!fitted) return null;
   return {
     frame: { ...group.frame, width: fitted.width },
     fragments: [fitted.fragment],
     contentHeight: flow.bottom,
+  };
+}
+
+/**
+ * A one-line frame with nothing to paint, such as a simple field before its page is known, has
+ * no width. It keeps its place in the lane, so the page that fills it does not change the lane.
+ */
+function emptyFrame(
+  fragment: ParagraphFragmentRecord
+): { readonly width: number; readonly fragment: ParagraphFragmentRecord } | undefined {
+  const line = fragment.lines.length === 1 ? fragment.lines[0]! : undefined;
+  if (!line || line.drawings?.length || line.spans.some((span) => span.text.trim()))
+    return undefined;
+  return {
+    width: 0,
+    fragment: {
+      ...fragment,
+      box: { ...fragment.box, width: 0 },
+      lines: [{ ...line, box: { ...line.box, x: fragment.box.x, width: 0 } }],
+    },
   };
 }
 
@@ -176,7 +198,8 @@ export function placeStoryTextFrames(
     readonly contentWidth: number;
     readonly pageWidth?: number;
     readonly marginLeft?: number;
-  }
+  },
+  overlapDecided = false
 ): Flow | null {
   const groups = textFrameGroups(blocks);
   if (!groups?.length) return null;
@@ -213,7 +236,7 @@ export function placeStoryTextFrames(
     const box = { ...origin, ...size };
     // A frame over the story's own paragraph text would wrap it; that stays in ordinary flow.
     const paragraphs = ordinary.blocks.filter((block) => block.kind === 'paragraph');
-    if (meetsOrdinaryContent(box, paragraphs)) return null;
+    if (!overlapDecided && meetsOrdinaryContent(box, paragraphs)) return null;
     for (const fragment of fragments) {
       const moved = translateParagraphFragment(fragment, origin.x, origin.y);
       placed.push(
@@ -230,7 +253,14 @@ export function placeStoryTextFrames(
   return { blocks: all, bottom: ordinary.bottom };
 }
 
-/** Re-lay a header or footer story with its text-anchored frames placed, when it has any. */
+/**
+ * Re-lay a header or footer story with its text-anchored frames placed, when it has any.
+ * Returns whether the frames were placed, or undefined when the story has none.
+ *
+ * `overlapDecided` skips the check that a frame meets the story's text. A caller sets it when a
+ * layout without a page context already admitted the frames, because a longer page number
+ * widens its frame and must not move the story text on later pages.
+ */
 export function layoutStoryWithTextFrames(
   blocks: readonly OoxmlElement[],
   story: (source: readonly OoxmlElement[]) => Flow,
@@ -240,9 +270,12 @@ export function layoutStoryWithTextFrames(
     readonly pageWidth?: number;
     readonly marginLeft?: number;
   },
-  publish: (flow: Flow) => void
-): void {
-  if (!hasStoryTextFrames(blocks)) return;
+  publish: (flow: Flow) => void,
+  overlapDecided = false
+): boolean | undefined {
+  if (!hasStoryTextFrames(blocks)) return undefined;
   // The trial lays the story out without its frames; a refusal lays all of it out again.
-  publish(placeStoryTextFrames(blocks, { story, frame }, geometry) ?? story(blocks));
+  const placed = placeStoryTextFrames(blocks, { story, frame }, geometry, overlapDecided);
+  publish(placed ?? story(blocks));
+  return placed !== null;
 }

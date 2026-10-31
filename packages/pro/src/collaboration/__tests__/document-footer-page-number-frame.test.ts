@@ -9,6 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { afterEach, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import type { ParagraphFragmentRecord } from '@docx-editor.dev/core/layout';
 import { collaborationModule } from '../collaboration-module.ts';
 import { createPeerHarness, zipDocument } from './document-peer-support.ts';
 import { packageFingerprint, saveReopenDigest } from './document-support.ts';
@@ -38,17 +39,11 @@ const FOOTER =
   `<w:ftr xmlns:w="${W}"><w:p><w:pPr>${FRAME}</w:pPr>${PAGE}</w:p>` +
   '<w:p><w:r><w:t>Version 9</w:t></w:r></w:p></w:ftr>';
 
-type Paragraph = {
-  readonly kind: string;
-  readonly paragraphId: string;
-  readonly outOfFlow?: boolean;
-  readonly box: { readonly x: number; readonly y: number; readonly width: number };
-  readonly lines: readonly { readonly spans: readonly { readonly text: string }[] }[];
-};
-
-function footerOf(editor: Editor): readonly Paragraph[] {
+function footerOf(editor: Editor): readonly ParagraphFragmentRecord[] {
   const fragments = editor.surface!.layout().pages[0]!.footer?.fragments ?? [];
-  return fragments.filter((fragment): fragment is Paragraph => fragment.kind === 'paragraph');
+  return fragments.filter(
+    (fragment): fragment is ParagraphFragmentRecord => fragment.kind === 'paragraph'
+  );
 }
 
 /** Each footer paragraph's text, `^` when it floats, and the floating frame's right edge. */
