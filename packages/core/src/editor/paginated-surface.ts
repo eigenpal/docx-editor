@@ -264,6 +264,8 @@ import {
   applyPageOffsets,
   equalPageSets,
   equalSurfaceExtents,
+  centreViewportOn,
+  viewportCentreX,
   surfaceExtent,
   surfaceScroller,
   visiblePageSet,
@@ -4449,7 +4451,7 @@ export function mountPaginatedSurface(
         // Preserve the viewport centre in layout coordinates across the reflow.
         const anchor = scroller
           ? {
-              x: (scroller.scrollLeft - container.offsetLeft + scroller.clientWidth / 2) / scale,
+              x: viewportCentreX(container, scroller, scale),
               y: (scroller.scrollTop - container.offsetTop + scroller.clientHeight / 2) / scale,
             }
           : null;
@@ -4470,21 +4472,14 @@ export function mountPaginatedSurface(
         scheduler.flush();
         payOwedPaint();
         if (scroller && anchor) {
-          const targetLeft = Math.max(
-            0,
-            anchor.x * scale + container.offsetLeft - scroller.clientWidth / 2
-          );
           const targetTop = Math.max(
             0,
             anchor.y * scale + container.offsetTop - scroller.clientHeight / 2
           );
-          const maxLeft = Number.isFinite(scroller.scrollWidth)
-            ? Math.max(0, scroller.scrollWidth - scroller.clientWidth)
-            : null;
           const maxTop = Number.isFinite(scroller.scrollHeight)
             ? Math.max(0, scroller.scrollHeight - scroller.clientHeight)
             : null;
-          scroller.scrollLeft = maxLeft === null ? targetLeft : Math.min(targetLeft, maxLeft);
+          centreViewportOn(container, scroller, anchor.x, scale);
           scroller.scrollTop = maxTop === null ? targetTop : Math.min(targetTop, maxTop);
           // The paint above chose its pages for the scroll offset the viewport had BEFORE the
           // restore. Building the destination band here keeps the zoom to one turn; leaving it
