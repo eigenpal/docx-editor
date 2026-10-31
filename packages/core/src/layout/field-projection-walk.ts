@@ -97,6 +97,7 @@ import {
 import { resolvedFormatChangeOf } from './revision-formatting-projection.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
 import { equationAtom } from './equation-piece.ts';
+import { createBidiDirectiveStack } from './bidi-directives.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
 import {
   contentControlContentChildren,
@@ -158,6 +159,7 @@ export function unmergedPiecesOfParagraphForDisplay(
    * piece emitted in between sees exactly its own enclosing stack.
    */
   let revisions: readonly RevisionAttribution[] = NO_REVISIONS;
+  const directives = createBidiDirectiveStack(); // `w:dir` and `w:bdo`, held like `revisions`.
 
   const push = (
     text: string,
@@ -190,7 +192,7 @@ export function unmergedPiecesOfParagraphForDisplay(
       published,
       extras?.revisionsOverride ? (extras.formatSiteOverride ?? null) : runFormatSite
     );
-    const link = effectiveLink ? { link: effectiveLink } : {};
+    const link = { ...(effectiveLink ? { link: effectiveLink } : {}), ...directives.fields() };
     if (projected) {
       pieces.push({
         text,
@@ -931,9 +933,8 @@ export function unmergedPiecesOfParagraphForDisplay(
       const text = resolveRunStyle(inheritedRunProperties, themeFonts);
       const display = isOmmlDisplay(child) || soleEquation;
       const { style, extras: atom } = equationAtom(equation, text, display);
-      if (!style.hidden && !revisionsVisible(revisions, displayMode, authorFilter)) {
+      if (!style.hidden && !revisionsVisible(revisions, displayMode, authorFilter))
         recordRemoved(start, offset, revisions);
-      }
       if (style.hidden || !revisionsVisible(revisions, displayMode, authorFilter)) return;
       return push('\uFFFC', inheritedRunProperties, style, true, start, offset, atom);
     }
@@ -983,10 +984,10 @@ export function unmergedPiecesOfParagraphForDisplay(
       return;
     }
     if (!isInlineRunContainer(child)) return;
-    // The wrapper text participates in layout. Its authored direction waits for the full
-    // shaping, atom, and visual-caret pipeline tracked by #714.
+    const leave = directives.enter(child as OoxmlElement); // Only w:dir and w:bdo add a level.
     for (const inner of (child as OoxmlElement).children)
       processInline(inner, depth + 1, childScope, containerDepth + 1);
+    leave();
   };
   // Paragraph root counts as depth 0; run children sit at depth 1.
   for (const child of paragraph.children) processInline(child, 1, paragraphScope, 0);

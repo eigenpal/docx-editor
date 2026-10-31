@@ -4,6 +4,12 @@ import { unchangedLtrLine } from './unchanged-ltr-line.ts';
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import { coalesceBidiPieces } from './bidi-piece-coalescing.ts';
 import { bidiAlgorithm } from './bidi.ts';
+import {
+  directedEmbeddingLevels,
+  hasBidiDirectives,
+  hasRtlBidiDirective,
+  overrideDirection,
+} from './bidi-directives.ts';
 import { PICTURE_CHAR } from './line-picture-alignment.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 import { isCollapsibleLineEndWhitespace } from './line-end-whitespace.ts';
@@ -47,7 +53,13 @@ const NEUTRAL_SLASH = '!';
 
 /** Resolve contiguous run-direction groups without changing source text or offsets. */
 function runDirectionLevels(pieces: readonly FieldAwarePiece[], text: string, rtl: boolean) {
-  const embedding = bidiAlgorithm.getEmbeddingLevels(text, rtl ? 'rtl' : 'ltr');
+  // `w:dir` and `w:bdo` wrappers resolve as explicit embeddings and overrides.
+  const directed = hasBidiDirectives(pieces);
+  const levelsOf = (start: number, end: number, groupText: string, direction: 'ltr' | 'rtl') =>
+    directed
+      ? directedEmbeddingLevels(pieces.slice(start, end), groupText, direction)
+      : bidiAlgorithm.getEmbeddingLevels(groupText, direction);
+  const embedding = levelsOf(0, pieces.length, text, rtl ? 'rtl' : 'ltr');
   // Keep authored Unicode controls on the established full-paragraph UAX #9 path.
   if (HAS_BIDI_CONTROLS.test(text)) return embedding;
   let offset = 0;
@@ -60,7 +72,9 @@ function runDirectionLevels(pieces: readonly FieldAwarePiece[], text: string, rt
       end++;
     }
     const group = text.slice(offset, offset + length);
-    const context = bidiAlgorithm.getEmbeddingLevels(
+    const context = levelsOf(
+      start,
+      end,
       direction && arabicScriptLanguage(pieces[start]!.props)
         ? group.replace(RTL_RUN_DIGIT_SLASH, NEUTRAL_SLASH)
         : group,
@@ -101,6 +115,7 @@ export function bidiPieces(
   if (
     !rtl &&
     !RIGHT_TO_LEFT_LETTER.test(text) &&
+    !hasRtlBidiDirective(pieces) &&
     !pieces.some((piece) => !isPicture(piece) && runIsRtl(piece.props))
   )
     return pieces;
@@ -144,14 +159,18 @@ export function bidiPieces(
     };
     const before = side(-1);
     const after = side(1);
+    // Inside a `w:bdo` override the override gives the picture its level. It keeps its own
+    // run's direction group, so it reverses in one sequence with the text around it.
     const direction =
-      after === undefined
-        ? (before ?? rtl)
-        : before === undefined
-          ? rtl
-          : before === after
-            ? before
-            : rtl;
+      overrideDirection(piece) !== undefined
+        ? runIsRtl(piece.props)
+        : after === undefined
+          ? (before ?? rtl)
+          : before === undefined
+            ? rtl
+            : before === after
+              ? before
+              : rtl;
     const props = piece.props.filter((prop) => prop.localName !== 'rtl');
     return { ...plain, props: direction ? [...props, { localName: 'rtl' }] : props };
   });
@@ -396,6 +415,7 @@ function resolvedItems(
       // UAX #9 L1: a segment separator is reset to the paragraph embedding level.
       const separator = /^\t+$/u.test(piece.text.slice(item.from, item.to));
       const level = separator ? (rtl ? 1 : 0) : item.bidiLevel;
+      const override = separator ? undefined : overrideDirection(piece);
       const style = {
         ...piece.style,
         shaping: {
@@ -403,6 +423,7 @@ function resolvedItems(
           direction: separator ? (rtl ? ('rtl' as const) : ('ltr' as const)) : item.direction,
           level,
           baseLevel: rtl ? 1 : 0,
+          ...(override ? { override } : {}),
           ...(usesRunGroups
             ? { runDirection: runIsRtl(piece.props) ? ('rtl' as const) : ('ltr' as const) }
             : {}),
