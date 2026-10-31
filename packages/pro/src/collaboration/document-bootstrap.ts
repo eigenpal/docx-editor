@@ -63,10 +63,15 @@ const MAX_ELECTION_STATES = 256;
  *
  * `maxBytes` bounds both the file and its expanded package, at most `MAX_BASELINE_BYTES`. A
  * file over the bound is refused with `baseline-too-large` before any part is parsed.
+ *
+ * A file opens with its data-bound controls showing their store's current value. `keepBound`
+ * re-seeds bytes read back out of a room as they are: compaction and migration carry the
+ * room's content, and must not change what its participants already see.
  */
 export function openBaselinePackage(
   bytes: Uint8Array,
-  maxBytes: number = MAX_BASELINE_BYTES
+  maxBytes: number = MAX_BASELINE_BYTES,
+  options: { readonly keepBound?: boolean } = {}
 ): OoxmlPackage {
   if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0) {
     throw new CollaborationSchemaError('invalid-baseline');
@@ -89,7 +94,7 @@ export function openBaselinePackage(
   // identity into shared authority so a concurrent-edit snapshot cannot strip it and
   // make a cold join disagree with peers whose header/footer store is already open.
   // Bound controls show their store's current value, so every participant starts from it.
-  let baseline = refreshBoundContent(loaded.package);
+  let baseline = options.keepBound ? loaded.package : refreshBoundContent(loaded.package);
   for (const part of baseline.parts.values()) {
     if (
       part.root.namespaceUri !== WML_NAMESPACE_URI ||

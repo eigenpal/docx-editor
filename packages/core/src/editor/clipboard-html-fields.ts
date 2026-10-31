@@ -12,11 +12,14 @@
 // into `w:instrText`, and field instructions stay inert in the engine. Comment size, marker
 // count and instruction length are capped. Only inert field types survive the paste: a field
 // that runs a command or loads a file or address when a word processor updates it (`DDEAUTO`,
-// `INCLUDETEXT`, `INCLUDEPICTURE`, `LINK`) keeps its result text and loses its field. Markers
+// `INCLUDETEXT`, `INCLUDEPICTURE`, `LINK`) keeps its result text and loses its field, and so
+// does a field whose instruction starts with a nested field or a `HYPERLINK` to anything but
+// a web, mail or phone address or a bookmark. Markers
 // that do not nest into complete fields are all dropped, so the result text stays and no half
 // field reaches the document.
 
-import { escapeXml, isEvaluableField } from '../store/package/sinks.ts';
+import { parseHyperlinkInstruction } from '../layout/field-link.ts';
+import { escapeXml, isEvaluableField, sanitizeHref } from '../store/package/sinks.ts';
 
 /** Field types a paste keeps besides the ones the engine evaluates: none fetches or runs. */
 const INERT_FIELDS = new Set([
@@ -44,8 +47,21 @@ const INERT_FIELDS = new Set([
   'INDEX',
 ]);
 
+/** Schemes a pasted `HYPERLINK` field may name. A relative or UNC target can open a file. */
+const LINK_SCHEME = /^(?:https?|mailto|tel|ftp):/i;
+
+/** A `HYPERLINK` field stays only with a web, mail or phone target, or a bookmark alone. */
+function pasteKeepsHyperlink(instruction: string): boolean {
+  const spec = parseHyperlinkInstruction(instruction);
+  if (!spec) return false;
+  if (spec.target === null) return spec.anchor !== null;
+  const href = sanitizeHref(spec.target);
+  return href.ok && LINK_SCHEME.test(href.href);
+}
+
 function pasteKeepsField(instruction: string): boolean {
   const keyword = instruction.trim().split(/\s+/)[0]?.toUpperCase() ?? '';
+  if (keyword === 'HYPERLINK') return pasteKeepsHyperlink(instruction);
   return isEvaluableField(instruction) || INERT_FIELDS.has(keyword);
 }
 
@@ -160,17 +176,34 @@ interface FieldRun {
  */
 function keptFieldRuns(runs: readonly FieldRun[]): readonly boolean[] {
   const keep = runs.map(() => true);
-  // Each open field: whether its separator has been seen, the runs that belong to it, and its
-  // instruction text.
-  const open: { separated: boolean; own: number[]; instruction: string }[] = [];
+  // Each open field: whether its separator has been seen, the runs that belong to it, its
+  // instruction text, and whether a nested field opened before its own keyword. Such a field's
+  // type is only known once a word processor updates the nested one, so it does not stay.
+  const open: {
+    separated: boolean;
+    own: number[];
+    instruction: string;
+    begin: number;
+    separator: number;
+    nestedFirst: boolean;
+  }[] = [];
   for (const [index, run] of runs.entries()) {
     const top = open[open.length - 1];
     if (run.kind === 'begin') {
-      open.push({ separated: false, own: [index], instruction: '' });
+      if (top && !top.separated && top.instruction.trim() === '') top.nestedFirst = true;
+      open.push({
+        separated: false,
+        own: [index],
+        instruction: '',
+        begin: index,
+        separator: -1,
+        nestedFirst: false,
+      });
     } else if (run.kind === 'instruction') {
       if (top && !top.separated) {
         top.own.push(index);
-        top.instruction += run.text;
+        // The run text is escaped XML; the rules read the instruction itself.
+        top.instruction += decodeEntities(run.text);
       } else {
         // Instruction text belongs between a begin and its separator, nowhere else.
         keep[index] = false;
@@ -178,12 +211,18 @@ function keptFieldRuns(runs: readonly FieldRun[]): readonly boolean[] {
     } else if (run.kind === 'separate') {
       if (!top || top.separated) return runs.map(() => false);
       top.separated = true;
+      top.separator = index;
       top.own.push(index);
     } else {
       const field = open.pop();
       if (!field) return runs.map(() => false);
       field.own.push(index);
-      if (!pasteKeepsField(field.instruction)) for (const own of field.own) keep[own] = false;
+      if (field.nestedFirst || !pasteKeepsField(field.instruction)) {
+        for (const own of field.own) keep[own] = false;
+        // A field nested in the instruction goes with it: it only ever fed the instruction.
+        const instructionEnd = field.separator < 0 ? index : field.separator;
+        for (let at = field.begin; at < instructionEnd; at += 1) keep[at] = false;
+      }
     }
   }
   return open.length === 0 ? keep : runs.map(() => false);

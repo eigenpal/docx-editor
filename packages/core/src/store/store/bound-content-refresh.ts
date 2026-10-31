@@ -11,8 +11,8 @@
 // dates and checkboxes. A rich text control, which a file writes as a control with no type
 // element, holds formatted paragraphs that a store string cannot stand for. A value this pass
 // cannot place (an unknown dropdown item, a date it cannot read, a text with characters a run
-// cannot hold) leaves the cached content as the file wrote it. An empty value shows the
-// control's prompt, as a value write does. A date whose stored day matches `w:fullDate` keeps
+// cannot hold) leaves the cached content as the file wrote it. An empty value empties the
+// content, and the open's placeholder pass then shows the control's placeholder. A date whose stored day matches `w:fullDate` keeps
 // the text the file wrote, which follows the control's own language and calendar.
 
 import {
@@ -83,7 +83,8 @@ function inputFor(
     case 'plainText':
       return {
         kind: 'text',
-        text: text.replaceAll('\n', properties.multiLine ? LINE_BREAK_TEXT : ' '),
+        // A single-line control drops a stored line break; it does not stand in a space.
+        text: text.replaceAll('\n', properties.multiLine ? LINE_BREAK_TEXT : ''),
       };
     case 'comboBox': {
       const item = properties.listItems.find((candidate) => candidate.value === text);
@@ -139,7 +140,13 @@ function alreadyShows(
     return properties.date?.fullDate?.slice(0, 10) === planned.fullDate.slice(0, 10);
   if (planned.checked !== undefined && properties.checkbox?.checked !== planned.checked)
     return false;
-  if (planned.lastValue !== undefined && properties.lastValue !== planned.lastValue) return false;
+  // Many files leave `w:lastValue` out; the text then says what the control shows.
+  if (
+    planned.lastValue !== undefined &&
+    properties.lastValue !== undefined &&
+    properties.lastValue !== planned.lastValue
+  )
+    return false;
   return contentControlTextOf(control, LINE_BREAK_TEXT) === planned.text;
 }
 
@@ -160,9 +167,13 @@ function refreshControl(
   if (!planned || alreadyShows(control, properties, planned)) return part;
   const content = contentControlContentOf(control);
   const inline = isInlineControl(source, control.id);
-  const children = planned.symbol
-    ? checkboxContent(content, planned.symbol, planned.text, nextId, inline)
-    : contentWithText(content, planned.text, nextId, inline);
+  // An empty value leaves the content empty for the open's placeholder pass, which shows the
+  // document's own placeholder when it names one and the type's prompt otherwise.
+  const children = planned.showingPlaceholder
+    ? []
+    : planned.symbol
+      ? checkboxContent(content, planned.symbol, planned.text, nextId, inline)
+      : contentWithText(content, planned.text, nextId, inline);
   if (!children || !content) return part;
   const sdtPr = contentControlPropertiesOf(control);
   const nextProperties = editedProperties(
@@ -209,8 +220,17 @@ export function refreshBoundContentControls(
 }
 
 /**
- * The package with every bound control in the main document, its headers, footers and notes
- * showing its store's current value. Returns `pkg` itself when nothing changes.
+ * The package with every data-bound content control in the main document, its headers,
+ * footers and notes showing its store's current value.
+ *
+ * Every open path runs this before the store is built, so a refreshed control is part of the
+ * opened document, not an edit: it adds no undo step and leaves the document clean. Run it
+ * before `materializeGlossaryPlaceholders`, which fills a control this empties for an empty
+ * value. A control whose value cannot be placed keeps the content the file saved.
+ *
+ * @param pkg - The package as read.
+ * @returns `pkg` itself when no control changes, otherwise a new package.
+ * @public
  */
 export function refreshBoundContent(pkg: OoxmlPackage): OoxmlPackage {
   const names = [pkg.mainDocumentPart];

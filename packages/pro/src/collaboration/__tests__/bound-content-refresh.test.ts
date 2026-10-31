@@ -17,6 +17,14 @@ import {
 } from '@docx-editor.dev/core/store';
 import { createDocumentCollaboration } from '../document-session.ts';
 import { collaborationModule } from '../collaboration-module.ts';
+import { DocumentRegistry, seedPackage } from '../document/index.ts';
+import { PACKAGE_META_KEY } from '../document/schema.ts';
+import { keepFormattingMarkers } from '../document/yjs-items.ts';
+import { recordFreshSize, recordSeed } from '../document-bootstrap.ts';
+import { compactCollaborationState } from '../room-generation.ts';
+import { readCollaborationDocument } from '../document-read.ts';
+import { SHARED_BLOBS_KEY, SharedBlobStore } from '../shared-blob-store.ts';
+import { normalizeParagraphIdentity, withPart } from '@docx-editor.dev/core/store';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -157,5 +165,70 @@ test('two editors share the refreshed bound value through edits, undo, rejoin an
     rejoined?.destroy();
     b.destroy();
     a.destroy();
+  }
+});
+
+/** A room seeded the way a client without the open refresh seeds it: cached text kept. */
+async function staleRoom(): Promise<Y.Doc> {
+  const ydoc = new Y.Doc();
+  keepFormattingMarkers(ydoc);
+  const registry = new DocumentRegistry(ydoc);
+  const loaded = readOoxmlPackage(fixture());
+  if (!loaded.ok) throw new Error(loaded.reason);
+  const main = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+  const pkg = withPart(loaded.package, normalizeParagraphIdentity(main));
+  const blobs = new SharedBlobStore(ydoc.getMap<Uint8Array>(SHARED_BLOBS_KEY));
+  const seeded = await seedPackage(registry, pkg, blobs);
+  if (!seeded.ok) throw new Error(seeded.code);
+  ydoc.transact(() => {
+    ydoc.getMap(PACKAGE_META_KEY).set('documentId', 'bound-content-refresh');
+    recordSeed(ydoc);
+  });
+  recordFreshSize(ydoc);
+  return ydoc;
+}
+
+test('a joiner of a room seeded with cached bound text agrees with the room', async () => {
+  const host = { ydoc: await staleRoom() };
+  const a = await peer('Alice', host),
+    b = await peer('Bob', host);
+  try {
+    for (const client of [a, b]) {
+      expect(client.editor.surface!.session.bodyText()).toContain('Old party');
+      expect(client.editor.surface!.session.bodyText()).not.toContain('Northwind Traders');
+    }
+    typeAt(a, 0, 0, 'A ');
+    typeAt(b, 1, 0, 'B ');
+    sync(a, b);
+    const left = await mainOf(new Uint8Array(await a.editor.save()));
+    const right = await mainOf(new Uint8Array(await b.editor.save()));
+    expect(canonicalOoxmlFingerprint(left)).toBe(canonicalOoxmlFingerprint(right));
+    expect(serializeOoxmlPart(left)).toContain('A Party');
+    expect(serializeOoxmlPart(left)).toContain('B Bravo');
+  } finally {
+    b.destroy();
+    a.destroy();
+    host.ydoc.destroy();
+  }
+});
+
+test('compacting a room seeded with cached bound text keeps that text', async () => {
+  const stale = await staleRoom();
+  try {
+    const compacted = await compactCollaborationState(Y.encodeStateAsUpdate(stale), {
+      minimumGain: 0,
+    });
+    expect(compacted).not.toBeNull();
+    const room = new Y.Doc();
+    try {
+      Y.applyUpdate(room, compacted!);
+      const xml = serializeOoxmlPart(await mainOf(readCollaborationDocument(room)));
+      expect(xml).toContain('Old party');
+      expect(xml).not.toContain('Northwind Traders');
+    } finally {
+      room.destroy();
+    }
+  } finally {
+    stale.destroy();
   }
 });

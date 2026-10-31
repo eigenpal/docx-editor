@@ -119,7 +119,9 @@ export async function compactCollaborationState(
     // Measured against a fresh build of the content the room holds now. The size the room had
     // when it was seeded is no bound: deleting most of a document makes the fresh build far
     // smaller than the seed while the stored state hardly grows.
-    const compacted = await seedGeneration(readCollaborationDocument(stored), documentId);
+    const compacted = await seedGeneration(readCollaborationDocument(stored), documentId, {
+      keepBound: true,
+    });
     if (state.byteLength / Math.max(1, compacted.byteLength) >= minimumGain) return compacted;
     rememberNotWorthIt(key);
     return null;
@@ -128,18 +130,27 @@ export async function compactCollaborationState(
   }
 }
 
-/** A fresh room state that holds `bytes`, with a new generation ID. */
+/**
+ * A fresh room state that holds `bytes`, with a new generation ID. `keepBound` is for bytes
+ * read back out of a room; see `openBaselinePackage`.
+ */
 export async function seedGeneration(
   bytes: Uint8Array,
   documentId: string,
-  maxBytes?: number
+  options: { readonly maxBytes?: number; readonly keepBound?: boolean } = {}
 ): Promise<Uint8Array> {
   const fresh = new Y.Doc();
   const stopKeepingMarkers = keepFormattingMarkers(fresh);
   const registry = new DocumentRegistry(fresh);
   try {
     const blobs = new SharedBlobStore(fresh.getMap<Uint8Array>(SHARED_BLOBS_KEY));
-    const seeded = await seedPackage(registry, openBaselinePackage(bytes, maxBytes), blobs);
+    const seeded = await seedPackage(
+      registry,
+      openBaselinePackage(bytes, options.maxBytes, {
+        keepBound: options.keepBound === true,
+      }),
+      blobs
+    );
     if (!seeded.ok) throw new CollaborationSchemaError(seeded.code);
     fresh.transact(() => {
       registry.schema.meta.set('documentId', documentId);

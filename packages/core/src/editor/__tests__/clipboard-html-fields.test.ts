@@ -81,6 +81,8 @@ describe('word field comments', () => {
     expect(xml).toContain('PAGEREF _Toc100000002 \\h');
     expect(xml).toContain('<w:pStyle w:val="TOC1"/>');
     expect(xml).toContain('<w:pStyle w:val="TOC2"/>');
+    // The headings' bookmarks travel with them, so entry links and page fields resolve.
+    expect(xml).toMatch(/<w:bookmarkStart [^>]*w:name="_Toc100000002"/);
   });
 
   test('an instruction that continues after a nested field keeps its tail', () => {
@@ -98,6 +100,45 @@ describe('word field comments', () => {
     expect(xml).toContain(' MERGEFIELD Region ');
     expect(xml).toContain(' = &quot;North&quot; &quot;yes&quot; &quot;no&quot; ');
     expect(xml.match(/w:fldCharType="begin"/g)?.length).toBe(2);
+  });
+
+  test('a field whose instruction starts with a nested field loses both fields', () => {
+    const html =
+      '<html xmlns:w="urn:schemas-microsoft-com:office:word"><body><p class=MsoNormal>' +
+      field(`${begin} `) +
+      field(
+        `${begin} IF 1 = 1 &quot;INCLUDEPICTURE https://example.invalid/a.png&quot; ${separator}`
+      ) +
+      'INCLUDEPICTURE' +
+      field(end) +
+      field(` TC ${separator}`) +
+      'Shown' +
+      field(end) +
+      '</p></body></html>';
+    const xml = fragmentXml(html);
+    expect(xml).not.toContain('w:fldChar');
+    expect(xml).not.toContain('w:instrText');
+    expect(xml).toContain('Shown');
+  });
+
+  test('a hyperlink field stays only with a web, mail or bookmark target', () => {
+    const link = (instruction: string, text: string) =>
+      field(`${begin} ${instruction} ${separator}`) + text + field(end);
+    const html =
+      '<html xmlns:w="urn:schemas-microsoft-com:office:word"><body><p class=MsoNormal>' +
+      link('HYPERLINK &quot;https://example.com/&quot;', 'web') +
+      link('HYPERLINK \\l &quot;_Toc1&quot;', 'bookmark') +
+      link('HYPERLINK &quot;javascript:alert(1)&quot;', 'script') +
+      link('HYPERLINK &quot;\\\\host\\share&quot;', 'share') +
+      link('HYPERLINK &quot;file:///etc/passwd&quot;', 'file') +
+      '</p></body></html>';
+    const xml = fragmentXml(html);
+    expect(xml.match(/w:fldCharType="begin"/g)?.length).toBe(2);
+    expect(xml).toContain('https://example.com/');
+    expect(xml).not.toContain('javascript:');
+    expect(xml).not.toContain('host');
+    expect(xml).not.toContain('file:');
+    for (const text of ['web', 'bookmark', 'script', 'share', 'file']) expect(xml).toContain(text);
   });
 
   test('a field that runs or loads something keeps its result text and loses the field', () => {

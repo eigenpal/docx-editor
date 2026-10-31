@@ -101,7 +101,7 @@ describe('bound content refresh', () => {
     expect(xml).not.toContain('South region</w:t>');
   });
 
-  test('an empty value shows the prompt, and a multi-line value breaks only when allowed', () => {
+  test('an empty value empties the control, and a multi-line value breaks only when allowed', () => {
     const xml = mainXml(
       docWith(
         paragraph(bound('/ns0:contract/ns0:note', '<w:text/>', 'Old note')) +
@@ -111,10 +111,34 @@ describe('bound content refresh', () => {
     );
     expect(xml).not.toContain('Old note');
     expect(xml).toContain('<w:showingPlcHdr/>');
-    // The prompt is real content, as a value write leaves it, never an empty control.
-    expect(xml).toContain('Click here to enter text.');
+    // Left for the open's placeholder pass, which knows the document's own placeholder.
+    expect(xml).toContain('<w:sdtContent/>');
     expect(xml).toMatch(/1 Main St<\/w:t><w:br\/><w:t>Suite 2/);
-    expect(xml).toContain('1 Main St Suite 2');
+    // A single-line control drops the break.
+    expect(xml).toContain('1 Main StSuite 2');
+  });
+
+  test('a session opens an empty bound value showing the prompt', () => {
+    const opened = openTreeSession(
+      docWith(paragraph(bound('/ns0:contract/ns0:note', '<w:text/>', 'Old note')))
+    );
+    if (!opened.ok) throw new Error(opened.reason);
+    expect(opened.session.bodyText()).toContain('Click here to enter text.');
+    expect(opened.session.bodyText()).not.toContain('Old note');
+  });
+
+  test('a list control without a saved last value is left alone when its text matches', () => {
+    const dropdown =
+      '<w:dropDownList><w:listItem w:displayText="North region" w:value="north"/></w:dropDownList>';
+    const combo =
+      '<w:comboBox><w:listItem w:displayText="North region" w:value="north"/></w:comboBox>';
+    const bytes = docWith(
+      paragraph(bound('/ns0:contract/ns0:region', dropdown, 'North region')) +
+        paragraph(bound('/ns0:contract/ns0:region', combo, 'North region'))
+    );
+    const loaded = readOoxmlPackage(bytes);
+    if (!loaded.ok) throw new Error(loaded.reason);
+    expect(refreshBoundContent(loaded.package)).toBe(loaded.package);
   });
 
   test('a value that cannot be placed keeps the cached content', () => {
