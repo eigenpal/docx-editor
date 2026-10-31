@@ -236,6 +236,8 @@ export class TextFollow {
   private readonly ownChanges = new Set<LogicalId>();
   /** Sources whose placement read what other sources hold (`movedAfter`). */
   private readonly readsOtherSources = new Set<LogicalId>();
+  /** For each live holder read in one `relocate`, the identities its following text shows. */
+  private readonly followingIdsOf = new Map<LogicalId, ReadonlySet<Identity>>();
   /** For each paragraph an undo joins text into, the sources whose placement read it. */
   private readonly joinedFrom = new Map<LogicalId, Set<LogicalId>>();
   /**
@@ -682,6 +684,7 @@ export class TextFollow {
 
   /** Place the following text of `sources` again. Returns the targets whose view changed. */
   private relocate(sources: readonly LogicalId[]): Set<LogicalId> {
+    this.followingIdsOf.clear();
     const touched = new Set<LogicalId>();
     for (const source of sources)
       for (const target of this.targetsOf.get(source) ?? []) touched.add(target);
@@ -912,6 +915,23 @@ export class TextFollow {
     return original.anchors.some((anchor) => this.leadsOut(original.source, live, anchor));
   }
 
+  /** Whether the original of `id` in the live paragraph `holder` shows as its following text. */
+  private followsOutOf(holder: LogicalId, id: Identity): boolean {
+    if (this.isDeleted(holder) || !this.sources.has(holder)) return false;
+    let ids = this.followingIdsOf.get(holder);
+    if (!ids) {
+      const text = this.textOf(holder);
+      const found = new Set<Identity>();
+      if (text) {
+        for (const following of this.followingOf(holder, this.identitiesOf(holder, text)))
+          for (const identity of following.identities) if (identity) found.add(identity);
+      }
+      ids = found;
+      this.followingIdsOf.set(holder, ids);
+    }
+    return ids.has(id);
+  }
+
   /**
    * Whether text in `source` follows `anchor`: a copy of the anchor shows in another
    * paragraph. Text typed before a character follows it only out of a paragraph that is gone.
@@ -941,15 +961,17 @@ export class TextFollow {
     if (!id) return undefined;
     const holders = this.holdersOf(id);
     if (!isCopyAt(identities, position) && holders.length > 0) return undefined;
-    // A live paragraph that still holds the original shows it, in place or as its own
-    // following text, so a copy left in a removed paragraph does not show it a second time.
-    if (holders.some((holder) => holder !== source && !this.isDeleted(holder))) return undefined;
     // The original follows by its anchors only when one leads to a copy that shows; otherwise
     // this copy is the only place the text can show. What another source holds can change
     // this, so this source is placed again with every placement.
     this.readsOtherSources.add(source);
     const originals = this.typedSources().get(id) ?? [];
     if (originals.some((original) => original.source !== source && this.follows(original))) {
+      return undefined;
+    }
+    // So does an original that comes along with following text of a live paragraph, typed
+    // right after it without anchors of its own.
+    if (holders.some((holder) => holder !== source && this.followsOutOf(holder, id))) {
       return undefined;
     }
     for (const identity of identities.copiedAfter[position] ?? []) {
