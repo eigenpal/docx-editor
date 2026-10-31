@@ -380,13 +380,21 @@ function subtreeSymbolFontsOf(subtree: OoxmlElement, depth = 0): SubtreeSymbolFa
         const fold = family.toLowerCase();
         if (!byFold.has(fold)) byFold.set(fold, family);
         // A private-use code point with no Unicode equivalent paints only in its own face.
+        // The test is on the text shown, so a glyph mapped past the private-use block (an
+        // emoji check box) counts as mapped.
         const glyph = symbolGlyphOf(node);
-        if (glyph && !glyph.unicode && !unmapped.has(fold)) unmapped.set(fold, family);
+        if (glyph && isPrivateUseText(glyph.text) && !unmapped.has(fold))
+          unmapped.set(fold, family);
       }
     }
     for (let i = node.children.length - 1; i >= 0; i -= 1) stack.push(node.children[i]!);
   }
   return remember();
+}
+
+function isPrivateUseText(text: string): boolean {
+  const code = text.codePointAt(0);
+  return code !== undefined && code >= 0xe000 && code <= 0xf8ff;
 }
 
 /**

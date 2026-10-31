@@ -44,6 +44,8 @@ describe('unmappedSymbolFaces', () => {
       symbol('Wingdings', 'F0FC') +
         symbol('Symbol', 'F0B7') +
         symbol('Arial', '0041') +
+        // Mapped past the private-use block, to an emoji check box.
+        symbol('Webdings', 'F072') +
         '<w:p><w:r><w:sym w:char="F0FC"/></w:r></w:p>'
     );
     expect(unmappedSymbolFaces(session)).toEqual([]);

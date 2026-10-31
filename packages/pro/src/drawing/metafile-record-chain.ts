@@ -12,11 +12,19 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // The walk reads only record sizes and types. Each step moves forward by at least one record
 // header, and it stops at the record limit, so it is linear in the file size. It is no
 // stricter than the replayer: bytes too short to hold a record header after the last record
-// are padding, and a stream with no end record that runs to its last byte drew in full.
+// are padding, and so is a zero-filled tail; an end record is the end whatever size it
+// declares, because every drawing record before it was read; and a stream with no end record
+// that runs to its last byte drew in full.
 
 const EMR_EOF = 14;
 const EMF_HEADER_MIN = 88;
 const PLACEABLE_KEY = 0x9ac6cdd7;
+
+/** Whether every byte from `at` to the end is zero: padding, not a record. */
+function zeroTail(view: DataView, at: number): boolean {
+  for (let i = at; i < view.byteLength; i += 1) if (view.getUint8(i) !== 0) return false;
+  return true;
+}
 
 function emfChainIntact(view: DataView, maxRecords: number): boolean {
   if (view.byteLength < EMF_HEADER_MIN) return false;
@@ -28,8 +36,8 @@ function emfChainIntact(view: DataView, maxRecords: number): boolean {
     if (records >= maxRecords) return false;
     const type = view.getUint32(at, true);
     const size = view.getUint32(at + 4, true);
-    if (size < 8 || size > view.byteLength - at) return false;
     if (type === EMR_EOF) return true;
+    if (size < 8 || size > view.byteLength - at) return zeroTail(view, at);
     at += size;
   }
   return true;
@@ -43,8 +51,8 @@ function wmfChainIntact(view: DataView, maxRecords: number): boolean {
     if (records >= maxRecords) return false;
     const size = view.getUint32(at, true) * 2;
     const fn = view.getUint16(at + 4, true);
-    if (size < 6 || size > view.byteLength - at) return false;
     if (fn === 0) return true;
+    if (size < 6 || size > view.byteLength - at) return zeroTail(view, at);
     at += size;
   }
   return true;

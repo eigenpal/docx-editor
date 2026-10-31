@@ -36,9 +36,10 @@ test('a record past the end, or one too small to step over, breaks the chain', (
   const picture = emf([0, 0, 40, 20], [RECTANGLE]);
   expect(metafileRecordsIntact(patched(picture, 92, 0x7fffffff), 'image/x-emf', LIMIT)).toBe(false);
   expect(metafileRecordsIntact(patched(picture, 92, 4), 'image/x-emf', LIMIT)).toBe(false);
-  expect(metafileRecordsIntact(picture.subarray(0, picture.length - 4), 'image/x-emf', LIMIT)).toBe(
-    false
-  );
+  // The rectangle record cut short.
+  expect(
+    metafileRecordsIntact(picture.subarray(0, picture.length - 24), 'image/x-emf', LIMIT)
+  ).toBe(false);
   const vector = wmf(40, 20, WMF_RECTANGLE);
   // The first record after the 22-byte placeable header and the 18-byte header.
   expect(metafileRecordsIntact(patched(vector, 40, 0x7fffffff), 'image/x-wmf', LIMIT)).toBe(false);
@@ -75,4 +76,29 @@ test('a chain longer than the record limit is not read in full', () => {
   // The header, three rectangles and the end record.
   expect(metafileRecordsIntact(picture, 'image/x-emf', 4)).toBe(false);
   expect(metafileRecordsIntact(picture, 'image/x-emf', 5)).toBe(true);
+});
+
+test('an end record is the end, whatever size it declares or however short it is cut', () => {
+  const picture = emf([0, 0, 40, 20], [RECTANGLE]);
+  const eof = picture.length - 20;
+  expect(metafileRecordsIntact(patched(picture, eof + 4, 0x7fffffff), 'image/x-emf', LIMIT)).toBe(
+    true
+  );
+  expect(metafileRecordsIntact(picture.subarray(0, picture.length - 4), 'image/x-emf', LIMIT)).toBe(
+    true
+  );
+  const vector = wmf(40, 20, WMF_RECTANGLE);
+  // The WMF end record is 3 words: size 3, function 0.
+  expect(metafileRecordsIntact(vector.subarray(0, vector.length - 2), 'image/x-wmf', LIMIT)).toBe(
+    true
+  );
+});
+
+test('a zero-filled tail after the last record is padding', () => {
+  const picture = emf([0, 0, 40, 20], [RECTANGLE]);
+  const padded = new Uint8Array(picture.length - 20 + 16);
+  padded.set(picture.subarray(0, picture.length - 20));
+  expect(metafileRecordsIntact(padded, 'image/x-emf', LIMIT)).toBe(true);
+  padded[padded.length - 1] = 1;
+  expect(metafileRecordsIntact(padded, 'image/x-emf', LIMIT)).toBe(false);
 });
