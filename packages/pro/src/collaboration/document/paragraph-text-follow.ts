@@ -8,10 +8,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  *
  * Every replica reads the same shared state, so every replica decides alike:
  *
- * - A moved copy shows in the last paragraph in document order that holds a copy of its
- *   character, and only once there. Two peers that split one paragraph each make a copy:
- *   the later paragraph holds the text after both splits, so it keeps the text in order.
- *   A join that races a split of the joined paragraph leaves the split's tail where it was.
+ * - A moved copy shows in one paragraph that holds a copy of its character, and only once
+ *   there. Two peers that split one paragraph each make a copy: the paragraph whose split fell
+ *   later holds the text after both splits, so it shows it, wherever a move puts either
+ *   paragraph (`copy-holder-order.ts`). Holders whose copies start together, and copies an
+ *   undo put back, show in the last holder in document order. A join that races a split of
+ *   the joined paragraph leaves the split's tail where it was.
  * - A character in its first place hides behind a moved copy of it. An undo that puts back
  *   text a peer has meanwhile moved on puts back characters that already show elsewhere.
  * - Text a peer typed while another peer moved the text around it away follows the move: it
@@ -30,6 +32,7 @@ import {
 } from './paragraph-text-identity.ts';
 import type { FollowAnchor } from './paragraph-text-moves.ts';
 import type { UndoneInto } from './undo-unlisted-text.ts';
+import { CopyHolderOrder } from './copy-holder-order.ts';
 
 const EMPTY: ReadonlySet<LogicalId> = new Set();
 
@@ -267,12 +270,40 @@ export class TextFollow {
     private readonly originalParagraph: (identity: Identity) => LogicalId | null,
     /** The paragraph an undo joins an unlisted paragraph's text into (`undo-unlisted-text.ts`). */
     private readonly undoneInto: (paragraphId: LogicalId) => UndoneInto | null = () => null
-  ) {}
+  ) {
+    this.holders = new CopyHolderOrder(textOf, order);
+  }
 
-  /** The paragraph of `paragraphs` that comes last in the document. */
-  private lastOf(paragraphs: readonly LogicalId[]): LogicalId | null {
+  /** Which of two holders of one moved copy shows it (`copy-holder-order.ts`). */
+  private readonly holders: CopyHolderOrder;
+
+  /**
+   * Negative when `a`'s copy of `identity` gives way to `b`'s: by where each moved copy
+   * starts, and by document order for a copy an undo put back.
+   */
+  private holderOrder(
+    kind: 'move' | 'restore',
+    a: LogicalId,
+    b: LogicalId,
+    source: Y.Text | null
+  ): number {
+    return kind === 'move' ? this.holders.compare(a, b, source) : this.order(a, b);
+  }
+
+  /** The paragraph of `paragraphs` whose copy of `identity` shows. */
+  private lastOf(
+    kind: 'move' | 'restore',
+    paragraphs: readonly LogicalId[],
+    identity: Identity
+  ): LogicalId | null {
     let last: LogicalId | null = null;
-    for (const id of paragraphs) if (last === null || this.order(id, last) > 0) last = id;
+    const source =
+      kind === 'move' && paragraphs.length > 1
+        ? this.holders.sourceOf(paragraphs[0]!, identity)
+        : null;
+    for (const id of paragraphs) {
+      if (last === null || this.holderOrder(kind, id, last, source) > 0) last = id;
+    }
     return last;
   }
 
@@ -369,8 +400,10 @@ export class TextFollow {
         const restores = others('restore');
         if (moves.length > 0 || restores.length > 0 || isCopy) {
           const from = clocks[start]!;
-          const move = this.coverage(moves, from, end - start, paragraphId);
-          const restore = this.coverage(restores, from, end - start, paragraphId);
+          // Which holder comes later decides only for a copy.
+          const self = isCopy ? paragraphId : null;
+          const move = this.coverage('move', moves, client, from, end - start, self);
+          const restore = this.coverage('restore', restores, client, from, end - start, self);
           for (let position = start; position < end; position += 1) {
             const at = position - start;
             const held = {
@@ -485,27 +518,40 @@ export class TextFollow {
 
   /**
    * For each of `length` consecutive clocks from `from`, how many of `entries` hold it, and
-   * how many of those come after `paragraphId`. Each holder's order is read once, and a sweep
-   * counts the rest: a peer that copies one run into many paragraphs made a scan of every
-   * holder for every character cost the copies squared times the run.
+   * how many of those show it instead of `paragraphId` (none for null). Each holder's order is
+   * read once, and a sweep counts the rest: a peer that copies one run into many paragraphs
+   * made a scan of every holder for every character cost the copies squared times the run.
    */
   private coverage(
+    kind: 'move' | 'restore',
     entries: readonly { readonly run: IdentityRun; readonly paragraph: LogicalId }[],
+    client: number,
     from: number,
     length: number,
-    paragraphId: LogicalId
+    paragraphId: LogicalId | null
   ): { readonly any: Int32Array; readonly later: Int32Array } {
     const any = new Int32Array(length + 1);
     const later = new Int32Array(length + 1);
+    // The texts the run's characters come from, read once per piece.
+    const pieces =
+      paragraphId !== null && kind === 'move' && entries.length > 0
+        ? this.holders.sourceSegments(paragraphId, client, from, length)
+        : [{ start: 0, end: length, source: null }];
     for (const entry of entries) {
       const first = Math.max(entry.run.start, from) - from;
       const last = Math.min(entry.run.end, from + length) - from;
       if (first >= last) continue;
       any[first]! += 1;
       any[last]! -= 1;
-      if (this.order(entry.paragraph, paragraphId) > 0) {
-        later[first]! += 1;
-        later[last]! -= 1;
+      if (paragraphId === null) continue;
+      for (const piece of pieces) {
+        const start = Math.max(first, piece.start);
+        const end = Math.min(last, piece.end);
+        if (start >= end) continue;
+        if (this.holderOrder(kind, entry.paragraph, paragraphId, piece.source) > 0) {
+          later[start]! += 1;
+          later[end]! -= 1;
+        }
       }
     }
     for (let at = 1; at <= length; at += 1) {
@@ -538,8 +584,8 @@ export class TextFollow {
     // Typing asks this of every character it was typed after; most clients have no copies.
     if (!this.index.hasCopies(client)) return null;
     return (
-      this.lastOf(this.index.holdersOf('move', client, clock)) ??
-      this.lastOf(this.index.holdersOf('restore', client, clock))
+      this.lastOf('move', this.index.holdersOf('move', client, clock), identity) ??
+      this.lastOf('restore', this.index.holdersOf('restore', client, clock), identity)
     );
   }
 
@@ -582,6 +628,7 @@ export class TextFollow {
   /** Forget a text's identities: a writer changed it inside a transaction. */
   invalidate(paragraphId: LogicalId): void {
     this.identities.delete(paragraphId);
+    this.holders.forget(paragraphId);
     this.recent.delete(paragraphId);
     this.typedStale.add(paragraphId);
   }
@@ -614,6 +661,7 @@ export class TextFollow {
 
   clear(): void {
     this.identities.clear();
+    this.holders.clear();
     this.recent.clear();
     this.index.clear();
     this.sources.clear();
