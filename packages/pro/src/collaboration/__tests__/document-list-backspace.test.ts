@@ -6,7 +6,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // Backspace at the start of a list item removes its number and keeps the text on its own line.
 // It is an ordinary numbering write, so two collaborating editors must converge on it through
 // concurrent typing, a remote deletion in the item, a concurrent press on the same item,
-// undo, redo, reconnect, and save and reopen.
+// undo, redo, reconnect, and save and reopen. A suggested list toggle is the same write as a
+// tracked property change, which the other participant can reject or accept.
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { afterEach, expect, test } from 'bun:test';
@@ -207,4 +208,41 @@ test('a suggested number removal converges, and the other participant can reject
 
   const reopened = await peer('Carol', undefined, new Uint8Array(await a.editor.save()));
   expect(markers(reopened)).toEqual(['1.', '2.', '3.']);
+});
+
+test('suggested list toggles converge, and the other participant can reject or accept them', async () => {
+  const a = await peer('Alice');
+  const b = await peer('Bob', a);
+
+  a.editor.surface!.setEditingMode('suggest');
+  caret(a, 0, 1);
+  caret(b, 0, 3);
+  expect(a.editor.surface!.toggleList('bullet')).toBe(true);
+  expect(b.editor.exec({ type: 'insertText', text: ' more' }).ok).toBe(true);
+  sync(a, b);
+  const switched = await converged(a, b);
+  expect(switched.match(/<w:pPrChange/g)).toHaveLength(1);
+  expect(markers(b)).toEqual(markers(a));
+  expect(markers(b)[0]).toBe('•');
+
+  b.editor.surface!.session.applyTreeOps([{ op: 'rejectAllRevisions' }]);
+  sync(a, b);
+  const rejected = await converged(a, b);
+  expect(rejected).not.toContain('<w:pPrChange');
+  expect(rejected).toContain('One more');
+  expect(markers(a)).toEqual(['1.', '2.', '3.']);
+
+  // Turning the list off on the last item is a suggestion too, and accept keeps it off.
+  caret(a, 2, 0);
+  expect(a.editor.surface!.toggleList('ordered')).toBe(true);
+  sync(a, b);
+  expect(markers(b)).toEqual(['1.', '2.', null]);
+  b.editor.surface!.session.applyTreeOps([{ op: 'acceptAllRevisions' }]);
+  sync(a, b);
+  const accepted = await converged(a, b);
+  expect(accepted).not.toContain('<w:pPrChange');
+  expect(numbered(accepted)).toBe(2);
+
+  const reopened = await peer('Carol', undefined, new Uint8Array(await a.editor.save()));
+  expect(markers(reopened)).toEqual(['1.', '2.', null]);
 });
