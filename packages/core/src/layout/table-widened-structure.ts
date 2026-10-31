@@ -36,7 +36,9 @@ export function widenedTableStructure(
       floating: base.float !== undefined,
       cellSpacingPt: base.cellSpacingPt,
       widthType: base.tableWidth.type,
-      alignment: base.alignment,
+      ...(base.tableWidth.type === 'dxa' ? { statedWidthPt: base.tableWidth.value } : {}),
+      // The structure stores the visual alignment; side rules take the authored one.
+      alignment: base.bidiVisual ? mirroredAlignment(base.alignment) : base.alignment,
       layoutFixed: base.layoutFixed,
       indentPt: base.indentPt,
       columnWidthsPt: base.columnWidthsPt,
@@ -44,18 +46,21 @@ export function widenedTableStructure(
     },
     widths
   );
-  // Top-level fixed tables never widen; nested fixed tables have no legacy content offset.
+  // A legacy content-edge offset does not depend on the widths; other offsets move with them.
   const { outerRuleOffsetPt: _previousOffset, ...unchanged } = base;
+  const offset = base.legacyContentOffsetPt ?? sideRules.outerRuleOffsetPt;
   const structure: SemanticTableStructure = {
     ...unchanged,
     columnWidthsPt: widths,
     rows: sideRules.rows,
-    ...(sideRules.outerRuleOffsetPt === undefined
-      ? {}
-      : { outerRuleOffsetPt: sideRules.outerRuleOffsetPt }),
+    ...(offset === undefined ? {} : { outerRuleOffsetPt: offset }),
   };
   if (!widened) widenedStructureMemos.set(base, (widened = new Map()));
   if (widened.size >= MAX_WIDENED_PER_BASE) widened.delete(widened.keys().next().value!);
   widened.set(widthsKey, structure);
   return structure;
+}
+
+function mirroredAlignment(alignment: SemanticTableStructure['alignment']) {
+  return alignment === 'left' ? 'right' : alignment === 'right' ? 'left' : alignment;
 }
