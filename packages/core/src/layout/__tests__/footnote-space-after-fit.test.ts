@@ -132,6 +132,18 @@ describe('space after above a footnote area', () => {
     expect(pageOf(pages, 'Body')).toBe(1);
   });
 
+  test('a kept pair before a page break keeps the space after of its last member', () => {
+    const pages = layout(
+      p('<w:t>Opening</w:t><w:footnoteReference w:id="1"/>') +
+        p('<w:t>Spacer</w:t>', 0, AREA_TOP - 5 - 3 * LINE) +
+        p('<w:t>Heading</w:t>', 0, LINE, true) +
+        p('<w:t>Body</w:t>', 10, LINE, true) +
+        '<w:p><w:pPr><w:pageBreakBefore/></w:pPr><w:r><w:t>Later</w:t></w:r></w:p>'
+    ).pages;
+    expect(pageOf(pages, 'Heading')).toBe(1);
+    expect(pageOf(pages, 'Body')).toBe(1);
+  });
+
   test('a kept paragraph gives its last line to a successor whose space after does not fit', () => {
     // From compatibility mode 15 a kept paragraph that may split gives its successor its last
     // line rather than moving whole; the successor's space after decides it here too.

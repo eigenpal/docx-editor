@@ -309,8 +309,9 @@ export function keepNextPlan(
     }
     if (!block || block.kind !== 'paragraph' || !block.spacing || !block.keeps) return false;
     // A forced new page also discards the preceding paragraph's trailing spacing.
+    // Above a cited note area, placement still charges the member's space after.
     if (index > start && look.breaksBefore?.(index))
-      return finish({ height: total - after, lastWhole });
+      return finish({ height: total - (look.closingSpaceAfter && cited ? 0 : after), lastWhole });
     // Adjacent before/after collapse to the larger gap unless the document sums them.
     if (index === start && look.headLead !== undefined) total += look.headLead;
     else if (look.sumAdjacentSpacing) total += block.spacing.before;
