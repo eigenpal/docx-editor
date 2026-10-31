@@ -18,6 +18,7 @@ import {
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { AtomicFieldSynthesis } from './field-synthesis.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
+import type { BidiDirective } from './field-pieces.ts';
 
 export interface CachedFieldDrawing {
   readonly textOffset: number;
@@ -48,7 +49,11 @@ export function captureFieldResultDrawing(
     readonly revisions: readonly RevisionAttribution[];
     readonly displayMode: RevisionDisplayMode;
     readonly authorFilter?: RevisionAuthorFilter;
-    readonly link?: SpanLinkRecord;
+    /** The link and direction wrappers around the drawing's run. */
+    readonly tags: {
+      readonly link?: SpanLinkRecord;
+      readonly bidiDirectives?: readonly BidiDirective[];
+    };
     readonly formatSite?: RevisionAttribution | null;
     readonly deletedRanges?: MutableModelRange[];
     readonly removed: (
@@ -85,9 +90,13 @@ export function captureFieldResultDrawing(
     ...plan.extras,
     revisionsOverride: revisions,
     formatSiteOverride: options.formatSite,
-    ...(options.link ? { linkOverride: options.link } : {}),
+    ...(options.tags.link ? { linkOverride: options.tags.link } : {}),
   };
   if (pending.atomic) {
+    // A displayed result drawing donates its wrappers as a result run does.
+    pending.resultDirectives ??= options.tags.bidiDirectives
+      ? { bidiDirectives: options.tags.bidiDirectives }
+      : {};
     (pending.cachedDrawings ??= []).push({
       textOffset: pending.cachedText.length,
       props,
@@ -104,7 +113,7 @@ export function captureFieldResultDrawing(
       end,
       projected: true,
       ...plan.extras,
-      ...(options.link ? { link: options.link } : {}),
+      ...options.tags,
       fieldAtom: { formField: pending.formField },
     });
   }

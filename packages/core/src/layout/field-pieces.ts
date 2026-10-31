@@ -137,6 +137,16 @@ export interface FieldAtomMarker {
 }
 
 /**
+ * A `w:dir` (directional embedding) or `w:bdo` (directional override) wrapper around run
+ * content. Layout resolves it as the matching Unicode embedding or override; the store keeps
+ * the wrapper unchanged.
+ */
+export interface BidiDirective {
+  readonly kind: 'embedding' | 'override';
+  readonly direction: 'ltr' | 'rtl';
+}
+
+/**
  * One measurable piece produced while walking runs (including projected field results).
  *
  * Projected page-field text covers the single atomic model unit for a well-formed field
@@ -217,6 +227,15 @@ export interface FieldAwarePiece {
    * `styleForFontSlot` while the piece's `style` stays the run's real resolution.
    */
   readonly fontSlot?: FontSlot;
+  /** The `w:dir` and `w:bdo` wrappers enclosing this text, outermost first; absent when none. */
+  readonly bidiDirectives?: readonly BidiDirective[];
+  /**
+   * The run-direction group a wrapper left open to the paragraph end places this text in,
+   * instead of its own run's direction. Set only by `withCarriedBidiDirectives`.
+   */
+  readonly bidiRunGroup?: 'ltr' | 'rtl';
+  /** The piece reads in a wrapper past that wrapper's end. Set by `withCarriedBidiDirectives`. */
+  readonly bidiCarried?: true;
 }
 
 /** A half-open model-offset range, in the paragraph's own UTF-16 offset space. */
@@ -286,10 +305,33 @@ export function capturedResultAttribution(pending: {
   readonly capturedResultRevisions: boolean;
   readonly resultRevisions: readonly RevisionAttribution[];
   readonly resultFormatSite: RevisionAttribution | null;
-}): Pick<PieceEmitExtras, 'revisionsOverride' | 'formatSiteOverride'> {
+  readonly resultDirectives?: PieceEmitExtras['directivesOverride'];
+}): Pick<PieceEmitExtras, 'revisionsOverride' | 'formatSiteOverride' | 'directivesOverride'> {
+  // The direction wrappers are captured at the begin marker, or else from the first displayed
+  // result: a field that ends inside or outside a wrapper still reads in the captured direction.
+  const directives = { directivesOverride: pending.resultDirectives ?? {} };
   return pending.capturedResultRevisions
-    ? { revisionsOverride: pending.resultRevisions, formatSiteOverride: pending.resultFormatSite }
-    : {};
+    ? {
+        revisionsOverride: pending.resultRevisions,
+        formatSiteOverride: pending.resultFormatSite,
+        ...directives,
+      }
+    : directives;
+}
+
+/** The emit extras a projected (atomic) piece carries. */
+export function projectedPieceFields(extras: PieceEmitExtras | undefined) {
+  return {
+    ...(extras?.measureText !== undefined ? { measureText: extras.measureText } : {}),
+    ...(extras?.noteNav ? { noteNav: extras.noteNav } : {}),
+    ...(extras?.noteSeparator ? { noteSeparator: extras.noteSeparator } : {}),
+    ...(extras?.inlineDrawing ? { inlineDrawing: extras.inlineDrawing } : {}),
+    ...(extras?.anchoredAtom ? { anchoredAtom: true as const } : {}),
+    ...(extras?.equation ? { equation: extras.equation } : {}),
+    ...(extras?.equationLayout ? { equationLayout: extras.equationLayout } : {}),
+    ...(extras?.unsupported ? { unsupported: extras.unsupported } : {}),
+    ...(extras?.fieldAtom ? { fieldAtom: extras.fieldAtom } : {}),
+  };
 }
 
 /**
@@ -397,6 +439,8 @@ export interface PieceEmitExtras {
   /** With {@link revisionsOverride}: the captured run's formatting site, or none. */
   readonly formatSiteOverride?: RevisionAttribution | null;
   readonly linkOverride?: SpanLinkRecord;
+  /** The `w:dir` and `w:bdo` wrappers captured for an atomic field, used instead of the live stack. */
+  readonly directivesOverride?: { readonly bidiDirectives?: readonly BidiDirective[] };
   /** Marks this piece as a field's displayed result, for the shading Word draws under one. */
   readonly fieldAtom?: FieldAtomMarker;
 }
@@ -577,6 +621,11 @@ export interface PendingFieldProjection {
    * the one run in the link painting with no href.
    */
   resultLink?: SpanLinkRecord;
+  /**
+   * The direction wrappers of the field's begin marker, or else of its first displayed result
+   * run; absent until one of them supplies an answer, which may be no wrapper at all.
+   */
+  resultDirectives?: { readonly bidiDirectives?: readonly BidiDirective[] };
 }
 
 /** A slice of `piece` covering `[from, to)` of its text, in the given font slot. */

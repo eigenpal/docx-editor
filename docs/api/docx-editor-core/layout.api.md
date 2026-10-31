@@ -1667,6 +1667,7 @@ export interface InlineDrawingRecord {
     // (undocumented)
     readonly baselineOffset: number;
     readonly bidiLevel?: number;
+    readonly bidiRunDirection?: 'ltr' | 'rtl';
     readonly chart?: DrawingChartSummary;
     // @internal
     readonly chartFallbackResource?: ImageResourceState;
@@ -3209,9 +3210,11 @@ export interface ResolvedRunStyle {
         readonly context?: ShapingContext;
         readonly direction: 'ltr' | 'rtl';
         readonly level: number;
+        readonly override?: 'ltr' | 'rtl';
         readonly runDirection?: 'ltr' | 'rtl';
         readonly script: string;
         readonly wordSpacingPt?: number;
+        readonly wrapperGroup?: true;
     };
     // (undocumented)
     readonly smallCaps: boolean;
