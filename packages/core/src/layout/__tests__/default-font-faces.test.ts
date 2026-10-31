@@ -9,7 +9,9 @@ import {
   fontTableChineseFaces,
   fontTableEastAsianFaces,
   isChineseFace,
+  isDefaultEastAsianFace,
   isEastAsianFace,
+  isEastAsianFontFamily,
 } from '../../store/package/default-font-faces.ts';
 import { openHeadlessDocument } from '../../store/headless-document-view.ts';
 import { applyEastAsiaFontSlots, type FieldAwarePiece } from '../field-pieces.ts';
@@ -174,7 +176,12 @@ describe('East Asian default faces for punctuation compression', () => {
       '<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="14"/></w:compat></w:settings>',
     '/word/settings.xml'
   );
-  const cascade = (face: string, table: readonly string[] = []) =>
+  const modernCompression = root(
+    `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/>` +
+      '<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>',
+    '/word/settings.xml'
+  );
+  const cascade = (face: string, table: readonly string[] = [], settings = legacyCompression) =>
     buildStyleCascadeTable(
       root(
         `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr>` +
@@ -183,7 +190,7 @@ describe('East Asian default faces for punctuation compression', () => {
         '/word/styles.xml'
       ),
       { major: null, minor: null, eastAsianFontTableFaces: table },
-      legacyCompression
+      settings
     );
 
   test('a known default face shrinks justified spaces in a legacy mode with compression', () => {
@@ -222,6 +229,70 @@ describe('East Asian default faces for punctuation compression', () => {
     ['Apple SD Gothic Neo', [], true],
   ] as const)('%s with table %j is East Asian: %s', (face, table, eastAsian) => {
     expect(isEastAsianFace(face, table)).toBe(eastAsian);
+  });
+
+  // Probe set p1725 (no font table, modes 14 and 15 alike): the default East Asian face that
+  // turns compression on.
+  test.each([
+    ['MS Mincho', true],
+    ['Noto Sans CJK JP', true],
+    ['Osaka', true],
+    ['Osaka-Mono', true],
+    ['Nanum Gothic', true],
+    ['NanumGothic', true],
+    // A full-width at sign is not a vertical-writing name; its full-width character counts.
+    ['＠MS Mincho', true],
+    ['ＰｉｎｇＦａｎｇ ＳＣ', true],
+    ['Ｈｉｒａｇｉｎｏ Ｓａｎｓ', true],
+    ['Songti SC', true],
+    ['STHeiti', true],
+    ['Microsoft YaHei', true],
+    ['Apple SD Gothic Neo', true],
+    ['Foo 明朝', true],
+    ['未知書体', true],
+    ['미지글꼴', true],
+    ['Ｆｏｏ', true],
+    ['ヒラギノ角ゴシック', true],
+    ['Hiragino Sans', false],
+    ['Hiragino Mincho ProN', false],
+    ['Hiragino Kaku Gothic ProN', false],
+    ['Hiragino Sans GB', false],
+    ['PingFang SC', false],
+    ['PingFang HK', false],
+    ['Heiti TC', false],
+    ['Noto Sans CJK SC', false],
+    ['Foo Sans', false],
+    ['Foo Mincho', false],
+    ['Arial', false],
+    ['@MS Mincho', false],
+    // The family name alone does not count; its face names do.
+    ['Klee', false],
+    ['Klee Medium', true],
+    ['Klee One', true],
+  ] as const)('default face %s counts: %s', (face, counts) => {
+    expect(isDefaultEastAsianFace(face, [])).toBe(counts);
+    expect(cascade(face).typography?.sourceEastAsianFont).toBe(counts);
+    expect(cascade(face, [], modernCompression).typography?.sourceEastAsianFont).toBe(counts);
+  });
+
+  test('the font table still makes an uncounted system family count', () => {
+    expect(isDefaultEastAsianFace('  HIRAGINO SANS ', [])).toBe(false);
+    expect(isDefaultEastAsianFace('OSAKA', [])).toBe(true);
+    expect(cascade('PingFang SC', ['pingfang sc']).typography?.sourceEastAsianFont).toBe(true);
+    expect(isDefaultEastAsianFace('PingFang SC', ['pingfang sc'])).toBe(true);
+    expect(isDefaultEastAsianFace('Hiragino Sans', ['hiragino sans'])).toBe(true);
+    expect(isDefaultEastAsianFace('Arial', ['arial'])).toBe(false);
+  });
+
+  test('a Korean or Japanese face is never Chinese by the font table', () => {
+    expect(isChineseFace('Nanum Gothic', ['nanum gothic'])).toBe(false);
+    expect(isChineseFace('Osaka', ['osaka'])).toBe(false);
+    expect(isChineseFace('Klee Medium', ['klee medium'])).toBe(false);
+  });
+
+  test('the system families still count as East Asian for a font pick', () => {
+    for (const family of ['Hiragino Sans', 'PingFang SC', 'Heiti SC', 'Osaka'])
+      expect(isEastAsianFontFamily(family)).toBe(true);
   });
 
   test('the font table names Shift JIS, Hangul, GB2312, and Big5 faces', () => {
