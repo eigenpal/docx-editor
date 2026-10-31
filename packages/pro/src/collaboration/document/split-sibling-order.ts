@@ -211,6 +211,25 @@ export function splitSiblingRanks(
           )
         )
     );
+    // Whether each listed paragraph went in right before a member of the run: its author
+    // saw that member, so it stays with the paragraph listed before it. An undo or redo that
+    // goes in right before its own removed entry stands for the split it puts back.
+    const saw = blocks.flatMap((block) =>
+      block.items
+        .filter((item) => !item.deleted)
+        .flatMap((item) =>
+          (item.content.getContent() as LogicalId[]).map(
+            (_, at) =>
+              at === 0 &&
+              !relisted.has(item) &&
+              members.some(
+                (member) =>
+                  inItem(item.rightOrigin, member) &&
+                  !(member.deleted && listedAgain(nodes, item, member))
+              )
+          )
+        )
+    );
     const blockOf = blocks.flatMap((block, index) => idsOf([block]).map(() => index));
     const byText = orderOf(
       blocks,
@@ -221,7 +240,7 @@ export function splitSiblingRanks(
       (item) => relisted.has(item) || listedBySplit(nodes, item)
     );
     const order =
-      idsByPoints(listed, keyed, blockOf, pointsOf, children.doc, missing) ??
+      idsByPoints(listed, keyed, saw, blockOf, pointsOf, children.doc, missing) ??
       (byText ? idsOf(byText) : null);
     const shown = order ?? listed;
     const source = items[first - 1];
@@ -273,6 +292,8 @@ function idsByPoints(
   listed: readonly LogicalId[],
   /** Whether each listed paragraph is a split at its entry (`splitAt`). */
   keyed: readonly boolean[],
+  /** Whether each listed paragraph went in right before a member of the run. */
+  saw: readonly boolean[],
   /** The block of the run that lists each paragraph, in listed order. */
   blockOf: readonly number[],
   pointsOf: (id: LogicalId) => readonly SplitPoint[],
@@ -285,17 +306,33 @@ function idsByPoints(
   /** The block of the run that lists each unit's first paragraph. */
   const unitBlocks: number[] = [];
   const pointsKeys = new Set<string>();
+  const unitOf = new Map<LogicalId, LogicalId[]>();
+  const followers = new Set<LogicalId>();
   for (const [at, id] of listed.entries()) {
     const key = pointsOf(id)
       .map((point) => `${point.source}@${point.at}`)
       .join('\n');
     const taken = pointsKeys.has(key);
     if (keyed[at]) pointsKeys.add(key);
-    if (keyed[at] && !taken) {
-      units.push([id]);
+    // A paragraph split off one that follows another goes with it: its split point tells
+    // where it stands in the text the follower holds, not in the run.
+    const source = pointsOf(id).at(-1)?.source;
+    const unit = saw[at]
+      ? unitOf.get(listed[at - 1]!)
+      : keyed[at] && !taken && !(source && followers.has(source))
+        ? null
+        : source && followers.has(source)
+          ? unitOf.get(source)!
+          : units.at(-1);
+    if (unit === undefined) return null;
+    if (unit) followers.add(id);
+    const into = unit ?? [];
+    if (!unit) {
+      units.push(into);
       unitBlocks.push(blockOf[at]!);
-    } else if (units.length > 0) units.at(-1)!.push(id);
-    else return null;
+    }
+    into.push(id);
+    unitOf.set(id, into);
   }
   if (units.length < 2) return null;
   const points = units.map((unit) => pointsOf(unit[0]!));
