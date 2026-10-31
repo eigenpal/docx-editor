@@ -147,7 +147,8 @@ test('a line added above an indented citing paragraph places its note alike', as
   bob.surface!.type(' typed');
   resume();
   const grown = converged();
-  expect(grown).not.toBe(opened);
+  // Too little room is left for a two-line opening, so the citing line and its note move on.
+  expect(grown).toBe('Cited 1, notes 0 4');
 
   alice.surface!.undo();
   alice.surface!.undo();
