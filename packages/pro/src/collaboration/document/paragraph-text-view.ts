@@ -29,6 +29,7 @@ import {
 } from './paragraph-text.ts';
 import type { FollowingText } from './paragraph-text-follow.ts';
 import { placeFollowingText, type FollowingSlot } from './paragraph-text-placement.ts';
+import { sharedDelta } from './paragraph-text-strikes.ts';
 
 type Delta = { insert?: unknown; attributes?: Record<string, unknown> }[];
 
@@ -41,7 +42,7 @@ function inlineItems(
   view?: ParagraphView,
   onCharacter?: (character: SharedCharacter | null) => void
 ): readonly LinearItem[] {
-  const delta = text.toDelta() as Delta;
+  const delta = sharedDelta(text) as Delta;
   if (!view) return decodeItems(delta, embedOf, limits, paragraphId);
   const shown = view.shown(text);
   if (shown.hidden.size > 0 || shown.incoming.length > 0) view.noteDrift();
@@ -120,7 +121,7 @@ function followingItems(
   const decoded = new Map<number, FollowingItem>();
   if (!text) return decoded;
   let position = 0;
-  for (const op of text.toDelta() as Delta) {
+  for (const op of sharedDelta(text) as Delta) {
     const length = typeof op.insert === 'string' ? op.insert.length : 1;
     if (typeof op.insert === 'string') {
       let attributes: ReturnType<typeof decodeAttributes> | null = null;

@@ -19,6 +19,7 @@ import {
   type InlineEmbed,
 } from './paragraph-text.ts';
 import { revisionTrail, withoutRevisions } from './paragraph-text-revisions.ts';
+import { sharedDelta } from './paragraph-text-strikes.ts';
 
 /** One position of a paragraph's inline sequence, as shared text holds it. */
 export interface Token {
@@ -48,7 +49,10 @@ export function tokensOfText(
 ): Token[] {
   const tokens: Token[] = [];
   let position = 0;
-  for (const op of text.toDelta() as { insert: unknown; attributes?: Record<string, string> }[]) {
+  for (const op of sharedDelta(text) as {
+    insert: unknown;
+    attributes?: Record<string, string>;
+  }[]) {
     const attributes = op.attributes ?? {};
     const trail = context ? revisionTrail(attributes, context.limits, context.paragraphId) : '';
     if (typeof op.insert === 'string') {

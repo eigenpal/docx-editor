@@ -34,6 +34,7 @@ import { followAnchorAt, insertFollowing, insertTyped } from './paragraph-text-a
 import { hasRevisions } from './paragraph-text-revisions.ts';
 import type { DocumentRegistry } from './registry.ts';
 import { awaitingUpdates } from './yjs-items.ts';
+import { sharedDelta } from './paragraph-text-strikes.ts';
 
 /** An insert the general path would write as one insert, and what it needs to write it. */
 export interface TypedInsert {
@@ -88,7 +89,7 @@ export function typedInsertOf(
   if (shown.hidden.size > 0 || shown.incoming.length > 0) return null;
 
   // The typed value's characters, and the tokens beside the place the insert goes.
-  const delta = text.toDelta() as { insert: unknown; attributes?: InlineAttributes }[];
+  const delta = sharedDelta(text) as { insert: unknown; attributes?: InlineAttributes }[];
   let at = 0;
   let start = -1;
   let count = 0;

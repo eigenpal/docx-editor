@@ -16,6 +16,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import type * as Y from 'yjs';
 import { REVISION_PREFIX, SUPERSEDED_KEY } from './paragraph-text-revisions.ts';
+import { withoutStrikesSeen } from './paragraph-text-strikes.ts';
 import type { Step, Token } from './paragraph-text-diff.ts';
 
 type Changes = Readonly<Record<string, string | null>>;
@@ -71,7 +72,7 @@ export function formatDecidedDeletions(
       // typed into it at the same time is in none of the revisions the decision removed. It
       // also takes the kept neighbor's other changes, a text element's kind among them, so the
       // peer's text reads as the text around it does after the decision.
-      const changes: Record<string, string | null> = { ...beside };
+      const changes: Record<string, string | null> = { ...withoutStrikesSeen(beside) };
       for (let at = index; at < end; at += 1) {
         for (const key of Object.keys(before[at]!.attributes)) {
           if (key.startsWith(REVISION_PREFIX) || key === SUPERSEDED_KEY) changes[key] = null;
