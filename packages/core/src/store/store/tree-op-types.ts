@@ -8,7 +8,11 @@ import type { SetTextFormFieldDefaultOp, CommitTextFormFieldOp } from './text-fo
 import type { SetLegacyCheckboxOp } from './legacy-checkbox-fields.ts';
 import type { InsertBuildingBlockOp } from './building-block-insert.ts';
 import type { InsertBookmarkOp, DeleteBookmarkOp } from './tree-op-bookmarks.ts';
-import type { InsertTableOp, MoveTableOp } from './table-placement-op-types.ts';
+import type {
+  InsertParagraphBesideTableOp,
+  InsertTableOp,
+  MoveTableOp,
+} from './table-placement-op-types.ts';
 // The op vocabulary and effect/rejection contracts (tree-ops seam).
 //
 // This module owns what an op IS — the declarative, JSON-safe `TreeDocOp` shapes, the
@@ -640,6 +644,7 @@ export type TreeDocOp =
     }
   | InsertTableOp
   | MoveTableOp
+  | InsertParagraphBesideTableOp
   | {
       /** Insert a fresh row above or below a canonical table row. */
       readonly op: 'insertTableRow';
@@ -687,6 +692,8 @@ export type TreeDocOp =
       readonly op: 'mergeTableCells';
       readonly tableId: string;
       readonly cellIds: readonly string[];
+      /** Merge inside this author's own pending table insertion; new structure joins it. */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /** Split one cell into `rows` by `columns` equal cells; a one-row cell adds rows. */
@@ -695,6 +702,8 @@ export type TreeDocOp =
       readonly cellId: string;
       readonly rows: number;
       readonly columns: number;
+      /** Split inside this author's own pending table insertion; new structure joins it. */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /**
@@ -1256,6 +1265,8 @@ export type TreeOpRejection =
   | 'cell-has-revision'
   /** The split cells would be narrower than the minimum column width. */
   | 'cell-too-narrow'
+  /** A whole-cell value write addresses a cell that is not one plain paragraph. */
+  | 'unsupported-cell-content'
   /** Without `w:tblGrid`, a cell splits only into a divisor of the columns it spans. */
   | 'split-needs-grid'
   /** The addressed grid column id is missing or ambiguous without `w:tblGrid`. */

@@ -1,5 +1,6 @@
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import { findNode } from '../store/package/ooxml-edit.ts';
+import { isOwnPendingTableInsertion } from '../store/store/table-authoring-plan.ts';
 import type { TreeDocOp } from '../store/store/tree-op-types.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import { SUGGESTING_CELL_STRUCTURE_REFUSAL } from './table-cell-structure-plan.ts';
@@ -20,10 +21,36 @@ export function tableLookupIn(
   };
 }
 
+/** Whether a table is the author's own pending insertion, in whichever part holds it. */
+export function ownProposedTableIn(
+  session: Pick<TreeDocxSessionView, 'currentPackage' | 'part' | 'storyParts'>,
+  author: string | undefined
+): (tableId: string) => boolean {
+  return (tableId) => {
+    const part = author?.trim() ? partOfNodeId(session, tableId) : null;
+    return part !== null && isOwnPendingTableInsertion(part.root, tableId, author!);
+  };
+}
+
+/** {@link suggestingStructureRefusal} for ops against a session, by the suggesting author. */
+export function suggestingRefusalIn(
+  session: Pick<TreeDocxSessionView, 'currentPackage' | 'part' | 'storyParts'>,
+  author: string | undefined,
+  ops: readonly TreeDocOp[]
+): string | null {
+  return suggestingStructureRefusal(
+    ops,
+    tableLookupIn(session),
+    ownProposedTableIn(session, author)
+  );
+}
+
 /** Refuse structural writes that cannot create tracked changes. */
 export function suggestingStructureRefusal(
   ops: readonly TreeDocOp[],
-  isTable: (blockId: string) => boolean
+  isTable: (blockId: string) => boolean,
+  /** Merge and split join the author's own proposed table, so they track there. */
+  isOwnProposedTable: (tableId: string) => boolean = () => false
 ): string | null {
   // Outright note removal deletes both its reference and body without a tracked change.
   // Strike the reference instead; accepting that strike removes the body.
@@ -37,9 +64,10 @@ export function suggestingStructureRefusal(
   if (ops.some(removesControl)) {
     return 'suggesting cannot remove a content control outright';
   }
-  // Cell merge and split have no tracked form either, so applying them would be untracked.
+  // Cell merge and split track only inside the author's own proposed table, where the new
+  // structure joins that insertion. Anywhere else, applying them would be untracked.
   const restructuresCells = (op: TreeDocOp) =>
-    op.op === 'mergeTableCells' || op.op === 'splitTableCell';
+    (op.op === 'mergeTableCells' || op.op === 'splitTableCell') && !isOwnProposedTable(op.tableId);
   if (ops.some(restructuresCells)) return SUGGESTING_CELL_STRUCTURE_REFUSAL;
   // A tracked table deletion would mark every row deleted, but the store refuses a tracked
   // deletion of the last live row, so a whole-table deletion has no tracked form.

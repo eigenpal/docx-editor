@@ -177,6 +177,7 @@ type StructureMethods = Pick<
   | 'canAdjustIndent'
   | 'exitListOnEmptyItem'
   | 'removeListNumber'
+  | 'removeParagraphIndent'
   | 'sectionProperties'
   | 'sectionPropertiesAt'
   | 'sectionAnchorParagraphAt'
@@ -479,7 +480,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         const next = level + step;
         if (next < 0 || next > MAX_LIST_LEVEL) continue;
         if (!ensureListLevel(marker, next)) continue;
-        ops.push(listNumbering.levelOp(paragraphId, marker.numId, next));
+        ops.push(...listNumbering.levelOps(paragraphId, marker.numId, level, next));
         continue;
       }
       // The step moves from the EFFECTIVE indent (what the user sees, cascade included),
@@ -599,6 +600,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
 
     exitListOnEmptyItem: listExit.exitListOnEmptyItem,
     removeListNumber: listExit.removeListNumber,
+    removeParagraphIndent: listExit.removeParagraphIndent,
 
     isListParagraph() {
       const { paragraphId } = orderedStart();

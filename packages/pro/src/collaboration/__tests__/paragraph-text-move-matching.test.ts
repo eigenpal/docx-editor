@@ -121,6 +121,63 @@ describe('move matching', () => {
   });
 });
 
+/** Paragraphs this edit creates, one for each value, of letters in a new text element. */
+function newParagraphs(values: readonly string[]): ParagraphWrite<Token>[] {
+  return values.map((value) => {
+    const after = chars(value, 'new').map(({ insert, attributes }) => ({ insert, attributes }));
+    return {
+      before: [],
+      after,
+      steps: after.map((_, at) => ({ op: 'ins' as const, after: at })),
+      identities: [],
+    };
+  });
+}
+
+describe('move matching of split pieces', () => {
+  /** "One; two; three" keeps "One" and deletes the rest. */
+  function splitSource(): ParagraphWrite<Token> {
+    const before = chars('One; two; three', 'one');
+    return {
+      before,
+      after: before.slice(0, 3),
+      steps: before.map((_, at) =>
+        at < 3 ? { op: 'eq', before: at, after: at } : { op: 'del', before: at }
+      ),
+      identities: before.map((_, at) => `5:${at}`),
+    };
+  }
+
+  function mark(writes: readonly ParagraphWrite<Token>[]): void {
+    markMoves(
+      writes,
+      (token, origin) => ({ ...token, attributes: { ...token.attributes, [ORIGIN_KEY]: origin } }),
+      (token) => JSON.stringify(token.attributes),
+      (token) => token.attributes.t ?? ''
+    );
+  }
+
+  test('pieces of a split that trims its delimiters keep the identities they copy', () => {
+    const [two, three] = newParagraphs(['two', 'three']) as [
+      ParagraphWrite<Token>,
+      ParagraphWrite<Token>,
+    ];
+    mark([splitSource(), two, three]);
+    expect(originsOf(two.after)).toEqual(['5:5', '5:6', '5:7']);
+    expect(originsOf(three.after)).toEqual(['5:10', '5:11', '5:12', '5:13', '5:14']);
+  });
+
+  test('a few of the deleted letters in new paragraphs are not pieces of it', () => {
+    const [first, second] = newParagraphs(['t', 'e']) as [
+      ParagraphWrite<Token>,
+      ParagraphWrite<Token>,
+    ];
+    mark([splitSource(), first, second]);
+    expect(originsOf(first.after)).toEqual([null]);
+    expect(originsOf(second.after)).toEqual([null]);
+  });
+});
+
 describe('move matching cost', () => {
   test('an edit that rewrites many paragraphs stays within its comparison budget', () => {
     // Four hundred paragraphs lose their text and four hundred others get new text of the

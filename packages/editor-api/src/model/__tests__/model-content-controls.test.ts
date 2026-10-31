@@ -373,6 +373,32 @@ describe('a control is written through the document’s own write path', () => {
     expect(xml).not.toContain('<w:t>☒</w:t>');
   });
 
+  test('replacing a checkbox glyph with the checked glyph ticks the box in place', async () => {
+    const runtime = await serverRuntime(CHECKBOX);
+    await runtime.run(async (context) => {
+      const control = context.document.contentControls.getFirst();
+      control.getRange('Content').insertText('☒', 'Replace');
+      await context.sync();
+    });
+    const xml = await mainXmlOf(runtime);
+    expect(xml).toContain('w14:val="1"');
+    expect(xml).toMatch(/<w:sdtContent><w:p[ >].*<w:sym w:char="2612" w:font="MS Gothic"\/>/);
+  });
+
+  test('replacing a checkbox glyph with other text is refused', async () => {
+    const runtime = await serverRuntime(CHECKBOX);
+    const before = await mainXmlOf(runtime);
+    const code = await codeOf(() =>
+      runtime.run(async (context) => {
+        const control = context.document.contentControls.getFirst();
+        control.getRange('Content').insertText('yes', 'Replace');
+        await context.sync();
+      })
+    );
+    expect(code).toBe('NotSupported');
+    expect(await mainXmlOf(runtime)).toBe(before);
+  });
+
   test('writing into a control showing its prompt replaces the whole prompt', async () => {
     const runtime = await serverRuntime(PROMPT);
     const after = await runtime.run(async (context) => {

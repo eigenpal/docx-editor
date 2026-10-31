@@ -79,6 +79,7 @@ export function openDiagnosticCode(reason: string, limit?: string): DocumentOpen
 /** Reasons the hosts write themselves, beside the store's. */
 type HostRejectionToken =
   | 'automation-structural-tracking-unsupported'
+  | 'unsupported-tracked-table-operation'
   | 'unsupported-story'
   | 'experimental-collaboration-body-text-only'
   | 'review-module-required'
@@ -136,9 +137,11 @@ const STORE_EDIT_CODES: Readonly<
   'cell-too-narrow': 'edit.table-split-unsupported',
   'split-needs-grid': 'edit.table-split-unsupported',
   'cell-has-revision': 'edit.revision-unsupported',
+  'unsupported-cell-content': 'edit.unsupported-content',
   trackedDrawingDeletionUnsupported: 'edit.tracked-drawing-delete-unsupported',
   packageTransactionRequired: 'edit.tracked-structure-unsupported',
   'automation-structural-tracking-unsupported': 'edit.tracked-structure-unsupported',
+  'unsupported-tracked-table-operation': 'edit.tracked-structure-unsupported',
   'unsupported-revision': 'edit.revision-unsupported',
   'unsupported-revision:foreign-insertion': 'edit.tracked-foreign-revision-unsupported',
   'unknown-revision': 'edit.stale-target',

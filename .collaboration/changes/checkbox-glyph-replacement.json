@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A replacement over exactly a checkbox control's glyph struck the glyph and wrote the text in a run beside the control, which left the control empty.",
+  "after": "A state glyph over a checkbox's glyph plans the existing setContentControlValue op, so the glyph and w14:checked change inside the control. Other text is refused before any op is emitted.",
+  "reason": "Peers replicate the existing content-control value op, which released participants already apply with the same meaning. No shared format field changes.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-checkbox-glyph-replace.test.ts",
+    "packages/core/src/automation/__tests__/checkbox-glyph-replace.test.ts"
+  ],
+  "changeset": "checkbox-glyph-replacement",
+  "migration": null
+}

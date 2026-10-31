@@ -13,6 +13,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 import { projectTypingOrJournal } from './document/projected-journal.ts';
+import { prepareMemberRootJournal } from './document/prepare-member-root-journal.ts';
 import { editWaits } from './document/journal.ts';
 import { markRestoredText } from './document/paragraph-text-restore.ts';
 import { awaitingUpdates } from './document/yjs-items.ts';
@@ -559,11 +560,18 @@ class DocumentSession implements DocumentCollaborationSession {
     // Custom ports and headless stores can publish without the editor's operation gate.
     // Enforce admission here too, before minting identities or publishing document/blob data.
     if (!this.canWriteSharedState()) return;
+    const translated = this.identityMap.translate(journal);
+    const memberRefusal = prepareMemberRootJournal(this.materializer, translated, () =>
+      awaitingUpdates(this.ydoc)
+    );
+    if (memberRefusal) {
+      this.refuseLocalJournal(memberRefusal.failure, memberRefusal.transient);
+      return;
+    }
+    // After the member refresh: drift it notes belongs to earlier journals, not this one.
     this.registry.inline.takeDrift();
-    const projected = projectTypingOrJournal(
-      this.registry,
-      this.identityMap.translate(journal),
-      (id) => this.materializer.shownPartChildren(id)
+    const projected = projectTypingOrJournal(this.registry, translated, (id) =>
+      this.materializer.shownPartChildren(id)
     );
     if (!projected.ok) {
       this.refuseLocalJournal({

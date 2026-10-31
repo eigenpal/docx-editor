@@ -1,5 +1,6 @@
 import { withDisplayedHyphens } from '../package/hyphen-text.ts';
 import { withTailStyle } from './tree-op-paragraph-tail.ts';
+import { withInsertionHints } from './tree-op-text-splice-hints.ts';
 import { applySetFieldCode } from './tree-op-field-code.ts';
 import { applyTableAuthoring } from './tree-op-table-batch.ts';
 import { applyTableProperties } from './tree-op-table-authoring.ts';
@@ -175,6 +176,7 @@ import {
 } from './tree-op-toc.ts';
 import { applyInsertTable } from './tree-op-insert-table.ts';
 import { applyMoveTable } from './tree-op-move-table.ts';
+import { applyInsertParagraphBesideTable } from './tree-op-paragraph-beside-table.ts';
 import { applyReplaceStoryBlocks } from './tree-op-story-replace.ts';
 import {
   inlineWrapperProperties,
@@ -244,7 +246,9 @@ function runElement(nextId: () => string, children: readonly OoxmlNode[]): Ooxml
  * quadratic in document size.
  */
 export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOptions): TreeOpResult {
-  return withBookmarkEditRules(part, op, options, () => applyValidatedTreeOp(part, op, options));
+  const run = () =>
+    withBookmarkEditRules(part, op, options, () => applyValidatedTreeOp(part, op, options));
+  return op.op === 'insertText' ? withInsertionHints(part, op.paragraphId, op.offset, run) : run();
 }
 
 function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOptions): TreeOpResult {
@@ -326,6 +330,8 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
   if (isBookmarkTreeOp(op)) return applyBookmarkOp(part, op, options);
   if (op.op === 'insertTable') return applyInsertTable(part, op, options);
   if (op.op === 'moveTable') return applyMoveTable(part, op, options);
+  if (op.op === 'insertParagraphBesideTable')
+    return applyInsertParagraphBesideTable(part, op, options, applyTreeOp);
   if (op.op === 'deleteBlock') return applyDeleteBlock(part, op.blockId, options);
   if (op.op === 'insertToc') return applyInsertToc(part, op, options);
   if (op.op === 'replaceTocResult') return applyReplaceTocResult(part, op, options);

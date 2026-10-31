@@ -39,7 +39,8 @@ import {
 } from '../runtime/model-support.ts';
 import { RangeCollection, type PromisedItem } from './collections.ts';
 import { List, ListItem } from './lists.ts';
-import { requireStyleName } from './addressing.ts';
+import { requireStyleName, spanRefOf } from './addressing.ts';
+import { Table, tableInsertion } from './tables.ts';
 import { Font } from './font.ts';
 import {
   besideLocation,
@@ -534,6 +535,34 @@ export class Paragraph extends ModelObject implements PromisedItem {
       }
     );
     return created;
+  }
+
+  /**
+   * Insert a rectangular table before or after this paragraph.
+   * TrackMineOnly marks rows, cell marks, and values inserted, as `Range.insertTable` does.
+   * Sync before configuring the returned table. A table inside a table cell refuses.
+   */
+  insertTable(
+    rowCount: number,
+    columnCount: number,
+    insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After',
+    values?: string[][]
+  ): Table {
+    const target = `${this.path.label}.insertTable`;
+    if (insertLocation !== 'Before' && insertLocation !== 'After')
+      fail({ code: 'InvalidArgument', target });
+    this.requireUsablePath();
+    const { table, plan, settle } = tableInsertion(
+      this.context,
+      target,
+      () => spanRefOf(this.path, 'paragraph'),
+      insertLocation,
+      rowCount,
+      columnCount,
+      values
+    );
+    this.commandCreating(table, target, plan, settle);
+    return table;
   }
 
   /**

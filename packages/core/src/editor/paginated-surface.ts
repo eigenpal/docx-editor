@@ -230,7 +230,7 @@ import type {
 } from './paginated-surface-contract.ts';
 import type { ExecResult, SelectionPin, ViewScope } from '../contracts/editor.ts';
 import type { TableCommandPlan } from './table-command-plan.ts';
-import { suggestingStructureRefusal, tableLookupIn } from './surface-suggesting-structure.ts';
+import { suggestingRefusalIn } from './surface-suggesting-structure.ts';
 import { wholeTableDeletionPlan } from './table-select-plan.ts';
 import {
   createSurfaceTableSelectHandle,
@@ -3008,7 +3008,7 @@ export function mountPaginatedSurface(
     }
     // Without an author, refuse every suggested edit instead of writing untracked changes.
     if (editingMode === 'suggest' && !author?.trim() && edits) return AUTHOR_WRITE_REFUSAL;
-    if (editingMode === 'suggest') return suggestingStructureRefusal(ops, tableLookupIn(session));
+    if (editingMode === 'suggest') return suggestingRefusalIn(session, author, ops);
     return null;
   }
 
@@ -4612,8 +4612,9 @@ export function mountPaginatedSurface(
           );
           return;
         }
-        // A list item's first Backspace removes its number, not the paragraph break.
+        // Number first, then indent: Backspace reaches the paragraph break only after both.
         if (surface.removeListNumber(position.paragraphId)) return;
+        if (surface.removeParagraphIndent(position.paragraphId)) return;
         const order = paragraphOrder();
         const index = order.indexOf(position.paragraphId);
         const previous = order[index - 1];

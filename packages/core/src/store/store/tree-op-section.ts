@@ -41,6 +41,7 @@ import type {
 } from './tree-op-types.ts';
 import { ownProposedParagraph, withPropertyChangeRecord } from './tree-op-tracked-properties.ts';
 import { readTwipsMeasure } from '../units.ts';
+import { withoutOwnLevelIndent } from './tree-op-list-level-indent.ts';
 import { build } from './tree-op-tracked.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import {
@@ -200,7 +201,9 @@ export function applySetSectionProperties(
  * Rewrites `w:numPr/w:ilvl` in place rather than rebuilding `w:pPr`: `w:numId` and every
  * other paragraph property have to survive, and the level is the ONLY thing this op
  * states. A paragraph without `w:numPr` is not a list item, so there is no level to move
- * and the edit is refused — Increase Indent on a plain paragraph is a different op.
+ * and the edit is refused — Increase Indent on a plain paragraph is a different op. A move
+ * to another level also drops the paragraph's own leading and first-line indent, so the
+ * item takes the new level's (`withoutOwnLevelIndent`).
  */
 function applySetListLevelUntracked(
   part: OoxmlPart,
@@ -225,11 +228,16 @@ function applySetListLevelUntracked(
     (child) => child.kind !== 'textValue' && child.localName === 'ilvl'
   );
   const replacement = sectionElement(nextId(), 'ilvl', [wmlAttribute('val', String(level))], []);
-  if (ilvl) {
-    return fromEdit(replaceNode(part, ilvl.id, replacement, options), effect);
-  }
   // Absent `w:ilvl` reads as level 0 (17.9.3); writing it makes the demotion explicit.
-  return fromEdit(insertChildren(part, numPr.id, 0, [replacement], options), effect);
+  const written = ilvl
+    ? replaceNode(part, ilvl.id, replacement, options)
+    : insertChildren(part, numPr.id, 0, [replacement], options);
+  // With no `w:ilvl` of its own, the item can take its level from its style's `w:numPr`, which
+  // this op cannot see, so writing one is a move.
+  const own = attributeValueOf(ilvl, 'val');
+  const moved = own === undefined || Number.parseInt(own, 10) !== level;
+  if (!written.ok || !moved) return fromEdit(written, effect);
+  return fromEdit(withoutOwnLevelIndent(written.part, paragraph.id, options), effect);
 }
 
 /**
