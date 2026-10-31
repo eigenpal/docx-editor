@@ -74,7 +74,6 @@ import { planListAuthoring } from './plan-list-authoring.ts';
 import type { OoxmlProperty, TreeDocOp } from '../store/store/tree-ops.ts';
 import { isSearchableQuery } from '../store/store/text-match.ts';
 import { directParagraphProperties, mergedProperties } from '../store/store/direct-properties.ts';
-import type { FormattingDisplayMode } from '../store/store/formattable-runs.ts';
 import {
   fontProperties,
   fontVerticalProperties,
@@ -84,7 +83,6 @@ import {
   type AutomationFontWrite,
   type AutomationParagraphFormatWrite,
 } from './formatting.ts';
-import type { AutomationHandleTable } from './handles.ts';
 import type {
   AutomationOperation,
   AutomationSearchOptions,
@@ -92,12 +90,7 @@ import type {
   AutomationTextProjection,
 } from './operations.ts';
 import { createBatchCommandPolicy } from './batch-command-policy.ts';
-import type {
-  AutomationCapabilities,
-  AutomationHandle,
-  AutomationSpan,
-  AutomationValue,
-} from './protocol.ts';
+import type { AutomationHandle, AutomationSpan, AutomationValue } from './protocol.ts';
 import {
   scopedStoryReads,
   PARAGRAPH_MARK,
@@ -129,7 +122,6 @@ import { pageSetupProperties } from './sections.ts';
 import { projectedSearchSpans } from './search.ts';
 import type { NoteKind } from '../store/package/note-nodes.ts';
 import { paragraphStyleName, styleIdFor } from './styles.ts';
-import type { StoryScope } from '../store/store/tree-package-store.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
 import { planProposal, trackedParagraphInsertError, trackedProposalOf } from './plan-proposal.ts';
 import { planRevisionDecision } from './revision-operations.ts';
@@ -173,55 +165,8 @@ interface Slot {
   id: string | null;
 }
 
-export interface BatchPlannerHost {
-  readonly collaborative?: boolean;
-  readonly trackedRangeReplacement?: boolean;
-  readonly fieldPageContext?: (
-    story: AutomationStoryId,
-    paragraphId: string,
-    fieldNodeId: string
-  ) => { pageNumber: number; pageNumberText?: string; pageCount: number } | null;
-  readonly handles: AutomationHandleTable;
-  readonly reads: AutomationPackageReads;
-  readonly capabilities: AutomationCapabilities;
-  /** The reader's view — see `AutomationDocumentPort.revisionDisplayMode`. */
-  readonly displayMode?: FormattingDisplayMode;
-  /** Where a tracked replacement lands — see `AutomationDocumentPort.replacementLanding`. */
-  readonly replacementLanding?: (paragraphId: string, start: number, end: number) => number | null;
-  /** Moves a reader's caret. Only called when `capabilities.selection` is true. */
-  readonly select?: (range: ResolvedRange, mode: AutomationSelectionMode) => boolean;
-  /** Why the host cannot select there now — see `AutomationDocumentPort.selectRefusal`. */
-  readonly selectRefusal?: (story: AutomationStoryId, paragraphId: string) => string | null;
-}
-
-export interface BatchPlanner {
-  plan(operation: AutomationOperation, trackingAuthor?: string): PlannedOperation;
-  /** Whether any planned operation writes. */
-  readonly hasCommands: boolean;
-  /**
-   * The transaction scope this batch's commands commit through, or null for a read-only batch.
-   *
-   * ONE scope, because one batch is one transaction and a transaction belongs to one story. A
-   * batch mixing two stories' writes is refused while planning rather than split into two
-   * commits: two commits are two revisions, two undo units and a window where half the caller's
-   * request is published — which is the partial application the batch rule exists to prevent.
-   */
-  readonly writeScope: StoryScope | null;
-  /**
-   * Bind created paragraphs and re-aim moved identities against the committed state.
-   *
-   * Runs before any command answers, and only when a transaction committed. A mismatch here
-   * means the planner's picture of what the ops would do disagrees with what they did, which
-   * is a bug in this file rather than in the caller's request — it is reported rather than
-   * papered over, because binding a slot to the wrong paragraph would hand back a handle that
-   * names the wrong thing forever.
-   */
-  settle(
-    post: AutomationPackageReads
-  ):
-    | { readonly ok: true }
-    | { readonly ok: false; readonly detail: string; readonly selection?: number };
-}
+import type { BatchPlanner, BatchPlannerHost } from './plan-planner-types.ts';
+export type { BatchPlanner, BatchPlannerHost };
 
 /** A handle whose object an edit, a peer, or an undo removed: reading again finds a fresh one. */
 const removed = (message: string) => refuse('invalid-handle', message, TARGET_REMOVED);
