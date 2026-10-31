@@ -381,9 +381,11 @@ function sourcePlace(
 }
 
 /**
- * What one block shows first: the copies of its first paragraph that is still listed and that
- * a split listed there. A deleted paragraph has no text to read, so a paragraph split off it
+ * What one block shows first: the copies of its first paragraph that is still listed, when a
+ * split listed it there. A deleted paragraph has no text to read, so a paragraph split off it
  * stands for it; a block moved after it has copies of its own, which tell nothing of a split.
+ * A block whose first listed paragraph no split listed there shows no copies: a paragraph split
+ * off that one tells where it goes after it, not where the block goes.
  */
 function blockCopies(
   block: Block,
@@ -391,7 +393,8 @@ function blockCopies(
   keyed: (item: Y.Item) => boolean
 ): Identity[] {
   for (const item of block.items) {
-    if (item.deleted || !keyed(item)) continue;
+    if (item.deleted) continue;
+    if (!keyed(item)) return [];
     const copies = copiesOf(headId(item), textOf);
     if (copies.length > 0) return copies;
   }
@@ -416,7 +419,8 @@ function blockBefore(
 
 /**
  * The split points of one block: those of its first paragraph that is still listed and holds
- * any. A paragraph split off a deleted one keeps the deleted one's split point.
+ * any. A paragraph split off a deleted one keeps the deleted one's split point. A block whose
+ * first listed paragraph no split listed there has none, as with its copies.
  */
 function blockPoints(
   block: Block,
@@ -424,7 +428,8 @@ function blockPoints(
   keyed: (item: Y.Item) => boolean
 ): readonly SplitPoint[] {
   for (const item of block.items) {
-    if (item.deleted || !keyed(item)) continue;
+    if (item.deleted) continue;
+    if (!keyed(item)) return [];
     const points = pointsOf(headId(item));
     if (points.length > 0) return points;
   }
