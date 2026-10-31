@@ -50,8 +50,8 @@ export interface DocumentCollaborationSession extends EditorCollaborationSession
    *
    * A room only grows — deletion is a tombstone — and the limits that bound hostile
    * amplification turn terminal when crossed. Watch this to archive and re-room before that
-   * happens. The formatting marker count walks the node map once per call, so read it on your
-   * own schedule rather than per keystroke. To be told when growth matters, use
+   * happens. The tombstone and formatting marker counts walk the node map once per call, so
+   * read it on your own schedule rather than per keystroke. To be told when growth matters, use
    * {@link DocumentCollaborationSession.subscribeResourcePressure}.
    */
   resourceUsage(): CollaborationResourceUsage;
@@ -59,16 +59,17 @@ export interface DocumentCollaborationSession extends EditorCollaborationSession
   /**
    * Call `listener` when the room crosses a fraction of any cap that would end it.
    *
-   * The session checks the caps after every local or remote transaction, from counts it
-   * maintains, so a subscription costs no walk of the document. `listener` runs when the
-   * highest threshold the room reaches changes, in either direction: deleting content can
-   * lower the live node fraction, and a lower `threshold` (0 below every threshold) tells the
-   * host to clear its warning. It also runs once, synchronously, at subscription when the room
+   * The session checks the caps after every local or remote transaction. The node count is
+   * maintained, and the part, relationship and media totals are measured again only after
+   * they change, so typing costs no walk of the document. `listener` runs when the highest
+   * threshold the room reaches changes, in either direction: a lower `threshold` (0 below
+   * every threshold) tells the host to clear its warning. It also runs once, synchronously, at subscription when the room
    * already reaches a threshold, so a participant joining a large room learns of it at once.
    *
    * The reading names the cap closest to its limit. Call
-   * {@link DocumentCollaborationSession.resourceUsage} for every count. The listener stops
-   * after the session is destroyed.
+   * {@link DocumentCollaborationSession.resourceUsage} for every count. Destroying the session
+   * ends every subscription. A listener that throws is reported with `console.error` and does
+   * not stop the edit or other listeners.
    *
    * @param options - `thresholds` sets the fractions that notify. Default: `[0.75, 0.9]`.
    * @returns A function that ends the subscription.

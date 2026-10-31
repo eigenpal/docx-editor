@@ -8,14 +8,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // until compaction exists: these cases pin that it reports growth a host can act on, that
 // the server-side probe agrees with the session's, and that the probe leaks nothing.
 
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import * as Y from 'yjs';
 import type { TreeDocOp } from '@docx-editor.dev/core/store';
 import { readCollaborationResourceUsage } from '../resource-usage.ts';
 import {
+  PressureWatches,
   limitFailure,
   resourcePressureOf,
-  watchPressure,
   type CollaborationResourcePressure,
 } from '../resource-pressure.ts';
 import { DocumentRegistry } from '../document/index.ts';
@@ -122,130 +122,97 @@ describe('collaboration resource usage', () => {
   });
 });
 
-/** A registry with its own limits over a peer's shared state, read the way a session reads it. */
-function limitedView(peer: Peer, maxNodes: number, maxNodeRecords?: number) {
-  const registry = new DocumentRegistry(peer.ydoc, {
-    maxNodes,
-    ...(maxNodeRecords === undefined ? {} : { maxNodeRecords }),
-  });
+/** A registry with its own node cap over a peer's shared state, read the way a session reads it. */
+function limitedView(peer: Peer, maxNodes: number) {
+  const registry = new DocumentRegistry(peer.ydoc, { maxNodes });
   const blobs = new SharedBlobStore(peer.ydoc.getMap<Uint8Array>(SHARED_BLOBS_KEY));
   return { registry, blobs };
 }
 
-function splitAndJoin(peer: Peer, rounds: number): void {
-  for (let round = 0; round < rounds; round += 1) {
-    harness.apply(peer, [
-      { op: 'splitParagraph', paragraphId: harness.paragraphIdAt(peer, 0), offset: 2 },
-    ]);
-    harness.apply(peer, [
-      {
-        op: 'joinParagraphs',
-        firstId: harness.paragraphIdAt(peer, 0),
-        secondId: harness.paragraphIdAt(peer, 1),
-      },
-    ]);
-  }
+function split(peer: Peer): void {
+  harness.apply(peer, [
+    { op: 'splitParagraph', paragraphId: harness.paragraphIdAt(peer, 0), offset: 1 },
+  ]);
 }
 
-describe('node cap policy (#554)', () => {
-  test('tombstones count against the record ceiling, not the live node cap', async () => {
+function afterTransactionHandlers(ydoc: Y.Doc): number {
+  const observers = (ydoc as unknown as { _observers: Map<string, Set<unknown>> })._observers;
+  return observers.get('afterTransaction')?.size ?? 0;
+}
+
+describe('node cap (#554)', () => {
+  test('every record counts, and the failure names the limit that ended the room', async () => {
     const { alice } = await harness.pair(collaborationDocx());
-    splitAndJoin(alice, 3);
     const usage = alice.room.session.resourceUsage();
-    const live = usage.nodes - usage.tombstonedNodes;
-    expect(usage.tombstonedNodes).toBeGreaterThan(0);
-    expect(usage.maxNodeRecords).toBe(2 * usage.maxNodes);
-
-    // Every record would cross a cap of `live`, but only live records count against it.
-    const roomy = limitedView(alice, live);
-    expect(limitFailure(roomy.registry, roomy.blobs)).toBeNull();
-    expect(roomy.registry.counts.wouldExceed(roomy.registry.limits, 0)).toBe(false);
-    expect(roomy.registry.counts.wouldExceed(roomy.registry.limits, 1)).toBe(true);
-    roomy.registry.destroy();
-
-    // The record ceiling still bounds what tombstones hold.
-    const full = limitedView(alice, live, usage.nodes - 1);
-    expect(limitFailure(full.registry, full.blobs)).toEqual({
+    const fits = limitedView(alice, usage.nodes);
+    expect(limitFailure(fits.registry, fits.blobs)).toBeNull();
+    fits.registry.destroy();
+    const over = limitedView(alice, usage.nodes - 1);
+    expect(limitFailure(over.registry, over.blobs)).toEqual({
       code: 'too-many-nodes',
-      detail: `${usage.nodes}`,
+      detail: `nodes=${usage.nodes}`,
     });
-    full.registry.destroy();
-
-    const tight = limitedView(alice, live - 1);
-    expect(limitFailure(tight.registry, tight.blobs)).toEqual({
-      code: 'too-many-nodes',
-      detail: `${live}`,
-    });
-    tight.registry.destroy();
-  });
-
-  test('every replica counts the same tombstones as a fresh walk', async () => {
-    const { alice, bob } = await harness.pair(collaborationDocx());
-    splitAndJoin(alice, 2);
-    splitAndJoin(bob, 1);
-    // An undone join restores a tombstone; the redo sets it again.
-    expect(alice.room.session.undo()).toBe(true);
-    const afterUndo = alice.room.session.resourceUsage();
-    expect(readCollaborationResourceUsage(alice.ydoc)).toEqual(afterUndo);
-    expect(alice.room.session.redo()).toBe(true);
-    const carol = await harness.join(alice, 'carol');
-    const remounted = await harness.remount(bob);
-    const reading = alice.room.session.resourceUsage();
-    expect(reading.tombstonedNodes).toBeGreaterThan(0);
-    for (const peer of [remounted, carol]) {
-      expect(peer.room.session.resourceUsage()).toEqual(reading);
-    }
-    expect(readCollaborationResourceUsage(carol.ydoc)).toEqual(reading);
-    harness.expectConverged(alice, remounted);
-    harness.expectConverged(alice, carol);
+    over.registry.destroy();
   });
 });
 
 describe('resource pressure signal (#554)', () => {
-  test('notifies when growth crosses a threshold and again when it falls back', async () => {
+  test('notifies a peer when received growth crosses a threshold', async () => {
     const { alice, bob } = await harness.pair(collaborationDocx());
-    const start = alice.room.session.resourceUsage();
-    // Small limits make the live node count the cap closest to its limit.
-    const live = start.nodes - start.tombstonedNodes;
-    const view = limitedView(bob, live + 4);
+    // A small node cap makes nodes the limit closest to its cap.
+    const max = alice.room.session.resourceUsage().nodes + 4;
+    const view = limitedView(bob, max);
+    const watches = new PressureWatches();
     const seen: CollaborationResourcePressure[] = [];
-    const stop = watchPressure(
-      bob.ydoc,
-      view.registry,
-      view.blobs,
-      () => false,
-      (pressure) => seen.push(pressure)
-    );
+    watches.watch(bob.ydoc, view.registry, view.blobs, (pressure) => seen.push(pressure));
     expect(seen).toEqual([]);
-
-    // Each split adds live nodes on the author; the receiver's watch sees them arrive.
-    for (let round = 0; round < 4 && seen.length === 0; round += 1) {
-      harness.apply(alice, [
-        { op: 'splitParagraph', paragraphId: harness.paragraphIdAt(alice, 0), offset: 1 },
-      ]);
-    }
+    for (let round = 0; round < 4 && seen.length === 0; round += 1) split(alice);
     expect(seen).toHaveLength(1);
-    expect(seen[0]!.limit).toBe('nodes');
+    expect(seen[0]).toMatchObject({ limit: 'nodes', max });
     expect(seen[0]!.threshold).toBeGreaterThanOrEqual(0.75);
-    expect(seen[0]!.max).toBe(live + 4);
-
-    // Joining back tombstones the split paragraphs, so live usage falls below the thresholds.
-    for (let round = 0; round < 4 && seen.length === 1; round += 1) {
-      harness.apply(alice, [
-        {
-          op: 'joinParagraphs',
-          firstId: harness.paragraphIdAt(alice, 0),
-          secondId: harness.paragraphIdAt(alice, 1),
-        },
-      ]);
-    }
-    expect(seen).toHaveLength(2);
-    expect(seen.at(-1)!.threshold).toBe(0);
-    stop();
+    watches.stopAll();
     view.registry.destroy();
   });
 
-  test('a session subscription reports a room already over a threshold, then stops', async () => {
+  test('a throwing listener breaks neither the edit nor the other listeners', async () => {
+    const { alice } = await harness.pair(collaborationDocx());
+    const view = limitedView(alice, alice.room.session.resourceUsage().nodes + 4);
+    const watches = new PressureWatches();
+    const seen: CollaborationResourcePressure[] = [];
+    watches.watch(alice.ydoc, view.registry, view.blobs, () => {
+      throw new Error('host bug');
+    });
+    watches.watch(alice.ydoc, view.registry, view.blobs, (pressure) => seen.push(pressure));
+    const errors = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      for (let round = 0; round < 4 && seen.length === 0; round += 1) split(alice);
+      expect(seen).toHaveLength(1);
+      expect(errors).toHaveBeenCalledTimes(1);
+      expect(alice.room.session.status()).toBe('ready');
+    } finally {
+      errors.mockRestore();
+      watches.stopAll();
+      view.registry.destroy();
+    }
+  });
+
+  test('typing reads no part, relationship or blob total', async () => {
+    const { alice } = await harness.pair(collaborationDocx());
+    const view = limitedView(alice, 200_000);
+    const totals = spyOn(view.blobs, 'totalByteLength');
+    const watches = new PressureWatches();
+    watches.watch(alice.ydoc, view.registry, view.blobs, () => {});
+    expect(totals).toHaveBeenCalledTimes(1);
+    for (let round = 0; round < 3; round += 1) typeText(alice, 'key ');
+    expect(totals).toHaveBeenCalledTimes(1);
+    // A blob map change measures again, once.
+    alice.ydoc.getMap(SHARED_BLOBS_KEY).set(`sha256:${'0'.repeat(64)}`, new Uint8Array(1));
+    expect(totals).toHaveBeenCalledTimes(2);
+    watches.stopAll();
+    view.registry.destroy();
+  });
+
+  test('a session subscription reports a room already over a threshold', async () => {
     const { alice } = await harness.pair(collaborationDocx());
     const session = alice.room.session;
     const usage = session.resourceUsage();
@@ -260,12 +227,25 @@ describe('resource pressure signal (#554)', () => {
     typeText(alice, 'more ');
     expect(seen).toHaveLength(1);
     stop();
+  });
 
-    const quiet: CollaborationResourcePressure[] = [];
-    session.subscribeResourcePressure((pressure) => quiet.push(pressure));
-    expect(quiet).toEqual([]);
-    harness.leave(alice);
-    expect(quiet).toEqual([]);
+  test('destroying the session removes its watches from the host document', async () => {
+    const { alice } = await harness.pair(collaborationDocx());
+    const before = afterTransactionHandlers(alice.ydoc);
+    alice.room.session.subscribeResourcePressure(() => {});
+    alice.room.session.subscribeResourcePressure(() => {});
+    expect(afterTransactionHandlers(alice.ydoc)).toBe(before + 2);
+    alice.detach();
+    alice.room.destroy();
+    // The session's own handler goes too; none of the watches stays behind.
+    const after = afterTransactionHandlers(alice.ydoc);
+    expect(after).toBeLessThan(before);
+    const late: CollaborationResourcePressure[] = [];
+    alice.room.session.subscribeResourcePressure((pressure) => late.push(pressure), {
+      thresholds: [0.000_001],
+    });
+    expect(afterTransactionHandlers(alice.ydoc)).toBe(after);
+    expect(late).toEqual([]);
   });
 
   test('refuses thresholds outside (0, 1]', async () => {
@@ -279,7 +259,7 @@ describe('resource pressure signal (#554)', () => {
   test('names the cap closest to its limit', () => {
     const pressure = resourcePressureOf(
       [
-        { limit: 'nodeRecords', code: 'too-many-nodes', used: 10, max: 100 },
+        { limit: 'nodes', code: 'too-many-nodes', used: 10, max: 100 },
         { limit: 'blobBytes', code: 'blob-store-full', used: 95, max: 100 },
         { limit: 'parts', code: 'too-many-parts', used: 1, max: 100 },
       ],

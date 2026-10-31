@@ -7,18 +7,17 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * Room-size observability.
  *
  * A room only grows: deletion is a tombstone, and deleted blob bytes stay in the shared blob
- * map. The resource caps that bound hostile amplification run on every received edit, so a
- * long-lived room walks toward a terminal `too-many-nodes` or `blob-store-full` failure.
- * Tombstones count against their own, larger record ceiling rather than the live node cap,
- * which makes that walk longer but not endless. Until compaction exists (the generation reset
- * of issue #554), the honest interim is visibility: a host that can SEE the walk can archive
- * and re-room before the caps end the session for it. This is the probe; the push signal is
+ * map. The resource caps that bound hostile amplification run on every received edit and
+ * count that growth, so a long-lived room walks toward a terminal `too-many-nodes` or
+ * `blob-store-full` failure. Until compaction exists (the generation reset of issue #554),
+ * the honest interim is visibility: a host that can SEE the walk can archive and re-room
+ * before the caps end the session for it. This is the probe; the push signal is
  * `subscribeResourcePressure`, in `resource-pressure.ts`.
  */
 
 import * as Y from 'yjs';
 import { DocumentRegistry } from './document/index.ts';
-import { isNodeMap } from './document/schema.ts';
+import { NODE_DELETED_FIELD, isNodeMap } from './document/schema.ts';
 import { INLINE_FIELD } from './document/paragraph-text.ts';
 import { MAX_SHARED_BLOB_BYTES, SHARED_BLOBS_KEY, SharedBlobStore } from './shared-blob-store.ts';
 import { rawRelationshipCount } from './resource-pressure.ts';
@@ -28,9 +27,8 @@ import { rawRelationshipCount } from './resource-pressure.ts';
  *
  * Every `max*` value is the cap whose crossing turns the session status terminal.
  * `tombstonedNodes` is included in `nodes`: a tombstone is never map-deleted, so it keeps
- * counting against `maxNodeRecords` for the life of the room. Live nodes, `nodes` minus
- * `tombstonedNodes`, count against `maxNodes`. A reading is a snapshot — take a new one to
- * observe growth, or subscribe with `subscribeResourcePressure`.
+ * counting against `maxNodes` for the life of the room. A reading is a snapshot — take a new
+ * one to observe growth, or subscribe with `subscribeResourcePressure`.
  *
  * @public
  */
@@ -39,10 +37,8 @@ export interface CollaborationResourceUsage {
   readonly nodes: number;
   /** The subset of `nodes` that is tombstoned: permanent, and only compaction reclaims it. */
   readonly tombstonedNodes: number;
-  /** Live node limit: `nodes - tombstonedNodes` over it is a terminal `too-many-nodes`. */
+  /** Node limit. Shared state over it is a terminal `too-many-nodes`. */
   readonly maxNodes: number;
-  /** Node record limit, tombstones included: `nodes` over it is a terminal `too-many-nodes`. */
-  readonly maxNodeRecords: number;
   /** Replicated relationship records. */
   readonly relationships: number;
   /** Relationship limit. Shared state over it is a terminal `too-many-relationships`. */
@@ -62,6 +58,17 @@ export interface CollaborationResourceUsage {
    * far past its text is one to move to a new room.
    */
   readonly formattingMarkers: number;
+}
+
+/** Count tombstoned node records. One walk over the node map, so this is a probe, not a poll. */
+function tombstoneCount(registry: DocumentRegistry): number {
+  let count = 0;
+  registry.schema.nodes.forEach((record) => {
+    // The nodes map is peer-writable: a hostile update can plant a non-map value, and a
+    // probe that throws on it takes the metrics scraper down with attacker-chosen input.
+    if (isNodeMap(record) && record.get(NODE_DELETED_FIELD) === true) count += 1;
+  });
+  return count;
 }
 
 /** Live formatting markers in every paragraph's shared text. */
@@ -91,9 +98,8 @@ export function resourceUsageOf(
 ): CollaborationResourceUsage {
   return Object.freeze({
     nodes: registry.nodeCount(),
-    tombstonedNodes: registry.counts.tombstones(),
+    tombstonedNodes: tombstoneCount(registry),
     maxNodes: registry.limits.maxNodes,
-    maxNodeRecords: registry.limits.maxNodeRecords,
     relationships: rawRelationshipCount(registry),
     maxRelationships: registry.limits.maxRelationships,
     parts: registry.schema.parts.size,
@@ -109,8 +115,7 @@ export function resourceUsageOf(
  *
  * The server-side sibling of `readCollaborationDocument`: call it from the same jobs — an
  * autosave hook, a metrics scraper — to watch a room's growth against the caps that would
- * end it. It creates no session and writes nothing, and it walks the node map once per call
- * to count tombstones and formatting markers.
+ * end it. It creates no session and writes nothing, and it walks the node map once per call.
  *
  * @public
  */

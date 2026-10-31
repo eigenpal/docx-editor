@@ -4,13 +4,15 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 /**
- * How close a room is to the caps that end it, read cheaply enough to check after every
- * transaction, and pushed to a host when it crosses a threshold.
+ * How close a room is to the caps that end it, and a push signal when it gets close.
  *
- * {@link resourceLevelsOf} is the one reading the enforcement and the push signal share, so a
- * notification can never claim more headroom than `limitFailure` allows. Every count in it is
- * either maintained from events or bounded by a cap checked before it, so no reading walks
- * the node map.
+ * A room only grows: deletion is a tombstone, and deleted blob bytes stay in the shared blob
+ * map. Every record, tombstones included, counts against `maxNodes`, so a long-lived room walks
+ * toward a terminal `too-many-nodes`. Until compaction exists (issue #554), a host that is told
+ * before the cap can export the room and seed a new one.
+ *
+ * The enforcement and the push signal read the same levels, so a notification never claims
+ * more headroom than `limitFailure` allows.
  */
 
 import * as Y from 'yjs';
@@ -24,20 +26,14 @@ import { MAX_SHARED_BLOB_BYTES, type SharedBlobStore } from './shared-blob-store
 /**
  * A cap whose crossing ends a room.
  *
- * - `nodes`: live document nodes, deleted nodes excluded.
- * - `nodeRecords`: every node record, deleted nodes included.
+ * - `nodes`: document node records, deleted nodes included.
  * - `parts`: package parts.
  * - `relationships`: relationship records.
  * - `blobBytes`: bytes in the shared blob map, including bytes no part references any more.
  *
  * @public
  */
-export type CollaborationResourceLimit =
-  | 'nodes'
-  | 'nodeRecords'
-  | 'parts'
-  | 'relationships'
-  | 'blobBytes';
+export type CollaborationResourceLimit = 'nodes' | 'parts' | 'relationships' | 'blobBytes';
 
 /**
  * The cap a room is closest to, delivered when the room crosses a threshold.
@@ -78,6 +74,12 @@ export interface ResourceLevel {
   readonly max: number;
 }
 
+/** The arguments of {@link DocumentCollaborationSession.subscribeResourcePressure}. */
+export type PressureArgs = [
+  listener: (pressure: CollaborationResourcePressure) => void,
+  options?: CollaborationResourcePressureOptions,
+];
+
 const DEFAULT_THRESHOLDS: readonly number[] = Object.freeze([0.75, 0.9]);
 const MAX_THRESHOLDS = 16;
 
@@ -90,32 +92,17 @@ export function rawRelationshipCount(registry: DocumentRegistry): number {
   return count;
 }
 
-/**
- * Every cap's reading, in the order the enforcement checks them.
- *
- * Counts are the ENFORCING reads, not the decoded projection: a hostile peer can pad shared
- * state with malformed entries the decoded readers skip, and a reading that under-reports
- * would show a healthy room right up to the terminal failure.
- */
-export function resourceLevelsOf(
-  registry: DocumentRegistry,
-  blobs: SharedBlobStore
-): readonly ResourceLevel[] {
-  const { limits, counts } = registry;
+/** The node level. `nodeCount` is maintained, so this costs no walk. */
+function nodeLevel(registry: DocumentRegistry): ResourceLevel {
+  const used = registry.nodeCount();
+  return { limit: 'nodes', code: 'too-many-nodes', used, max: registry.limits.maxNodes };
+}
+
+/** The levels a walk measures: parts, relationship owners, and stored blobs. */
+function walkedLevels(registry: DocumentRegistry, blobs: SharedBlobStore): ResourceLevel[] {
+  const { limits, schema } = registry;
   return [
-    {
-      limit: 'nodeRecords',
-      code: 'too-many-nodes',
-      used: counts.total(),
-      max: limits.maxNodeRecords,
-    },
-    { limit: 'nodes', code: 'too-many-nodes', used: counts.live(), max: limits.maxNodes },
-    {
-      limit: 'parts',
-      code: 'too-many-parts',
-      used: registry.schema.parts.size,
-      max: limits.maxParts,
-    },
+    { limit: 'parts', code: 'too-many-parts', used: schema.parts.size, max: limits.maxParts },
     {
       limit: 'relationships',
       code: 'too-many-relationships',
@@ -129,6 +116,20 @@ export function resourceLevelsOf(
       max: MAX_SHARED_BLOB_BYTES,
     },
   ];
+}
+
+/**
+ * Every cap's reading, in the order the enforcement checks them.
+ *
+ * Counts are the ENFORCING reads, not the decoded projection: a hostile peer can pad shared
+ * state with malformed entries the decoded readers skip, and a reading that under-reports
+ * would show a healthy room right up to the terminal failure.
+ */
+export function resourceLevelsOf(
+  registry: DocumentRegistry,
+  blobs: SharedBlobStore
+): readonly ResourceLevel[] {
+  return [nodeLevel(registry), ...walkedLevels(registry, blobs)];
 }
 
 /**
@@ -147,12 +148,8 @@ export function resourceLevelsOf(
  * cost exactly what the incremental materializer exists to avoid, and the per-node ceilings
  * still hold on every local write.
  *
- * Tombstones (#554). They are never map-deleted, so counting them against `maxNodes` made a
- * long-lived room's growth terminal at a size its live document never reached. Live records,
- * which materializing builds, count against `maxNodes`; every record, tombstones included,
- * counts against the larger `maxNodeRecords`, which still bounds the memory tombstones hold.
- * Blob bytes no part references any more still count against the blob cap: they occupy the
- * same memory on every replica as referenced bytes, and only compaction can drop them.
+ * The detail names the limit and its count, `nodes=200001`, so a host can tell which limit
+ * ended the room.
  */
 export function limitFailure(
   registry: DocumentRegistry,
@@ -160,7 +157,7 @@ export function limitFailure(
 ): CollaborationFailure | null {
   for (const level of resourceLevelsOf(registry, blobs)) {
     if (level.used > level.max) {
-      return Object.freeze({ code: level.code, detail: `${level.used}` });
+      return Object.freeze({ code: level.code, detail: `${level.limit}=${level.used}` });
     }
   }
   return null;
@@ -206,40 +203,72 @@ export function resourcePressureOf(
 }
 
 /**
- * Call `listener` whenever the highest threshold the room reaches changes, up or down.
- *
- * Checked after each transaction on `ydoc`, local or remote, from counts that are maintained
- * or bounded, so a keystroke pays a handful of reads and no walk. The listener runs once at
- * subscription when the room already reaches a threshold. The watch removes itself at the
- * first transaction after the session that owns the counts is destroyed.
+ * A session's pressure subscriptions, so that destroying the session removes every one of them
+ * from the host's `Y.Doc`.
  */
-export function watchPressure(
-  ydoc: Y.Doc,
-  registry: DocumentRegistry,
-  blobs: SharedBlobStore,
-  destroyed: () => boolean,
-  ...[listener, options]: PressureArgs
-): () => void {
-  const thresholds = normalizedThresholds(options);
-  const read = (): CollaborationResourcePressure =>
-    resourcePressureOf(resourceLevelsOf(registry, blobs), thresholds);
-  const stop = (): void => ydoc.off('afterTransaction', check);
-  if (destroyed()) return () => {};
-  let reported = read().threshold;
-  const check = (): void => {
-    if (destroyed()) return stop();
-    const pressure = read();
-    if (pressure.threshold === reported) return;
-    reported = pressure.threshold;
-    listener(pressure);
-  };
-  ydoc.on('afterTransaction', check);
-  if (reported > 0) listener(read());
-  return stop;
-}
+export class PressureWatches {
+  private readonly stops = new Set<() => void>();
+  private stopped = false;
 
-/** The arguments of {@link DocumentCollaborationSession.subscribeResourcePressure}. */
-export type PressureArgs = [
-  listener: (pressure: CollaborationResourcePressure) => void,
-  options?: CollaborationResourcePressureOptions,
-];
+  /**
+   * Call `listener` whenever the highest threshold the room reaches changes, up or down.
+   *
+   * Checked after each transaction on `ydoc`, local or remote. The node count is maintained;
+   * the part, relationship and blob totals are measured once and again only after their own
+   * maps change, so a keystroke reads no part, relationship owner or blob. The listener runs
+   * once at subscription when the room already reaches a threshold. A listener that throws is
+   * reported and never breaks the transaction or another subscription.
+   */
+  watch(
+    ydoc: Y.Doc,
+    registry: DocumentRegistry,
+    blobs: SharedBlobStore,
+    ...[listener, options]: PressureArgs
+  ): () => void {
+    const thresholds = normalizedThresholds(options);
+    if (this.stopped) return () => {};
+    const { parts, relationships } = registry.schema;
+    let walked: ResourceLevel[] | null = null;
+    const changed = (): void => {
+      walked = null;
+    };
+    const read = (): CollaborationResourcePressure => {
+      walked ??= walkedLevels(registry, blobs);
+      return resourcePressureOf([nodeLevel(registry), ...walked], thresholds);
+    };
+    const notify = (pressure: CollaborationResourcePressure): void => {
+      try {
+        listener(pressure);
+      } catch (error) {
+        console.error('A subscribeResourcePressure listener threw.', error);
+      }
+    };
+    parts.observe(changed);
+    relationships.observeDeep(changed);
+    const stopBlobs = blobs.observeChanges(changed);
+    let reported = read().threshold;
+    const check = (): void => {
+      const pressure = read();
+      if (pressure.threshold === reported) return;
+      reported = pressure.threshold;
+      notify(pressure);
+    };
+    const stop = (): void => {
+      if (!this.stops.delete(stop)) return;
+      ydoc.off('afterTransaction', check);
+      parts.unobserve(changed);
+      relationships.unobserveDeep(changed);
+      stopBlobs();
+    };
+    ydoc.on('afterTransaction', check);
+    this.stops.add(stop);
+    if (reported > 0) notify(read());
+    return stop;
+  }
+
+  /** End every subscription, and refuse new ones. */
+  stopAll(): void {
+    this.stopped = true;
+    for (const stop of [...this.stops]) stop();
+  }
+}

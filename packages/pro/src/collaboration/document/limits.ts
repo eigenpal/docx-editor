@@ -7,13 +7,7 @@ import { isDangerousKey, normalizePartName } from '@docx-editor.dev/core/store';
 
 /** Finite resource limits for shared package state. Every value is attacker-controlled. */
 export interface DocumentLimits {
-  /** Live node records, tombstones excluded. Live records are what materializing builds. */
   readonly maxNodes: number;
-  /**
-   * Every node record, tombstones included. Tombstones are never map-deleted and only
-   * compaction reclaims them, so they get their own, larger budget instead of none.
-   */
-  readonly maxNodeRecords: number;
   readonly maxTreeDepth: number;
   readonly maxTextLength: number;
   readonly maxAttributes: number;
@@ -28,7 +22,6 @@ export interface DocumentLimits {
 
 export const DEFAULT_DOCUMENT_LIMITS: DocumentLimits = Object.freeze({
   maxNodes: 200_000,
-  maxNodeRecords: 400_000,
   maxTreeDepth: 256,
   maxTextLength: 1_048_576,
   maxAttributes: 4096,
@@ -60,16 +53,9 @@ export type LimitCode =
   | 'invalid-bound'
   | 'invalid-string';
 
-/** The record ceiling follows a `maxNodes` override unless the override names it too. */
 export function mergeLimits(overrides?: Partial<DocumentLimits>): DocumentLimits {
   if (!overrides) return DEFAULT_DOCUMENT_LIMITS;
-  const maxNodes = overrides.maxNodes ?? DEFAULT_DOCUMENT_LIMITS.maxNodes;
-  return Object.freeze({
-    ...DEFAULT_DOCUMENT_LIMITS,
-    maxNodeRecords:
-      maxNodes * (DEFAULT_DOCUMENT_LIMITS.maxNodeRecords / DEFAULT_DOCUMENT_LIMITS.maxNodes),
-    ...overrides,
-  });
+  return Object.freeze({ ...DEFAULT_DOCUMENT_LIMITS, ...overrides });
 }
 
 export function rejectDangerousKey(key: string): LimitCode | null {

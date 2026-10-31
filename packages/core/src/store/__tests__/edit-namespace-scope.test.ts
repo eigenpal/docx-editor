@@ -144,4 +144,13 @@ test('moved content declares the prefixes its destination does not bind', () => 
     children: [leaf('a', 'i', 'urn:one'), leaf('b', 'i', 'urn:two')],
   } as OoxmlElement;
   expect((bindMissingPrefixes(clash, scope) as OoxmlElement).namespaceBindings).toEqual([]);
+  // A prefix the destination binds to another URI is rebound where the moved content uses it.
+  const rebound = bindMissingPrefixes(
+    note,
+    new Map([...scope, ['i', 'urn:other']])
+  ) as OoxmlElement;
+  const reboundParagraph = rebound.children[0] as OoxmlElement;
+  expect(reboundParagraph.namespaceBindings).toEqual([
+    { prefix: 'i', namespaceUri: 'urn:identity' },
+  ]);
 });

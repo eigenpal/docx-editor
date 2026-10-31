@@ -82,7 +82,6 @@ import {
 } from './registry-node-reads.ts';
 import { addListing, syncChildListings, type ChildListings } from './registry-listings.ts';
 import { AdoptionIndex } from './registry-adoption.ts';
-import { NodeCounts } from './registry-node-counts.ts';
 import { InlineIndex } from './paragraph-inline-index.ts';
 import { INLINE_FIELD } from './paragraph-text.ts';
 import {
@@ -123,8 +122,10 @@ export class DocumentRegistry {
   private readonly splitTextSources: SplitTextSources;
   private bulkLoad = 0;
   private unobservedWrites = 0;
-  /** Node and tombstone totals, maintained from node events. */
-  readonly counts: NodeCounts;
+  /** Node total as of the last observed event batch. Negative means "not counted yet". */
+  private nodeCountCache = -1;
+  /** Nodes written since that batch. Yjs delivers a nested transaction's events late. */
+  private pendingNodeAdds = 0;
   /** Relationship-record total as of the last decode. Negative means "not counted yet". */
   private relationshipCountCache = -1;
   /** Part-entry total as of the last read. Negative means "not counted yet". */
@@ -139,7 +140,6 @@ export class DocumentRegistry {
     this.stopKeepingMarkers = keepFormattingMarkers(doc);
     this.schema = packageSchemaOf(doc);
     this.limits = mergeLimits(limits);
-    this.counts = new NodeCounts(this.schema.nodes);
     this.splitDedup = new SplitDedupIndex(this.schema.nodes);
     // A paragraph no parent lists counts as deleted: an undo of a split unlists the new one.
     this.inline = new InlineIndex(
@@ -398,7 +398,8 @@ export class DocumentRegistry {
    * plus the writes those events have not described yet.
    */
   nodeCount(): number {
-    return this.counts.total();
+    if (this.nodeCountCache < 0) this.nodeCountCache = this.schema.nodes.size;
+    return this.nodeCountCache + this.pendingNodeAdds;
   }
 
   /** The quantities a bound check reads, without the attribute arrays {@link record} builds. */
@@ -414,7 +415,7 @@ export class DocumentRegistry {
   }
 
   private noteNodeWrite(logicalId: LogicalId): void {
-    this.counts.noteWrite(logicalId);
+    if (!this.schema.nodes.has(logicalId)) this.pendingNodeAdds += 1;
   }
 
   putElement(record: Omit<ElementRecord, 'childIds'>): void {
@@ -736,7 +737,8 @@ export class DocumentRegistry {
 
   rebuildDerivedIndexes(): void {
     this.unobservedWrites = 0;
-    this.counts.reset();
+    this.nodeCountCache = -1;
+    this.pendingNodeAdds = 0;
     this.relationshipCountCache = -1;
     this.partCountCache = -1;
     this.parentIndex = new Map();
@@ -780,7 +782,7 @@ export class DocumentRegistry {
   private applyChildArrayEvents(events: Y.YEvent<Y.AbstractType<unknown>>[]): void {
     this.unobservedWrites = 0;
     // These events describe every write, local or remote, so they carry the whole count.
-    this.counts.batchObserved();
+    this.pendingNodeAdds = 0;
     const changed = new Set<LogicalId>();
     let structural = false;
     for (const event of events) {
@@ -818,7 +820,9 @@ export class DocumentRegistry {
       if (event.path.length === 0 && event.target instanceof Y.Map) {
         structural = true;
         for (const [key, change] of event.changes.keys) {
-          this.counts.recordChanged(String(key), change.action);
+          if (this.nodeCountCache >= 0 && change.action !== 'update') {
+            this.nodeCountCache += change.action === 'add' ? 1 : -1;
+          }
           if (rejectDangerousKey(String(key))) continue;
           if (change.action === 'delete') {
             // A removed record's text no longer holds IDs or copies.
@@ -870,7 +874,6 @@ export class DocumentRegistry {
       ) {
         structural = true;
         const id = keyId(event.path[0]!);
-        this.counts.tombstoneChanged(id);
         this.adoption.sync(id);
         this.adoption.recomputeListerSurvivors(id);
         // A delete or restore changes which lister can place this node's children.

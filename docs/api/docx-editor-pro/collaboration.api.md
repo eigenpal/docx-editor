@@ -111,7 +111,7 @@ export interface CollaborationModuleOptions extends ProLicenseOptions {
 }
 
 // @public
-export type CollaborationResourceLimit = 'nodes' | 'nodeRecords' | 'parts' | 'relationships' | 'blobBytes';
+export type CollaborationResourceLimit = 'nodes' | 'parts' | 'relationships' | 'blobBytes';
 
 // @public
 export interface CollaborationResourcePressure {
@@ -132,7 +132,6 @@ export interface CollaborationResourceUsage {
     readonly blobBytes: number;
     readonly formattingMarkers: number;
     readonly maxBlobBytes: number;
-    readonly maxNodeRecords: number;
     readonly maxNodes: number;
     readonly maxParts: number;
     readonly maxRelationships: number;

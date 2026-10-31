@@ -68,7 +68,9 @@ export function bindConflictingPrefixes(
  * keeps using that prefix, and a destination root that never declared it leaves the copy
  * unserializable. Each element and attribute carries its own namespace URI, so the binding
  * comes from the moved content itself. A prefix the subtree uses for two URIs gets no
- * binding and still fails validation. Returns `node` itself when nothing is missing.
+ * binding and still fails validation. A prefix the destination binds to another URI is
+ * rebound locally, as {@link bindConflictingPrefixes} does. Returns `node` itself when
+ * nothing needs a binding.
  */
 export function bindMissingPrefixes(
   node: OoxmlNode,
@@ -98,12 +100,15 @@ export function bindMissingPrefixes(
   };
   visit(node, inherited);
   const additions = [...missing].filter((entry): entry is [string, string] => entry[1] !== null);
-  if (additions.length === 0) return node;
-  return {
-    ...node,
-    namespaceBindings: [
-      ...node.namespaceBindings,
-      ...additions.map(([prefix, namespaceUri]) => ({ prefix, namespaceUri })),
-    ],
-  } as OoxmlElement;
+  const declared =
+    additions.length === 0
+      ? node
+      : ({
+          ...node,
+          namespaceBindings: [
+            ...node.namespaceBindings,
+            ...additions.map(([prefix, namespaceUri]) => ({ prefix, namespaceUri })),
+          ],
+        } as OoxmlElement);
+  return bindConflictingPrefixes(declared, inherited);
 }

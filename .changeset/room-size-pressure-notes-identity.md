@@ -2,4 +2,4 @@
 '@docx-editor.dev/pro': minor
 ---
 
-Received footnote and endnote edits now match the author before the receiving participant opens the note, and deleted content in a collaboration room counts against a separate, larger node limit. Add `subscribeResourcePressure` to notify hosts before a room reaches a size limit. Fixes #580. Fixes #554.
+Received footnote and endnote edits now match the author before the receiving participant opens the note. Add `subscribeResourcePressure` to notify hosts before a collaboration room reaches a size limit, and name the limit in the failure detail when one ends the room. Fixes #580. Fixes #554.

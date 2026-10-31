@@ -62,7 +62,7 @@ import { LogicalIdentityMap } from './document-identity.ts';
 import { CaretAnchors } from './document-caret-anchors.ts';
 import { EditWait } from './document-edit-wait.ts';
 import { resourceUsageOf, type CollaborationResourceUsage } from './resource-usage.ts';
-import { limitFailure, watchPressure, type PressureArgs } from './resource-pressure.ts';
+import { PressureWatches, limitFailure, type PressureArgs } from './resource-pressure.ts';
 import {
   AWARENESS_FIELD,
   MAX_AWARENESS_STATES,
@@ -135,6 +135,7 @@ class DocumentSession implements DocumentCollaborationSession {
   private drainingHeldJournals = false;
   private remoteCounter = 0;
   private destroyed = false;
+  private readonly pressure = new PressureWatches();
   private readonly refusals = new RefusalStreak();
   private readonly historyGroups: HistoryGroupCapture;
   private readonly undoGroups: UndoGroups;
@@ -226,7 +227,7 @@ class DocumentSession implements DocumentCollaborationSession {
   }
 
   subscribeResourcePressure(...args: PressureArgs): () => void {
-    return watchPressure(this.ydoc, this.registry, this.blobs, () => this.destroyed, ...args);
+    return this.pressure.watch(this.ydoc, this.registry, this.blobs, ...args);
   }
 
   subscribeStatus(
@@ -541,6 +542,7 @@ class DocumentSession implements DocumentCollaborationSession {
     this.undoGroups.close();
     this.detachPort?.();
     this.destroyed = true;
+    this.pressure.stopAll();
     this.stopBlobWatch();
     this.stopSeedWatch();
     this.ydoc.off('beforeTransaction', this.onBeforeYjsTransaction);
