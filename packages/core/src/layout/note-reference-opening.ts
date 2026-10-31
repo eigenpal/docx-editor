@@ -46,13 +46,21 @@ export function noteReferenceOpeningBottom(
   return bottom;
 }
 
-/** New paragraph split admission requires one vertically stacked, full-width body column. */
+/**
+ * New paragraph split admission requires one vertically stacked, full-width body column. A
+ * paragraph's column is the width it was laid out in, its box plus its own indents, so
+ * indented text still counts and a narrower column of a multi-column section does not.
+ */
 export function paragraphNoteSplitsAllowed(page: PageRecord): boolean {
   let bottom = Number.NEGATIVE_INFINITY;
   for (const fragment of page.fragments) {
     if (fragment.kind === 'paragraph' && (fragment.outOfFlow || fragment.positionedFrame)) continue;
     if (fragment.box.y < bottom - 0.001) return false;
-    if (fragment.kind === 'paragraph' && fragment.box.width < page.contentBox.width - 0.001)
+    if (
+      fragment.kind === 'paragraph' &&
+      fragment.box.width + fragment.indent.left + fragment.indent.right <
+        page.contentBox.width - 0.001
+    )
       return false;
     bottom = fragment.box.y + fragment.box.height;
   }

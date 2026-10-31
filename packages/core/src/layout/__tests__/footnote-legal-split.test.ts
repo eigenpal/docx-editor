@@ -22,11 +22,13 @@ function fixture(
   widow: boolean,
   keep: boolean | 'next' = false,
   noteCount = 6,
-  stacked = false
+  stacked = false,
+  bodyProps = ''
 ) {
   const body = Array.from({ length: reference }, (_, index) =>
     paragraph(
-      `<w:t>Body ${index + 1}</w:t>${index + 1 === reference ? '<w:footnoteReference w:id="1"/>' : stacked && index === 9 ? '<w:footnoteReference w:id="2"/>' : ''}`
+      `<w:t>Body ${index + 1}</w:t>${index + 1 === reference ? '<w:footnoteReference w:id="1"/>' : stacked && index === 9 ? '<w:footnoteReference w:id="2"/>' : ''}`,
+      bodyProps
     )
   ).join('');
   const document = part(
@@ -99,6 +101,13 @@ describe('legal footnote opening admission', () => {
       });
     }
   }
+  test('indented body text admits the same split opening', () => {
+    const indented = '<w:ind w:left="720" w:right="360" w:hanging="360"/>';
+    const { document, options } = fixture(49, true, false, 6, false, indented);
+    const layout = layoutSemanticDocument(document, 0, options);
+    expect(counts(layout.pages[0]!)).toEqual({ body: 49, notes: 4 });
+    expect(layout.pages.reduce((n, p) => n + counts(p).notes, 0)).toBe(6);
+  });
   test('an oversized kept note still drains on fresh pages', () => {
     const { document, options } = fixture(1, true, true, 70);
     const layout = layoutSemanticDocument(document, 0, options);
