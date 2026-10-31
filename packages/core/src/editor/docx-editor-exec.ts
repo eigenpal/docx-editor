@@ -42,6 +42,7 @@ import {
   execSetNoteProperties,
 } from './docx-editor-notes.ts';
 import { isTableEditorCommand, planTableCommand } from './table-command-plan.ts';
+import { suggestingAuthorOf } from './table-cell-structure-plan.ts';
 import {
   execImageCommand,
   isImageCommand,
@@ -528,6 +529,7 @@ export function execEditorCommand(
           themeColors: mounted.session.documentThemeColors(),
           editable: mounted.session.editable,
           viewing: mounted.editingMode() === 'view',
+          ...suggestingAuthorOf(mounted),
         });
       return mounted.applyTableCommandPlan(plan);
     }

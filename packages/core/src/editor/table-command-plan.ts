@@ -20,6 +20,7 @@ import {
 } from '../store/store/tree-op-table-topology.ts';
 import { wmlAttributeValue, wmlChildNamed } from '../store/store/tree-op-table-shared.ts';
 import {
+  asSuggested,
   cellStructureOp,
   cellStructureRejection,
   outerColumnOfSelection,
@@ -95,6 +96,8 @@ export interface TableCommandPlannerInput {
   readonly themeColors: readonly DocumentThemeColorEntry[];
   readonly editable: boolean;
   readonly viewing: boolean;
+  /** The author while suggesting, whose own proposed table takes tracked merge and split. */
+  readonly suggestingAuthor?: string;
 }
 
 export type TableCommandSelectionPolicy =
@@ -802,7 +805,9 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
       if (!anchor) return refusal('unsupported', 'the selection is not inside a table');
       const planned = cellStructureOp(command, anchor, input.cellSelection !== null);
       if (!planned.ok) return refusal(planned.code, planned.reason);
-      return planValidated(part, [planned.op], { kind: 'adoptCommittedCaret' });
+      const tracked = asSuggested(part, planned.op, input.suggestingAuthor);
+      const invalid = validateOps(part, [tracked]);
+      return invalid ?? { ok: true, ops: [planned.op], selection: { kind: 'adoptCommittedCaret' } };
     }
     case 'insertRow': {
       if (!anchor) return refusal('unsupported', 'the selection is not inside a table');
