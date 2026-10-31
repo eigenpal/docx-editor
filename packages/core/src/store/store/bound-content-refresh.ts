@@ -11,8 +11,9 @@
 // dates and checkboxes. A rich text control, which a file writes as a control with no type
 // element, holds formatted paragraphs that a store string cannot stand for. A value this pass
 // cannot place (an unknown dropdown item, a date it cannot read, a text with characters a run
-// cannot hold) leaves the cached content as the file wrote it. An empty value empties the
-// content, and the open's placeholder pass then shows the control's placeholder. A date whose stored day matches `w:fullDate` keeps
+// cannot hold) leaves the cached content as the file wrote it. An empty value shows the
+// placeholder the control names, through the open's placeholder pass, or an empty run when it
+// names none. A date whose stored day matches `w:fullDate` keeps
 // the text the file wrote, which follows the control's own language and calendar.
 
 import {
@@ -109,8 +110,12 @@ function planFor(properties: ContentControlProperties, raw: string): PlannedValu
   if (raw.length > MAX_BOUND_VALUE_LENGTH) return null;
   const input = inputFor(properties, raw);
   if (!input) return null;
+  // An empty value shows the document's own placeholder when the control names one, and
+  // otherwise an empty control: no prompt text stands in for a value the store holds.
   if (input.kind === 'text' && input.text === '')
-    return { text: promptFor(properties.type), showingPlaceholder: true };
+    return properties.placeholderDocPart !== undefined
+      ? { text: promptFor(properties.type), showingPlaceholder: true }
+      : { text: '', showingPlaceholder: false };
   if (properties.type === 'checkbox') {
     const checked = parseCheckbox(input.kind === 'text' ? input.text : '');
     if (checked === null) return null;
@@ -167,8 +172,7 @@ function refreshControl(
   if (!planned || alreadyShows(control, properties, planned)) return part;
   const content = contentControlContentOf(control);
   const inline = isInlineControl(source, control.id);
-  // An empty value leaves the content empty for the open's placeholder pass, which shows the
-  // document's own placeholder when it names one and the type's prompt otherwise.
+  // A placeholder is left to the open's placeholder pass, which reads it from the glossary.
   const children = planned.showingPlaceholder
     ? []
     : planned.symbol

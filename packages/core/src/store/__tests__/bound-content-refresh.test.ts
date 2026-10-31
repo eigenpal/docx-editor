@@ -110,19 +110,31 @@ describe('bound content refresh', () => {
       )
     );
     expect(xml).not.toContain('Old note');
-    expect(xml).toContain('<w:showingPlcHdr/>');
-    // Left for the open's placeholder pass, which knows the document's own placeholder.
-    expect(xml).toContain('<w:sdtContent/>');
+    // No placeholder is named, so the control shows nothing, not a prompt.
+    expect(xml).not.toContain('<w:showingPlcHdr/>');
+    expect(xml).not.toContain('Click here to enter text.');
     expect(xml).toMatch(/1 Main St<\/w:t><w:br\/><w:t>Suite 2/);
-    // A single-line control drops the break.
+    // A single-line control drops the break; no space stands in for it.
     expect(xml).toContain('1 Main StSuite 2');
+    expect(xml).not.toContain('1 Main St Suite 2');
   });
 
-  test('a session opens an empty bound value showing the prompt', () => {
+  test('a session opens an empty bound value as an empty control', () => {
     const opened = openTreeSession(
       docWith(paragraph(bound('/ns0:contract/ns0:note', '<w:text/>', 'Old note')))
     );
     if (!opened.ok) throw new Error(opened.reason);
+    expect(opened.session.bodyText()).not.toContain('Old note');
+    expect(opened.session.bodyText()).not.toContain('Click here to enter text.');
+  });
+
+  test('an empty value shows the placeholder the control names', () => {
+    const named = '<w:placeholder><w:docPart w:val="NotePrompt"/></w:placeholder><w:text/>';
+    const bytes = docWith(paragraph(bound('/ns0:contract/ns0:note', named, 'Old note')));
+    expect(mainXml(bytes)).toContain('<w:showingPlcHdr/>');
+    const opened = openTreeSession(bytes);
+    if (!opened.ok) throw new Error(opened.reason);
+    // The glossary has no such block, so the open shows the type's prompt.
     expect(opened.session.bodyText()).toContain('Click here to enter text.');
     expect(opened.session.bodyText()).not.toContain('Old note');
   });
