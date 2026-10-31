@@ -115,6 +115,10 @@ export const MODE_RULES = {
     'Side rules center on grid lines for covered dxa/auto width shapes; edge-aligned grids move by half a rule',
     'ECMA-376 Part 1 §17.4.38 tblBorders'
   ),
+  noteAreaHoldsLineSpacing: modern(
+    'Auto line spacing below a body line must fit above the footnote area; legacy modes let it cross the area as it crosses a bottom margin',
+    'ECMA-376 Part 1 §17.11 Footnotes and Endnotes'
+  ),
   noteTableCellKeeps: modern(
     'Note reference bands in table rows honor cell widow control and keep-lines cuts',
     'ECMA-376 Part 1 §17.11 Footnotes and Endnotes'

@@ -1,7 +1,7 @@
 // The body fit rule lets a page's last line carry its trailing `auto` depth
-// past the bottom of the text area. The note passes measure the body the same way, so a
-// note the reserve fit whole is not split or carried at attach time. A reference line
-// still needs its full box above its note.
+// past the bottom of the text area. In the modern mode it may not reach into a footnote
+// area: there the line's full box must fit. The note passes measure the body the same way, so a note the reserve fit
+// whole is not split or carried at attach time.
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
@@ -112,7 +112,8 @@ function probeDocx(probe: Probe): Uint8Array {
 
 function layoutProbe(
   probe: Probe,
-  session = createLayoutSession()
+  session = createLayoutSession(),
+  compatibilityMode?: number
 ): { layout: SemanticLayout; fixedPoint: boolean } {
   const loaded = readOoxmlPackage(probeDocx(probe));
   if (!loaded.ok) throw new Error(loaded.reason);
@@ -128,10 +129,12 @@ function layoutProbe(
     documentFootnoteProps: fn,
     documentEndnoteProps: en,
     measurer,
+    compatibilityMode,
     producer: 'footnote-trailing-depth',
   };
   const layout = layoutSemanticDocument(part, 1, {
     measurer,
+    compatibilityMode,
     notes,
     session,
     producer: 'footnote-trailing-depth',
@@ -183,8 +186,25 @@ function areaTop(page: PageRecord): number {
 describe('footnote area beside the last line trailing spacing', () => {
   // US Letter, 1 in margins: 648 pt of body. Double-spaced 12 pt lines are 30.55 pt boxes
   // whose glyph band ends 15.27 pt above the box bottom; a note line is 12.73 pt.
-  test('a note fits whole when the last line leaves room below its glyph band', () => {
-    // 17 note lines: the area rises above L14's box bottom but stays below its glyph band.
+  test('a line whose trailing depth would reach into the note area moves on', () => {
+    // 17 note lines: the area would rise above L14's box bottom, below its glyph band.
+    // The line's full box must fit above the area, so L14 starts the next page.
+    const { layout, fixedPoint } = layoutProbe(
+      { paragraphs: [{ lines: 30 }], refs: { 1: [1] }, notes: { 1: 17 } },
+      createLayoutSession(),
+      15
+    );
+    expect(pages(layout)).toEqual(['L01..L13 | 1', 'L14..L30']);
+    const page = layout.pages[0]!;
+    const last = pageLines(page).at(-1)!;
+    expect(last.trailingSpacing ?? 0).toBeGreaterThan(0);
+    expect(areaTop(page)).toBeGreaterThanOrEqual(last.box.y + last.box.height - 0.01);
+    expect(fixedPoint).toBe(true);
+  });
+
+  test('a legacy mode lets that trailing depth reach into the note area', () => {
+    // Without a declaration the document lays out in a legacy mode: L14 stays, and the area
+    // rises above its box bottom but stays below its glyph band.
     const { layout, fixedPoint } = layoutProbe({
       paragraphs: [{ lines: 30 }],
       refs: { 1: [1] },
@@ -193,7 +213,6 @@ describe('footnote area beside the last line trailing spacing', () => {
     expect(pages(layout)).toEqual(['L01..L14 | 1', 'L15..L30']);
     const page = layout.pages[0]!;
     const last = pageLines(page).at(-1)!;
-    expect(last.trailingSpacing ?? 0).toBeGreaterThan(0);
     expect(areaTop(page)).toBeLessThan(last.box.y + last.box.height);
     expect(areaTop(page)).toBeGreaterThanOrEqual(
       last.box.y + last.box.height - (last.trailingSpacing ?? 0)

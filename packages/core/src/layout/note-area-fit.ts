@@ -1,4 +1,5 @@
 // Body fit above a footnote area: a paragraph's space after must fit there too.
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { fragmentCursorBottomPt } from './note-fragment-geometry.ts';
 import type { BlockFragmentRecord, LineRecord, PageRecord } from './semantic-records.ts';
 
@@ -55,6 +56,26 @@ export function closingSpaceAfterPt(
 }
 
 /**
+ * The auto line spacing below a line's glyph band that the body pass leaves out of the
+ * budget. At the bottom of a plain page it may cross the text margin. Above a footnote
+ * area it must fit, the same as {@link closingSpaceAfterPt}, so none of it is dropped. Legacy
+ * modes drop it there too.
+ */
+export function droppableSpacingPt(
+  reservePt: number | undefined,
+  fragments: readonly BlockFragmentRecord[],
+  pending: readonly SpannedLine[],
+  line: SpannedLine & { readonly trailingSpacing: number },
+  layout: { readonly compatibilityMode?: number | undefined }
+): number {
+  if (line.trailingSpacing <= 0 || (reservePt ?? 0) <= 0) return line.trailingSpacing;
+  if (!hasCompatibilityRule(layout.compatibilityMode, 'noteAreaHoldsLineSpacing')) {
+    return line.trailingSpacing;
+  }
+  return pageHoldsFootnoteReference(fragments, pending, line) ? 0 : line.trailingSpacing;
+}
+
+/**
  * The space after that the body pass charges below the page's last line: the closing
  * paragraph's space after when the page cites a footnote, else 0. A reserve that holds
  * the body end in place must leave this room, or it pushes that paragraph out.
@@ -72,5 +93,13 @@ export function chargedSpaceAfterPt(page: PageRecord): number {
   if (last?.kind !== 'paragraph' || !last.paragraphEnd) return 0;
   // No reserve check: this answer only matters while a hold-out sizes this page's reserve,
   // and a page it holds always has one.
-  return page.fragments.some(fragmentCitesFootnote) ? last.spacing.after : 0;
+  return pageCitesFootnote(page) ? last.spacing.after : 0;
+}
+
+/**
+ * Whether a laid page cites a footnote, so its body must fit whole above the footnote
+ * area: no spacing below a line's glyph band may cross into it.
+ */
+export function pageCitesFootnote(page: PageRecord): boolean {
+  return page.fragments.some(fragmentCitesFootnote);
 }

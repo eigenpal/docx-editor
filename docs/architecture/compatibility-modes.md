@@ -52,6 +52,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `legacySharedGridLineSideRules` | `legacy` | Side rules center on shared grid lines, in left-to-right and right-to-left tables |
 | `modernBidiTableRuleShift` | `modern` | A right-to-left table sits half its mean outer side rule toward its visual left |
 | `modernGridLineSideRules` | `modern` | Side rules center on grid lines for covered shapes; edge-aligned grids move by half a rule |
+| `noteAreaHoldsLineSpacing` | `modern` | Auto line spacing below a body line must fit above the footnote area |
 | `noteTableCellKeeps` | `modern` | Note bands in table rows honor cell widow control and `w:keepLines` |
 | `openingColumnBreakTakesNoLine` | `legacy` | A column break that opens a paragraph leaves no line in the column it ends |
 | `oversizedRowKeepGroupReleases` | `legacy` | Oversized kept row groups release before placement, except below authored headers |
