@@ -60,6 +60,7 @@ import {
   type HeaderFooterScopeBinding,
 } from './surface-scope.ts';
 import { autoScrollDelta } from './surface-drag-autoscroll.ts';
+import { isApplePlatform } from '@docx-editor.dev/i18n';
 
 /** Active header/footer scope as seen by the pointer layer. */
 export interface ActiveHeaderFooterPointerState {
@@ -574,14 +575,19 @@ export function createPointerController(
     '[data-docx-hf], [data-docx-cc-widget], [data-docx-note-ref], [data-drawing-paragraph-id], ' +
     '.docx-image-selection-overlay, .docx-drawing-textbox, input, textarea, select';
 
+  /** On Apple platforms Control with the primary button opens the context menu, as a right-click. */
+  const isContextClick = (event: PointerEvent): boolean =>
+    event.button === 0 && event.ctrlKey && !event.metaKey && isApplePlatform();
+
   /**
    * A secondary press in body text outside the selection moves the caret to the press, so the
    * context menu acts on the text under the pointer and not on a selection the user cannot
-   * see. A press inside a range keeps that range, so Cut and Copy still act on it. The press
-   * is never prevented: the context menu still opens.
+   * see. A press inside a range keeps that range, so Cut and Copy still act on it. This never
+   * prevents the press, so the context menu still opens.
    */
   function placeCaretForSecondaryPress(event: PointerEvent): void {
-    if (event.button !== 2 || event.pointerType === 'touch') return;
+    if (event.pointerType === 'touch') return;
+    if (event.button !== 2 && !isContextClick(event)) return;
     if (host.activeHeaderFooter?.() || host.activeNote?.()) return;
     const target = event.target as Element | null;
     if (target?.closest?.(SECONDARY_PRESS_KEEPS_SELECTION)) return;
@@ -617,8 +623,17 @@ export function createPointerController(
   }
 
   const onPointerDown = (event: PointerEvent): void => {
-    // Other non-primary buttons keep their native behaviour. A right-click places the caret
-    // only when it lands outside the selection; see `placeCaretForSecondaryPress`.
+    // Other non-primary buttons keep their native behaviour. A right-click, or a Control-click
+    // on Apple platforms, places the caret only when it lands outside the selection; see
+    // `placeCaretForSecondaryPress`. A Control-click is a primary press to the browser, whose
+    // native mousedown would collapse the selection, so it is prevented as every engine press
+    // is; the context menu still opens.
+    if (isContextClick(event)) {
+      const target = event.target as Element | null;
+      if (!target?.closest?.('input, textarea, select')) event.preventDefault();
+      placeCaretForSecondaryPress(event);
+      return;
+    }
     if (event.button !== 0) {
       placeCaretForSecondaryPress(event);
       return;
