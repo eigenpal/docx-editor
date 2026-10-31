@@ -152,6 +152,13 @@ export function bodyPageNumbers(pages: readonly PageRecord[]): ReadonlyMap<numbe
   return numbers;
 }
 
+/** Points; well under any visible step, well over float error from offset sums. */
+const BOX_TOLERANCE = 0.001;
+
+function hasAnchoredDrawings(story: PageRecord['header']): boolean {
+  return (story?.anchoredDrawings?.length ?? 0) > 0;
+}
+
 /**
  * Give a body page the header and footer of its new page number.
  *
@@ -183,6 +190,9 @@ export function resettleBodyFurniture(
     const shift = after - before;
     // An even move keeps every page on its parity, so no variant changes.
     if (shift % 2 === 0) return page;
+    // Anchored furniture drawings can sit in the body's way; such a page keeps its shell.
+    // Checked before the resolver, which lays the new variant out.
+    if (hasAnchoredDrawings(page.header) || hasAnchoredDrawings(page.footer)) return page;
     const shell = overflowPageShellAt(layout, page.index, page.index, page.box, shift);
     if (!shell) return page;
     if (
@@ -190,12 +200,15 @@ export function resettleBodyFurniture(
       shell.footer?.variant === page.footer?.variant
     )
       return page;
+    // The body pass placed this content box through section-local offsets, so it can sit
+    // a rounding step away from the same edge computed here.
     const top = page.box.y + shell.insets.top;
-    if (top !== page.contentBox.y || shell.insets.height !== page.contentBox.height) return page;
-    const anchored = [page.header, page.footer, shell.header, shell.footer].some(
-      (story) => (story?.anchoredDrawings?.length ?? 0) > 0
-    );
-    if (anchored) return page;
+    if (
+      Math.abs(top - page.contentBox.y) > BOX_TOLERANCE ||
+      Math.abs(shell.insets.height - page.contentBox.height) > BOX_TOLERANCE
+    )
+      return page;
+    if (hasAnchoredDrawings(shell.header) || hasAnchoredDrawings(shell.footer)) return page;
     changed = true;
     return withShellFurniture(page, shell);
   });

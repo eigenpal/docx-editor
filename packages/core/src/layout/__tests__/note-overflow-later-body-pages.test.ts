@@ -44,6 +44,8 @@ function furnitureDoc(options: {
   readonly evenFooterLines?: number;
   /** Section two has a title page with no first-page header or footer: a blank cover. */
   readonly coverSectionTwo?: boolean;
+  /** A4 with margins and header distances that are not whole points. */
+  readonly fractionalGeometry?: boolean;
 }): Uint8Array {
   const story = (tag: 'hdr' | 'ftr', text: string, count = 1) =>
     strToU8(
@@ -56,9 +58,11 @@ function furnitureDoc(options: {
     '<w:headerReference w:type="even" r:id="rIdH2"/>' +
     '<w:footerReference w:type="default" r:id="rIdF1"/>' +
     '<w:footerReference w:type="even" r:id="rIdF2"/>';
-  const geometry =
-    '<w:pgSz w:w="12240" w:h="7200"/>' +
-    '<w:pgMar w:top="1080" w:right="720" w:bottom="1080" w:left="720" w:header="360" w:footer="360"/>';
+  const geometry = options.fractionalGeometry
+    ? '<w:pgSz w:w="11906" w:h="7203"/>' +
+      '<w:pgMar w:top="1087" w:right="719" w:bottom="1083" w:left="721" w:header="367" w:footer="363"/>'
+    : '<w:pgSz w:w="12240" w:h="7200"/>' +
+      '<w:pgMar w:top="1080" w:right="720" w:bottom="1080" w:left="720" w:header="360" w:footer="360"/>';
   const sectOne = `<w:sectPr>${refs}${geometry}<w:endnotePr><w:pos w:val="sectEnd"/></w:endnotePr></w:sectPr>`;
   const sectTwo =
     `<w:sectPr>${refs}<w:type w:val="nextPage"/>${geometry}` +
@@ -186,6 +190,15 @@ describe('body pages after a sectEnd note sheet', () => {
     layout.pages.forEach((page, index) => {
       expect(page.index).toBe(index);
       expect(page.pageFieldSource?.pageNumber ?? index + 1).toBe(index + 1);
+      expect(page.header?.variant).toBe(variantFor(index + 1));
+      expect(page.footer?.variant).toBe(variantFor(index + 1));
+    });
+  });
+
+  test('a page box that is not whole points still takes the variant of its new place', () => {
+    const layout = oddOverflowLayout({ fractionalGeometry: true });
+    layout.pages.forEach((page, index) => {
+      if (page.noteStream !== undefined) return;
       expect(page.header?.variant).toBe(variantFor(index + 1));
       expect(page.footer?.variant).toBe(variantFor(index + 1));
     });
