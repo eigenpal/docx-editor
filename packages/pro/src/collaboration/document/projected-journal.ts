@@ -23,7 +23,7 @@ import {
 } from './singleton-children.ts';
 import { PACKAGE_NODES_KEY, NODE_TEXT_FIELD, makeTextRecord, type SharedRecord } from './schema.ts';
 import { splitWinnerOrder } from './split-dedup.ts';
-import { splitSiblingOrder } from './split-sibling-order.ts';
+import { splitSiblingOrder, type SiblingRanks } from './split-sibling-order.ts';
 import { typedInsertOf, type TypedInsert } from './paragraph-text-typing.ts';
 import type { DocumentRegistry } from './registry.ts';
 import type { LogicalId } from './identity.ts';
@@ -379,6 +379,23 @@ export function projectJournalToShared(
   // concurrent peer duplicated. A node this journal creates is live by definition.
   // `companions` maps a shown singleton's index to the hidden copies it stands for, and
   // `repeats` maps a shown child's index to its other listings in the same parent.
+  // Children this journal listed right after a concurrent split sibling, by parent, with the
+  // child each was listed after: each follows that one wherever the rule shows it, as the
+  // shared order does once it holds the edit, though the stored ranks do not name it yet.
+  const attached = new Map<LogicalId, Map<LogicalId, LogicalId>>();
+  const ranksWith = (parentId: LogicalId, children: readonly LogicalId[]): SiblingRanks => {
+    const ranks = registry.splitSiblings.ranksOf(parentId);
+    const after = attached.get(parentId);
+    if (!ranks || !after) return ranks;
+    const out = new Map(ranks);
+    let step = 0;
+    for (const id of children) {
+      const anchor = after.get(id);
+      const rank = anchor === undefined || out.has(id) ? undefined : out.get(anchor);
+      if (rank) out.set(id, { group: rank.group, rank: rank.rank + (step += 1) / 1e6 });
+    }
+    return out;
+  };
   const visibleLayout = (
     parentId: LogicalId,
     children: readonly LogicalId[]
@@ -402,7 +419,7 @@ export function projectJournalToShared(
     // Then the materializer's order of concurrent split siblings, over the same ids.
     const siblings = splitSiblingOrder(
       shared.map((index) => children[index]!),
-      registry.splitSiblings.ranksOf(parentId)
+      ranksWith(parentId, children)
     );
     (siblings ? siblings.map((at) => shared[at]!) : shared).forEach((index) => {
       const id = children[index]!;
@@ -456,15 +473,21 @@ export function projectJournalToShared(
     const before = positions[visibleAt] ?? children.length;
     // Beside concurrent split siblings shown in another order than listed, a child goes right
     // after the one shown before it: it then follows that sibling wherever the rule puts it.
-    const ranks = registry.splitSiblings.ranksOf(parentId);
+    const ranks = ranksWith(parentId, children);
     const left = visibleAt > 0 ? positions[visibleAt - 1] : undefined;
     const shownAt = positions[visibleAt];
     if (
       ranks &&
       left !== undefined &&
       (ranks.has(children[left]!) || (shownAt !== undefined && ranks.has(children[shownAt]!)))
-    )
+    ) {
+      if (ranks.has(children[left]!)) {
+        const after = attached.get(parentId) ?? new Map<LogicalId, LogicalId>();
+        ids.forEach((id, at) => after.set(id, at === 0 ? children[left]! : ids[at - 1]!));
+        attached.set(parentId, after);
+      }
       return left + 1;
+    }
     if (!permuted(positions)) return before;
     const after = visibleAt > 0 ? positions[visibleAt - 1]! + 1 : 0;
     for (const at of [before, after, children.length]) {

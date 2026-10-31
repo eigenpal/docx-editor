@@ -528,10 +528,8 @@ export class SplitSiblingOrders {
 
 /**
  * Indexes of `ids` in the order the rule shows them, or null when nothing moves. Each run of
- * ids from one group is put in rank order; the list can be a parent's shared children or a
- * projection's working copy of them. A working copy can list an id without a rank between
- * two ids of one group, as an edit that just inserted it right after one of them: it moves
- * with the ranked id before it, as the shared order shows it once it holds the insert.
+ * consecutive ids from one group is put in rank order; the list can be a parent's shared
+ * children or a projection's working copy of them.
  */
 export function splitSiblingOrder(ids: readonly LogicalId[], ranks: SiblingRanks): number[] | null {
   if (!ranks) return null;
@@ -539,35 +537,17 @@ export function splitSiblingOrder(ids: readonly LogicalId[], ranks: SiblingRanks
   let moved = false;
   for (let start = 0; start < ids.length; ) {
     const first = ranks.get(ids[start]!);
-    if (!first) {
-      start += 1;
-      continue;
-    }
-    // The run ends at the last id of its group before an id of another group.
-    let last = start;
-    for (let at = start + 1; at < ids.length; at += 1) {
-      const rank = ranks.get(ids[at]!);
-      if (!rank) continue;
-      if (rank.group !== first.group) break;
-      last = at;
-    }
-    if (last > start) {
-      // Each ranked id with the unranked ids listed after it, in rank order.
-      const units: number[][] = [];
-      for (let at = start; at <= last; at += 1) {
-        if (ranks.has(ids[at]!)) units.push([at]);
-        else units.at(-1)!.push(at);
-      }
-      units.sort(
-        (left, right) => ranks.get(ids[left[0]!]!)!.rank - ranks.get(ids[right[0]!]!)!.rank
-      );
-      const segment = units.flat();
+    let end = start + 1;
+    while (first && end < ids.length && ranks.get(ids[end]!)?.group === first.group) end += 1;
+    if (end - start > 1) {
+      const segment = order.slice(start, end);
+      segment.sort((left, right) => ranks.get(ids[left]!)!.rank - ranks.get(ids[right]!)!.rank);
       for (let at = 0; at < segment.length; at += 1) {
         if (order[start + at] !== segment[at]) moved = true;
         order[start + at] = segment[at]!;
       }
     }
-    start = last + 1;
+    start = end;
   }
   return moved ? order : null;
 }
