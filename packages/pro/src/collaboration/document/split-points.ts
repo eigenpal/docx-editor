@@ -96,20 +96,20 @@ function serialized(points: readonly SplitPoint[], entry: string): string {
   ].join('\n');
 }
 
-/** The listing entry this edit gave each record it listed, for the fields it writes later. */
-const entries = new WeakMap<Y.Map<unknown>, string>();
-
-const entryKey = (item: Y.Item, id: LogicalId): string | null => {
-  const at = (item.content.getContent() as unknown[]).indexOf(id);
-  return at < 0 ? null : `${item.id.client}:${item.id.clock + at}`;
-};
-
 /**
  * Paragraph records the current edit created, by the peer that runs it. Only that edit writes
  * their split points: `endSplitPointEdit` forgets them when it ends, so a later edit of the
  * paragraph, as text pasted into a paragraph a break left empty, never rewrites the field.
  */
 let minted = new WeakSet<Y.Map<unknown>>();
+
+/** The listing entry this edit gave each record it created, for the fields it writes later. */
+let entries = new WeakMap<Y.Map<unknown>, string>();
+
+const entryKey = (item: Y.Item, id: LogicalId): string | null => {
+  const at = (item.content.getContent() as unknown[]).indexOf(id);
+  return at < 0 ? null : `${item.id.client}:${item.id.clock + at}`;
+};
 
 /** Note a paragraph record this edit created, before it is listed. */
 export function noteMintedParagraph(record: Y.Map<unknown> | undefined): void {
@@ -119,6 +119,7 @@ export function noteMintedParagraph(record: Y.Map<unknown> | undefined): void {
 /** The edit that noted new paragraphs ended: their split points are final. */
 export function endSplitPointEdit(): void {
   minted = new WeakSet();
+  entries = new WeakMap();
 }
 
 /**
@@ -148,17 +149,21 @@ export function inheritSplitPoints(
     let entry: string | null = null;
     for (const item of written) if (!item.deleted && (entry = entryKey(item, id))) break;
     if (!entry) continue;
-    const created = minted.has(record);
+    // Created by this edit and listed for the first time.
+    const created = minted.has(record) && !entries.has(record);
     if (created) entries.set(record, entry);
-    if (created && record.has(NODE_SPLIT_POINTS_FIELD)) continue;
+    if (created && record.has(NODE_SPLIT_POINTS_FIELD)) {
+      // It carries its own points: no split of this edit rewrites them.
+      minted.delete(record);
+      continue;
+    }
     listed ??= children.toArray();
     const at = listed.indexOf(id);
     const leftId = at > 0 ? listed[at - 1]! : undefined;
     if (!created && (leftId === undefined || !reordered(leftId))) continue;
-    const inherited = splitPointsOf(leftId === undefined ? undefined : nodeOf(leftId));
-    // A paragraph this edit created also counts as split off the end of the one before it.
+    let points = splitPointsOf(leftId === undefined ? undefined : nodeOf(leftId));
     const last = created && leftId !== undefined ? lastOf(leftId) : null;
-    const points = last ? [...inherited, { source: leftId!, at: `${last}+` }] : inherited;
+    if (last) points = [...points, { source: leftId!, at: `${last}+` }];
     if (points.length > 0) record.set(NODE_SPLIT_POINTS_FIELD, serialized(points, entry));
   }
 }
@@ -261,9 +266,7 @@ export function recordSplitPoints(writes: readonly SplitWrite[]): void {
       // Written by the edit that creates the paragraph, over what the listing gave it.
       const inherited = splitPointsOf(source.record);
       const entry = entries.get(write.record);
-      if (!entry) break;
-      if (write.record.has(NODE_SPLIT_POINTS_FIELD) && !minted.has(write.record)) break;
-      minted.delete(write.record);
+      if (!entry || !minted.delete(write.record)) break;
       write.record.set(
         NODE_SPLIT_POINTS_FIELD,
         serialized([...inherited, { source: source.id, at: origin }], entry)

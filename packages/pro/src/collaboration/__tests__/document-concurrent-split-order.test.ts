@@ -908,4 +908,42 @@ describe('undoing and redoing concurrent splits while offline', () => {
                   r.close();
                 }
               });
+
+  // A redo after an earlier undo and redo puts the paragraph back before the removed entry of
+  // the earlier redo, not before the entry its split made.
+  for (const { label, ids } of ORDERS)
+    test(`both peers redo offline after each undid and redid online (${label})`, async () => {
+      const r = await room('One; two; three', ids);
+      const split = ['One; ', 'two; ', 'three', 'Signed'];
+      try {
+        r.offline();
+        await splitAfter(r.alice.runtime, 'One; ', false);
+        later();
+        await splitAfter(r.bob.runtime, 'two; ', false);
+        later();
+        r.online();
+        await r.expectAll(split);
+        for (const peer of [r.alice, r.bob]) {
+          for (const type of ['undo', 'redo'] as const) {
+            expect(peer.editor.exec({ type }).ok).toBe(true);
+            r.sync();
+            later();
+          }
+          await r.expectAll(split);
+        }
+        r.offline();
+        for (const type of ['undo', 'redo'] as const) {
+          expect(r.alice.editor.exec({ type }).ok).toBe(true);
+          later();
+          expect(r.bob.editor.exec({ type }).ok).toBe(true);
+          later();
+          r.online();
+          await r.expectAll(type === 'undo' ? ['One; two; three', 'Signed'] : split, 0);
+          if (type === 'undo') r.offline();
+        }
+        await r.expectReopens(split);
+      } finally {
+        r.close();
+      }
+    });
 });
