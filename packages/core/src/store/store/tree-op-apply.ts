@@ -176,6 +176,7 @@ import {
 } from './tree-op-toc.ts';
 import { applyInsertTable } from './tree-op-insert-table.ts';
 import { applyMoveTable } from './tree-op-move-table.ts';
+import { applyInsertParagraphBesideTable } from './tree-op-paragraph-beside-table.ts';
 import { applyReplaceStoryBlocks } from './tree-op-story-replace.ts';
 import {
   inlineWrapperProperties,
@@ -329,6 +330,8 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
   if (isBookmarkTreeOp(op)) return applyBookmarkOp(part, op, options);
   if (op.op === 'insertTable') return applyInsertTable(part, op, options);
   if (op.op === 'moveTable') return applyMoveTable(part, op, options);
+  if (op.op === 'insertParagraphBesideTable')
+    return applyInsertParagraphBesideTable(part, op, options, applyTreeOp);
   if (op.op === 'deleteBlock') return applyDeleteBlock(part, op.blockId, options);
   if (op.op === 'insertToc') return applyInsertToc(part, op, options);
   if (op.op === 'replaceTocResult') return applyReplaceTocResult(part, op, options);

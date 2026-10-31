@@ -35,3 +35,18 @@ export interface MoveTableOp {
   readonly tableId: string;
   readonly beforeBlockId: string;
 }
+
+export interface InsertParagraphBesideTableOp {
+  /**
+   * Insert a paragraph holding `text` just before or just after a block-level table.
+   *
+   * For a table that opens or closes its story, where no paragraph of the same parent sits
+   * on that side to split.
+   */
+  readonly op: 'insertParagraphBesideTable';
+  readonly tableId: string;
+  readonly where: 'before' | 'after';
+  readonly text: string;
+  /** Propose the paragraph and its text as a tracked insertion. */
+  readonly revision?: RevisionAttributionInput;
+}
