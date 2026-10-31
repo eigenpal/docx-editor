@@ -24,6 +24,7 @@ const splice = (parentLogicalId: string): CanonicalPrimitiveEffect => ({
   deleteCount: 0,
   childLogicalIds: ['new'],
 });
+const ready = () => false;
 function fixture(result: MaterializeResult = success) {
   return {
     current: mock(() => result),
@@ -46,7 +47,7 @@ test('typing, no-op journals, and paragraph edits do not materialize the package
       },
     ],
   ] as readonly CanonicalPrimitiveEffect[][]) {
-    expect(prepareMemberRootJournal(view, { effects })).toBeNull();
+    expect(prepareMemberRootJournal(view, { effects }, ready)).toBeNull();
   }
   expect(view.current).not.toHaveBeenCalled();
 });
@@ -54,9 +55,11 @@ test('typing, no-op journals, and paragraph edits do not materialize the package
 test('several member splices refresh once before their coordinate projection', () => {
   const view = fixture();
   expect(
-    prepareMemberRootJournal(view, {
-      effects: [splice('paragraph'), splice(member), splice(member)],
-    })
+    prepareMemberRootJournal(
+      view,
+      { effects: [splice('paragraph'), splice(member), splice(member)] },
+      ready
+    )
   ).toBeNull();
   expect(view.current).toHaveBeenCalledTimes(1);
 });
@@ -64,16 +67,20 @@ test('several member splices refresh once before their coordinate projection', (
 test('a move into a member root refreshes its coordinates', () => {
   const view = fixture();
   expect(
-    prepareMemberRootJournal(view, {
-      effects: [
-        {
-          kind: 'moveNode',
-          logicalId: 'definition',
-          destinationParentLogicalId: member,
-          destinationIndex: 0,
-        },
-      ],
-    })
+    prepareMemberRootJournal(
+      view,
+      {
+        effects: [
+          {
+            kind: 'moveNode',
+            logicalId: 'definition',
+            destinationParentLogicalId: member,
+            destinationIndex: 0,
+          },
+        ],
+      },
+      ready
+    )
   ).toBeNull();
   expect(view.current).toHaveBeenCalledTimes(1);
 });
@@ -82,20 +89,44 @@ test.each(['missing-root', 'missing-blob', 'invalid-relationships'] as const)(
   'a failed member refresh preserves the typed %s refusal',
   (code) => {
     const view = fixture({ ok: false, code, issues: [] });
-    expect(prepareMemberRootJournal(view, { effects: [splice(member)] })).toEqual({ code });
+    expect(prepareMemberRootJournal(view, { effects: [splice(member)] }, ready)).toEqual({
+      failure: { code },
+      transient: false,
+    });
     expect(view.current).toHaveBeenCalledTimes(1);
   }
 );
 
 test('a member refresh refuses dropped content and reports its reason', () => {
   const view = fixture({ ...success, issues: [{ code: 'missing-node' }] });
-  expect(prepareMemberRootJournal(view, { effects: [splice(member)] })).toEqual({
-    code: 'materialize-dropped-content',
-    detail: 'missing-node=1',
+  expect(prepareMemberRootJournal(view, { effects: [splice(member)] }, ready)).toEqual({
+    failure: { code: 'materialize-dropped-content', detail: 'missing-node=1' },
+    transient: false,
   });
 });
 
 test('a harmless repaired duplicate does not refuse member edits', () => {
   const view = fixture({ ...success, issues: [{ code: 'duplicate-child' }] });
-  expect(prepareMemberRootJournal(view, { effects: [splice(member)] })).toBeNull();
+  expect(prepareMemberRootJournal(view, { effects: [splice(member)] }, ready)).toBeNull();
+});
+
+test('a refusal while a held-back update waits is transient', () => {
+  const waiting = mock(() => true);
+  for (const result of [
+    { ok: false, code: 'missing-root', issues: [] },
+    { ...success, issues: [{ code: 'missing-node' }] },
+  ] as MaterializeResult[]) {
+    const refusal = prepareMemberRootJournal(
+      fixture(result),
+      { effects: [splice(member)] },
+      waiting
+    );
+    expect(refusal?.transient).toBe(true);
+  }
+});
+
+test('a successful refresh does not ask whether updates wait', () => {
+  const waiting = mock(() => true);
+  expect(prepareMemberRootJournal(fixture(), { effects: [splice(member)] }, waiting)).toBeNull();
+  expect(waiting).not.toHaveBeenCalled();
 });

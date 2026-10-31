@@ -562,9 +562,11 @@ class DocumentSession implements DocumentCollaborationSession {
     if (!this.canWriteSharedState()) return;
     this.registry.inline.takeDrift();
     const translated = this.identityMap.translate(journal);
-    const memberFailure = prepareMemberRootJournal(this.materializer, translated);
-    if (memberFailure) {
-      this.refuseLocalJournal(memberFailure);
+    const memberRefusal = prepareMemberRootJournal(this.materializer, translated, () =>
+      awaitingUpdates(this.ydoc)
+    );
+    if (memberRefusal) {
+      this.refuseLocalJournal(memberRefusal.failure, memberRefusal.transient);
       return;
     }
     const projected = projectTypingOrJournal(this.registry, translated, (id) =>

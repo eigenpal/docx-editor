@@ -9,11 +9,18 @@ import { asLogicalId } from './identity.ts';
 import type { PackageMaterializer } from './materialize.ts';
 import { droppedContentDetail } from './schema.ts';
 
+/** A refused member refresh, and whether it waits on a held-back update. */
+export interface MemberRootRefusal {
+  readonly failure: CollaborationFailure;
+  readonly transient: boolean;
+}
+
 /** Refresh directory-member coordinates after earlier local journals, before projecting another. */
 export function prepareMemberRootJournal(
   materializer: Pick<PackageMaterializer, 'shownPartChildren' | 'current'>,
-  journal: CanonicalPrimitiveJournal
-): CollaborationFailure | null {
+  journal: CanonicalPrimitiveJournal,
+  waiting: () => boolean
+): MemberRootRefusal | null {
   const touchesMemberRoot = journal.effects.some((effect) => {
     const parentId =
       effect.kind === 'spliceChildren'
@@ -29,7 +36,13 @@ export function prepareMemberRootJournal(
   // cached root order from before those commits and then apply its newer insertion indexes.
   // Ordinary paragraph edits take no materialization pass here.
   const view = materializer.current();
-  if (!view.ok) return { code: view.code };
-  const dropped = droppedContentDetail(view.issues);
-  return dropped ? { code: 'materialize-dropped-content', detail: dropped } : null;
+  const dropped = view.ok ? droppedContentDetail(view.issues) : null;
+  const failure: CollaborationFailure | null = !view.ok
+    ? { code: view.code }
+    : dropped
+      ? { code: 'materialize-dropped-content', detail: dropped }
+      : null;
+  // A held-back update can leave the view incomplete until it arrives. That refusal must not
+  // count toward the streak that ends recovery, as the remote path treats it as waiting.
+  return failure ? { failure, transient: waiting() } : null;
 }
