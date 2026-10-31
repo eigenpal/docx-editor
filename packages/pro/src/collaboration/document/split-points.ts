@@ -20,10 +20,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * a paragraph's end does, takes the split points of the paragraph listed right before it. The order reads these first, and reads the text
  * only when a paragraph holds none, as one a release without this field wrote.
  *
- * The field is written once, by the peer that creates the paragraph, in the transaction that
- * creates it, so no two peers write it.
+ * The value starts with the listing entry it was written for (`#client:clock`): the order
+ * counts a paragraph as a split only at that entry, so a block that a move, an undo, or a redo
+ * lists again keeps its points but takes no part where it now stands. The edit that lists the
+ * paragraph writes the field, in the transaction that lists it: the split that creates it, a
+ * move that puts a block right after a sibling the order moves, or the deletion of such a
+ * sibling's entry, which hands its points to the block listed after it.
  */
-import type * as Y from 'yjs';
+import * as Y from 'yjs';
 import type { LogicalId } from './identity.ts';
 import { ORIGIN_KEY } from './paragraph-text-moves.ts';
 
@@ -41,12 +45,25 @@ export interface SplitPoint {
 
 const IDENTITY = /^\d{1,16}:\d{1,16}$/;
 
+/** The lines of a paragraph's split points field, or null for none or a malformed value. */
+function fieldLines(record: Y.Map<unknown> | undefined): string[] | null {
+  const value = record?.get(NODE_SPLIT_POINTS_FIELD);
+  return typeof value === 'string' && value.length <= 4096 ? value.split('\n') : null;
+}
+
+/** The listing entry a paragraph's split points were written for, or null. */
+export function splitEntryOf(record: Y.Map<unknown> | undefined): Y.ID | null {
+  const first = fieldLines(record)?.[0];
+  const match = first ? /^#(\d{1,16}):(\d{1,16})$/.exec(first) : null;
+  return match ? Y.createID(Number(match[1]), Number(match[2])) : null;
+}
+
 /** A paragraph's split points, nearest last, or an empty list for none or a malformed value. */
 export function splitPointsOf(record: Y.Map<unknown> | undefined): SplitPoint[] {
-  const value = record?.get(NODE_SPLIT_POINTS_FIELD);
-  if (typeof value !== 'string' || value.length > 4096) return [];
+  const lines = fieldLines(record);
+  if (!lines) return [];
   const points: SplitPoint[] = [];
-  for (const entry of value.split('\n').slice(-MAX_SPLIT_POINTS)) {
+  for (const entry of lines.filter((line) => !line.startsWith('#')).slice(-MAX_SPLIT_POINTS)) {
     const split = entry.lastIndexOf('@');
     const at = entry.slice(split + 1);
     if (split <= 0 || !IDENTITY.test(at)) return [];
@@ -55,12 +72,20 @@ export function splitPointsOf(record: Y.Map<unknown> | undefined): SplitPoint[] 
   return points;
 }
 
-function serialized(points: readonly SplitPoint[]): string {
-  return points
-    .slice(-MAX_SPLIT_POINTS)
-    .map((point) => `${point.source}@${point.at}`)
-    .join('\n');
+function serialized(points: readonly SplitPoint[], entry: string): string {
+  return [
+    `#${entry}`,
+    ...points.slice(-MAX_SPLIT_POINTS).map((point) => `${point.source}@${point.at}`),
+  ].join('\n');
 }
+
+/** The listing entry this edit gave each record it listed, for the fields it writes later. */
+const entries = new WeakMap<Y.Map<unknown>, string>();
+
+const entryKey = (item: Y.Item, id: LogicalId): string | null => {
+  const at = (item.content.getContent() as unknown[]).indexOf(id);
+  return at < 0 ? null : `${item.id.client}:${item.id.clock + at}`;
+};
 
 /** Paragraph records the current edit created, by the peer that runs it. */
 const minted = new WeakSet<Y.Map<unknown>>();
@@ -78,6 +103,8 @@ export function inheritSplitPoints(
   nodeOf: (id: LogicalId) => Y.Map<unknown> | undefined,
   children: Y.Array<LogicalId> | null,
   ids: readonly LogicalId[],
+  /** The items this edit wrote into `children`. */
+  written: readonly Y.Item[],
   /**
    * Whether a listed child is a concurrent split sibling the rule moves. A block this edit
    * moves right after one takes its split points too: it follows that sibling, and once the
@@ -90,15 +117,83 @@ export function inheritSplitPoints(
   for (const id of ids) {
     const record = nodeOf(id);
     if (!record) continue;
+    let entry: string | null = null;
+    for (const item of written) if (!item.deleted && (entry = entryKey(item, id))) break;
+    if (!entry) continue;
     const created = minted.delete(record);
+    if (created) entries.set(record, entry);
     if (created && record.has(NODE_SPLIT_POINTS_FIELD)) continue;
     listed ??= children.toArray();
     const at = listed.indexOf(id);
     const leftId = at > 0 ? listed[at - 1]! : undefined;
     if (!created && (leftId === undefined || !reordered(leftId))) continue;
     const points = splitPointsOf(leftId === undefined ? undefined : nodeOf(leftId));
-    if (points.length > 0) record.set(NODE_SPLIT_POINTS_FIELD, serialized(points));
+    if (points.length > 0) record.set(NODE_SPLIT_POINTS_FIELD, serialized(points, entry));
   }
+}
+
+/**
+ * Before this edit removes listing entries from `children`: a removed entry of a sibling the
+ * order moves hands its split points to the entry listed right after it from its own place,
+ * which then shows where the sibling showed. A collected entry names no paragraph, so without
+ * this the block would lose its place in the run.
+ */
+export function handOnSplitPoints(
+  nodeOf: (id: LogicalId) => Y.Map<unknown> | undefined,
+  children: Y.Array<LogicalId> | null,
+  start: number,
+  count: number,
+  reordered: (id: LogicalId) => boolean
+): void {
+  if (!children || count <= 0) return;
+  const removed: Y.Item[] = [];
+  let index = 0;
+  let item = (children as unknown as { _start: Y.Item | null })._start;
+  for (; item && index < start + count; item = item.right) {
+    if (item.deleted || !item.countable) continue;
+    if (index >= start) removed.push(item);
+    index += item.length;
+  }
+  for (const gone of removed) {
+    const id = (gone.content.getContent() as LogicalId[])[0]!;
+    if (!reordered(id)) continue;
+    const points = splitPointsOf(nodeOf(id));
+    if (points.length === 0) continue;
+    // The first entry that stays among those listed after it from its place, through entries
+    // this edit removes as well, as a block moved with it.
+    const chain = [gone];
+    let next = gone.right;
+    for (; next; next = next.right) {
+      if (next.deleted && !chain.some((member) => inItem(next!.origin, member))) continue;
+      if (!chain.some((member) => inItem(next!.origin, member))) {
+        next = null;
+        break;
+      }
+      if (!next.deleted && !removed.includes(next)) break;
+      chain.push(next);
+    }
+    if (!next) continue;
+    const nextId = (next.content.getContent() as LogicalId[])[0]!;
+    const record = nodeOf(nextId);
+    const entry = record ? entryKey(next, nextId) : null;
+    if (!record || !entry) continue;
+    // A paragraph split off a block that followed the sibling keeps its own split points
+    // after the sibling's, as it would hold had it been split off the sibling's piece.
+    const own = splitEntryOf(record);
+    const held = own && inItem(own, next) ? splitPointsOf(record) : [];
+    if (held.some((point) => point.source === points.at(-1)!.source)) continue;
+    record.set(NODE_SPLIT_POINTS_FIELD, serialized([...points, ...held], entry));
+  }
+}
+
+/** Whether `id` names an element of `item`. */
+export function inItem(id: Y.ID | null, item: Y.Item): boolean {
+  return (
+    id !== null &&
+    id.client === item.id.client &&
+    id.clock >= item.id.clock &&
+    id.clock < item.id.clock + item.length
+  );
 }
 
 /** The first moved character a paragraph's split points give for a split of `source`. */
@@ -135,11 +230,13 @@ export function recordSplitPoints(writes: readonly SplitWrite[]): void {
       // Written once: a paragraph holds no field yet, or only what it took from the paragraph
       // it was listed after, which is the paragraph it was split off.
       const inherited = splitPointsOf(source.record);
+      const entry = entries.get(write.record);
+      if (!entry) break;
       const held = write.record.get(NODE_SPLIT_POINTS_FIELD);
-      if (held !== undefined && held !== serialized(inherited)) break;
+      if (held !== undefined && held !== serialized(inherited, entry)) break;
       write.record.set(
         NODE_SPLIT_POINTS_FIELD,
-        serialized([...inherited, { source: source.id, at: origin }])
+        serialized([...inherited, { source: source.id, at: origin }], entry)
       );
       break;
     }

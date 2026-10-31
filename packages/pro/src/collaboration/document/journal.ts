@@ -31,7 +31,7 @@ import {
   rejectString,
   type LimitCode,
 } from './limits.ts';
-import type * as Y from 'yjs';
+import * as Y from 'yjs';
 import {
   childArrayOf,
   hasPendingUpdates,
@@ -45,7 +45,8 @@ import { SharedTextValueRefused } from './paragraph-text-codec.ts';
 import { tokensOfParagraph, type Token } from './paragraph-text-diff.ts';
 import { JournalProjection, projectEffect } from './journal-projection.ts';
 import type { DocumentRegistry } from './registry.ts';
-import { inheritSplitPoints, noteMintedParagraph } from './split-points.ts';
+import { itemsWrittenSince } from './yjs-items.ts';
+import { handOnSplitPoints, inheritSplitPoints, noteMintedParagraph } from './split-points.ts';
 
 export type JournalRefusalCode =
   | LimitCode
@@ -353,6 +354,17 @@ function applyEffect(
     case 'spliceChildren': {
       const listed = registry.record(effect.parentLogicalId);
       const length = listed && 'childIds' in listed ? listed.childIds.length : effect.start;
+      const children = childArrayOf(registry.schema.nodes.get(effect.parentLogicalId));
+      const reordered = (id: LogicalId): boolean =>
+        registry.splitSiblings.ranksOf(effect.parentLogicalId)?.has(id) ?? false;
+      handOnSplitPoints(
+        (id) => registry.schema.nodes.get(id),
+        children,
+        effect.start,
+        effect.deleteCount,
+        reordered
+      );
+      const from = Y.getState(registry.doc.store, registry.doc.clientID);
       registry.spliceChildren(
         effect.parentLogicalId,
         appendsToPartRoot(registry, effect, length) ? length : effect.start,
@@ -363,9 +375,10 @@ function applyEffect(
       // sibling, takes the split points of the one listed before it.
       inheritSplitPoints(
         (id) => registry.schema.nodes.get(id),
-        childArrayOf(registry.schema.nodes.get(effect.parentLogicalId)),
+        children,
         effect.childLogicalIds,
-        (id) => registry.splitSiblings.ranksOf(effect.parentLogicalId)?.has(id) ?? false
+        [...itemsWrittenSince(registry.doc, from)].filter((item) => item.parent === children),
+        reordered
       );
       return;
     }

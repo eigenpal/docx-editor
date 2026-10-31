@@ -24,16 +24,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import * as Y from 'yjs';
 import type { LogicalId } from './identity.ts';
-import { firstItem, mapEntry, structAt } from './yjs-items.ts';
+import { firstItem, structAt } from './yjs-items.ts';
 import { itemIdentity, type Identity } from './paragraph-text-identity.ts';
 import { marksOfText } from './paragraph-text-marks.ts';
 import { childArrayOf, PACKAGE_NODES_KEY } from './schema.ts';
-import {
-  NODE_SPLIT_POINTS_FIELD,
-  splitAtIn,
-  splitPointsOf,
-  type SplitPoint,
-} from './split-points.ts';
+import { splitAtIn, splitEntryOf, splitPointsOf, type SplitPoint } from './split-points.ts';
 
 /**
  * How many clocks of one paragraph's text the rule reads. It counts clocks, which every
@@ -175,27 +170,24 @@ export function splitSiblingRanks(
         }
       }
     }
-    start = end;
+    // A run that moves nothing leaves its blocks as listed, so a run inside one of them, as
+    // splits of a paragraph a moved block carries, is read on its own.
+    start = order ? end : start + 1;
   }
   return ranks;
 }
 
 /**
- * Whether `item` is the entry a split made when it added its paragraph. The edit that adds a
- * paragraph writes the paragraph's split points after it lists the paragraph, so their entry
- * is that author's and comes later. A paragraph listed again by a move, an undo, or a redo
- * keeps its earlier entry, and a paragraph that names no split point is no split.
+ * Whether `item` is the entry a paragraph's split points were written for (`split-points.ts`):
+ * the entry a split made when it added the paragraph, or one that took a moved sibling's points.
+ * A paragraph listed again by a move, an undo, or a redo names its earlier entry, and a
+ * paragraph that names no split point is no split.
  */
 function listedBySplit(nodes: Y.Map<unknown> | null, item: Y.Item): boolean {
   const record = nodes?.get(headId(item) as string);
   if (!(record instanceof Y.Map)) return false;
-  const points = mapEntry(record, NODE_SPLIT_POINTS_FIELD);
-  return (
-    points !== undefined &&
-    !points.deleted &&
-    points.id.client === item.id.client &&
-    points.id.clock > item.id.clock
-  );
+  const entry = splitEntryOf(record as Y.Map<unknown>);
+  return entry !== null && inItem(entry, item);
 }
 
 /** The paragraph a listing item names first. */
