@@ -91,7 +91,7 @@ In an RTL interface, the editor changes these parts:
 | Header and footer hints | The hover hints, such as **Double-click to edit header**, use the interface language. |
 | Page setup | The margin unit uses the interface language. |
 
-The pages take their direction from the document, not from the interface. The vertical scroll bar stays at the right edge. The scroll container keeps a left-to-right base for its scroll offsets.
+The pages take their direction from the document, not from the interface. In a right-to-left interface, the vertical scroll bar is at the left edge of the viewport, and a page wider than the viewport opens at its right edge.
 
 ### Choose the interface direction
 
@@ -138,7 +138,7 @@ The interface language does not change the direction of an existing document.
 
 You can mount the editor in a page that sets `dir="rtl"` on the page or on an ancestor of the editor. You don't need to override the direction on the editor components. The review column and the navigation pane read the nearest `dir` attribute, so set the attribute rather than only the CSS `direction` property.
 
-The painted pages and the `DocxEditor.Viewport` scroll container keep a left-to-right base whatever direction the host page sets. Text direction comes only from the document's `w:bidi` and `w:rtl` properties. Page layout, caret placement, selection, zoom, and horizontal scrolling are the same in left-to-right and right-to-left host pages.
+The painted pages keep a left-to-right base whatever direction the host page sets. Text direction comes only from the document's `w:bidi` and `w:rtl` properties. Page layout, caret placement, selection, and zoom are the same in left-to-right and right-to-left host pages. The `DocxEditor.Viewport` scroll container follows the interface direction, so its vertical scroll bar moves to the left in a right-to-left interface.
 
 The toolbar, menus, and other controls outside the viewport inherit the host page direction. So do the review column, which moves to the left of the page, and the navigation pane, which opens at the right. Controls that mount inside the viewport, such as dialogs, the context menu, and comment cards, take the direction that a `dir` attribute declares on an ancestor. They keep their positions, so only their content mirrors.
 
