@@ -96,6 +96,21 @@ function serialized(points: readonly SplitPoint[], entry: string): string {
   ].join('\n');
 }
 
+/** The index in `children` of `id`'s element in the live entry `entry`, or -1. */
+function indexOfEntry(children: Y.Array<LogicalId>, entry: Y.Item, id: LogicalId): number {
+  let index = 0;
+  let item = (children as unknown as { _start: Y.Item | null })._start;
+  for (; item; item = item.right) {
+    if (item.deleted || !item.countable) continue;
+    if (item === entry) {
+      const at = (item.content.getContent() as unknown[]).indexOf(id);
+      return at < 0 ? -1 : index + at;
+    }
+    index += item.length;
+  }
+  return -1;
+}
+
 /** The listing entry this edit gave each record it listed, for the fields it writes later. */
 const entries = new WeakMap<Y.Map<unknown>, string>();
 
@@ -146,13 +161,20 @@ export function inheritSplitPoints(
     const record = nodeOf(id);
     if (!record) continue;
     let entry: string | null = null;
-    for (const item of written) if (!item.deleted && (entry = entryKey(item, id))) break;
-    if (!entry) continue;
+    let entryItem: Y.Item | null = null;
+    for (const item of written) {
+      if (!item.deleted && (entry = entryKey(item, id))) {
+        entryItem = item;
+        break;
+      }
+    }
+    if (!entry || !entryItem) continue;
     const created = minted.has(record);
     if (created) entries.set(record, entry);
     if (created && record.has(NODE_SPLIT_POINTS_FIELD)) continue;
     listed ??= children.toArray();
-    const at = listed.indexOf(id);
+    // Where this edit's entry stands: a block can be listed twice after concurrent moves.
+    const at = indexOfEntry(children, entryItem, id);
     const leftId = at > 0 ? listed[at - 1]! : undefined;
     if (!created && (leftId === undefined || !reordered(leftId))) continue;
     const inherited = splitPointsOf(leftId === undefined ? undefined : nodeOf(leftId));
@@ -177,36 +199,52 @@ export function handOnSplitPoints(
   reordered: (id: LogicalId) => boolean
 ): void {
   if (!children || count <= 0) return;
-  const removed: Y.Item[] = [];
+  // Each removed entry, as its item and its element: one splice can list several paragraphs.
+  const removed: { item: Y.Item; at: number }[] = [];
+  const whole = new Set<Y.Item>();
   let index = 0;
   let item = (children as unknown as { _start: Y.Item | null })._start;
   for (; item && index < start + count; item = item.right) {
     if (item.deleted || !item.countable) continue;
-    if (index >= start) removed.push(item);
+    const first = Math.max(start - index, 0);
+    const end = Math.min(start + count - index, item.length);
+    for (let at = first; at < end; at += 1) removed.push({ item, at });
+    if (first === 0 && end === item.length) whole.add(item);
     index += item.length;
   }
-  for (const gone of removed) {
-    const id = (gone.content.getContent() as LogicalId[])[0]!;
+  const elementOf = (holder: Y.Item, at: number): LogicalId =>
+    (holder.content.getContent() as LogicalId[])[at]!;
+  const stays = (holder: Y.Item, at: number): boolean =>
+    !removed.some((entry) => entry.item === holder && entry.at === at);
+  for (const { item: gone, at: goneAt } of removed) {
+    const id = elementOf(gone, goneAt);
     if (!reordered(id)) continue;
     const points = splitPointsOf(nodeOf(id));
     if (points.length === 0) continue;
-    // The first entry that stays among those listed after it from its place, through entries
-    // this edit removes as well, as a block moved with it.
-    const chain = [gone];
-    let next = gone.right;
-    for (; next; next = next.right) {
-      if (next.deleted && !chain.some((member) => inItem(next!.origin, member))) continue;
-      if (!chain.some((member) => inItem(next!.origin, member))) {
-        next = null;
-        break;
+    // The first entry that stays among those listed after it from its place: later in the
+    // same item, or through entries this edit removes as well, as a block moved with it.
+    let next: Y.Item | null = gone;
+    let nextAt = goneAt + 1;
+    while (nextAt < gone.length && !stays(gone, nextAt)) nextAt += 1;
+    if (nextAt >= gone.length) {
+      const chain = [gone];
+      for (next = gone.right; next; next = next.right) {
+        if (next.deleted && !chain.some((member) => inItem(next!.origin, member))) continue;
+        if (!chain.some((member) => inItem(next!.origin, member))) {
+          next = null;
+          break;
+        }
+        if (!next.deleted && !whole.has(next)) break;
+        chain.push(next);
       }
-      if (!next.deleted && !removed.includes(next)) break;
-      chain.push(next);
+      if (!next) continue;
+      nextAt = 0;
+      while (nextAt < next.length && !stays(next, nextAt)) nextAt += 1;
+      if (nextAt >= next.length) continue;
     }
-    if (!next) continue;
-    const nextId = (next.content.getContent() as LogicalId[])[0]!;
+    const nextId = elementOf(next, nextAt);
     const record = nodeOf(nextId);
-    const entry = record ? entryKey(next, nextId) : null;
+    const entry = record ? `${next.id.client}:${next.id.clock + nextAt}` : null;
     if (!record || !entry) continue;
     // A paragraph split off a block that followed the sibling keeps its own split points
     // after the sibling's, as it would hold had it been split off the sibling's piece.
