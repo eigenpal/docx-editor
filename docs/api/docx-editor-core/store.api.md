@@ -1592,7 +1592,7 @@ export interface EnsuredHyperlinkRelationship {
 export function ensureHyperlinkRelationship(pkg: OoxmlPackage, url: string, ownerPart?: string): EnsuredHyperlinkRelationship | null;
 
 // @public
-export function ensureListDefinition(pkg: OoxmlPackage, kind: ListKind): EnsuredListDefinition | null;
+export function ensureListDefinition(pkg: OoxmlPackage, kind: ListKind, geometry?: ListDefinitionGeometry): EnsuredListDefinition | null;
 
 // @public
 export function ensureNumberingLevel(pkg: OoxmlPackage, numId: string, level: number, kind: ListKind): OoxmlPackage | null;
@@ -2426,6 +2426,18 @@ export interface InsertPageFieldOp {
 }
 
 // @public (undocumented)
+export interface InsertParagraphBesideTableOp {
+    readonly op: 'insertParagraphBesideTable';
+    readonly revision?: RevisionAttributionInput;
+    // (undocumented)
+    readonly tableId: string;
+    // (undocumented)
+    readonly text: string;
+    // (undocumented)
+    readonly where: 'before' | 'after';
+}
+
+// @public (undocumented)
 export interface InsertTableOp {
     // (undocumented)
     readonly beforeParagraphId: string;
@@ -2742,7 +2754,21 @@ export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonl
 export function listBookmarks(part: OoxmlPart): readonly BookmarkRecord[];
 
 // @public
+export type ListDefinitionGeometry = readonly (ListLevelGeometry | undefined)[];
+
+// @public
 export type ListKind = 'bullet' | 'ordered';
+
+// @public
+export interface ListLevelGeometry {
+    readonly align?: 'left' | 'center' | 'right';
+    readonly firstLine?: number;
+    readonly hanging?: number;
+    readonly left?: number;
+    readonly paragraphProperties?: OoxmlElement;
+    readonly right?: number;
+    readonly suffix?: 'tab' | 'space' | 'nothing';
+}
 
 // @public
 export function liveDrawingReferenceCount(pkg: OoxmlPackage, partName: string): number;
@@ -5259,7 +5285,7 @@ export interface TransportPort {
 }
 
 // @public
-export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setRevisionAttribution", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "insertComplexField", "insertEquation", "setFieldCode", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setMathEquation", "removeMathEquation", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "moveTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "mergeTableCells", "splitTableCell", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableProperties", "authorTable", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "setDocumentProtection", "setWatermark", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertFragment", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "insertToc", "replaceTocResult", "rewriteTocPageNumbers", "refreshFieldResults", "setFieldResult", "setTextFormFieldDefault", "commitTextFormField", "setLegacyCheckbox", "setLegacyDropdown", "insertBuildingBlock", "insertBookmark", "deleteBookmark"];
+export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setRevisionAttribution", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "insertComplexField", "insertEquation", "setFieldCode", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setMathEquation", "removeMathEquation", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "moveTable", "insertParagraphBesideTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "mergeTableCells", "splitTableCell", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableProperties", "authorTable", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "setDocumentProtection", "setWatermark", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertFragment", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "insertToc", "replaceTocResult", "rewriteTocPageNumbers", "refreshFieldResults", "setFieldResult", "setTextFormFieldDefault", "commitTextFormField", "setLegacyCheckbox", "setLegacyDropdown", "insertBuildingBlock", "insertBookmark", "deleteBookmark"];
 
 // @public
 export type TreeDocOp = SetFieldCodeOp | {
@@ -5457,7 +5483,7 @@ export type TreeDocOp = SetFieldCodeOp | {
 } | {
     readonly blockId: string;
     readonly op: 'deleteBlock';
-} | InsertTableOp | MoveTableOp | {
+} | InsertTableOp | MoveTableOp | InsertParagraphBesideTableOp | {
     readonly op: 'insertTableRow';
     readonly revision?: RevisionAttributionInput;
     readonly rowId: string;
@@ -5486,11 +5512,13 @@ export type TreeDocOp = SetFieldCodeOp | {
 } | {
     readonly cellIds: readonly string[];
     readonly op: 'mergeTableCells';
+    readonly revision?: RevisionAttributionInput;
     readonly tableId: string;
 } | {
     readonly cellId: string;
     readonly columns: number;
     readonly op: 'splitTableCell';
+    readonly revision?: RevisionAttributionInput;
     readonly rows: number;
     readonly tableId: string;
 } | {
@@ -5936,6 +5964,8 @@ export type TreeOpRejection = 'unknown-op' | 'unknown-paragraph' | 'not-a-paragr
 | 'cell-has-revision'
 /** The split cells would be narrower than the minimum column width. */
 | 'cell-too-narrow'
+/** A whole-cell value write addresses a cell that is not one plain paragraph. */
+| 'unsupported-cell-content'
 /** Without `w:tblGrid`, a cell splits only into a divisor of the columns it spans. */
 | 'split-needs-grid'
 /** The addressed grid column id is missing or ambiguous without `w:tblGrid`. */

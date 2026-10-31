@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Switching a list item between bullets and numbers minted a definition with default level indents, so the item moved.",
+  "after": "The minted definition keeps each level's stated indent, suffix, alignment and level paragraph properties from the list the item leaves; an item its style numbers at another indent gets its own definition at that indent.",
+  "reason": "The change writes ordinary numbering.xml definitions and paragraph indents through the existing package and tree op lanes. Released participants read and replicate them unchanged; no shared format or update meaning changes.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-list-kind-switch.test.ts",
+    "packages/core/src/editor/__tests__/list-kind-switch-geometry.test.ts"
+  ],
+  "changeset": "list-kind-switch-indent",
+  "migration": null
+}

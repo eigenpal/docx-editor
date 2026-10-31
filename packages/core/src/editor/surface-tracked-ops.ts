@@ -24,6 +24,8 @@ type RevisionCapableOp = Extract<
       | 'insertTable'
       | 'insertTableRow'
       | 'deleteTableRow'
+      | 'mergeTableCells'
+      | 'splitTableCell'
       | 'setRunProperties'
       | 'setParagraphProperties'
       | 'setParagraphMarkProperties'
@@ -46,6 +48,9 @@ const REVISION_CAPABLE_OPS: ReadonlySet<TreeDocOp['op']> = new Set<RevisionCapab
   'insertTable',
   'insertTableRow',
   'deleteTableRow',
+  // Only inside the author's own proposed table: suggesting refuses them anywhere else.
+  'mergeTableCells',
+  'splitTableCell',
   'setRunProperties',
   'setParagraphProperties',
   'setParagraphMarkProperties',

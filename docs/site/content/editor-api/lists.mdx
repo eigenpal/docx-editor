@@ -50,6 +50,10 @@ Automatic spacing stays tight between adjacent items in the same list, including
 
 The editor follows the document relationship when style definitions use a different package filename. Line-unit paragraph margins (`w:beforeLines` and `w:afterLines`) use a fixed 12-point unit without a document grid. An active section grid supplies its line pitch instead. Line-unit values take precedence over point values, including inherited values; automatic spacing takes precedence over both. Contextual spacing applies in body text and table cells, including paragraphs using the implicit default style.
 
+## Switch list markers in the editor
+
+When you switch list items to bullets, each item keeps its text and marker indents. A selection can include items with numbering from a paragraph style and items with direct numbering. Each item keeps its own indents, regardless of its position in the selection. When you switch items to numbers, items at the same level share one indent, so they number as one list.
+
 ## Discover and join existing lists
 
 `ListCollection` exposes `items`, `getFirst()`, and `getById(id)`. Load a list's `id` before using its numeric value. `List.paragraphs` returns all its paragraphs. `List.getLevelParagraphs(level)` returns the paragraphs at one level. Load collection items, then load their text or formatting properties.
@@ -64,7 +68,7 @@ paragraph.attachToList(list.id, 1);
 await context.sync();
 ```
 
-`Paragraph.attachToList(listId, level)` returns the addressed `List`. `Paragraph.detachFromList()` removes that paragraph's list membership. `Paragraph.list` returns its existing list. If the paragraph has no list, the operation fails with `InvalidArgument`. `Paragraph.listItem.level` reads or writes its level. Existing lists can omit levels. The runtime rejects assignments to a missing level. There is no marker-text `listString` or `siblingIndex` property in this subset.
+`Paragraph.attachToList(listId, level)` returns the addressed `List`. `Paragraph.detachFromList()` removes that paragraph's list membership. `Paragraph.list` returns its existing list. If the paragraph has no list, the operation fails with `InvalidArgument`. `Paragraph.listItem.level` reads or writes its level. A new level removes the paragraph’s own left and first-line or hanging indents, so the item takes the indents of that level. Its right indent stays. Existing lists can omit levels. The runtime rejects assignments to a missing level. There is no marker-text `listString` or `siblingIndex` property in this subset.
 
 ## Choose level markers
 

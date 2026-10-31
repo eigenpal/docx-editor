@@ -16,9 +16,9 @@ The editor displays control boundaries and provides typed operations to read and
 
 See the [Word fidelity matrix](/docs/2.x/word-fidelity) for support levels across features.
 
-## Filling a template from a server
+## Fill a template from a server
 
-[`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) is the headless path, and its object model is Office.js-compatible. Reads are batched, then one `sync()` sends the writes as a single ordered batch:
+[`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) provides a headless runtime with a documented Office.js subset. Load the control tags before reading them. Then commit the writes in one batch:
 
 ```ts
 import { readFile, writeFile } from 'node:fs/promises';
@@ -28,8 +28,8 @@ const runtime = await DocxEditor.createServer(await readFile('contract-template.
 try {
   await runtime.run(async (context) => {
     const controls = context.document.body.contentControls;
-    controls.load();
-    await context.sync(); // one round trip: now you know what the template has
+    controls.load('items/tag');
+    await context.sync(); // Read the control tags.
 
     for (const control of controls.items) {
       if (control.tag === 'customerName') control.setValue({ kind: 'text', text: 'Acme GmbH' });
@@ -37,7 +37,7 @@ try {
       if (control.tag === 'agree') control.setValue({ kind: 'checkbox', checked: true });
       if (control.tag === 'betaClause') control.delete(false); // condition not met
     }
-    await context.sync(); // one atomic batch: all of the writes, or none
+    await context.sync(); // Commit all writes together.
   });
 
   await writeFile('contract-acme.docx', Buffer.from(await runtime.save()));
@@ -54,7 +54,7 @@ The editor rejects a value update if it would remove a sibling table or nested c
 
 ## Values are typed
 
-`setValue` takes a discriminated value rather than a bare string, so a typed control cannot be filled with something it cannot hold:
+`setValue()` is a DocxEditor extension, not an Office.js member. Its value identifies the control type and the data to write:
 
 | Kind | Shape | For |
 | --- | --- | --- |
@@ -70,7 +70,7 @@ The editor rejects a value update if it would remove a sibling table or nested c
 `placeholderShown` tells you the control still holds Word's boilerplate ("Click here to enter text") rather than real data. Check it before treating `text` as entered content. `cannotEdit` and `cannotDelete` expose the control's locks, and are settable when you are producing a template rather than filling one.
 
 ```ts
-controls.load();
+controls.load('items/placeholderShown');
 await context.sync();
 
 const unfilled = controls.items.filter((c) => c.placeholderShown);
@@ -97,13 +97,20 @@ function ControlInspector() {
       <h4>{control.alias ?? control.tag ?? control.id}</h4>
       <p>{control.controlType}</p>
       <button
+        type="button"
+        onMouseDown={(event) => event.preventDefault()}
         disabled={!canSetValue}
         title={setValueDisabledReason ?? undefined}
         onClick={() => setValue('Acme GmbH')}
       >
         Fill
       </button>
-      <button disabled={!canRemove} onClick={() => remove()}>
+      <button
+        type="button"
+        onMouseDown={(event) => event.preventDefault()}
+        disabled={!canRemove}
+        onClick={() => remove()}
+      >
         Remove
       </button>
     </div>
@@ -130,11 +137,14 @@ const { control, setValue, canSetValue, setValueDisabledReason, remove, canRemov
       type="button"
       :disabled="!canSetValue"
       :title="setValueDisabledReason ?? undefined"
+      @mousedown.prevent
       @click="setValue('Acme GmbH')"
     >
       Fill
     </button>
-    <button type="button" :disabled="!canRemove" @click="remove()">Remove</button>
+    <button type="button" :disabled="!canRemove" @mousedown.prevent @click="remove()">
+      Remove
+    </button>
   </div>
 </template>
 ```
@@ -144,7 +154,7 @@ const { control, setValue, canSetValue, setValueDisabledReason, remove, canRemov
 
 The inspector state carries `tag`, `alias`, `id`, `controlType`, `locked`, `removalLocked`, `effectiveLock`, `bound` (whether it is driven by a data binding), and `placeholder`.
 
-`showAll` / `setShowAll` toggles boundary rendering for every control, and `formFill` / `setFormFill` puts the document into fill-only mode, where the caret can enter controls but not the text around them. The packaged `ContentControl` part is the inspector panel over exactly this API, and `CONTENT_CONTROL_SLOTS` lists the matching chrome slot ids.
+`showAll` / `setShowAll` toggles boundary rendering for every control. `formFill` / `setFormFill` enables Tab and Shift+Tab navigation between editable controls, skipping locked and bound controls. This setting does not prevent editing outside controls. Use [document protection](/docs/2.x/guides/document-protection) when the document must restrict edits. The packaged `ContentControl` part uses this API, and `CONTENT_CONTROL_SLOTS` lists its chrome slot IDs.
 
 A data-bound control rejects a direct write: its content comes from the Custom XML store, so writing it here would not persist in Word. `setValueDisabledReason` reports the reason instead of dropping the write.
 
@@ -297,7 +307,7 @@ In React and Vue, pass the same value as the `contentLockPolicy` prop. The edito
 With the option, run formatting passes the content lock: bold, italic, color, font, size, and highlight, on the control's text or on its paragraph marks. The toolbar, keyboard shortcuts, and automation `setFont` all follow the same rule. These edits are still refused with `locked`:
 
 - Typing, pasting, cutting, or deleting text in the control.
-- Other paragraph properties, such as indents or spacing.
+- Paragraph styles, lists, text direction, tab stops, and contextual spacing.
 - Removing a control whose wrapper is locked.
 - Tracked character formatting in suggesting mode. Its revision would sit inside the lock, where nobody could accept or reject it.
 

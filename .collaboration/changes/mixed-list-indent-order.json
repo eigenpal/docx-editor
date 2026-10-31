@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Converting selected numbered items to bullets could move earlier items to the indent of a later style-numbered item.",
+  "after": "Converting numbered items to bullets preserves each selected indent regardless of item order.",
+  "reason": "The fix groups existing numbering definitions correctly. Shared operations, stored fields, and update meaning stay unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/list-kind-switch-geometry.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-list-kind-switch.test.ts"
+  ],
+  "changeset": "mixed-list-indent-order",
+  "migration": null
+}

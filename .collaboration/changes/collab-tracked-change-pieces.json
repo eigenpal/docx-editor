@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A store kept pieces of one tracked change apart after an unlink, a control removal, or a decision removed what stood between them, and a tracked deletion struck runs in a container as separate pieces. Typing in the deletion then landed between pieces, and a card decision reached one piece, while every peer showed one change. The paragraph text writer matched kept letters by value only at the ends of a gap, did not count a strike as keeping a letter in its insertion, and let one strong match on a text element that formatting moved to a later piece decide the alignment. It then wrote kept letters again as new characters, so a peer's concurrent accept, reject, or deletion did not reach them.",
+  "after": "The store joins pieces of one change that an edit makes neighbours, and a tracked deletion joins its pieces inside every container, so typing and decisions read one change as peers do. The writer keeps every letter of a gap that only deletes, prefers the equal letter that stays in its revisions, and uses the alignment from the equal ends when it keeps more letters, so kept characters keep their identity.",
+  "reason": "Shared text holds revisions as attributes on characters, so joining wrapper pieces in a store writes nothing new. The writer still writes ordinary inserts, deletes, and formats in the existing format; it only keeps more existing characters. Released replicas read the result the same way, and a mixed room converges. No stored field, identity rule, conflict rule, or canonical mapping changes.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-concurrent-strike-decision.test.ts",
+    "packages/pro/src/collaboration/__tests__/paragraph-text-diff-kept-letters.test.ts",
+    "packages/core/src/store/__tests__/revision-split-change.test.ts"
+  ],
+  "changeset": "collab-tracked-change-pieces",
+  "migration": null
+}

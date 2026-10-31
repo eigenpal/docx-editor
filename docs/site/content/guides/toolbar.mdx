@@ -416,7 +416,7 @@ When the caret or a rectangular cell selection is inside a table, the formatting
 - **Merge cells**: select two or more cells that form a rectangle, then choose **Merge cells** in the table toolbar or the right-click menu.
 - **Split cells**: place the caret in one cell, then choose **Split cell** in the table toolbar or the right-click menu, and enter the row and column counts.
 
-These controls target the innermost table under the pointer or selection. Merge and split are unavailable in suggesting mode. Unsupported table structures show an explicit disabled reason. Merged tables support row and column insertion, deletion, and column resizing. Legacy horizontal merges, rows with offsets, and merged right-to-left tables refuse column resizing.
+These controls target the innermost table under the pointer or selection. In suggesting mode, merge and split work only in a table that you proposed and that is still pending. Unsupported table structures show an explicit disabled reason. Merged tables support row and column insertion, deletion, and column resizing. Legacy horizontal merges, rows with offsets, and merged right-to-left tables refuse column resizing.
 
 For cell limits and concurrent editing behavior, see [Merge and split cells](/docs/2.x/editor-api/tables#merge-and-split-cells).
 

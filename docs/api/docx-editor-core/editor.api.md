@@ -2462,7 +2462,7 @@ export function overlayHostOrigin(surfaceElement: HTMLElement | null): {
 };
 
 // @public
-export interface PaginatedSurface {
+export interface PaginatedSurface extends SurfaceIndentAndListOps {
     activatedReviewKey(): string | null;
     activateReview(key: string, selection?: SemanticSelection, options?: {
         readonly allowExcluded?: boolean;
@@ -2470,7 +2470,6 @@ export interface PaginatedSurface {
     }): void;
     activeReviewKey(): string | null;
     activeScope(): ViewScope;
-    adjustIndent(direction: 'increase' | 'decrease'): boolean;
     applyAutomationOps(staged: (relate: (url: string) => string | null) => readonly TreeDocOp[] | null, scope?: StoryScope, packageEdits?: readonly ((pkg: OoxmlPackage) => OoxmlPackage)[], requiresReview?: boolean): TreeApplyResult;
     // (undocumented)
     applyDrawingOps(ops: readonly DrawingTreeDocOp[]): TreeApplyResult;
@@ -2498,7 +2497,6 @@ export interface PaginatedSurface {
     author(): string | undefined;
     readonly bookmarkEditing: SurfaceBookmarks;
     bookmarks(): BookmarkIndex;
-    canAdjustIndent(direction: 'increase' | 'decrease'): boolean;
     canEditTextFormField(): boolean;
     canInsertTable(rows: number, cols: number): boolean;
     canInsertToc(): boolean;
@@ -2554,7 +2552,6 @@ export interface PaginatedSurface {
     // (undocumented)
     readonly equations: EquationOps;
     exitHeaderFooter(): void;
-    exitListOnEmptyItem(): boolean;
     // (undocumented)
     exitNote(): void;
     flushPendingInput(): void;
@@ -2579,7 +2576,6 @@ export interface PaginatedSurface {
     readonly hyperlinks: HyperlinkOps;
     // (undocumented)
     imageDecodePort(): ImageDecodePort;
-    indentWithTab(direction: 'increase' | 'decrease'): boolean;
     // (undocumented)
     insertImage(input: SurfaceInsertImageInput): Promise<ImageIntentResult>;
     insertLineBreak(): void;
@@ -2592,8 +2588,6 @@ export interface PaginatedSurface {
     insertTable(rows: number, cols: number): boolean;
     insertToc(): boolean;
     isInsideToc(paragraphId: string): boolean;
-    isListActive(kind: 'bullet' | 'ordered'): boolean;
-    isListParagraph(): boolean;
     // (undocumented)
     layout(): SemanticLayout;
     layoutSession(): {
@@ -2625,7 +2619,6 @@ export interface PaginatedSurface {
     refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
     releaseSelection(pin: SelectionPin): void;
     remotePresenceColor(name: string): string | undefined;
-    removeListNumber(paragraphId: string): boolean;
     repaintHighlights(): void;
     // (undocumented)
     replaceImage(drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, options: {
@@ -2666,11 +2659,6 @@ export interface PaginatedSurface {
     // (undocumented)
     setEditingMode(mode: SurfaceEditingMode): void;
     setHighlightPainter(painter: SurfaceOverlayPainter | null): void;
-    setIndent(update: {
-        readonly firstLine?: number | null;
-        readonly left?: number | null;
-        readonly right?: number | null;
-    }): boolean;
     setLocale(locale: string | undefined): void;
     // (undocumented)
     setNoteProperties(args: {
@@ -2728,7 +2716,6 @@ export interface PaginatedSurface {
     // (undocumented)
     storyScope(): StoryScope;
     textMeasurer?(): TextMeasurer;
-    toggleList(kind: 'bullet' | 'ordered'): boolean;
     toggleRunProperty(localName: string, attributes?: Record<string, string>): string | null;
     // (undocumented)
     type(text: string): void;
@@ -3906,6 +3893,24 @@ export interface SurfaceHyperlink {
 }
 
 // @public
+export interface SurfaceIndentAndListOps {
+    adjustIndent(direction: 'increase' | 'decrease'): boolean;
+    canAdjustIndent(direction: 'increase' | 'decrease'): boolean;
+    exitListOnEmptyItem(): boolean;
+    indentWithTab(direction: 'increase' | 'decrease'): boolean;
+    isListActive(kind: 'bullet' | 'ordered'): boolean;
+    isListParagraph(): boolean;
+    removeListNumber(paragraphId: string): boolean;
+    removeParagraphIndent(paragraphId: string): boolean;
+    setIndent(update: {
+        readonly firstLine?: number | null;
+        readonly left?: number | null;
+        readonly right?: number | null;
+    }): boolean;
+    toggleList(kind: 'bullet' | 'ordered'): boolean;
+}
+
+// @public
 export type SurfaceInsertImageInput = Omit<InsertImageInput, 'decodePort' | 'actorId'>;
 
 // @public
@@ -4354,8 +4359,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     // (undocumented)
     endComposition(): void;
     ensureHyperlinkRelationship(url: string, scope?: StoryScope): string | null;
-    // (undocumented)
-    ensureListDefinition(kind: ListKind): string | null;
+    ensureListDefinition(kind: ListKind, geometry?: ListDefinitionGeometry): string | null;
     ensureNumberingLevel(numId: string, level: number, kind: ListKind): boolean;
     findText(query: string, options?: DocumentSearchOptions_2): DocumentSearchResult;
     findText(queries: readonly string[], options?: DocumentSearchOptions_2): readonly DocumentSearchResult[];

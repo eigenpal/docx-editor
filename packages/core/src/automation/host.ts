@@ -78,6 +78,9 @@ function storeTransactionError(reason: string): AutomationError {
       'this edit requires a supported review mode',
       reason
     );
+  // The refusal a plan-time cell write gives, for a cell an earlier edit in the batch reshaped.
+  if (reason === 'unsupported-cell-content')
+    return automationError('unsupported-content', 'that cell is not one plain paragraph', reason);
   if (reason === 'unsupported-revision:foreign-insertion')
     return automationError(
       'unsupported-revision',

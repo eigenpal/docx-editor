@@ -230,7 +230,7 @@ import type {
 } from './paginated-surface-contract.ts';
 import type { ExecResult, SelectionPin, ViewScope } from '../contracts/editor.ts';
 import type { TableCommandPlan } from './table-command-plan.ts';
-import { suggestingStructureRefusal, tableLookupIn } from './surface-suggesting-structure.ts';
+import { suggestingRefusalIn } from './surface-suggesting-structure.ts';
 import { wholeTableDeletionPlan } from './table-select-plan.ts';
 import {
   createSurfaceTableSelectHandle,
@@ -296,6 +296,7 @@ import { createReviewViewState } from './surface-review-view.ts';
 import { selectionsEqual } from './dom-selection.ts';
 import { createSurfaceSelectionSync } from './surface-selection-sync.ts';
 import { createSurfaceStructure } from './surface-structure.ts';
+import { listDefinitionReads } from './list-level-geometry.ts';
 // Deep import, not the store barrel: re-exporting a bound from there pulls the whole store
 // namespace into the published editor-api surface for one number.
 import { MIN_TABLE_COLUMN_WIDTH_TWIPS } from '../store/store/table-constraints.ts';
@@ -1084,9 +1085,9 @@ export function mountPaginatedSurface(
     // List definitions mint `numId` on the package before the paragraph op names it, so
     // the typing transaction never binds an actor for that scan. Same wrap the hyperlink
     // mint uses.
-    ensureListDefinition: (kind) =>
+    ensureListDefinition: (kind, geometry) =>
       runWithTransactionActor(collaborationSession?.identity.actorId, () =>
-        session.ensureListDefinition(kind)
+        session.ensureListDefinition(kind, geometry)
       ),
     applyPmDoc: (doc) => {
       if (editingMode === 'view') {
@@ -1302,6 +1303,7 @@ export function mountPaginatedSurface(
         numId,
         level
       ) !== null,
+    ...listDefinitionReads(() => withNumberingStyleLinks(numberingIndex(), styleCascade())),
     styleCascade,
   });
   /** The contract's `replacementLanding`; the hyperlink lane reads the same rule. */
@@ -3006,7 +3008,7 @@ export function mountPaginatedSurface(
     }
     // Without an author, refuse every suggested edit instead of writing untracked changes.
     if (editingMode === 'suggest' && !author?.trim() && edits) return AUTHOR_WRITE_REFUSAL;
-    if (editingMode === 'suggest') return suggestingStructureRefusal(ops, tableLookupIn(session));
+    if (editingMode === 'suggest') return suggestingRefusalIn(session, author, ops);
     return null;
   }
 
@@ -4610,8 +4612,9 @@ export function mountPaginatedSurface(
           );
           return;
         }
-        // A list item's first Backspace removes its number, not the paragraph break.
+        // Number first, then indent: Backspace reaches the paragraph break only after both.
         if (surface.removeListNumber(position.paragraphId)) return;
+        if (surface.removeParagraphIndent(position.paragraphId)) return;
         const order = paragraphOrder();
         const index = order.indexOf(position.paragraphId);
         const previous = order[index - 1];

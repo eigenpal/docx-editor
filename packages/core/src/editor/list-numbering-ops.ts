@@ -46,34 +46,52 @@ export function createListNumberingOps(deps: ListNumberingDeps) {
   }
 
   return {
-    /** `numId` is the list the level was declared on. */
-    levelOp(paragraphId: string, numId: string, level: number): TreeDocOp {
+    /**
+     * The ops that move a list item from `from` to `level`. `numId` is the list the level was
+     * declared on.
+     *
+     * An item numbered through its style first gets its own `w:numPr` at the level it is at,
+     * so the move itself is always `setListLevel`. That op also drops the paragraph's own
+     * leading and first-line indent, which would otherwise outrank the new level's.
+     */
+    levelOps(paragraphId: string, numId: string, from: number, level: number): TreeDocOp[] {
       const paragraph = findNode(deps.storyPart(), paragraphId);
       const ownsNumPr = paragraph && namedChild(paragraphPropertiesNodeOf(paragraph), 'numPr');
       const styleNumbered =
         !ownsNumPr && !absorbed(paragraphId) && styleNumbering(paragraphId)?.numId === numId;
+      const move: TreeDocOp = { op: 'setListLevel', paragraphId, level };
       return styleNumbered
-        ? { op: 'setListNumbering', paragraphId, numId, level }
-        : { op: 'setListLevel', paragraphId, level };
+        ? [{ op: 'setListNumbering', paragraphId, numId, level: from }, move]
+        : [move];
     },
 
     /**
      * The indent the paragraph's style chain gives it without its list, in twips: the left
      * edge and the signed first-line offset (negative hangs). Each attribute cascades on its
      * own, so the last tier that states it wins. `inChars` says the style also states the
-     * first line in character units, which supersede the twips (§17.3.1.12).
+     * first line in character units, which supersede the twips (§17.3.1.12), and
+     * `leftInChars` says the same of the left edge. With `defaultStyle`, the chain is the
+     * document's default paragraph style, as it is once the paragraph's `w:pStyle` goes.
      */
-    styleIndent(paragraphId: string): { left: number; firstLine: number; inChars: boolean } {
+    styleIndent(
+      paragraphId: string,
+      defaultStyle = false
+    ): { left: number; firstLine: number; inChars: boolean; leftInChars: boolean } {
       const styles = deps.styleCascade();
       const paragraph = findNode(deps.storyPart(), paragraphId);
-      if (!styles || !paragraph) return { left: 0, firstLine: 0, inChars: false };
+      if (!styles || !paragraph)
+        return { left: 0, firstLine: 0, inChars: false, leftInChars: false };
       const pPr = paragraphPropertiesNodeOf(paragraph);
-      const tiers = cascadeParagraphFormatting(styles, pPr).paragraphPropertyNodes;
+      const tiers = cascadeParagraphFormatting(
+        styles,
+        defaultStyle ? undefined : pPr
+      ).paragraphPropertyNodes;
       const stated = tiers
         .filter((tier) => tier !== pPr)
         .flatMap((tier) => authoredProperties(tier, INDENT));
       let firstLine = 0;
       let inChars = false;
+      let leftInChars = false;
       for (const { attributes } of stated) {
         const hanging = readTwipsMeasure(attributes?.hanging);
         const first = readTwipsMeasure(attributes?.firstLine);
@@ -81,8 +99,10 @@ export function createListNumberingOps(deps: ListNumberingDeps) {
         else if (first !== null) firstLine = first;
         const chars = Number(attributes?.hangingChars ?? attributes?.firstLineChars ?? NaN);
         if (Number.isFinite(chars)) inChars = chars !== 0;
+        const leftChars = Number(attributes?.leftChars ?? attributes?.startChars ?? NaN);
+        if (Number.isFinite(leftChars)) leftInChars = leftChars !== 0;
       }
-      return { left: leftIndentTwipsOf(stated), firstLine, inChars };
+      return { left: leftIndentTwipsOf(stated), firstLine, inChars, leftInChars };
     },
 
     /** Whether the paragraph's numbering comes from its style, so leaving writes `numId` 0. */

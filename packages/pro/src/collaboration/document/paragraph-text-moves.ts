@@ -287,20 +287,25 @@ export function markMoves<T extends MoveToken>(
   }
   // A split into three or more paragraphs moves the tail in pieces, one run in each new
   // paragraph: runs inserted one after another in paragraphs this edit creates that together
-  // spell a deleted run are that run moved, piece by piece. Each source looks at every
-  // candidate once, so the pass spends the edit's budget like the other passes.
+  // spell a deleted run are that run moved, piece by piece. Each pass over the pieces has a
+  // budget of its own, so a large edit that finds none leaves the next passes theirs.
   const candidates = inserted.filter((run) => writes[run.paragraph]!.before.length === 0);
-  for (const source of candidates.length < 2 ? [] : deleted) {
-    if (budget.cells < candidates.length) break;
-    budget.cells -= candidates.length;
-    if (taken.get(source)!.some(Boolean)) continue;
-    const pieces = piecesOf(source, candidates, taken, sameScope);
-    let from = 0;
-    for (const piece of pieces) {
-      take(piece, { source, from, to: 0, length: piece.indexes.length });
-      from += piece.indexes.length;
+  const takePieces = (gaps: boolean): void => {
+    const piecesBudget: MatchBudget = { cells: MAX_EDIT_MATCH_CELLS };
+    for (const source of candidates.length === 0 ? [] : deleted) {
+      if (taken.get(source)!.some(Boolean)) continue;
+      for (const { run, from } of piecesOf(
+        source,
+        candidates,
+        taken,
+        sameScope,
+        piecesBudget,
+        gaps
+      ))
+        take(run, { source, from, to: 0, length: run.indexes.length });
     }
-  }
+  };
+  takePieces(false);
   // Then characters in the same text element: a move keeps the element of most of what it
   // moves. Then by value, but only whole stretches the first pass left: a split gives its
   // tail a new run, and by value alone a short match could be any typed text.
@@ -310,6 +315,10 @@ export function markMoves<T extends MoveToken>(
       match = longestMatch(run, keysBy(true), deleted, taken, sameScope, budget);
     }
   }
+  // A split that trims its delimiters deletes the text around its pieces, so they spell the
+  // deleted run with gaps. Taken after the passes that match exactly, and only from a run
+  // none of them matched.
+  takePieces(true);
   // Text a paragraph deletes and writes again, as a run split by new formatting or markup
   // is, was rewritten there, not moved: its letters elsewhere are new text.
   const insertedIn = new Map<number, Run[]>();
@@ -345,33 +354,53 @@ export function markMoves<T extends MoveToken>(
 
 /**
  * Untaken inserted runs, one after another in `inserted` and each in another paragraph than
- * `source`, whose values together spell `source` exactly, or none. Two pieces at least: one
- * run equal to the whole source is the first pass's match. The value is compared first, so a
- * run that cannot continue the source costs one comparison.
+ * `source`, whose values are stretches of `source` in the same order, each with its offset in
+ * `source`, or none. Without `gaps`, two runs at least that together spell `source` exactly:
+ * one run equal to the whole source is the first pass's match. With `gaps`, one run or more
+ * that leave text of `source` before, between, and after them, the delimiters a split trims,
+ * but less than they cover, so a few common letters in new paragraphs are not a move. Each
+ * look spends what it reads from `budget`; none are found once it runs out.
  */
 function piecesOf(
   source: Run,
   inserted: readonly Run[],
   taken: ReadonlyMap<Run, readonly boolean[]>,
-  sameScope: (left: number, right: number) => boolean
-): readonly Run[] {
-  const fits = (run: Run, offset: number): boolean =>
-    run.value.length > 0 &&
-    source.value.startsWith(run.value, offset) &&
-    run.paragraph !== source.paragraph &&
-    sameScope(source.paragraph, run.paragraph) &&
-    !taken.get(run)!.some(Boolean);
+  sameScope: (left: number, right: number) => boolean,
+  budget: MatchBudget,
+  gaps: boolean
+): readonly { readonly run: Run; readonly from: number }[] {
+  const at = (run: Run, offset: number): number => {
+    if (
+      run.value.length === 0 ||
+      run.paragraph === source.paragraph ||
+      !sameScope(source.paragraph, run.paragraph) ||
+      taken.get(run)!.some(Boolean)
+    )
+      return -1;
+    // A search reads the source; a comparison reads the run at most.
+    const cost = gaps ? source.value.length : run.value.length;
+    if (budget.cells < cost) return -1;
+    budget.cells -= cost;
+    if (gaps) return source.value.indexOf(run.value, offset);
+    return source.value.startsWith(run.value, offset) ? offset : -1;
+  };
   for (let first = 0; first < inserted.length; first += 1) {
-    if (!fits(inserted[first]!, 0)) continue;
-    const pieces: Run[] = [];
+    if (at(inserted[first]!, 0) < 0) continue;
+    const pieces: { run: Run; from: number }[] = [];
     let offset = 0;
-    for (let at = first; at < inserted.length && offset < source.value.length; at += 1) {
-      const run = inserted[at]!;
-      if (!fits(run, offset)) break;
-      pieces.push(run);
-      offset += run.value.length;
+    let covered = 0;
+    for (let next = first; next < inserted.length && offset < source.value.length; next += 1) {
+      const run = inserted[next]!;
+      const from = at(run, offset);
+      if (from < 0) break;
+      pieces.push({ run, from });
+      offset = from + run.value.length;
+      covered += run.value.length;
     }
-    if (offset === source.value.length && pieces.length > 1) return pieces;
+    const found = gaps
+      ? covered * 2 > source.value.length
+      : covered === source.value.length && pieces.length > 1;
+    if (found) return pieces;
   }
   return [];
 }

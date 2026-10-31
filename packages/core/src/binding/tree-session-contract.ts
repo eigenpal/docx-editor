@@ -10,6 +10,7 @@ import type {
   HeaderFooterParts,
   HeaderFooterSectionResolution,
   HeadlessDocumentView,
+  ListDefinitionGeometry,
   ListKind,
   OoxmlElement,
   OoxmlPackage,
@@ -462,7 +463,13 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
    * relationship.
    */
   ensureHyperlinkRelationship(url: string, scope?: StoryScope): string | null;
-  ensureListDefinition(kind: ListKind): string | null;
+  /**
+   * Find or create a `kind` list definition and answer the `w:numId` to name, or `null`.
+   *
+   * With `geometry`, the definition keeps those level positions, so an item switching
+   * between bullets and numbers stays where it was.
+   */
+  ensureListDefinition(kind: ListKind, geometry?: ListDefinitionGeometry): string | null;
   /**
    * Declare `level` in the list definition `numId` names, with Word's default format for
    * that depth, or answer false.

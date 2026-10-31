@@ -86,6 +86,27 @@ export function tokensOfText(
   return tokens;
 }
 
+/** Characters typed into one text value: a journal that only inserts at one place. */
+export interface TypedSplice {
+  readonly textValueId: string;
+  readonly utf16Start: number;
+}
+
+/**
+ * Where typed characters start among a paragraph's tokens, from the text value the author typed
+ * into. Undefined when the paragraph does not hold that value.
+ */
+export function typedStartIn(after: OoxmlElement, typed: TypedSplice): number | undefined {
+  const items = linearizeParagraph(after).items;
+  for (let at = 0; at < items.length; at += 1) {
+    const item = items[at]!;
+    if (item.kind === 'char' && item.attributes.textValueId === typed.textValueId) {
+      return at + typed.utf16Start;
+    }
+  }
+  return undefined;
+}
+
 export function tokensOfParagraph(after: OoxmlElement, limits: DocumentLimits): Token[] {
   const paragraphId = after.id;
   // Characters of one run share one attributes object, so each is encoded once.
@@ -153,14 +174,16 @@ export function diffTokens(
   before: readonly Token[],
   after: readonly Token[],
   /** Whether typing at one place skips the full diff. Tests compare both answers. */
-  shortcut = true
+  shortcut = true,
+  /** Where typed characters start in `after`, when the edit only typed them. */
+  typedAt?: number
 ): Step[] {
   // A character outside the basic plane is two code units, and shared text replaces a half
   // that an edit cuts off with U+FFFD. So the script compares whole code points, and each
   // step on a pair covers both halves.
   const left = codePoints(before);
   const right = codePoints(after);
-  if (left === null && right === null) return diffCodePoints(before, after, shortcut);
+  if (left === null && right === null) return diffCodePoints(before, after, shortcut, typedAt);
   const beforeAt = left?.starts ?? null;
   const afterAt = right?.starts ?? null;
   const unitsOf = (starts: readonly number[] | null, index: number, length: number): number[] => {
@@ -240,19 +263,22 @@ function codePoints(
 function diffCodePoints(
   before: readonly Token[],
   after: readonly Token[],
-  shortcut: boolean
+  shortcut: boolean,
+  typedAt?: number
 ): Step[] {
-  const inserted = shortcut ? pureInsertion(before, after) : null;
+  const inserted = shortcut ? pureInsertion(before, after, typedAt) : null;
   if (inserted) return inserted;
   // Equal strong alignments can differ in what their gaps keep: runs merged by a join give the
   // same letters a new text element, and an early tie can pair letters of one word with those
   // of the next. Of the two tie-breaks, keep the one that keeps more, and of two that keep as
   // much, the one with fewer separate changes: typing "lore" before "on" is one insert, not
   // an "l", the existing "o", and then "re" with a new "o".
-  const first = scriptOf(before, after, strongMatches(before, after, false));
-  const second = scriptOf(before, after, strongMatches(before, after, true));
+  const firstStrong = strongMatches(before, after, false);
+  const secondStrong = strongMatches(before, after, true);
+  const first = scriptOf(before, after, firstStrong);
+  const second = scriptOf(before, after, secondStrong);
   const [firstKept, secondKept] = [equalCount(first), equalCount(second)];
-  const chosen =
+  let chosen =
     secondKept !== firstKept
       ? secondKept > firstKept
         ? second
@@ -260,7 +286,35 @@ function diffCodePoints(
       : changeCount(second) < changeCount(first)
         ? second
         : first;
+  // Two more ways keep letters an alignment can leave. A gap that only deletes keeps every
+  // token the edit kept, wherever it stands in the gap. And a run split by formatting can keep
+  // its text element on a later piece, so one strong match pairs a letter with an equal letter
+  // further on and leaves the text between to be written again; matched by value from the ends
+  // instead, the same letters all stay. Either wins only when it keeps more, so an edit whose
+  // alignment keeps every token it can, as typing does, never pays for them.
+  let kept = Math.max(firstKept, secondKept);
+  if (kept < Math.min(before.length, after.length) && writesAgain(chosen, before, after)) {
+    const endsStrong = strongMatches(before, after, false, false);
+    for (const strong of [firstStrong, secondStrong, endsStrong]) {
+      const candidate = scriptOf(before, after, strong, true);
+      const count = equalCount(candidate);
+      if (count > kept) [chosen, kept] = [candidate, count];
+    }
+  }
   return dropScatteredLetters(joinInserts(chosen, after), before);
+}
+
+/**
+ * Whether a script inserts a token equal to one it deletes: only then can another alignment
+ * keep more. Typing inserts new letters and deletes nothing, so it never asks for one.
+ */
+function writesAgain(steps: readonly Step[], before: readonly Token[], after: readonly Token[]) {
+  const deleted = new Set<string>();
+  for (const step of steps) if (step.op === 'del') deleted.add(before[step.before]!.key);
+  if (deleted.size === 0) return false;
+  for (const step of steps)
+    if (step.op === 'ins' && deleted.has(after[step.after]!.key)) return true;
+  return false;
 }
 
 /**
@@ -271,9 +325,19 @@ function diffCodePoints(
  * paragraph's text sees. Where the stretch could stand is decided as the full diff decides
  * it, and a test compares the two answers.
  */
-function pureInsertion(before: readonly Token[], after: readonly Token[]): Step[] | null {
+function pureInsertion(
+  before: readonly Token[],
+  after: readonly Token[],
+  typedAt?: number
+): Step[] | null {
   const added = after.length - before.length;
   if (added <= 0) return null;
+  // Typed beside equal letters, the stretch could stand at several places that keep as much.
+  // Where the author typed it is the one their view shows, so their caret and shared order
+  // agree; a concurrent peer's same letter is then not taken for their own.
+  if (typedAt !== undefined && insertsAt(before, after, typedAt, added)) {
+    return insertionSteps(before.length, typedAt, added);
+  }
   let prefix = 0;
   while (prefix < before.length && before[prefix]!.strong === after[prefix]!.strong) prefix += 1;
   let suffix = 0;
@@ -292,11 +356,32 @@ function pureInsertion(before: readonly Token[], after: readonly Token[]): Step[
   const previous = prefix > 0 ? before[prefix - 1]! : null;
   if (previous && previous.key === last.key && previous.strong !== last.strong) return null;
   if (prefix < before.length && before[prefix]!.key === first.key) return null;
+  return insertionSteps(before.length, prefix, added);
+}
+
+/** Whether `after` is `before` with `added` tokens inserted at `at`. */
+function insertsAt(
+  before: readonly Token[],
+  after: readonly Token[],
+  at: number,
+  added: number
+): boolean {
+  if (!Number.isSafeInteger(at) || at < 0 || at > before.length) return false;
+  for (let index = 0; index < at; index += 1) {
+    if (before[index]!.strong !== after[index]!.strong) return false;
+  }
+  for (let index = at; index < before.length; index += 1) {
+    if (before[index]!.strong !== after[index + added]!.strong) return false;
+  }
+  return true;
+}
+
+function insertionSteps(length: number, at: number, added: number): Step[] {
   const steps: Step[] = [];
-  for (let at = 0; at < prefix; at += 1) steps.push({ op: 'eq', before: at, after: at });
-  for (let at = prefix; at < prefix + added; at += 1) steps.push({ op: 'ins', after: at });
-  for (let at = prefix; at < before.length; at += 1) {
-    steps.push({ op: 'eq', before: at, after: at + added });
+  for (let index = 0; index < at; index += 1) steps.push({ op: 'eq', before: index, after: index });
+  for (let index = at; index < at + added; index += 1) steps.push({ op: 'ins', after: index });
+  for (let index = at; index < length; index += 1) {
+    steps.push({ op: 'eq', before: index, after: index + added });
   }
   return steps;
 }
@@ -466,7 +551,9 @@ function equalCount(steps: readonly Step[]): number {
 function scriptOf(
   before: readonly Token[],
   after: readonly Token[],
-  strong: readonly (readonly [number, number])[]
+  strong: readonly (readonly [number, number])[],
+  /** Whether a gap that only deletes keeps the tokens the edit kept (`keptByDeletion`). */
+  keepDeleted = false
 ): Step[] {
   const steps: Step[] = [];
   let i = 0;
@@ -508,6 +595,12 @@ function scriptOf(
         }
       }
     }
+    const onlyDeleted = keepDeleted ? keptByDeletion(before, i, bEnd, after, j, aEnd) : null;
+    if (onlyDeleted) {
+      for (const step of onlyDeleted) steps.push(step);
+      i = bEnd;
+      j = aEnd;
+    }
     for (; i < bEnd; i += 1) steps.push({ op: 'del', before: i });
     for (; j < aEnd; j += 1) steps.push({ op: 'ins', after: j });
     for (const step of tail) steps.push(step);
@@ -520,6 +613,83 @@ function scriptOf(
     }
   }
   return steps;
+}
+
+/**
+ * The script of a gap where the edit only deletes: every token after it is a token before it,
+ * in order. Those tokens stay, so a decision that removes text on both sides of a kept letter
+ * never writes that letter again, and a peer's concurrent decision on it still reaches it. A
+ * letter in two places keeps the copy that stays in its revisions. Null when the gap inserts.
+ */
+function keptByDeletion(
+  before: readonly Token[],
+  i: number,
+  bEnd: number,
+  after: readonly Token[],
+  j: number,
+  aEnd: number
+): Step[] | null {
+  if (j === aEnd || aEnd - j >= bEnd - i) return null;
+  // Where each token stands in the gap, in order, by content and trail: a letter finds the
+  // first token whose trail keeps its revisions by one search per trail, not a scan of the
+  // gap. The trails are few. Built only for the preferred search.
+  let index: Map<string, Map<string, number[]>> | null = null;
+  const byTrail = (): Map<string, Map<string, number[]>> => {
+    if (index) return index;
+    index = new Map();
+    for (let at = i; at < bEnd; at += 1) {
+      const { key } = before[at]!;
+      const trail = before[at]!.trail ?? '';
+      let trails = index.get(key);
+      if (!trails) index.set(key, (trails = new Map()));
+      let positions = trails.get(trail);
+      if (!positions) trails.set(trail, (positions = []));
+      positions.push(at);
+    }
+    return index;
+  };
+  const match = (prefer: boolean): Step[] | null => {
+    const steps: Step[] = [];
+    let at = i;
+    for (let k = j; k < aEnd; k += 1) {
+      const token = after[k]!;
+      // The first equal token that stays in its revisions, wherever it stands in the gap, else
+      // the first equal token. The caller bounds the gap for the preferred search.
+      let found = -1;
+      if (prefer) {
+        const trail = token.trail ?? '';
+        for (const [from, positions] of byTrail().get(token.key) ?? []) {
+          if (!keepsRevisions(from, trail)) continue;
+          const next = firstAtOrAfter(positions, at);
+          if (next >= 0 && (found < 0 || next < found)) found = next;
+        }
+      }
+      // The cursor moves past each match, so this scan covers the gap once in all.
+      for (let candidate = at; found < 0 && candidate < bEnd; candidate += 1) {
+        if (before[candidate]!.key === token.key) found = candidate;
+      }
+      if (found < 0) return null;
+      for (; at < found; at += 1) steps.push({ op: 'del', before: at });
+      steps.push({ op: 'eq', before: found, after: k });
+      at = found + 1;
+    }
+    for (; at < bEnd; at += 1) steps.push({ op: 'del', before: at });
+    return steps;
+  };
+  const preferred = (aEnd - j) * (bEnd - i) <= MAX_DIFF_CELLS ? match(true) : null;
+  return preferred ?? match(false);
+}
+
+/** The first of the ascending `positions` at or after `at`, or -1. */
+function firstAtOrAfter(positions: readonly number[], at: number): number {
+  let low = 0;
+  let high = positions.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (positions[middle]! < at) low = middle + 1;
+    else high = middle;
+  }
+  return low < positions.length ? positions[low]! : -1;
 }
 
 /** The weak matches at the ends of one gap, and the gap they leave. */
@@ -606,24 +776,71 @@ function inRevision(
 ): { readonly equal: number; readonly inRevision: number } {
   let equal = 0;
   let kept = 0;
+  // Neighbouring letters share their trails: one answer serves a run of them.
+  let lastFrom: string | null = null;
+  let lastTo: string | null = null;
+  let lastAnswer = false;
   for (const steps of [ends.head, ends.tail]) {
     for (const step of steps) {
       if (step.op !== 'eq') continue;
       equal += 1;
-      if ((before[step.before]!.trail ?? '') === (after[step.after]!.trail ?? '')) kept += 1;
+      const from = before[step.before]!.trail ?? '';
+      const to = after[step.after]!.trail ?? '';
+      if (from === to) {
+        kept += 1;
+        continue;
+      }
+      if (from !== lastFrom || to !== lastTo) {
+        lastAnswer = keepsRevisions(from, to);
+        lastFrom = from;
+        lastTo = to;
+      }
+      if (lastAnswer) kept += 1;
     }
   }
   return { equal, inRevision: kept };
 }
 
 /**
+ * Whether a letter is still in every revision it was in. A strike adds a deletion and keeps
+ * the letter in its insertion, so of two equal letters the one a strike keeps is the one the
+ * insertion holds, and a peer's concurrent decision on that insertion still reaches it.
+ */
+function keepsRevisions(from: string, to: string): boolean {
+  if (from === to) return true;
+  // Keyed by the trail strings themselves, which every letter of a run shares, so a lookup
+  // builds no string.
+  let answers = keptRevisions.get(to);
+  if (answers === undefined) {
+    if (keptRevisions.size >= MAX_KEPT_REVISIONS) keptRevisions.clear();
+    keptRevisions.set(to, (answers = new Map()));
+  }
+  const cached = answers.get(from);
+  if (cached !== undefined) return cached;
+  const kept = new Set((JSON.parse(to || '[]') as unknown[]).map((entry) => JSON.stringify(entry)));
+  const answer = (JSON.parse(from || '[]') as unknown[]).every((entry) =>
+    kept.has(JSON.stringify(entry))
+  );
+  // A paragraph holds few revision trails, so the answers repeat; the bound keeps it small.
+  if (answers.size >= MAX_KEPT_REVISIONS) answers.clear();
+  answers.set(from, answer);
+  return answer;
+}
+
+const MAX_KEPT_REVISIONS = 1024;
+const keptRevisions = new Map<string, Map<string, boolean>>();
+
+/**
  * The strong matches of a longest common subsequence, as index pairs in order. On a tie the
  * walk skips a character of `before` first, or of `after` first when `skipAfter` is set.
+ * Without `middle`, only the equal tokens at both ends.
  */
 function strongMatches(
   before: readonly Token[],
   after: readonly Token[],
-  skipAfter: boolean
+  skipAfter: boolean,
+  /** Whether to align the middle between the equal ends too. */
+  middle = true
 ): [number, number][] {
   const pairs: [number, number][] = [];
   let low = 0;
@@ -646,16 +863,25 @@ function strongMatches(
   const rows = beforeEnd - low;
   const columns = afterEnd - low;
   // Too large to align: the middle is replaced whole, which stays correct.
-  if (rows > 0 && columns > 0 && rows * columns <= MAX_DIFF_CELLS) {
+  if (middle && rows > 0 && columns > 0 && rows * columns <= MAX_DIFF_CELLS) {
     const width = columns + 1;
     const score = new Uint32Array((rows + 1) * width);
-    const same = (r: number, c: number): boolean =>
-      before[low + r]!.strong === after[low + c]!.strong;
+    // The keys once, so the cell loop compares strings without reading tokens: a long
+    // paragraph's first decisions run the loop before it is optimized.
+    const left = new Array<string>(rows);
+    const right = new Array<string>(columns);
+    for (let r = 0; r < rows; r += 1) left[r] = before[low + r]!.strong;
+    for (let c = 0; c < columns; c += 1) right[c] = after[low + c]!.strong;
+    const same = (r: number, c: number): boolean => left[r] === right[c];
     for (let r = rows - 1; r >= 0; r -= 1) {
+      const key = left[r];
+      const row = r * width;
+      const below = row + width;
       for (let c = columns - 1; c >= 0; c -= 1) {
-        score[r * width + c] = same(r, c)
-          ? score[(r + 1) * width + c + 1]! + 1
-          : Math.max(score[(r + 1) * width + c]!, score[r * width + c + 1]!);
+        const down = score[below + c]!;
+        const across = score[row + c + 1]!;
+        score[row + c] =
+          key === right[c] ? score[below + c + 1]! + 1 : down > across ? down : across;
       }
     }
     let r = 0;

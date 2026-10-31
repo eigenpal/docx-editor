@@ -21,7 +21,7 @@ import { NoteItemCollection } from './notes.ts';
 import { InsertLocation } from './editing-enums.ts';
 import { FieldCollection } from './fields.ts';
 import { InlinePictureCollection } from './pictures.ts';
-import { TableCollection } from './tables.ts';
+import { Table, TableCollection, tableInsertion } from './tables.ts';
 import {
   ObjectPath,
   fail,
@@ -380,6 +380,34 @@ export class Body extends ModelObject {
       }
     );
     return created;
+  }
+
+  /**
+   * Insert a rectangular table at the start or the end of this body.
+   * TrackMineOnly marks rows, cell marks, and values inserted, as `Range.insertTable` does.
+   * Sync before configuring the returned table. A table inside a table cell refuses.
+   */
+  insertTable(
+    rowCount: number,
+    columnCount: number,
+    insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End',
+    values?: string[][]
+  ): Table {
+    const target = `${this.path.label}.insertTable`;
+    if (insertLocation !== 'Start' && insertLocation !== 'End')
+      fail({ code: 'InvalidArgument', target });
+    this.requireUsablePath();
+    const { table, plan, settle } = tableInsertion(
+      this.context,
+      target,
+      () => ({ body: this.#handle() }),
+      insertLocation === 'Start' ? 'Before' : 'After',
+      rowCount,
+      columnCount,
+      values
+    );
+    this.commandCreating(table, target, plan, settle);
+    return table;
   }
 
   /** @internal Plan the read this object's `load(...)` asked for. */

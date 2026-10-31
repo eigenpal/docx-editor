@@ -12,6 +12,7 @@ import { afterAll, afterEach, describe, expect, setSystemTime, test } from 'bun:
 import { strFromU8, unzipSync } from 'fflate';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import { DocxEditor as ServerDocxEditor } from '@docx-editor.dev/editor-api';
 import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
 import { collaborationModule, reviewModule } from '../../index';
 import { createPeerHarness, zipDocument } from './document-peer-support';
@@ -72,20 +73,27 @@ async function room(clientIds?: Readonly<Record<string, number>>) {
     sync() {
       for (const peer of peers) peer.room.session.flushPendingJournals();
     },
-    /** Both peers read `expected`, hold no pending change when `revisions` is 0, save alike. */
+    /**
+     * Both peers read `expected`, hold no pending change when `revisions` is 0, and save alike,
+     * and the saved file reads `expected` when it opens again.
+     */
     async expectBoth(expected: readonly string[], revisions?: number) {
       for (const peer of peers) {
         expect(peer.room.session.statusSnapshot().status).toBe('ready');
         expect(await texts(peer.runtime)).toEqual([...expected]);
         if (revisions !== undefined) expect(await revisionCount(peer.runtime)).toBe(revisions);
       }
-      const xml = await Promise.all(
-        peers.map(async (peer) => {
-          const saved = unzipSync(new Uint8Array(await peer.editor.save()));
-          return strFromU8(saved['word/document.xml']!);
-        })
+      const saved = await Promise.all(
+        peers.map(async (peer) => new Uint8Array(await peer.editor.save()))
       );
+      const xml = saved.map((bytes) => strFromU8(unzipSync(bytes)['word/document.xml']!));
       expect(xml[0]).toBe(xml[1]!);
+      const reopened = await ServerDocxEditor.createServer(saved[0]!);
+      try {
+        expect(await texts(reopened)).toEqual([...expected]);
+      } finally {
+        reopened.dispose();
+      }
     },
     close() {
       for (const peer of peers) {
@@ -98,7 +106,7 @@ async function room(clientIds?: Readonly<Record<string, number>>) {
   };
 }
 
-async function texts(runtime: Runtime): Promise<string[]> {
+async function texts(runtime: Pick<Runtime, 'run'>): Promise<string[]> {
   return runtime.run(async (context) => {
     const paragraphs = context.document.body.paragraphs;
     paragraphs.load('items/text');
@@ -133,13 +141,18 @@ async function rejectAll(runtime: Runtime): Promise<void> {
   });
 }
 
-/** Split the first paragraph after each `delimiter`, tracked or not. */
-async function splitAt(runtime: Runtime, delimiter: string, tracked: boolean): Promise<void> {
+/** Split the first paragraph after each `delimiter`, tracked or not, maybe trimming it. */
+async function splitAt(
+  runtime: Runtime,
+  delimiter: string,
+  tracked: boolean,
+  trimDelimiters = false
+): Promise<void> {
   await runtime.run(async (context) => {
     if (tracked) context.document.changeTrackingMode = 'TrackMineOnly';
     const paragraph = context.document.body.paragraphs.getFirst();
     await context.sync();
-    paragraph.split([delimiter]);
+    paragraph.split([delimiter], trimDelimiters);
     await context.sync();
   });
 }
@@ -370,14 +383,22 @@ describe('undoing a split into three paragraphs while a peer types in the middle
   // The split moves the tail of the paragraph into two new paragraphs, one piece in each. The
   // pieces are the moved text, so text a peer types in one follows it back when the split is
   // undone, as it does after a split into two.
-  for (const { name, split } of [
+  for (const { name, split, pieces } of [
     {
       name: 'an untracked split',
       split: (runtime: Runtime) => splitAt(runtime, '; ', false),
+      pieces: ['One; ', '2 two; ', 'three', 'Signed'],
     },
     {
       name: 'a tracked split',
       split: (runtime: Runtime) => splitAt(runtime, '; ', true),
+      pieces: ['One; ', '2 two; ', 'three', 'Signed'],
+    },
+    // The pieces of a split that trims its delimiters spell the removed text with gaps (#1653).
+    {
+      name: 'an untracked split that trims its delimiters',
+      split: (runtime: Runtime) => splitAt(runtime, '; ', false, true),
+      pieces: ['One', '2 two', 'three', 'Signed'],
     },
   ]) {
     test(`${name} keeps the typing on undo and on redo`, async () => {
@@ -394,7 +415,7 @@ describe('undoing a split into three paragraphs while a peer types in the middle
           await context.sync();
         });
         r.sync();
-        await r.expectBoth(['One; ', '2 two; ', 'three', 'Signed']);
+        await r.expectBoth(pieces);
         later();
         expect(r.alice.editor.exec({ type: 'undo' }).ok).toBe(true);
         r.sync();
@@ -402,14 +423,77 @@ describe('undoing a split into three paragraphs while a peer types in the middle
         later();
         expect(r.alice.editor.exec({ type: 'redo' }).ok).toBe(true);
         r.sync();
-        await r.expectBoth(['One; ', '2 two; ', 'three', 'Signed']);
+        await r.expectBoth(pieces);
       } finally {
         r.close();
       }
     });
   }
+});
 
-  // `split(['; '], true)` trims the delimiters, so the pieces do not spell the text the split
-  // removed and are not moved text: the typing has nothing to follow on undo (#1653).
-  test.todo('a split that trims its delimiters keeps the typing on undo and on redo', () => {});
+describe('undoing a split into two that trims its delimiter while a peer types', () => {
+  // The new paragraph holds the tail without the delimiter. The tail is moved text all the
+  // same, so the typing follows it back when the split is undone.
+  test('keeps the typing on undo and on redo', async () => {
+    const r = await room();
+    try {
+      await splitAt(r.alice.runtime, '; two', false, true);
+      r.sync();
+      later();
+      await r.bob.runtime.run(async (context) => {
+        const paragraphs = context.document.body.paragraphs;
+        paragraphs.load('items');
+        await context.sync();
+        paragraphs.items[1]!.insertText('2', 'Start');
+        await context.sync();
+      });
+      r.sync();
+      await r.expectBoth(['One', '2; three', 'Signed']);
+      later();
+      expect(r.alice.editor.exec({ type: 'undo' }).ok).toBe(true);
+      r.sync();
+      await r.expectBoth(['One; two2; three', 'Signed']);
+      later();
+      expect(r.alice.editor.exec({ type: 'redo' }).ok).toBe(true);
+      r.sync();
+      await r.expectBoth(['One', '2; three', 'Signed']);
+    } finally {
+      r.close();
+    }
+  });
+});
+
+describe('undoing a split that trims its delimiters while a peer edits its pieces offline', () => {
+  // The peer types in one piece and deletes another while it is offline, and the author undoes
+  // the split meanwhile. Once the peer reconnects, the typing stays, the deletion stays, and
+  // the delimiters the undo brought back show once.
+  test('keeps the typing and the deletion through the reconnect, undo, and redo', async () => {
+    const r = await room();
+    try {
+      await splitAt(r.alice.runtime, '; ', false, true);
+      r.sync();
+      await r.expectBoth(['One', 'two', 'three', 'Signed']);
+      later();
+      r.pause();
+      await r.bob.runtime.run(async (context) => {
+        const paragraphs = context.document.body.paragraphs;
+        paragraphs.load('items');
+        await context.sync();
+        paragraphs.items[1]!.insertText('2 ', 'Start');
+        paragraphs.items[2]!.search('three').getFirst().delete();
+        await context.sync();
+      });
+      later();
+      expect(r.alice.editor.exec({ type: 'undo' }).ok).toBe(true);
+      r.resume();
+      r.sync();
+      await r.expectBoth(['One; 2 two; ', 'Signed']);
+      later();
+      expect(r.alice.editor.exec({ type: 'redo' }).ok).toBe(true);
+      r.sync();
+      await r.expectBoth(['One', '2 two', '', 'Signed']);
+    } finally {
+      r.close();
+    }
+  });
 });

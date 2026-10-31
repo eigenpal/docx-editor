@@ -62,6 +62,7 @@ import {
   mergeRevisionParagraphs,
   tableParagraphMergeTarget,
 } from './revision-paragraph-merge.ts';
+import { joinedAtSeams } from './revision-piece-seams.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import {
   rebuildReach,
@@ -87,6 +88,9 @@ import {
 import { recordedProperties } from './tree-op-tracked-properties.ts';
 import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
 import type { RevisionAddress } from './tree-op-types.ts';
+import { addressOf, revisionGroupKey, sameRevision, wmlAttribute } from './revision-address.ts';
+
+export { revisionGroupKey };
 import type { TreeOpEffect, TreeOpRejection } from './tree-op-validate.ts';
 
 export { namedMoveRanges };
@@ -157,40 +161,6 @@ export interface RevisionSite {
    * paragraph, and two sites can only cover one position if they are in the same paragraph.
    */
   readonly nesting: number;
-}
-
-function wmlAttribute(node: OoxmlElement, localName: string): string | undefined {
-  for (const attribute of node.attributes) {
-    if (attribute.localName !== localName) continue;
-    if (attribute.namespaceUri !== WML_NAMESPACE_URI) continue;
-    return attribute.value;
-  }
-  return undefined;
-}
-
-function addressOf(node: OoxmlElement): RevisionAddress | null {
-  const id = wmlAttribute(node, 'id');
-  const author =
-    wmlAttribute(node, 'author') ?? (node.localName === 'tblGridChange' ? '' : undefined);
-  if (id === undefined || author === undefined) return null;
-  const date = wmlAttribute(node, 'date');
-  return date === undefined ? { id, author } : { id, author, date };
-}
-
-function sameRevision(a: RevisionAddress, b: RevisionAddress): boolean {
-  return a.id === b.id && a.author === b.author && (a.date ?? null) === (b.date ?? null);
-}
-
-/**
- * The key a revision is grouped under: its address PLUS the element it is written on.
- *
- * `@w:id` carries no uniqueness constraint, and Word writes one `w:date` for a whole editing
- * burst — so an insertion and a deletion can legally share all three. Grouping on the triple
- * alone showed them as one card reading `insert` with both texts concatenated, and Accept
- * then deleted the half the card said it was inserting.
- */
-export function revisionGroupKey(address: RevisionAddress, localName: string): string {
-  return `${localName}\u0000${address.id}\u0000${address.author}\u0000${address.date ?? ''}`;
 }
 
 /** Revision sites of one paragraph or table subtree, memoized on the immutable node. */
@@ -545,7 +515,12 @@ function rebuildChildren(
 ): OoxmlNode[] {
   const out: OoxmlNode[] = [];
   let decided: DecidedSpan | null = null;
+  // Where a child left nothing or was unwrapped: pieces of one change that met there join.
+  const seams: number[] = [];
+  let pushed = -1;
   for (const child of children) {
+    if (pushed === out.length) seams.push(out.length);
+    pushed = out.length;
     const before = decided;
     decided = null;
     if (child.kind !== 'textValue' && !plan.reach.has(child.id)) {
@@ -573,7 +548,9 @@ function rebuildChildren(
       const kept = rebuildChildren(child.children, plan).map((node) =>
         action === 'restore' ? withDeletedTextRestored(node) : node
       );
+      seams.push(out.length);
       decided = pushDecidedContent(out, child, kept, before, plan.mint);
+      seams.push(out.length);
       continue;
     }
 
@@ -632,7 +609,8 @@ function rebuildChildren(
     out.push(...rebuilt);
   }
 
-  return mergeRevisionParagraphs(out, plan.mergeForward, plan.mint, cell, container, plan.first);
+  const joined = joinedAtSeams(plan.mint, out, seams);
+  return mergeRevisionParagraphs(joined, plan.mergeForward, plan.mint, cell, container, plan.first);
 }
 
 function rebuild(node: OoxmlNode, plan: RebuildPlan): OoxmlNode[] {

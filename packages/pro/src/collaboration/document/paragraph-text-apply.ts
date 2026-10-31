@@ -33,6 +33,7 @@ import {
   diffTokens,
   tokensOfParagraph,
   tokensOfText,
+  typedStartIn,
   type Step,
   type Token,
 } from './paragraph-text-diff.ts';
@@ -326,8 +327,10 @@ function writeParagraphText(
 
 /**
  * Write the text that follows a move into a planned paragraph as its own: a copy marked with
- * the identities of the characters it copies, so they hide where they were typed. A deleted
- * paragraph that held them deletes them. Returns the paragraphs the text came from.
+ * the identities of the characters it copies, so they hide where they were typed. Every source
+ * keeps its characters, a deleted paragraph's too: the characters keep their follow anchors
+ * there, so they follow again when an undo takes the copy out, and an undo that put deleted
+ * originals back would give them none. Returns the paragraphs the text came from.
  */
 function adoptFollowingText(
   registry: DocumentRegistry,
@@ -367,8 +370,8 @@ function adoptFollowingText(
       (right.atEnd ? 0 : Number(right.following.before)) ||
     right.order - left.order;
   placed.sort(byPlace);
-  /** For each source, the identities of the characters it passed on. */
-  const deletions = new Map<LogicalId, string[]>();
+  /** The paragraphs the text came from. */
+  const sources = new Set<LogicalId>();
   /**
    * Sources whose text this adoption changed. Their cached identities name the positions
    * before the change, and a write of one in the same plan read stale hidden positions.
@@ -513,10 +516,7 @@ function adoptFollowingText(
     }
     // This paragraph's text changed; a later piece can follow out of it too.
     reads.delete(paragraphId);
-    const copied = pieces.flatMap((piece) =>
-      piece.kind === 'char' && piece.identity ? [piece.identity] : []
-    );
-    deletions.set(following.source, [...(deletions.get(following.source) ?? []), ...copied]);
+    sources.add(following.source);
     return { positions, landed };
   };
   /** Pieces whose character inside another piece the write did not copy. */
@@ -548,28 +548,10 @@ function adoptFollowingText(
   for (const following of unplaced) {
     adoptInside(following, adoptPiece(following, text.length));
   }
-  for (const [source, copied] of deletions) {
-    const sourceText = registry.inline.textOf(source);
-    if (!sourceText) continue;
-    // A live source keeps its characters: the copy hides them, and they show again if a peer
-    // deletes the paragraph that holds the copy meanwhile. Deleting them lost the text then.
-    // Found by identity: a moved embed and the copies this write made shift positions. Text
-    // that followed within this paragraph is kept as a live source's is: by identity, the
-    // deletion also found the copies this write made.
-    if (source !== paragraphId && registry.inline.isDeletedParagraph(source)) {
-      const gone = new Set(copied);
-      const sourceIds = textIdentities(sourceText).ids;
-      deletePositions(
-        sourceText,
-        sourceIds.flatMap((id, position) => (id && gone.has(id) ? [position] : []))
-      );
-      changedSources.add(source);
-    }
-  }
   for (const source of changedSources) registry.inline.follow.invalidate(source);
   registry.inline.follow.invalidate(paragraphId);
   registry.inline.noteDrift();
-  return [...deletions.keys()];
+  return [...sources];
 }
 
 /** What a write deletes from where its paragraph showed it, by identity. */
@@ -862,6 +844,7 @@ export function applyInlinePlan(
   /** Each plan paragraph's tokens, encoded before the write began. */
   encoded: ReadonlyMap<LogicalId, Token[]> = new Map()
 ): InlineWritten {
+  const typed = plan.typed;
   const embedsAfter = new Set<string>();
   // Block children are records the record pipeline writes; the rest is shared text.
   const writes: (ParagraphWrite<Token> & {
@@ -908,7 +891,7 @@ export function applyInlinePlan(
       text,
       before,
       after: tokens,
-      steps: diffTokens(before, tokens),
+      steps: diffTokens(before, tokens, true, typed && typedStartIn(after, typed)),
       identities: shown?.identities.ids ?? [],
       shownIdentities: shown?.identities ?? null,
       hidden: shown?.hidden ?? new Set(),

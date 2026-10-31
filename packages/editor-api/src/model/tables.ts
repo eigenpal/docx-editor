@@ -9,6 +9,7 @@ import {
   fail,
   hydratedHandle,
   type AutomationOperation,
+  type AutomationValue,
   type ObjectAddress,
   type RequestContext,
   type ResolvedLoadOptions,
@@ -29,6 +30,44 @@ function matrix(value: string[][], target: string): string[][] {
   )
     fail({ code: 'InvalidArgument', target });
   return value.map((r) => [...r]);
+}
+/**
+ * @internal One table insertion at either edge of `span`, after the Office.js argument checks.
+ * Range, Body, and Paragraph share it, so they refuse the same arguments the same way. The
+ * caller queues `plan` and `settle` as the command that creates `table`.
+ */
+export function tableInsertion(
+  context: RequestContext,
+  target: string,
+  span: () => AutomationSpanRef,
+  where: 'Before' | 'After',
+  rowCount: number,
+  columnCount: number,
+  values: string[][] | undefined
+): {
+  readonly table: Table;
+  readonly plan: () => AutomationOperation;
+  readonly settle: (answer: AutomationValue) => void;
+} {
+  integer(rowCount, target, 1);
+  integer(columnCount, target, 1);
+  const copied = values === undefined ? undefined : matrix(values, target);
+  const table = Table.promised(context, target);
+  return {
+    table,
+    plan: () => ({
+      op: 'insertTable',
+      span: span(),
+      location: where,
+      rowCount,
+      columnCount,
+      ...(copied ? { values: copied } : {}),
+    }),
+    settle: (answer) => {
+      if (answer.kind !== 'handle') fail({ code: 'GeneralException', target });
+      table.hydrateAddress({ kind: 'handle', handle: answer.handle });
+    },
+  };
 }
 function location(value: 'Start' | 'End', target: string): 'start' | 'end' {
   if (value !== 'Start' && value !== 'End') fail({ code: 'InvalidArgument', target });
@@ -222,9 +261,12 @@ export class Table extends ModelObject implements PromisedItem {
    * cell can lie further left. The rectangle grows to whole merged cells; a cell that crosses
    * its edge, or a rectangle of one cell, refuses with `InvalidArgument` and the diagnostic
    * code `edit.table-merge-not-rectangle`. The merged cell keeps every non-empty cell's content
-   * in reading order. Edits to the returned cell can share the sync. A pending cell revision
-   * refuses with `NotImplemented`; tracking modes refuse with `NotSupported`, because a merge
-   * has no tracked form.
+   * in reading order. The returned cell's `value`, `shadingColor`, and `verticalAlignment` can
+   * share the sync; a text edit in the table refuses with `ConflictingChanges` until a sync,
+   * because the merge moves paragraphs between cells. With tracking off, a pending cell revision
+   * refuses with `NotImplemented`. `TrackMineOnly` merges only inside the author's own
+   * proposed table, whose insertion the new shape joins; any other table refuses with
+   * `NotSupported` and `edit.tracked-structure-unsupported`.
    */
   mergeCells(topRow: number, firstCell: number, bottomRow: number, lastCell: number): TableCell {
     const label = `${this.path.label}.mergeCells`;
@@ -449,7 +491,8 @@ export class TableCell extends ModelObject implements PromisedItem {
    * from 1 to 63. A cell merged over several rows splits only into a divisor of them; a
    * one-row cell adds rows to the table. Counts the cell cannot take, such as columns narrower
    * than the minimum width, refuse with `InvalidArgument` and the diagnostic code
-   * `edit.table-split-unsupported`. Tracking modes refuse with `NotSupported`.
+   * `edit.table-split-unsupported`. `TrackMineOnly` splits only inside the author's own
+   * proposed table, as `Table.mergeCells` does; any other table refuses with `NotSupported`.
    */
   split(rowCount: number, columnCount: number): void {
     const label = `${this.path.label}.split`;

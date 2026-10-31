@@ -41,7 +41,7 @@ async function joinRoom(page: Page, invite: string, name: string): Promise<void>
   const dialog = page.getByRole('dialog', { name: /Collaborate on this document/i });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Display name').fill(name);
-  await expect(dialog.getByLabel('Room ID or link')).toHaveValue(
+  await expect(dialog.getByLabel(/^Full room link/)).toHaveValue(
     new URL(invite).searchParams.get('room')!
   );
   await dialog.getByRole('button', { name: 'Join room' }).click();
@@ -123,7 +123,7 @@ test('invalid and missing rooms fail without changing the document', async ({ co
   const dialog = page.getByRole('dialog', { name: /Collaborate on this document/i });
   await dialog.getByLabel('Display name').fill('Alice');
   await dialog.getByRole('button', { name: /Join an existing room/i }).click();
-  await dialog.getByLabel('Room ID or link').fill('too-short');
+  await dialog.getByLabel(/^Full room link/).fill('too-short');
   await dialog.getByRole('button', { name: 'Join room' }).click();
   await expect(dialog.getByRole('alert')).toBeVisible();
   expect((await firstEditableParagraph(page)).text).toBe(before);

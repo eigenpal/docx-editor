@@ -334,7 +334,13 @@ export {
   usedParaIds,
   w14RootPrefix,
 } from './para-id.ts';
-export { ensureListDefinition, ensureNumberingLevel, type ListKind } from './numbering-part.ts';
+export {
+  ensureListDefinition,
+  ensureNumberingLevel,
+  type ListDefinitionGeometry,
+  type ListKind,
+  type ListLevelGeometry,
+} from './numbering-part.ts';
 export { buildBookmarkIndex, type BookmarkAnchor, type BookmarkIndex } from './bookmarks.ts';
 export { listBookmarks, type BookmarkPosition, type BookmarkRecord } from './bookmark-list.ts';
 export {
