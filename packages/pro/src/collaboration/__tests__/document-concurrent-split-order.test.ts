@@ -17,6 +17,7 @@ import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
 import { collaborationModule, reviewModule } from '../../index';
 import { createPeerHarness, zipDocument } from './document-peer-support';
+import { packageFingerprint } from './document-support';
 
 const registered = !GlobalRegistrator.isRegistered;
 if (registered) GlobalRegistrator.register();
@@ -131,6 +132,16 @@ async function room(
       );
       expect(xml[1]).toBe(xml[0]!);
       expect(xml[2]).toBe(xml[0]!);
+      // A paragraph mark's run properties come before section properties (`CT_PPr`).
+      expect(xml[0]).not.toMatch(/<\/w:sectPr><w:rPr>/);
+    },
+    /** A participant that joins now, and builds its view once from shared state, reads alike. */
+    async expectJoinerConverges() {
+      flush();
+      const dave = await harness.join(pair.alice, 'dave');
+      expect(packageFingerprint(harness.packageOf(dave))).toBe(
+        packageFingerprint(peers[0]!.editor.surface!.session.currentPackage())
+      );
     },
     /** Every peer's saved document opens again with `expected` and no pending change. */
     async expectReopens(expected: readonly string[], revisions = 0) {
@@ -379,6 +390,7 @@ describe('more concurrent splits of one paragraph', () => {
           const split = ['a1; ', 'b2; ', 'c3; ', 'd4; ', 'e5', 'Signed'];
           await r.expectAll(split, tracked ? 2 : undefined);
           await r.expectReopens(split, tracked ? 2 : 0);
+          await r.expectJoinerConverges();
           if (!tracked) return;
           later();
           await rejectAll(r.carol.runtime);
@@ -699,6 +711,12 @@ describe('rejecting every change after concurrent tracked splits', () => {
     {
       name: 'paragraph mark run properties',
       properties: '<w:pPr><w:jc w:val="left"/><w:rPr><w:b/></w:rPr></w:pPr>',
+    },
+    // A moved mark's `w:rPr` goes before the section properties, as `CT_PPr` orders them.
+    {
+      name: 'section properties',
+      properties:
+        '<w:pPr><w:jc w:val="left"/><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:pPr>',
     },
   ];
   for (const { name: marks, properties } of MARKS)

@@ -24,7 +24,7 @@ import {
 import { PACKAGE_NODES_KEY, NODE_TEXT_FIELD, makeTextRecord, type SharedRecord } from './schema.ts';
 import { splitWinnerOrder } from './split-dedup.ts';
 import { splitSiblingOrder, type SiblingRanks } from './split-sibling-order.ts';
-import { splitMarkMoves } from './split-mark-moves.ts';
+import { markPropertiesEnd, splitMarkMoves } from './split-mark-moves.ts';
 import { typedInsertOf, type TypedInsert } from './paragraph-text-typing.ts';
 import type { DocumentRegistry } from './registry.ts';
 import type { LogicalId } from './identity.ts';
@@ -592,7 +592,7 @@ export function projectJournalToShared(
       emit({
         kind: 'spliceChildren',
         parentLogicalId: move.to,
-        start: move.first ? 0 : raw.node(move.to)!.children.length,
+        start: move.first ? 0 : markPropertiesEnd(registry, to.children),
         deleteCount: 0,
         childLogicalIds: [move.node],
       });

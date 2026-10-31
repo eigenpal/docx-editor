@@ -26,7 +26,7 @@ import type { LogicalId } from './identity.ts';
 import { replicaOfLogicalId } from './identity.ts';
 import type { DocumentRegistry } from './registry.ts';
 import { isElementRecord } from './schema.ts';
-import { sharedChildShell } from './singleton-children.ts';
+import { mayFollowMarkProperties, sharedChildShell } from './singleton-children.ts';
 import type { SiblingGroup } from './split-sibling-order.ts';
 
 /** One proposal element shown under another parent than the one that lists it. */
@@ -191,6 +191,8 @@ export class SplitMarkMoves {
   private readonly hidden = new Map<LogicalId, Set<LogicalId>>();
   private readonly added = new Map<LogicalId, MarkMove[]>();
 
+  constructor(private readonly registry: DocumentRegistry) {}
+
   /**
    * Read the moves again from the runs the registry knows, and return every node whose shown
    * children changed: the parents that list and show a move that appeared or went.
@@ -236,7 +238,13 @@ export class SplitMarkMoves {
     const kept = hidden ? childIds.filter((id) => !hidden.has(id)) : [...childIds];
     const first = (added ?? []).filter((move) => move.first && !kept.includes(move.node));
     const last = (added ?? []).filter((move) => !move.first && !kept.includes(move.node));
-    return [...first.map((move) => move.node), ...kept, ...last.map((move) => move.node)];
+    const end = markPropertiesEnd(this.registry, kept);
+    return [
+      ...first.map((move) => move.node),
+      ...kept.slice(0, end),
+      ...last.map((move) => move.node),
+      ...kept.slice(end),
+    ];
   }
 
   /** The moves a local edit has to list in shared state before it addresses `parent`. */
@@ -245,12 +253,27 @@ export class SplitMarkMoves {
   }
 }
 
+/**
+ * Where a paragraph mark's `w:rPr` goes among `children` of a `w:pPr`: before the first
+ * `w:sectPr` or `w:pPrChange`, which come after it in `CT_PPr`, or at the end.
+ */
+export function markPropertiesEnd(
+  registry: DocumentRegistry,
+  children: readonly LogicalId[]
+): number {
+  const at = children.findIndex((id) => {
+    const shell = sharedChildShell(registry, id);
+    return shell !== null && mayFollowMarkProperties(shell);
+  });
+  return at < 0 ? children.length : at;
+}
+
 const perRegistry = new WeakMap<DocumentRegistry, SplitMarkMoves>();
 
 /** The one set of moves a registry's view and projection share. */
 export function splitMarkMoves(registry: DocumentRegistry): SplitMarkMoves {
   let moves = perRegistry.get(registry);
-  if (!moves) perRegistry.set(registry, (moves = new SplitMarkMoves()));
+  if (!moves) perRegistry.set(registry, (moves = new SplitMarkMoves(registry)));
   return moves;
 }
 
