@@ -1,0 +1,210 @@
+{
+  "config": "trackedStructuresSequential",
+  "seed": 27,
+  "replicas": 3,
+  "delivery": "in-order",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertHyperlink",
+          "start": 8,
+          "end": 10,
+          "anchor": "_fuzz"
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 13,
+          "text": " dol"
+        },
+        "paragraphs": [4]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 3,
+          "text": "em ",
+          "revision": {
+            "author": "Author 1",
+            "date": "2026-01-01T09:26:15Z"
+          }
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 0,
+          "text": "lor"
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 24,
+          "end": 26,
+          "revision": {
+            "author": "Author 2",
+            "date": "2026-01-01T10:58:40Z"
+          }
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 23,
+          "end": 25,
+          "revision": {
+            "author": "Author 2",
+            "date": "2026-01-01T21:13:45Z"
+          }
+        },
+        "paragraphs": [4]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 7,
+          "text": "psu"
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 21,
+          "text": "i",
+          "revision": {
+            "author": "Author 2",
+            "date": "2026-01-01T18:20:39Z"
+          }
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "rejectRevision",
+          "revision": {
+            "id": "162916",
+            "author": "Author 2",
+            "date": "2026-01-01T18:20:39Z"
+          },
+          "localName": "ins"
+        },
+        "paragraphs": [7]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 6,
+          "text": "ip"
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 23,
+          "end": 28,
+          "revision": {
+            "author": "Author 0",
+            "date": "2026-01-01T01:48:33Z"
+          }
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "rejectAllRevisions",
+          "siteNodeIds": []
+        },
+        "targets": [
+          {
+            "field": "siteNodeIds",
+            "localName": "del",
+            "index": 1,
+            "array": true,
+            "identity": {
+              "id": "32650",
+              "author": "Author 0",
+              "date": "2026-01-01T01:48:33Z"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
