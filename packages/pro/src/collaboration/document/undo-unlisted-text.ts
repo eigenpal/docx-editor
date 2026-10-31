@@ -148,7 +148,8 @@ function paragraphRecordOf(nodes: Y.Map<Y.Map<unknown>>, item: Y.Item): Y.Map<un
  * participant deleted that paragraph meanwhile, the join has nowhere to go: the moved text
  * would go back into a deleted paragraph and show nowhere. So when every paragraph the step
  * took text from is deleted, the undo keeps each paragraph the step listed that shows text it
- * moved: its listing entry, and the copies it holds. Text the step typed there still goes.
+ * moved: its listing entry, its record fields, and the copies it holds. Text the step typed
+ * there still goes.
  */
 export function undoKeeps(
   doc: Y.Doc,
@@ -186,9 +187,12 @@ export function undoKeeps(
     }
   }
   if (keptIds.size === 0) return null;
+  // A kept paragraph keeps its record fields too: its split points still place it.
+  const keptRecords = new Set<unknown>([...keptIds].map((id) => nodes.get(id)));
   return (item) => {
     const parent = item.parent as unknown;
     if (keptTexts.has(parent)) return isCopy(item);
+    if (keptRecords.has(parent)) return true;
     if (!(parent instanceof Y.Array) || fieldOf(parent) !== NODE_CHILDREN_FIELD) return false;
     const listed = item.content.getContent();
     return listed.length > 0 && listed.every((id) => keptIds.has(id as string));
