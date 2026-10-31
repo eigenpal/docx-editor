@@ -265,6 +265,12 @@ function isParagraphCharacter(item: Y.Item): boolean {
   if (!(item.content instanceof Y.ContentString) && !(item.content instanceof Y.ContentEmbed)) {
     return false;
   }
+  return inParagraphText(item);
+}
+
+/** Whether `item` sits in a paragraph's shared text; a deleted item may keep no content. */
+function inParagraphText(item: Y.Item): boolean {
+  if (item.content instanceof Y.ContentFormat) return false;
   return item.parent instanceof Y.Text && item.parent._item?.parentSub === INLINE_FIELD;
 }
 
@@ -319,8 +325,11 @@ function copiesOf(registry: DocumentRegistry, step: StackItemShape | undefined):
         // wrote of another character records only its own item, which names nothing else.
         // Otherwise spans first, characters only where an index run holds a copy: an undo
         // of a long paste reads its marks once per insert, not once per character.
+        // A character already deleted counts too: a peer can copy it before the deletion
+        // reaches them, as a split of a paragraph another peer deleted does, and that copy
+        // reaches this replica after the undo.
         const shown =
-          (!!item && !item.deleted && isParagraphCharacter(item)) ||
+          (!!item && (item.deleted ? inParagraphText(item) : isParagraphCharacter(item))) ||
           spans.some(
             (span) =>
               follow.holdsCopyIn(span.client, span.from, span.to) &&

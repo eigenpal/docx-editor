@@ -712,6 +712,9 @@ export class TextFollow {
         open !== null &&
         (!identities.starts[position] ||
           (position > 0 && identities.lefts[position] === identities.ids[position - 1]));
+      // A copy in a gone paragraph whose character another paragraph holds shows there: a
+      // join copied text a peer typed while its original stayed. What follows it comes along.
+      if (!live && continues && isCopy && id !== null && this.holdersOf(id).length > 0) continue;
       const anchor: (FollowAnchor & { readonly target?: LogicalId }) | undefined =
         identities.anchors[position]?.find((candidate) => this.leadsOut(source, live, candidate)) ??
         (live || continues ? undefined : this.movedAfter(source, identities, position));

@@ -186,6 +186,12 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
   { config: 'reorderUndo', delivery: 'server', seed: 1005 },
   { config: 'reorderEverything', delivery: 'server', seed: 1045 },
   { config: 'reorderUndo', delivery: 'peer', seed: 1058 },
+  // Blocks moved, split, and joined at once showed one typed character twice: a deleted
+  // paragraph's following text carried a join's copy of a character whose original still
+  // showed (server 3057). Typing its typist undid after the typing was already deleted showed
+  // again when a peer's concurrent split of its paragraph arrived (peer 63).
+  { config: 'reorder', delivery: 'server', seed: 3057 },
+  { config: 'reorderUndo', delivery: 'peer', seed: 63 },
 ];
 
 /**
@@ -193,29 +199,7 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
  * into `replays/` and the seed back into `CLEAN`.
  */
 const OPEN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number; case: string }[] =
-  [
-    // Blocks moved, split, and joined at once show one typed character twice. Every case in
-    // `replays/open/` moves blocks, and none of them loses or misplaces a block. The other
-    // cases there were shrunk before the fuzzer moved tables with `moveTable`; their seeds now
-    // run clean, but the cases still fail: text shows twice, a caret lands at the wrong
-    // offset after concurrent joins, and an edit after an undone join is refused
-    // (`invalid-bound`).
-    {
-      config: 'reorder',
-      delivery: 'server',
-      seed: 3057,
-      case: 'moved-and-split-blocks-show-typed-text-twice.json',
-    },
-    // Typing that its typist undoes, in a paragraph a peer deletes and another peer splits at
-    // the same time, shows again once updates settle. No block moves; the fuzzer reports it
-    // since it counts a typist's own undo as a deletion of the typing.
-    {
-      config: 'reorderUndo',
-      delivery: 'peer',
-      seed: 63,
-      case: 'undone-typing-shows-after-concurrent-delete-and-split.json',
-    },
-  ];
+  [];
 
 /** How many test files share the seeds. Each file defines one share with `scenarioShare`. */
 export const SCENARIO_SHARES = 8;
