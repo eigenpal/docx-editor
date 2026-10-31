@@ -1,8 +1,8 @@
 // A footer whose first paragraph is a right-aligned PAGE frame (`w:wrap="none"`, anchored to
 // the text below it) and whose second paragraph is its text line. The frame shares that line's
 // band at the right margin and adds no flow height; the text paragraph lays out as if it opened
-// the footer. Other frames that wrap nothing take the general story frame lane; every other
-// structure keeps the ordinary flow.
+// the footer. Other frames that wrap nothing, and the same page number wrapping text, take the
+// general story frame lane; every other structure keeps the ordinary flow.
 
 import { describe, expect, test } from 'bun:test';
 import {
@@ -223,7 +223,6 @@ describe('structures that keep the ordinary flow', () => {
     return (story.fragments[1] as ParagraphFragmentRecord).box.y > 0;
   };
   const samples: [string, string][] = [
-    ['wrap around', body.replace('w:wrap="none"', 'w:wrap="around"')],
     ['wrap notBeside', body.replace('w:wrap="none"', 'w:wrap="notBeside"')],
     ['page-anchored', body.replace('w:vAnchor="text"', 'w:vAnchor="page"')],
     ['two frames', body.replace(frame, frame + frame)],
@@ -235,9 +234,10 @@ describe('structures that keep the ordinary flow', () => {
     });
   }
 
-  // Other frames that wrap nothing leave this lane for the general story frame lane, which
-  // also keeps them out of the footer's flow.
+  // Other frames that wrap nothing, and a page number that wraps text, leave this lane for the
+  // general story frame lane, which also keeps them out of the footer's flow.
   const placedElsewhere: [string, string][] = [
+    ['wrap around', body.replace('w:wrap="none"', 'w:wrap="around"')],
     ['centered', body.replace('w:xAlign="right"', 'w:xAlign="center"')],
     ['page-relative', body.replace('w:hAnchor="margin"', 'w:hAnchor="page"')],
     ['a real offset', body.replace('w:y="1"', 'w:y="200"')],
