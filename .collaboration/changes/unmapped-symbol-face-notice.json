@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The font substitution notice listed only faces that text renders in, so a missing symbol face that a private-use symbol needs was not listed.",
+  "after": "The notice also lists symbol faces whose glyph has no Unicode equivalent. Metafile pictures in PDF export take the picture's brightness and contrast, and a metafile with a malformed record reports a diagnostic.",
+  "reason": "Both changes only read the document: a local font notice derived from the tree, and PDF export. Shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/unmapped-symbol-faces.test.ts",
+    "packages/core/src/binding/__tests__/document-catalog.test.ts",
+    "packages/docx-to-pdf/test/header-metafile-pictures.test.ts"
+  ],
+  "changeset": "unmapped-symbol-face-notice",
+  "migration": null
+}
