@@ -143,7 +143,10 @@ describe('footnote hold-out keeps only the reference line out', () => {
   });
 
   test('a paragraph that starts on the next page returns at least two lines', () => {
-    expect(returningLines(input(0, 4))).toBe(2);
+    // With a one-line note the whole paragraph and its note fit, so nothing is held.
+    expect(returningLines(input(0, 4))).toBe(6);
+    // A two-line note does not fit beside the whole paragraph; its opening pair returns.
+    expect(returningLines(input(0, 4, [], 2))).toBe(2);
   });
 
   test('a paragraph citing a second note on the next page keeps the full hold', () => {
