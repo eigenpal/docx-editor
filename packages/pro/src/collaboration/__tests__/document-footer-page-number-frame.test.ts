@@ -28,15 +28,15 @@ const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const WML = 'application/vnd.openxmlformats-officedocument.wordprocessingml';
-const FRAME =
-  '<w:framePr w:wrap="none" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="1"/>';
+const frame = (wrap: string) =>
+  `<w:framePr w:wrap="${wrap}" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="1"/>`;
 const PAGE =
   '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
   '<w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>' +
   '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r>' +
   '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
-const FOOTER =
-  `<w:ftr xmlns:w="${W}"><w:p><w:pPr>${FRAME}</w:pPr>${PAGE}</w:p>` +
+const footer = (wrap: string) =>
+  `<w:ftr xmlns:w="${W}"><w:p><w:pPr>${frame(wrap)}</w:pPr>${PAGE}</w:p>` +
   '<w:p><w:r><w:t>Version 9</w:t></w:r></w:p></w:ftr>';
 
 function footerOf(editor: Editor): readonly ParagraphFragmentRecord[] {
@@ -69,7 +69,7 @@ function coldSummary(editor: Editor): string {
   }
 }
 
-async function pair() {
+async function pair(wrap: string) {
   const peers = await harness.pair(
     zipDocument(
       '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
@@ -81,7 +81,7 @@ async function pair() {
         documentRels:
           `<Relationships xmlns="${REL}">` +
           `<Relationship Id="rFooter" Type="${R}/footer" Target="footer1.xml"/></Relationships>`,
-        extraXml: { 'word/footer1.xml': FOOTER },
+        extraXml: { 'word/footer1.xml': footer(wrap) },
       }
     )
   );
@@ -121,43 +121,46 @@ function caretIn(editor: Editor, index: number, offset?: number): string {
   return paragraph.paragraphId;
 }
 
-test('typing in the page-number frame while a peer edits the footer text converges', async () => {
-  const { alice, bob, converged, pause, resume } = await pair();
-  const opened = converged();
-  expect(opened).toBe('^1>468.0 | Version 9@0.0');
+// A page number that wraps text floats the same way as one that wraps nothing.
+for (const wrap of ['none', 'around']) {
+  test(`typing in the page-number frame while a peer edits the footer text converges: ${wrap}`, async () => {
+    const { alice, bob, converged, pause, resume } = await pair(wrap);
+    const opened = converged();
+    expect(opened).toBe('^1>468.0 | Version 9@0.0');
 
-  pause();
-  caretIn(alice, 0, 0);
-  alice.surface!.type('p. ');
-  caretIn(bob, 1);
-  bob.surface!.type(' draft');
-  resume();
-  const typed = converged();
-  expect(typed).toBe('^p. 1>468.0 | Version 9 draft@0.0');
+    pause();
+    caretIn(alice, 0, 0);
+    alice.surface!.type('p. ');
+    caretIn(bob, 1);
+    bob.surface!.type(' draft');
+    resume();
+    const typed = converged();
+    expect(typed).toBe('^p. 1>468.0 | Version 9 draft@0.0');
 
-  alice.surface!.undo();
-  expect(converged()).toBe('^1>468.0 | Version 9 draft@0.0');
-  alice.surface!.redo();
-  expect(converged()).toBe(typed);
-});
-
-test('deleting the footer text while a peer types in the frame keeps the frame afloat', async () => {
-  const { alice, bob, converged, pause, resume } = await pair();
-  pause();
-  const anchor = caretIn(bob, 1);
-  bob.surface!.setSelection({
-    anchor: { paragraphId: anchor, offset: 0 },
-    head: { paragraphId: anchor, offset: 'Version 9'.length },
+    alice.surface!.undo();
+    expect(converged()).toBe('^1>468.0 | Version 9 draft@0.0');
+    alice.surface!.redo();
+    expect(converged()).toBe(typed);
   });
-  bob.surface!.deleteSelection();
-  caretIn(alice, 0, 0);
-  alice.surface!.type('p. ');
-  resume();
-  const deleted = converged();
-  expect(deleted).toBe('^p. 1>468.0 | @0.0');
 
-  bob.surface!.undo();
-  expect(converged()).toBe('^p. 1>468.0 | Version 9@0.0');
-  bob.surface!.redo();
-  expect(converged()).toBe(deleted);
-});
+  test(`deleting the footer text while a peer types in the frame keeps the frame afloat: ${wrap}`, async () => {
+    const { alice, bob, converged, pause, resume } = await pair(wrap);
+    pause();
+    const anchor = caretIn(bob, 1);
+    bob.surface!.setSelection({
+      anchor: { paragraphId: anchor, offset: 0 },
+      head: { paragraphId: anchor, offset: 'Version 9'.length },
+    });
+    bob.surface!.deleteSelection();
+    caretIn(alice, 0, 0);
+    alice.surface!.type('p. ');
+    resume();
+    const deleted = converged();
+    expect(deleted).toBe('^p. 1>468.0 | @0.0');
+
+    bob.surface!.undo();
+    expect(converged()).toBe('^p. 1>468.0 | Version 9@0.0');
+    bob.surface!.redo();
+    expect(converged()).toBe(deleted);
+  });
+}

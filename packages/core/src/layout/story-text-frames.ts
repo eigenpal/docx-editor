@@ -5,7 +5,8 @@
 // page, the margins or the column, with `w:xAlign` superseding `w:x`. The story's own text keeps
 // its flow, so the frame never changes the height the header or footer reserves. A frame that
 // does not wrap text (`w:wrap="none"`) may also size itself to its one line, align with
-// `w:xAlign`, and hold fields, which is how page numbers sit beside a footer's text.
+// `w:xAlign`, and hold fields, which is how page numbers sit beside a footer's text. A frame
+// that wraps text around itself may do the same when it holds one page number.
 import {
   WML_NAMESPACE_URI as W,
   type OoxmlElement,
@@ -19,10 +20,13 @@ import {
 } from './paragraph-frame.ts';
 import { meetsOrdinaryContent } from './header-positioned-frames.ts';
 import { shrinkSingleLineFrame } from './paragraph-frame-flow.ts';
+import { readLegacyPageField } from './legacy-footer-page-field.ts';
 import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
 const MAX_NODES = 4096;
 const MAX_GROUPS = 16;
+/** How far a self-sized wrapping frame may end below the story's text, for a raised first line. */
+const OVERHANG_TOLERANCE_PT = 1;
 /** Elements a frame paragraph in this lane may not hold. */
 const REFUSED = new Set([
   'drawing',
@@ -35,7 +39,7 @@ const REFUSED = new Set([
   'pageBreakBefore',
   'framePr',
 ]);
-/** Fields a wrapping frame may not hold; a frame that wraps nothing may. */
+/** Fields a wrapping frame holds only as one page number; a frame that wraps nothing may hold any. */
 const FIELDS = new Set(['fldChar', 'fldSimple', 'instrText']);
 
 type Flow = { readonly blocks: BlockFragmentRecord[]; readonly bottom: number };
@@ -67,6 +71,42 @@ function directFrame(paragraph: OoxmlElement): ParagraphFrame | null | undefined
   return readParagraphFrame([{ localName: 'framePr', attributes }]);
 }
 
+/** Direct paragraph properties a self-sized page number beside the text may carry. */
+const PAGE_NUMBER_PROPERTIES = new Set(['pStyle', 'framePr', 'jc', 'tabs', 'rPr']);
+
+/** Whether the paragraph's direct properties leave its frame's geometry to the frame itself. */
+function plainFrameProperties(paragraph: OoxmlElement): boolean {
+  const properties = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  if (properties?.kind !== 'paragraphProperties') return true;
+  return properties.children.every(
+    (child) =>
+      child.kind !== 'textValue' &&
+      child.namespaceUri === W &&
+      (PAGE_NUMBER_PROPERTIES.has(child.localName) ||
+        // A right indent only trims the self-sized frame's far edge.
+        (child.localName === 'ind' &&
+          child.attributes.every((item) => item.localName === 'right' || item.localName === 'end')))
+  );
+}
+
+/**
+ * Whether the story holds floating content, a DrawingML anchor or legacy VML, or more markup
+ * than the bound. A frame beside the text is placed only where nothing else floats.
+ */
+function holdsFloatingContent(blocks: readonly OoxmlElement[]): boolean {
+  const pending: OoxmlNode[] = [...blocks];
+  let count = 0;
+  while (pending.length) {
+    const node = pending.pop()!;
+    if (node.kind === 'textValue') continue;
+    if (++count > MAX_NODES * 4) return true;
+    if (node.localName === 'anchor' || node.localName === 'pict' || node.localName === 'object')
+      return true;
+    pending.push(...node.children);
+  }
+  return false;
+}
+
 /** Bounded text content and revisions, fields when allowed, with at least one visible character. */
 function plainContent(paragraph: OoxmlElement, fields: boolean): boolean {
   const pending: OoxmlNode[] = [...paragraph.children];
@@ -95,6 +135,7 @@ function plainContent(paragraph: OoxmlElement, fields: boolean): boolean {
 
 /** Groups of adjacent frame paragraphs with equal properties, each with its anchor paragraph. */
 function textFrameGroups(blocks: readonly OoxmlElement[]): readonly FrameGroup[] | null {
+  let floating: boolean | undefined;
   const groups: { frame: ParagraphFrame; paragraphs: OoxmlElement[] }[] = [];
   const anchored: FrameGroup[] = [];
   let open: { frame: ParagraphFrame; paragraphs: OoxmlElement[] } | undefined;
@@ -107,15 +148,23 @@ function textFrameGroups(blocks: readonly OoxmlElement[]): readonly FrameGroup[]
       continue;
     }
     if (!frame || frame.verticalAnchor !== 'text' || frame.dropCap !== undefined) return null;
-    // A wrapping frame needs fixed geometry and plain text; one that wraps nothing may size
-    // itself, align, and hold fields. The lane places every page alike, so it never takes
-    // inside or outside alignment, which follows odd and even pages.
+    // A wrapping frame needs fixed geometry and plain text, unless it sizes itself to one page
+    // number; one that wraps nothing may size itself, align, and hold fields. The lane places
+    // every page alike, so it never takes inside or outside alignment, which follows odd and
+    // even pages.
     const free = frame.wrap === 'none';
+    const pageNumber =
+      frame.autoWidth &&
+      (frame.wrap === 'around' || frame.wrap === 'auto') &&
+      plainFrameProperties(block) &&
+      readLegacyPageField(block, { allowDecoration: 'text' }) !== undefined &&
+      !(floating ??= holdsFloatingContent(blocks));
+    const sized = free || pageNumber;
     if (
-      (!free && (frame.autoWidth || frame.xAlign !== undefined)) ||
+      (!sized && (frame.autoWidth || frame.xAlign !== undefined)) ||
       frame.xAlign === 'inside' ||
       frame.xAlign === 'outside' ||
-      !plainContent(block, free)
+      !plainContent(block, sized)
     )
       return null;
     if (open && open.frame.token === frame.token) open.paragraphs.push(block);
@@ -234,6 +283,14 @@ export function placeStoryTextFrames(
       size
     );
     const box = { ...origin, ...size };
+    // The lane keeps the height the story reserves. A page number that wraps text and ends
+    // below that height would need more, so its story keeps ordinary flow.
+    if (
+      frame.autoWidth &&
+      frame.wrap !== 'none' &&
+      box.y + box.height > ordinary.bottom + OVERHANG_TOLERANCE_PT
+    )
+      return null;
     // A frame over the story's own paragraph text would wrap it; that stays in ordinary flow.
     const paragraphs = ordinary.blocks.filter((block) => block.kind === 'paragraph');
     if (!overlapDecided && meetsOrdinaryContent(box, paragraphs)) return null;

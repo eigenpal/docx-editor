@@ -123,9 +123,14 @@ test('a page-anchored page-number frame that wraps nothing sits beside the foote
 });
 
 test('a right-aligned page number without a width keeps its right edge on every page', () => {
-  const framePr =
-    '<w:framePr w:wrap="none" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="1"/>';
-  const number = framed(framePr, pageField('PAGE', '1'));
+  // A frame that wraps text places the same way when it stays clear of that text.
+  for (const wrap of ['none', 'around', 'auto']) {
+    const framePr = `<w:framePr w:wrap="${wrap}" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="1"/>`;
+    expectRightNumber(framed(framePr, pageField('PAGE', '1')));
+  }
+});
+
+function expectRightNumber(number: string): void {
   const gallery =
     '<w:sdtPr><w:docPartObj><w:docPartGallery w:val="Page Numbers (Bottom of Page)"/></w:docPartObj></w:sdtPr>';
   const plain = lay(text('Version 9'), 'ftr');
@@ -149,17 +154,22 @@ test('a right-aligned page number without a width keeps its right edge on every 
       expect(anchor!.box.y).toBe(0);
     }
   }
-});
+}
 
-test('page-number frames that wrap text, follow page parity, or span paragraphs stay in flow', () => {
-  const framePr = (wrap: string, align = 'right') =>
-    `<w:framePr w:wrap="${wrap}" w:vAnchor="text" w:hAnchor="margin" w:xAlign="${align}" w:y="1"/>`;
+test('page-number frames that wrap text out of place, follow page parity, or span paragraphs stay in flow', () => {
+  const framePr = (wrap: string, align = 'right', y = '1') =>
+    `<w:framePr w:wrap="${wrap}" w:vAnchor="text" w:hAnchor="margin" w:xAlign="${align}" w:y="${y}"/>`;
   const number = (props: string) => framed(props, pageField('PAGE', '1'));
   for (const content of [
-    // A frame that wraps text needs a fixed width and position, and holds no fields.
-    number(framePr('around')),
-    // Fixed geometry, so only the field refuses it.
+    // A frame that wraps text and has a fixed width holds no fields.
     number(frame('w:wrap="around"')),
+    // A page number that wraps text and ends below it would grow the footer.
+    number(framePr('around', 'right', '400')),
+    // Direct indents and borders shape the frame's own paragraph, so it keeps its flow.
+    number(framePr('around') + '<w:ind w:left="200"/>'),
+    number(framePr('around') + '<w:pBdr><w:bottom w:val="single"/></w:pBdr>'),
+    // Only a page number makes a wrapping frame size itself.
+    framed(framePr('around'), pageField('NUMPAGES', '9')),
     // Inside and outside alignment follow odd and even pages.
     number(framePr('none', 'outside')),
     // A frame without a width shrinks to one paragraph only.
@@ -168,6 +178,18 @@ test('page-number frames that wrap text, follow page parity, or span paragraphs 
     const { paragraphs } = lay(content + text('Version 9'), 'ftr');
     expect(paragraphs.some((paragraph) => paragraph.outOfFlow)).toBe(false);
   }
+});
+
+test('a page number that wraps text keeps its own right indent and floats', () => {
+  const framePr =
+    '<w:framePr w:wrap="around" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="1"/>';
+  const { paragraphs } = lay(
+    framed(framePr + '<w:ind w:right="200"/>', pageField('PAGE', '1')) + text('Version 9'),
+    'ftr'
+  );
+  const [number, anchor] = paragraphs;
+  expect(number!.outOfFlow).toBe(true);
+  expect(anchor!.box.y).toBe(0);
 });
 
 const rightNumber = framed(
