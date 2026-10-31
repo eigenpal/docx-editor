@@ -184,7 +184,7 @@ import {
   inheritNotesLayoutInput,
   layoutSemanticDocumentWithNotesSteps,
 } from './note-pagination.ts';
-import { closingSpaceAfterPt } from './note-area-fit.ts';
+import { closingSpaceAfterPt, pageChargesSpaceAfter } from './note-area-fit.ts';
 import { passProducerOf } from './pass-producer.ts';
 import { documentProjectionProducer } from './document-property-context.ts';
 
@@ -2194,6 +2194,7 @@ function* layoutBlocksPass(
             ? 0
             : collapsedSpaceBefore(authoredSpacing.before, previousSpaceAfter),
           freshLead: keepsBeforeAtPageStart(index, entry) ? spacing.before : 0,
+          closingSpaceAfter: pageChargesSpaceAfter(noteReserveHere(), pageFragments),
         });
         if (need !== null) needed = Math.max(needed, need);
       }

@@ -198,6 +198,11 @@ export interface KeepNextLookahead {
   readonly dynamicBlock?: (index: number) => boolean;
   /** Stop once even the smallest later ending exceeds both page admission heights. */
   readonly maxHeight?: number;
+  /**
+   * A member that ends on this page keeps its space after below its last line, as placement
+   * charges it above a note area. Without it, the plan fits a group that placement splits.
+   */
+  readonly closingSpaceAfter?: boolean;
 }
 
 /** What a keep chain that reaches a table needs of it (`tableKeepOpening`). */
@@ -304,11 +309,13 @@ export function keepNextPlan(
     const hardBreak = lines.findIndex((line) => line.pageBreakAfter || line.columnBreakAfter);
     const openingLength = hardBreak < 0 ? lines.length : hardBreak + 1;
     const openingLines = shortestOpeningLines(lines.length, openingLength, block.keeps);
-    const opening = total + fitExtent(lines, openingLines);
+    const closing = look.closingSpaceAfter && hardBreak < 0 ? block.spacing.after : 0;
+    const opening =
+      total + fitExtent(lines, openingLines) + (openingLines === lines.length ? closing : 0);
     // The story's LAST block keeps with nothing, so it terminates the chain however authored.
     if (!block.keeps.keepNext || index + 1 >= blocks.length)
       return finish({ height: opening, lastWhole });
-    const whole = fitExtent(lines, openingLength);
+    const whole = fitExtent(lines, openingLength) + closing;
     // A natural split carries this member's last line to its successor's page.
     if (hardBreak < 0 && openingLines < lines.length && total + whole > room) {
       return finish({ height: opening, lastWhole });
@@ -324,7 +331,8 @@ export function keepNextPlan(
       return finish({ height: Infinity, lastWhole });
     return true;
   };
-  if (look.rangeIndex) {
+  // The range index prices members without a closing space after.
+  if (look.rangeIndex && !look.closingSpaceAfter) {
     look.rangeIndex.walk(
       start,
       look.chainEnd?.(start) ?? blocks.length - 1,
@@ -387,6 +395,8 @@ export interface KeepNextPlacement {
   /** Space before the head at the top of a fresh page. */
   readonly freshLead: number;
   readonly topExtent: number;
+  /** A member that ends here keeps its space after ({@link KeepNextLookahead.closingSpaceAfter}). */
+  readonly closingSpaceAfter?: boolean;
   /** `w:compatSetting` `compatibilityMode`, read through `hasCompatibilityRule`. */
   readonly compatibilityMode: number | undefined;
 }
@@ -413,8 +423,9 @@ export function keepNextGroupNeed(look: KeepNextLookahead, at: KeepNextPlacement
     here + at.pricedLead,
     at.contentHeight - at.freshLead - at.topExtent + at.pricedLead
   );
-  const plan = (room: number) => keepNextPlan({ ...look, maxHeight }, room + at.pricedLead);
-  const group = plan(here);
+  const plan = (room: number, closingSpaceAfter = false) =>
+    keepNextPlan({ ...look, maxHeight, closingSpaceAfter }, room + at.pricedLead);
+  const group = plan(here, at.closingSpaceAfter);
   if (group === null) return null;
   const need = group.height - at.pricedLead + at.lead + at.topExtent;
   if (at.cursorY + need <= at.contentHeight) return need;

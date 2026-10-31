@@ -28,6 +28,17 @@ export function pageHoldsFootnoteReference(
   return fragments.some(fragmentCitesFootnote);
 }
 
+/**
+ * Whether a paragraph that ends on this page keeps its space after, priced before its lines
+ * are placed: the page has a note reserve and already cites a footnote.
+ */
+export function pageChargesSpaceAfter(
+  reservePt: number | undefined,
+  fragments: readonly BlockFragmentRecord[]
+): boolean {
+  return (reservePt ?? 0) > 0 && fragments.some(fragmentCitesFootnote);
+}
+
 /** Fragments are immutable records, so each is scanned once per pass however often asked. */
 const fragmentCitations = new WeakMap<BlockFragmentRecord, boolean>();
 function fragmentCitesFootnote(fragment: BlockFragmentRecord): boolean {

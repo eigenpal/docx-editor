@@ -22,8 +22,8 @@ const AREA_TOP = PAGE - 24;
 const LINE = 12;
 
 const run = (text: string) => `<w:r><w:rPr><w:sz w:val="22"/></w:rPr>${text}</w:r>`;
-const p = (text: string, after = 0, height = LINE) =>
-  `<w:p><w:pPr><w:spacing w:before="0" w:after="${after * 20}" w:line="${height * 20}" w:lineRule="exact"/></w:pPr>${run(text)}</w:p>`;
+const p = (text: string, after = 0, height = LINE, keepNext = false) =>
+  `<w:p><w:pPr>${keepNext ? '<w:keepNext/>' : ''}<w:spacing w:before="0" w:after="${after * 20}" w:line="${height * 20}" w:lineRule="exact"/></w:pPr>${run(text)}</w:p>`;
 
 function load(body: string) {
   const entries = {
@@ -95,6 +95,26 @@ describe('space after above a footnote area', () => {
       );
     expect(pageOf(plain(5, 10).pages, 'Closing')).toBe(1);
     expect(pageOf(plain(12, 10).pages, 'Closing')).toBe(0);
+  });
+
+  test('a kept heading moves with a successor whose space after does not fit', () => {
+    // Opening, spacer, heading and body leave `room` points above the note area.
+    const kept = (room: number, cite = true) =>
+      layout(
+        p(`<w:t>Opening</w:t>${cite ? '<w:footnoteReference w:id="1"/>' : ''}`) +
+          p('<w:t>Spacer</w:t>', 0, AREA_TOP - room - 3 * LINE) +
+          p('<w:t>Heading</w:t>', 0, LINE, true) +
+          p('<w:t>Body</w:t>', 10) +
+          p('<w:t>Next</w:t>')
+      ).pages;
+    const moved = kept(5);
+    expect(pageOf(moved, 'Heading')).toBe(1);
+    expect(pageOf(moved, 'Body')).toBe(1);
+    const stays = kept(12);
+    expect(pageOf(stays, 'Heading')).toBe(0);
+    expect(pageOf(stays, 'Body')).toBe(0);
+    // Without a citation there is no note area, and the space after stays out of the fit.
+    expect(pageOf(kept(5, false), 'Heading')).toBe(0);
   });
 
   test('a page without a citation keeps the space after out of the fit', () => {
