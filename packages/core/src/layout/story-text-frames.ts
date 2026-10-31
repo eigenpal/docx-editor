@@ -102,9 +102,57 @@ function holdsFloatingContent(blocks: readonly OoxmlElement[]): boolean {
     if (++count > MAX_NODES * 4) return true;
     if (node.localName === 'anchor' || node.localName === 'pict' || node.localName === 'object')
       return true;
-    pending.push(...node.children);
+    for (const child of node.children) pending.push(child);
+    if (count + pending.length > MAX_NODES * 4) return true;
   }
   return false;
+}
+
+/** Revision and bookmark markup a page-number paragraph reads through. */
+const READ_THROUGH = new Set(['ins', 'moveTo']);
+const SKIPPED = new Set(['del', 'moveFrom', 'bookmarkStart', 'bookmarkEnd', 'proofErr']);
+
+/**
+ * The paragraph as its visible runs, with inserted runs unwrapped and deletions, bookmarks and
+ * proofing marks left out, so a tracked edit does not change whether it holds a page number.
+ */
+function visibleRuns(paragraph: OoxmlElement): OoxmlElement {
+  const children: OoxmlNode[] = [];
+  for (const child of paragraph.children) {
+    if (child.kind === 'textValue' || child.namespaceUri !== W) children.push(child);
+    else if (SKIPPED.has(child.localName)) continue;
+    else if (READ_THROUGH.has(child.localName))
+      for (const inner of child.children) {
+        if (inner.kind === 'textValue' || !SKIPPED.has(inner.localName)) children.push(inner);
+      }
+    else children.push(child);
+  }
+  return { ...paragraph, children };
+}
+
+/** Room for a page number of this many digits, so a longer one on a later page still fits. */
+const PAGE_NUMBER_DIGITS = 5;
+
+/**
+ * The box a self-sized page number may need on any page, with its distance from the text: it
+ * grows away from its alignment edge until it holds {@link PAGE_NUMBER_DIGITS} characters.
+ */
+function pageNumberReach(
+  box: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
+  fragment: ParagraphFragmentRecord,
+  frame: ParagraphFrame
+): { readonly x: number; readonly y: number; readonly width: number; readonly height: number } {
+  const line = fragment.lines[0];
+  const length = line ? line.spans.reduce((sum, span) => sum + span.text.length, 0) : 0;
+  const perCharacter = length > 0 ? box.width / length : (line?.box.height ?? 0) / 2;
+  const extra = Math.max(0, PAGE_NUMBER_DIGITS - length) * perCharacter;
+  const shift = frame.xAlign === 'right' ? extra : frame.xAlign === 'center' ? extra / 2 : 0;
+  return {
+    x: box.x - shift - frame.hSpace,
+    y: box.y,
+    width: box.width + extra + 2 * frame.hSpace,
+    height: box.height,
+  };
 }
 
 /** Bounded text content and revisions, fields when allowed, with at least one visible character. */
@@ -157,7 +205,7 @@ function textFrameGroups(blocks: readonly OoxmlElement[]): readonly FrameGroup[]
       frame.autoWidth &&
       (frame.wrap === 'around' || frame.wrap === 'auto') &&
       plainFrameProperties(block) &&
-      readLegacyPageField(block, { allowDecoration: 'text' }) !== undefined &&
+      readLegacyPageField(visibleRuns(block), { allowDecoration: 'text' }) !== undefined &&
       !(floating ??= holdsFloatingContent(blocks));
     const sized = free || pageNumber;
     if (
@@ -283,17 +331,20 @@ export function placeStoryTextFrames(
       size
     );
     const box = { ...origin, ...size };
+    const pageNumber = frame.autoWidth && frame.wrap !== 'none';
     // The lane keeps the height the story reserves. A page number that wraps text and ends
     // below that height would need more, so its story keeps ordinary flow.
     if (
-      frame.autoWidth &&
-      frame.wrap !== 'none' &&
+      !overlapDecided &&
+      pageNumber &&
       box.y + box.height > ordinary.bottom + OVERHANG_TOLERANCE_PT
     )
       return null;
     // A frame over the story's own paragraph text would wrap it; that stays in ordinary flow.
+    // A page number that wraps text keeps clear of it on every page, however long it grows.
     const paragraphs = ordinary.blocks.filter((block) => block.kind === 'paragraph');
-    if (!overlapDecided && meetsOrdinaryContent(box, paragraphs)) return null;
+    const reach = pageNumber ? pageNumberReach(box, fragments[0]!, frame) : box;
+    if (!overlapDecided && meetsOrdinaryContent(reach, paragraphs)) return null;
     for (const fragment of fragments) {
       const moved = translateParagraphFragment(fragment, origin.x, origin.y);
       placed.push(

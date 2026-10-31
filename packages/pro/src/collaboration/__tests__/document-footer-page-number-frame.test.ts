@@ -11,6 +11,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import type { ParagraphFragmentRecord } from '@docx-editor.dev/core/layout';
 import { collaborationModule } from '../collaboration-module.ts';
+import { reviewModule } from '../../review/review-module.ts';
 import { createPeerHarness, zipDocument } from './document-peer-support.ts';
 import { packageFingerprint, saveReopenDigest } from './document-support.ts';
 
@@ -69,7 +70,7 @@ function coldSummary(editor: Editor): string {
   }
 }
 
-async function pair(wrap: string) {
+async function pair(wrap: string, tracked = false) {
   const peers = await harness.pair(
     zipDocument(
       '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
@@ -92,9 +93,11 @@ async function pair(wrap: string) {
     const editor = createDocxEditor({
       container,
       document: peer.room.document,
-      modules: [collaborationModule({ session: peer.room.session })],
+      author: tracked ? 'Reviewer' : undefined,
+      modules: [reviewModule(), collaborationModule({ session: peer.room.session })],
     });
     editors.push(editor);
+    if (tracked) expect(editor.exec({ type: 'setEditingMode', mode: 'suggesting' }).ok).toBe(true);
     return editor;
   }) as [Editor, Editor];
   const converged = (): string => {
@@ -162,5 +165,19 @@ for (const wrap of ['none', 'around']) {
     expect(converged()).toBe('^p. 1>468.0 | Version 9@0.0');
     bob.surface!.redo();
     expect(converged()).toBe(deleted);
+  });
+
+  test(`tracked typing in the page-number frame keeps it afloat on both peers: ${wrap}`, async () => {
+    const { alice, bob, converged, pause, resume } = await pair(wrap, true);
+    pause();
+    caretIn(alice, 0, 0);
+    alice.surface!.type('p. ');
+    caretIn(bob, 1);
+    bob.surface!.type(' draft');
+    resume();
+    // The inserted text is a suggestion, and the number still sits beside the footer text.
+    expect(converged()).toBe('^p. 1>468.0 | Version 9 draft@0.0');
+    alice.surface!.undo();
+    expect(converged()).toBe('^1>468.0 | Version 9 draft@0.0');
   });
 }

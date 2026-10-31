@@ -192,6 +192,21 @@ test('a page number that wraps text keeps its own right indent and floats', () =
   expect(anchor!.box.y).toBe(0);
 });
 
+test('a page number that wraps text keeps room for a longer number beside right-aligned text', () => {
+  const framePr =
+    '<w:framePr w:wrap="around" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="1"/>';
+  const number = framed(framePr, pageField('PAGE', '1'));
+  // Text ending 10 pt before the margin clears "1" but not a five-digit number; 40 pt clears both.
+  const near = lay(
+    number + text('Version 9', '<w:jc w:val="right"/><w:ind w:right="200"/>'),
+    'ftr'
+  );
+  expect(near.paragraphs.some((paragraph) => paragraph.outOfFlow)).toBe(false);
+  const far = lay(number + text('Version 9', '<w:jc w:val="right"/><w:ind w:right="800"/>'), 'ftr');
+  expect(far.paragraphs[0]!.outOfFlow).toBe(true);
+  expect(far.paragraphs[1]!.box.y).toBe(0);
+});
+
 const rightNumber = framed(
   '<w:framePr w:wrap="none" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="1"/>',
   pageField('PAGE', '9')
