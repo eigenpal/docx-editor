@@ -128,7 +128,8 @@ describe('space after above a footnote area', () => {
         p('<w:t>Body</w:t><w:footnoteReference w:id="1"/>', 10) +
         p('<w:t>Next</w:t>')
     ).pages;
-    expect(pageOf(pages, 'Heading')).toBe(pageOf(pages, 'Body'));
+    expect(pageOf(pages, 'Heading')).toBe(1);
+    expect(pageOf(pages, 'Body')).toBe(1);
   });
 
   test('a kept paragraph gives its last line to a successor whose space after does not fit', () => {
