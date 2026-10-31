@@ -143,9 +143,12 @@ function pageNumberReach(
   frame: ParagraphFrame
 ): { readonly x: number; readonly y: number; readonly width: number; readonly height: number } {
   const line = fragment.lines[0];
-  const length = line ? line.spans.reduce((sum, span) => sum + span.text.length, 0) : 0;
-  const perCharacter = length > 0 ? box.width / length : (line?.box.height ?? 0) / 2;
-  const extra = Math.max(0, PAGE_NUMBER_DIGITS - length) * perCharacter;
+  const text = line ? line.spans.map((span) => span.text).join('') : '';
+  // Text beside the number keeps its width; only the number's digits grow.
+  let digits = 0;
+  for (const character of text) if (character >= '0' && character <= '9') digits += 1;
+  const perCharacter = text.length > 0 ? box.width / text.length : (line?.box.height ?? 0) / 2;
+  const extra = Math.max(0, PAGE_NUMBER_DIGITS - digits) * perCharacter;
   const shift = frame.xAlign === 'right' ? extra : frame.xAlign === 'center' ? extra / 2 : 0;
   return {
     x: box.x - shift - frame.hSpace,

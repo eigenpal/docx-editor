@@ -202,6 +202,16 @@ test('a page number that wraps text keeps room for a longer number beside right-
     'ftr'
   );
   expect(near.paragraphs.some((paragraph) => paragraph.outOfFlow)).toBe(false);
+  // Text beside the number does not count toward its digits.
+  const decorated = framed(
+    framePr,
+    '<w:r><w:t xml:space="preserve">Page </w:t></w:r>' + pageField('PAGE', '1')
+  );
+  const wide = lay(
+    decorated + text('Version 9', '<w:jc w:val="right"/><w:ind w:right="800"/>'),
+    'ftr'
+  );
+  expect(wide.paragraphs.some((paragraph) => paragraph.outOfFlow)).toBe(false);
   const far = lay(number + text('Version 9', '<w:jc w:val="right"/><w:ind w:right="800"/>'), 'ftr');
   expect(far.paragraphs[0]!.outOfFlow).toBe(true);
   expect(far.paragraphs[1]!.box.y).toBe(0);
