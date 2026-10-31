@@ -1,5 +1,6 @@
 // Body fit above a footnote area: a paragraph's space after must fit there too.
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
+import { isOutOfFlowFragment } from './fragment-flow.ts';
 import { fragmentCursorBottomPt } from './note-fragment-geometry.ts';
 import type { BlockFragmentRecord, LineRecord, PageRecord } from './semantic-records.ts';
 
@@ -86,15 +87,41 @@ export function chargedSpaceAfterPt(page: PageRecord): number {
   return pageCitesFootnote(page) ? closingSpaceAfterOf(page) : 0;
 }
 
+/** Where lines that return from the next page start on a page. */
+export interface RejoinPoint {
+  /** The top of the returning lines, content-relative; never above the given body bottom. */
+  readonly bottom: number;
+  /** The space after that `bottom` includes. A returning space before collapses with it. */
+  readonly spaceAfter: number;
+}
+
 /**
- * The space after below the page's last line when the next page's opening lines return to
- * it. Those lines start a new paragraph below the closing paragraph's space after, whether
- * or not the page cites a footnote yet; {@link chargedSpaceAfterPt} counts it only once the
- * page does. The published space after already reflects contextual spacing, and the next
- * paragraph's own space before can only widen the gap, so this is the least gap there is.
+ * Where the next page's opening lines start when they return to `page`. They rejoin the column
+ * that the last fragment in flow order ends, as a new paragraph below that paragraph's space
+ * after. The space after counts whether or not the page cites a footnote yet;
+ * {@link chargedSpaceAfterPt} counts it only once the page does. The published space after
+ * already reflects contextual spacing, and the returning paragraph's own space before can only
+ * widen the gap, so this is the least gap there is. A last fragment that is a table, or a
+ * paragraph that continues on the next page, adds no gap.
  */
-export function rejoinSpaceAfterPt(page: PageRecord): number {
-  return closingSpaceAfterOf(page);
+export function rejoinPoint(page: PageRecord, bodyBottom: number): RejoinPoint {
+  let last: BlockFragmentRecord | undefined;
+  for (let at = page.fragments.length - 1; at >= 0 && !last; at -= 1) {
+    const fragment = page.fragments[at]!;
+    if (isOutOfFlowFragment(fragment)) continue;
+    if (fragment.kind === 'paragraph' && fragment.positionedFrame) continue;
+    last = fragment;
+  }
+  if (last?.kind !== 'paragraph' || !last.paragraphEnd || last.spacing.after <= 0) {
+    return { bottom: bodyBottom, spaceAfter: 0 };
+  }
+  const bottom = fragmentCursorBottomPt(last) + last.spacing.after;
+  // Lines returning to a shorter last column land at that column's end. The answer keeps the
+  // lower body end instead, a conservative bound the pull-back fit already used there, and
+  // that end holds none of this paragraph's space after.
+  return bottom >= bodyBottom - 0.001
+    ? { bottom: Math.max(bottom, bodyBottom), spaceAfter: last.spacing.after }
+    : { bottom: bodyBottom, spaceAfter: 0 };
 }
 
 /** The space after of the paragraph that ends the page's body, or 0. */
