@@ -14,6 +14,8 @@ import {
 import { openHeadlessDocument } from '../../store/headless-document-view.ts';
 import { applyEastAsiaFontSlots, type FieldAwarePiece } from '../field-pieces.ts';
 import { resolveRunStyle } from '../run-style.ts';
+import { COMPRESSED_LEGACY_SPACE_SHRINK, resolveSpaceShrinkRule } from '../space-shrink-rule.ts';
+import { buildStyleCascadeTable } from '../style-cascade.ts';
 import type { OoxmlProperty } from '../../store/store/tree-op-types.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -167,6 +169,36 @@ describe('Chinese fonts for the East Asian hint', () => {
 });
 
 describe('East Asian default faces for punctuation compression', () => {
+  const legacyCompression = root(
+    `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/>` +
+      '<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="14"/></w:compat></w:settings>',
+    '/word/settings.xml'
+  );
+  const cascade = (face: string, table: readonly string[] = []) =>
+    buildStyleCascadeTable(
+      root(
+        `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr>` +
+          `<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="${face}"/>` +
+          '</w:rPr></w:rPrDefault></w:docDefaults></w:styles>',
+        '/word/styles.xml'
+      ),
+      { major: null, minor: null, eastAsianFontTableFaces: table },
+      legacyCompression
+    );
+
+  test('a known default face shrinks justified spaces in a legacy mode with compression', () => {
+    const justified = [{ localName: 'jc', attributes: { val: 'both' } }];
+    const typography = cascade('Noto Sans CJK JP').typography;
+    expect(typography?.sourceEastAsianFont).toBe(true);
+    expect(resolveSpaceShrinkRule(14, justified, typography)).toBe(COMPRESSED_LEGACY_SPACE_SHRINK);
+    const natural = cascade('Noto Sans CJK SC').typography;
+    expect(natural?.sourceEastAsianFont).toBe(false);
+    expect(resolveSpaceShrinkRule(14, justified, natural)).toBeUndefined();
+    expect(cascade('Noto Sans CJK SC', ['noto sans cjk sc']).typography?.sourceEastAsianFont).toBe(
+      true
+    );
+  });
+
   test.each([
     ['Yu Mincho', [], true],
     ['MS Gothic', [], true],
@@ -180,6 +212,14 @@ describe('East Asian default faces for punctuation compression', () => {
     ['Unknown Face', [], false],
     ['Unknown Face', ['unknown face'], true],
     ['@Yu Mincho', [], false],
+    // A face that is not installed still counts by name.
+    ['Noto Sans CJK JP', [], true],
+    ['Noto Sans CJK SC', [], false],
+    ['Noto Sans CJK SC', ['noto sans cjk sc'], true],
+    ['Songti SC', [], true],
+    ['Kaiti TC', [], true],
+    ['STHeiti', [], true],
+    ['Apple SD Gothic Neo', [], true],
   ] as const)('%s with table %j is East Asian: %s', (face, table, eastAsian) => {
     expect(isEastAsianFace(face, table)).toBe(eastAsian);
   });
