@@ -29,9 +29,13 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const WML = 'application/vnd.openxmlformats-officedocument.wordprocessingml';
 const AUTO =
   '<w:spacing w:before="100" w:beforeAutospacing="1" w:after="100" w:afterAutospacing="1"/>';
-const line = (text: string) => `<w:p><w:pPr>${AUTO}</w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+/** The same 14pt after, authored rather than automatic. */
+const EXPLICIT = '<w:spacing w:before="100" w:beforeAutospacing="1" w:after="280"/>';
+const line = (text: string, spacing = AUTO) =>
+  `<w:p><w:pPr>${spacing}</w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
 // Four lines fill the header past the top margin, so its height decides where the body starts.
-const HEADER = `<w:hdr xmlns:w="${W}">${line('One')}${line('Two')}${line('Three')}${line('Four')}</w:hdr>`;
+const header = (last = AUTO) =>
+  `<w:hdr xmlns:w="${W}">${line('One')}${line('Two')}${line('Three')}${line('Four', last)}</w:hdr>`;
 
 /** The header's height and where the body's first line starts on the first page. */
 function summary(editor: Editor): string {
@@ -51,22 +55,36 @@ function coldSummary(editor: Editor): string {
   }
 }
 
-async function pair() {
-  const peers = await harness.pair(
-    zipDocument(
-      '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
-        '<w:sectPr><w:headerReference w:type="default" r:id="rHeader"/>' +
-        '<w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" ' +
-        'w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>',
-      {
-        overrides: `<Override PartName="/word/header1.xml" ContentType="${WML}.header+xml"/>`,
-        documentRels:
-          `<Relationships xmlns="${REL}">` +
-          `<Relationship Id="rHeader" Type="${R}/header" Target="header1.xml"/></Relationships>`,
-        extraXml: { 'word/header1.xml': HEADER },
-      }
-    )
+const documentWith = (headerXml: string) =>
+  zipDocument(
+    '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
+      '<w:sectPr><w:headerReference w:type="default" r:id="rHeader"/>' +
+      '<w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" ' +
+      'w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>',
+    {
+      overrides: `<Override PartName="/word/header1.xml" ContentType="${WML}.header+xml"/>`,
+      documentRels:
+        `<Relationships xmlns="${REL}">` +
+        `<Relationship Id="rHeader" Type="${R}/header" Target="header1.xml"/></Relationships>`,
+      extraXml: { 'word/header1.xml': headerXml },
+    }
   );
+
+/** The summary of a document whose last header line has an authored 14pt space after. */
+function explicitSummary(): string {
+  const editor = createDocxEditor({
+    container: document.createElement('div'),
+    document: documentWith(header(EXPLICIT)),
+  });
+  try {
+    return summary(editor);
+  } finally {
+    editor.destroy();
+  }
+}
+
+async function pair() {
+  const peers = await harness.pair(documentWith(header()));
   const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
     peer.detach();
     const container = document.createElement('div');
@@ -104,9 +122,8 @@ function caretAfter(editor: Editor, scope: 'header' | 'body', text: string): voi
 test('a header line added while a peer types in the body moves the body alike', async () => {
   const { alice, bob, converged, pause, resume } = await pair();
   const opened = converged();
-  // The header, from its 36pt top, holds the last line's space after; the body starts below.
-  const [, header, , body] = opened.split(' ').map(Number);
-  expect(body).toBeGreaterThanOrEqual(36 + header! - 0.1);
+  // The header reserves its last line's automatic space after, as it would an authored one.
+  expect(opened).toBe(explicitSummary());
 
   pause();
   caretAfter(alice, 'header', 'Four');
@@ -124,4 +141,30 @@ test('a header line added while a peer types in the body moves the body alike', 
   alice.surface!.redo();
   alice.surface!.redo();
   expect(converged()).toBe(grown);
+});
+
+test('deleting the last header lines while a peer types in them converges', async () => {
+  const { alice, bob, converged, pause, resume } = await pair();
+  const opened = converged();
+  pause();
+  caretAfter(bob, 'header', 'Two');
+  const from = bob.findMatches('Two')[0]!;
+  const to = bob.findMatches('Four')[0]!;
+  bob.surface!.setSelection({
+    anchor: { paragraphId: from.blockId, offset: from.start + from.length },
+    head: { paragraphId: to.blockId, offset: to.start + to.length },
+  });
+  bob.surface!.deleteSelection();
+  caretAfter(alice, 'header', 'Four');
+  alice.surface!.type(' typed');
+  resume();
+  const deleted = converged();
+  expect(deleted).not.toBe(opened);
+
+  bob.surface!.undo();
+  const restored = converged();
+  bob.surface!.redo();
+  expect(converged()).toBe(deleted);
+  bob.surface!.undo();
+  expect(converged()).toBe(restored);
 });

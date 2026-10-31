@@ -99,3 +99,29 @@ test('a frame in a header drops its last paragraph automatic space after, like a
   };
   expect(height(AUTO)).toBeCloseTo(height(AUTO_BEFORE), 3);
 });
+
+test('a page-number frame that opens a header drops its automatic space after', () => {
+  const frame =
+    '<w:framePr w:wrap="around" w:vAnchor="text" w:hAnchor="margin" w:xAlign="inside" w:y="1"/>';
+  const field =
+    '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+    '<w:r><w:instrText xml:space="preserve">PAGE</w:instrText></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+  const content =
+    `<w:p><w:pPr><w:pStyle w:val="Framed"/>${frame}</w:pPr>${field}</w:p>` +
+    '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>RUNNING HEAD</w:t></w:r></w:p>';
+  // The frame's style carries the spacing; the fixed frame lane refuses direct spacing.
+  const styled = (spacing: string) =>
+    buildStyleCascadeTable(
+      read(
+        `<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:styleId="Framed">` +
+          `<w:name w:val="framed"/><w:pPr>${spacing}</w:pPr></w:style></w:styles>`,
+        '/word/styles.xml'
+      ).root
+    );
+  const auto = story('hdr', content, styled(AUTO));
+  // The frame shares the running head's line, so the header is one line tall either way.
+  expect(auto.fragments[1]!.box.y).toBe(0);
+  expect(auto.flowHeight).toBeCloseTo(story('hdr', content, styled(AUTO_BEFORE)).flowHeight, 3);
+});
