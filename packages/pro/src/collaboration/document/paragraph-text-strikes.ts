@@ -51,7 +51,8 @@ function seenOf(value: unknown): Seen {
   let seen: Map<number, number> | null = null;
   const data = parseJson(value);
   const field = isRecord(data) ? data[STRIKE_SEEN_FIELD] : undefined;
-  if (isRecord(field) && Object.keys(field).length <= MAX_SEEN_CLIENTS) {
+  // Only a strike records what it saw: a record on any other revision value is ignored.
+  if (isRecord(field) && Object.keys(field).length <= MAX_SEEN_CLIENTS && isStrike(data)) {
     seen = new Map();
     for (const [client, clock] of Object.entries(field)) {
       if (!CLIENT.test(client) || !Number.isSafeInteger(clock) || (clock as number) < 0) {
@@ -68,7 +69,7 @@ function seenOf(value: unknown): Seen {
 
 /** Whether a revision value is a strike: a tracked deletion or the source of a move. */
 function isStrike(value: unknown): boolean {
-  const data = parseJson(value);
+  const data = typeof value === 'string' ? parseJson(value) : value;
   const element = isRecord(data) ? data.e : undefined;
   return isRecord(element) && element.n === undefined && STRIKES.has(element.l as string);
 }

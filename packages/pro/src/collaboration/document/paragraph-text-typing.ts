@@ -34,7 +34,7 @@ import { followAnchorAt, insertFollowing, insertTyped } from './paragraph-text-a
 import { hasRevisions } from './paragraph-text-revisions.ts';
 import type { DocumentRegistry } from './registry.ts';
 import { awaitingUpdates } from './yjs-items.ts';
-import { sharedDelta } from './paragraph-text-strikes.ts';
+import { sharedDelta, withoutStrikesSeen } from './paragraph-text-strikes.ts';
 
 /** An insert the general path would write as one insert, and what it needs to write it. */
 export interface TypedInsert {
@@ -157,7 +157,8 @@ export function typedInsertOf(
     length: text.length,
     position,
     value: effect.insert,
-    attributes,
+    // Typed characters are inserted ones: a strike they take covers them.
+    attributes: withoutStrikesSeen(attributes),
     identities: shown.identities,
   };
 }

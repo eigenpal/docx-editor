@@ -60,6 +60,34 @@ async function room() {
   return { ...peers, aliceEditor: alice, bobEditor: bob, deliver, paragraphId, text };
 }
 
+test('a proposed deletion strikes text that a split moved into a new paragraph', async () => {
+  const r = await room();
+  const caret = { paragraphId: r.paragraphId, offset: 4 };
+  r.bobEditor.surface!.setSelection({ anchor: caret, head: caret });
+  r.bobEditor.surface!.splitParagraph();
+  r.deliver();
+  const moved = r.aliceEditor.findMatches('Two and')[0]!.blockId;
+  expect(moved).not.toBe(r.paragraphId);
+  expect(r.aliceEditor.exec({ type: 'setEditingMode', mode: 'suggesting' }).ok).toBe(true);
+  r.aliceEditor.surface!.setSelection({
+    anchor: { paragraphId: moved, offset: 0 },
+    head: { paragraphId: moved, offset: 8 },
+  });
+  expect(r.aliceEditor.exec({ type: 'deleteText' }).ok).toBe(true);
+  r.deliver();
+  for (const editor of [r.aliceEditor, r.bobEditor]) {
+    const xml = serializeOoxmlPart(editor.surface!.session.part());
+    const struck = [...xml.matchAll(/<w:delText[^>]*>([^<]*)<\/w:delText>/g)].map((m) => m[1]);
+    expect(struck.join('')).toBe('Two and ');
+  }
+  expect(r.aliceEditor.exec({ type: 'resolveAllReviewChanges', action: 'accept' }).ok).toBe(true);
+  r.deliver();
+  for (const editor of [r.aliceEditor, r.bobEditor]) {
+    editor.surface!.layout();
+    expect(paragraphTextOf(editor.surface!.session.part(), moved)).toBe('more Three');
+  }
+});
+
 type Mode = 'deletes' | 'proposes deleting';
 
 for (const mode of ['deletes', 'proposes deleting'] as const satisfies readonly Mode[])

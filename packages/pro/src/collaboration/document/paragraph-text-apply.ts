@@ -276,10 +276,12 @@ function writeParagraphText(
         const changes = identities
           ? recordStrikesSeen(
               run[0]!.changes!,
-              run.map(({ position }) => ({
-                client: identities.clients[position] ?? -1,
-                clock: identities.clocks[position] ?? -1,
-              }))
+              // The item each character stands in, not its identity: a reader compares a
+              // character's own item ID, and a moved copy has its own.
+              run.map(({ position }) => {
+                const [client, clock] = (identities.items[position] ?? '-1:-1').split(':');
+                return { client: Number(client), clock: Number(clock) };
+              })
             )
           : run[0]!.changes!;
         text.format(run[0]!.position, run.length, changes);
@@ -500,13 +502,16 @@ function adoptFollowingText(
     let insertAt = start;
     // A copy takes the revision attributes of the character it lands after, as typing does
     // (`rebaseRevisions`), so it writes no marker for another author's revision.
+    // Copies are inserted characters: a strike they take covers them, as with any insert.
     const landing = (at: number, attributes: Record<string, string>): InlineAttributes =>
-      rebaseRevisions(
-        at > 0 ? (attributesByPosition(text)[at - 1] ?? {}) : {},
-        attributes,
-        true,
-        registry.limits,
-        paragraphId
+      withoutStrikesSeen(
+        rebaseRevisions(
+          at > 0 ? (attributesByPosition(text)[at - 1] ?? {}) : {},
+          attributes,
+          true,
+          registry.limits,
+          paragraphId
+        )
       );
     for (const run of runs) {
       const first = run[0]!;
