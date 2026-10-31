@@ -16,7 +16,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * first character of another piece that has it, so text typed inside moved text stays inside
  * it, after the characters of that piece inserted after the anchor: a later insert after one
  * character shows before what followed that character, as it did to its typist. A piece whose
- * anchor shows nowhere here shows at the end.
+ * anchor shows nowhere here shows at the end, and a piece an undo joins in at the start shows
+ * before everything else.
  */
 import { isNextClock } from './identity.ts';
 import type { FollowingText, ShownText } from './paragraph-text-follow.ts';
@@ -37,6 +38,8 @@ export interface FollowingPlacement {
   readonly inside: ReadonlyMap<FollowingText, ReadonlyMap<number, FollowingSlot>>;
   /** Pieces whose anchor shows nowhere here, in the order they show at the end. */
   readonly atEnd: readonly FollowingText[];
+  /** Pieces an undo joins in at the start, in the order they show there. */
+  readonly atStart: readonly FollowingText[];
 }
 
 interface MutableSlot {
@@ -86,6 +89,7 @@ export function placeFollowingText(shown: ShownText): FollowingPlacement {
   const atPosition = new Map<number, MutableSlot>();
   const inside = new Map<FollowingText, Map<number, MutableSlot>>();
   const atEnd: FollowingText[] = [];
+  const atStart: FollowingText[] = [];
   const slotIn = <K>(map: Map<K, MutableSlot>, key: K): MutableSlot => {
     let slot = map.get(key);
     if (!slot) {
@@ -95,6 +99,10 @@ export function placeFollowingText(shown: ShownText): FollowingPlacement {
     return slot;
   };
   for (const piece of shown.incoming) {
+    if (piece.atStart) {
+      atStart.push(piece);
+      continue;
+    }
     const position = firstShown.get(piece.after);
     const parent = parentOf.get(piece);
     let slot: MutableSlot | null = null;
@@ -111,7 +119,7 @@ export function placeFollowingText(shown: ShownText): FollowingPlacement {
     else if (piece.before) slot.before.push(piece);
     else slot.after.push(piece);
   }
-  return { atPosition, inside, atEnd };
+  return { atPosition, inside, atEnd, atStart };
 }
 
 /**

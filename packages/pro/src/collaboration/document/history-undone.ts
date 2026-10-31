@@ -24,6 +24,7 @@ import { textMarksOf } from './paragraph-text-marks.ts';
 import { INLINE_FIELD } from './paragraph-text.ts';
 import { whileUndoingCreations } from './undo-delete-filter.ts';
 import { ownDeletedRecords, redoRefusedDeletes } from './tombstone-guard.ts';
+import { noteUndoneParagraphTargets, undoKeeps } from './undo-unlisted-text.ts';
 
 /**
  * The part members a part always lists. Numbering definitions are not among them: concurrent
@@ -145,7 +146,15 @@ export function stepHistory(
     const below = stack.splice(0, grouped ? stack.length - 1 : aboveLastGroupStep(stack));
     try {
       if (direction === 'undo') {
-        whileUndoingCreations(registry.schema, createdBy(registry, popped), () => history.undo());
+        noteUndoneParagraphTargets(registry.doc, registry.schema.nodes, popped, (write) =>
+          registry.doc.transact(write, RESTORE_ORIGIN)
+        );
+        whileUndoingCreations(
+          registry.schema,
+          createdBy(registry, popped),
+          () => history.undo(),
+          undoKeeps(registry.doc, registry.schema.nodes, popped)
+        );
       } else history.redo();
     } finally {
       if (below.length > 0) {

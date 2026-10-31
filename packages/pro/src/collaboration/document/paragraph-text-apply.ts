@@ -361,7 +361,10 @@ function adoptFollowingText(
   interface Placed {
     readonly following: FollowingText;
     readonly order: number;
-    /** The character it goes before or after, or for a piece at the end, the text length. */
+    /**
+     * The character it goes before or after; for a piece at the end, the text length, and for
+     * one at the start, -1, so it goes in last, in front of every other piece.
+     */
     readonly at: number;
     readonly atEnd?: true;
   }
@@ -373,6 +376,9 @@ function adoptFollowingText(
   }
   for (const following of placement.atEnd) {
     placed.push({ following, order: orderOf.get(following)!, at: ids.length, atEnd: true });
+  }
+  for (const following of placement.atStart) {
+    placed.push({ following, order: orderOf.get(following)!, at: -1, atEnd: true });
   }
   // From the end back; at one character, the text after it before the text before it, and
   // of two pieces on one side, the later first: each goes in at the same place, so the
@@ -554,7 +560,7 @@ function adoptFollowingText(
     }
   };
   for (const root of placed) {
-    const start = root.atEnd ? root.at : root.following.before ? root.at : root.at + 1;
+    const start = root.atEnd ? Math.max(root.at, 0) : root.following.before ? root.at : root.at + 1;
     adoptInside(root.following, adoptPiece(root.following, now(start)));
   }
   // Still written, at the end: lost, the write would have typed it again without its identity.
