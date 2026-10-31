@@ -77,19 +77,26 @@ export function noteMintedParagraph(record: Y.Map<unknown> | undefined): void {
 export function inheritSplitPoints(
   nodeOf: (id: LogicalId) => Y.Map<unknown> | undefined,
   children: Y.Array<LogicalId> | null,
-  ids: readonly LogicalId[]
+  ids: readonly LogicalId[],
+  /**
+   * Whether a listed child is a concurrent split sibling the rule moves. A block this edit
+   * moves right after one takes its split points too: it follows that sibling, and once the
+   * sibling is deleted, whose entry then names no paragraph, its points still place the block.
+   */
+  reordered: (id: LogicalId) => boolean = () => false
 ): void {
   if (!children) return;
   let listed: LogicalId[] | null = null;
   for (const id of ids) {
     const record = nodeOf(id);
-    if (!record || !minted.has(record)) continue;
-    minted.delete(record);
-    if (record.has(NODE_SPLIT_POINTS_FIELD)) continue;
+    if (!record) continue;
+    const created = minted.delete(record);
+    if (created && record.has(NODE_SPLIT_POINTS_FIELD)) continue;
     listed ??= children.toArray();
     const at = listed.indexOf(id);
-    const left = at > 0 ? nodeOf(listed[at - 1]!) : undefined;
-    const points = splitPointsOf(left);
+    const leftId = at > 0 ? listed[at - 1]! : undefined;
+    if (!created && (leftId === undefined || !reordered(leftId))) continue;
+    const points = splitPointsOf(leftId === undefined ? undefined : nodeOf(leftId));
     if (points.length > 0) record.set(NODE_SPLIT_POINTS_FIELD, serialized(points));
   }
 }

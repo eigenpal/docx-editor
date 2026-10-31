@@ -24,11 +24,16 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import * as Y from 'yjs';
 import type { LogicalId } from './identity.ts';
-import { firstItem, structAt } from './yjs-items.ts';
+import { firstItem, mapEntry, structAt } from './yjs-items.ts';
 import { itemIdentity, type Identity } from './paragraph-text-identity.ts';
 import { marksOfText } from './paragraph-text-marks.ts';
-import { childArrayOf } from './schema.ts';
-import { splitAtIn, splitPointsOf, type SplitPoint } from './split-points.ts';
+import { childArrayOf, PACKAGE_NODES_KEY } from './schema.ts';
+import {
+  NODE_SPLIT_POINTS_FIELD,
+  splitAtIn,
+  splitPointsOf,
+  type SplitPoint,
+} from './split-points.ts';
 
 /**
  * How many clocks of one paragraph's text the rule reads. It counts clocks, which every
@@ -124,10 +129,14 @@ export function splitSiblingRanks(
     const key = originsKey(item);
     sharing.set(key, (sharing.get(key) ?? 0) + 1);
   }
+  const nodes = children.doc?.getMap<unknown>(PACKAGE_NODES_KEY) ?? null;
+  // A paragraph a split added at this place, not one a move or an undo listed here again: two
+  // moves to one place share both origins too, and they show where their authors put them.
+  const splitHere = (item: Y.Item): boolean => item.deleted || listedBySplit(nodes, item);
   for (let start = 0; start < items.length; ) {
     const head = items[start]!;
     const key = originsKey(head);
-    if (sharing.get(key)! < 2) {
+    if (sharing.get(key)! < 2 || !splitHere(head)) {
       start += 1;
       continue;
     }
@@ -138,7 +147,7 @@ export function splitSiblingRanks(
     for (; end < items.length; end += 1) {
       const item = items[end]!;
       const current = blocks.at(-1)!;
-      if (originsKey(item) === key) blocks.push({ head: item, items: [item] });
+      if (originsKey(item) === key && splitHere(item)) blocks.push({ head: item, items: [item] });
       else if (current.items.some((member) => inItem(item.origin, member)))
         current.items.push(item);
       else break;
@@ -149,7 +158,9 @@ export function splitSiblingRanks(
     }
     for (const block of blocks)
       for (const item of block.items) if (!item.deleted) heads.push(headId(item));
-    const order = orderOf(blocks, textOf, children.doc, pointsOf, missing);
+    const order = orderOf(blocks, textOf, children.doc, pointsOf, missing, (item) =>
+      listedBySplit(nodes, item)
+    );
     if (order) {
       group += 1;
       ranks ??= new Map();
@@ -167,6 +178,24 @@ export function splitSiblingRanks(
     start = end;
   }
   return ranks;
+}
+
+/**
+ * Whether `item` is the entry a split made when it added its paragraph. The edit that adds a
+ * paragraph writes the paragraph's split points after it lists the paragraph, so their entry
+ * is that author's and comes later. A paragraph listed again by a move, an undo, or a redo
+ * keeps its earlier entry, and a paragraph that names no split point is no split.
+ */
+function listedBySplit(nodes: Y.Map<unknown> | null, item: Y.Item): boolean {
+  const record = nodes?.get(headId(item) as string);
+  if (!(record instanceof Y.Map)) return false;
+  const points = mapEntry(record, NODE_SPLIT_POINTS_FIELD);
+  return (
+    points !== undefined &&
+    !points.deleted &&
+    points.id.client === item.id.client &&
+    points.id.clock > item.id.clock
+  );
 }
 
 /** The paragraph a listing item names first. */
@@ -228,12 +257,17 @@ function sourcePlace(
 }
 
 /**
- * What one block shows first: the copies of its first paragraph that is still listed. A
- * deleted paragraph has no text to read, so a paragraph split off it stands for it.
+ * What one block shows first: the copies of its first paragraph that is still listed and that
+ * a split listed there. A deleted paragraph has no text to read, so a paragraph split off it
+ * stands for it; a block moved after it has copies of its own, which tell nothing of a split.
  */
-function blockCopies(block: Block, textOf: (id: LogicalId) => Y.Text | null): Identity[] {
+function blockCopies(
+  block: Block,
+  textOf: (id: LogicalId) => Y.Text | null,
+  keyed: (item: Y.Item) => boolean
+): Identity[] {
   for (const item of block.items) {
-    if (item.deleted) continue;
+    if (item.deleted || !keyed(item)) continue;
     const copies = copiesOf(headId(item), textOf);
     if (copies.length > 0) return copies;
   }
@@ -262,10 +296,11 @@ function blockBefore(
  */
 function blockPoints(
   block: Block,
-  pointsOf: (id: LogicalId) => readonly SplitPoint[]
+  pointsOf: (id: LogicalId) => readonly SplitPoint[],
+  keyed: (item: Y.Item) => boolean
 ): readonly SplitPoint[] {
   for (const item of block.items) {
-    if (item.deleted) continue;
+    if (item.deleted || !keyed(item)) continue;
     const points = pointsOf(headId(item));
     if (points.length > 0) return points;
   }
@@ -337,10 +372,12 @@ function orderOf(
   textOf: (id: LogicalId) => Y.Text | null,
   doc: Y.Doc | null,
   pointsOf: (id: LogicalId) => readonly SplitPoint[],
-  missing: string[]
+  missing: string[],
+  /** Whether an item's paragraph may stand for its block: a split listed it there. */
+  keyed: (item: Y.Item) => boolean
 ): Block[] | null {
-  const points = run.map((block) => blockPoints(block, pointsOf));
-  const copies = run.map((block) => blockCopies(block, textOf));
+  const points = run.map((block) => blockPoints(block, pointsOf, keyed));
+  const copies = run.map((block) => blockCopies(block, textOf, keyed));
   const places = new Map<Y.Text, Map<string, number>>();
   const starts = copies.map((list) => (doc ? sourcePlace(doc, list[0], places) : null));
   // Insertion sort by the rule, from the order Yjs gives: every replica starts from the same
@@ -389,6 +426,8 @@ export class SplitSiblingOrders {
   private readonly built = new WeakMap<readonly LogicalId[], OrderEntry>();
   /** Parents whose last order read a concurrent run. */
   private readonly withRuns = new Set<LogicalId>();
+  /** Parents whose child array changed, with the order they showed before. */
+  private readonly recheck = new Map<LogicalId, readonly LogicalId[]>();
 
   constructor(
     /** A node's shared record. */
@@ -416,6 +455,12 @@ export class SplitSiblingOrders {
    */
   takeChanged(): LogicalId[] {
     const changed: LogicalId[] = [];
+    for (const [parentId, shown] of this.recheck) {
+      this.recheck.delete(parentId);
+      const next = this.read(parentId)?.shown ?? this.listingOf(parentId);
+      if (next && (next.length !== shown.length || next.some((id, at) => shown[at] !== id)))
+        changed.push(parentId);
+    }
     for (const parentId of [...this.withRuns]) {
       const listing = this.listingOf(parentId);
       const known = listing ? this.built.get(listing) : undefined;
@@ -431,6 +476,19 @@ export class SplitSiblingOrders {
       if (!next || next.shown.some((id, at) => known.shown[at] !== id)) changed.push(parentId);
     }
     return changed;
+  }
+
+  /**
+   * A parent's child array changed. Its listing can keep the same ids, as when a peer moves a
+   * block back to the index it had, while the entries that list them, and so the order the rule
+   * reads, changed: the stored order goes, and `takeChanged` reports the parent if it moved.
+   */
+  forget(parentId: LogicalId): void {
+    const listing = this.listingOf(parentId);
+    const known = listing ? this.built.get(listing) : undefined;
+    if (!listing || !known) return;
+    this.built.delete(listing);
+    if (!this.recheck.has(parentId)) this.recheck.set(parentId, known.shown);
   }
 
   private lengthsKey(heads: readonly LogicalId[]): string {
@@ -470,8 +528,10 @@ export class SplitSiblingOrders {
 
 /**
  * Indexes of `ids` in the order the rule shows them, or null when nothing moves. Each run of
- * consecutive ids from one group is put in rank order; the list can be a parent's shared
- * children or a projection's working copy of them.
+ * ids from one group is put in rank order; the list can be a parent's shared children or a
+ * projection's working copy of them. A working copy can list an id without a rank between
+ * two ids of one group, as an edit that just inserted it right after one of them: it moves
+ * with the ranked id before it, as the shared order shows it once it holds the insert.
  */
 export function splitSiblingOrder(ids: readonly LogicalId[], ranks: SiblingRanks): number[] | null {
   if (!ranks) return null;
@@ -479,17 +539,35 @@ export function splitSiblingOrder(ids: readonly LogicalId[], ranks: SiblingRanks
   let moved = false;
   for (let start = 0; start < ids.length; ) {
     const first = ranks.get(ids[start]!);
-    let end = start + 1;
-    while (first && end < ids.length && ranks.get(ids[end]!)?.group === first.group) end += 1;
-    if (end - start > 1) {
-      const segment = order.slice(start, end);
-      segment.sort((left, right) => ranks.get(ids[left]!)!.rank - ranks.get(ids[right]!)!.rank);
+    if (!first) {
+      start += 1;
+      continue;
+    }
+    // The run ends at the last id of its group before an id of another group.
+    let last = start;
+    for (let at = start + 1; at < ids.length; at += 1) {
+      const rank = ranks.get(ids[at]!);
+      if (!rank) continue;
+      if (rank.group !== first.group) break;
+      last = at;
+    }
+    if (last > start) {
+      // Each ranked id with the unranked ids listed after it, in rank order.
+      const units: number[][] = [];
+      for (let at = start; at <= last; at += 1) {
+        if (ranks.has(ids[at]!)) units.push([at]);
+        else units.at(-1)!.push(at);
+      }
+      units.sort(
+        (left, right) => ranks.get(ids[left[0]!]!)!.rank - ranks.get(ids[right[0]!]!)!.rank
+      );
+      const segment = units.flat();
       for (let at = 0; at < segment.length; at += 1) {
         if (order[start + at] !== segment[at]) moved = true;
         order[start + at] = segment[at]!;
       }
     }
-    start = end;
+    start = last + 1;
   }
   return moved ? order : null;
 }

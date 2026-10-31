@@ -863,7 +863,7 @@ export class DocumentRegistry {
       if (event.target instanceof Y.Array && event.path.length > 0) {
         structural = true;
         const parentId = keyId(event.path[0]!);
-        for (const childId of this.syncChildListings(parentId)) changed.add(childId);
+        for (const childId of this.syncChildListings(parentId, true)) changed.add(childId);
         if (this.isTombstoned(parentId)) this.adoption.sync(parentId);
         continue;
       }
@@ -915,7 +915,8 @@ export class DocumentRegistry {
     applyBindingMapEvent(this.schema, this.bindingsByNode, event);
   }
 
-  private syncChildListings(parentId: LogicalId): LogicalId[] {
+  private syncChildListings(parentId: LogicalId, arrayChanged = false): LogicalId[] {
+    if (arrayChanged) this.splitSiblings.forget(parentId);
     const rec = this.schema.nodes.get(parentId);
     const next = rec ? (childArrayOf(rec)?.toArray() ?? []) : [];
     return syncChildListings(this.listingIndex(), parentId, next);

@@ -359,11 +359,13 @@ function applyEffect(
         effect.deleteCount,
         effect.childLogicalIds
       );
-      // A paragraph this edit created takes the split points of the one listed before it.
+      // A paragraph this edit created, or a block it moved right after a concurrent split
+      // sibling, takes the split points of the one listed before it.
       inheritSplitPoints(
         (id) => registry.schema.nodes.get(id),
         childArrayOf(registry.schema.nodes.get(effect.parentLogicalId)),
-        effect.childLogicalIds
+        effect.childLogicalIds,
+        (id) => registry.splitSiblings.ranksOf(effect.parentLogicalId)?.has(id) ?? false
       );
       return;
     }
