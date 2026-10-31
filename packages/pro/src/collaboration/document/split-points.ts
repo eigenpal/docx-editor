@@ -262,7 +262,8 @@ export function recordSplitPoints(writes: readonly SplitWrite[]): void {
       const inherited = splitPointsOf(source.record);
       const entry = entries.get(write.record);
       if (!entry) break;
-      if (write.record.has(NODE_SPLIT_POINTS_FIELD) && !minted.has(write.record)) break;
+      // Only the edit that created the paragraph writes them: a later join into it does not.
+      if (!minted.has(write.record)) break;
       minted.delete(write.record);
       write.record.set(
         NODE_SPLIT_POINTS_FIELD,
