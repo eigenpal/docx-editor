@@ -119,7 +119,7 @@ Dispose the runtime when you finish. Save browser edits through the owning edito
 ## Editing rules
 
 - Load properties before reading them. Load a collection's `items`, sync, then load each item's properties.
-- Batch independent writes. Each `sync()` commits all queued writes or none; earlier successful syncs remain committed. A failed post-commit load leaves the writes applied. Handle `edit.read-after-commit` without repeating the edit.
+- Batch independent writes. Each `sync()` commits all queued writes or none; earlier successful syncs remain committed. A failed post-commit load leaves the writes applied. If `debugInfo.innerError.code` is `edit.read-after-commit`, don't repeat the edit.
 - You can load an inserted object in the insertion sync. Sync before editing it or reading its navigation properties.
 - After editing a paragraph, search again before editing another target there. Ranges retain their original offsets, and a range whose text moved fails with `StaleDocument`.
 - Keep proxies inside `runtime.run()`, or explicitly track and adopt them across runs.

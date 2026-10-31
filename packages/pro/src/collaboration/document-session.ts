@@ -560,13 +560,16 @@ class DocumentSession implements DocumentCollaborationSession {
     // Custom ports and headless stores can publish without the editor's operation gate.
     // Enforce admission here too, before minting identities or publishing document/blob data.
     if (!this.canWriteSharedState()) return;
-    this.registry.inline.takeDrift();
     const translated = this.identityMap.translate(journal);
-    const memberFailure = prepareMemberRootJournal(this.materializer, translated);
-    if (memberFailure) {
-      this.refuseLocalJournal(memberFailure);
+    const memberRefusal = prepareMemberRootJournal(this.materializer, translated, () =>
+      awaitingUpdates(this.ydoc)
+    );
+    if (memberRefusal) {
+      this.refuseLocalJournal(memberRefusal.failure, memberRefusal.transient);
       return;
     }
+    // After the member refresh: drift it notes belongs to earlier journals, not this one.
+    this.registry.inline.takeDrift();
     const projected = projectTypingOrJournal(this.registry, translated, (id) =>
       this.materializer.shownPartChildren(id)
     );
