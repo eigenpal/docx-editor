@@ -146,12 +146,16 @@ export interface SideRuleTableShape {
   readonly floating: boolean;
   readonly cellSpacingPt: number;
   readonly widthType: PreferredWidthType;
+  /** The stated `dxa` table width in points; absent for other width types. */
+  readonly statedWidthPt?: number;
   readonly alignment: TableAlignment;
   readonly layoutFixed: boolean;
   readonly indentPt: number;
   readonly columnWidthsPt: readonly number[];
   /** Width of the box the table is aligned in. */
   readonly containerWidthPt: number;
+  /** The table is in a text box story. */
+  readonly textBox?: boolean;
 }
 
 /** Cells with their side-rule geometry, and where the grid sits against the aligned edge. */
@@ -255,11 +259,11 @@ function uniformSimpleSideRuleWidth(
  * on the aligned edge, so the grid moves inward by half the rule. Every rule is centred on
  * its grid line and the margin is measured from that centre, as in the centred shape. The
  * controls cover 0.5 to 6pt single rules, 3pt thick rules, 0 to 10.8pt margins, indents,
- * fixed and autofit layout, and one to three columns. A fixed left table keeps the offset
- * when its outer box overflows the container: a full-width control and an over-indented
- * one both put the outer rule edge on the indent. An overflowing right-aligned or autofit
- * table, and a table whose side rules differ, keep the full-stroke inset and the unshifted
- * grid until controls cover them.
+ * fixed and autofit layout, and one to three columns. A fixed left table, and a table whose
+ * stated absolute width already overflows, keeps the offset when its outer box overflows the
+ * container: full-width and over-wide controls put the outer rule edge on the aligned edge. A
+ * table that only widens past its room for its content, and a table whose side rules differ,
+ * keep the full-stroke inset and the unshifted grid until controls cover them.
  */
 function modernEdgeAlignedOffsetPt(
   rows: readonly SemanticTableRow[],
@@ -280,7 +284,12 @@ function modernEdgeAlignedOffsetPt(
   const fits =
     (left ? table.indentPt : 0) + gridWidth + rule <= table.containerWidthPt + 1e-6 ||
     autoWidthOuterRulePt(rows, table) > 0;
-  if (!fits && !(left && table.layoutFixed)) return undefined;
+  // A stated absolute width that already overflows keeps the offset; a table that only
+  // widens past its room for its content does not.
+  const statedOverflow =
+    table.statedWidthPt !== undefined &&
+    (left ? table.indentPt : 0) + table.statedWidthPt + rule > table.containerWidthPt + 1e-6;
+  if (!fits && !(left && table.layoutFixed) && !statedOverflow) return undefined;
   return left ? rule / 2 : -rule / 2;
 }
 
@@ -338,8 +347,9 @@ function modernMixedLeadPt(
  * Admit simple collapsed side rules to the shared-grid-line geometry.
  *
  * Modes 11, 12 and 14 (and an absent mode) take it for every top-level, collapsed, unpositioned
- * left-to-right table. Mode 15 takes it only for the shapes its captured controls cover, with
- * a `dxa` or `auto` width (`MODERN_GRID_WIDTH_TYPES`):
+ * table, left-to-right or right-to-left. Mode 15 takes it only for the shapes its captured
+ * controls cover, with a `dxa` or `auto` width (`MODERN_GRID_WIDTH_TYPES`), and for a
+ * leading- or trailing-aligned right-to-left table with a `dxa` width and one rule width:
  *
  * - a centred table. Fixed-layout controls at 0.5, 1.5, 3 and 6pt strokes with 0 and
  *   5.4pt margins, and autofit controls, put text and strokes at the mode-14 positions: the
@@ -365,19 +375,26 @@ function sharedGridLineDecision(
 } | null {
   const { compatibilityMode: mode } = table;
   if (table.depth !== 0 || table.floating || table.cellSpacingPt !== 0) return null;
+  // The legacy modes give right-to-left tables the same shared grid lines.
+  if (table.bidiVisual && hasCompatibilityRule(mode, 'legacySharedGridLineSideRules'))
+    return { legacyMode: true, modernGridWidth: false };
   if (table.bidiVisual) {
     const rule = uniformSimpleSideRuleWidth(rows, table.columnWidthsPt.length);
     if (
       !hasCompatibilityRule(mode, 'modernGridLineSideRules') ||
       table.widthType !== 'dxa' ||
-      table.alignment !== 'left' ||
-      !table.layoutFixed ||
+      table.alignment === 'center' ||
       rule === undefined
     )
       return null;
-    // Leading-aligned fixed bidi tables share their side rules with cell padding.
-    // Their grid moves by one outer rule toward the visual left.
-    return { legacyMode: false, modernGridWidth: true, outerRuleOffsetPt: -rule };
+    // A right-to-left table with an absolute width shares its side rules with cell padding,
+    // in fixed and AutoFit layout. Leading-aligned, its grid moves by one outer rule toward
+    // the visual left; trailing-aligned, its grid stays on the aligned edge.
+    return {
+      legacyMode: false,
+      modernGridWidth: true,
+      outerRuleOffsetPt: table.alignment === 'left' ? -rule : 0,
+    };
   }
   const legacyMode = hasCompatibilityRule(mode, 'legacySharedGridLineSideRules');
   const modernGridWidth =

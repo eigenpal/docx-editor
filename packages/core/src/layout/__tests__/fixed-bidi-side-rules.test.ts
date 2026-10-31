@@ -65,15 +65,22 @@ test('leading bidi indent stays relative to the right edge', () => {
   expect(tableOriginX(read(table), 300)).toBe(107);
 });
 
-test('legacy, percent, autofit, spaced, nested, and compound tables keep their previous rules', () => {
+test('legacy, trailing-aligned and autofit bidi tables share their side rules too', () => {
+  const standard = fixture().table;
+  for (const structure of [
+    read(standard, 14),
+    read(fixture('<w:jc w:val="right"/>').table),
+    read(fixture('', 'dxa', 'single', false).table),
+  ])
+    for (const cell of structure.rows[0]!.cells) expect(cell.centeredSideRules).toBe(true);
+});
+
+test('percent, centred, spaced, nested, and compound tables keep their previous rules', () => {
   const standard = fixture().table;
   const cases = [
-    read(standard, 14),
     read(standard, 15, 1),
     read(fixture('<w:jc w:val="center"/>').table),
-    read(fixture('<w:jc w:val="right"/>').table),
     read(fixture('', 'pct').table),
-    read(fixture('', 'dxa', 'single', false).table),
     read(fixture('<w:tblCellSpacing w:w="20" w:type="dxa"/>').table),
     read(fixture('', 'dxa', 'double').table),
   ];

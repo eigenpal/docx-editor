@@ -363,7 +363,10 @@ describe('a clearing break across a region boundary', () => {
       expect(anchoredDrawingsOf(result.pages[1]!)).toHaveLength(0);
       const lines = spilledLines(result);
       expect(lines.length).toBeGreaterThan(0);
-      for (const line of lines) expect(round(line.contentX)).toBe(0);
+      // An unstyled table keeps its outer edge on the text edge, so cell text starts after
+      // the 10-twip fallback margin.
+      const textEdge = where === 'a table cell' ? 0.5 : 0;
+      for (const line of lines) expect(round(line.contentX)).toBe(textEdge);
     });
   }
 });

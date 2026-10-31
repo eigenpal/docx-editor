@@ -7,6 +7,7 @@ import {
 } from '../semantic-layout.ts';
 import { withSharedGridLineSideRules } from '../legacy-table-side-rules.ts';
 import { readTableStructure } from '../semantic-table.ts';
+import { buildStyleCascadeTable } from '../style-cascade.ts';
 
 // Compatibility mode 15 puts the OUTER edge of a left- or right-aligned table's side rule on
 // the aligned edge. Captured `dxa` controls (0.5 to 6pt single and 3pt thick rules, 0 to
@@ -201,8 +202,6 @@ test('mode 15 keeps the full-stroke inset and unshifted grid for shapes its cont
     { style: 'double', sz: 6 },
     { cols: [1440, 1440], rows: gridBefore },
     { widthType: 'pct' },
-    { jc: 'right', cols: [6000] },
-    { fixed: false, cols: [5960] },
     { extra: '<w:tblCellSpacing w:w="20" w:type="dxa"/>' },
     {
       extra: '<w:tblpPr w:horzAnchor="margin" w:vertAnchor="text" w:tblpXSpec="left" w:tblpY="1"/>',
@@ -213,27 +212,74 @@ test('mode 15 keeps the full-stroke inset and unshifted grid for shapes its cont
     expect(structure.rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
   }
   expect(read(source().table, 15, 300, 1).outerRuleOffsetPt).toBeUndefined();
-  // An autofit table's whole outer box must fit: 144 + 3 in 147 fits, in 146.9 it does not.
+});
+
+test('mode 15 keeps the edge-aligned grid for an absolute-width table wider than its room', () => {
+  // AutoFit and fixed tables with a `dxa` width put the outer rule edge on the aligned edge
+  // even when the outer box overflows, left- or right-aligned.
   const autofit = source({ fixed: false }).table;
   expect(read(autofit, 15, 147).outerRuleOffsetPt).toBe(1.5);
-  expect(read(autofit, 15, 146.9).outerRuleOffsetPt).toBeUndefined();
-  // An AutoFit right-to-left table keeps the full-stroke inset and moves half its outer rule
-  // toward its visual left (`modernBidiTableRuleShift`).
+  expect(read(autofit, 15, 146.9).outerRuleOffsetPt).toBe(1.5);
+  expect(read(source({ fixed: false, cols: [5960] }).table, 15).outerRuleOffsetPt).toBe(1.5);
+  const right = source({ jc: 'right', cols: [6000] });
+  expect(read(right.table, 15).outerRuleOffsetPt).toBe(-1.5);
+  expect(read(right.table, 15).rows[0]!.cells[0]!.centeredSideRules).toBe(true);
+  expect(firstTable(layout(right.part, 15)).box.x).toBe(-1.5);
+  // A right-to-left AutoFit table shares its rules too: leading-aligned, its grid moves one
+  // outer rule toward its visual left; trailing-aligned, it stays on the aligned edge.
   const bidi = read(source({ extra: '<w:bidiVisual/>', fixed: false }).table, 15);
-  expect(bidi.outerRuleOffsetPt).toBe(-1.5);
-  expect(bidi.rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
-  const { part } = source({ jc: 'right', cols: [6000] });
-  expect(firstTable(layout(part, 15)).box.x).toBe(0);
-  expect(contentEdges(layout(part, 15)).left).toBeCloseTo(6.9, 8);
+  expect(bidi.outerRuleOffsetPt).toBe(-3);
+  expect(bidi.rows[0]!.cells[0]!.centeredSideRules).toBe(true);
+  const trailing = read(source({ extra: '<w:bidiVisual/>', fixed: false, jc: 'right' }).table, 15);
+  expect(trailing.outerRuleOffsetPt).toBe(0);
+});
+
+test('a widened right-to-left AutoFit table keeps its rule offset', () => {
+  // A word wider than the stated width widens the grid; the aligned side stays put.
+  for (const [jc, rightEdge] of [
+    [undefined, 297],
+    ['right', undefined],
+  ] as const) {
+    const narrow = source({ extra: '<w:bidiVisual/>', fixed: false, cols: [1000], jc });
+    const wide = source({
+      extra: '<w:bidiVisual/>',
+      fixed: false,
+      cols: [1000],
+      jc,
+      text: 'W'.repeat(20),
+    });
+    const before = firstTable(layout(narrow.part, 15));
+    const after = firstTable(layout(wide.part, 15));
+    expect(after.box.width).toBeGreaterThan(before.box.width);
+    if (rightEdge === undefined) expect(after.box.x).toBe(before.box.x);
+    else {
+      expect(before.box.x + before.box.width).toBeCloseTo(rightEdge, 8);
+      expect(after.box.x + after.box.width).toBeCloseTo(rightEdge, 8);
+    }
+  }
 });
 
 test('legacy modes align the content edge, newer modes take the edge-aligned grid', () => {
-  // A fixed left table in an absent, 11, 12 or 14 mode puts its first content edge on the
-  // text column; mode 15 and every newer mode move the grid by half the outer rule.
+  // A left table with a stated indent in an absent, 11, 12 or 14 mode puts its first content
+  // edge on the text column; mode 15 and every newer mode move the grid by half the outer rule.
+  const indented = { extra: '<w:tblInd w:w="0" w:type="dxa"/>' };
   for (const mode of [undefined, 11, 12, 14]) {
-    const { part, table } = source();
+    const { part, table } = source(indented);
     expect(read(table, mode).outerRuleOffsetPt).toBe(-5.4);
     expect(firstTable(layout(part, mode)).box.x).toBe(-5.4);
+    // Without a stated indent or a table style, the outer edge stays on the text column.
+    expect(read(source().table, mode).outerRuleOffsetPt).toBeUndefined();
+    // A default table style applies even when it states no table properties.
+    const bare = buildStyleCascadeTable(
+      readOoxmlPart(
+        `<w:styles xmlns:w="${W}"><w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/></w:style></w:styles>`,
+        { name: '/word/styles.xml', contentType: 'app/xml' }
+      ).part!.root
+    );
+    expect(
+      readTableStructure(source().table, 300, 0, bare, 'proposed', undefined, mode)!
+        .outerRuleOffsetPt
+    ).toBe(-5.4);
   }
   for (const mode of [15, 16, 17]) {
     const { part, table } = source();
@@ -253,7 +299,7 @@ test('a retained session relays an edge-aligned table when the mode or width cha
     expect(layout(part, 15, session, width).pages).toEqual(
       layout(part, 15, createLayoutSession(), width).pages
     );
-  expect(firstTable(layout(part, 15, session, 146.9)).box.x).toBe(0);
+  expect(firstTable(layout(part, 15, session, 146.9)).box.x).toBe(1.5);
   expect(read(table, 16).outerRuleOffsetPt).toBe(1.5);
   expect(read(table, 15).outerRuleOffsetPt).toBe(1.5);
 });

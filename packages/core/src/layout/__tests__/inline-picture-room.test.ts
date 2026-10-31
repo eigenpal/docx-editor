@@ -164,10 +164,12 @@ test('a header picture with a negative indent paints into the left margin up to 
 });
 
 test('a picture in a header table cell crops at the cell box, not the paper', () => {
-  // The cell box is 180pt wide and starts one cell margin left of the text column.
+  // The story takes the legacy table origin: an unstyled table with no indent keeps its
+  // 180pt cell box on the text column, so the picture starts one cell margin in and ends
+  // at the cell box.
   const [cell] = storyPictures('hdr', table(picture(300)));
-  expect(cell![0]).toBeCloseTo(0, 5);
-  expect(cell![1]).toBeCloseTo(174.6, 5);
+  expect(cell![0]).toBeCloseTo(5.4, 5);
+  expect(cell![1]).toBeCloseTo(180, 5);
 });
 
 test('a picture in a fixed cell crops at the cell box, margins included', () => {
