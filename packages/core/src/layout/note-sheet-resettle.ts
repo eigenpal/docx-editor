@@ -3,7 +3,8 @@
 // A sheet resolves its shell when it lands, and a body page resolves its own in the body pass.
 // An insertion in front of either can change the page number that picks its variant.
 
-import { overflowPageShellAt } from './page-furniture-insets.ts';
+import { overflowPageShellAt, type OverflowPageShell } from './page-furniture-insets.ts';
+import { layoutUsesEvenAndOddHeaders } from './page-parity-sheet.ts';
 import type { LayoutBox, NoteAreaRecord, PageRecord, SemanticLayout } from './semantic-records.ts';
 
 /**
@@ -58,17 +59,27 @@ export function resettleMintedSheets(
     const shifted = shiftNoteAreas(page, top - page.contentBox.y, bottom - oldBottom);
     if (!shifted.fits(top, bottom)) return page;
     changed = true;
-    const { header: _header, footer: _footer, ...rest } = page;
-    return {
-      ...rest,
-      contentBox,
-      ...(shifted.footnotes ? { footnotes: shifted.footnotes } : {}),
-      ...(shifted.endnotes ? { endnotes: shifted.endnotes } : {}),
-      ...(shell.header ? { header: shell.header } : {}),
-      ...(shell.footer ? { footer: shell.footer } : {}),
-    };
+    return withShellFurniture(
+      {
+        ...page,
+        contentBox,
+        ...(shifted.footnotes ? { footnotes: shifted.footnotes } : {}),
+        ...(shifted.endnotes ? { endnotes: shifted.endnotes } : {}),
+      },
+      shell
+    );
   });
   return changed ? next : [...pages];
+}
+
+/** The page with the shell's header and footer in place of its own. */
+function withShellFurniture(page: PageRecord, shell: OverflowPageShell): PageRecord {
+  const { header: _header, footer: _footer, ...rest } = page;
+  return {
+    ...rest,
+    ...(shell.header ? { header: shell.header } : {}),
+    ...(shell.footer ? { footer: shell.footer } : {}),
+  };
 }
 
 /** Translate one note area and everything inside it by `dy`. */
@@ -146,13 +157,13 @@ export function bodyPageNumbers(pages: readonly PageRecord[]): ReadonlyMap<numbe
  *
  * A `sectEnd` sheet inserted in front of a later section moves every unrestarted page number
  * after it. Under `w:evenAndOddHeaders` an odd move also changes the variant those pages show.
- * The section's shell resolver answers for the new number when it is asked for the index that
- * number has in the section: the index moves by the same amount as the number.
+ * The section's shell resolver answers for the page at its own index with its number moved,
+ * so its place in the section and its running header values stay its own.
  *
  * Only the furniture changes. The body was laid out in the body pass against the content box
- * of the old variant, so a page whose new variant needs a different box keeps its old shell:
- * moving the box would put body lines under the furniture. A `first` page keeps its variant,
- * because that variant belongs to the page's place in its section, not to its number.
+ * and the furniture wrap zones of the old variant, so a page whose new variant needs a
+ * different box, or whose old or new furniture holds anchored drawings, keeps its old shell:
+ * moving either would put body lines under the furniture.
  *
  * Runs before reindexing, while a body page still carries its body-pass index.
  */
@@ -161,6 +172,8 @@ export function resettleBodyFurniture(
   numbersBefore: ReadonlyMap<number, number>,
   layout: SemanticLayout
 ): PageRecord[] {
+  // Without alternating variants no page number picks a variant.
+  if (!layoutUsesEvenAndOddHeaders(layout)) return [...pages];
   let changed = false;
   const next = pages.map((page) => {
     if (page.noteStream !== undefined || page.parityBlank) return page;
@@ -170,8 +183,7 @@ export function resettleBodyFurniture(
     const shift = after - before;
     // An even move keeps every page on its parity, so no variant changes.
     if (shift % 2 === 0) return page;
-    if (page.header?.variant === 'first' || page.footer?.variant === 'first') return page;
-    const shell = overflowPageShellAt(layout, page.index, page.index + shift, page.box);
+    const shell = overflowPageShellAt(layout, page.index, page.index, page.box, shift);
     if (!shell) return page;
     if (
       shell.header?.variant === page.header?.variant &&
@@ -180,13 +192,12 @@ export function resettleBodyFurniture(
       return page;
     const top = page.box.y + shell.insets.top;
     if (top !== page.contentBox.y || shell.insets.height !== page.contentBox.height) return page;
+    const anchored = [page.header, page.footer, shell.header, shell.footer].some(
+      (story) => (story?.anchoredDrawings?.length ?? 0) > 0
+    );
+    if (anchored) return page;
     changed = true;
-    const { header: _header, footer: _footer, ...rest } = page;
-    return {
-      ...rest,
-      ...(shell.header ? { header: shell.header } : {}),
-      ...(shell.footer ? { footer: shell.footer } : {}),
-    };
+    return withShellFurniture(page, shell);
   });
   return changed ? next : [...pages];
 }

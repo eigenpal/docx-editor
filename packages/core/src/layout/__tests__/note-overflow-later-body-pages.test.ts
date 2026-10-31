@@ -42,6 +42,8 @@ function furnitureDoc(options: {
   readonly endnoteLines: number;
   readonly restartSectionTwo?: boolean;
   readonly evenFooterLines?: number;
+  /** Section two has a title page with no first-page header or footer: a blank cover. */
+  readonly coverSectionTwo?: boolean;
 }): Uint8Array {
   const story = (tag: 'hdr' | 'ftr', text: string, count = 1) =>
     strToU8(
@@ -61,6 +63,7 @@ function furnitureDoc(options: {
   const sectTwo =
     `<w:sectPr>${refs}<w:type w:val="nextPage"/>${geometry}` +
     (options.restartSectionTwo ? '<w:pgNumType w:start="1"/>' : '') +
+    (options.coverSectionTwo ? '<w:titlePg/>' : '') +
     '</w:sectPr>';
   return zipSync({
     '[Content_Types].xml': strToU8(
@@ -213,6 +216,23 @@ describe('body pages after a sectEnd note sheet', () => {
       for (const fragment of page.fragments) {
         expect(fragment.box.y + fragment.box.height).toBeLessThanOrEqual(bottom + 0.001);
       }
+    }
+  });
+
+  test('a blank cover page keeps showing no header or footer', () => {
+    const layout = oddOverflowLayout({ coverSectionTwo: true });
+    const cover = layout.pages.findIndex(
+      (page, index) =>
+        index > 0 &&
+        page.noteStream === undefined &&
+        layout.pages[index - 1]!.noteStream === 'endnote-overflow'
+    );
+    expect(cover).toBeGreaterThan(0);
+    expect(layout.pages[cover]!.header).toBeUndefined();
+    expect(layout.pages[cover]!.footer).toBeUndefined();
+    // The pages after it still take the variant of their number.
+    for (let index = cover + 1; index < layout.pages.length; index += 1) {
+      expect(layout.pages[index]!.header?.variant).toBe(variantFor(index + 1));
     }
   });
 });

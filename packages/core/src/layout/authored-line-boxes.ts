@@ -10,9 +10,25 @@ import { glyphSizeFactorOf, type ResolvedRunStyle } from './run-style.ts';
 // recorded: they need the face, and a face that is not metric-compatible would trade one
 // error for another. Values are `hhea` ascent, descent and line gap in 2048ths of an em, the
 // same for every style of the family. Numbers only; no font data.
-const LINE_BOXES: ReadonlyMap<string, readonly [number, number, number]> = new Map([
-  ['garamond', [1765, 539, 0]],
-]);
+const LINE_BOXES: ReadonlyMap<string, { readonly family: string; readonly em: LineBoxEm }> =
+  new Map([['garamond', { family: 'Garamond', em: lineBoxEm(1765, 539, 0) }]]);
+
+/** A line box as em ratios, the shape of a font substitution's `lineMetrics`. */
+export interface LineBoxEm {
+  readonly heightEm: number;
+  readonly baselineEm: number;
+}
+
+function lineBoxEm(ascent: number, descent: number, gap: number): LineBoxEm {
+  return { heightEm: (ascent + descent + gap) / 2048, baselineEm: (ascent + gap) / 2048 };
+}
+
+/** The recorded family `family` names, with its box, or undefined when none is recorded. */
+export function recordedLineBoxFamily(
+  family: string | null | undefined
+): { readonly family: string; readonly em: LineBoxEm } | undefined {
+  return family ? LINE_BOXES.get(family.trim().toLowerCase()) : undefined;
+}
 
 /**
  * The authored family's line box at the run's size, or undefined when the family is not
@@ -22,13 +38,8 @@ const LINE_BOXES: ReadonlyMap<string, readonly [number, number, number]> = new M
 export function authoredLineBox(
   style: ResolvedRunStyle
 ): { readonly height: number; readonly baseline: number } | undefined {
-  const box = LINE_BOXES.get(style.fontFamily?.trim().toLowerCase() ?? '');
-  if (!box) return undefined;
-  const [ascent, descent, gap] = box;
+  const recorded = recordedLineBoxFamily(style.fontFamily);
+  if (!recorded) return undefined;
   const sizePt = (layoutRunHalfPointsOf(style) / 2) * glyphSizeFactorOf(style);
-  if (!(sizePt > 0)) return undefined;
-  return {
-    height: ((ascent + descent + gap) / 2048) * sizePt,
-    baseline: ((ascent + gap) / 2048) * sizePt,
-  };
+  return { height: recorded.em.heightEm * sizePt, baseline: recorded.em.baselineEm * sizePt };
 }

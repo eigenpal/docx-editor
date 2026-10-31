@@ -1,4 +1,4 @@
-import { headerStoryForPage } from './character-header-pages.ts';
+import { characterHeaderPageToken, headerStoryForPage } from './character-header-pages.ts';
 // The furniture one section's pages show, and the shell a sheet minted after layout gets.
 //
 // Extracted from the section pass so both live beside each other: what a page's header and
@@ -60,8 +60,16 @@ export interface SectionPageFurniture {
     index: number,
     box: LayoutBox
   ): HeaderFooterStoryRecord | undefined;
-  /** Content box AND furniture for a sheet minted at a DOCUMENT index, placed on `box`. */
-  overflowShellAt(documentPageIndex: number, box: LayoutBox): OverflowPageShell;
+  /**
+   * Content box AND furniture for a sheet minted at a DOCUMENT index, placed on `box`.
+   * `pageNumberShift` asks for a body page whose displayed number moved by that much after
+   * the body pass; see {@link OverflowPageShellResolver}.
+   */
+  overflowShellAt(
+    documentPageIndex: number,
+    box: LayoutBox,
+    pageNumberShift?: number
+  ): OverflowPageShell;
   /**
    * The page record of section-local page `index` before its body: its box, content box, page
    * borders, header and footer. `index` is section-local, which is what `w:display` asks about.
@@ -161,23 +169,28 @@ export function createSectionPageFurniture(
     height: geometry.height,
   });
 
-  const variantFor = (index: number): HeaderFooterVariantName =>
-    headerFooterVariantFor(furniture, inputs.pageNumberStart ?? pageIndexStart + 1, index);
+  const variantFor = (index: number, pageNumberShift = 0): HeaderFooterVariantName =>
+    headerFooterVariantFor(
+      furniture,
+      (inputs.pageNumberStart ?? pageIndexStart + 1) + pageNumberShift,
+      index
+    );
 
   const furnitureFor = (
     kind: 'header' | 'footer',
     index: number,
-    box: LayoutBox
+    box: LayoutBox,
+    pageNumberShift = 0
   ): HeaderFooterStoryRecord | undefined => {
     if (!furniture) return undefined;
-    const variant = variantFor(index);
+    const variant = variantFor(index, pageNumberShift);
     const story =
       kind === 'header'
         ? headerStoryForPage(furniture, variant, pageIndexStart + index)
         : furniture.footers.get(variant);
     // An absent variant shows nothing — Word falls back to blank, not to `default`.
     if (!story) return undefined;
-    const pageNumber = (inputs.pageNumberStart ?? pageIndexStart + 1) + index;
+    const pageNumber = (inputs.pageNumberStart ?? pageIndexStart + 1) + pageNumberShift + index;
     const pageContext: FieldPageContext = {
       pageNumber,
       pageCount: Math.max(pageNumber, inputs.pageCount() + 1),
@@ -206,14 +219,25 @@ export function createSectionPageFurniture(
     return placed;
   };
 
-  const overflowShellAt = (documentPageIndex: number, box: LayoutBox): OverflowPageShell => {
+  const overflowShellAt = (
+    documentPageIndex: number,
+    box: LayoutBox,
+    pageNumberShift = 0
+  ): OverflowPageShell => {
     const local = documentPageIndex - pageIndexStart;
-    const header = furnitureFor('header', local, box);
-    const footer = furnitureFor('footer', local, box);
+    // A renumbered page keeps its own index, so its place in the section, its running
+    // header values and its section page count stay its own; only the number moves. A
+    // `first` page stays `first`, because that variant follows the index. A header that
+    // repeats running values is laid out per page index and is not re-resolved here.
+    const shift = furniture && characterHeaderPageToken(furniture) ? 0 : pageNumberShift;
+    const header = furnitureFor('header', local, box, shift);
+    const footer = furnitureFor('footer', local, box, shift);
     // Same rule as a body page: `w:display` asks about the page's place in ITS section.
     const pageBorders = pageBorderFrame(inputs.pageBorders, geometry, local === 0);
     return {
-      insets: inputs.insetsFor(local),
+      // Off the first page, insets depend only on the variant. A page that changes variant
+      // takes the insets of the next local page, which shows the other parity's variant.
+      insets: inputs.insetsFor(variantFor(local, shift) === variantFor(local) ? local : local + 1),
       ...(header ? { header } : {}),
       ...(footer ? { footer } : {}),
       ...(pageBorders ? { pageBorders } : {}),

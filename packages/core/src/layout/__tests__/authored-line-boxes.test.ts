@@ -10,6 +10,7 @@ import {
   createFontResourceSnapshot,
   createHarfBuzzTextShaper,
   createShapedMeasurer,
+  tryCreateCanvasMeasurer,
   harfBuzzFontValidator,
   initializeHarfBuzz,
   sha256FontBytes,
@@ -84,4 +85,39 @@ test('a face the host supplies for the family keeps its own box', () => {
   });
   const metrics = measurer.lineMetrics(style('Garamond', 10), 'x');
   expect(metrics.height).not.toBeCloseTo(10 * GARAMOND_HEIGHT_EM, 3);
+});
+
+/** A canvas whose fallback face reports a 1.0 em box; `Garamond` resolves when `installed`. */
+function canvasContext(installed: boolean) {
+  let font = '';
+  return {
+    get font() {
+      return font;
+    },
+    set font(value: string) {
+      font = value;
+    },
+    textAlign: 'left',
+    textBaseline: 'alphabetic',
+    measureText(text: string) {
+      const garamond = installed && font.includes('"Garamond"');
+      const size = Number(/([\d.]+)px/.exec(font)?.[1] ?? 16);
+      return {
+        width: text.length * size * (garamond ? 0.45 : 0.5),
+        fontBoundingBoxAscent: size * (garamond ? 0.95 : 0.8),
+        fontBoundingBoxDescent: size * (garamond ? 0.35 : 0.2),
+        actualBoundingBoxAscent: 0,
+        actualBoundingBoxDescent: 0,
+        actualBoundingBoxLeft: 0,
+        actualBoundingBoxRight: 0,
+      };
+    },
+  };
+}
+
+test('in the browser, Garamond keeps its box only when the browser has no Garamond face', () => {
+  const missing = tryCreateCanvasMeasurer({ context: canvasContext(false) as never })!;
+  expect(missing.lineMetrics(style('Garamond', 8), 'x').height).toBeCloseTo(9, 9);
+  const installed = tryCreateCanvasMeasurer({ context: canvasContext(true) as never })!;
+  expect(installed.lineMetrics(style('Garamond', 8), 'x').height).not.toBeCloseTo(9, 3);
 });

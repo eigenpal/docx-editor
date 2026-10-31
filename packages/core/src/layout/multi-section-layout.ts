@@ -78,7 +78,11 @@ export interface SectionLayoutResult {
   /** Whether the last page is still open, or was closed by a trailing page break. */
   readonly endsOpenPage: boolean;
   /** The shell a sheet minted at a DOCUMENT index resolves to under this section's variants. */
-  readonly overflowShellAt: (documentPageIndex: number, box: LayoutBox) => OverflowPageShell;
+  readonly overflowShellAt: (
+    documentPageIndex: number,
+    box: LayoutBox,
+    pageNumberShift?: number
+  ) => OverflowPageShell;
 }
 
 /** {@link LayoutSectionFn} as steps that may pause between pages. */
@@ -504,7 +508,7 @@ export function* layoutMultiSectionDocumentSteps(
   /** Each section's shell resolver, for a sheet minted after layout. */
   const sectionShells: {
     readonly startIndex: number;
-    readonly at: (index: number, box: LayoutBox) => OverflowPageShell;
+    readonly at: (index: number, box: LayoutBox, pageNumberShift?: number) => OverflowPageShell;
   }[] = [];
   let previousGeometry: PageGeometry | null = null;
   /**
@@ -847,8 +851,8 @@ export function* layoutMultiSectionDocumentSteps(
     });
     retainOnce();
     const finalized = finalizePageFieldProjection({ revision, pages: laid.pages }, { provisional });
-    registerOverflowPageShell(finalized, (_sectionAnchorIndex, documentPageIndex, box) =>
-      laid.overflowShellAt(documentPageIndex, box)
+    registerOverflowPageShell(finalized, (_sectionAnchorIndex, documentPageIndex, box, shift) =>
+      laid.overflowShellAt(documentPageIndex, box, shift)
     );
     if (multi) {
       multi.spans = [];
@@ -914,13 +918,13 @@ export function* layoutMultiSectionDocumentSteps(
   // after the one the sheet belongs to — which would pair the previous section's sheet box
   // with the next section's content box. The anchor is a page of the owning section, and the
   // offset walks that section's own resolver past its last page.
-  registerOverflowPageShell(finalized, (sectionAnchorIndex, documentPageIndex, box) => {
+  registerOverflowPageShell(finalized, (sectionAnchorIndex, documentPageIndex, box, shift) => {
     let chosen = sectionShells[0];
     for (const span of sectionShells) {
       if (span.startIndex <= sectionAnchorIndex) chosen = span;
     }
     const owner = chosen ?? sectionShells[sectionShells.length - 1];
-    return owner?.at(documentPageIndex, box);
+    return owner?.at(documentPageIndex, box, shift);
   });
   registerParityPlan(finalized, evenAndOddHeaders, sheetStarts, runningAfter);
   if (movedSeed && session) recordMovedSeedReserves(session, movedSeed);
