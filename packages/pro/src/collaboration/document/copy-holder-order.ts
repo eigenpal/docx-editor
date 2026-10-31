@@ -14,13 +14,16 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * too, and left the other one empty.
  *
  * So where each holder's copy starts decides first. For a character of a live paragraph text,
- * each holder's key is the first character of that text it holds a moved copy of, deleted
- * or not: the copy whose key stands later in the text shows, as a later split point does.
- * A deleted copy keeps its identity and its mark, and a block move changes no text, so the
- * keys stay while peers edit and move the paragraphs. Document order decides between holders
- * with the same key. A holder with no key, as when its copy came from a text this replica
- * cannot place, gives way to one with a key. The comparison is one key per holder, so it
- * orders every holder of a character in one order and exactly one of them shows it.
+ * the source, each holder's key is the place in the source of the first character the holder
+ * holds a moved copy of, deleted or not, that the source holds too: as its own character, or
+ * as a copy it holds itself, as a paragraph split off a split paragraph does. The copy whose
+ * key stands later in the source shows, as a later split point does. A join copies a
+ * paragraph from its start, so its key is that start, also when the joined paragraph begins
+ * with copies of another text. A deleted copy keeps its identity and its mark, and a block
+ * move changes no text, so the keys stay while peers edit and move the paragraphs. Document
+ * order decides between holders with the same key. A holder with no key gives way to one
+ * with a key. The comparison is one key per holder, so it orders every holder of a character
+ * in one order and exactly one of them shows it.
  *
  * The keys read only shared text, marks, and item order, which every replica holds alike once
  * it holds the same updates. Only a live text gives places: a deleted paragraph's text is
@@ -39,9 +42,6 @@ type Order = (a: LogicalId, b: LogicalId) => number;
 /** How many paragraphs keep their keys between reads. */
 const MAX_CACHED = 4096;
 
-/** How many answers of which of two characters comes first are kept. */
-const MAX_ORDERS = 16_384;
-
 /** The item that holds a character, and its live text, or null when it has none. */
 function placeOf(doc: Y.Doc, identity: Identity): { item: Y.Item; text: Y.Text } | null {
   const parsed = parseClientClock(identity);
@@ -58,56 +58,47 @@ function placeOf(doc: Y.Doc, identity: Identity): { item: Y.Item; text: Y.Text }
   return { item, text };
 }
 
-/** The first copies of one paragraph, and what this replica still waits for to place them. */
-interface FirstCopies {
-  /** For each live text, the first character of it the paragraph holds a moved copy of. */
-  readonly firsts: Map<Y.Text, Identity>;
-  /** The clients whose copied characters have not arrived, and their state when read. */
-  readonly waiting: Map<number, number>;
+/**
+ * Where each character a text holds stands in it, deleted or not: its own characters and the
+ * copies it holds, by identity, at the first place each one stands.
+ */
+function placesIn(text: Y.Text): Map<Identity, number> {
+  const places = new Map<Identity, number>();
+  let at = 0;
+  for (let item = firstItem(text); item; item = item.right) {
+    for (let offset = 0; offset < item.length; offset += 1, at += 1) {
+      const identity = itemIdentity(text, item, offset);
+      if (!places.has(identity)) places.set(identity, at);
+    }
+  }
+  return places;
 }
 
 /**
- * For each text a paragraph's moved copies come from, the identity of the first character of
- * it the paragraph holds a copy of, deleted or not, in the paragraph's text order.
+ * The key of a paragraph in a source text: where the first character the paragraph holds a
+ * moved copy of, deleted or not, stands in the source, or null when the source holds none
+ * of its copies.
  */
-function firstCopiesOf(text: Y.Text): FirstCopies {
-  const firsts = new Map<Y.Text, Identity>();
-  const waiting = new Map<number, number>();
-  const doc = text.doc;
-  if (!doc) return { firsts, waiting };
+function keyIn(text: Y.Text, places: ReadonlyMap<Identity, number>): number | null {
   const marks = marksOfText(text);
   for (let item = firstItem(text); item; item = item.right) {
-    const end = item.id.clock + item.length;
-    for (let clock = item.id.clock; clock < end; ) {
-      const origin = marks.origin('move', item.id.client, clock);
-      if (!origin) {
-        clock += 1;
-        continue;
-      }
-      // One insert copies consecutive characters: its first one here names their text.
-      const identity = itemIdentity(text, item, clock - item.id.clock);
-      const parsed = parseClientClock(identity);
-      const state = parsed ? Y.getState(doc.store, parsed.client) : 0;
-      if (parsed && parsed.clock >= state) waiting.set(parsed.client, state);
-      const source = placeOf(doc, identity)?.text;
-      if (source && !firsts.has(source)) firsts.set(source, identity);
-      clock = Math.max(clock + 1, Math.min(end, origin.firstClock + origin.length));
+    for (let offset = 0; offset < item.length; offset += 1) {
+      if (!marks.origin('move', item.id.client, item.id.clock + offset)) continue;
+      const at = places.get(itemIdentity(text, item, offset));
+      if (at !== undefined) return at;
     }
   }
-  return { firsts, waiting };
-}
-
-/** Whether no client a read waited for has written since. */
-function current(doc: Y.Doc, waiting: ReadonlyMap<number, number>): boolean {
-  for (const [client, state] of waiting) if (Y.getState(doc.store, client) !== state) return false;
-  return true;
+  return null;
 }
 
 export class CopyHolderOrder {
-  /** The first copies of each paragraph read, by the text they come from. */
-  private readonly firsts = new Map<LogicalId, FirstCopies>();
-  /** Whether one character comes before another in their text. Item order never changes. */
-  private readonly before = new Map<string, boolean>();
+  /** Each source text's places, read again when the paragraph that holds it changes. */
+  private readonly places = new Map<Y.Text, Map<Identity, number>>();
+  /** Each paragraph's key in each source, for the places it was read against. */
+  private readonly keys = new Map<
+    LogicalId,
+    Map<Y.Text, { readonly places: Map<Identity, number>; readonly key: number | null }>
+  >();
 
   constructor(
     private readonly textOf: (paragraphId: LogicalId) => Y.Text | null,
@@ -160,60 +151,48 @@ export class CopyHolderOrder {
    */
   compare(a: LogicalId, b: LogicalId, source: Y.Text | null): number {
     if (a === b) return 0;
-    const doc = source?.doc;
-    if (doc && source) {
-      const first = this.firstsOf(a).get(source) ?? null;
-      const second = this.firstsOf(b).get(source) ?? null;
+    if (source) {
+      const first = this.keyOf(a, source);
+      const second = this.keyOf(b, source);
       if (first !== second) {
         if (first === null) return -1;
         if (second === null) return 1;
-        return this.comesBefore(doc, first, second) ? -1 : 1;
+        return first - second;
       }
     }
     return this.order(a, b);
   }
 
-  /** A paragraph's text or marks changed: read its copies again. */
+  /** A paragraph's text or marks changed: read its keys, and its text as a source, again. */
   forget(paragraphId: LogicalId): void {
-    this.firsts.delete(paragraphId);
+    this.keys.delete(paragraphId);
+    const text = this.textOf(paragraphId);
+    if (text) this.places.delete(text);
   }
 
   clear(): void {
-    this.firsts.clear();
+    this.keys.clear();
+    this.places.clear();
   }
 
-  private firstsOf(paragraphId: LogicalId): Map<Y.Text, Identity> {
-    const text = this.textOf(paragraphId);
-    const cached = this.firsts.get(paragraphId);
-    // A copied character that arrives later can place a copy the last read could not.
-    if (cached && text?.doc && current(text.doc, cached.waiting)) return cached.firsts;
-    const read = text ? firstCopiesOf(text) : { firsts: new Map(), waiting: new Map() };
-    if (this.firsts.size >= MAX_CACHED) this.firsts.clear();
-    this.firsts.set(paragraphId, read);
-    return read.firsts;
-  }
-
-  /** Whether `first` stands before `second` in the one live text that holds both. */
-  private comesBefore(doc: Y.Doc, first: Identity, second: Identity): boolean {
-    const key = `${first} ${second}`;
-    const known = this.before.get(key);
-    if (known !== undefined) return known;
-    const left = placeOf(doc, first)?.item;
-    const right = placeOf(doc, second)?.item;
-    if (!left || !right) return first < second;
-    let answer: boolean;
-    if (left === right) answer = parseClientClock(first)!.clock < parseClientClock(second)!.clock;
-    else {
-      answer = false;
-      for (let item = left.right; item; item = item.right) {
-        if (item === right) {
-          answer = true;
-          break;
-        }
-      }
+  private keyOf(paragraphId: LogicalId, source: Y.Text): number | null {
+    let places = this.places.get(source);
+    if (!places) {
+      if (this.places.size >= MAX_CACHED) this.places.clear();
+      places = placesIn(source);
+      this.places.set(source, places);
     }
-    if (this.before.size >= MAX_ORDERS) this.before.clear();
-    this.before.set(key, answer);
-    return answer;
+    let keys = this.keys.get(paragraphId);
+    const known = keys?.get(source);
+    if (known && known.places === places) return known.key;
+    const text = this.textOf(paragraphId);
+    const key = text ? keyIn(text, places) : null;
+    if (!keys) {
+      if (this.keys.size >= MAX_CACHED) this.keys.clear();
+      keys = new Map();
+      this.keys.set(paragraphId, keys);
+    }
+    keys.set(source, { places, key });
+    return key;
   }
 }
