@@ -306,6 +306,23 @@ describe('deleteNote / convertNote / cascade', () => {
     expect(noteReferenceKindOf(refNode)).toBe('endnote');
   });
 
+  test('convertNote from an opened notes store keeps paragraph identity', () => {
+    // Opening the notes store mints paraIds under a prefix only the source root declares.
+    const body = `<w:p><w:r><w:footnoteReference w:id="1"/></w:r></w:p>`;
+    const store = openStore(build({ body, footnotes: seededNotes }));
+    store.partFor({ kind: 'notesPart', noteKind: 'footnote' });
+    const result = store.applyLifecycleOp({
+      op: 'convertNote',
+      fromKind: 'footnote',
+      noteId: 1,
+    });
+    if (!result.ok) throw new Error(`${result.reason} ${result.detail ?? ''}`);
+    const end = resolveNotesPart(store.currentPackage(), 'endnote')!;
+    const xml = serializeOoxmlPart(end);
+    expect(xml).toContain('paraId');
+    expect(readOoxmlPart(xml, { name: end.name, contentType: end.contentType }).ok).toBe(true);
+  });
+
   test('deleteNote on missing id fails closed', () => {
     const store = openStore(build({ footnotes: seededNotes }));
     const result = store.applyLifecycleOp({

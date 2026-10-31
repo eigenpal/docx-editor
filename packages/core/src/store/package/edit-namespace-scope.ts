@@ -60,3 +60,50 @@ export function bindConflictingPrefixes(
     children: children ?? node.children,
   } as OoxmlElement;
 }
+
+/**
+ * Declare on `node` every prefix its subtree uses that neither it nor `inherited` binds.
+ *
+ * For content moved between parts: a note copied out of a part whose root declared a prefix
+ * keeps using that prefix, and a destination root that never declared it leaves the copy
+ * unserializable. Each element and attribute carries its own namespace URI, so the binding
+ * comes from the moved content itself. A prefix the subtree uses for two URIs gets no
+ * binding and still fails validation. Returns `node` itself when nothing is missing.
+ */
+export function bindMissingPrefixes(
+  node: OoxmlNode,
+  inherited: ReadonlyMap<string, string>
+): OoxmlNode {
+  if (node.kind === 'textValue') return node;
+  const missing = new Map<string, string | null>();
+  const visit = (current: OoxmlNode, scope: ReadonlyMap<string, string>): void => {
+    if (current.kind === 'textValue') return;
+    let own = scope;
+    if (current.namespaceBindings.length > 0) {
+      const local = new Map(scope);
+      for (const binding of current.namespaceBindings) {
+        local.set(binding.prefix, binding.namespaceUri);
+      }
+      own = local;
+    }
+    const need = (prefix: string | undefined, uri: string): void => {
+      if (!prefix || prefix === 'xml' || prefix === 'xmlns' || !uri || own.has(prefix)) return;
+      const seen = missing.get(prefix);
+      if (seen === undefined) missing.set(prefix, uri);
+      else if (seen !== uri) missing.set(prefix, null);
+    };
+    need(current.prefix, current.namespaceUri);
+    for (const attribute of current.attributes) need(attribute.prefix, attribute.namespaceUri);
+    for (const child of current.children) visit(child, own);
+  };
+  visit(node, inherited);
+  const additions = [...missing].filter((entry): entry is [string, string] => entry[1] !== null);
+  if (additions.length === 0) return node;
+  return {
+    ...node,
+    namespaceBindings: [
+      ...node.namespaceBindings,
+      ...additions.map(([prefix, namespaceUri]) => ({ prefix, namespaceUri })),
+    ],
+  } as OoxmlElement;
+}
