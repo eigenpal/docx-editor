@@ -16,9 +16,11 @@
 //     [--only LIST_FILE]
 //     [-- <args passed to every `bun test`>]
 //
-// `--exclude` drops files whose repository-relative path starts with the prefix, after shards
-// are assigned, so a shard holds the same files with or without it and CI duration caches stay
-// valid across both. Pull request CI uses it to leave the seeded collaboration scenarios to main.
+// `--exclude` drops files whose repository-relative path starts with the prefix, before shards
+// are assigned, so the remaining files spread evenly over every shard. Every shard of one run
+// passes the same prefixes, so the shards still partition what is left. Pull request CI uses it
+// to leave the seeded collaboration scenarios to main. They are close to half of the measured
+// time, and dropping them after assignment left one shard with a third more work than the rest.
 //
 // `--balance` assigns shards by the durations in the cache file instead of by file count. Only
 // use it where every shard reads an identical cache file, as CI does; otherwise shards overlap.
@@ -450,13 +452,12 @@ async function main() {
     ? Object.fromEntries(Object.entries(durations).map(([file, entry]) => [file, entry.ms]))
     : undefined;
   const queue = selectShard(
-    SEARCH_ROOTS.flatMap((searchRoot) => discover(searchRoot)),
+    SEARCH_ROOTS.flatMap((searchRoot) => discover(searchRoot)).filter(
+      (file) => !exclude.some((prefix) => file.startsWith(prefix))
+    ),
     shard,
     weights
-  ).filter(
-    (file) =>
-      !exclude.some((prefix) => file.startsWith(prefix)) && (!selected || selected.has(file))
-  );
+  ).filter((file) => !selected || selected.has(file));
   if (queue.length === 0) {
     console.error(`no test files found for shard ${shard}`);
     process.exit(1);

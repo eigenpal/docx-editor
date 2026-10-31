@@ -62,9 +62,10 @@ test('fail-fast stops dispatch after the first failure; normal mode reports both
     expect(excluded.stdout).not.toContain('FAIL packages/first.test.ts');
     expect(excluded.stdout).toContain('FAIL packages/second.test.ts');
 
-    // Shards are assigned before exclusion, so shard 2/2 keeps its file.
-    const excludedShard = run('--shard', '2/2', '--exclude', 'packages/first');
+    // Exclusion comes before shard assignment, so the one remaining file moves to shard 1/2.
+    const excludedShard = run('--shard', '1/2', '--exclude', 'packages/first');
     expect(excludedShard.status).toBe(1);
+    expect(excludedShard.stdout).toContain('Running 1 test files (shard 1/2)');
     expect(excludedShard.stdout).toContain('FAIL packages/second.test.ts');
 
     // A balanced shard still runs its files, and --durations-out lists only what this run ran.
