@@ -310,11 +310,17 @@ export interface SemanticTableStructure {
   readonly legacyTrailingOuterEdge?: true;
   /**
    * Derived, never serialized: how far the grid moves from the aligned table edge, in points.
-   * A supported mode-14 fixed table shifts by its leading cell margin in the other direction.
+   * A supported legacy table with an absolute width shifts by its aligned cell margin so its
+   * content meets the aligned text edge (`legacyContentOffsetPt`).
    * A compatibility-mode-15 left- or right-aligned table puts the outer edge of its side rule
    * on that edge, so its first grid line sits half a rule inward. Positive moves right.
    */
   readonly outerRuleOffsetPt?: number;
+  /**
+   * Derived, never serialized: the legacy content-edge offset, which `outerRuleOffsetPt`
+   * carries. It does not depend on the column widths, so AutoFit widening keeps it.
+   */
+  readonly legacyContentOffsetPt?: number;
   /**
    * Derived, never serialized: the outer side rule an automatic-width mode-15 AutoFit table
    * keeps inside its container, so its grid settles that much narrower than the room.
@@ -897,18 +903,21 @@ function readTableStructureUncached(
     floating: float !== undefined,
     cellSpacingPt,
     widthType: tableWidth.type,
+    ...(tableWidth.type === 'dxa' ? { statedWidthPt: tableWidth.value } : {}),
     alignment,
     layoutFixed,
     indentPt,
     columnWidthsPt,
     containerWidthPt: contentWidthPt,
+    ...(textBox ? { textBox: true } : {}),
   };
   const sideRules = withSharedGridLineSideRules(contentRows, sideRuleShape);
   const contentOffset = legacyFixedTableContentOffset(
     table,
     tableStyle.tablePropertyNodes,
     contentRows,
-    sideRuleShape
+    sideRuleShape,
+    tableStyle !== EMPTY_TABLE_FORMATTING
   );
   contentRows =
     contentOffset !== undefined && tableWidth.type === 'auto'
@@ -931,6 +940,7 @@ function readTableStructureUncached(
     ...(legacyWidth === undefined ? {} : { legacyContentAlignment: true as const }),
     ...(legacy?.trailingOuterEdge ? { legacyTrailingOuterEdge: true as const } : {}),
     ...(outerRuleOffsetPt === undefined ? {} : { outerRuleOffsetPt }),
+    ...(contentOffset === undefined ? {} : { legacyContentOffsetPt: contentOffset }),
     ...(autoOuterRulePt > 0 ? { autoOuterRulePt } : {}),
     ...(pastTextColumn ? { pastTextColumn: true as const } : {}),
     tableWidth,

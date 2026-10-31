@@ -4072,6 +4072,7 @@ export interface SemanticTableStructure {
     readonly indentPt: number;
     readonly layoutFixed: boolean;
     readonly legacyContentAlignment?: true;
+    readonly legacyContentOffsetPt?: number;
     readonly legacyTrailingOuterEdge?: true;
     readonly outerRuleOffsetPt?: number;
     readonly pastTextColumn?: true;

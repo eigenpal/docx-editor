@@ -32,7 +32,8 @@ function document(
   cell = '',
   indent = 108,
   width = 'auto',
-  text = 'abcdefghij klmnopqrst'
+  text = 'abcdefghij klmnopqrst',
+  lastCell = cell
 ) {
   const edges = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
     .map((side) => `<w:${side} w:val="single" w:sz="4"/>`)
@@ -42,8 +43,8 @@ function document(
 <w:tblBorders>${edges}</w:tblBorders><w:tblLayout w:type="fixed"/>${extra}</w:tblPr>
 <w:tblGrid><w:gridCol w:w="1000"/><w:gridCol w:w="1000"/></w:tblGrid><w:tr>${[0, 1]
     .map(
-      () =>
-        `<w:tc><w:tcPr><w:tcW w:w="1000" w:type="dxa"/>${cell}</w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`
+      (index) =>
+        `<w:tc><w:tcPr><w:tcW w:w="1000" w:type="dxa"/>${index === 0 ? cell : lastCell}</w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`
     )
     .join('')}</w:tr></w:tbl><w:p/></w:body></w:document>`);
 }
@@ -142,12 +143,56 @@ describe('legacy fixed table content edges', () => {
       expect(p.lines[0]!.box.x).toBeCloseTo(11.05, 8);
     }
   });
+  test('a right-to-left table aligns the content edge of its aligned outer cell', () => {
+    // Leading-aligned (`left`) puts the visual right cell's text edge on the right text edge;
+    // trailing-aligned (`right`) puts the visual left cell's text edge on the left text edge.
+    expect(structure(document('<w:bidiVisual/>')).outerRuleOffsetPt).toBe(5.4);
+    expect(structure(document('<w:bidiVisual/><w:jc w:val="right"/>')).outerRuleOffsetPt).toBe(
+      -5.4
+    );
+  });
+  test('a right-to-left table reads the margin of its visual outer cell', () => {
+    const wide = (side: string) => `<w:tcMar><w:${side} w:w="200" w:type="dxa"/></w:tcMar>`;
+    // The first cell in document order is the visually rightmost one, and a right-to-left
+    // table puts w:left on the physical right side.
+    const leading = document('<w:bidiVisual/>', wide('left'), 108, 'auto', undefined, '');
+    expect(structure(leading).outerRuleOffsetPt).toBe(10);
+    const trailing = document(
+      '<w:bidiVisual/><w:jc w:val="right"/>',
+      '',
+      108,
+      'auto',
+      undefined,
+      wide('right')
+    );
+    expect(structure(trailing).outerRuleOffsetPt).toBe(-10);
+  });
+
+  test('a text-box table keeps the left-to-right fixed rule', () => {
+    const s = (extra: string) =>
+      readTableStructure(
+        (
+          document(extra).root.children.find((node) => node.kind === 'body') as OoxmlElement
+        ).children.find((node) => node.kind === 'table') as OoxmlElement,
+        300,
+        0,
+        styles,
+        'proposed',
+        undefined,
+        14,
+        undefined,
+        true
+      )!;
+    expect(s('').outerRuleOffsetPt).toBe(-5.4);
+    expect(s('<w:jc w:val="right"/>').outerRuleOffsetPt).toBeUndefined();
+    expect(s('<w:bidiVisual/>').outerRuleOffsetPt).toBeUndefined();
+  });
+
+  test('a right-aligned table aligns the content edge of its last cell', () => {
+    expect(structure(document('<w:jc w:val="right"/>')).outerRuleOffsetPt).toBe(5.4);
+  });
   test('table boundaries retain their prior origin', () => {
-    for (const extra of [
-      '<w:bidiVisual/>',
-      '<w:tblCellSpacing w:w="20" w:type="dxa"/>',
-      '<w:jc w:val="center"/>',
-    ]) {
+    for (const extra of ['<w:tblCellSpacing w:w="20" w:type="dxa"/>', '<w:jc w:val="center"/>']) {
       expect(structure(document(extra)).outerRuleOffsetPt).toBeUndefined();
     }
     expect(structure(document(), 14, 1).outerRuleOffsetPt).toBeUndefined();
