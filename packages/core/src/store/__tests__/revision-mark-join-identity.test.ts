@@ -139,3 +139,22 @@ test('rejecting an inserted mark of an empty paragraph keeps that paragraph', ()
     '<w:p w14:paraId="00000001"><w:r><w:t>kept</w:t></w:r></w:p>'
   );
 });
+
+// The joined paragraph keeps the last paragraph's content, so a prefix only the last `w:p`
+// declared stays declared on the paragraph that holds it.
+test('rejecting an inserted mark keeps the namespace the second paragraph declared', () => {
+  const part = load(
+    `<w:p w14:paraId="00000001"><w:pPr><w:rPr><w:ins w:id="1" w:author="Ada"/></w:rPr></w:pPr>` +
+      `<w:r><w:t xml:space="preserve">One; </w:t></w:r></w:p>` +
+      `<w:p xmlns:x="urn:example:x" w14:paraId="00000002"><w:r><w:rPr><x:mark/></w:rPr>` +
+      `<w:t>two</w:t></w:r></w:p>`
+  );
+  const result = applyTreeOp(part, { op: 'rejectAllRevisions' });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  const xml = serializeOoxmlPart(result.part);
+  expect(xml).toContain('xmlns:x="urn:example:x"');
+  expect(xml).toContain('<x:mark/>');
+  const reread = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'application/xml' });
+  expect(reread.ok).toBe(true);
+});

@@ -72,7 +72,13 @@ function joinedInto(
   carried: readonly OoxmlNode[]
 ): OoxmlElement {
   const merged = prepend(last, carried);
-  const { id, attributes, namespaceBindings } = first;
+  const { id, attributes } = first;
+  // The last paragraph's content stays, so the prefixes only it declared stay declared.
+  const bound = new Set(first.namespaceBindings.map((binding) => binding.prefix));
+  const namespaceBindings = [
+    ...first.namespaceBindings,
+    ...last.namespaceBindings.filter((binding) => !bound.has(binding.prefix)),
+  ];
   return { ...merged, id, attributes, namespaceBindings } as OoxmlElement;
 }
 
