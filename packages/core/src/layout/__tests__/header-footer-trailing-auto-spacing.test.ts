@@ -1,10 +1,12 @@
 // A header or footer keeps its last paragraph's automatic space after: the story reserves
 // it, so the body starts below it (header) or ends above it (footer). A table cell drops the
-// automatic space after its own last paragraph.
+// automatic space after its own last paragraph, and so does a frame in the story.
 
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutHeaderFooterStory } from '../index.ts';
+import type { ParagraphFragmentRecord } from '../semantic-records.ts';
+import { buildStyleCascadeTable } from '../style-cascade.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const measurer = createFixedMeasurer(6, 14);
@@ -18,15 +20,30 @@ const AUTO_BEFORE = '<w:spacing w:before="100" w:beforeAutospacing="1" w:after="
 const paragraph = (text: string, spacing: string) =>
   `<w:p><w:pPr>${spacing}</w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-function flowHeight(kind: 'hdr' | 'ftr', content: string): number {
-  const name = kind === 'hdr' ? '/word/header1.xml' : '/word/footer1.xml';
-  const result = readOoxmlPart(`<w:${kind} xmlns:w="${W}">${content}</w:${kind}>`, {
-    name,
-    contentType: 'application/xml',
-  });
+function read(xml: string, name: string) {
+  const result = readOoxmlPart(xml, { name, contentType: 'application/xml' });
   if (!result.ok) throw new Error(result.reason);
-  return layoutHeaderFooterStory(result.part, 468, measurer, name).flowHeight;
+  return result.part;
 }
+
+/** The style table of a document with `w:doNotUseHTMLParagraphAutoSpacing` on. */
+const fixedSpacing = () =>
+  buildStyleCascadeTable(
+    read(`<w:styles xmlns:w="${W}"/>`, '/word/styles.xml').root,
+    undefined,
+    read(
+      `<w:settings xmlns:w="${W}"><w:compat><w:doNotUseHTMLParagraphAutoSpacing/></w:compat></w:settings>`,
+      '/word/settings.xml'
+    ).root
+  );
+
+function story(kind: 'hdr' | 'ftr', content: string, cascade?: ReturnType<typeof fixedSpacing>) {
+  const name = kind === 'hdr' ? '/word/header1.xml' : '/word/footer1.xml';
+  const part = read(`<w:${kind} xmlns:w="${W}">${content}</w:${kind}>`, name);
+  return layoutHeaderFooterStory(part, 468, measurer, name, undefined, cascade);
+}
+
+const flowHeight = (kind: 'hdr' | 'ftr', content: string) => story(kind, content).flowHeight;
 
 const lines = (spacing: string) =>
   paragraph('First', spacing) + paragraph('Second', spacing) + paragraph('Third', spacing);
@@ -44,7 +61,17 @@ for (const kind of ['hdr', 'ftr'] as const) {
 
   test(`a ${kind} story keeps the automatic space after a content control at its end`, () => {
     const wrapped = `<w:sdt><w:sdtPr><w:id w:val="1"/></w:sdtPr><w:sdtContent>${lines(AUTO)}</w:sdtContent></w:sdt>`;
-    expect(flowHeight(kind, wrapped)).toBeCloseTo(flowHeight(kind, lines(AUTO)), 3);
+    expect(flowHeight(kind, wrapped)).toBeCloseTo(flowHeight(kind, lines(EXPLICIT)), 3);
+  });
+
+  test(`a ${kind} story keeps the fixed automatic space after under fixed spacing`, () => {
+    const tail =
+      paragraph('First', AUTO) + paragraph('Second', AUTO) + paragraph('Third', AUTO_BEFORE);
+    // The setting gives 10pt after in place of 14pt; the story end keeps it all the same.
+    expect(story(kind, lines(AUTO), fixedSpacing()).flowHeight).toBeCloseTo(
+      story(kind, tail, fixedSpacing()).flowHeight + 10,
+      3
+    );
   });
 }
 
@@ -58,4 +85,17 @@ test('a table cell in a header still drops its last paragraph automatic space af
     flowHeight('hdr', table(NONE) + after),
     3
   );
+});
+
+test('a frame in a header drops its last paragraph automatic space after, like a cell', () => {
+  const frame =
+    '<w:framePr w:w="4000" w:x="6400" w:y="960" w:hAnchor="page" w:vAnchor="text" w:wrap="around"/>';
+  const height = (spacing: string) => {
+    const framed = paragraph('Framed', frame + spacing) + paragraph('Anchor', NONE);
+    const fragments = story('hdr', framed).fragments as readonly ParagraphFragmentRecord[];
+    const placed = fragments.find((fragment) => fragment.outOfFlow);
+    expect(placed).toBeDefined();
+    return placed!.box.height;
+  };
+  expect(height(AUTO)).toBeCloseTo(height(AUTO_BEFORE), 3);
 });
