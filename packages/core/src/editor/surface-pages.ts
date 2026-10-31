@@ -12,6 +12,7 @@ import {
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
 import type { HeadlessDocumentView } from '@docx-editor.dev/core/store';
+import { hostWindowOf } from './host-realm.ts';
 
 export const createSurfaceStyleDeps = createDocumentStyleDependencies;
 
@@ -35,6 +36,81 @@ export function createNotesLayoutInput(
 
 export function surfaceScroller(container: HTMLElement): HTMLElement | null {
   return container.closest('.docx-editor__scroll-container') as HTMLElement | null;
+}
+
+/** The scroller's horizontal scroll range, or Infinity when it reports none. */
+function inlineScrollRange(scroller: HTMLElement): number {
+  return Number.isFinite(scroller.scrollWidth)
+    ? Math.max(0, scroller.scrollWidth - scroller.clientWidth)
+    : Number.POSITIVE_INFINITY;
+}
+
+/** A right-to-left scroller: `scrollLeft` runs from 0 at its right end to negative values. */
+function scrollsFromRight(scroller: HTMLElement): boolean {
+  return hostWindowOf(scroller).getComputedStyle(scroller).direction === 'rtl';
+}
+
+/**
+ * How far the scroller is scrolled from its left end, whatever its direction. An `offsetLeft`
+ * inside `.docx-content-mount`, which is positioned and starts at the scroller's left padding
+ * in both directions, then means the same thing in both. An `offsetLeft` against the scroller
+ * itself does not: a right-to-left scroller reports it from its right-end origin.
+ */
+export function inlineScrollOffset(scroller: HTMLElement): number {
+  const range = inlineScrollRange(scroller);
+  return scrollsFromRight(scroller) && Number.isFinite(range)
+    ? scroller.scrollLeft + range
+    : scroller.scrollLeft;
+}
+
+/** Scroll to `offset` from the left end, clamped to the scroll range, whatever the direction. */
+export function setInlineScrollOffset(scroller: HTMLElement, offset: number): void {
+  const range = inlineScrollRange(scroller);
+  const clamped = Math.min(Math.max(0, offset), range);
+  scroller.scrollLeft =
+    scrollsFromRight(scroller) && Number.isFinite(range) ? clamped - range : clamped;
+}
+
+/** Whether layout gave the container and scroller real boxes (a test DOM gives none). */
+function hasBoxes(container: HTMLElement, scroller: HTMLElement): boolean {
+  const containerRect = container.getBoundingClientRect();
+  const scrollerRect = scroller.getBoundingClientRect();
+  return containerRect.width !== 0 || scrollerRect.width !== 0;
+}
+
+/** The viewport's horizontal centre, in layout points from the container's left edge. */
+export function viewportCentreX(
+  container: HTMLElement,
+  scroller: HTMLElement,
+  scale: number
+): number {
+  const half = scroller.clientWidth / 2;
+  if (!hasBoxes(container, scroller)) {
+    return (inlineScrollOffset(scroller) - container.offsetLeft + half) / scale;
+  }
+  const left = scroller.getBoundingClientRect().left + scroller.clientLeft;
+  return (left + half - container.getBoundingClientRect().left) / scale;
+}
+
+/**
+ * Scroll sideways so the viewport's centre is `x` layout points from the container's left
+ * edge, as `viewportCentreX` measured it before a rescale. Boxes, not `offsetLeft`, so the
+ * padding around the content and the scroller's direction need no special case.
+ */
+export function centreViewportOn(
+  container: HTMLElement,
+  scroller: HTMLElement,
+  x: number,
+  scale: number
+): void {
+  const half = scroller.clientWidth / 2;
+  if (!hasBoxes(container, scroller)) {
+    setInlineScrollOffset(scroller, x * scale + container.offsetLeft - half);
+    return;
+  }
+  const left = scroller.getBoundingClientRect().left + scroller.clientLeft;
+  const drift = container.getBoundingClientRect().left + x * scale - (left + half);
+  setInlineScrollOffset(scroller, inlineScrollOffset(scroller) + drift);
 }
 
 /**
