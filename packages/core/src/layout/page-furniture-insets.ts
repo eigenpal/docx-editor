@@ -211,14 +211,20 @@ export interface OverflowPageShell {
  * the section loop runs — which is the document order, continuation ahead of the section's
  * endnotes — and each sheet an earlier section then inserts moves it one position along. Those
  * sheets are re-resolved once every insertion is done, by `resettleMintedSheets` in
- * `note-pagination.ts`, which is where the argument for this index actually lives.
+ * `note-sheet-resettle.ts`, which is where the argument for this index actually lives.
  *
  * `box` is the sheet the new page occupies, which furniture is positioned against.
+ *
+ * `pageNumberShift` asks instead for a BODY page at `documentPageIndex` whose displayed number
+ * moved by that much because sheets were inserted before it: the shell keeps the page's own
+ * index and takes the variant of its new number. A `first` page and a header that repeats
+ * running values keep their shell.
  */
 export type OverflowPageShellResolver = (
   sectionAnchorIndex: number,
   documentPageIndex: number,
-  box: LayoutBox
+  box: LayoutBox,
+  pageNumberShift?: number
 ) => OverflowPageShell | undefined;
 
 /**
@@ -247,7 +253,13 @@ export function overflowPageShellAt(
   layout: SemanticLayout,
   sectionAnchorIndex: number,
   documentPageIndex: number,
-  box: LayoutBox
+  box: LayoutBox,
+  pageNumberShift?: number
 ): OverflowPageShell | undefined {
-  return layoutOverflowShells.get(layout)?.(sectionAnchorIndex, documentPageIndex, box);
+  return layoutOverflowShells.get(layout)?.(
+    sectionAnchorIndex,
+    documentPageIndex,
+    box,
+    pageNumberShift
+  );
 }

@@ -1,3 +1,4 @@
+import { recordedLineBoxFamily } from './authored-line-boxes.ts';
 import type { FontConfiguration, FontSourceSubstitution } from '../contracts/editor.ts';
 import type { HeadlessDocumentView } from '../store/headless-document-view.ts';
 import { fontTableAlternates, fontTableClasses } from '../store/package/font-table-alternates.ts';
@@ -314,7 +315,9 @@ export function applyDocumentFontSubstitutions(
             if (remaining === 0) break;
             remaining--;
           }
-          substitutions.push({ from, ...supplied });
+          // A recorded family keeps its authored line box on the face that stands in for it.
+          const authored = recordedLineBoxFamily(family)?.em;
+          substitutions.push({ from, ...supplied, ...(authored ? { lineMetrics: authored } : {}) });
           break;
         }
       }

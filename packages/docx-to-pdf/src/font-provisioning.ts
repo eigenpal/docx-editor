@@ -259,6 +259,9 @@ const standInLineBoxes: Record<string, { readonly heightEm: number; readonly bas
   {
     // hhea ascender 2210 and descender 514 of a 2048-unit em, no line gap.
     'Segoe UI Symbol': { heightEm: 2724 / 2048, baselineEm: 2210 / 2048 },
+    // hhea ascender 1765 and descender 539, no line gap: the box core's measurers record for
+    // the family in `authored-line-boxes.ts`, so export and editor break lines alike.
+    Garamond: { heightEm: 2304 / 2048, baselineEm: 1765 / 2048 },
   };
 
 /**

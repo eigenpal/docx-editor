@@ -209,3 +209,19 @@ test('a family the platform has installed keeps its own face', () => {
     false
   );
 });
+
+test('Garamond falls back to the serif face and keeps its own line box there', () => {
+  const document = documentWith('Garamond');
+  const plan = documentFontSubstitutionPlan(document, ['Garamond']);
+  const fonts = applyDocumentFontSubstitutions(hostFonts(), plan);
+  const garamond = fonts.substitutions?.filter(
+    (substitution) => substitution.from.family === 'Garamond'
+  );
+  expect(garamond?.length).toBe(4);
+  for (const substitution of garamond ?? []) {
+    expect(substitution.to.family).toBe('Liberation Serif');
+    // hhea ascent 1765 and descent 539 over 2048 units per em.
+    expect(substitution.lineMetrics?.heightEm).toBeCloseTo(2304 / 2048, 9);
+    expect(substitution.lineMetrics?.baselineEm).toBeCloseTo(1765 / 2048, 9);
+  }
+});

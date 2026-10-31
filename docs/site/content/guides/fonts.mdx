@@ -336,6 +336,8 @@ googleFonts({
 
 An arbitrary substitute can change line breaks and pagination. Use a metric-compatible substitute when layout must remain stable.
 
+If no face is available for Garamond, the editor and PDF export keep Garamond's own line height on the fallback font. Line spacing and page breaks then stay the same, but character widths still follow the fallback font. A face that you supply for the family uses its own line height.
+
 | Resolver constraint | Required behavior |
 | --- | --- |
 | File-supplied family names | Match them against a closed `Map` or catalog. |

@@ -1,4 +1,5 @@
 import { withAuthoredCjkGapMetric } from './cjk-auto-spacing-metric-port.ts';
+import { authoredLineBox } from './authored-line-boxes.ts';
 import { createResolvedCjkAutoSpacingGapMetric } from './sfnt-auto-spacing-metrics.ts';
 import { isRunKerningEnabled } from './run-kerning.ts';
 import { runLigatureFeatureKey } from './run-ligatures.ts';
@@ -485,7 +486,8 @@ export function createShapedMeasurer(
 
     lineMetrics(style, text) {
       const font = resolveFontCached(style);
-      if (!font) return fallback.lineMetrics(style, text);
+      // No face of its own: a recorded family keeps its authored box on the fallback face.
+      if (!font) return authoredLineBox(style) ?? fallback.lineMetrics(style, text);
       if (!text || /^[\t\n\r\f ]*$/.test(text)) return faceLineMetrics(font, style);
       // A shaper that never substitutes a face shapes this text in `font` alone, so its band
       // is the answer; shaping each word again only to read the face back was a third of
