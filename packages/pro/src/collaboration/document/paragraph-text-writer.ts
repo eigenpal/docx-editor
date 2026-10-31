@@ -399,8 +399,11 @@ export function routeInlineEffects(
       // An embed shows as the materializer shows it: not when its record is deleted or has not
       // arrived. A placeholder for it put a child in this tree that the editor's tree lacks,
       // and the journal's child indexes then addressed the wrong children.
+      // A node two copies in the text embed shows once, at the first, as the materializer
+      // places it once.
       const placeholderOf = (id: LogicalId): OoxmlNode | null => {
         if (!registry.showsAsChild(id)) return null;
+        if (embedded.has(id)) return null;
         embedded.add(id);
         return embedPlaceholder(id);
       };
