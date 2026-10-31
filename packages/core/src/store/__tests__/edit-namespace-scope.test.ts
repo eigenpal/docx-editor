@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { strToU8, unzipSync, zipSync } from 'fflate';
-import { bindConflictingPrefixes } from '../package/edit-namespace-scope.ts';
+import { bindConflictingPrefixes, bindMissingPrefixes } from '../package/edit-namespace-scope.ts';
 import { readOoxmlPart, serializeOoxmlPart, type OoxmlElement } from '../package/ooxml-tree.ts';
 import {
   plainDoc,
@@ -115,4 +115,33 @@ test('hands back the same subtree when nothing in it needs a binding', () => {
   expect(rebound.children[0]).toBe(paragraph);
   const reboundLeaf = (rebound.children[1] as OoxmlElement).children[0] as OoxmlElement;
   expect(reboundLeaf.namespaceBindings).toEqual([{ prefix: 'w', namespaceUri: 'urn:foreign' }]);
+});
+test('moved content declares the prefixes its destination does not bind', () => {
+  const leaf = (id: string, prefix: string, namespaceUri: string): OoxmlElement =>
+    ({
+      id,
+      kind: 'generic',
+      localName: id,
+      namespaceUri,
+      prefix,
+      namespaceBindings: [],
+      attributes: [],
+      children: [],
+    }) as unknown as OoxmlElement;
+  const paragraph = {
+    ...leaf('p', 'w', W),
+    attributes: [{ namespaceUri: 'urn:identity', localName: 'paraId', prefix: 'i', value: '1' }],
+  } as unknown as OoxmlElement;
+  const note = { ...leaf('note', 'w', W), children: [paragraph] } as OoxmlElement;
+  const scope = new Map([['w', W]]);
+  const bound = bindMissingPrefixes(note, scope) as OoxmlElement;
+  expect(bound.namespaceBindings).toEqual([{ prefix: 'i', namespaceUri: 'urn:identity' }]);
+  // Nothing to declare: the same node comes back.
+  expect(bindMissingPrefixes(note, new Map([...scope, ['i', 'urn:identity']]))).toBe(note);
+  // A prefix used for two URIs gets no binding and is left to validation.
+  const clash = {
+    ...leaf('note', 'w', W),
+    children: [leaf('a', 'i', 'urn:one'), leaf('b', 'i', 'urn:two')],
+  } as OoxmlElement;
+  expect((bindMissingPrefixes(clash, scope) as OoxmlElement).namespaceBindings).toEqual([]);
 });

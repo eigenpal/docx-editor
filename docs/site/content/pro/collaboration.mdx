@@ -1433,7 +1433,7 @@ const stop = session.subscribeResourcePressure(
 
 The reading names the limit closest to its cap: `nodes`, `nodeRecords`, `parts`, `relationships`, or `blobBytes`. If the room already reaches a threshold when you subscribe, the listener runs once at subscription. The default thresholds are `[0.75, 0.9]`.
 
-For every count, call `session.resourceUsage()`. It returns the replicated counts next to the limits:
+To read every count, call `session.resourceUsage()`. It returns the replicated counts next to the limits:
 
 ```ts
 const usage = session.resourceUsage();
