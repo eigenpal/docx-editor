@@ -575,38 +575,43 @@ function keptByDeletion(
   aEnd: number
 ): Step[] | null {
   if (j === aEnd || aEnd - j >= bEnd - i) return null;
-  // The revision trails in the gap are few. A letter whose trail none of them keeps, as every
-  // letter of an accepted insertion, takes the first equal token without a scan for a better one.
-  let trails: Set<string> | null = null;
-  const preferable = new Map<string, boolean>();
-  const canPrefer = (trail: string): boolean => {
-    let answer = preferable.get(trail);
-    if (answer === undefined) {
-      if (trails === null) {
-        trails = new Set();
-        for (let at = i; at < bEnd; at += 1) trails.add(before[at]!.trail ?? '');
-      }
-      answer = [...trails].some((from) => keepsRevisions(from, trail));
-      preferable.set(trail, answer);
+  // Where each token stands in the gap, in order, by content and trail: a letter finds the
+  // first token whose trail keeps its revisions by one search per trail, not a scan of the
+  // gap. The trails are few. Built only for the preferred search.
+  let index: Map<string, Map<string, number[]>> | null = null;
+  const byTrail = (): Map<string, Map<string, number[]>> => {
+    if (index) return index;
+    index = new Map();
+    for (let at = i; at < bEnd; at += 1) {
+      const { key } = before[at]!;
+      const trail = before[at]!.trail ?? '';
+      let trails = index.get(key);
+      if (!trails) index.set(key, (trails = new Map()));
+      let positions = trails.get(trail);
+      if (!positions) trails.set(trail, (positions = []));
+      positions.push(at);
     }
-    return answer;
+    return index;
   };
   const match = (prefer: boolean): Step[] | null => {
     const steps: Step[] = [];
     let at = i;
     for (let k = j; k < aEnd; k += 1) {
       const token = after[k]!;
-      const preferring = prefer && canPrefer(token.trail ?? '');
-      let found = -1;
       // The first equal token that stays in its revisions, wherever it stands in the gap, else
-      // the first equal token. The caller bounds the gap, so the scan stays bounded too.
-      for (let candidate = at; candidate < bEnd; candidate += 1) {
-        if (before[candidate]!.key !== token.key) continue;
-        if (!preferring || keepsRevisions(before[candidate]!.trail ?? '', token.trail ?? '')) {
-          found = candidate;
-          break;
+      // the first equal token. The caller bounds the gap for the preferred search.
+      let found = -1;
+      if (prefer) {
+        const trail = token.trail ?? '';
+        for (const [from, positions] of byTrail().get(token.key) ?? []) {
+          if (!keepsRevisions(from, trail)) continue;
+          const next = firstAtOrAfter(positions, at);
+          if (next >= 0 && (found < 0 || next < found)) found = next;
         }
-        if (found < 0) found = candidate;
+      }
+      // The cursor moves past each match, so this scan covers the gap once in all.
+      for (let candidate = at; found < 0 && candidate < bEnd; candidate += 1) {
+        if (before[candidate]!.key === token.key) found = candidate;
       }
       if (found < 0) return null;
       for (; at < found; at += 1) steps.push({ op: 'del', before: at });
@@ -618,6 +623,18 @@ function keptByDeletion(
   };
   const preferred = (aEnd - j) * (bEnd - i) <= MAX_DIFF_CELLS ? match(true) : null;
   return preferred ?? match(false);
+}
+
+/** The first of the ascending `positions` at or after `at`, or -1. */
+function firstAtOrAfter(positions: readonly number[], at: number): number {
+  let low = 0;
+  let high = positions.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (positions[middle]! < at) low = middle + 1;
+    else high = middle;
+  }
+  return low < positions.length ? positions[low]! : -1;
 }
 
 /** The weak matches at the ends of one gap, and the gap they leave. */
@@ -704,13 +721,26 @@ function inRevision(
 ): { readonly equal: number; readonly inRevision: number } {
   let equal = 0;
   let kept = 0;
+  // Neighbouring letters share their trails: one answer serves a run of them.
+  let lastFrom: string | null = null;
+  let lastTo: string | null = null;
+  let lastAnswer = false;
   for (const steps of [ends.head, ends.tail]) {
     for (const step of steps) {
       if (step.op !== 'eq') continue;
       equal += 1;
-      if (keepsRevisions(before[step.before]!.trail ?? '', after[step.after]!.trail ?? '')) {
+      const from = before[step.before]!.trail ?? '';
+      const to = after[step.after]!.trail ?? '';
+      if (from === to) {
         kept += 1;
+        continue;
       }
+      if (from !== lastFrom || to !== lastTo) {
+        lastAnswer = keepsRevisions(from, to);
+        lastFrom = from;
+        lastTo = to;
+      }
+      if (lastAnswer) kept += 1;
     }
   }
   return { equal, inRevision: kept };
@@ -781,13 +811,22 @@ function strongMatches(
   if (middle && rows > 0 && columns > 0 && rows * columns <= MAX_DIFF_CELLS) {
     const width = columns + 1;
     const score = new Uint32Array((rows + 1) * width);
-    const same = (r: number, c: number): boolean =>
-      before[low + r]!.strong === after[low + c]!.strong;
+    // The keys once, so the cell loop compares strings without reading tokens: a long
+    // paragraph's first decisions run the loop before it is optimized.
+    const left = new Array<string>(rows);
+    const right = new Array<string>(columns);
+    for (let r = 0; r < rows; r += 1) left[r] = before[low + r]!.strong;
+    for (let c = 0; c < columns; c += 1) right[c] = after[low + c]!.strong;
+    const same = (r: number, c: number): boolean => left[r] === right[c];
     for (let r = rows - 1; r >= 0; r -= 1) {
+      const key = left[r];
+      const row = r * width;
+      const below = row + width;
       for (let c = columns - 1; c >= 0; c -= 1) {
-        score[r * width + c] = same(r, c)
-          ? score[(r + 1) * width + c + 1]! + 1
-          : Math.max(score[(r + 1) * width + c]!, score[r * width + c + 1]!);
+        const down = score[below + c]!;
+        const across = score[row + c + 1]!;
+        score[row + c] =
+          key === right[c] ? score[below + c + 1]! + 1 : down > across ? down : across;
       }
     }
     let r = 0;
