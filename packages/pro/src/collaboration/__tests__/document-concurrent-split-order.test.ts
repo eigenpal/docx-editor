@@ -408,6 +408,34 @@ describe('more concurrent splits of one paragraph', () => {
     });
 
   for (const { label, ids } of ORDERS)
+    test(`a break at the end of the split-off paragraph stays right after it (${label})`, async () => {
+      // Alice's break at the end and Bob's later break at the end of his piece both fall
+      // after "three": Bob's paragraph stays with the piece he split.
+      const r = await room('One; two; three', ids);
+      try {
+        r.offline();
+        await newlineAfter(r.alice.runtime, 'three', false);
+        later();
+        await splitAfter(r.bob.runtime, 'two; ', false);
+        later();
+        r.online();
+        await r.expectAll(['One; two; ', 'three', '', 'Signed']);
+        later();
+        await r.bob.runtime.run(async (context) => {
+          const found = context.document.body.search('three').getFirst();
+          await context.sync();
+          found.insertText('\nfour', 'After');
+          await context.sync();
+        });
+        r.sync();
+        await r.expectAll(['One; two; ', 'three', 'four', '', 'Signed']);
+        await r.expectReopens(['One; two; ', 'three', 'four', '', 'Signed']);
+      } finally {
+        r.close();
+      }
+    });
+
+  for (const { label, ids } of ORDERS)
     test(`redoing both splits after both undos keeps them in text order (${label})`, async () => {
       const r = await room('One; two; three', ids);
       try {

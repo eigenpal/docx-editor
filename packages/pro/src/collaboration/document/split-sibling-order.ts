@@ -195,9 +195,11 @@ export function splitSiblingRanks(
           .flatMap((item) => item.content.getContent() as LogicalId[])
       );
     const listed = idsOf(blocks);
+    const blockOf = blocks.flatMap((block, index) => idsOf([block]).map(() => index));
     const byText = orderOf(blocks, textOf, children.doc, pointsOf, missing, keyed);
     const order =
-      idsByPoints(listed, pointsOf, children.doc, missing) ?? (byText ? idsOf(byText) : null);
+      idsByPoints(listed, blockOf, pointsOf, children.doc, missing) ??
+      (byText ? idsOf(byText) : null);
     const shown = order ?? listed;
     const source = items[first - 1];
     if (source && !source.deleted && inItem(head.origin, source)) {
@@ -251,9 +253,16 @@ function listedBySplit(nodes: Y.Map<unknown> | null, item: Y.Item): boolean {
  * live text, as a split of text typed after the first split, each paragraph goes by its split
  * of that one paragraph; paragraphs with one split point, as
  * a paragraph and the paragraph that took its split points, keep their listed order.
+ *
+ * Two paragraphs can fall at one place: a break at the end of the paragraph the run follows
+ * and a break at the end of a sibling that took that paragraph's last character both fall
+ * after that character. Such a tie goes by where each one's block shows, so a paragraph split
+ * off a sibling stays with it, and then by the listed order.
  */
 function idsByPoints(
   listed: readonly LogicalId[],
+  /** The block of the run that lists each paragraph, in listed order. */
+  blockOf: readonly number[],
   pointsOf: (id: LogicalId) => readonly SplitPoint[],
   doc: Y.Doc | null,
   missing: string[]
@@ -262,8 +271,19 @@ function idsByPoints(
   const points = listed.map((id) => pointsOf(id));
   const places = new Map<Y.Text, Map<string, number>>();
   const sorted = (keys: readonly number[]): LogicalId[] => {
+    // Where each block shows: by the key of the first paragraph it lists.
+    const heads = new Map<number, number>();
+    blockOf.forEach((block, index) => {
+      if (!heads.has(block)) heads.set(block, index);
+    });
+    const blocks = [...heads.keys()].sort(
+      (a, b) => keys[heads.get(a)!]! - keys[heads.get(b)!]! || a - b
+    );
+    const shown = new Map(blocks.map((block, rank) => [block, rank]));
     const order = listed.map((_, index) => index);
-    order.sort((a, b) => keys[a]! - keys[b]! || a - b);
+    order.sort(
+      (a, b) => keys[a]! - keys[b]! || shown.get(blockOf[a]!)! - shown.get(blockOf[b]!)! || a - b
+    );
     return order.map((index) => listed[index]!);
   };
   for (let at = points[0]!.length - 1; at >= 0; at -= 1) {
