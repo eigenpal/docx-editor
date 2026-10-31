@@ -569,10 +569,60 @@ export function createPointerController(
 
   const GRANULARITIES: readonly Granularity[] = ['character', 'word', 'paragraph'];
 
+  /** Targets whose own selection a right-click must keep: furniture, widgets and pictures. */
+  const SECONDARY_PRESS_KEEPS_SELECTION =
+    '[data-docx-hf], [data-docx-cc-widget], [data-docx-note-ref], [data-drawing-paragraph-id], ' +
+    '.docx-image-selection-overlay, .docx-drawing-textbox, input, textarea, select';
+
+  /**
+   * A secondary press in body text outside the selection moves the caret to the press, so the
+   * context menu acts on the text under the pointer and not on a selection the user cannot
+   * see. A press inside a range keeps that range, so Cut and Copy still act on it. The press
+   * is never prevented: the context menu still opens.
+   */
+  function placeCaretForSecondaryPress(event: PointerEvent): void {
+    if (event.button !== 2 || event.pointerType === 'touch') return;
+    if (host.activeHeaderFooter?.() || host.activeNote?.()) return;
+    const target = event.target as Element | null;
+    if (target?.closest?.(SECONDARY_PRESS_KEEPS_SELECTION)) return;
+    const layout = host.layout();
+    if (!isBodyContentPoint(layout, sheetPoint(event.clientX, event.clientY), host.pageOffsetX)) {
+      return;
+    }
+    const hit = resolveBody(event.clientX, event.clientY);
+    if (!hit) return;
+    if (
+      host.isReadOnlyPosition?.(hit.position) ??
+      host.isReadOnlyParagraph?.(hit.position.paragraphId)
+    ) {
+      return;
+    }
+    const current = host.selection();
+    const reversed = isBefore(layout, current.head, current.anchor);
+    const from = reversed ? current.head : current.anchor;
+    const to = reversed ? current.anchor : current.head;
+    if (!isBefore(layout, hit.position, from) && !isBefore(layout, to, hit.position)) return;
+    host.focus();
+    // A placeholder prompt is selected whole, as a primary press selects it.
+    const placeholder = placeholderAtHit(layout, hit);
+    if (placeholder) {
+      if (host.selectContentControl?.(placeholder.id)) return;
+      const unit = placeholderSelectionRange(layout, placeholder);
+      if (unit) {
+        host.setSelection({ anchor: unit.from, head: unit.to });
+        return;
+      }
+    }
+    host.setSelection({ anchor: hit.position, head: hit.position }, hit.caret);
+  }
+
   const onPointerDown = (event: PointerEvent): void => {
-    // Anything but the primary button keeps its native behaviour: a right-click must reach the
-    // context menu with the existing selection intact, not move the caret out from under it.
-    if (event.button !== 0) return;
+    // Other non-primary buttons keep their native behaviour. A right-click places the caret
+    // only when it lands outside the selection; see `placeCaretForSecondaryPress`.
+    if (event.button !== 0) {
+      placeCaretForSecondaryPress(event);
+      return;
+    }
     // Content-control widgets: prevent mousedown so chrome does not steal the caret, then
     // dispatch the engine-level interaction (checkbox toggle, dropdown menu, date picker).
     // (Furniture clicks continue below into the scoped header/footer / note enter paths.)

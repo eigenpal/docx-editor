@@ -570,9 +570,9 @@ const removeToc = (tocId: string | null): EditorCommand => ({
  * Define a row that only exists while the right-click landed on a table of contents.
  *
  * Contextual the same way the table rows are, but keyed on the TOC the OPEN captured
- * rather than on the caret: a right-click does not move the caret and a generated TOC
- * refuses it outright, so the pointed-at table of contents is the only thing that can say
- * these rows apply. The row also carries that id into the command, so a document with two
+ * rather than on the caret: a generated TOC refuses the caret outright, so a right-click on
+ * it leaves the caret where it was, and the pointed-at table of contents is the only thing
+ * that can say these rows apply. The row also carries that id into the command, so a document with two
  * tables of contents refreshes the one the user pointed at.
  */
 function defineTocCommandRow(

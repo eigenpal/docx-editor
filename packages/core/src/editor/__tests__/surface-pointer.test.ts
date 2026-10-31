@@ -224,13 +224,37 @@ describe('a press beside the text', () => {
 });
 
 describe('what the engine does NOT claim', () => {
-  test('a non-primary button keeps its native behaviour and the current selection', () => {
+  test('a right-click inside a range keeps the range and its native behaviour', () => {
     const mounted = mount(paragraph('hello world'));
-    press(mounted, 30, 5);
-    const before = offsets(mounted.surface);
-    const event = press(mounted, 500, 5, { button: 2 });
+    mounted.surface.setSelection({
+      anchor: { ...mounted.surface.state().selection.anchor, offset: 0 },
+      head: { ...mounted.surface.state().selection.anchor, offset: 11 },
+    });
+    const event = press(mounted, 30, 5, { button: 2 });
     expect(event.defaultPrevented).toBe(false);
-    expect(offsets(mounted.surface)).toEqual(before);
+    expect(offsets(mounted.surface)).toEqual([0, 11]);
+    mounted.surface.destroy();
+  });
+
+  test('a right-click outside the selection moves the caret there without preventing the menu', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, -40, 5);
+    release(-40, 5);
+    expect(offsets(mounted.surface)).toEqual([0, 0]);
+    // Inside the content box, right of the last glyph: the end of the line.
+    const event = press(mounted, 300, 5, { button: 2 });
+    expect(event.defaultPrevented).toBe(false);
+    expect(offsets(mounted.surface)).toEqual([11, 11]);
+    mounted.surface.destroy();
+  });
+
+  test('a middle-button press keeps the current selection', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, -40, 5);
+    release(-40, 5);
+    const event = press(mounted, 500, 5, { button: 1 });
+    expect(event.defaultPrevented).toBe(false);
+    expect(offsets(mounted.surface)).toEqual([0, 0]);
     mounted.surface.destroy();
   });
 
@@ -800,6 +824,15 @@ describe('showingPlcHdr placeholder selection is atomic', () => {
     const { x, y } = controlCenter(mounted.surface);
     press(mounted, x, y);
     // "aa" (2) + "Enter name" (10) → whole prompt [2, 12)
+    expect(offsets(mounted.surface)).toEqual([2, 12]);
+    mounted.surface.destroy();
+  });
+
+  test('right-click inside a placeholder selects the whole prompt', () => {
+    const mounted = mount(`<w:p>${run('aa')}${inlinePlc('Enter name')}${run('zz')}</w:p>`);
+    const { x, y } = controlCenter(mounted.surface);
+    const event = press(mounted, x, y, { button: 2 });
+    expect(event.defaultPrevented).toBe(false);
     expect(offsets(mounted.surface)).toEqual([2, 12]);
     mounted.surface.destroy();
   });

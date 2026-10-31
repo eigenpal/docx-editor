@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A right-click in document text kept the local selection wherever it was.",
+  "after": "A right-click in document text outside the local selection moves the local caret to the click. A right-click inside the selection keeps it.",
+  "reason": "Only the local selection changes, through the same selection path as a primary press. No shared field, operation, snapshot, or protocol message changes, and remote carets follow the local selection as they do after a click.",
+  "tests": ["packages/core/src/editor/__tests__/surface-pointer.test.ts"],
+  "changeset": "right-click-moves-caret",
+  "migration": null
+}
