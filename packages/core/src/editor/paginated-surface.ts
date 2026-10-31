@@ -264,6 +264,8 @@ import {
   applyPageOffsets,
   equalPageSets,
   equalSurfaceExtents,
+  centreViewportOn,
+  viewportCentreX,
   surfaceExtent,
   surfaceScroller,
   visiblePageSet,
@@ -1770,18 +1772,18 @@ export function mountPaginatedSurface(
     publish: (layout) => publishLayout(layout),
   });
   function publishLayout(layout: SemanticLayout): void {
-    // Release the previous layout BEFORE the new one replaces it: the roster cache held
-    // it by strong reference, and a 200-page graph kept alive beside the live one is tens
-    // of megabytes of retained records. `layout: null` means "recompute on the next read"
-    // while keeping the map itself, which that read compares against to decide whether
-    // the author set actually moved.
-    // The review queue is released with it, for the same reason and by the same rule.
+    // Release the previous layout BEFORE the new one replaces it: the roster cache held it by
+    // strong reference, and a 200-page graph kept beside the live one is tens of megabytes.
+    // `layout: null` means "recompute on the next read" while keeping the map, which that read
+    // compares against to decide whether the author set moved. The review queue goes with it.
     reviewAuthors.releaseLayout();
     currentLayout = layout;
     const carried = remoteCaret.map(selection);
-    // Peers see this caret move too, or they keep painting it at the old offset.
+    // Peers see this caret move too, or they keep painting it at the old offset. It is a model
+    // move: until the next paint, the browser still shows the old caret, which must not win.
     if (carried !== selection) {
       selection = carried;
+      selectionSync.noteModelMoved();
       publishLocalCollaborationSelection();
     }
     // Repaint from HERE, so a commit that never went through this surface — undo, or
@@ -4449,7 +4451,7 @@ export function mountPaginatedSurface(
         // Preserve the viewport centre in layout coordinates across the reflow.
         const anchor = scroller
           ? {
-              x: (scroller.scrollLeft - container.offsetLeft + scroller.clientWidth / 2) / scale,
+              x: viewportCentreX(container, scroller, scale),
               y: (scroller.scrollTop - container.offsetTop + scroller.clientHeight / 2) / scale,
             }
           : null;
@@ -4470,21 +4472,14 @@ export function mountPaginatedSurface(
         scheduler.flush();
         payOwedPaint();
         if (scroller && anchor) {
-          const targetLeft = Math.max(
-            0,
-            anchor.x * scale + container.offsetLeft - scroller.clientWidth / 2
-          );
           const targetTop = Math.max(
             0,
             anchor.y * scale + container.offsetTop - scroller.clientHeight / 2
           );
-          const maxLeft = Number.isFinite(scroller.scrollWidth)
-            ? Math.max(0, scroller.scrollWidth - scroller.clientWidth)
-            : null;
           const maxTop = Number.isFinite(scroller.scrollHeight)
             ? Math.max(0, scroller.scrollHeight - scroller.clientHeight)
             : null;
-          scroller.scrollLeft = maxLeft === null ? targetLeft : Math.min(targetLeft, maxLeft);
+          centreViewportOn(container, scroller, anchor.x, scale);
           scroller.scrollTop = maxTop === null ? targetTop : Math.min(targetTop, maxTop);
           // The paint above chose its pages for the scroll offset the viewport had BEFORE the
           // restore. Building the destination band here keeps the zoom to one turn; leaving it
