@@ -1772,6 +1772,11 @@
       "name": "paragraph-text-collaboration",
       "role": "collaboration-packaging",
       "notes": "Changes how paragraph inline content is shared. Adds no TreeDocOp kind, so the freeze holds."
+    },
+    {
+      "name": "collaboration-room-compaction",
+      "role": "collaboration-packaging",
+      "notes": "Compacts a live room's stored history. Adds no TreeDocOp kind, so the freeze holds."
     }
   ],
   "remainingAmbiguity": [

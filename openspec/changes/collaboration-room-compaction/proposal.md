@@ -23,7 +23,7 @@ The run used one replica on `examples/vite/public/sample.docx`, with typing, del
 
 This change proposes a design. It ships no collaboration format change.
 
-- **Live generation reset.** A server-coordinated reset compacts a room while participants stay connected. It reuses the shipped generation gate: the server takes a writer lock, builds generation N+1 from the materialized package, swaps it in with compare-and-swap, closes clients on generation N with code 4409, and keeps N for rollback until N+1 is confirmed. Clients reconnect and join N+1.
+- **Live generation reset.** A server-coordinated reset compacts a room while participants stay connected. It reuses the shipped generation gate: the server takes a writer lock, builds generation N+1 from the materialized package, swaps it in with compare-and-swap, closes clients on generation N with code 4409, and keeps N for rollback until N+1 is confirmed. Clients reconnect and join N+1. The server announces the reset first, so clients hold edits made during it and replay them on N+1.
 - **A trigger on garbage, not only bytes.** Compaction runs when reclaimable records, unreferenced blob bytes, or state size cross a threshold, each relative to a fresh build.
 - **One ceiling.** The compaction path admits the same blob total as a live room, so a room that can grow can always be compacted. A build that still refuses reports `baseline-too-large` instead of failing silently.
 - **Room-size observability.** `resourceUsage()` adds `reclaimableNodes`, `referencedBlobBytes`, and a `compactable` verdict. Servers get a threshold hook. The Hocuspocus example and the telemetry server sample report the new fields.
@@ -42,7 +42,7 @@ None. The `durable-collaboration-rooms` requirements in `full-document-yjs-colla
 ## Impact
 
 - **Format:** no field increment. Generation N+1 uses the current `docx-collaboration:1.5.2.1` shape, and the 4409 gate already ships, so released clients reconnect correctly. Each implementation PR records a `compatible` decision, confirmed by `bun run collaboration:test --all`.
-- **Behavior:** a reset ends every participant's undo history and briefly disconnects them. Unsent local edits from a client on generation N are refused, as they are after a load-time compaction today.
+- **Behavior:** a reset ends every participant's undo history and briefly reconnects them. A participant keeps editing during the reset, and held edits replay on the new generation. A released client that does not support the reset message can lose unsent edits, as after a load-time compaction today.
 - **Packages:** `pro` (`room-generation.ts`, `resource-usage.ts`, `shared-blob-store.ts`, `document-bootstrap.ts`, `hocuspocus.ts`), `telemetry` server sampling, and `examples/collaboration-hocuspocus`.
 - **Not in scope:** WebRTC rooms, which have no server to coordinate a reset; in-place deletion of records, which would break D15 adoption for offline peers.
-- **Cost:** about 2 days for observability and the trigger and ceiling fixes, 5 to 8 days for the live reset, and 3 to 4 days for the optional interim cap policy.
+- **Cost:** about 2 days for observability and the trigger and ceiling fixes, 7 to 10 days for the live reset with held-edit replay, and 3 to 4 days for the optional interim cap policy.

@@ -59,10 +59,20 @@ The compaction path accepts the same blob total as a live room. `MAX_BASELINE_BY
 
 Counting only reachable records against `maxNodes` and only referenced bytes against the blob cap turns a scheduled failure into ordinary cost. It is local policy: every replica decides alone, and no shared data changes meaning. Because it lets raw state grow, a second cap on raw totals (proposed at four times the current values) stays in place, so a hostile or runaway peer is still bounded. A reachable count needs a walk or an incrementally kept index; the walk runs on the server sample from D3, not per update.
 
+### D7: No participant loses an edit to a reset
+
+A reset that drops a participant's last keystrokes is worse than a slow room, so a live reset carries unsent edits across it.
+
+1. Before it takes the writer lock, the server sends a stateless `docx-room-reset-pending` message. A client that supports it stops sending updates, holds new local edits, and acknowledges once its earlier updates are confirmed. The server waits for every acknowledgment, up to a bounded timeout.
+2. When the client joins N+1, it replays the held edits as ordinary tree ops against N+1, the same path a local edit takes. An edit whose target N+1 no longer holds is refused through the normal rejection path, so the participant sees it, and nothing is dropped silently.
+3. A released client ignores the message. It is closed with 4409 as in D2, and its unsent edits follow today's load-time behavior. The timeout bounds how long such a client can delay a reset.
+
+The editor stays editable for the whole reset, so the participant notices at most a short reconnect. Alternative considered: refuse every edit in the reset window. Rejected, because a busy room always has edits in flight, and losing them is the failure this change exists to prevent.
+
 ## Risks / Trade-offs
 
 - **Undo loss on reset** → reset only when a trigger fires, prefer quiet periods (no update for a configured interval), and document it for hosts.
-- **Edits lost in the reset window** → the writer lock queues updates and refuses them with 4409, so the client keeps them as unsent and the user sees the refusal; this matches load-time compaction today.
+- **Edits lost in the reset window** → clients hold edits after `docx-room-reset-pending` and replay them on N+1 (D7). Only a released client that ignores the message can lose unsent edits, as after a load-time compaction today.
 - **Materialization cost on large rooms** → sample on a schedule and after large events, and measure the cost on the 20,000-edit benchmark room before choosing intervals.
 - **Interim policy hides growth** → keep the raw-total backstop and report raw totals in `resourceUsage()`.
 

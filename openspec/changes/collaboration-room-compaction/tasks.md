@@ -16,8 +16,10 @@
 - [ ] 3.1 Move the writer lock, compare-and-swap, and rollback from `__tests__/generation-spike/` into production code.
 - [ ] 3.2 Add a server reset that builds generation N+1, swaps it in, closes generation-N clients with 4409, and keeps N until N+1 is confirmed.
 - [ ] 3.3 Wire the reset into the Hocuspocus wrapper and the example server.
-- [ ] 3.4 Test reset with connected participants, a failed swap, edits during the lock, and reconnect, with real sessions.
-- [ ] 3.5 Record a `compatible` decision and run `bun run collaboration:test --all` against released clients.
+- [ ] 3.4 Send `docx-room-reset-pending`, wait for acknowledgments with a bounded timeout, and hold local edits on the client until it joins N+1.
+- [ ] 3.5 Replay held edits as tree ops on N+1, and refuse an edit whose target is gone through the normal rejection path.
+- [ ] 3.6 Test reset with connected participants, a failed swap, edits during the reset, a held edit whose target is gone, a released client, and reconnect, with real sessions.
+- [ ] 3.7 Record a `compatible` decision and run `bun run collaboration:test --all` against released clients.
 
 ## 4. Optional interim cap policy
 

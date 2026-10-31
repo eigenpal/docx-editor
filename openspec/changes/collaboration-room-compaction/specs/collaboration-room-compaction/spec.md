@@ -14,10 +14,24 @@ A server SHALL be able to compact a room while participants are connected, by re
 - **WHEN** the stored generation changed between the build and the swap
 - **THEN** the old generation stays in place, the lock is released, and no participant is closed
 
-#### Scenario: Edit sent during the reset
+### Requirement: No participant loses an edit to a live reset
 
-- **WHEN** a participant sends an update while the server holds the writer lock
-- **THEN** the update is refused with code 4409 and the client keeps it as unsent
+The server SHALL announce a live reset before it takes the writer lock. A client that supports the announcement SHALL hold local edits made during the reset and replay them on the new generation.
+
+#### Scenario: Edit made during the reset
+
+- **WHEN** a participant types after the server announces the reset and before it rejoins
+- **THEN** the client holds the edit, replays it on the new generation, and every participant sees it after the reset
+
+#### Scenario: Held edit whose target is gone
+
+- **WHEN** a held edit names content that the new generation no longer holds
+- **THEN** the client refuses it through the normal rejection path and does not drop it silently
+
+#### Scenario: Released client during the lock
+
+- **WHEN** a client that does not support the reset message sends an update while the server holds the writer lock
+- **THEN** the update is refused with code 4409, and the client rejoins as after a load-time compaction
 
 ### Requirement: Compaction triggers on reclaimable state
 
