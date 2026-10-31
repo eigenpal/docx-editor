@@ -4225,6 +4225,9 @@ export function readXml(xml: string, limits?: XmlLimits): XmlResult;
 export function readZip(bytes: Uint8Array, limits?: ZipLimits): ZipReadResult;
 
 // @public
+export function refreshBoundContent(pkg: OoxmlPackage): OoxmlPackage;
+
+// @public
 export class RegistryError extends Error {
     constructor(code: RegistryErrorCode, message: string,
     responsible?: readonly string[]);

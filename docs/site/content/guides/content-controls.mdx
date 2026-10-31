@@ -158,6 +158,23 @@ The inspector state carries `tag`, `alias`, `id`, `controlType`, `locked`, `remo
 
 A data-bound control rejects a direct write: its content comes from the Custom XML store, so writing it here would not persist in Word. `setValueDisabledReason` reports the reason instead of dropping the write.
 
+When a document opens, a data-bound control shows the current value of the node its binding names, not the text saved in the control. The editor reads custom XML parts in the package and the core and extended document properties. It reads a binding whose `w:xpath` is an absolute path of child elements, with optional positions such as `[2]`, that ends in an element, an attribute, or `text()`.
+
+These controls refresh:
+
+- Plain text controls. A single-line control drops a line break in the value; a multi-line control shows it as a break.
+- Combo box and dropdown controls. A dropdown value must match a list item.
+- Date controls. If the saved date is the bound date, the control keeps its saved text.
+- Checkbox controls, from `true`, `false`, `1`, or `0`.
+
+An empty value shows the placeholder that the control names, or an empty control if it names none. These keep the saved content:
+
+- A rich text control, including a control with no type.
+- A value the control can't show, such as a dropdown value that matches no list item or a date the editor can't read.
+- A binding with any other XPath.
+
+In a collaboration session, the participant that creates the room refreshes the controls, and every participant then shows the room's content.
+
 ### Caret movement in content-locked controls
 
 By default, the caret walks through the characters of a content-locked inline control, as in Word. The reader cannot type there, so a long locked control takes one arrow press per character to pass. If your template uses locked controls as markers, set `lockedControlNavigation` to `'atomic'`:

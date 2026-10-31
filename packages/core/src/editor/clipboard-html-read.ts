@@ -13,6 +13,11 @@ import {
 } from './clipboard-html-numbering.ts';
 import { clipboardBookmarkName, isClipboardHyperlink } from './clipboard-html-links.ts';
 import { createGestureMemo } from './clipboard-html-memo.ts';
+import {
+  withCompleteFields,
+  withCompleteNoteFields,
+  wordFieldRuns,
+} from './clipboard-html-fields.ts';
 import { reconcileUnreachableNotes } from './clipboard-html-note-reconcile.ts';
 import { allocateList, msoListNumPr } from './clipboard-html-list-alloc.ts';
 import { writeProjectedHtmlPackage } from './clipboard-html-package.ts';
@@ -182,6 +187,10 @@ function collectInline(
     if (collapsed === ' ' && isFurnitureOnly(runs)) return;
     runs.push(textRunXml(collapsed, ctx.run));
     return;
+  }
+  // Word keeps a field's begin, instruction, separator and end in conditional comments.
+  if (node.nodeType === 8 /* COMMENT_NODE */ && p.wordHtml) {
+    for (const run of wordFieldRuns(node.nodeValue ?? '', p)) runs.push(run);
   }
   if (!isElement(node)) return;
   // A recovered Word equation lands as canonical OMML; the prepass charged its nodes.
@@ -772,10 +781,10 @@ function projectTable(
 
 function assembleFragment(p: Projection, blocks: readonly string[]): Uint8Array {
   return writeProjectedHtmlPackage({
-    blocks,
+    blocks: withCompleteFields(blocks),
     rels: p.rels,
     lists: [...p.lists.values()],
-    notes: p.notes,
+    notes: withCompleteNoteFields(p.notes),
     noteRels: p.noteRels,
     media: p.media,
     mediaExtensions: p.mediaExtensions,
