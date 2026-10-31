@@ -78,6 +78,7 @@ import {
   ContextMenuSelectAll,
   ContextMenuRefreshToc,
   ContextMenuRefreshTocPageNumbers,
+  ContextMenuRemoveToc,
   useTableContextMenuVisible,
 } from './parts';
 import { useChromeScopeClassName } from '../color-mode-context';
@@ -266,6 +267,7 @@ function tocContextEntries(): readonly DefaultEntry[] {
       id: ContextMenuRefreshTocPageNumbers.docxRow,
       render: () => <ContextMenuRefreshTocPageNumbers />,
     },
+    { kind: 'row', id: ContextMenuRemoveToc.docxRow, render: () => <ContextMenuRemoveToc /> },
   ];
 }
 
@@ -644,6 +646,7 @@ export interface DocxEditorContextMenuNamespace {
   readonly CellVerticalAlignment: typeof ContextMenuCellVerticalAlignment;
   readonly RefreshToc: typeof ContextMenuRefreshToc;
   readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
+  readonly RemoveToc: typeof ContextMenuRemoveToc;
   /** A host-owned row: no slot, no command, the host's own label and action. */
   readonly Item: typeof ContextMenuItem;
   /** Any chrome slot as a live row (`<ContextMenu.Slot slotId="text.bold" />`). */
@@ -676,6 +679,7 @@ export const ContextMenu: DocxEditorContextMenuNamespace = Object.assign(DocxEdi
   CellVerticalAlignment: ContextMenuCellVerticalAlignment,
   RefreshToc: ContextMenuRefreshToc,
   RefreshTocPageNumbers: ContextMenuRefreshTocPageNumbers,
+  RemoveToc: ContextMenuRemoveToc,
   Item: ContextMenuItem,
   Slot: MenuItem,
   Row: MenuRow,

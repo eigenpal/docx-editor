@@ -27,6 +27,7 @@ export {
   ContextMenuSelectAll,
   ContextMenuRefreshToc,
   ContextMenuRefreshTocPageNumbers,
+  ContextMenuRemoveToc,
   type ContextMenuCommandProps,
   type ContextMenuItemProps,
   type ContextMenuTableRowProps,

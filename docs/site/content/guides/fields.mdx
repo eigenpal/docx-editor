@@ -123,6 +123,27 @@ For a custom core integration, use the same `FieldResultsMode` for layout, `para
 
 Generated TOC rows are read-only. Ordinary text before or after the field remains editable, even when it shares a paragraph with a field marker. Formatting a selection that includes a TOC, such as Select All followed by a highlight, formats the ordinary text and leaves the generated rows unchanged. The TOC highlight follows the generated content. TOC links use the TOC paragraph formatting and explicit run formatting, as in Word. The Hyperlink character style does not add blue underlines inside generated TOC results.
 
+### Remove a table of contents
+
+To remove a TOC, right-click it and select **Remove table of contents**. From code, run the `removeToc` command:
+
+```ts
+const tocId = editor.snapshot().tocContext?.id;
+editor.exec({ type: 'removeToc', ...(tocId ? { tocId } : {}) });
+```
+
+Without `tocId`, the command removes the TOC you last right-clicked, the TOC at the selection, or the only TOC in the document. If the TOC fills a table of contents control, and the control holds only heading paragraphs before the field, the command removes the control with its heading. Otherwise, it removes the field from its begin marker to its end marker, and the control and its other content stay. Text before and after the field stays and joins into one paragraph, and the caret goes to that point. A section break at the end of the TOC stays: the joined paragraph takes it, or an empty paragraph keeps it. Comments and footnotes that lie wholly inside the TOC are removed with it. A comment that starts before the TOC keeps its reference, which moves to where the TOC was. A bookmark or comment range that only partly overlaps the TOC keeps its other end, and its removed end moves to where the TOC was.
+
+The removal is one undo step, and it synchronizes in collaboration sessions. These cases refuse the command and leave the document unchanged:
+
+- Suggesting mode: a removal has no tracked form.
+- Locked or data-bound TOC content.
+- A section break before the end of the field, or a table or content control inside the field.
+
+A control that is locked only against deletion stays, and the command removes only its field.
+
+The Delete and Backspace keys do not remove a generated TOC. A selection that includes generated rows refuses deletion.
+
 ## Character-style header fields
 
 Header `STYLEREF` fields use text with the named character style applied directly. A derived style does not match its base style. Use the style's display name, not its internal identifier.

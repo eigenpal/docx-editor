@@ -732,7 +732,8 @@
   },
   "toc": {
     "refresh": "Atualizar tabela inteira",
-    "refreshPageNumbers": "Atualizar apenas números de página"
+    "refreshPageNumbers": "Atualizar apenas números de página",
+    "remove": "Remover sumário"
   },
   "reviewers": {
     "label": "Revisores",

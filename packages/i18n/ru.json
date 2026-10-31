@@ -64,7 +64,8 @@
   },
   "toc": {
     "refresh": "Обновить оглавление",
-    "refreshPageNumbers": "Обновить номера страниц"
+    "refreshPageNumbers": "Обновить номера страниц",
+    "remove": "Удалить оглавление"
   },
   "formattingBar": {
     "groups": {

@@ -533,9 +533,19 @@ export const ContextMenuCellVerticalAlignment = defineComponent({
 
 ContextMenuCellVerticalAlignment.docxRow = 'table.cellVerticalAlignment' as const;
 
+/** The right-clicked table of contents in a command; without an id, the engine picks one. */
+const withToc = (tocId: string | null) => (tocId ? { tocId } : {});
+const refreshToc =
+  (mode: 'entire' | 'pageNumbers') =>
+  (tocId: string | null): EditorCommand => ({ type: 'refreshToc', mode, ...withToc(tocId) });
+const removeToc = (tocId: string | null): EditorCommand => ({
+  type: 'removeToc',
+  ...withToc(tocId),
+});
+
 function defineTocCommandRow(
   rowId: string,
-  mode: 'entire' | 'pageNumbers',
+  commandOf: (tocId: string | null) => EditorCommand,
   defaults: { labelKey: string; paths: readonly string[] }
 ) {
   const Part = defineComponent({
@@ -550,9 +560,7 @@ function defineTocCommandRow(
       const editorRef = useDocxEditor();
       const { close, tocId } = useContextMenuContext();
       const label = useMenuLabel();
-      const command = computed(
-        (): EditorCommand => ({ type: 'refreshToc', mode, ...(tocId ? { tocId } : {}) })
-      );
+      const command = computed(() => commandOf(tocId));
       const cmd = useEditorCommand(command as unknown as EditorCommand);
       return () => {
         if (props.hidden || tocId === null) return null;
@@ -578,7 +586,7 @@ function defineTocCommandRow(
 }
 
 /** @public */
-export const ContextMenuRefreshToc = defineTocCommandRow('toc.refresh', 'entire', {
+export const ContextMenuRefreshToc = defineTocCommandRow('toc.refresh', refreshToc('entire'), {
   labelKey: 'toc.refresh',
   paths: REFRESH_TOC_PATHS,
 });
@@ -586,12 +594,22 @@ export const ContextMenuRefreshToc = defineTocCommandRow('toc.refresh', 'entire'
 /** @public */
 export const ContextMenuRefreshTocPageNumbers = defineTocCommandRow(
   'toc.refreshPageNumbers',
-  'pageNumbers',
+  refreshToc('pageNumbers'),
   { labelKey: 'toc.refreshPageNumbers', paths: REFRESH_TOC_PAGE_NUMBERS_PATHS }
 );
 
+/** @public */
+export const ContextMenuRemoveToc = defineTocCommandRow('toc.remove', removeToc, {
+  labelKey: 'toc.remove',
+  paths: DELETE_PATHS,
+});
+
 /** @internal */
-export const TOC_CONTEXT_ROWS = [ContextMenuRefreshToc, ContextMenuRefreshTocPageNumbers] as const;
+export const TOC_CONTEXT_ROWS = [
+  ContextMenuRefreshToc,
+  ContextMenuRefreshTocPageNumbers,
+  ContextMenuRemoveToc,
+] as const;
 
 /** @internal */
 export function useTableContextMenuVisible() {

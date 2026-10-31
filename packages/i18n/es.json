@@ -132,7 +132,8 @@
   },
   "toc": {
     "refresh": "Actualizar tabla de contenido",
-    "refreshPageNumbers": "Actualizar números de página"
+    "refreshPageNumbers": "Actualizar números de página",
+    "remove": "Quitar tabla de contenido"
   },
   "formattingBar": {
     "label": "Controles de formato",

@@ -732,7 +732,8 @@
   },
   "toc": {
     "refresh": "पूरी तालिका अपडेट करें",
-    "refreshPageNumbers": "केवल पृष्ठ संख्याएँ अपडेट करें"
+    "refreshPageNumbers": "केवल पृष्ठ संख्याएँ अपडेट करें",
+    "remove": "विषय-सूची हटाएँ"
   },
   "reviewers": {
     "label": "समीक्षक",

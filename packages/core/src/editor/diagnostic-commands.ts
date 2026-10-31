@@ -63,6 +63,7 @@ const COMMANDS: Readonly<Record<EditorCommand['type'], true>> = {
   proposeReplacement: true,
   redo: true,
   refreshToc: true,
+  removeToc: true,
   rejectAllRevisions: true,
   rejectRevision: true,
   removeContentControl: true,

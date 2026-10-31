@@ -54,6 +54,7 @@ import {
 } from './surface-toc-ranges.ts';
 import { tocBoundaryForLayout } from './surface-toc-boundary.ts';
 import { resolveTocSources } from '../store/package/toc-sources.ts';
+import { createTocCommands } from './surface-toc-commands.ts';
 import {
   commandProtectionRefusal,
   createControlWriteRefusal,
@@ -2422,7 +2423,8 @@ export function mountPaginatedSurface(
    */
   function onTocContextMenu(event: MouseEvent): void {
     const toc = tocForGesture(event);
-    setContextTocId(toc && canRefreshToc(toc.id) ? toc.id : null);
+    const reachable = toc && (canRefreshToc(toc.id) || !tocRemoval.removeTocRefusal(toc.id));
+    setContextTocId(reachable ? toc.id : null);
   }
 
   /** The TOC the last right-click addressed. Cleared by a right-click anywhere else. */
@@ -4065,19 +4067,16 @@ export function mountPaginatedSurface(
     return result;
   }
 
-  function canRefreshToc(tocId?: string): boolean {
-    if (editingMode === 'view' || !session.editable) return false;
-    const toc = targetToc(tocId);
-    if (!toc || !resolveTocSources(session.part(), session.documentOutline(), toc.instruction))
-      return false;
-    return (
-      validateTreeOp(session.part(), {
-        op: 'rewriteTocPageNumbers',
-        tocId: toc.id,
-        updates: [],
-      }) === null
-    );
-  }
+  const { canRefreshToc, removal: tocRemoval } = createTocCommands({
+    session,
+    editingMode: () => editingMode,
+    target: targetToc,
+    writeRefusal: (ops) => writeRefusal(true, ops, false),
+    apply: (ops) => applyJournaledOps(ops, undefined, undefined, BODY_STORY),
+    removed: () => setContextTocId(null),
+    select: (at) => setSelection(collapsedAt(at)),
+    refuse: (reason, raw) => void (lastRejection = refuse(reason, raw)),
+  });
 
   /**
    * The op behind Insert › Table, or null when the size is not one this engine authors.
@@ -5122,6 +5121,7 @@ export function mountPaginatedSurface(
     canEditTextFormField: () => textFormInteraction?.canEdit() ?? false,
     editTextFormField: () => textFormInteraction?.edit() ?? false,
     refreshToc,
+    ...tocRemoval,
     refreshRefFieldResults,
     save: () => saveSurfaceDocument(surface, container, () => destroyed),
     saveSteps: () => saveSurfaceDocumentSteps(surface, container, () => destroyed),
