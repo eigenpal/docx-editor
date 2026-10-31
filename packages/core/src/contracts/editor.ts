@@ -1540,8 +1540,8 @@ export interface EditorSnapshot {
   /**
    * The table of contents the last right-click landed on, or null.
    *
-   * NOT caret context, unlike `table`: a right-click leaves the selection where it was, and
-   * a generated TOC refuses the caret outright, so a host's context menu could otherwise
+   * NOT caret context, unlike `table`: a generated TOC refuses the caret outright, so a
+   * right-click on it leaves the selection where it was, and a host's context menu could otherwise
    * never tell which table of contents it was opened over. Cleared by a right-click
    * anywhere else.
    */

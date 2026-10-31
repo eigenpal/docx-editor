@@ -7,11 +7,11 @@ import type { ReactNode } from 'react';
 // REPLACES that row where it stands, `hidden` removes it, other children append, and
 // `preset={false}` renders children verbatim.
 //
-// RIGHT-CLICK DOES NOT MOVE THE CARET, and that is the engine's decision rather than this
-// component's omission: the surface's pointer controller ignores every non-primary button
-// so that "a right-click must reach the context menu with the existing selection intact,
-// not move the caret out from under it". The menu therefore always acts on the selection
-// the user already had, which is what makes Cut and Copy mean what they appear to mean.
+// THE ENGINE DECIDES WHERE A RIGHT-CLICK LEAVES THE CARET, not this component. A right-click
+// inside the selection keeps it, so Cut and Copy act on what the user selected. One in body
+// text outside it moves the caret to the click, so the rows act on the text under the
+// pointer. A position that refuses the caret, such as a generated table of contents, keeps
+// the selection the user already had. The menu always acts on the resulting selection.
 //
 // The panel is `position: fixed`. Client coordinates go straight in with no ancestor
 // scroll, transform or offset-parent math, and scrolling closes the panel anyway — so the
