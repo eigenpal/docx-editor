@@ -47,6 +47,26 @@ test('a strike keeps the letter of the insertion it strikes, not an equal remove
   expect(keptFrom(diffTokens(before, after), after.length)).toEqual([0, 3, 4]);
 });
 
+for (const length of [2, 20, 40]) {
+  test(`a strike of own text on both sides keeps another author's letter ${length} places on`, () => {
+    // The author's own insertion holds equal letters well before the other author's one.
+    const own = `qm${'x'.repeat(length - 1)}m`;
+    const before = [
+      ...word('N', 'a'),
+      ...word(own, 'b', INSERTED_BY_ALICE),
+      ...word('m', 'c', INSERTED_BY_CAROL),
+      ...word('yy', 'f', INSERTED_BY_ALICE),
+      ...word('o', 'd'),
+    ];
+    const after = [...word('N', 'a'), ...word('m', 'e', CAROL_STRUCK_BY_ALICE), ...word('o', 'd')];
+    expect(keptFrom(diffTokens(before, after), after.length)).toEqual([
+      0,
+      1 + own.length,
+      before.length - 1,
+    ]);
+  });
+}
+
 test('rejecting insertions on both sides of a letter keeps that letter', () => {
   const before = [
     ...word('ab', 'a'),

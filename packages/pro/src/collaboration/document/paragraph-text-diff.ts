@@ -575,18 +575,34 @@ function keptByDeletion(
   aEnd: number
 ): Step[] | null {
   if (j === aEnd || aEnd - j >= bEnd - i) return null;
+  // The revision trails in the gap are few. A letter whose trail none of them keeps, as every
+  // letter of an accepted insertion, takes the first equal token without a scan for a better one.
+  let trails: Set<string> | null = null;
+  const preferable = new Map<string, boolean>();
+  const canPrefer = (trail: string): boolean => {
+    let answer = preferable.get(trail);
+    if (answer === undefined) {
+      if (trails === null) {
+        trails = new Set();
+        for (let at = i; at < bEnd; at += 1) trails.add(before[at]!.trail ?? '');
+      }
+      answer = [...trails].some((from) => keepsRevisions(from, trail));
+      preferable.set(trail, answer);
+    }
+    return answer;
+  };
   const match = (prefer: boolean): Step[] | null => {
     const steps: Step[] = [];
     let at = i;
     for (let k = j; k < aEnd; k += 1) {
       const token = after[k]!;
+      const preferring = prefer && canPrefer(token.trail ?? '');
       let found = -1;
-      // The first equal token, or one a few places on that stays in its revisions: the look
-      // ahead is short, so the match stays linear in the gap.
+      // The first equal token that stays in its revisions, wherever it stands in the gap, else
+      // the first equal token. The caller bounds the gap, so the scan stays bounded too.
       for (let candidate = at; candidate < bEnd; candidate += 1) {
-        if (found >= 0 && candidate - found > PREFERRED_LOOKAHEAD) break;
         if (before[candidate]!.key !== token.key) continue;
-        if (!prefer || keepsRevisions(before[candidate]!.trail ?? '', token.trail ?? '')) {
+        if (!preferring || keepsRevisions(before[candidate]!.trail ?? '', token.trail ?? '')) {
           found = candidate;
           break;
         }
@@ -603,9 +619,6 @@ function keptByDeletion(
   const preferred = (aEnd - j) * (bEnd - i) <= MAX_DIFF_CELLS ? match(true) : null;
   return preferred ?? match(false);
 }
-
-/** How far past the first equal token a gap that only deletes looks for one in its revisions. */
-const PREFERRED_LOOKAHEAD = 16;
 
 /** The weak matches at the ends of one gap, and the gap they leave. */
 interface WeakEnds {
@@ -710,21 +723,27 @@ function inRevision(
  */
 function keepsRevisions(from: string, to: string): boolean {
   if (from === to) return true;
-  const key = `${from}\u0000${to}`;
-  const cached = keptRevisions.get(key);
+  // Keyed by the trail strings themselves, which every letter of a run shares, so a lookup
+  // builds no string.
+  let answers = keptRevisions.get(to);
+  if (answers === undefined) {
+    if (keptRevisions.size >= MAX_KEPT_REVISIONS) keptRevisions.clear();
+    keptRevisions.set(to, (answers = new Map()));
+  }
+  const cached = answers.get(from);
   if (cached !== undefined) return cached;
   const kept = new Set((JSON.parse(to || '[]') as unknown[]).map((entry) => JSON.stringify(entry)));
   const answer = (JSON.parse(from || '[]') as unknown[]).every((entry) =>
     kept.has(JSON.stringify(entry))
   );
   // A paragraph holds few revision trails, so the answers repeat; the bound keeps it small.
-  if (keptRevisions.size >= MAX_KEPT_REVISIONS) keptRevisions.clear();
-  keptRevisions.set(key, answer);
+  if (answers.size >= MAX_KEPT_REVISIONS) answers.clear();
+  answers.set(from, answer);
   return answer;
 }
 
 const MAX_KEPT_REVISIONS = 1024;
-const keptRevisions = new Map<string, boolean>();
+const keptRevisions = new Map<string, Map<string, boolean>>();
 
 /**
  * The strong matches of a longest common subsequence, as index pairs in order. On a tie the
