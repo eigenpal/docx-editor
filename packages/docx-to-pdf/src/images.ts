@@ -443,8 +443,21 @@ export class ImageWriter {
     if (d.resource.kind === 'unrenderable' && d.resource.partName !== null) {
       const metafile = this.session.metafileBytes?.(d);
       if (metafile) {
-        const form = await this.metafiles.form(d.resource.partName, metafile, visit.page.index);
+        // Brightness and contrast, such as a washed-out watermark, apply to the drawn colours.
+        const transfer = lumTransfer(d.effects.brightness, d.effects.contrast);
+        const form = await this.metafiles.form(
+          d.resource.partName,
+          metafile,
+          visit.page.index,
+          transfer
+        );
         if (!form) return report('Metafile picture could not be drawn');
+        if (d.effects.grayscale || d.effects.bilevel !== undefined)
+          this.work.report(
+            'image-effects',
+            'Image color adjustments are not encoded',
+            visit.page.index
+          );
         const opacity = this.opacityCommand(visit, page);
         if (opacity === null) return report('Invalid image opacity');
         const key = `Fm${form.objectNumber}`;

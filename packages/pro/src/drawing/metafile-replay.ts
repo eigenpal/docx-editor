@@ -23,6 +23,7 @@ import {
   type RecordingContext2D,
 } from './metafile-recording.ts';
 import { emfWithCanvasMapping } from './metafile-emf-origin.ts';
+import { metafileRecordsIntact } from './metafile-record-chain.ts';
 import {
   scanWmfBitmaps,
   wmfBitmapCommands,
@@ -215,7 +216,8 @@ async function replayAlone(
       : commands;
     return {
       drawing: drawn === replayed.commands ? replayed : { ...replayed, commands: drawn },
-      complete: !budget.exhausted,
+      // A record that does not fit stops the replayer early; the picture is then partial.
+      complete: !budget.exhausted && metafileRecordsIntact(bytes, mime),
     };
   } catch {
     return null;

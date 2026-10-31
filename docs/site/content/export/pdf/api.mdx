@@ -113,7 +113,7 @@ Drawings report these codes. With the default `fidelityPolicy: 'strict'`, a diag
 | Code | Severity | Meaning |
 | --- | --- | --- |
 | `drawing` | `unsupported` | A chart, SmartArt diagram, WordArt, or other drawing cannot render and is left out. The message names the kind, such as `Unsupported drawing: chart`, and `pageNumber` gives its page. A shape group left out of alternative content because its picture cannot embed reports `drawing` at `information` severity. |
-| `metafile-limit` | `unsupported` | An EMF or WMF picture stopped drawing at a resource bound. |
+| `metafile-limit` | `unsupported` | An EMF or WMF picture stopped drawing early, at a malformed record or a resource bound. |
 | `metafile-image` | `unsupported` | An image inside an EMF or WMF picture could not be decoded and is left out. |
 | `metafile-text` | `unsupported` | Text inside an EMF or WMF picture could not be shaped and is left out. |
 | `metafile-font` | `information` | An EMF or WMF picture names a font that the document does not use; its text uses the default font. |

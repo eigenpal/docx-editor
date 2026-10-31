@@ -3,7 +3,8 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// A WMF picture draws as a vector form in the picture's place.
+// A WMF picture draws as a vector form in the picture's place, with the picture's colour
+// adjustments applied to what it draws.
 import { expect, test } from 'bun:test';
 import { PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef, decodePDFRawStream } from 'pdf-lib';
 import { exportPdf } from '../src/index.ts';
@@ -61,7 +62,7 @@ const TYPES =
   '<Default Extension="wmf" ContentType="image/x-wmf"/>' +
   '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>';
 
-function input(metafile: Uint8Array): Uint8Array {
+function input(metafile: Uint8Array, blip = ''): Uint8Array {
   const drawing = `<w:drawing
     xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
     xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -69,7 +70,7 @@ function input(metafile: Uint8Array): Uint8Array {
     <wp:inline><wp:extent cx="1270000" cy="635000"/><wp:docPr id="1" name="Picture"/>
     <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
     <pic:pic><pic:nvPicPr><pic:cNvPr id="1" name="p"/><pic:cNvPicPr/></pic:nvPicPr>
-    <pic:blipFill><a:blip r:embed="rIdImg"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>
+    <pic:blipFill><a:blip r:embed="rIdImg">${blip}</a:blip><a:stretch><a:fillRect/></a:stretch></pic:blipFill>
     <pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1270000" cy="635000"/></a:xfrm>
     <a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>
     </a:graphicData></a:graphic></wp:inline></w:drawing>`;
@@ -102,4 +103,43 @@ test('a WMF picture paints as a vector form XObject', async () => {
   // The blue triangle, filled in canvas pixels on the flipped unit square.
   expect(content).toContain('0 0 1 rg');
   expect(content).toMatch(/ m [^\n]* l [^\n]* l [^\n]*h f\*? Q/);
+});
+
+const TRIANGLE = wmf(200, 100, [
+  { fn: 0x020b, words: [0, 0] },
+  { fn: 0x020c, words: [100, 200] },
+  { fn: 0x02fc, words: [0, ...colorWords(0, 0, 255), 0] },
+  { fn: 0x012d, words: [0] },
+  { fn: 0x0324, words: [3, 0, 0, 200, 0, 100, 100] },
+]);
+
+async function formContent(bytes: Uint8Array): Promise<string> {
+  const pdf = await PDFDocument.load(bytes);
+  const objects = pdf.getPage(0).node.Resources()!.lookup(PDFName.of('XObject'), PDFDict);
+  const name = objects.keys().find((key) => key.asString().startsWith('/Fm'))!;
+  const form = pdf.context.lookup(objects.get(name) as PDFRef) as PDFRawStream;
+  return new TextDecoder().decode(decodePDFRawStream(form).decode());
+}
+
+test('a washed-out WMF picture draws its colours washed out', async () => {
+  const result = await exportPdf(input(TRIANGLE, '<a:lum bright="70000" contrast="-70000"/>'), {
+    useSystemFonts: false,
+  });
+  expect(result.diagnostics).toEqual([]);
+  const content = await formContent(result.bytes);
+  // Blue through the washout transfer: 0.3 * c + 0.805, clamped.
+  expect(content).toContain('0.805 0.805 1 rg');
+  expect(content).not.toContain('0 0 1 rg');
+});
+
+test('a grayscale WMF picture is refused, not silently drawn in colour', async () => {
+  const document = input(TRIANGLE, '<a:grayscl/>');
+  await expect(exportPdf(document, { useSystemFonts: false })).rejects.toMatchObject({
+    code: 'fidelityUnsupported',
+  });
+  const result = await exportPdf(document, {
+    useSystemFonts: false,
+    fidelityPolicy: 'best-effort',
+  });
+  expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('image-effects');
 });

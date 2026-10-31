@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // EMF and WMF pictures as vector form XObjects. Core replays the metafile into drawing
 // commands; this writes them as PDF operators on the unit square a picture image fills, so
 // the picture's crop, clip, and transform place the form exactly as they place an image.
-import { PDFDocument, type PDFRef } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFStream, type PDFRef } from 'pdf-lib';
 import {
   ExportResourceError,
   replayMetafile,
@@ -19,6 +19,7 @@ import {
   type MetafilePathCommand,
   type MetafileRaster,
 } from '@docx-editor.dev/core/export';
+import type { LumTransfer } from '@docx-editor.dev/core/output';
 import {
   DEFAULT_RUN_STYLE,
   shapedRunOutline,
@@ -49,16 +50,21 @@ export class MetafileForms {
     readonly work: Work
   ) {}
 
-  /** The form for a metafile part, or null when it does not replay. */
+  /**
+   * The form for a metafile part, or null when it does not replay. A brightness and contrast
+   * `transfer` applies to every colour the picture draws, so each transfer has its own form.
+   */
   form(
     key: string,
     metafile: { readonly mime: 'image/x-emf' | 'image/x-wmf'; readonly bytes: Uint8Array },
-    pageIndex: number
+    pageIndex: number,
+    transfer: LumTransfer | null = null
   ): Promise<PDFRef | null> {
-    let form = this.forms.get(key);
+    const formKey = transfer ? `${key}\0lum:${transfer.slope}:${transfer.intercept}` : key;
+    let form = this.forms.get(formKey);
     if (!form) {
-      form = this.build(metafile, pageIndex);
-      this.forms.set(key, form);
+      form = this.build(metafile, pageIndex, transfer);
+      this.forms.set(formKey, form);
     }
     return form;
   }
@@ -105,10 +111,11 @@ export class MetafileForms {
 
   private async build(
     metafile: { readonly mime: 'image/x-emf' | 'image/x-wmf'; readonly bytes: Uint8Array },
-    pageIndex: number
+    pageIndex: number,
+    transfer: LumTransfer | null
   ): Promise<PDFRef | null> {
     try {
-      return await this.write(metafile, pageIndex);
+      return await this.write(metafile, pageIndex, transfer);
     } catch (error) {
       // A metafile that fails to draw is refused for its picture, never for the whole export.
       // The work budget's own errors still end the export.
@@ -119,7 +126,8 @@ export class MetafileForms {
 
   private async write(
     metafile: { readonly mime: 'image/x-emf' | 'image/x-wmf'; readonly bytes: Uint8Array },
-    pageIndex: number
+    pageIndex: number,
+    transfer: LumTransfer | null
   ): Promise<PDFRef | null> {
     const replay = await replayMetafile(metafile.bytes, metafile.mime, {
       measureText: (text, font) => this.shape(text, font)?.width ?? 0,
@@ -130,11 +138,16 @@ export class MetafileForms {
     if (!replay.complete) {
       this.work.report(
         'metafile-limit',
-        'A metafile picture stopped drawing at a resource bound',
+        'A metafile picture stopped drawing early, at a malformed record or a resource bound',
         pageIndex
       );
     }
-    const writer = new FormWriter(this.doc, this.work, (text, font) => this.shape(text, font));
+    const writer = new FormWriter(
+      this.doc,
+      this.work,
+      (text, font) => this.shape(text, font),
+      transfer
+    );
     const out = writer.out;
     // Canvas pixels, y down, onto the unit square, y up.
     out.push(`${n(1 / drawing.width)} 0 0 ${n(-1 / drawing.height)} 0 1 cm`);
@@ -152,6 +165,13 @@ export class MetafileForms {
       this.work.report(
         'metafile-image',
         'An image in a metafile picture could not be decoded and is left out',
+        pageIndex
+      );
+    }
+    if (writer.unadjustedImage) {
+      this.work.report(
+        'image-effects',
+        'Image color adjustments are not encoded for an image in a metafile picture',
         pageIndex
       );
     }
@@ -182,13 +202,22 @@ class FormWriter {
   readonly images: Record<string, PDFRef> = {};
   missedText = false;
   missedImage = false;
+  /** Set when an embedded image could not take the brightness and contrast transfer. */
+  unadjustedImage = false;
   private readonly alphaNames = new Map<number, string>();
   constructor(
     private readonly doc: PDFDocument,
     private readonly work: Work,
-    private readonly shape: (text: string, font: MetafileFont) => ShapedText | null
+    private readonly shape: (text: string, font: MetafileFont) => ShapedText | null,
+    private readonly transfer: LumTransfer | null = null
   ) {
     this.out = new Commands(work);
+  }
+
+  /** One sRGB channel in [0, 1] through the transfer, clamped like the colour space clamps. */
+  private channel(value: number): number {
+    if (!this.transfer) return value;
+    return Math.max(0, Math.min(1, this.transfer.slope * value + this.transfer.intercept));
   }
 
   private alpha(value: number): string {
@@ -205,8 +234,9 @@ class FormWriter {
     return `/${name} gs `;
   }
 
-  private static colour(paint: MetafilePaint, operator: 'rg' | 'RG'): string {
-    return `${n(paint.r / 255)} ${n(paint.g / 255)} ${n(paint.b / 255)} ${operator}`;
+  private colour(paint: MetafilePaint, operator: 'rg' | 'RG'): string {
+    const [r, g, b] = [paint.r, paint.g, paint.b].map((value) => this.channel(value / 255));
+    return `${n(r!)} ${n(g!)} ${n(b!)} ${operator}`;
   }
 
   private path(commands: readonly MetafilePathCommand[]): string {
@@ -248,7 +278,7 @@ class FormWriter {
     switch (command.kind) {
       case 'fill':
         this.out.push(
-          `q ${this.alpha(command.paint.alpha)}${FormWriter.colour(command.paint, 'rg')} ${this.path(command.path)} ${command.evenOdd ? 'f*' : 'f'} Q`
+          `q ${this.alpha(command.paint.alpha)}${this.colour(command.paint, 'rg')} ${this.path(command.path)} ${command.evenOdd ? 'f*' : 'f'} Q`
         );
         return;
       case 'stroke': {
@@ -256,7 +286,7 @@ class FormWriter {
           ? `[${command.dash.map(n).join(' ')}] 0 d `
           : '';
         this.out.push(
-          `q ${this.alpha(command.paint.alpha)}${FormWriter.colour(command.paint, 'RG')} ${n(command.width)} w 0 J 0 j 10 M ${dash}${this.path(command.path)} S Q`
+          `q ${this.alpha(command.paint.alpha)}${this.colour(command.paint, 'RG')} ${n(command.width)} w 0 J 0 j 10 M ${dash}${this.path(command.path)} S Q`
         );
         return;
       }
@@ -301,7 +331,7 @@ class FormWriter {
         const x = command.x + shiftX;
         const y = command.y + shiftY;
         this.out.push(
-          `q ${FormWriter.matrix([a, b, c, d, a * x + c * y + e, b * x + d * y + f])} cm ${this.alpha(command.paint.alpha)}${FormWriter.colour(command.paint, 'rg')} ${operators} f Q`
+          `q ${FormWriter.matrix([a, b, c, d, a * x + c * y + e, b * x + d * y + f])} cm ${this.alpha(command.paint.alpha)}${this.colour(command.paint, 'rg')} ${operators} f Q`
         );
         return;
       }
@@ -312,6 +342,29 @@ class FormWriter {
         this.out.push('Q');
         return;
     }
+  }
+
+  /**
+   * The transfer as the embedded image's `Decode` array, the way a raster picture takes it.
+   * Only `DeviceRGB` and `DeviceGray` samples are sRGB-like channels; any other image keeps
+   * its samples and is reported.
+   */
+  private decodeThroughTransfer(ref: PDFRef): void {
+    const stream = this.doc.context.lookup(ref);
+    const dict = stream instanceof PDFStream ? stream.dict : null;
+    const space = dict?.get(PDFName.of('ColorSpace'));
+    const components =
+      space === PDFName.of('DeviceRGB') ? 3 : space === PDFName.of('DeviceGray') ? 1 : 0;
+    if (!dict || !components || dict.get(PDFName.of('Decode')) || !this.transfer) {
+      this.unadjustedImage = true;
+      return;
+    }
+    const low = this.transfer.intercept;
+    const high = this.transfer.slope + this.transfer.intercept;
+    dict.set(
+      PDFName.of('Decode'),
+      this.doc.context.obj(Array.from({ length: components }, () => [low, high]).flat())
+    );
   }
 
   /** An image XObject for raster content: RGB with a soft mask when any pixel is not opaque. */
@@ -325,6 +378,10 @@ class FormWriter {
           raster.mime === 'image/png'
             ? await this.doc.embedPng(raster.bytes)
             : await this.doc.embedJpg(raster.bytes);
+        if (this.transfer) {
+          await image.embed();
+          this.decodeThroughTransfer(image.ref);
+        }
         return image.ref;
       } catch (error) {
         if (error instanceof PdfWorkLimitError || error instanceof ExportResourceError) throw error;
@@ -338,9 +395,12 @@ class FormWriter {
     const alpha = new Uint8Array(pixels);
     let translucent = false;
     for (let pixel = 0; pixel < pixels; pixel += 1) {
-      rgb[pixel * 3] = data[pixel * 4]!;
-      rgb[pixel * 3 + 1] = data[pixel * 4 + 1]!;
-      rgb[pixel * 3 + 2] = data[pixel * 4 + 2]!;
+      for (let channel = 0; channel < 3; channel += 1) {
+        const value = data[pixel * 4 + channel]!;
+        rgb[pixel * 3 + channel] = this.transfer
+          ? Math.round(this.channel(value / 255) * 255)
+          : value;
+      }
       alpha[pixel] = data[pixel * 4 + 3]!;
       if (alpha[pixel] !== 255) translucent = true;
     }
