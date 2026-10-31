@@ -184,9 +184,9 @@ async function replayAlone(
       maxCanvasDimension: CANVAS_EDGE,
       maxRecords: MAX_RECORDS,
     };
-    const buffer = (
-      mime === 'image/x-emf' ? emfWithCanvasMapping(bytes, replayOptions) : (scan?.marked ?? bytes)
-    ).slice().buffer;
+    const replayedBytes =
+      mime === 'image/x-emf' ? emfWithCanvasMapping(bytes, replayOptions) : (scan?.marked ?? bytes);
+    const buffer = replayedBytes.slice().buffer;
     const url =
       mime === 'image/x-emf'
         ? await convertEmfToDataUrl(buffer, replayOptions)
@@ -217,8 +217,9 @@ async function replayAlone(
     return {
       drawing: drawn === replayed.commands ? replayed : { ...replayed, commands: drawn },
       // A record that does not fit, or the record limit, stops the replayer early; the
-      // picture is then partial.
-      complete: !budget.exhausted && metafileRecordsIntact(bytes, mime, MAX_RECORDS),
+      // picture is then partial. The chain is the one the replayer read, with any records the
+      // canvas mapping added.
+      complete: !budget.exhausted && metafileRecordsIntact(replayedBytes, mime, MAX_RECORDS),
     };
   } catch {
     return null;
