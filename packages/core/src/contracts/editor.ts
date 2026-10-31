@@ -1633,8 +1633,10 @@ export interface EditorSnapshot {
    * A family the app answers with a metric-compatible stand-in — Word's Times New Roman
    * with Liberation Serif — is AVAILABLE and stays out: the outlines differ, the advance
    * widths do not, so wrap and pagination land where Word puts them. The face a `w:sym`
-   * names (MS Gothic for a checkbox, Wingdings for a bullet) stays out too, because it
-   * paints one code point rather than text, and has no metric twin an app could supply.
+   * names (MS Gothic for a checkbox, Wingdings for a bullet) stays out while each glyph it
+   * draws has a Unicode equivalent, because any face can paint that. A `w:sym` face joins
+   * when one of its glyphs is a private-use code point with no equivalent, because that
+   * glyph shows as a missing-glyph box in every other face.
    *
    * Optional and additive like `canUndo`: absent means the implementation has not derived
    * it; empty means every family resolved (or no document is loaded).

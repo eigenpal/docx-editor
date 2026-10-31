@@ -72,7 +72,7 @@ The packaged font notice lists rendered document families without an available c
 
 The notice also excludes font declarations that rendered text does not use. The font picker can still list those declared families.
 
-The notice also excludes symbol faces, such as MS Gothic in a Word checkbox (`w:sym`). The editor maps symbols to Unicode where a mapping exists. Rendering still depends on the available font glyphs; a missing notice does not guarantee that every symbol can render.
+Symbol faces (`w:sym`), such as MS Gothic in a checkbox, join the notice only when a symbol needs its own face. The editor maps symbols to Unicode where a mapping exists, and any face can render a mapped symbol. A private-use symbol with no mapping renders only in its authored face. If that face is not available, the notice lists it, because the symbol shows as a missing-glyph box.
 
 The font picker is a separate list. It offers the families your configuration supplies and the families the document declares in `w:rFonts`, so a symbol face appears there when the file declares it as a run font, which Word's checkbox markup does.
 

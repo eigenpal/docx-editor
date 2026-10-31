@@ -8,7 +8,11 @@
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
-import { collectDocumentFonts } from '../document-catalog.ts';
+import {
+  collectDocumentFonts,
+  collectSymbolFontFamilies,
+  collectUnmappedSymbolFaces,
+} from '../document-catalog.ts';
 import { openTreeSession, type TreeDocxSession } from '../tree-session.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -289,5 +293,26 @@ describe('documentStyles', () => {
   test('a document without a styles part answers empty', () => {
     const session = open(docx({ body: '<w:p><w:r><w:t>x</w:t></w:r></w:p>' }));
     expect(session.documentStyles()).toEqual([]);
+  });
+});
+
+describe('unmapped symbol faces', () => {
+  test('a wide table composes them from its cells, in reading order', () => {
+    const cell = (inner: string) => `<w:tc><w:p><w:r>${inner}</w:r></w:p></w:tc>`;
+    const cells = Array.from({ length: 20 }, (_, index) =>
+      index === 3
+        ? cell('<w:sym w:font="Icon Face" w:char="F0FC"/>')
+        : index === 7
+          ? cell('<w:sym w:font="Symbol" w:char="F0B7"/>')
+          : cell('<w:t>x</w:t>')
+    ).join('');
+    const result = readOoxmlPart(
+      `<w:document xmlns:w="${W}"><w:body><w:tbl><w:tr>${cells}</w:tr></w:tbl></w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    // The Symbol glyph has a Unicode equivalent; the icon glyph does not.
+    expect(collectSymbolFontFamilies([result.part.root])).toEqual(['Icon Face', 'Symbol']);
+    expect(collectUnmappedSymbolFaces([result.part.root])).toEqual(['Icon Face']);
   });
 });
