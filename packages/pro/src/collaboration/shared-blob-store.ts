@@ -8,19 +8,16 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  *
  * A peer is not a trust boundary. Everything here treats shared state exactly the way the
  * engine treats bytes out of a `.docx`: the sender chose all of it, so a claim is checked
- * rather than believed. Two claims matter enough to live together — that a blob's key
- * describes its bytes, and that the registry as a whole still fits this replica's limits.
+ * rather than believed. The claim checked here is that a blob's key describes its bytes; that
+ * the registry as a whole still fits this replica's limits is `limitFailure`, in
+ * `resource-pressure.ts`.
  */
 
 import * as Y from 'yjs';
-import type {
-  CollaborationFailure,
-  CollaborationFailureCode,
-} from '@docx-editor.dev/core/collaboration';
 // Named for its first caller, not for fonts. Hashing wire bytes is the same primitive, and
 // the media digests this verifies are produced by this exact function in the store lane.
 import { sha256FontBytes as sha256Bytes } from '@docx-editor.dev/core/layout';
-import type { BlobBytesStore, DocumentRegistry } from './document/index.ts';
+import type { BlobBytesStore } from './document/index.ts';
 import { CollaborationSchemaError } from './errors.ts';
 
 /** Ceiling on the bytes one room carries beside its shared tree. */
@@ -43,10 +40,6 @@ function sharedBlobBytes(value: unknown): Uint8Array | null {
 function sharedBlobByteLength(value: unknown): number {
   if (value instanceof ArrayBuffer) return value.byteLength;
   return ArrayBuffer.isView(value) ? value.byteLength : 0;
-}
-
-function failure(code: CollaborationFailureCode, detail?: string): CollaborationFailure {
-  return Object.freeze(detail === undefined ? { code } : { code, detail });
 }
 
 /**
@@ -156,43 +149,4 @@ export class SharedBlobStore implements BlobBytesStore {
     this.verified.add(stored);
     return true;
   }
-}
-
-/**
- * Refuse shared state that exceeds this replica's resource limits.
- *
- * Every limit is checked as a journal applies, which covers every LOCAL write. A remote update
- * reaches shared state without passing through that path, so until now one crafted message
- * could grow the registry without bound on every peer in the room.
- *
- * What this bounds is the amplification rather than the message. By the time a session sees
- * shared state, Yjs has already integrated the update; the multiplication comes next, when
- * materializing builds a canonical node per record and the store takes a whole package from
- * it. Rejecting the bytes before integration needs the transport, which is a separate seam.
- *
- * Aggregate counts only, because this runs on every received edit. A per-node walk here would
- * cost exactly what the incremental materializer exists to avoid, and the per-node ceilings
- * still hold on every local write.
- */
-export function limitFailure(
-  registry: DocumentRegistry,
-  blobs: SharedBlobStore
-): CollaborationFailure | null {
-  const { limits } = registry;
-  // The maintained count, not `nodes.size`: that getter walks every key and allocates an
-  // array to measure it, and this runs on every received edit.
-  const nodes = registry.nodeCount();
-  if (nodes > limits.maxNodes) return failure('too-many-nodes', `${nodes}`);
-  const parts = registry.schema.parts.size;
-  if (parts > limits.maxParts) return failure('too-many-parts', `${parts}`);
-  let relationships = 0;
-  registry.schema.relationships.forEach((owner) => {
-    relationships += owner instanceof Y.Map ? owner.size : 0;
-  });
-  if (relationships > limits.maxRelationships) {
-    return failure('too-many-relationships', `${relationships}`);
-  }
-  const blobBytes = blobs.totalByteLength();
-  if (blobBytes > MAX_SHARED_BLOB_BYTES) return failure('blob-store-full', `${blobBytes}`);
-  return null;
 }

@@ -43,6 +43,11 @@ function fixture(limits: Partial<DocumentLimits> = {}) {
     limits: { ...DEFAULT_DOCUMENT_LIMITS, ...limits },
     replacementLoserRuns: () => hidden,
     nodeCount: () => nodes.size,
+    // No tombstones here, so every record is live.
+    counts: {
+      wouldExceed: (bounds: DocumentLimits, added: number) =>
+        nodes.size + added > Math.min(bounds.maxNodes, bounds.maxNodeRecords),
+    },
     splitTextRange: () => null,
     kindOf: (id: string) => (nodes.get(id)?.isText ? 'textValue' : 'element'),
     hasNode: (id: string) => nodes.has(id),

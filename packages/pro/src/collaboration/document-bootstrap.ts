@@ -32,7 +32,7 @@ import { seedPackage, type DocumentRegistry } from './document/index.ts';
 import type { SharedBlobStore } from './shared-blob-store.ts';
 import { CollaborationSchemaError } from './errors.ts';
 import { PACKAGE_META_KEY, packageVersionFailure } from './document/schema.ts';
-import { limitFailure } from './shared-blob-store.ts';
+import { limitFailure } from './resource-pressure.ts';
 import type { CreateDocumentCollaborationOptions } from './document-session.ts';
 
 const MAX_BASELINE_BYTES = 20 * 1024 * 1024;

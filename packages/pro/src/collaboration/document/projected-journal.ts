@@ -333,7 +333,7 @@ export function projectJournalToShared(
   const incoming = journal.effects.map(sharedEffect);
   const hidden = registry.replacementLoserRuns();
   const minted = incoming.filter((effect) => effect.kind === 'putNode').length;
-  if (registry.nodeCount() + minted > registry.limits.maxNodes) {
+  if (registry.counts.wouldExceed(registry.limits, minted)) {
     return { ok: false, code: 'too-many-nodes' };
   }
   // Bound incoming lists before collecting future moves. Do not flatten unvalidated

@@ -561,7 +561,7 @@ export function applyPrimitiveJournal(
     if (plan) journal = { ...given, effects: routed.passThrough };
   }
   const effects = journal.effects.map(sharedEffect);
-  if (registry.nodeCount() + mintedNodeCount(effects) > registry.limits.maxNodes) {
+  if (registry.counts.wouldExceed(registry.limits, mintedNodeCount(effects))) {
     return { ok: false, code: 'too-many-nodes' };
   }
   // Nothing is written until every effect is admitted.
