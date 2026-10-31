@@ -199,7 +199,7 @@ Grouping supports these `exec` commands:
 - Tracked proposals: `proposeInsertion`, `proposeDeletion`, and `proposeReplacement`.
 - Review: `resolveAllReviewChanges` and `setReviewChangesAuthor`.
 
-The review methods `addComment`, `replyToReviewItem`, `setCommentResolved`, `deleteReviewItem`, `acceptReviewItem`, and `rejectReviewItem` take the same handle in their last `options` argument. `addComment` and `replyToReviewItem` also accept the options in place of the author, such as `editor.addComment(text, { historyGroup })`. For browser automation, pass it to `runtime.run({ historyGroup }, callback)`. For more information, see [Group a review decision](#group-a-review-decision).
+The review methods `addComment`, `replyToReviewItem`, `setCommentResolved`, `setCommentText`, `deleteReviewItem`, `acceptReviewItem`, and `rejectReviewItem` take the same handle in their last `options` argument. `addComment` and `replyToReviewItem` also accept the options in place of the author, such as `editor.addComment(text, { historyGroup })`. For browser automation, pass it to `runtime.run({ historyGroup }, callback)`. For more information, see [Group a review decision](#group-a-review-decision).
 
 Other command families reject `historyGroup` before changing the document. These include typing, structural edits, images, hyperlinks, notes, header/footer lifecycle, protection, form fields, and content controls. Some of those commands apply changes asynchronously or through the typing buffer. Omit `historyGroup` to run them with their default history behavior.
 

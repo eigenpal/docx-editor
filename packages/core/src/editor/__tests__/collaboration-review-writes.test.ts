@@ -59,6 +59,7 @@ const INTENT_COVERAGE: Record<ReviewWriteIntent, true> = {
   'comment-delete': true,
   'comment-reply': true,
   'comment-resolve': true,
+  'comment-edit': true,
   'package-scoped': true,
   'revision-resolve': true,
 };
@@ -75,6 +76,12 @@ const PROVEN: readonly ReviewWriteIntent[] = [
   'revision-resolve',
 ];
 
+/**
+ * The intents no two-replica test admits yet. Their package write journals the change (see
+ * `comment-package-write.test.ts`), but the gate stays closed until a replica proves it arrives.
+ */
+const NOT_YET_ADMITTED: readonly ReviewWriteIntent[] = ['comment-edit'];
+
 describe('review writes with a replica attached', () => {
   test('admits the writes a two-replica test proves arrive whole', () => {
     const surface = mount(true);
@@ -86,7 +93,14 @@ describe('review writes with a replica attached', () => {
   test('covers every intent the contract declares, so a new one cannot be forgotten here', () => {
     // Sorted equality, not a count: an intent added to the union without a proof and without a
     // line in this list would otherwise be admitted by `REPLICABLE_REVIEW_WRITES` silently.
-    expect([...PROVEN].sort()).toEqual([...ALL_INTENTS].sort());
+    expect([...PROVEN, ...NOT_YET_ADMITTED].sort()).toEqual([...ALL_INTENTS].sort());
+  });
+
+  test('refuses an intent that no two-replica test admits yet', () => {
+    const surface = mount(true);
+    for (const intent of NOT_YET_ADMITTED) {
+      expect(attempted(surface, intent)).toBe(false);
+    }
   });
 
   test('refuses an unnamed write, so a new call site cannot slip through', () => {

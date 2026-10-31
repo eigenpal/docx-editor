@@ -28,7 +28,7 @@ export function lifecycleProtectionRefusal(
   if (
     protection.enforced &&
     protection.edit === 'comments' &&
-    ['comment', 'setCommentResolved', 'deleteComments'].includes(op.op)
+    ['comment', 'setCommentResolved', 'setCommentText', 'deleteComments'].includes(op.op)
   )
     return null;
   return documentProtectionRefusal(settings);

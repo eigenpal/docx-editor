@@ -95,7 +95,8 @@ function uniqueCommentById(
   return byId;
 }
 
-function commentForKey(
+/** The one comment behind a card key, or the refusal that names why there is none. */
+export function commentForKey(
   placements: readonly ReviewItemPlacement[],
   key: string
 ): ReviewCommentItem | ExecResult {
