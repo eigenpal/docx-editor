@@ -1770,18 +1770,18 @@ export function mountPaginatedSurface(
     publish: (layout) => publishLayout(layout),
   });
   function publishLayout(layout: SemanticLayout): void {
-    // Release the previous layout BEFORE the new one replaces it: the roster cache held
-    // it by strong reference, and a 200-page graph kept alive beside the live one is tens
-    // of megabytes of retained records. `layout: null` means "recompute on the next read"
-    // while keeping the map itself, which that read compares against to decide whether
-    // the author set actually moved.
-    // The review queue is released with it, for the same reason and by the same rule.
+    // Release the previous layout BEFORE the new one replaces it: the roster cache held it by
+    // strong reference, and a 200-page graph kept beside the live one is tens of megabytes.
+    // `layout: null` means "recompute on the next read" while keeping the map, which that read
+    // compares against to decide whether the author set moved. The review queue goes with it.
     reviewAuthors.releaseLayout();
     currentLayout = layout;
     const carried = remoteCaret.map(selection);
-    // Peers see this caret move too, or they keep painting it at the old offset.
+    // Peers see this caret move too, or they keep painting it at the old offset. It is a model
+    // move: until the next paint, the browser still shows the old caret, which must not win.
     if (carried !== selection) {
       selection = carried;
+      selectionSync.noteModelMoved();
       publishLocalCollaborationSelection();
     }
     // Repaint from HERE, so a commit that never went through this surface — undo, or
