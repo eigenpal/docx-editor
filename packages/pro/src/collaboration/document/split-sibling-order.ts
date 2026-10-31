@@ -134,7 +134,12 @@ export function splitSiblingRanks(
   // Items that went in at one place at once have the same two origins. Only such items start
   // a group, so a listing without concurrent inserts is read once.
   const sharing = new Map<string, number>();
+  /** How many live entries list each paragraph. */
+  const listings = new Map<LogicalId, number>();
   for (let item = firstItem(children); item; item = item.right) {
+    if (!item.deleted)
+      for (const id of item.content.getContent() as LogicalId[])
+        listings.set(id, (listings.get(id) ?? 0) + 1);
     items.push(item);
     const key = originsKey(item);
     sharing.set(key, (sharing.get(key) ?? 0) + 1);
@@ -142,6 +147,16 @@ export function splitSiblingRanks(
   // A paragraph a split added at this place, not one a move or an undo listed here again: two
   // moves to one place share both origins too, and they show where their authors put them.
   const splitHere = (item: Y.Item): boolean => item.deleted || listedBySplit(nodes, item);
+  const copies = new Map<LogicalId, ReadonlySet<Identity>>();
+  const copiesOf = (id: LogicalId): ReadonlySet<Identity> => {
+    let found = copies.get(id);
+    if (!found) {
+      const text = textOf(id);
+      found = new Set(text ? copiedIdentities(text) : []);
+      copies.set(id, found);
+    }
+    return found;
+  };
   for (let start = 0; start < items.length; ) {
     const head = items[start]!;
     const key = originsKey(head);
@@ -253,9 +268,22 @@ export function splitSiblingRanks(
       missing,
       (item) => relisted.has(item) || listedBySplit(nodes, item)
     );
-    const order =
-      idsByPoints(listed, keyed, saw, originIds, blockOf, pointsOf, children.doc, missing) ??
-      (byText ? idsOf(byText) : null);
+    // A run with a paragraph the parent lists twice, as two concurrent moves of it do, keeps
+    // its listed order: which listing shows could change with any later edit of the run.
+    const twice = listed.some((id) => listings.get(id)! > 1);
+    const order = twice
+      ? null
+      : (idsByPoints(
+          listed,
+          keyed,
+          saw,
+          originIds,
+          blockOf,
+          pointsOf,
+          children.doc,
+          missing,
+          copiesOf
+        ) ?? (byText ? idsOf(byText) : null));
     const shown = order ?? listed;
     const source = items[first - 1];
     if (source && !source.deleted && inItem(head.origin, source)) {
@@ -314,7 +342,9 @@ function idsByPoints(
   blockOf: readonly number[],
   pointsOf: (id: LogicalId) => readonly SplitPoint[],
   doc: Y.Doc | null,
-  missing: string[]
+  missing: string[],
+  /** The characters a paragraph holds moved copies of (`copiedIdentities`). */
+  copiesOf: (id: LogicalId) => ReadonlySet<Identity> = () => new Set()
 ): LogicalId[] | null {
   // A block a move listed after a paragraph keeps its points but follows that paragraph, and
   // so does one a move put right after a sibling, whose points it took (`split-points.ts`).
@@ -348,18 +378,29 @@ function idsByPoints(
     // splits at one place name the same points too, but each is listed after the one it split.
     const taken = key !== '' && keyAt(originIds[at]!) === key;
     // A paragraph split off one that follows another goes with it: its split point tells
-    // where it stands in the text the follower holds, not in the run. So does a break at the
-    // end of a member: it shows right after what that member shows, wherever its last
-    // character stood in the text it came from.
+    // where it stands in the text the follower holds, not in the run. So does a split of a
+    // member at a character no other paragraph of the run holds, as a break at the end of
+    // the member or text typed in it while a peer split the paragraph it came from: the text
+    // order of that character tells nothing about the other members. Only when each other
+    // split of the run holds its own copies: one that took another paragraph's points holds
+    // none, and stands for text that paragraph held.
     const last = pointsOf(id).at(-1);
     const source = last?.source;
+    const ownCharacter = (): boolean => {
+      const character = last!.at.replace(/\+$/, '');
+      return listed.every((other, index) => {
+        if (other === id || other === source) return true;
+        const held = copiesOf(other);
+        return !held.has(character) && (!keyed[index] || held.size > 0);
+      });
+    };
     const joins =
-      source !== undefined &&
-      (followers.has(source) || (last!.at.endsWith('+') && unitOf.has(source)));
+      source !== undefined && (followers.has(source) || (unitOf.has(source) && ownCharacter()));
     // A paragraph that went in before a member stays with the paragraph its author listed it
-    // after; once that paragraph is gone, it goes as if it had not seen the member.
+    // after; once that sibling is gone, it goes as if it had not seen the member. The first
+    // one has no sibling before it, and the run then has no order by points.
     const unit =
-      saw[at] && !goneAt(originIds[at]!)
+      saw[at] && (at === 0 || !goneAt(originIds[at]!))
         ? unitOf.get(listed[at - 1]!)
         : keyed[at] && !taken && !joins
           ? null
