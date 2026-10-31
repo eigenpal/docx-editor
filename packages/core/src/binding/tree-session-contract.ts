@@ -221,8 +221,9 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
    *
    * Separate from both other answers on purpose. It is not a DECLARATION, so it does not
    * join `documentFonts`, and it is not a face TEXT renders in, so the substitution notice
-   * must not report it — but a font resolver has to hear about it, or an app cannot supply
-   * the face a private-use glyph needs.
+   * reports it only for a private-use glyph with no Unicode equivalent
+   * (`editor/unmapped-symbol-faces.ts`) — but a font resolver has to hear about it, or an
+   * app cannot supply the face such a glyph needs.
    */
   symbolFontFamilies(): readonly string[];
   /**
