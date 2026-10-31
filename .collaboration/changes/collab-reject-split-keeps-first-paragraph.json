@@ -1,0 +1,14 @@
+{
+  "impact": "migration-required",
+  "fields": ["repairVersion"],
+  "before": "Rejecting a proposed paragraph mark joined the paragraph into the one after it and kept the second paragraph's node. An undo of the split that proposed the mark removes the second paragraph instead. When one participant rejected a tracked split while its author undid it, each edit removed the paragraph the other kept, and every replica lost the whole paragraph.",
+  "after": "Rejecting a proposed paragraph mark keeps the first paragraph, with its node ID and attributes, the properties of the mark that remains, and the content of every joined paragraph in order, as a join by deleting a mark keeps the paragraph before it. The first paragraph is kept when it brings content, or when it held none before the decision, as a break at a paragraph's start leaves; a paragraph the decision emptied goes, and the paragraph after it keeps its identity. A rejection and an undo of the same split both keep the first paragraph, so its text survives on every replica, also when a third participant types in the second paragraph. Accepting a deleted paragraph mark keeps the paragraph after it, as before, and an emptied paragraph keeps its bookmarks and comment starts in the paragraph that stays. Paragraph objects of the second paragraph stop resolving after a rejection.",
+  "reason": "The survivor of a rejected paragraph mark decides which conflicting node survives a concurrent undo or a concurrent equal decision, so it is repair semantics. A replica with repairVersion 2 keeps the second paragraph; in one room with this version, two concurrent rejections of one proposed mark each remove the paragraph the other keeps, and the paragraph is lost. repairVersion increases to 3, so the two versions refuse to share a room before any update applies, and a room created with repairVersion 2 keeps the earlier rule. The journal writes ordinary moves, removals, and text copies; no stored field changes.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-split-collaboration.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-concurrent-split-order.test.ts",
+    "packages/core/src/store/__tests__/revision-mark-join-identity.test.ts"
+  ],
+  "changeset": "collab-concurrent-split-order",
+  "migration": "upgrade-rooms-to-format-1531"
+}

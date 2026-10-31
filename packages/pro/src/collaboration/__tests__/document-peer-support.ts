@@ -140,7 +140,9 @@ export function createPeerHarness(
   documentId: string,
   sessionOptions?: { readonly offlineEditing?: boolean },
   /** Fixed Yjs client ids by peer name, so a test can run both concurrent insert orders. */
-  clientIds?: Readonly<Record<string, number>>
+  clientIds?: Readonly<Record<string, number>>,
+  /** Yjs garbage collection for every peer's document; on unless a test turns it off. */
+  gc = true
 ): {
   readonly pair: (
     bytes: Uint8Array
@@ -177,7 +179,7 @@ export function createPeerHarness(
    * `COLLABORATION_TEST_CLIENT_SALT` to try other orders.
    */
   function newDoc(name: string): Y.Doc {
-    const ydoc = new Y.Doc();
+    const ydoc = new Y.Doc({ gc });
     let hash = 0x811c9dc5;
     for (const char of `${process.env.COLLABORATION_TEST_CLIENT_SALT ?? ''}:${name}`) {
       hash = Math.imul(hash ^ char.charCodeAt(0), 0x01000193) >>> 0;

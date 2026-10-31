@@ -19,9 +19,7 @@
             "date": "2026-01-01T05:25:18Z"
           }
         },
-        "paragraphs": [
-          1
-        ]
+        "paragraphs": [1]
       }
     },
     {
@@ -44,9 +42,7 @@
             "date": "2026-01-01T10:59:45Z"
           }
         },
-        "paragraphs": [
-          1
-        ]
+        "paragraphs": [1]
       }
     },
     {
@@ -69,9 +65,7 @@
             "date": "2026-01-01T13:24:27Z"
           }
         },
-        "paragraphs": [
-          1
-        ]
+        "paragraphs": [1]
       }
     },
     {
@@ -82,9 +76,7 @@
         "op": {
           "op": "acceptAllRevisions"
         },
-        "paragraphs": [
-          3
-        ]
+        "paragraphs": [3]
       }
     }
   ]

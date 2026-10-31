@@ -57,7 +57,11 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
-import { mergeRevisionParagraphs, tableParagraphMergeTarget } from './revision-paragraph-merge.ts';
+import {
+  holdsContent,
+  mergeRevisionParagraphs,
+  tableParagraphMergeTarget,
+} from './revision-paragraph-merge.ts';
 import { joinedAtSeams } from './revision-piece-seams.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import {
@@ -84,6 +88,9 @@ import {
 import { recordedProperties } from './tree-op-tracked-properties.ts';
 import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
 import type { RevisionAddress } from './tree-op-types.ts';
+import { addressOf, revisionGroupKey, sameRevision, wmlAttribute } from './revision-address.ts';
+
+export { revisionGroupKey };
 import type { TreeOpEffect, TreeOpRejection } from './tree-op-validate.ts';
 
 export { namedMoveRanges };
@@ -154,40 +161,6 @@ export interface RevisionSite {
    * paragraph, and two sites can only cover one position if they are in the same paragraph.
    */
   readonly nesting: number;
-}
-
-function wmlAttribute(node: OoxmlElement, localName: string): string | undefined {
-  for (const attribute of node.attributes) {
-    if (attribute.localName !== localName) continue;
-    if (attribute.namespaceUri !== WML_NAMESPACE_URI) continue;
-    return attribute.value;
-  }
-  return undefined;
-}
-
-function addressOf(node: OoxmlElement): RevisionAddress | null {
-  const id = wmlAttribute(node, 'id');
-  const author =
-    wmlAttribute(node, 'author') ?? (node.localName === 'tblGridChange' ? '' : undefined);
-  if (id === undefined || author === undefined) return null;
-  const date = wmlAttribute(node, 'date');
-  return date === undefined ? { id, author } : { id, author, date };
-}
-
-function sameRevision(a: RevisionAddress, b: RevisionAddress): boolean {
-  return a.id === b.id && a.author === b.author && (a.date ?? null) === (b.date ?? null);
-}
-
-/**
- * The key a revision is grouped under: its address PLUS the element it is written on.
- *
- * `@w:id` carries no uniqueness constraint, and Word writes one `w:date` for a whole editing
- * burst — so an insertion and a deletion can legally share all three. Grouping on the triple
- * alone showed them as one card reading `insert` with both texts concatenated, and Accept
- * then deleted the half the card said it was inserting.
- */
-export function revisionGroupKey(address: RevisionAddress, localName: string): string {
-  return `${localName}\u0000${address.id}\u0000${address.author}\u0000${address.date ?? ''}`;
 }
 
 /** Revision sites of one paragraph or table subtree, memoized on the immutable node. */
@@ -513,6 +486,8 @@ interface RebuildPlan {
    * class of error as removing a `w:trPr/w:del` and leaving the row.
    */
   readonly mergeForward: ReadonlySet<string>;
+  /** Rejected inserted marks: their join keeps the first paragraph, as undoing the split does. */
+  readonly first: ReadonlyMap<string, boolean>;
   /** Accepting: a cell's emptied last paragraph joins the one before (rejecting keeps it). */
   readonly accepting: boolean;
   /** Removed cells, rows, and tables, including containers emptied by this decision. */
@@ -635,7 +610,7 @@ function rebuildChildren(
   }
 
   const joined = joinedAtSeams(plan.mint, out, seams);
-  return mergeRevisionParagraphs(joined, plan.mergeForward, plan.mint, cell, container);
+  return mergeRevisionParagraphs(joined, plan.mergeForward, plan.mint, cell, container, plan.first);
 }
 
 function rebuild(node: OoxmlNode, plan: RebuildPlan): OoxmlNode[] {
@@ -827,6 +802,7 @@ export function resolveRevisions(
     for (const id of implicitTableRowProperties(part, matched).keys()) dropMarks.add(id);
   const restoreProperties = new Set<string>();
   const mergeForward = new Set<string>();
+  const first = new Map<string, boolean>();
   const removeStructures = new Set([
     ...tableRevisionRemovals(part, matched, action).keys(),
     ...movePlan.remove,
@@ -919,6 +895,8 @@ export function resolveRevisions(
         const paragraph = paragraphOwning(part, site.node.id);
         if (paragraph === null) return { ok: false, reason: 'unsupported-revision' };
         mergeForward.add(paragraph);
+        if (action === 'reject' && site.node.localName === 'ins')
+          first.set(paragraph, !holdsContent(findNode(part, paragraph)));
       }
       continue;
     }
@@ -952,6 +930,7 @@ export function resolveRevisions(
     acceptedMarks,
     restoreProperties,
     mergeForward,
+    first,
     accepting: action === 'accept',
     removeStructures,
     mergeCells,

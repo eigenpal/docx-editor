@@ -1,0 +1,95 @@
+{
+  "config": "reorderEverything",
+  "seed": 76,
+  "replicas": 4,
+  "delivery": "server",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 15
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "toggle",
+      "replica": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveBlocks",
+          "parentId": "",
+          "moves": [[4, 2]]
+        },
+        "targets": [
+          {
+            "field": "parentId",
+            "localName": "body",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "toggle",
+      "replica": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 16
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveBlocks",
+          "parentId": "",
+          "moves": [[1, 2]]
+        },
+        "targets": [
+          {
+            "field": "parentId",
+            "localName": "body",
+            "index": 0
+          }
+        ]
+      }
+    }
+  ]
+}

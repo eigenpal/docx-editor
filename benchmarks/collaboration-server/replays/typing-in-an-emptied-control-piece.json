@@ -16,9 +16,7 @@
           "tag": "fuzz",
           "text": "value"
         },
-        "paragraphs": [
-          4
-        ]
+        "paragraphs": [4]
       }
     },
     {
@@ -34,9 +32,7 @@
           "cols": 1,
           "columnWidthTwips": 2000
         },
-        "paragraphs": [
-          0
-        ]
+        "paragraphs": [0]
       }
     },
     {
@@ -51,9 +47,7 @@
           "end": 4,
           "anchor": "_fuzz"
         },
-        "paragraphs": [
-          6
-        ]
+        "paragraphs": [6]
       }
     },
     {
@@ -71,9 +65,7 @@
             "date": "2026-01-01T23:43:02Z"
           }
         },
-        "paragraphs": [
-          4
-        ]
+        "paragraphs": [4]
       }
     },
     {
@@ -91,9 +83,7 @@
             "date": "2026-01-01T07:43:08Z"
           }
         },
-        "paragraphs": [
-          6
-        ]
+        "paragraphs": [6]
       }
     },
     {
@@ -136,9 +126,7 @@
           },
           "localName": "del"
         },
-        "paragraphs": [
-          0
-        ]
+        "paragraphs": [0]
       }
     },
     {
@@ -152,9 +140,7 @@
           "offset": 10,
           "text": "m "
         },
-        "paragraphs": [
-          8
-        ]
+        "paragraphs": [8]
       }
     }
   ]

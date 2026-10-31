@@ -89,7 +89,8 @@ describe('readCollaborationDocument', () => {
     ['sharedSchemaVersion', 6, 'schema-version-mismatch'],
     ['protocolVersion', 0, 'protocol-version-mismatch'],
     ['repairVersion', 1, 'schema-version-mismatch'],
-    ['repairVersion', 3, 'schema-version-mismatch'],
+    ['repairVersion', 2, 'schema-version-mismatch'],
+    ['repairVersion', 4, 'schema-version-mismatch'],
     ['canonicalModelVersion', 2, 'schema-version-mismatch'],
   ] as const) {
     test(`refuses ${field} ${version} before interpreting persisted split metadata`, async () => {

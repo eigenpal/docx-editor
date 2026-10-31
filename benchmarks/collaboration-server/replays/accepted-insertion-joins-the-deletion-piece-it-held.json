@@ -19,9 +19,7 @@
             "date": "2026-01-01T06:53:15Z"
           }
         },
-        "paragraphs": [
-          0
-        ]
+        "paragraphs": [0]
       }
     },
     {
@@ -38,9 +36,7 @@
           },
           "localName": "del"
         },
-        "paragraphs": [
-          8
-        ]
+        "paragraphs": [8]
       }
     },
     {
@@ -57,9 +53,7 @@
           },
           "localName": "del"
         },
-        "paragraphs": [
-          0
-        ]
+        "paragraphs": [0]
       }
     },
     {
@@ -77,9 +71,7 @@
             "date": "2026-01-01T11:04:24Z"
           }
         },
-        "paragraphs": [
-          8
-        ]
+        "paragraphs": [8]
       }
     },
     {
@@ -107,9 +99,7 @@
           "op": "deleteBlock",
           "blockId": ""
         },
-        "paragraphs": [
-          0
-        ]
+        "paragraphs": [0]
       }
     },
     {
@@ -122,9 +112,7 @@
           "op": "deleteBlock",
           "blockId": ""
         },
-        "paragraphs": [
-          1
-        ]
+        "paragraphs": [1]
       }
     },
     {
@@ -137,9 +125,7 @@
           "op": "deleteBlock",
           "blockId": ""
         },
-        "paragraphs": [
-          1
-        ]
+        "paragraphs": [1]
       }
     },
     {
@@ -157,9 +143,7 @@
             "date": "2026-01-01T07:18:23Z"
           }
         },
-        "paragraphs": [
-          7
-        ]
+        "paragraphs": [7]
       }
     },
     {
@@ -216,9 +200,7 @@
             "date": "2026-01-01T01:05:43Z"
           }
         },
-        "paragraphs": [
-          8
-        ]
+        "paragraphs": [8]
       }
     }
   ]

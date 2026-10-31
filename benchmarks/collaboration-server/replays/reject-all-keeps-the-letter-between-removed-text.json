@@ -19,9 +19,7 @@
             "date": "2026-01-01T22:54:18Z"
           }
         },
-        "paragraphs": [
-          0
-        ]
+        "paragraphs": [0]
       }
     },
     {
@@ -57,9 +55,7 @@
           },
           "localName": "ins"
         },
-        "paragraphs": [
-          0
-        ]
+        "paragraphs": [0]
       }
     },
     {
@@ -76,9 +72,7 @@
           },
           "localName": "ins"
         },
-        "paragraphs": [
-          2
-        ]
+        "paragraphs": [2]
       }
     },
     {
@@ -101,9 +95,7 @@
             "date": "2026-01-01T12:56:59Z"
           }
         },
-        "paragraphs": [
-          0
-        ]
+        "paragraphs": [0]
       }
     },
     {
@@ -126,9 +118,7 @@
             "date": "2026-01-01T22:50:14Z"
           }
         },
-        "paragraphs": [
-          0
-        ]
+        "paragraphs": [0]
       }
     },
     {
@@ -151,9 +141,7 @@
             "date": "2026-01-01T02:40:56Z"
           }
         },
-        "paragraphs": [
-          0
-        ]
+        "paragraphs": [0]
       }
     },
     {
@@ -164,9 +152,7 @@
         "op": {
           "op": "rejectAllRevisions"
         },
-        "paragraphs": [
-          0
-        ]
+        "paragraphs": [0]
       }
     }
   ]

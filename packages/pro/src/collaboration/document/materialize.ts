@@ -55,6 +55,7 @@ import { spineChildren } from './materialize-spine.ts';
 import { NodeCache } from './materialize-node-cache.ts';
 import { dedupeIssues, ListingContests } from './materialize-contests.ts';
 import { splitWinnerOrder } from './split-dedup.ts';
+import { splitSiblingOrder } from './split-sibling-order.ts';
 import { AdoptionTracker } from './materialize-adoption.ts';
 import { inlineChildren, reuseEqualNodes } from './paragraph-text-view.ts';
 import { reportOrphans } from './materialize-orphans.ts';
@@ -229,6 +230,10 @@ export class PackageMaterializer {
     // delivered yet, so it disqualifies the package projections exactly as the flag does.
     if (packageChanged || unobserved) this.packageCache.invalidate();
     for (const survivor of this.adoption.changes(this.registry)) rawDirty.add(survivor);
+    // Concurrent split siblings whose text came after their listing can show in a new order.
+    const reordered = this.registry.splitSiblings.takeChanged();
+    if (reordered.length > 0) this.registry.inline.orderChanged();
+    for (const parent of reordered) rawDirty.add(parent);
     // A paragraph shows other IDs, or hides other moved text, when another paragraph's text
     // changes what they share.
     for (const paragraph of this.registry.inline.takeAffected()) rawDirty.add(paragraph);
@@ -496,6 +501,8 @@ export class PackageMaterializer {
             (id) => this.registry.splitLineageOf(id)
           );
     if (winnerOrder) childIds = winnerOrder.map((index) => childIds[index]!);
+    const siblings = splitSiblingOrder(childIds, this.registry.splitSiblings.ranksOf(logicalId));
+    if (siblings) childIds = siblings.map((index) => childIds[index]!);
     const children: OoxmlNode[] = [];
     // Concurrent peers can each write a child OOXML allows once; show one, in one order.
     const order = partitionWithMerges(record.kind, childIds, (id) =>

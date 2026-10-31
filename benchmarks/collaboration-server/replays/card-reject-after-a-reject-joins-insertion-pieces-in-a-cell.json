@@ -14,9 +14,7 @@
           "op": "deleteBlock",
           "blockId": ""
         },
-        "paragraphs": [
-          3
-        ]
+        "paragraphs": [3]
       }
     },
     {
@@ -34,9 +32,7 @@
             "date": "2026-01-01T22:11:15Z"
           }
         },
-        "paragraphs": [
-          8
-        ]
+        "paragraphs": [8]
       }
     },
     {

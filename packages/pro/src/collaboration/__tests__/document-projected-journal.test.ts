@@ -62,6 +62,8 @@ function fixture(limits: Partial<DocumentLimits> = {}) {
     showsAsChild: (id: string) => nodes.has(id),
     // No paragraph here holds shared inline text, so the projection sees every effect.
     inline: { textOf: () => null, owner: () => null },
+    // No concurrent split siblings: every child shows where it is listed.
+    splitSiblings: { ranksOf: () => null },
   } as unknown as DocumentRegistry;
   return { registry, nodes };
 }
