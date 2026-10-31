@@ -1,5 +1,6 @@
 // A `w:sym` face joins the font notice only when one of its glyphs has no Unicode
-// equivalent, because only then does the missing face show as a missing-glyph box.
+// equivalent and is shown, because only then does the missing face show as a missing-glyph
+// box.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -51,6 +52,28 @@ describe('unmappedSymbolFaces', () => {
     expect(unmappedSymbolFaces(session)).toEqual([]);
   });
 
+  test('a hidden symbol is not painted, so its face is not reported', () => {
+    const hidden = (font: string, char: string, value = '') =>
+      `<w:p><w:r><w:rPr><w:vanish${value}/></w:rPr><w:sym w:font="${font}" w:char="${char}"/>` +
+      '</w:r></w:p>';
+    const session = sessionOf(
+      hidden('MT Extra', 'F0FC') +
+        hidden('Marlett', 'F061', ' w:val="0"') +
+        symbol('Wingdings', 'F041')
+    );
+    expect(unmappedSymbolFaces(session)).toEqual(['Marlett', 'Wingdings']);
+    // A face stays a face to try: only the notice leaves it out.
+    expect(session.symbolFontFamilies()).toContain('MT Extra');
+  });
+
+  test('a hidden symbol in a wide run is still hidden', () => {
+    const wide = '<w:t>x</w:t>'.repeat(20);
+    const session = sessionOf(
+      `<w:p><w:r><w:rPr><w:vanish/></w:rPr>${wide}<w:sym w:font="MT Extra" w:char="F0FC"/></w:r></w:p>`
+    );
+    expect(unmappedSymbolFaces(session)).toEqual([]);
+  });
+
   test('an unmapped byte of a table face still reports the face', () => {
     const session = sessionOf(symbol('Wingdings', 'F041'));
     expect(unmappedSymbolFaces(session)).toEqual(['Wingdings']);
@@ -85,6 +108,13 @@ describe('font notice', () => {
 
   test('reports a missing face that a private-use glyph needs', async () => {
     expect(await notice(symbol('MT Extra', 'F0FC'))).toContain('MT Extra');
+  });
+
+  test('leaves out a missing face that only a hidden symbol needs', async () => {
+    const hidden =
+      '<w:p><w:r><w:t>box </w:t></w:r><w:r><w:rPr><w:vanish/></w:rPr>' +
+      '<w:sym w:font="MT Extra" w:char="F0FC"/></w:r></w:p>';
+    expect(await notice(hidden)).not.toContain('MT Extra');
   });
 
   test('leaves out a missing face whose glyph has a Unicode equivalent', async () => {

@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A metafile picture that stopped at a malformed record reported metafile-limit, and the font notice counted faces that only hidden runs used.",
+  "after": "A malformed record reports metafile-record; metafile-limit means a resource bound. Hidden runs do not add faces to the font notice.",
+  "reason": "Both changes only read the document: PDF export diagnostics and a local font notice derived from the tree. Shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/unmapped-symbol-faces.test.ts",
+    "packages/core/src/binding/__tests__/document-rendered-fonts.test.ts",
+    "packages/docx-to-pdf/test/header-metafile-pictures.test.ts"
+  ],
+  "changeset": "pdf-metafile-record-diagnostic",
+  "migration": null
+}

@@ -305,6 +305,20 @@ describe('collectRenderedFontFamilies', () => {
     expect(declared.renderedFontFamilies()).toEqual([]);
   });
 
+  test('a run with direct w:vanish renders nothing; w:val="0" keeps it shown', () => {
+    const hidden = (font: string, value = '') =>
+      `<w:r><w:rPr><w:rFonts w:ascii="${font}" w:hAnsi="${font}"/><w:vanish${value}/></w:rPr>` +
+      '<w:t>hidden</w:t></w:r>';
+    const session = open(
+      docx({
+        body:
+          `<w:p>${run('Georgia', 'shown')}${hidden('Impact')}` +
+          `${hidden('Verdana', ' w:val="0"')}</w:p>`,
+      })
+    );
+    expect(session.renderedFontFamilies()).toEqual(['Georgia', 'Verdana']);
+  });
+
   test('a used paragraph style resolves through basedOn, nearest family wins', () => {
     const session = open(
       docx({

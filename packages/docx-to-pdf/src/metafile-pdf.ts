@@ -136,10 +136,17 @@ export class MetafileForms {
     this.work.check();
     const { drawing } = replay ?? {};
     if (!replay || !drawing || !(drawing.width > 0 && drawing.height > 0)) return null;
-    if (!replay.complete) {
+    if (!replay.complete && replay.stop === 'malformed-record') {
+      this.work.report(
+        'metafile-record',
+        'A metafile picture stopped drawing early, at a malformed record',
+        pageIndex
+      );
+    } else if (!replay.complete) {
+      // A renderer that gives no reason stopped at a bound, the long-standing cause.
       this.work.report(
         'metafile-limit',
-        'A metafile picture stopped drawing early, at a malformed record or a resource bound',
+        'A metafile picture stopped drawing early, at a resource bound',
         pageIndex
       );
     }
