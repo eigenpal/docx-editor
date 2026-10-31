@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Body.insertParagraph at Start or End wrote the paragraph into the first or last cell of a table that opened or closed the body.",
+  "after": "The paragraph is a sibling of that table, before or after it. Under tracking, its paragraph mark and text carry w:ins markers.",
+  "reason": "The edit writes an ordinary paragraph beside a table, the same nodes an untracked or tracked paragraph insertion already writes elsewhere. Released participants read and merge these nodes with their current rules, so shared data keeps its meaning.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-api-paragraph-beside-table.test.ts",
+    "packages/editor-api/src/model/__tests__/model-body-insert-paragraph-table-edge.test.ts"
+  ],
+  "changeset": "body-paragraph-beside-table",
+  "migration": null
+}

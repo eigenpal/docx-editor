@@ -82,6 +82,8 @@ jobs:
         include:
           - label: lint
             command: bun run lint
+          - label: shipped dependency advisories
+            command: bun run check:shipped-advisories
           - label: format
             command: bun run format:check
           - label: typecheck
@@ -165,6 +167,9 @@ jobs:
 
       - name: Build packages (publish reuses the dist/)
         run: bun run build:packages
+
+      - name: Check public API snapshots
+        run: bun run api:check
 
       - name: Root and example type check
         run: bun run typecheck:root
@@ -264,9 +269,9 @@ jobs:
   release:
     name: Release
     needs: [mode, checks, build, collaboration]
-    # Run on both paths: checks/build are skipped on the PR-update path by
-    # design, so accept skipped as well as success. The idle path has no work.
-    if: ${{ !cancelled() && needs.mode.result == 'success' && (needs.mode.outputs.mode == 'pending' || needs.mode.outputs.mode == 'publish') && (needs.checks.result == 'success' || needs.checks.result == 'skipped') && (needs.build.result == 'success' || needs.build.result == 'skipped') && (needs.mode.outputs.mode != 'publish' || needs.collaboration.result == 'success') }}
+    # PR updates accept skipped checks/build. Publication requires every gate
+    # to succeed. The idle path has no work.
+    if: ${{ !cancelled() && needs.mode.result == 'success' && ((needs.mode.outputs.mode == 'pending' && (needs.checks.result == 'success' || needs.checks.result == 'skipped') && (needs.build.result == 'success' || needs.build.result == 'skipped')) || (needs.mode.outputs.mode == 'publish' && needs.checks.result == 'success' && needs.build.result == 'success' && needs.collaboration.result == 'success')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:

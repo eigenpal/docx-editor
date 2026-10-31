@@ -8,7 +8,11 @@ import type { SetTextFormFieldDefaultOp, CommitTextFormFieldOp } from './text-fo
 import type { SetLegacyCheckboxOp } from './legacy-checkbox-fields.ts';
 import type { InsertBuildingBlockOp } from './building-block-insert.ts';
 import type { InsertBookmarkOp, DeleteBookmarkOp } from './tree-op-bookmarks.ts';
-import type { InsertTableOp, MoveTableOp } from './table-placement-op-types.ts';
+import type {
+  InsertParagraphBesideTableOp,
+  InsertTableOp,
+  MoveTableOp,
+} from './table-placement-op-types.ts';
 // The op vocabulary and effect/rejection contracts (tree-ops seam).
 //
 // This module owns what an op IS — the declarative, JSON-safe `TreeDocOp` shapes, the
@@ -640,6 +644,7 @@ export type TreeDocOp =
     }
   | InsertTableOp
   | MoveTableOp
+  | InsertParagraphBesideTableOp
   | {
       /** Insert a fresh row above or below a canonical table row. */
       readonly op: 'insertTableRow';

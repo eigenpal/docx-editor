@@ -47,6 +47,7 @@ import {
 import { planBreakOperation, planLineBreak } from './plan-breaks.ts';
 import { planParagraphBreaks } from './plan-paragraph-breaks.ts';
 import { insertTextOps, lineBreakRefusal, PARAGRAPH_MARK_IN_TEXT } from './line-break-text.ts';
+import { edgeTableOf, paragraphTextRefusal } from './plan-story-edge.ts';
 import { automationListLevelExists } from './list-authoring.ts';
 import { planListAuthoring } from './plan-list-authoring.ts';
 // What each operation MEANS, as reads off a snapshot and `TreeDocOp`s for one transaction.
@@ -836,15 +837,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     text: string
   ): PlannedOperation => {
     const reads = plan.reads;
-    if (typeof text !== 'string')
-      return refuse('unsupported-content', 'insertParagraph needs text', 'text');
-    if (PARAGRAPH_MARK_IN_TEXT.test(text)) {
-      return refuse(
-        'unsupported-content',
-        'a paragraph mark inside a paragraph\u2019s text is not written by this host',
-        'paragraph-mark-in-text'
-      );
-    }
+    const textRefusal = paragraphTextRefusal(text);
+    if (textRefusal) return textRefusal;
     const pin = pinWrite(plan);
     if (pin) return pin;
     const conflict = claim(plan, anchor.paragraphId);
@@ -1875,6 +1869,29 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           );
         const story = packageReads.story(anchor.value.story);
         if (!story) return refuse('invalid-handle', 'that story is not in this document');
+        const edgeTable = edgeTableOf(operation.anchor, handles, packageReads);
+        if (edgeTable) {
+          // The edge paragraph is in the table's cell, so the new one goes beside the table.
+          // Another edit at that edge in this batch would land out of order, so it refuses.
+          const plan = planFor(story);
+          const { where, text } = operation;
+          const refusal =
+            paragraphTextRefusal(text) ??
+            pinWrite(plan) ??
+            claim(plan, `${edgeTable}:${where}`) ??
+            claim(plan, anchor.value.paragraphId);
+          if (refusal) return refusal;
+          const edgeSlot = plan.slotById.get(anchor.value.paragraphId);
+          if (!edgeSlot) return refuse('invalid-handle', 'that paragraph is not in the body');
+          const edge = positionOf(plan, edgeSlot);
+          const fresh = insertSlot(plan, where === 'before' ? edge : edge + 1);
+          const op = { op: 'insertParagraphBesideTable', tableId: edgeTable, where, text } as const;
+          const answer = (): AutomationValue =>
+            fresh.id === null
+              ? APPLIED
+              : { kind: 'handle', handle: handles.paragraph(fresh.id, story.story) };
+          return { ok: true, kind: 'command', ops: [op], story: story.story, answer };
+        }
         const error =
           tracked && trackedParagraphInsertError(story, anchor.value.paragraphId, trackingAuthor!);
         if (error) return { ok: false, error };

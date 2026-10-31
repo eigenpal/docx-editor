@@ -7,8 +7,8 @@
   "baseGitCommitDate": "2026-08-24 14:45:47 +0200",
   "inventoryNote": "Kinds, reach, properties, chrome slots, and lifecycle sets are taken from the implementation after rebase onto origin/main. Main added replaceStoryBlocks, setMathEquation, removeMathEquation, and insertFragment (rich-clipboard-fidelity).",
   "counts": {
-    "treeDocOpKinds": 93,
-    "singlePartApply": 79,
+    "treeDocOpKinds": 94,
+    "singlePartApply": 80,
     "headerFooterLifecycle": 7,
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
@@ -89,6 +89,7 @@
       "deleteBlock",
       "insertTable",
       "moveTable",
+      "insertParagraphBesideTable",
       "insertTableRow",
       "deleteTableRow",
       "insertTableColumn",
@@ -190,6 +191,7 @@
     "deleteBlock",
     "insertTable",
     "moveTable",
+    "insertParagraphBesideTable",
     "insertTableRow",
     "deleteTableRow",
     "insertTableColumn",
@@ -759,6 +761,15 @@
       "storyScopes": ["body", "headerFooter", "notesPart"],
       "storyParity": "same",
       "commandExposure": ["surface-table"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "insertParagraphBesideTable",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["automation"],
       "packageIntents": [],
       "openSpec": ["typed-ooxml-paragraph-editor"]
     },
@@ -1772,6 +1783,11 @@
       "name": "paragraph-text-collaboration",
       "role": "collaboration-packaging",
       "notes": "Changes how paragraph inline content is shared. Adds no TreeDocOp kind, so the freeze holds."
+    },
+    {
+      "name": "collaboration-room-compaction",
+      "role": "collaboration-packaging",
+      "notes": "Compacts a live room's stored history. Adds no TreeDocOp kind, so the freeze holds."
     }
   ],
   "remainingAmbiguity": [

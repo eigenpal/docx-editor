@@ -50,6 +50,7 @@ export const TREE_DOC_OP_KINDS = [
   'deleteBlock',
   'insertTable',
   'moveTable',
+  'insertParagraphBesideTable',
   'insertTableRow',
   'deleteTableRow',
   'insertTableColumn',

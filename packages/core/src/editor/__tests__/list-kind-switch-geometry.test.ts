@@ -314,26 +314,31 @@ describe('switching a list item between bullets and numbers', () => {
     });
   });
 
-  test("a style-numbered item keeps its style's indent without moving its neighbours", () => {
-    const styles =
-      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
-      '<w:style w:type="paragraph" w:styleId="ListNumber"><w:name w:val="List Number"/>' +
-      '<w:basedOn w:val="Normal"/><w:pPr><w:numPr><w:numId w:val="1"/></w:numPr>' +
-      '<w:ind w:left="1800" w:hanging="360"/></w:pPr></w:style>';
-    const styled = `<w:p><w:pPr><w:pStyle w:val="ListNumber"/></w:pPr><w:r><w:t>a</w:t></w:r></w:p>`;
-    withSurface(docx(styled + item('b', 0) + item('c', 0), numbered(), styles), (surface) => {
-      const before = positions(surface);
-      selectParagraphs(surface, 0, 2);
-      expect(surface.toggleList('bullet')).toBe(true);
-      expect(positions(surface)).toEqual(before);
-      // The styled item gets its own definition; the shared level keeps the list's indent,
-      // and no paragraph gains a direct indent that would pin it.
-      const saved = surface.save();
-      expect(numberingXml(saved)).toContain('<w:ind w:hanging="360" w:left="360"');
-      expect(numberingXml(saved)).toContain('<w:ind w:hanging="360" w:left="1800"');
-      expect(strFromU8(unzipSync(saved)['word/document.xml']!)).not.toContain('<w:ind');
-    });
-  });
+  test.each([0, 1, 2])(
+    'a style-numbered item at %i keeps its indent without moving its neighbours',
+    (styledIndex) => {
+      const styles =
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+        '<w:style w:type="paragraph" w:styleId="ListNumber"><w:name w:val="List Number"/>' +
+        '<w:basedOn w:val="Normal"/><w:pPr><w:numPr><w:numId w:val="1"/></w:numPr>' +
+        '<w:ind w:left="1800" w:hanging="360"/></w:pPr></w:style>';
+      const styled = `<w:p><w:pPr><w:pStyle w:val="ListNumber"/></w:pPr><w:r><w:t>a</w:t></w:r></w:p>`;
+      const items = [item('b', 0), item('c', 0)];
+      items.splice(styledIndex, 0, styled);
+      withSurface(docx(items.join(''), numbered(), styles), (surface) => {
+        const before = positions(surface);
+        selectParagraphs(surface, 0, 2);
+        expect(surface.toggleList('bullet')).toBe(true);
+        expect(positions(surface)).toEqual(before);
+        // The styled item gets its own definition; the shared level keeps the list's indent,
+        // and no paragraph gains a direct indent that would pin it.
+        const saved = surface.save();
+        expect(numberingXml(saved)).toContain('<w:ind w:hanging="360" w:left="360"');
+        expect(numberingXml(saved)).toContain('<w:ind w:hanging="360" w:left="1800"');
+        expect(strFromU8(unzipSync(saved)['word/document.xml']!)).not.toContain('<w:ind');
+      });
+    }
+  );
 
   test('switching to numbers keeps one count, and the shared indent is the majority one', () => {
     const styles =
