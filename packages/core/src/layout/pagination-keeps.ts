@@ -199,10 +199,19 @@ export interface KeepNextLookahead {
   /** Stop once even the smallest later ending exceeds both page admission heights. */
   readonly maxHeight?: number;
   /**
-   * A member that ends on this page keeps its space after below its last line, as placement
-   * charges it above a note area. Without it, the plan fits a group that placement splits.
+   * Set when this page has a note area. A member that ends here then keeps its space after
+   * below its last line once the page cites a footnote, as placement charges it. Without it,
+   * the plan fits a group that placement splits.
    */
-  readonly closingSpaceAfter?: boolean;
+  readonly closingSpaceAfter?: KeepNoteClosing;
+}
+
+/** Whether a page with a note area cites a footnote, before and within a keep group. */
+export interface KeepNoteClosing {
+  /** The page already cites a footnote. */
+  readonly cited: boolean;
+  /** Whether a member's lines cite one. */
+  readonly cites: (lines: readonly KeepNextLine[]) => boolean;
 }
 
 /** What a keep chain that reaches a table needs of it (`tableKeepOpening`). */
@@ -272,6 +281,7 @@ export function keepNextPlan(
   let after = look.carry;
   let lastWhole = -1;
   let fits = true;
+  let cited = look.closingSpaceAfter?.cited ?? false;
   let result: KeepNextPlan | null = null;
   const finish = (plan: KeepNextPlan): false => {
     result = plan;
@@ -309,7 +319,8 @@ export function keepNextPlan(
     const hardBreak = lines.findIndex((line) => line.pageBreakAfter || line.columnBreakAfter);
     const openingLength = hardBreak < 0 ? lines.length : hardBreak + 1;
     const openingLines = shortestOpeningLines(lines.length, openingLength, block.keeps);
-    const closing = look.closingSpaceAfter && hardBreak < 0 ? block.spacing.after : 0;
+    cited ||= !!look.closingSpaceAfter?.cites(lines);
+    const closing = look.closingSpaceAfter && cited && hardBreak < 0 ? block.spacing.after : 0;
     const opening =
       total + fitExtent(lines, openingLines) + (openingLines === lines.length ? closing : 0);
     // The story's LAST block keeps with nothing, so it terminates the chain however authored.
@@ -395,8 +406,8 @@ export interface KeepNextPlacement {
   /** Space before the head at the top of a fresh page. */
   readonly freshLead: number;
   readonly topExtent: number;
-  /** A member that ends here keeps its space after ({@link KeepNextLookahead.closingSpaceAfter}). */
-  readonly closingSpaceAfter?: boolean;
+  /** The page's note area, when it has one ({@link KeepNextLookahead.closingSpaceAfter}). */
+  readonly closingSpaceAfter?: KeepNoteClosing;
   /** `w:compatSetting` `compatibilityMode`, read through `hasCompatibilityRule`. */
   readonly compatibilityMode: number | undefined;
 }
@@ -423,7 +434,8 @@ export function keepNextGroupNeed(look: KeepNextLookahead, at: KeepNextPlacement
     here + at.pricedLead,
     at.contentHeight - at.freshLead - at.topExtent + at.pricedLead
   );
-  const plan = (room: number, closingSpaceAfter = false) =>
+  // A fresh page cites nothing yet, so only the plan for this page keeps the space after.
+  const plan = (room: number, closingSpaceAfter?: KeepNoteClosing) =>
     keepNextPlan({ ...look, maxHeight, closingSpaceAfter }, room + at.pricedLead);
   const group = plan(here, at.closingSpaceAfter);
   if (group === null) return null;
@@ -460,13 +472,19 @@ export function keepNextTailLines(
   look = { ...look, maxHeight: Math.max(room, pageHeight) };
   const plan = keepNextPlan(look, room);
   if (plan === null || plan.height <= room || plan.lastWhole !== look.start) return 0;
-  const fresh = keepNextPlan(look, pageHeight);
+  const fresh = keepNextPlan({ ...look, closingSpaceAfter: undefined }, pageHeight);
   if (fresh === null || fresh.height > pageHeight) return 0;
   return splitTailLines(look, look.start);
 }
 
 /** The inputs every chain in a pass shares: {@link KeepNextLookahead} without its start. */
-export type KeepNextSource = Omit<KeepNextLookahead, 'start' | 'carry' | 'headLead'>;
+export type KeepNextSource = Omit<
+  KeepNextLookahead,
+  'start' | 'carry' | 'headLead' | 'closingSpaceAfter'
+> & {
+  /** The current page's note area, asked at each decision ({@link KeepNoteClosing}). */
+  readonly noteClosing?: () => KeepNoteClosing | undefined;
+};
 
 /** A pass's `w:keepNext` decisions, bound to its blocks and its layout mode. */
 export interface KeepNextChains {
@@ -474,7 +492,7 @@ export interface KeepNextChains {
   need(
     start: number,
     carry: number,
-    at: Omit<KeepNextPlacement, 'compatibilityMode'>
+    at: Omit<KeepNextPlacement, 'compatibilityMode' | 'closingSpaceAfter'>
   ): number | null;
   /**
    * Line index the paragraph at `start` breaks before when it splits early
@@ -557,10 +575,14 @@ export function keepNextChains(
   };
   return {
     need: (start, carry, at) =>
-      keepNextGroupNeed({ ...current(), start, carry }, { ...at, compatibilityMode }),
+      keepNextGroupNeed(
+        { ...current(), start, carry },
+        { ...at, compatibilityMode, closingSpaceAfter: source.noteClosing?.() }
+      ),
     tailBreak: (start, lineCount, cursorY, contentHeight) => {
       if (!source.blocks[start]?.keeps?.keepNext || source.skipBlock?.(start)) return lineCount;
-      const look = { ...current(), start, carry: 0, headLead: 0 };
+      const closingSpaceAfter = source.noteClosing?.();
+      const look = { ...current(), start, carry: 0, headLead: 0, closingSpaceAfter };
       const room = contentHeight - cursorY;
       return lineCount - keepNextTailLines(look, room, contentHeight, compatibilityMode);
     },
