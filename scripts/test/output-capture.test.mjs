@@ -27,7 +27,9 @@ test('output over the limit is reported as over it', () => {
   const capture = createOutputCapture({ head: 2, tail: 2, limit: 10 });
   capture.write('0123456789A');
   expect(capture.overLimit).toBe(true);
-  expect(capture.text()).toContain('wrote 11 bytes of output, more than the 10-byte limit');
+  expect(capture.text()).toContain(
+    'wrote 11 bytes of output, more than the 10-byte limit, and was stopped'
+  );
 });
 
 test('a long flood is held in bounded memory', () => {

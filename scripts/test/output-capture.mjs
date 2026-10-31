@@ -65,8 +65,8 @@ export function createOutputCapture({
       parts.push(Buffer.concat(tailChunks).toString('utf8'));
       if (total > limit) {
         parts.push(
-          `\nThis file wrote ${total} bytes of output, more than the ${limit}-byte limit.` +
-            ' A log line in a loop is the usual cause.\n'
+          `\nThis file wrote ${total} bytes of output, more than the ${limit}-byte limit, and` +
+            ' was stopped. A log line in a loop is the usual cause.\n'
         );
       }
       return parts.join('');

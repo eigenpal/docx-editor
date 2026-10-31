@@ -108,16 +108,15 @@ test('fail-fast stops dispatch after the first failure; normal mode reports both
     expect(onlyRun.stdout).toContain('FAIL packages/second.test.ts');
     expect(onlyRun.stdout).not.toContain('FAIL packages/first.test.ts');
 
-    // A file that floods its output fails with the start and end of it; the runner survives
-    // and still runs and reports the other files.
+    // A file that floods its output without end is stopped and fails with the start and end of
+    // its output; the runner survives and still runs and reports the other files.
     writeFileSync(
       join(root, 'packages', 'flood.test.ts'),
       `import { test } from 'bun:test';
        test('floods stderr', () => {
          console.error('FLOOD_START');
          const line = 'x'.repeat(1023);
-         for (let index = 0; index < 70 * 1024; index += 1) console.error(line);
-         console.error('FLOOD_END');
+         for (;;) console.error(line);
        });`
     );
     // To a file: on macOS a pipe is asynchronous, and the runner's exit cuts a long report.
@@ -134,9 +133,8 @@ test('fail-fast stops dispatch after the first failure; normal mode reports both
     expect(floodReport).toContain('FAIL packages/flood.test.ts');
     expect(floodReport).toContain('FAIL packages/second.test.ts');
     expect(floodReport).toContain('FLOOD_START');
-    expect(floodReport).toContain('FLOOD_END');
     expect(floodReport).toContain('bytes of output omitted');
-    expect(floodReport).toContain('more than the 67108864-byte limit');
+    expect(floodReport).toContain('more than the 67108864-byte limit, and was stopped');
     expect(floodReport.length).toBeLessThan(8 * 1024 * 1024);
     rmSync(join(root, 'packages', 'flood.test.ts'));
 

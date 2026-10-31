@@ -392,9 +392,19 @@ function runFile(file, passthrough, failFast, onRss) {
     }, PEAK_SAMPLE_INTERVAL_MS);
     // Bounded: a file that logs in a loop fails with its output's start and end, instead of
     // growing one string until it throws and takes the runner down with it.
+    // Past the limit the file has already failed, so it is stopped: a log line in an endless
+    // loop would otherwise run until the CI job's own timeout.
     const output = createOutputCapture();
-    child.stdout.on('data', (chunk) => output.write(chunk));
-    child.stderr.on('data', (chunk) => output.write(chunk));
+    let stopped = false;
+    const capture = (chunk) => {
+      output.write(chunk);
+      if (output.overLimit && !stopped) {
+        stopped = true;
+        stopWorker(child);
+      }
+    };
+    child.stdout.on('data', capture);
+    child.stderr.on('data', capture);
     child.on('error', (error) => {
       children.delete(child);
       clearInterval(sampler);
