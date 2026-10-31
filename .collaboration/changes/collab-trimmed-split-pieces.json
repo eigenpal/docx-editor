@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The writer matched the pieces of a split as moved text only when one inserted run equalled one deleted run, or when inserted runs, one after another, spelled a deleted run exactly. A split that trims its delimiters deletes the text around the pieces, so its pieces were written as new text without the marks that name the characters they copy, and text a peer typed in a piece showed nowhere when the split was undone.",
+  "after": "Inserted runs in paragraphs the edit creates that, one after another, are stretches of a deleted run in the same order, with less text around them than they cover, are that run moved, and each piece carries the marks of the characters it copies. Text a peer types in a piece of a trimmed split follows it back when the split is undone and forward again on redo.",
+  "reason": "The writer writes ordinary move marks in the existing docx-text-marks-v1 map, which released replicas of this format already read. No stored field, identity, conflict rule, or canonical mapping changes, so a mixed room converges. A released replica writes a trimmed split without the marks until it upgrades.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-split-collaboration.test.ts",
+    "packages/pro/src/collaboration/__tests__/paragraph-text-move-matching.test.ts"
+  ],
+  "changeset": "collab-trimmed-split-pieces",
+  "migration": null
+}

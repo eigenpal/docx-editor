@@ -250,6 +250,8 @@ export {
   type SurfaceFormatting,
 } from './paginated-surface.ts';
 export type { OpeningIndicatorHost } from './surface-opening-indicator.ts';
+// `PaginatedSurface` extends it, so its indent and list members need the name.
+export type { SurfaceIndentAndListOps } from './surface-indent-list-contract.ts';
 export {
   createDocxEditor,
   type DocxEditorInstance,

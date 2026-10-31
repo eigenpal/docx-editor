@@ -1,5 +1,6 @@
 import { withDisplayedHyphens } from '../package/hyphen-text.ts';
 import { withTailStyle } from './tree-op-paragraph-tail.ts';
+import { withInsertionHints } from './tree-op-text-splice-hints.ts';
 import { applySetFieldCode } from './tree-op-field-code.ts';
 import { applyTableAuthoring } from './tree-op-table-batch.ts';
 import { applyTableProperties } from './tree-op-table-authoring.ts';
@@ -71,6 +72,7 @@ import {
   applyInsertTrackedElements,
   insertedRunProperties,
 } from './tree-op-tracked.ts';
+import { splicedJoined } from './revision-piece-seams.ts';
 import {
   applyParagraphMarkRevision,
   applyProposeParagraphMerge,
@@ -243,7 +245,9 @@ function runElement(nextId: () => string, children: readonly OoxmlNode[]): Ooxml
  * quadratic in document size.
  */
 export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOptions): TreeOpResult {
-  return withBookmarkEditRules(part, op, options, () => applyValidatedTreeOp(part, op, options));
+  const run = () =>
+    withBookmarkEditRules(part, op, options, () => applyValidatedTreeOp(part, op, options));
+  return op.op === 'insertText' ? withInsertionHints(part, op.paragraphId, op.offset, run) : run();
 }
 
 function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOptions): TreeOpResult {
@@ -2042,8 +2046,11 @@ function applyRemoveHyperlink(
   if (!link || link.kind !== 'hyperlink') return { ok: false, reason: 'tree-invariant' };
   const owner = parentOf(part, link.id);
   if (!owner) return { ok: false, reason: 'tree-invariant' };
-  const children = owner.children.flatMap((child) =>
-    child.id === link.id ? [...link.children] : [child]
+  const children = splicedJoined(
+    createNodeIdAllocator(part),
+    owner.children,
+    link.id,
+    link.children
   );
   const effect: TreeOpEffect = {
     dirty: [owner.id],
@@ -2074,7 +2081,7 @@ function applyRemoveContentControl(
   if (!owner) return { ok: false, reason: 'tree-invariant' };
   const kept = contentControlUnwrapPayload(control);
   if (!kept) return { ok: false, reason: 'tree-invariant' };
-  const children = owner.children.flatMap((child) => (child.id === control.id ? kept : [child]));
+  const children = splicedJoined(createNodeIdAllocator(part), owner.children, control.id, kept);
   const effect: TreeOpEffect = {
     dirty: [owner.id],
     created: [],

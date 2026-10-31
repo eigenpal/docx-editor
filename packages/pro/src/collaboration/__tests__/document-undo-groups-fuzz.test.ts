@@ -18,8 +18,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // - An ungrouped agent write keeps the timing rule and never joins a group's step.
 // - Replicas converge, and the saved document reopens with the same text.
 //
-// Undo and redo near text that a person's split moved have open defects that do not depend
-// on groups (#1393, #1394). The checks that those defects break relax once text moved.
+// Redo near text that a person's split moved has an open defect that does not depend on
+// groups (#1394). The checks that it breaks relax once text moved.
 //
 // Environment:
 // - `UNDO_GROUP_FUZZ_SEEDS` and `UNDO_GROUP_FUZZ_FROM` choose the seeds.
@@ -249,9 +249,9 @@ class Run {
   /** Tokens a person's action took from view: a later undo of it may bring back copies. */
   private readonly uncertain = new Set<string>();
   /**
-   * A person split or removed a paragraph, which moves text. Undo and redo of text near
-   * moved text have open defects that are not about group boundaries (#1393, #1394), so
-   * some checks relax once text moved.
+   * A person split or removed a paragraph, which moves text. Redo of text near moved text
+   * has an open defect that is not about group boundaries (#1394), so some checks relax
+   * once text moved.
    */
   private moved = false;
   /** How often each check ran, and how often an exemption applied. */
@@ -531,8 +531,6 @@ class Run {
     const inCreated = textBefore
       .filter((_, index) => group.created.has(idsBefore[index]!))
       .join('\n');
-    // Text the removal joins back can still be lost by a later undo (#1393).
-    for (const token of this.everyToken) if (inCreated.includes(token)) this.uncertain.add(token);
     const others = new Set(
       [...presentBefore].filter(
         (token) => !group.tokens.includes(token) && !inCreated.includes(token)
@@ -572,16 +570,7 @@ class Run {
     // text as their own, and the copy stays (#1394). The group's tokens are then exempt
     // from the check that the undo removed them.
     const concurrentCopy = action.typing !== null && this.moved;
-    if (action.typing) {
-      const tokensBefore = new Set(this.everyToken);
-      const target = this.personEdit(action.typing);
-      // Typing into a paragraph that the undo removes joins the text it is joined back to,
-      // where a later undo can lose it (#1393).
-      if (target !== null && group.created.has(target)) {
-        for (const token of this.everyToken)
-          if (!tokensBefore.has(token)) this.uncertain.add(token);
-      }
-    }
+    if (action.typing) this.personEdit(action.typing);
     this.settle();
     for (const replica of [this.agent, this.person]) {
       this.stats.undoChecks += 1;

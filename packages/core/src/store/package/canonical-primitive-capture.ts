@@ -61,6 +61,27 @@ export function truncateJournalCapture(mark: number): void {
   frame.effects.length = mark;
 }
 
+let spliceHints: ReadonlyMap<string, number> | null = null;
+
+/**
+ * Run an edit with the offset in each text value where it inserts. A text compared before and
+ * after cannot tell which of two equal letters is new, so the lowering asks these first.
+ */
+export function withTextSpliceHints<T>(hints: ReadonlyMap<string, number>, run: () => T): T {
+  const outer = spliceHints;
+  spliceHints = hints;
+  try {
+    return run();
+  } finally {
+    spliceHints = outer;
+  }
+}
+
+/** Where the running edit inserts into a text value, when it said. */
+export function textSpliceHint(logicalId: string): number | undefined {
+  return spliceHints?.get(logicalId);
+}
+
 /** True only while the top frame is observed and that frame is not suppressed. */
 export function isCanonicalPrimitiveCaptureActive(): boolean {
   const frame = topFrame();
