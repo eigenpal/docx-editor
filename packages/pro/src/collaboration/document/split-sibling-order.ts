@@ -134,12 +134,12 @@ export function splitSiblingRanks(
   // Items that went in at one place at once have the same two origins. Only such items start
   // a group, so a listing without concurrent inserts is read once.
   const sharing = new Map<string, number>();
-  /** How many live entries list each paragraph. */
-  const listings = new Map<LogicalId, number>();
+  /** The item that lists each paragraph first. */
+  const firstListed = new Map<LogicalId, number>();
   for (let item = firstItem(children); item; item = item.right) {
     if (!item.deleted)
       for (const id of item.content.getContent() as LogicalId[])
-        listings.set(id, (listings.get(id) ?? 0) + 1);
+        if (!firstListed.has(id)) firstListed.set(id, items.length);
     items.push(item);
     const key = originsKey(item);
     sharing.set(key, (sharing.get(key) ?? 0) + 1);
@@ -268,9 +268,9 @@ export function splitSiblingRanks(
       missing,
       (item) => relisted.has(item) || listedBySplit(nodes, item)
     );
-    // A run with a paragraph the parent lists twice, as two concurrent moves of it do, keeps
-    // its listed order: which listing shows could change with any later edit of the run.
-    const twice = listed.some((id) => listings.get(id)! > 1);
+    // A run that lists a paragraph twice, as two concurrent moves into it do, keeps its
+    // listed order: which listing shows could change with any later edit of the run.
+    const twice = new Set(listed).size < listed.length;
     const order = twice
       ? null
       : (idsByPoints(
@@ -307,7 +307,10 @@ export function splitSiblingRanks(
     if (moves) {
       group += 1;
       ranks ??= new Map();
-      order.forEach((id, rank) => ranks!.set(id, { group, rank }));
+      // A paragraph listed again before the run, as by two concurrent moves, shows there.
+      order.forEach((id, rank) => {
+        if ((firstListed.get(id) ?? first) >= first) ranks!.set(id, { group, rank });
+      });
     }
     // A run that moves nothing leaves its blocks as listed, so a run inside one of them, as
     // splits of a paragraph a moved block carries, is read on its own.
@@ -397,10 +400,12 @@ function idsByPoints(
     const joins =
       source !== undefined && (followers.has(source) || (unitOf.has(source) && ownCharacter()));
     // A paragraph that went in before a member stays with the paragraph its author listed it
-    // after; once that sibling is gone, it goes as if it had not seen the member. The first
-    // one has no sibling before it, and the run then has no order by points.
+    // after. When the paragraph listed before it is in another block and the entry it went in
+    // after is gone, that is not the paragraph its author saw: it goes as if it had not seen
+    // the member. The first one has no paragraph before it, and the run then has no order by
+    // points.
     const unit =
-      saw[at] && (at === 0 || !goneAt(originIds[at]!))
+      saw[at] && (at === 0 || blockOf[at - 1] === blockOf[at] || !goneAt(originIds[at]!))
         ? unitOf.get(listed[at - 1]!)
         : keyed[at] && !taken && !joins
           ? null
@@ -893,17 +898,28 @@ export class SplitSiblingOrders {
 export function splitSiblingOrder(ids: readonly LogicalId[], ranks: SiblingRanks): number[] | null {
   if (!ranks) return null;
   const order = ids.map((_, index) => index);
+  // A child listed twice shows at its first listing: a later one stays where it is, out of
+  // the groups, so it does not cut a group in two.
+  const seen = new Set<LogicalId>();
+  const firsts: number[] = [];
+  ids.forEach((id, index) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    firsts.push(index);
+  });
   let moved = false;
-  for (let start = 0; start < ids.length; ) {
-    const first = ranks.get(ids[start]!);
+  for (let start = 0; start < firsts.length; ) {
+    const first = ranks.get(ids[firsts[start]!]!);
     let end = start + 1;
-    while (first && end < ids.length && ranks.get(ids[end]!)?.group === first.group) end += 1;
+    while (first && end < firsts.length && ranks.get(ids[firsts[end]!]!)?.group === first.group)
+      end += 1;
     if (end - start > 1) {
-      const segment = order.slice(start, end);
+      const segment = firsts.slice(start, end);
       segment.sort((left, right) => ranks.get(ids[left]!)!.rank - ranks.get(ids[right]!)!.rank);
       for (let at = 0; at < segment.length; at += 1) {
-        if (order[start + at] !== segment[at]) moved = true;
-        order[start + at] = segment[at]!;
+        const index = firsts[start + at]!;
+        if (order[index] !== segment[at]) moved = true;
+        order[index] = segment[at]!;
       }
     }
     start = end;
