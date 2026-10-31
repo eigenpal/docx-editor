@@ -121,7 +121,7 @@ header.verticalAlignment = 'Center';
 await context.sync();
 ```
 
-Merge and split have no tracked form of their own. In `TrackMineOnly` mode, they work only inside a table that is your own pending insertion, with no pending edits from another author. The rows, cells, and paragraph marks that they add join that insertion. Accepting the insertion keeps the new shape, and rejecting it removes the whole table. In any other table, both refuse with `NotSupported`. With tracking off, cells with a pending row or cell revision refuse with `NotImplemented`.
+Merge and split have no tracked form of their own. In `TrackMineOnly` mode, they work only inside a table that is your own pending insertion, with no pending edits from another author. The rows, cells, and paragraph marks that they add join that insertion. Accepting the insertion keeps the new shape, and rejecting it removes the whole table. In any other table, both refuse with `NotSupported` and the diagnostic code `edit.tracked-structure-unsupported`. With tracking off, cells with a pending row or cell revision refuse with `NotImplemented`.
 
 For example, propose a table with a merged header row:
 

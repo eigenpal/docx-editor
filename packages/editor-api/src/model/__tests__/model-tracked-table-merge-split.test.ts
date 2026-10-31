@@ -142,7 +142,10 @@ describe('merge and split in a pending tracked table', () => {
               else table.getCell(0, 0).split(1, 2);
               await context.sync();
             })
-          ).rejects.toMatchObject({ code: 'NotSupported' });
+          ).rejects.toMatchObject({
+            code: 'NotSupported',
+            debugInfo: { innerError: { code: 'edit.tracked-structure-unsupported' } },
+          });
         }
         expect(await mainXmlOf(reviewer)).toBe(proposed);
       } finally {

@@ -22,9 +22,7 @@ async function blocks(runtime: DocxEditorServerRuntime): Promise<string[]> {
   return (body.match(pattern) ?? []).map((block) =>
     block.startsWith('<w:tbl>')
       ? '[table]'
-      : (block.match(/<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g) ?? [])
-          .map((t) => t.replace(/<[^>]+>/g, ''))
-          .join('')
+      : [...block.matchAll(/<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g)].map((match) => match[1]).join('')
   );
 }
 
