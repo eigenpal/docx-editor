@@ -20,8 +20,8 @@ async function blocks(runtime: DocxEditorServerRuntime): Promise<string[]> {
   const body = xml.slice(xml.indexOf('<w:body>') + 8, xml.indexOf('</w:body>'));
   const pattern = /<w:tbl>[\s\S]*?<\/w:tbl>|<w:p(?: [^>]*)?\/>|<w:p(?: [^>]*)?>[\s\S]*?<\/w:p>/g;
   const text = (block: string) =>
-    (block.match(/<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g) ?? [])
-      .map((t) => t.replace(/<[^>]+>/g, ''))
+    [...block.matchAll(/<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g)]
+      .map((match) => match[1])
       .join('');
   return (body.match(pattern) ?? []).map((block) =>
     block.startsWith('<w:tbl>') ? `[table: ${text(block)}]` : text(block)
