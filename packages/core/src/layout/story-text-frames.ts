@@ -5,10 +5,12 @@
 // page, the margins or the column, with `w:xAlign` superseding `w:x`. The story's own text keeps
 // its flow, so the frame never changes the height the header or footer reserves. A frame that
 // does not wrap text (`w:wrap="none"`) may also size itself to its one line, align with
-// `w:xAlign`, and hold fields, which is how page numbers sit beside a footer's text.
+// `w:xAlign`, and hold fields, which is how page numbers sit beside a footer's text. A frame
+// that wraps text around itself may do the same when it holds one page number.
 import {
   WML_NAMESPACE_URI as W,
   type OoxmlElement,
+  type OoxmlGenericElementNode,
   type OoxmlNode,
 } from '../store/package/ooxml-tree.ts';
 import {
@@ -19,10 +21,13 @@ import {
 } from './paragraph-frame.ts';
 import { meetsOrdinaryContent } from './header-positioned-frames.ts';
 import { shrinkSingleLineFrame } from './paragraph-frame-flow.ts';
+import { readLegacyPageField } from './legacy-footer-page-field.ts';
 import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
 const MAX_NODES = 4096;
 const MAX_GROUPS = 16;
+/** How far a self-sized wrapping frame may end below the story's text, for a raised first line. */
+const OVERHANG_TOLERANCE_PT = 1;
 /** Elements a frame paragraph in this lane may not hold. */
 const REFUSED = new Set([
   'drawing',
@@ -35,7 +40,7 @@ const REFUSED = new Set([
   'pageBreakBefore',
   'framePr',
 ]);
-/** Fields a wrapping frame may not hold; a frame that wraps nothing may. */
+/** Fields a wrapping frame holds only as one page number; a frame that wraps nothing may hold any. */
 const FIELDS = new Set(['fldChar', 'fldSimple', 'instrText']);
 
 type Flow = { readonly blocks: BlockFragmentRecord[]; readonly bottom: number };
@@ -46,6 +51,8 @@ interface FrameGroup {
   readonly frame: ParagraphFrame;
   readonly paragraphs: readonly OoxmlElement[];
   readonly anchorId: string;
+  /** For a page number that wraps text: the text beside the number, in source order. */
+  readonly decoration?: string;
 }
 
 function directFrame(paragraph: OoxmlElement): ParagraphFrame | null | undefined {
@@ -65,6 +72,112 @@ function directFrame(paragraph: OoxmlElement): ParagraphFrame | null | undefined
     attributes[attribute.localName] = attribute.value;
   }
   return readParagraphFrame([{ localName: 'framePr', attributes }]);
+}
+
+/** Direct paragraph properties a self-sized page number beside the text may carry. */
+const PAGE_NUMBER_PROPERTIES = new Set(['pStyle', 'framePr', 'jc', 'tabs', 'rPr']);
+
+/** Whether the paragraph's direct properties leave its frame's geometry to the frame itself. */
+function plainFrameProperties(paragraph: OoxmlElement): boolean {
+  const properties = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  if (properties?.kind !== 'paragraphProperties') return true;
+  return properties.children.every(
+    (child) =>
+      child.namespaceUri === W &&
+      (PAGE_NUMBER_PROPERTIES.has(child.localName) ||
+        // A right indent only trims the self-sized frame's far edge.
+        (child.localName === 'ind' &&
+          child.attributes.every((item) => item.localName === 'right' || item.localName === 'end')))
+  );
+}
+
+/**
+ * Whether the story holds floating content, a DrawingML anchor or legacy VML, or more markup
+ * than the bound. A frame beside the text is placed only where nothing else floats.
+ */
+function holdsFloatingContent(blocks: readonly OoxmlElement[]): boolean {
+  const pending: OoxmlNode[] = [...blocks];
+  let count = 0;
+  while (pending.length) {
+    const node = pending.pop()!;
+    if (node.kind === 'textValue') continue;
+    if (++count > MAX_NODES * 4) return true;
+    if (node.localName === 'anchor' || node.localName === 'pict' || node.localName === 'object')
+      return true;
+    for (const child of node.children) pending.push(child);
+    if (count + pending.length > MAX_NODES * 4) return true;
+  }
+  return false;
+}
+
+/** Revision and bookmark markup a page-number paragraph reads through. */
+const READ_THROUGH = new Set(['ins', 'moveTo']);
+const SKIPPED = new Set(['del', 'moveFrom', 'bookmarkStart', 'bookmarkEnd', 'proofErr']);
+
+/**
+ * The paragraph as its visible runs, with inserted runs unwrapped and deletions, bookmarks and
+ * proofing marks left out, so a tracked edit does not change whether it holds a page number.
+ */
+function visibleRuns(paragraph: OoxmlElement): OoxmlGenericElementNode {
+  const children: OoxmlNode[] = [];
+  for (const child of paragraph.children) {
+    if (child.kind === 'textValue' || child.namespaceUri !== W) children.push(child);
+    else if (SKIPPED.has(child.localName)) continue;
+    else if (READ_THROUGH.has(child.localName))
+      for (const inner of child.children) {
+        if (inner.kind === 'textValue' || !SKIPPED.has(inner.localName)) children.push(inner);
+      }
+    else children.push(child);
+  }
+  const { id, namespaceUri, localName, namespaceBindings, attributes } = paragraph;
+  return { id, kind: 'generic', namespaceUri, localName, namespaceBindings, attributes, children };
+}
+
+function digitCount(text: string): number {
+  let count = 0;
+  for (const character of text) if (character >= '0' && character <= '9') count += 1;
+  return count;
+}
+
+/** Room for a page number of this many digits, so a longer one on a later page still fits. */
+const PAGE_NUMBER_DIGITS = 5;
+
+/**
+ * The box a self-sized page number may need on any page, with its distance from the text: it
+ * grows away from its alignment edge until it holds {@link PAGE_NUMBER_DIGITS} characters.
+ */
+function pageNumberReach(
+  box: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
+  fragment: ParagraphFragmentRecord,
+  frame: ParagraphFrame,
+  decoration: string
+): { readonly x: number; readonly y: number; readonly width: number; readonly height: number } {
+  const line = fragment.lines[0];
+  const text = line ? line.spans.map((span) => span.text).join('') : '';
+  // Text beside the number keeps its width; only the number's own digits grow.
+  const digits = Math.max(0, digitCount(text) - digitCount(decoration));
+  // One digit's width comes from the spans that hold only digits, the number's result.
+  let digitWidth = 0;
+  let digitCharacters = 0;
+  for (const span of line?.spans ?? []) {
+    if (!span.text || digitCount(span.text) !== span.text.length) continue;
+    digitWidth += span.box.width;
+    digitCharacters += span.text.length;
+  }
+  const perDigit =
+    digitCharacters > 0
+      ? digitWidth / digitCharacters
+      : text.length > 0
+        ? box.width / text.length
+        : (line?.box.height ?? 0) / 2;
+  const extra = Math.max(0, PAGE_NUMBER_DIGITS - digits) * perDigit;
+  const shift = frame.xAlign === 'right' ? extra : frame.xAlign === 'center' ? extra / 2 : 0;
+  return {
+    x: box.x - shift - frame.hSpace,
+    y: box.y,
+    width: box.width + extra + 2 * frame.hSpace,
+    height: box.height,
+  };
 }
 
 /** Bounded text content and revisions, fields when allowed, with at least one visible character. */
@@ -95,9 +208,11 @@ function plainContent(paragraph: OoxmlElement, fields: boolean): boolean {
 
 /** Groups of adjacent frame paragraphs with equal properties, each with its anchor paragraph. */
 function textFrameGroups(blocks: readonly OoxmlElement[]): readonly FrameGroup[] | null {
-  const groups: { frame: ParagraphFrame; paragraphs: OoxmlElement[] }[] = [];
+  let floating: boolean | undefined;
+  type Open = { frame: ParagraphFrame; paragraphs: OoxmlElement[]; decoration?: string };
+  const groups: Open[] = [];
   const anchored: FrameGroup[] = [];
-  let open: { frame: ParagraphFrame; paragraphs: OoxmlElement[] } | undefined;
+  let open: Open | undefined;
   for (const block of blocks) {
     const frame = block.kind === 'paragraph' ? directFrame(block) : undefined;
     if (frame === undefined) {
@@ -107,20 +222,29 @@ function textFrameGroups(blocks: readonly OoxmlElement[]): readonly FrameGroup[]
       continue;
     }
     if (!frame || frame.verticalAnchor !== 'text' || frame.dropCap !== undefined) return null;
-    // A wrapping frame needs fixed geometry and plain text; one that wraps nothing may size
-    // itself, align, and hold fields. The lane places every page alike, so it never takes
-    // inside or outside alignment, which follows odd and even pages.
+    // A wrapping frame needs fixed geometry and plain text, unless it sizes itself to one page
+    // number; one that wraps nothing may size itself, align, and hold fields. The lane places
+    // every page alike, so it never takes inside or outside alignment, which follows odd and
+    // even pages.
     const free = frame.wrap === 'none';
+    const decoration =
+      frame.autoWidth &&
+      (frame.wrap === 'around' || frame.wrap === 'auto') &&
+      plainFrameProperties(block)
+        ? readLegacyPageField(visibleRuns(block), { allowDecoration: 'text' })
+        : undefined;
+    const pageNumber = decoration !== undefined && !(floating ??= holdsFloatingContent(blocks));
+    const sized = free || pageNumber;
     if (
-      (!free && (frame.autoWidth || frame.xAlign !== undefined)) ||
+      (!sized && (frame.autoWidth || frame.xAlign !== undefined)) ||
       frame.xAlign === 'inside' ||
       frame.xAlign === 'outside' ||
-      !plainContent(block, free)
+      !plainContent(block, sized)
     )
       return null;
     if (open && open.frame.token === frame.token) open.paragraphs.push(block);
     else {
-      open = { frame, paragraphs: [block] };
+      open = { frame, paragraphs: [block], ...(pageNumber ? { decoration } : {}) };
       groups.push(open);
       if (groups.length + anchored.length > MAX_GROUPS) return null;
     }
@@ -234,9 +358,22 @@ export function placeStoryTextFrames(
       size
     );
     const box = { ...origin, ...size };
+    const pageNumber = frame.autoWidth && frame.wrap !== 'none';
+    // The lane keeps the height the story reserves. A page number that wraps text and ends
+    // below that height would need more, so its story keeps ordinary flow.
+    if (
+      !overlapDecided &&
+      pageNumber &&
+      box.y + box.height > ordinary.bottom + OVERHANG_TOLERANCE_PT
+    )
+      return null;
     // A frame over the story's own paragraph text would wrap it; that stays in ordinary flow.
+    // A page number that wraps text keeps clear of it on every page, however long it grows.
     const paragraphs = ordinary.blocks.filter((block) => block.kind === 'paragraph');
-    if (!overlapDecided && meetsOrdinaryContent(box, paragraphs)) return null;
+    const reach = pageNumber
+      ? pageNumberReach(box, fragments[0]!, frame, group.decoration ?? '')
+      : box;
+    if (!overlapDecided && meetsOrdinaryContent(reach, paragraphs)) return null;
     for (const fragment of fragments) {
       const moved = translateParagraphFragment(fragment, origin.x, origin.y);
       placed.push(
