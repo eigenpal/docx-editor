@@ -26,6 +26,7 @@ import {
   withPart,
   normalizeParagraphIdentity,
   readOoxmlPackage,
+  refreshBoundContent,
   type OoxmlPackage,
 } from '@docx-editor.dev/core/store';
 import { seedPackage, type DocumentRegistry } from './document/index.ts';
@@ -87,7 +88,8 @@ export function openBaselinePackage(
   // Lazy story stores normalize paragraph identity when first opened. Seed the same
   // identity into shared authority so a concurrent-edit snapshot cannot strip it and
   // make a cold join disagree with peers whose header/footer store is already open.
-  let baseline = loaded.package;
+  // Bound controls show their store's current value, so every participant starts from it.
+  let baseline = refreshBoundContent(loaded.package);
   for (const part of baseline.parts.values()) {
     if (
       part.root.namespaceUri !== WML_NAMESPACE_URI ||

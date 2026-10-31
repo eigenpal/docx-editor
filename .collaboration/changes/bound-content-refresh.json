@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A room baseline kept the cached w:sdtContent text of a data-bound content control.",
+  "after": "The room creator refreshes data-bound controls from their store before seeding the baseline, so every participant starts from the bound value.",
+  "reason": "Only the creator's initial baseline changes. Joiners read the seeded room state, so a room created by an older client keeps its cached text for every participant. Shared nodes, operations, and serialization formats are unchanged.",
+  "tests": [
+    "packages/core/src/store/__tests__/bound-content-refresh.test.ts",
+    "packages/pro/src/collaboration/__tests__/bound-content-refresh.test.ts"
+  ],
+  "changeset": "bound-content-refresh",
+  "migration": null
+}

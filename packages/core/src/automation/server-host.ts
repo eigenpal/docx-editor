@@ -38,6 +38,7 @@ import { runObservedStoreTransaction } from '../store/package/canonical-primitiv
 import { normalizeParagraphIdentity } from '../store/package/para-id.ts';
 import type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
 import { materializeGlossaryPlaceholders } from '../store/store/placeholder-materialize.ts';
+import { refreshBoundContent } from '../store/store/bound-content-refresh.ts';
 import { TreePackageStore, type StoryScope } from '../store/store/tree-package-store.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { ORIGIN_IDS } from '../store/registry/frozen-ids.ts';
@@ -142,17 +143,19 @@ export function createServerAutomationHost(
       ...(loaded.detail ? { detail: loaded.detail } : {}),
     };
   }
-  const main = loaded.package.parts.get(loaded.package.mainDocumentPart);
+  // Bound controls show their store's current value, not the text cached at save.
+  const pkg = refreshBoundContent(loaded.package);
+  const main = pkg.parts.get(pkg.mainDocumentPart);
   if (!main) {
     return {
       ok: false,
       reason: 'no-main-document-part',
-      detail: loaded.package.mainDocumentPart,
+      detail: pkg.mainDocumentPart,
     };
   }
   const store = new TreePackageStore(
-    loaded.package,
-    materializeGlossaryPlaceholders(loaded.package, normalizeParagraphIdentity(main)),
+    pkg,
+    materializeGlossaryPlaceholders(pkg, normalizeParagraphIdentity(main)),
     options.contentLockPolicy ? { contentLockPolicy: options.contentLockPolicy } : {}
   );
   const collaboration = options.collaborationModel?.session;

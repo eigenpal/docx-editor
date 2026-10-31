@@ -1315,7 +1315,7 @@ function namedElementChild(
 // Value semantics
 // ---------------------------------------------------------------------------
 
-interface PlannedValue {
+export interface PlannedValue {
   /** What the control's content becomes. */
   readonly text: string;
   /** Whether the control ends up showing its prompt. */
@@ -1337,7 +1337,7 @@ interface PlannedValue {
  * forms from becoming two answers to "what is this control's value" — a string routed to one
  * applier and an object to another is already two code paths, and it must not be two meanings.
  */
-function valueInputOf(
+export function valueInputOf(
   properties: ContentControlProperties,
   value: string | ContentControlValueInput
 ): ContentControlValueInput | TreeOpRejection {
@@ -1358,7 +1358,7 @@ function valueInputOf(
   }
 }
 
-function planValue(
+export function planValue(
   properties: ContentControlProperties,
   value: ContentControlValueInput
 ): PlannedValue | TreeOpRejection {
