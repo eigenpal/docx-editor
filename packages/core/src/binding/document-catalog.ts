@@ -11,6 +11,7 @@ import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import { themeFontFamilyOf, type ThemeSchemeFaces } from '../store/package/theme-font-scheme.ts';
 import { symbolFontFamily } from '../store/package/run-defaults.ts';
+import { symbolGlyphOf } from '../store/package/symbol-glyph.ts';
 import { weakRefOf, type WeakRefOf } from '../store/package/weak-ref.ts';
 
 /**
@@ -277,7 +278,7 @@ export function collectSymbolFontFamilies(roots: readonly OoxmlElement[]): reado
     // `collectDocumentFonts`.
     for (const child of root.children) {
       if (!isElement(child)) continue;
-      for (const [fold, family] of subtreeSymbolFontsOf(child)) {
+      for (const [fold, family] of subtreeSymbolFontsOf(child).all) {
         if (!byFold.has(fold)) byFold.set(fold, family);
       }
     }
@@ -288,28 +289,58 @@ export function collectSymbolFontFamilies(roots: readonly OoxmlElement[]): reado
 }
 
 /**
+ * The `w:sym` faces whose glyph has no Unicode equivalent, in reading order and deduplicated
+ * case-insensitively. Such a glyph means something only in its own face, so without the face
+ * the reader sees a missing-glyph box. Shares the subtree memo of
+ * {@link collectSymbolFontFamilies}.
+ */
+export function collectUnmappedSymbolFaces(roots: readonly OoxmlElement[]): readonly string[] {
+  const byFold = new Map<string, string>();
+  for (const root of roots) {
+    for (const child of root.children) {
+      if (!isElement(child)) continue;
+      for (const [fold, family] of subtreeSymbolFontsOf(child).unmapped) {
+        if (!byFold.has(fold)) byFold.set(fold, family);
+      }
+    }
+  }
+  return [...byFold.values()];
+}
+
+/**
  * Per-subtree memo, for the reason {@link collectDocumentFonts} has one: this is a public
  * session answer, and a derivation that re-walks every story per revision becomes a
  * per-keystroke cost the moment any chrome reads it in a selector. No theme in the key —
  * `w:sym/@w:font` is a literal family name, never a theme slot.
  */
-const subtreeSymbolFontsMemos = new WeakMap<OoxmlElement, ReadonlyMap<string, string>>();
+const subtreeSymbolFontsMemos = new WeakMap<OoxmlElement, SubtreeSymbolFaces>();
+
+/** A subtree's symbol faces: every one, and those an unmapped glyph needs. Both by fold. */
+interface SubtreeSymbolFaces {
+  readonly all: ReadonlyMap<string, string>;
+  readonly unmapped: ReadonlyMap<string, string>;
+}
 
 /**
  * Shared by every subtree that names no symbol face, which in a real document is nearly all
  * of them: a per-block empty `Map` retained for the life of the tree is pure overhead.
  */
-const NO_SYMBOL_FONTS: ReadonlyMap<string, string> = new Map();
+const NO_FACES: ReadonlyMap<string, string> = new Map();
+const NO_SYMBOL_FONTS: SubtreeSymbolFaces = { all: NO_FACES, unmapped: NO_FACES };
 
-function subtreeSymbolFontsOf(subtree: OoxmlElement, depth = 0): ReadonlyMap<string, string> {
+function subtreeSymbolFontsOf(subtree: OoxmlElement, depth = 0): SubtreeSymbolFaces {
   const cached = subtreeSymbolFontsMemos.get(subtree);
   if (cached) return cached;
-  const remember = (byFold: Map<string, string>): ReadonlyMap<string, string> => {
-    const answer = byFold.size === 0 ? NO_SYMBOL_FONTS : byFold;
+  const byFold = new Map<string, string>();
+  const unmapped = new Map<string, string>();
+  const remember = (): SubtreeSymbolFaces => {
+    const answer: SubtreeSymbolFaces =
+      byFold.size === 0
+        ? NO_SYMBOL_FONTS
+        : { all: byFold, unmapped: unmapped.size === 0 ? NO_FACES : unmapped };
     subtreeSymbolFontsMemos.set(subtree, answer);
     return answer;
   };
-  const byFold = new Map<string, string>();
   // The compose branch never inspects the node itself, so a `w:sym` wide enough to take it
   // would lose its own face — the same self-check `subtreeFontsOf` makes for `w:rFonts`.
   // `w:sym` is a generic node, so a hand-built package can give it children.
@@ -320,11 +351,12 @@ function subtreeSymbolFontsOf(subtree: OoxmlElement, depth = 0): ReadonlyMap<str
   ) {
     for (const child of subtree.children) {
       if (!isElement(child)) continue;
-      for (const [fold, family] of subtreeSymbolFontsOf(child, depth + 1)) {
-        if (!byFold.has(fold)) byFold.set(fold, family);
-      }
+      const faces = subtreeSymbolFontsOf(child, depth + 1);
+      for (const [fold, family] of faces.all) if (!byFold.has(fold)) byFold.set(fold, family);
+      for (const [fold, family] of faces.unmapped)
+        if (!unmapped.has(fold)) unmapped.set(fold, family);
     }
-    return remember(byFold);
+    return remember();
   }
   // Iterative and depth-safe like its sibling, and children push in reverse for the same
   // reason: first-seen casing has to mean the first occurrence a reader would see.
@@ -344,13 +376,17 @@ function subtreeSymbolFontsOf(subtree: OoxmlElement, depth = 0): ReadonlyMap<str
       // export lane's own walk: a name no measurer or paint sink would take is a face
       // nothing could supply, so it is not asked for.
       const family = symbolFontFamily(authored);
-      if (family !== null && !byFold.has(family.toLowerCase())) {
-        byFold.set(family.toLowerCase(), family);
+      if (family !== null) {
+        const fold = family.toLowerCase();
+        if (!byFold.has(fold)) byFold.set(fold, family);
+        // A private-use code point with no Unicode equivalent paints only in its own face.
+        const glyph = symbolGlyphOf(node);
+        if (glyph && !glyph.unicode && !unmapped.has(fold)) unmapped.set(fold, family);
       }
     }
     for (let i = node.children.length - 1; i >= 0; i -= 1) stack.push(node.children[i]!);
   }
-  return remember(byFold);
+  return remember();
 }
 
 /**

@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // EMF and WMF pictures as vector form XObjects. Core replays the metafile into drawing
 // commands; this writes them as PDF operators on the unit square a picture image fills, so
 // the picture's crop, clip, and transform place the form exactly as they place an image.
-import { PDFDocument, PDFName, PDFStream, type PDFRef } from 'pdf-lib';
+import { PDFDocument, type PDFRef } from 'pdf-lib';
 import {
   ExportResourceError,
   replayMetafile,
@@ -20,6 +20,7 @@ import {
   type MetafileRaster,
 } from '@docx-editor.dev/core/export';
 import type { LumTransfer } from '@docx-editor.dev/core/output';
+import { decodeThroughTransfer } from './lum-decode.ts';
 import {
   DEFAULT_RUN_STYLE,
   shapedRunOutline,
@@ -220,6 +221,17 @@ class FormWriter {
     return Math.max(0, Math.min(1, this.transfer.slope * value + this.transfer.intercept));
   }
 
+  /** 8-bit samples through the transfer, built on the first image that needs it. */
+  private levels: Uint8Array | null = null;
+  private sampleLevels(): Uint8Array {
+    if (!this.levels) {
+      this.levels = new Uint8Array(256);
+      for (let value = 0; value < 256; value += 1)
+        this.levels[value] = Math.round(this.channel(value / 255) * 255);
+    }
+    return this.levels;
+  }
+
   private alpha(value: number): string {
     const alpha = Math.round(Math.max(0, Math.min(1, value)) * 1000) / 1000;
     if (alpha >= 1) return '';
@@ -235,8 +247,10 @@ class FormWriter {
   }
 
   private colour(paint: MetafilePaint, operator: 'rg' | 'RG'): string {
-    const [r, g, b] = [paint.r, paint.g, paint.b].map((value) => this.channel(value / 255));
-    return `${n(r!)} ${n(g!)} ${n(b!)} ${operator}`;
+    const r = this.channel(paint.r / 255);
+    const g = this.channel(paint.g / 255);
+    const b = this.channel(paint.b / 255);
+    return `${n(r)} ${n(g)} ${n(b)} ${operator}`;
   }
 
   private path(commands: readonly MetafilePathCommand[]): string {
@@ -344,29 +358,6 @@ class FormWriter {
     }
   }
 
-  /**
-   * The transfer as the embedded image's `Decode` array, the way a raster picture takes it.
-   * Only `DeviceRGB` and `DeviceGray` samples are sRGB-like channels; any other image keeps
-   * its samples and is reported.
-   */
-  private decodeThroughTransfer(ref: PDFRef): void {
-    const stream = this.doc.context.lookup(ref);
-    const dict = stream instanceof PDFStream ? stream.dict : null;
-    const space = dict?.get(PDFName.of('ColorSpace'));
-    const components =
-      space === PDFName.of('DeviceRGB') ? 3 : space === PDFName.of('DeviceGray') ? 1 : 0;
-    if (!dict || !components || dict.get(PDFName.of('Decode')) || !this.transfer) {
-      this.unadjustedImage = true;
-      return;
-    }
-    const low = this.transfer.intercept;
-    const high = this.transfer.slope + this.transfer.intercept;
-    dict.set(
-      PDFName.of('Decode'),
-      this.doc.context.obj(Array.from({ length: components }, () => [low, high]).flat())
-    );
-  }
-
   /** An image XObject for raster content: RGB with a soft mask when any pixel is not opaque. */
   private async raster(raster: MetafileRaster): Promise<PDFRef | null> {
     this.work.tick();
@@ -380,7 +371,9 @@ class FormWriter {
             : await this.doc.embedJpg(raster.bytes);
         if (this.transfer) {
           await image.embed();
-          this.decodeThroughTransfer(image.ref);
+          // An image the transfer cannot reach keeps its colours and is reported.
+          if (!decodeThroughTransfer(this.doc, image.ref, this.transfer))
+            this.unadjustedImage = true;
         }
         return image.ref;
       } catch (error) {
@@ -394,13 +387,14 @@ class FormWriter {
     const rgb = new Uint8Array(pixels * 3);
     const alpha = new Uint8Array(pixels);
     let translucent = false;
+    const levels = this.transfer ? this.sampleLevels() : null;
     for (let pixel = 0; pixel < pixels; pixel += 1) {
-      for (let channel = 0; channel < 3; channel += 1) {
-        const value = data[pixel * 4 + channel]!;
-        rgb[pixel * 3 + channel] = this.transfer
-          ? Math.round(this.channel(value / 255) * 255)
-          : value;
-      }
+      const r = data[pixel * 4]!;
+      const g = data[pixel * 4 + 1]!;
+      const b = data[pixel * 4 + 2]!;
+      rgb[pixel * 3] = levels ? levels[r]! : r;
+      rgb[pixel * 3 + 1] = levels ? levels[g]! : g;
+      rgb[pixel * 3 + 2] = levels ? levels[b]! : b;
       alpha[pixel] = data[pixel * 4 + 3]!;
       if (alpha[pixel] !== 255) translucent = true;
     }

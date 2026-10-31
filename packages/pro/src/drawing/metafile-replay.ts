@@ -216,8 +216,9 @@ async function replayAlone(
       : commands;
     return {
       drawing: drawn === replayed.commands ? replayed : { ...replayed, commands: drawn },
-      // A record that does not fit stops the replayer early; the picture is then partial.
-      complete: !budget.exhausted && metafileRecordsIntact(bytes, mime),
+      // A record that does not fit, or the record limit, stops the replayer early; the
+      // picture is then partial.
+      complete: !budget.exhausted && metafileRecordsIntact(bytes, mime, MAX_RECORDS),
     };
   } catch {
     return null;

@@ -3,7 +3,7 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-import { PDFDocument, PDFName, PDFStream, PDFString, type PDFImage, type PDFPage } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFString, type PDFImage, type PDFPage } from 'pdf-lib';
 import type { FontBackedExportCapabilities } from '@docx-editor.dev/core/export';
 import {
   groupPictureLayerDrawing,
@@ -17,6 +17,7 @@ import { paintTextArt } from './text-art.ts';
 import { outlinePath, turnAbout } from './textbox-shape.ts';
 import { lumTransfer, type LumTransfer } from '@docx-editor.dev/core/output';
 import { MetafileForms } from './metafile-pdf.ts';
+import { decodeThroughTransfer } from './lum-decode.ts';
 import { gifToPng } from './gif-png.ts';
 import { embedPlainPng } from './png-passthrough.ts';
 import { reflectionMask, softEdgeMask } from './picture-effects.ts';
@@ -414,21 +415,10 @@ export class ImageWriter {
     if (cached) return { image: cached, lum: true };
     const image = await embedRaster(this.doc, mime, bytes);
     await image.embed();
-    const stream = this.doc.context.lookup(image.ref);
-    const dict = stream instanceof PDFStream ? stream.dict : null;
-    const space = dict?.get(PDFName.of('ColorSpace'));
-    const components =
-      space === PDFName.of('DeviceRGB') ? 3 : space === PDFName.of('DeviceGray') ? 1 : 0;
-    if (!dict || !components || dict.get(PDFName.of('Decode'))) {
+    if (!decodeThroughTransfer(this.doc, image.ref, transfer)) {
       this.doc.context.delete(image.ref);
       return { image: await plain(), lum: false };
     }
-    const low = transfer.intercept,
-      high = transfer.slope + transfer.intercept;
-    dict.set(
-      PDFName.of('Decode'),
-      this.doc.context.obj(Array.from({ length: components }, () => [low, high]).flat())
-    );
     this.images.set(key, image);
     return { image, lum: true };
   }
