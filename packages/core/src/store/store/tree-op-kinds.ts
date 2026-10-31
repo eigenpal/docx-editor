@@ -92,6 +92,7 @@ export const TREE_DOC_OP_KINDS = [
   'transformDrawing',
   'insertToc',
   'replaceTocResult',
+  'removeToc',
   'rewriteTocPageNumbers',
   'refreshFieldResults',
   'setFieldResult',

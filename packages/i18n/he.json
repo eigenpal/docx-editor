@@ -733,7 +733,8 @@
   },
   "toc": {
     "refresh": "עדכון הטבלה כולה",
-    "refreshPageNumbers": "עדכון מספרי עמודים בלבד"
+    "refreshPageNumbers": "עדכון מספרי עמודים בלבד",
+    "remove": "הסרת תוכן העניינים"
   },
   "reviewers": {
     "label": "סוקרים",

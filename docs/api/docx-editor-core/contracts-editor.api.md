@@ -950,6 +950,9 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     removeTabMark: {
         positionTwips: number;
     };
+    removeToc: {
+        tocId?: string;
+    };
     replaceAllMatches: {
         matchCase?: boolean;
         query: string;

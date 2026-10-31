@@ -1310,6 +1310,13 @@ export interface EditorCommands
   /** Open options for the selected or context-clicked legacy text form. */
   editTextFormField: Record<never, never>;
   refreshToc: { tocId?: string; mode?: 'entire' | 'pageNumbers' };
+  /**
+   * Remove a table of contents: its field, or the table of contents control around it with
+   * its heading. Text before and after the field stays. Without `tocId`, removes the table of
+   * contents last right-clicked, the one at the selection, or the only one. One undo step.
+   * Refuses with `notFound` when there is none, and while suggesting.
+   */
+  removeToc: { tocId?: string };
 
   undo: Record<never, never>;
   redo: Record<never, never>;
