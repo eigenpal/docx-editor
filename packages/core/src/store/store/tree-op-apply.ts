@@ -1,5 +1,6 @@
 import { withDisplayedHyphens } from '../package/hyphen-text.ts';
 import { withTailStyle } from './tree-op-paragraph-tail.ts';
+import { withInsertionHints } from './tree-op-text-splice-hints.ts';
 import { applySetFieldCode } from './tree-op-field-code.ts';
 import { applyTableAuthoring } from './tree-op-table-batch.ts';
 import { applyTableProperties } from './tree-op-table-authoring.ts';
@@ -244,7 +245,9 @@ function runElement(nextId: () => string, children: readonly OoxmlNode[]): Ooxml
  * quadratic in document size.
  */
 export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOptions): TreeOpResult {
-  return withBookmarkEditRules(part, op, options, () => applyValidatedTreeOp(part, op, options));
+  const run = () =>
+    withBookmarkEditRules(part, op, options, () => applyValidatedTreeOp(part, op, options));
+  return op.op === 'insertText' ? withInsertionHints(part, op.paragraphId, op.offset, run) : run();
 }
 
 function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOptions): TreeOpResult {

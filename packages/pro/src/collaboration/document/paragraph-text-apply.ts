@@ -33,6 +33,7 @@ import {
   diffTokens,
   tokensOfParagraph,
   tokensOfText,
+  typedStartIn,
   type Step,
   type Token,
 } from './paragraph-text-diff.ts';
@@ -861,6 +862,7 @@ export function applyInlinePlan(
   /** Each plan paragraph's tokens, encoded before the write began. */
   encoded: ReadonlyMap<LogicalId, Token[]> = new Map()
 ): InlineWritten {
+  const typed = plan.typed;
   const embedsAfter = new Set<string>();
   // Block children are records the record pipeline writes; the rest is shared text.
   const writes: (ParagraphWrite<Token> & {
@@ -907,7 +909,7 @@ export function applyInlinePlan(
       text,
       before,
       after: tokens,
-      steps: diffTokens(before, tokens),
+      steps: diffTokens(before, tokens, true, typed && typedStartIn(after, typed)),
       identities: shown?.identities.ids ?? [],
       shownIdentities: shown?.identities ?? null,
       hidden: shown?.hidden ?? new Set(),
