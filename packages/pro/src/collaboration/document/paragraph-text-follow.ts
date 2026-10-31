@@ -801,15 +801,29 @@ export class TextFollow {
     const out: Open[] = [];
     let open: Open | null = null;
     const ownCopies = copiesIn(identities);
+    /** Characters this paragraph holds a copy of that a move, not an undo or redo, wrote. */
+    let movedCopies: Set<Identity> | null = null;
+    const movedHere = (id: Identity): boolean => {
+      if (!movedCopies) {
+        movedCopies = new Set();
+        identities.ids.forEach((other, at) => {
+          if (other && identities.moved[at] && !identities.restored[at]) movedCopies!.add(other);
+        });
+      }
+      return movedCopies.has(id);
+    };
     for (let position = 0; position < identities.ids.length; position += 1) {
       const id = identities.ids[position] ?? null;
       // A character that already has a shown copy shows there, not as following text, and an
       // original goes nowhere when this paragraph holds a copy of it, which follows instead.
       const isCopy = isCopyAt(identities, position);
       // A copy an undo or redo wrote is a holder of its character itself: it follows like
-      // the typing it copies while no other paragraph shows that character.
+      // the typing it copies while no other copy shows that character, in this paragraph or
+      // another. A copy a move wrote here shows here, so the restored copy stays.
       const shownIn = id === null ? null : this.shownCopy(id);
-      const elsewhere = shownIn !== null && !(shownIn === source && identities.restored[position]);
+      const elsewhere =
+        shownIn !== null &&
+        !(shownIn === source && identities.restored[position] && !movedHere(id!));
       if (
         identities.deleted[position] ||
         (id !== null && (elsewhere || (!isCopy && ownCopies.has(id))))

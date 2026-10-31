@@ -626,10 +626,13 @@ export function projectJournalToShared(
         });
       }
     }
+    // They show after the survivor's own children, so they go in after the last one shown,
+    // which beside reordered split siblings is not the last one listed.
+    const shownCount = visibleIndexes(parentId, parent.children).length;
     emit({
       kind: 'spliceChildren',
       parentLogicalId: parentId,
-      start: parent.children.length,
+      start: insertionIndex(parentId, parent.children, shownCount, adopted),
       deleteCount: 0,
       childLogicalIds: adopted,
     });
