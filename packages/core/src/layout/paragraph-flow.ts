@@ -1080,7 +1080,7 @@ export function breakParagraph(
           contentRight: contentOriginX + rightEdge,
           ...(flow?.deferInlineDrawingHorizontalClip ? { deferHorizontalClip: true } : {}),
           ...(piece.revisions ? { revisions: piece.revisions } : {}),
-          ...(piece.style.shaping ? { bidiLevel: piece.style.shaping.level } : {}),
+          ...(piece.style.shaping ? { bidiShaping: piece.style.shaping } : {}),
           layoutTextboxStory: flow?.layoutTextboxStory,
           measurer,
         })

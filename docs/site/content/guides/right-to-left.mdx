@@ -268,6 +268,19 @@ To build your own buttons, use the `direction.ltr` and `direction.rtl` [chrome s
 
 To set direction from a document automation script on a server or in the browser, use `Paragraph.readingOrder`. It addresses paragraphs instead of the selection. For more information, see [Right-to-left paragraphs](/docs/2.x/editor-api/formatting#right-to-left-paragraphs).
 
+## Run direction wrappers
+
+A document can wrap runs in a direction override (`w:bdo`) or a direction embedding (`w:dir`). The editor lays out, paints, and edits the wrapped text in the declared direction:
+
+- An override (`w:bdo`) sets the direction of every character inside it, so `<w:bdo w:val="rtl">` shows Latin letters right to left. Inline pictures inside the override reverse with the text.
+- An embedding (`w:dir`) sets the base direction of the wrapped text. The letters keep their own direction. Spaces and punctuation at the edges of the wrapped text, or between letters of different directions, follow the embedding.
+- If the run that follows a wrapper is a right-to-left run (`w:rtl`), the wrapper stays in effect to the end of the paragraph. A wrapper reads together with the run before it.
+- The caret, clicks, and arrow keys follow the displayed order. A line break inside a wrapper keeps the direction on the next line.
+- A wrapper whose `w:val` is not `ltr` or `rtl` does not change the direction.
+- In a paragraph that contains a positional tab, a picture inside a field result, or a field result that the editor shows as one unit and that is not a number, the wrappers do not change the order.
+
+The editor has no command that adds or removes these wrappers. Wrappers in an opened document stay in place when you save it.
+
 ## Export right-to-left text to PDF
 
 PDF export preserves Arabic joining across formatting runs and uses fonts that support Arabic shaping. The PDF text layer keeps Arabic, Persian, and Hebrew words in logical order for text extraction. Default fallback fonts cover Arabic and Hebrew when the selected font lacks those characters.
@@ -276,6 +289,6 @@ For font configuration, see [Configure PDF fonts](/docs/2.x/export/pdf/fonts). F
 
 ## Limits
 
-- Run direction wrappers (`w:dir`, `w:bdo`) do not change layout. Section direction changes only the column order.
+- Section direction changes only the column order.
 - A paragraph that contains a positional tab (`w:ptab`) keeps left-to-right order for its text.
 - Kerning and cursive offsets across formatting run boundaries are not applied.
