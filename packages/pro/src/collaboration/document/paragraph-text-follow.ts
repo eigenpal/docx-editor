@@ -891,7 +891,11 @@ export class TextFollow {
     // that shows hides its original (`shown`), and a shown copy elsewhere stopped it already.
     const id = identities.ids[position];
     if (!id) return undefined;
-    if (!isCopyAt(identities, position) && this.holdersOf(id).length > 0) return undefined;
+    const holders = this.holdersOf(id);
+    if (!isCopyAt(identities, position) && holders.length > 0) return undefined;
+    // A live paragraph that still holds the original shows it, in place or as its own
+    // following text, so a copy left in a removed paragraph does not show it a second time.
+    if (holders.some((holder) => holder !== source && !this.isDeleted(holder))) return undefined;
     // The original follows by its anchors only when one leads to a copy that shows; otherwise
     // this copy is the only place the text can show. What another source holds can change
     // this, so this source is placed again with every placement.

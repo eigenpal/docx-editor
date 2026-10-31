@@ -402,10 +402,9 @@ function idsByPoints(
     // A paragraph that went in before a member stays with the paragraph its author listed it
     // after. When the paragraph listed before it is in another block and the entry it went in
     // after is gone, that is not the paragraph its author saw: it goes as if it had not seen
-    // the member. The first one has no paragraph before it, and the run then has no order by
-    // points.
+    // the member, also when it is the first one of the run.
     const unit =
-      saw[at] && (at === 0 || blockOf[at - 1] === blockOf[at] || !goneAt(originIds[at]!))
+      saw[at] && (blockOf[at - 1] === blockOf[at] || !goneAt(originIds[at]!))
         ? unitOf.get(listed[at - 1]!)
         : keyed[at] && !taken && !joins
           ? null

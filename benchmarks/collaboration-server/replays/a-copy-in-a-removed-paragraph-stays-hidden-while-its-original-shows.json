@@ -1,0 +1,125 @@
+{
+  "config": "denseTable",
+  "seed": 52,
+  "replicas": 3,
+  "delivery": "peer",
+  "actions": [
+    {
+      "kind": "toggle",
+      "replica": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 10
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "toggle",
+      "replica": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 23,
+          "text": " 😃"
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "joinParagraphs",
+          "firstId": "",
+          "secondId": ""
+        },
+        "paragraphs": [0, 1]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 6,
+          "text": "ips"
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 30,
+          "text": "t lo"
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "toggle",
+      "replica": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 22
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "toggle",
+      "replica": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertInlineContentControl",
+          "offset": 9,
+          "tag": "fuzz",
+          "text": "value"
+        },
+        "paragraphs": [1]
+      }
+    }
+  ]
+}
