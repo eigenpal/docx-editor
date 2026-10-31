@@ -191,7 +191,7 @@ export function switchedListNumIds(
   };
   const groups: {
     readonly numId: string;
-    readonly shown: Map<number, StyleIndent>;
+    readonly shown: Map<number, StyleIndent | null>;
     readonly items: string[];
   }[] = [];
   touched.forEach((paragraphId, index) => {
@@ -203,13 +203,15 @@ export function switchedListNumIds(
     let group = groups.find((candidate) => {
       if (candidate.numId !== numId) return false;
       const taken = candidate.shown.get(level);
-      return shown ? taken === undefined || sameStyleIndent(taken, shown) : taken === undefined;
+      if (taken === undefined) return true;
+      return shown ? taken !== null && sameStyleIndent(taken, shown) : taken === null;
     });
     if (!group) {
       group = { numId, shown: new Map(), items: [] };
       groups.push(group);
     }
-    if (shown) group.shown.set(level, shown);
+    // Null reserves this level for items that keep the original level indent.
+    group.shown.set(level, shown);
     group.items.push(paragraphId);
   });
 
