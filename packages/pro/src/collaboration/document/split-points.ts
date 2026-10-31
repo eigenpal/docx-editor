@@ -62,6 +62,26 @@ export function lastIdentityOf(text: Y.Text | null): string | null {
   return last ? itemIdentity(text, last, last.length - 1) : null;
 }
 
+/**
+ * The last character a paragraph shows, by identity, or null. Its text can still hold copies
+ * that show in another paragraph, as a concurrent split leaves them, so a split at its end
+ * names the last character that shows here.
+ */
+export function lastShownIdentityOf(
+  text: Y.Text | null,
+  shown: {
+    readonly identities: { readonly ids: readonly (string | null)[] };
+    readonly hidden: ReadonlySet<number>;
+  } | null
+): string | null {
+  if (!text || !shown) return lastIdentityOf(text);
+  const { ids } = shown.identities;
+  for (let at = ids.length - 1; at >= 0; at -= 1) {
+    if (!shown.hidden.has(at) && ids[at]) return ids[at]!;
+  }
+  return null;
+}
+
 /** The lines of a paragraph's split points field, or null for none or a malformed value. */
 function fieldLines(record: Y.Map<unknown> | undefined): string[] | null {
   const value = record?.get(NODE_SPLIT_POINTS_FIELD);

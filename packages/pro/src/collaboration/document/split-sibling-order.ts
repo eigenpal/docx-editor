@@ -334,6 +334,12 @@ function idsByPoints(
     const id = (item.content.getContent() as unknown[])[clock! - item.id.clock];
     return typeof id === 'string' ? keyOf(id as LogicalId) : null;
   };
+  /** Whether the entry `entry` names was removed. */
+  const goneAt = (entry: string | null): boolean => {
+    if (!entry || !doc) return false;
+    const [client, clock] = entry.split(':').map(Number);
+    return structAt(doc, { client: client!, clock: clock! })?.deleted === true;
+  };
   const unitOf = new Map<LogicalId, LogicalId[]>();
   const followers = new Set<LogicalId>();
   for (const [at, id] of listed.entries()) {
@@ -342,15 +348,24 @@ function idsByPoints(
     // splits at one place name the same points too, but each is listed after the one it split.
     const taken = key !== '' && keyAt(originIds[at]!) === key;
     // A paragraph split off one that follows another goes with it: its split point tells
-    // where it stands in the text the follower holds, not in the run.
-    const source = pointsOf(id).at(-1)?.source;
-    const unit = saw[at]
-      ? unitOf.get(listed[at - 1]!)
-      : keyed[at] && !taken && !(source && followers.has(source))
-        ? null
-        : source && followers.has(source)
-          ? unitOf.get(source)!
-          : units.at(-1);
+    // where it stands in the text the follower holds, not in the run. So does a break at the
+    // end of a member: it shows right after what that member shows, wherever its last
+    // character stood in the text it came from.
+    const last = pointsOf(id).at(-1);
+    const source = last?.source;
+    const joins =
+      source !== undefined &&
+      (followers.has(source) || (last!.at.endsWith('+') && unitOf.has(source)));
+    // A paragraph that went in before a member stays with the paragraph its author listed it
+    // after; once that paragraph is gone, it goes as if it had not seen the member.
+    const unit =
+      saw[at] && !goneAt(originIds[at]!)
+        ? unitOf.get(listed[at - 1]!)
+        : keyed[at] && !taken && !joins
+          ? null
+          : joins
+            ? unitOf.get(source)!
+            : units.at(-1);
     if (unit === undefined) return null;
     if (unit) followers.add(id);
     const into = unit ?? [];

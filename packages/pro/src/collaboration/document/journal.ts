@@ -50,7 +50,7 @@ import {
   endSplitPointEdit,
   handOnSplitPoints,
   inheritSplitPoints,
-  lastIdentityOf,
+  lastShownIdentityOf,
   noteMintedParagraph,
 } from './split-points.ts';
 
@@ -381,7 +381,10 @@ function applyEffect(
       // sibling, takes the split points of the one listed before it.
       inheritSplitPoints(
         (id) => registry.schema.nodes.get(id),
-        (id) => lastIdentityOf(registry.inline.textOf(id)),
+        (id) => {
+          const text = registry.inline.textOf(id);
+          return lastShownIdentityOf(text, text ? registry.inline.viewOf(id).shown(text) : null);
+        },
         children,
         effect.childLogicalIds,
         [...itemsWrittenSince(registry.doc, from)].filter((item) => item.parent === children),
