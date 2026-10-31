@@ -3,7 +3,9 @@
 // A `w:framePr` paragraph with `w:vAnchor="text"` takes no room in the story: it sits at its
 // authored offset from the top of the next ordinary paragraph or table, and horizontally against the
 // page, the margins or the column, with `w:xAlign` superseding `w:x`. The story's own text keeps
-// its flow, so the frame never changes the height the header or footer reserves.
+// its flow, so the frame never changes the height the header or footer reserves. A frame that
+// does not wrap text (`w:wrap="none"`) may also size itself to its one line, align with
+// `w:xAlign`, and hold fields, which is how page numbers sit beside a footer's text.
 import {
   WML_NAMESPACE_URI as W,
   type OoxmlElement,
@@ -16,6 +18,7 @@ import {
   type ParagraphFrame,
 } from './paragraph-frame.ts';
 import { meetsOrdinaryContent } from './header-positioned-frames.ts';
+import { shrinkSingleLineFrame } from './paragraph-frame-flow.ts';
 import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
 const MAX_NODES = 4096;
@@ -31,11 +34,9 @@ const REFUSED = new Set([
   'endnoteReference',
   'pageBreakBefore',
   'framePr',
-  // Page-number frames belong to the fixed footer and header lanes.
-  'fldChar',
-  'fldSimple',
-  'instrText',
 ]);
+/** Fields a wrapping frame may not hold; a frame that wraps nothing may. */
+const FIELDS = new Set(['fldChar', 'fldSimple', 'instrText']);
 
 type Flow = { readonly blocks: BlockFragmentRecord[]; readonly bottom: number };
 const key = (block: BlockFragmentRecord) =>
@@ -66,8 +67,8 @@ function directFrame(paragraph: OoxmlElement): ParagraphFrame | null | undefined
   return readParagraphFrame([{ localName: 'framePr', attributes }]);
 }
 
-/** Bounded text content, fields and revisions only, with at least one visible character. */
-function plainContent(paragraph: OoxmlElement): boolean {
+/** Bounded text content and revisions, fields when allowed, with at least one visible character. */
+function plainContent(paragraph: OoxmlElement, fields: boolean): boolean {
   const pending: OoxmlNode[] = [...paragraph.children];
   let count = 0;
   let visible = false;
@@ -79,6 +80,9 @@ function plainContent(paragraph: OoxmlElement): boolean {
     }
     if (++count > MAX_NODES || node.namespaceUri !== W) return false;
     if (node.kind !== 'paragraphProperties' && REFUSED.has(node.localName)) return false;
+    if (!fields && FIELDS.has(node.localName)) return false;
+    // A simple field shows its result even before the file caches one.
+    visible ||= node.localName === 'fldSimple';
     if (
       node.localName === 'br' &&
       node.attributes.some((item) => item.localName === 'type' && item.value !== 'textWrapping')
@@ -102,13 +106,16 @@ function textFrameGroups(blocks: readonly OoxmlElement[]): readonly FrameGroup[]
       open = undefined;
       continue;
     }
+    if (!frame || frame.verticalAnchor !== 'text' || frame.dropCap !== undefined) return null;
+    // A wrapping frame needs fixed geometry and plain text; one that wraps nothing may size
+    // itself, align, and hold fields. The lane places every page alike, so it never takes
+    // inside or outside alignment, which follows odd and even pages.
+    const free = frame.wrap === 'none';
     if (
-      !frame ||
-      frame.verticalAnchor !== 'text' ||
-      frame.dropCap !== undefined ||
-      frame.autoWidth ||
-      frame.xAlign !== undefined ||
-      !plainContent(block)
+      (!free && (frame.autoWidth || frame.xAlign !== undefined)) ||
+      frame.xAlign === 'inside' ||
+      frame.xAlign === 'outside' ||
+      !plainContent(block, free)
     )
       return null;
     if (open && open.frame.token === frame.token) open.paragraphs.push(block);
@@ -119,6 +126,57 @@ function textFrameGroups(blocks: readonly OoxmlElement[]): readonly FrameGroup[]
     }
   }
   return groups.length ? null : anchored;
+}
+
+/**
+ * The frame's paragraphs laid out at the frame width. A frame without `w:w` holds one line of one
+ * paragraph and shrinks to it, the way a page number does; any other auto-width frame is refused.
+ */
+function sizedFrame(
+  group: FrameGroup,
+  layoutFrame: (paragraphs: readonly OoxmlElement[], width: number) => Flow,
+  storyWidth: number
+): {
+  readonly frame: ParagraphFrame;
+  readonly fragments: readonly ParagraphFragmentRecord[];
+  readonly contentHeight: number;
+} | null {
+  const auto = group.frame.autoWidth;
+  if (auto && group.paragraphs.length !== 1) return null;
+  const flow = layoutFrame(group.paragraphs, auto ? storyWidth : group.frame.width);
+  if (flow.blocks.length !== group.paragraphs.length) return null;
+  const fragments = flow.blocks.filter(
+    (block): block is ParagraphFragmentRecord => block.kind === 'paragraph'
+  );
+  if (fragments.length !== flow.blocks.length) return null;
+  if (!auto) return { frame: group.frame, fragments, contentHeight: flow.bottom };
+  const fitted = shrinkSingleLineFrame(fragments[0]!) ?? emptyFrame(fragments[0]!);
+  if (!fitted) return null;
+  return {
+    frame: { ...group.frame, width: fitted.width },
+    fragments: [fitted.fragment],
+    contentHeight: flow.bottom,
+  };
+}
+
+/**
+ * A one-line frame with nothing to paint, such as a simple field before its page is known, has
+ * no width. It keeps its place in the lane, so the page that fills it does not change the lane.
+ */
+function emptyFrame(
+  fragment: ParagraphFragmentRecord
+): { readonly width: number; readonly fragment: ParagraphFragmentRecord } | undefined {
+  const line = fragment.lines.length === 1 ? fragment.lines[0]! : undefined;
+  if (!line || line.drawings?.length || line.spans.some((span) => span.text.trim()))
+    return undefined;
+  return {
+    width: 0,
+    fragment: {
+      ...fragment,
+      box: { ...fragment.box, width: 0 },
+      lines: [{ ...line, box: { ...line.box, x: fragment.box.x, width: 0 } }],
+    },
+  };
 }
 
 /** Whether the story holds a frame this lane positions; cheap enough for every layout. */
@@ -140,7 +198,8 @@ export function placeStoryTextFrames(
     readonly contentWidth: number;
     readonly pageWidth?: number;
     readonly marginLeft?: number;
-  }
+  },
+  overlapDecided = false
 ): Flow | null {
   const groups = textFrameGroups(blocks);
   if (!groups?.length) return null;
@@ -153,15 +212,9 @@ export function placeStoryTextFrames(
   for (const group of groups) {
     const anchor = ordinary.blocks.find((block) => key(block) === group.anchorId);
     if (!anchor) return null;
-    const frame = group.frame;
-    // `textFrameGroups` refuses frames that size their own width, so every frame has one.
-    const flow = layout.frame(group.paragraphs, frame.width);
-    if (flow.blocks.length !== group.paragraphs.length) return null;
-    const fragments = flow.blocks.filter(
-      (block): block is ParagraphFragmentRecord => block.kind === 'paragraph'
-    );
-    if (fragments.length !== flow.blocks.length) return null;
-    const contentHeight = flow.bottom;
+    const sized = sizedFrame(group, layout.frame, width);
+    if (!sized) return null;
+    const { frame, fragments, contentHeight } = sized;
     const height =
       frame.heightRule === 'exact'
         ? frame.height!
@@ -183,7 +236,7 @@ export function placeStoryTextFrames(
     const box = { ...origin, ...size };
     // A frame over the story's own paragraph text would wrap it; that stays in ordinary flow.
     const paragraphs = ordinary.blocks.filter((block) => block.kind === 'paragraph');
-    if (meetsOrdinaryContent(box, paragraphs)) return null;
+    if (!overlapDecided && meetsOrdinaryContent(box, paragraphs)) return null;
     for (const fragment of fragments) {
       const moved = translateParagraphFragment(fragment, origin.x, origin.y);
       placed.push(
@@ -200,7 +253,14 @@ export function placeStoryTextFrames(
   return { blocks: all, bottom: ordinary.bottom };
 }
 
-/** Re-lay a header or footer story with its text-anchored frames placed, when it has any. */
+/**
+ * Re-lay a header or footer story with its text-anchored frames placed, when it has any.
+ * Returns whether the frames were placed, or undefined when the story has none.
+ *
+ * `overlapDecided` skips the check that a frame meets the story's text. A caller sets it when a
+ * layout without a page context already admitted the frames, because a longer page number
+ * widens its frame and must not move the story text on later pages.
+ */
 export function layoutStoryWithTextFrames(
   blocks: readonly OoxmlElement[],
   story: (source: readonly OoxmlElement[]) => Flow,
@@ -210,9 +270,12 @@ export function layoutStoryWithTextFrames(
     readonly pageWidth?: number;
     readonly marginLeft?: number;
   },
-  publish: (flow: Flow) => void
-): void {
-  if (!hasStoryTextFrames(blocks)) return;
+  publish: (flow: Flow) => void,
+  overlapDecided = false
+): boolean | undefined {
+  if (!hasStoryTextFrames(blocks)) return undefined;
   // The trial lays the story out without its frames; a refusal lays all of it out again.
-  publish(placeStoryTextFrames(blocks, { story, frame }, geometry) ?? story(blocks));
+  const placed = placeStoryTextFrames(blocks, { story, frame }, geometry, overlapDecided);
+  publish(placed ?? story(blocks));
+  return placed !== null;
 }

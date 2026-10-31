@@ -88,3 +88,138 @@ test('story frames that would meet the story text, or lack a fixed geometry, sta
     expect(paragraphs.some((paragraph) => paragraph.outOfFlow)).toBe(false);
   }
 });
+
+const pageField = (instruction: string, cached: string) =>
+  `<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> ${instruction} </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>${cached}</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>`;
+const framed = (framePr: string, runs: string) => `<w:p><w:pPr>${framePr}</w:pPr>${runs}</w:p>`;
+const onPage = (story: ReturnType<typeof lay>['story'], pageNumber: number) =>
+  story.withPageContext({ ...page, pageNumber, pageCount: 200, sectionPageCount: 200 })
+    .fragments as readonly ParagraphFragmentRecord[];
+const textOf = (paragraph: ParagraphFragmentRecord) =>
+  paragraph.lines.map((line) => line.spans.map((span) => span.text).join('')).join('');
+const inkRight = (paragraph: ParagraphFragmentRecord) =>
+  Math.max(...paragraph.lines[0]!.spans.map((span) => span.box.x + span.box.width));
+
+test('a page-anchored page-number frame that wraps nothing sits beside the footer text', () => {
+  const framePr =
+    '<w:framePr w:w="1940" w:wrap="none" w:vAnchor="text" w:hAnchor="page" w:x="9400" w:y="128"/><w:jc w:val="right"/>';
+  const runs =
+    `<w:r><w:t xml:space="preserve">Page </w:t></w:r>${pageField('PAGE', '1')}` +
+    `<w:r><w:t xml:space="preserve"> of </w:t></w:r>${pageField('NUMPAGES', '1')}`;
+  const plain = lay(text('ANCHOR'), 'ftr');
+  const { story } = lay(framed(framePr, runs) + text('ANCHOR'), 'ftr');
+  expect(story.flowHeight).toBe(plain.story.flowHeight);
+  for (const pageNumber of [1, 12]) {
+    const [number, anchor] = onPage(story, pageNumber);
+    expect(number!.outOfFlow).toBe(true);
+    expect(textOf(number!)).toBe(`Page ${pageNumber} of 200`);
+    // Page x 470 is 400 from the left margin; the frame top is 6.4 below the anchor's top.
+    expect(number!.box.x).toBe(400);
+    expect(number!.box.y).toBeCloseTo(anchor!.box.y + 6.4, 6);
+    // Right-aligned text ends at the frame's 97 pt width.
+    expect(inkRight(number!)).toBeCloseTo(497, 6);
+    expect(anchor!.box.y).toBe(0);
+  }
+});
+
+test('a right-aligned page number without a width keeps its right edge on every page', () => {
+  const framePr =
+    '<w:framePr w:wrap="none" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="1"/>';
+  const number = framed(framePr, pageField('PAGE', '1'));
+  const gallery =
+    '<w:sdtPr><w:docPartObj><w:docPartGallery w:val="Page Numbers (Bottom of Page)"/></w:docPartObj></w:sdtPr>';
+  const plain = lay(text('Version 9'), 'ftr');
+  for (const content of [
+    number + text('Version 9'),
+    `<w:sdt>${gallery}<w:sdtContent>${number}${text('Version 9')}</w:sdtContent></w:sdt>`,
+  ]) {
+    const { story } = lay(content, 'ftr');
+    expect(story.flowHeight).toBe(plain.story.flowHeight);
+    for (const pageNumber of [1, 12, 123]) {
+      const [digits, anchor] = onPage(story, pageNumber);
+      expect(digits!.outOfFlow).toBe(true);
+      expect(textOf(digits!)).toBe(String(pageNumber));
+      // The frame shrinks to its digits and keeps its right edge on the right margin.
+      const ink = digits!.lines[0]!.spans.reduce((sum, span) => sum + span.box.width, 0);
+      expect(ink).toBeGreaterThan(0);
+      expect(digits!.box.width).toBeCloseTo(ink, 6);
+      expect(digits!.box.x + digits!.box.width).toBeCloseTo(460, 6);
+      expect(inkRight(digits!)).toBeCloseTo(460, 6);
+      expect(textOf(anchor!)).toBe('Version 9');
+      expect(anchor!.box.y).toBe(0);
+    }
+  }
+});
+
+test('page-number frames that wrap text, follow page parity, or span paragraphs stay in flow', () => {
+  const framePr = (wrap: string, align = 'right') =>
+    `<w:framePr w:wrap="${wrap}" w:vAnchor="text" w:hAnchor="margin" w:xAlign="${align}" w:y="1"/>`;
+  const number = (props: string) => framed(props, pageField('PAGE', '1'));
+  for (const content of [
+    // A frame that wraps text needs a fixed width and position, and holds no fields.
+    number(framePr('around')),
+    // Fixed geometry, so only the field refuses it.
+    number(frame('w:wrap="around"')),
+    // Inside and outside alignment follow odd and even pages.
+    number(framePr('none', 'outside')),
+    // A frame without a width shrinks to one paragraph only.
+    number(framePr('none')) + number(framePr('none')),
+  ]) {
+    const { paragraphs } = lay(content + text('Version 9'), 'ftr');
+    expect(paragraphs.some((paragraph) => paragraph.outOfFlow)).toBe(false);
+  }
+});
+
+const rightNumber = framed(
+  '<w:framePr w:wrap="none" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="1"/>',
+  pageField('PAGE', '9')
+);
+
+test('a longer page number never moves the footer text the frame was admitted beside', () => {
+  // Footer digits whose ink ends between the left edges of a one-digit and a two-digit number.
+  const nine = onPage(lay(rightNumber + text('1'), 'ftr').story, 9)[0]!;
+  const digit = nine.box.width;
+  const digits = '1'.repeat(Math.floor(nine.box.x / digit));
+  const { story } = lay(rightNumber + text(digits), 'ftr');
+  const plain = lay(text(digits), 'ftr').story;
+  const [, anchor] = onPage(story, 9);
+  expect(inkRight(anchor!)).toBeGreaterThan(460 - 2 * digit);
+  expect(inkRight(anchor!)).toBeLessThanOrEqual(460 - digit + 1e-9);
+  for (const pageNumber of [9, 10, 100]) {
+    const projected = story.withPageContext({
+      ...page,
+      pageNumber,
+      pageCount: 200,
+      sectionPageCount: 200,
+    });
+    const [number, footerText] = projected.fragments as readonly ParagraphFragmentRecord[];
+    expect(number!.outOfFlow).toBe(true);
+    expect(footerText!.box.y).toBe(0);
+    expect(projected.flowHeight).toBe(plain.flowHeight);
+  }
+});
+
+test('a simple PAGE field takes the lane', () => {
+  const simple = framed(
+    '<w:framePr w:wrap="none" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="1"/>',
+    '<w:fldSimple w:instr=" PAGE "/>'
+  );
+  const [number, anchor] = onPage(lay(simple + text('Version 9'), 'ftr').story, 12);
+  expect(number!.outOfFlow).toBe(true);
+  expect(textOf(number!)).toBe('12');
+  expect(anchor!.box.y).toBe(0);
+});
+
+test('a page-anchored page number in a header takes the lane', () => {
+  const framePr =
+    '<w:framePr w:w="1940" w:wrap="none" w:vAnchor="text" w:hAnchor="page" w:x="9400" w:y="128"/>';
+  const runs = `<w:r><w:t xml:space="preserve">Page </w:t></w:r>${pageField('PAGE', '1')}`;
+  const plain = lay(text('Title'), 'hdr').story;
+  const { story } = lay(framed(framePr, runs) + text('Title'), 'hdr');
+  expect(story.flowHeight).toBe(plain.flowHeight);
+  const [number, anchor] = onPage(story, 12);
+  expect(number!.outOfFlow).toBe(true);
+  expect(textOf(number!)).toBe('Page 12');
+  expect(number!.box.x).toBe(400);
+  expect(anchor!.box.y).toBe(0);
+});
