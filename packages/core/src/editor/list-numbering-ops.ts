@@ -46,15 +46,23 @@ export function createListNumberingOps(deps: ListNumberingDeps) {
   }
 
   return {
-    /** `numId` is the list the level was declared on. */
-    levelOp(paragraphId: string, numId: string, level: number): TreeDocOp {
+    /**
+     * The ops that move a list item from `from` to `level`. `numId` is the list the level was
+     * declared on.
+     *
+     * An item numbered through its style first gets its own `w:numPr` at the level it is at,
+     * so the move itself is always `setListLevel`. That op also drops the paragraph's own
+     * leading and first-line indent, which would otherwise outrank the new level's.
+     */
+    levelOps(paragraphId: string, numId: string, from: number, level: number): TreeDocOp[] {
       const paragraph = findNode(deps.storyPart(), paragraphId);
       const ownsNumPr = paragraph && namedChild(paragraphPropertiesNodeOf(paragraph), 'numPr');
       const styleNumbered =
         !ownsNumPr && !absorbed(paragraphId) && styleNumbering(paragraphId)?.numId === numId;
+      const move: TreeDocOp = { op: 'setListLevel', paragraphId, level };
       return styleNumbered
-        ? { op: 'setListNumbering', paragraphId, numId, level }
-        : { op: 'setListLevel', paragraphId, level };
+        ? [{ op: 'setListNumbering', paragraphId, numId, level: from }, move]
+        : [move];
     },
 
     /**

@@ -621,7 +621,7 @@
   },
   "Word.ListItem#level": {
     "status": "partial",
-    "notes": "Writes levels 0\u20138 only when the list defines that level. New authored lists define all nine levels. Missing levels and protected paragraphs refuse. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
+    "notes": "Writes levels 0\u20138 only when the list defines that level. New authored lists define all nine levels. A level change removes the paragraph’s own left and first-line or hanging indent, so the item takes the new level’s indents; its right indent stays. Missing levels and protected paragraphs refuse. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
   },
   "Word.Range#insertBreak": {
     "status": "partial",
