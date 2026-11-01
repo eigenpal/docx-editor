@@ -183,10 +183,15 @@ export function insertFollowing(
   if (item) textMarksOf(text.doc!).markFollow(item.id.client, item.id.clock, value.length, anchor);
 }
 
-/** The attributes of each position of a shared text, hidden positions too. */
+/**
+ * The attributes of each position of a shared text, hidden positions too, as Yjs stores them:
+ * an insert compares its attributes with these and writes a marker for each that differs. A
+ * strike a character is left out of (`sharedDelta`) still counts here, so an insert after it
+ * carries the strike on in `b` and writes no marker that a peer's decision would not reach.
+ */
 function attributesByPosition(text: Y.Text): InlineAttributes[] {
   const out: InlineAttributes[] = [];
-  for (const op of sharedDelta(text) as { insert: unknown; attributes?: InlineAttributes }[]) {
+  for (const op of text.toDelta() as { insert: unknown; attributes?: InlineAttributes }[]) {
     const attributes = op.attributes ?? {};
     const length = typeof op.insert === 'string' ? op.insert.length : 1;
     for (let at = 0; at < length; at += 1) out.push(attributes);

@@ -24,7 +24,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import * as Y from 'yjs';
 import { firstItem } from './yjs-items.ts';
 import { isRecord } from './paragraph-text-codec.ts';
-import { parseJson, REVISION_PREFIX } from './paragraph-text-revisions.ts';
+import {
+  parseJson,
+  REVISION_PREFIX,
+  SUPERSEDED_KEY,
+  supersededKeys,
+} from './paragraph-text-revisions.ts';
 
 /** The field of a revision value that records what a strike saw. */
 export const STRIKE_SEEN_FIELD = 's';
@@ -109,11 +114,19 @@ export function recordStrikesSeen(
 /**
  * Attributes for inserted characters: a strike they take keeps no record of what it saw, so it
  * covers them. An insert writes its attributes, so it never takes a strike by accident.
+ *
+ * A strike the characters only carry on from their left, which `b` names as one they do not
+ * belong to, keeps its value. Another value would write a marker for it over them and restore
+ * it after them, and a decision a peer makes on it at the same time would not reach those
+ * markers: the strike would stay on the characters after them.
  */
 export function withoutStrikesSeen<T extends Attributes>(attributes: T): T {
   let out: Record<string, unknown> | null = null;
+  let left: Set<string> | null = null;
   for (const [key, value] of Object.entries(attributes)) {
     if (!key.startsWith(REVISION_PREFIX) || seenOf(value) === null) continue;
+    left ??= supersededKeys(attributes[SUPERSEDED_KEY]);
+    if (left.has(key)) continue;
     const { [STRIKE_SEEN_FIELD]: _seen, ...rest } = parseJson(value) as Record<string, unknown>;
     out ??= { ...attributes };
     out[key] = JSON.stringify(rest);
@@ -183,6 +196,15 @@ function outOfStrikes(
  * strikes that did not see it.
  */
 export function sharedDelta(text: Y.Text): DeltaOp[] {
+  return readShared(text).ops;
+}
+
+/**
+ * `sharedDelta`, and whether it left a character out of a strike: then the delta differs from
+ * the attributes Yjs compares an insert with.
+ */
+export function readShared(text: Y.Text): { ops: DeltaOp[]; leftOut: boolean } {
+  let leftOut = false;
   const ops: DeltaOp[] = [];
   const current: Record<string, unknown> = {};
   let attributes: Record<string, unknown> | null = null;
@@ -199,6 +221,7 @@ export function sharedDelta(text: Y.Text): DeltaOp[] {
   // One object for each set of strikes left out of the same attributes, so equal ops pack.
   let left = new Map<string, Record<string, unknown>>();
   const minus = (keys: readonly string[]): Record<string, unknown> => {
+    leftOut = true;
     const joined = keys.join('\n');
     let own = left.get(joined);
     if (!own) left.set(joined, (own = outOfStrikes(attributesNow(), keys)));
@@ -245,5 +268,5 @@ export function sharedDelta(text: Y.Text): DeltaOp[] {
       push(content.getContent()[0], unseen ? minus(unseen) : { ...attributesNow() });
     }
   }
-  return ops;
+  return { ops, leftOut };
 }
