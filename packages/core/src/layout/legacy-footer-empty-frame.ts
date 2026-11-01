@@ -147,7 +147,9 @@ export function positionEmptyFooterPageFrame<
     right = Math.max(right, span.box.x + span.box.width);
   }
   if (!Number.isFinite(left) || !Number.isFinite(right) || right - left > contentWidth) return flow;
-  const before = paragraphSpacing(anchor.props).before;
+  const before = paragraphSpacing(anchor.props, {
+    fixedAutoSpacing: fixedParagraphSpacing,
+  }).before;
   // Restore the anchor's inherited leading space, which ordinary adjacent flow collapsed.
   const lifted = shiftParagraphFragment(anchor, before - anchor.lines[0]!.box.y);
   const opened: ParagraphFragmentRecord = {

@@ -238,7 +238,8 @@ export function mergedFlowBlocks(
     accepted,
     displayMode,
     authorFilter,
-    (block) => !mergeGroups.has(block)
+    (block) => !mergeGroups.has(block),
+    { fixedAutoSpacing: styles?.fixedParagraphSpacing === true }
   );
 }
 

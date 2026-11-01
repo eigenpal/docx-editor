@@ -319,12 +319,17 @@ export function cascadedParagraphAttributes(
  * rather than an authored measurement.
  *
  * Callers that know a paragraph sits at a container edge need this: the auto value is
- * suppressed there, an authored one is not.
+ * suppressed there, an authored one is not. With `fixedAutoSpacing` nothing is substituted, so
+ * neither side is.
  */
-export function paragraphAutoSpacingSides(props: readonly OoxmlProperty[]): {
+export function paragraphAutoSpacingSides(
+  props: readonly OoxmlProperty[],
+  context?: Pick<ParagraphAutoSpacingContext, 'fixedAutoSpacing'>
+): {
   readonly before: boolean;
   readonly after: boolean;
 } {
+  if (context?.fixedAutoSpacing === true) return { before: false, after: false };
   let before = false;
   let after = false;
   for (const property of props) {

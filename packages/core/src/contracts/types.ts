@@ -329,7 +329,9 @@ export interface RunFormatting {
    * The measurement the cascade STATES — `w:docDefaults`, the style chain and direct
    * formatting resolved together — not the gap the page finally draws. The two differ for a
    * paragraph carrying `w:beforeAutospacing`, where Word substitutes its own value and
-   * ignores the measurement, and again where two paragraphs collapse their adjacent spacing.
+   * ignores the measurement (unless the document sets
+   * `w:doNotUseHTMLParagraphAutoSpacing`, which keeps the measurement), and again where two
+   * paragraphs collapse their adjacent spacing.
    * Absent when the selection's paragraphs disagree or no level states it.
    */
   readonly spaceBeforePt?: number;

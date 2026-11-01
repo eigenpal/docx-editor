@@ -424,13 +424,11 @@ function placeCellParagraph(
     borders,
     shading,
   } = layoutInputs;
-  const edgeSpacing = cellEdgeAutoSpacing(
-    authoredSpacing,
-    props,
-    options?.firstInCell === true,
-    options?.lastInCell === true,
-    deps.styleCascade?.fixedParagraphSpacing === true
-  );
+  const edgeSpacing = cellEdgeAutoSpacing(authoredSpacing, props, {
+    firstInCell: options?.firstInCell === true,
+    lastInCell: options?.lastInCell === true,
+    fixedAutoSpacing: deps.styleCascade?.fixedParagraphSpacing === true,
+  });
   const spacing = cellContextualSpacing(
     edgeSpacing,
     layoutInputs.contextualSpacing,

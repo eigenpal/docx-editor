@@ -20,12 +20,15 @@ import { paragraphAutoSpacingSides, type ParagraphSpacing } from './paragraph-st
 export function cellEdgeAutoSpacing(
   spacing: ParagraphSpacing,
   props: readonly OoxmlProperty[],
-  firstInCell: boolean,
-  lastInCell: boolean,
-  fixedAutoSpacing = false
+  edges: {
+    readonly firstInCell: boolean;
+    readonly lastInCell: boolean;
+    readonly fixedAutoSpacing: boolean;
+  }
 ): ParagraphSpacing {
-  if (fixedAutoSpacing || (!firstInCell && !lastInCell)) return spacing;
-  const auto = paragraphAutoSpacingSides(props);
+  const { firstInCell, lastInCell } = edges;
+  if (!firstInCell && !lastInCell) return spacing;
+  const auto = paragraphAutoSpacingSides(props, edges);
   const dropBefore = firstInCell && auto.before;
   const dropAfter = lastInCell && auto.after;
   if (!dropBefore && !dropAfter) return spacing;
