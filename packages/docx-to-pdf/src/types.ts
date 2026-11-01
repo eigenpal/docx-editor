@@ -50,7 +50,11 @@ export interface PdfExportOptions extends Omit<
   readonly documentLigatures?: boolean;
   /** Sources after embedded fonts and before the built-in generic substitutes. */
   readonly lastResortFonts?: PdfFontsSource;
-  /** Use installed Word fonts before packaged substitutes. Defaults to true. */
+  /**
+   * Use fonts installed on the system before packaged substitutes. Any family that the
+   * document names can resolve to an installed font, so output depends on the machine's fonts.
+   * Set to false for the same output on every machine. Defaults to true.
+   */
   readonly useSystemFonts?: boolean;
   /** Font sources before installed and packaged fonts. */
   readonly fonts?: PdfFontsSource;

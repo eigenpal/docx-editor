@@ -213,7 +213,7 @@ describe('googleFonts resolver', () => {
   test('a document naming nothing catalogued makes no request at all', async () => {
     const { fetcher, requested } = fakeFetcher();
     const fragment = await googleFonts({ fetcher })({
-      families: ['Wingdings', 'Segoe UI', 'Some Corporate Face'],
+      families: ['Wingdings', 'Tahoma', 'Some Corporate Face'],
       defaultFamily: 'Wingdings',
     });
     expect(requested).toHaveLength(0);

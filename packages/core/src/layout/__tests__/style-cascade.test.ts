@@ -683,6 +683,27 @@ describe('layout applies Heading1 / Heading2 cascade', () => {
     });
   });
 
+  test('a pStyle naming a character style or no style applies the default paragraph style', () => {
+    const styles =
+      DOC_DEFAULTS +
+      `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
+      `<w:pPr><w:spacing w:after="160"/></w:pPr><w:rPr><w:color w:val="102030"/></w:rPr></w:style>` +
+      `<w:style w:type="character" w:styleId="Strong"><w:rPr><w:b/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    for (const named of ['Strong', 'Missing']) {
+      const cascaded = cascadeParagraphFormatting(
+        table,
+        paragraphPPr(`<w:p><w:pPr><w:pStyle w:val="${named}"/></w:pPr></w:p>`)
+      );
+      expect(paragraphSpacing(cascaded.paragraphProperties).after).toBe(8);
+      const run = cascaded.runProperties.find((property) => property.localName === 'color');
+      expect(run?.attributes?.val).toBe('102030');
+      expect(cascaded.runProperties.some((property) => property.localName === 'b')).toBe(false);
+      // Contextual spacing compares it as a default-style paragraph.
+      expect(cascaded.styleId).toBe('Normal');
+    }
+  });
+
   test('rStyle in a run reaches layout with direct override', () => {
     const styles =
       DOC_DEFAULTS +

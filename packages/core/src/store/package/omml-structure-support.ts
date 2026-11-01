@@ -90,6 +90,32 @@ const BAR_POSITIONS: ReadonlySet<string> = new Set(['top', 'bot']);
 const FRACTION_TYPES: ReadonlySet<string> = new Set(['bar']);
 const TRUE_VALUES: ReadonlySet<string> = new Set(['1', 'true', 'on']);
 const NARY_LIMIT_LOCATIONS: ReadonlySet<string> = new Set(['undOvr', 'subSup']);
+const ON_OFF_VALUES: ReadonlySet<string> = new Set(['0', '1', 'true', 'false', 'on', 'off']);
+
+/** `m:borderBoxPr` flags; each is an on/off property. */
+export const BORDER_BOX_FLAGS = Object.freeze([
+  'hideTop',
+  'hideBot',
+  'hideLeft',
+  'hideRight',
+  'strikeH',
+  'strikeV',
+  'strikeBLTR',
+  'strikeTLBR',
+] as const);
+
+/** An on/off property: a bare element, or one `m:val` from `ST_OnOff`. */
+function isOnOffProperty(node: OoxmlGenericElementNode): boolean {
+  if (node.children.length > 0) return false;
+  return node.attributes.length === 0 || hasOnlyMathVal(node, ON_OFF_VALUES);
+}
+
+/** Whether an on/off property is on. A bare element is on. */
+export function mathOnOff(node: OoxmlGenericElementNode | null): boolean {
+  if (!node) return false;
+  const value = mathVal(node);
+  return value === undefined || TRUE_VALUES.has(value);
+}
 
 /** True when every node belongs to the projected Office Math subset. */
 export function isSupportedExpressionNode(node: OoxmlNode): boolean {
@@ -104,6 +130,19 @@ export function isSupportedExpressionNode(node: OoxmlNode): boolean {
         const position = namedChild(property, 'pos');
         return !position || hasOnlyMathVal(position, BAR_POSITIONS);
       }) &&
+      containersSupported(node, ['e'])
+    );
+  }
+  if (node.localName === 'borderBox') {
+    const counts = Object.fromEntries(BORDER_BOX_FLAGS.map((flag) => [flag, OPTIONAL]));
+    return (
+      hasOnlyMathChildren(node, { borderBoxPr: OPTIONAL, e: REQUIRED }) &&
+      propertyIsSupported(namedChild(node, 'borderBoxPr'), counts, (property) =>
+        BORDER_BOX_FLAGS.every((flag) => {
+          const value = namedChild(property, flag);
+          return !value || isOnOffProperty(value);
+        })
+      ) &&
       containersSupported(node, ['e'])
     );
   }

@@ -143,6 +143,21 @@ function mathml(expression: EquationExpression, depth: number): string {
       return expression.position === 'top'
         ? `<mover accent="true">${row(expression.body)}<mo>¯</mo></mover>`
         : `<munder accentunder="true">${row(expression.body)}<mo>¯</mo></munder>`;
+    case 'borderBox': {
+      const notation = [
+        expression.hidden.top ? '' : 'top',
+        expression.hidden.bottom ? '' : 'bottom',
+        expression.hidden.left ? '' : 'left',
+        expression.hidden.right ? '' : 'right',
+        expression.strikes.horizontal ? 'horizontalstrike' : '',
+        expression.strikes.vertical ? 'verticalstrike' : '',
+        expression.strikes.bottomLeftToTopRight ? 'updiagonalstrike' : '',
+        expression.strikes.topLeftToBottomRight ? 'downdiagonalstrike' : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      return `<menclose notation="${notation}">${row(expression.body)}</menclose>`;
+    }
     case 'fraction':
       return `<mfrac>${row(expression.numerator)}${row(expression.denominator)}</mfrac>`;
     case 'radical':

@@ -57,9 +57,10 @@ describe('packaged manifest', () => {
     }
   });
 
-  test('every Word family has all four faces packaged', () => {
-    expect(ALL_DEFAULT_FONT_FAMILIES).toHaveLength(6);
-    expect(FONT_ASSET_MANIFEST).toHaveLength(24);
+  test('every Word family has its faces packaged: four, or two for an upright-only plan', () => {
+    expect(ALL_DEFAULT_FONT_FAMILIES).toHaveLength(7);
+    // Six four-face families and Segoe UI's two upright Selawik faces.
+    expect(FONT_ASSET_MANIFEST).toHaveLength(26);
   });
 
   test('the omitted-families default carries only Word DOCUMENT defaults', () => {
@@ -118,9 +119,10 @@ describe('loadDefaultFonts', () => {
   test('the full family list is opt-in and adds the packaged extras', async () => {
     const { fetcher, requested } = countingFetcher();
     const fragment = await loadDefaultFonts({ families: ALL_DEFAULT_FONT_FAMILIES, fetcher });
-    expect(requested).toHaveLength(24);
+    expect(requested).toHaveLength(26);
     expect(requested.filter((url) => url.includes('TeXGyreAdventor'))).toHaveLength(4);
-    expect(fragment.sources).toHaveLength(24);
+    expect(requested.filter((url) => url.includes('Selawik'))).toHaveLength(2);
+    expect(fragment.sources).toHaveLength(26);
     expect(fragment.failures).toHaveLength(0);
   });
 
@@ -168,6 +170,43 @@ describe('loadDefaultFonts', () => {
       if (!(resolved instanceof FontResolutionError)) {
         expect(resolved.substitution?.resolved.family).toBe('TeX Gyre Adventor');
       }
+    } finally {
+      disposeLayoutShaping(shaping);
+    }
+  });
+
+  test('Segoe UI resolves to Selawik with its own line box, italics on the upright faces', async () => {
+    const { fetcher, requested } = countingFetcher();
+    const fragment = await loadDefaultFonts({ families: ['Segoe UI'], fetcher });
+    expect(requested).toHaveLength(2);
+    expect(fragment.failures).toHaveLength(0);
+    const italicBold = fragment.substitutions.find(
+      (entry) => entry.from.weight === 700 && entry.from.style === 'italic'
+    );
+    expect(italicBold?.to).toEqual({ family: 'Selawik', weight: 700, style: 'normal' });
+    const shaping = await createLayoutShaping(composeFontConfiguration(fragment));
+    try {
+      const measurer = createLayoutShapedMeasurer(shaping, {
+        resolveFont: (style) => {
+          const resolved = shaping.fonts.resolve({
+            family: style.fontFamily ?? 'Segoe UI',
+            weight: style.bold ? 700 : 400,
+            style: style.italic ? 'italic' : 'normal',
+          });
+          return resolved instanceof FontResolutionError ? null : resolved;
+        },
+        fallback: createFixedMeasurer(),
+      });
+      const style = { ...DEFAULT_RUN_STYLE, fontFamily: 'Segoe UI', fontSizePt: 10 };
+      // The advance sum of the Segoe UI subset Word embeds for this text, at 10 pt.
+      expect(measurer.measure('Shape of the layout', style)).toBeCloseTo(85.92, 1);
+      // Segoe UI's line, hhea 2210/-514/0 over 2048, not Selawik's own 1.2 em.
+      const line = { height: 10 * (2724 / 2048), baseline: 10 * (2210 / 2048) };
+      expect(measurer.lineMetrics(style)).toEqual(line);
+      expect(measurer.lineMetrics({ ...style, italic: true })).toEqual(line);
+      expect(measurer.measure('Shape', { ...style, italic: true })).toBe(
+        measurer.measure('Shape', style)
+      );
     } finally {
       disposeLayoutShaping(shaping);
     }

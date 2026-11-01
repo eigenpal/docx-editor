@@ -27,6 +27,7 @@ function children(node: EquationGeometry): readonly EquationGeometry[] {
     case 'radical':
       return node.degree ? [node.sign, node.radicand, node.degree] : [node.sign, node.radicand];
     case 'bar':
+    case 'borderBox':
       return [node.body];
     case 'script':
       return [node.base, node.subscript, node.superscript].filter(
@@ -39,10 +40,11 @@ function children(node: EquationGeometry): readonly EquationGeometry[] {
   }
 }
 
-function rule(node: EquationGeometry): LayoutBox | null {
+function rules(node: EquationGeometry): readonly LayoutBox[] {
+  if (node.kind === 'borderBox') return node.rules;
   return node.kind === 'fraction' || node.kind === 'radical' || node.kind === 'bar'
-    ? node.bar
-    : null;
+    ? [node.bar]
+    : [];
 }
 
 // Ink of one grapheme in one face, per measurer. Equations repeat a small set of letters,
@@ -158,8 +160,8 @@ function measureInk(node: EquationGeometry, measurer: TextMeasurer): EquationInk
     top = Math.min(top, baseline - ink.ascent);
     bottom = Math.max(bottom, baseline + ink.descent);
   }
-  const stroke = rule(node);
-  if (stroke && stroke.height > 0) {
+  for (const stroke of rules(node)) {
+    if (stroke.height <= 0) continue;
     top = Math.min(top, stroke.y);
     bottom = Math.max(bottom, stroke.y + stroke.height);
   }

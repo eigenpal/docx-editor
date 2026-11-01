@@ -24,7 +24,7 @@ export interface DefaultFontFaceRequest {
 }
 
 // @public
-export type DefaultFontFamily = 'Calibri' | 'Cambria' | 'Times New Roman' | 'Arial' | 'Courier New' | 'Century Gothic';
+export type DefaultFontFamily = 'Calibri' | 'Cambria' | 'Times New Roman' | 'Arial' | 'Courier New' | 'Century Gothic' | 'Segoe UI';
 
 // @public
 export interface DefaultFontLoadFailure {

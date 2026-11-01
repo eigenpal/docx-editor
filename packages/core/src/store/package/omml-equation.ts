@@ -13,6 +13,7 @@ import {
 import {
   equationStructureHasControlProperties,
   isSupportedExpressionNode,
+  mathOnOff,
   mathVal,
 } from './omml-structure-support.ts';
 import {
@@ -50,106 +51,13 @@ export interface OmmlLimits {
   readonly maxTextLength?: number;
 }
 
-/**
- * Marks a structure whose property element carries `m:ctrlPr` operator run formatting that
- * compact replacement cannot reproduce.
- *
- * The source keeps those properties verbatim. Layout draws the operator glyphs with the
- * default math formatting. When every `m:ctrlPr` of the equation holds only default
- * formatting, no structure carries this mark: compact replacement writes the same control
- * properties back on each structure it emits.
- */
-export interface EquationControlSource {
-  /** The structure carries non-default `m:ctrlPr` properties, so compact replacement refuses it. */
-  readonly controlProperties?: true;
-  /**
-   * Font size of the structure, in points. The source is the `w:sz` value of the run
-   * properties in the structure's `m:ctrlPr`, which counts half-points.
-   *
-   * Layout sizes script offsets and bar strokes and gaps from this size, not from the size of
-   * the runs inside the structure. When it is not set, those use the size of the text around
-   * the equation. A script or fraction after the first atom of the equation takes its offsets
-   * from the size of that first atom instead. Set whether or not the control properties are
-   * default. Radicals and n-ary operators with limits below and above do not use it yet.
-   */
-  readonly controlFontSizePt?: number;
-}
-
-export type EquationExpression =
-  | { readonly kind: 'row'; readonly items: readonly EquationExpression[] }
-  | {
-      readonly kind: 'text';
-      readonly value: string;
-      /**
-       * Authored font size of the run, in points. The source is the `w:sz` value of the
-       * run properties (`w:rPr`), which counts half-points.
-       *
-       * Set only when every run of the equation holds the same default math formatting: the
-       * Cambria Math font, italic, one size, and at most a language. Such runs have no
-       * `format`, so compact replacement stays available and writes the same `w:rPr` back.
-       * Otherwise the size is in `format.fontSizePt`. When neither field is set, the text
-       * takes the size of the surrounding text. To read the size of any text expression,
-       * use `format?.fontSizePt ?? fontSizePt`.
-       */
-      readonly fontSizePt?: number;
-      /**
-       * Source formatting of the run. Set when the run has its own supported formatting and
-       * the equation does not use the uniform default math formatting. Compact replacement
-       * refuses an equation that has a text expression with a `format`, because it cannot
-       * write that formatting back.
-       */
-      readonly format?: {
-        readonly fontFamily?: string;
-        /**
-         * Authored font size of the run, in points. The source is the `w:sz` value of the
-         * run properties (`w:rPr`), which counts half-points. Set when the run has a
-         * `format` and a `w:sz`. The top-level `fontSizePt` is not set in that case.
-         */
-        readonly fontSizePt?: number;
-        readonly bold?: boolean;
-        readonly italic?: boolean;
-        readonly literal?: boolean;
-        readonly normalText?: boolean;
-        readonly mathStyle?: 'p' | 'b' | 'i' | 'bi';
-      };
-    }
-  | ({
-      readonly kind: 'bar';
-      readonly body: EquationExpression;
-      readonly position: 'top' | 'bottom';
-    } & EquationControlSource)
-  | ({
-      readonly kind: 'fraction';
-      readonly numerator: EquationExpression;
-      readonly denominator: EquationExpression;
-    } & EquationControlSource)
-  | ({
-      readonly kind: 'radical';
-      readonly radicand: EquationExpression;
-      readonly degree?: EquationExpression;
-    } & EquationControlSource)
-  | ({
-      readonly kind: 'script';
-      readonly base: EquationExpression;
-      readonly subscript?: EquationExpression;
-      readonly superscript?: EquationExpression;
-    } & EquationControlSource)
-  | ({
-      readonly kind: 'nary';
-      /** The operator character from `m:chr`, or `∫` when the source names none. */
-      readonly operator: string;
-      readonly body: EquationExpression;
-      readonly lowerLimit?: EquationExpression;
-      readonly upperLimit?: EquationExpression;
-      /**
-       * Where the limits sit, from `m:limLoc`: `undOvr` below and above the operator, `subSup`
-       * to its right as a subscript and superscript. Not set when the source names none.
-       * Inline equations place the limits to the right either way. An `m:oMath` alone in its
-       * paragraph is a display equation, as an `m:oMathPara` is, and follows this location.
-       */
-      readonly limitLocation?: 'undOvr' | 'subSup';
-    } & EquationControlSource)
-  | { readonly kind: 'fallback'; readonly text: string };
+export type {
+  EquationBoxEdges,
+  EquationBoxStrikes,
+  EquationControlSource,
+  EquationExpression,
+} from './omml-equation-expression.ts';
+import type { EquationControlSource, EquationExpression } from './omml-equation-expression.ts';
 
 export interface OmmlEquationProjection {
   readonly sourceNodeId: OoxmlNodeId;
@@ -341,6 +249,27 @@ function projectStructured(
       body: projectContainer(namedChildren(node, 'e')[0]!, state, depth + 1),
       position: position && mathVal(position) === 'top' ? 'top' : 'bottom',
       ...controlSource(node, 'barPr', state),
+    });
+  }
+  if (node.localName === 'borderBox') {
+    const property = namedChild(node, 'borderBoxPr');
+    const flag = (name: string) => (property ? mathOnOff(namedChild(property, name)) : false);
+    return Object.freeze({
+      kind: 'borderBox',
+      body: projectContainer(namedChildren(node, 'e')[0]!, state, depth + 1),
+      hidden: Object.freeze({
+        top: flag('hideTop'),
+        bottom: flag('hideBot'),
+        left: flag('hideLeft'),
+        right: flag('hideRight'),
+      }),
+      strikes: Object.freeze({
+        horizontal: flag('strikeH'),
+        vertical: flag('strikeV'),
+        bottomLeftToTopRight: flag('strikeBLTR'),
+        topLeftToBottomRight: flag('strikeTLBR'),
+      }),
+      ...controlSource(node, 'borderBoxPr', state),
     });
   }
   if (node.localName === 'f') {
@@ -867,6 +796,29 @@ function expressionNodes(
         structure(
           'bar',
           structureProperties('barPr', [position], context),
+          [container('e', expression.body)],
+          context
+        ),
+      ];
+    }
+    case 'borderBox': {
+      const on = (localName: string) =>
+        mathElement(localName, [], nextId, [mathAttribute('val', '1')]);
+      const flags: [boolean, string][] = [
+        [expression.hidden.top, 'hideTop'],
+        [expression.hidden.bottom, 'hideBot'],
+        [expression.hidden.left, 'hideLeft'],
+        [expression.hidden.right, 'hideRight'],
+        [expression.strikes.horizontal, 'strikeH'],
+        [expression.strikes.vertical, 'strikeV'],
+        [expression.strikes.bottomLeftToTopRight, 'strikeBLTR'],
+        [expression.strikes.topLeftToBottomRight, 'strikeTLBR'],
+      ];
+      const properties = flags.filter(([set]) => set).map(([, name]) => on(name));
+      return [
+        structure(
+          'borderBox',
+          structureProperties('borderBoxPr', properties, context),
           [container('e', expression.body)],
           context
         ),

@@ -65,3 +65,30 @@ test('equation digits paint in the authored text face that layout measured', asy
     await pdf.destroy();
   }
 });
+
+test('a border box paints its edges, its strikes, and a stroked diagonal', async () => {
+  const { result, pdf, content, operators } = await pageOf(
+    equation(
+      '<m:borderBox><m:borderBoxPr><m:hideTop/><m:strikeH/><m:strikeBLTR/></m:borderBoxPr>' +
+        '<m:e><m:r><m:t>abc</m:t></m:r></m:e></m:borderBox>'
+    )
+  );
+  try {
+    const codes = result.diagnostics.map((entry) => entry.code);
+    expect(codes).not.toContain('equation-unsupported');
+    expect(codes).not.toContain('equation-fallback');
+    const text = content.items.map((item) => ('str' in item ? item.str : '')).join('');
+    // Math italic letters, as layout draws them.
+    expect(text).toContain('\u{1d44e}\u{1d44f}\u{1d450}');
+    const painted = (wanted: readonly number[]) =>
+      operators.fnArray.filter((op, index) => {
+        const drawn = op === OPS.constructPath ? operators.argsArray[index]?.[0] : op;
+        return wanted.includes(drawn as number);
+      }).length;
+    // Three shown edges and the horizontal strike fill; the diagonal strokes.
+    expect(painted([OPS.fill, OPS.eoFill])).toBe(4);
+    expect(painted([OPS.stroke])).toBe(1);
+  } finally {
+    await pdf.destroy();
+  }
+});

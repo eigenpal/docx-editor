@@ -1049,6 +1049,30 @@ export interface EquationBarGeometry extends EquationGeometryBase {
 }
 
 // @public (undocumented)
+export interface EquationBorderBoxGeometry extends EquationGeometryBase {
+    // (undocumented)
+    readonly body: EquationGeometry;
+    readonly diagonals: readonly EquationDiagonal[];
+    // (undocumented)
+    readonly kind: 'borderBox';
+    readonly rules: readonly LayoutBox[];
+    // (undocumented)
+    readonly thickness: number;
+}
+
+// @public
+export interface EquationDiagonal {
+    // (undocumented)
+    readonly x1: number;
+    // (undocumented)
+    readonly x2: number;
+    // (undocumented)
+    readonly y1: number;
+    // (undocumented)
+    readonly y2: number;
+}
+
+// @public (undocumented)
 export interface EquationFractionGeometry extends EquationGeometryBase {
     // (undocumented)
     readonly bar: LayoutBox;
@@ -1061,7 +1085,7 @@ export interface EquationFractionGeometry extends EquationGeometryBase {
 }
 
 // @public (undocumented)
-export type EquationGeometry = EquationTextGeometry | EquationRowGeometry | EquationFractionGeometry | EquationRadicalGeometry | EquationBarGeometry | EquationScriptGeometry | EquationNaryGeometry;
+export type EquationGeometry = EquationTextGeometry | EquationRowGeometry | EquationFractionGeometry | EquationRadicalGeometry | EquationBarGeometry | EquationBorderBoxGeometry | EquationScriptGeometry | EquationNaryGeometry;
 
 // @public (undocumented)
 export interface EquationNaryGeometry extends EquationGeometryBase {

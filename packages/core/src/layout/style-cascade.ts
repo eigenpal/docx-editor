@@ -62,7 +62,12 @@ import { cascadedTabStops, tabStopsFingerprint, type ResolvedTabStops } from './
 import { withNumberingTabRule } from './numbering-tab-rule.ts';
 import { NO_THEME_FONTS, type ThemeFonts } from './run-style.ts';
 import { combineStyleToggles } from './style-toggles.ts';
-import { characterStyleRunProperties, styleChain, styleIdFromProps } from './style-chain.ts';
+import {
+  characterStyleRunProperties,
+  paragraphStyleChain,
+  styleChain,
+  styleIdFromProps,
+} from './style-chain.ts';
 import { resolveParagraphOutlineLevel } from './paragraph-outline-level.ts';
 import { paragraphMarkRunProperties } from './paragraph-mark-run.ts';
 import { legacyTableDefaultProperties } from './table-style-compatibility.ts';
@@ -611,7 +616,7 @@ export function cascadeParagraphWithNumbering(
 ): CascadedParagraphFormatting {
   const directProps = propertiesOf(directPPr);
   const styleId = styleIdFromProps(directProps, 'pStyle') ?? table.defaultParagraphStyleId;
-  const chain = styleId ? styleChain(table, styleId, 'paragraph') : [];
+  const chain = paragraphStyleChain(table, styleId);
   // The level's `w:pPr` sits directly below the nearest `w:pPr` stating a `w:numPr`: above
   // the whole chain when that is the paragraph's own. List indents use the same rank
   // (`numberingLevelTiers`).
@@ -676,7 +681,9 @@ export function cascadeParagraphWithNumbering(
     paragraphPropertyNodes,
     runProperties: applyLigatureCompatibility(runProperties, table.disableOptionalLigatures),
     markRunProperties,
-    styleId: styleId ?? null,
+    // The style that applies: the default paragraph style when `w:pStyle` names no paragraph
+    // style, so contextual spacing compares that paragraph as a default-style neighbour.
+    styleId: chain.at(-1)?.styleId ?? styleId ?? null,
   };
 }
 

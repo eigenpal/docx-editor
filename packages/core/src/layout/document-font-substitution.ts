@@ -303,9 +303,13 @@ export function applyDocumentFontSubstitutions(
         if (sources.has(fontRequestKey(from))) continue;
         // A family the host substitutes itself (Arial to Liberation Sans) keeps that face unless
         // the document names a face the host supplies directly, as before: following the host's
-        // substitutions for a fallback is only for families the host has no answer for.
+        // substitutions for a fallback is only for families the host has no answer for. The
+        // class fallback is not a face the document names: a host substitute (Segoe UI to its
+        // metric twin) keeps the family even when the host has the fallback face installed.
         const hostAnswered = hostSubstitutions.has(fontRequestKey(from));
-        for (const candidate of [english, alternate, fallback]) {
+        for (const candidate of hostAnswered
+          ? [english, alternate]
+          : [english, alternate, fallback]) {
           if (!candidate || candidate.trim().toLowerCase() === key) continue;
           const request = { family: candidate, weight, style };
           const direct = sources.get(fontRequestKey(request));
