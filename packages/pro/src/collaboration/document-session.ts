@@ -113,6 +113,12 @@ class DocumentSession implements DocumentCollaborationSession {
   private applyingRemote = false;
   /** The last publish waited for a held-back update and left the editor behind shared state. */
   private viewWaiting = false;
+  /**
+   * A full rebuild that the editor refused while shared state waited for a held-back update.
+   * Until that update arrives, another full rebuild reads the same incomplete state, so a
+   * refused view waits for it instead of rebuilding the whole document on every update.
+   */
+  private fullRefusedWhileWaiting = false;
   /** Where a degraded session returns on its next clean remote apply; null when terminal. */
   private healTo: HealTarget | null = null;
   private readonly historySelections: HistorySelection;
@@ -708,6 +714,7 @@ class DocumentSession implements DocumentCollaborationSession {
       // address what shared state holds, but a view that incompleteness breaks is skipped
       // rather than reported, and the update that completes it publishes again.
       const waiting = awaitingUpdates(this.ydoc);
+      if (!waiting) this.fullRefusedWhileWaiting = false;
       const materialized = full ? this.materializer.rebuildFull() : this.materializer.current();
       // After materializing, because that is what reads the blobs and so what hashes them.
       const poisoned = this.blobs.poisonedDigest();
@@ -741,11 +748,12 @@ class DocumentSession implements DocumentCollaborationSession {
         });
       };
       let result = apply(materialized.package);
-      if (!result.ok) {
+      if (!result.ok && !(waiting && this.fullRefusedWhileWaiting)) {
         // The incremental view kept a subtree a concurrent edit invalidated. Rebuild the view
         // from shared state alone, as every replica would, before calling the room broken.
         const full = this.materializer.rebuildFull();
         if (full.ok && !droppedContentDetail(full.issues)) result = apply(full.package);
+        if (!result.ok && waiting) this.fullRefusedWhileWaiting = true;
       }
       if (!result.ok) {
         if (waiting) this.viewWaiting = true;

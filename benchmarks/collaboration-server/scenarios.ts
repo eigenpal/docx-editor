@@ -13,6 +13,7 @@ import './scenario-clock.ts';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createInterface } from 'node:readline';
 import { parseArgs } from 'node:util';
 import { defaultMatrixWidth, matrixJobs, runMatrix } from './scenario-matrix.ts';
 import {
@@ -357,6 +358,24 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
+  // Many seeds, as a matrix worker: one JSON job per input line, one JSON result line each.
+  if (command === 'worker') {
+    const fallback = new Uint8Array(readFileSync(values.document!));
+    for await (const line of createInterface({ input: process.stdin })) {
+      const job = JSON.parse(line) as { config: string; delivery: Delivery; seed: number };
+      const shape = configFor(job.config);
+      const report = await runScenario({
+        ...scenarioOptions(shape, job.seed, documentFor(shape, fallback), job.delivery),
+        strict,
+      });
+      const problem = report.problems[0] ?? null;
+      console.log(
+        JSON.stringify({ applied: report.applied, problem, rss: process.memoryUsage().rss })
+      );
+    }
+    process.exit(0);
+  }
+
   if (command === 'matrix') {
     const shapes = values.configs
       ? values.configs.split(',').map((name) => configFor(name.trim()))
@@ -372,7 +391,15 @@ async function main(): Promise<void> {
       // Six seeds per shape unless `--seeds` says otherwise; `run` keeps its own default.
       process.argv.some((arg) => arg === '--seeds' || arg.startsWith('--seeds='))
         ? Number(values.seeds)
-        : 6
+        : 6,
+      // Shapes on the large sample document take the longest.
+      (name) => {
+        const shape = SCENARIO_CONFIGS[name as ScenarioConfig] as {
+          documentPath?: string;
+          documentBody?: string;
+        };
+        return shape.documentPath === undefined && shape.documentBody === undefined;
+      }
     );
     const width = values.jobs ? Number(values.jobs) : defaultMatrixWidth();
     const started = performance.now();
@@ -542,7 +569,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  throw new Error(`unknown command ${command}; use run, matrix, shrink, or replay`);
+  throw new Error(`unknown command ${command}; use run, matrix, worker, shrink, or replay`);
 }
 
 if (import.meta.main) await main();

@@ -1,11 +1,18 @@
-// Run many scenario seeds at once, one child process per seed.
+// Run many scenario seeds at once, in worker processes that each run seeds one at a time.
 //
 // A seed is single-threaded and holds its replicas in memory (about 1.5 GB for the
 // `everything` shape on the sample document), so the matrix fans seeds out to child
 // processes and caps how many run together by cores and by memory.
+//
+// Starting a process and loading the engine costs about half a second, as long as a whole
+// seed of a shape on a small document, so a worker runs many seeds. It starts fresh after
+// `SEEDS_PER_WORKER` seeds, or once it holds `WORKER_RESTART_BYTES`, so its memory stays
+// bounded. A seed that fails in a worker runs again in a process of its own, and that run
+// is the result: every failure the matrix reports reproduces with `scenarios.ts one`.
 
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import os from 'node:os';
+import { createInterface } from 'node:readline';
 
 export interface MatrixJob {
   readonly config: string;
@@ -29,12 +36,22 @@ export function defaultMatrixWidth(): number {
   return Math.min(byCores, byMemory);
 }
 
-/** Every config and delivery for `count` seeds from `first`, heaviest shapes first. */
+/** Seeds one worker runs before it starts fresh. */
+const SEEDS_PER_WORKER = 25;
+
+/** A worker that holds more than this after a seed starts fresh. */
+const WORKER_RESTART_BYTES = 3 * 1024 ** 3;
+
+/**
+ * Every config and delivery for `count` seeds from `first`, heaviest shapes first. `heavy`
+ * names the shapes whose seeds take long, as those on the large sample document do.
+ */
 export function matrixJobs(
   configs: readonly string[],
   deliveries: (config: string) => readonly string[],
   first: number,
-  count: number
+  count: number,
+  heavy: (config: string) => boolean = () => false
 ): MatrixJob[] {
   const jobs: MatrixJob[] = [];
   for (const config of configs) {
@@ -43,7 +60,7 @@ export function matrixJobs(
     }
   }
   // The longest seeds start first, so the pool does not end on one long straggler.
-  const weight = (job: MatrixJob) => (job.config === 'everything' ? 0 : 1);
+  const weight = (job: MatrixJob) => (job.config === 'everything' ? 0 : heavy(job.config) ? 1 : 2);
   return jobs.sort((left, right) => weight(left) - weight(right));
 }
 
@@ -102,7 +119,74 @@ function runOne(
   });
 }
 
-/** Run the jobs with at most `width` child processes at a time. */
+/** One worker process: `scenarios.ts worker`, which reads a job per line and answers one. */
+class SeedWorker {
+  readonly child: ChildProcessWithoutNullStreams;
+  private readonly lines: string[] = [];
+  private waiting: ((line: string | null) => void) | null = null;
+  private closed = false;
+  private stderr = '';
+  ran = 0;
+
+  constructor(script: string, document: string, extraArgs: readonly string[]) {
+    this.child = spawn(process.execPath, [script, 'worker', '--document', document, ...extraArgs], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    createInterface({ input: this.child.stdout }).on('line', (line) => {
+      if (this.waiting) {
+        const waiting = this.waiting;
+        this.waiting = null;
+        waiting(line);
+      } else this.lines.push(line);
+    });
+    this.child.stderr.on('data', (chunk) => (this.stderr = (this.stderr + chunk).slice(-4000)));
+    const close = () => {
+      this.closed = true;
+      this.waiting?.(null);
+      this.waiting = null;
+    };
+    this.child.on('close', close);
+    this.child.on('error', close);
+  }
+
+  /** Run one job: its result, and the worker's memory after it, or null if the worker died. */
+  async run(job: MatrixJob): Promise<{ result: MatrixResult; rss: number } | { died: string }> {
+    this.ran += 1;
+    this.child.stdin.write(`${JSON.stringify(job)}\n`);
+    const line =
+      this.lines.shift() ??
+      (this.closed
+        ? null
+        : await new Promise<string | null>((resolve) => (this.waiting = resolve)));
+    try {
+      const parsed = JSON.parse(line ?? '') as {
+        applied: number;
+        problem: string | null;
+        rss: number;
+      };
+      return {
+        result: { ...job, applied: parsed.applied, problem: parsed.problem },
+        rss: parsed.rss,
+      };
+    } catch {
+      const lines = this.stderr.trim().split('\n');
+      const cause =
+        lines.find((entry) => /^\s*(\w*Error\b|error:|panic|Killed|out of memory)/i.test(entry)) ??
+        lines.at(-1);
+      return { died: cause?.trim() || 'no output' };
+    }
+  }
+
+  /** Let the worker finish and exit. */
+  async stop(): Promise<void> {
+    if (this.closed) return;
+    const exited = new Promise<void>((resolve) => this.child.once('close', () => resolve()));
+    this.child.stdin.end();
+    await exited;
+  }
+}
+
+/** Run the jobs with at most `width` worker processes at a time. */
 export async function runMatrix(
   script: string,
   document: string,
@@ -114,13 +198,35 @@ export async function runMatrix(
   const results: MatrixResult[] = [];
   let next = 0;
   const worker = async (): Promise<void> => {
+    let current: SeedWorker | null = null;
     while (next < jobs.length) {
       const job = jobs[next]!;
       next += 1;
-      const result = await runOne(script, document, job, extraArgs);
+      current ??= new SeedWorker(script, document, extraArgs);
+      const outcome = await current.run(job);
+      let result: MatrixResult;
+      if ('died' in outcome) {
+        // A worker that dies takes only its current seed with it; that seed runs alone.
+        current = null;
+        result = await runOne(script, document, job, extraArgs);
+      } else {
+        result = outcome.result;
+        if (result.problem) {
+          // Confirmed alone, so the failure is the seed's own and `one` reproduces it.
+          const alone = await runOne(script, document, job, extraArgs);
+          result = alone.problem
+            ? alone
+            : { ...result, problem: `only after other seeds in one process: ${result.problem}` };
+        }
+        if (current.ran >= SEEDS_PER_WORKER || outcome.rss > WORKER_RESTART_BYTES) {
+          await current.stop();
+          current = null;
+        }
+      }
       results.push(result);
       onResult(result);
     }
+    await current?.stop();
   };
   await Promise.all(Array.from({ length: Math.min(width, jobs.length) }, worker));
   return results;
