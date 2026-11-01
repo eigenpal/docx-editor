@@ -119,6 +119,10 @@ export const MODE_RULES = {
     'Auto line spacing below a body line must fit above the footnote area; legacy modes let it cross the area as it crosses a bottom margin',
     'ECMA-376 Part 1 §17.11 Footnotes and Endnotes'
   ),
+  noteAreaHoldsSpaceAfter: modern(
+    'A paragraph space after must fit above the footnote area; legacy modes let a paragraph that cites no footnote cross the area as it crosses a bottom margin',
+    'ECMA-376 Part 1 §17.11 Footnotes and Endnotes'
+  ),
   noteTableCellKeeps: modern(
     'Note reference bands in table rows honor cell widow control and keep-lines cuts',
     'ECMA-376 Part 1 §17.11 Footnotes and Endnotes'

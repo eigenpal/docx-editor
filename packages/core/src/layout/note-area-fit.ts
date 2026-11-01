@@ -2,7 +2,13 @@
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import { fragmentCursorBottomPt } from './note-fragment-geometry.ts';
-import type { BlockFragmentRecord, LineRecord, PageRecord } from './semantic-records.ts';
+import type {
+  BlockFragmentRecord,
+  LineRecord,
+  PageRecord,
+  ParagraphFragmentRecord,
+} from './semantic-records.ts';
+import type { KeepNextLine, KeepNoteClosing } from './pagination-keeps.ts';
 
 type SpannedLine = Pick<LineRecord, 'spans'>;
 
@@ -30,6 +36,25 @@ export function pageHoldsFootnoteReference(
   return fragments.some(fragmentCitesFootnote);
 }
 
+/**
+ * What a keep group priced before placement needs to charge closing space after as
+ * {@link closingSpaceAfterPt} does: undefined without a note reserve, else whether the page
+ * already cites a footnote and how to tell when a member's lines cite one. In legacy modes
+ * only a member's own citation counts.
+ */
+export function keepNoteClosing(
+  reservePt: number | undefined,
+  fragments: readonly BlockFragmentRecord[],
+  layout: CompatibilityLayout
+): KeepNoteClosing | undefined {
+  if ((reservePt ?? 0) <= 0) return undefined;
+  const cited = pageAreaHoldsSpaceAfter(layout) && fragments.some(fragmentCitesFootnote);
+  return { cited, cites: linesCiteFootnote };
+}
+
+const linesCiteFootnote = (lines: readonly KeepNextLine[]): boolean =>
+  lines.some((line) => 'spans' in line && citesFootnote(line as SpannedLine));
+
 /** Fragments are immutable records, so each is scanned once per pass however often asked. */
 const fragmentCitations = new WeakMap<BlockFragmentRecord, boolean>();
 function fragmentCitesFootnote(fragment: BlockFragmentRecord): boolean {
@@ -43,17 +68,30 @@ function fragmentCitesFootnote(fragment: BlockFragmentRecord): boolean {
 
 /**
  * The space after the body pass charges to a paragraph's closing line: the paragraph's
- * space after on a page that has a note reserve and cites a footnote, else 0.
+ * space after on a page that has a note reserve and cites a footnote, else 0. Legacy modes
+ * let it cross the area as it crosses a bottom margin, unless the paragraph's own lines on
+ * the page cite a footnote.
  */
 export function closingSpaceAfterPt(
   reservePt: number | undefined,
   fragments: readonly BlockFragmentRecord[],
   pending: readonly SpannedLine[],
   line: SpannedLine,
-  spaceAfterPt: number
+  spaceAfterPt: number,
+  layout: CompatibilityLayout
 ): number {
   if (spaceAfterPt <= 0 || (reservePt ?? 0) <= 0) return 0;
+  if (!pageAreaHoldsSpaceAfter(layout)) {
+    return citesFootnote(line) || pending.some(citesFootnote) ? spaceAfterPt : 0;
+  }
   return pageHoldsFootnoteReference(fragments, pending, line) ? spaceAfterPt : 0;
+}
+
+type CompatibilityLayout = { readonly compatibilityMode?: number | undefined };
+
+/** Whether any citation on the page makes a closing paragraph's space after count. */
+function pageAreaHoldsSpaceAfter(layout: CompatibilityLayout): boolean {
+  return hasCompatibilityRule(layout.compatibilityMode, 'noteAreaHoldsSpaceAfter');
 }
 
 /**
@@ -67,7 +105,7 @@ export function droppableSpacingPt(
   fragments: readonly BlockFragmentRecord[],
   pending: readonly SpannedLine[],
   line: SpannedLine & { readonly trailingSpacing: number },
-  layout: { readonly compatibilityMode?: number | undefined }
+  layout: CompatibilityLayout
 ): number {
   if (line.trailingSpacing <= 0 || (reservePt ?? 0) <= 0) return line.trailingSpacing;
   if (!hasCompatibilityRule(layout.compatibilityMode, 'noteAreaHoldsLineSpacing')) {
@@ -78,13 +116,19 @@ export function droppableSpacingPt(
 
 /**
  * The space after that the body pass charges below the page's last line: the closing
- * paragraph's space after when the page cites a footnote, else 0. A reserve that holds
- * the body end in place must leave this room, or it pushes that paragraph out.
+ * paragraph's space after when the page cites a footnote, else 0. In legacy modes the closing
+ * paragraph must cite one itself ({@link closingSpaceAfterPt}). A reserve that holds the
+ * body end in place must leave this room, or it pushes that paragraph out.
  */
-export function chargedSpaceAfterPt(page: PageRecord): number {
+export function chargedSpaceAfterPt(page: PageRecord, layout: CompatibilityLayout): number {
   // No reserve check: this answer only matters while a hold-out sizes this page's reserve,
   // and a page it holds always has one.
-  return pageCitesFootnote(page) ? closingSpaceAfterOf(page) : 0;
+  const last = closingParagraphOf(page);
+  if (!last) return 0;
+  const cites = pageAreaHoldsSpaceAfter(layout)
+    ? pageCitesFootnote(page)
+    : fragmentCitesFootnote(last);
+  return cites ? last.spacing.after : 0;
 }
 
 /** Where lines that return from the next page start on a page. */
@@ -124,8 +168,8 @@ export function rejoinPoint(page: PageRecord, bodyBottom: number): RejoinPoint {
     : { bottom: bodyBottom, spaceAfter: 0 };
 }
 
-/** The space after of the paragraph that ends the page's body, or 0. */
-function closingSpaceAfterOf(page: PageRecord): number {
+/** The paragraph that ends on the page and closes its body, if one does. */
+function closingParagraphOf(page: PageRecord): ParagraphFragmentRecord | undefined {
   let last: BlockFragmentRecord | undefined;
   let lastBottom = -Infinity;
   for (const fragment of page.fragments) {
@@ -135,8 +179,7 @@ function closingSpaceAfterOf(page: PageRecord): number {
       lastBottom = bottom;
     }
   }
-  if (last?.kind !== 'paragraph' || !last.paragraphEnd) return 0;
-  return last.spacing.after;
+  return last?.kind === 'paragraph' && last.paragraphEnd ? last : undefined;
 }
 
 /**
