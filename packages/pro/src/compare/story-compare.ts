@@ -165,7 +165,9 @@ type Step =
 export function compareContainer(
   base: readonly Unit[],
   revised: readonly Unit[],
-  ctx: EmitContext
+  ctx: EmitContext,
+  /** A whole story added by the revised document: its final paragraph mark stays unmarked. */
+  insertedStory = false
 ): string {
   if (base.length === 0 && revised.length === 0) return '';
   const steps: Step[] = [];
@@ -210,11 +212,12 @@ export function compareContainer(
         lastRevised?.kind === 'paragraph' &&
         step.base.includes(lastBase) &&
         step.revised.includes(lastRevised);
+      const alone = insertedStory && base.length === 0;
       out += emitHunk(
         step.base,
         step.revised,
-        sentinel ? lastBase : null,
-        sentinel ? lastRevised : null,
+        sentinel || alone ? (lastBase ?? null) : null,
+        sentinel || alone ? (lastRevised ?? null) : null,
         ctx,
         moves
       );
@@ -366,7 +369,15 @@ function emitHunk(
         items.push({ mark, atom, baseRPr: '', markers: mark === 'del' ? atom.markers : [] });
       }
     } else if (token.kind === 'mark') {
-      closeParagraph(mark, mark === 'del' ? token.unit : null, mark === 'ins' ? token.unit : null);
+      if (token.key === END_KEY && a.length === 0) {
+        // The final mark of an inserted story.
+        closeParagraph('eq', token.unit, token.unit);
+      } else
+        closeParagraph(
+          mark,
+          mark === 'del' ? token.unit : null,
+          mark === 'ins' ? token.unit : null
+        );
     } else if (token.kind === 'move') {
       block(movedParagraph(token.unit, token.end, ctx));
     } else {

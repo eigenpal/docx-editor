@@ -396,6 +396,14 @@ function runAtoms(
         }
         break;
       }
+      case 'commentReference':
+        // Comments come from the original only: its reference run is a range marker, and a
+        // reference in the revised document is not content.
+        if (side.name === 'base')
+          state.pending.push(
+            `<w:r>${rPr ? `<w:rPr>${rPr}</w:rPr>` : ''}${side.serialize(child)}</w:r>`
+          );
+        break;
       default:
         if (!DROPPED.has(child.localName)) pushObject(child, rPr, side, wrappers, state);
     }

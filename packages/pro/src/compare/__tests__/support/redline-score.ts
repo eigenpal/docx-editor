@@ -161,8 +161,14 @@ export function scoreRedline(ours: RedlineNormalForm, reference: RedlineNormalFo
   const oursChanged = sum(a, true);
   const referenceChanged = sum(b, true);
   const overallMatched = matchedWeight(a, b, false);
+  // Empty stories (default parts one writer saves and another omits) carry no marks.
   const perStory = (form: RedlineNormalForm, pick: (p: NormalParagraph) => string) =>
-    form.stories.map((story) => `${story.kind}:${story.paragraphs.map(pick).join(',')}`).join('|');
+    form.stories
+      .filter((story) =>
+        story.paragraphs.some((p) => p.mark || p.segments.some((s) => s.text.trim() !== ''))
+      )
+      .map((story) => `${story.kind}:${story.paragraphs.map(pick).join(',')}`)
+      .join('|');
   const formatRuns = (form: RedlineNormalForm) =>
     form.stories
       .flatMap((story) =>
@@ -195,12 +201,23 @@ export function scoreRedline(ours: RedlineNormalForm, reference: RedlineNormalFo
 
 /**
  * The accepted or rejected view as a comparable fingerprint: the text of each non-empty story,
- * sorted, without comments (comment parts are not compared content).
+ * sorted, without comments (comment parts are not compared content) or empty note paragraphs.
  */
 export function viewFingerprint(form: RedlineNormalForm, view: 'accept' | 'reject'): string {
   return form.stories
     .filter((story) => story.kind !== 'comments')
-    .map((story) => `${story.kind}:${viewText({ ...form, stories: [story] }, view)}`)
+    .map((story) => {
+      const text = viewText({ ...form, stories: [story] }, view);
+      // A note whose reference is gone goes with it, so empty note paragraphs carry nothing.
+      const notes = story.kind === 'footnotes' || story.kind === 'endnotes';
+      const kept = notes
+        ? text
+            .split('\n')
+            .filter((line) => line.trim() !== '')
+            .join('\n')
+        : text;
+      return `${story.kind}:${kept}`;
+    })
     .filter((text) => !/^[a-z]+:\s*$/.test(text))
     .sort()
     .join('\n\n');
