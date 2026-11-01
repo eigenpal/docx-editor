@@ -72,10 +72,9 @@ export function paragraphMarkHidden(paragraph: OoxmlNode): boolean {
 /**
  * Whether the paragraph states a space before directly. Before a table, a removed paragraph
  * still keeps its space before; leaving it in place keeps that space, so only paragraphs
- * without one leave the flow there. Under `w:doNotUseHTMLParagraphAutoSpacing`
- * (`fixedAutoSpacing`) the automatic flag adds no space of its own.
+ * without one leave the flow there.
  */
-function directSpaceBefore(paragraph: OoxmlNode, fixedAutoSpacing: boolean): boolean {
+function directSpaceBefore(paragraph: OoxmlNode): boolean {
   const properties = wmlChild(paragraph, 'pPr');
   const spacing = properties && wmlChild(properties, 'spacing');
   if (!spacing) return false;
@@ -85,7 +84,9 @@ function directSpaceBefore(paragraph: OoxmlNode, fixedAutoSpacing: boolean): boo
   return (
     Number(value('before') ?? 0) > 0 ||
     Number(value('beforeLines') ?? 0) > 0 ||
-    (!fixedAutoSpacing && (auto === '1' || auto === 'true' || auto === 'on'))
+    auto === '1' ||
+    auto === 'true' ||
+    auto === 'on'
   );
 }
 
@@ -153,15 +154,13 @@ function standInFor(block: OoxmlElement, neighbours: HiddenMarkNeighbours): Ooxm
  * join. Returns the entries' blocks unchanged in the common case of no hidden marks.
  *
  * `canStandIn` refuses a copy for a block whose identity something else is keyed on; that
- * block keeps its own neighbours for contextual spacing. `fixedAutoSpacing` reports
- * `w:doNotUseHTMLParagraphAutoSpacing`, which decides what an automatic space before is worth.
+ * block keeps its own neighbours for contextual spacing.
  */
 export function withoutHiddenMarkParagraphs(
   entries: readonly HiddenMarkFlowEntry[],
   displayMode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter,
-  canStandIn: (block: OoxmlElement) => boolean = () => true,
-  { fixedAutoSpacing = false }: { readonly fixedAutoSpacing?: boolean } = {}
+  canStandIn: (block: OoxmlElement) => boolean = () => true
 ): OoxmlElement[] {
   let removed: Set<number> | null = null;
   let next: HiddenMarkFlowEntry | undefined;
@@ -173,7 +172,7 @@ export function withoutHiddenMarkParagraphs(
       next !== undefined &&
       next.parentKey === entry.parentKey &&
       (next.block.kind === 'paragraph' ||
-        (next.block.kind === 'table' && !directSpaceBefore(block, fixedAutoSpacing))) &&
+        (next.block.kind === 'table' && !directSpaceBefore(block))) &&
       paragraphMarkHidden(block) &&
       !carriesSectionBreak(block) &&
       paragraphRendersNothingVisible(block, displayMode, authorFilter)

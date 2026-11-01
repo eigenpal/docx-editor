@@ -130,26 +130,6 @@ describe('an empty paragraph with a hidden mark before a table', () => {
     expect(joined[1]! - joined[0]!).toBeCloseTo(adjacent[1]! - adjacent[0]!, 6);
   });
 
-  test('an automatic space before keeps the line only while automatic spacing is on', () => {
-    const autoOnly = para(
-      '',
-      `<w:spacing w:before="0" w:beforeAutospacing="1" w:after="0"/><w:rPr>${HIDDEN}</w:rPr>`
-    );
-    const body = `${para(text('a'))}${autoOnly}${table('cell')}`;
-    const cascade = (compat: string) =>
-      buildStyleCascadeTable(
-        read(`<w:styles xmlns:w="${W}"/>`, '/word/styles.xml').root,
-        undefined,
-        read(
-          `<w:settings xmlns:w="${W}"><w:compat>${compat}</w:compat></w:settings>`,
-          '/word/settings.xml'
-        ).root
-      );
-    expect(lineTexts(layout(body, { styleCascade: cascade('') }))).toEqual(['a', '', 'cell']);
-    const fixed = cascade('<w:doNotUseHTMLParagraphAutoSpacing/>');
-    expect(lineTexts(layout(body, { styleCascade: fixed }))).toEqual(['a', 'cell']);
-  });
-
   test('after a paragraph leaves that paragraph and the table as neighbours', () => {
     expect(lineTexts(layout(`${para(text('a'))}${hiddenNoBefore()}${table('cell')}`))).toEqual([
       'a',

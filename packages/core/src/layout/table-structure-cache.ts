@@ -105,8 +105,7 @@ function createStructureCache() {
                     blocks: mergedFlowBlocks(
                       node.children,
                       context.displayMode,
-                      context.authorFilter,
-                      context.styleCascade
+                      context.authorFilter
                     ),
                   }
                 : cell;

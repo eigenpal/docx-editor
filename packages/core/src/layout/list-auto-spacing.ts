@@ -75,10 +75,11 @@ export function resolveListAutoSpacing<T extends SpacingBlock>(
         ).props
       : block.props;
     const outer = paragraphSpacing(block.props, { lineUnitPt, fixedAutoSpacing });
-    // Under fixed spacing a list does not change the answer, so the outer one serves.
-    const inner = fixedAutoSpacing
-      ? outer
-      : paragraphSpacing(block.props, { inList: block.listItem !== undefined, lineUnitPt });
+    const inner = paragraphSpacing(block.props, {
+      inList: block.listItem !== undefined,
+      lineUnitPt,
+      fixedAutoSpacing,
+    });
     // Word also suppresses automatic before-spacing at the start of a story/section.
     let before =
       (block.listItem && index === 0) || suppressesAuto(-1) ? inner.before : outer.before;

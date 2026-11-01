@@ -746,7 +746,7 @@ function readTableStructureUncached(
       // cell empty in layout while the tree still holds the text.
       // Through the shared collector: a cell is a story like any other, so a tracked mark
       // merges inside it and a paragraph a revision removed leaves no blank line behind.
-      const blocks = mergedFlowBlocks(cellNode.children, displayMode, authorFilter, styleCascade);
+      const blocks = mergedFlowBlocks(cellNode.children, displayMode, authorFilter);
       const ownBorders = cellProperties ? readCellBorders(cellProperties) : EMPTY_CELL_BORDER_BOX;
       const vMerge = readVMerge(cellProperties);
       if (vMerge !== 'none') mergedHere.add(gridColumn);
