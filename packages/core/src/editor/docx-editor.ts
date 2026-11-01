@@ -149,8 +149,7 @@ import {
 } from './docx-editor-derive.ts';
 import { commentTargetRangeOf } from './docx-editor-comment-resolution.ts';
 import { createReviewWrites } from './docx-editor-review-writes.ts';
-import { registerEditorHistoryGroups } from './editor-history-group-registry.ts';
-import { registerEditorCompareEngine } from './editor-compare-engine-registry.ts';
+import { registerEditorAutomation } from './editor-automation-registry.ts';
 import {
   canContentControlCommand,
   runContentControlCommand,
@@ -2586,8 +2585,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // Host calls read and write saved field results in this editor's mode.
   const instance = fieldScope.methods(editor);
   registerEditorHost(instance, () => container);
-  registerEditorHistoryGroups(instance, historyGroups);
-  registerEditorCompareEngine(instance, modules.review?.compareDocuments);
+  registerEditorAutomation(instance, historyGroups, modules.review?.compareDocuments);
   bindPopupChromeRequests(instance, views.popupChrome);
   endPreview = () => endEditorPreview(instance);
   registerEditorPreviewHost(instance, {
