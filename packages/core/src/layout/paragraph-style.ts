@@ -344,7 +344,7 @@ export function paragraphAutoSpacingSides(props: readonly OoxmlProperty[]): {
  * suppression in cells, notes, headers and footers, the document's first paragraph, list
  * margins) keeps the authored measurement. Returns `props` itself when no flag is present.
  */
-export function withoutAutoSpacingFlags(props: readonly OoxmlProperty[]): readonly OoxmlProperty[] {
+export function withoutAutoSpacingFlags(props: OoxmlProperty[]): OoxmlProperty[] {
   const flagged = (property: OoxmlProperty) =>
     property.localName === 'spacing' &&
     (property.attributes?.beforeAutospacing !== undefined ||

@@ -874,7 +874,7 @@ export function resolveParagraphLayoutInputs(
   // Under fixed spacing the automatic flags have no effect, so no layout reader sees them.
   const props =
     styleCascade?.fixedParagraphSpacing === true
-      ? [...withoutAutoSpacingFlags(cascadedProps)]
+      ? withoutAutoSpacingFlags(cascadedProps)
       : cascadedProps;
   // Content vs mark: with a styles table, `cascaded.runProperties` is content-only and
   // `markRunProperties` carries direct `w:pPr/w:rPr`. Without styles, there is no style

@@ -137,6 +137,7 @@ describe('an empty paragraph with a hidden mark before a table', () => {
     ]);
   });
 
+  // Captured references drop this paragraph in both modes, with no automatic gap left.
   test('an automatic space before without a measurement takes no line either', () => {
     const autoOnly = para(
       '',

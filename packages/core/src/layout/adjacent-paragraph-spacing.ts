@@ -11,7 +11,7 @@
 export interface AdjacentParagraphSpacingSettings {
   /**
    * Adjacent after- and before-spacing add up rather than collapse to the larger one, and
-   * automatic spacing resolves to fixed values.
+   * automatic spacing keeps the authored measurement.
    */
   readonly fixedParagraphSpacing?: true;
 }
