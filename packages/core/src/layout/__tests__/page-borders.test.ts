@@ -97,6 +97,22 @@ describe('w:pgBorders — parsing', () => {
     expect(bordersOf(allSides('w:val="single"'))?.top?.widthPt).toBe(0.5);
   });
 
+  test('borders only in the tracked previous properties still frame the pages', () => {
+    const change = (old: string) =>
+      `<w:sectPrChange w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:sectPr>` +
+      `<w:pgSz w:w="15840" w:h="12240" w:orient="landscape"/>${old}</w:sectPr></w:sectPrChange>`;
+    const blue = allSides('w:val="single" w:sz="24" w:color="00B0F0"');
+    const red = allSides('w:val="single" w:sz="8" w:color="FF0000"');
+    expect(bordersOf(change(blue))?.top?.color).toBe('00B0F0');
+    // The section's own borders win over the previous ones.
+    expect(bordersOf(red + change(blue))?.top?.color).toBe('FF0000');
+    expect(bordersOf(change(''))).toBeUndefined();
+    // The page keeps the current size: the previous landscape size does not apply.
+    const page = lay(docBody(change(blue))).pages[0]!;
+    expect(page.box.width).toBe(PAGE_WIDTH);
+    expect(strokeOf(page, 'top')?.edge.color).toBe('00B0F0');
+  });
+
   test('w:color auto keeps a null colour for paint to default to black', () => {
     expect(bordersOf(allSides('w:val="single" w:sz="8" w:color="auto"'))?.top?.color).toBeNull();
     expect(bordersOf(allSides('w:val="single" w:sz="8" w:color="FF0000"'))?.top?.color).toBe(

@@ -1598,6 +1598,26 @@ export function ensureListDefinition(pkg: OoxmlPackage, kind: ListKind, geometry
 export function ensureNumberingLevel(pkg: OoxmlPackage, numId: string, level: number, kind: ListKind): OoxmlPackage | null;
 
 // @public
+export interface EquationBoxEdges {
+    // (undocumented)
+    readonly bottom: boolean;
+    // (undocumented)
+    readonly left: boolean;
+    // (undocumented)
+    readonly right: boolean;
+    // (undocumented)
+    readonly top: boolean;
+}
+
+// @public
+export interface EquationBoxStrikes {
+    readonly bottomLeftToTopRight: boolean;
+    readonly horizontal: boolean;
+    readonly topLeftToBottomRight: boolean;
+    readonly vertical: boolean;
+}
+
+// @public
 export interface EquationControlSource {
     readonly controlFontSizePt?: number;
     readonly controlProperties?: true;
@@ -1644,6 +1664,11 @@ export type EquationExpression = {
     readonly lowerLimit?: EquationExpression;
     readonly operator: string;
     readonly upperLimit?: EquationExpression;
+} & EquationControlSource) | ({
+    readonly body: EquationExpression;
+    readonly hidden: EquationBoxEdges;
+    readonly kind: 'borderBox';
+    readonly strikes: EquationBoxStrikes;
 } & EquationControlSource) | {
     readonly kind: 'fallback';
     readonly text: string;

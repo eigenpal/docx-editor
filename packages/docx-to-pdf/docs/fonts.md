@@ -25,6 +25,8 @@ Sources resolve in this order:
 
 Earlier sources take priority. Each option accepts one source or an ordered array of sources.
 
+Installed fonts come from the operating system's font folders. On macOS, these folders include the fonts that Microsoft Word installs. Export reads each installed font file's own family name, so a font resolves by the name that the document uses, not by its file name. If an installed family has no bold or italic face, the nearest face draws the text with a synthesized style. Export never reads an installed copy of a face that the packages ship.
+
 Export rejects font faces that exceed the shaping byte limit. Later sources can supply usable faces. The resolution report retains rejected faces in `originFailures`. See [Separate font policy from PDF policy](#separate-font-policy-from-pdf-policy) for refusal rules. Use `defineFontResolver` for a resolver that reads the document's requested families. The `PdfFontOrigin` and `PdfFontsSource` types describe these inputs.
 
 The default sources need no network access. A resolver that you supply can make network requests.
@@ -60,10 +62,7 @@ Use the URL to read the font directly:
 
 ```ts
 import { readFile } from 'node:fs/promises';
-import {
-  NOTO_SANS_CJK_JP_FAMILY,
-  NOTO_SANS_CJK_JP_URL,
-} from '@docx-editor.dev/fonts-cjk';
+import { NOTO_SANS_CJK_JP_FAMILY, NOTO_SANS_CJK_JP_URL } from '@docx-editor.dev/fonts-cjk';
 
 const fontBytes = new Uint8Array(await readFile(NOTO_SANS_CJK_JP_URL));
 console.log(NOTO_SANS_CJK_JP_FAMILY, fontBytes.byteLength);

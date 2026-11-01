@@ -182,7 +182,10 @@ export interface TextboxStoryProjection {
   readonly insetsEmu: Readonly<{ top: number; right: number; bottom: number; left: number }>;
   /** `wps:bodyPr/@anchor` collapsed to the three renderable positions; default top. */
   readonly verticalAnchor: 'top' | 'center' | 'bottom';
-  /** Autofit child of `wps:bodyPr`; extent stays authoritative either way (diagnostic only). */
+  /**
+   * Autofit child of `wps:bodyPr`. `shape` on a top-level box sets {@link fitHeightToText};
+   * `normal` (shrink text on overflow) keeps the extent.
+   */
   readonly autofit: 'none' | 'shape' | 'normal';
   /**
    * `wps:bodyPr/@wrap="none"` (VML `mso-wrap-style:none`): lines never wrap at the box edge,
@@ -201,7 +204,10 @@ export interface TextboxStoryProjection {
   readonly strokeCentered?: true;
   /** VML `insetpen`: the outline lies inside the box and insets the text by its full width. */
   readonly strokeInset?: true;
-  /** VML `mso-fit-shape-to-text`: the box height follows its text when laid out. */
+  /**
+   * VML `mso-fit-shape-to-text` or DrawingML `a:spAutoFit` on a top-level box: the box height
+   * follows its text when laid out.
+   */
   readonly fitHeightToText?: true;
   /** Outline dash pattern in multiples of the outline width; absent for solid. */
   readonly strokeDash?: readonly number[];
@@ -866,8 +872,13 @@ export function projectTextboxStory(
     resolveSchemeColor,
     resolveStyleMatrixReference
   );
+  if (!story) return story;
+  // `a:spAutoFit` resizes a top-level box to its text. A group member keeps its member size:
+  // the group's own extent places every member.
+  const fitted: TextboxStoryProjection =
+    story.autofit === 'shape' ? { ...story, fitHeightToText: true } : story;
   const spPr = shapeProperties(wsp);
-  if (!story || !spPr) return story;
+  if (!spPr) return fitted;
   // A top-level box paints the outline of its geometry, turns, and flows its text vertically;
   // a group member's shape paints with the group.
   const bodyPr = findDirectChild(wsp.children, {
@@ -875,7 +886,7 @@ export function projectTextboxStory(
     localName: 'bodyPr',
   });
   const frame = drawingTextboxFrame(spPr, bodyPr, extent);
-  return frame ? { ...story, legacyFrame: frame, strokeCentered: true } : story;
+  return frame ? { ...fitted, legacyFrame: frame, strokeCentered: true } : fitted;
 }
 
 /**

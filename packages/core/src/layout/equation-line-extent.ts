@@ -63,6 +63,12 @@ function collectClaimants(
       open(node.subscript, depth + scriptLevels(node.subscript));
       open(node.superscript, depth + scriptLevels(node.superscript));
       return;
+    case 'borderBox':
+      // The body claims like any other part; the box adds a claim for its own rules.
+      open(node.body, depth);
+      if (node.rules.length > 0)
+        claimants.push({ node, offset: top + node.baseline - baseline, depth });
+      return;
     case 'fraction':
       if (display) break;
       open(node.numerator, depth);
@@ -123,6 +129,18 @@ function withExtent(node: EquationGeometry, baseline: number, height: number): E
       });
     case 'bar':
       return Object.freeze({ ...node, ...extent, body: move(node.body), bar: rule(node.bar) });
+    case 'borderBox':
+      return Object.freeze({
+        ...node,
+        ...extent,
+        body: move(node.body),
+        rules: Object.freeze(node.rules.map(rule)),
+        diagonals: Object.freeze(
+          node.diagonals.map((line) =>
+            Object.freeze({ ...line, y1: line.y1 + dy, y2: line.y2 + dy })
+          )
+        ),
+      });
     case 'radical':
       return Object.freeze({
         ...node,
@@ -206,6 +224,17 @@ export function fitEquationLineExtent(
         nodeAscent = Math.min(nodeAscent, ink.ascent + leading);
         nodeDescent = Math.min(nodeDescent, ink.descent);
       }
+    }
+    // A border box claims the extent of its rules, with the math leading above them.
+    if (node.kind === 'borderBox') {
+      let ruleTop = Number.POSITIVE_INFINITY;
+      let ruleBottom = Number.NEGATIVE_INFINITY;
+      for (const rule of node.rules) {
+        ruleTop = Math.min(ruleTop, rule.y);
+        ruleBottom = Math.max(ruleBottom, rule.y + rule.height);
+      }
+      nodeAscent = node.baseline - ruleTop + MATH_LEADING * leadingSizePt;
+      nodeDescent = ruleBottom - node.baseline;
     }
     ascent = Math.max(ascent, nodeAscent - offset);
     descent = Math.max(descent, nodeDescent + offset);

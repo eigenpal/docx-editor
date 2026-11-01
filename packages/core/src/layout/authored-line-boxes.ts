@@ -11,7 +11,10 @@ import { glyphSizeFactorOf, type ResolvedRunStyle } from './run-style.ts';
 // error for another. Values are `hhea` ascent, descent and line gap in 2048ths of an em, the
 // same for every style of the family. Numbers only; no font data.
 const LINE_BOXES: ReadonlyMap<string, { readonly family: string; readonly em: LineBoxEm }> =
-  new Map([['garamond', { family: 'Garamond', em: lineBoxEm(1765, 539, 0) }]]);
+  new Map([
+    ['garamond', { family: 'Garamond', em: lineBoxEm(1765, 539, 0) }],
+    ['segoe ui', { family: 'Segoe UI', em: lineBoxEm(2210, 514, 0) }],
+  ]);
 
 /** A line box as em ratios, the shape of a font substitution's `lineMetrics`. */
 export interface LineBoxEm {

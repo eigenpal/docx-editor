@@ -12,6 +12,7 @@ import type { FontSource, FontSourceSubstitution } from '@docx-editor.dev/core';
 import { createFontSource, defineFontResolver } from '@docx-editor.dev/core/editor';
 import type { FontRequest } from '@docx-editor.dev/core/export';
 import { FONT_ASSET_ROOT } from '@docx-editor.dev/fonts';
+import { buildSystemFontIndex, indexedFace, type SystemFontIndex } from './system-font-index.ts';
 
 const assetRoot = new NodeURL(
   '../assets/',
@@ -213,6 +214,7 @@ const packagedSubstitutes: Record<string, string> = {
   Arial: 'Liberation Sans',
   'Courier New': 'Liberation Mono',
   'Century Gothic': 'TeX Gyre Adventor',
+  'Segoe UI': 'Selawik',
 };
 const substituteFor = (family: string): string | undefined => {
   const canonical = canonicalFamily(family).family;
@@ -288,6 +290,14 @@ const knownFamilies = new Set<string>([
  * resolves, so the stand-in covers one that is still uncovered when it runs. A document can
  * name the CJK face itself, so it is here too.
  */
+/** The faces this package ships, by case-folded name: never read from a system copy. */
+const shippedFamilies = new Set<string>(
+  [
+    ...supplemental.map(([family]) => family),
+    CJK_FAMILY,
+    ...Object.values(packagedSubstitutes),
+  ].map((family) => family.toLowerCase())
+);
 const cjkWordFamilies = new Set<string>([
   CJK_FAMILY,
   ...Object.keys(substitutes).filter((family) => substitutes[family] === CJK_FAMILY),
@@ -596,8 +606,83 @@ const wordFontRoots =
           '/usr/share/fonts/truetype/msttcore',
           join(homedir(), '.local/share/fonts'),
         ];
+/** The operating system's font folders, searched in full for a family the fixed rules lack. */
+const systemFontRoots =
+  process.platform === 'darwin'
+    ? [
+        '/System/Library/Fonts',
+        '/Library/Fonts',
+        join(homedir(), 'Library/Fonts'),
+        '/Applications/Microsoft Word.app/Contents/Resources/DFonts',
+      ]
+    : process.platform === 'win32'
+      ? [
+          join(process.env.WINDIR ?? 'C:\\Windows', 'Fonts'),
+          ...(process.env.LOCALAPPDATA
+            ? [join(process.env.LOCALAPPDATA, 'Microsoft', 'Windows', 'Fonts')]
+            : []),
+        ]
+      : [
+          '/usr/share/fonts',
+          '/usr/local/share/fonts',
+          join(homedir(), '.local/share/fonts'),
+          join(homedir(), '.fonts'),
+        ];
 /** Internal factory: tests supply isolated trusted directories without mocking global fs. */
-export function installedWordFontResolver(roots: readonly string[]) {
+export function installedWordFontResolver(
+  roots: readonly string[],
+  indexRoots: readonly string[] = roots
+) {
+  // Built once, on the first family no fixed rule names, then shared by every export.
+  let index: Promise<SystemFontIndex> | undefined;
+  const systemIndex = () => (index ??= buildSystemFontIndex(indexRoots));
+  /**
+   * Every style of a family the fixed rules do not name, from the installed faces. A style
+   * the family lacks reads its nearest face, which the renderer emboldens or slants.
+   */
+  const indexedSources = async (
+    requested: string,
+    family: string,
+    bold: boolean,
+    italic: boolean,
+    signal: AbortSignal | undefined
+  ): Promise<FontSource[]> => {
+    // The faces this package ships come from the package, never from a system copy.
+    if (shippedFamilies.has(family.toLowerCase())) return [];
+    const installed = await systemIndex();
+    if (signal?.aborted) throw signal.reason;
+    const found: FontSource[] = [];
+    // One face file serves at most one style: a style the family lacks resolves to the
+    // nearest style that has a source, and the renderer emboldens or slants it.
+    const used = new Set<string>();
+    for (const [weight, style] of [
+      [400, 'normal'],
+      [700, 'normal'],
+      [400, 'italic'],
+      [700, 'italic'],
+    ] as const) {
+      const faceBold = bold || weight === 700;
+      const faceItalic = italic || style === 'italic';
+      const hit =
+        indexedFace(installed, family, faceBold, faceItalic) ??
+        (family === requested
+          ? undefined
+          : indexedFace(installed, requested, weight === 700, style === 'italic'));
+      if (!hit || used.has(`${hit.path}#${hit.faceIndex}`)) continue;
+      used.add(`${hit.path}#${hit.faceIndex}`);
+      try {
+        const source = createFontSource(await readFontFile(hit.path, signal), {
+          ...face(requested, weight, style),
+          faceIndex: hit.faceIndex,
+        });
+        if (!('failure' in source)) found.push(source.source);
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        // An unreadable or oversized file resolves nothing for this style.
+      }
+    }
+    return found;
+  };
   return defineFontResolver(async ({ families, defaultFamily, signal }) => {
     // Filename stems that take Word's ` Bold` / `bd` style suffixes.
     const names: Record<string, readonly string[]> = {
@@ -661,7 +746,10 @@ export function installedWordFontResolver(roots: readonly string[]) {
     const sources = [];
     for (const requested of new Set([...families, ...(defaultFamily ? [defaultFamily] : [])])) {
       const { family, bold, italic } = canonicalFamily(requested);
-      if (!Object.hasOwn(names, family) && !Object.hasOwn(files, family)) continue;
+      if (!Object.hasOwn(names, family) && !Object.hasOwn(files, family)) {
+        sources.push(...(await indexedSources(requested, family, bold, italic, signal)));
+        continue;
+      }
       for (const [weight, style] of [
         [400, 'normal'],
         [700, 'normal'],
@@ -751,8 +839,11 @@ function collectionFaceMatches(
   return actual === expected.toLowerCase();
 }
 
-/** Read only fixed, known Word font filenames from trusted OS font locations. */
-export const installedWordFonts = installedWordFontResolver(wordFontRoots);
+/**
+ * Read known Word font filenames from trusted OS font locations, and any other installed
+ * family from an index of the OS font folders.
+ */
+export const installedWordFonts = installedWordFontResolver(wordFontRoots, systemFontRoots);
 
 async function readFontFile(path: string | NodeURL, signal?: AbortSignal): Promise<Uint8Array> {
   if (signal?.aborted) throw signal.reason;

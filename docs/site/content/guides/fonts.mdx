@@ -100,6 +100,7 @@ The optional `@docx-editor.dev/fonts` package provides open-licensed substitutes
 | Arial           | Liberation Sans   | SIL OFL           | Yes                          |
 | Courier New     | Liberation Mono   | SIL OFL           | Yes                          |
 | Century Gothic  | TeX Gyre Adventor | GUST Font License | No                           |
+| Segoe UI        | Selawik           | SIL OFL           | No                           |
 
 The first five match advance widths for the glyphs they cover. Kerning differences can still change line breaks.
 
@@ -107,11 +108,13 @@ Helvetica has the same advance widths as Arial. `packagedFonts()` serves a docum
 
 TeX Gyre Adventor has slightly narrower advance widths than Century Gothic. The measured difference stays within 1% in `bun run check:font-width-fidelity`, but can still change line breaks.
 
+Selawik has the same advance widths as Segoe UI, and Segoe UI text keeps the Segoe UI line height. Selawik has no italic faces, so italic Segoe UI text draws in the upright faces with a synthesized slant.
+
 Packaged faces do not cover every script. Liberation Sans has no Arabic glyphs. The editor preserves native family fallback for missing glyphs. Exact metrics still depend on the available font for that script.
 
 Supply licensed font bytes when pixels must match the original face.
 
-`defaultFonts()` loads five package defaults: Calibri, Cambria, Times New Roman, Arial, and Courier New. Century Gothic requires an explicit choice and adds about 709 KB:
+`defaultFonts()` loads five package defaults: Calibri, Cambria, Times New Roman, Arial, and Courier New. Century Gothic and Segoe UI require an explicit choice. Their substitutes add about 709 KB and 88 KB:
 
 ```ts
 import { ALL_DEFAULT_FONT_FAMILIES, defaultFonts } from '@docx-editor.dev/fonts';
@@ -119,7 +122,7 @@ import { ALL_DEFAULT_FONT_FAMILIES, defaultFonts } from '@docx-editor.dev/fonts'
 const fonts = await defaultFonts({ families: ALL_DEFAULT_FONT_FAMILIES });
 ```
 
-`googleFonts()` covers it on demand instead. It serves Century Gothic from the same packaged bytes, and only when a document names the family, so it makes no third-party request for it.
+`googleFonts()` covers them on demand instead. It serves Century Gothic and Segoe UI from the same packaged bytes, and only when a document names the family, so it makes no third-party request for them.
 
 `packagedFonts()` loads a family only when a document names it, or when it is that document's default face. Narrow it further with `allow`:
 
@@ -351,7 +354,7 @@ The editor caps the family list passed to a resolver.
 `googleFonts()` resolves a family against closed sets, in this order:
 
 1. A redirect from the substitution map: your `substitute` entries merged over the built-in metric map, such as Calibri to Carlito. Your entries win, and they win over the other two steps as well, so you can redirect any family.
-2. A packaged face for a family the catalog cannot match. Century Gothic is the one. It reads the package's own assets, so it makes no third-party request.
+2. A packaged face for a family the catalog cannot match: Century Gothic or Segoe UI. It reads the package's own assets, so it makes no third-party request.
 3. A direct catalog match on the name the document wrote.
 
 Step 1 comes first, so `substitute: { Lato: 'Tinos' }` redirects Lato even though Lato is cataloged under its own name.
