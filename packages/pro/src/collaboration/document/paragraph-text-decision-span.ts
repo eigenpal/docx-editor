@@ -93,18 +93,23 @@ export function formatDecidedDeletions(
 }
 
 /**
- * Write `changes` over the kept characters from `position`, `length` long, and add each
- * revision the write removes from them to `removed`.
+ * Write `changes` over the kept characters from `position`, `length` long, whose attributes
+ * are `have`, and add each revision the write removes from them to `removed`, with the value
+ * it removes.
  */
 export function formatDeciding(
   text: Y.Text,
   position: number,
   length: number,
+  have: Readonly<Record<string, string>>,
   changes: Changes,
-  removed: Set<string>
+  removed: Map<string, string>
 ): void {
   for (const key of Object.keys(changes)) {
-    if (key.startsWith(REVISION_PREFIX) && changes[key] === null) removed.add(key);
+    const value = have[key];
+    if (key.startsWith(REVISION_PREFIX) && changes[key] === null && value !== undefined) {
+      removed.set(key, value);
+    }
   }
   text.format(position, length, changes);
 }
@@ -114,15 +119,15 @@ export function formatDeciding(
  * paragraph still belongs to (`paragraph-text-decisions.ts`). A decision on one piece of a
  * revision records nothing: the rest of the revision stays.
  */
-export function recordWholeDecisions(text: Y.Text, removed: ReadonlySet<string>): void {
+export function recordWholeDecisions(text: Y.Text, removed: ReadonlyMap<string, string>): void {
   if (removed.size === 0) return;
-  const still = new Set<string>();
+  const whole = new Map(removed);
   for (const op of sharedDelta(text)) {
     const attributes = op.attributes ?? {};
     const superseded = supersededKeys(attributes[SUPERSEDED_KEY]);
     for (const key of Object.keys(attributes)) {
-      if (removed.has(key) && !superseded.has(key)) still.add(key);
+      if (removed.has(key) && !superseded.has(key)) whole.delete(key);
     }
   }
-  recordDecisions(text, [...removed].filter((key) => !still.has(key)).sort());
+  recordDecisions(text, whole);
 }

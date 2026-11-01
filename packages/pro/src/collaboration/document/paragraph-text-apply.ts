@@ -246,15 +246,16 @@ function writeParagraphText(
     (from, to) => changeOf(from, to)?.changes ?? null
   );
   // The revisions a write removes from kept characters, for `recordWholeDecisions`.
-  const removed = new Set<string>();
+  const removed = new Map<string, string>();
   for (let index = blocks.length - 1; index >= 0; index -= 1) {
     const block = blocks[index]!;
     if (block.kind === 'eq') {
       // Reformat runs of positions that are adjacent and change alike, from the end back.
-      const changed: (AttributeChange & { readonly position: number })[] = [];
+      const changed: (AttributeChange & { position: number; have: InlineAttributes })[] = [];
       for (const step of block.steps as Extract<Step, { op: 'eq' }>[]) {
-        const change = changeOf(before[step.before]!.attributes, after[step.after]!.attributes);
-        if (change) changed.push({ ...change, position: before[step.before]!.position! });
+        const { attributes: have, position } = before[step.before]!;
+        const change = changeOf(have, after[step.after]!.attributes);
+        if (change) changed.push({ ...change, position: position!, have });
       }
       const runs: (typeof changed)[] = [];
       for (const entry of changed) {
@@ -284,7 +285,7 @@ function writeParagraphText(
               })
             )
           : run[0]!.changes!;
-        formatDeciding(text, run[0]!.position, run.length, changes, removed);
+        formatDeciding(text, run[0]!.position, run.length, run[0]!.have, changes, removed);
       }
       continue;
     }

@@ -48,10 +48,21 @@ test('a reader ignores decision records it cannot trust', () => {
 
 test('a decision record leaves only the characters it saw out of the revision', () => {
   const { text } = paragraph();
-  recordDecisions(text, [KEY]);
+  recordDecisions(text, new Map([[KEY, VALUE]]));
   expect(revisionsOf(text)).toEqual(['']);
   // A character typed after the decision keeps the revision it takes.
   text.insert(3, 'd', { [KEY]: VALUE });
   expect(sharedDelta(text).map((op) => op.insert)).toEqual(['abc', 'd']);
   expect(revisionsOf(text)).toEqual(['', KEY]);
+});
+
+test('a decision record applies only to the revision it names under its key', () => {
+  const { text } = paragraph();
+  const other = JSON.stringify({
+    e: { i: 'lid:a:1', l: 'del', k: 'revisionDelete', a: [['author', 'Bob']] },
+    d: 1,
+  });
+  recordDecisions(text, new Map([[KEY, other]]));
+  expect(decidedOf(text)).not.toBeNull();
+  expect(revisionsOf(text)).toEqual([KEY]);
 });
