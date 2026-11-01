@@ -10,8 +10,9 @@
 // ONE Latin family (`run-style.ts`: theme slot ?? `w:ascii` ?? `w:hAnsi`), resolved through
 // the cascade layout applies: direct run `w:rFonts`, the `w:rStyle` chain, the `w:pStyle`
 // chain, the enclosing table's `w:tblStyle` chain, then `w:docDefaults` — with the
-// `w:default="1"` style of each type standing in where the reference is absent
-// (`style-cascade.ts` resolves absent `pStyle`/`rStyle`/`tblStyle` the same way).
+// `w:default="1"` paragraph and table styles standing in where the reference is absent.
+// The default character style contributes nothing, named or reached through `basedOn`
+// (`style-cascade.ts` resolves the same way).
 //
 // Each glyph-bearing run resolves on its own, in the order layout applies: the run's own
 // `w:rFonts`, its `w:rStyle` chain, its paragraph's `w:pStyle` chain, its table's
@@ -565,6 +566,8 @@ interface StyleIndex {
   readonly defaultTable: string | null;
   /** The chain a style reference resolves through. Cycle-safe, capped at {@link CHAIN_CAP}. */
   chain(styleId: string | null): StyleChain;
+  /** A `w:rStyle` chain: {@link chain} without the default character style's own entry. */
+  characterChain(styleId: string | null): StyleChain;
 }
 
 const EMPTY_STYLE_INDEX: StyleIndex = {
@@ -579,6 +582,7 @@ const EMPTY_STYLE_INDEX: StyleIndex = {
   defaultCharacter: null,
   defaultTable: null,
   chain: () => EMPTY_CHAIN,
+  characterChain: () => EMPTY_CHAIN,
 };
 
 interface StyleIndexMemo {
@@ -692,9 +696,14 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
   }
 
   const chainMemo = new Map<string, StyleChain>();
-  const chain = (styleId: string | null): StyleChain => {
+  const characterChainMemo = new Map<string, StyleChain>();
+  const walk = (
+    styleId: string | null,
+    memo: Map<string, StyleChain>,
+    skip: string | null
+  ): StyleChain => {
     if (styleId === null) return EMPTY_CHAIN;
-    const cached = chainMemo.get(styleId);
+    const cached = memo.get(styleId);
     if (cached) return cached;
     let latin: string | null = null;
     let eastAsia: string | null = null;
@@ -708,6 +717,10 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
       seen.add(at);
       const entry = entries.get(at);
       if (!entry) break;
+      if (at === skip) {
+        at = entry.basedOn;
+        continue;
+      }
       latin ??= entry.family;
       eastAsia ??= entry.eastAsiaFamily;
       hAnsi ??= entry.hAnsiFamily;
@@ -717,9 +730,12 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
       at = entry.basedOn;
     }
     const resolved = { latin, eastAsia, hAnsi, hint, conditional, conditionalEastAsia };
-    chainMemo.set(styleId, resolved);
+    memo.set(styleId, resolved);
     return resolved;
   };
+  const chain = (styleId: string | null): StyleChain => walk(styleId, chainMemo, null);
+  const characterChain = (styleId: string | null): StyleChain =>
+    walk(styleId, characterChainMemo, defaultCharacter);
 
   return {
     docDefaultLatin: docDefaultFamily,
@@ -733,6 +749,7 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
     defaultCharacter,
     defaultTable,
     chain,
+    characterChain,
   };
 }
 
@@ -797,7 +814,7 @@ function addBroadFamilies(
   inherited: Map<string, string>
 ): void {
   const chains = [
-    index.chain(profile.runStyle ?? index.defaultCharacter),
+    index.characterChain(profile.runStyle ?? null),
     index.chain(profile.paragraphStyle ?? index.defaultParagraph),
     profile.tableStyle === false || profile.tableStyle === undefined
       ? EMPTY_CHAIN
@@ -835,7 +852,7 @@ function resolveProfile(
   direct: Map<string, string>,
   inherited: Map<string, string>
 ): void {
-  const runChain = index.chain(profile.runStyle ?? index.defaultCharacter);
+  const runChain = index.characterChain(profile.runStyle ?? null);
   const paragraphChain = index.chain(profile.paragraphStyle ?? index.defaultParagraph);
   const tableChain =
     profile.tableStyle === false || profile.tableStyle === undefined

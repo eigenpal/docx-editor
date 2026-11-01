@@ -5,8 +5,9 @@
 // latent Balloon Text naming Segoe UI, a table style carrying a face name) contributes to
 // `documentFonts()` for the picker, and never here. The cascade half: used `w:pStyle` /
 // `w:rStyle` / `w:tblStyle` chains resolve through `basedOn` with the nearest family
-// winning, absent references fall to the `w:default="1"` style of the type, and
-// `w:docDefaults` counts once any text renders.
+// winning, absent paragraph and table references fall to the `w:default="1"` style of
+// the type, the default character style contributes nothing, and `w:docDefaults` counts
+// once any text renders.
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
@@ -355,20 +356,38 @@ describe('collectRenderedFontFamilies', () => {
     expect(session.renderedFontFamilies()).toEqual(['Cambria', 'Georgia']);
   });
 
-  test('absent style references fall to the w:default="1" style of the type', () => {
+  test('absent style references fall to the w:default="1" paragraph style', () => {
     const session = open(
       docx({
         body: '<w:p><w:r><w:t>bare</w:t></w:r></w:p>',
         styles: styles(
           `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
             '<w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/></w:rPr></w:style>' +
-            // The default CHARACTER style stands in for absent rStyle too, and is nearer.
             `<w:style w:type="character" w:default="1" w:styleId="DPF">` +
             '<w:rPr><w:rFonts w:ascii="Consolas"/></w:rPr></w:style>'
         ),
       })
     );
-    expect(session.renderedFontFamilies()).toEqual(['Consolas']);
+    expect(session.renderedFontFamilies()).toEqual(['Aptos']);
+  });
+
+  test('the default character style face never renders, named or reached through basedOn', () => {
+    const session = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rStyle w:val="DPF"/></w:rPr><w:t>named</w:t></w:r>' +
+          '<w:r><w:rPr><w:rStyle w:val="Child"/></w:rPr><w:t>derived</w:t></w:r></w:p>',
+        styles: styles(
+          `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
+            '<w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/></w:rPr></w:style>' +
+            `<w:style w:type="character" w:default="1" w:styleId="DPF">` +
+            '<w:rPr><w:rFonts w:ascii="Consolas"/></w:rPr></w:style>' +
+            `<w:style w:type="character" w:styleId="Child"><w:basedOn w:val="DPF"/>` +
+            '<w:rPr><w:b/></w:rPr></w:style>'
+        ),
+      })
+    );
+    expect(session.renderedFontFamilies()).toEqual(['Aptos']);
   });
 
   test('a text-bearing table brings its tblStyle chain and conditional formats', () => {

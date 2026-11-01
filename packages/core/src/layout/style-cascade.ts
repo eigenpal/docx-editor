@@ -62,7 +62,7 @@ import { cascadedTabStops, tabStopsFingerprint, type ResolvedTabStops } from './
 import { withNumberingTabRule } from './numbering-tab-rule.ts';
 import { NO_THEME_FONTS, type ThemeFonts } from './run-style.ts';
 import { combineStyleToggles } from './style-toggles.ts';
-import { styleChain, styleIdFromProps } from './style-chain.ts';
+import { characterStyleRunProperties, styleChain, styleIdFromProps } from './style-chain.ts';
 import { resolveParagraphOutlineLevel } from './paragraph-outline-level.ts';
 import { paragraphMarkRunProperties } from './paragraph-mark-run.ts';
 import { legacyTableDefaultProperties } from './table-style-compatibility.ts';
@@ -730,13 +730,9 @@ export function cascadeRunProperties(
     applyLigatureCompatibility(props, table?.disableOptionalLigatures);
   let characterProps: readonly OoxmlProperty[] = [];
   if (table) {
+    // Only a named character style applies; the default character style adds nothing.
     const rStyleId = styleIdFromProps(directRunProperties, 'rStyle');
-    const characterStyleId = rStyleId ?? table.defaultCharacterStyleId;
-    if (characterStyleId) {
-      characterProps = styleChain(table, characterStyleId, 'character').flatMap(
-        (style) => style.runProperties
-      );
-    }
+    if (rStyleId) characterProps = characterStyleRunProperties(table, rStyleId);
   }
 
   if (inheritedRunProperties.length === 0 && characterProps.length === 0) {

@@ -118,12 +118,6 @@ const cases = [
     rPr: '<w:rStyle w:val="Complex"/>',
   },
   {
-    name: 'default character style',
-    styles: character.replace('w:type="character"', 'w:type="character" w:default="1"'),
-    pPr: '',
-    rPr: '',
-  },
-  {
     name: 'default paragraph style',
     styles: character.replace('w:type="character"', 'w:type="paragraph" w:default="1"'),
     pPr: '',
@@ -321,13 +315,27 @@ test('table inheritance respects a direct false override', () => {
   );
 });
 
-test('empty paragraph typing applies the default character style while mark writes stay separate', () => {
+for (const caret of [false, true]) {
+  test(`default character style: ${caret ? 'caret' : 'selection'} writes no companions`, () => {
+    const styles = character.replace('w:type="character"', 'w:type="character" w:default="1"');
+    withEditor('<w:p><w:r><w:t>abc</w:t></w:r></w:p>', styles, (editor) => {
+      select(editor, [0, caret ? 3 : 0], [0, 3]);
+      editor.surface!.setRunProperty('b');
+      if (caret) editor.surface!.type('x');
+      const runs = authoredRunProperties(editor)[0]!;
+      expect(runs[runs.length - 1]).toEqual(['b']);
+      expect(editor.surface!.formatting()?.bold).toBe(true);
+    });
+  });
+}
+
+test('empty paragraph typing ignores the default character style while mark writes stay separate', () => {
   const styles = character.replace('w:type="character"', 'w:type="character" w:default="1"');
   withEditor('<w:p/>', styles, (editor) => {
     select(editor, [0, 0], [0, 0]);
     editor.surface!.setRunProperty('b');
     editor.surface!.type('x');
-    expect(authoredRunProperties(editor)[0]![0]).toContain('bCs');
+    expect(authoredRunProperties(editor)[0]![0]).not.toContain('bCs');
     expect(authoredMarkProperties(editor)[0]).not.toContain('bCs');
     expect(editor.surface!.formatting()?.bold).toBe(true);
   });
