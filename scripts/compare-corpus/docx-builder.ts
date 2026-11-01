@@ -196,6 +196,20 @@ export function buildDocx(spec: DocSpec): Uint8Array {
       const name = `${kind}${n++}.xml`;
       const tag = kind === 'header' ? 'hdr' : 'ftr';
       addPart(`word/${name}`, `<w:${tag} ${NS_DECL}>${xml}</w:${tag}>`, `${WML_CT}.${kind}+xml`);
+      // Images in a header or footer are relationships of that part.
+      const own = (spec.media ?? []).filter((media) => xml.includes(`"${media.rId}"`));
+      if (own.length > 0) {
+        files[`word/_rels/${name}.rels`] = strToU8(
+          `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+            own
+              .map(
+                (media) =>
+                  `<Relationship Id="${media.rId}" Type="${REL_TYPE}/image" Target="media/${esc(media.name)}"/>`
+              )
+              .join('') +
+            '</Relationships>'
+        );
+      }
       const rid = addRel(kind, name);
       furniture.push(`<w:${kind}Reference w:type="${variant}" r:id="${rid}"/>`);
     }
@@ -237,7 +251,8 @@ export function buildDocx(spec: DocSpec): Uint8Array {
   }
   for (const media of spec.media ?? []) {
     files[`word/media/${media.name}`] = media.bytes;
-    addRel('image', `media/${media.name}`, false, media.rId);
+    if (spec.body.includes(`"${media.rId}"`))
+      addRel('image', `media/${media.name}`, false, media.rId);
   }
   for (const [rid, url] of Object.entries(spec.hyperlinks ?? {})) {
     addRel('hyperlink', url, true, rid);

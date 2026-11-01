@@ -41,8 +41,13 @@ interface Rel {
 }
 
 function relationshipOf(pkg: OoxmlPackage, owner: string, id: string): Rel | null {
-  const internal = relationshipsOf(pkg, owner).find((record) => record.id === id);
-  if (internal) return { type: internal.type, target: internal.rawTarget, external: false };
+  const record = relationshipsOf(pkg, owner).find((entry) => entry.id === id);
+  if (record)
+    return {
+      type: record.type,
+      target: record.rawTarget,
+      external: record.targetMode === 'External',
+    };
   const external = pkg.externalTargets.find(
     (record) => record.ownerPart === owner && record.id === id
   );

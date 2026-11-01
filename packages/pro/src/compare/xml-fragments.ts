@@ -78,6 +78,11 @@ export class NamespaceScope {
     });
   }
 
+  /** The namespace a root-scope prefix is bound to, if any. */
+  uriOf(prefix: string): string | undefined {
+    return this.#bindings.get(prefix);
+  }
+
   /** Declarations for the output root element. */
   declarations(): string {
     return [...this.#bindings]
