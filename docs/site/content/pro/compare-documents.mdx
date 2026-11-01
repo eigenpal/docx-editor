@@ -92,3 +92,10 @@ else console.error(result.code, result.message);
 ```
 
 The function checks every result before it returns it: accepting all changes must give the revised text, and rejecting all changes must give the original text. A result that fails the check is not returned; the function refuses with `unsupported-content` instead. It refuses with `invalid-original` or `invalid-revised` for a file it cannot read, and with `too-large` for documents over its size limit.
+
+The compare also refuses with `unsupported-content` in these cases:
+
+- The documents differ inside a content control that is locked or bound to custom XML data. Tracked changes there cannot be accepted or rejected.
+- The original or the revised document holds tracked changes that cannot be accepted, so its final state is unknown.
+
+Every compare entry point reports the same reason: the dialog shows it, the `compareDocuments` command returns it, and `Document.compareFromBase64` rejects `context.sync()` with it.
