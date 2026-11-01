@@ -290,15 +290,19 @@ export function commentsInOrder(layout: ExportSemanticLayout): CommentRecord[] {
   for (const artifact of layout.reviewArtifacts) {
     if (artifact.kind !== 'comment') continue;
     comments.push(artifact);
+    // Occurrences come in document order, so the last one holds the end of the range, also
+    // when a split table row carries an earlier cell onto a later page.
     for (const occurrence of artifact.occurrences) {
       if (occurrence.rootStory !== 'body') continue;
       const boxes = (occurrence.geometry?.pageStack ?? []).filter(isAnchorBox);
       const last = boxes[boxes.length - 1];
       if (!last) continue;
       // Rounded, so two ranges that end at the same character tie despite float noise.
-      const key: Key = [occurrence.pageIndex, hundredths(last.y), hundredths(last.x + last.width)];
-      const known = keys.get(artifact.id);
-      if (!known || later(key, known) > 0) keys.set(artifact.id, key);
+      keys.set(artifact.id, [
+        occurrence.pageIndex,
+        hundredths(last.y),
+        hundredths(last.x + last.width),
+      ]);
     }
   }
   for (const artifact of comments) {
@@ -363,7 +367,8 @@ function commentsOn(
       const colors = artifact.resolved
         ? { mark: mix(base.mark, 0.25), fill: mix(base.mark, 0.06) }
         : base;
-      // The balloon sits beside the end of the range, on the page where the range ends.
+      // The balloon sits beside the end of the range, on the page where the range ends: the
+      // page of its last occurrence in document order.
       let end: { pageIndex: number; boxes: readonly LayoutBox[] } | undefined;
       const parts = artifact.occurrences.flatMap((occurrence) => {
         const boxes = (occurrence.geometry?.pageStack ?? []).filter(isAnchorBox);
@@ -379,11 +384,10 @@ function commentsOn(
           opens: index === 0,
           closes: index === parts.length - 1,
         });
-        if (!end || occurrence.pageIndex >= end.pageIndex)
-          end = {
-            pageIndex: occurrence.pageIndex,
-            boxes: end?.pageIndex === occurrence.pageIndex ? [...end.boxes, ...boxes] : boxes,
-          };
+        end = {
+          pageIndex: occurrence.pageIndex,
+          boxes: end?.pageIndex === occurrence.pageIndex ? [...end.boxes, ...boxes] : boxes,
+        };
       }
       // A reply usually has no range: its balloon follows its parent's.
       end ??= artifact.parentId ? anchors.get(artifact.parentId) : undefined;
