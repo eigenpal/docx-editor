@@ -211,6 +211,40 @@ export function spreadPreferredColumns(
   return floor.map((width) => MIN_COLUMN_PT + (width - MIN_COLUMN_PT) * scale);
 }
 
+/**
+ * Widen the columns of a table whose every column has a percentage preferred width.
+ *
+ * A column narrower than its minimum grows to it, and every other column gives up an equal
+ * part of what they grew by, whatever its width or content. Then, from the first column to
+ * the last, a column that the equal part takes below its minimum keeps the minimum, and the
+ * next column that gives way gives up the difference as well. Returns `undefined` when no
+ * column widens, or when the last columns cannot give up what the earlier ones need.
+ */
+export function equalShareWidenedWidths(
+  widths: readonly number[],
+  minimums: readonly number[]
+): readonly number[] | undefined {
+  const floor = minimums.map((minimum) => Math.max(minimum, MIN_COLUMN_PT));
+  let gain = 0;
+  let givers = 0;
+  const widens = widths.map((width, index) => {
+    const grows = width < floor[index]! - EPSILON_PT;
+    if (grows) gain += floor[index]! - width;
+    else givers++;
+    return grows;
+  });
+  if (gain <= EPSILON_PT || givers === 0) return undefined;
+  const share = gain / givers;
+  let carry = 0;
+  const result = widths.map((width, index) => {
+    if (widens[index]) return floor[index]!;
+    const settled = width - share - carry;
+    carry = Math.max(0, floor[index]! - settled);
+    return Math.max(settled, floor[index]!);
+  });
+  return carry > EPSILON_PT ? undefined : result;
+}
+
 /** Widths that match the resolved ones come back by identity, so the shared base stays. */
 export function sameOrComputed(
   structure: { readonly columnWidthsPt: readonly number[] },
