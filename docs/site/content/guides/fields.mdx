@@ -20,7 +20,7 @@ The shortcut changes the display without changing document content or adding an 
 | Field | Behavior |
 | --- | --- |
 | `PAGE`, `NUMPAGES`, and `SECTIONPAGES` | Update in headers and footers. Empty-cache body fields also update. |
-| `STYLEREF` | Updates supported character-style references in headers. |
+| `STYLEREF` | Updates supported character-style and paragraph-style references in headers. |
 | `REF` | Resolves bookmark text or numbering in the document body and notes. |
 | `NOTEREF` | Resolves a bookmarked footnote or endnote reference number. |
 | `AUTONUM`, `AUTONUMLGL`, and `AUTONUMOUT` | Generate separate document-order number sequences. |
@@ -144,9 +144,9 @@ A control that is locked only against deletion stays, and the command removes on
 
 The Delete and Backspace keys do not remove a generated TOC. A selection that includes generated rows refuses deletion.
 
-## Character-style header fields
+## Style header fields
 
-Header `STYLEREF` fields use text with the named character style applied directly. A derived style does not match its base style. Use the style's display name, not its internal identifier.
+Header `STYLEREF` fields use text with the named style applied directly. For a character style, the result is the text of the styled runs. For a paragraph style, the result is the whole text of a paragraph with that style, including field results and runs with a character style. A page or column break in that text reads as a space, and an empty paragraph supplies an empty result. Paragraphs without a paragraph style use the default paragraph style. If a character style and a paragraph style have the same name, the paragraph style applies. A derived style does not match its base style. Use the style's display name, not its internal identifier.
 
 The default result uses the first occurrence on the page. The `\l` switch uses the last occurrence. A page without a match uses the last preceding occurrence. If none precedes it, the result uses the first following occurrence.
 
@@ -156,9 +156,9 @@ Header height adjusts for each page's result. Body text and footnotes use the sp
 
 A continuous section keeps the preceding section's header on their shared page. Its own header does not enlarge that page's body inset. Exact negative top margins do not reserve header height.
 
-The `\* MERGEFORMAT` switch is supported. Other switches, missing matches, nested result fields, and results longer than 4,096 characters keep their saved results. Body and footer `STYLEREF` fields keep their saved results. Paragraph styles and style aliases are not supported.
+The `\* MERGEFORMAT` switch is supported. Other switches, missing matches, nested result fields, and results longer than 4,096 characters keep their saved results. Body and footer `STYLEREF` fields keep their saved results. Style aliases are not supported.
 
-The layout checks bounded document scans and pagination passes. Exceeded scan or pagination bounds stop layout with an error. Save preserves instructions and saved results.
+The layout checks bounded document scans and pagination passes. If the body exceeds the scan bound, header `STYLEREF` fields keep their saved results. Exceeded pagination bounds stop layout with an error. Save preserves instructions and saved results.
 
 ## `REF` fields
 
