@@ -339,7 +339,7 @@ googleFonts({
 
 An arbitrary substitute can change line breaks and pagination. Use a metric-compatible substitute when layout must remain stable.
 
-If no face is available for Garamond, the editor and PDF export keep Garamond's own line height on the fallback font. Line spacing and page breaks then stay the same, but character widths still follow the fallback font. A face that you supply for the family uses its own line height.
+If no face is available for Garamond, the editor and PDF export keep Garamond's own line height on the fallback font. Fallback character widths can still change line breaks and pagination. A face that you supply for the family uses its own line height.
 
 | Resolver constraint | Required behavior |
 | --- | --- |
@@ -579,9 +579,11 @@ Bidirectional paragraphs with tabs or inline atoms retain the existing placement
 
 ## Font names with punctuation
 
-The editor requests a run font name as one family, even when it contains a semicolon or a comma. For example, `Georgia;Verdana` requests one family. It does not request Georgia followed by Verdana. The editor preserves the original name when it saves the document.
+The editor uses the first item in a comma-separated run font name. For example, `Georgia,Verdana` requests Georgia. If Georgia is unavailable, the editor uses its normal fallback rules; it does not try Verdana. The editor preserves the complete authored name when it saves the document.
 
-The editor does not split a comma-separated name into candidates. If a run names `Georgia,Verdana` and the font table has no `w:altName` for it, the editor does not use Georgia. Instead, the editor uses an available script default or the existing fallback path.
+A semicolon does not separate font names. For example, `Georgia;Verdana` requests one family with that complete name.
+
+A quoted first item, such as `"Open Sans"` in `"Open Sans", sans-serif`, requests Cambria. Invalid characters or an excessive name length also select Cambria.
 
 An available primary face wins over its font-table `w:altName`. Otherwise, Core requests the complete alternate name as one family and uses its admitted face. Core ignores a `w:altName` value that is longer than 31 characters.
 
