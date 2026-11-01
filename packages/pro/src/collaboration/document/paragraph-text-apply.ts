@@ -872,7 +872,9 @@ export function applyInlinePlan(
   registry: DocumentRegistry,
   plan: InlinePlan,
   /** Each plan paragraph's tokens, encoded before the write began. */
-  encoded: ReadonlyMap<LogicalId, Token[]> = new Map()
+  encoded: ReadonlyMap<LogicalId, Token[]> = new Map(),
+  /** The paragraphs this edit removes: a join moves their text, so they are written. */
+  removedHere: ReadonlySet<LogicalId> = new Set()
 ): InlineWritten {
   const typed = plan.typed;
   const embedsAfter = new Set<string>();
@@ -886,15 +888,16 @@ export function applyInlinePlan(
   })[] = [];
   // Following text becomes its target's own first. The plan read it where it was typed too,
   // so a deleted paragraph whose following text moved is not written from that stale read.
-  // A live one's view never showed it, so its plan holds only its own edits. Text that follows
-  // within its own paragraph stays there, and that paragraph is written: a join that deletes
-  // it moves its text, and only its write names the text the join moves.
+  // A live one's view never showed it, so its plan holds only its own edits. A paragraph this
+  // edit removes, and one whose text follows within itself, is written: a join that deletes it
+  // moves its text, and only its write marks the join's text as copies a peer's delete hides.
   const adopted = new Set<LogicalId>();
   for (const { id } of plan.paragraphs) {
     const text = registry.inline.textOf(id);
     if (!text) continue;
     for (const source of adoptFollowingText(registry, id, text)) {
-      if (source !== id && registry.inline.isDeletedParagraph(source)) adopted.add(source);
+      if (source === id || removedHere.has(source)) continue;
+      if (registry.inline.isDeletedParagraph(source)) adopted.add(source);
     }
   }
   for (const { id, after } of plan.paragraphs) {
