@@ -7,6 +7,6 @@
   "tests": [
     "packages/pro/src/collaboration/__tests__/compare-documents-collaboration.test.ts"
   ],
-  "changeset": null,
+  "changeset": "compare-documents",
   "migration": null
 }
