@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { downloadBaseline, selectBaselineRun } from './package-size-baseline.mjs';
+import { downloadBaseline, selectBaselineRuns } from './package-size-baseline.mjs';
 
 const options = { repository: 'eigenpal/docx-editor', branch: 'main', sha: 'a'.repeat(40) };
 const source = {
@@ -20,9 +20,19 @@ afterEach(() => {
   for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-test('selects the newest successful run for the exact base, regardless of response order', () => {
+test('orders runs for the exact base newest first, regardless of response order', () => {
   const runs = [{ ...source, id: 50, head_sha: 'b'.repeat(40) }, source, { ...source, id: 11 }];
-  expect(selectBaselineRun(runs, options)?.id).toBe(11);
+  expect(selectBaselineRuns(runs, options).map((run) => run.id)).toEqual([11, 10]);
+});
+
+test.each([
+  { status: 'in_progress', conclusion: null },
+  { status: 'completed', conclusion: 'cancelled' },
+  { status: 'completed', conclusion: 'failure' },
+])('keeps an unfinished or unsuccessful run as a candidate: %j', (change) => {
+  expect(selectBaselineRuns([{ ...source, ...change }], options).map((run) => run.id)).toEqual([
+    10,
+  ]);
 });
 
 test.each([
@@ -30,11 +40,9 @@ test.each([
   { head_branch: 'other' },
   { event: 'pull_request' },
   { path: '.github/workflows/release.yml' },
-  { conclusion: 'failure' },
-  { status: 'in_progress' },
   { head_repository: { full_name: 'fork/docx-editor' } },
 ])('rejects a baseline with mismatched provenance: %j', (change) => {
-  expect(selectBaselineRun([{ ...source, ...change }], options)).toBeUndefined();
+  expect(selectBaselineRuns([{ ...source, ...change }], options)).toEqual([]);
 });
 
 test('downloads only the verified run and includes the base SHA in the API query', () => {
@@ -49,6 +57,7 @@ test('downloads only the verified run and includes the base SHA in the API query
     return '';
   });
   expect(calls[0].at(-1)).toContain(`head_sha=${options.sha}`);
+  expect(calls[0].at(-1)).not.toContain('status=');
   expect(calls[2]).toEqual([
     'run',
     'download',
@@ -60,6 +69,29 @@ test('downloads only the verified run and includes the base SHA in the API query
     '-D',
     directory,
   ]);
+});
+
+test('falls back to an older run on the same base when the newest has no artifact yet', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'package-size-baseline-'));
+  directories.push(directory);
+  const downloads: string[][] = [];
+  downloadBaseline({ ...options, directory }, (args: string[]) => {
+    if (args[0] === 'run') {
+      downloads.push(args);
+      return '';
+    }
+    const path = args.at(-1) ?? '';
+    if (path.includes('/runs?'))
+      return JSON.stringify({
+        workflow_runs: [
+          { ...source, id: 10, conclusion: 'cancelled' },
+          { ...source, id: 12, status: 'in_progress', conclusion: null },
+        ],
+      });
+    if (path.includes('runs/12/')) return JSON.stringify({ artifacts: [] });
+    return JSON.stringify({ artifacts: [{ name: 'package-sizes', expired: false }] });
+  });
+  expect(downloads.map((args) => args[2])).toEqual(['10']);
 });
 
 test.each(['wrong-commit', 'expired-artifact'])(
