@@ -58,6 +58,7 @@ describe('the plain-text flavour of a copy over tracked changes', () => {
   });
 
   test('the Original view copies the text it shows, without the hidden insertion', () => {
-    expect(copyAll('original')).toBe('Joined \nfirst gone end\n17tail');
+    // The deleted PAGE field shows the page it is on, not its saved `17`.
+    expect(copyAll('original')).toBe('Joined \nfirst gone end\n1tail');
   });
 });

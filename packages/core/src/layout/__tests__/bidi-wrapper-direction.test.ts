@@ -175,7 +175,8 @@ test('a field that begins inside a wrapper keeps its direction when it ends outs
     linesOf(layout(field(end)))[0]!.spans.map((span) => [span.text, span.style.shaping?.level]);
   expect(levels('inside')).toEqual([
     ['ab', 1],
-    ['7', 1],
+    // A body PAGE paints the page it lands on, not its cached `7`.
+    ['1', 1],
   ]);
   expect(levels('outside')).toEqual(levels('inside'));
 });
@@ -214,8 +215,9 @@ test('a field whose result sits inside a wrapper takes the wrapper', () => {
     '<w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>' +
     `<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:bdo w:val="rtl">${run('7')}` +
     '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:bdo>';
-  const seven = linesOf(layout(field))[0]!.spans.find((span) => span.text === '7');
-  expect(seven?.style.shaping?.override).toBe('rtl');
+  const page = linesOf(layout(field))[0]!.spans.find((span) => span.text === '1');
+  expect(page).toBeDefined();
+  expect(page?.style.shaping?.override).toBe('rtl');
   // An unterminated field's cached text keeps the wrapper too.
   const open =
     `<w:bdo w:val="rtl"><w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
@@ -235,14 +237,16 @@ test('a field that begins and shows its result outside a wrapper ignores the wra
     run('7'),
     '<w:bdo w:val="rtl"><w:r><w:fldChar w:fldCharType="end"/></w:r></w:bdo>'
   );
-  const seven = linesOf(layout(field))[0]!.spans.find((span) => span.text === '7');
-  expect(seven?.style.shaping?.override).toBeUndefined();
-  expect(seven?.style.shaping?.level ?? 0).toBe(0);
+  const page = linesOf(layout(field))[0]!.spans.find((span) => span.text === '1');
+  expect(page).toBeDefined();
+  expect(page?.style.shaping?.override).toBeUndefined();
+  expect(page?.style.shaping?.level ?? 0).toBe(0);
 });
 
 test('only the first displayed result run gives a field its wrappers', () => {
   const field = fieldOf(`${run('7')}<w:bdo w:val="rtl">${run('8')}</w:bdo>`);
-  const atom = linesOf(layout(field))[0]!.spans.find((span) => /[78]/.test(span.text));
+  const atom = linesOf(layout(field))[0]!.spans.find((span) => span.text === '1');
+  expect(atom).toBeDefined();
   expect(atom?.style.shaping?.override).toBeUndefined();
 });
 

@@ -69,7 +69,7 @@ import { createNestedPageTracker } from './field-nested-page.ts';
 import {
   PAGE_FIELD_PLACEHOLDER,
   pageFieldMarker,
-  pageFieldPlaceholder,
+  pageFieldMeasuredText,
   projectPageFieldValue,
   type BodyPageFieldContext,
   type FieldPageContext,
@@ -416,22 +416,21 @@ function projectSimpleFieldDisplay(
       style,
     };
   }
-  // A BODY page field (no page context) with no cached result: paint a placeholder and mark the
-  // kind so document finalize substitutes the page's value. A cached result wins — it falls
-  // through to paint normally, exactly as it would in Word until the field is next updated.
+  // A BODY page field (no page context): paint a placeholder and mark the kind so document
+  // finalize substitutes the page's value. A cached result is stale as soon as pagination
+  // moves, so it never wins. A result that existed but was hidden stays hidden.
   if (
     pageField &&
     args.bodyPageFields &&
     !pageContext &&
-    display.text.length === 0 &&
-    !display.sawResultContent
+    (display.text.length > 0 || !display.sawResultContent)
   ) {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return null;
     // The same marker the complex-field flush records: finalize renders the value through
     // the switches this placeholder was measured through.
     return {
-      text: pageFieldPlaceholder(pageField),
+      text: pageFieldMeasuredText(pageField, display.text),
       props,
       style,
       pageField: pageFieldMarker(pageField.kind, pageField),
