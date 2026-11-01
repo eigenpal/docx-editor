@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { forEachSemanticSpan } from '@docx-editor.dev/core/layout';
+import { forEachSemanticSpan, linesOf } from '@docx-editor.dev/core/layout';
 import { exportPdf } from '../../src/index.ts';
 import { openExportSession } from '../../src/open-session.ts';
 import { docx } from '../../test/fixture.ts';
@@ -115,6 +115,32 @@ test('a caller list without a Hebrew face replaces the defaults and reports the 
   const result = await exportPdf(input, { ...exportOptions, ...SETTINGS, glyphFallbacks });
   expect(missingGlyphs(result.diagnostics).length).toBeGreaterThan(0);
   expect(hebrewLetters(await pdfText(result.bytes))).toBe(0);
+});
+
+test('a check box the text face lacks keeps the symbol face line under the evaluation profile', async () => {
+  // 12 pt Liberation Sans has no U+2610. The profile's symbol stand-in keeps the 1.33 em line
+  // of the face it stands in for (hhea 2210 + 514 over 2048), not its own 1.7 em line.
+  const paragraph = (text: string) =>
+    '<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>' +
+    '<w:r><w:rPr><w:rFonts w:ascii="Liberation Sans" w:hAnsi="Liberation Sans"/>' +
+    `<w:sz w:val="24"/></w:rPr><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+  const source = docx(
+    paragraph('Plain line') + paragraph('☐ Option one') + paragraph('☒ Option two')
+  );
+  const opened = await openExportSession(source, SETTINGS);
+  if (!opened.ok) throw new Error(opened.reason);
+  try {
+    const [plain, unchecked, checked] = linesOf(await opened.session.layout()).map(
+      (line) => line.box.height
+    );
+    expect(unchecked).toBeCloseTo((12 * 2724) / 2048, 2);
+    expect(checked).toBeCloseTo((12 * 2724) / 2048, 2);
+    // A line without a symbol keeps the text face's own line.
+    expect(plain!).toBeLessThan(unchecked!);
+    expect(plain).toBeCloseTo(12 * 1.149, 1);
+  } finally {
+    opened.session.dispose();
+  }
 });
 
 test('the fast summary uses the export font profile for mixed scripts', async () => {

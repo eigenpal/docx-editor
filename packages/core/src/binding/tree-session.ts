@@ -10,6 +10,7 @@ import { createSessionPackageWriter } from './session-package-writer.ts';
 
 import { projectedText, storyCarriesCommentAnchor } from './story-text-reads.ts';
 import { numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import { refreshBoundContent } from '../store/store/bound-content-refresh.ts';
 import { materializeGlossaryPlaceholders } from '../store/store/placeholder-materialize.ts';
 import { paragraphOrderOfPart, type ReviewItem } from '@docx-editor.dev/core/store';
 import { patchDecidedReviewItems as patchDecided } from './review-decision-patch.ts';
@@ -171,7 +172,8 @@ export function openTreeSessionFromPackage(
   // The package's refusal as it is, with the limit it crossed when it names one.
   if (!loaded.ok) return loaded;
 
-  const pkgLoaded: OoxmlPackage = loaded.package;
+  // Bound controls show their store's current value, not the text cached at save.
+  const pkgLoaded: OoxmlPackage = refreshBoundContent(loaded.package);
   const main = pkgLoaded.parts.get(pkgLoaded.mainDocumentPart);
   if (!main)
     return { ok: false, reason: 'no-main-document-tree', detail: pkgLoaded.mainDocumentPart };

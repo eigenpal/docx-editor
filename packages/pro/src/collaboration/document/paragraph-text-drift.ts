@@ -31,10 +31,11 @@ function inlineIds(registry: DocumentRegistry, nodes: readonly OoxmlNode[], out:
 }
 
 /**
- * Only the main document story is checked. A notes story the editor opened carries paragraph
- * identity shared state does not hold yet (#580), and installing the shared view would take
- * it from the author. A next edit there that names a node by an older ID still lands: the
- * router finds the paragraph that shows the node.
+ * Only the main document story is checked. A room seeded before notes paragraph identity was
+ * seeded into shared state holds none for its notes, so a notes story the editor opened carries
+ * identity shared state does not, and installing the shared view would take it from the
+ * author. A next edit there that names a node by an older ID still lands: the router finds the
+ * paragraph that shows the node.
  */
 export function viewRenamesPlan(registry: DocumentRegistry, plan: InlinePlan | null): boolean {
   if (!plan) return false;

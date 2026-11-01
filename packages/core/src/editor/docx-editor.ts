@@ -205,6 +205,7 @@ import {
   createLocalFontProbe,
   detectFontSubstitutions,
 } from './font-availability.ts';
+import { renderedAndUnmappedSymbolFaces } from './unmapped-symbol-faces.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import {
   fontFaceEnvironmentOf,
@@ -508,7 +509,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const deriveFontSubstitutions = (): readonly string[] => {
     if (!surface || fontsResolving || lateFonts.pending()) return EMPTY_FONT_SUBSTITUTIONS;
     return detectFontSubstitutions(
-      surface.session.renderedFontFamilies(),
+      renderedAndUnmappedSymbolFaces(surface.session),
       fontFamilyCovered,
       probeLocalFont,
       documentSubstitutedFamilies

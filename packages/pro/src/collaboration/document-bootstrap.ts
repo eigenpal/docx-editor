@@ -26,16 +26,26 @@ import {
   withPart,
   normalizeParagraphIdentity,
   readOoxmlPackage,
+  refreshBoundContent,
   type OoxmlPackage,
 } from '@docx-editor.dev/core/store';
 import { seedPackage, type DocumentRegistry } from './document/index.ts';
 import type { SharedBlobStore } from './shared-blob-store.ts';
 import { CollaborationSchemaError } from './errors.ts';
 import { PACKAGE_META_KEY, packageVersionFailure } from './document/schema.ts';
-import { limitFailure } from './shared-blob-store.ts';
+import { limitFailure } from './resource-pressure.ts';
 import type { CreateDocumentCollaborationOptions } from './document-session.ts';
 
 const MAX_BASELINE_BYTES = 20 * 1024 * 1024;
+
+/** Story roots whose stores mint paragraph identity on open. Comments open no story store. */
+const SEEDED_STORY_ROOTS: ReadonlySet<string> = new Set([
+  'document',
+  'hdr',
+  'ftr',
+  'footnotes',
+  'endnotes',
+]);
 
 /** Default wait for a synced room before a `join` bootstrap gives up. */
 export const DEFAULT_INITIALIZATION_TIMEOUT_MS = 30_000;
@@ -62,10 +72,15 @@ const MAX_ELECTION_STATES = 256;
  *
  * `maxBytes` bounds both the file and its expanded package, at most `MAX_BASELINE_BYTES`. A
  * file over the bound is refused with `baseline-too-large` before any part is parsed.
+ *
+ * A file opens with its data-bound controls showing their store's current value. `keepBound`
+ * re-seeds bytes read back out of a room as they are: compaction and migration carry the
+ * room's content, and must not change what its participants already see.
  */
 export function openBaselinePackage(
   bytes: Uint8Array,
-  maxBytes: number = MAX_BASELINE_BYTES
+  maxBytes: number = MAX_BASELINE_BYTES,
+  options: { readonly keepBound?: boolean } = {}
 ): OoxmlPackage {
   if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0) {
     throw new CollaborationSchemaError('invalid-baseline');
@@ -86,12 +101,15 @@ export function openBaselinePackage(
   if (!main) throw new CollaborationSchemaError('no-main-document-part');
   // Lazy story stores normalize paragraph identity when first opened. Seed the same
   // identity into shared authority so a concurrent-edit snapshot cannot strip it and
-  // make a cold join disagree with peers whose header/footer store is already open.
-  let baseline = loaded.package;
+  // make a cold join disagree with peers whose header, footer or notes store is already
+  // open. Notes count too: without them a received edit in a note left the receiver's
+  // notes part without the paraIds the author's open store had minted (#580).
+  // Bound controls show their store's current value, so every participant starts from it.
+  let baseline = options.keepBound ? loaded.package : refreshBoundContent(loaded.package);
   for (const part of baseline.parts.values()) {
     if (
       part.root.namespaceUri !== WML_NAMESPACE_URI ||
-      !['document', 'hdr', 'ftr'].includes(part.root.localName) ||
+      !SEEDED_STORY_ROOTS.has(part.root.localName) ||
       !isStoryPart(part)
     ) {
       continue;

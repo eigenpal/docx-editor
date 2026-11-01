@@ -28,6 +28,7 @@ export {
   ContextMenuInsertRowBelow,
   ContextMenuRefreshToc,
   ContextMenuRefreshTocPageNumbers,
+  ContextMenuRemoveToc,
   useTableContextMenuVisible,
   TABLE_CONTEXT_ROWS,
   TOC_CONTEXT_ROWS,

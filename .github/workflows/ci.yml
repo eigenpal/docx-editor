@@ -46,13 +46,15 @@ jobs:
         # `lint` also runs the advisory and changeset checks, and `typecheck` the
         # informational Office.js report: each takes seconds, not a runner of its own.
         # The acceptance specs run one at a time, so they split into two jobs to keep
-        # the browser lanes off the wall clock. `consumers` installs the packed
+        # the browser lanes off the wall clock. For the same reason the table revision
+        # specs run in `review-tables`, apart from the export checks in `browser`. `consumers` installs the packed
         # packages into fresh apps; `packages` checks the published artifacts and the
         # repository-wide checks that read the build.
         include:
           - check: lint
           - check: typecheck
           - check: browser
+          - check: review-tables
           - check: acceptance
             shard: 1/2
           - check: acceptance
@@ -101,9 +103,13 @@ jobs:
       - name: tsconfig lib floor check
         run: bun run check:tsconfig-lib-floor
         if: "matrix.check == 'lint'"
+      # The multi-threaded CLI checks the tree about 3x faster from a cold start. The
+      # pre-commit gate keeps the classic CLI, whose content cache this CLI does not support.
       - name: Format check
         run: bun run format:check
         if: "matrix.check == 'lint'"
+        env:
+          PRETTIER_EXPERIMENTAL_CLI: '1'
       # Also a prepublish check. Running it here finds a missing header before the release PR.
       - name: License header check
         run: bun run check:license-headers
@@ -161,14 +167,17 @@ jobs:
           NODE_OPTIONS: '--max-old-space-size=2048'
       # Skips the slow apt step unless Chromium cannot start; see the script header.
       - name: Install Chromium for browser checks
-        if: "matrix.check == 'browser' || matrix.check == 'acceptance'"
+        if: "matrix.check == 'browser' || matrix.check == 'review-tables' || matrix.check == 'acceptance'"
         run: bash scripts/install-ci-chromium.sh
       - name: Build the PDF server package for export checks
         if: "matrix.check == 'browser'"
         run: bun run build:pdf
-      - name: Check table revision grouping and file exports in the editor
+      - name: Check file exports in the editor
         if: "matrix.check == 'browser'"
-        run: bunx playwright test --config e2e/editor-smoke.config.ts e2e/table-review-grouping.interaction.spec.ts e2e/file-export.interaction.spec.ts
+        run: bunx playwright test --config e2e/editor-smoke.config.ts e2e/file-export.interaction.spec.ts
+      - name: Check table revision grouping in the editor
+        if: "matrix.check == 'review-tables'"
+        run: bunx playwright test --config e2e/editor-smoke.config.ts e2e/table-review-grouping.interaction.spec.ts
       - name: Check Markdown page layout and review controls
         if: "matrix.check == 'browser'"
         run: "bun run --filter './examples/docx-to-markdown' check:preview"
@@ -183,7 +192,7 @@ jobs:
           ACCEPTANCE_SHARD: ${{ matrix.shard }}
         run: bun run test:e2e:acceptance --shard "$ACCEPTANCE_SHARD"
       - name: Save editor browser failure evidence
-        if: "failure() && (matrix.check == 'browser' || matrix.check == 'acceptance')"
+        if: "failure() && (matrix.check == 'browser' || matrix.check == 'review-tables' || matrix.check == 'acceptance')"
         uses: actions/upload-artifact@v7
         with:
           name: editor-${{ matrix.check }}-${{ strategy.job-index }}-failures

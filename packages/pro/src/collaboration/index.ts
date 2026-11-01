@@ -55,6 +55,11 @@ export {
   readCollaborationResourceUsage,
   type CollaborationResourceUsage,
 } from './resource-usage.ts';
+export type {
+  CollaborationResourceLimit,
+  CollaborationResourcePressure,
+  CollaborationResourcePressureOptions,
+} from './resource-pressure.ts';
 export { CollaborationSchemaError } from './errors.ts';
 export {
   CollaborationUndoGroupError,

@@ -25,9 +25,11 @@ import {
   type OoxmlPart,
   type OoxmlParagraphNode,
 } from './ooxml-tree.ts';
+import { bindMissingPrefixes } from './edit-namespace-scope.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { withPart } from './ooxml-package.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import { namespaceBindingsAt } from './wml-namespace.ts';
 import {
   allocateNoteId,
   findNoteById,
@@ -568,7 +570,10 @@ function applyConvertNote(
 
   // Fresh copy into target part with rewritten localName + id.
   const targetNextId = createNodeIdAllocator(targetPart);
-  const moved = rewriteNoteNode(sourceNote, op.fromKind, toKind, newId, targetNextId);
+  const moved = bindMissingPrefixes(
+    rewriteNoteNode(sourceNote, op.fromKind, toKind, newId, targetNextId),
+    namespaceBindingsAt(targetPart, targetPart.root)
+  );
   const appended = insertChildren(targetPart, targetPart.root.id, targetPart.root.children.length, [
     moved,
   ]);

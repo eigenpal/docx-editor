@@ -30,9 +30,9 @@ const bytes = () =>
   });
 
 describe('collaboration baseline story identity', () => {
-  test('normalizes body, headers, and footers before they are opened locally', () => {
+  test('normalizes body, headers, footers, and notes before they are opened locally', () => {
     const baseline = openBaselinePackage(bytes());
-    for (const name of ['document', 'header1', 'footer1']) {
+    for (const name of ['document', 'header1', 'footer1', 'footnotes', 'endnotes']) {
       const part = baseline.parts.get(`/word/${name}.xml`)!;
       expect(part).toBeDefined();
       // A lazy story open must have no identity changes left to make.
@@ -40,18 +40,12 @@ describe('collaboration baseline story identity', () => {
     }
   });
 
-  test('preserves notes and non-story XML, including lookalike roots and embedded paragraphs', () => {
+  test('preserves comments and non-story XML, including lookalike roots and embedded paragraphs', () => {
     const document = bytes();
     const original = readOoxmlPackage(document);
     if (!original.ok) throw new Error(original.reason);
     const baseline = openBaselinePackage(document);
-    for (const name of [
-      '/word/footnotes.xml',
-      '/word/endnotes.xml',
-      '/word/comments.xml',
-      '/customXml/item1.xml',
-      '/customXml/item2.xml',
-    ]) {
+    for (const name of ['/word/comments.xml', '/customXml/item1.xml', '/customXml/item2.xml']) {
       expect(canonicalOoxmlFingerprint(baseline.parts.get(name)!)).toBe(
         canonicalOoxmlFingerprint(original.package.parts.get(name)!)
       );

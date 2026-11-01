@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A generated table of contents could not be removed in the editor. Its rows were read-only and a deletion that touched them was refused.",
+  "after": "The removeToc command and the context menu remove a table of contents in one undo step: its field from the begin marker to the end marker, or the table of contents control with its heading. Text around the field stays in one paragraph.",
+  "reason": "The removal journals as existing node replacement and node removal primitives, which released participants already apply. The new store operation kind runs only on the writing participant, and the change adds no shared field or protocol message.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-toc-remove.test.ts",
+    "packages/core/src/store/__tests__/canonical-primitive-journal-coverage.test.ts",
+    "packages/core/src/store/__tests__/toc-remove.test.ts",
+    "packages/core/src/editor/__tests__/toc-remove-command.test.ts"
+  ],
+  "changeset": "remove-table-of-contents",
+  "migration": null
+}

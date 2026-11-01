@@ -469,6 +469,11 @@ export const ContextMenuRefreshTocPageNumbers: ((input: ContextMenuCommandProps)
 };
 
 // @public
+export const ContextMenuRemoveToc: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
 export const ContextMenuSelectAll: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
     docxRow: string;
 };
@@ -770,6 +775,8 @@ export interface DocxEditorContextMenuNamespace {
     readonly RefreshToc: typeof ContextMenuRefreshToc;
     // (undocumented)
     readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
+    // (undocumented)
+    readonly RemoveToc: typeof ContextMenuRemoveToc;
     readonly Row: typeof MenuRow;
     // (undocumented)
     readonly SelectAll: typeof ContextMenuSelectAll;

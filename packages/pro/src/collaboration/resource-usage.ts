@@ -11,7 +11,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * count that growth, so a long-lived room walks toward a terminal `too-many-nodes` or
  * `blob-store-full` failure. Until compaction exists (the generation reset of issue #554),
  * the honest interim is visibility: a host that can SEE the walk can archive and re-room
- * before the caps end the session for it.
+ * before the caps end the session for it. This is the probe; the push signal is
+ * `subscribeResourcePressure`, in `resource-pressure.ts`.
  */
 
 import * as Y from 'yjs';
@@ -19,6 +20,7 @@ import { DocumentRegistry } from './document/index.ts';
 import { NODE_DELETED_FIELD, isNodeMap } from './document/schema.ts';
 import { INLINE_FIELD } from './document/paragraph-text.ts';
 import { MAX_SHARED_BLOB_BYTES, SHARED_BLOBS_KEY, SharedBlobStore } from './shared-blob-store.ts';
+import { rawRelationshipCount } from './resource-pressure.ts';
 
 /**
  * One reading of a room's replicated size against this replica's hard limits.
@@ -26,7 +28,7 @@ import { MAX_SHARED_BLOB_BYTES, SHARED_BLOBS_KEY, SharedBlobStore } from './shar
  * Every `max*` value is the cap whose crossing turns the session status terminal.
  * `tombstonedNodes` is included in `nodes`: a tombstone is never map-deleted, so it keeps
  * counting against `maxNodes` for the life of the room. A reading is a snapshot — take a new
- * one to observe growth.
+ * one to observe growth, or subscribe with `subscribeResourcePressure`.
  *
  * @public
  */
@@ -78,15 +80,6 @@ function formattingMarkerCount(registry: DocumentRegistry): number {
     for (let item = text._start; item; item = item.right) {
       if (!item.deleted && item.content instanceof Y.ContentFormat) count += 1;
     }
-  });
-  return count;
-}
-
-/** Raw relationship records, counted exactly the way `limitFailure` counts them. */
-function rawRelationshipCount(registry: DocumentRegistry): number {
-  let count = 0;
-  registry.schema.relationships.forEach((owner) => {
-    count += owner instanceof Y.Map ? owner.size : 0;
   });
   return count;
 }

@@ -306,6 +306,54 @@ describe('deleteNote / convertNote / cascade', () => {
     expect(noteReferenceKindOf(refNode)).toBe('endnote');
   });
 
+  test('convertNote from an opened notes store keeps paragraph identity', () => {
+    // Opening the notes store mints paraIds under a prefix only the source root declares.
+    const body = `<w:p><w:r><w:footnoteReference w:id="1"/></w:r></w:p>`;
+    const store = openStore(build({ body, footnotes: seededNotes }));
+    store.partFor({ kind: 'notesPart', noteKind: 'footnote' });
+    const result = store.applyLifecycleOp({
+      op: 'convertNote',
+      fromKind: 'footnote',
+      noteId: 1,
+    });
+    if (!result.ok) throw new Error(`${result.reason} ${result.detail ?? ''}`);
+    const end = resolveNotesPart(store.currentPackage(), 'endnote')!;
+    const xml = serializeOoxmlPart(end);
+    expect(xml).toContain('paraId');
+    expect(readOoxmlPart(xml, { name: end.name, contentType: end.contentType }).ok).toBe(true);
+  });
+
+  test('convertNote keeps paragraph identity when the target binds its prefix elsewhere', () => {
+    const body = `<w:p><w:r><w:footnoteReference w:id="1"/></w:r></w:p>`;
+    const bytes = build({
+      body,
+      footnotes: seededNotes,
+      endnotes:
+        `<w:endnote w:type="separator" w:id="-1"><w:p/></w:endnote>` +
+        `<w:endnote w:type="continuationSeparator" w:id="0"><w:p/></w:endnote>`,
+    });
+    // The target root uses the prefix the source's minted paraIds use for another URI.
+    const entries = unzipSync(bytes);
+    entries['word/endnotes.xml'] = strToU8(
+      new TextDecoder()
+        .decode(entries['word/endnotes.xml'])
+        .replace('<w:endnotes ', '<w:endnotes xmlns:w14="urn:other" ')
+    );
+    const store = openStore(zipSync(entries));
+    store.partFor({ kind: 'notesPart', noteKind: 'footnote' });
+    const result = store.applyLifecycleOp({
+      op: 'convertNote',
+      fromKind: 'footnote',
+      noteId: 1,
+    });
+    if (!result.ok) throw new Error(`${result.reason} ${result.detail ?? ''}`);
+    const end = resolveNotesPart(store.currentPackage(), 'endnote')!;
+    const xml = serializeOoxmlPart(end);
+    expect(xml).toContain('"urn:other"');
+    expect(xml).toContain('paraId');
+    expect(readOoxmlPart(xml, { name: end.name, contentType: end.contentType }).ok).toBe(true);
+  });
+
   test('deleteNote on missing id fails closed', () => {
     const store = openStore(build({ footnotes: seededNotes }));
     const result = store.applyLifecycleOp({

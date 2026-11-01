@@ -63,6 +63,7 @@ import {
   ContextMenuSelectAll,
   ContextMenuRefreshToc,
   ContextMenuRefreshTocPageNumbers,
+  ContextMenuRemoveToc,
   useTableContextMenuVisible,
 } from './parts';
 import { useChromeScopeClassName } from '../color-mode-context';
@@ -241,6 +242,7 @@ function tocContextEntries(): readonly DefaultEntry[] {
       id: ContextMenuRefreshTocPageNumbers.docxRow,
       render: () => <ContextMenuRefreshTocPageNumbers />,
     },
+    { kind: 'row', id: ContextMenuRemoveToc.docxRow, render: () => <ContextMenuRemoveToc /> },
   ];
 }
 
@@ -598,6 +600,7 @@ export interface DocxEditorContextMenuNamespace {
   readonly CellVerticalAlignment: typeof ContextMenuCellVerticalAlignment;
   readonly RefreshToc: typeof ContextMenuRefreshToc;
   readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
+  readonly RemoveToc: typeof ContextMenuRemoveToc;
   readonly Item: typeof ContextMenuItem;
   readonly Slot: typeof MenuItem;
   readonly Row: typeof MenuRow;
@@ -627,6 +630,7 @@ export const ContextMenu = Object.assign(DocxEditorContextMenu, {
   CellVerticalAlignment: ContextMenuCellVerticalAlignment,
   RefreshToc: ContextMenuRefreshToc,
   RefreshTocPageNumbers: ContextMenuRefreshTocPageNumbers,
+  RemoveToc: ContextMenuRemoveToc,
   Item: ContextMenuItem,
   Slot: MenuItem,
   Row: MenuRow,

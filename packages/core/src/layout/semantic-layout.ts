@@ -184,7 +184,7 @@ import {
   inheritNotesLayoutInput,
   layoutSemanticDocumentWithNotesSteps,
 } from './note-pagination.ts';
-import { closingSpaceAfterPt } from './note-area-fit.ts';
+import { closingSpaceAfterPt, droppableSpacingPt } from './note-area-fit.ts';
 import { passProducerOf } from './pass-producer.ts';
 import { documentProjectionProducer } from './document-property-context.ts';
 
@@ -386,8 +386,8 @@ function* layoutInModeSteps(
     });
     carryLayoutReadCaches(laid.layout, finalized);
     // The notes pass mints overflow sheets from this layout; publish what index they land at.
-    registerOverflowPageShell(finalized, (_sectionAnchorIndex, documentPageIndex, box) =>
-      laid.overflowShellAt(documentPageIndex, box)
+    registerOverflowPageShell(finalized, (_sectionAnchorIndex, documentPageIndex, box, shift) =>
+      laid.overflowShellAt(documentPageIndex, box, shift)
     );
     if (opts.session) {
       opts.session.multi = null;
@@ -2236,6 +2236,8 @@ function* layoutBlocksPass(
     let pending: LineRecord[] = [];
     const closingAfter = (line: PendingLine): number =>
       closingSpaceAfterPt(noteReserveHere(), pageFragments, pending, line, spacing.after);
+    const droppedBelow = (line: PendingLine): number =>
+      droppableSpacingPt(noteReserveHere(), pageFragments, pending, line, options);
     let fragmentStart = lines[0]?.start ?? 0;
     let fragmentBefore = appliedBefore;
     // Reserved above the FIRST fragment only: a paragraph continued onto the next page opens
@@ -2538,12 +2540,12 @@ function* layoutBlocksPass(
             appliedSkipByLineIndex,
             fragmentBefore
           );
-      // Auto spacing below the glyph band may cross the bottom text margin. The painted line
-      // keeps its full box; only the pagination budget drops that trailing external depth.
+      // Auto spacing below the glyph band may cross the bottom text margin, not a footnote
+      // area. The painted line keeps its full box; only the pagination budget drops it.
       // An empty anchor's own clearance moves its mark, not the anchor onto another sheet.
       const lineExtent =
         (pendingLine.anchorClearanceBefore ?? skipBefore) +
-        Math.max(0, pendingLine.height - pendingLine.trailingSpacing) +
+        Math.max(0, pendingLine.height - droppedBelow(pendingLine)) +
         tail;
       // A leading page break's empty line stays: the break itself opens the next sheet.
       keptBreakLine =

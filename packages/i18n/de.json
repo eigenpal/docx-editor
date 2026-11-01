@@ -732,7 +732,8 @@
   },
   "toc": {
     "refresh": "Gesamtes Verzeichnis aktualisieren",
-    "refreshPageNumbers": "Nur Seitenzahlen aktualisieren"
+    "refreshPageNumbers": "Nur Seitenzahlen aktualisieren",
+    "remove": "Inhaltsverzeichnis entfernen"
   },
   "reviewers": {
     "label": "Prüfer",

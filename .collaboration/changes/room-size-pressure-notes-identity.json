@@ -1,0 +1,16 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A new room seeded no paragraph identity for notes, so a received note edit differed from the author until the receiver opened its notes store. Hosts could only poll room size, and a limit failure detail gave a count without naming the limit.",
+  "after": "A new room seeds notes paragraph identity, so both peers agree before either opens the notes store. Sessions push a notification when a room crosses a fraction of any cap, and a limit failure detail names the limit. The caps themselves are unchanged.",
+  "reason": "Shared records, text offsets, operations, repair rules, and the resource caps keep their meaning, so mixed rooms accept and refuse exactly as before. Seeded paraIds are ordinary attributes released readers already store and serialize, and rooms seeded before this change behave as before. The pressure signal only reads shared state.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-story-variants.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-baseline-story-identity.test.ts",
+    "packages/pro/src/collaboration/__tests__/collaboration-resource-usage.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-session.test.ts",
+    "packages/core/src/store/__tests__/note-lifecycle.test.ts"
+  ],
+  "changeset": "room-size-pressure-notes-identity",
+  "migration": null
+}

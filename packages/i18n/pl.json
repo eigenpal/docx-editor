@@ -732,7 +732,8 @@
   },
   "toc": {
     "refresh": "Aktualizuj cały spis",
-    "refreshPageNumbers": "Aktualizuj tylko numery stron"
+    "refreshPageNumbers": "Aktualizuj tylko numery stron",
+    "remove": "Usuń spis treści"
   },
   "reviewers": {
     "label": "Recenzenci",

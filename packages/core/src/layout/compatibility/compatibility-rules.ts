@@ -72,7 +72,7 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §17.18.44 ST_Jc'
   ),
   fixedTableContentEdgeOrigin: legacy(
-    'A collapsed fixed left table aligns its leading cell content edge with the text column',
+    'A collapsed table with an absolute width aligns the content edge of its aligned outer cell with the text column; a leading alignment without a stated indent or table style keeps the outer edge',
     'ECMA-376 Part 1 §17.4.52 tblLayout'
   ),
   floatingTableContentOrigin: legacy(
@@ -104,7 +104,7 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §17.4.63 tblW'
   ),
   legacySharedGridLineSideRules: legacy(
-    'Collapsed side rules center on shared grid lines for every simple top-level table',
+    'Collapsed side rules center on shared grid lines for every simple top-level table, in either direction',
     'ECMA-376 Part 1 §17.4.38 tblBorders'
   ),
   modernBidiTableRuleShift: modern(
@@ -114,6 +114,10 @@ export const MODE_RULES = {
   modernGridLineSideRules: modern(
     'Side rules center on grid lines for covered dxa/auto width shapes; edge-aligned grids move by half a rule',
     'ECMA-376 Part 1 §17.4.38 tblBorders'
+  ),
+  noteAreaHoldsLineSpacing: modern(
+    'Auto line spacing below a body line must fit above the footnote area; legacy modes let it cross the area as it crosses a bottom margin',
+    'ECMA-376 Part 1 §17.11 Footnotes and Endnotes'
   ),
   noteTableCellKeeps: modern(
     'Note reference bands in table rows honor cell widow control and keep-lines cuts',
