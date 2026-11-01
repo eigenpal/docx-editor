@@ -136,6 +136,26 @@ describe('an empty paragraph with a hidden mark before a table', () => {
       'cell',
     ]);
   });
+
+  test('an automatic space before without a measurement takes no line either', () => {
+    const autoOnly = para(
+      '',
+      `<w:spacing w:before="0" w:beforeAutospacing="1" w:after="0"/><w:rPr>${HIDDEN}</w:rPr>`
+    );
+    const body = `${para(text('a'))}${autoOnly}${table('cell')}`;
+    const cascade = (compat: string) =>
+      buildStyleCascadeTable(
+        read(`<w:styles xmlns:w="${W}"/>`, '/word/styles.xml').root,
+        undefined,
+        read(
+          `<w:settings xmlns:w="${W}"><w:compat>${compat}</w:compat></w:settings>`,
+          '/word/settings.xml'
+        ).root
+      );
+    for (const compat of ['', '<w:doNotUseHTMLParagraphAutoSpacing/>']) {
+      expect(lineTexts(layout(body, { styleCascade: cascade(compat) }))).toEqual(['a', 'cell']);
+    }
+  });
 });
 
 describe('paragraphs that keep their line', () => {

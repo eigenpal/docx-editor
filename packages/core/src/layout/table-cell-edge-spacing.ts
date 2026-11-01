@@ -26,9 +26,9 @@ export function cellEdgeAutoSpacing(
     readonly fixedAutoSpacing: boolean;
   }
 ): ParagraphSpacing {
-  const { firstInCell, lastInCell } = edges;
-  if (!firstInCell && !lastInCell) return spacing;
-  const auto = paragraphAutoSpacingSides(props, edges);
+  const { firstInCell, lastInCell, fixedAutoSpacing } = edges;
+  if (fixedAutoSpacing || (!firstInCell && !lastInCell)) return spacing;
+  const auto = paragraphAutoSpacingSides(props);
   const dropBefore = firstInCell && auto.before;
   const dropAfter = lastInCell && auto.after;
   if (!dropBefore && !dropAfter) return spacing;

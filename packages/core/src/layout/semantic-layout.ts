@@ -1473,8 +1473,8 @@ function* layoutBlocksPass(
     prepared.length,
     options.compatibilityMode,
     () => firstParagraphOfSection,
-    // The HTML automatic gap only: under the setting the authored measurement stays.
-    styleCascade?.fixedParagraphSpacing !== true && pageIndexStart === 0 && flowStartY === 0
+    pageIndexStart === 0 && flowStartY === 0,
+    styleCascade?.fixedParagraphSpacing === true
   );
 
   // Placement and keep-with-next lookahead share cached line breaks.

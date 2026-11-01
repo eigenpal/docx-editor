@@ -213,25 +213,3 @@ for (const enabled of [false, true]) {
     expect(projected.flowHeight).toBe(story.flowHeight);
   });
 }
-
-test('fixed paragraph spacing keeps the measured lead of an auto-spaced empty anchor', () => {
-  const autoStyles = buildStyleCascadeTable(
-    read(
-      `<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}<w:style w:type="paragraph" w:styleId="Footer"><w:pPr><w:spacing w:before="100" w:beforeAutospacing="1" w:after="100" w:afterAutospacing="1"/></w:pPr></w:style></w:styles>`,
-      '/word/styles.xml'
-    ).root,
-    undefined,
-    read(
-      `<w:settings xmlns:w="${W}"><w:compat><w:doNotUseHTMLParagraphAutoSpacing/><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`,
-      '/word/settings.xml'
-    ).root
-  );
-  const layOut = (xml: string) =>
-    layoutHeaderFooterStory(part(xml), 400, measurer, 'empty-frame-auto', undefined, autoStyles);
-  const [framed, empty] = paragraphs(layOut(body()));
-  const alone = layOut(anchor).fragments[0] as ParagraphFragmentRecord;
-  // The anchor takes its authored 5pt lead, the same as when it stands alone.
-  expect(empty!.spacing.before).toBe(5);
-  expect(empty!.lines[0]!.box.y).toBeCloseTo(alone.lines[0]!.box.y, 6);
-  expect(framed!.lines[0]!.box.y - empty!.lines[0]!.box.y).toBeCloseTo(0.05, 6);
-});

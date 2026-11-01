@@ -18,6 +18,7 @@ import {
 import { compatibilityProfileFromSettings } from '../compatibility/compatibility-profile.ts';
 import { layoutHeaderFooterStory } from '../hf-layout.ts';
 import { buildNumberingIndex } from '../numbering-index.ts';
+import { layoutNoteStory } from '../note-layout.ts';
 import { keepNextGroupHeight } from '../pagination-keeps.ts';
 import {
   createFixedMeasurer,
@@ -379,6 +380,27 @@ describe('automatic spacing under the setting', () => {
       ).fragments.find((fragment) => fragment.kind === 'paragraph') as ParagraphFragmentRecord;
     expect(firstHeaderParagraph('').spacing.before).toBe(0);
     expect(firstHeaderParagraph(FLAG).spacing.before).toBe(5);
+  });
+
+  test('a footnote keeps the measured space at both of its edges', () => {
+    const noteParagraphs = (compat: string) => {
+      const notes = read(
+        `<w:footnotes xmlns:w="${W}"><w:footnote w:id="1">${web('One')}</w:footnote></w:footnotes>`,
+        '/word/footnotes.xml'
+      );
+      const story = layoutNoteStory(notes.root.children[0]!, 400, {
+        measurer,
+        producer: 'test',
+        styleCascade: cascade(compat),
+      });
+      return story!.fragments.filter(
+        (fragment) => fragment.kind === 'paragraph'
+      ) as ParagraphFragmentRecord[];
+    };
+    const [html] = noteParagraphs('');
+    expect([html!.spacing.before, html!.spacing.after]).toEqual([0, 0]);
+    const [fixed] = noteParagraphs(FLAG);
+    expect([fixed!.spacing.before, fixed!.spacing.after]).toEqual([5, 5]);
   });
 });
 

@@ -72,7 +72,8 @@ export function paragraphMarkHidden(paragraph: OoxmlNode): boolean {
 /**
  * Whether the paragraph states a space before directly. Before a table, a removed paragraph
  * still keeps its space before; leaving it in place keeps that space, so only paragraphs
- * without one leave the flow there.
+ * without one leave the flow there. `w:beforeAutospacing` alone states no measurement: such a
+ * paragraph leaves the flow too, with or without `w:doNotUseHTMLParagraphAutoSpacing`.
  */
 function directSpaceBefore(paragraph: OoxmlNode): boolean {
   const properties = wmlChild(paragraph, 'pPr');
@@ -80,14 +81,7 @@ function directSpaceBefore(paragraph: OoxmlNode): boolean {
   if (!spacing) return false;
   const value = (name: string): string | undefined =>
     spacing.attributes.find((attribute) => attribute.localName === name)?.value;
-  const auto = value('beforeAutospacing');
-  return (
-    Number(value('before') ?? 0) > 0 ||
-    Number(value('beforeLines') ?? 0) > 0 ||
-    auto === '1' ||
-    auto === 'true' ||
-    auto === 'on'
-  );
+  return Number(value('before') ?? 0) > 0 || Number(value('beforeLines') ?? 0) > 0;
 }
 
 function carriesSectionBreak(paragraph: OoxmlNode): boolean {
