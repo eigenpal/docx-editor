@@ -9,6 +9,7 @@
 import { diffKeys, type DiffOp } from './sequence-diff.ts';
 import {
   emitContent,
+  notePlaceholder,
   paragraphProperties,
   paragraphXml,
   type EmitContext,
@@ -212,12 +213,17 @@ function emitHunk(
       if (left.kind === 'text' && right.kind === 'text') {
         for (let k = 0; k < left.to - left.from; k++) {
           const baseAtom = left.unit.atoms[left.from + k]!;
-          items.push({
-            mark: 'eq',
-            atom: right.unit.atoms[right.from + k]!,
-            baseRPr: baseAtom.rPr,
-            markers: baseAtom.markers,
-          });
+          let atom = right.unit.atoms[right.from + k]!;
+          if (baseAtom.note && atom.note) {
+            // The output keeps the original's note; the two notes compare later.
+            ctx.state.notePairs.push({
+              kind: atom.note.kind,
+              base: baseAtom.note.id,
+              revised: atom.note.id,
+            });
+            atom = { ...atom, xml: baseAtom.xml };
+          }
+          items.push({ mark: 'eq', atom, baseRPr: baseAtom.rPr, markers: baseAtom.markers });
         }
       } else if (left.kind === 'mark' && right.kind === 'mark') {
         closeParagraph('eq', left.unit, right.unit);
@@ -230,7 +236,14 @@ function emitHunk(
     const mark = op.op;
     if (token.kind === 'text') {
       for (let k = token.from; k < token.to; k++) {
-        const atom = token.unit.atoms[k]!;
+        let atom = token.unit.atoms[k]!;
+        if (atom.note && mark === 'del')
+          ctx.state.deletedNotes.push({ kind: atom.note.kind, base: atom.note.id });
+        if (atom.note && mark === 'ins') {
+          ctx.state.newNotes.push({ kind: atom.note.kind, revised: atom.note.id });
+          const id = notePlaceholder(atom.note.kind, atom.note.id);
+          atom = { ...atom, xml: atom.xml.replace(/\bw:id="[^"]*"/, `w:id="${id}"`) };
+        }
         items.push({ mark, atom, baseRPr: '', markers: mark === 'del' ? atom.markers : [] });
       }
     } else if (token.kind === 'mark') {
@@ -242,7 +255,7 @@ function emitHunk(
   if (items.length > 0) {
     // Unreachable for well-formed containers, whose blocks always end in a paragraph mark.
     out += paragraphXml('', emitContent(items, ctx));
-    ctx.untracked++;
+    ctx.state.untracked++;
   }
   return out + deferred;
 }
@@ -302,13 +315,13 @@ function deletedBlock(unit: BlockUnit, ctx: EmitContext): string {
   if (unit.kind === 'table') return compareTable(unit.node, null, ctx);
   if (unit.kind === 'sdt') return compareSdt(unit.node, null, ctx);
   // Untrackable original content stays.
-  ctx.untracked++;
+  ctx.state.untracked++;
   return ctx.base.serialize(unit.node);
 }
 
 function insertedBlock(unit: BlockUnit, ctx: EmitContext): string {
   if (unit.kind === 'table') return compareTable(null, unit.node, ctx);
   if (unit.kind === 'sdt') return compareSdt(null, unit.node, ctx);
-  ctx.untracked++;
+  ctx.state.untracked++;
   return '';
 }

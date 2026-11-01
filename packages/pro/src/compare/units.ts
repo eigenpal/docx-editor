@@ -44,6 +44,8 @@ export interface Atom {
   readonly wrappers: readonly Wrapper[];
   /** Zero-width range markers (bookmarks, comment ranges) that precede this atom. */
   readonly markers: readonly string[];
+  /** The note a footnote or endnote reference points at. */
+  readonly note?: { readonly kind: 'footnote' | 'endnote'; readonly id: string };
 }
 
 export interface ParagraphUnit {
@@ -76,7 +78,10 @@ export const OBJECT_TEXT = '￼';
 
 /** Relationship-valued attributes (`r` is the serializer's controlled prefix). */
 const REL_ATTRIBUTE = /(\br:(?:id|embed|link|pict|href|dm|lo|qs|cs)=")([^"]+)"/g;
-/** Revised-side relationship ids are written as `§REL:<id>§` and resolved on assembly. */
+/**
+ * Revised-side relationship ids are written as `§REL:<revised owner part>|<id>§` and resolved
+ * on assembly against the output part that holds the fragment.
+ */
 export const REL_PLACEHOLDER = '§REL:';
 
 const MARKERS = new Set([
@@ -109,12 +114,25 @@ export class SideContext {
     readonly partName: string,
     readonly scope: NamespaceScope
   ) {
-    this.#rels = new Map(
-      relationshipsOf(pkg, partName).map((record) => [
-        record.id,
-        { type: record.type, target: record.rawTarget, external: record.targetMode === 'External' },
-      ])
-    );
+    this.#rels = new Map([
+      ...relationshipsOf(pkg, partName).map(
+        (record) =>
+          [
+            record.id,
+            {
+              type: record.type,
+              target: record.rawTarget,
+              external: record.targetMode === 'External',
+            },
+          ] as const
+      ),
+      ...pkg.externalTargets
+        .filter((record) => record.ownerPart === partName)
+        .map(
+          (record) =>
+            [record.id, { type: record.type, target: record.rawTarget, external: true }] as const
+        ),
+    ]);
   }
 
   /** A stable, side-independent identity for a relationship id. */
@@ -142,7 +160,7 @@ export class SideContext {
     if (this.name === 'base') return xml;
     return xml.replace(
       REL_ATTRIBUTE,
-      (_, lead: string, id: string) => `${lead}${REL_PLACEHOLDER}${id}§"`
+      (_, lead: string, id: string) => `${lead}${REL_PLACEHOLDER}${this.partName}|${id}§"`
     );
   }
 
@@ -388,15 +406,24 @@ function pushObject(
   const delXml = xml
     .replace(/^<w:instrText\b/, '<w:delInstrText')
     .replace(/<\/w:instrText>$/, '</w:delInstrText>');
+  const noteKind =
+    node.localName === 'footnoteReference'
+      ? 'footnote'
+      : node.localName === 'endnoteReference'
+        ? 'endnote'
+        : undefined;
+  const noteId = noteKind ? attributeOf(node, 'id') : undefined;
   state.atoms.push({
     kind: 'object',
     text: OBJECT_TEXT,
     xml,
     delXml,
-    key: side.keyOf(raw),
+    // Note references align by position; their notes compare as stories of their own.
+    key: noteKind ? `noteRef:${noteKind}` : side.keyOf(raw),
     rPr,
     wrappers,
     markers: takePending(state),
+    ...(noteKind && noteId !== undefined ? { note: { kind: noteKind, id: noteId } } : {}),
   });
 }
 

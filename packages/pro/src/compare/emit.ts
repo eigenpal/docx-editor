@@ -20,13 +20,28 @@ export interface Item {
   readonly markers: readonly string[];
 }
 
-export class EmitContext {
-  #nextId = 1;
-  #count = 0;
-  /** Units or blocks the engine could not track (kept or dropped without a revision). */
-  untracked = 0;
+export type NoteKind = 'footnote' | 'endnote';
 
+/** State shared by every story of one compare: revision ids and note bookkeeping. */
+export class CompareState {
+  nextId = 1;
+  count = 0;
+  /** Blocks the engine could not track (kept or dropped without a revision). */
+  untracked = 0;
+  /** Note references matched between the documents: compare the two notes. */
+  readonly notePairs: { kind: NoteKind; base: string; revised: string }[] = [];
+  /** Note references only in the revised document: add the note as inserted content. */
+  readonly newNotes: { kind: NoteKind; revised: string }[] = [];
+  /** Note references only in the original: its note content is deleted. */
+  readonly deletedNotes: { kind: NoteKind; base: string }[] = [];
+}
+
+/** Placeholder for the id of a note added from the revised document. */
+export const notePlaceholder = (kind: NoteKind, revisedId: string) => `§NOTE:${kind}:${revisedId}§`;
+
+export class EmitContext {
   constructor(
+    readonly state: CompareState,
     readonly author: string,
     readonly date: string | undefined,
     readonly detectFormatChanges: boolean,
@@ -34,15 +49,27 @@ export class EmitContext {
     readonly revised: SideContext
   ) {}
 
+  /** The same compare, for another pair of stories. */
+  withSides(base: SideContext, revised: SideContext): EmitContext {
+    return new EmitContext(
+      this.state,
+      this.author,
+      this.date,
+      this.detectFormatChanges,
+      base,
+      revised
+    );
+  }
+
   get revisionCount(): number {
-    return this.#count;
+    return this.state.count;
   }
 
   /** The `w:id w:author w:date` attribute triple of one new revision. */
   attrs(): string {
-    this.#count++;
+    this.state.count++;
     const date = this.date === undefined ? '' : ` w:date="${this.date}"`;
-    return ` w:id="${this.#nextId++}" w:author="${escapeAttribute(this.author)}"${date}`;
+    return ` w:id="${this.state.nextId++}" w:author="${escapeAttribute(this.author)}"${date}`;
   }
 }
 
@@ -161,17 +188,20 @@ function sectPrBody(node: ElementNode, side: SideContext): string {
 export function sectPrXml(
   base: ElementNode | null,
   revised: ElementNode | null,
-  ctx: EmitContext
+  ctx: EmitContext,
+  /** References to header and footer parts the output adds. */
+  extraRefs = ''
 ): string {
   const source = revised ?? base;
   if (!source) return '';
   const side = revised ? ctx.revised : ctx.base;
-  const refs = base
-    ? elementChildren(base)
-        .filter(isRef)
-        .map((child) => ctx.base.serialize(child))
-        .join('')
-    : '';
+  const refs =
+    (base
+      ? elementChildren(base)
+          .filter(isRef)
+          .map((child) => ctx.base.serialize(child))
+          .join('')
+      : '') + extraRefs;
   const body = sectPrBody(source, side);
   let change = '';
   if (base && revised && ctx.detectFormatChanges) {

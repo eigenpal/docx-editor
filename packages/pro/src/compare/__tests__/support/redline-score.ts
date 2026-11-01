@@ -188,6 +188,19 @@ export function scoreRedline(ours: RedlineNormalForm, reference: RedlineNormalFo
   };
 }
 
+/**
+ * The accepted or rejected view as a comparable fingerprint: the text of each non-empty story,
+ * sorted, without comments (comment parts are not compared content).
+ */
+export function viewFingerprint(form: RedlineNormalForm, view: 'accept' | 'reject'): string {
+  return form.stories
+    .filter((story) => story.kind !== 'comments')
+    .map((story) => `${story.kind}:${viewText({ ...form, stories: [story] }, view)}`)
+    .filter((text) => !/^[a-z]+:\s*$/.test(text))
+    .sort()
+    .join('\n\n');
+}
+
 /** Text of the accepted (`'accept'`) or rejected (`'reject'`) view of a normal form. */
 export function viewText(form: RedlineNormalForm, view: 'accept' | 'reject'): string {
   const drop: ReadonlySet<SegmentMark> = new Set(

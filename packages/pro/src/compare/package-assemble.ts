@@ -1,6 +1,7 @@
 /**
- * Builds the output package: the original package with the compared main story, plus the
- * relationships (and media) that content taken from the revised document refers to.
+ * Builds the output package: the original package with the compared stories, new parts for
+ * stories only the revised document has, and the relationships (and media) that content taken
+ * from the revised document refers to.
  */
 import {
   readOoxmlPackage,
@@ -10,27 +11,31 @@ import {
   resolveContentTypeOf,
   serializeOoxmlPart,
   withBinaryPart,
+  withContentTypeOverride,
   withPart,
   writeOoxmlPackage,
   type OoxmlPackage,
 } from '@docx-editor.dev/core/store';
+import type { StoryOutput } from './stories.ts';
 import { REL_PLACEHOLDER } from './units.ts';
 import { escapeAttribute } from './xml-fragments.ts';
 
-const PLACEHOLDER = new RegExp(`${REL_PLACEHOLDER}([^§"]+)§`, 'g');
+const PLACEHOLDER = new RegExp(`${REL_PLACEHOLDER}([^§"|]+)\\|([^§"]+)§`, 'g');
+const NEW_PART = /§NEW:([^§"]+)§/g;
+const RELS_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const RELS_CONTENT_TYPE = 'application/vnd.openxmlformats-package.relationships+xml';
 
 export type AssembleResult =
   | { readonly ok: true; readonly bytes: Uint8Array }
   | { readonly ok: false; readonly message: string };
 
-interface RevisedRel {
+interface Rel {
   readonly type: string;
   readonly target: string;
   readonly external: boolean;
 }
 
-function revisedRelationship(pkg: OoxmlPackage, owner: string, id: string): RevisedRel | null {
+function relationshipOf(pkg: OoxmlPackage, owner: string, id: string): Rel | null {
   const internal = relationshipsOf(pkg, owner).find((record) => record.id === id);
   if (internal) return { type: internal.type, target: internal.rawTarget, external: false };
   const external = pkg.externalTargets.find(
@@ -47,86 +52,137 @@ function resolveTarget(owner: string, target: string): string {
     if (piece === '..') out.pop();
     else if (piece !== '.' && piece !== '') out.push(piece);
   }
-  return out.join('/').startsWith('/') ? out.join('/') : `/${out.join('/').replace(/^\//, '')}`;
+  const name = out.join('/');
+  return name.startsWith('/') ? name : `/${name}`;
+}
+
+/** Target of `part` written relative to `owner`'s folder. */
+function relativeTarget(owner: string, part: string): string {
+  const dir = owner.slice(0, owner.lastIndexOf('/') + 1);
+  return part.startsWith(dir) ? part.slice(dir.length) : part;
+}
+
+/** Relationships to add, per owner part. */
+class RelationshipPlan {
+  readonly #added = new Map<string, string[]>();
+  readonly #used = new Map<string, Set<string>>();
+  #counter = 1;
+
+  constructor(private readonly base: OoxmlPackage) {}
+
+  add(owner: string, type: string, target: string, external: boolean): string {
+    let used = this.#used.get(owner);
+    if (!used) {
+      used = new Set([
+        ...relationshipsOf(this.base, owner).map((record) => record.id),
+        ...this.base.externalTargets
+          .filter((record) => record.ownerPart === owner)
+          .map((record) => record.id),
+      ]);
+      this.#used.set(owner, used);
+    }
+    let id: string;
+    do id = `rIdCmp${this.#counter++}`;
+    while (used.has(id));
+    used.add(id);
+    const list = this.#added.get(owner) ?? [];
+    list.push(
+      `<Relationship Id="${id}" Type="${escapeAttribute(type)}" Target="${escapeAttribute(target)}"${external ? ' TargetMode="External"' : ''}/>`
+    );
+    this.#added.set(owner, list);
+    return id;
+  }
+
+  entries(): IterableIterator<[string, string[]]> {
+    return this.#added.entries();
+  }
 }
 
 export function assemblePackage(
   base: OoxmlPackage,
   revised: OoxmlPackage,
-  documentXml: string
+  stories: readonly StoryOutput[]
 ): AssembleResult {
-  const owner = base.mainDocumentPart;
-  const revisedOwner = revised.mainDocumentPart;
-  const relsName = relsPartNameFor(owner);
-  const used = new Set<string>([
-    ...relationshipsOf(base, owner).map((record) => record.id),
-    ...base.externalTargets
-      .filter((record) => record.ownerPart === owner)
-      .map((record) => record.id),
-  ]);
   let pkg = base;
-  let counter = 1;
-  const freshId = () => {
-    let id: string;
-    do id = `rIdCmp${counter++}`;
-    while (used.has(id));
-    used.add(id);
-    return id;
-  };
-  const mapping = new Map<string, string>();
-  let added = '';
-  let mediaCounter = 1;
-  for (const match of documentXml.matchAll(PLACEHOLDER)) {
-    const original = match[1]!;
-    if (mapping.has(original)) continue;
-    const rel = revisedRelationship(revised, revisedOwner, original);
-    if (!rel)
-      return {
-        ok: false,
-        message: `The revised document refers to a missing relationship (${original}).`,
-      };
-    const id = freshId();
-    mapping.set(original, id);
-    if (rel.external) {
-      added += `<Relationship Id="${id}" Type="${escapeAttribute(rel.type)}" Target="${escapeAttribute(rel.target)}" TargetMode="External"/>`;
-      continue;
+  const plan = new RelationshipPlan(base);
+  const main = base.mainDocumentPart;
+  const newPartIds = new Map<string, string>();
+  for (const story of stories) {
+    if (story.isNew && story.relType) {
+      newPartIds.set(
+        story.partName,
+        plan.add(main, story.relType, relativeTarget(main, story.partName), false)
+      );
     }
-    const source = resolveTarget(revisedOwner, rel.target);
-    const bytes = revised.partBytes.get(source) ?? revised.partBytes.get(source.slice(1));
-    if (!bytes)
-      return { ok: false, message: `The revised document refers to a missing part (${source}).` };
-    const extension = /\.[A-Za-z0-9]+$/.exec(source)?.[0] ?? '';
-    const name = `/word/media/compare${mediaCounter++}${extension}`;
-    pkg = withBinaryPart(
-      pkg,
-      name,
-      bytes,
-      resolveContentTypeOf(revised, source) ?? 'application/octet-stream'
-    );
-    added += `<Relationship Id="${id}" Type="${escapeAttribute(rel.type)}" Target="${escapeAttribute(name.replace('/word/', ''))}"/>`;
   }
-  const xml = documentXml.replace(PLACEHOLDER, (_, original: string) => mapping.get(original)!);
-  const contentType =
-    base.parts.get(owner)?.contentType ??
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
-  const documentPart = readOoxmlPart(xml, { name: owner, contentType });
-  if (!documentPart.ok)
-    return { ok: false, message: `The compared story is not valid XML (${documentPart.reason}).` };
-  pkg = withPart(pkg, documentPart.part);
-  if (added) {
-    const relsPart = base.parts.get(relsName);
-    if (!relsPart) return { ok: false, message: 'The original document has no relationship part.' };
-    const relsXml = serializeOoxmlPart(relsPart).replace(
-      /<\/((?:[\w.-]+:)?)Relationships>\s*$/,
-      (_, prefix: string) =>
-        `${prefix ? added.replace(/<Relationship /g, `<${prefix}Relationship `) : added}</${prefix}Relationships>`
-    );
+  const media = new Map<string, string>();
+  let mediaCounter = 1;
+  for (const story of stories) {
+    const imported = new Map<string, string>();
+    let failure: string | null = null;
+    let xml = story.xml.replace(NEW_PART, (_, partName: string) => newPartIds.get(partName) ?? '');
+    xml = xml.replace(PLACEHOLDER, (_, revisedOwner: string, id: string) => {
+      const key = `${revisedOwner}|${id}`;
+      const known = imported.get(key);
+      if (known) return known;
+      const rel = relationshipOf(revised, revisedOwner, id);
+      if (!rel) {
+        failure = `The revised document refers to a missing relationship (${id}).`;
+        return id;
+      }
+      let target = rel.target;
+      if (!rel.external) {
+        const source = resolveTarget(revisedOwner, rel.target);
+        let copied = media.get(source);
+        if (!copied) {
+          const bytes = revised.partBytes.get(source) ?? revised.partBytes.get(source.slice(1));
+          if (!bytes) {
+            failure = `The revised document refers to a missing part (${source}).`;
+            return id;
+          }
+          const extension = /\.[A-Za-z0-9]+$/.exec(source)?.[0] ?? '';
+          copied = `/word/media/compare${mediaCounter++}${extension}`;
+          pkg = withBinaryPart(
+            pkg,
+            copied,
+            bytes,
+            resolveContentTypeOf(revised, source) ?? 'application/octet-stream'
+          );
+          media.set(source, copied);
+        }
+        target = relativeTarget(story.partName, copied);
+      }
+      const newId = plan.add(story.partName, rel.type, target, rel.external);
+      imported.set(key, newId);
+      return newId;
+    });
+    if (failure) return { ok: false, message: failure };
+    const part = readOoxmlPart(xml, { name: story.partName, contentType: story.contentType });
+    if (!part.ok)
+      return { ok: false, message: `A compared story is not valid XML (${part.reason}).` };
+    pkg = withPart(pkg, part.part);
+    if (story.isNew) pkg = withContentTypeOverride(pkg, story.partName, story.contentType);
+  }
+  for (const [owner, added] of plan.entries()) {
+    const relsName = relsPartNameFor(owner);
+    const existing = pkg.parts.get(relsName);
+    const relsXml = existing
+      ? serializeOoxmlPart(existing).replace(
+          /<\/((?:[\w.-]+:)?)Relationships>\s*$/,
+          (_, prefix: string) => {
+            const entries = prefix
+              ? added.map((entry) => entry.replace('<Relationship ', `<${prefix}Relationship `))
+              : added;
+            return `${entries.join('')}</${prefix}Relationships>`;
+          }
+        )
+      : `<Relationships xmlns="${RELS_NS}">${added.join('')}</Relationships>`;
     const next = readOoxmlPart(relsXml, {
       name: relsName,
-      contentType: relsPart.contentType || RELS_CONTENT_TYPE,
+      contentType: existing?.contentType || RELS_CONTENT_TYPE,
     });
     if (!next.ok)
-      return { ok: false, message: `The relationship part is not valid XML (${next.reason}).` };
+      return { ok: false, message: `A relationship part is not valid XML (${next.reason}).` };
     pkg = withPart(pkg, next.part);
   }
   const bytes = writeOoxmlPackage(pkg);

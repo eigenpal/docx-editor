@@ -2,8 +2,8 @@
  * Document compare: the original with the revised document's differences as tracked changes.
  *
  * DOM-free and layout-free. Both inputs are compared in their accepted state; the output is
- * the original package with a new main story and any relationships and media the inserted
- * content needs.
+ * the original package with compared stories and any parts, relationships, and media that
+ * content taken from the revised document needs.
  */
 import {
   applyTreeOp,
@@ -12,8 +12,9 @@ import {
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
 import type { CompareDocumentsOptions, CompareDocumentsResult } from './compare-types.ts';
-import { EmitContext, sectPrXml } from './emit.ts';
+import { CompareState, EmitContext, notePlaceholder, sectPrXml, type NoteKind } from './emit.ts';
 import { assemblePackage } from './package-assemble.ts';
+import { compareFurniture, compareNotes, storyXml, type StoryOutput } from './stories.ts';
 import { compareContainer } from './story-compare.ts';
 import { SideContext, unitsOf } from './units.ts';
 import {
@@ -24,7 +25,7 @@ import {
   type ElementNode,
 } from './xml-fragments.ts';
 
-/** Inputs larger than this many paragraph and table blocks are refused. */
+/** Inputs larger than this many blocks (paragraphs, tables, rows, cells) are refused. */
 const MAX_BLOCKS = 200_000;
 
 export function compareDocuments(
@@ -33,19 +34,21 @@ export function compareDocuments(
   options: CompareDocumentsOptions = {}
 ): CompareDocumentsResult {
   const baseRead = readOoxmlPackage(original);
-  if (!baseRead.ok)
+  if (!baseRead.ok) {
     return {
       ok: false,
       code: 'invalid-original',
       message: `The original document cannot be read (${baseRead.reason}).`,
     };
+  }
   const revisedRead = readOoxmlPackage(revised);
-  if (!revisedRead.ok)
+  if (!revisedRead.ok) {
     return {
       ok: false,
       code: 'invalid-revised',
       message: `The revised document cannot be read (${revisedRead.reason}).`,
     };
+  }
   return comparePackages(baseRead.package, revisedRead.package, options);
 }
 
@@ -60,48 +63,79 @@ export function comparePackages(
   const revisedDoc = revisedPkg.parts.get(revisedPkg.mainDocumentPart);
   const baseBody = baseDoc && childNamed(baseDoc.root, 'body');
   const revisedBody = revisedDoc && childNamed(revisedDoc.root, 'body');
-  if (!baseDoc || !baseBody)
+  if (!baseDoc || !baseBody) {
     return {
       ok: false,
       code: 'invalid-original',
       message: 'The original document has no main story.',
     };
-  if (!revisedDoc || !revisedBody)
+  }
+  if (!revisedDoc || !revisedBody) {
     return {
       ok: false,
       code: 'invalid-revised',
       message: 'The revised document has no main story.',
     };
+  }
   if (countBlocks(baseBody) + countBlocks(revisedBody) > MAX_BLOCKS) {
     return { ok: false, code: 'too-large', message: 'The documents are too large to compare.' };
   }
 
+  const state = new CompareState();
   const scope = new NamespaceScope();
   const base = new SideContext('base', basePkg, basePkg.mainDocumentPart, scope);
   const next = new SideContext('revised', revisedPkg, revisedPkg.mainDocumentPart, scope);
   const ctx = new EmitContext(
+    state,
     options.authorName ?? defaultAuthor(revisedPkg),
     options.removeDateAndTime ? undefined : revisionDate(options.date ?? new Date()),
     options.detectFormatChanges ?? true,
     base,
     next
   );
-  // The root shell first, so its prefixes win the namespace scope.
-  const rootShell = scope
-    .serialize({ ...baseDoc.root, children: [] } as ElementNode)
-    .replace(/\/>$/, '>');
-  const content = compareContainer(unitsOf(baseBody, base), unitsOf(revisedBody, next), ctx);
-  const finalSect = sectPrXml(
-    childNamed(baseBody, 'sectPr') ?? null,
-    childNamed(revisedBody, 'sectPr') ?? null,
-    ctx
-  );
-  const rootStart = rootShell.replace(/>$/, `${scope.declarations()}>`);
-  const xml = `${rootStart}<w:body>${content}${finalSect}</w:body></w:document>`;
+  const baseSect = childNamed(baseBody, 'sectPr');
+  const revisedSect = childNamed(revisedBody, 'sectPr');
+  const bodyShell = shellXml(scope, baseBody);
+  const furnitureCtx = ctx;
+  let furniture: ReturnType<typeof compareFurniture> = { outputs: [], extraRefs: '' };
+  const documentXml = storyXml(scope, baseDoc.root as ElementNode, () => {
+    const content = compareContainer(unitsOf(baseBody, base), unitsOf(revisedBody, next), ctx);
+    furniture = compareFurniture(basePkg, revisedPkg, baseSect, revisedSect, furnitureCtx);
+    const finalSect = sectPrXml(baseSect ?? null, revisedSect ?? null, ctx, furniture.extraRefs);
+    return `${bodyShell.start}${content}${finalSect}${bodyShell.end}`;
+  });
 
-  const assembled = assemblePackage(basePkg, revisedPkg, xml);
+  const stories: StoryOutput[] = [
+    { partName: baseDoc.name, contentType: baseDoc.contentType, xml: documentXml, isNew: false },
+    ...furniture.outputs,
+  ];
+  for (const kind of ['footnote', 'endnote'] as const) {
+    const notes = compareNotes(basePkg, revisedPkg, kind, ctx);
+    if (notes.output) stories.push(notes.output);
+    replaceNoteIds(stories, kind, notes.ids);
+  }
+  const assembled = assemblePackage(basePkg, revisedPkg, stories);
   if (!assembled.ok) return { ok: false, code: 'unsupported-content', message: assembled.message };
   return { ok: true, bytes: assembled.bytes, revisionCount: ctx.revisionCount };
+}
+
+function shellXml(scope: NamespaceScope, node: ElementNode): { start: string; end: string } {
+  const xml = scope.serialize({ ...node, children: [] } as ElementNode);
+  const match = /^<([^\s/>]+)([^>]*?)\/?>/.exec(xml)!;
+  return { start: `<${match[1]}${match[2]}>`, end: `</${match[1]}>` };
+}
+
+function replaceNoteIds(
+  stories: StoryOutput[],
+  kind: NoteKind,
+  ids: ReadonlyMap<string, string>
+): void {
+  if (ids.size === 0) return;
+  for (let i = 0; i < stories.length; i++) {
+    let xml = stories[i]!.xml;
+    for (const [revisedId, id] of ids) xml = xml.split(notePlaceholder(kind, revisedId)).join(id);
+    stories[i] = { ...stories[i]!, xml };
+  }
 }
 
 /** Accepts every revision in every story part, so both inputs compare in their final state. */
@@ -134,7 +168,7 @@ const REVISION_NAMES = new Set([
   'cellDel',
 ]);
 
-function hasRevision(node: ElementNode | OoxmlPart['root']): boolean {
+function hasRevision(node: OoxmlPart['root'] | ElementNode): boolean {
   if (!isElement(node)) return false;
   if (REVISION_NAMES.has(node.localName)) return true;
   return node.children.some((child) => isElement(child) && hasRevision(child));
