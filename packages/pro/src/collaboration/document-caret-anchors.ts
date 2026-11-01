@@ -108,18 +108,27 @@ export class CaretAnchors {
     this.carryOwed = false;
   }
 
-  /** Shared state is about to change: anchor the selection on what the editor shows. */
+  /**
+   * Shared state is about to change: anchor the selection on what the editor shows.
+   *
+   * A selection that cannot be anchored now is tried again at the next change. The editor can
+   * show a node that no build holds yet, as a tab this participant inserted, and the layout of
+   * its paragraph is then not trusted. The next build holds it, and the selection the editor
+   * still shows is anchored then. Anchoring only once left the selection to text mapping for
+   * every later change, which loses the caret when a change also joins or moves paragraphs.
+   */
   beforeChange(): void {
     this.carried = null;
     this.carryOwed = true;
     if (!this.stale) return;
-    this.stale = false;
     this.anchored = null;
     const selection = this.selection;
     if (!selection || !this.deps.viewIsCurrent()) return;
     const anchor = this.anchorOf(selection.anchor);
     const head = this.anchorOf(selection.head);
-    if (anchor && head) this.anchored = { anchor, head };
+    if (!anchor || !head) return;
+    this.anchored = { anchor, head };
+    this.stale = false;
   }
 
   /** The editor shows the change: carry the selection onto the characters it was beside. */
