@@ -150,6 +150,7 @@ import {
 import { commentTargetRangeOf } from './docx-editor-comment-resolution.ts';
 import { createReviewWrites } from './docx-editor-review-writes.ts';
 import { registerEditorHistoryGroups } from './editor-history-group-registry.ts';
+import { registerEditorCompareEngine } from './editor-compare-engine-registry.ts';
 import {
   canContentControlCommand,
   runContentControlCommand,
@@ -2583,6 +2584,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const instance = fieldScope.methods(editor);
   registerEditorHost(instance, () => container);
   registerEditorHistoryGroups(instance, historyGroups);
+  registerEditorCompareEngine(instance, modules.review?.compareDocuments);
   bindPopupChromeRequests(instance, views.popupChrome);
   endPreview = () => endEditorPreview(instance);
   registerEditorPreviewHost(instance, {

@@ -727,6 +727,14 @@
     "status": "partial",
     "notes": "Only DocumentProperties removes standard core, extended, and custom property parts and their package relationships. Other modes, TrackMineOnly, and collaboration refuse with NotSupported. Run as the only write in its sync. Malformed or ambiguous part topology refuses before mutation. Content, comments, revisions, and media remain unchanged; this operation does not anonymize document content."
   },
+  "Word.Document#compareFromBase64": {
+    "status": "partial",
+    "notes": "Requires reviewModule() from @docx-editor.dev/pro on the runtime or editor; without it the call refuses with NotSupported. Only CompareTargetCurrent is supported: the differences replace this document's content as tracked revisions in one undoable edit. CompareTargetNew, CompareTargetSelected, and removePersonalInformation: true refuse with NotSupported. authorName, detectFormatChanges, and removeDateAndTime are honored; addToRecentFiles and ignoreAllComparisonWarnings have no effect. Both documents are compared with their existing revisions accepted, and comments and bookmarks come from this document. Empty or invalid base64 and unreadable packages refuse with InvalidArgument. Collaborative sessions refuse with NotSupported. Run as the only write in its sync."
+  },
+  "Word.Document#compare": {
+    "status": "partial",
+    "notes": "Always refuses with NotSupported, because the document model has no file system. Read the file and call compareFromBase64 instead."
+  },
   "Word.Range#text": {
     "status": "partial",
     "notes": "Reads the range's text through its paragraph identity and offsets. A range whose text moved since it was read refuses with StaleDocument. Search again after an edit before the range's end in its paragraph."

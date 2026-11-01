@@ -739,6 +739,41 @@ Existing `acceptAll()` and `rejectAll()` calls keep their behavior. To support p
 
 The editor's **Accept all changes shown** and **Reject all changes shown** controls honor filters and skip unsupported groups. To keep the previous editor command behavior, pass `scope: 'document'` and `unsupported: 'fail'`.
 
+## Compare two documents
+
+Call `document.compareFromBase64(base64File, options)` to record the differences between the open document and a revised copy as tracked changes. The open document is the original. After the sync, accepting every change gives the revised text, and rejecting every change gives the original text.
+
+This method requires the Pro review module. Pass `reviewModule()` from `@docx-editor.dev/pro` in the runtime or editor `modules` list. Without it, the call refuses with `NotSupported`.
+
+```ts
+import { reviewModule } from '@docx-editor.dev/pro';
+
+const runtime = await DocxEditor.createServer(originalBytes, {
+  modules: [reviewModule()],
+});
+await runtime.run(async (context) => {
+  context.document.compareFromBase64(revisedBase64, {
+    authorName: 'Legal',
+    detectFormatChanges: true,
+  });
+  await context.sync();
+});
+const redline = await runtime.save();
+```
+
+The compare replaces the document content in one edit. In the editor, one undo restores the original. Keep the call as the only write in its sync.
+
+The following options are supported:
+
+- `authorName` sets the author of every revision. The default is the revised document's last author, then its creator, then `Comparison`.
+- `detectFormatChanges` records character, paragraph, table, and section formatting differences. The default is `true`.
+- `removeDateAndTime` writes the revisions without dates.
+- `compareTarget` supports `CompareTargetCurrent` only.
+
+`addToRecentFiles` and `ignoreAllComparisonWarnings` have no effect. `CompareTargetNew`, `CompareTargetSelected`, and `removePersonalInformation: true` refuse with `NotSupported`. Empty or invalid base64 and unreadable packages refuse with `InvalidArgument`. `document.compare(filePath)` always refuses with `NotSupported`, because the document model has no file system. Collaborative sessions refuse the compare.
+
+Both documents are compared with their existing revisions accepted. Comments, bookmarks, and header and footer references come from the open document.
+
 ## Try the demo
 
 From a repository checkout, run:

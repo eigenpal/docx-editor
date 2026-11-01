@@ -681,3 +681,19 @@ Do not substitute revision author settings for document author metadata. Other d
 Collaborative writes require an existing core-properties part. If the input omits this part, set properties before joining collaboration. Concurrent creation of this package part cannot merge safely.
 
 Load `properties.lastAuthor` to read the last saved author. This property has no setter. To remove all standard property parts, call `document.removeDocumentInformation('DocumentProperties')`, then `context.sync()`. Run this command alone. It removes core, extended, and custom properties, including the last author. It preserves document text, comments, revisions, and media. It does not anonymize their content. Other removal modes, tracked removal, and removal during collaboration refuse with `NotSupported`.
+
+## Compare two documents
+
+To record the differences between the open document and a revised copy as tracked changes, call `document.compareFromBase64(base64File, options)`. The open document is the original. This method requires `reviewModule()` from `@docx-editor.dev/pro` in the runtime `modules` list; without it the call refuses with `NotSupported`. Run the call alone in its sync.
+
+```ts
+const runtime = await DocxEditor.createServer(originalBytes, {
+  modules: [reviewModule()],
+});
+await runtime.run(async (context) => {
+  context.document.compareFromBase64(revisedBase64, { authorName: 'Legal' });
+  await context.sync();
+});
+```
+
+Only `CompareTargetCurrent` is supported. `CompareTargetNew`, `CompareTargetSelected`, `removePersonalInformation: true`, `document.compare(filePath)`, and collaborative sessions refuse with `NotSupported`. Invalid base64 and unreadable packages refuse with `InvalidArgument`. Pass the revised document as plain base64 data; do not pass proxies to a job queue.

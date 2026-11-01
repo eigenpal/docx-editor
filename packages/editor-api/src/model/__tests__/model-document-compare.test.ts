@@ -1,0 +1,210 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+import { afterAll, expect, test } from 'bun:test';
+import { strFromU8, unzipSync } from 'fflate';
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+const registered = !GlobalRegistrator.isRegistered;
+if (registered) GlobalRegistrator.register();
+afterAll(() => {
+  if (registered) GlobalRegistrator.unregister();
+});
+import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import { CompareTarget, DocxEditor } from '@docx-editor.dev/editor-api';
+import { DocxEditor as BrowserDocxEditor } from '@docx-editor.dev/editor-api/browser';
+import { reviewModule } from '../../../../pro/src/review/review-module.ts';
+import { docx, p } from './support/documents.ts';
+
+const ORIGINAL = docx(p('The quick brown fox jumps.') + p('Second paragraph stays.'));
+const REVISED = docx(p('The quick red fox jumps far.') + p('Second paragraph stays.'));
+
+function base64Of(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString('base64');
+}
+
+function bodyXml(bytes: Uint8Array): string {
+  return strFromU8(unzipSync(bytes)['word/document.xml']!);
+}
+
+test('server compare writes the differences as tracked revisions by the given author', async () => {
+  const runtime = await DocxEditor.createServer(ORIGINAL, { modules: [reviewModule()] });
+  try {
+    await runtime.run(async (context) => {
+      context.document.compareFromBase64(base64Of(REVISED), {
+        authorName: 'Legal',
+        compareTarget: CompareTarget.compareTargetCurrent,
+        addToRecentFiles: false,
+        ignoreAllComparisonWarnings: true,
+      });
+      await context.sync();
+      const revisions = context.document.body.revisions;
+      revisions.load('items/type,items/author');
+      await context.sync();
+      const ranges = revisions.items.map((item) => item.range.load('text'));
+      await context.sync();
+      const entries = revisions.items.map((item, i) => [
+        item.type,
+        item.author,
+        ranges[i]!.text.trim(),
+      ]);
+      expect(entries).toContainEqual(['Delete', 'Legal', 'brown']);
+      expect(entries).toContainEqual(['Insert', 'Legal', 'red']);
+      expect(entries.every((entry) => entry[1] === 'Legal')).toBe(true);
+    });
+    const saved = await runtime.save();
+    const xml = bodyXml(saved);
+    expect(xml).toContain('<w:delText');
+    expect(xml).toContain('w:author="Legal"');
+    const reopened = await DocxEditor.createServer(saved);
+    try {
+      await reopened.run(async (context) => {
+        const body = context.document.body.getRange('Whole');
+        const original = body.getReviewedText('Original');
+        const current = body.getReviewedText('Current');
+        await context.sync();
+        expect(original.value).toContain('quick brown fox jumps.');
+        expect(current.value).toContain('quick red fox jumps far.');
+      });
+    } finally {
+      reopened.dispose();
+    }
+  } finally {
+    runtime.dispose();
+  }
+});
+
+test('removeDateAndTime writes revisions without dates', async () => {
+  const runtime = await DocxEditor.createServer(ORIGINAL, { modules: [reviewModule()] });
+  try {
+    await runtime.run(async (context) => {
+      context.document.compareFromBase64(base64Of(REVISED), {
+        authorName: 'Legal',
+        removeDateAndTime: true,
+      });
+      await context.sync();
+    });
+    const xml = bodyXml(await runtime.save());
+    expect(xml).toContain('<w:ins ');
+    expect(xml).not.toContain('w:date=');
+  } finally {
+    runtime.dispose();
+  }
+});
+
+test('an identical document compares to no revisions', async () => {
+  const runtime = await DocxEditor.createServer(ORIGINAL, { modules: [reviewModule()] });
+  try {
+    await runtime.run(async (context) => {
+      context.document.compareFromBase64(base64Of(ORIGINAL));
+      await context.sync();
+      const revisions = context.document.body.revisions;
+      revisions.load('items');
+      await context.sync();
+      expect(revisions.items.length).toBe(0);
+    });
+  } finally {
+    runtime.dispose();
+  }
+});
+
+test('compare refuses without the review module and leaves the document unchanged', async () => {
+  const runtime = await DocxEditor.createServer(ORIGINAL);
+  try {
+    const before = await runtime.save();
+    await expect(
+      runtime.run(async (context) => {
+        context.document.compareFromBase64(base64Of(REVISED));
+        await context.sync();
+      })
+    ).rejects.toMatchObject({ code: 'NotSupported' });
+    expect(await runtime.save()).toEqual(before);
+  } finally {
+    runtime.dispose();
+  }
+});
+
+test('unsupported options, file paths and bad input refuse at sync', async () => {
+  const runtime = await DocxEditor.createServer(ORIGINAL, { modules: [reviewModule()] });
+  try {
+    const before = await runtime.save();
+    const refusals: Array<
+      [string, (document: import('@docx-editor.dev/editor-api').Document) => void]
+    > = [
+      [
+        'NotSupported',
+        (d) => d.compareFromBase64(base64Of(REVISED), { compareTarget: 'CompareTargetNew' }),
+      ],
+      [
+        'NotSupported',
+        (d) =>
+          d.compareFromBase64(base64Of(REVISED), {
+            compareTarget: CompareTarget.compareTargetSelected,
+          }),
+      ],
+      [
+        'NotSupported',
+        (d) => d.compareFromBase64(base64Of(REVISED), { removePersonalInformation: true }),
+      ],
+      ['NotSupported', (d) => d.compare('/tmp/revised.docx')],
+      ['InvalidArgument', (d) => d.compareFromBase64('')],
+      ['InvalidArgument', (d) => d.compareFromBase64('not base64 at all!')],
+      ['InvalidArgument', (d) => d.compareFromBase64(base64Of(new Uint8Array([1, 2, 3, 4])))],
+    ];
+    for (const [code, call] of refusals) {
+      await expect(
+        runtime.run(async (context) => {
+          call(context.document);
+          await context.sync();
+        })
+      ).rejects.toMatchObject({ code });
+      expect(await runtime.save()).toEqual(before);
+    }
+  } finally {
+    runtime.dispose();
+  }
+});
+
+test('browser compare applies as one undoable edit', async () => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const editor = createDocxEditor({ container, document: ORIGINAL, modules: [reviewModule()] });
+  const runtime = BrowserDocxEditor.createBrowser(editor);
+  try {
+    const before = bodyXml(new Uint8Array(await editor.save()));
+    await runtime.run(async (context) => {
+      context.document.compareFromBase64(base64Of(REVISED), { authorName: 'Legal' });
+      await context.sync();
+    });
+    const compared = bodyXml(new Uint8Array(await editor.save()));
+    expect(compared).toContain('<w:delText');
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    expect(bodyXml(new Uint8Array(await editor.save()))).toBe(before);
+    expect(editor.exec({ type: 'redo' }).ok).toBe(true);
+    expect(bodyXml(new Uint8Array(await editor.save()))).toBe(compared);
+  } finally {
+    runtime.dispose();
+    editor.destroy();
+    container.remove();
+  }
+});
+
+test('browser compare refuses without the review module', async () => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const editor = createDocxEditor({ container, document: ORIGINAL });
+  const runtime = BrowserDocxEditor.createBrowser(editor);
+  try {
+    await expect(
+      runtime.run(async (context) => {
+        context.document.compareFromBase64(base64Of(REVISED));
+        await context.sync();
+      })
+    ).rejects.toMatchObject({ code: 'NotSupported' });
+  } finally {
+    runtime.dispose();
+    editor.destroy();
+    container.remove();
+  }
+});

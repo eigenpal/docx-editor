@@ -97,6 +97,8 @@ export interface AutomationDocumentPort {
   readonly localChangeTracking?: true;
   /** True when a live collaboration session replicates package edits. */
   readonly collaborative?: () => boolean;
+  /** The document compare engine a review module provides, when one is installed. */
+  readonly compareDocuments?: import('../contracts/modules.ts').CompareDocumentsEngine;
   /**
    * The collaboration actor this owner's commits mint ids under, or undefined when it has none.
    *
