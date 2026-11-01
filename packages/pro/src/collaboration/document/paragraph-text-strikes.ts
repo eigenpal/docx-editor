@@ -23,6 +23,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import * as Y from 'yjs';
 import { firstItem } from './yjs-items.ts';
+import { textDecisionsOf, type TextDecisions } from './paragraph-text-decisions.ts';
 import { isRecord } from './paragraph-text-codec.ts';
 import {
   parseJson,
@@ -191,9 +192,29 @@ function outOfStrikes(
   return own;
 }
 
+/** The revisions in `attributes` that a decision took the character `client:clock` out of. */
+function decidedRevisions(
+  decisions: TextDecisions,
+  keys: readonly string[],
+  client: number,
+  clock: number
+): string[] | null {
+  let out: string[] | null = null;
+  for (const key of keys) if (decisions.decided(key, client, clock)) (out ??= []).push(key);
+  return out;
+}
+
+/** The keys of two lists, or either alone. */
+function joined(left: string[] | null, right: string[] | null): string[] | null {
+  if (!left) return right;
+  if (!right) return left;
+  return [...new Set([...left, ...right])].sort();
+}
+
 /**
  * A paragraph text's delta, as `Y.Text#toDelta` gives it, with every character left out of the
- * strikes that did not see it.
+ * strikes that did not see it, and out of each revision a decision took it out of
+ * (`paragraph-text-decisions.ts`).
  */
 export function sharedDelta(text: Y.Text): DeltaOp[] {
   return readShared(text).ops;
@@ -210,6 +231,18 @@ export function readShared(text: Y.Text): { ops: DeltaOp[]; leftOut: boolean } {
   let attributes: Record<string, unknown> | null = null;
   const attributesNow = (): Record<string, unknown> => (attributes ??= { ...current });
   let hasStrikesSeen = false;
+  const recorded = text.doc ? textDecisionsOf(text.doc) : null;
+  const decisions = recorded && !recorded.empty ? recorded : null;
+  // The revisions of the current attributes that a record names, read again after a marker.
+  let decidable: string[] | null = null;
+  const decidableNow = (): string[] => {
+    if (decidable) return decidable;
+    decidable = [];
+    for (const key in current) {
+      if (key.startsWith(REVISION_PREFIX) && decisions!.names(key)) decidable.push(key);
+    }
+    return decidable;
+  };
   // The attributes object the last string op was packed with, to pack the next one into it.
   let packed: Record<string, unknown> | null = null;
   const push = (insert: unknown, own: Record<string, unknown>): void => {
@@ -245,27 +278,38 @@ export function readShared(text: Y.Text): { ops: DeltaOp[]; leftOut: boolean } {
       else current[content.key] = content.value;
       if (seenOf(content.value) !== null) hasStrikesSeen = true;
       attributes = null;
+      decidable = null;
       left = new Map();
       continue;
     }
     const { client, clock } = item.id;
+    const deciding = decisions && decidableNow().length > 0 ? decisions : null;
     if (content instanceof Y.ContentString) {
       const str = content.str;
-      if (!hasStrikesSeen) {
+      if (!hasStrikesSeen && !deciding) {
         pushString(str, attributesNow());
         continue;
       }
       for (let at = 0; at < str.length; ) {
-        const unseen = unseenStrikes(attributesNow(), client, clock + at);
-        const until = sameUntil(attributesNow(), client, clock + at, clock + str.length) - clock;
-        pushString(str.slice(at, until), unseen ? minus(unseen) : attributesNow());
+        const unseen = hasStrikesSeen ? unseenStrikes(attributesNow(), client, clock + at) : null;
+        const decided = deciding
+          ? decidedRevisions(deciding, decidableNow(), client, clock + at)
+          : null;
+        // A record can end at any character, so a text with records is read one at a time.
+        const until = deciding
+          ? at + 1
+          : sameUntil(attributesNow(), client, clock + at, clock + str.length) - clock;
+        const out = joined(unseen, decided);
+        pushString(str.slice(at, until), out ? minus(out) : attributesNow());
         at = until;
       }
       continue;
     }
     if (content instanceof Y.ContentEmbed || content instanceof Y.ContentType) {
       const unseen = hasStrikesSeen ? unseenStrikes(attributesNow(), client, clock) : null;
-      push(content.getContent()[0], unseen ? minus(unseen) : { ...attributesNow() });
+      const decided = deciding ? decidedRevisions(deciding, decidableNow(), client, clock) : null;
+      const out = joined(unseen, decided);
+      push(content.getContent()[0], out ? minus(out) : { ...attributesNow() });
     }
   }
   return { ops, leftOut };

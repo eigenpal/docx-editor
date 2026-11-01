@@ -5,64 +5,86 @@ import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import { PACKAGE_NODES_KEY } from '../../packages/pro/src/collaboration/document/index.ts';
 import { INLINE_FIELD } from '../../packages/pro/src/collaboration/document/paragraph-text.ts';
 
+// A document tree is immutable, and an edit shares every subtree it did not change, so these
+// readers keep what they read of a node by its identity. The fuzzer reads the whole document
+// after every action; with the caches, an action costs what it changed, not the document.
+
+const texts = new WeakMap<OoxmlNode, string>();
+
 /**
  * The text a node shows, from its text values. With `hardBreak`, a line break shows as that
  * mark, so a printout keeps the lines apart.
  */
 export function textOf(node: OoxmlNode, hardBreak?: string): string {
   if (node.kind === 'textValue') return node.value;
-  if (hardBreak !== undefined && node.kind === 'hardBreak') return hardBreak;
-  return node.children.map((child) => textOf(child, hardBreak)).join('');
+  if (hardBreak !== undefined) {
+    if (node.kind === 'hardBreak') return hardBreak;
+    return node.children.map((child) => textOf(child, hardBreak)).join('');
+  }
+  let text = texts.get(node);
+  if (text === undefined) {
+    text = '';
+    for (const child of node.children) text += textOf(child);
+    texts.set(node, text);
+  }
+  return text;
+}
+
+/** One walk of a root: its nodes by ID, the parent of each, and elements by local name. */
+interface TreeIndex {
+  readonly byId: Map<string, OoxmlNode>;
+  readonly parentById: Map<string, OoxmlNode>;
+  readonly byName: Map<string, OoxmlNode[]>;
+  readonly paragraphs: OoxmlNode[];
+}
+
+const indexes = new WeakMap<OoxmlNode, TreeIndex>();
+
+/** The index of `root`, in document order: the first node with an ID and its first lister. */
+function indexOf(root: OoxmlNode): TreeIndex {
+  let index = indexes.get(root);
+  if (index) return index;
+  const built: TreeIndex = {
+    byId: new Map(),
+    parentById: new Map(),
+    byName: new Map(),
+    paragraphs: [],
+  };
+  const visit = (node: OoxmlNode): void => {
+    if (!built.byId.has(node.id)) built.byId.set(node.id, node);
+    if (node.kind === 'textValue') return;
+    if (node.kind === 'paragraph') built.paragraphs.push(node);
+    let named = built.byName.get(node.localName);
+    if (!named) built.byName.set(node.localName, (named = []));
+    named.push(node);
+    for (const child of node.children) {
+      if (!built.parentById.has(child.id)) built.parentById.set(child.id, node);
+    }
+    for (const child of node.children) visit(child);
+  };
+  visit(root);
+  indexes.set(root, (index = built));
+  return index;
 }
 
 /** Every element named `localName` under `root`, `root` included, in document order. */
 export function elements(root: OoxmlNode, localName: string): OoxmlNode[] {
-  const found: OoxmlNode[] = [];
-  const walk = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
-    if (node.localName === localName) found.push(node);
-    for (const child of node.children) walk(child);
-  };
-  walk(root);
-  return found;
+  return [...(indexOf(root).byName.get(localName) ?? [])];
 }
 
 /** Every paragraph under `root`, nested ones included, in document order. */
 export function paragraphs(root: OoxmlNode): OoxmlNode[] {
-  const found: OoxmlNode[] = [];
-  const visit = (node: OoxmlNode): void => {
-    if (node.kind === 'paragraph') found.push(node);
-    if (node.kind !== 'textValue') for (const child of node.children) visit(child);
-  };
-  visit(root);
-  return found;
+  return [...indexOf(root).paragraphs];
 }
 
 /** The node with `id` under `root`, or null. */
 export function findNode(root: OoxmlNode, id: string): OoxmlNode | null {
-  let found: OoxmlNode | null = null;
-  const visit = (node: OoxmlNode): void => {
-    if (found) return;
-    if (node.id === id) {
-      found = node;
-      return;
-    }
-    if (node.kind !== 'textValue') for (const child of node.children) visit(child);
-  };
-  visit(root);
-  return found;
+  return indexOf(root).byId.get(id) ?? null;
 }
 
 /** The node that lists a child with `id`, or null. */
 export function parentOf(root: OoxmlNode, id: string): OoxmlNode | null {
-  let found: OoxmlNode | null = null;
-  const walk = (node: OoxmlNode): void => {
-    if (found || node.kind === 'textValue') return;
-    if (node.children.some((child) => child.id === id)) found = node;
-    else for (const child of node.children) walk(child);
-  };
-  walk(root);
-  return found;
+  return indexOf(root).parentById.get(id) ?? null;
 }
 
 /** The shared record map of every package node, by node ID. */

@@ -342,13 +342,22 @@ export function projectJournalToShared(
   // Bound incoming lists before collecting future moves. Do not flatten unvalidated
   // child arrays into an additional unbounded allocation.
   const reinserted = new Set<LogicalId>();
+  // The parents this journal lists each child in, so releasing a child's other listings
+  // never deletes the listing the same journal writes.
+  const insertedInto = new Map<LogicalId, Set<LogicalId>>();
+  const noteInsert = (id: LogicalId, parentId: LogicalId): void => {
+    reinserted.add(id);
+    const parents = insertedInto.get(id) ?? new Set<LogicalId>();
+    parents.add(parentId);
+    insertedInto.set(id, parents);
+  };
   for (const effect of incoming) {
     if (effect.kind === 'spliceChildren') {
       if (effect.childLogicalIds.length > registry.limits.maxChildren)
         return { ok: false, code: 'too-many-children' };
-      for (const id of effect.childLogicalIds) reinserted.add(id);
+      for (const id of effect.childLogicalIds) noteInsert(id, effect.parentLogicalId);
     } else if (effect.kind === 'moveNode') {
-      reinserted.add(effect.logicalId);
+      noteInsert(effect.logicalId, effect.destinationParentLogicalId);
     }
     if (reinserted.size > registry.limits.maxNodes) return { ok: false, code: 'too-many-nodes' };
   }
@@ -432,6 +441,17 @@ export function projectJournalToShared(
         const others = repeats.get(first) ?? [];
         others.push(index);
         repeats.set(first, others);
+        return;
+      }
+      // Two parents can list one child after concurrent moves, and the first one in document
+      // order shows it. A listing here that lost to another parent shows nothing here, so it
+      // takes no visible index. A child this journal lists is placed where the journal puts it.
+      const placed = reinserted.has(id) ? parentId : registry.parentOf(id);
+      if (
+        placed !== null &&
+        placed !== parentId &&
+        registry.listingParents(id).includes(parentId)
+      ) {
         return;
       }
       seen.set(id, index);
@@ -528,6 +548,28 @@ export function projectJournalToShared(
           });
         }
         stack.push(child);
+      }
+    }
+  };
+  // A child removed from the parent that shows it can still be listed by a parent that lost
+  // its placement. Left there, that listing showed the child again: a deleted block came
+  // back, or a block moved in its parent showed inside the other one. So removing a child
+  // from where it shows removes its other listings too, except those this journal writes.
+  const releaseOtherListings = (id: LogicalId, parentId: LogicalId): void => {
+    if (registry.parentOf(id) !== parentId) return;
+    for (const lister of registry.listingParents(id)) {
+      if (lister === parentId || insertedInto.get(id)?.has(lister)) continue;
+      const other = raw.node(lister);
+      if (!other || other.isText) continue;
+      for (let at = other.children.length - 1; at >= 0; at -= 1) {
+        if (other.children[at] !== id) continue;
+        emit({
+          kind: 'spliceChildren',
+          parentLogicalId: lister,
+          start: at,
+          deleteCount: 1,
+          childLogicalIds: [],
+        });
       }
     }
   };
@@ -812,7 +854,10 @@ export function projectJournalToShared(
         }
         // A deleted block takes what it showed with it, as a Yjs node takes its nested content.
         if (!refusal) {
-          for (const id of removed) if (!reinserted.has(id)) releaseElsewhere(id);
+          for (const id of removed) {
+            releaseOtherListings(id, effect.parentLogicalId);
+            if (!reinserted.has(id)) releaseElsewhere(id);
+          }
         }
         if (!refusal && effect.childLogicalIds.length > 0) {
           for (const id of removed) {
