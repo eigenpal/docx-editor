@@ -202,6 +202,12 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
+    "editor/DocxEditorCompareDocumentsDialog": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
     "editor/DocxEditorContent": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["class", "class", "inheritAttrs", "name", "props"],

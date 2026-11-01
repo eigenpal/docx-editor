@@ -5,6 +5,7 @@ export const VUE_COMPOSABLES = [
   'useChromeDir',
   'useChromeTranslate',
   'useCommentDraftRequest',
+  'useCompareDocumentsDialog',
   'useContentControl',
   'useContentControlInstance',
   'useContentControlWidget',
