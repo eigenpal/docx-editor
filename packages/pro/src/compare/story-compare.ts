@@ -192,7 +192,11 @@ function emitHunk(
     baseUnit: ParagraphUnit | null,
     revisedUnit: ParagraphUnit | null
   ) => {
-    const trailing = baseUnit && mark !== 'ins' ? baseUnit.trailingMarkers.join('') : '';
+    const trailing =
+      (baseUnit && mark !== 'ins' ? baseUnit.trailingMarkers.join('') : '') +
+      (revisedUnit && revisedUnit !== baseUnit && mark !== 'del'
+        ? revisedUnit.trailingMarkers.join('')
+        : '');
     out += paragraphXml(
       paragraphProperties(mark, baseUnit, revisedUnit, ctx),
       emitContent(items, ctx) + trailing
@@ -224,7 +228,12 @@ function emitHunk(
           }
           if (baseAtom.node && atom.node)
             atom = { ...atom, xml: objectWithBoxes(baseAtom, atom, ctx) };
-          items.push({ mark: 'eq', atom, baseRPr: baseAtom.rPr, markers: baseAtom.markers });
+          items.push({
+            mark: 'eq',
+            atom,
+            baseRPr: baseAtom.rPr,
+            markers: [...baseAtom.markers, ...atom.markers],
+          });
         }
       } else if (left.kind === 'mark' && right.kind === 'mark') {
         closeParagraph('eq', left.unit, right.unit);
@@ -253,7 +262,7 @@ function emitHunk(
           );
           atom = { ...atom, xml, delXml: xml };
         }
-        items.push({ mark, atom, baseRPr: '', markers: mark === 'del' ? atom.markers : [] });
+        items.push({ mark, atom, baseRPr: '', markers: atom.markers });
       }
     } else if (token.kind === 'mark') {
       if (token.key === END_KEY && (a.length === 0 || b.length === 0)) {

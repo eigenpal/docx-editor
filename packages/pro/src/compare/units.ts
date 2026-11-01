@@ -84,6 +84,9 @@ export type Unit = ParagraphUnit | BlockUnit;
 
 export const OBJECT_TEXT = '￼';
 
+/** Id placeholder of a comment taken from the revised document. */
+export const commentPlaceholder = (id: string) => `§CMT:${id}§`;
+
 /**
  * Candidate relationship-valued attributes. The serializer chooses its own prefixes, so the
  * prefix is checked against the relationships namespace before the value counts as an id.
@@ -316,8 +319,11 @@ function walkInline(
   const name = node.localName;
   if (DROPPED.has(name)) return;
   if (MARKERS.has(name)) {
-    // Range markers survive from the original only; they reference its comments and bookmarks.
+    // Bookmarks and permissions survive from the original only. Comments come from both
+    // documents; the revised document's ids become placeholders, numbered on assembly.
     if (side.name === 'base') state.pending.push(side.serialize(node));
+    else if (name === 'commentRangeStart' || name === 'commentRangeEnd')
+      state.pending.push(revisedCommentMarker(side.serialize(node)));
     return;
   }
   if (name === 'r') {
@@ -405,14 +411,12 @@ function runAtoms(
         }
         break;
       }
-      case 'commentReference':
-        // Comments come from the original only: its reference run is a range marker, and a
-        // reference in the revised document is not content.
-        if (side.name === 'base')
-          state.pending.push(
-            `<w:r>${rPr ? `<w:rPr>${rPr}</w:rPr>` : ''}${side.serialize(child)}</w:r>`
-          );
+      case 'commentReference': {
+        // A comment's reference run is a range marker, not compared content.
+        const reference = `<w:r>${rPr ? `<w:rPr>${rPr}</w:rPr>` : ''}${side.serialize(child)}</w:r>`;
+        state.pending.push(side.name === 'base' ? reference : revisedCommentMarker(reference));
         break;
+      }
       default:
         if (!DROPPED.has(child.localName)) pushObject(child, rPr, side, wrappers, state);
     }
@@ -456,6 +460,11 @@ function pushObject(
     ...(noteKind && noteId !== undefined ? { note: { kind: noteKind, id: noteId } } : {}),
     ...(boxes ? { node } : {}),
   });
+}
+
+/** A revised-document comment marker, with its comment id as an assembly placeholder. */
+function revisedCommentMarker(xml: string): string {
+  return xml.replace(/\bw:id="([^"]*)"/, (_, id: string) => `w:id="${commentPlaceholder(id)}"`);
 }
 
 function takePending(state: WalkState): readonly string[] {

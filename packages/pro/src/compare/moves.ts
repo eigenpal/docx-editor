@@ -72,12 +72,12 @@ export function movedParagraph(unit: ParagraphUnit, end: MoveEnd, ctx: EmitConte
     mark: end.kind,
     atom,
     baseRPr: '',
-    markers: from ? atom.markers : [],
+    markers: atom.markers,
   }));
   const pPr = paragraphProperties(end.kind, from ? unit : null, from ? null : unit, ctx);
   const range = ctx.rangeAttrs(end.name);
   const content = emitContent(items, ctx);
-  const trailing = from ? unit.trailingMarkers.join('') : '';
+  const trailing = unit.trailingMarkers.join('');
   return paragraphXml(
     pPr,
     `<w:${end.kind}RangeStart${range.attrs}/>${content}<w:${end.kind}RangeEnd w:id="${range.id}"/>${trailing}`

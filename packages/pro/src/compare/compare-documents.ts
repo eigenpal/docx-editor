@@ -29,6 +29,7 @@ export type ComparePackagesResult =
   | Extract<CompareDocumentsResult, { ok: false }>;
 import { CompareState, EmitContext, notePlaceholder, sectPrXml, type NoteKind } from './emit.ts';
 import { assemblePackage } from './package-assemble.ts';
+import { mergeComments } from './comments.ts';
 import { selfCheck } from './self-check.ts';
 import { compareFurniture, compareNotes, storyXml, type StoryOutput } from './stories.ts';
 import { compareContainer } from './story-compare.ts';
@@ -135,7 +136,11 @@ export function comparePackages(
     if (notes.output) stories.push(notes.output);
     replaceNoteIds(stories, kind, notes.ids);
   }
-  const assembled = assemblePackage(basePkg, revisedPkg, stories);
+  const assembled = assemblePackage(
+    basePkg,
+    revisedPkg,
+    mergeComments(basePkg, revisedPkg, stories)
+  );
   if (!assembled.ok) return { ok: false, code: 'unsupported-content', message: assembled.message };
   const check = selfCheck(assembled.pkg, basePkg, revisedPkg);
   if (!unchecked && (!check.accept || !check.reject)) {
