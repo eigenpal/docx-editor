@@ -40,10 +40,14 @@ const BALLOON_INSET = 22.3;
 const BALLOON_END = 4.6;
 const CONNECTOR_TURN = 4.4;
 const FONT_SIZE = 9;
-const LINE_HEIGHT = 10.35;
-const PAD_Y = 2.3;
+const LINE_HEIGHT = 11.04;
+const PAD_Y = 1.92;
 const PAD_X = 4.5;
-const BALLOON_GAP = 2;
+const BALLOON_GAP = 0.96;
+/** A balloon starts this far above the line it sits beside. */
+const BALLOON_RISE = 0.6;
+/** From a balloon's top to its first baseline. */
+const FIRST_BASELINE = 10.7;
 const PANE_GRAY = '0.949 0.949 0.949';
 const MAX_BALLOON_LINES = 40;
 /** Characters of comment text a balloon reads; 40 lines hold far fewer. */
@@ -92,7 +96,7 @@ export function hasMarkupPane(layout: ExportSemanticLayout, includeComments: boo
         artifact.occurrences.some(
           (occurrence) =>
             occurrence.rootStory === 'body' &&
-            (occurrence.geometry?.pageStack ?? []).some((box) => box.width > 0)
+            (occurrence.geometry?.pageStack ?? []).some(isAnchorBox)
         )
     )
   );
@@ -236,6 +240,7 @@ export function commentRangeCommands(
   for (const balloon of commentsOn(layout, pageIndex, authorSlots).ranges) {
     const y = (box: LayoutBox) => sheetHeight - (box.y - record.box.y);
     for (const box of balloon.boxes) {
+      if (box.width <= 0) continue;
       const x = box.x - record.box.x;
       out.push(
         `${op(balloon.fill)} rg ${n(x)} ${n(y(box) - box.height)} ${n(box.width)} ${n(box.height)} re f`
@@ -268,44 +273,59 @@ export function addRangeBlend(page: PDFPage): void {
 type CommentRecord = Extract<ExportSemanticLayout['reviewArtifacts'][number], { kind: 'comment' }>;
 
 /**
- * Comments in the order their ranges start in the body, which is the order they are numbered
- * in. A reply without a range of its own keeps its place after its parent, and a comment
- * outside the body keeps its place after the rest.
+ * Comments in the order their ranges end in the body, where each comment's reference mark
+ * stands; that is the order they are numbered in. A range nested in another ends first, so it
+ * comes first. Comments that end at the same place keep the order they are listed in. A reply
+ * without a range of its own keeps its place after its parent, and a
+ * comment outside the body keeps its place after the rest.
  */
-function commentsByStart(layout: ExportSemanticLayout): CommentRecord[] {
-  const keys = new Map<string, readonly [number, number, number]>();
+function commentsInOrder(layout: ExportSemanticLayout): CommentRecord[] {
+  type Key = readonly [page: number, y: number, x: number];
+  const later = (a: Key, b: Key) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+  const keys = new Map<string, Key>();
   const comments: CommentRecord[] = [];
   for (const artifact of layout.reviewArtifacts) {
     if (artifact.kind !== 'comment') continue;
     comments.push(artifact);
     for (const occurrence of artifact.occurrences) {
-      const box = occurrence.geometry?.pageStack.find((item) => item.width > 0);
-      if (!box || occurrence.rootStory !== 'body') continue;
-      keys.set(artifact.id, [occurrence.pageIndex, box.y, box.x]);
-      break;
-    }
-    if (!keys.has(artifact.id) && artifact.parentId) {
-      const parent = keys.get(artifact.parentId);
-      if (parent) keys.set(artifact.id, parent);
+      if (occurrence.rootStory !== 'body') continue;
+      const boxes = (occurrence.geometry?.pageStack ?? []).filter(isAnchorBox);
+      const last = boxes[boxes.length - 1];
+      if (!last) continue;
+      const key: Key = [occurrence.pageIndex, last.y, last.x + last.width];
+      const known = keys.get(artifact.id);
+      if (!known || later(key, known) > 0) keys.set(artifact.id, key);
     }
   }
-  const none = [Infinity, 0, 0] as const;
-  // `sort` is stable, so equal starts keep their order, replies after their parent.
-  return comments.sort((a, b) => {
-    const [pa, ya, xa] = keys.get(a.id) ?? none;
-    const [pb, yb, xb] = keys.get(b.id) ?? none;
-    return pa - pb || ya - yb || xa - xb;
-  });
+  for (const artifact of comments) {
+    if (keys.has(artifact.id) || !artifact.parentId) continue;
+    const parent = keys.get(artifact.parentId);
+    if (parent) keys.set(artifact.id, parent);
+  }
+  const none: Key = [Infinity, 0, 0];
+  // `sort` is stable: comments that end together keep their order, a reply without a range
+  // stays after its parent.
+  return comments.sort((a, b) => later(keys.get(a.id) ?? none, keys.get(b.id) ?? none));
+}
+
+/**
+ * A box a comment can stand beside: a line it covers, or the point a comment without a range
+ * marks, which has no width.
+ */
+function isAnchorBox(box: LayoutBox): boolean {
+  return box.height > 0 && box.width >= 0;
 }
 
 /** Comments by page, per paint: one paint's author slots color its revisions and comments. */
 const commentCache = new WeakMap<ReadonlyMap<string, number>, Map<number, PageComments>>();
 
 /**
- * The comments on one page, in document order: a balloon beside the end of each range, and the
- * range marks on every page its range crosses. An author's comments take the color of that
- * author's revisions. A reply is numbered under its parent (`[AB2R1]`) and marks no range of
- * its own, since it shares its parent's.
+ * The comments on one page: a balloon beside the end of each range, and the range marks on
+ * every page its range crosses. Comments, replies included, are numbered in one sequence in
+ * the order their ranges end, after the initials the document declares (`[AB2]`, or `[2]`
+ * without initials), and their balloons stack down the pane in that order. A reply without a
+ * range of its own follows its parent. An author's comments take the color of that author's
+ * revisions.
  */
 function commentsOn(
   layout: ExportSemanticLayout,
@@ -322,22 +342,11 @@ function commentsOn(
       if (!entry) pages.set(index, (entry = { balloons: [], ranges: [] }));
       return entry;
     };
-    const numbers = new Map<string, number>();
-    const replies = new Map<string, number>();
     const anchors = new Map<string, { pageIndex: number; boxes: readonly LayoutBox[] }>();
     let number = 0;
-    for (const artifact of commentsByStart(layout)) {
-      const parent = artifact.parentId ? numbers.get(artifact.parentId) : undefined;
-      let label: string;
-      if (parent !== undefined) {
-        const reply = (replies.get(artifact.parentId!) ?? 0) + 1;
-        replies.set(artifact.parentId!, reply);
-        label = `Commented [${artifact.initials}${parent}R${reply}]: `;
-      } else {
-        number += 1;
-        numbers.set(artifact.id, number);
-        label = `Commented [${artifact.initials}${number}]: `;
-      }
+    for (const artifact of commentsInOrder(layout)) {
+      number += 1;
+      const label = `Commented [${artifact.declaredInitials ?? ''}${number}]: `;
       const slot = authorSlots.get(artifact.author) ?? 0;
       const [markHex, fillHex] = AUTHOR_PALETTE[slot % AUTHOR_PALETTE.length]!;
       const base = { mark: parseHex(markHex), fill: parseHex(fillHex) };
@@ -348,20 +357,19 @@ function commentsOn(
       // The balloon sits beside the end of the range, on the page where the range ends.
       let end: { pageIndex: number; boxes: readonly LayoutBox[] } | undefined;
       const parts = artifact.occurrences.flatMap((occurrence) => {
-        const boxes = (occurrence.geometry?.pageStack ?? []).filter((box) => box.width > 0);
+        const boxes = (occurrence.geometry?.pageStack ?? []).filter(isAnchorBox);
         return boxes.length && occurrence.rootStory === 'body'
           ? [{ pageIndex: occurrence.pageIndex, boxes }]
           : [];
       });
       for (const [index, occurrence] of parts.entries()) {
         const { boxes } = occurrence;
-        if (parent === undefined)
-          on(occurrence.pageIndex).ranges.push({
-            boxes,
-            ...colors,
-            opens: index === 0,
-            closes: index === parts.length - 1,
-          });
+        on(occurrence.pageIndex).ranges.push({
+          boxes,
+          ...colors,
+          opens: index === 0,
+          closes: index === parts.length - 1,
+        });
         if (!end || occurrence.pageIndex >= end.pageIndex)
           end = {
             pageIndex: occurrence.pageIndex,
@@ -376,12 +384,7 @@ function commentsOn(
       }
     }
   }
-  const entry = byPage.get(pageIndex);
-  if (!entry) return { balloons: [], ranges: [] };
-  // Balloons stack down the pane in the order of the lines they sit beside.
-  const top = (balloon: Balloon) => balloon.boxes[balloon.boxes.length - 1]!.y;
-  entry.balloons.sort((a, b) => top(a) - top(b));
-  return entry;
+  return byPage.get(pageIndex) ?? { balloons: [], ranges: [] };
 }
 
 /** Fonts for balloon text, embedded once per document. */
@@ -447,7 +450,7 @@ export function paintMarkupPane(
     const lines = placed.reduce((count, word) => Math.max(count, word.line + 1), 1);
     const last = balloon.boxes[balloon.boxes.length - 1]!;
     const anchorTop = last.y - record.box.y;
-    const boxTop = Math.max(anchorTop, floor);
+    const boxTop = Math.max(anchorTop - BALLOON_RISE, floor);
     const boxHeight = lines * LINE_HEIGHT + 2 * PAD_Y;
     // A balloon that would run off the sheet is left out; its annotation keeps the comment.
     if (boxTop + boxHeight > height) {
@@ -484,7 +487,7 @@ export function paintMarkupPane(
     const color = balloon.comment.resolved ? rgb(0.749, 0.749, 0.749) : rgb(0, 0, 0);
     for (const word of placed) {
       if (word.text.trim() === '') continue;
-      const baseline = boxTop + PAD_Y + word.line * LINE_HEIGHT + FONT_SIZE * 0.86;
+      const baseline = boxTop + FIRST_BASELINE + word.line * LINE_HEIGHT;
       texts.push((page) =>
         page.drawText(word.text, {
           x: left + scale * (x0 + PAD_X + word.x),

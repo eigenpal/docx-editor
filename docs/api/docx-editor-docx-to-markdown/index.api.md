@@ -861,9 +861,9 @@ export interface SemanticCommentArtifactRecord {
     readonly author: string;
     // (undocumented)
     readonly date?: string;
+    readonly declaredInitials?: string;
     // (undocumented)
     readonly id: string;
-    // (undocumented)
     readonly initials: string;
     // (undocumented)
     readonly kind: 'comment';

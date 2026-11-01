@@ -104,7 +104,10 @@ export interface SemanticCommentArtifactRecord {
   readonly kind: 'comment';
   readonly id: string;
   readonly author: string;
+  /** Initials to show for the author: the document's, or ones made from the author name. */
   readonly initials: string;
+  /** The initials the document itself declares, trimmed; absent when it declares none. */
+  readonly declaredInitials?: string;
   readonly date?: string;
   readonly text: string;
   readonly resolved: boolean;

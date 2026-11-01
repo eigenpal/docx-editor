@@ -562,6 +562,9 @@ function artifactOf(
     id: mappedId(ids.comment, 'comment', item.id),
     author: item.comment.author,
     initials: commentInitials(item.comment),
+    ...(item.comment.initials?.trim()
+      ? { declaredInitials: commentInitials({ ...item.comment, author: '' }) }
+      : {}),
     ...(item.comment.date !== undefined ? { date: item.comment.date } : {}),
     text: commentBodyText(item.comment),
     resolved: item.resolved,

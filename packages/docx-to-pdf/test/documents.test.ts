@@ -79,7 +79,7 @@ test('All Markup with comments shrinks the page beside a pane of comment balloon
   }
 });
 
-test('the comment pane numbers replies under their parent and wraps long words', async () => {
+test('the comment pane numbers replies in sequence and wraps long words', async () => {
   const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
   const W15 = 'http://schemas.microsoft.com/office/word/2012/wordml';
   const long = 'x'.repeat(120);
@@ -99,8 +99,8 @@ test('the comment pane numbers replies under their parent and wraps long words',
     const items = (await page.getTextContent()).items.flatMap((i) => ('str' in i ? [i] : []));
     const text = items.map((i) => i.str).join('');
     expect(text).toContain('Commented [RV1]:');
-    expect(text).toContain('Commented [ED1R1]:');
-    expect(text).not.toContain('Commented [ED2]:');
+    // A reply takes the next number, after the initials its author declares.
+    expect(text).toContain('Commented [ED2]:');
     // The 120-character word breaks inside the balloon instead of running past the sheet.
     const { width } = page.getViewport({ scale: 1 });
     for (const item of items) expect(item.transform[4] + item.width).toBeLessThanOrEqual(width);

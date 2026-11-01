@@ -77,3 +77,29 @@ test('pattern fills shrink and move with the page they fill', async () => {
   const values = matrix.asArray().map((value) => (value as PDFNumber).asNumber());
   expect(values).toEqual([0.75, 0, 0, 0.75, 0.96, 792 - 99 - 0.75 * 792]);
 });
+
+const balloonLabels = async (input: Uint8Array) =>
+  (await textItems((await exportPdf(input, { useSystemFonts: false })).bytes)).items
+    .map((item) => item.str)
+    .join('')
+    .match(/Commented \[[^\]]*\]: [A-Z][a-z]+/g);
+
+test('balloons number comments in the order their ranges end, with declared initials only', async () => {
+  // The outer range starts first but ends last; the second comment declares no initials.
+  const input = docx(
+    '<w:p><w:commentRangeStart w:id="0"/><w:r><w:t>Outer </w:t></w:r><w:commentRangeStart w:id="1"/><w:r><w:t>inner</w:t></w:r><w:commentRangeEnd w:id="1"/><w:r><w:commentReference w:id="1"/></w:r><w:r><w:t> text</w:t></w:r><w:commentRangeEnd w:id="0"/><w:r><w:commentReference w:id="0"/></w:r></w:p>',
+    comments(
+      '<w:comment w:id="0" w:author="Reviewer" w:initials="RV"><w:p><w:r><w:t>Outer</w:t></w:r></w:p></w:comment>' +
+        '<w:comment w:id="1" w:author="Second Person" w:initials=""><w:p><w:r><w:t>Inner</w:t></w:r></w:p></w:comment>'
+    )
+  );
+  expect(await balloonLabels(input)).toEqual(['Commented [1]: Inner', 'Commented [RV2]: Outer']);
+});
+
+test('a comment on a point, with no range, still gets its balloon', async () => {
+  const input = docx(
+    '<w:p><w:r><w:t>Before</w:t></w:r><w:commentRangeStart w:id="0"/><w:commentRangeEnd w:id="0"/><w:r><w:commentReference w:id="0"/></w:r><w:r><w:t> after</w:t></w:r></w:p>',
+    comments(note)
+  );
+  expect(await balloonLabels(input)).toEqual(['Commented [RV1]: Note']);
+});
