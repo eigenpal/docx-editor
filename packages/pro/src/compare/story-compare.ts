@@ -107,7 +107,12 @@ export function compareContainer(
   let out = '';
   for (const step of steps) {
     if (step.kind === 'pair') {
-      out += emitPair(step.base, step.revised, ctx);
+      out += emitPair(
+        step.base,
+        step.revised,
+        ctx,
+        step.base === lastBase && step.revised === lastRevised
+      );
     } else {
       const sentinel =
         lastBase?.kind === 'paragraph' &&
@@ -145,9 +150,9 @@ function foldTrailingPair(steps: Step[]): void {
   });
 }
 
-function emitPair(base: Unit, revised: Unit, ctx: EmitContext): string {
+function emitPair(base: Unit, revised: Unit, ctx: EmitContext, last = false): string {
   if (base.kind === 'paragraph' && revised.kind === 'paragraph')
-    return emitHunk([base], [revised], base, revised, ctx);
+    return emitHunk([base], [revised], last ? base : null, last ? revised : null, ctx);
   if (base.kind === 'table' && revised.kind === 'table')
     return compareTable(base.node, revised.node, ctx);
   if (base.kind === 'sdt' && revised.kind === 'sdt')

@@ -26,7 +26,7 @@ const RELS_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const RELS_CONTENT_TYPE = 'application/vnd.openxmlformats-package.relationships+xml';
 
 export type AssembleResult =
-  | { readonly ok: true; readonly bytes: Uint8Array }
+  | { readonly ok: true; readonly bytes: Uint8Array; readonly pkg: OoxmlPackage }
   | { readonly ok: false; readonly message: string };
 
 interface Rel {
@@ -189,5 +189,5 @@ export function assemblePackage(
   const check = readOoxmlPackage(bytes);
   if (!check.ok)
     return { ok: false, message: `The compared package does not read back (${check.reason}).` };
-  return { ok: true, bytes };
+  return { ok: true, bytes, pkg: check.package };
 }

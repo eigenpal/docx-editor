@@ -14,6 +14,7 @@ import {
 import type { CompareDocumentsOptions, CompareDocumentsResult } from './compare-types.ts';
 import { CompareState, EmitContext, notePlaceholder, sectPrXml, type NoteKind } from './emit.ts';
 import { assemblePackage } from './package-assemble.ts';
+import { selfCheck } from './self-check.ts';
 import { compareFurniture, compareNotes, storyXml, type StoryOutput } from './stories.ts';
 import { compareContainer } from './story-compare.ts';
 import { SideContext, unitsOf } from './units.ts';
@@ -55,7 +56,9 @@ export function compareDocuments(
 export function comparePackages(
   original: OoxmlPackage,
   revised: OoxmlPackage,
-  options: CompareDocumentsOptions = {}
+  options: CompareDocumentsOptions = {},
+  /** @internal Diagnostics only: return the result even when the self-check fails. */
+  unchecked = false
 ): CompareDocumentsResult {
   const basePkg = acceptAll(original);
   const revisedPkg = acceptAll(revised);
@@ -116,6 +119,14 @@ export function comparePackages(
   }
   const assembled = assemblePackage(basePkg, revisedPkg, stories);
   if (!assembled.ok) return { ok: false, code: 'unsupported-content', message: assembled.message };
+  const check = selfCheck(assembled.pkg, basePkg, revisedPkg);
+  if (!unchecked && (!check.accept || !check.reject)) {
+    return {
+      ok: false,
+      code: 'unsupported-content',
+      message: `The compare result does not reproduce both documents (${check.detail ?? ''}).`,
+    };
+  }
   return { ok: true, bytes: assembled.bytes, revisionCount: ctx.revisionCount };
 }
 
