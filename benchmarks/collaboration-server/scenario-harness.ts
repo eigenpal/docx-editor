@@ -367,7 +367,12 @@ class Simulation {
         const pendingBefore = shownOrPending(replica);
         if (action.kind === 'redo' ? session.redo() : session.undo()) {
           this.undos += 1;
-          this.decisions.undone(action.replica, replica.ydoc);
+          this.decisions.undone(
+            action.replica,
+            replica.ydoc,
+            before,
+            replica.store.currentPackage()
+          );
           this.tokens.undoOn(action.replica, sharedBefore, sharedTextOf(replica.ydoc), {
             before: pendingBefore,
             after: shownOrPending(replica),
