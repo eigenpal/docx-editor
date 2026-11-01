@@ -8,6 +8,7 @@ import { describe, expect, test } from 'bun:test';
 import { canonicalOoxmlFingerprint, readOoxmlPackage, semanticDigest } from '../../store/index.ts';
 import {
   docx,
+  handlesAt,
   open,
   p,
   pWithSection,
@@ -406,11 +407,17 @@ test('a tracked deletion over 4000 paragraphs separated by bookmarks stays one d
   const started = performance.now();
   run(host, [deleteBetween(paragraphs, [0, 0], [count - 1, 0])]);
   const elapsed = performance.now() - started;
-  const markIds = new Set(
-    [...savedMainXml(host).matchAll(/<w:rPr><w:del [^>]*w:id="(\d+)"/g)].map((m) => m[1])
+  // One decision: the marks join across the bookmarks, so the id walk happens once. The saved
+  // file gives each mark its own id, and the reopened document still reads one decision.
+  const decisions = (target: AutomationHost, story: AutomationHandle) =>
+    handlesAt(target.execute({ operations: [{ op: 'getRevisions', body: story }] }), 0).length;
+  expect(decisions(host, story)).toBe(1);
+  const markIds = [...savedMainXml(host).matchAll(/<w:rPr><w:del [^>]*w:id="(\d+)"/g)].map(
+    (m) => m[1]
   );
-  // One shared mark id: the marks join across the bookmarks, so the id walk happens once.
-  expect(markIds.size).toBe(1);
+  expect(new Set(markIds).size).toBe(count - 1);
+  const reopened = reopen(host);
+  expect(decisions(reopened.host, reopened.body)).toBe(1);
   // About 4.5 s here. One id walk per mark took 54 s.
   expect(elapsed).toBeLessThan(30_000);
 }, 120_000);
@@ -493,8 +500,8 @@ test('a file that already uses the highest revision id still gets distinct new i
     { op: 'deleteParagraph', paragraph: paragraphs[2]! },
   ]);
   const ids = [...savedMainXml(host).matchAll(/<w:del [^>]*w:id="(\d+)"/g)].map((m) => m[1]);
-  // Two text deletions and one shared mark id, none of them a duplicate of another.
-  expect(new Set(ids).size).toBe(3);
+  // Two text deletions and two paragraph marks, none of them a duplicate of another.
+  expect(new Set(ids).size).toBe(4);
   expect(ids).not.toContain('2147483647');
 });
 
@@ -539,6 +546,6 @@ test('after the ceiling, a padded file id such as 05 is not minted again as 5', 
     { op: 'deleteParagraph', paragraph: paragraphs[taken.length + 1]! },
   ]);
   const ids = [...savedMainXml(host).matchAll(/<w:del [^>]*w:id="(\d+)"/g)].map((m) => m[1]!);
-  expect(new Set(ids).size).toBe(3);
+  expect(new Set(ids).size).toBe(4);
   for (const id of ids) expect(['0', '1', '2', '3', '4', '5']).not.toContain(id);
 });

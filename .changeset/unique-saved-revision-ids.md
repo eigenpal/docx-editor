@@ -1,0 +1,5 @@
+---
+'@docx-editor.dev/core': patch
+---
+
+Saved documents give every revision its own id across the body, headers, footers, and notes, and replace ids outside the 32-bit range. Fixes #1429.

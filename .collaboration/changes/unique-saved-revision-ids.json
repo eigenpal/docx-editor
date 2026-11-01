@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A saved file could hold two revision elements with one id, or an id above the 32-bit range.",
+  "after": "A saved file gives each revision element its own in-range id. The bytes a joining peer loads keep the ids that shared state holds.",
+  "reason": "Only the exported file changes. Shared state, operations, snapshots, actor-striped revision ids, and protocol messages are unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-saved-revision-ids.test.ts",
+    "packages/core/src/store/__tests__/revision-id-export.test.ts"
+  ],
+  "changeset": "unique-saved-revision-ids",
+  "migration": null
+}
