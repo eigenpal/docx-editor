@@ -1,5 +1,31 @@
 # @docx-editor.dev/pro
 
+## 2.34.0
+
+### Minor Changes
+
+- 502d273: Breaking collaboration upgrade (format `docx-collaboration:1.5.3.1`): concurrent paragraph splits show in text order, Reject All restores a paragraph that peers split, rejecting a proposed paragraph break keeps the first paragraph, undoing an inserted paragraph keeps text that others typed in it, and typing beside deleted, moved, or redone text keeps its place; export saved rooms with your current release and reseed them, see [Upgrade rooms to format 1.5.3.1](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-rooms-to-format-1531). Fixes #1652, #1654, #1398, #1607, #1394, #1354.
+- 230afcf: Collaboration format `docx-collaboration:1.5.3.1` preserves review decisions, deletions, block order, and caret placement during concurrent edits. Export saved rooms with the previous compatible release, then reseed them: [Upgrade rooms to format 1.5.3.1](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-rooms-to-format-1531).
+- 0282006: Breaking collaboration upgrade (format `docx-collaboration:1.5.3.1`): moving a paragraph that a concurrent split created keeps the text of both new paragraphs; see [Upgrade rooms to format 1.5.3.1](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-rooms-to-format-1531).
+- 04b4619: Received footnote and endnote edits now match the author before the receiving participant opens the note, and `subscribeResourcePressure` notifies hosts before a collaboration room reaches a size limit, which the failure detail names when it ends the room. Fixes #580.
+
+### Patch Changes
+
+- 795c6c6: In a collaboration session, undoing a format change over text that another participant typed before an undone split keeps that text.
+- 74b3b0e: In a collaboration session, moving a block toward the start of its container, or formatting text whose properties are stored out of order, no longer removes a neighboring block or property for every participant. A table moved after concurrent moves of the same table keeps the empty paragraph between it and the next table. Fixes #1572. Fixes #1606.
+- 2a69317: In a collaboration session, rejecting every change of a paragraph that holds a tracked break and a tracked paragraph mark rejects both in one call. Fixes #1655.
+- 2a69317: In a collaboration session, text that a participant types in the middle paragraph of a split into three paragraphs stays when the author of the split undoes it.
+- c5f6f77: Removing a hyperlink or content control, accepting or rejecting a change, and a tracked deletion inside a container keep one tracked change as one piece, so typing and decisions reach all of it; in a collaboration session, a concurrent accept, reject, or deletion also reaches every character it names. Fixes #1701
+- aa81fb2: In a collaboration session, text that a participant types in a paragraph of a split that trims its delimiters stays when the author of the split undoes it.
+- 4fbfb16: In a collaboration session, a table row, column, table, or paragraph that two participants delete at the same time stays deleted when one of them undoes, and typing that a participant undoes no longer shows again in a copy that a concurrent join made. An undo next to moved blocks no longer removes another participant's text or leaves a moved table's empty paragraph without the identity that remote carets need. Fixes #1601.
+- bd947a7: Keep numbering definitions in schema order across participants when one edit creates multiple list definitions.
+- e2800c7: When two people type at the same place at the same time, each person's characters now stay in the order they typed them. Fixes #1693.
+- 9c02206: Equation border boxes and fitted text boxes render; collaboration is unchanged.
+- 0648f54: Keep collaboration recoverable when a list, comment, or note edit is refused while a peer's update is still arriving.
+- f182c70: Find the right header, note, section, or link for content another participant created during a collaboration session, so table controls, page setup, comments, custom nodes, and the content control at the caret act on it. Fixes #1633.
+- 26d02bd: Collaboration undo and redo keep the same behavior after an internal code move.
+- Updated dependencies: @docx-editor.dev/core@2.34.0, @docx-editor.dev/react@2.34.0, @docx-editor.dev/vue@2.34.0
+
 ## 2.33.0
 
 ### Minor Changes
