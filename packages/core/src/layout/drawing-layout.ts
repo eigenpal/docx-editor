@@ -312,6 +312,8 @@ export interface InlineDrawingRecord {
    * paragraph needed no bidi resolution.
    */
   readonly bidiLevel?: number;
+  /** The run-direction group of a picture in a `w:bdo` override or a wrapper's group; else its level's. */
+  readonly bidiRunDirection?: 'ltr' | 'rtl';
   /**
    * Laid-out textbox story for a `wps:txbx` drawing; paint renders it clipped inside the
    * extent instead of a placeholder. Absent when the drawing carries no story or the host
@@ -1258,7 +1260,13 @@ export function buildInlineDrawingRecord(options: {
   /** @internal Line placement applies the horizontal clip later. */
   readonly deferHorizontalClip?: boolean;
   readonly revisions?: readonly RevisionAttribution[];
-  readonly bidiLevel?: number;
+  /** The resolved bidi shaping of the drawing's piece; absent without bidi resolution. */
+  readonly bidiShaping?: {
+    readonly level: number;
+    readonly runDirection?: 'ltr' | 'rtl';
+    readonly override?: 'ltr' | 'rtl';
+    readonly wrapperGroup?: true;
+  };
   /** Lays out a text-box story; called only for a drawing that carries one. */
   readonly layoutTextboxStory?: import('./inline-textbox-flow.ts').TextboxStoryLayouter;
   /** Fits legacy text art; without it, text art on the line paints nothing. */
@@ -1333,7 +1341,11 @@ export function buildInlineDrawingRecord(options: {
     ...groupPictureLayerFields(options.input.projection, options.input.groupPictureLayerResources),
     ...chartFallbackFields(options.input.chartFallbackResource),
     ...(options.revisions && options.revisions.length > 0 ? { revisions: options.revisions } : {}),
-    ...(options.bidiLevel !== undefined ? { bidiLevel: options.bidiLevel } : {}),
+    ...(options.bidiShaping ? { bidiLevel: options.bidiShaping.level } : {}),
+    ...((options.bidiShaping?.override || options.bidiShaping?.wrapperGroup) &&
+    options.bidiShaping.runDirection
+      ? { bidiRunDirection: options.bidiShaping.runDirection }
+      : {}),
     ...(textboxStory ? { textboxStory } : {}),
     ...(textArt ? { textArt } : {}),
   });

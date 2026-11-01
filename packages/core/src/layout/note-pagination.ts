@@ -87,7 +87,6 @@ import { reindexAndRestackPages } from './page-restacking.ts';
 import type {
   BlockFragmentRecord,
   LineRecord,
-  LayoutBox,
   NoteAreaRecord,
   NoteStoryRecord,
   PageNoteStream,
@@ -107,6 +106,11 @@ import { withNoteAreasOnProgress, type NotesBodyOptions } from './note-progress.
 import { overflowRowNote, referenceRowOverflowsPage } from './note-overflow-row.ts';
 import { overflowPageShellAt, type OverflowPageShell } from './page-furniture-insets.ts';
 import { resettleParitySheets } from './page-parity-sheet.ts';
+import {
+  bodyPageNumbers,
+  resettleBodyFurniture,
+  resettleMintedSheets,
+} from './note-sheet-resettle.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   type RevisionAuthorFilter,
@@ -1394,127 +1398,6 @@ function cloneEmptyOverflowPage(
   };
 }
 
-/**
- * Re-resolve the shell of every minted sheet that later insertions slid along.
- *
- * A sheet resolves its shell when it is minted, from where it lands at that moment. That is
- * final for a sheet inserted inside its own section, but not for the footnote drain: the drain
- * appends at the document's end BEFORE the section loop runs, because that is the document
- * order Word uses, and an earlier section's `sectEnd` insertion then moves every drain sheet
- * one position along for each sheet it adds. Under `w:evenAndOddHeaders` an odd number of them
- * leaves each drain sheet showing the other variant's header over the other variant's box.
- *
- * Runs BEFORE `reindexAndFinalizeFields`, while a body-pass page still carries the index the
- * layout gave it — that is what a section lookup reads. From here an array position IS the
- * final page index, so the two inputs the resolver wants are both in hand.
- *
- * The comparison is on the FURNITURE as well as the insets. Two variants routinely resolve to
- * the same height — a one-line `default` header against a one-line `even` header is the common
- * shape — so equal insets say nothing about whether the sheet is showing the right story, and
- * an inset-only test would leave exactly the sheets this exists for untouched.
- *
- * A `pageBottom` note area hangs from the content box's BOTTOM, so it travels with that edge
- * when a footer variant moves it; every other area is measured from the top and travels with
- * that. A sheet whose area cannot sit inside the new box after the shift KEEPS the shell it was
- * minted with: its notes were fitted to the old box's HEIGHT and this pass cannot re-fit them,
- * and a sheet that is wrong about its variant beats one whose own notes fall outside it.
- */
-function resettleMintedSheets(pages: readonly PageRecord[], layout: SemanticLayout): PageRecord[] {
-  let sectionAnchorIndex: number | null = null;
-  let changed = false;
-  const next = pages.map((page, position) => {
-    if (page.noteStream === undefined) {
-      sectionAnchorIndex = page.index;
-      return page;
-    }
-    if (sectionAnchorIndex === null) return page;
-    const shell = overflowPageShellAt(layout, sectionAnchorIndex, position, page.box);
-    if (!shell) return page;
-    const top = page.box.y + shell.insets.top;
-    const settled =
-      top === page.contentBox.y &&
-      shell.insets.height === page.contentBox.height &&
-      shell.header?.variant === page.header?.variant &&
-      shell.footer?.variant === page.footer?.variant;
-    if (settled) return page;
-    const contentBox = { ...page.contentBox, y: top, height: shell.insets.height };
-    const bottom = top + contentBox.height;
-    const oldBottom = page.contentBox.y + page.contentBox.height;
-    const shifted = shiftNoteAreas(page, top - page.contentBox.y, bottom - oldBottom);
-    if (!shifted.fits(top, bottom)) return page;
-    changed = true;
-    const { header: _header, footer: _footer, ...rest } = page;
-    return {
-      ...rest,
-      contentBox,
-      ...(shifted.footnotes ? { footnotes: shifted.footnotes } : {}),
-      ...(shifted.endnotes ? { endnotes: shifted.endnotes } : {}),
-      ...(shell.header ? { header: shell.header } : {}),
-      ...(shell.footer ? { footer: shell.footer } : {}),
-    };
-  });
-  return changed ? next : [...pages];
-}
-
-/** Translate one note area and everything inside it by `dy`. */
-function shiftNoteArea(area: NoteAreaRecord, dy: number): NoteAreaRecord {
-  if (dy === 0) return area;
-  const shiftBox = (box: LayoutBox): LayoutBox => ({ ...box, y: box.y + dy });
-  return {
-    ...area,
-    box: shiftBox(area.box),
-    ...(area.separator
-      ? { separator: { ...area.separator, box: shiftBox(area.separator.box) } }
-      : {}),
-    ...(area.continuationNotice
-      ? {
-          continuationNotice: {
-            ...area.continuationNotice,
-            box: shiftBox(area.continuationNotice.box),
-          },
-        }
-      : {}),
-    notes: area.notes.map((note) => ({ ...note, box: shiftBox(note.box) })),
-  };
-}
-
-/**
- * Move a resettled sheet's note areas onto the edge each one is measured from, and say whether
- * they still sit inside the new box.
- *
- * A `pageBottom` footnote area hangs from the content bottom, so a footer variant that moves
- * that edge must move the area with it — leaving it where it was would paint the notes over the
- * footer band. Everything else is placed from the content top.
- */
-function shiftNoteAreas(
-  page: PageRecord,
-  topDelta: number,
-  bottomDelta: number
-): {
-  readonly footnotes?: NoteAreaRecord;
-  readonly endnotes?: NoteAreaRecord;
-  fits(top: number, bottom: number): boolean;
-} {
-  const deltaFor = (area: NoteAreaRecord): number =>
-    area.placement === 'pageBottom' ? bottomDelta : topDelta;
-  const footnotes = page.footnotes
-    ? shiftNoteArea(page.footnotes, deltaFor(page.footnotes))
-    : undefined;
-  const endnotes = page.endnotes
-    ? shiftNoteArea(page.endnotes, deltaFor(page.endnotes))
-    : undefined;
-  return {
-    ...(footnotes ? { footnotes } : {}),
-    ...(endnotes ? { endnotes } : {}),
-    fits(top: number, bottom: number): boolean {
-      const inside = (area: NoteAreaRecord | undefined): boolean =>
-        area === undefined ||
-        (area.box.y >= top - 0.001 && area.box.y + area.box.height <= bottom + 0.001);
-      return inside(footnotes) && inside(endnotes);
-    },
-  };
-}
-
 /** Section indexes represented by body paragraph fragments on a page. */
 function pageBodySectionIndexes(
   page: PageRecord,
@@ -2564,10 +2447,12 @@ export function attachNotesToLayout(
   }
 
   if (pages.length !== pageCountBeforeOverflow) {
+    const numbersBefore = bodyPageNumbers(pages);
     // Inserted sheets move the sections after them: decide their parity sheets again first.
     pages = [...resettleParitySheets(pages, layout)];
     // Every insertion is done, so a minted sheet's array position is the page index it keeps.
     pages = resettleMintedSheets(pages, layout);
+    pages = resettleBodyFurniture(pages, numbersBefore, layout);
     pages = reindexAndFinalizeFields(pages, layout.revision);
   }
 

@@ -466,6 +466,15 @@ export function execEditorCommand(
         };
       }
       break;
+    case 'removeToc':
+      if (!mounted.removeToc(command.tocId)) {
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: mounted.state().lastRejection ?? 'the table of contents could not be removed',
+        };
+      }
+      break;
     case 'editHeaderFooter':
       return execEditHeaderFooter(mounted, command);
     case 'exitHeaderFooter': {

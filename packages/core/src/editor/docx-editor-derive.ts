@@ -482,6 +482,10 @@ export function gateCommand(
       },
     };
   }
+  if (command.type === 'removeToc') {
+    const refusal = surface.removeTocRefusal(command.tocId);
+    if (refusal) return { ok: false, refusal: { ok: false, ...refusal } };
+  }
   if (command.type === 'insertPageField') {
     const active = surface.activeScope?.() ?? { kind: 'body' as const };
     if (active.kind !== 'headerFooter') {

@@ -23,7 +23,11 @@ export interface BlockLayoutResult {
   /** Whether the last page is the one the flow was still filling. */
   readonly endsOpenPage: boolean;
   /** Resolve the content box and furniture for a note-overflow sheet at this document index. */
-  readonly overflowShellAt: (documentPageIndex: number, box: LayoutBox) => OverflowPageShell;
+  readonly overflowShellAt: (
+    documentPageIndex: number,
+    box: LayoutBox,
+    pageNumberShift?: number
+  ) => OverflowPageShell;
 }
 
 /** Session state the balance search reads and publishes. */

@@ -121,6 +121,11 @@ interface ParityPlan {
  */
 const parityPlans = new WeakMap<SemanticLayout, ParityPlan>();
 
+/** Whether the layout alternates header and footer variants on odd and even page numbers. */
+export function layoutUsesEvenAndOddHeaders(layout: SemanticLayout): boolean {
+  return parityPlans.get(layout)?.evenAndOddHeaders ?? false;
+}
+
 export function registerParityPlan(
   layout: SemanticLayout,
   evenAndOddHeaders: boolean,

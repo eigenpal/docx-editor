@@ -2,7 +2,7 @@
 // producer fingerprint invalidates all stories when document typography changes.
 // References: ECMA-376 §17.3.1.16, §17.3.1.21, §17.15.1.18, §17.15.1.58–59, §17.15.1.82.
 import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
-import { isEastAsianFace } from '../store/package/default-font-faces.ts';
+import { isDefaultEastAsianFace } from '../store/package/default-font-faces.ts';
 import { omittedDocDefaults } from '../store/package/application-doc-defaults.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-tree.ts';
 import { resolveRunStyle, type ThemeFonts } from './run-style.ts';
@@ -306,7 +306,7 @@ export function kinsokuCharacters(
  * Whether the authored document defaults select an East Asian face as the East Asian font.
  * Adjacent full-width punctuation compression needs one. Only `w:rPrDefault` counts: an
  * application or theme fallback alone does not. The resolved face must be a Chinese,
- * Japanese, or Korean font (`isEastAsianFace`). An empty theme slot resolves to a built-in
+ * Japanese, or Korean font (`isDefaultEastAsianFace`). An empty theme slot resolves to a built-in
  * East Asian face.
  */
 export function defaultsSelectEastAsianFace(
@@ -315,7 +315,7 @@ export function defaultsSelectEastAsianFace(
 ): boolean {
   if (!namesEastAsianFont(defaultRun)) return false;
   const face = resolveRunStyle(defaultRun, themeFonts).fontFamilyEastAsia;
-  return isEastAsianFace(face, themeFonts.eastAsianFontTableFaces);
+  return isDefaultEastAsianFace(face, themeFonts.eastAsianFontTableFaces);
 }
 
 /** Whether run defaults name an East Asian face slot (`w:eastAsia` or `w:eastAsiaTheme`). */

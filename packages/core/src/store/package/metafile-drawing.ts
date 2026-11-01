@@ -111,7 +111,10 @@ export interface MetafileRenderOptions {
   readonly textAdvance: (text: string, font: MetafileFont) => number;
 }
 
-/** A replayed metafile. `complete` is false when a bound stopped recording early. @internal */
+/**
+ * A replayed metafile. `complete` is false when a bound or a malformed record stopped recording
+ * early. @internal
+ */
 export interface MetafileReplay {
   readonly drawing: MetafileDrawing;
   readonly complete: boolean;

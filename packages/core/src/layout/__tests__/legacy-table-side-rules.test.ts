@@ -87,11 +87,17 @@ test('compound, unequal, separated, positioned and percentage tables retain thei
     source(0.5, '<w:tblCellSpacing w:w="20" w:type="dxa"/>').table,
     source(0.5, '<w:tblpPr w:horzAnchor="text" w:vertAnchor="text" w:tblpX="1" w:tblpY="1"/>')
       .table,
-    source(0.5, '<w:bidiVisual/>').table,
     source(0.5, '', 4, 'single', 'pct').table,
   ])
     expect(read(table, 12).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
   expect(read(source().table, 12, 1).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
+});
+
+// A right-to-left legacy table shares its grid lines the same way.
+test('a bidiVisual legacy table shares the grid line', () => {
+  expect(read(source(0.5, '<w:bidiVisual/>').table, 12).rows[0]!.cells[0]!.centeredSideRules).toBe(
+    true
+  );
 });
 
 // Mode 16 is above 15, the newest documented mode, and lays out as mode 15. This bordered

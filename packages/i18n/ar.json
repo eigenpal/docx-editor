@@ -132,7 +132,8 @@
   },
   "toc": {
     "refresh": "تحديث جدول المحتويات",
-    "refreshPageNumbers": "تحديث أرقام الصفحات"
+    "refreshPageNumbers": "تحديث أرقام الصفحات",
+    "remove": "إزالة جدول المحتويات"
   },
   "formattingBar": {
     "label": "عناصر تحكم التنسيق",

@@ -154,7 +154,7 @@ const WIDTH_CASES: readonly WidthCase[] = [
 const KNOWN_GAPS: readonly { readonly family: string; readonly gap: string }[] = [
   {
     family: 'Garamond',
-    gap: 'no packaged or catalogued face is metric-compatible; Word line pitch at 8pt is 1.125em against the engine fallback 1.2727em (issue #563)',
+    gap: 'widths only: no packaged or catalogued face is metric-compatible; the line box is recorded in core and checked below (issue #563)',
   },
   {
     family: 'Rockwell',
@@ -301,6 +301,41 @@ try {
           `${line.height.toFixed(2)}pt/${line.baseline.toFixed(2)}pt differ from Word ` +
           `${testCase.wordLineHeightPt.toFixed(2)}pt/${testCase.wordBaselinePt.toFixed(2)}pt; ` +
           `limit ${VERTICAL_TOLERANCE_PT.toFixed(2)}pt`
+      );
+    }
+  }
+  // A family the package cannot serve still keeps its own line box: core records it and
+  // applies it on whatever face the fallback picks. Garamond's own `hhea` is 1765/-539/0
+  // over 2048 units per em, so 1.125 em at every style.
+  const unresolved = createShapedMeasurer({
+    shaper,
+    resolveFont: () => null,
+    fallback: createFixedMeasurer(),
+    shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
+    unicodeDataVersion: '16.0.0',
+    fixedPointScale: 20,
+  });
+  for (const [sizePt, bold, italic] of [
+    [8, false, false],
+    [11, true, false],
+    [12, false, true],
+  ] as const) {
+    const line = unresolved.lineMetrics({
+      ...DEFAULT_RUN_STYLE,
+      fontFamily: 'Garamond',
+      fontSizePt: sizePt,
+      bold,
+      italic,
+    });
+    const expectedHeight = sizePt * (2304 / 2048);
+    const expectedBaseline = sizePt * (1765 / 2048);
+    if (
+      Math.abs(line.height - expectedHeight) > VERTICAL_TOLERANCE_PT ||
+      Math.abs(line.baseline - expectedBaseline) > VERTICAL_TOLERANCE_PT
+    ) {
+      throw new Error(
+        `Garamond @${sizePt}pt line metrics ${line.height.toFixed(2)}pt/${line.baseline.toFixed(2)}pt ` +
+          `differ from ${expectedHeight.toFixed(2)}pt/${expectedBaseline.toFixed(2)}pt`
       );
     }
   }

@@ -173,6 +173,7 @@ const JAPANESE_KOREAN_FACES: ReadonlySet<string> = new Set([
   'hiragino mincho pron',
   'hiragino kaku gothic pron',
   'hiragino sans',
+  'noto sans cjk jp',
   'ｍｓ 明朝',
   'ｍｓ ゴシック',
   'メイリオ',
@@ -188,6 +189,12 @@ const JAPANESE_KOREAN_FACES: ReadonlySet<string> = new Set([
   'gungsuh',
   'gungsuhche',
   'apple sd gothic neo',
+  'osaka',
+  'osaka-mono',
+  'nanum gothic',
+  'nanumgothic',
+  'klee medium',
+  'klee one',
   '맑은 고딕',
   '바탕',
   '굴림',
@@ -218,8 +225,8 @@ export function isChineseFace(
 
 /**
  * Whether a face is an East Asian font: Chinese, Japanese, or Korean. A known face answers by
- * its own character set. Any other face answers by the font table's `w:charset`. A
- * vertical-writing name is not one.
+ * its own character set, also when it is not installed. Any other face answers by the font
+ * table's `w:charset`. A vertical-writing name is not one.
  */
 export function isEastAsianFace(
   face: string | null | undefined,
@@ -230,6 +237,40 @@ export function isEastAsianFace(
   if (CHINESE_FACES.has(name) || JAPANESE_KOREAN_FACES.has(name)) return true;
   if (LATIN_FACES.has(name)) return false;
   return fontTableEastAsianFaces?.includes(name) ?? false;
+}
+
+/**
+ * East Asian system families of macOS that a document default does not make an East Asian
+ * face: Hiragino, PingFang, and Heiti, named in Latin letters. They still draw East Asian
+ * text and still count for a font pick.
+ */
+function isUncountedSystemFamily(name: string): boolean {
+  return (
+    name.startsWith('hiragino') ||
+    name.startsWith('pingfang') ||
+    name === 'heiti sc' ||
+    name === 'heiti tc'
+  );
+}
+
+/**
+ * Whether the East Asian face of the document defaults is an East Asian font, the gate of
+ * punctuation and kana compression, hanging punctuation, and justified-space shrinking. It is
+ * `isEastAsianFace`, and also counts a name written in East Asian or full-width characters.
+ * The macOS system families of `isUncountedSystemFamily` count only by the font table. The
+ * compatibility mode does not change the answer.
+ */
+export function isDefaultEastAsianFace(
+  face: string | null | undefined,
+  fontTableEastAsianFaces: readonly string[] | undefined
+): boolean {
+  const name = face?.trim().toLowerCase();
+  if (!name || name.startsWith('@')) return false;
+  if (isUncountedSystemFamily(name)) return fontTableEastAsianFaces?.includes(name) ?? false;
+  return (
+    isEastAsianFace(name, fontTableEastAsianFaces) ||
+    [...name].some((character) => isEastAsianCodePoint(character.codePointAt(0)!))
+  );
 }
 
 /**

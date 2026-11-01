@@ -571,13 +571,13 @@ const TREE_OP_REACH: {
     kind: 'nodes',
     targets: [{ nodeId: op.beforeParagraphId }, ...inParagraphs(op.bookmarksToCreate)],
   }),
-  // A refresh REBUILDS the cached result. `tocId` is the enclosing control when the file wrote
-  // one and the field's own begin node otherwise; either way everything under it is replaced.
+  // A refresh REBUILDS the cached result and a removal takes it out; both reach all of `tocId`
+  // (the control, else the field's begin node). Page numbers reach only the named paragraphs.
   replaceTocResult: (op) => ({
     kind: 'nodes',
     targets: [{ nodeId: op.tocId, structural: true }, ...inParagraphs(op.bookmarksToCreate)],
   }),
-  // Page numbers rewrite runs in the result paragraphs the op names, and nothing else.
+  removeToc: (op) => restructuring(op.tocId),
   rewriteTocPageNumbers: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
   // A field-result refresh rewrites result runs in the paragraphs the op names, nothing else.
   setFieldCode: (op) => whole(op.fieldNodeId),
@@ -1315,7 +1315,7 @@ function namedElementChild(
 // Value semantics
 // ---------------------------------------------------------------------------
 
-interface PlannedValue {
+export interface PlannedValue {
   /** What the control's content becomes. */
   readonly text: string;
   /** Whether the control ends up showing its prompt. */
@@ -1358,7 +1358,7 @@ function valueInputOf(
   }
 }
 
-function planValue(
+export function planValue(
   properties: ContentControlProperties,
   value: ContentControlValueInput
 ): PlannedValue | TreeOpRejection {

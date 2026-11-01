@@ -232,7 +232,8 @@ export async function migrateCollaborationRoom(
   }
   const documentId = validateDocumentId(given);
   // One step at a time, so a step's memory is free before the next step needs its own.
-  const state = await seedGeneration(options.exported, documentId);
+  // The earlier room's content as it is: migration changes the format, not what it shows.
+  const state = await seedGeneration(options.exported, documentId, { keepBound: true });
   const after = withRoom(state, (room) => readCollaborationDocument(room));
   const before = await migrationContentsOf(options.exported);
   const report = compareMigrationContents(before, await migrationContentsOf(after), {

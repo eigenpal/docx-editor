@@ -50,6 +50,7 @@ import { isRunKerningEnabled, kernsText } from './run-kerning.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { glyphSizeFactorOf, type ResolvedRunStyle } from './run-style.ts';
 import { createFixedMeasurer } from './fixed-measurer.ts';
+import { authoredLineBox, recordedLineBoxFamily } from './authored-line-boxes.ts';
 import { segmentGraphemes } from './grapheme.ts';
 import { fontFamilyClassFromName } from '../store/package/font-family-class.ts';
 
@@ -335,6 +336,27 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
   );
 
   const fontAlias = options.fontAlias;
+  // Whether the browser resolves a recorded family: the advance of a sample changes from the
+  // generic face's when it does. Only recorded family names reach the probe.
+  const familyProbes = new Map<string, boolean>();
+  const browserHasFamily = (family: string): boolean => {
+    const known = familyProbes.get(family);
+    if (known !== undefined) return known;
+    const sample = 'The quick brown fox 0123';
+    let resolved = false;
+    for (const generic of ['monospace', 'serif']) {
+      ctx.font = `32px ${generic}`;
+      const base = ctx.measureText(sample).width;
+      ctx.font = `32px "${family}", ${generic}`;
+      if (ctx.measureText(sample).width !== base) {
+        resolved = true;
+        break;
+      }
+    }
+    familyProbes.set(family, resolved);
+    return resolved;
+  };
+
   const fontOf = (style: ResolvedRunStyle): string => {
     // Re-validated at the sink: a font name is file-derived and this builds a CSS font
     // shorthand, so a name that could close the string is refused rather than escaped.
@@ -440,6 +462,14 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
       const font = fontOf(style);
       const cached = metricsCache.get(font);
       if (cached) return cached;
+      // A recorded family the browser has no face for keeps its authored box on the face it
+      // falls back to. A face the browser has keeps its own box.
+      const recorded = recordedLineBoxFamily(style.fontFamily);
+      const authored = recorded && !browserHasFamily(recorded.family) && authoredLineBox(style);
+      if (authored) {
+        metricsCache.set(font, authored);
+        return authored;
+      }
 
       // Deterministic fallback: same 1.15 / 0.8 ratios the pre-canvas path used when the
       // host could not report font bounding boxes.

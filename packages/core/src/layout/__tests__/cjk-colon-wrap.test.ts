@@ -42,8 +42,9 @@ const doc = part(
 const settings = part(
   `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/></w:settings>`
 );
+// The document default names a face that turns compression on; Hiragino as a default does not.
 const styles = part(
-  `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="Hiragino Mincho ProN"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
+  `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="MS Mincho"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
 );
 const cascade = buildStyleCascadeTable(styles.root, undefined, settings.root);
 function layout(width: number, session = createLayoutSession(), enabled = true, source = doc) {

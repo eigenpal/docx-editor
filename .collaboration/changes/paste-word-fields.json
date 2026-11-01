@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Pasted word-processor HTML dropped field markers, so a pasted table of contents became plain paragraphs.",
+  "after": "Pasted word-processor HTML keeps complete fields as w:fldChar and w:instrText runs, and TOC entry classes map to TOC paragraph styles.",
+  "reason": "The paste still goes through the existing fragment paste operation. Field runs and paragraph styles are node shapes the shared model already carries, so peers on earlier versions receive and keep them unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/clipboard-html-fields.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-paste-toc-field.test.ts"
+  ],
+  "changeset": "paste-word-fields",
+  "migration": null
+}

@@ -17,6 +17,7 @@ import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
 import type { RevisionStyles } from '../output/revision-presentation.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { EquationOps } from './surface-equations.ts';
+import type { TocRemovalRefusal } from './surface-toc-commands.ts';
 import type { SurfaceNavigation } from './surface-navigation.ts';
 import type {
   CellSelection,
@@ -416,6 +417,16 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps {
   canEditTextFormField(): boolean;
   editTextFormField(): boolean;
   refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
+  /**
+   * Why the addressed (or right-clicked, or caret-local) body TOC cannot be removed now, or
+   * null when it can: `notFound` when there is none, `unsupported` with the reason otherwise.
+   */
+  removeTocRefusal(tocId?: string): TocRemovalRefusal | null;
+  /**
+   * Remove a body TOC: its field, or the table of contents control around it with its
+   * heading. Text before and after the field stays. One undo step. Refused while suggesting.
+   */
+  removeToc(tocId?: string): boolean;
   /**
    * Rewrite stale REF field results in the body, footnote and endnote stories so a save
    * exports what the pages paint. Fresh results commit nothing (no transaction, no revision

@@ -2619,6 +2619,8 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps {
     refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
     releaseSelection(pin: SelectionPin): void;
     remotePresenceColor(name: string): string | undefined;
+    removeToc(tocId?: string): boolean;
+    removeTocRefusal(tocId?: string): TocRemovalRefusal | null;
     repaintHighlights(): void;
     // (undocumented)
     replaceImage(drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, options: {
@@ -4137,6 +4139,14 @@ export interface TextMeasurer {
     measure(text: string, style: ResolvedRunStyle): number;
     strikeoutMetrics?(style: ResolvedRunStyle): StrikeoutStrokePt | undefined;
     textOutline?(text: string, style: ResolvedRunStyle): TextOutline | undefined;
+}
+
+// @public
+export interface TocRemovalRefusal {
+    // (undocumented)
+    readonly code: 'notFound' | 'unsupported';
+    // (undocumented)
+    readonly reason: string;
 }
 
 // @public (undocumented)

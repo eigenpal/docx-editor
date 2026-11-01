@@ -39,6 +39,29 @@ describe('createLocalFontProbe', () => {
     expect(probe('Aptos')).toBe(false);
   });
 
+  test('an installed icon face with only private-use glyphs resolves', () => {
+    let font = '';
+    const context = {
+      set font(value: string) {
+        font = value;
+      },
+      get font() {
+        return font;
+      },
+      // The icon face draws private-use code points only; Latin text falls back.
+      measureText(text: string) {
+        const icons = font.includes('"Icon Assets"');
+        let width = 0;
+        for (const char of text) {
+          const privateUse = char >= '' && char <= '';
+          width += privateUse && icons ? 16 : 10;
+        }
+        return { width };
+      },
+    };
+    expect(createLocalFontProbe(context)('Icon Assets')).toBe(true);
+  });
+
   test('no canvas means no evidence: every family reports resolved', () => {
     const probe = createLocalFontProbe(null);
     expect(probe('Aptos')).toBe(true);

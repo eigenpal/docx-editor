@@ -49,8 +49,9 @@ export function alignLineWithPictures(
       direction,
       level,
       baseLevel,
-      // Lines that group text by run direction read a picture in its resolved direction.
-      ...(groupsByRun ? { runDirection: direction } : {}),
+      // Lines that group text by run direction read a picture in its resolved direction, or
+      // inside an override in its run's group.
+      ...(groupsByRun ? { runDirection: drawing.bidiRunDirection ?? direction } : {}),
     };
     return {
       range: { paragraphId: drawing.paragraphId, start: drawing.start, end: drawing.start + 1 },

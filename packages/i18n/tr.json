@@ -732,7 +732,8 @@
   },
   "toc": {
     "refresh": "Tüm tabloyu güncelle",
-    "refreshPageNumbers": "Yalnızca sayfa numaralarını güncelle"
+    "refreshPageNumbers": "Yalnızca sayfa numaralarını güncelle",
+    "remove": "İçindekiler tablosunu kaldır"
   },
   "reviewers": {
     "label": "Gözden geçirenler",

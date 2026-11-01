@@ -8,7 +8,8 @@ import { footnoteContinuationNotice } from './note-continuation-notice.ts';
 
 import { splitNoteHead, splitNoteKeepsParagraphReference } from './note-eviction-guard.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
-import { chargedSpaceAfterPt } from './note-area-fit.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
+import { chargedSpaceAfterPt, pageCitesFootnote } from './note-area-fit.ts';
 import { fragmentOwnsPosition } from './line-segments.ts';
 import {
   bodyCursorBottomPt,
@@ -191,15 +192,25 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
     independentAhead &&
     orphanPairFrontier === true &&
     orphanPairNoteStrands(args, owningBlock, nextBody, frontierRef, flowBottom, ownReserve);
+  // A `w:keepNext` group ahead returns with the owning block's opening lines when those
+  // lines end above the reference line. That head returns alone: the hold shrinks to
+  // admit exactly it, so the reference line cannot follow and reopen the eviction.
   if (
-    independentAhead &&
+    (independentAhead || (owningAt > 0 && ownReserve > 0)) &&
     !strandsOrphanNote &&
     stacksInOneColumn(bodyPage) &&
     stacksInOneColumn(nextBody)
   ) {
-    const head = independentHeadHeight(nextBody.fragments, owningAt);
+    const head = independentHeadHeight(
+      nextBody.fragments,
+      owningAt,
+      frontier.top,
+      pageCitesFootnote(bodyPage) &&
+        hasCompatibilityRule(args.opts.compatibilityMode, 'noteAreaHoldsLineSpacing')
+    );
     if (head !== null && flowBottom + head + ownReserve <= contentHeight + 0.001) {
-      return 0;
+      if (independentAhead) return 0;
+      return Math.max(0, contentHeight - flowBottom - head - RESERVE_BOUNDARY_BACKOFF_PT);
     }
   }
   // Release a settled hold only when the preceding body plus this opening pair
@@ -393,7 +404,17 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   const areaWithPulled = existingArea + pulledNotesHeight;
   // A legal split consumes the measured remaining room. Extra speculative line headroom
   // would reject every such split, including a valid single-line opening without widows.
-  const headroom = admitsSplit ? 0 : refLineHeight;
+  // A reference on the closing line of its paragraph has no later line to bring back, so it
+  // needs no headroom either, unless the paragraph keeps with the next one or returns a
+  // successor's reference. A one-line paragraph keeps the headroom.
+  const closesParagraph =
+    owningBlock.paragraphEnd === true &&
+    !keeps.keepNext &&
+    !pullsSuccessorReference &&
+    frontier.bottom >=
+      owningBlock.box.y + owningBlock.box.height - owningBlock.spacing.after - 0.001 &&
+    frontier.top > owningBlock.lines[0]!.box.y + 0.001;
+  const headroom = admitsSplit || closesParagraph ? 0 : refLineHeight;
   // Backed off by half a point like the eviction reserve: the last kept body line's bottom
   // is exactly `bodyBottom`, and a budget equal to it flips on float drift.
   const hold = leadingLinesHold(
@@ -573,9 +594,14 @@ function orphanPairNoteStrands(
   if (!line) return false;
   const contentHeight = args.bodyPage.contentBox.height;
   const shift = flowBottom - firstBodyContentTopPt(nextBody);
-  const glyphBottom =
-    line.box.y + line.box.height - Math.min(line.trailingSpacing ?? 0, line.box.height);
-  if (shift + glyphBottom + ownReserve > contentHeight + 0.001) return false;
+  // The pair cites the note, so the whole line box must fit above the footnote area. Legacy
+  // modes let the spacing below the glyph band cross it.
+  const trailing = hasCompatibilityRule(args.opts.compatibilityMode, 'noteAreaHoldsLineSpacing')
+    ? 0
+    : Math.min(line.trailingSpacing ?? 0, line.box.height);
+  if (shift + line.box.y + line.box.height - trailing + ownReserve > contentHeight + 0.001) {
+    return false;
+  }
   const laid = layoutNoteCached(
     args.footnotesPart,
     frontierRef.noteId,
@@ -592,21 +618,25 @@ function orphanPairNoteStrands(
 /**
  * Height (pt) the next page's opening blocks need on the previous page before any of them
  * can return there: the first block's smallest head that may move, from the page's first
- * line plus its applied before-spacing down to the glyph band of the head's last line (the
- * body fit rule lets that line's trailing depth cross the reserve). The head is one line;
+ * line plus its applied before-spacing down to the head's last line. That line's trailing
+ * depth counts only when the page cites a footnote (`chargesTrailing`), as in the body fit
+ * rule; elsewhere it may cross the reserve. The head is one line;
  * under widow control it is the opening pair of a paragraph that starts here (the whole
  * paragraph when it has fewer than four lines) and it leaves at least two lines of a
  * paragraph that ends here; under `w:keepLines` it is the whole paragraph when the paragraph
  * sits whole on the page (one that already splits returns line by line). A head that
- * completes a `w:keepNext` paragraph takes the next block's head as well. Null when the head
- * reaches the owning block, whose lines return only with the reference.
+ * completes a `w:keepNext` paragraph takes the next block's head as well. A head that reaches
+ * the owning block ends there only when those opening lines end above the reference line
+ * (`frontierTop`); otherwise it is null, because those lines return only with the reference.
  */
 function independentHeadHeight(
   fragments: PageRecord['fragments'],
-  owningAt: number
+  owningAt: number,
+  frontierTop: number,
+  chargesTrailing: boolean
 ): number | null {
   let top: number | undefined;
-  for (let index = 0; index < owningAt; index += 1) {
+  for (let index = 0; index <= owningAt; index += 1) {
     const block = fragments[index]!;
     if (block.kind !== 'paragraph' || block.positionedFrame || block.outOfFlow) continue;
     const lines = block.lines;
@@ -621,10 +651,13 @@ function independentHeadHeight(
       take = whole && count < 4 ? count : Math.min(2, count);
     } else if (keeps.widowControl && block.paragraphEnd && count < 3) take = count;
     const last = lines[take - 1]!;
+    if (index === owningAt) {
+      const citesInHead = take === count || last.box.y + last.box.height > frontierTop + 0.001;
+      if (citesInHead) return null;
+    }
     if (take < count || !block.paragraphEnd || !keeps.keepNext) {
-      return (
-        last.box.y + last.box.height - Math.min(last.trailingSpacing ?? 0, last.box.height) - top
-      );
+      const trailing = chargesTrailing ? 0 : Math.min(last.trailingSpacing ?? 0, last.box.height);
+      return last.box.y + last.box.height - trailing - top;
     }
   }
   return null;

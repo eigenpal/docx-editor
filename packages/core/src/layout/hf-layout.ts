@@ -309,6 +309,8 @@ export function layoutHeaderFooterStory(
   let baseline: HeaderFooterStoryLayout | undefined;
   // Whether the header frame lane holds, decided once by the layout without a page context.
   let frameAdmitted: boolean | undefined;
+  // Likewise for text-anchored story frames, so longer page numbers never move the story text.
+  let storyFramesAdmitted: boolean | undefined;
 
   const layoutOnce = (ctx: HeaderFooterLayoutPageContext | undefined): HeaderFooterStoryLayout => {
     const effectiveCtx =
@@ -466,7 +468,8 @@ export function layoutHeaderFooterStory(
         ? hfPageContext
         : undefined;
     const flowBlocks = floatingGeometry ? floatingSplit.flowBlocks : blocks;
-    const plainDeps = () => ({
+    // Only the story's own flow keeps its last paragraph's automatic space after, not a frame.
+    const plainDeps = (storyEnd = false) => ({
       measurer,
       cache,
       producer:
@@ -476,6 +479,7 @@ export function layoutHeaderFooterStory(
         (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : ''),
       nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
       styleCascade,
+      ...(storyEnd ? { keepsStoryEndAutoSpacing: true as const } : {}),
       ...(listItems ? { listItems } : {}),
       pageContext: effectiveCtx,
       ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
@@ -504,8 +508,8 @@ export function layoutHeaderFooterStory(
     const collect = (drawings: readonly AnchoredDrawingRecord[]) => {
       pendingAnchoredDrawings.push(...drawings);
     };
-    const drawingDeps = (collectAnchoredDrawings: typeof collect) => ({
-      ...plainDeps(),
+    const drawingDeps = (collectAnchoredDrawings: typeof collect, storyEnd = false) => ({
+      ...plainDeps(storyEnd),
       hostedStory,
       anchorsWrapText,
       inlineDrawingLayout,
@@ -529,14 +533,15 @@ export function layoutHeaderFooterStory(
           : {}),
     });
 
-    const flowStory = (source: typeof flowBlocks, firstLine: number): void => {
+    const flowStory = (source: typeof flowBlocks, firstLine: number, storyEnd = true): void => {
+      const width = Math.max(1, contentWidth);
       exclusionZones = tableZones;
       if (inlineDrawingLayout) {
         let converged = false;
         for (let pass = 0; pass < MAX_DRAWING_EXCLUSION_REFLOW_PASSES; pass += 1) {
           pendingAnchoredDrawings.splice(0, pendingAnchoredDrawings.length);
           lineCounter = firstLine;
-          flow = flowBlocksInBox(source, 0, Math.max(1, contentWidth), 0, 0, drawingDeps(collect));
+          flow = flowBlocksInBox(source, 0, width, 0, 0, drawingDeps(collect, storyEnd));
           const drawingZones = collectExclusionZonesFromDrawings(
             pendingAnchoredDrawings,
             inlineDrawingLayout,
@@ -566,7 +571,7 @@ export function layoutHeaderFooterStory(
         }
       } else {
         lineCounter = firstLine;
-        flow = flowBlocksInBox(source, 0, Math.max(1, contentWidth), 0, 0, plainDeps());
+        flow = flowBlocksInBox(source, 0, width, 0, 0, plainDeps(storyEnd));
       }
     };
 
@@ -582,7 +587,7 @@ export function layoutHeaderFooterStory(
     const decideFrame = effectiveCtx === undefined;
     if (frameBlock && !decideFrame && frameAdmitted === undefined) layoutOnce(undefined);
     if (pageFrame && frameBlock && (decideFrame || frameAdmitted)) {
-      flowStory([frameBlock], 0);
+      flowStory([frameBlock], 0, false);
       const framed = flow;
       flowStory(flowBlocks.slice(1), lineCounter);
       // An anchored drawing wraps the story around an exclusion the isolated frame never saw.
@@ -712,14 +717,18 @@ export function layoutHeaderFooterStory(
       styleCascade?.fixedParagraphSpacing
     );
     // Text-anchored frames that no fixed lane describes take their place beside the story.
-    if (plainStory && flow === unframed)
-      layoutStoryWithTextFrames(
+    if (plainStory && flow === unframed && storyFramesAdmitted !== false) {
+      if (effectiveCtx && storyFramesAdmitted === undefined) layoutOnce(undefined);
+      const placed = layoutStoryWithTextFrames(
         flowBlocks,
         (source) => (flowStory(source, 0), flow),
         (paragraphs, width) => flowBlocksInBox(paragraphs, 0, width, 0, 0, plainDeps()),
         { contentWidth, ...hfPageContext },
-        (framed) => (flow = framed)
+        (framed) => (flow = framed),
+        effectiveCtx !== undefined && storyFramesAdmitted === true
       );
+      if (!effectiveCtx) storyFramesAdmitted = placed ?? false;
+    }
     const story: HeaderFooterStoryLayout = {
       partName: part.name,
       part,

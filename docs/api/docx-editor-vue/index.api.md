@@ -2121,6 +2121,95 @@ export const ContextMenuRefreshTocPageNumbers: {
 };
 
 // @public (undocumented)
+export const ContextMenuRemoveToc: {
+    new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
+        };
+    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
+        hidden: boolean;
+        icon: VNode<vue.RendererNode, vue.RendererElement, {
+            [key: string]: any;
+        }>;
+        labelKey: string;
+    }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
+        B: {};
+        C: {};
+        D: {};
+        Defaults: {};
+        M: {};
+        P: {};
+    }, Readonly<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
+        };
+    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
+        hidden: boolean;
+        icon: VNode<vue.RendererNode, vue.RendererElement, {
+            [key: string]: any;
+        }>;
+        labelKey: string;
+    }>;
+    __isFragment?: never;
+    __isTeleport?: never;
+    __isSuspense?: never;
+} & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
+    hidden: boolean;
+    icon: VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }>;
+    labelKey: string;
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
+    docxRow: string;
+};
+
+// @public (undocumented)
 export const ContextMenuSelectAll: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
         className: {
@@ -2945,6 +3034,8 @@ export interface DocxEditorContextMenuNamespace {
     readonly RefreshToc: typeof ContextMenuRefreshToc;
     // (undocumented)
     readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
+    // (undocumented)
+    readonly RemoveToc: typeof ContextMenuRemoveToc;
     // (undocumented)
     readonly Row: typeof MenuRow;
     // (undocumented)
