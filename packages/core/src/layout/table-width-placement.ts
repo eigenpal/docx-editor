@@ -71,6 +71,25 @@ export function ruleAdjustedTableWidth(
   return { type: 'pct', value: (widthPt / containerWidthPt) * 100 };
 }
 
+/**
+ * The grid width of a mode-15 percentage table whose side rules share its grid lines
+ * (`modernPercentRulePt`): its share of the container less the rule. The outer box adds the
+ * rule back, so it stays where `ruleAdjustedTableWidth` puts it. The result is a share of
+ * the container, so the width resolver and AutoFit need no other change.
+ */
+export function modernSharedPercentWidth(
+  tableWidth: PreferredWidth,
+  containerWidthPt: number,
+  rulePt: number
+): PreferredWidth {
+  if (tableWidth.type !== 'pct' || !(containerWidthPt > 0) || !(rulePt > 0)) return tableWidth;
+  if (rulePt >= containerWidthPt) return tableWidth;
+  return {
+    type: 'pct',
+    value: (tableWidth.value * (containerWidthPt - rulePt)) / containerWidthPt,
+  };
+}
+
 export interface TableWidthPlacement {
   readonly legacy: LegacyTableContentWidth | undefined;
   /** The width preference the column resolver reads. */
@@ -82,7 +101,19 @@ export interface TableWidthPlacement {
   readonly indentPt: number;
   /** How far a right-to-left table moves from its aligned place, in points. */
   readonly bidiRuleShiftPt?: number;
+  /** See `SemanticTableStructure.textBoxBidiShiftPt`. */
+  readonly textBoxBidiShiftPt?: number;
 }
+
+/**
+ * How far right a top-level right-to-left table in a text box sits from the mirrored
+ * left-to-right geometry: 15 twips, in every mode and for every width type. Measured on
+ * reference renderings of inline text boxes 2880 and 4320 twips wide, with percentage,
+ * absolute and automatic widths, leading, trailing and centred alignment, and cell margins
+ * of 0 and 108 twips: every grid line sat 0.72 to 0.96pt right, at the renderer's 0.24pt
+ * position resolution.
+ */
+const TEXT_BOX_BIDI_SHIFT_PT = 0.75;
 
 export function resolveTableWidthPlacement(input: {
   readonly table: OoxmlElement;
@@ -110,14 +141,10 @@ export function resolveTableWidthPlacement(input: {
   const { depth, tableWidth, contentWidthPt, rows } = input;
   const reference = legacyTableContentWidth({
     ...input,
-    ...(input.bidiVisual
-      ? {}
-      : { outerRulesPt: outerSideRulesPt(input.tableBorders, rows, false) }),
+    outerRulesPt: outerSideRulesPt(input.tableBorders, rows, input.bidiVisual),
   });
   const legacy =
-    reference && input.textBox && !input.bidiVisual
-      ? textBoxLegacyContentWidth(reference, tableWidth)
-      : reference;
+    reference && input.textBox ? textBoxLegacyContentWidth(reference, tableWidth) : reference;
   // A nested table, and every table outside the legacy modes, adds its outer rule to the share.
   const resolvedWidth =
     legacy === undefined &&
@@ -160,8 +187,15 @@ export function resolveTableWidthPlacement(input: {
       ? outerSideRulesPt(input.tableBorders, rows, true)
       : undefined;
   const shift = sides ? -(sides.left + sides.right) / 4 : 0;
+  const textBoxShift =
+    input.bidiVisual &&
+    input.textBox &&
+    depth === 0 &&
+    !input.floating &&
+    input.cellSpacingPt === 0;
   return {
     ...(shift < 0 ? { bidiRuleShiftPt: shift } : {}),
+    ...(textBoxShift ? { textBoxBidiShiftPt: TEXT_BOX_BIDI_SHIFT_PT } : {}),
     legacy,
     tableWidth: resolvedWidth,
     contentWidthPt: nestedRoomPt ?? (legacy?.widthPt ?? contentWidthPt) - autoRoomPt,

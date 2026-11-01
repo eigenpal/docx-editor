@@ -168,7 +168,7 @@ describe('legacy fixed table content edges', () => {
     expect(structure(trailing).outerRuleOffsetPt).toBe(-10);
   });
 
-  test('a text-box table keeps the left-to-right fixed rule', () => {
+  test('a text-box table aligns the content of a leading alignment only', () => {
     const s = (extra: string) =>
       readTableStructure(
         (
@@ -185,7 +185,9 @@ describe('legacy fixed table content edges', () => {
       )!;
     expect(s('').outerRuleOffsetPt).toBe(-5.4);
     expect(s('<w:jc w:val="right"/>').outerRuleOffsetPt).toBeUndefined();
-    expect(s('<w:bidiVisual/>').outerRuleOffsetPt).toBeUndefined();
+    // A right-to-left table leads from its visual right, so its content moves right there.
+    expect(s('<w:bidiVisual/>').outerRuleOffsetPt).toBe(5.4);
+    expect(s('<w:bidiVisual/><w:jc w:val="right"/>').outerRuleOffsetPt).toBeUndefined();
   });
 
   test('a right-aligned table aligns the content edge of its last cell', () => {
@@ -195,13 +197,17 @@ describe('legacy fixed table content edges', () => {
     for (const extra of ['<w:tblCellSpacing w:w="20" w:type="dxa"/>', '<w:jc w:val="center"/>']) {
       expect(structure(document(extra)).outerRuleOffsetPt).toBeUndefined();
     }
-    expect(structure(document(), 14, 1).outerRuleOffsetPt).toBeUndefined();
     expect(structure(document('', '', 108, 'pct')).outerRuleOffsetPt).toBeUndefined();
+    // A nested table shares its grid lines instead: half its 0.5pt rule in from the cell edge.
+    expect(structure(document(), 14, 1).outerRuleOffsetPt).toBe(0.25);
+  });
+  test('a leading margin narrower than half the rule starts the text at the half', () => {
+    const cell = '<w:tcMar><w:left w:w="0" w:type="dxa"/></w:tcMar>';
+    expect(structure(document('', cell)).outerRuleOffsetPt).toBe(-0.25);
   });
   test('invalid margins and unsupported border clearances keep the original geometry', () => {
     for (const cell of [
       '<w:tcMar><w:left w:w="20" w:type="pct"/></w:tcMar>',
-      '<w:tcMar><w:left w:w="0" w:type="dxa"/></w:tcMar>',
       '<w:tcBorders><w:left w:val="double" w:sz="4"/></w:tcBorders>',
       '<w:tcBorders><w:left w:val="single" w:sz="8"/></w:tcBorders>',
     ])

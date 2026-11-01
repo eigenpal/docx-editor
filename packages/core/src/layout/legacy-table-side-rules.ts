@@ -31,7 +31,8 @@ function simpleSideRuleWidth(edge: TableBorderSide): number | undefined {
  * Captured left, right and centred fixed-layout controls, and centred autofit controls,
  * drawn with `w:tblW w:type="auto"` put every stroke and text edge where the matching `dxa`
  * control does. A wrapped cell line in an `auto` table confirms the reclaimed content width.
- * A `pct` table stays outside until controls cover it.
+ * A `pct` table takes it only with one simple rule width on every cell side
+ * (`modernPercentRulePt`).
  */
 const MODERN_GRID_WIDTH_TYPES: readonly PreferredWidthType[] = ['dxa', 'auto'];
 
@@ -163,6 +164,8 @@ export interface SharedGridLineSideRules {
   readonly rows: readonly SemanticTableRow[];
   /** See `SemanticTableStructure.outerRuleOffsetPt`. */
   readonly outerRuleOffsetPt?: number;
+  /** See `SemanticTableStructure.sharedGridLinesHold`. */
+  readonly holdsWhenWidened?: true;
 }
 
 /**
@@ -259,9 +262,10 @@ function uniformSimpleSideRuleWidth(
  * on the aligned edge, so the grid moves inward by half the rule. Every rule is centred on
  * its grid line and the margin is measured from that centre, as in the centred shape. The
  * controls cover 0.5 to 6pt single rules, 3pt thick rules, 0 to 10.8pt margins, indents,
- * fixed and autofit layout, and one to three columns. A fixed left table, and a table whose
- * stated absolute width already overflows, keeps the offset when its outer box overflows the
- * container: full-width and over-wide controls put the outer rule edge on the aligned edge. A
+ * fixed and autofit layout, and one to three columns. A fixed table, left- or right-aligned,
+ * and a table whose stated absolute width already overflows, keep the offset when the outer
+ * box overflows the container: full-width and over-wide controls put the outer rule edge on
+ * the aligned edge. A
  * table that only widens past its room for its content, and a table whose side rules differ,
  * keep the full-stroke inset and the unshifted grid until controls cover them.
  */
@@ -269,12 +273,18 @@ function modernEdgeAlignedOffsetPt(
   rows: readonly SemanticTableRow[],
   table: SideRuleTableShape
 ): number | undefined {
+  if (table.alignment === 'center') return undefined;
+  // A percentage states its own width, so its grid always moves in, however wide it is.
+  // In a text box the trailing grid line stays on the trailing edge.
+  const trailing = (rule: number) => (table.textBox ? 0 : -rule / 2);
+  const percentRule = modernPercentRulePt(rows, table);
+  if (percentRule !== undefined)
+    return table.alignment === 'left' ? percentRule / 2 : trailing(percentRule);
   if (
     !hasCompatibilityRule(table.compatibilityMode, 'modernGridLineSideRules') ||
     !MODERN_GRID_WIDTH_TYPES.includes(table.widthType)
   )
     return undefined;
-  if (table.alignment === 'center') return undefined;
   const rule = uniformSimpleSideRuleWidth(rows, table.columnWidthsPt.length);
   if (rule === undefined) return undefined;
   let gridWidth = 0;
@@ -289,8 +299,39 @@ function modernEdgeAlignedOffsetPt(
   const statedOverflow =
     table.statedWidthPt !== undefined &&
     (left ? table.indentPt : 0) + table.statedWidthPt + rule > table.containerWidthPt + 1e-6;
-  if (!fits && !(left && table.layoutFixed) && !statedOverflow) return undefined;
-  return left ? rule / 2 : -rule / 2;
+  if (!fits && !table.layoutFixed && !statedOverflow) return undefined;
+  return left ? rule / 2 : trailing(rule);
+}
+
+/**
+ * The one side-rule width of a percentage table that shares its grid lines; else
+ * `undefined`. A top-level table needs mode 15; a nested table takes it in every mode.
+ *
+ * With one simple rule width on every cell side, such a table takes the shared-grid-line
+ * geometry of the absolute-width shapes. Its percentage is a share of the container less
+ * that rule, and the outer box, the grid plus half of each outer rule, is one rule wider
+ * (`modernSharedPercentWidth`). Captured controls cover 0.5, 1.5 and 3pt single rules, 0 to
+ * 3pt margins, 50 to 150%, left, indented, right and centred AutoFit tables, top-level in
+ * mode 15 and nested in modes 11 to 15. Mixed, compound and absent rules keep the full-stroke
+ * inset.
+ */
+export function modernPercentRulePt(
+  rows: readonly SemanticTableRow[],
+  table: Pick<
+    SideRuleTableShape,
+    'compatibilityMode' | 'depth' | 'floating' | 'cellSpacingPt' | 'widthType'
+  > & { readonly columnCount?: number; readonly columnWidthsPt?: readonly number[] }
+): number | undefined {
+  if (
+    // Nested tables take it in every mode.
+    (table.depth === 0 &&
+      !hasCompatibilityRule(table.compatibilityMode, 'modernGridLineSideRules')) ||
+    table.widthType !== 'pct' ||
+    table.floating ||
+    table.cellSpacingPt !== 0
+  )
+    return undefined;
+  return uniformSimpleSideRuleWidth(rows, table.columnCount ?? table.columnWidthsPt?.length ?? 0);
 }
 
 /**
@@ -307,7 +348,6 @@ export function autoWidthOuterRulePt(
     table.widthType !== 'auto' ||
     table.layoutFixed ||
     table.depth !== 0 ||
-    table.bidiVisual ||
     table.floating ||
     table.cellSpacingPt !== 0
   )
@@ -348,8 +388,8 @@ function modernMixedLeadPt(
  *
  * Modes 11, 12 and 14 (and an absent mode) take it for every top-level, collapsed, unpositioned
  * table, left-to-right or right-to-left. Mode 15 takes it only for the shapes its captured
- * controls cover, with a `dxa` or `auto` width (`MODERN_GRID_WIDTH_TYPES`), and for a
- * leading- or trailing-aligned right-to-left table with a `dxa` width and one rule width:
+ * controls cover: a `dxa` or `auto` width (`MODERN_GRID_WIDTH_TYPES`), a `pct` width with
+ * one simple rule width (`modernPercentRulePt`), and a right-to-left table of either kind:
  *
  * - a centred table. Fixed-layout controls at 0.5, 1.5, 3 and 6pt strokes with 0 and
  *   5.4pt margins, and autofit controls, put text and strokes at the mode-14 positions: the
@@ -361,8 +401,9 @@ function modernMixedLeadPt(
  *
  * - a left-aligned table whose simple rules differ in width (`modernMixedLeadPt`).
  *
- * Other mode-15 shapes (`pct` width, compound rules, right-aligned unequal rules) and mode 16
- * keep the full-stroke inset until controls cover them.
+ * Other mode-15 shapes (`pct` width with mixed rules, compound rules, right-aligned unequal
+ * rules) and mode 16 keep the full-stroke inset until controls cover them. Nested tables
+ * take `nestedSharedGridLineDecision` in every mode.
  */
 function sharedGridLineDecision(
   rows: readonly SemanticTableRow[],
@@ -374,7 +415,8 @@ function sharedGridLineDecision(
   unequalSides?: true;
 } | null {
   const { compatibilityMode: mode } = table;
-  if (table.depth !== 0 || table.floating || table.cellSpacingPt !== 0) return null;
+  if (table.floating || table.cellSpacingPt !== 0) return null;
+  if (table.depth !== 0) return nestedSharedGridLineDecision(rows, table);
   // The legacy modes give right-to-left tables the same shared grid lines.
   if (table.bidiVisual && hasCompatibilityRule(mode, 'legacySharedGridLineSideRules'))
     return { legacyMode: true, modernGridWidth: false };
@@ -382,24 +424,28 @@ function sharedGridLineDecision(
     const rule = uniformSimpleSideRuleWidth(rows, table.columnWidthsPt.length);
     if (
       !hasCompatibilityRule(mode, 'modernGridLineSideRules') ||
-      table.widthType !== 'dxa' ||
-      table.alignment === 'center' ||
+      (!MODERN_GRID_WIDTH_TYPES.includes(table.widthType) && table.widthType !== 'pct') ||
       rule === undefined
     )
       return null;
-    // A right-to-left table with an absolute width shares its side rules with cell padding,
-    // in fixed and AutoFit layout. Leading-aligned, its grid moves by one outer rule toward
-    // the visual left; trailing-aligned, its grid stays on the aligned edge.
+    // A right-to-left table shares its side rules with cell padding, in fixed and AutoFit
+    // layout: the left-to-right geometry mirrored, then half a rule toward the visual left.
+    // Leading-aligned, its grid moves by one outer rule toward the visual left; centred, by
+    // half of one; trailing-aligned, its grid stays on the aligned edge.
+    // In a text box it takes the mirrored text-box geometry alone (`textBoxBidiShiftPt`).
+    const shift = table.textBox ? 0 : -rule / 2;
     return {
       legacyMode: false,
       modernGridWidth: true,
-      outerRuleOffsetPt: table.alignment === 'left' ? -rule : 0,
+      outerRuleOffsetPt:
+        table.alignment === 'left' ? shift - rule / 2 : table.alignment === 'center' ? shift : 0,
     };
   }
   const legacyMode = hasCompatibilityRule(mode, 'legacySharedGridLineSideRules');
   const modernGridWidth =
-    hasCompatibilityRule(mode, 'modernGridLineSideRules') &&
-    MODERN_GRID_WIDTH_TYPES.includes(table.widthType);
+    (hasCompatibilityRule(mode, 'modernGridLineSideRules') &&
+      MODERN_GRID_WIDTH_TYPES.includes(table.widthType)) ||
+    modernPercentRulePt(rows, table) !== undefined;
   const modernCentred = modernGridWidth && table.alignment === 'center';
   const outerRuleOffsetPt = legacyMode ? undefined : modernEdgeAlignedOffsetPt(rows, table);
   const partialGrid =
@@ -415,6 +461,37 @@ function sharedGridLineDecision(
       : { legacyMode, modernGridWidth, outerRuleOffsetPt: lead / 2, unequalSides: true };
   }
   return { legacyMode, modernGridWidth, outerRuleOffsetPt };
+}
+
+/**
+ * A nested table with one simple rule width on every cell side shares its grid lines with
+ * the cell padding in every mode, whatever its width type. Its grid moves in by half the
+ * outer rule from a leading alignment, so the rule's outer edge meets the cell's content
+ * edge. A trailing alignment does the same in mode 15; the older modes keep the trailing grid
+ * line on that edge. A centred grid stays centred. Captured controls cover 0.5pt rules, cell
+ * margins of 0 and 5.4pt, percentage, absolute and absent widths, both directions and
+ * every alignment.
+ */
+function nestedSharedGridLineDecision(
+  rows: readonly SemanticTableRow[],
+  table: SideRuleTableShape
+): { legacyMode: boolean; modernGridWidth: boolean; outerRuleOffsetPt?: number } | null {
+  const rule = uniformSimpleSideRuleWidth(rows, table.columnWidthsPt.length);
+  if (rule === undefined) return null;
+  // Authored alignments; a right-to-left table leads from its visual right.
+  const leading = table.alignment === 'left';
+  const inward =
+    leading ||
+    (table.alignment === 'right' &&
+      hasCompatibilityRule(table.compatibilityMode, 'modernGridLineSideRules'));
+  if (table.alignment === 'center' || !inward) return { legacyMode: false, modernGridWidth: true };
+  // The visual left moves right; the visual right moves left.
+  const visualLeft = leading !== table.bidiVisual;
+  return {
+    legacyMode: false,
+    modernGridWidth: true,
+    outerRuleOffsetPt: visualLeft ? rule / 2 : -rule / 2,
+  };
 }
 
 const rowsWithoutSharedSides = new WeakMap<SemanticTableRow, SemanticTableRow>();
@@ -500,5 +577,14 @@ export function withSharedGridLineSideRules(
     table.widthType === 'dxa' || modernGridWidth
       ? withLegacyTableSideRules(painted, !legacyMode, unequalSides)
       : painted;
-  return outerRuleOffsetPt === undefined ? { rows: shared } : { rows: shared, outerRuleOffsetPt };
+  // A legacy, nested or one-rule percentage table keeps the shared lines at any widths; a
+  // mode-15 absolute or automatic width can lose them as it widens, so it does not hold.
+  const holds =
+    shared !== painted &&
+    (legacyMode || table.depth !== 0 || modernPercentRulePt(rows, table) !== undefined);
+  return {
+    rows: shared,
+    ...(outerRuleOffsetPt === undefined ? {} : { outerRuleOffsetPt }),
+    ...(holds ? { holdsWhenWidened: true as const } : {}),
+  };
 }

@@ -4078,8 +4078,11 @@ export interface SemanticTableStructure {
     readonly pastTextColumn?: true;
     // (undocumented)
     readonly rows: readonly SemanticTableRow[];
+    readonly sharedGridLinesHold?: true;
     readonly tableBorders: TableBorderBox;
     readonly tableWidth: PreferredWidth;
+    readonly textBox?: true;
+    readonly textBoxBidiShiftPt?: number;
 }
 
 // @public
@@ -4601,6 +4604,7 @@ export interface TableAutofitContext {
     readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
     readonly measurer: TextMeasurer;
     readonly paragraphToken?: (paragraph: OoxmlElement) => string;
+    readonly parentTableFixed?: true;
     readonly passToken?: string;
 }
 

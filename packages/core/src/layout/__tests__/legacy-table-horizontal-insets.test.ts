@@ -168,14 +168,19 @@ test('full document flow applies the admitted mode, without changing canonical O
     if (!table) throw new Error('missing full-document table');
     return table;
   };
-  // The admitted mode starts the content at the margin; mode 15 adds the ordinary collapsed
-  // clearance. Autofit keeps the seven digits whole in both, so the inset is the difference.
+  // The admitted mode starts the content at the margin. Mode 15 centres the 0.5pt rules on
+  // grid lines half a rule in from the outer edge and measures the margin from there, so the
+  // text starts 5.65pt in from the text edge, as before. Autofit keeps the seven
+  // digits whole in both.
   const contentInset = (compatibilityMode: number) => {
     const table = firstTable(compatibilityMode);
     return firstParagraph(table).box.x - table.rows[0]!.cells[0]!.box.x;
   };
   expect(contentInset(11)).toBeCloseTo(5.4, 6);
-  expect(contentInset(15)).toBeCloseTo(5.65, 6);
+  expect(contentInset(15)).toBeCloseTo(5.4, 6);
+  const modern = firstTable(15);
+  expect(modern.box.x).toBeCloseTo(0.25, 6);
+  expect(firstParagraph(modern).box.x).toBeCloseTo(5.65, 6);
   expect(firstParagraph(firstTable(11)).lines).toHaveLength(1);
   expect(firstParagraph(firstTable(15)).lines).toHaveLength(1);
   expect(serializeOoxmlPart(part)).toBe(canonical);

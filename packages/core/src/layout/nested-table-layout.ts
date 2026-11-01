@@ -78,6 +78,7 @@ export function emitNestedTable(
   const nestedDeferred: DeferredRowAnchor[] = [];
   const nestedFlowDeps: TableFlowDeps = {
     ...deps,
+    parentTableFixed: structure.layoutFixed ? true : undefined,
     publishAnchoredDrawings: undefined,
     collectAnchoredDrawings: undefined,
     anchorDeferOnly: true,

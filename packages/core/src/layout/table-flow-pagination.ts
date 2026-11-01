@@ -153,7 +153,7 @@ export function* paginateTableInFlowSteps(
   const floats =
     outOfFlow || structure.float
       ? null
-      : planOutOfCellFloats(structure, table.id, tableLeft, flow.cursorY, flowDeps);
+      : planOutOfCellFloats(structure, table.id, tableLeft, flow.cursorY, cellDeps);
   const tableDeps = terminal.tableTerminalDeps(structure, floats?.deps ?? cellDeps);
   const headerRows: SemanticTableRow[] = [];
   for (const row of structure.rows) {

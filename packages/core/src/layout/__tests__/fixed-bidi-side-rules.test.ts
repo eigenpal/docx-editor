@@ -75,12 +75,24 @@ test('legacy, trailing-aligned and autofit bidi tables share their side rules to
     for (const cell of structure.rows[0]!.cells) expect(cell.centeredSideRules).toBe(true);
 });
 
-test('percent, centred, spaced, nested, and compound tables keep their previous rules', () => {
-  const standard = fixture().table;
+// Mode-15 reference renderings of right-to-left tables with 3pt rules put a centred table's
+// grid half a rule left of centre, a leading percentage table one rule in from its visual
+// right, and a nested leading table half a rule in from its cell's right edge.
+test('percent, centred and nested bidi tables share their side rules too', () => {
+  const centred = read(fixture('<w:jc w:val="center"/>').table);
+  const percent = read(fixture('', 'pct').table);
+  const nested = read(fixture().table, 15, 1);
+  expect(centred.outerRuleOffsetPt).toBe(-1.5);
+  expect(percent.outerRuleOffsetPt).toBe(-3);
+  // 80% of the container less the rule.
+  expect(percent.columnWidthsPt.reduce((sum, width) => sum + width, 0)).toBeCloseTo(237.6, 6);
+  expect(nested.outerRuleOffsetPt).toBe(-1.5);
+  for (const structure of [centred, percent, nested])
+    for (const cell of structure.rows[0]!.cells) expect(cell.centeredSideRules).toBe(true);
+});
+
+test('spaced and compound tables keep their previous rules', () => {
   const cases = [
-    read(standard, 15, 1),
-    read(fixture('<w:jc w:val="center"/>').table),
-    read(fixture('', 'pct').table),
     read(fixture('<w:tblCellSpacing w:w="20" w:type="dxa"/>').table),
     read(fixture('', 'dxa', 'double').table),
   ];

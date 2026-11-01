@@ -260,6 +260,8 @@ export interface TableFlowDeps {
   readonly tableNestingOffset?: 1;
   /** The story is a text box's content. */
   readonly textBoxStory?: true;
+  /** The cell content belongs to a fixed-layout table (`nestedAutofitStructure`). */
+  readonly parentTableFixed?: true | undefined;
   /**
    * Turns a typed `w:hyperlink` into the sanitized record its spans carry. A link in a
    * table cell is an ordinary link; without this it would paint its text and be dead.
