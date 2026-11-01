@@ -5,6 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { subscribeTextReads } from './registry-text-reads.ts';
 import { TEXT_DELETIONS_KEY } from './paragraph-text-deletions.ts';
+import { TEXT_DECISIONS_KEY } from './paragraph-text-decisions.ts';
 import { keepFormattingMarkers } from './yjs-items.ts';
 import { compareDocumentOrder } from './registry-document-order.ts';
 import { RegistryHistory } from './registry-history.ts';
@@ -243,8 +244,9 @@ export class DocumentRegistry {
       asTrackedType(this.schema.binaries),
       asTrackedType(this.schema.attributes),
       asTrackedType(this.schema.bindings),
-      // An undo of a deletion withdraws its record, so the text shows again.
+      // An undo of a deletion or a decision withdraws its record, so the text shows again.
       asTrackedType(this.doc.getMap(TEXT_DELETIONS_KEY)),
+      asTrackedType(this.doc.getMap(TEXT_DECISIONS_KEY)),
     ];
   }
 

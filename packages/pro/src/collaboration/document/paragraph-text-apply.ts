@@ -59,6 +59,7 @@ import {
 } from './paragraph-text-identity.ts';
 import { rebaseRevisions } from './paragraph-text-revisions.ts';
 import { formatDecidedDeletions } from './paragraph-text-decision-span.ts';
+import { formatDecision } from './paragraph-text-decisions.ts';
 import { writeInlineText } from './paragraph-text-view.ts';
 import { positionsNow, type FollowingText } from './paragraph-text-follow.ts';
 import { placeFollowingText } from './paragraph-text-placement.ts';
@@ -289,7 +290,7 @@ function writeParagraphText(
               })
             )
           : run[0]!.changes!;
-        text.format(run[0]!.position, run.length, changes);
+        formatDecision(text, changes, identities?.items, run);
       }
       continue;
     }

@@ -6,9 +6,10 @@
 // So when a replica accepts or rejects a change, the typed tokens the change holds in that
 // replica's view are recorded. At the end, none of them may still sit in a change with the
 // same identity. A replica that undoes or redoes after its decision may have brought the
-// change back, so its earlier decisions are not checked. The undo restores the change as new
-// content, so a peer's decision on the same change that did not see the undo misses it too,
-// and is not checked either.
+// change back, so its earlier decisions are not checked. An undo or redo writes the text it
+// restores as new content, whether it brings back a decided change or typing inside one. A
+// peer's decision on that change that did not see the undo or redo misses the new copy, so
+// it is not checked either.
 
 import type {
   OoxmlNode,
@@ -152,13 +153,21 @@ export class DecisionOracle {
     if (decision && decision.tokens.size > 0) this.decisions.push(decision);
   }
 
-  /** An undo or redo on `replica`: its earlier decisions may come back. */
-  undone(replica: number, ydoc: Y.Doc): void {
+  /**
+   * An undo or redo on `replica`, which changed its body from `before` to `after`: its earlier
+   * decisions may come back, and so may text inside any change whose tokens it moved.
+   */
+  undone(replica: number, ydoc: Y.Doc, before: OoxmlNode, after: OoxmlNode): void {
     const identities = new Set<string>();
     for (const decision of this.decisions) {
       if (decision.replica !== replica) continue;
       decision.excused = true;
       for (const identity of decidedIdentities(decision)) identities.add(identity);
+    }
+    const was = tokensInChanges(before);
+    for (const [token, now] of tokensInChanges(after)) {
+      const earlier = was.get(token);
+      for (const identity of now) if (!earlier?.has(identity)) identities.add(identity);
     }
     const client = ydoc.clientID;
     this.restores.push({ replica, client, clock: Y.getState(ydoc.store, client), identities });

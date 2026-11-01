@@ -69,7 +69,7 @@ function recordOf(
 }
 
 /** Sorted, disjoint ranges of one client's identities, merged as they are added. */
-class Coverage {
+export class Coverage {
   private readonly starts: number[] = [];
   private readonly ends: number[] = [];
 
