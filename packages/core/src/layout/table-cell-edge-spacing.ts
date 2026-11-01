@@ -14,20 +14,15 @@ import { paragraphAutoSpacingSides, type ParagraphSpacing } from './paragraph-st
  * gap across a row boundary carries no addition at all. See `.cache/pdf/claude-autospacing/`.
  *
  * An AUTHORED measurement is untouched — only the substituted value is suppressed, because
- * only it is the consumer's to decide. Under `w:doNotUseHTMLParagraphAutoSpacing`
- * (`fixedAutoSpacing`) nothing is substituted, so the authored spacing stays at both edges.
+ * only it is the consumer's to decide.
  */
 export function cellEdgeAutoSpacing(
   spacing: ParagraphSpacing,
   props: readonly OoxmlProperty[],
-  edges: {
-    readonly firstInCell: boolean;
-    readonly lastInCell: boolean;
-    readonly fixedAutoSpacing: boolean;
-  }
+  firstInCell: boolean,
+  lastInCell: boolean
 ): ParagraphSpacing {
-  const { firstInCell, lastInCell, fixedAutoSpacing } = edges;
-  if (fixedAutoSpacing || (!firstInCell && !lastInCell)) return spacing;
+  if (!firstInCell && !lastInCell) return spacing;
   const auto = paragraphAutoSpacingSides(props);
   const dropBefore = firstInCell && auto.before;
   const dropAfter = lastInCell && auto.after;

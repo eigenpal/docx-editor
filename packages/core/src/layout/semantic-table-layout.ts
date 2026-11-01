@@ -215,8 +215,7 @@ export interface TableFlowDeps {
   readonly paragraphLineUnitPt?: number;
   /** Story paragraphs outside cells snap to `paragraphLineUnitPt`; see {@link withStoryLineGrid}. */
   readonly snapsStoryLines?: true;
-  /** A header or footer story keeps its last automatic space after; cells and frames drop it,
-   * except under `w:doNotUseHTMLParagraphAutoSpacing`, where every edge keeps it. */
+  /** A header or footer story keeps its last automatic space after; cells and frames drop it. */
   readonly keepsStoryEndAutoSpacing?: true;
   /** Whether a positioned table of this story carries `w:tblOverlap w:val="never"`. */
   readonly floatRefusesOverlap?: (tableId: string) => boolean;
@@ -425,11 +424,12 @@ function placeCellParagraph(
     borders,
     shading,
   } = layoutInputs;
-  const edgeSpacing = cellEdgeAutoSpacing(authoredSpacing, props, {
-    firstInCell: options?.firstInCell === true,
-    lastInCell: options?.lastInCell === true,
-    fixedAutoSpacing: deps.styleCascade?.fixedParagraphSpacing === true,
-  });
+  const edgeSpacing = cellEdgeAutoSpacing(
+    authoredSpacing,
+    props,
+    options?.firstInCell === true,
+    options?.lastInCell === true
+  );
   const spacing = cellContextualSpacing(
     edgeSpacing,
     layoutInputs.contextualSpacing,

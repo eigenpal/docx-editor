@@ -152,8 +152,12 @@ describe('an empty paragraph with a hidden mark before a table', () => {
           '/word/settings.xml'
         ).root
       );
+    const tops = (source: string, compat: string) =>
+      linesOf(layout(source, { styleCascade: cascade(compat) })).map((line) => line.box.y);
     for (const compat of ['', '<w:doNotUseHTMLParagraphAutoSpacing/>']) {
       expect(lineTexts(layout(body, { styleCascade: cascade(compat) }))).toEqual(['a', 'cell']);
+      // No automatic gap stays behind: the table sits where it would without the paragraph.
+      expect(tops(body, compat)).toEqual(tops(`${para(text('a'))}${table('cell')}`, compat));
     }
   });
 });

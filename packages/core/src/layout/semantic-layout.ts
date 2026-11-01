@@ -1473,8 +1473,8 @@ function* layoutBlocksPass(
     prepared.length,
     options.compatibilityMode,
     () => firstParagraphOfSection,
-    pageIndexStart === 0 && flowStartY === 0,
-    styleCascade?.fixedParagraphSpacing === true
+    // Layout inputs carry no automatic flags under fixed spacing, so this drops nothing there.
+    pageIndexStart === 0 && flowStartY === 0
   );
 
   // Placement and keep-with-next lookahead share cached line breaks.

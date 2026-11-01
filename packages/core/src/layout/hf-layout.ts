@@ -468,8 +468,7 @@ export function layoutHeaderFooterStory(
         ? hfPageContext
         : undefined;
     const flowBlocks = floatingGeometry ? floatingSplit.flowBlocks : blocks;
-    // Only the story's own flow keeps its last paragraph's automatic space after, not a frame
-    // (under fixed paragraph spacing a frame keeps its measured space after too).
+    // Only the story's own flow keeps its last paragraph's automatic space after, not a frame.
     const plainDeps = (storyEnd = false) => ({
       measurer,
       cache,

@@ -15,7 +15,8 @@
 //     text forward, and dropping the box would lose it, so such a paragraph keeps its box.
 //   - A paragraph or table must follow in the same container. The last paragraph of a story,
 //     cell, or content control keeps its line. Before a table the paragraph's own space before
-//     still applies, so one that states a space before keeps its line there.
+//     still applies, so one that states a space before keeps its line there. An automatic space
+//     before alone (`w:beforeAutospacing` without a measurement) states none.
 //   - A paragraph carrying `w:sectPr` keeps its box, so section boundaries do not move.
 //
 // The paragraph stays in the tree and still advances list counters: numbering is a property
