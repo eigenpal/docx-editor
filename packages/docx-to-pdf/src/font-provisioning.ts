@@ -4,7 +4,6 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { create as openFont } from 'fontkit';
-import { readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL, URL as NodeURL } from 'node:url';
@@ -13,6 +12,7 @@ import { createFontSource, defineFontResolver } from '@docx-editor.dev/core/edit
 import type { FontRequest } from '@docx-editor.dev/core/export';
 import { FONT_ASSET_ROOT } from '@docx-editor.dev/fonts';
 import { buildSystemFontIndex, indexedFace, type SystemFontIndex } from './system-font-index.ts';
+import { derivedOnce, fontFiles } from './font-file-cache.ts';
 
 const assetRoot = new NodeURL(
   '../assets/',
@@ -419,8 +419,10 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
   ): Promise<FontSource[]> =>
     Promise.all(
       faces.map(async ([family, file, weight, style]) => {
-        const bytes = new Uint8Array(await readFontFile(file, signal));
-        const result = createFontSource(bytes, face(family, weight, style));
+        const cached = await fontFiles.read(file, signal);
+        const result = derivedOnce(cached, `source:${family}:${weight}:${style}:0`, () =>
+          createFontSource(cached.bytes, face(family, weight, style))
+        );
         if ('failure' in result) throw new Error(`Invalid packaged PDF font: ${String(file)}`);
         return result.source;
       })
@@ -671,10 +673,16 @@ export function installedWordFontResolver(
       if (!hit || used.has(`${hit.path}#${hit.faceIndex}`)) continue;
       used.add(`${hit.path}#${hit.faceIndex}`);
       try {
-        const source = createFontSource(await readFontFile(hit.path, signal), {
-          ...face(requested, weight, style),
-          faceIndex: hit.faceIndex,
-        });
+        const file = await fontFiles.read(hit.path, signal);
+        const source = derivedOnce(
+          file,
+          `source:${requested}:${weight}:${style}:${hit.faceIndex}`,
+          () =>
+            createFontSource(file.bytes, {
+              ...face(requested, weight, style),
+              faceIndex: hit.faceIndex,
+            })
+        );
         if (!('failure' in source)) found.push(source.source);
       } catch (error) {
         if (signal?.aborted) throw error;
@@ -788,20 +796,24 @@ export function installedWordFontResolver(
           for (const filename of new Set(candidates)) {
             if (signal?.aborted) throw signal.reason;
             try {
-              const bytes = new Uint8Array(await readFontFile(join(root, filename), signal));
-              let faceIndex = 0;
-              if (filename.toLowerCase().endsWith('.ttc')) {
-                const collection = openFont(Buffer.from(bytes));
-                if (!('fonts' in collection)) continue;
-                faceIndex = collection.fonts.findIndex((font) =>
-                  collectionFaceMatches(font.postscriptName, family, faceBold, faceItalic)
-                );
-                if (faceIndex < 0) continue;
-              }
-              const source = createFontSource(bytes, {
-                ...face(requested, weight, style),
-                faceIndex,
-              });
+              const file = await fontFiles.read(join(root, filename), signal);
+              // A collection is opened once per file to find the face by its name.
+              const faceIndex = filename.toLowerCase().endsWith('.ttc')
+                ? derivedOnce(file, `face:${family}:${faceBold}:${faceItalic}`, () => {
+                    const collection = openFont(Buffer.from(file.bytes));
+                    return 'fonts' in collection
+                      ? collection.fonts.findIndex((font) =>
+                          collectionFaceMatches(font.postscriptName, family, faceBold, faceItalic)
+                        )
+                      : -1;
+                  })
+                : 0;
+              if (faceIndex < 0) continue;
+              const source = derivedOnce(
+                file,
+                `source:${requested}:${weight}:${style}:${faceIndex}`,
+                () => createFontSource(file.bytes, { ...face(requested, weight, style), faceIndex })
+              );
               if ('failure' in source) continue;
               sources.push(source.source);
               found = true;
@@ -844,23 +856,3 @@ function collectionFaceMatches(
  * family from an index of the OS font folders.
  */
 export const installedWordFonts = installedWordFontResolver(wordFontRoots, systemFontRoots);
-
-async function readFontFile(path: string | NodeURL, signal?: AbortSignal): Promise<Uint8Array> {
-  if (signal?.aborted) throw signal.reason;
-  // Check the local size before allocation.
-  if ((await stat(path)).size > 32 * 1024 * 1024) throw new RangeError('Local font exceeds 32 MiB');
-  // Let the read itself observe the signal, so a cancelled export does not finish mapping a
-  // 16 MB face first. Node's fs accepts only its own realm's `AbortSignal`, and `instanceof`
-  // cannot tell: a DOM shim can install an `AbortSignal` global that passes the check and is
-  // still refused with `ERR_INVALID_ARG_TYPE`. So the read is asked, and a refused signal
-  // falls back to the bounded read with the signal checked around it, as before.
-  let bytes: Uint8Array;
-  try {
-    bytes = await readFile(path, signal ? { signal } : undefined);
-  } catch (error) {
-    if (!signal || (error as { code?: string }).code !== 'ERR_INVALID_ARG_TYPE') throw error;
-    bytes = await readFile(path);
-  }
-  if (signal?.aborted) throw signal.reason;
-  return bytes;
-}
