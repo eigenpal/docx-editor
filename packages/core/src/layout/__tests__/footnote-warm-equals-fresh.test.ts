@@ -4,7 +4,8 @@
 // with its own body. These seeded documents mix keep-with-next, widow control, space after
 // and notes of one to six lines on a small page, then take typed edits one at a time. After
 // each edit, a pass over the retained session must publish exactly the pages that a pass with
-// no session publishes over the same tree.
+// no session publishes over the same tree. That holds after a pass that a newer edit cut
+// short, and after an edit to a separator that a file numbers like an ordinary note.
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
@@ -17,7 +18,7 @@ import { TreeDocumentStore } from '../../store/index.ts';
 import type { OoxmlElement, OoxmlPart } from '../../store/index.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
 import { createLayoutSession, type LayoutSession } from '../layout-session.ts';
-import { layoutSemanticDocument } from '../semantic-layout.ts';
+import { layoutSemanticDocument, layoutSemanticDocumentSteps } from '../semantic-layout.ts';
 import type { SemanticLayout } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -39,8 +40,16 @@ function random(seed: number): () => number {
   };
 }
 
-function documentBytes(next: () => number): Uint8Array {
-  const count = 20 + Math.floor(next() * 40);
+interface DocumentShape {
+  /** The least number of paragraphs; up to 39 more follow. */
+  readonly minCount?: number;
+  /** The ids of the separator and the continuation separator. */
+  readonly separatorIds?: readonly [number, number];
+}
+
+function documentBytes(next: () => number, shape: DocumentShape = {}): Uint8Array {
+  const count = (shape.minCount ?? 20) + Math.floor(next() * 40);
+  const [separatorId, continuationId] = shape.separatorIds ?? [-1, 0];
   const notes: number[] = [];
   const body: string[] = [];
   for (let i = 0; i < count; i += 1) {
@@ -52,7 +61,8 @@ function documentBytes(next: () => number): Uint8Array {
     let cite = '';
     if (next() < 0.25) {
       notes.push(1 + Math.floor(next() * 6));
-      cite = `<w:r><w:footnoteReference w:id="${notes.length}"/></w:r>`;
+      const id = notes.length + Math.max(0, continuationId);
+      cite = `<w:r><w:footnoteReference w:id="${id}"/></w:r>`;
     }
     const text = Array.from({ length: words }, (_, k) => `w${i}x${k}`).join(' ');
     body.push(
@@ -61,7 +71,7 @@ function documentBytes(next: () => number): Uint8Array {
     );
   }
   const note = (lines: number, k: number) =>
-    `<w:footnote w:id="${k + 1}"><w:p><w:pPr><w:widowControl/>${EXACT} w:after="0"/></w:pPr>` +
+    `<w:footnote w:id="${k + 1 + Math.max(0, continuationId)}"><w:p><w:pPr><w:widowControl/>${EXACT} w:after="0"/></w:pPr>` +
     `<w:r><w:t>${'n'.repeat(Math.max(1, lines * 40 - 5))}</w:t></w:r></w:p></w:footnote>`;
   const separator = (type: string, id: number) =>
     `<w:footnote w:type="${type}" w:id="${id}"><w:p><w:pPr>${EXACT} w:after="0"/></w:pPr>` +
@@ -86,24 +96,19 @@ function documentBytes(next: () => number): Uint8Array {
         '</w:sectPr></w:body></w:document>'
     ),
     'word/footnotes.xml': strToU8(
-      `<w:footnotes xmlns:w="${W}">${separator('separator', -1)}` +
-        `${separator('continuationSeparator', 0)}${notes.map(note).join('')}</w:footnotes>`
+      `<w:footnotes xmlns:w="${W}">${separator('separator', separatorId)}` +
+        `${separator('continuationSeparator', continuationId)}${notes.map(note).join('')}` +
+        '</w:footnotes>'
     ),
   });
 }
 
 const measurer = createFixedMeasurer(5, 12);
 
-function lay(
-  part: OoxmlPart,
-  footnotesPart: OoxmlPart | null,
-  mode: number,
-  revision: number,
-  session?: LayoutSession
-): SemanticLayout {
+function layoutOptions(footnotesPart: OoxmlPart | null, mode: number, session?: LayoutSession) {
   const footnoteProps = resolveFootnoteProperties(undefined, undefined);
   const endnoteProps = resolveEndnoteProperties(undefined, undefined);
-  return layoutSemanticDocument(part, revision, {
+  return {
     measurer,
     notes: {
       footnotesPart,
@@ -118,7 +123,28 @@ function lay(
     ...(session ? { session } : {}),
     producer: 'footnote-warm-equals-fresh',
     compatibilityMode: mode,
-  });
+  };
+}
+
+function lay(
+  part: OoxmlPart,
+  footnotesPart: OoxmlPart | null,
+  mode: number,
+  revision: number,
+  session?: LayoutSession
+): SemanticLayout {
+  return layoutSemanticDocument(part, revision, layoutOptions(footnotesPart, mode, session));
+}
+
+/** Every paragraph id under `root`, in document order. */
+function allParagraphIds(root: OoxmlElement): string[] {
+  return root.children.flatMap((child) =>
+    child.kind === 'textValue'
+      ? []
+      : child.localName === 'p'
+        ? [child.id]
+        : allParagraphIds(child as OoxmlElement)
+  );
 }
 
 function paragraphIds(part: OoxmlPart): string[] {
@@ -162,4 +188,72 @@ describe('a warm footnote pass matches a fresh one after each edit', () => {
       expect(mismatches).toEqual([]);
     }, 60000);
   }
+
+  test('after a pass that a newer edit cut short', () => {
+    const mismatches: string[] = [];
+    for (const mode of [15, 14]) {
+      for (let seed = 1; seed <= 12; seed += 1) {
+        const next = random(seed * 7919 + mode + 13);
+        const loaded = readOoxmlPackage(documentBytes(next, { minCount: 60 }));
+        if (!loaded.ok) throw new Error(loaded.reason);
+        const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+        const footnotesPart = resolveNotesPart(loaded.package, 'footnote');
+        const store = new TreeDocumentStore(part);
+        const session = createLayoutSession();
+        lay(store.part, footnotesPart, mode, 1, session);
+        const phrase = 'a thirty-eight character phrase here. ';
+        const first = paragraphIds(store.part)[0]!;
+        store.transact((tx) =>
+          tx.apply({ op: 'insertText', paragraphId: first, offset: 0, text: phrase + phrase })
+        );
+        // Cut the pass short after 60 progress reports, as a host does for a newer edit.
+        const steps = layoutSemanticDocumentSteps(
+          store.part,
+          2,
+          layoutOptions(footnotesPart, mode, session) as never
+        );
+        let reports = 0;
+        for (let step = steps.next(); !step.done; step = steps.next()) {
+          if (step.value?.wrapUp && (reports += 1) === 60) step.value.wrapUp();
+        }
+        const ids = paragraphIds(store.part);
+        const last = ids[ids.length - 2]!;
+        store.transact((tx) =>
+          tx.apply({ op: 'insertText', paragraphId: last, offset: 0, text: 'abc ' })
+        );
+        const fresh = JSON.stringify(lay(store.part, footnotesPart, mode, 3).pages);
+        if (JSON.stringify(lay(store.part, footnotesPart, mode, 3, session).pages) !== fresh) {
+          mismatches.push(`mode ${mode} seed ${seed}`);
+        }
+      }
+    }
+    expect(mismatches).toEqual([]);
+  }, 60000);
+
+  test('after an edit to a continuation separator with a positive id', () => {
+    const mismatches: string[] = [];
+    for (const mode of [15, 14]) {
+      for (let seed = 1; seed <= 12; seed += 1) {
+        const next = random(seed * 7919 + mode + 13);
+        const loaded = readOoxmlPackage(documentBytes(next, { separatorIds: [0, 1] }));
+        if (!loaded.ok) throw new Error(loaded.reason);
+        const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+        const notes = new TreeDocumentStore(resolveNotesPart(loaded.package, 'footnote')!);
+        const store = new TreeDocumentStore(part);
+        const session = createLayoutSession();
+        lay(store.part, notes.part, mode, 1, session);
+        // The second paragraph of the notes part is the continuation separator's.
+        const paragraphId = allParagraphIds(notes.part.root)[1]!;
+        const result = notes.transact((tx) =>
+          tx.apply({ op: 'insertText', paragraphId, offset: 0, text: 'x'.repeat(200) })
+        );
+        expect(result.ok).toBe(true);
+        const fresh = JSON.stringify(lay(store.part, notes.part, mode, 2).pages);
+        if (JSON.stringify(lay(store.part, notes.part, mode, 2, session).pages) !== fresh) {
+          mismatches.push(`mode ${mode} seed ${seed}`);
+        }
+      }
+    }
+    expect(mismatches).toEqual([]);
+  }, 60000);
 });

@@ -147,11 +147,23 @@ function changedFootnotes(before: OoxmlPart | null, after: OoxmlPart | null): nu
   const ids: number[] = [];
   for (const id of changed) {
     const value = Number(id);
-    // A separator or notice changes every note area.
+    // A separator or notice changes every note area, whatever its id.
     if (!Number.isInteger(value) || value <= 0) return null;
+    if (isSpecialNote(old.get(id)) || isSpecialNote(now.get(id))) return null;
     ids.push(value);
   }
   return ids;
+}
+
+/** A separator, continuation separator, or continuation notice: any typed note story. */
+function isSpecialNote(node: OoxmlNode | undefined): boolean {
+  if (!node || node.kind === 'textValue') return false;
+  return node.attributes.some(
+    (attribute) =>
+      attribute.localName === 'type' &&
+      attribute.namespaceUri === WML_NAMESPACE_URI &&
+      attribute.value !== 'normal'
+  );
 }
 
 /** The first and last previous-layout page holding a fragment of one of `paragraphIds`. */
@@ -257,6 +269,9 @@ export function* searchFootnoteReserves(
       // A page's answer reads the next page, or the one after a blank parity sheet.
       const reads = previousLayout!.pages[first - 1]?.parityBlank ? 2 : 1;
       startFloor = Math.max(0, Math.min(first - reads, reuse.record.decided));
+      // The walk starts from the notes carried into its first page; a page with no record of
+      // them starts earlier.
+      while (startFloor > 0 && reuse.record.carries[startFloor] === undefined) startFloor -= 1;
       unchangedFrom = from;
     }
   } else if (session) {

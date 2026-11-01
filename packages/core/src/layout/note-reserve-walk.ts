@@ -198,6 +198,9 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
       // A newer edit waits: keep the last whole round as it was laid. Only the page being
       // decided changed since, so the decided pages keep their reserves.
       if (last?.whole && lastUsed) used = new Map(lastUsed);
+      // The decided pages fix the notes carried into the next page, so the next pass can
+      // start there.
+      carries[floor] = carry;
       exhausted = true;
       break;
     }
