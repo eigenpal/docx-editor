@@ -120,7 +120,7 @@ export function compareFurniture(
         base ? unitsOf(base.part.root, baseSide) : [],
         revised ? unitsOf(revised.part.root, revisedSide) : [],
         story,
-        !base
+        !base || !revised
       )
     );
     if (base) {
@@ -230,7 +230,8 @@ export function compareNotes(
             shell.end;
         } else if (deleted.has(id)) {
           const shell = noteShell(note, baseSide);
-          out += shell.start + compareContainer(unitsOf(note, baseSide), [], story) + shell.end;
+          out +=
+            shell.start + compareContainer(unitsOf(note, baseSide), [], story, true) + shell.end;
         } else {
           out += baseSide.serialize(note);
         }

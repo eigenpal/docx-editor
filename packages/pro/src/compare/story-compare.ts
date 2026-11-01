@@ -166,8 +166,8 @@ export function compareContainer(
   base: readonly Unit[],
   revised: readonly Unit[],
   ctx: EmitContext,
-  /** A whole story added by the revised document: its final paragraph mark stays unmarked. */
-  insertedStory = false
+  /** A whole story added or removed: its final paragraph mark stays unmarked. */
+  wholeStory = false
 ): string {
   if (base.length === 0 && revised.length === 0) return '';
   const steps: Step[] = [];
@@ -212,7 +212,7 @@ export function compareContainer(
         lastRevised?.kind === 'paragraph' &&
         step.base.includes(lastBase) &&
         step.revised.includes(lastRevised);
-      const alone = insertedStory && base.length === 0;
+      const alone = wholeStory && (base.length === 0 || revised.length === 0);
       out += emitHunk(
         step.base,
         step.revised,
@@ -373,8 +373,8 @@ function emitHunk(
         items.push({ mark, atom, baseRPr: '', markers: mark === 'del' ? atom.markers : [] });
       }
     } else if (token.kind === 'mark') {
-      if (token.key === END_KEY && a.length === 0) {
-        // The final mark of an inserted story.
+      if (token.key === END_KEY && (a.length === 0 || b.length === 0)) {
+        // The final mark of an added or removed story.
         closeParagraph('eq', token.unit, token.unit);
       } else
         closeParagraph(
