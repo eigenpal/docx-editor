@@ -113,13 +113,13 @@ function middle(
   return orderHunks(reversed.reverse());
 }
 
-/** Within each run of changes, deletions come before insertions. */
+/** Within each run of changes, insertions come before deletions. */
 export function orderHunks(ops: readonly DiffOp[]): DiffOp[] {
   const out: DiffOp[] = [];
   let dels: DiffOp[] = [];
   let inss: DiffOp[] = [];
   const flush = () => {
-    out.push(...dels, ...inss);
+    out.push(...inss, ...dels);
     dels = [];
     inss = [];
   };
