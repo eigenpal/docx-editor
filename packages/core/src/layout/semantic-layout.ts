@@ -152,10 +152,7 @@ import {
 import { drawingModelOffsetsInParagraph } from './drawing-layout.ts';
 import { bodyLineId } from './body-line-id.ts';
 import { syntheticAnchorLines } from './anchor-frame-lines.ts';
-import {
-  drawingSourceOrderInPart,
-  drawingTokenForTableBlockMemo,
-} from './inline-drawing-source.ts';
+import { drawingTokenForTableBlockMemo, withDrawingSourceOrder } from './inline-drawing-source.ts';
 import {
   emptyTocPlaceholderParagraphIds,
   emptyTocSuppressedResultParagraphIds,
@@ -180,10 +177,12 @@ import {
   sectionLineGridPt,
 } from './section-properties.ts';
 import { pageBreakBeforeRules } from './page-break-before.ts';
+import { previousBodyLayout } from './previous-body-pages.ts';
 import { columnSeparatorBoxes, resolveSectionColumns } from './section-columns.ts';
 import {
   inheritNotesLayoutInput,
   layoutSemanticDocumentWithNotesSteps,
+  noteRoundBlocks,
 } from './note-pagination.ts';
 import { closingSpaceAfterPt, droppableSpacingPt, keepNoteClosing } from './note-area-fit.ts';
 import { passProducerOf } from './pass-producer.ts';
@@ -299,13 +298,7 @@ function* layoutInModeSteps(
       options.emptyTocSuppressedResultParagraphIds ?? emptyTocSuppressedResultParagraphIds(part),
   };
   // Full-body list resolve so counters continue across sections and table cells.
-  let drawingSourceOrder = options.drawingSourceOrder;
-  if (!drawingSourceOrder && options.inlineDrawingLayout) {
-    drawingSourceOrder = drawingSourceOrderInPart(part, options.inlineDrawingLayout);
-  }
-  const drawingOptions = drawingSourceOrder
-    ? { ...optionsWithControlContext, drawingSourceOrder }
-    : optionsWithControlContext;
+  const drawingOptions = withDrawingSourceOrder(optionsWithControlContext, part);
   const optionsWithLists = options.session
     ? withResolvedListItemsForSession(drawingOptions, allBlocks, options.session)
     : withResolvedListItems(drawingOptions, allBlocks);
@@ -327,12 +320,13 @@ function* layoutInModeSteps(
   const optionsForBody = refFields === null ? optionsWithLists : { ...optionsWithLists, refFields };
 
   function* runBodySteps(opts: SemanticLayoutOptions): LayoutSteps<SemanticLayout> {
-    if (sections.length > 1) {
+    const [roundBlocks, roundSections] = noteRoundBlocks(part, blocks, sections, opts);
+    if (roundSections.length > 1) {
       // Reports document pages as each section completes them, labelled as a single section's.
       return yield* withRelabeledProgress(
         layoutMultiSectionDocumentSteps(
-          blocks,
-          sections,
+          roundBlocks,
+          roundSections,
           revision,
           opts,
           layoutBlocksWithGeometrySteps
@@ -342,10 +336,10 @@ function* layoutInModeSteps(
       );
     }
 
-    const section = sections[0];
+    const section = roundSections[0];
     const geometry =
       opts.geometry ?? (section ? geometryOfSection(section.properties) : DEFAULT_PAGE_GEOMETRY);
-    const furniture = furnitureForSection(opts, 0, sections.length) ?? opts.furniture;
+    const furniture = furnitureForSection(opts, 0, roundSections.length) ?? opts.furniture;
     const sectionNumbering = section?.properties.pageNumbering;
     const interim = {
       revision,
@@ -353,7 +347,7 @@ function* layoutInModeSteps(
       listItems: optionsWithLists.listItems,
     };
     const laid = yield* withInterimLayout(
-      layoutBlocksWithGeometrySteps(blocks, revision, {
+      layoutBlocksWithGeometrySteps(roundBlocks, revision, {
         ...opts,
         geometry,
         furniture,
@@ -440,7 +434,7 @@ function* layoutInModeSteps(
   );
   return finish(
     yield* layoutWithCharacterHeadersSteps(part, optionsForBody, (opts) =>
-      layoutSemanticDocumentWithNotesSteps(part, sections, opts, notesInput, runBodySteps)
+      layoutSemanticDocumentWithNotesSteps(part, sections, opts, notesInput, runBodySteps, blocks)
     )
   );
 }
@@ -1088,7 +1082,7 @@ function* layoutBlocksPass(
       prepared.flatMap((entry) => (entry.kind === 'table' ? [entry.table] : []))
     );
   };
-  const previous = session?.previous ?? null;
+  const previous = previousBodyLayout(session?.previous ?? null);
   // A geometry or producer change invalidates every checkpoint, because it moves every
   // break; resuming from one would place new content against a stale flow. A parity flip
   // only matters when the previous pass actually read parity (even/odd headers or an

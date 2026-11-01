@@ -7,15 +7,6 @@ const geometryBySession = new WeakMap<
   { readonly part: object; readonly pages: readonly string[] }
 >();
 
-export function resetNoteReserveSearch(
-  memo: { settledReserves: unknown; reflowSpent: unknown; orphanPolicyPart?: unknown } | null
-): void {
-  if (!memo) return;
-  memo.settledReserves = null;
-  memo.reflowSpent = null;
-  memo.orphanPolicyPart = undefined;
-}
-
 export function noteBodyGeometryChanged(
   session: object | undefined,
   layout: SemanticLayout,
