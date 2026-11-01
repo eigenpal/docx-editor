@@ -921,7 +921,8 @@
     "replyCount": "Odpowiedzi: {count}",
     "trackedChange": "Śledzona zmiana",
     "changeAnnouncement": "{change} – {author}: {text}",
-    "replyTargetResolved": "Zmiana została rozwiązana, więc odpowiedź nie została opublikowana."
+    "replyTargetResolved": "Zmiana została rozwiązana, więc odpowiedź nie została opublikowana.",
+    "compareDocuments": "Porównaj dokumenty"
   },
   "imageAltText": {
     "description": "Opis",
@@ -1169,5 +1170,20 @@
     "sectionBreakNextColumn": "Podział sekcji (nowa kolumna)",
     "sectionBreakNextPage": "Podział sekcji (na następnej stronie)",
     "sectionBreakOddPage": "Podział sekcji (na stronie nieparzystej)"
+  },
+  "compareDocuments": {
+    "author": "Oznacz zmiany jako",
+    "cancel": "Anuluj",
+    "chooseFile": "Wybierz plik",
+    "compare": "Porównaj",
+    "comparing": "Porównywanie…",
+    "description": "Otwarty dokument jest oryginałem. Wybierz poprawiony dokument. Jego różnice pojawią się tutaj jako śledzone zmiany.",
+    "detectFormatting": "Wykrywaj zmiany formatowania",
+    "failed": "Nie można porównać dokumentów: {message}",
+    "fileRequired": "Najpierw wybierz poprawiony dokument.",
+    "noFile": "Nie wybrano pliku",
+    "readFailed": "Nie można odczytać wybranego pliku.",
+    "revisedFile": "Poprawiony dokument",
+    "title": "Porównaj dokumenty"
   }
 }

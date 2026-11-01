@@ -155,6 +155,13 @@ export type {
   ToolbarValueSlot,
 } from './editor/index.ts';
 export type { RevisionMarkupDialog, RevisionMarkupDialogHost } from './contracts/modules.ts';
+export type { CompareDocumentsDialog, CompareDocumentsDialogHost } from './contracts/modules.ts';
+export type {
+  CompareDocumentsChromeHandlers,
+  CompareDocumentsDialogSession,
+  CompareDocumentsOutcome,
+  CompareDocumentsRequest,
+} from './contracts/compare-documents.ts';
 
 // ─── Capability modules (what `@docx-editor.dev/pro` implements) ─────────────
 export type {

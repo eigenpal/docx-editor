@@ -1064,7 +1064,8 @@
     "replyCount": "الردود: {count}",
     "trackedChange": "تغيير متعقب",
     "changeAnnouncement": "{change} بواسطة {author}: {text}",
-    "replyTargetResolved": "تم حسم التغيير، لذا لم يُنشر الرد."
+    "replyTargetResolved": "تم حسم التغيير، لذا لم يُنشر الرد.",
+    "compareDocuments": "مقارنة المستندات"
   },
   "textFormField": {
     "title": "خيارات حقل النموذج النصي",
@@ -1169,5 +1170,20 @@
       "lightGreen": "أخضر فاتح",
       "gray": "رمادي"
     }
+  },
+  "compareDocuments": {
+    "author": "تسمية التغييرات باسم",
+    "cancel": "إلغاء",
+    "chooseFile": "اختيار ملف",
+    "compare": "مقارنة",
+    "comparing": "جارٍ المقارنة…",
+    "description": "المستند المفتوح هو الأصلي. اختر المستند المعدل. تظهر الاختلافات هنا كتغييرات متعقبة.",
+    "detectFormatting": "اكتشاف تغييرات التنسيق",
+    "failed": "تعذرت مقارنة المستندات: {message}",
+    "fileRequired": "اختر المستند المعدل أولاً.",
+    "noFile": "لم يتم اختيار ملف",
+    "readFailed": "تعذرت قراءة الملف المحدد.",
+    "revisedFile": "المستند المعدل",
+    "title": "مقارنة المستندات"
   }
 }

@@ -921,7 +921,8 @@
     "replyCount": "Antworten: {count}",
     "trackedChange": "Nachverfolgte Änderung",
     "changeAnnouncement": "{change} von {author}: {text}",
-    "replyTargetResolved": "Die Änderung wurde aufgelöst, daher wurde die Antwort nicht gesendet."
+    "replyTargetResolved": "Die Änderung wurde aufgelöst, daher wurde die Antwort nicht gesendet.",
+    "compareDocuments": "Dokumente vergleichen"
   },
   "imageAltText": {
     "description": "Beschreibung",
@@ -1169,5 +1170,20 @@
     "sectionBreakNextColumn": "Abschnittswechsel (Neue Spalte)",
     "sectionBreakNextPage": "Abschnittswechsel (Nächste Seite)",
     "sectionBreakOddPage": "Abschnittswechsel (Ungerade Seite)"
+  },
+  "compareDocuments": {
+    "author": "Änderungen kennzeichnen mit",
+    "cancel": "Abbrechen",
+    "chooseFile": "Datei auswählen",
+    "compare": "Vergleichen",
+    "comparing": "Wird verglichen…",
+    "description": "Das geöffnete Dokument ist das Original. Wählen Sie das überarbeitete Dokument. Seine Unterschiede erscheinen hier als nachverfolgte Änderungen.",
+    "detectFormatting": "Formatierungsänderungen erkennen",
+    "failed": "Die Dokumente konnten nicht verglichen werden: {message}",
+    "fileRequired": "Wählen Sie zuerst das überarbeitete Dokument.",
+    "noFile": "Keine Datei ausgewählt",
+    "readFailed": "Die ausgewählte Datei konnte nicht gelesen werden.",
+    "revisedFile": "Überarbeitetes Dokument",
+    "title": "Dokumente vergleichen"
   }
 }

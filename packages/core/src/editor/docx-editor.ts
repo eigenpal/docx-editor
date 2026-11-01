@@ -2,7 +2,7 @@ import { createUnsupportedElementState } from './unsupported-element-state.ts';
 import { createEditorEvents } from './editor-events.ts';
 import { createEditorDiagnostics, reportEditorFontError } from './editor-diagnostics.ts';
 import { surfaceFieldResultsScope } from './field-results-scope.ts';
-import { createRevisionMarkupState } from './revision-markup-state.ts';
+import { createReviewDialogs } from './review-dialogs.ts';
 import { queryEditorDocument, watermarkOf } from './docx-editor-query.ts';
 import { previewAllows, refreshWriteBlocked, writeBlockReason } from './refresh-write-guard.ts';
 import type { PaginatedSurfaceRuntimeOptions } from './surface-runtime-options.ts';
@@ -580,8 +580,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   });
   const suggesting = () => editingMode === 'suggesting';
 
-  const revisionMarkupState = createRevisionMarkupState(config.revisionMarkup, {
+  const reviewDialogs = createReviewDialogs(config.revisionMarkup, {
     container: () => container,
+    surface: () => surface,
+    viewing: () => editingMode === 'viewing' || hostConfig.mode() === 'view',
     destroyed: () => destroyed,
     contribution: () => modules.review,
     translate: () => hostConfig.translate(),
@@ -597,7 +599,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   /** The pages now live in `document`: per-document fonts, the fit observer, and a report. */
   function followHost(document: Document): void {
-    revisionMarkupState.destroyDialog(); // its pickers listen to the window it opened in
+    reviewDialogs.destroyDialogs(); // their pickers listen to the window they opened in
     embeddedFaces?.showIn(document);
     zoomLane.detach();
     zoomLane.attach();
@@ -609,7 +611,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let endPreview = (): void => {};
   function teardownSurface(): void {
     endPreview();
-    revisionMarkupState.destroyDialog();
+    reviewDialogs.destroyDialogs();
     unsubscribeSession?.();
     unsubscribeSession = null;
     surface?.destroy();
@@ -681,7 +683,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         : {}),
       reviewAuthorSlots,
       revisionAuthorVisibility: reviewAuthorVisibility,
-      revisionMarkup: revisionMarkupState.current(),
+      revisionMarkup: reviewDialogs.markup.current(),
       ...preparedOpen.sessionOpenOptions(reviewModelOption(modules, reportDiagnostic), config),
       pairsReplacements: pairedPin.lightsPair,
       ...(shapedMeasurer
@@ -1351,7 +1353,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       reviewPane: reviewPane.current(),
       ...views.snapshot(),
       documentProtection: protection.state(),
-      revisionMarkup: revisionMarkupState.current(),
+      revisionMarkup: reviewDialogs.markup.current(),
       reviewDisplayMode:
         surface && reviewEnabled ? surface.revisionDisplayMode() : reviewDisplayMode,
       hasReviewContent: surface?.session.hasReviewContent() ?? false,
@@ -1915,7 +1917,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         pendingBytes = reclaimed;
       } else if (surface) {
         // Its settings draft belongs to chrome in the element being left.
-        revisionMarkupState.destroyDialog();
+        reviewDialogs.destroyDialogs();
         endPreview();
         surface.park();
         mountGeneration += 1;
@@ -1958,7 +1960,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // A command inside the yield window addresses the just-loaded document: mount now.
       // (`can` does NOT flush — chrome polls it per render; a read must not defeat the yield.)
       openScheduler.flush();
-      if (command.type === 'openRevisionMarkupDialog') return revisionMarkupState.open();
+      const reviewDialog = reviewDialogs.exec(command);
+      if (reviewDialog) return reviewDialog;
       const dialog = views.dialog(command, true);
       if (dialog) return dialog;
       const historyRefusal = historyGroups.gate(command, options);
@@ -1995,9 +1998,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const toggled = views.toggle(command);
       if (toggled) return toggled;
       if (command.type === 'toggleReviewPane') {
-        if (!reviewEnabled) {
-          return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
-        }
+        if (!reviewEnabled) return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
         reviewPaneOpen = !reviewPaneOpen;
         bump();
         emitSelectionChange();
@@ -2054,7 +2055,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     can(command, options): CanResult {
       if (container && refreshWriteBlocked(container) && !previewAllows(container, command))
         return { ok: false, code: 'unsupported', reason: writeBlockReason(container) };
-      if (command.type === 'openRevisionMarkupDialog') return revisionMarkupState.canOpen();
+      const reviewDialog = reviewDialogs.can(command);
+      if (reviewDialog) return reviewDialog;
       const dialog = views.dialog(command, false);
       if (dialog) return dialog;
       const historyRefusal = historyGroups.gate(command, options);
@@ -2313,8 +2315,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       surface?.setRemoteCaretLabelHost(host);
     },
     setReviewPaneOptions: reviewPane.set,
-    setRevisionMarkup: revisionMarkupState.set,
-    setRevisionMarkupChrome: revisionMarkupState.register,
+    setRevisionMarkup: reviewDialogs.markup.set,
+    setRevisionMarkupChrome: reviewDialogs.markup.register,
+    setCompareDocumentsChrome: reviewDialogs.compare.register,
     setUnsupportedElementRules: unsupported.set,
     setRevisionStyles(colors) {
       revisionStyleState.set(colors);

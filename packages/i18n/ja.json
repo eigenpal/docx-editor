@@ -1055,7 +1055,8 @@
     "replyCount": "返信: {count}",
     "trackedChange": "変更履歴",
     "changeAnnouncement": "{author} による{change}: {text}",
-    "replyTargetResolved": "変更は解決済みのため、返信は投稿されませんでした。"
+    "replyTargetResolved": "変更は解決済みのため、返信は投稿されませんでした。",
+    "compareDocuments": "文書の比較"
   },
   "textFormField": {
     "title": "テキスト フォーム フィールドのオプション",
@@ -1169,5 +1170,20 @@
     "sectionBreakNextColumn": "セクション区切り (次の段から新しいセクション)",
     "sectionBreakNextPage": "セクション区切り (次のページから新しいセクション)",
     "sectionBreakOddPage": "セクション区切り (奇数ページから新しいセクション)"
+  },
+  "compareDocuments": {
+    "author": "変更の作成者名",
+    "cancel": "キャンセル",
+    "chooseFile": "ファイルを選択",
+    "compare": "比較",
+    "comparing": "比較しています…",
+    "description": "開いている文書が元の文書です。変更後の文書を選択してください。相違点は変更履歴としてここに表示されます。",
+    "detectFormatting": "書式の変更を検出する",
+    "failed": "文書を比較できませんでした: {message}",
+    "fileRequired": "先に変更後の文書を選択してください。",
+    "noFile": "ファイルが選択されていません",
+    "readFailed": "選択したファイルを読み取れませんでした。",
+    "revisedFile": "変更後の文書",
+    "title": "文書の比較"
   }
 }

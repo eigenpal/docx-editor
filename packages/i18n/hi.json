@@ -921,7 +921,8 @@
     "replyCount": "उत्तर: {count}",
     "trackedChange": "ट्रैक किया गया परिवर्तन",
     "changeAnnouncement": "{author} द्वारा {change}: {text}",
-    "replyTargetResolved": "परिवर्तन हल हो गया था, इसलिए उत्तर पोस्ट नहीं किया गया।"
+    "replyTargetResolved": "परिवर्तन हल हो गया था, इसलिए उत्तर पोस्ट नहीं किया गया।",
+    "compareDocuments": "दस्तावेज़ों की तुलना करें"
   },
   "imageAltText": {
     "description": "विवरण",
@@ -1169,5 +1170,20 @@
     "sectionBreakNextColumn": "अनुभाग ब्रेक (अगला कॉलम)",
     "sectionBreakNextPage": "अनुभाग ब्रेक (अगला पृष्ठ)",
     "sectionBreakOddPage": "अनुभाग ब्रेक (विषम पृष्ठ)"
+  },
+  "compareDocuments": {
+    "author": "परिवर्तनों को इस नाम से चिह्नित करें",
+    "cancel": "रद्द करें",
+    "chooseFile": "फ़ाइल चुनें",
+    "compare": "तुलना करें",
+    "comparing": "तुलना हो रही है…",
+    "description": "खुला दस्तावेज़ मूल है। संशोधित दस्तावेज़ चुनें। उसके अंतर यहाँ ट्रैक किए गए परिवर्तनों के रूप में दिखाई देंगे।",
+    "detectFormatting": "फ़ॉर्मेटिंग परिवर्तनों का पता लगाएँ",
+    "failed": "दस्तावेज़ों की तुलना नहीं हो सकी: {message}",
+    "fileRequired": "पहले संशोधित दस्तावेज़ चुनें।",
+    "noFile": "कोई फ़ाइल नहीं चुनी गई",
+    "readFailed": "चुनी गई फ़ाइल पढ़ी नहीं जा सकी।",
+    "revisedFile": "संशोधित दस्तावेज़",
+    "title": "दस्तावेज़ों की तुलना करें"
   }
 }

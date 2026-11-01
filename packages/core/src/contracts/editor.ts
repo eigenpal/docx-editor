@@ -977,6 +977,13 @@ export interface EditorCommands
   toggleReviewPane: Record<never, never>;
   /** Open the local review settings dialog supplied by the review module. */
   openRevisionMarkupDialog: Record<never, never>;
+  /** Open the Compare documents dialog supplied by the review module. */
+  openCompareDocumentsDialog: Record<never, never>;
+  /**
+   * Compare the open document (the original) with a revised DOCX and record the differences in
+   * it as tracked changes, as one undoable step. For hosts with their own file picker.
+   */
+  compareDocuments: { revised: Uint8Array; authorName?: string; detectFormatChanges?: boolean };
   /** Word's Show/Hide paragraph marks; presentation only. */
   toggleParagraphMarks: Record<never, never>;
   /** Word's Protect Document: enforce filling-in-forms protection, or lift the enforced one. */

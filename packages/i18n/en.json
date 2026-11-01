@@ -1030,6 +1030,7 @@
     "acceptAllChanges": "Accept all changes shown",
     "rejectAllChanges": "Reject all changes shown",
     "protectDocument": "Protect Document for Forms",
+    "compareDocuments": "Compare documents",
     "ariaLabel": "Review",
     "empty": "No changes or comments",
     "accept": "Accept",
@@ -1169,5 +1170,20 @@
       "lightGreen": "Light green",
       "gray": "Gray"
     }
+  },
+  "compareDocuments": {
+    "title": "Compare documents",
+    "description": "The open document is the original. Choose the revised document. Its differences appear here as tracked changes.",
+    "revisedFile": "Revised document",
+    "chooseFile": "Choose file",
+    "noFile": "No file chosen",
+    "author": "Label changes with",
+    "detectFormatting": "Detect formatting changes",
+    "compare": "Compare",
+    "cancel": "Cancel",
+    "comparing": "Comparing…",
+    "failed": "Could not compare the documents: {message}",
+    "readFailed": "Could not read the chosen file.",
+    "fileRequired": "Choose the revised document first."
   }
 }

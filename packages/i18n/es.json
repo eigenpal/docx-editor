@@ -1055,7 +1055,8 @@
     "replyCount": "Respuestas: {count}",
     "trackedChange": "Cambio con seguimiento",
     "changeAnnouncement": "{change} de {author}: {text}",
-    "replyTargetResolved": "El cambio se resolvió, por lo que la respuesta no se publicó."
+    "replyTargetResolved": "El cambio se resolvió, por lo que la respuesta no se publicó.",
+    "compareDocuments": "Comparar documentos"
   },
   "textFormField": {
     "title": "Opciones del campo de formulario de texto",
@@ -1169,5 +1170,20 @@
     "sectionBreakNextColumn": "Salto de sección (Columna nueva)",
     "sectionBreakNextPage": "Salto de sección (Página siguiente)",
     "sectionBreakOddPage": "Salto de sección (Página impar)"
+  },
+  "compareDocuments": {
+    "author": "Etiquetar cambios con",
+    "cancel": "Cancelar",
+    "chooseFile": "Elegir archivo",
+    "compare": "Comparar",
+    "comparing": "Comparando…",
+    "description": "El documento abierto es el original. Elija el documento revisado. Sus diferencias aparecen aquí como cambios con seguimiento.",
+    "detectFormatting": "Detectar cambios de formato",
+    "failed": "No se pudieron comparar los documentos: {message}",
+    "fileRequired": "Elija primero el documento revisado.",
+    "noFile": "Ningún archivo elegido",
+    "readFailed": "No se pudo leer el archivo elegido.",
+    "revisedFile": "Documento revisado",
+    "title": "Comparar documentos"
   }
 }

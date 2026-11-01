@@ -922,7 +922,8 @@
     "replyCount": "תשובות: {count}",
     "trackedChange": "שינוי במעקב",
     "changeAnnouncement": "{change} מאת {author}: {text}",
-    "replyTargetResolved": "השינוי נפתר, ולכן התשובה לא פורסמה."
+    "replyTargetResolved": "השינוי נפתר, ולכן התשובה לא פורסמה.",
+    "compareDocuments": "השוואת מסמכים"
   },
   "imageAltText": {
     "description": "תיאור",
@@ -1170,5 +1171,20 @@
     "sectionBreakNextColumn": "מעבר מקטע (טור חדש)",
     "sectionBreakNextPage": "מעבר מקטע (עמוד חדש)",
     "sectionBreakOddPage": "מעבר מקטע (עמוד אי-זוגי)"
+  },
+  "compareDocuments": {
+    "author": "סמן שינויים בשם",
+    "cancel": "ביטול",
+    "chooseFile": "בחירת קובץ",
+    "compare": "השוואה",
+    "comparing": "משווה…",
+    "description": "המסמך הפתוח הוא המקור. בחר את המסמך המתוקן. ההבדלים יופיעו כאן כשינויים במעקב.",
+    "detectFormatting": "זיהוי שינויי עיצוב",
+    "failed": "לא ניתן היה להשוות את המסמכים: {message}",
+    "fileRequired": "בחר תחילה את המסמך המתוקן.",
+    "noFile": "לא נבחר קובץ",
+    "readFailed": "לא ניתן היה לקרוא את הקובץ שנבחר.",
+    "revisedFile": "מסמך מתוקן",
+    "title": "השוואת מסמכים"
   }
 }

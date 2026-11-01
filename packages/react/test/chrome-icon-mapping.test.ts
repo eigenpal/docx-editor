@@ -70,6 +70,7 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'review.paragraphMarks': 'format_paragraph',
   'review.bookmarks': 'bookmarks',
   'review.protectDocument': 'lock',
+  'review.compareDocuments': 'difference',
   'review.simpleMarkup': 'visibility',
   'review.allMarkup': 'visibility',
   'review.noMarkup': 'visibility',

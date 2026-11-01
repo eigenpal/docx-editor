@@ -921,7 +921,8 @@
     "replyCount": "Yanıtlar: {count}",
     "trackedChange": "İzlenen değişiklik",
     "changeAnnouncement": "{author} tarafından {change}: {text}",
-    "replyTargetResolved": "Değişiklik çözümlendiği için yanıt gönderilmedi."
+    "replyTargetResolved": "Değişiklik çözümlendiği için yanıt gönderilmedi.",
+    "compareDocuments": "Belgeleri karşılaştır"
   },
   "imageAltText": {
     "description": "Açıklama",
@@ -1169,5 +1170,20 @@
     "sectionBreakNextColumn": "Bölüm Sonu (Yeni Sütun)",
     "sectionBreakNextPage": "Bölüm Sonu (Sonraki Sayfa)",
     "sectionBreakOddPage": "Bölüm Sonu (Tek Sayfa)"
+  },
+  "compareDocuments": {
+    "author": "Değişiklikleri şu adla etiketle",
+    "cancel": "İptal",
+    "chooseFile": "Dosya seç",
+    "compare": "Karşılaştır",
+    "comparing": "Karşılaştırılıyor…",
+    "description": "Açık belge özgün belgedir. Düzeltilmiş belgeyi seçin. Farkları burada izlenen değişiklikler olarak görünür.",
+    "detectFormatting": "Biçimlendirme değişikliklerini algıla",
+    "failed": "Belgeler karşılaştırılamadı: {message}",
+    "fileRequired": "Önce düzeltilmiş belgeyi seçin.",
+    "noFile": "Dosya seçilmedi",
+    "readFailed": "Seçilen dosya okunamadı.",
+    "revisedFile": "Düzeltilmiş belge",
+    "title": "Belgeleri karşılaştır"
   }
 }

@@ -1,3 +1,4 @@
+import type { CompareDocumentsDialogSession } from './compare-documents.ts';
 import type { RevisionMarkupDialogSession } from './revision-markup.ts';
 import type { ReviewPaneOptions } from './review-pane.ts';
 import type { EditorDiagnostic, EditorDiagnosticKind } from './diagnostics.ts';
@@ -75,6 +76,18 @@ export interface RevisionMarkupDialogHost extends RevisionMarkupDialogSession {
   readonly translate?: (key: string) => string | undefined;
 }
 
+/** Compare documents dialog supplied by the review module. @public */
+export interface CompareDocumentsDialog {
+  open(): void;
+  destroy(): void;
+}
+
+/** What the Compare documents dialog may use: its session, mount, and strings. @public */
+export interface CompareDocumentsDialogHost extends CompareDocumentsDialogSession {
+  readonly container: HTMLElement;
+  readonly translate?: (key: string) => string | undefined;
+}
+
 /** Options of one document compare. @public */
 export interface DocumentCompareOptions {
   /** Author recorded on every revision. The engine picks a default when absent. */
@@ -128,6 +141,10 @@ export type CompareDocumentsEngine = (
 export interface ReviewModuleContribution {
   /** Document compare. Absent, compare commands refuse. */
   readonly compareDocuments?: CompareDocumentsEngine;
+  /** Create the Compare documents dialog when a host opens it. */
+  readonly createCompareDocumentsDialog?: (
+    host: CompareDocumentsDialogHost
+  ) => CompareDocumentsDialog;
   /** Create local review settings chrome when a host opens the dialog. */
   readonly createRevisionMarkupDialog?: (host: RevisionMarkupDialogHost) => RevisionMarkupDialog;
   /**

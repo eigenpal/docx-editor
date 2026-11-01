@@ -921,7 +921,8 @@
     "replyCount": "Balasan: {count}",
     "trackedChange": "Perubahan terlacak",
     "changeAnnouncement": "{change} oleh {author}: {text}",
-    "replyTargetResolved": "Perubahan sudah diselesaikan, jadi balasan tidak dikirim."
+    "replyTargetResolved": "Perubahan sudah diselesaikan, jadi balasan tidak dikirim.",
+    "compareDocuments": "Bandingkan dokumen"
   },
   "imageAltText": {
     "description": "Deskripsi",
@@ -1169,5 +1170,20 @@
     "sectionBreakNextColumn": "Pemisah Bagian (Kolom Baru)",
     "sectionBreakNextPage": "Pemisah Bagian (Halaman Berikutnya)",
     "sectionBreakOddPage": "Pemisah Bagian (Halaman Ganjil)"
+  },
+  "compareDocuments": {
+    "author": "Beri label perubahan dengan",
+    "cancel": "Batal",
+    "chooseFile": "Pilih file",
+    "compare": "Bandingkan",
+    "comparing": "Membandingkan…",
+    "description": "Dokumen yang terbuka adalah dokumen asli. Pilih dokumen revisi. Perbedaannya muncul di sini sebagai perubahan terlacak.",
+    "detectFormatting": "Deteksi perubahan format",
+    "failed": "Tidak dapat membandingkan dokumen: {message}",
+    "fileRequired": "Pilih dokumen revisi terlebih dahulu.",
+    "noFile": "Tidak ada file yang dipilih",
+    "readFailed": "Tidak dapat membaca file yang dipilih.",
+    "revisedFile": "Dokumen revisi",
+    "title": "Bandingkan dokumen"
   }
 }

@@ -921,7 +921,8 @@
     "replyCount": "Réponses : {count}",
     "trackedChange": "Modification suivie",
     "changeAnnouncement": "{change} par {author} : {text}",
-    "replyTargetResolved": "La modification a été résolue, la réponse n'a donc pas été publiée."
+    "replyTargetResolved": "La modification a été résolue, la réponse n'a donc pas été publiée.",
+    "compareDocuments": "Comparer des documents"
   },
   "imageAltText": {
     "description": "Description",
@@ -1169,5 +1170,20 @@
     "sectionBreakNextColumn": "Saut de section (nouvelle colonne)",
     "sectionBreakNextPage": "Saut de section (page suivante)",
     "sectionBreakOddPage": "Saut de section (page impaire)"
+  },
+  "compareDocuments": {
+    "author": "Étiqueter les modifications avec",
+    "cancel": "Annuler",
+    "chooseFile": "Choisir un fichier",
+    "compare": "Comparer",
+    "comparing": "Comparaison…",
+    "description": "Le document ouvert est l'original. Choisissez le document révisé. Ses différences apparaissent ici comme des modifications suivies.",
+    "detectFormatting": "Détecter les modifications de mise en forme",
+    "failed": "Impossible de comparer les documents : {message}",
+    "fileRequired": "Choisissez d'abord le document révisé.",
+    "noFile": "Aucun fichier choisi",
+    "readFailed": "Impossible de lire le fichier choisi.",
+    "revisedFile": "Document révisé",
+    "title": "Comparer des documents"
   }
 }

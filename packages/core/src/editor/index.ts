@@ -668,6 +668,13 @@ export type {
   RevisionMarkupTextStyle,
 } from '../contracts/revision-markup.ts';
 export type { RevisionMarkupDialog, RevisionMarkupDialogHost } from '../contracts/modules.ts';
+export type { CompareDocumentsDialog, CompareDocumentsDialogHost } from '../contracts/modules.ts';
+export type {
+  CompareDocumentsChromeHandlers,
+  CompareDocumentsDialogSession,
+  CompareDocumentsOutcome,
+  CompareDocumentsRequest,
+} from '../contracts/compare-documents.ts';
 
 /** The watermark shape box that `setWatermark` writes, for previews. */
 export {
