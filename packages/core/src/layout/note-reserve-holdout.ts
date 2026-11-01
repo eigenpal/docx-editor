@@ -171,7 +171,7 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   const refLineHeight = frontier.bottom - frontier.top;
 
   // The closing paragraph's charged space after belongs to the body end here.
-  const bodyBottom = bodyCursorBottomPt(bodyPage) + chargedSpaceAfterPt(bodyPage);
+  const bodyBottom = bodyCursorBottomPt(bodyPage) + chargedSpaceAfterPt(bodyPage, args.opts);
   // Where the pulled band would start: below the closing paragraph's space after, which the
   // page charges once the band's reference returns to it. A release measured from the bare
   // body end lets the band back, the band lands lower than measured, and the page's own
