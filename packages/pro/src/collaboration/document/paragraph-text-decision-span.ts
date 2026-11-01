@@ -15,8 +15,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * character is outside it, as everywhere else the decision reached.
  */
 import type * as Y from 'yjs';
-import { REVISION_PREFIX, SUPERSEDED_KEY } from './paragraph-text-revisions.ts';
-import { withoutStrikesSeen } from './paragraph-text-strikes.ts';
+import { recordDecisions } from './paragraph-text-decisions.ts';
+import { REVISION_PREFIX, SUPERSEDED_KEY, supersededKeys } from './paragraph-text-revisions.ts';
+import { sharedDelta, withoutStrikesSeen } from './paragraph-text-strikes.ts';
 import type { Step, Token } from './paragraph-text-diff.ts';
 
 type Changes = Readonly<Record<string, string | null>>;
@@ -89,4 +90,39 @@ export function formatDecidedDeletions(
     }
     index = end;
   }
+}
+
+/**
+ * Write `changes` over the kept characters from `position`, `length` long, and add each
+ * revision the write removes from them to `removed`.
+ */
+export function formatDeciding(
+  text: Y.Text,
+  position: number,
+  length: number,
+  changes: Changes,
+  removed: Set<string>
+): void {
+  for (const key of Object.keys(changes)) {
+    if (key.startsWith(REVISION_PREFIX) && changes[key] === null) removed.add(key);
+  }
+  text.format(position, length, changes);
+}
+
+/**
+ * After an edit, record a decision on each revision in `removed` that no character of the
+ * paragraph still belongs to (`paragraph-text-decisions.ts`). A decision on one piece of a
+ * revision records nothing: the rest of the revision stays.
+ */
+export function recordWholeDecisions(text: Y.Text, removed: ReadonlySet<string>): void {
+  if (removed.size === 0) return;
+  const still = new Set<string>();
+  for (const op of sharedDelta(text)) {
+    const attributes = op.attributes ?? {};
+    const superseded = supersededKeys(attributes[SUPERSEDED_KEY]);
+    for (const key of Object.keys(attributes)) {
+      if (removed.has(key) && !superseded.has(key)) still.add(key);
+    }
+  }
+  recordDecisions(text, [...removed].filter((key) => !still.has(key)).sort());
 }

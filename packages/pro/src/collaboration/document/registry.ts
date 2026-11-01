@@ -91,6 +91,7 @@ import {
 import { AdoptionIndex } from './registry-adoption.ts';
 import { InlineIndex } from './paragraph-inline-index.ts';
 import { INLINE_FIELD } from './paragraph-text.ts';
+import { isDecisionKey } from './paragraph-text-decisions.ts';
 import {
   readBinaries,
   readContentTypeDefaults,
@@ -806,12 +807,14 @@ export class DocumentRegistry {
         this.inline.paragraphChanged(keyId(event.path[0]!));
         continue;
       }
-      // A record's shared text can arrive after the record itself, in a later update, and a
-      // deleted paragraph's text shows nothing, or only what follows a move out of it.
+      // A record's text can arrive after the record, a deleted paragraph's text shows nothing,
+      // and a decision record (`paragraph-text-decisions.ts`) changes what its text reads.
       if (
         event.target instanceof Y.Map &&
         event.path.length === 1 &&
-        (event.changes.keys.has(INLINE_FIELD) || event.changes.keys.has(NODE_DELETED_FIELD))
+        [...event.changes.keys.keys()].some(
+          (key) => key === INLINE_FIELD || key === NODE_DELETED_FIELD || isDecisionKey(key)
+        )
       ) {
         this.inline.paragraphChanged(keyId(event.path[0]!));
       }

@@ -1,0 +1,15 @@
+{
+  "impact": "migration-required",
+  "fields": [
+    "repairVersion"
+  ],
+  "before": "A decision on a whole tracked change removed the revision's format markers. When another participant decided one piece of the same change at the same time, Yjs ended that piece's removal with a new marker that set the revision again on the rest of the change. The whole decision did not see that marker, so the rest of the change stayed pending, and the text after it, up to the next marker of the revision, became part of the change.",
+  "after": "When an edit leaves no character of a paragraph in a revision that it removed from some character, it records on the paragraph record, under a key that starts with d and the unit separator and names the revision key and the writing client, one past the last clock of each client that wrote the paragraph's text (at most 256 clients). Readers leave every character with a clock below that bound out of the revision, also when a concurrent marker sets it again. A character written later, typed or put back by an undo or redo, keeps the revision it takes. The undo of the deciding step withdraws the record. A decision on one piece of a change writes as before.",
+  "reason": "The record changes which revision a character reads for the same shared state, so it is a rule over shared state that rides the repairVersion 3 change these records already make for format 1.5.3.1, which is not yet published; replicas with repairVersion 2 refuse these rooms before any update applies. The keys are new optional keys on a paragraph record that only this format writes and reads, each writer sets only its own keys, and a paragraph without them reads as before, so rooms of this format created before the record read the same. sharedSchemaVersion does not change: no existing field changes meaning. Keys and values are validated, and an invalid record is ignored.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-concurrent-piece-decision.test.ts",
+    "packages/pro/src/collaboration/__tests__/paragraph-text-decisions.test.ts"
+  ],
+  "changeset": "collab-whole-decision-record",
+  "migration": "upgrade-rooms-to-format-1531"
+}

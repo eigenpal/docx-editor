@@ -58,12 +58,21 @@ import {
   type TextIdentities,
 } from './paragraph-text-identity.ts';
 import { rebaseRevisions } from './paragraph-text-revisions.ts';
-import { formatDecidedDeletions } from './paragraph-text-decision-span.ts';
+import {
+  formatDecidedDeletions,
+  formatDeciding,
+  recordWholeDecisions,
+} from './paragraph-text-decision-span.ts';
 import { writeInlineText } from './paragraph-text-view.ts';
 import { positionsNow, type FollowingText } from './paragraph-text-follow.ts';
 import { placeFollowingText } from './paragraph-text-placement.ts';
 import type { InlinePlan } from './paragraph-text-writer.ts';
-import { recordStrikesSeen, sharedDelta, withoutStrikesSeen } from './paragraph-text-strikes.ts';
+import {
+  attributesByPosition,
+  recordStrikesSeen,
+  sharedDelta,
+  withoutStrikesSeen,
+} from './paragraph-text-strikes.ts';
 
 interface Block {
   /** Equal tokens, or a run of deletions and insertions. */
@@ -183,22 +192,6 @@ export function insertFollowing(
   if (item) textMarksOf(text.doc!).markFollow(item.id.client, item.id.clock, value.length, anchor);
 }
 
-/**
- * The attributes of each position of a shared text, hidden positions too, as Yjs stores them:
- * an insert compares its attributes with these and writes a marker for each that differs. A
- * strike a character is left out of (`sharedDelta`) still counts here, so an insert after it
- * carries the strike on in `b` and writes no marker that a peer's decision would not reach.
- */
-function attributesByPosition(text: Y.Text): InlineAttributes[] {
-  const out: InlineAttributes[] = [];
-  for (const op of text.toDelta() as { insert: unknown; attributes?: InlineAttributes }[]) {
-    const attributes = op.attributes ?? {};
-    const length = typeof op.insert === 'string' ? op.insert.length : 1;
-    for (let at = 0; at < length; at += 1) out.push(attributes);
-  }
-  return out;
-}
-
 /** How one attributes object changes into another, and what it changes from. */
 interface AttributeChange {
   readonly changes: Record<string, string | null>;
@@ -252,6 +245,8 @@ function writeParagraphText(
     steps,
     (from, to) => changeOf(from, to)?.changes ?? null
   );
+  // The revisions a write removes from kept characters, for `recordWholeDecisions`.
+  const removed = new Set<string>();
   for (let index = blocks.length - 1; index >= 0; index -= 1) {
     const block = blocks[index]!;
     if (block.kind === 'eq') {
@@ -289,7 +284,7 @@ function writeParagraphText(
               })
             )
           : run[0]!.changes!;
-        text.format(run[0]!.position, run.length, changes);
+        formatDeciding(text, run[0]!.position, run.length, changes, removed);
       }
       continue;
     }
@@ -343,6 +338,7 @@ function writeParagraphText(
       at = start - 1;
     }
   }
+  recordWholeDecisions(text, removed);
 }
 
 /**

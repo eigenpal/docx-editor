@@ -23,6 +23,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import * as Y from 'yjs';
 import { firstItem } from './yjs-items.ts';
+import { decidedKeys, decidedOf, decidedUntil } from './paragraph-text-decisions.ts';
 import { isRecord } from './paragraph-text-codec.ts';
 import {
   parseJson,
@@ -193,7 +194,8 @@ function outOfStrikes(
 
 /**
  * A paragraph text's delta, as `Y.Text#toDelta` gives it, with every character left out of the
- * strikes that did not see it.
+ * strikes that did not see it, and out of each revision that a recorded decision on it saw it
+ * in (`paragraph-text-decisions.ts`).
  */
 export function sharedDelta(text: Y.Text): DeltaOp[] {
   return readShared(text).ops;
@@ -209,7 +211,18 @@ export function readShared(text: Y.Text): { ops: DeltaOp[]; leftOut: boolean } {
   const current: Record<string, unknown> = {};
   let attributes: Record<string, unknown> | null = null;
   const attributesNow = (): Record<string, unknown> => (attributes ??= { ...current });
-  let hasStrikesSeen = false;
+  // A recorded decision leaves the characters it saw out of the revisions it decided.
+  const decided = decidedOf(text);
+  let hasStrikesSeen = decided !== null;
+  const leftOutKeys = (client: number, clock: number): string[] | null => {
+    const unseen = unseenStrikes(attributesNow(), client, clock);
+    const keys = decided ? decidedKeys(decided, attributesNow(), client, clock) : null;
+    return unseen && keys ? [...new Set([...unseen, ...keys])].sort() : (unseen ?? keys);
+  };
+  const sameFrom = (client: number, clock: number, end: number): number => {
+    const until = sameUntil(attributesNow(), client, clock, end);
+    return decided ? decidedUntil(decided, attributesNow(), client, clock, until) : until;
+  };
   // The attributes object the last string op was packed with, to pack the next one into it.
   let packed: Record<string, unknown> | null = null;
   const push = (insert: unknown, own: Record<string, unknown>): void => {
@@ -256,17 +269,34 @@ export function readShared(text: Y.Text): { ops: DeltaOp[]; leftOut: boolean } {
         continue;
       }
       for (let at = 0; at < str.length; ) {
-        const unseen = unseenStrikes(attributesNow(), client, clock + at);
-        const until = sameUntil(attributesNow(), client, clock + at, clock + str.length) - clock;
+        const unseen = leftOutKeys(client, clock + at);
+        const until = sameFrom(client, clock + at, clock + str.length) - clock;
         pushString(str.slice(at, until), unseen ? minus(unseen) : attributesNow());
         at = until;
       }
       continue;
     }
     if (content instanceof Y.ContentEmbed || content instanceof Y.ContentType) {
-      const unseen = hasStrikesSeen ? unseenStrikes(attributesNow(), client, clock) : null;
+      const unseen = hasStrikesSeen ? leftOutKeys(client, clock) : null;
       push(content.getContent()[0], unseen ? minus(unseen) : { ...attributesNow() });
     }
   }
   return { ops, leftOut };
+}
+
+/**
+ * The attributes of each position of a shared text, hidden positions too, as Yjs stores them:
+ * an insert compares its attributes with these and writes a marker for each that differs. A
+ * strike a character is left out of (`sharedDelta`) still counts here, so an insert after it
+ * carries the strike on in `b` and writes no marker that a peer's decision would not reach. A
+ * revision that a recorded decision leaves a character out of counts here too, for that reason.
+ */
+export function attributesByPosition(text: Y.Text): Record<string, string>[] {
+  const out: Record<string, string>[] = [];
+  for (const op of text.toDelta() as { insert: unknown; attributes?: Record<string, string> }[]) {
+    const attributes = op.attributes ?? {};
+    const length = typeof op.insert === 'string' ? op.insert.length : 1;
+    for (let at = 0; at < length; at += 1) out.push(attributes);
+  }
+  return out;
 }
