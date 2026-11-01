@@ -1,5 +1,27 @@
 # @docx-editor.dev/docx-to-pdf
 
+## 2.34.0
+
+### Minor Changes
+
+- 55e7541: PDF export now shows tracked changes by default (`displayMode: 'all-markup'`) with changed-line bars, and a document with comments shrinks each page beside a markup pane that shows every comment as a balloon. Set `displayMode: 'proposed'` to keep the previous output.
+- 9f098f2: PDF export reports a metafile picture that stops at a malformed record as `metafile-record`, and keeps `metafile-limit` for a picture that stops at a resource bound. The font notice no longer lists a face that only hidden text or a hidden symbol uses.
+
+### Patch Changes
+
+- 94d7d1c: A comment balloon in PDF export now stands on the page where its range ends, also when a split table row carries part of the range onto a later page.
+- 5abd50f: A localized East Asian font name, such as メイリオ, now resolves to the face supplied under its English name, and a missing bold or italic face of an East Asian family draws in that family's regular face. Fixes #1647.
+- afca693: PDF export parses merged equation text in linear time and no longer writes two adjustment numbers without a separator.
+- 6505457: Equations with spaced operators paint each source run as one text span, and PDF export writes one text object per face and baseline, so pages with many operators paint faster and export smaller. Fixes #1560.
+- 233aeaa: Text in Garamond keeps the font's own line height when the font is not available, so its line spacing and page breaks no longer depend on the fallback font. Fixes #563.
+- 752d5fb: Kana compression keeps a kana and its spaced sound mark on a full line, and PDF text gives a kana and a joined sound mark as the precomposed character. Fixes #1638.
+- 620b7ca: Markdown conversion and PDF export build against the latest layout records again.
+- 45cd6f8: EMF and WMF pictures in PDF export take the picture's brightness and contrast, so a washed-out picture watermark exports faded, and a metafile that stops at a malformed record reports a diagnostic instead of exporting blank. With the default strict fidelity policy, grayscale or black-and-white metafile pictures and metafiles that stop early now reject the export; use `'best-effort'` to keep them. Fixes #1338.
+- f7baed2: PDF export paints equations with an overline or underline bar and draws equation text in the same face that layout measured.
+- 78abf89: PDF export draws highlight, shading, strikethrough, every underline style, and tracked-change marks continuously across the gaps of justified and distributed lines, as the editor does.
+- 5abd50f: Symbols that the text fonts lack, such as ballot boxes, no longer make their line taller than the symbol fallback font does when a packaged font draws them. Fixes #1648.
+- Updated dependencies: @docx-editor.dev/core@2.34.0, @docx-editor.dev/fonts-cjk@2.34.0, @docx-editor.dev/fonts@2.34.0, @docx-editor.dev/pro@2.34.0
+
 ## 2.33.0
 
 ### Minor Changes

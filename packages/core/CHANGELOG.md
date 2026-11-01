@@ -1,5 +1,130 @@
 # @docx-editor.dev/core
 
+## 2.34.0
+
+### Minor Changes
+
+- 3934f6a: Inline equations place n-ary limits to the right of the operator as a subscript and superscript, display equations follow `m:limLoc`, and an n-ary with an `m:limLoc` of `subSup` displays as math; `EquationExpression` n-ary structures carry it as `limitLocation`. Fixes #1543.
+- 3934f6a: Equation scripts and bars take their size from the structure's control properties, or from the text around the equation, and a tall subscript drops until its top meets the subscript limit; `EquationExpression` structures carry the control size as `controlFontSizePt`. Fixes #1539.
+- f182c70: Close the link panel when another participant strikes its selected words in suggesting mode, and add `hyperlinks.selectionIsPendingDeletion()` to tell whether a selection is a pending deletion. Fixes #1643.
+- 4e4d44d: Remove a generated table of contents from its context menu or with the `removeToc` command. Fixes #1223.
+- bb84b35: A handle at a table's top-left corner selects the whole table, and dragging it moves the table between the blocks around it; `selectTableRegion` supports `region: 'table'`. Suggesting mode no longer deletes a whole table untracked. Fixes #1567, fixes #1568
+- 9c02206: Equations render border boxes, text boxes that fit their shape to their text take the text height, paragraphs that name a missing or character style take the default paragraph style, and page borders held only in tracked section properties draw. PDF export uses fonts installed on the system, and Segoe UI resolves to a metric-compatible packaged substitute.
+
+### Patch Changes
+
+- ae0ccce: Backspace at the start of an indented paragraph now removes the indent before it joins the paragraph to the previous one, and keeps the right indent. Fixes #1690.
+- 8671251: Backspace at the start of a list item now removes its bullet or number and keeps the text in place, and a second Backspace joins it to the previous paragraph. In suggesting mode, list changes are now tracked as suggestions. Fixes #1594.
+- 5abd50f: In a legacy compatibility mode that compresses punctuation, a document that balances single-byte and double-byte widths now shrinks inter-word spaces down to a quarter of the font size to keep one more word on a line. Fixes #1667.
+- 2b3abe6: Text inside `w:bdo` and `w:dir` wrappers now displays in the direction that the wrapper declares, and the caret, clicks, and arrow keys follow that order. Fixes #714.
+- 6a8141c: Page number, page count, and section page count fields in the document body now show the page they are on, instead of the result saved in the file.
+- 93fbd9b: Data-bound content controls open showing the current value of their custom XML or document property node instead of the saved text. Fixes #1684.
+- f5cdd00: Paragraph formatting, such as indents, spacing, alignment, styles, and lists, now applies inside data-bound block content controls, and the bound text stays unchanged. In suggesting mode, indents, spacing, alignment, and styles become a suggestion that can be accepted or rejected. Fixes #1661.
+- 98f3186: Text no longer disappears from runs, paragraphs, and tables whose markup is out of order, repeated, or nested, and repeated run, paragraph, and table properties now combine instead of only the first applying. Text in `w:t` without `xml:space="preserve"` now drops its leading and trailing spaces.
+- 398963c: Formatting or clearing formatting at a caret inside a word applies to the whole word as one undo step, and a format painter click on a word with a tracked replacement paints the whole visible word.
+- 5186d17: Replacing a checkbox content control's glyph with its checked or unchecked glyph now changes the checkbox state inside the control, and other replacement text is refused instead of emptying the control. Fixes #1144.
+- 752d5fb: A long word with no break opportunity keeps its final period on the line, hanging past the margin, instead of moving it alone to a new line. Fixes #1639.
+- 9e7a1ac: Justified and distributed lines with East Asian text give every character the same gap, including gaps next to punctuation, and spaces and automatic gaps between scripts take only a bounded share of the slack. Fixes #1542.
+- a343e05: Lines drawn in a Chinese, Japanese, or Korean face that is taller than one em now take 1.3 times the height of that face, so documents that use such faces paginate correctly. A character in a run with the East Asian font hint that the East Asian face cannot draw now keeps the Latin face.
+- 74b3b0e: In a collaboration session, moving a block toward the start of its container, or formatting text whose properties are stored out of order, no longer removes a neighboring block or property for every participant. A table moved after concurrent moves of the same table keeps the empty paragraph between it and the next table. Fixes #1572. Fixes #1606.
+- f5cdd00: The Decrease Indent button state updates quickly when a long selection, such as a select-all in a long document, has no indented paragraph. Fixes #1660.
+- d460053: Formatting stored on the default character style no longer changes text, so text keeps the size and color of its paragraph style.
+- 3e928db: Distributed paragraphs stretch their final line, including table cells and passages beside floating objects. Fixes #1361.
+- 9622f77: Distributed paragraphs spread their lines across every character in legacy compatibility modes and when the styles part defines run defaults, keep the letters of kerned runs together in modern modes, and center a line that has nothing to stretch.
+- 752d5fb: A distributed line keeps the next word only when its spaces would lose at most a third of the stretch the shorter line takes, and hangs a final comma or period beside spaces at their limit. Fixes #1637.
+- a990507: A distributed line with a tab stretches the text after its last tab from a left stop to the line end, and centers when that tab reaches a right, center, or decimal stop. Fixes #1541.
+- b3f007c: Punctuation compression, kana compression, and hanging punctuation now turn on for documents whose default East Asian font is Osaka, Nanum Gothic, Klee Medium, Klee One, or a font named in East Asian characters, and turn off for Hiragino, PingFang, and Heiti unless the font table marks them as East Asian. Picking Osaka in the font menu now also sets the East Asian font. Fixes #1725.
+- a4a765d: Documents whose default East Asian font is Noto Sans CJK JP now compress punctuation and shrink justified spaces like other Japanese defaults, also when the face is not installed and the font table has no entry for it. Fixes #1663.
+- 00044e7: East Asian line-end punctuation hangs only where the line-start rules forbid it, at every alignment in legacy compatibility modes and in distributed paragraphs, kana compress to fit a line-start-prohibited character, and pair kerning leaves full-width East Asian text unkerned. Fixes #1574, #1575, #1577, #1578, #1581.
+- fca265a: In documents with an East Asian language, a justified line shrinks its spaces to keep a line-end comma or period inside the margin, and hangs the mark only when the spaces cannot make room for it. Fixes #1605.
+- 9e7a1ac: East Asian text on justified lines no longer spreads between its characters, and automatic spacing between East Asian and Latin text no longer opens, when the document's run defaults name no East Asian font. Fixes #1556.
+- 677252d: Formatting at the caret of an empty paragraph applies to its paragraph mark as a document change with its own undo step, so Bold and other toggles turn off a format the mark already has. Fixes #1626.
+- 7760eb5: When two participants type at the same place, each caret now stays after its own text, and later typing no longer lands inside text that was already typed. Fixes #1710.
+- 598631e: Use authored text fonts for equation digits, except in bold math styles, and the paragraph font for unstyled normal text. Fixes #1307.
+- f7baed2: An equation overline or underline keeps a fixed gap from the glyphs that it covers, and its stroke follows the rule thickness of the math font.
+- f7baed2: Equation runs whose font slots name different faces render as math with their face, size, and math style instead of a text fallback.
+- f7baed2: Inline equation fractions center their rule on the math axis, place their numerator and denominator by the math font constants, and add no side padding, so a line with a fraction is no taller than it needs to be; fractions in display equations keep their padded placement.
+- 4d616ff: An equation whose runs differ in size no longer makes its line too tall: the first run keeps its full height, and a later, larger run adds only the height of its glyphs. Fixes #1540.
+- 6505457: Equations space relations, binary operators, punctuation, fractions, and n-ary operators by their operator class, and a sign at the start of an argument or after another operator stays unspaced; a hyphen draws as the minus sign and `*` as the asterisk operator, and the saved text does not change. Fixes #1533.
+- f7baed2: Equation runs that name a language render as math at their own size instead of a text fallback, and save keeps the language.
+- f7baed2: Equation scripts draw at 73 percent of the run size in whole half points, or 60 percent inside another script, and superscripts rise a fixed share of the size, or higher over a tall base.
+- 7e0a75f: Equation lines with scripts and fractions now take the height of their glyphs, later scripts and fractions take their offsets from the size of the first run, and multiple line spacing adds its share of the text height below an equation instead of keeping the equation as a minimum. Fixes #1591.
+- f7baed2: Equation subscripts sit a fifth of an em below the baseline and keep a gap below a superscript on the same base, so a line with a subscript no longer gains extra height.
+- 6505457: Equations with spaced operators paint each source run as one text span, and PDF export writes one text object per face and baseline, so pages with many operators paint faster and export smaller. Fixes #1560.
+- c3e33c6: A fixed-height table row that ends a page now keeps its authored height with the table's bottom border below it, and moves to the next page when that border does not fit. A fixed-height row that opens a later page of its table grows by the extra width of the top border there. Fixes #1534.
+- 31562fa: A fixed-height last table row keeps its authored height, with its bottom border placed below it and cell text aligned to the authored bottom. If the row does not fit with its border, it moves to the next page unless it starts the page, and repeated header rows that leave no room for the border are omitted in compatibility mode 15 and later.
+- a67a4ed: Runs with `w:fitText` now take the width the property states, so a fitted phrase no longer wraps onto an extra line. Fixes #1646.
+- 1c501ef: Documents that turn off automatic paragraph spacing now keep each paragraph's own space before and space after, including list items and paragraphs at the edges of table cells, headers, footers, and notes. An empty paragraph with a hidden mark before a table no longer keeps a blank line because of automatic space before alone.
+- 924ec26: Compress spaces within each text passage so justified lines beside floating objects can keep the next word. Fixes #1360.
+- 55e7541: Text whose font is written as a list, such as `Verdana, Geneva, sans-serif`, now renders in the first font of the list, and text whose font name no font can carry, such as `"Open Sans", sans-serif`, renders in Cambria instead of disappearing from PDF export.
+- 5ffe967: Page numbers in header and footer frames that do not wrap text now sit at their frame position beside the header or footer text, instead of taking a line of their own.
+- ad7c146: In documents that use the current compatibility mode, a line whose line spacing would reach into the footnote area now moves to the next page. A heading kept with a paragraph now returns to the previous page with the paragraph's opening lines when its footnote reference comes later.
+- 0b4ada3: Pages with long footnotes now settle on one layout, so an edited document ends on the same pages as the same document opened fresh. Fixes #1747.
+- 918aa35: A footnote cited beside indented text now continues on the next page instead of moving its paragraph, and a paragraph kept with the next one now moves with it when the next paragraph's space after does not fit above the footnote area. Fixes #1748
+- 2b13781: A manual page break inside a text frame no longer moves the frame and the text after it to a new page.
+- 233aeaa: Text in Garamond keeps the font's own line height when the font is not available, so its line spacing and page breaks no longer depend on the fallback font. Fixes #563.
+- a67a4ed: List items in headers and footers now share one count across the document, so a footer list continues the header list instead of starting again at one. Fixes #1631.
+- 802b03b: Headers and footers keep the automatic space after their last paragraph, so body text starts below the header and ends above the footer at the correct position.
+- 3f3fc9a: Japanese kana no longer shrink in every overflowing paragraph when kana compression is enabled. Fixes #1303.
+- fca265a: A combining kana voiced or semi-voiced sound mark takes a full cell in faces that space it, joins its base in faces that class it as a mark, and stays on the line of its base. Fixes #1576.
+- 752d5fb: Kana compression keeps a kana and its spaced sound mark on a full line, and PDF text gives a kana and a joined sound mark as the precomposed character. Fixes #1638.
+- 021c787: A keep-with-next paragraph or kept row before a table row that cannot break across pages and is taller than a page now moves to the next page instead of staying beside earlier content, and authored header rows no longer hold such a row on their page. Fixes #1529.
+- 259b9e8: Follow the run language for hanging punctuation and fill the line before a hanging mark. Fixes #1323
+- 37ef590: Long documents without East Asian text lay out faster again, because line layout no longer checks every word for East Asian text spacing.
+- 752d5fb: In older compatibility modes with punctuation compression and an East Asian default font, a line at any alignment shrinks its spaces down to half the average character width of their font to keep one more word, unless the document balances single-byte and double-byte widths. Fixes #1635.
+- 445382d: The Insert link context menu row and toolbar button now open the mounted link panel, and the context menu row shows the Ctrl+K shortcut. If no link panel is mounted, both are disabled with a reason and Ctrl+K is left to the browser. Fixes #1592.
+- 4051150: Keep a list item in place when you switch it between bullets and numbers, using the indents of the list it leaves instead of default indents. Fixes #1705.
+- f48510f: A list item with its own indent now moves to the indent of its new level when Tab, Shift+Tab, Increase Indent, Decrease Indent, Enter on an empty item, or `listItem.level` changes its level, and keeps its right indent. Fixes #1720.
+- a886a00: Number list items correctly when several lists share one numbering definition and one of them restarts, and start each new list, and each list given a starting number, on its own. Lists that share a definition with no start override now continue one count, so lists that earlier versions started this way can renumber. Fixes #1597.
+- 6a13d2f: A list item on a deeper level now counts the parent levels it skips, so the next parent item continues from there, and list numbers past 9999 show in full. Fixes #1662.
+- a67a4ed: `LISTNUM` fields in the document body now show their list number, computed from the document's list definitions, also when the field has no saved result. Fixes #1644.
+- 70b5641: Moving, deleting, double-click selecting, and format painting by word stop at both edges of every inline content control, including Shift selection and headers and footers. Fixes #1300.
+- 3d74192: Allow paragraph alignment inside content-locked controls, including tracked changes. Fixes #1311.
+- 01e6845: Refuse paragraph formatting other than alignment in content-locked controls with code `locked`, and let every participant edit, review, and accept or reject changes suggested during a collaboration session in every story, including headers, footers, and notes created in the session.
+- f182c70: Allow alignment, indents, spacing, line spacing, and line and page break settings on paragraphs inside content-locked controls, plainly or as suggestions that can be accepted or rejected there, while styles, lists, direction, and tab stops stay locked. Fixes #1622.
+- bd947a7: Preserve each item indent when converting mixed style-numbered and directly numbered items to bullets.
+- 7e0a75f: In compatibility mode 14 and earlier, a repeated table header stays above a row that continues from the previous page when its next line or nested table does not fit below the header, and the rest of the row stays on that page. Fixes #1602.
+- 1135d96: In compatibility mode 14 and earlier, a repeated table header stays above a row that opens with a nested table whose first row does not fit below it, also when the row is taller than a page, and that row stays whole past the bottom margin. Fixes #1582.
+- 845e680: In compatibility mode 14 and earlier, a repeated table header stays above a splittable row whose first line does not fit below it, and that row stays whole past the bottom margin. Fixes #1565.
+- 7408aad: An n-ary equation operator without an operator character draws and copies as an integral, and copied text, Markdown, PDF text, and accessible labels include each drawn n-ary operator. The equation popover disables replacement of an equation that has no linear form and shows the reason. Fixes #1564.
+- c6f8f0f: The number at the head of a footnote or endnote now follows its renumbering. When a note was cited before an existing one, or the note number format changed, the notes area kept the existing note's old number until the document was reopened, while its citation in the text showed the new one.
+- dbe57b9: Footnote and endnote numbering comes from each section's own note properties, including its start value, instead of the document-wide settings, and applying note properties to the whole document updates every section and keeps the values you did not change. Fixes #1527.
+- 396296f: Keep text typed after a note reference out of the reference style and superscript. Fixes #1127.
+- 233aeaa: Pages after a section's overflowing endnotes show the even or odd header and footer of their new page number. Fixes #515.
+- 85f3a0f: Text typed after a note reference takes the formatting of the text before the reference, and toolbar presses there and beside locked content controls toggle the formatting that typing applies.
+- b2f826b: In compatibility mode 15 and later, the content after a table whose last page leaves out the repeated header rows starts on the next page. Fixes #1559.
+- c556512: Draw each supported equation run at its authored font size. Mixed sizes also set the equation line height.
+- f182c70: Report a Paragraph dialog submission whose settings are already in force as a success with no change, as `can` already did.
+- a886a00: Keep the number text, number formatting, symbol bullets, and indents of pasted list levels. Fixes #1596.
+- 93fbd9b: Fields in pasted word-processor HTML stay fields, so a pasted table of contents keeps its entry styles and can be updated or removed. Fixes #50.
+- 78abf89: PDF export draws highlight, shading, strikethrough, every underline style, and tracked-change marks continuously across the gaps of justified and distributed lines, as the editor does.
+- cbff3e2: In a percentage AutoFit table whose cells state percentage widths, the columns that give way to a widened column now give up equal parts, so their text no longer changes their widths. Fixes #1754.
+- b2213a6: When people type at the same place at the same time, your caret no longer jumps back into text you already typed. Fixes #1710.
+- b2f826b: The first body row below a repeated table header reserves the wider of its own top border and the header's bottom border in compatibility mode 14 and earlier, and the border it shares with the row above it in mode 15 and later. Fixes #1561.
+- b2f826b: In documents that declare compatibility mode 14 or earlier, or no mode, repeated header rows stay on a continuation page above a row that cannot split and does not fit below them, and that row runs past the bottom margin. Fixes #1538.
+- 627e74a: A right-click (or Control-click on macOS) in document text outside the selection now moves the caret to the click, so the context menu acts on the text under the pointer instead of a selection elsewhere in the document. A right-click inside a selection keeps it.
+- 6cf19f1: Right-to-left text beside a floating object fills the passage to the right of the object first and aligns each part inside its own passage, and square wrapping on the largest side with equal sides keeps text on the left in compatibility mode 15 and later. Fixes #1528.
+- 1135d96: In compatibility mode 15 and later, justified left-to-right paragraphs beside floating objects compress their spaces also when they contain right-to-left runs. Fixes #1573.
+- e16cdca: In a right-to-left interface, the vertical scroll bar of the editor viewport is now on the left, and a page wider than the viewport opens at its right edge. Fixes #1493.
+- 8bc3cad: A section that authors its own footnote or endnote properties without a number format now numbers its notes in the default format, as Word does, instead of inheriting the document-wide format from settings.xml. A document whose settings use `chicago` for a title-page note no longer shows every body note as a symbol. The final section's note properties are also read from the body-level `w:sectPr` in the notes layout and NOTEREF numbering, as the note properties state already did.
+- f182c70: Find the right header, note, section, or link for content another participant created during a collaboration session, so table controls, page setup, comments, custom nodes, and the content control at the caret act on it. Fixes #1633.
+- fa9d0cb: Header STYLEREF fields that name a paragraph style now show the matching paragraph text for each page instead of the saved result.
+- 0e0c430: Tables with an absolute width in older compatibility modes, and right-to-left tables, now align their borders and text with the text column edge.
+- aa6e145: The table move handle shows again for the table that holds the caret after you drag a table to another page.
+- 44647ff: Percentage-width, nested, and text-box tables now place their borders and text at the expected positions, including right-to-left tables.
+- 6f4505a: In compatibility mode 14 and earlier, a page that holds a whole table row taller than the page keeps the first line of the first footnote that the row references. Fixes #1554.
+- 6f4505a: In documents that declare compatibility mode 14 or earlier, or no mode, a text-only table row that cannot split and is taller than a page stays whole on one page and runs past the bottom margin instead of splitting. Fixes #1532.
+- fa80cde: Pictures no longer blink while you type in a text box on the same page.
+- a9c00f2: Applying many tracked edits in one transaction is much faster on long documents, especially when the batch also inserts content controls or splits paragraphs.
+- 7539b23: With change tracking on, `Paragraph.split()` proposes each new paragraph mark, and `Range.insertBreak()` proposes page and next-page section breaks, as tracked changes that reject removes. Fixes #1617.
+- e0c6488: Rejecting all changes after a table is inserted as a suggestion now gives back the original paragraphs, and a table inserted at the end of a paragraph no longer adds an empty paragraph after it. Splitting a paragraph right after a field that edits as one unit now keeps the whole field in the first paragraph. Fixes #1609.
+- bafbf5a: Typing in large documents with tables, footnotes, and tracked changes responds faster, and saving does less repeated validation.
+- 45cd6f8: The font notice lists a missing symbol face when a symbol in the document has no Unicode equivalent and would show as a missing-glyph box. Fixes #753.
+- 94d7d1c: Table grid columns that no cell reaches no longer take width, so a one-cell row in a wider grid is as wide as its cell.
+- bd3ffb7: Keep the hanging indent, number position, and number format of lists pasted from Word.
+- 443b2ad: A header or footer page number in a text-wrapping frame without a set width now sits beside the text instead of taking a line of its own.
+- Updated dependencies: @docx-editor.dev/i18n@2.34.0
+
 ## 2.33.0
 
 ### Minor Changes
