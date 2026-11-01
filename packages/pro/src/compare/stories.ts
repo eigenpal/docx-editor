@@ -85,6 +85,14 @@ function furnitureRefs(
   return out;
 }
 
+/** Names of the header and footer parts the final section of `pkg`'s main story references. */
+export function finalSectionFurniture(pkg: OoxmlPackage): ReadonlySet<string> {
+  const main = pkg.parts.get(pkg.mainDocumentPart);
+  const body = main && childNamed(main.root, 'body');
+  const refs = furnitureRefs(pkg, body ? childNamed(body, 'sectPr') : undefined);
+  return new Set([...refs.values()].map((ref) => ref.part.name));
+}
+
 /** Compares the final section's headers and footers by kind and type. */
 export function compareFurniture(
   basePkg: OoxmlPackage,
@@ -140,7 +148,8 @@ export function compareFurniture(
         isNew: true,
         relType: `${REL_BASE}/${ref.kind}`,
       });
-      extraRefs += `<w:${ref.kind}Reference w:type="${ref.type}" r:id="§NEW:${partName}§"/>`;
+      // Declared here: the original's main story need not declare the relationships namespace.
+      extraRefs += `<w:${ref.kind}Reference xmlns:r="${R_NS}" w:type="${ref.type}" r:id="§NEW:${partName}§"/>`;
     }
   }
   return { outputs, extraRefs };

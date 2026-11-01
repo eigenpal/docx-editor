@@ -11,6 +11,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * is reported rather than fatal: some structure has no revision form (a content control added
  * around existing text, a section break added or removed), and refusing the whole compare for
  * it would be worse than showing every text change.
+ *
+ * Only the compared stories are checked: the main story, the notes, and the headers and footers
+ * of the final section. Other sections keep the original's headers and footers.
  */
 import {
   applyTreeOp,
@@ -21,6 +24,8 @@ import {
   type OoxmlPart,
   type ParagraphDigest,
 } from '@docx-editor.dev/core/store';
+import { finalSectionFurniture } from './stories.ts';
+import { attributeOf, elementChildren, type ElementNode } from './xml-fragments.ts';
 
 const STORY_TYPES = [
   'document.main+xml',
@@ -30,22 +35,66 @@ const STORY_TYPES = [
   '.endnotes+xml',
 ];
 
-const isStory = (part: OoxmlPart) =>
+const isStoryType = (part: OoxmlPart) =>
   STORY_TYPES.some((suffix) => part.contentType.endsWith(suffix));
+
+const isFurniture = (part: OoxmlPart) =>
+  part.contentType.endsWith('.header+xml') || part.contentType.endsWith('.footer+xml');
+
+/** The compared story parts of `pkg`. */
+function storyParts(pkg: OoxmlPackage): OoxmlPart[] {
+  const furniture = finalSectionFurniture(pkg);
+  return [...pkg.parts.values()].filter(
+    (part) => isStoryType(part) && (!isFurniture(part) || furniture.has(part.name))
+  );
+}
 
 type Level = 'text' | 'properties';
 
+const NOTE_REFERENCES: Readonly<Record<string, 'footnote' | 'endnote'>> = {
+  footnoteReference: 'footnote',
+  endnoteReference: 'endnote',
+};
+
+/** Note ids, as `footnote:3`, that the main story references. */
+function referencedNotes(parts: readonly OoxmlPart[]): ReadonlySet<string> {
+  const out = new Set<string>();
+  const main = parts.find((part) => part.contentType.endsWith('document.main+xml'));
+  const stack: ElementNode[] = main ? [...elementChildren(main.root)] : [];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    const kind = NOTE_REFERENCES[node.localName];
+    if (kind) out.add(`${kind}:${attributeOf(node, 'id') ?? ''}`);
+    else stack.push(...elementChildren(node));
+  }
+  return out;
+}
+
+/** A notes part without the notes nothing references: those never show. */
+function referencedOnly(part: OoxmlPart, referenced: ReadonlySet<string>): OoxmlPart {
+  const kind = part.contentType.endsWith('.footnotes+xml') ? 'footnote' : 'endnote';
+  const children = elementChildren(part.root).filter(
+    (note) => note.localName !== kind || referenced.has(`${kind}:${attributeOf(note, 'id') ?? ''}`)
+  );
+  return { ...part, root: { ...part.root, children } as OoxmlPart['root'] };
+}
+
 /** Paragraph text (and, at the properties level, paragraph properties) per story, sorted. */
-function fingerprint(parts: Iterable<OoxmlPart>, level: Level): string {
+function fingerprint(list: readonly OoxmlPart[], level: Level): string {
   const stories: string[] = [];
-  for (const part of parts) {
-    if (!isStory(part)) continue;
+  const referenced = referencedNotes(list);
+  for (const story of list) {
+    const part = story.contentType.endsWith('notes+xml')
+      ? referencedOnly(story, referenced)
+      : story;
     const digest = digestPart(part);
     if (!digest) continue;
-    // A note whose reference was rejected (or accepted away) stays as an empty note.
+    // Empty paragraphs carry no text. A note whose reference was rejected (or accepted away)
+    // stays as an empty note, and a deleted block content control keeps an empty paragraph
+    // when no paragraph follows it to join.
     const notes = part.contentType.endsWith('notes+xml');
     const paragraphs = digest.paragraphs
-      .filter((paragraph) => !notes || paragraph.text.trim() !== '')
+      .filter((paragraph) => (level === 'properties' && !notes) || paragraph.text.trim() !== '')
       .map((paragraph) => paragraphFingerprint(paragraph, level));
     // Empty stories carry no content (a deleted header, a notes part with only separators).
     if (digest.paragraphs.every((paragraph) => paragraph.text.trim() === '')) continue;
@@ -66,8 +115,7 @@ function paragraphFingerprint(paragraph: ParagraphDigest, level: Level): string 
 
 function resolved(pkg: OoxmlPackage, op: 'acceptAllRevisions' | 'rejectAllRevisions'): OoxmlPart[] {
   const out: OoxmlPart[] = [];
-  for (const part of pkg.parts.values()) {
-    if (!isStory(part)) continue;
+  for (const part of storyParts(pkg)) {
     const result = applyTreeOp(part, { op });
     const next = result.ok ? result.part : part;
     // Re-read, so renamed elements (a restored `w:instrText`) take their typed kinds.
@@ -106,8 +154,8 @@ export function selfCheck(
   const check = (level: Level) => {
     const a = fingerprint(accepted, level);
     const r = fingerprint(rejected, level);
-    const expectedA = fingerprint(revised.parts.values(), level);
-    const expectedR = fingerprint(original.parts.values(), level);
+    const expectedA = fingerprint(storyParts(revised), level);
+    const expectedR = fingerprint(storyParts(original), level);
     return {
       accept: a === expectedA,
       reject: r === expectedR,
