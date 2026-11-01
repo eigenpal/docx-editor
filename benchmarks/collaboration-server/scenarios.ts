@@ -404,20 +404,43 @@ async function main(): Promise<void> {
     const width = values.jobs ? Number(values.jobs) : defaultMatrixWidth();
     const started = performance.now();
     console.log(`${jobs.length} seeds across ${width} processes`);
+    // A long sweep says how far it is: every 25 seeds, and at least once a minute.
+    let done = 0;
+    let failures = 0;
+    let reported = started;
+    const progress = (): void => {
+      const now = performance.now();
+      const elapsed = (now - started) / 1000;
+      const left = jobs.length - done;
+      // The heaviest shapes run first, so the estimate falls as the sweep goes on.
+      const estimate = done > 0 ? `, about ${Math.round((elapsed / done) * left)} s left` : '';
+      console.log(
+        `progress: ${done} of ${jobs.length} seeds done, ${left} remaining, ` +
+          `${failures} failed, ${Math.round(elapsed)} s${estimate}`
+      );
+      reported = now;
+    };
+    const ticker = setInterval(() => {
+      if (performance.now() - reported >= 60_000) progress();
+    }, 5_000);
     const results = await runMatrix(
       fileURLToPath(import.meta.url),
       values.document!,
       jobs,
       width,
       (result) => {
+        done += 1;
         if (result.problem) {
+          failures += 1;
           console.log(
             `FAIL ${result.config} ${result.delivery} seed ${result.seed}: ${result.problem.slice(0, 160)}`
           );
         }
+        if (done % 25 === 0 && done < jobs.length) progress();
       },
       strict ? ['--strict'] : []
     );
+    clearInterval(ticker);
     const groups = new Map<string, { clean: number; total: number; applied: number }>();
     for (const result of results) {
       const key = `${result.config}, ${result.delivery} delivery`;
