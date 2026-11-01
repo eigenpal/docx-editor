@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The collaboration session repaired split anchors, restored text marks, and split entries itself after each undo or redo step.",
+  "after": "The session calls one repair function beside the history step, which does the same three repairs in the same order.",
+  "reason": "This moves code to keep a file under its line cap. Shared nodes, operations, transaction origins, and serialization formats are unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-undo-groups.test.ts",
+    "packages/pro/src/collaboration/__tests__/split-text-source-undo.test.ts"
+  ],
+  "changeset": "session-history-repair-module",
+  "migration": null
+}

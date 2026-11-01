@@ -16,7 +16,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import * as Y from 'yjs';
 import type { LogicalId } from './identity.ts';
 import type { DocumentRegistry } from './registry.ts';
-import { RESTORE_ORIGIN } from './paragraph-text-restore.ts';
+import { markRestoredText, RESTORE_ORIGIN } from './paragraph-text-restore.ts';
+import { relistSplitEntries } from './split-points.ts';
 import { isElementRecord, isNodeMap, NODE_UNDONE_FIELD } from './schema.ts';
 import { textDeletionsOf, type DeletedRun } from './paragraph-text-deletions.ts';
 import { deleteSetRuns, structAt } from './yjs-items.ts';
@@ -98,6 +99,20 @@ interface HistoryStack {
   undo(): unknown;
   redo(): unknown;
   stopCapturing(): void;
+}
+
+/**
+ * Repairs what an undo or redo step restored, after Yjs wrote it. `from` is this client's clock
+ * before the step: split text anchors, restored text marks and split entries written since
+ * then are put back the way the step's peers read them.
+ */
+export function repairRestored(registry: DocumentRegistry, doc: Y.Doc, from: number): void {
+  registry.normalizeRestoredSplitTextAnchors();
+  markRestoredText(doc, from);
+  doc.transact(
+    () => relistSplitEntries(doc, (id) => registry.schema.nodes.get(id), from),
+    RESTORE_ORIGIN
+  );
 }
 
 /**

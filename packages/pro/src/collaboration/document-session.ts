@@ -15,11 +15,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { projectTypingOrJournal } from './document/projected-journal.ts';
 import { prepareMemberRootJournal } from './document/prepare-member-root-journal.ts';
 import { editWaits } from './document/journal.ts';
-import { markRestoredText, RESTORE_ORIGIN } from './document/paragraph-text-restore.ts';
-import { relistSplitEntries } from './document/split-points.ts';
 import { awaitingUpdates } from './document/yjs-items.ts';
 import { viewRenamesPlan } from './document/paragraph-text-drift.ts';
-import { stepHistory } from './document/history-undone.ts';
+import { repairRestored, stepHistory } from './document/history-undone.ts';
 import { HistoryGroupCapture } from './document/history-group-capture.ts';
 import * as Y from 'yjs';
 import type { Awareness } from 'y-protocols/awareness';
@@ -435,14 +433,9 @@ class DocumentSession implements DocumentCollaborationSession {
     this.historySelections.startPop();
     const from = Y.getState(this.ydoc.store, this.ydoc.clientID);
     this.registry.takeUnlisted();
-    stepHistory(this.registry, this.undoManager, direction, () => {
-      this.registry.normalizeRestoredSplitTextAnchors();
-      markRestoredText(this.ydoc, from);
-      this.ydoc.transact(
-        () => relistSplitEntries(this.ydoc, (id) => this.registry.schema.nodes.get(id), from),
-        RESTORE_ORIGIN
-      );
-    });
+    stepHistory(this.registry, this.undoManager, direction, () =>
+      repairRestored(this.registry, this.ydoc, from)
+    );
     return true;
   }
 
