@@ -68,6 +68,7 @@ export {
   addPackageComment,
   deletePackageComments,
   setPackageCommentResolved,
+  setPackageCommentText,
   type PackageCommentDelete,
 } from './comment-package-write.ts';
 export { insertPackageCustomNode, removePackageCustomNode } from './custom-node-package-write.ts';
@@ -76,6 +77,7 @@ export { nextCommentId } from './comment-id-mint.ts';
 export {
   addComment,
   setCommentResolved,
+  setCommentText,
   commentPartNameOf,
   commentsExtendedPartNameOf,
   hasCommentPart,
@@ -83,6 +85,7 @@ export {
   type AddCommentResult,
   type CommentAnchorRequest,
   type SetCommentResolvedResult,
+  type SetCommentTextResult,
 } from './comment-writes.ts';
 export {
   MAX_CUSTOM_NODE_LABEL_LENGTH,

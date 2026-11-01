@@ -139,7 +139,7 @@ describe('history groups across review writes', () => {
   );
 
   test(
-    'card writes join the group: accept, reply, resolve and delete',
+    'card writes join the group: accept, reply, resolve, edit and delete',
     withEditor(async (editor) => {
       const before = await saved(editor);
       const decision = editor.beginHistoryGroup();
@@ -154,6 +154,9 @@ describe('history groups across review writes', () => {
       const comment = editor.getReviewItems().find((item) => item.kind === 'comment')!;
       expect(
         editor.setCommentResolved(comment.key, true, { historyGroup: decision })
+      ).toMatchObject({ ok: true, history: { kind: 'extended' } });
+      expect(
+        editor.setCommentText(comment.key, 'Why only 30?', { historyGroup: decision })
       ).toMatchObject({ ok: true, history: { kind: 'extended' } });
       expect(editor.exec({ type: 'undo' }).ok).toBe(true);
       expect(await saved(editor)).toBe(before);
@@ -266,6 +269,7 @@ describe('history groups across review writes', () => {
           editor.replyToReviewItem(card!.key, 'No', undefined, options),
           editor.deleteReviewItem(card!.key, options),
           editor.setCommentResolved(card!.key, true, options),
+          editor.setCommentText(card!.key, 'No', options),
           editor.exec({ type: 'resolveAllReviewChanges', action: 'accept' }, options),
         ]) {
           expect(result).toMatchObject({ ok: false, code: 'unsupported' });

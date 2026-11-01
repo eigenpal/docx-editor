@@ -731,6 +731,20 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
   setCommentResolved(key: string, resolved: boolean, options?: HistoryGroupOptions): ExecResult;
 
   /**
+   * Replace the text of the comment, or of the reply, behind a review card.
+   *
+   * The body becomes one paragraph of plain text, as {@link addComment} writes it; a line break in
+   * `text` does not start a new paragraph. The author, the date, the thread state, the replies and
+   * the range the comment covers stay, so the comment keeps its place in its thread when the file
+   * opens in Word. The write is one package transaction and one undo step, and it joins an open
+   * history group. Text the card already shows succeeds without adding an undo entry.
+   *
+   * Refused on a revision card, on blank text, in viewing mode and in a collaboration session;
+   * other refusals name their cause, as {@link addComment} describes.
+   */
+  setCommentText(key: string, text: string, options?: HistoryGroupOptions): ExecResult;
+
+  /**
    * Discard the item behind a card: the destructive half of the review verbs.
    *
    * On a COMMENT it deletes the thread — the `w:comment` body, the `w15:commentEx` record and
