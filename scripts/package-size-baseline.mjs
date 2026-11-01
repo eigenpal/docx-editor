@@ -4,7 +4,11 @@ import { appendFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export function selectBaselineRun(runs, { repository, branch, sha }) {
+// The run does not have to be finished or green. Main pushes cancel each other
+// (`cancel-in-progress`), and a PR often starts while its base is still running.
+// The build job uploads `package-sizes` only after the build and size check pass,
+// so a retained artifact on the exact base commit is a sound baseline.
+export function selectBaselineRuns(runs, { repository, branch, sha }) {
   return runs
     .filter(
       (run) =>
@@ -12,11 +16,9 @@ export function selectBaselineRun(runs, { repository, branch, sha }) {
         run.head_branch === branch &&
         run.event === 'push' &&
         run.path === '.github/workflows/ci.yml' &&
-        run.conclusion === 'success' &&
-        run.status === 'completed' &&
         run.head_repository?.full_name === repository
     )
-    .sort((a, b) => b.id - a.id)[0];
+    .sort((a, b) => b.id - a.id);
 }
 
 export function downloadBaseline(
@@ -31,26 +33,23 @@ export function downloadBaseline(
   rmSync(join(directory, 'package-sizes.json'), { force: true });
   const api = (path) =>
     JSON.parse(run(['api', '-H', 'Cache-Control: no-cache', `repos/${repository}/${path}`]));
-  const query = new URLSearchParams({
-    branch,
-    event: 'push',
-    head_sha: sha,
-    status: 'success',
-    per_page: '100',
-  });
-  const source = selectBaselineRun(api(`actions/workflows/ci.yml/runs?${query}`).workflow_runs, {
-    repository,
-    branch,
-    sha,
-  });
+  const query = new URLSearchParams({ branch, event: 'push', head_sha: sha, per_page: '100' });
+  const candidates = selectBaselineRuns(
+    api(`actions/workflows/ci.yml/runs?${query}`).workflow_runs,
+    {
+      repository,
+      branch,
+      sha,
+    }
+  );
+  const source = candidates.find((candidate) =>
+    api(`actions/runs/${candidate.id}/artifacts?per_page=100`).artifacts.some(
+      (artifact) => artifact.name === 'package-sizes' && !artifact.expired
+    )
+  );
   if (!source) {
-    console.log(`No successful CI baseline for ${branch}@${sha}; reporting sizes without deltas.`);
-    return;
-  }
-  const artifacts = api(`actions/runs/${source.id}/artifacts?per_page=100`).artifacts;
-  if (!artifacts.some((artifact) => artifact.name === 'package-sizes' && !artifact.expired)) {
     console.log(
-      `CI run ${source.id} has no retained package-sizes artifact for ${sha}; reporting sizes without deltas.`
+      `No CI run for ${branch}@${sha} has a retained package-sizes artifact (${candidates.length} checked); reporting sizes without deltas.`
     );
     return;
   }
