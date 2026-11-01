@@ -22,7 +22,7 @@ import {
   readOoxmlPackage,
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
-import { readCollaborationDocument } from './document-read.ts';
+import { readCollaborationDocumentKeepingRevisionIds } from './document-read.ts';
 import { validateDocumentId } from './document-awareness.ts';
 import { COLLABORATION_FORMAT_VERSION, readCollaborationFormatVersion } from './document-format.ts';
 import { PACKAGE_META_KEY } from './document/schema.ts';
@@ -234,7 +234,7 @@ export async function migrateCollaborationRoom(
   // One step at a time, so a step's memory is free before the next step needs its own.
   // The earlier room's content as it is: migration changes the format, not what it shows.
   const state = await seedGeneration(options.exported, documentId, { keepBound: true });
-  const after = withRoom(state, (room) => readCollaborationDocument(room));
+  const after = withRoom(state, (room) => readCollaborationDocumentKeepingRevisionIds(room));
   const before = await migrationContentsOf(options.exported);
   const report = compareMigrationContents(before, await migrationContentsOf(after), {
     from: earlier.format ?? 'unversioned',

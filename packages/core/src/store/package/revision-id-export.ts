@@ -10,8 +10,14 @@
 // The pass is deterministic and minimal. Parts are visited in a fixed order (main document
 // first, then by part name), and elements in document order. The first element to use an id
 // keeps it, so a file whose ids are already unique and in range saves unchanged. Every later
-// user of a taken id, and every id that is not a valid 32-bit integer, gets one past the
-// highest id in use, or the lowest free id once that passes the ceiling.
+// user of a taken id, and every id that is not a valid 32-bit integer, gets a new id.
+//
+// A new id depends only on the id the element had and on how many elements with that id came
+// before it, never on the highest id in use or on other conflicts. So a later edit that mints
+// a revision, or splits a revision with another id, leaves every other new id as it was, and
+// a repeated save reuses the markup it wrote before. The id is a hash of those two inputs in
+// the lower half of the 32-bit range, moved up to the next free value when it is taken. The
+// upper half stays free for the ids the editor mints after the file is opened again.
 //
 // A range start and its end are one annotation and share one id by design: a
 // `w:moveFromRangeStart` and the `w:moveFromRangeEnd` that closes it are renumbered together.
@@ -19,6 +25,7 @@
 // read or written here.
 
 import { MAX_DECIMAL_ID } from './actor-scoped-ids.ts';
+import { fnv1a32 } from './para-id.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { MC_NAMESPACE_URI, WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type { OoxmlAttribute, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
@@ -69,7 +76,12 @@ export function parseRevisionId(value: string): number | null {
 interface Conflict {
   readonly partName: string;
   readonly nodeIds: string[];
+  /** The authored id, and how many conflicts with that authored id came before this one. */
+  readonly seed: string;
 }
+
+/** New ids fall in `[0, 2^30)`, the lower half of the non-negative 32-bit range. */
+const NEW_ID_MASK = (1 << 30) - 1;
 
 /** The `w:id` attribute value of a WML element, or undefined when it has none. */
 function revisionIdOf(node: OoxmlNode): string | undefined {
@@ -99,15 +111,23 @@ function partsInOrder(pkg: OoxmlPackage): OoxmlPart[] {
 class RevisionIdScan {
   readonly used = new Set<number>();
   readonly conflicts: Conflict[] = [];
-  highest = -1;
+  /** Conflicts seen so far per authored id, for each conflict's seed. */
+  private readonly repeats = new Map<string, number>();
 
   /** Claims `value` for a new annotation; answers whether the annotation keeps it. */
   private claim(value: string): boolean {
     const parsed = parseRevisionId(value);
     if (parsed === null || this.used.has(parsed)) return false;
     this.used.add(parsed);
-    if (parsed > this.highest) this.highest = parsed;
     return true;
+  }
+
+  private conflict(partName: string, nodeId: string, value: string): Conflict {
+    const count = this.repeats.get(value) ?? 0;
+    this.repeats.set(value, count + 1);
+    const conflict = { partName, nodeIds: [nodeId], seed: `${value}\u0000${count}` };
+    this.conflicts.push(conflict);
+    return conflict;
   }
 
   scanPart(part: OoxmlPart): void {
@@ -125,7 +145,9 @@ class RevisionIdScan {
         }
       } else if (node.namespaceUri === MC_NAMESPACE_URI && node.localName === 'Fallback') {
         // A fallback holds a second copy of the content its choice holds, ids included; only
-        // one of the two is read. Save re-syncs a text box fallback from its choice afterwards.
+        // one of the two is read, and save re-syncs a text box fallback from its choice. Its
+        // ids are not rewritten, but no new id may take one of them.
+        this.reserve(node);
         return;
       }
       for (const child of node.children) visit(child);
@@ -133,10 +155,24 @@ class RevisionIdScan {
     visit(part.root);
   }
 
+  /** Marks every revision id under `node` as used, without claiming or rewriting any. */
+  private reserve(node: OoxmlNode): void {
+    if (node.kind === 'textValue') return;
+    if (
+      node.namespaceUri === WML_NAMESPACE_URI &&
+      (REVISION_ID_BEARING.has(node.localName) || PAIRED_RANGES.has(node.localName))
+    ) {
+      const value = revisionIdOf(node);
+      const parsed = value === undefined ? null : parseRevisionId(value);
+      if (parsed !== null) this.used.add(parsed);
+    }
+    for (const child of node.children) this.reserve(child);
+  }
+
   private single(partName: string, node: OoxmlNode): void {
     const value = revisionIdOf(node);
     if (value === undefined || this.claim(value)) return;
-    this.conflicts.push({ partName, nodeIds: [node.id] });
+    this.conflict(partName, node.id, value);
   }
 
   private range(
@@ -150,8 +186,7 @@ class RevisionIdScan {
     if (value === undefined) return;
     const key = `${family}\u0000${value}`;
     if (start) {
-      const conflict = this.claim(value) ? null : { partName, nodeIds: [node.id] };
-      if (conflict) this.conflicts.push(conflict);
+      const conflict = this.claim(value) ? null : this.conflict(partName, node.id, value);
       const stack = open.get(key);
       if (stack) stack.push(conflict);
       else open.set(key, [conflict]);
@@ -170,19 +205,11 @@ class RevisionIdScan {
   /** New ids for every conflict, in the order they were found. */
   assign(): Map<string, Map<string, string>> {
     const byPart = new Map<string, Map<string, string>>();
-    let next = this.highest + 1;
-    let cursor = 0;
     for (const conflict of this.conflicts) {
-      let id: number;
-      if (next <= MAX_DECIMAL_ID) {
-        id = next;
-        next += 1;
-      } else {
-        // Past the ceiling, the lowest free id. The used set holds at most one id per
-        // element read, so this ends long before the ceiling.
-        while (this.used.has(cursor)) cursor += 1;
-        id = cursor;
-      }
+      // The used set holds at most one id per element read, far fewer than the 2^30 values
+      // the probe can walk, so it reaches a free one quickly.
+      let id = fnv1a32(conflict.seed) & NEW_ID_MASK;
+      while (this.used.has(id)) id = (id + 1) & NEW_ID_MASK;
       this.used.add(id);
       let changes = byPart.get(conflict.partName);
       if (!changes) byPart.set(conflict.partName, (changes = new Map()));

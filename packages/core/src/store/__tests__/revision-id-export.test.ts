@@ -12,6 +12,7 @@ import {
 } from '../package/ooxml-package.ts';
 import { serializeOoxmlPart, type OoxmlNode } from '../package/ooxml-tree.ts';
 import { parseRevisionId, uniqueRevisionIdsExportPackage } from '../package/revision-id-export.ts';
+import { fnv1a32 } from '../package/para-id.ts';
 import { TreePackageStore } from '../store/tree-package-store.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -91,6 +92,26 @@ function firstParagraphId(node: OoxmlNode): string {
 
 const saved = (pkg: OoxmlPackage): OoxmlPackage => open(writeOoxmlPackage(pkg));
 
+const NEW_ID_LIMIT = 2 ** 30;
+
+/**
+ * `entries` with each id outside `kept` named `A`, `B`, ... by first appearance. A new id is
+ * stable but not dense, so tests name it by role. Every new id must be in range and distinct
+ * from every kept id.
+ */
+function named(entries: readonly string[], kept: readonly string[]): string[] {
+  const names = new Map<string, string>();
+  return entries.map((entry) => {
+    const at = entry.indexOf(':');
+    const value = entry.slice(at + 1);
+    if (kept.includes(value)) return entry;
+    expect(value).toMatch(/^\d{1,10}$/);
+    expect(Number(value)).toBeLessThan(NEW_ID_LIMIT);
+    if (!names.has(value)) names.set(value, String.fromCharCode(65 + names.size));
+    return `${entry.slice(0, at)}:${names.get(value)}`;
+  });
+}
+
 const run = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
 const ins = (id: string, text: string, author = 'Other') =>
   `<w:ins w:id="${id}" w:author="${author}" ${DATE}>${run(text)}</w:ins>`;
@@ -119,7 +140,7 @@ describe('saved revision ids', () => {
     expect(ids(live)).toEqual(['ins:1', 'ins:2', 'ins:1']);
 
     const reopened = saved(live);
-    expect(ids(reopened)).toEqual(['ins:1', 'ins:2', 'ins:3']);
+    expect(named(ids(reopened), ['1', '2'])).toEqual(['ins:1', 'ins:2', 'ins:A']);
     // Save is a projection: the live tree still holds the ids it had.
     expect(ids(store.currentPackage())).toEqual(['ins:1', 'ins:2', 'ins:1']);
     expect(store.currentPackage()).toBe(live);
@@ -130,22 +151,30 @@ describe('saved revision ids', () => {
       docx(`<w:p>${ins('4', 'body')}</w:p>`, `<w:p>${del('4', 'head')}${ins('5', 'more')}</w:p>`)
     );
     const reopened = saved(pkg);
-    expect(ids(reopened)).toEqual(['ins:4']);
-    expect(ids(reopened, '/word/header1.xml')).toEqual(['del:6', 'ins:5']);
+    expect(named([...ids(reopened), ...ids(reopened, '/word/header1.xml')], ['4', '5'])).toEqual([
+      'ins:4',
+      'del:A',
+      'ins:5',
+    ]);
   });
 
   test('ids outside the 32-bit range are replaced with in-range ids', () => {
     const pkg = open(
       docx(`<w:p>${ins('4294967299', 'a')}${ins('99999999999', 'b')}${ins('7', 'c')}</w:p>`)
     );
-    expect(ids(saved(pkg))).toEqual(['ins:8', 'ins:9', 'ins:7']);
+    expect(named(ids(saved(pkg)), ['7'])).toEqual(['ins:A', 'ins:B', 'ins:7']);
   });
 
-  test('ids at the ceiling wrap to the lowest free id', () => {
+  test('a file that uses the ceiling still gets free in-range ids', () => {
     const pkg = open(
       docx(`<w:p>${ins('2147483647', 'a')}${ins('0', 'b')}${ins('0', 'c')}${ins('x', 'd')}</w:p>`)
     );
-    expect(ids(saved(pkg))).toEqual(['ins:2147483647', 'ins:0', 'ins:1', 'ins:2']);
+    expect(named(ids(saved(pkg)), ['2147483647', '0'])).toEqual([
+      'ins:2147483647',
+      'ins:0',
+      'ins:A',
+      'ins:B',
+    ]);
   });
 
   test('property and structural revisions share the one id space', () => {
@@ -156,11 +185,11 @@ describe('saved revision ids', () => {
       '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr><w:tblGrid><w:gridCol w:w="100"/></w:tblGrid>' +
       '<w:tr><w:trPr><w:ins w:id="3" w:author="Other"/></w:trPr>' +
       '<w:tc><w:tcPr><w:cellIns w:id="3" w:author="Other"/></w:tcPr><w:p/></w:tc></w:tr></w:tbl>';
-    expect(ids(saved(open(docx(body))))).toEqual([
+    expect(named(ids(saved(open(docx(body)))), ['3'])).toEqual([
       'pPrChange:3',
-      'rPrChange:4',
-      'ins:5',
-      'cellIns:6',
+      'rPrChange:A',
+      'ins:B',
+      'cellIns:C',
     ]);
   });
 
@@ -173,14 +202,14 @@ describe('saved revision ids', () => {
       '<w:p><w:moveToRangeStart w:id="5" w:author="Other" w:name="m1"/>' +
       `<w:moveTo w:id="6" w:author="Other" ${DATE}>${run('moved')}</w:moveTo>` +
       '<w:moveToRangeEnd w:id="5"/></w:p>';
-    expect(ids(saved(open(docx(body))))).toEqual([
+    expect(named(ids(saved(open(docx(body)))), ['5', '6'])).toEqual([
       'ins:5',
-      'moveFromRangeStart:7',
+      'moveFromRangeStart:A',
       'moveFrom:6',
-      'moveFromRangeEnd:7',
-      'moveToRangeStart:8',
-      'moveTo:9',
-      'moveToRangeEnd:8',
+      'moveFromRangeEnd:A',
+      'moveToRangeStart:B',
+      'moveTo:C',
+      'moveToRangeEnd:B',
     ]);
   });
 
@@ -189,11 +218,11 @@ describe('saved revision ids', () => {
       '<w:p><w:bookmarkStart w:id="1" w:name="b"/><w:commentRangeStart w:id="1"/>' +
       `${ins('1', 'a')}${del('1', 'b')}<w:bookmarkEnd w:id="1"/><w:commentRangeEnd w:id="1"/>` +
       '<w:r><w:commentReference w:id="1"/></w:r></w:p>';
-    expect(ids(saved(open(docx(body))))).toEqual([
+    expect(named(ids(saved(open(docx(body)))), ['1'])).toEqual([
       'bookmarkStart:1',
       'commentRangeStart:1',
       'ins:1',
-      'del:2',
+      'del:A',
       'bookmarkEnd:1',
       'commentRangeEnd:1',
       'commentReference:1',
@@ -207,6 +236,36 @@ describe('saved revision ids', () => {
       '</mc:AlternateContent></w:p>';
     const pkg = open(docx(body));
     expect(uniqueRevisionIdsExportPackage(pkg)).toBe(pkg);
+  });
+
+  test('a new id never takes an id a fallback copy uses', () => {
+    // The id the first repeat of `1` would get, written in a fallback.
+    const taken = String(fnv1a32('1\u00000') & (NEW_ID_LIMIT - 1));
+    const body =
+      `<w:p>${ins('1', 'a')}${ins('1', 'b')}<mc:AlternateContent><mc:Choice Requires="w14">` +
+      `${ins('3', 'c')}</mc:Choice><mc:Fallback>${ins(taken, 'c')}</mc:Fallback>` +
+      '</mc:AlternateContent></w:p>';
+    const found = ids(saved(open(docx(body))));
+    expect(found[0]).toBe('ins:1');
+    expect(found[1]).not.toBe(`ins:${taken}`);
+    expect(named(found, ['1', '3', taken])).toEqual(['ins:1', 'ins:A', 'ins:3', `ins:${taken}`]);
+  });
+
+  test('new ids stay put when an edit elsewhere mints or splits a revision', () => {
+    const second = `<w:p>${ins('2', 'c')}${run('plain')}${ins('2', 'd')}</w:p>`;
+    const before = ids(saved(open(docx(`<w:p>${ins('1', 'a')}${ins('1', 'b')}</w:p>${second}`))));
+    const after = ids(
+      saved(
+        open(
+          docx(
+            `<w:p>${ins('9', 'new')}${ins('1', 'a')}${ins('1', 'x')}${ins('1', 'b')}</w:p>${second}`
+          )
+        )
+      )
+    );
+    // The second paragraph's repeat keeps the new id it had before the edit above it.
+    expect(after.slice(-2)).toEqual(before.slice(-2));
+    expect(before.at(-1)).not.toBe('ins:2');
   });
 
   test('a document whose ids are unique saves byte-identical parts', () => {
@@ -230,7 +289,7 @@ describe('saved revision ids', () => {
   test('keeping revision ids writes them as the package holds them', () => {
     const pkg = open(docx(`<w:p>${ins('1', 'a')}${ins('1', 'b')}</w:p>`));
     expect(ids(open(writeOoxmlPackageKeepingRevisionIds(pkg)))).toEqual(['ins:1', 'ins:1']);
-    expect(ids(saved(pkg))).toEqual(['ins:1', 'ins:2']);
+    expect(named(ids(saved(pkg)), ['1'])).toEqual(['ins:1', 'ins:A']);
   });
 
   test('custom XML revision ranges keep their start and end paired', () => {
@@ -239,12 +298,12 @@ describe('saved revision ids', () => {
       `${run('b')}<w:customXmlInsRangeEnd w:id="2"/>` +
       '<w:customXmlDelRangeStart w:id="2" w:author="Other"/>' +
       `${run('c')}<w:customXmlDelRangeEnd w:id="2"/></w:p>`;
-    expect(ids(saved(open(docx(body))))).toEqual([
+    expect(named(ids(saved(open(docx(body)))), ['2'])).toEqual([
       'ins:2',
-      'customXmlInsRangeStart:3',
-      'customXmlInsRangeEnd:3',
-      'customXmlDelRangeStart:4',
-      'customXmlDelRangeEnd:4',
+      'customXmlInsRangeStart:A',
+      'customXmlInsRangeEnd:A',
+      'customXmlDelRangeStart:B',
+      'customXmlDelRangeEnd:B',
     ]);
   });
 
