@@ -9,7 +9,14 @@ import { footnoteContinuationNotice } from './note-continuation-notice.ts';
 import { splitNoteHead, splitNoteKeepsParagraphReference } from './note-eviction-guard.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
-import { chargedSpaceAfterPt, pageCitesFootnote } from './note-area-fit.ts';
+import {
+  chargedSpaceAfterPt,
+  pageCitesFootnote,
+  rejoinPoint,
+  type RejoinPoint,
+} from './note-area-fit.ts';
+import { collapsingSpaceAfter } from './adjacent-paragraph-spacing.ts';
+import { collapsedSpaceBefore } from './paragraph-style.ts';
 import { fragmentOwnsPosition } from './line-segments.ts';
 import {
   bodyCursorBottomPt,
@@ -116,12 +123,18 @@ export interface HoldOutArgs {
  * every pulled reference in the OWNING BLOCK, not just the frontier line's — a
  * citation-dense paragraph pulls all of its notes back together.
  *
+ * The pull-back fit starts the pulled band below the closing paragraph's space after, where
+ * the body pass places a returning paragraph, plus any space before the band kept at the page
+ * top.
+ *
  * Known approximation: the pull-back fit charges the pulled band's page-top geometry plus
  * one reference-line of headroom (the split tail wraps from the split offset, so the
  * reference sits up to one line higher here than the joined re-wrap a pull-back
- * produces). A pulled paragraph whose applied `w:spacing w:before` exceeds that headroom
- * can still release early; the loop then degrades to the pre-eviction envelope/exhaustion
- * exit rather than diverging.
+ * produces). A space before that the page top suppressed is not published, so it is not
+ * charged: it widens the gap by its excess over the closing paragraph's space after, or by
+ * all of it where the two add up (`w:doNotUseHTMLParagraphAutoSpacing`). One larger than that
+ * headroom can still release early; the loop then degrades to the pre-eviction
+ * envelope/exhaustion exit rather than diverging.
  */
 export function holdOutReserveNeed(args: HoldOutArgs): number {
   const { bodyPage, nextPage } = args;
@@ -159,11 +172,20 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
 
   // The closing paragraph's charged space after belongs to the body end here.
   const bodyBottom = bodyCursorBottomPt(bodyPage) + chargedSpaceAfterPt(bodyPage);
+  // Where the pulled band would start: below the closing paragraph's space after, which the
+  // page charges once the band's reference returns to it. A release measured from the bare
+  // body end lets the band back, the band lands lower than measured, and the page's own
+  // eviction pushes it out again: the reflow loop orbits the two placements.
+  // A next page that opens a continuous section keeps its first paragraph's space before at
+  // the page top; on return that space collapses against the rejoin point's space after, as
+  // the body pass collapses them. Elsewhere a page-top paragraph publishes no space before.
+  const rejoin = rejoinPoint(bodyPage, bodyBottom);
+  const returnTop = rejoin.bottom + returningSpaceBeforePt(nextBody, rejoin, args.opts);
   const contentHeight = bodyPage.contentBox.height;
-  // A slack that cannot seat even the pulled line needs no reserve to stay out — and
-  // publishing one for every naturally full page would churn the reserve fingerprints
-  // the reflow loop converges on.
-  if (contentHeight - bodyBottom < refLineHeight - 0.001) return 0;
+  // A slack that cannot seat even the pulled line where it would return needs no reserve to
+  // stay out — and publishing one for every naturally full page would churn the reserve
+  // fingerprints the reflow loop converges on.
+  if (contentHeight - returnTop < refLineHeight - 0.001) return 0;
 
   // The pulled band spans from the page's first content to the reference paragraph's
   // fragment. A table anywhere in that opening run, or a reference deeper than the scan
@@ -371,7 +393,7 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
       noteReferenceOpeningBottom(nextBody, ref, band) - firstContentTop
     );
     const remaining =
-      contentHeight - bodyBottom - referenceOpening - existingArea - pulledNotesHeight;
+      contentHeight - returnTop - referenceOpening - existingArea - pulledNotesHeight;
     const noticeHeight =
       admitsSplit || (args.existingNoticeHeight ?? 0) > 0
         ? 0
@@ -423,14 +445,14 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
     owningAt,
     owningBlock,
     frontier,
-    bodyBottom,
+    returnTop,
     Math.max(0, contentHeight - bodyBottom - RESERVE_BOUNDARY_BACKOFF_PT)
   );
   const fitsLineQuantum =
-    bodyBottom + splitOpeningHeight + headroom + areaWithPulled <= contentHeight + 0.001;
+    returnTop + splitOpeningHeight + headroom + areaWithPulled <= contentHeight + 0.001;
   if (!fitsLineQuantum) return hold;
   const fitsWholeBlock =
-    bodyBottom + blockBandHeight + headroom + areaWithPulled <= contentHeight + 0.001;
+    returnTop + blockBandHeight + headroom + areaWithPulled <= contentHeight + 0.001;
   if (fitsWholeBlock) return 0;
   // The optimistic quantum fits but the whole block does not. Whether releasing is safe
   // depends on whether the block can SPLIT, which the body pass has already answered:
@@ -443,7 +465,7 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   // outside the reflow loop must not manufacture holds the loop never observed).
   const { usedReservePt } = args;
   if (usedReservePt === undefined) return 0;
-  const offeredGap = Math.max(0, contentHeight - usedReservePt - bodyBottom);
+  const offeredGap = Math.max(0, contentHeight - usedReservePt - returnTop);
   const neverOfferedTheRoom = lineBandHeight + refLineHeight > offeredGap + 0.001;
   const alreadyHeldHere = Math.abs(usedReservePt - hold) <= HELD_RESERVE_TOLERANCE_PT;
   return neverOfferedTheRoom && !alreadyHeldHere ? 0 : hold;
@@ -465,7 +487,8 @@ function leadingLinesHold(
   owningAt: number,
   owner: ParagraphFragmentRecord,
   frontier: NoteReferenceLineBand,
-  bodyBottom: number,
+  /** Where the returning paragraph's first line starts ({@link holdOutReserveNeed}). */
+  returnTop: number,
   fullHold: number
 ): number {
   if (owningAt !== 0 || !stacksInOneColumn(args.bodyPage) || !stacksInOneColumn(nextBody)) {
@@ -489,14 +512,33 @@ function leadingLinesHold(
   const least = keeps.widowControl && owner.fragmentIndex === 0 ? 2 : 1;
   const contentHeight = args.bodyPage.contentBox.height;
   const ownReserve = args.ownReservePt ?? args.existingAreaHeight;
-  const top = lines[0]!.box.y - (owner.fragmentIndex === 0 ? owner.spacing.before : 0);
   for (let count = most; count >= least; count -= 1) {
     const last = lines[count - 1]!;
-    const bottom = bodyBottom + last.box.y + last.box.height - top;
+    const bottom = returnTop + last.box.y + last.box.height - lines[0]!.box.y;
     const reserve = contentHeight - bottom - RESERVE_BOUNDARY_BACKOFF_PT;
     if (reserve >= ownReserve - 0.001) return Math.min(fullHold, Math.max(0, reserve));
   }
   return fullHold;
+}
+
+/**
+ * The space before the next page's first paragraph keeps when it returns below `rejoin`: the
+ * space it kept at the page top, collapsed against the space after there, or added to it
+ * where the document adds the two (`w:doNotUseHTMLParagraphAutoSpacing`).
+ */
+function returningSpaceBeforePt(
+  nextBody: PageRecord,
+  rejoin: RejoinPoint,
+  opts: LayoutNoteStoryOptions
+): number {
+  const first = nextBody.fragments[0];
+  if (first?.kind !== 'paragraph' || first.fragmentIndex !== 0 || first.spacing.before <= 0) {
+    return 0;
+  }
+  return collapsedSpaceBefore(
+    first.spacing.before,
+    collapsingSpaceAfter(rejoin.spaceAfter, opts.styleCascade)
+  );
 }
 
 /** The body opening that must return with a frontier reference. */
