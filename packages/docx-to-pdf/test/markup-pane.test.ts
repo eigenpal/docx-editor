@@ -176,3 +176,23 @@ test('ranges that end at the same place tie despite float noise in their boxes',
     ])
   ).toEqual(['Wide', 'Narrow']);
 });
+
+test('a range that ends before a later page part is numbered where it ends', () => {
+  // A split table row: the commented middle cell runs onto page 2, the range ends on page 1.
+  const occurrence = (pageIndex: number, y: number) => ({
+    rootStory: 'body',
+    pageIndex,
+    geometry: { pageStack: [{ x: 72, y, width: 100, height: 12 }] },
+  });
+  const reviewArtifacts = [
+    { kind: 'comment', id: 'Later', text: 'Later', occurrences: [occurrence(0, 700)] },
+    {
+      kind: 'comment',
+      id: 'Split',
+      text: 'Split',
+      occurrences: [occurrence(0, 500), occurrence(1, 100), occurrence(0, 600)],
+    },
+  ];
+  const layout = { reviewArtifacts } as unknown as Parameters<typeof commentsInOrder>[0];
+  expect(commentsInOrder(layout).map((comment) => comment.text)).toEqual(['Split', 'Later']);
+});
