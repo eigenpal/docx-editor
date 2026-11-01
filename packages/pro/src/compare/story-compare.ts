@@ -280,15 +280,19 @@ function emitHunk(
   const a = tokensOf(base, lastBase, moves);
   const b = tokensOf(revised, lastRevised, moves);
   const ops = pairBlocks(
-    coalesceGaps(
-      slideLeft(
-        diffKeys(
-          a.map((token) => token.key),
-          b.map((token) => token.key)
+    replaceWholeParagraphs(
+      coalesceGaps(
+        slideLeft(
+          diffKeys(
+            a.map((token) => token.key),
+            b.map((token) => token.key)
+          ),
+          a
         ),
         a
       ),
-      a
+      a,
+      b
     ),
     a,
     b
@@ -429,6 +433,41 @@ function slideLeft(input: readonly DiffOp[], a: readonly Token[]): DiffOp[] {
     i = j;
   }
   return ops;
+}
+
+/**
+ * A paragraph that keeps none of its text is replaced as a whole: the new paragraph is
+ * inserted and the old one deleted, each with its own mark. The final mark of a container
+ * stays, so its paragraph changes word by word.
+ */
+function replaceWholeParagraphs(
+  ops: readonly DiffOp[],
+  a: readonly Token[],
+  b: readonly Token[]
+): DiffOp[] {
+  const out: DiffOp[] = [];
+  let start = 0;
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i]!;
+    if (op.op !== 'eq' || a[op.a]!.kind !== 'mark') continue;
+    const segment = ops.slice(start, i);
+    const textOnly = segment.every(
+      (item) => item.op !== 'eq' && (item.op === 'ins' ? b[item.b] : a[item.a])!.kind === 'text'
+    );
+    const both =
+      segment.some((item) => item.op === 'ins') && segment.some((item) => item.op === 'del');
+    if (textOnly && both && a[op.a]!.key !== END_KEY) {
+      out.push(
+        ...segment.filter((item) => item.op === 'ins'),
+        { op: 'ins', b: op.b },
+        ...segment.filter((item) => item.op === 'del'),
+        { op: 'del', a: op.a }
+      );
+    } else out.push(...segment, op);
+    start = i + 1;
+  }
+  out.push(...ops.slice(start));
+  return out;
 }
 
 /** A text token of characters only: objects and note references never slide. */
