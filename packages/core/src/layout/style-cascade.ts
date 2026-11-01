@@ -56,7 +56,6 @@ import {
   type ParagraphLineSpacing,
   type ParagraphSpacing,
   cascadeLineSpacingFlags,
-  withoutAutoSpacingFlags,
 } from './paragraph-style.ts';
 import { paragraphShading } from './ooxml-shading.ts';
 import { cascadedTabStops, tabStopsFingerprint, type ResolvedTabStops } from './paragraph-tabs.ts';
@@ -868,14 +867,9 @@ export function resolveParagraphLayoutInputs(
   const nodes =
     cascaded?.paragraphPropertyNodes ??
     [numberingPPr, pPr].filter((node): node is OoxmlElement => node !== undefined);
-  const cascadedProps = cascaded
+  const props = cascaded
     ? [...cascaded.paragraphProperties]
     : [...propertiesOf(numberingPPr), ...propertiesOf(pPr)];
-  // Under fixed spacing the automatic flags have no effect, so no layout reader sees them.
-  const props =
-    styleCascade?.fixedParagraphSpacing === true
-      ? withoutAutoSpacingFlags(cascadedProps)
-      : cascadedProps;
   // Content vs mark: with a styles table, `cascaded.runProperties` is content-only and
   // `markRunProperties` carries direct `w:pPr/w:rPr`. Without styles, there is no style
   // face to inherit — content stays empty and the mark props size empty lines alone.

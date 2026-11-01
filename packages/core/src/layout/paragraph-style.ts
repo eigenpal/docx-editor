@@ -319,12 +319,17 @@ export function cascadedParagraphAttributes(
  * rather than an authored measurement.
  *
  * Callers that know a paragraph sits at a container edge need this: the auto value is
- * suppressed there, an authored one is not.
+ * suppressed there, an authored one is not. With `fixedAutoSpacing`
+ * (`w:doNotUseHTMLParagraphAutoSpacing`) nothing is substituted, so neither side is.
  */
-export function paragraphAutoSpacingSides(props: readonly OoxmlProperty[]): {
+export function paragraphAutoSpacingSides(
+  props: readonly OoxmlProperty[],
+  context?: Pick<ParagraphAutoSpacingContext, 'fixedAutoSpacing'>
+): {
   readonly before: boolean;
   readonly after: boolean;
 } {
+  if (context?.fixedAutoSpacing === true) return { before: false, after: false };
   let before = false;
   let after = false;
   for (const property of props) {
@@ -335,30 +340,6 @@ export function paragraphAutoSpacingSides(props: readonly OoxmlProperty[]): {
     if (authoredAfter !== undefined) after = isOn(authoredAfter);
   }
   return { before, after };
-}
-
-/**
- * The properties without `w:beforeAutospacing` / `w:afterAutospacing`, for a document that sets
- * `w:doNotUseHTMLParagraphAutoSpacing`. The flags have no effect there, so layout drops them
- * once where it resolves a paragraph, and every reader of the resolved properties (edge
- * suppression in cells, notes, headers and footers, the document's first paragraph, list
- * margins) keeps the authored measurement. Returns `props` itself when no flag is present.
- */
-export function withoutAutoSpacingFlags(props: OoxmlProperty[]): OoxmlProperty[] {
-  const flagged = (property: OoxmlProperty) =>
-    property.localName === 'spacing' &&
-    (property.attributes?.beforeAutospacing !== undefined ||
-      property.attributes?.afterAutospacing !== undefined);
-  if (!props.some(flagged)) return props;
-  return props.map((property) => {
-    if (!flagged(property)) return property;
-    const {
-      beforeAutospacing: _before,
-      afterAutospacing: _after,
-      ...attributes
-    } = property.attributes!;
-    return { ...property, attributes };
-  });
 }
 
 /**
