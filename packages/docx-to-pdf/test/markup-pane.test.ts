@@ -7,7 +7,7 @@ import { expect, test } from 'bun:test';
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFNumber } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { exportPdf } from '../src/index.ts';
-import { placeOnSheet } from '../src/markup-pane.ts';
+import { commentsInOrder, placeOnSheet } from '../src/markup-pane.ts';
 import { patternFillOperator } from '../src/vector-pattern.ts';
 import { docx } from './fixture.ts';
 
@@ -114,4 +114,65 @@ test('comments on the same text follow the order of their reference marks', asyn
     )
   );
   expect(await balloonLabels(input)).toEqual(['Commented [SP1]: Second', 'Commented [RV2]: First']);
+});
+
+test('ranges that end together but start apart follow the order of their reference marks', async () => {
+  const input = docx(
+    '<w:p><w:commentRangeStart w:id="0"/><w:r><w:t xml:space="preserve">Long shared </w:t></w:r><w:commentRangeStart w:id="1"/><w:r><w:t>text</w:t></w:r><w:commentRangeEnd w:id="1"/><w:commentRangeEnd w:id="0"/><w:r><w:commentReference w:id="1"/></w:r><w:r><w:commentReference w:id="0"/></w:r></w:p>',
+    comments(
+      '<w:comment w:id="0" w:author="Reviewer" w:initials="RV"><w:p><w:r><w:t>Wide</w:t></w:r></w:p></w:comment>' +
+        '<w:comment w:id="1" w:author="Second Person" w:initials="SP"><w:p><w:r><w:t>Narrow</w:t></w:r></w:p></w:comment>'
+    )
+  );
+  expect(await balloonLabels(input)).toEqual(['Commented [SP1]: Narrow', 'Commented [RV2]: Wide']);
+});
+
+/** A layout with only the comment fields that ordering reads. */
+function orderedTexts(
+  artifacts: readonly {
+    readonly text: string;
+    readonly referenceOrder?: number;
+    readonly parentId?: string;
+    readonly end?: readonly [x: number, width: number];
+  }[]
+): string[] {
+  const reviewArtifacts = artifacts.map(({ text, referenceOrder, parentId, end }) => ({
+    kind: 'comment',
+    id: text,
+    text,
+    ...(referenceOrder === undefined ? {} : { referenceOrder }),
+    ...(parentId === undefined ? {} : { parentId }),
+    occurrences: end
+      ? [
+          {
+            rootStory: 'body',
+            pageIndex: 0,
+            geometry: { pageStack: [{ x: end[0], y: 100, width: end[1], height: 12 }] },
+          },
+        ]
+      : [],
+  }));
+  const layout = { reviewArtifacts } as unknown as Parameters<typeof commentsInOrder>[0];
+  return commentsInOrder(layout).map((comment) => comment.text);
+}
+
+test('a reply with no range or mark stays after its parent among tied comments', () => {
+  // Listed parent, reply, other; all end together and the other comment's mark comes first.
+  expect(
+    orderedTexts([
+      { text: 'Parent', referenceOrder: 1, end: [72, 30] },
+      { text: 'Reply', parentId: 'Parent' },
+      { text: 'Other', referenceOrder: 0, end: [72, 30] },
+    ])
+  ).toEqual(['Other', 'Parent', 'Reply']);
+});
+
+test('ranges that end at the same place tie despite float noise in their boxes', () => {
+  // 0.1 + 0.2 is 0.30000000000000004, a hair past 0.3, but its mark comes first.
+  expect(
+    orderedTexts([
+      { text: 'Narrow', referenceOrder: 1, end: [0, 0.3] },
+      { text: 'Wide', referenceOrder: 0, end: [0.1, 0.2] },
+    ])
+  ).toEqual(['Wide', 'Narrow']);
 });

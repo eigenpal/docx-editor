@@ -523,26 +523,42 @@ function mappedId(
   return ids.get(sourceId) ?? opaqueId(kind, sourceId);
 }
 
+const referenceOrderByRoot = new WeakMap<OoxmlNode, ReadonlyMap<string, number>>();
+
 /**
- * The place of each comment's first reference mark among the reference marks of `part`, in
+ * The place of each comment's last reference mark among the reference marks of `part`, in
  * tree order. Two comments on the same characters end at the same place, so only the order of
- * their marks tells which one is numbered first.
+ * their marks tells which one is numbered first. The last mark is the one that stands with the
+ * comment's last range end. The walk uses a stack, not recursion, and the tree it reads is
+ * already capped in depth and element count where it was parsed. It skips run and paragraph
+ * properties and text, which cannot hold a mark.
  */
 function referenceOrderOf(part: OoxmlPart): ReadonlyMap<string, number> {
+  const cached = referenceOrderByRoot.get(part.root);
+  if (cached) return cached;
   const order = new Map<string, number>();
+  let marks = 0;
   const stack: OoxmlNode[] = [part.root];
   while (stack.length > 0) {
     const node = stack.pop()!;
-    if (node.kind === 'textValue') continue;
+    if (
+      node.kind === 'textValue' ||
+      node.kind === 'text' ||
+      node.kind === 'runProperties' ||
+      node.kind === 'paragraphProperties'
+    ) {
+      continue;
+    }
     if (node.kind === 'commentReference') {
       const id = attribute(node, WML_NAMESPACE_URI, 'id');
-      if (id !== undefined && !order.has(id)) order.set(id, order.size);
+      if (id !== undefined) order.set(id, marks++);
       continue;
     }
     for (let index = node.children.length - 1; index >= 0; index -= 1) {
       stack.push(node.children[index]!);
     }
   }
+  referenceOrderByRoot.set(part.root, order);
   return order;
 }
 
@@ -583,6 +599,7 @@ function artifactOf(
     };
   }
   if (item.kind !== 'comment') return null;
+  const order = referenceOrder.get(item.id);
   return {
     kind: 'comment',
     id: mappedId(ids.comment, 'comment', item.id),
@@ -591,7 +608,7 @@ function artifactOf(
     ...(item.comment.initials?.trim()
       ? { declaredInitials: commentInitials({ ...item.comment, author: '' }) }
       : {}),
-    ...(referenceOrder.has(item.id) ? { referenceOrder: referenceOrder.get(item.id)! } : {}),
+    ...(order !== undefined ? { referenceOrder: order } : {}),
     ...(item.comment.date !== undefined ? { date: item.comment.date } : {}),
     text: commentBodyText(item.comment),
     resolved: item.resolved,
@@ -643,6 +660,7 @@ function exportReviewQueue(pkg: OoxmlPackage): ExportReviewQueue | null {
 }
 
 /** Only the site ids are kept per package, so no derivation outlives the call that needed it. */
+const NO_REFERENCE_ORDER: ReadonlyMap<string, number> = new Map();
 const unlistedSitesByPackage = new WeakMap<OoxmlPackage, UnlistedRevisionSites>();
 const NO_SITES: UnlistedRevisionSites = { sites: new Set(), paragraphs: new Map(), key: '' };
 
@@ -682,11 +700,10 @@ export function projectReviewArtifacts(
       ? paragraphOccurrences(layout, pkg, parts, ranges, derivation.deepParagraphOrderOfPart)
       : null;
   const ids = publicReviewIds(items);
-  const main = parts[0];
-  const referenceOrder =
-    main && items.some((item) => item.kind === 'comment')
-      ? referenceOrderOf(main)
-      : new Map<string, number>();
+  // `exportReviewQueue` puts the main document part first.
+  const referenceOrder = items.some((item) => item.kind === 'comment')
+    ? referenceOrderOf(parts[0]!)
+    : NO_REFERENCE_ORDER;
   return items
     .map((item) => artifactOf(item, occurrences, ids, referenceOrder))
     .filter((artifact): artifact is SemanticReviewArtifactRecord => artifact !== null);

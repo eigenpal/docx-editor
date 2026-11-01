@@ -272,6 +272,8 @@ export function addRangeBlend(page: PDFPage): void {
 
 type CommentRecord = Extract<ExportSemanticLayout['reviewArtifacts'][number], { kind: 'comment' }>;
 
+const hundredths = (value: number) => Math.round(value * 100) / 100;
+
 /**
  * Comments in the order their ranges end in the body, where each comment's reference mark
  * stands; that is the order they are numbered in. A range nested in another ends first, so it
@@ -280,7 +282,7 @@ type CommentRecord = Extract<ExportSemanticLayout['reviewArtifacts'][number], { 
  * its own keeps its place after its parent, and a comment outside the body keeps its place
  * after the rest.
  */
-function commentsInOrder(layout: ExportSemanticLayout): CommentRecord[] {
+export function commentsInOrder(layout: ExportSemanticLayout): CommentRecord[] {
   type Key = readonly [page: number, y: number, x: number];
   const later = (a: Key, b: Key) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
   const keys = new Map<string, Key>();
@@ -293,7 +295,8 @@ function commentsInOrder(layout: ExportSemanticLayout): CommentRecord[] {
       const boxes = (occurrence.geometry?.pageStack ?? []).filter(isAnchorBox);
       const last = boxes[boxes.length - 1];
       if (!last) continue;
-      const key: Key = [occurrence.pageIndex, last.y, last.x + last.width];
+      // Rounded, so two ranges that end at the same character tie despite float noise.
+      const key: Key = [occurrence.pageIndex, hundredths(last.y), hundredths(last.x + last.width)];
       const known = keys.get(artifact.id);
       if (!known || later(key, known) > 0) keys.set(artifact.id, key);
     }
@@ -304,12 +307,11 @@ function commentsInOrder(layout: ExportSemanticLayout): CommentRecord[] {
     if (parent) keys.set(artifact.id, parent);
   }
   const none: Key = [Infinity, 0, 0];
-  const byMark = (a: CommentRecord, b: CommentRecord) =>
-    a.referenceOrder !== undefined && b.referenceOrder !== undefined
-      ? a.referenceOrder - b.referenceOrder
-      : 0;
+  // A comment with no mark sorts after the marked ones, so the order stays consistent.
+  const byMark = ({ referenceOrder: a }: CommentRecord, { referenceOrder: b }: CommentRecord) =>
+    a === undefined ? (b === undefined ? 0 : 1) : b === undefined ? -1 : a - b;
   // `sort` is stable: comments that end together with no marks to tell them apart keep their
-  // order, and a reply without a range stays after its parent.
+  // order, and a reply without a range or a mark stays after its parent.
   return comments.sort(
     (a, b) => later(keys.get(a.id) ?? none, keys.get(b.id) ?? none) || byMark(a, b)
   );
