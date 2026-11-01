@@ -17,58 +17,64 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // that runs to its last byte drew in full.
 
 const EMR_EOF = 14;
+
+/**
+ * How far the replayer reads a metafile's records: all of them, up to its record limit, or up
+ * to a malformed record.
+ */
+export type MetafileRecordChain = 'intact' | 'record-limit' | 'malformed-record';
 const EMF_HEADER_MIN = 88;
 const PLACEABLE_KEY = 0x9ac6cdd7;
 
-/** Whether every byte from `at` to the end is zero: padding, not a record. */
-function zeroTail(view: DataView, at: number): boolean {
-  for (let i = at; i < view.byteLength; i += 1) if (view.getUint8(i) !== 0) return false;
-  return true;
+/** Every byte from `at` to the end zero is padding, not a record. */
+function tail(view: DataView, at: number): MetafileRecordChain {
+  for (let i = at; i < view.byteLength; i += 1)
+    if (view.getUint8(i) !== 0) return 'malformed-record';
+  return 'intact';
 }
 
-function emfChainIntact(view: DataView, maxRecords: number): boolean {
-  if (view.byteLength < EMF_HEADER_MIN) return false;
+function emfChain(view: DataView, maxRecords: number): MetafileRecordChain {
+  if (view.byteLength < EMF_HEADER_MIN) return 'malformed-record';
   const headerSize = view.getUint32(4, true);
-  if (headerSize < EMF_HEADER_MIN || headerSize > view.byteLength) return false;
+  if (headerSize < EMF_HEADER_MIN || headerSize > view.byteLength) return 'malformed-record';
   // The header is the first record.
   let records = 1;
   for (let at = headerSize; at + 8 <= view.byteLength; records += 1) {
-    if (records >= maxRecords) return false;
+    if (records >= maxRecords) return 'record-limit';
     const type = view.getUint32(at, true);
     const size = view.getUint32(at + 4, true);
-    if (type === EMR_EOF) return true;
-    if (size < 8 || size > view.byteLength - at) return zeroTail(view, at);
+    if (type === EMR_EOF) return 'intact';
+    if (size < 8 || size > view.byteLength - at) return tail(view, at);
     at += size;
   }
-  return true;
+  return 'intact';
 }
 
-function wmfChainIntact(view: DataView, maxRecords: number): boolean {
+function wmfChain(view: DataView, maxRecords: number): MetafileRecordChain {
   let at = view.byteLength >= 22 && view.getUint32(0, true) === PLACEABLE_KEY ? 22 : 0;
-  if (at + 18 > view.byteLength) return false;
+  if (at + 18 > view.byteLength) return 'malformed-record';
   at += view.getUint16(at + 2, true) * 2;
   for (let records = 0; at + 6 <= view.byteLength; records += 1) {
-    if (records >= maxRecords) return false;
+    if (records >= maxRecords) return 'record-limit';
     const size = view.getUint32(at, true) * 2;
     const fn = view.getUint16(at + 4, true);
-    if (fn === 0) return true;
-    if (size < 6 || size > view.byteLength - at) return zeroTail(view, at);
+    if (fn === 0) return 'intact';
+    if (size < 6 || size > view.byteLength - at) return tail(view, at);
     at += size;
   }
-  return true;
+  return 'intact';
 }
 
 /**
- * True when the replayer reads every record of the metafile: each record fits, and the chain
- * reaches its end within `maxRecords`, the record limit the replay runs with.
+ * `intact` when the replayer reads every record of the metafile: each record fits, and the
+ * chain reaches its end within `maxRecords`, the record limit the replay runs with. Otherwise
+ * the reason the replayer stops early.
  */
-export function metafileRecordsIntact(
+export function metafileRecordChain(
   bytes: Uint8Array,
   mime: 'image/x-emf' | 'image/x-wmf',
   maxRecords: number
-): boolean {
+): MetafileRecordChain {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  return mime === 'image/x-emf'
-    ? emfChainIntact(view, maxRecords)
-    : wmfChainIntact(view, maxRecords);
+  return mime === 'image/x-emf' ? emfChain(view, maxRecords) : wmfChain(view, maxRecords);
 }

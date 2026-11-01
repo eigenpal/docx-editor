@@ -23,7 +23,7 @@ import {
   type RecordingContext2D,
 } from './metafile-recording.ts';
 import { emfWithCanvasMapping } from './metafile-emf-origin.ts';
-import { metafileRecordsIntact } from './metafile-record-chain.ts';
+import { metafileRecordChain } from './metafile-record-chain.ts';
 import {
   scanWmfBitmaps,
   wmfBitmapCommands,
@@ -214,12 +214,18 @@ async function replayAlone(
     const drawn = groups.some((group) => group.length)
       ? withWmfBitmaps(commands, groups, position)
       : commands;
+    // A record that does not fit, or the record limit, stops the replayer early; the picture
+    // is then partial. The chain is the one the replayer read, with any records the canvas
+    // mapping added.
+    const chain = budget.exhausted
+      ? 'record-limit'
+      : metafileRecordChain(replayedBytes, mime, MAX_RECORDS);
+    const picture = drawn === replayed.commands ? replayed : { ...replayed, commands: drawn };
+    if (chain === 'intact') return { drawing: picture, complete: true };
     return {
-      drawing: drawn === replayed.commands ? replayed : { ...replayed, commands: drawn },
-      // A record that does not fit, or the record limit, stops the replayer early; the
-      // picture is then partial. The chain is the one the replayer read, with any records the
-      // canvas mapping added.
-      complete: !budget.exhausted && metafileRecordsIntact(replayedBytes, mime, MAX_RECORDS),
+      drawing: picture,
+      complete: false,
+      stop: chain === 'malformed-record' ? 'malformed-record' : 'resource-bound',
     };
   } catch {
     return null;

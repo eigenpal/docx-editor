@@ -35,6 +35,7 @@
 import { isEastAsianCodePoint } from './east-asian-code-points.ts';
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import { runIsDirectlyHidden } from './run-hidden.ts';
 import type { DocumentThemeFonts } from './theme-font-scheme.ts';
 import {
   eastAsiaFamilyFromRFonts,
@@ -241,9 +242,12 @@ function symbolOverridesRunFace(sym: OoxmlElement): boolean {
 /**
  * Whether a `w:r` puts a glyph on the page IN ITS OWN FACE: a non-empty `w:t`, a
  * `w:delText` (tracked deletions render in markup view — over-reporting in final view,
- * never hiding), a glyph mark element, or a `w:sym` that names no face of its own.
+ * never hiding), a glyph mark element, or a `w:sym` that names no face of its own. A run
+ * with direct `w:vanish` puts nothing on the page; one hidden through a style still counts,
+ * and so does a run nested in a hidden run's text box (over-reported, never hidden).
  */
 function runRendersGlyphs(run: OoxmlElement, projectedGlyphIds?: ReadonlySet<string>): boolean {
+  if (runIsDirectlyHidden(run)) return false;
   if (projectedGlyphIds?.has(run.id)) return true;
   for (const child of run.children as readonly OoxmlNode[]) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;

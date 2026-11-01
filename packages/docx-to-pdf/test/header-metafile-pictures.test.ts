@@ -5,7 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // Metafile pictures in a header export without a host converter: an EMF logo draws on every
 // page, a WMF picture watermark draws washed out behind the text, and a metafile that does not
-// replay is reported instead of leaving its place silently empty.
+// replay in full is reported, with its cause, instead of leaving its place silently empty.
 import { expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef, decodePDFRawStream } from 'pdf-lib';
@@ -67,14 +67,23 @@ function emf(width: number, height: number, rgb: readonly [number, number, numbe
   return bytes;
 }
 
-/** A placeable WMF of `width` × `height` units at 96 per inch: one filled rectangle in `rgb`. */
-function wmf(width: number, height: number, rgb: readonly [number, number, number]): Uint8Array {
+/**
+ * A placeable WMF of `width` × `height` units at 96 per inch: one filled rectangle in `rgb`,
+ * then `extra` brush selections.
+ */
+function wmf(
+  width: number,
+  height: number,
+  rgb: readonly [number, number, number],
+  extra = 0
+): Uint8Array {
   const records = [
     { fn: 0x020b, words: [0, 0] },
     { fn: 0x020c, words: [height, width] },
     { fn: 0x02fc, words: [0, rgb[0] | (rgb[1] << 8), rgb[2], 0] },
     { fn: 0x012d, words: [0] },
     { fn: 0x041b, words: [height, width, 0, 0] },
+    ...Array.from({ length: extra }, () => ({ fn: 0x012d, words: [0] })),
     { fn: 0, words: [] },
   ];
   const body: number[] = [];
@@ -203,5 +212,19 @@ test('a header metafile that does not replay is refused, not dropped', async () 
     useSystemFonts: false,
     fidelityPolicy: 'best-effort',
   });
-  expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('metafile-limit');
+  const codes = result.diagnostics.map((diagnostic) => diagnostic.code);
+  expect(codes).toContain('metafile-record');
+  expect(codes).not.toContain('metafile-limit');
+});
+
+test('a header metafile past the record limit reports the resource bound', async () => {
+  // More records than the replay reads.
+  const long = wmf(200, 100, [255, 0, 0], 200_000);
+  const result = await exportPdf(input(emf(96, 48, [0, 0, 255]), long), {
+    useSystemFonts: false,
+    fidelityPolicy: 'best-effort',
+  });
+  const codes = result.diagnostics.map((diagnostic) => diagnostic.code);
+  expect(codes).toContain('metafile-limit');
+  expect(codes).not.toContain('metafile-record');
 });

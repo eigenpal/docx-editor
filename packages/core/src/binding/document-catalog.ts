@@ -9,6 +9,7 @@
 
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
+import { runIsDirectlyHidden } from '../store/package/run-hidden.ts';
 import { themeFontFamilyOf, type ThemeSchemeFaces } from '../store/package/theme-font-scheme.ts';
 import { symbolFontFamily } from '../store/package/run-defaults.ts';
 import { symbolGlyphOf } from '../store/package/symbol-glyph.ts';
@@ -343,11 +344,13 @@ function subtreeSymbolFontsOf(subtree: OoxmlElement, depth = 0): SubtreeSymbolFa
   };
   // The compose branch never inspects the node itself, so a `w:sym` wide enough to take it
   // would lose its own face — the same self-check `subtreeFontsOf` makes for `w:rFonts`.
-  // `w:sym` is a generic node, so a hand-built package can give it children.
+  // `w:sym` is a generic node, so a hand-built package can give it children. A run never
+  // composes either: its children's memos cannot know that the run hides them.
   if (
     subtree.children.length >= COMPOSE_CHILD_THRESHOLD &&
     depth < MAX_COMPOSE_DEPTH &&
-    subtree.localName !== 'sym'
+    subtree.localName !== 'sym' &&
+    subtree.localName !== 'r'
   ) {
     for (const child of subtree.children) {
       if (!isElement(child)) continue;
@@ -359,11 +362,18 @@ function subtreeSymbolFontsOf(subtree: OoxmlElement, depth = 0): SubtreeSymbolFa
     return remember();
   }
   // Iterative and depth-safe like its sibling, and children push in reverse for the same
-  // reason: first-seen casing has to mean the first occurrence a reader would see.
+  // reason: first-seen casing has to mean the first occurrence a reader would see. A node
+  // inside a run with direct `w:vanish` is hidden: layout neither measures nor paints it.
   const stack: OoxmlNode[] = [subtree];
+  const hidden = new Set<OoxmlNode>();
   while (stack.length > 0) {
     const node = stack.pop()!;
     if (!isElement(node)) continue;
+    const hides =
+      hidden.has(node) ||
+      (node.localName === 'r' &&
+        node.namespaceUri === WML_NAMESPACE_URI &&
+        runIsDirectlyHidden(node));
     if (node.localName === 'sym' && node.namespaceUri === WML_NAMESPACE_URI) {
       // The WML namespace or none, matching how `layout/symbol-run.ts` reads it: a face
       // layout will not use is a face no resolver should be asked for.
@@ -382,12 +392,18 @@ function subtreeSymbolFontsOf(subtree: OoxmlElement, depth = 0): SubtreeSymbolFa
         // A private-use code point with no Unicode equivalent paints only in its own face.
         // The test is on the text shown, so a glyph mapped past the private-use block (an
         // emoji check box) counts as mapped.
-        const glyph = symbolGlyphOf(node);
+        // A hidden glyph shows nothing, so its face is still one to try but not one the
+        // notice names.
+        const glyph = hides ? null : symbolGlyphOf(node);
         if (glyph && isPrivateUseText(glyph.text) && !unmapped.has(fold))
           unmapped.set(fold, family);
       }
     }
-    for (let i = node.children.length - 1; i >= 0; i -= 1) stack.push(node.children[i]!);
+    for (let i = node.children.length - 1; i >= 0; i -= 1) {
+      const child = node.children[i]!;
+      if (hides) hidden.add(child);
+      stack.push(child);
+    }
   }
   return remember();
 }
