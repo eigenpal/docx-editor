@@ -14,6 +14,8 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const PKG = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml';
+const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
+const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
 const DATE = new Date('2026-01-10T12:00:00Z');
 
 interface Part {
@@ -52,7 +54,7 @@ function docx(body: string, parts: readonly Part[] = [], declareR = true): Uint8
       `<Relationships xmlns="${PKG}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
     ),
     'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}"${declareR ? ` xmlns:r="${R}"` : ''}><w:body>${body}</w:body></w:document>`
+      `<w:document xmlns:w="${W}" xmlns:mc="${MC}" xmlns:wps="${WPS}"${declareR ? ` xmlns:r="${R}"` : ''}><w:body>${body}</w:body></w:document>`
     ),
   };
   if (parts.length > 0) {
@@ -134,4 +136,61 @@ test('notes that nothing references do not take part', () => {
   expect(strFromU8(files['word/document.xml']!)).toContain('<w:ins');
   const back = compare(revised, base);
   expect(strFromU8(back.files['word/document.xml']!)).toContain('<w:del');
+});
+
+test('a change inside a content-locked control is refused with its reason', () => {
+  const control = (text: string) =>
+    `<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent>${p(text)}</w:sdtContent></w:sdt>`;
+  const base = docx(`${control('Locked words here')}${p('End')}<w:sectPr/>`);
+  const revised = docx(`${control('Locked text here')}${p('End')}<w:sectPr/>`);
+  const result = compareDocuments(base, revised, { authorName: 'Test', date: DATE });
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.code).toBe('unsupported-content');
+    expect(result.message).toContain('locked or bound to data');
+  }
+  // Text outside the control still compares.
+  const outside = docx(`${control('Locked words here')}${p('End changed')}<w:sectPr/>`);
+  expect(compareDocuments(base, outside, { authorName: 'Test', date: DATE }).ok).toBe(true);
+});
+
+test('an input whose tracked changes cannot be accepted is refused', () => {
+  const table = `<w:tbl><w:tblPr><w:ins w:id="20" w:author="A"/></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc>${p('Cell')}</w:tc></w:tr></w:tbl>`;
+  const odd = docx(`${p('Text')}${table}${p('End')}<w:sectPr/>`);
+  const plain = docx(`${p('Text')}${p('End')}<w:sectPr/>`);
+  const original = compareDocuments(odd, plain, { authorName: 'Test', date: DATE });
+  expect(original.ok ? '' : original.message).toContain('original document holds tracked changes');
+  const revised = compareDocuments(plain, odd, { authorName: 'Test', date: DATE });
+  expect(revised.ok ? '' : revised.message).toContain('revised document holds tracked changes');
+});
+
+test('a cell that starts with a nested table keeps its order', () => {
+  const grid = '<w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>';
+  const table = (cell: string) => `<w:tbl>${grid}<w:tr><w:tc>${cell}</w:tc></w:tr></w:tbl>`;
+  const nested = table(p('Inner cell'));
+  const base = docx(`${p('Before')}${table(`${nested}${p('Outer pad')}`)}${p('After')}<w:sectPr/>`);
+  const revised = docx(`${p('Before')}${table(p('Replaced cell'))}${p('After')}<w:sectPr/>`);
+  const { files } = compare(base, revised);
+  const document = strFromU8(files['word/document.xml']!);
+  expect(document.indexOf('Inner cell')).toBeLessThan(document.indexOf('Outer pad'));
+});
+
+test('a choice that requires a prefix the part root declares', () => {
+  const choice = (text: string) =>
+    `<w:p><w:r><mc:AlternateContent><mc:Choice Requires="wps"><w:t>${text}</w:t></mc:Choice>` +
+    `<mc:Fallback><w:t>${text}</w:t></mc:Fallback></mc:AlternateContent></w:r></w:p>`;
+  const base = docx(`${choice('Shape')}${p('Body text')}<w:sectPr/>`);
+  const revised = docx(`${choice('Shape')}${p('Body text changed')}<w:sectPr/>`);
+  expect(compare(base, base).revisionCount).toBe(0);
+  const { files } = compare(base, revised);
+  expect(strFromU8(files['word/document.xml']!)).toMatch(/xmlns:wps=/);
+});
+
+test('a reference that leads nowhere in both documents stays as written', () => {
+  const chart = `<w:p><w:r><w:t>Chart </w:t></w:r><w:r><w:drawing><c:chart xmlns:c="urn:chart" r:id="rId9"/></w:drawing></w:r></w:p>`;
+  const base = docx(`${chart}${p('Body text')}<w:sectPr/>`);
+  const revised = docx(`${chart}${p('Body text changed')}<w:sectPr/>`);
+  expect(compare(base, base).revisionCount).toBe(0);
+  const { files } = compare(base, revised);
+  expect(strFromU8(files['word/document.xml']!)).toMatch(/<c:chart [\w.-]+:id="rId9"/);
 });

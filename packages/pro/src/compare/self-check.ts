@@ -25,7 +25,7 @@ import {
   type ParagraphDigest,
 } from '@docx-editor.dev/core/store';
 import { finalSectionFurniture } from './stories.ts';
-import { attributeOf, elementChildren, type ElementNode } from './xml-fragments.ts';
+import { attributeOf, elementChildren, isElement, type ElementNode } from './xml-fragments.ts';
 
 const STORY_TYPES = [
   'document.main+xml',
@@ -113,10 +113,46 @@ function paragraphFingerprint(paragraph: ParagraphDigest, level: Level): string 
   return `${paragraph.text}\u0001${properties.join('|')}`;
 }
 
-function resolved(pkg: OoxmlPackage, op: 'acceptAllRevisions' | 'rejectAllRevisions'): OoxmlPart[] {
+const REVISION_NAMES = new Set([
+  'ins',
+  'del',
+  'moveFrom',
+  'moveTo',
+  'rPrChange',
+  'pPrChange',
+  'sectPrChange',
+  'tblPrChange',
+  'trPrChange',
+  'tcPrChange',
+  'tblGridChange',
+  'numberingChange',
+  'cellIns',
+  'cellDel',
+]);
+
+/** Whether `node` holds a revision element. */
+export function hasRevision(node: OoxmlPart['root'] | ElementNode): boolean {
+  if (!isElement(node)) return false;
+  if (REVISION_NAMES.has(node.localName)) return true;
+  return node.children.some((child) => isElement(child) && hasRevision(child));
+}
+
+/** Reasons a review decision refuses that come from the content, not from the compare. */
+const GUARDS = new Set(['locked', 'bound']);
+
+function resolved(
+  pkg: OoxmlPackage,
+  op: 'acceptAllRevisions' | 'rejectAllRevisions',
+  guards: Set<string>
+): OoxmlPart[] {
   const out: OoxmlPart[] = [];
   for (const part of storyParts(pkg)) {
+    if (!hasRevision(part.root)) {
+      out.push(part);
+      continue;
+    }
     const result = applyTreeOp(part, { op });
+    if (!result.ok && GUARDS.has(result.reason)) guards.add(result.reason);
     const next = result.ok ? result.part : part;
     // Re-read, so renamed elements (a restored `w:instrText`) take their typed kinds.
     const reread = readOoxmlPart(serializeOoxmlPart(next), {
@@ -135,6 +171,11 @@ export interface SelfCheckResult {
   readonly reject: boolean;
   /** Paragraph properties also agree in both directions. */
   readonly properties: boolean;
+  /**
+   * A lock or a data binding on a content control keeps some revisions from being accepted or
+   * rejected: `locked` or `bound`.
+   */
+  readonly guard?: string;
   readonly detail?: string;
 }
 
@@ -149,8 +190,9 @@ export function selfCheck(
   original: OoxmlPackage,
   revised: OoxmlPackage
 ): SelfCheckResult {
-  const accepted = resolved(output, 'acceptAllRevisions');
-  const rejected = resolved(output, 'rejectAllRevisions');
+  const guards = new Set<string>();
+  const accepted = resolved(output, 'acceptAllRevisions', guards);
+  const rejected = resolved(output, 'rejectAllRevisions', guards);
   const check = (level: Level) => {
     const a = fingerprint(accepted, level);
     const r = fingerprint(rejected, level);
@@ -174,6 +216,7 @@ export function selfCheck(
     accept: text.accept,
     reject: text.reject,
     properties: properties.accept && properties.reject,
+    ...(guards.size > 0 ? { guard: [...guards].sort().join(',') } : {}),
     ...(detail === undefined ? {} : { detail }),
   };
 }

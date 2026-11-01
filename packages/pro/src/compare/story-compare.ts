@@ -127,12 +127,32 @@ function foldTrailingPair(steps: Step[]): void {
 function emitPair(base: Unit, revised: Unit, ctx: EmitContext, last = false): string {
   if (base.kind === 'paragraph' && revised.kind === 'paragraph')
     return emitHunk([base], [revised], last ? base : null, last ? revised : null, ctx);
-  if (base.kind === 'table' && revised.kind === 'table')
-    return compareTable(base.node, revised.node, ctx);
-  if (base.kind === 'sdt' && revised.kind === 'sdt')
-    return compareSdt(base.node, revised.node, ctx);
+  if (base.kind === 'table' && revised.kind === 'table') {
+    const copy = identicalCopy(base.node, revised.node, ctx);
+    return copy ?? compareTable(base.node, revised.node, ctx);
+  }
+  if (base.kind === 'sdt' && revised.kind === 'sdt') {
+    const copy = identicalCopy(base.node, revised.node, ctx);
+    return copy ?? compareSdt(base.node, revised.node, ctx);
+  }
   // Equal opaque content: the original's copy references the output's own relationships.
   return ctx.base.serialize(base.node);
+}
+
+/** References whose content lives in another part, which the serialized block does not show. */
+const OUTSIDE_CONTENT =
+  /<(?:[\w.-]+:)?(?:footnoteReference|endnoteReference|commentReference|commentRangeStart)\b/;
+
+/**
+ * The original's copy of a block that is the same in both documents, relationships resolved,
+ * or null. A block that references notes or comments always compares, so their content does.
+ */
+function identicalCopy(base: BlockUnit['node'], revised: BlockUnit['node'], ctx: EmitContext) {
+  const before = ctx.base.raw(base);
+  if (OUTSIDE_CONTENT.test(before)) return null;
+  const after = ctx.revised.raw(revised);
+  if (ctx.base.keyOf(before) !== ctx.revised.keyOf(after)) return null;
+  return ctx.base.remap(before);
 }
 
 function tokensOf(units: readonly Unit[], last: Unit | null, moves: Moves): Token[] {
@@ -158,27 +178,30 @@ function emitHunk(
 ): string {
   const a = tokensOf(base, lastBase, moves);
   const b = tokensOf(revised, lastRevised, moves);
-  const ops = pairBlocks(
-    replaceWholeParagraphs(
-      dropSparseMatches(
-        coalesceGaps(
-          slideLeft(
-            diffKeys(
-              a.map((token) => token.key),
-              b.map((token) => token.key)
+  const ops = deletedBlocksFirst(
+    pairBlocks(
+      replaceWholeParagraphs(
+        dropSparseMatches(
+          coalesceGaps(
+            slideLeft(
+              diffKeys(
+                a.map((token) => token.key),
+                b.map((token) => token.key)
+              ),
+              a
             ),
             a
           ),
-          a
+          a,
+          base.length > 1 || revised.length > 1
         ),
         a,
-        base.length > 1 || revised.length > 1
+        b
       ),
       a,
       b
     ),
-    a,
-    b
+    a
   );
   let out = '';
   let items: Item[] = [];
@@ -335,6 +358,42 @@ function pairBlocks(ops: readonly DiffOp[], a: readonly Token[], b: readonly Tok
       fromDel = match + 1;
     }
     out.push(...inserted.slice(fromIns), ...deleted.slice(fromDel));
+    i = j;
+  }
+  return out;
+}
+
+/**
+ * In a run of changes with deleted content after a deleted block, the deletions up to that
+ * block go before the insertions.
+ * Inserted text opens a paragraph that a block cannot enter, so a deleted block after it would
+ * land behind the deleted text that follows the block in the original.
+ */
+function deletedBlocksFirst(ops: readonly HunkOp[], a: readonly Token[]): HunkOp[] {
+  const out: HunkOp[] = [];
+  let i = 0;
+  while (i < ops.length) {
+    const op = ops[i]!;
+    if (op.op !== 'ins' && op.op !== 'del') {
+      out.push(op);
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < ops.length && (ops[j]!.op === 'ins' || ops[j]!.op === 'del')) j++;
+    const run = ops.slice(i, j) as DiffOp[];
+    const dels = run.filter((item) => item.op === 'del');
+    let cut = -1;
+    dels.forEach((item, k) => {
+      if (item.op === 'del' && a[item.a]!.kind === 'block') cut = k;
+    });
+    // Nothing deleted after the block: the insertions can stay first.
+    if (cut < 0 || cut === dels.length - 1 || !run.some((item) => item.op === 'ins'))
+      out.push(...run);
+    else {
+      const inss = run.filter((item) => item.op === 'ins');
+      out.push(...dels.slice(0, cut + 1), ...inss, ...dels.slice(cut + 1));
+    }
     i = j;
   }
   return out;

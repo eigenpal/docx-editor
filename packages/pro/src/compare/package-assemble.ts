@@ -137,7 +137,11 @@ export function assemblePackage(
       if (known) return known;
       const rel = relationshipOf(revised, revisedOwner, id);
       if (!rel) {
-        failure = `The revised document refers to a missing relationship (${id}).`;
+        // A reference that leads nowhere in the revised document stays as written, when the
+        // id names nothing in the output part either: the output is no more broken than the
+        // input. An id the output part uses for something else would point at that instead.
+        if (relationshipOf(base, story.partName, id))
+          failure = `The revised document refers to a missing relationship (${id}).`;
         return id;
       }
       let target = rel.target;

@@ -10,7 +10,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * re-reads it through the bounded part reader, so every output node passes the same typed
  * tree construction as a file read.
  */
-import { serializeOoxmlPart, type OoxmlNode, type OoxmlPart } from '@docx-editor.dev/core/store';
+import {
+  serializeOoxmlPart,
+  type OoxmlNamespaceBinding,
+  type OoxmlNode,
+  type OoxmlPart,
+} from '@docx-editor.dev/core/store';
 
 export const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
@@ -36,6 +41,52 @@ export function attributeOf(
       attribute.localName === localName &&
       (namespaceUri === undefined || attribute.namespaceUri === namespaceUri)
   )?.value;
+}
+
+const MC_NS = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
+const XSI_NS = 'http://www.w3.org/2001/XMLSchema-instance';
+
+/** Prefixes that attribute values in `node`'s subtree name: `mc:Ignorable`, `Requires`, ... */
+function valuePrefixes(node: ElementNode): Set<string> {
+  const out = new Set<string>();
+  const stack: ElementNode[] = [node];
+  while (stack.length > 0) {
+    const element = stack.pop()!;
+    for (const attribute of element.attributes) {
+      const named =
+        attribute.namespaceUri === MC_NS ||
+        (attribute.namespaceUri === '' && attribute.localName === 'Requires') ||
+        (attribute.namespaceUri === XSI_NS && attribute.localName === 'type');
+      if (!named) continue;
+      for (const token of attribute.value.split(/\s+/)) {
+        const colon = token.indexOf(':');
+        if (token) out.add(colon < 0 ? token : token.slice(0, colon));
+      }
+    }
+    stack.push(...elementChildren(element));
+  }
+  return out;
+}
+
+/**
+ * `node` with the declarations its attribute values need from the part root. A fragment
+ * serializes on its own, and a value such as `mc:Ignorable="w14"` names a prefix that the
+ * part root declares.
+ */
+export function withInheritedBindings(
+  node: OoxmlNode,
+  inherited: readonly OoxmlNamespaceBinding[]
+): OoxmlNode {
+  if (!isElement(node) || inherited.length === 0) return node;
+  const named = valuePrefixes(node);
+  if (named.size === 0) return node;
+  const own = new Set(node.namespaceBindings.map((binding) => binding.prefix));
+  const extra = inherited.filter(
+    (binding) => named.has(binding.prefix) && !own.has(binding.prefix)
+  );
+  return extra.length === 0
+    ? node
+    : ({ ...node, namespaceBindings: [...node.namespaceBindings, ...extra] } as OoxmlNode);
 }
 
 export function escapeText(text: string): string {

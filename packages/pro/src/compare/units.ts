@@ -20,6 +20,7 @@ import {
   elementChildren,
   innerOf,
   isElement,
+  withInheritedBindings,
   shellOf,
   R_NS,
   type ElementNode,
@@ -165,9 +166,17 @@ export class SideContext {
     return key;
   }
 
+  /** Serialized node, with relationship ids as written. */
+  raw(node: OoxmlNode): string {
+    const root = this.pkg.parts.get(this.partName)?.root;
+    return this.scope.serialize(
+      withInheritedBindings(node, root && isElement(root) ? root.namespaceBindings : [])
+    );
+  }
+
   /** Serialized node; revised-side relationship ids become import placeholders. */
   serialize(node: OoxmlNode): string {
-    return this.remap(this.scope.serialize(node));
+    return this.remap(this.raw(node));
   }
 
   remap(xml: string): string {
@@ -224,7 +233,7 @@ export function unitsOf(container: OoxmlNode, side: SideContext): Unit[] {
           kind: 'sdt',
           side: side.name,
           node: child,
-          key: `S:${side.keyOf(side.scope.serialize(child))}`,
+          key: `S:${side.keyOf(side.raw(child))}`,
         });
         break;
       case 'sectPr':
@@ -234,7 +243,7 @@ export function unitsOf(container: OoxmlNode, side: SideContext): Unit[] {
           kind: 'opaque',
           side: side.name,
           node: child,
-          key: `O:${side.keyOf(side.scope.serialize(child))}`,
+          key: `O:${side.keyOf(side.raw(child))}`,
         });
     }
   }
@@ -364,7 +373,7 @@ function wrapperOf(node: ElementNode, side: SideContext): Wrapper {
     ...node,
     children: [...keep, ...(content ? [{ ...content, children: [] }] : [])],
   } as ElementNode;
-  const xml = side.scope.serialize(shellNode);
+  const xml = side.raw(shellNode);
   let start: string;
   let end: string;
   if (name === 'sdt') {
@@ -430,7 +439,7 @@ function pushObject(
   wrappers: readonly Wrapper[],
   state: WalkState
 ): void {
-  const raw = side.scope.serialize(node);
+  const raw = side.raw(node);
   const xml = side.remap(raw);
   const delXml = xml
     .replace(/^<w:instrText\b/, '<w:delInstrText')
@@ -452,7 +461,7 @@ function pushObject(
     key: noteKind
       ? `noteRef:${noteKind}`
       : boxes
-        ? side.keyOf(side.scope.serialize(withBoxMarkers(node)))
+        ? side.keyOf(side.raw(withBoxMarkers(node)))
         : side.keyOf(raw),
     rPr,
     wrappers,

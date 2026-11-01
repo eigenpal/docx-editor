@@ -30,7 +30,7 @@ export type ComparePackagesResult =
 import { CompareState, EmitContext, notePlaceholder, sectPrXml, type NoteKind } from './emit.ts';
 import { assemblePackage } from './package-assemble.ts';
 import { mergeComments } from './comments.ts';
-import { selfCheck } from './self-check.ts';
+import { hasRevision, selfCheck } from './self-check.ts';
 import { compareFurniture, compareNotes, storyXml, type StoryOutput } from './stories.ts';
 import { compareContainer } from './story-compare.ts';
 import { SideContext, unitsOf } from './units.ts';
@@ -81,6 +81,8 @@ export function comparePackages(
 ): ComparePackagesResult {
   const basePkg = acceptAll(original);
   const revisedPkg = acceptAll(revised);
+  if (!basePkg) return unacceptable('original');
+  if (!revisedPkg) return unacceptable('revised');
   const baseDoc = basePkg.parts.get(basePkg.mainDocumentPart);
   const revisedDoc = revisedPkg.parts.get(revisedPkg.mainDocumentPart);
   const baseBody = baseDoc && childNamed(baseDoc.root, 'body');
@@ -143,6 +145,15 @@ export function comparePackages(
   );
   if (!assembled.ok) return { ok: false, code: 'unsupported-content', message: assembled.message };
   const check = selfCheck(assembled.pkg, basePkg, revisedPkg);
+  if (!unchecked && (!check.accept || !check.reject) && check.guard) {
+    return {
+      ok: false,
+      code: 'unsupported-content',
+      message:
+        'The documents differ inside a content control that is locked or bound to data. ' +
+        'Changes there cannot be accepted or rejected.',
+    };
+  }
   if (!unchecked && (!check.accept || !check.reject)) {
     return {
       ok: false,
@@ -177,47 +188,45 @@ function replaceNoteIds(
   }
 }
 
-/** Accepts every revision in every story part, so both inputs compare in their final state. */
-function acceptAll(pkg: OoxmlPackage): OoxmlPackage {
+function unacceptable(side: 'original' | 'revised'): ComparePackagesResult {
+  return {
+    ok: false,
+    code: 'unsupported-content',
+    message: `The ${side} document holds tracked changes that cannot be accepted, so its final state is unknown.`,
+  };
+}
+
+/**
+ * Accepts every revision in every story part, so both inputs compare in their final state, or
+ * returns null when a part holds revisions that cannot be accepted.
+ */
+function acceptAll(pkg: OoxmlPackage): OoxmlPackage | null {
   let parts: Map<string, OoxmlPart> | null = null;
   for (const [name, part] of pkg.parts) {
     if (!hasRevision(part.root)) continue;
     const result = applyTreeOp(part, { op: 'acceptAllRevisions' });
-    if (!result.ok) continue;
+    if (!result.ok) {
+      // A part that only names revision elements without holding one has nothing to accept.
+      if (result.reason === 'unknown-revision') continue;
+      return null;
+    }
     parts ??= new Map(pkg.parts);
     parts.set(name, result.part);
   }
   return parts ? { ...pkg, parts } : pkg;
 }
 
-const REVISION_NAMES = new Set([
-  'ins',
-  'del',
-  'moveFrom',
-  'moveTo',
-  'rPrChange',
-  'pPrChange',
-  'sectPrChange',
-  'tblPrChange',
-  'trPrChange',
-  'tcPrChange',
-  'tblGridChange',
-  'numberingChange',
-  'cellIns',
-  'cellDel',
-]);
+const BLOCKS = new Set(['p', 'tbl', 'tr', 'tc', 'sdt']);
 
-function hasRevision(node: OoxmlPart['root'] | ElementNode): boolean {
-  if (!isElement(node)) return false;
-  if (REVISION_NAMES.has(node.localName)) return true;
-  return node.children.some((child) => isElement(child) && hasRevision(child));
-}
-
+/** Paragraphs, tables, rows, cells, and content controls under `node`; properties do not count. */
 function countBlocks(node: ElementNode): number {
   let count = 0;
-  for (const child of elementChildren(node)) {
-    if (child.localName === 'p') count++;
-    else count += 1 + countBlocks(child);
+  const stack = [...elementChildren(node)];
+  while (stack.length > 0) {
+    const child = stack.pop()!;
+    if (BLOCKS.has(child.localName)) count++;
+    // Paragraph content holds no blocks the compare aligns.
+    if (child.localName !== 'p') stack.push(...elementChildren(child));
   }
   return count;
 }

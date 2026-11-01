@@ -228,7 +228,7 @@ export function sectPrXml(
     if (normalizeSect(before) !== normalizeSect(body))
       change = `<w:sectPrChange${ctx.attrs()}><w:sectPr>${before}</w:sectPr></w:sectPrChange>`;
   }
-  const shell = side.scope.serialize({ ...source, children: [] } as ElementNode);
+  const shell = side.raw({ ...source, children: [] } as ElementNode);
   const start = shell.replace(/\/>$/, '>');
   return `${start}${refs}${body}${change}</w:sectPr>`;
 }

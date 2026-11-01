@@ -215,7 +215,7 @@ export function compareNotes(
   );
   const story = ctx.withSides(baseSide, revisedSide);
   const noteShell = (note: ElementNode, side: SideContext, id?: string) => {
-    const shell = shellOf(side.scope.serialize({ ...note, children: [] } as ElementNode));
+    const shell = shellOf(side.raw({ ...note, children: [] } as ElementNode));
     return {
       start: id === undefined ? shell.start : shell.start.replace(/\bw:id="[^"]*"/, `w:id="${id}"`),
       end: shell.end,
