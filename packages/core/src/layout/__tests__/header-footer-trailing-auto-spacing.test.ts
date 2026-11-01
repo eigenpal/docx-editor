@@ -64,12 +64,12 @@ for (const kind of ['hdr', 'ftr'] as const) {
     expect(flowHeight(kind, wrapped)).toBeCloseTo(flowHeight(kind, lines(EXPLICIT)), 3);
   });
 
-  test(`a ${kind} story keeps the fixed automatic space after under fixed spacing`, () => {
+  test(`a ${kind} story keeps the measured space after under fixed spacing`, () => {
     const tail =
       paragraph('First', AUTO) + paragraph('Second', AUTO) + paragraph('Third', AUTO_BEFORE);
-    // The setting gives 10pt after in place of 14pt; the story end keeps it all the same.
+    // The setting keeps the authored 5pt after in place of 14pt; the story end keeps it too.
     expect(story(kind, lines(AUTO), fixedSpacing()).flowHeight).toBeCloseTo(
-      story(kind, tail, fixedSpacing()).flowHeight + 10,
+      story(kind, tail, fixedSpacing()).flowHeight + 5,
       3
     );
   });

@@ -229,7 +229,7 @@ export const PROFILE_RULES = {
   },
   fixedParagraphSpacing: {
     behavior:
-      'Adjacent paragraph spacing adds up, and automatic spacing is a fixed 5pt before and 10pt after',
+      'Adjacent paragraph spacing adds up, and automatic spacing keeps the authored measurement',
     source: 'ECMA-376 Part 4 §14.8.3.15 doNotUseHTMLParagraphAutoSpacing',
     applies: (p) => p.legacy.doNotUseHTMLParagraphAutoSpacing === true,
   },

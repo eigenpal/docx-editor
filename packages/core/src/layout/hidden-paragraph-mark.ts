@@ -15,7 +15,8 @@
 //     text forward, and dropping the box would lose it, so such a paragraph keeps its box.
 //   - A paragraph or table must follow in the same container. The last paragraph of a story,
 //     cell, or content control keeps its line. Before a table the paragraph's own space before
-//     still applies, so one that states a space before keeps its line there.
+//     still applies, so one that states a space before keeps its line there. An automatic space
+//     before alone (`w:beforeAutospacing` without a measurement) states none.
 //   - A paragraph carrying `w:sectPr` keeps its box, so section boundaries do not move.
 //
 // The paragraph stays in the tree and still advances list counters: numbering is a property
@@ -72,7 +73,8 @@ export function paragraphMarkHidden(paragraph: OoxmlNode): boolean {
 /**
  * Whether the paragraph states a space before directly. Before a table, a removed paragraph
  * still keeps its space before; leaving it in place keeps that space, so only paragraphs
- * without one leave the flow there.
+ * without one leave the flow there. `w:beforeAutospacing` alone states no measurement: such a
+ * paragraph leaves the flow too, with or without `w:doNotUseHTMLParagraphAutoSpacing`.
  */
 function directSpaceBefore(paragraph: OoxmlNode): boolean {
   const properties = wmlChild(paragraph, 'pPr');
@@ -80,14 +82,7 @@ function directSpaceBefore(paragraph: OoxmlNode): boolean {
   if (!spacing) return false;
   const value = (name: string): string | undefined =>
     spacing.attributes.find((attribute) => attribute.localName === name)?.value;
-  const auto = value('beforeAutospacing');
-  return (
-    Number(value('before') ?? 0) > 0 ||
-    Number(value('beforeLines') ?? 0) > 0 ||
-    auto === '1' ||
-    auto === 'true' ||
-    auto === 'on'
-  );
+  return Number(value('before') ?? 0) > 0 || Number(value('beforeLines') ?? 0) > 0;
 }
 
 function carriesSectionBreak(paragraph: OoxmlNode): boolean {

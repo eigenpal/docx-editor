@@ -330,6 +330,8 @@ export interface RunFormatting {
    * formatting resolved together — not the gap the page finally draws. The two differ for a
    * paragraph carrying `w:beforeAutospacing`, where Word substitutes its own value and
    * ignores the measurement, and again where two paragraphs collapse their adjacent spacing.
+   * A document that sets `w:doNotUseHTMLParagraphAutoSpacing` does neither: the measurement
+   * stays, and adjacent spacing adds up.
    * Absent when the selection's paragraphs disagree or no level states it.
    */
   readonly spaceBeforePt?: number;

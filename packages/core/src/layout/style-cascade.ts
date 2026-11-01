@@ -112,8 +112,8 @@ export interface StyleCascadeTable {
   /** `w:doNotUseIndentAsNumberingTabStop`, carried onto each paragraph's tab stops. */
   readonly ignoreIndentAsNumberingTabStop?: true;
   /**
-   * `w:doNotUseHTMLParagraphAutoSpacing`: adjacent paragraph spacing adds up, and automatic
-   * spacing is a fixed 5pt before and 10pt after.
+   * `w:doNotUseHTMLParagraphAutoSpacing`: adjacent paragraph spacing adds up, and the automatic
+   * spacing flags are ignored, so the authored measurement stays.
    */
   readonly fixedParagraphSpacing?: true;
   /** `w:doNotExpandShiftReturn`: a justified line before a manual break keeps natural spacing. */
