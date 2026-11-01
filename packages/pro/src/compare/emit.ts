@@ -15,7 +15,7 @@ import {
   type ElementNode,
 } from './xml-fragments.ts';
 
-export type Mark = 'eq' | 'ins' | 'del';
+export type Mark = 'eq' | 'ins' | 'del' | 'moveFrom' | 'moveTo';
 
 export interface Item {
   readonly mark: Mark;
@@ -33,6 +33,8 @@ export class CompareState {
   count = 0;
   /** Blocks the engine could not track (kept or dropped without a revision). */
   untracked = 0;
+  /** Move ranges written so far; names each range pair. */
+  moves = 0;
   /** Note references matched between the documents: compare the two notes. */
   readonly notePairs: { kind: NoteKind; base: string; revised: string }[] = [];
   /** Note references only in the revised document: add the note as inserted content. */
@@ -68,6 +70,16 @@ export class EmitContext {
 
   get revisionCount(): number {
     return this.state.count;
+  }
+
+  /** Attributes of a move range marker: an id, the author and date, and the move's name. */
+  rangeAttrs(name: string): { id: number; attrs: string } {
+    const id = this.state.nextId++;
+    const date = this.date === undefined ? '' : ` w:date="${this.date}"`;
+    return {
+      id,
+      attrs: ` w:id="${id}" w:author="${escapeAttribute(this.author)}"${date} w:name="${name}"`,
+    };
   }
 
   /** The `w:id w:author w:date` attribute triple of one new revision. */
@@ -229,15 +241,15 @@ export function paragraphProperties(
   revised: ParagraphUnit | null,
   ctx: EmitContext
 ): string {
-  const own = mark === 'del' ? base! : revised!;
+  const own = mark === 'del' || mark === 'moveFrom' ? base! : revised!;
   let rPr = own.markRPr;
-  if (mark === 'ins' || mark === 'del') rPr = `<w:${mark}${ctx.attrs()}/>${rPr}`;
+  if (mark !== 'eq') rPr = `<w:${mark}${ctx.attrs()}/>${rPr}`;
   else if (base && ctx.detectFormatChanges && base.markRPr !== own.markRPr) {
     rPr += `<w:rPrChange${ctx.attrs()}><w:rPr>${base.markRPr}</w:rPr></w:rPrChange>`;
   }
   let sect = '';
   if (mark === 'eq') sect = sectPrXml(base?.sectPr ?? null, own.sectPr, ctx);
-  else if (own.sectPr)
+  else if (own.sectPr && (mark === 'ins' || mark === 'del'))
     sect = sectPrXml(mark === 'del' ? own.sectPr : null, mark === 'del' ? null : own.sectPr, ctx);
   let change = '';
   if (mark === 'eq' && base && ctx.detectFormatChanges && base.pPr.join('') !== own.pPr.join('')) {

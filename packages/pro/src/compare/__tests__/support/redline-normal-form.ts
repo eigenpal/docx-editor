@@ -186,8 +186,9 @@ function paragraphOf(paragraph: OoxmlNode & Element, scope: Scope): NormalParagr
   const segments: NormalSegment[] = [];
   const pPr = child(paragraph, 'pPr');
   const markRPr = pPr ? child(pPr, 'rPr') : undefined;
-  const mark =
-    markRPr && child(markRPr, 'ins') ? 'ins' : markRPr && child(markRPr, 'del') ? 'del' : null;
+  // A moved paragraph's mark goes with its text: away from the source, in at the destination.
+  const has = (name: string) => !!markRPr && !!child(markRPr, name);
+  const mark = has('ins') || has('moveTo') ? 'ins' : has('del') || has('moveFrom') ? 'del' : null;
   const push = (text: string, segmentMark: SegmentMark, formatChanged: boolean) => {
     if (text === '') return;
     const last = segments[segments.length - 1];

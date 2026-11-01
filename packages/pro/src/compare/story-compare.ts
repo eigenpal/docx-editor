@@ -21,6 +21,7 @@ import {
   type EmitContext,
   type Item,
 } from './emit.ts';
+import { findMoves, movedParagraph, NO_MOVES, type MoveEnd, type Moves } from './moves.ts';
 import { compareSdt, compareTable } from './table-compare.ts';
 import type { Atom, BlockUnit, ParagraphUnit, Unit } from './units.ts';
 
@@ -122,7 +123,13 @@ interface BlockToken {
   readonly key: string;
   readonly unit: BlockUnit;
 }
-type Token = TextToken | MarkToken | BlockToken;
+interface MoveToken {
+  readonly kind: 'move';
+  readonly key: string;
+  readonly unit: ParagraphUnit;
+  readonly end: MoveEnd;
+}
+type Token = TextToken | MarkToken | BlockToken | MoveToken;
 
 function paragraphTokens(unit: ParagraphUnit, last: boolean, out: Token[]): void {
   const atoms = unit.atoms;
@@ -182,6 +189,12 @@ export function compareContainer(
   foldTrailingPair(steps);
   const lastBase = base[base.length - 1];
   const lastRevised = revised[revised.length - 1];
+  const moves = findMoves(
+    steps.filter((step): step is Extract<Step, { kind: 'hunk' }> => step.kind === 'hunk'),
+    lastBase,
+    lastRevised,
+    ctx
+  );
   let out = '';
   for (const step of steps) {
     if (step.kind === 'pair') {
@@ -202,7 +215,8 @@ export function compareContainer(
         step.revised,
         sentinel ? lastBase : null,
         sentinel ? lastRevised : null,
-        ctx
+        ctx,
+        moves
       );
     }
   }
@@ -239,10 +253,14 @@ function emitPair(base: Unit, revised: Unit, ctx: EmitContext, last = false): st
   return ctx.base.serialize(base.node);
 }
 
-function tokensOf(units: readonly Unit[], last: Unit | null): Token[] {
+function tokensOf(units: readonly Unit[], last: Unit | null, moves: Moves): Token[] {
   const out: Token[] = [];
   for (const unit of units) {
-    if (unit.kind === 'paragraph') paragraphTokens(unit, unit === last, out);
+    const end = moves.get(unit);
+    // A moved paragraph is one token that matches nothing in its hunk.
+    if (end && unit.kind === 'paragraph')
+      out.push({ kind: 'move', key: `\u0004${end.kind}:${end.name}`, unit, end });
+    else if (unit.kind === 'paragraph') paragraphTokens(unit, unit === last, out);
     else out.push({ kind: 'block', key: unit.key, unit });
   }
   return out;
@@ -253,15 +271,19 @@ function emitHunk(
   revised: readonly Unit[],
   lastBase: Unit | null,
   lastRevised: Unit | null,
-  ctx: EmitContext
+  ctx: EmitContext,
+  moves: Moves = NO_MOVES
 ): string {
-  const a = tokensOf(base, lastBase);
-  const b = tokensOf(revised, lastRevised);
+  const a = tokensOf(base, lastBase, moves);
+  const b = tokensOf(revised, lastRevised, moves);
   const ops = pairBlocks(
     coalesceGaps(
-      diffKeys(
-        a.map((token) => token.key),
-        b.map((token) => token.key)
+      slideLeft(
+        diffKeys(
+          a.map((token) => token.key),
+          b.map((token) => token.key)
+        ),
+        a
       ),
       a
     ),
@@ -345,6 +367,8 @@ function emitHunk(
       }
     } else if (token.kind === 'mark') {
       closeParagraph(mark, mark === 'del' ? token.unit : null, mark === 'ins' ? token.unit : null);
+    } else if (token.kind === 'move') {
+      block(movedParagraph(token.unit, token.end, ctx));
     } else {
       block(mark === 'del' ? deletedBlock(token.unit, ctx) : insertedBlock(token.unit, ctx));
     }
@@ -356,6 +380,48 @@ function emitHunk(
   }
   return out + deferred;
 }
+
+/**
+ * A deletion that could sit one token earlier with the same result moves there, as far as it
+ * can: `a{- b} c` rather than `a {-b }c`. Insertions stay where the diff put them. Only text
+ * tokens of characters slide.
+ */
+function slideLeft(input: readonly DiffOp[], a: readonly Token[]): DiffOp[] {
+  const ops = [...input];
+  let i = 0;
+  while (i < ops.length) {
+    if (ops[i]!.op !== 'del') {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < ops.length && ops[j]!.op === 'del') j++;
+    if (j < ops.length && ops[j]!.op !== 'eq') {
+      i = j;
+      continue;
+    }
+    while (i > 0 && ops[i - 1]!.op === 'eq') {
+      const before = ops[i - 1] as Extract<DiffOp, { op: 'eq' }>;
+      const dels = ops.slice(i, j) as Extract<DiffOp, { op: 'del' }>[];
+      const last = dels[dels.length - 1]!;
+      if (!plainText(a[before.a]!) || a[before.a]!.key !== a[last.a]!.key) break;
+      if (dels.some((op) => !plainText(a[op.a]!))) break;
+      // Shift the run one token left: the equal token takes the run's last position.
+      ops.splice(i - 1, j - i + 1, { op: 'del', a: before.a }, ...dels.slice(0, -1), {
+        op: 'eq',
+        a: last.a,
+        b: before.b,
+      });
+      i--;
+      j--;
+    }
+    i = j;
+  }
+  return ops;
+}
+
+/** A text token of characters only: objects and note references never slide. */
+const plainText = (token: Token) => token.kind === 'text' && !token.key.includes('\u0001');
 
 /** Text with no letters or digits: white space and punctuation. */
 const NO_WORD = /^[^\p{L}\p{N}]+$/u;
