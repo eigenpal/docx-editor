@@ -458,14 +458,25 @@ describe('collectRenderedFontFamilies', () => {
     expect(session.renderedFontFamilies()).toEqual(['Calibri']);
   });
 
-  test('hostile names are dropped at the derivation boundary', () => {
+  test('hostile names never reach the catalog: they render in the unmatched face', () => {
     const long = 'A'.repeat(500);
     const session = open(
       docx({
         body: `<w:p>${run(long, 'a')}${run('Bad&#x09;Name', 'b')}${run('Calibri', 'c')}</w:p>`,
       })
     );
-    expect(session.renderedFontFamilies()).toEqual(['Calibri']);
+    expect(session.renderedFontFamilies()).toEqual(['Calibri', 'Cambria']);
+  });
+
+  test('a quoted CSS-style list renders in the unmatched face, a plain list in its first item', () => {
+    const session = open(
+      docx({
+        body:
+          `<w:p>${run('&quot;Open Sans&quot;, sans-serif', 'a')}` +
+          `${run('Verdana, Geneva, sans-serif', 'b')}</w:p>`,
+      })
+    );
+    expect(session.renderedFontFamilies()).toEqual(['Cambria', 'Verdana']);
   });
 
   test('a glyph mark without w:t still counts its run: note marks render in a face', () => {

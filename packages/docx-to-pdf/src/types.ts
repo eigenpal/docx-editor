@@ -44,7 +44,7 @@ export interface PdfExportOptions extends Omit<
    * collections such as SimSun are not replaced. The hard maximum is 64 MiB.
    */
   readonly fontShaping?: FontShapingOptions;
-  /** Revision display mode. Defaults to proposed. */
+  /** Revision display mode. Defaults to all-markup, which shows insertions and deletions. */
   readonly displayMode?: ReviewDisplayMode;
   /** Apply optional document ligatures during measurement and output. Defaults to true. */
   readonly documentLigatures?: boolean;

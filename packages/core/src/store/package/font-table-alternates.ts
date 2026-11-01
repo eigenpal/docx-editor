@@ -2,7 +2,7 @@ import type { OoxmlPackage } from './ooxml-package.ts';
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import { resolveRelationship } from './relationships.ts';
-import { fontFamilyName } from './font-family-name.ts';
+import { fontFamilyName, listedFontFamilyName } from './font-family-name.ts';
 import { fontTableFamilyClass, type FontFamilyClass } from './font-family-class.ts';
 
 const FONT_TABLE_REL =
@@ -55,7 +55,7 @@ export function fontTableClasses(pkg: OoxmlPackage): ReadonlyMap<string, FontFam
   for (const font of root.children) {
     if (!wordElement(font, 'font')) continue;
     if (++inspected > MAX_FONT_TABLE_NAMES) break;
-    const family = fontFamilyName(wordAttribute(font, 'name'));
+    const family = listedFontFamilyName(wordAttribute(font, 'name'));
     if (!family) continue;
     const kind = fontTableFamilyClass(entryValue(font, 'family'), entryValue(font, 'pitch'));
     const key = family.trim().toLowerCase();
@@ -73,7 +73,7 @@ export function fontTableAlternates(pkg: OoxmlPackage): ReadonlyMap<string, stri
   for (const font of root.children) {
     if (!wordElement(font, 'font')) continue;
     if (++inspected > MAX_FONT_TABLE_NAMES) break;
-    const family = fontFamilyName(wordAttribute(font, 'name'));
+    const family = listedFontFamilyName(wordAttribute(font, 'name'));
     if (!family) continue;
     const alternateNode = font.children.find((node) => wordElement(node, 'altName'));
     const rawAlternate =

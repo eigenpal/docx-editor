@@ -104,7 +104,16 @@ export interface SemanticCommentArtifactRecord {
   readonly kind: 'comment';
   readonly id: string;
   readonly author: string;
+  /** Initials to show for the author: the document's, or ones made from the author name. */
   readonly initials: string;
+  /** The initials the document itself declares, trimmed; absent when it declares none. */
+  readonly declaredInitials?: string;
+  /**
+   * The place of the comment's reference mark among the reference marks in the main document
+   * body, counting from 0; absent when the body holds no reference mark for it. Comments are
+   * numbered in this order.
+   */
+  readonly referenceOrder?: number;
   readonly date?: string;
   readonly text: string;
   readonly resolved: boolean;

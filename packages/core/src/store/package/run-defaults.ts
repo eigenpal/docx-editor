@@ -14,7 +14,7 @@
 
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 import { themeFontFamilyOf, type DocumentThemeFonts } from './theme-font-scheme.ts';
-import { fontFamilyName } from './font-family-name.ts';
+import { fontFamilyName, paintedFontFamilyName } from './font-family-name.ts';
 
 /** What a run inherits at one point of the chain — null means "nothing authored". */
 export interface StyleRunDefaults {
@@ -78,13 +78,14 @@ export function familyFromRFonts(
   // this reader must answer the same face the layout lane paints.
   // Each theme attribute overrides only its own slot, so an explicit `w:ascii` outranks a
   // `w:hAnsiTheme` beside it.
+  // Each name resolves to the family it paints in before the next one is tried, as layout's
+  // run cascade reads it: an empty `w:ascii` falls through to `w:hAnsi`.
   const direct =
     themeFontFamilyOf(attributeValue(rFonts, 'asciiTheme'), themeFonts) ??
-    attributeValue(rFonts, 'ascii') ??
+    paintedFontFamilyName(attributeValue(rFonts, 'ascii')) ??
     themeFontFamilyOf(attributeValue(rFonts, 'hAnsiTheme'), themeFonts) ??
-    attributeValue(rFonts, 'hAnsi');
-  if (direct === undefined) return null;
-  return fontFamilyName(direct);
+    paintedFontFamilyName(attributeValue(rFonts, 'hAnsi'));
+  return fontFamilyName(direct ?? undefined);
 }
 
 /** The independently resolved East Asian family named by an `w:rFonts` element. */
@@ -96,7 +97,7 @@ export function eastAsiaFamilyFromRFonts(
   if (themed !== null) return themed;
   const direct = attributeValue(rFonts, 'eastAsia');
   if (direct === undefined) return null;
-  return fontFamilyName(direct);
+  return fontFamilyName(paintedFontFamilyName(direct) ?? undefined);
 }
 
 /**
@@ -111,7 +112,7 @@ export function hAnsiFamilyFromRFonts(
   if (themed !== null) return themed;
   const direct = attributeValue(rFonts, 'hAnsi');
   if (direct === undefined) return null;
-  return fontFamilyName(direct);
+  return fontFamilyName(paintedFontFamilyName(direct) ?? undefined);
 }
 
 /** A validated literal family name from another Word font-bearing attribute such as `w:sym`. */

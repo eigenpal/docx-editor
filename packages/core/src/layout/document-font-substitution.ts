@@ -7,7 +7,7 @@ import {
   fontFamilyClassFromName,
   type FontFamilyClass,
 } from '../store/package/font-family-class.ts';
-import { fontFamilyName } from '../store/package/font-family-name.ts';
+import { fontFamilyName, paintedFontFamilyName } from '../store/package/font-family-name.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import { SYMBOL_ENCODED_FAMILIES } from '../store/package/symbol-encoding.ts';
@@ -171,7 +171,10 @@ function scriptDefaults(
             ['eastAsia', eastAsia],
             ['cs', complex],
           ] as const) {
-            const family = fontFamilyName(wordAttribute(node, slot));
+            // The family the slot paints in: a list's first item, or the unmatched face.
+            const family = fontFamilyName(
+              paintedFontFamilyName(wordAttribute(node, slot)) ?? undefined
+            );
             if (!family || !target) continue;
             const key = family.trim().toLowerCase();
             const targets = needs.get(key) ?? new Set<string>();

@@ -253,3 +253,17 @@ test('Garamond falls back to the serif face and keeps its own line box there', (
     expect(substitution.lineMetrics?.baselineEm).toBeCloseTo(1765 / 2048, 9);
   }
 });
+
+test('a listed font name reads its font table entry under its first family', () => {
+  const listed = 'Lexington, Georgia, serif';
+  const entry = `<w:font w:name="${listed}"><w:family w:val="roman"/></w:font>`;
+  expect(fallbackOf('Lexington', entry, `w:ascii="${listed}" w:hAnsi="${listed}"`)).toBe(
+    'Liberation Serif'
+  );
+  // A name that names no face describes nothing, not the face it paints in.
+  const stray = documentWith(
+    'Lexington',
+    '<w:font w:name="&quot;Stray&quot;, serif"><w:family w:val="modern"/></w:font>'
+  );
+  expect([...fontTableClasses(stray.currentPackage()).keys()]).toEqual([]);
+});

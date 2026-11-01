@@ -10,7 +10,13 @@
 // and codepoint validation as `w:sym` — so the two symbol paths cannot drift apart.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
-import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
+import {
+  resolveRunStyle,
+  withFontFamily,
+  type ResolvedRunStyle,
+  type ThemeFonts,
+} from './run-style.ts';
+import { fontFamilyName } from '../store/package/font-family-name.ts';
 import { isSymbolEncodedFamily, mapSymbolPuaText } from './symbol-encoding.ts';
 import {
   isRenderableCodePoint,
@@ -171,26 +177,30 @@ export function symbolFieldGlyph(
   themeFonts?: ThemeFonts
 ): SymbolFieldGlyph | null {
   const overrides: OoxmlProperty[] = [];
-  if (spec.font) {
+  // A SYMBOL face is one whole name, never a list, and a name that is not a valid face name
+  // is ignored: the field keeps the inherited face.
+  const font = fontFamilyName(spec.font ?? undefined) ?? undefined;
+  if (font) {
     // Like w:sym, the explicit face also owns the East Asian slot: neighboring Han can
     // select that slot even after the inherited hint is reset.
     overrides.push({
       localName: 'rFonts',
-      attributes: { ascii: spec.font, hAnsi: spec.font, eastAsia: spec.font, hint: 'default' },
+      attributes: { ascii: font, hAnsi: font, eastAsia: font, hint: 'default' },
     });
   }
   if (spec.sizePt !== null) {
     overrides.push({ localName: 'sz', attributes: { val: String(spec.sizePt * 2) } });
   }
   const props = overrides.length > 0 ? [...baseProps, ...overrides] : baseProps;
-  const style = resolveRunStyle(props, themeFonts);
+  const resolved = resolveRunStyle(props, themeFonts);
+  const style = font ? withFontFamily(resolved, font) : resolved;
 
   if (spec.unicode) {
     if (!isRenderableCodePoint(spec.code)) return null;
     return { text: String.fromCodePoint(spec.code), props, style };
   }
 
-  const family = spec.font ?? style.fontFamily;
+  const family = font ?? style.fontFamily;
   if (isSymbolEncodedFamily(family)) {
     const effective =
       spec.code <= 0xff && spec.code + SYMBOL_PUA_BASE <= SYMBOL_PUA_END

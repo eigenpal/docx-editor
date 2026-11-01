@@ -3738,9 +3738,9 @@ export interface SemanticCommentArtifactRecord {
     readonly author: string;
     // (undocumented)
     readonly date?: string;
+    readonly declaredInitials?: string;
     // (undocumented)
     readonly id: string;
-    // (undocumented)
     readonly initials: string;
     // (undocumented)
     readonly kind: 'comment';
@@ -3752,6 +3752,7 @@ export interface SemanticCommentArtifactRecord {
     readonly parentId?: string;
     // (undocumented)
     readonly parentRevisionId?: string;
+    readonly referenceOrder?: number;
     // (undocumented)
     readonly replyIds: readonly string[];
     // (undocumented)
