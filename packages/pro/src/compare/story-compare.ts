@@ -11,7 +11,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * hunk is diffed as one token stream in which every paragraph mark is a token, so inserted,
  * deleted, split, and merged paragraphs all fall out of the same word-level diff.
  */
-import { diffKeys, orderHunks, type DiffOp } from './sequence-diff.ts';
+import { diffKeys, type DiffOp } from './sequence-diff.ts';
+import {
+  coalesceGaps,
+  dropSparseMatches,
+  replaceWholeParagraphs,
+  slideLeft,
+} from './hunk-rules.ts';
+import { END_KEY, paragraphTokens, type BlockToken, type Token } from './tokens.ts';
 import { objectWithBoxes } from './text-boxes.ts';
 import {
   emitContent,
@@ -21,137 +28,9 @@ import {
   type EmitContext,
   type Item,
 } from './emit.ts';
-import { findMoves, movedParagraph, NO_MOVES, type MoveEnd, type Moves } from './moves.ts';
+import { findMoves, movedParagraph, NO_MOVES, type Moves } from './moves.ts';
 import { compareSdt, compareTable } from './table-compare.ts';
-import type { Atom, BlockUnit, ParagraphUnit, Unit } from './units.ts';
-
-/** Character classes of the word tokenizer. */
-const HAN = /[\p{sc=Han}\u3000-\u303F\uFF01-\uFF0F\uFF1A-\uFF20]/u;
-const HIRAGANA = /\p{sc=Hiragana}/u;
-const KATAKANA = /[\p{sc=Katakana}\u30FC]/u;
-const DICTIONARY = /[\p{sc=Thai}\p{sc=Lao}\p{sc=Khmer}\p{sc=Myanmar}]/u;
-const WORD = /[\p{L}\p{M}\p{N}_]/u;
-const SPACE_CHAR = /\s/u;
-const APOSTROPHE = /['\u2019]/u;
-
-type CharClass = 'han' | 'hiragana' | 'katakana' | 'dictionary' | 'word' | 'space' | 'other';
-
-function classOf(char: string): CharClass {
-  if (HAN.test(char)) return 'han';
-  if (HIRAGANA.test(char)) return 'hiragana';
-  if (KATAKANA.test(char)) return 'katakana';
-  if (DICTIONARY.test(char)) return 'dictionary';
-  if (WORD.test(char)) return 'word';
-  if (SPACE_CHAR.test(char)) return 'space';
-  return 'other';
-}
-
-let dictionarySegmenter: Intl.Segmenter | null | undefined;
-
-/**
- * Word tokens as `[from, to)` code-unit ranges. A token is a run of one class: Han text with
- * its full-width punctuation, a kana run, a run of letters and digits, or a run of white space.
- * Scripts written without spaces between words (Thai, Lao, Khmer, Myanmar) split at dictionary
- * word boundaries where the platform offers them. Anything else is one character.
- */
-export function wordTokens(text: string): Array<[number, number]> {
-  const out: Array<[number, number]> = [];
-  let i = 0;
-  while (i < text.length) {
-    const code = text.codePointAt(i)!;
-    const width = code > 0xffff ? 2 : 1;
-    const kind = classOf(text.slice(i, i + width));
-    let j = i + width;
-    if (kind !== 'other' && kind !== 'space') {
-      while (j < text.length) {
-        const next = text.codePointAt(j)!;
-        const nextWidth = next > 0xffff ? 2 : 1;
-        const nextKind = classOf(text.slice(j, j + nextWidth));
-        // Combining marks stay with the run they follow.
-        if (nextKind !== kind && !(nextKind === 'word' && /\p{M}/u.test(text[j]!))) {
-          // An apostrophe between letters stays in the word.
-          if (
-            kind !== 'word' ||
-            !APOSTROPHE.test(text[j]!) ||
-            classOf(text[j + 1] ?? '') !== 'word'
-          )
-            break;
-        }
-        j += nextWidth;
-      }
-    }
-    if (kind === 'dictionary') splitDictionary(text, i, j, out);
-    else out.push([i, j]);
-    i = j;
-  }
-  return out;
-}
-
-function splitDictionary(text: string, from: number, to: number, out: Array<[number, number]>) {
-  if (dictionarySegmenter === undefined) {
-    dictionarySegmenter =
-      typeof Intl !== 'undefined' && 'Segmenter' in Intl
-        ? new Intl.Segmenter(undefined, { granularity: 'word' })
-        : null;
-  }
-  if (!dictionarySegmenter) {
-    out.push([from, to]);
-    return;
-  }
-  for (const segment of dictionarySegmenter.segment(text.slice(from, to))) {
-    out.push([from + segment.index, from + segment.index + segment.segment.length]);
-  }
-}
-
-const MARK_KEY = '¶';
-const END_KEY = '¶END';
-
-interface TextToken {
-  readonly kind: 'text';
-  readonly key: string;
-  readonly unit: ParagraphUnit;
-  readonly from: number;
-  readonly to: number;
-}
-interface MarkToken {
-  readonly kind: 'mark';
-  readonly key: string;
-  readonly unit: ParagraphUnit;
-}
-interface BlockToken {
-  readonly kind: 'block';
-  readonly key: string;
-  readonly unit: BlockUnit;
-}
-interface MoveToken {
-  readonly kind: 'move';
-  readonly key: string;
-  readonly unit: ParagraphUnit;
-  readonly end: MoveEnd;
-}
-type Token = TextToken | MarkToken | BlockToken | MoveToken;
-
-function paragraphTokens(unit: ParagraphUnit, last: boolean, out: Token[]): void {
-  const atoms = unit.atoms;
-  let text = '';
-  for (const atom of atoms) text += atom.text;
-  for (const [from, to] of wordTokens(text)) {
-    out.push({ kind: 'text', key: tokenKey(atoms, from, to), unit, from, to });
-  }
-  out.push({ kind: 'mark', key: last ? END_KEY : `${MARK_KEY}${unit.sectPr ? 'S' : ''}`, unit });
-}
-
-function tokenKey(atoms: readonly Atom[], from: number, to: number): string {
-  let key = '';
-  for (let i = from; i < to; i++) {
-    const atom = atoms[i]!;
-    key += atom.kind === 'char' ? atom.text : `\u0001${atom.key}\u0001`;
-  }
-  // Inline content controls do not split or change words; links and fields do.
-  const wrappers = atoms[from]!.wrappers.filter((wrapper) => !wrapper.key.startsWith('sdt|'));
-  if (wrappers.length > 0) key += `\u0002${wrappers.map((wrapper) => wrapper.key).join('\u0003')}`;
-  return key;
-}
+import type { BlockUnit, ParagraphUnit, Unit } from './units.ts';
 
 interface Hunk {
   readonly base: Unit[];
@@ -281,15 +160,19 @@ function emitHunk(
   const b = tokensOf(revised, lastRevised, moves);
   const ops = pairBlocks(
     replaceWholeParagraphs(
-      coalesceGaps(
-        slideLeft(
-          diffKeys(
-            a.map((token) => token.key),
-            b.map((token) => token.key)
+      dropSparseMatches(
+        coalesceGaps(
+          slideLeft(
+            diffKeys(
+              a.map((token) => token.key),
+              b.map((token) => token.key)
+            ),
+            a
           ),
           a
         ),
-        a
+        a,
+        base.length > 1 || revised.length > 1
       ),
       a,
       b
@@ -396,138 +279,15 @@ function emitHunk(
   return out + deferred;
 }
 
-/**
- * A deletion that could sit one token earlier with the same result moves there, as far as it
- * can: `a{- b} c` rather than `a {-b }c`. Insertions stay where the diff put them. Only text
- * tokens of characters slide.
- */
-function slideLeft(input: readonly DiffOp[], a: readonly Token[]): DiffOp[] {
-  const ops = [...input];
-  let i = 0;
-  while (i < ops.length) {
-    if (ops[i]!.op !== 'del') {
-      i++;
-      continue;
-    }
-    let j = i;
-    while (j < ops.length && ops[j]!.op === 'del') j++;
-    if (j < ops.length && ops[j]!.op !== 'eq') {
-      i = j;
-      continue;
-    }
-    while (i > 0 && ops[i - 1]!.op === 'eq') {
-      const before = ops[i - 1] as Extract<DiffOp, { op: 'eq' }>;
-      const dels = ops.slice(i, j) as Extract<DiffOp, { op: 'del' }>[];
-      const last = dels[dels.length - 1]!;
-      if (!plainText(a[before.a]!) || a[before.a]!.key !== a[last.a]!.key) break;
-      if (dels.some((op) => !plainText(a[op.a]!))) break;
-      // Shift the run one token left: the equal token takes the run's last position.
-      ops.splice(i - 1, j - i + 1, { op: 'del', a: before.a }, ...dels.slice(0, -1), {
-        op: 'eq',
-        a: last.a,
-        b: before.b,
-      });
-      i--;
-      j--;
-    }
-    i = j;
-  }
-  return ops;
-}
-
-/**
- * A paragraph that keeps none of its text is replaced as a whole: the new paragraph is
- * inserted and the old one deleted, each with its own mark. The final mark of a container
- * stays, so its paragraph changes word by word.
- */
-function replaceWholeParagraphs(
-  ops: readonly DiffOp[],
-  a: readonly Token[],
-  b: readonly Token[]
-): DiffOp[] {
-  const out: DiffOp[] = [];
-  let start = 0;
-  for (let i = 0; i < ops.length; i++) {
-    const op = ops[i]!;
-    if (op.op !== 'eq' || a[op.a]!.kind !== 'mark') continue;
-    const segment = ops.slice(start, i);
-    const textOnly = segment.every(
-      (item) => item.op !== 'eq' && (item.op === 'ins' ? b[item.b] : a[item.a])!.kind === 'text'
-    );
-    const both =
-      segment.some((item) => item.op === 'ins') && segment.some((item) => item.op === 'del');
-    if (textOnly && both && a[op.a]!.key !== END_KEY) {
-      out.push(
-        ...segment.filter((item) => item.op === 'ins'),
-        { op: 'ins', b: op.b },
-        ...segment.filter((item) => item.op === 'del'),
-        { op: 'del', a: op.a }
-      );
-    } else out.push(...segment, op);
-    start = i + 1;
-  }
-  out.push(...ops.slice(start));
-  return out;
-}
-
-/** A text token of characters only: objects and note references never slide. */
-const plainText = (token: Token) => token.kind === 'text' && !token.key.includes('\u0001');
-
-/** Text with no letters or digits: white space and punctuation. */
-const NO_WORD = /^[^\p{L}\p{N}]+$/u;
-
-/**
- * Changes separated only by white space and punctuation read as one change: the text between
- * them is deleted and inserted with them, so a run of replaced words shows as one insertion and one deletion.
- * The joined run must hold both an insertion and a deletion, or absorbing the space would
- * change the text of one side.
- */
-function coalesceGaps(ops: readonly DiffOp[], a: readonly Token[]): DiffOp[] {
-  const out: DiffOp[] = [];
-  let i = 0;
-  while (i < ops.length) {
-    const op = ops[i]!;
-    if (op.op !== 'eq') {
-      out.push(op);
-      i++;
-      continue;
-    }
-    let j = i;
-    while (j < ops.length && ops[j]!.op === 'eq') j++;
-    const spaces = ops.slice(i, j).every((eq) => {
-      const token = a[(eq as Extract<DiffOp, { op: 'eq' }>).a]!;
-      return token.kind === 'text' && NO_WORD.test(token.key);
-    });
-    if (spaces && i > 0 && j < ops.length && mixedAround(ops, i, j)) {
-      for (const eq of ops.slice(i, j) as Extract<DiffOp, { op: 'eq' }>[]) {
-        out.push({ op: 'del', a: eq.a }, { op: 'ins', b: eq.b });
-      }
-    } else out.push(...ops.slice(i, j));
-    i = j;
-  }
-  return orderHunks(out);
-}
-
-/** Whether the change runs on either side of `ops[from, to)` hold an insertion and a deletion. */
-function mixedAround(ops: readonly DiffOp[], from: number, to: number): boolean {
-  let ins = false;
-  let del = false;
-  for (let k = from - 1; k >= 0 && ops[k]!.op !== 'eq'; k--) {
-    if (ops[k]!.op === 'ins') ins = true;
-    else del = true;
-  }
-  for (let k = to; k < ops.length && ops[k]!.op !== 'eq'; k++) {
-    if (ops[k]!.op === 'ins') ins = true;
-    else del = true;
-  }
-  return ins && del;
-}
-
 type HunkOp =
   | DiffOp
   | { readonly op: 'pair'; readonly base: BlockUnit; readonly revised: BlockUnit };
 
-/** In a run of changes, a deleted and an inserted block of the same kind compare as a pair. */
+/**
+ * In a run of changes, a deleted and an inserted block of the same kind compare as a pair, in
+ * order. The run is cut at each pair, so the content before a pair stays before it on both
+ * sides: insertions, then deletions, then the pair.
+ */
 function pairBlocks(ops: readonly DiffOp[], a: readonly Token[], b: readonly Token[]): HunkOp[] {
   const out: HunkOp[] = [];
   let i = 0;
@@ -540,30 +300,32 @@ function pairBlocks(ops: readonly DiffOp[], a: readonly Token[], b: readonly Tok
     let j = i;
     while (j < ops.length && ops[j]!.op !== 'eq') j++;
     const run = ops.slice(i, j);
-    const deleted = run.filter(
-      (op): op is Extract<DiffOp, { op: 'del' }> => op.op === 'del' && a[op.a]!.kind === 'block'
-    );
-    const used = new Set<DiffOp>();
-    const pairs = new Map<DiffOp, BlockUnit>();
-    for (const op of run) {
-      if (op.op !== 'ins') continue;
-      const token = b[op.b]!;
+    const inserted = run.filter((op): op is Extract<DiffOp, { op: 'ins' }> => op.op === 'ins');
+    const deleted = run.filter((op): op is Extract<DiffOp, { op: 'del' }> => op.op === 'del');
+    let fromIns = 0;
+    let fromDel = 0;
+    for (let k = 0; k < inserted.length; k++) {
+      const token = b[inserted[k]!.b]!;
       if (token.kind !== 'block' || token.unit.kind === 'opaque') continue;
-      const match = deleted.find(
-        (candidate) =>
-          !used.has(candidate) && (a[candidate.a] as BlockToken).unit.kind === token.unit.kind
-      );
-      if (!match) continue;
-      used.add(match);
-      pairs.set(op, (a[match.a] as BlockToken).unit);
+      let match = -1;
+      for (let d = fromDel; d < deleted.length; d++) {
+        const candidate = a[deleted[d]!.a]!;
+        if (candidate.kind === 'block' && candidate.unit.kind === token.unit.kind) {
+          match = d;
+          break;
+        }
+      }
+      if (match < 0) continue;
+      out.push(...inserted.slice(fromIns, k), ...deleted.slice(fromDel, match));
+      out.push({
+        op: 'pair',
+        base: (a[deleted[match]!.a] as BlockToken).unit,
+        revised: token.unit,
+      });
+      fromIns = k + 1;
+      fromDel = match + 1;
     }
-    for (const op of run) {
-      if (used.has(op)) continue;
-      const paired = pairs.get(op);
-      if (paired && op.op === 'ins')
-        out.push({ op: 'pair', base: paired, revised: (b[op.b] as BlockToken).unit });
-      else out.push(op);
-    }
+    out.push(...inserted.slice(fromIns), ...deleted.slice(fromDel));
     i = j;
   }
   return out;
