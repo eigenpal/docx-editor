@@ -1412,7 +1412,25 @@ Presence reads return only the first 256 participants. For Hocuspocus, increase 
 
 Between compactions, a room grows. Deletion writes a tombstone, and deleted media bytes stay in the shared state, so a long-lived room under heavy editing moves toward the node and media limits. Crossing a limit is a terminal error for the room. A server that compacts rooms when it loads them keeps each room well below the limits; see [Compact rooms on a server](#compact-rooms-on-a-server). A WebRTC room has no server to compact it.
 
-Watch the growth. `session.resourceUsage()` returns the replicated counts next to the limits:
+To be told when a room grows close to a limit, subscribe with `session.subscribeResourcePressure()`. The session checks the limits after each local or remote change. It keeps the node count up to date, and it measures parts, relationships, and media again only after they change, so typing does not walk the document. The listener runs when the room reaches a higher threshold or falls back below one:
+
+```ts
+const stop = session.subscribeResourcePressure(
+  ({ limit, fraction, threshold }) => {
+    if (threshold === 0) {
+      hideRoomSizeWarning();
+    } else {
+      // Export the room and create a new one from the saved bytes.
+      showRoomSizeWarning(limit, fraction);
+    }
+  },
+  { thresholds: [0.75, 0.9] }
+);
+```
+
+The reading names the limit closest to its cap: `nodes`, `parts`, `relationships`, or `blobBytes`. If the room already reaches a threshold when you subscribe, the listener runs once at subscription. The default thresholds are `[0.75, 0.9]`.
+
+To read every count, call `session.resourceUsage()`. It returns the replicated counts next to the limits:
 
 ```ts
 const usage = session.resourceUsage();
@@ -1424,6 +1442,8 @@ if (usage.nodes > usage.maxNodes * 0.8) {
 On a server, call `readCollaborationResourceUsage(ydoc)` from `@docx-editor.dev/pro/collaboration`. It reads a synchronized `Y.Doc` the same way `readCollaborationDocument` does: it joins nothing and writes nothing.
 
 Both probes walk the node map once per call. Read them on a schedule, not on every edit.
+
+When a limit ends the room, the failure `detail` names the limit and its count, such as `nodes=200001`.
 
 `formattingMarkers` counts the formatting markers in paragraph text. Each formatting change leaves some, and deleting the formatted text does not remove them, because a participant who edited offline can still depend on them. Compaction removes them.
 

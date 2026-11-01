@@ -25,39 +25,55 @@ const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
 const HEADER: StoryScope = { kind: 'headerFooter', rId: 'rId7' };
+const FOOTER: StoryScope = { kind: 'headerFooter', rId: 'rId8' };
 const FOOTNOTES: StoryScope = { kind: 'notesPart', noteKind: 'footnote' };
+const ENDNOTES: StoryScope = { kind: 'notesPart', noteKind: 'endnote' };
 
-function headerDoc(): Uint8Array {
+function furnitureDoc(): Uint8Array {
+  const type = (kind: string) =>
+    `application/vnd.openxmlformats-officedocument.wordprocessingml.${kind}+xml`;
   return zipDocument(
     '<w:p><w:pPr><w:sectPr><w:headerReference w:type="default" r:id="rId7"/>' +
+      '<w:footerReference w:type="default" r:id="rId8"/>' +
       '</w:sectPr></w:pPr><w:r><w:t>body</w:t></w:r></w:p>',
     {
       documentRels:
         `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-        `<Relationship Id="rId7" Type="${R}/header" Target="header1.xml"/></Relationships>`,
+        `<Relationship Id="rId7" Type="${R}/header" Target="header1.xml"/>` +
+        `<Relationship Id="rId8" Type="${R}/footer" Target="footer1.xml"/></Relationships>`,
       overrides:
-        '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>',
+        `<Override PartName="/word/header1.xml" ContentType="${type('header')}"/>` +
+        `<Override PartName="/word/footer1.xml" ContentType="${type('footer')}"/>`,
       extraXml: {
         'word/header1.xml': `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>Header text</w:t></w:r></w:p></w:hdr>`,
+        'word/footer1.xml': `<w:ftr xmlns:w="${W}"><w:p><w:r><w:t>Footer text</w:t></w:r></w:p></w:ftr>`,
       },
     }
   );
 }
 
-function footnoteDoc(): Uint8Array {
-  const notes =
-    `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
-    `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
-    `<w:footnote w:id="1"><w:p><w:r><w:footnoteRef/></w:r><w:r><w:t>note text</w:t></w:r></w:p></w:footnote>`;
+function notesDoc(): Uint8Array {
+  const notes = (kind: 'footnote' | 'endnote') =>
+    `<w:${kind} w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:${kind}>` +
+    `<w:${kind} w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:${kind}>` +
+    `<w:${kind} w:id="1"><w:p><w:r><w:${kind}Ref/></w:r><w:r><w:t>note text</w:t></w:r></w:p></w:${kind}>`;
+  const type = (kind: string) =>
+    `application/vnd.openxmlformats-officedocument.wordprocessingml.${kind}+xml`;
   return zipDocument(
-    '<w:p><w:r><w:t>Hi</w:t></w:r><w:r><w:footnoteReference w:id="1"/></w:r></w:p><w:sectPr/>',
+    '<w:p><w:r><w:t>Hi</w:t></w:r><w:r><w:footnoteReference w:id="1"/></w:r>' +
+      '<w:r><w:endnoteReference w:id="1"/></w:r></w:p><w:sectPr/>',
     {
       documentRels:
         `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-        `<Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`,
+        `<Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/>` +
+        `<Relationship Id="rIdEn" Type="${R}/endnotes" Target="endnotes.xml"/></Relationships>`,
       overrides:
-        '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>',
-      extraXml: { 'word/footnotes.xml': `<w:footnotes xmlns:w="${W}">${notes}</w:footnotes>` },
+        `<Override PartName="/word/footnotes.xml" ContentType="${type('footnotes')}"/>` +
+        `<Override PartName="/word/endnotes.xml" ContentType="${type('endnotes')}"/>`,
+      extraXml: {
+        'word/footnotes.xml': `<w:footnotes xmlns:w="${W}">${notes('footnote')}</w:footnotes>`,
+        'word/endnotes.xml': `<w:endnotes xmlns:w="${W}">${notes('endnote')}</w:endnotes>`,
+      },
     }
   );
 }
@@ -81,6 +97,7 @@ function textParagraphId(peer: Peer, scope: StoryScope): string {
 
 interface StoryCase {
   readonly name: string;
+  readonly partName: string;
   readonly bytes: () => Uint8Array;
   readonly scope: StoryScope;
   readonly op: (paragraphId: string) => TreeDocOp;
@@ -88,13 +105,7 @@ interface StoryCase {
   readonly expectLocalName: string;
 }
 
-const STORY_PART_NAME: Record<string, string> = {
-  headerFooter: '/word/header1.xml',
-  notesPart: '/word/footnotes.xml',
-};
-
-function storyPartFromPackage(peer: Peer, scope: StoryScope): OoxmlNode {
-  const name = STORY_PART_NAME[scope.kind];
+function storyPartFromPackage(peer: Peer, name: string): OoxmlNode {
   const part = peer.store.currentPackage().parts.get(name);
   if (!part) throw new Error(`no ${name} in package`);
   return part.root;
@@ -117,56 +128,31 @@ function containsParaId(root: OoxmlNode): boolean {
   return present;
 }
 
-const cases: readonly StoryCase[] = [
-  {
-    name: 'header indent',
-    bytes: headerDoc,
-    scope: HEADER,
-    op: (paragraphId) => ({
-      op: 'setParagraphProperties',
-      paragraphId,
-      properties: [{ localName: 'ind', attributes: { start: '720' } }],
-    }),
-    expectLocalName: 'ind',
-  },
-  {
-    name: 'header bold',
-    bytes: headerDoc,
-    scope: HEADER,
-    op: (paragraphId) => ({
-      op: 'setRunProperties',
-      paragraphId,
-      start: 0,
-      end: 3,
-      properties: [{ localName: 'b' }],
-    }),
-    expectLocalName: 'b',
-  },
-  {
-    name: 'footnote indent',
-    bytes: footnoteDoc,
-    scope: FOOTNOTES,
-    op: (paragraphId) => ({
-      op: 'setParagraphProperties',
-      paragraphId,
-      properties: [{ localName: 'ind', attributes: { start: '720' } }],
-    }),
-    expectLocalName: 'ind',
-  },
-  {
-    name: 'footnote bold',
-    bytes: footnoteDoc,
-    scope: FOOTNOTES,
-    op: (paragraphId) => ({
-      op: 'setRunProperties',
-      paragraphId,
-      start: 0,
-      end: 3,
-      properties: [{ localName: 'b' }],
-    }),
-    expectLocalName: 'b',
-  },
-];
+const indent = (paragraphId: string): TreeDocOp => ({
+  op: 'setParagraphProperties',
+  paragraphId,
+  properties: [{ localName: 'ind', attributes: { start: '720' } }],
+});
+
+const bold = (paragraphId: string): TreeDocOp => ({
+  op: 'setRunProperties',
+  paragraphId,
+  start: 0,
+  end: 3,
+  properties: [{ localName: 'b' }],
+});
+
+const stories = [
+  { story: 'header', bytes: furnitureDoc, scope: HEADER, partName: '/word/header1.xml' },
+  { story: 'footer', bytes: furnitureDoc, scope: FOOTER, partName: '/word/footer1.xml' },
+  { story: 'footnote', bytes: notesDoc, scope: FOOTNOTES, partName: '/word/footnotes.xml' },
+  { story: 'endnote', bytes: notesDoc, scope: ENDNOTES, partName: '/word/endnotes.xml' },
+] as const;
+
+const cases: readonly StoryCase[] = stories.flatMap(({ story, ...shared }) => [
+  { name: `${story} indent`, ...shared, op: indent, expectLocalName: 'ind' },
+  { name: `${story} bold`, ...shared, op: bold, expectLocalName: 'b' },
+]);
 
 describe('property variants replicate in non-body stories', () => {
   for (const testCase of cases) {
@@ -178,19 +164,35 @@ describe('property variants replicate in non-body stories', () => {
 
       // Gap 2's core claim: the property VALUE replicates into a non-body story WITHOUT the
       // receiver opening that story store — read it straight from bob's materialized package.
-      const received = storyPartFromPackage(bob, testCase.scope);
+      const received = storyPartFromPackage(bob, testCase.partName);
       expect(containsLocalName(received, testCase.expectLocalName)).toBe(true);
 
-      // Headers/footers seed paragraph identity before either peer opens the story.
-      // Notes still have the lazy identity limitation (#580): only opening the receiving
-      // notes store adds paraId. Keep that remaining limitation explicit.
-      expect(containsParaId(storyPartFromPackage(alice, testCase.scope))).toBe(true);
-      expect(containsParaId(received)).toBe(testCase.scope.kind === 'headerFooter');
+      // Every story seeds paragraph identity into shared state, so the receiver's package
+      // matches the author's before it opens the story store (#580).
+      expect(containsParaId(storyPartFromPackage(alice, testCase.partName))).toBe(true);
+      expect(containsParaId(received)).toBe(true);
+      harness.expectConverged(alice, bob);
 
-      // Once the receiver opens the story — the ordinary "view the header/note" flow — the
-      // two packages fully converge, identity included.
+      // Opening the story, the ordinary "view the header/note" flow, changes nothing.
       bob.store.partFor(testCase.scope);
       harness.expectConverged(alice, bob);
+    });
+  }
+});
+
+describe('received story edits match before any story store opens', () => {
+  for (const { story, bytes, scope } of stories) {
+    test(`${story}: a cold joiner and a remounted peer match the author`, async () => {
+      const { alice, bob } = await harness.pair(bytes());
+      harness.apply(alice, [indent(textParagraphId(alice, scope))], scope);
+      // Neither peer below has opened the story store.
+      const carol = await harness.join(alice, 'carol');
+      harness.expectConverged(alice, carol);
+      const remounted = await harness.remount(bob);
+      harness.expectConverged(alice, remounted);
+      harness.apply(alice, [bold(textParagraphId(alice, scope))], scope);
+      harness.expectConverged(alice, remounted);
+      harness.expectConverged(alice, carol);
     });
   }
 });
