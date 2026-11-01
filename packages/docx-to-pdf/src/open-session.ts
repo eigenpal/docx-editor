@@ -73,7 +73,7 @@ export function openExportSession(
     ...core,
     documentLigatures: options.documentLigatures ?? true,
     signal,
-    displayMode: options.displayMode ?? 'proposed',
+    displayMode: options.displayMode ?? 'all-markup',
     // Installed CJK faces such as SimSun and PMingLiU ship as 17 to 37 MB collections; the
     // editor's 16 MiB default would drop them for a substitute with other metrics.
     fontShaping: exportFontShaping(options),

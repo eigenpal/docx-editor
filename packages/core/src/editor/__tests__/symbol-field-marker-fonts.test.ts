@@ -204,16 +204,20 @@ test('does not interpret arbitrary instruction text and rejects unsafe or overlo
   expect(result.families).toEqual([]);
 });
 
-test.each(['Georgia;Verdana', 'Georgia,Verdana'])(
-  'requests a quoted SYMBOL font as one complete name: %s',
-  async (family) => {
-    const result = await requested(docx(symbolField(family)));
-    expect(result.families).toEqual([family]);
-    expect(result.families).not.toContain('Georgia');
-    expect(result.families).not.toContain('Verdana');
-    expect(result.declared).not.toContain(family);
-  }
-);
+test('requests a quoted SYMBOL font as one complete name', async () => {
+  const family = 'Georgia;Verdana';
+  const result = await requested(docx(symbolField(family)));
+  expect(result.families).toEqual([family]);
+  expect(result.families).not.toContain('Georgia');
+  expect(result.families).not.toContain('Verdana');
+  expect(result.declared).not.toContain(family);
+});
+
+test('a SYMBOL font written as a list requests its first face only, as a run font does', async () => {
+  const result = await requested(docx(symbolField('Georgia,Verdana')));
+  expect(result.families).toEqual(['Georgia']);
+  expect(result.declared).not.toContain('Georgia,Verdana');
+});
 
 test('keeps field and bullet faces in the reserved share of a crowded request', async () => {
   const declarations = Array.from(
