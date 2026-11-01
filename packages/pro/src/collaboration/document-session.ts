@@ -54,7 +54,7 @@ import { DocumentRegistry, PackageMaterializer, applyPrimitiveJournal } from './
 import { collectJournalBlobs, putJournalBlobs } from './document-session-blobs.ts';
 import { healTargetOf, RefusalStreak, type HealTarget } from './document-session-heal.ts';
 import { HistorySelection } from './document-history-selection.ts';
-import { startAttachWatchdog } from './document-session-watchdog.ts';
+import { attachWatchdogDelay, startAttachWatchdog } from './document-session-watchdog.ts';
 import { RemoteSelectionResolver } from './document-remote-selections.ts';
 import { droppedContentDetail, packageVersionFailure } from './document/schema.ts';
 import { SHARED_BLOBS_KEY, SharedBlobStore } from './shared-blob-store.ts';
@@ -88,18 +88,7 @@ import type { CreateDocumentCollaborationOptions } from './document-session-opti
  * paragraph a user types without a long pause. This is the `Y.UndoManager` default.
  */
 const UNDO_CAPTURE_TIMEOUT_MS = 500;
-/** After this long with no attached document port, the session warns that nothing replicates. */
-const ATTACH_WATCHDOG_MS = 2_000;
-
-/**
- * Test-only override for the attach watchdog delay. Not re-exported from
- * `@docx-editor.dev/pro/collaboration`.
- *
- * @internal
- */
-export const ATTACH_WATCHDOG_MS_FOR_TESTS: unique symbol = Symbol(
-  'createDocumentCollaboration.attachWatchdogMs'
-);
+export { ATTACH_WATCHDOG_MS_FOR_TESTS } from './document-session-watchdog.ts';
 
 class DocumentSession implements DocumentCollaborationSession {
   readonly documentId: string;
@@ -914,10 +903,7 @@ export { readCollaborationDocument } from './document-read.ts';
 export async function createDocumentCollaboration(
   options: CreateDocumentCollaborationOptions
 ): Promise<DocumentCollaborationHandle> {
-  const attachWatchdogMs =
-    (options as { readonly [ATTACH_WATCHDOG_MS_FOR_TESTS]?: number })[
-      ATTACH_WATCHDOG_MS_FOR_TESTS
-    ] ?? ATTACH_WATCHDOG_MS;
+  const attachWatchdogMs = attachWatchdogDelay(options);
   const documentId = validateDocumentId(options.documentId);
   const sessionId = sessionIdentity(options.sessionId);
   const identity = validateIdentity(options.identity);
