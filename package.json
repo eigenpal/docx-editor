@@ -135,6 +135,7 @@
     "reference:fetch": "node scripts/fetch-reference.mjs",
     "release": "bun run build:packages && bun run notices:generate && bun run collaboration:check --release && node scripts/collaboration/cli.mjs pack && bun run collaboration:test --all --candidate .cache/collaboration/publish && node scripts/collaboration/cli.mjs verify --candidate .cache/collaboration/publish && changeset publish",
     "test": "node scripts/test/run-parallel.mjs",
+    "test:no-collab": "node scripts/test/run-parallel.mjs --exclude benchmarks/collaboration-server/ --exclude packages/pro/src/collaboration/ --exclude packages/core/src/collaboration/ --exclude scripts/collaboration/ --exclude examples/collaboration-hocuspocus/",
     "test:serial": "bun test",
     "test:changed": "node scripts/test/changed.mjs",
     "test:e2e:collab": "playwright test --config e2e/collaboration.config.ts",
