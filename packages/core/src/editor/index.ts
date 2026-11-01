@@ -306,6 +306,10 @@ export type { ReviewDiagnosticCode, ReviewOperation } from '../automation/diagno
 export {
   resolveEditorModules,
   type CollectReviewItems,
+  type CompareDocumentsEngine,
+  type DocumentCompareErrorCode,
+  type DocumentCompareOptions,
+  type DocumentCompareResult,
   type EditorModule,
   type EditorModuleRegistry,
   type ReviewModelInput,

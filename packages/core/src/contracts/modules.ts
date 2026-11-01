@@ -21,7 +21,7 @@ import type { EditorDiagnostic, EditorDiagnosticKind } from './diagnostics.ts';
  * @public
  */
 
-import type { OoxmlPart } from '@docx-editor.dev/core/store';
+import type { OoxmlPackage, OoxmlPart } from '@docx-editor.dev/core/store';
 import type { CollaborationModuleContribution } from '../collaboration/index.ts';
 import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
 import type {
@@ -75,6 +75,49 @@ export interface RevisionMarkupDialogHost extends RevisionMarkupDialogSession {
   readonly translate?: (key: string) => string | undefined;
 }
 
+/** Options of one document compare. @public */
+export interface DocumentCompareOptions {
+  /** Author recorded on every revision. The engine picks a default when absent. */
+  readonly authorName?: string;
+  /** Record formatting differences as property-change revisions. Default `true`. */
+  readonly detectFormatChanges?: boolean;
+  /** Omit the revision timestamps. Default `false`. */
+  readonly removeDateAndTime?: boolean;
+}
+
+/** Why a document compare was refused. @public */
+export type DocumentCompareErrorCode =
+  | 'invalid-original'
+  | 'invalid-revised'
+  | 'too-large'
+  | 'unsupported-content';
+
+/** Result of one document compare. @public */
+export type DocumentCompareResult =
+  | {
+      readonly ok: true;
+      /** The original package with the differences recorded as tracked changes. */
+      readonly package: OoxmlPackage;
+      readonly revisionCount: number;
+    }
+  | {
+      readonly ok: false;
+      readonly code: DocumentCompareErrorCode;
+      readonly message: string;
+    };
+
+/**
+ * Compares the open document (the original) with a revised DOCX and returns the original with
+ * the differences as tracked changes. Synchronous, DOM-free, and free of side effects.
+ *
+ * @public
+ */
+export type CompareDocumentsEngine = (
+  original: OoxmlPackage,
+  revised: Uint8Array,
+  options: DocumentCompareOptions
+) => DocumentCompareResult;
+
 /**
  * What a review module contributes: the queue derivation, and the revision
  * display modes the editor may enter beyond the free tier's final-state
@@ -83,6 +126,8 @@ export interface RevisionMarkupDialogHost extends RevisionMarkupDialogSession {
  * @public
  */
 export interface ReviewModuleContribution {
+  /** Document compare. Absent, compare commands refuse. */
+  readonly compareDocuments?: CompareDocumentsEngine;
   /** Create local review settings chrome when a host opens the dialog. */
   readonly createRevisionMarkupDialog?: (host: RevisionMarkupDialogHost) => RevisionMarkupDialog;
   /**

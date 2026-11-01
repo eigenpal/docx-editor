@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 /**
  * Proves a compare result with the engine's own review operations: accepting every revision
  * must give the revised document, and rejecting every revision must give the original.

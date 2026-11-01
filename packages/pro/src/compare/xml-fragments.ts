@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 /**
  * XML string helpers for the compare engine.
  *
@@ -15,7 +20,7 @@ export type ElementNode = Exclude<OoxmlNode, { readonly kind: 'textValue' }>;
 export const isElement = (node: OoxmlNode): node is ElementNode => node.kind !== 'textValue';
 
 export const elementChildren = (node: OoxmlNode): readonly ElementNode[] =>
-  isElement(node) ? node.children.filter(isElement) : [];
+  isElement(node) ? (node.children as readonly OoxmlNode[]).filter(isElement) : [];
 
 export const childNamed = (node: OoxmlNode, name: string): ElementNode | undefined =>
   elementChildren(node).find((child) => child.localName === name);

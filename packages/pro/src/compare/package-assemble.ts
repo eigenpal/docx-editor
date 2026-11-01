@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 /**
  * Builds the output package: the original package with the compared stories, new parts for
  * stories only the revised document has, and the relationships (and media) that content taken

@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 /**
  * Stories other than the main one: headers and footers of the final section, footnotes, and
  * endnotes. Each compares with the same container engine, in its own part.

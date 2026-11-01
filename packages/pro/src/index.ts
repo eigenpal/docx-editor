@@ -40,6 +40,12 @@ export {
   type RevisionDisplay,
 } from './review/review-module.ts';
 export {
+  compareDocuments,
+  type CompareDocumentsErrorCode,
+  type CompareDocumentsOptions,
+  type CompareDocumentsResult,
+} from './compare/index.ts';
+export {
   collaborationModule,
   type CollaborationModuleOptions,
 } from './collaboration/collaboration-module.ts';

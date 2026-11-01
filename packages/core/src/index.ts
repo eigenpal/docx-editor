@@ -159,6 +159,10 @@ export type { RevisionMarkupDialog, RevisionMarkupDialogHost } from './contracts
 // ─── Capability modules (what `@docx-editor.dev/pro` implements) ─────────────
 export type {
   CollectReviewItems,
+  CompareDocumentsEngine,
+  DocumentCompareErrorCode,
+  DocumentCompareOptions,
+  DocumentCompareResult,
   EditorModule,
   ReviewModelInput,
   ReviewModuleContribution,

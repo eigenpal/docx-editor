@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 /**
  * Document compare: the original with the revised document's differences as tracked changes.
  *
@@ -12,6 +17,16 @@ import {
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
 import type { CompareDocumentsOptions, CompareDocumentsResult } from './compare-types.ts';
+
+/** {@link comparePackages} result: the public result plus the output package. */
+export type ComparePackagesResult =
+  | {
+      readonly ok: true;
+      readonly bytes: Uint8Array;
+      readonly package: OoxmlPackage;
+      readonly revisionCount: number;
+    }
+  | Extract<CompareDocumentsResult, { ok: false }>;
 import { CompareState, EmitContext, notePlaceholder, sectPrXml, type NoteKind } from './emit.ts';
 import { assemblePackage } from './package-assemble.ts';
 import { selfCheck } from './self-check.ts';
@@ -50,7 +65,10 @@ export function compareDocuments(
       message: `The revised document cannot be read (${revisedRead.reason}).`,
     };
   }
-  return comparePackages(baseRead.package, revisedRead.package, options);
+  const result = comparePackages(baseRead.package, revisedRead.package, options);
+  return result.ok
+    ? { ok: true, bytes: result.bytes, revisionCount: result.revisionCount }
+    : result;
 }
 
 export function comparePackages(
@@ -59,7 +77,7 @@ export function comparePackages(
   options: CompareDocumentsOptions = {},
   /** @internal Diagnostics only: return the result even when the self-check fails. */
   unchecked = false
-): CompareDocumentsResult {
+): ComparePackagesResult {
   const basePkg = acceptAll(original);
   const revisedPkg = acceptAll(revised);
   const baseDoc = basePkg.parts.get(basePkg.mainDocumentPart);
@@ -127,7 +145,12 @@ export function comparePackages(
       message: `The compare result does not reproduce both documents (${check.detail ?? ''}).`,
     };
   }
-  return { ok: true, bytes: assembled.bytes, revisionCount: ctx.revisionCount };
+  return {
+    ok: true,
+    bytes: assembled.bytes,
+    package: assembled.pkg,
+    revisionCount: ctx.revisionCount,
+  };
 }
 
 function shellXml(scope: NamespaceScope, node: ElementNode): { start: string; end: string } {

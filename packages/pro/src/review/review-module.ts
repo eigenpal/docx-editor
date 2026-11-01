@@ -23,6 +23,7 @@ import {
 import { collectReviewItems, revisionItemsOfParagraph } from './review-model.ts';
 import type { ProLicenseOptions } from '../license.ts';
 import { installDrawing } from '../drawing/index.ts';
+import { compareDocumentsEngine } from '../compare/index.ts';
 
 export type {
   CommentMarkerStyle,
@@ -62,6 +63,7 @@ export function reviewModule(options: ReviewModuleOptions = {}): EditorModule {
   return {
     id: 'review',
     review: {
+      compareDocuments: compareDocumentsEngine,
       createRevisionMarkupDialog,
       displayModes: ['all-markup', 'simple-markup', 'proposed', 'original'],
       collectReviewItems,
