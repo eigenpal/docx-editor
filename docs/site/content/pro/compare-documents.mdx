@@ -1,0 +1,94 @@
+---
+title: 'Compare documents'
+description: 'Record the differences between two DOCX files as tracked changes, in the editor, with the Office.js document API, or with the compare function on a server.'
+category: 'Pro'
+order: 64
+---
+
+Compare documents records the differences between an original document and a revised document as tracked changes. Accept all changes to get the revised document. Reject all changes to get the original.
+
+Compare documents requires the review module and an EigenPal Pro License. Follow [Tracked changes](/docs/2.x/pro/tracked-changes) to enable review features. Without the review module, every compare entry point refuses with a stable reason.
+
+You can compare documents in three ways:
+
+- In the editor, from **Compare documents** in the **Review** menu, or with the `compareDocuments` command.
+- With `Document.compareFromBase64` in the Office.js-compatible document API, on a server or in the browser.
+- With the `compareDocuments` function from `@docx-editor.dev/pro`, which takes two DOCX files and returns a third.
+
+## What a compare records
+
+The compare aligns the two documents block by block, then compares matched text word by word. It records these differences:
+
+- Inserted and deleted text, paragraphs, table rows, tables, images, and text boxes.
+- Moved paragraphs, as move revisions at the source and the destination.
+- Character, paragraph, table, and section formatting, when formatting detection is on.
+- Changes in headers and footers of the final section, footnotes, and endnotes.
+
+The compare runs on both documents with their existing tracked changes accepted. The result keeps the comments of both documents. Bookmarks and header and footer references come from the original. Field results are compared as saved; the compare never updates or runs fields.
+
+## Compare in the editor
+
+Add `reviewModule()` to the editor modules. The **Review** menu then shows **Compare documents**. The dialog asks for the revised DOCX file, the author name for the revisions, and whether to detect formatting changes. The open document is the original.
+
+The differences replace the open document's content as one undoable step. One undo restores the original.
+
+```ts
+import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import { reviewModule } from '@docx-editor.dev/pro';
+
+const editor = createDocxEditor({ document: originalBytes, modules: [reviewModule()] });
+editor.attach(container);
+```
+
+To compare without the dialog, for example from your own file picker, run the `compareDocuments` command:
+
+```ts
+const result = editor.exec({
+  type: 'compareDocuments',
+  revised: revisedBytes,
+  authorName: 'Legal',
+  detectFormatChanges: true,
+});
+if (!result.ok) showMessage(result.reason);
+```
+
+The command refuses while the editor is in viewing mode or the document is protected against edits. It also refuses in a collaborative session.
+
+To replace the dialog, pass a component as `popups.compareDocuments`. For more information, see [Customize dialogs](/docs/2.x/customization/dialogs).
+
+## Compare with the document API
+
+`Document.compareFromBase64` follows the Office.js signature. Register `reviewModule()` on the runtime, then call the method with the revised document as base64 data:
+
+```ts
+import { DocxEditor } from '@docx-editor.dev/editor-api';
+import { reviewModule } from '@docx-editor.dev/pro';
+
+const runtime = await DocxEditor.createServer(originalBytes, {
+  modules: [reviewModule()],
+});
+await runtime.run(async (context) => {
+  context.document.compareFromBase64(revisedBase64, { authorName: 'Legal' });
+  await context.sync();
+});
+const redline = await runtime.save();
+```
+
+For supported options and refusals, see [Tracked changes](/docs/2.x/editor-api/revisions).
+
+## Compare two files on a server
+
+The `compareDocuments` function needs no editor or runtime. It returns the result as DOCX bytes:
+
+```ts
+import { compareDocuments } from '@docx-editor.dev/pro';
+
+const result = compareDocuments(originalBytes, revisedBytes, {
+  authorName: 'Legal',
+  detectFormatChanges: true,
+});
+if (result.ok) await writeFile('redline.docx', result.bytes);
+else console.error(result.code, result.message);
+```
+
+The function checks every result before it returns it: accepting all changes must give the revised text, and rejecting all changes must give the original text. A result that fails the check is not returned; the function refuses with `unsupported-content` instead. It refuses with `invalid-original` or `invalid-revised` for a file it cannot read, and with `too-large` for documents over its size limit.

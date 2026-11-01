@@ -88,6 +88,7 @@
     "pro/index",
     "pro/tracked-changes",
     "pro/revision-markup",
+    "pro/compare-documents",
     "pro/review-styling",
     "pro/comments",
     "pro/custom-nodes",
