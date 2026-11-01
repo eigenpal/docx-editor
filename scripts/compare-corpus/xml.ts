@@ -200,6 +200,10 @@ export function sdtBlock(tag: string, paragraphs: string, id: number): string {
 }
 
 let revisionId = 900;
+/** Restarts revision ids, so every build of the corpus writes the same bytes. */
+export function resetRevisionIds(): void {
+  revisionId = 900;
+}
 const revAttrs = (author: string) =>
   `w:id="${revisionId++}" w:author="${esc(author)}" w:date="2026-01-03T09:00:00Z"`;
 export const insWrap = (inner: string, author = 'Earlier Reviewer') =>

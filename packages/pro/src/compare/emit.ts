@@ -128,6 +128,8 @@ export function emitContent(items: readonly Item[], ctx: EmitContext): string {
       const next = items[j]!;
       if (next.markers.length > 0 || next.mark !== first.mark || next.atom.rPr !== first.atom.rPr)
         break;
+      // Field characters, drawings, and other objects each take a run of their own.
+      if (next.atom.kind === 'object' || first.atom.kind === 'object') break;
       if (!sameWrappers(next.atom.wrappers, first.atom.wrappers)) break;
       const nextChange =
         next.mark === 'eq' && ctx.detectFormatChanges && next.baseRPr !== next.atom.rPr;

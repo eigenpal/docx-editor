@@ -291,7 +291,8 @@ export function buildDocx(spec: DocSpec): Uint8Array {
   );
   // Fixed timestamps keep the archive byte-stable across runs.
   const stamped: Record<string, [Uint8Array, { mtime: Date }]> = {};
-  const fixed = new Date('2026-01-01T00:00:00Z');
+  // Zip times are local fields: a local date gives the same bytes in every time zone.
+  const fixed = new Date(2026, 0, 1);
   for (const name of Object.keys(files).sort()) stamped[name] = [files[name]!, { mtime: fixed }];
   return zipSync(stamped, { level: 6 });
 }

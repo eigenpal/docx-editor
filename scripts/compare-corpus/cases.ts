@@ -21,9 +21,12 @@ import {
   wholeDocumentFamily,
 } from './families-structure.ts';
 
+import { resetRevisionIds } from './xml.ts';
+
 export type { CompareCase } from './families-text.ts';
 
 export function allCases(): CompareCase[] {
+  resetRevisionIds();
   const out: CompareCase[] = [];
   for (const family of [
     wordsFamily,
