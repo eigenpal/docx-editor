@@ -438,6 +438,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     author: 'represented',
     initials: 'represented',
     declaredInitials: 'represented',
+    referenceOrder: 'represented',
     date: 'represented',
     text: 'represented',
     resolved: 'represented',

@@ -26,6 +26,8 @@ import {
 } from '../store/store/tree-op-revisions.ts';
 import { stylesAndNumberingKey, unlistedSitesOf } from '../store/store/review-unlisted-sites.ts';
 import { numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import { attribute } from '../store/package/comment-lifecycle-scan.ts';
+import { WML_NAMESPACE_URI } from '../store/package/ooxml-tree.ts';
 import type { UnlistedRevisionSites } from '../layout/revision-hidden-sites.ts';
 import {
   forEachSemanticDrawing,
@@ -521,10 +523,34 @@ function mappedId(
   return ids.get(sourceId) ?? opaqueId(kind, sourceId);
 }
 
+/**
+ * The place of each comment's first reference mark among the reference marks of `part`, in
+ * tree order. Two comments on the same characters end at the same place, so only the order of
+ * their marks tells which one is numbered first.
+ */
+function referenceOrderOf(part: OoxmlPart): ReadonlyMap<string, number> {
+  const order = new Map<string, number>();
+  const stack: OoxmlNode[] = [part.root];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    if (node.kind === 'textValue') continue;
+    if (node.kind === 'commentReference') {
+      const id = attribute(node, WML_NAMESPACE_URI, 'id');
+      if (id !== undefined && !order.has(id)) order.set(id, order.size);
+      continue;
+    }
+    for (let index = node.children.length - 1; index >= 0; index -= 1) {
+      stack.push(node.children[index]!);
+    }
+  }
+  return order;
+}
+
 function artifactOf(
   item: ReviewItem,
   occurrences: ParagraphOccurrenceIndex | null,
-  ids: PublicReviewIds
+  ids: PublicReviewIds,
+  referenceOrder: ReadonlyMap<string, number>
 ): SemanticReviewArtifactRecord | null {
   if (item.kind === 'revision') {
     return {
@@ -565,6 +591,7 @@ function artifactOf(
     ...(item.comment.initials?.trim()
       ? { declaredInitials: commentInitials({ ...item.comment, author: '' }) }
       : {}),
+    ...(referenceOrder.has(item.id) ? { referenceOrder: referenceOrder.get(item.id)! } : {}),
     ...(item.comment.date !== undefined ? { date: item.comment.date } : {}),
     text: commentBodyText(item.comment),
     resolved: item.resolved,
@@ -655,7 +682,12 @@ export function projectReviewArtifacts(
       ? paragraphOccurrences(layout, pkg, parts, ranges, derivation.deepParagraphOrderOfPart)
       : null;
   const ids = publicReviewIds(items);
+  const main = parts[0];
+  const referenceOrder =
+    main && items.some((item) => item.kind === 'comment')
+      ? referenceOrderOf(main)
+      : new Map<string, number>();
   return items
-    .map((item) => artifactOf(item, occurrences, ids))
+    .map((item) => artifactOf(item, occurrences, ids, referenceOrder))
     .filter((artifact): artifact is SemanticReviewArtifactRecord => artifact !== null);
 }

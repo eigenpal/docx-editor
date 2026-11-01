@@ -875,6 +875,7 @@ export interface SemanticCommentArtifactRecord {
     readonly parentId?: string;
     // (undocumented)
     readonly parentRevisionId?: string;
+    readonly referenceOrder?: number;
     // (undocumented)
     readonly replyIds: readonly string[];
     // (undocumented)

@@ -275,9 +275,10 @@ type CommentRecord = Extract<ExportSemanticLayout['reviewArtifacts'][number], { 
 /**
  * Comments in the order their ranges end in the body, where each comment's reference mark
  * stands; that is the order they are numbered in. A range nested in another ends first, so it
- * comes first. Comments that end at the same place keep the order they are listed in. A reply
- * without a range of its own keeps its place after its parent, and a
- * comment outside the body keeps its place after the rest.
+ * comes first. Comments that end at the same place follow the order of their reference marks
+ * in the body, and otherwise keep the order they are listed in. A reply without a range of
+ * its own keeps its place after its parent, and a comment outside the body keeps its place
+ * after the rest.
  */
 function commentsInOrder(layout: ExportSemanticLayout): CommentRecord[] {
   type Key = readonly [page: number, y: number, x: number];
@@ -303,9 +304,15 @@ function commentsInOrder(layout: ExportSemanticLayout): CommentRecord[] {
     if (parent) keys.set(artifact.id, parent);
   }
   const none: Key = [Infinity, 0, 0];
-  // `sort` is stable: comments that end together keep their order, a reply without a range
-  // stays after its parent.
-  return comments.sort((a, b) => later(keys.get(a.id) ?? none, keys.get(b.id) ?? none));
+  const byMark = (a: CommentRecord, b: CommentRecord) =>
+    a.referenceOrder !== undefined && b.referenceOrder !== undefined
+      ? a.referenceOrder - b.referenceOrder
+      : 0;
+  // `sort` is stable: comments that end together with no marks to tell them apart keep their
+  // order, and a reply without a range stays after its parent.
+  return comments.sort(
+    (a, b) => later(keys.get(a.id) ?? none, keys.get(b.id) ?? none) || byMark(a, b)
+  );
 }
 
 /**

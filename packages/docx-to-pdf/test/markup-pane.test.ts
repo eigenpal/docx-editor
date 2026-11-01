@@ -103,3 +103,15 @@ test('a comment on a point, with no range, still gets its balloon', async () => 
   );
   expect(await balloonLabels(input)).toEqual(['Commented [RV1]: Note']);
 });
+
+test('comments on the same text follow the order of their reference marks', async () => {
+  // Both ranges cover the same characters; the second comment's mark comes first.
+  const input = docx(
+    '<w:p><w:commentRangeStart w:id="0"/><w:commentRangeStart w:id="1"/><w:r><w:t>Shared</w:t></w:r><w:commentRangeEnd w:id="1"/><w:commentRangeEnd w:id="0"/><w:r><w:commentReference w:id="1"/></w:r><w:r><w:commentReference w:id="0"/></w:r></w:p>',
+    comments(
+      '<w:comment w:id="0" w:author="Reviewer" w:initials="RV"><w:p><w:r><w:t>First</w:t></w:r></w:p></w:comment>' +
+        '<w:comment w:id="1" w:author="Second Person" w:initials="SP"><w:p><w:r><w:t>Second</w:t></w:r></w:p></w:comment>'
+    )
+  );
+  expect(await balloonLabels(input)).toEqual(['Commented [SP1]: Second', 'Commented [RV2]: First']);
+});
