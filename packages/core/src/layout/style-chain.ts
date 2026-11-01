@@ -50,3 +50,21 @@ export function styleChain(
   }
   return tipFirst.reverse();
 }
+
+/**
+ * The run properties a character style chain contributes. The document's default character
+ * style (`w:default="1"`, normally "Default Paragraph Font") contributes nothing: not on a run
+ * without `w:rStyle`, not when a run names it, and not as the base of another character style.
+ * A style based on it still applies its own properties.
+ */
+export function characterStyleRunProperties(
+  table: {
+    readonly styles: ReadonlyMap<string, StyleDefinition>;
+    readonly defaultCharacterStyleId?: string | null;
+  },
+  styleId: string
+): readonly OoxmlProperty[] {
+  return styleChain(table, styleId, 'character')
+    .filter((style) => style.styleId !== table.defaultCharacterStyleId)
+    .flatMap((style) => style.runProperties);
+}

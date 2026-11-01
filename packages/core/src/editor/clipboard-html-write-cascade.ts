@@ -207,10 +207,12 @@ export function runPropertyLayers(
     if (rPr) paragraphLevel.push(rPr);
   }
   const characterLevel: OoxmlElement[] = [];
-  // The default character style applies when the run names no rStyle, like layout.
-  const characterStyleId =
-    wmlVal(wmlChild(ownRPr, 'rStyle')) ?? index.defaultCharacterStyleId ?? undefined;
+  // Only a named character style applies, like layout. The default character style adds
+  // nothing, also as the base of another character style.
+  const characterStyleId = wmlVal(wmlChild(ownRPr, 'rStyle')) ?? undefined;
   for (const style of styleChain(index, characterStyleId, 'character')) {
+    const id = attributeValueOf(style, 'styleId', WML_NAMESPACE_URI);
+    if (id !== undefined && id === index.defaultCharacterStyleId) continue;
     const rPr = wmlChild(style, 'rPr');
     if (rPr) characterLevel.push(rPr);
   }
