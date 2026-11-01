@@ -122,7 +122,8 @@ export function formatKeepingEnds(
         right && right.id,
         text,
         null,
-        new Y.ContentFormat(key, null)
+        // Yjs types a format value as an object, but a null value is how it ends one.
+        new Y.ContentFormat(key, null as unknown as object)
       );
       marker.integrate(transaction, 0);
     }
