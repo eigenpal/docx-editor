@@ -15,6 +15,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 import { createRevisionMarkupDialog } from './revision-markup-dialog';
+import { createCompareDocumentsDialog } from './compare-documents-dialog';
 import {
   resolveReviewPane,
   type EditorModule,
@@ -64,6 +65,7 @@ export function reviewModule(options: ReviewModuleOptions = {}): EditorModule {
     id: 'review',
     review: {
       compareDocuments: compareDocumentsEngine,
+      createCompareDocumentsDialog,
       createRevisionMarkupDialog,
       displayModes: ['all-markup', 'simple-markup', 'proposed', 'original'],
       collectReviewItems,
