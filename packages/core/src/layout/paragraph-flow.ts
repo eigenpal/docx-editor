@@ -182,8 +182,9 @@ export function breakParagraph(
   if (cached) return cached;
 
   const lineSpacing = flow?.lineSpacing ?? SINGLE_LINE_SPACING;
-  // A manual page break inside a table cell keeps its model offset but has no geometry.
-  const pageBreaksIgnored = flow?.cellAnchorScope?.inTableCell === true;
+  // A manual page break in a table cell or a text frame keeps its offset but has no geometry.
+  const pageBreaksIgnored =
+    flow?.cellAnchorScope?.inTableCell === true || flow?.pageBreaksIgnored === true;
 
   // Collect deleted ranges during projection: removed content has no visible span.
   const deletedRanges: { start: number; end: number }[] = [];

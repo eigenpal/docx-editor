@@ -10,6 +10,7 @@ import {
   bodyParagraphOptionFlow,
   bodyParagraphPlacementFlow,
   bodyContentBounds,
+  framedParagraphFlow,
 } from './body-paragraph-flow.ts';
 import { layoutWithCharacterHeadersSteps } from './character-header-layout.ts';
 import { contextualParagraphSpacing, flowNeighbourStyle } from './contextual-paragraph-spacing.ts';
@@ -1573,8 +1574,7 @@ function* layoutBlocksPass(
         displayMode,
         ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
         ...inlineDrawingFlow(options.inlineDrawingLayout, hostedStory),
-        // Line placement below clips these pictures to the sheet; frames keep the flow clip.
-        ...(!entry.frame ? { deferInlineDrawingHorizontalClip: true } : {}),
+        ...framedParagraphFlow(entry.frame !== undefined),
         ...bodyContentBounds(entry.indent, available, columnCount > 1 ? columnWidth() : undefined),
         ...bodyParagraphPlacementFlow({
           paragraphStartY,
