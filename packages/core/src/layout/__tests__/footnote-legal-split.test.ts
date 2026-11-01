@@ -22,11 +22,13 @@ function fixture(
   widow: boolean,
   keep: boolean | 'next' = false,
   noteCount = 6,
-  stacked = false
+  stacked = false,
+  bodyProps = ''
 ) {
   const body = Array.from({ length: reference }, (_, index) =>
     paragraph(
-      `<w:t>Body ${index + 1}</w:t>${index + 1 === reference ? '<w:footnoteReference w:id="1"/>' : stacked && index === 9 ? '<w:footnoteReference w:id="2"/>' : ''}`
+      `<w:t>Body ${index + 1}</w:t>${index + 1 === reference ? '<w:footnoteReference w:id="1"/>' : stacked && index === 9 ? '<w:footnoteReference w:id="2"/>' : ''}`,
+      bodyProps
     )
   ).join('');
   const document = part(
@@ -99,6 +101,26 @@ describe('legal footnote opening admission', () => {
       });
     }
   }
+  for (const mode of [14, 15]) {
+    for (const indent of [
+      '<w:ind w:left="720"/>',
+      '<w:ind w:right="720"/>',
+      '<w:ind w:left="720" w:hanging="360"/>',
+      '<w:ind w:left="1440" w:right="1440"/>',
+    ]) {
+      test(`mode ${mode}: indented body text admits the same split opening, ${indent}`, () => {
+        const { document, options } = fixture(49, true, false, 6, false, indent);
+        const configured = {
+          ...options,
+          compatibilityMode: mode,
+          notes: { ...options.notes, compatibilityMode: mode },
+        };
+        const layout = layoutSemanticDocument(document, 0, configured);
+        expect(counts(layout.pages[0]!)).toEqual({ body: 49, notes: 4 });
+        expect(layout.pages.reduce((n, p) => n + counts(p).notes, 0)).toBe(6);
+      });
+    }
+  }
   test('an oversized kept note still drains on fresh pages', () => {
     const { document, options } = fixture(1, true, true, 70);
     const layout = layoutSemanticDocument(document, 0, options);
@@ -151,6 +173,27 @@ describe('legal footnote opening admission', () => {
       [52, 6],
     ]) {
       const changed = fixture(reference!, false, false, lines);
+      const options = { ...changed.options, session: initial.options.session };
+      const warm = layoutSemanticDocument(changed.document, reference!, options);
+      const cold = layoutSemanticDocument(changed.document, reference!, {
+        ...options,
+        session: createLayoutSession(),
+      });
+      expect(warm.pages).toEqual(cold.pages);
+      expect(warm.pages.reduce((n, p) => n + counts(p).notes, 0)).toBe(lines!);
+    }
+  });
+  test('indented reference edits retain cold geometry', () => {
+    const indent = '<w:ind w:left="720" w:hanging="360"/>';
+    const initial = fixture(49, true, false, 6, false, indent);
+    layoutSemanticDocument(initial.document, 0, initial.options);
+    for (const [reference, lines] of [
+      [51, 8],
+      [49, 3],
+      [52, 6],
+      [49, 6],
+    ]) {
+      const changed = fixture(reference!, true, false, lines, false, indent);
       const options = { ...changed.options, session: initial.options.session };
       const warm = layoutSemanticDocument(changed.document, reference!, options);
       const cold = layoutSemanticDocument(changed.document, reference!, {

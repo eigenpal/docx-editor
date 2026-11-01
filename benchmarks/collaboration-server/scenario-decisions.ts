@@ -6,10 +6,11 @@
 // So when a replica accepts or rejects a change, the typed tokens the change holds in that
 // replica's view are recorded. At the end, none of them may still sit in a change with the
 // same identity. A replica that undoes or redoes after its decision may have brought the
-// change back, so its earlier decisions are not checked. An undo or redo writes the text it
-// restores as new content, whether it brings back a decided change or typing inside one. A
-// peer's decision on that change that did not see the undo or redo misses the new copy, so
-// it is not checked either.
+// change back, so its earlier decisions are not checked. The undo restores the change as new
+// content, so a peer's decision on the same change that did not see the undo misses it too,
+// and is not checked either. An undo or redo of typing writes the typed text again as new
+// content too, so a peer's decision that did not see it does not reach that text, and is not
+// checked for the changes the text came back in.
 
 import type {
   OoxmlNode,
@@ -154,20 +155,23 @@ export class DecisionOracle {
   }
 
   /**
-   * An undo or redo on `replica`, which changed its body from `before` to `after`: its earlier
-   * decisions may come back, and so may text inside any change whose tokens it moved.
+   * An undo or redo on `replica`, from `before` to `after`: its earlier decisions may come
+   * back, and so may typing in a change, which the undo or redo writes again as new content.
    */
-  undone(replica: number, ydoc: Y.Doc, before: OoxmlNode, after: OoxmlNode): void {
+  undone(replica: number, ydoc: Y.Doc, before: OoxmlPackage, after: OoxmlPackage): void {
     const identities = new Set<string>();
     for (const decision of this.decisions) {
       if (decision.replica !== replica) continue;
       decision.excused = true;
       for (const identity of decidedIdentities(decision)) identities.add(identity);
     }
-    const was = tokensInChanges(before);
-    for (const [token, now] of tokensInChanges(after)) {
-      const earlier = was.get(token);
-      for (const identity of now) if (!earlier?.has(identity)) identities.add(identity);
+    const root = bodyOf(before);
+    const held = root ? tokensInChanges(root) : new Map<string, Set<string>>();
+    const restored = bodyOf(after);
+    for (const [token, around] of restored ? tokensInChanges(restored) : []) {
+      for (const identity of around) {
+        if (!held.get(token)?.has(identity)) identities.add(identity);
+      }
     }
     const client = ydoc.clientID;
     this.restores.push({ replica, client, clock: Y.getState(ydoc.store, client), identities });

@@ -18,7 +18,6 @@ import {
   sameOrComputed,
   spanAdjustedMinimums,
   widenAutofitColumns,
-  type SpanRequirement,
 } from './table-autofit-distribution.ts';
 
 export { autofitTargetPt, widenAutofitColumns } from './table-autofit-distribution.ts';
@@ -68,7 +67,9 @@ import {
   type StyleCascadeTable,
 } from './style-cascade.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
-import { preferredSpreadWidths } from './table-autofit-spread.ts';
+import { percentShareWidths, preferredSpreadWidths } from './table-autofit-spread.ts';
+import { emptyColumnContent, type AutofitColumnContent } from './table-autofit-column-content.ts';
+export type { AutofitColumnContent } from './table-autofit-column-content.ts';
 import { resolveCjkTypography } from './cjk-typography.ts';
 import { withoutLineEndWhitespace } from './trailing-spaces.ts';
 
@@ -548,17 +549,6 @@ function nestedTableMinimumPt(
   return { plain: need(false), widened: need(true) };
 }
 
-function emptyColumnContent(): AutofitColumnContent {
-  return {
-    maximums: [],
-    sizedByContent: [],
-    preferredWidths: [],
-    spans: [],
-    measured: [],
-    verticalHolds: [],
-  };
-}
-
 /**
  * A fixed table's cell minimums when it must narrow inside a cell: the content each column
  * holds, raised for its spanning cells. A column only spanning cells cover asks for nothing
@@ -723,6 +713,7 @@ export function autofitColumnMinimumsPt(
       if (cell.gridSpan === 1 && cell.preferredWidth.value > 0) {
         const stated = cell.preferredWidth;
         if (stated.type === 'dxa' || stated.type === 'pct') preferred[cell.gridColumn] = true;
+        if (content && stated.type === 'pct') content.percentColumns[cell.gridColumn] = true;
         if (content && stated.type === 'dxa') {
           const points = stated.value;
           const known = content.preferredWidths[cell.gridColumn];
@@ -814,22 +805,6 @@ export function autofitColumnMinimumsPt(
     }
   }
   return minimums;
-}
-
-/** What a table's cells say about its columns beyond their minimums. */
-export interface AutofitColumnContent {
-  /** Each column's widest unwrapped content, with the insets of the widened geometry. */
-  readonly maximums: number[];
-  /** Columns no single-column cell gives a preferred width: sized by their content. */
-  readonly sizedByContent: boolean[];
-  /** The widest absolute preferred width a single-column cell states, where one does. */
-  readonly preferredWidths: (number | undefined)[];
-  /** Columns a single-column cell of horizontal text measured. */
-  readonly measured: boolean[];
-  /** The width each cell of vertical text has across the columns it covers. */
-  readonly verticalHolds: SpanRequirement[];
-  /** What each cell spanning several columns needs across them. */
-  readonly spans: SpanRequirement[];
 }
 
 /**
@@ -976,7 +951,8 @@ export function autofitColumnWidthsPt(
           roomPt,
           cellWidths.reduce((sum, width) => sum + width, 0)
         )
-      : widenAutofitColumns(cellWidths, minimums, targetPt, roomPt);
+      : (percentShareWidths(structure, content, cellWidths, minimums, targetPt, view.depth ?? 0) ??
+        widenAutofitColumns(cellWidths, minimums, targetPt, roomPt));
   let cells = settle();
   // A span the preferred widths held may lose its room as columns settle: hold it against
   // the settled widths and settle again.

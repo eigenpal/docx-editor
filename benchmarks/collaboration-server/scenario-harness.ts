@@ -370,8 +370,8 @@ class Simulation {
           this.decisions.undone(
             action.replica,
             replica.ydoc,
-            before.parts.get(before.mainDocumentPart)!.root,
-            replica.store.bodyStore().part.root
+            before,
+            replica.store.currentPackage()
           );
           this.tokens.undoOn(action.replica, sharedBefore, sharedTextOf(replica.ydoc), {
             before: pendingBefore,

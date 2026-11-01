@@ -1,8 +1,8 @@
 // How an autofit table with a preferred width on every column settles: from those preferred
 // widths, not from the grid the width resolver already scaled to the table's width.
 import type { SemanticTableCell, SemanticTableStructure } from './semantic-table.ts';
-import { spreadPreferredColumns } from './table-autofit-distribution.ts';
-import type { AutofitColumnContent } from './table-autofit-widths.ts';
+import { equalShareWidenedWidths, spreadPreferredColumns } from './table-autofit-distribution.ts';
+import type { AutofitColumnContent } from './table-autofit-column-content.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
 import { legacyLeadingInsetPt, legacyTrailingInsetPt } from './table-origin.ts';
 
@@ -105,4 +105,46 @@ export function preferredSpreadWidths(
   return tableWidth.value > 0
     ? spreadPreferredColumns(preferred, minimums, totalPt, fitPt, true)
     : undefined;
+}
+
+/**
+ * Column widths for a top-level percentage autofit table whose every column has a
+ * percentage preferred width and no absolute one, once a column widens to its minimum, or
+ * `undefined` when another rule settles the table. The other columns give way in equal
+ * parts (see {@link equalShareWidenedWidths}), so their content does not change the split.
+ */
+export function percentShareWidths(
+  structure: SemanticTableStructure,
+  content: Pick<
+    AutofitColumnContent,
+    'percentColumns' | 'preferredWidths' | 'spans' | 'verticalHolds'
+  >,
+  widths: readonly number[],
+  minimums: readonly number[],
+  targetPt: number,
+  depth: number
+): readonly number[] | undefined {
+  const count = widths.length;
+  if (
+    depth > 0 ||
+    structure.layoutFixed ||
+    structure.cellSpacingPt !== 0 ||
+    structure.float ||
+    structure.tableWidth.type !== 'pct' ||
+    !(structure.tableWidth.value > 0) ||
+    content.spans.length > 0 ||
+    content.verticalHolds.length > 0 ||
+    count === 0 ||
+    minimums.length !== count
+  )
+    return undefined;
+  let totalPt = 0;
+  for (let column = 0; column < count; column++) {
+    if (content.percentColumns[column] !== true) return undefined;
+    if (content.preferredWidths[column] !== undefined) return undefined;
+    totalPt += widths[column]!;
+  }
+  // Only a table that already sits at its settled width shares out what its columns gain.
+  if (Math.abs(totalPt - targetPt) > ONE_TWIP_PT) return undefined;
+  return equalShareWidenedWidths(widths, minimums);
 }

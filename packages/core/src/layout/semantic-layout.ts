@@ -184,7 +184,7 @@ import {
   inheritNotesLayoutInput,
   layoutSemanticDocumentWithNotesSteps,
 } from './note-pagination.ts';
-import { closingSpaceAfterPt, droppableSpacingPt } from './note-area-fit.ts';
+import { closingSpaceAfterPt, droppableSpacingPt, keepNoteClosing } from './note-area-fit.ts';
 import { passProducerOf } from './pass-producer.ts';
 import { documentProjectionProducer } from './document-property-context.ts';
 
@@ -1845,6 +1845,7 @@ function* layoutBlocksPass(
         prepared[at]?.kind === 'paragraph' && (!!prepared[at].frame || !!emptySectionMarkAt(at)),
       breaksBefore: (at) => prepared[at]?.kind === 'paragraph' && breaksBeforeAt(at, prepared[at]),
       sumAdjacentSpacing: styleCascade?.fixedParagraphSpacing,
+      noteClosing: () => keepNoteClosing(noteReserveHere(), pageFragments, options),
       tableOpening: (at) =>
         keptTables.opening(prepared[at], columnWidth(), contentHeight(), tableDeps),
     },
@@ -2235,7 +2236,7 @@ function* layoutBlocksPass(
     let fragmentIndex = 0;
     let pending: LineRecord[] = [];
     const closingAfter = (line: PendingLine): number =>
-      closingSpaceAfterPt(noteReserveHere(), pageFragments, pending, line, spacing.after);
+      closingSpaceAfterPt(noteReserveHere(), pageFragments, pending, line, spacing.after, options);
     const droppedBelow = (line: PendingLine): number =>
       droppableSpacingPt(noteReserveHere(), pageFragments, pending, line, options);
     let fragmentStart = lines[0]?.start ?? 0;
