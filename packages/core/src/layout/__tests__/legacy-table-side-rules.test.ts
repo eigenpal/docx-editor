@@ -90,7 +90,18 @@ test('compound, unequal, separated, positioned and percentage tables retain thei
     source(0.5, '', 4, 'single', 'pct').table,
   ])
     expect(read(table, 12).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
-  expect(read(source().table, 12, 1).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
+});
+
+// Nested reference renderings with 0.5pt rules put each rule centre on a grid line that sits
+// half a rule in from the cell edge, and the text a margin from that line, in every mode.
+test('a nested table with one rule width shares its grid lines in every mode', () => {
+  for (const mode of [12, 14, 15]) {
+    const nested = read(source().table, mode, 1);
+    expect(nested.rows[0]!.cells[0]!.centeredSideRules).toBe(true);
+    expect(nested.outerRuleOffsetPt).toBe(0.25);
+  }
+  // Unequal side rules are not that shape.
+  expect(read(source(0, '', 8).table, 12, 1).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
 });
 
 // A right-to-left legacy table shares its grid lines the same way.
@@ -139,10 +150,9 @@ for (const fixed of [false, true]) {
 }
 
 test('mode 15 keeps the full-stroke inset for shapes its controls do not cover', () => {
-  // Left- and right-aligned `dxa` tables are covered in `modern-edge-aligned-side-rules.test.ts`.
+  // Left- and right-aligned `dxa` tables are covered in `modern-edge-aligned-side-rules.test.ts`,
+  // percentage and right-to-left tables in `modern-percent-side-rules.test.ts`.
   for (const table of [
-    source(0.5, '', 4, 'single', 'pct').table,
-    source(0.5, CENTRED, 4, 'single', 'pct').table,
     source(0.5, CENTRED, 8).table,
     source(0.5, CENTRED, 4, 'double').table,
     source(0.5, `${CENTRED}<w:tblCellSpacing w:w="20" w:type="dxa"/>`).table,
@@ -150,23 +160,12 @@ test('mode 15 keeps the full-stroke inset for shapes its controls do not cover',
       0.5,
       `${CENTRED}<w:tblpPr w:horzAnchor="text" w:vertAnchor="text" w:tblpX="1" w:tblpY="1"/>`
     ).table,
-    source(0.5, `${CENTRED}<w:bidiVisual/>`).table,
   ]) {
     const cell = read(table, 15).rows[0]!.cells[0]!;
     expect(cell.centeredSideRules).toBeUndefined();
     expect(cell.centeredSidePaint).toBeUndefined();
   }
-  expect(
-    read(source(0.5, CENTRED).table, 15, 1).rows[0]!.cells[0]!.centeredSideRules
-  ).toBeUndefined();
   expect(read(source(0.5, CENTRED).table, 16).rows[0]!.cells[0]!.centeredSideRules).toBe(true);
-  const { part } = source(0, '', 4, 'single', 'pct');
-  const inset = layout(part, 15).pages[0]!.fragments[0]!;
-  if (inset.kind !== 'table') throw new Error('Expected table');
-  const cell = inset.rows[0]!.cells[0]!;
-  const paragraph = cell.blocks[0]!;
-  if (paragraph.kind !== 'paragraph') throw new Error('Expected paragraph');
-  expect(paragraph.lines[0]!.box.x - cell.box.x).toBe(0.5);
 });
 
 // Captured centred controls drawn with `w:tblW w:type="auto"` put text and strokes where the

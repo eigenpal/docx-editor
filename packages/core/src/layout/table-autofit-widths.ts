@@ -79,6 +79,7 @@ import { withoutLineEndWhitespace } from './trailing-spaces.ts';
 export interface TableAutofitContext {
   /** Measures text exactly as line breaking does. */
   readonly measurer: TextMeasurer;
+  /** Nested in a fixed table's cell (`nestedAutofitStructure`). */ readonly parentTableFixed?: true;
   /** List items by paragraph id: a list level indents its paragraph. */
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
   /** Resolves inline pictures, so a picture column keeps the width the picture paints at. */
@@ -775,8 +776,8 @@ export function autofitColumnMinimumsPt(
       });
       const { least, leastWidened, most } = measured;
       if (least < 0) continue;
-      // Widening an automatic-width table keeps its shared grid lines (`autoOuterRulePt`).
-      const around = structure.autoOuterRulePt
+      const keepsSharedLines = structure.autoOuterRulePt || structure.sharedGridLinesHold;
+      const around = keepsSharedLines
         ? measured.left + measured.right
         : measured.wideLeft + measured.wideRight;
       if (cell.gridSpan !== 1) {

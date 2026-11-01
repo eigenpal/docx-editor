@@ -52,23 +52,30 @@ function simpleRulePt(
 }
 
 /**
- * The leading content inset of a legacy content-aligned left-to-right table: its first cell's
- * margin, or its centred outer rule's inner half where the margin is narrower. A right-to-left
- * table keeps the margin.
+ * The content inset of a legacy content-aligned table on its visual left: the margin of that
+ * cell, or its centred outer rule's inner half where the margin is narrower. The content edge
+ * of the reading-order leading side meets the text edge; the trailing side of a right-to-left
+ * table places by its margin alone, so `placement` gives the margin there.
  */
-export function legacyLeadingInsetPt(structure: SemanticTableStructure): number {
-  const leading = structure.rows[0]?.cells[0];
-  const margin = leading?.margins.left ?? 0;
-  if (structure.bidiVisual) return margin;
-  return Math.max(margin, simpleRulePt((leading?.contentBorders ?? leading?.borders)?.left) / 2);
+export function legacyLeadingInsetPt(
+  structure: SemanticTableStructure,
+  use: 'width' | 'placement' = 'width'
+): number {
+  // Right-to-left rows keep document order with physical sides: the last cell is visual left.
+  const cell = structure.bidiVisual ? structure.rows[0]?.cells.at(-1) : structure.rows[0]?.cells[0];
+  const margin = cell?.margins.left ?? 0;
+  if (structure.bidiVisual && use === 'placement') return margin;
+  return Math.max(margin, simpleRulePt((cell?.contentBorders ?? cell?.borders)?.left) / 2);
 }
 
-/** The trailing counterpart of {@link legacyLeadingInsetPt}, for the reference box width. */
+/**
+ * The visual right counterpart of {@link legacyLeadingInsetPt}. A right-to-left table's
+ * leading side is its visual right, so its content edge meets the text edge there.
+ */
 export function legacyTrailingInsetPt(structure: SemanticTableStructure): number {
-  const trailing = structure.rows[0]?.cells.at(-1);
-  const margin = trailing?.margins.right ?? 0;
-  if (structure.bidiVisual) return margin;
-  return Math.max(margin, simpleRulePt((trailing?.contentBorders ?? trailing?.borders)?.right) / 2);
+  const cell = structure.bidiVisual ? structure.rows[0]?.cells[0] : structure.rows[0]?.cells.at(-1);
+  const margin = cell?.margins.right ?? 0;
+  return Math.max(margin, simpleRulePt((cell?.contentBorders ?? cell?.borders)?.right) / 2);
 }
 
 /**
@@ -83,6 +90,10 @@ export function legacyTrailingInsetPt(structure: SemanticTableStructure): number
  * cell on the aligned edge of the text column; its indent still applies from the leading edge.
  */
 export function tableOriginX(structure: SemanticTableStructure, containerWidthPt: number): number {
+  return alignedOriginX(structure, containerWidthPt) + (structure.textBoxBidiShiftPt ?? 0);
+}
+
+function alignedOriginX(structure: SemanticTableStructure, containerWidthPt: number): number {
   const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
   const slack = containerWidthPt - width;
   if (!Number.isFinite(slack)) return 0;
@@ -90,10 +101,12 @@ export function tableOriginX(structure: SemanticTableStructure, containerWidthPt
     // The leading or trailing cell's content edge sits on the aligned text edge. The indent
     // moves the table from its leading edge.
     const last = structure.rows[0]?.cells.at(-1)?.margins.right ?? 0;
-    const first = legacyLeadingInsetPt(structure);
-    if (structure.alignment === 'left')
-      return structure.bidiVisual ? -first : structure.indentPt - first;
-    if (structure.bidiVisual) return slack + last - structure.indentPt;
+    const first = legacyLeadingInsetPt(structure, 'placement');
+    // A text box puts the trailing outer edge on the trailing text edge, in either direction.
+    if (structure.alignment === 'left' && structure.bidiVisual)
+      return structure.legacyTrailingOuterEdge ? 0 : -first;
+    if (structure.alignment === 'left') return structure.indentPt - first;
+    if (structure.bidiVisual) return slack + legacyTrailingInsetPt(structure) - structure.indentPt;
     return structure.legacyTrailingOuterEdge ? slack : slack + last;
   }
   if (structure.alignment === 'center')

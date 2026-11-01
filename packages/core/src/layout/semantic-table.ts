@@ -8,8 +8,12 @@ import {
   wmlRevisionAttribute,
 } from './revision-cell-shading.ts';
 import { readTableAlignment } from './table-alignment.ts';
-import { autoWidthOuterRulePt, withSharedGridLineSideRules } from './legacy-table-side-rules.ts';
-import { widenedTableStructure } from './table-widened-structure.ts';
+import {
+  autoWidthOuterRulePt,
+  modernPercentRulePt,
+  withSharedGridLineSideRules,
+} from './legacy-table-side-rules.ts';
+import { nestedAutofitStructure, widenedTableStructure } from './table-widened-structure.ts';
 import { withRowMinimumContentInsets } from './table-row-minimum-insets.ts';
 // Bounded table structure over the typed canonical tree.
 //
@@ -100,7 +104,7 @@ import { readCellVerticalAlign, type CellVerticalAlign } from './table-cell-vert
 import { tableRowIsHeader } from './table-row-header-style.ts';
 import { cellIgnoresEndMark, cellNoWrap } from './table-cell-hide-mark.ts';
 import { uniformRowCellSpacingPt } from './table-row-cell-spacing.ts';
-import { resolveTableWidthPlacement } from './table-width-placement.ts';
+import { modernSharedPercentWidth, resolveTableWidthPlacement } from './table-width-placement.ts';
 import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
 import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
 import { conditionalTypesFor, readTableLook } from './table-conditional-formats.ts';
@@ -326,6 +330,12 @@ export interface SemanticTableStructure {
    * keeps inside its container, so its grid settles that much narrower than the room.
    */
   readonly autoOuterRulePt?: number;
+  /** Derived, never serialized: a right-to-left text-box table's move right, in points. */
+  readonly textBoxBidiShiftPt?: number;
+  /** Derived, never serialized: a top-level table of a text box story. */
+  readonly textBox?: true;
+  /** Derived, never serialized: AutoFit widening keeps the shared grid lines. */
+  readonly sharedGridLinesHold?: true;
   /**
    * Derived, never serialized: a top-level autofit table whose absolute `w:tblW` is wider than
    * its text column. See `tableWidthPastTextColumn`.
@@ -427,6 +437,9 @@ export function readTableStructure(
       )
   );
   if (!autofit || !base || (base.layoutFixed && depth === 0)) return base;
+  const context = { compatibilityMode, depth, contentWidthPt };
+  const nested = nestedAutofitStructure(base, autofit, context);
+  if (nested) return nested;
   // Deleted and inserted content sizes the columns in every view.
   const markupStructure =
     displayMode === 'all-markup' || !tableHasHidableRevisions(table)
@@ -866,17 +879,19 @@ function readTableStructureUncached(
     depth,
     textBox,
   });
-  const columnWidthsPt = resolveColumnWidthsPt({
-    gridCols,
-    claims: placement.claims,
-    columnCount,
-    contentWidthPt: placement.contentWidthPt,
-    tableWidth: placement.tableWidth,
-    layoutFixed,
-    // A hidden revision row can still account for part of the authored grid.
-    hasOmittedRows,
-    pastTextColumn,
-  });
+  const resolveColumns = (width: PreferredWidth): readonly number[] =>
+    resolveColumnWidthsPt({
+      gridCols,
+      claims: placement.claims,
+      columnCount,
+      contentWidthPt: placement.contentWidthPt,
+      tableWidth: width,
+      layoutFixed,
+      // A hidden revision row can still account for part of the authored grid.
+      hasOmittedRows,
+      pastTextColumn,
+    });
+  let columnWidthsPt = resolveColumns(placement.tableWidth);
   // Project the grid visually; cell arrays retain document order for keyboard traversal.
   const visualRows = physicalTableRows(rows, columnWidthsPt.length, bidiVisual);
   let contentRows = withTableContentBorders(
@@ -896,6 +911,16 @@ function readTableStructureUncached(
     columnWidthsPt.length,
     cellSpacingPt === 0
   );
+  // A mode-15 percentage table whose rules share its grid lines takes its share less the rule.
+  const percentRulePt = modernPercentRulePt(contentRows, {
+    ...{ compatibilityMode, depth, cellSpacingPt, widthType: tableWidth.type },
+    ...{ floating: float !== undefined, columnCount: columnWidthsPt.length },
+  });
+  const structureWidth =
+    percentRulePt === undefined
+      ? tableWidth
+      : modernSharedPercentWidth(tableWidth, placement.contentWidthPt, percentRulePt);
+  if (structureWidth !== tableWidth) columnWidthsPt = resolveColumns(structureWidth);
   const sideRuleShape = {
     compatibilityMode,
     depth,
@@ -942,8 +967,11 @@ function readTableStructureUncached(
     ...(outerRuleOffsetPt === undefined ? {} : { outerRuleOffsetPt }),
     ...(contentOffset === undefined ? {} : { legacyContentOffsetPt: contentOffset }),
     ...(autoOuterRulePt > 0 ? { autoOuterRulePt } : {}),
+    ...(sideRules.holdsWhenWidened ? { sharedGridLinesHold: true as const } : {}),
+    ...(placement.textBoxBidiShiftPt ? { textBoxBidiShiftPt: placement.textBoxBidiShiftPt } : {}),
+    ...(textBox ? { textBox: true as const } : {}),
     ...(pastTextColumn ? { pastTextColumn: true as const } : {}),
-    tableWidth,
+    tableWidth: structureWidth,
     layoutFixed,
     indentPt,
     alignment: bidiVisual

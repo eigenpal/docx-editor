@@ -43,6 +43,7 @@ export function widenedTableStructure(
       indentPt: base.indentPt,
       columnWidthsPt: base.columnWidthsPt,
       containerWidthPt: context.contentWidthPt,
+      ...(base.textBox ? { textBox: true } : {}),
     },
     widths
   );
@@ -59,6 +60,34 @@ export function widenedTableStructure(
   if (widened.size >= MAX_WIDENED_PER_BASE) widened.delete(widened.keys().next().value!);
   widened.set(widthsKey, structure);
   return structure;
+}
+
+/**
+ * A nested AutoFit table in a fixed-layout cell, at the widths its grid, cell widths and table
+ * width resolve to. It never widens for its content: a word that does not fit breaks inside
+ * its column. In an AutoFit parent it widens, and the parent column with it. A grid
+ * narrower than a stated absolute width stretches to that width, in proportion, when the
+ * width fits the container.
+ */
+export function nestedAutofitStructure(
+  base: SemanticTableStructure,
+  autofit: { readonly parentTableFixed?: true },
+  context: Parameters<typeof widenedTableStructure>[2]
+): SemanticTableStructure | undefined {
+  if (context.depth === 0 || base.layoutFixed || !autofit.parentTableFixed) return undefined;
+  const stated = base.tableWidth.type === 'dxa' ? base.tableWidth.value : 0;
+  let total = 0;
+  for (const width of base.columnWidthsPt) total += width;
+  // A stated width past the container keeps the grid: no reference covers that shape.
+  if (!(total > 0) || !(stated > total + 1e-6) || stated > context.contentWidthPt + 1e-6) {
+    return base;
+  }
+  const scale = stated / total;
+  return widenedTableStructure(
+    base,
+    base.columnWidthsPt.map((width) => width * scale),
+    context
+  );
 }
 
 function mirroredAlignment(alignment: SemanticTableStructure['alignment']) {

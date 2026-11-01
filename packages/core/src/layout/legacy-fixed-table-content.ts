@@ -55,7 +55,7 @@ export function hasUnsupportedRowGeometry(table: OoxmlElement): boolean {
  * table, left in a right-to-left one) always aligns the content. A leading alignment aligns
  * the content when an indent is stated, directly or by a table style, or a table style
  * applies; a table with neither puts its outer edge on the text edge. In a text box, only a
- * fixed left-aligned left-to-right table takes the rule, and it always aligns the content.
+ * leading alignment takes the rule, and it always aligns the content.
  */
 export function legacyFixedTableContentOffset(
   table: OoxmlElement,
@@ -73,8 +73,9 @@ export function legacyFixedTableContentOffset(
     (shape.alignment !== 'left' && shape.alignment !== 'right') ||
     // AutoFit takes it with an absolute width only; captured controls cover no other.
     !(shape.widthType === 'dxa' || (shape.layoutFixed && shape.widthType === 'auto')) ||
-    // References cover only fixed, left-aligned, left-to-right tables in text boxes.
-    (shape.textBox && (!shape.layoutFixed || shape.alignment !== 'left' || shape.bidiVisual)) ||
+    // In a text box only a leading alignment aligns the content; a trailing one keeps the
+    // outer edge on the trailing text edge.
+    (shape.textBox && shape.alignment !== 'left') ||
     !hasSupportedLegacyTableMargins(table, propertyNodes) ||
     hasUnsupportedRowGeometry(table)
   )
@@ -140,16 +141,17 @@ export function legacyFixedTableContentOffset(
         const edge = borders[cellSide];
         const margin = cell.margins[cellSide];
         if (!Number.isFinite(margin) || margin < 0) return undefined;
-        if (
-          edge.state === 'edge' &&
-          (!['single', 'thick'].includes(edge.style) || margin < edge.widthPt / 2)
-        )
-          return undefined;
+        if (edge.state === 'edge' && !['single', 'thick'].includes(edge.style)) return undefined;
       }
     }
   }
   // The aligned cell's text edge meets the aligned text edge, moved by any indent. The grid
   // stays the same width. Cell margins already start at the centred rule, so they do not add
-  // another half-rule.
-  return side === 'left' && leading !== 0 ? -leading : leading;
+  // another half-rule; a leading side whose margin is narrower than that half starts its
+  // text at the half. A trailing side places by its margin alone.
+  const edge = rows[0] && edgeCell(rows[0]);
+  const rule = edge && (edge.contentBorders ?? edge.borders)[side];
+  const inset =
+    leadingAlignment && rule?.state === 'edge' ? Math.max(leading, rule.widthPt / 2) : leading;
+  return side === 'left' && inset !== 0 ? -inset : inset;
 }

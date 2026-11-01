@@ -104,7 +104,7 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §17.4.63 tblW'
   ),
   legacySharedGridLineSideRules: legacy(
-    'Collapsed side rules center on shared grid lines for every simple top-level table, in either direction',
+    'Collapsed side rules center on shared grid lines for every simple table, in either direction; a percent width keeps the legacy reference box',
     'ECMA-376 Part 1 §17.4.38 tblBorders'
   ),
   modernBidiTableRuleShift: modern(
@@ -112,7 +112,7 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §17.4.1 bidiVisual'
   ),
   modernGridLineSideRules: modern(
-    'Side rules center on grid lines for covered dxa/auto width shapes; edge-aligned grids move by half a rule',
+    'Side rules center on grid lines for covered dxa/auto shapes and one-rule percent widths; edge-aligned grids move by half a rule',
     'ECMA-376 Part 1 §17.4.38 tblBorders'
   ),
   noteAreaHoldsLineSpacing: modern(

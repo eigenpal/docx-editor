@@ -201,7 +201,6 @@ test('mode 15 keeps the full-stroke inset and unshifted grid for shapes its cont
   for (const shape of [
     { style: 'double', sz: 6 },
     { cols: [1440, 1440], rows: gridBefore },
-    { widthType: 'pct' },
     { extra: '<w:tblCellSpacing w:w="20" w:type="dxa"/>' },
     {
       extra: '<w:tblpPr w:horzAnchor="margin" w:vertAnchor="text" w:tblpXSpec="left" w:tblpY="1"/>',
@@ -211,7 +210,8 @@ test('mode 15 keeps the full-stroke inset and unshifted grid for shapes its cont
     expect(structure.outerRuleOffsetPt).toBeUndefined();
     expect(structure.rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
   }
-  expect(read(source().table, 15, 300, 1).outerRuleOffsetPt).toBeUndefined();
+  // A nested table shares its grid lines, half a rule in from its cell edge.
+  expect(read(source().table, 15, 300, 1).outerRuleOffsetPt).toBe(1.5);
 });
 
 test('mode 15 keeps the edge-aligned grid for an absolute-width table wider than its room', () => {
