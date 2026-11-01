@@ -235,17 +235,17 @@ const CONCURRENT: Record<
   string,
   { bob: Edit; reject?: string; accept?: string | readonly string[] }
 > = {
+  // Typing the deleting peer never saw stays out of the strike, at the edge of the struck text
+  // too, and joins the next paragraph on accept.
   'types at the paragraph start': {
     bob: typeInto(1, 'Note ', 'Start'),
     reject: 'First clause\rNote Middle clause\rLast clause',
-    accept: 'First clause\rLast clause',
+    accept: 'First clause\rNote Last clause',
   },
-  // Typing at the edge of the struck text joins the deletion or stays ordinary text,
-  // depending on client order. Ordinary text joins the next paragraph on accept.
   'types at the paragraph end': {
     bob: typeInto(1, ' note', 'End'),
     reject: 'First clause\rMiddle clause note\rLast clause',
-    accept: ['First clause\rLast clause', 'First clause\r noteLast clause'],
+    accept: 'First clause\r noteLast clause',
   },
   'bolds the first word': {
     bob: onWord('Middle', (range) => (range.font.bold = true)),
@@ -322,7 +322,7 @@ for (const order of Object.keys(ORDERS) as Order[])
         await expectDecisions(
           r,
           'First clause\rNote Middle clause\rLast clause',
-          'First clause\rLast clause'
+          'First clause\rNote Last clause'
         );
       } finally {
         r.close();
@@ -443,7 +443,7 @@ const MARKED_EDITS: Record<string, { bob: Edit; reject: string; accept: string }
   'types at the start of the second': {
     bob: typeInto(1, 'Note ', 'Start'),
     reject: 'First clause\rNote Middle clause\rLast clause',
-    accept: 'Last clause',
+    accept: 'Note Last clause',
   },
 };
 
@@ -620,7 +620,7 @@ test('a whole-story tracked deletion converges with concurrent typing', async ()
     });
     await concurrently(r, story, typeInto(1, 'User note: ', 'Start'));
     await converged(r);
-    await expectDecisions(r, 'First clause\rUser note: Middle clause\rLast clause', '');
+    await expectDecisions(r, 'First clause\rUser note: Middle clause\rLast clause', 'User note: ');
   } finally {
     r.close();
   }
@@ -714,7 +714,7 @@ test('a peer that edits offline and reconnects converges with a tracked paragrap
     await expectDecisions(
       r,
       'First clause\rOffline Middle clause\rLast clause',
-      'First clause\rLast clause'
+      'First clause\rOffline Last clause'
     );
   } finally {
     r.close();

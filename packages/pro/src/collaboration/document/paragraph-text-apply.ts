@@ -43,6 +43,7 @@ import {
   encodeAttributes,
   type InlineAttributes,
 } from './paragraph-text.ts';
+import { recordSplitPoints } from './split-points.ts';
 import {
   insertCopy,
   markMoves,
@@ -62,6 +63,7 @@ import { writeInlineText } from './paragraph-text-view.ts';
 import { positionsNow, type FollowingText } from './paragraph-text-follow.ts';
 import { placeFollowingText } from './paragraph-text-placement.ts';
 import type { InlinePlan } from './paragraph-text-writer.ts';
+import { recordStrikesSeen, sharedDelta, withoutStrikesSeen } from './paragraph-text-strikes.ts';
 
 interface Block {
   /** Equal tokens, or a run of deletions and insertions. */
@@ -181,7 +183,12 @@ export function insertFollowing(
   if (item) textMarksOf(text.doc!).markFollow(item.id.client, item.id.clock, value.length, anchor);
 }
 
-/** The attributes of each position of a shared text, hidden positions too. */
+/**
+ * The attributes of each position of a shared text, hidden positions too, as Yjs stores them:
+ * an insert compares its attributes with these and writes a marker for each that differs. A
+ * strike a character is left out of (`sharedDelta`) still counts here, so an insert after it
+ * carries the strike on in `b` and writes no marker that a peer's decision would not reach.
+ */
 function attributesByPosition(text: Y.Text): InlineAttributes[] {
   const out: InlineAttributes[] = [];
   for (const op of text.toDelta() as { insert: unknown; attributes?: InlineAttributes }[]) {
@@ -271,7 +278,18 @@ function writeParagraphText(
       }
       for (let at = runs.length - 1; at >= 0; at -= 1) {
         const run = runs[at]!;
-        text.format(run[0]!.position, run.length, run[0]!.changes!);
+        const changes = identities
+          ? recordStrikesSeen(
+              run[0]!.changes!,
+              // The item each character stands in, not its identity: a reader compares a
+              // character's own item ID, and a moved copy has its own.
+              run.map(({ position }) => {
+                const [client, clock] = (identities.items[position] ?? '-1:-1').split(':');
+                return { client: Number(client), clock: Number(clock) };
+              })
+            )
+          : run[0]!.changes!;
+        text.format(run[0]!.position, run.length, changes);
       }
       continue;
     }
@@ -291,7 +309,10 @@ function writeParagraphText(
     for (const group of groups(inserted, (token) =>
       typeof token.insert === 'string' ? `c${attributeSignature(token.attributes)}` : `e${embeds++}`
     )) {
-      const first = { ...group[0]!, attributes: rebase(left, group[0]!.attributes, true) };
+      const first = {
+        ...group[0]!,
+        attributes: withoutStrikesSeen(rebase(left, group[0]!.attributes, true)),
+      };
       left = first.attributes;
       if (typeof first.insert !== 'string') {
         const typed =
@@ -347,7 +368,10 @@ function adoptFollowingText(
   interface Placed {
     readonly following: FollowingText;
     readonly order: number;
-    /** The character it goes before or after, or for a piece at the end, the text length. */
+    /**
+     * The character it goes before or after; for a piece at the end, the text length, and for
+     * one at the start, -1, so it goes in last, in front of every other piece.
+     */
     readonly at: number;
     readonly atEnd?: true;
   }
@@ -359,6 +383,9 @@ function adoptFollowingText(
   }
   for (const following of placement.atEnd) {
     placed.push({ following, order: orderOf.get(following)!, at: ids.length, atEnd: true });
+  }
+  for (const following of placement.atStart) {
+    placed.push({ following, order: orderOf.get(following)!, at: -1, atEnd: true });
   }
   // From the end back; at one character, the text after it before the text before it, and
   // of two pieces on one side, the later first: each goes in at the same place, so the
@@ -390,7 +417,7 @@ function adoptFollowingText(
   const readOf = (id: LogicalId, source: Y.Text) => {
     let read = reads.get(id);
     if (!read) {
-      read = { identities: textIdentities(source), delta: source.toDelta() as Delta };
+      read = { identities: textIdentities(source), delta: sharedDelta(source) as Delta };
       reads.set(id, read);
     }
     return read;
@@ -480,13 +507,16 @@ function adoptFollowingText(
     let insertAt = start;
     // A copy takes the revision attributes of the character it lands after, as typing does
     // (`rebaseRevisions`), so it writes no marker for another author's revision.
+    // Copies are inserted characters: a strike they take covers them, as with any insert.
     const landing = (at: number, attributes: Record<string, string>): InlineAttributes =>
-      rebaseRevisions(
-        at > 0 ? (attributesByPosition(text)[at - 1] ?? {}) : {},
-        attributes,
-        true,
-        registry.limits,
-        paragraphId
+      withoutStrikesSeen(
+        rebaseRevisions(
+          at > 0 ? (attributesByPosition(text)[at - 1] ?? {}) : {},
+          attributes,
+          true,
+          registry.limits,
+          paragraphId
+        )
       );
     for (const run of runs) {
       const first = run[0]!;
@@ -540,7 +570,7 @@ function adoptFollowingText(
     }
   };
   for (const root of placed) {
-    const start = root.atEnd ? root.at : root.following.before ? root.at : root.at + 1;
+    const start = root.atEnd ? Math.max(root.at, 0) : root.following.before ? root.at : root.at + 1;
     adoptInside(root.following, adoptPiece(root.following, now(start)));
   }
   // Still written, at the end: lost, the write would have typed it again without its identity.
@@ -908,6 +938,7 @@ export function applyInlinePlan(
       decodeAttributes(token.attributes, registry.limits, writes[paragraph]!.id).text?.id ?? '',
     (paragraph) => storyRootOf(registry, writes[paragraph]!.id)
   );
+  recordSplitPoints(writes);
   for (const write of writes) {
     const text = write.text ?? writeInlineText(write.record, []);
     writeParagraphText(

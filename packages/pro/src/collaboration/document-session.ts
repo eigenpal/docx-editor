@@ -15,7 +15,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { projectTypingOrJournal } from './document/projected-journal.ts';
 import { prepareMemberRootJournal } from './document/prepare-member-root-journal.ts';
 import { editWaits } from './document/journal.ts';
-import { markRestoredText } from './document/paragraph-text-restore.ts';
+import { markRestoredText, RESTORE_ORIGIN } from './document/paragraph-text-restore.ts';
+import { relistSplitEntries } from './document/split-points.ts';
 import { awaitingUpdates } from './document/yjs-items.ts';
 import { viewRenamesPlan } from './document/paragraph-text-drift.ts';
 import { stepHistory } from './document/history-undone.ts';
@@ -437,6 +438,10 @@ class DocumentSession implements DocumentCollaborationSession {
     stepHistory(this.registry, this.undoManager, direction, () => {
       this.registry.normalizeRestoredSplitTextAnchors();
       markRestoredText(this.ydoc, from);
+      this.ydoc.transact(
+        () => relistSplitEntries(this.ydoc, (id) => this.registry.schema.nodes.get(id), from),
+        RESTORE_ORIGIN
+      );
     });
     return true;
   }

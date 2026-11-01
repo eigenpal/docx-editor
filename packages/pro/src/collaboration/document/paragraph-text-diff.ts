@@ -19,6 +19,7 @@ import {
   type InlineEmbed,
 } from './paragraph-text.ts';
 import { revisionTrail, withoutRevisions } from './paragraph-text-revisions.ts';
+import { sharedDelta } from './paragraph-text-strikes.ts';
 
 /** One position of a paragraph's inline sequence, as shared text holds it. */
 export interface Token {
@@ -48,7 +49,10 @@ export function tokensOfText(
 ): Token[] {
   const tokens: Token[] = [];
   let position = 0;
-  for (const op of text.toDelta() as { insert: unknown; attributes?: Record<string, string> }[]) {
+  for (const op of sharedDelta(text) as {
+    insert: unknown;
+    attributes?: Record<string, string>;
+  }[]) {
     const attributes = op.attributes ?? {};
     const trail = context ? revisionTrail(attributes, context.limits, context.paragraphId) : '';
     if (typeof op.insert === 'string') {
@@ -843,8 +847,19 @@ function strongMatches(
   middle = true
 ): [number, number][] {
   const pairs: [number, number][] = [];
+  // An equal token that leaves its revisions, beside an equal one of `before` that keeps them:
+  // the alignment of the middle chooses between the two.
+  const choice = (at: number, other: number, token: Token): boolean =>
+    before[other]?.strong === token.strong &&
+    !keepsRevisions(before[at]!.trail ?? '', token.trail ?? '') &&
+    keepsRevisions(before[other]!.trail ?? '', token.trail ?? '');
   let low = 0;
-  while (low < before.length && low < after.length && before[low]!.strong === after[low]!.strong) {
+  while (
+    low < before.length &&
+    low < after.length &&
+    before[low]!.strong === after[low]!.strong &&
+    !choice(low, low + 1, after[low]!)
+  ) {
     pairs.push([low, low]);
     low += 1;
   }
@@ -854,7 +869,8 @@ function strongMatches(
   while (
     beforeEnd > low &&
     afterEnd > low &&
-    before[beforeEnd - 1]!.strong === after[afterEnd - 1]!.strong
+    before[beforeEnd - 1]!.strong === after[afterEnd - 1]!.strong &&
+    !(beforeEnd - 2 >= low && choice(beforeEnd - 1, beforeEnd - 2, after[afterEnd - 1]!))
   ) {
     beforeEnd -= 1;
     afterEnd -= 1;
@@ -887,10 +903,18 @@ function strongMatches(
     let r = 0;
     let c = 0;
     while (r < rows && c < columns) {
+      // Of two equal tokens of `before`, the one that keeps its revisions matches, when skipping
+      // the first loses no match: an accept keeps the letter typed beside a struck equal one,
+      // not the struck one, which it would take out of the deletion and write over.
+      const kept = (): boolean =>
+        score[(r + 1) * width + c] !== score[r * width + c] ||
+        keepsRevisions(before[low + r]!.trail ?? '', after[low + c]!.trail ?? '');
       if (same(r, c)) {
-        pairs.push([low + r, low + c]);
+        if (kept()) {
+          pairs.push([low + r, low + c]);
+          c += 1;
+        }
         r += 1;
-        c += 1;
       } else {
         const down = score[(r + 1) * width + c]!;
         const right = score[r * width + c + 1]!;

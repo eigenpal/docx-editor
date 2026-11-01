@@ -538,6 +538,8 @@ export interface DecodeView {
     readonly at: ReadonlyMap<number, ShownSlot>;
     /** Pieces whose place is not shown here: they show at the end. */
     readonly atEnd: readonly ShownPiece[];
+    /** Pieces an undo joins in at the start: they show first. */
+    readonly atStart?: readonly ShownPiece[];
   };
   /** Called when the text needs a repair to show. */
   readonly onRepair?: () => void;
@@ -576,6 +578,7 @@ export function decodeItems(
     const slot = view.following?.at.get(position);
     for (const piece of (before ? slot?.before : slot?.after) ?? []) show(piece);
   };
+  for (const piece of view.following?.atStart ?? []) show(piece);
   let position = 0;
   for (const op of delta) {
     const attributes = decodeAttributes(op.attributes, limits, paragraphId);

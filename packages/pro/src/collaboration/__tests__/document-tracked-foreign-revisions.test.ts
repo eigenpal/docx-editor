@@ -73,9 +73,10 @@ const ON_THEIR_INSERTION: Record<string, Edit> = {
 
 /**
  * Pairs the one-after-the-other oracle cannot describe. Words typed into text that another
- * participant strikes at the same time join the strike, as they do in plain text, while one
- * after the other the second edit lands outside the struck text. And after words inside the
- * insertion, their search for the whole insertion finds nothing.
+ * participant strikes at the same time stay out of the strike, where they were typed, as they
+ * stay when a peer deletes the text outright, while one after the other the second edit lands
+ * outside the struck text. And after words inside the insertion, their search for the whole
+ * insertion finds nothing.
  */
 const CONFLICTS = new Set([
   'replaces the insertion|types inside their insertion',
@@ -102,23 +103,25 @@ for (const order of ORDER_NAMES)
     }
 
 for (const order of ORDER_NAMES)
-  test(`${order}: words typed into their insertion while the reviewer replaces it join the strike`, async () => {
+  test(`${order}: words typed into their insertion while the reviewer replaces it stay out of the strike`, async () => {
     const r = await room(order);
     try {
       await concurrently(r, replaceProposal, ON_THEIR_INSERTION['types inside their insertion']!);
       await converged(r);
       const state = await expectSamePeers(r);
-      expect(state.text).toContain(' calendar');
+      expect(state.text).toContain('(30) calendar days');
+      // The reviewer never saw the words, so the strike goes around them, in two pieces.
       expect(state.revisions).toEqual([
+        `${REVIEWER}:Delete`,
         `${REVIEWER}:Delete`,
         `${REVIEWER}:Insert`,
         `${COUNTERPARTY}:Insert`,
       ]);
-      // The reviewer's strike covers the words typed into it; rejecting everything removes
-      // the counterparty's insertion, and with it their typing.
+      // The words stay the counterparty's insertion: rejecting everything removes them with
+      // it, and accepting everything keeps them.
       expect(await expectSameDecisions(r)).toEqual([
         'Payment is due within .\rSecond clause.',
-        `Payment is due within ${REVISED}.\rSecond clause.`,
+        `Payment is due within calendar ${REVISED}.\rSecond clause.`,
       ]);
     } finally {
       r.close();

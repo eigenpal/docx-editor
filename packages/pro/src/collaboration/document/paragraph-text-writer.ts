@@ -37,6 +37,7 @@ import type { DocumentRegistry } from './registry.ts';
 import { inlineChildren } from './paragraph-text-view.ts';
 import type { TypedSplice } from './paragraph-text-diff.ts';
 import { partitionChildIds, sharedChildShell } from './singleton-children.ts';
+import { splitMarkMoves } from './split-mark-moves.ts';
 
 interface ScratchNode {
   readonly id: LogicalId;
@@ -381,9 +382,10 @@ export function routeInlineEffects(
       root.localName = 'p';
       // Block children as a replica shows them: concurrent property copies show as one.
       const record = registry.record(paragraphId);
+      const listed = record && 'childIds' in record ? record.childIds : [];
       const { shown } = partitionChildIds(
         'paragraph',
-        record && 'childIds' in record ? record.childIds : [],
+        splitMarkMoves(registry).shownChildIds(paragraphId, listed),
         (id) => sharedChildShell(registry, id)
       );
       for (const childId of shown) {
@@ -397,8 +399,11 @@ export function routeInlineEffects(
       // An embed shows as the materializer shows it: not when its record is deleted or has not
       // arrived. A placeholder for it put a child in this tree that the editor's tree lacks,
       // and the journal's child indexes then addressed the wrong children.
+      // A node two copies in the text embed shows once, at the first, as the materializer
+      // places it once.
       const placeholderOf = (id: LogicalId): OoxmlNode | null => {
         if (!registry.showsAsChild(id)) return null;
+        if (embedded.has(id)) return null;
         embedded.add(id);
         return embedPlaceholder(id);
       };

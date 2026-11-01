@@ -22,6 +22,7 @@ import { asLogicalId, parseClientClock, type LogicalId } from './identity.ts';
 import { keyId } from './registry-node-reads.ts';
 import { isNodeMap } from './schema.ts';
 import { relocatedMarkerLineage } from './relocated-markers.ts';
+import { undoneIntoOf } from './undo-unlisted-text.ts';
 import type { DocumentLimits } from './limits.ts';
 import { decodeAttributes, INLINE_FIELD } from './paragraph-text.ts';
 import { TextFollow, type DocumentOrder, type ShownText } from './paragraph-text-follow.ts';
@@ -153,7 +154,8 @@ export class InlineIndex {
       isDeleted,
       order,
       (paragraphs) => this.noteOthers(paragraphs),
-      (identity) => this.paragraphHolding(identity)
+      (identity) => this.paragraphHolding(identity),
+      (paragraphId) => undoneIntoOf(this.nodes.get(paragraphId))
     );
   }
 

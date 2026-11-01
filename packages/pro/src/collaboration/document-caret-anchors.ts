@@ -15,6 +15,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * A paragraph's stable id is its `w14:paraId`: two participants can mint the same one, and
  * the editor then renames one of them in its own tree while shared state keeps both.
  */
+import * as Y from 'yjs';
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type {
   CollaborationEditorSelection,
@@ -31,8 +32,12 @@ import {
   paragraphLayout,
   type CaretAnchor,
 } from './document/selection-anchors.ts';
+import { structAt } from './document/yjs-items.ts';
 
 type EditorPoint = CollaborationEditorSelection['anchor'];
+
+/** How many items a caret beside deleted text walks past to find a character still shown. */
+const MAX_DELETED_WALK = 4096;
 
 interface AnchoredPoint {
   /** The paragraph it was anchored in, or null when this replica no longer has it. */
@@ -197,6 +202,10 @@ export class CaretAnchors {
     const shown = follow.shownCopy(identity);
     if (shown) candidates.add(shown);
     for (const holder of follow.holdersOf(identity)) candidates.add(holder);
+    // Text typed in a paragraph a peer removed shows where it follows the move.
+    if (point.paragraph) {
+      for (const target of follow.targetsFor(point.paragraph)) candidates.add(target);
+    }
     for (const candidate of candidates) {
       if (registry.inline.isDeletedParagraph(candidate)) continue;
       // After a publish, the editor's node id of a paragraph is its logical id.
@@ -205,6 +214,43 @@ export class CaretAnchors {
       const layout = paragraphLayout(registry, candidate, this.deps.embedOf, text);
       const offset = layout ? offsetIn(layout, point.anchor) : null;
       if (offset !== null) return { nodeId: candidate, offset };
+    }
+    return point.paragraph ? this.besideDeleted(point.paragraph, point.anchor) : null;
+  }
+
+  /**
+   * A peer deleted the character an endpoint stood beside, and no copy of it shows: the
+   * endpoint goes where the deleted text was, beside the nearest character still shown, the
+   * one before it first. Mapping by text instead guessed among the letters around the gap.
+   */
+  private besideDeleted(paragraph: LogicalId, anchor: CaretAnchor): EditorPoint | null {
+    const { registry } = this.deps;
+    const shared = registry.inline.textOf(paragraph);
+    const text = this.shownText(paragraph);
+    const match = /^(\d{1,16}):(\d{1,16})$/.exec(anchor.character.item);
+    if (!shared?.doc || text === null || !match || registry.inline.isDeletedParagraph(paragraph)) {
+      return null;
+    }
+    const start = structAt(shared.doc, { client: Number(match[1]), clock: Number(match[2]) });
+    if (!start || !start.deleted || start.parent !== shared) return null;
+    const layout = paragraphLayout(registry, paragraph, this.deps.embedOf, text);
+    if (!layout) return null;
+    if (text.length === 0) return { nodeId: paragraph, offset: 0 };
+    for (const after of [true, false]) {
+      let steps = 0;
+      for (
+        let item = after ? start.left : start.right;
+        item && steps < MAX_DELETED_WALK;
+        item = after ? item.left : item.right, steps += 1
+      ) {
+        if (item.deleted || !(item.content instanceof Y.ContentString)) continue;
+        const clock = after ? item.id.clock + item.length - 1 : item.id.clock;
+        const offset = offsetIn(layout, {
+          character: { item: `${item.id.client}:${clock}`, identity: null },
+          after,
+        });
+        if (offset !== null) return { nodeId: paragraph, offset };
+      }
     }
     return null;
   }

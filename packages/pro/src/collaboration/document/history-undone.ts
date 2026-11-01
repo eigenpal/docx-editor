@@ -24,6 +24,7 @@ import { textMarksOf } from './paragraph-text-marks.ts';
 import { INLINE_FIELD } from './paragraph-text.ts';
 import { whileUndoingCreations } from './undo-delete-filter.ts';
 import { ownDeletedRecords, redoRefusedDeletes } from './tombstone-guard.ts';
+import { noteUndoneParagraphTargets, undoKeeps } from './undo-unlisted-text.ts';
 
 /**
  * The part members a part always lists. Numbering definitions are not among them: concurrent
@@ -145,7 +146,15 @@ export function stepHistory(
     const below = stack.splice(0, grouped ? stack.length - 1 : aboveLastGroupStep(stack));
     try {
       if (direction === 'undo') {
-        whileUndoingCreations(registry.schema, createdBy(registry, popped), () => history.undo());
+        noteUndoneParagraphTargets(registry.doc, registry.schema.nodes, popped, (write) =>
+          registry.doc.transact(write, RESTORE_ORIGIN)
+        );
+        whileUndoingCreations(
+          registry.schema,
+          createdBy(registry, popped),
+          () => history.undo(),
+          undoKeeps(registry.doc, registry.schema.nodes, popped)
+        );
       } else history.redo();
     } finally {
       if (below.length > 0) {
@@ -265,6 +274,12 @@ function isParagraphCharacter(item: Y.Item): boolean {
   if (!(item.content instanceof Y.ContentString) && !(item.content instanceof Y.ContentEmbed)) {
     return false;
   }
+  return inParagraphText(item);
+}
+
+/** Whether `item` sits in a paragraph's shared text; a deleted item may keep no content. */
+function inParagraphText(item: Y.Item): boolean {
+  if (item.content instanceof Y.ContentFormat) return false;
   return item.parent instanceof Y.Text && item.parent._item?.parentSub === INLINE_FIELD;
 }
 
@@ -319,8 +334,11 @@ function copiesOf(registry: DocumentRegistry, step: StackItemShape | undefined):
         // wrote of another character records only its own item, which names nothing else.
         // Otherwise spans first, characters only where an index run holds a copy: an undo
         // of a long paste reads its marks once per insert, not once per character.
+        // A character already deleted counts too: a peer can copy it before the deletion
+        // reaches them, as a split of a paragraph another peer deleted does, and that copy
+        // reaches this replica after the undo.
         const shown =
-          (!!item && !item.deleted && isParagraphCharacter(item)) ||
+          (!!item && (item.deleted ? inParagraphText(item) : isParagraphCharacter(item))) ||
           spans.some(
             (span) =>
               follow.holdsCopyIn(span.client, span.from, span.to) &&

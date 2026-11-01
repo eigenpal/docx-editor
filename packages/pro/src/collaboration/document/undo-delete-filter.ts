@@ -15,6 +15,8 @@ export interface NodeDescriptorMaps {
 
 /** The nodes the step being undone created, by the attribute map they describe. */
 const undoingCreations = new WeakMap<Y.Map<string>, ReadonlySet<string>>();
+/** Items the running undo keeps although its step wrote them, by the same map. */
+const undoingKeeps = new WeakMap<Y.Map<string>, (item: Y.Item) => boolean>();
 
 /**
  * Run an undo of a step that created the nodes `created`.
@@ -28,14 +30,18 @@ const undoingCreations = new WeakMap<Y.Map<string>, ReadonlySet<string>>();
 export function whileUndoingCreations<Result>(
   maps: NodeDescriptorMaps,
   created: ReadonlySet<string>,
-  run: () => Result
+  run: () => Result,
+  /** Items of the step that the undo keeps (`undo-unlisted-text.ts`). */
+  keeps: ((item: Y.Item) => boolean) | null = null
 ): Result {
-  if (created.size === 0) return run();
+  if (created.size === 0 && !keeps) return run();
   undoingCreations.set(maps.attributes, created);
+  if (keeps) undoingKeeps.set(maps.attributes, keeps);
   try {
     return run();
   } finally {
     undoingCreations.delete(maps.attributes);
+    undoingKeeps.delete(maps.attributes);
   }
 }
 
@@ -102,6 +108,7 @@ export function nodeRecordDeleteFilter(
     const parent = item.parent;
     if (parent === null) return true;
     if (describesUndoneCreation(item, maps)) return false;
+    if (maps && undoingKeeps.get(maps.attributes)?.(item)) return false;
     // The record entry itself.
     if ((parent as unknown) === nodes) return false;
     // A field of a record: its holder sits directly in `nodes`.

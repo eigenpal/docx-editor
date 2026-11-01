@@ -17,9 +17,7 @@
           "cols": 1,
           "columnWidthTwips": 2000
         },
-        "paragraphs": [
-          0
-        ]
+        "paragraphs": [0]
       }
     },
     {
@@ -34,9 +32,7 @@
           "end": 4,
           "anchor": "_fuzz"
         },
-        "paragraphs": [
-          6
-        ]
+        "paragraphs": [6]
       }
     },
     {
@@ -51,9 +47,7 @@
           "end": 8,
           "anchor": "_fuzz"
         },
-        "paragraphs": [
-          6
-        ]
+        "paragraphs": [6]
       }
     },
     {

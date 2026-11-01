@@ -44,10 +44,16 @@ export function viewRenamesPlan(registry: DocumentRegistry, plan: InlinePlan | n
     const text = registry.inline.textOf(id);
     if (!text || registry.isTombstoned(id)) continue;
     if (main && storyRootOf(registry, id) !== main.rootLogicalId) continue;
+    // A node two copies in the text embed shows once, at the first.
+    const placed = new Set<LogicalId>();
     const shown = inlineChildren(
       id,
       text,
-      (embedded) => (registry.showsAsChild(embedded) ? embedPlaceholder(embedded) : null),
+      (embedded) => {
+        if (placed.has(embedded) || !registry.showsAsChild(embedded)) return null;
+        placed.add(embedded);
+        return embedPlaceholder(embedded);
+      },
       registry.limits,
       registry.inline.viewOf(id)
     );

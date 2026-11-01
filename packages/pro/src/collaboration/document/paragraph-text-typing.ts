@@ -34,6 +34,7 @@ import { followAnchorAt, insertFollowing, insertTyped } from './paragraph-text-a
 import { hasRevisions } from './paragraph-text-revisions.ts';
 import type { DocumentRegistry } from './registry.ts';
 import { awaitingUpdates } from './yjs-items.ts';
+import { readShared, withoutStrikesSeen } from './paragraph-text-strikes.ts';
 
 /** An insert the general path would write as one insert, and what it needs to write it. */
 export interface TypedInsert {
@@ -88,7 +89,11 @@ export function typedInsertOf(
   if (shown.hidden.size > 0 || shown.incoming.length > 0) return null;
 
   // The typed value's characters, and the tokens beside the place the insert goes.
-  const delta = text.toDelta() as { insert: unknown; attributes?: InlineAttributes }[];
+  // A character left out of a strike reads other attributes than Yjs compares an insert with,
+  // so the insert would write markers for the strike: the general path carries it on in `b`.
+  const shared = readShared(text);
+  if (shared.leftOut) return null;
+  const delta = shared.ops as { insert: unknown; attributes?: InlineAttributes }[];
   let at = 0;
   let start = -1;
   let count = 0;
@@ -156,7 +161,8 @@ export function typedInsertOf(
     length: text.length,
     position,
     value: effect.insert,
-    attributes,
+    // Typed characters are inserted ones: a strike they take covers them.
+    attributes: withoutStrikesSeen(attributes),
     identities: shown.identities,
   };
 }

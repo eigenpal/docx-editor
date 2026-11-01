@@ -23,6 +23,8 @@ import {
 } from './singleton-children.ts';
 import { PACKAGE_NODES_KEY, NODE_TEXT_FIELD, makeTextRecord, type SharedRecord } from './schema.ts';
 import { splitWinnerOrder } from './split-dedup.ts';
+import { splitSiblingOrder, type SiblingRanks } from './split-sibling-order.ts';
+import { markPropertiesEnd, splitMarkMoves } from './split-mark-moves.ts';
 import { typedInsertOf, type TypedInsert } from './paragraph-text-typing.ts';
 import type { DocumentRegistry } from './registry.ts';
 import type { LogicalId } from './identity.ts';
@@ -274,7 +276,8 @@ class VisibleJournalProjection extends JournalProjection {
       const adopted = [...this.shared.adoptedChildren(id), ...this.mergedOf(id)].filter(
         (child, at, all) => !node.children.includes(child) && all.indexOf(child) === at
       );
-      const children = adopted.length > 0 ? [...node.children, ...adopted] : node.children;
+      const listed = adopted.length > 0 ? [...node.children, ...adopted] : node.children;
+      const children = splitMarkMoves(this.shared).shownChildIds(id, listed);
       node.children =
         this.shownOf(id)?.slice() ??
         this.visibleIndexes(id, children).map((index) => children[index]!);
@@ -378,6 +381,23 @@ export function projectJournalToShared(
   // concurrent peer duplicated. A node this journal creates is live by definition.
   // `companions` maps a shown singleton's index to the hidden copies it stands for, and
   // `repeats` maps a shown child's index to its other listings in the same parent.
+  // Children this journal listed right after a concurrent split sibling, by parent, with the
+  // child each was listed after: each follows that one wherever the rule shows it, as the
+  // shared order does once it holds the edit, though the stored ranks do not name it yet.
+  const attached = new Map<LogicalId, Map<LogicalId, LogicalId>>();
+  const ranksWith = (parentId: LogicalId, children: readonly LogicalId[]): SiblingRanks => {
+    const ranks = registry.splitSiblings.ranksOf(parentId);
+    const after = attached.get(parentId);
+    if (!ranks || !after) return ranks;
+    const out = new Map(ranks);
+    let step = 0;
+    for (const id of children) {
+      const anchor = after.get(id);
+      const rank = anchor === undefined || out.has(id) ? undefined : out.get(anchor);
+      if (rank) out.set(id, { group: rank.group, rank: rank.rank + (step += 1) / 1e6 });
+    }
+    return out;
+  };
   const visibleLayout = (
     parentId: LogicalId,
     children: readonly LogicalId[]
@@ -389,7 +409,7 @@ export function projectJournalToShared(
     const seen = new Map<LogicalId, number>();
     const repeats = new Map<number, number[]>();
     const base: number[] = [];
-    const order =
+    const winners =
       hidden.size === 0
         ? null
         : splitWinnerOrder(
@@ -397,7 +417,13 @@ export function projectJournalToShared(
             (id) => hidden.has(id),
             (id) => registry.splitLineageOf(id)
           );
-    (order ?? children.map((_, index) => index)).forEach((index) => {
+    const shared = winners ?? children.map((_, index) => index);
+    // Then the materializer's order of concurrent split siblings, over the same ids.
+    const siblings = splitSiblingOrder(
+      shared.map((index) => children[index]!),
+      ranksWith(parentId, children)
+    );
+    (siblings ? siblings.map((at) => shared[at]!) : shared).forEach((index) => {
       const id = children[index]!;
       if (id === parentId || hidden.has(id)) return;
       const first = seen.get(id);
@@ -447,6 +473,23 @@ export function projectJournalToShared(
   ): number => {
     const positions = visibleIndexes(parentId, children);
     const before = positions[visibleAt] ?? children.length;
+    // Beside concurrent split siblings shown in another order than listed, a child goes right
+    // after the one shown before it: it then follows that sibling wherever the rule puts it.
+    const ranks = ranksWith(parentId, children);
+    const left = visibleAt > 0 ? positions[visibleAt - 1] : undefined;
+    const shownAt = positions[visibleAt];
+    if (
+      ranks &&
+      left !== undefined &&
+      (ranks.has(children[left]!) || (shownAt !== undefined && ranks.has(children[shownAt]!)))
+    ) {
+      if (ranks.has(children[left]!)) {
+        const after = attached.get(parentId) ?? new Map<LogicalId, LogicalId>();
+        ids.forEach((id, at) => after.set(id, at === 0 ? children[left]! : ids[at - 1]!));
+        attached.set(parentId, after);
+      }
+      return left + 1;
+    }
     if (!permuted(positions)) return before;
     const after = visibleAt > 0 ? positions[visibleAt - 1]! + 1 : 0;
     for (const at of [before, after, children.length]) {
@@ -527,6 +570,34 @@ export function projectJournalToShared(
       childLogicalIds: [...shown, ...kept],
     });
   };
+  // A proposal of a concurrent split shows on another paragraph mark than the one that lists
+  // it (`split-mark-moves.ts`). Before a journal addresses either, list it where it shows.
+  const marksWhereShown = new Set<LogicalId>();
+  const listMarksWhereShown = (parentId: LogicalId): void => {
+    for (const move of splitMarkMoves(registry).movesAt(parentId)) {
+      if (marksWhereShown.has(move.node)) continue;
+      marksWhereShown.add(move.node);
+      const from = raw.node(move.from);
+      const to = raw.node(move.to);
+      if (!from || from.isText || !to || to.isText) continue;
+      const at = from.children.indexOf(move.node);
+      if (at < 0 || to.children.includes(move.node)) continue;
+      emit({
+        kind: 'spliceChildren',
+        parentLogicalId: move.from,
+        start: at,
+        deleteCount: 1,
+        childLogicalIds: [],
+      });
+      emit({
+        kind: 'spliceChildren',
+        parentLogicalId: move.to,
+        start: move.first ? 0 : markPropertiesEnd(registry, to.children),
+        deleteCount: 0,
+        childLogicalIds: [move.node],
+      });
+    }
+  };
   const listedWhereShown = new Set<LogicalId>();
   const listAdoptedWhereShown = (parentId: LogicalId): void => {
     if (listedWhereShown.has(parentId)) return;
@@ -555,10 +626,13 @@ export function projectJournalToShared(
         });
       }
     }
+    // They show after the survivor's own children, so they go in after the last one shown,
+    // which beside reordered split siblings is not the last one listed.
+    const shownCount = visibleIndexes(parentId, parent.children).length;
     emit({
       kind: 'spliceChildren',
       parentLogicalId: parentId,
-      start: parent.children.length,
+      start: insertionIndex(parentId, parent.children, shownCount, adopted),
       deleteCount: 0,
       childLogicalIds: adopted,
     });
@@ -678,6 +752,7 @@ export function projectJournalToShared(
         );
       } else if (effect.kind === 'spliceChildren') {
         listPartMembersAsShown(effect.parentLogicalId);
+        listMarksWhereShown(effect.parentLogicalId);
         listAdoptedWhereShown(effect.parentLogicalId);
         listMergedWhereShown(effect.parentLogicalId);
         const parent = raw.node(effect.parentLogicalId);
@@ -749,6 +824,7 @@ export function projectJournalToShared(
       } else if (effect.kind === 'moveNode') {
         // moveNode's destination index is measured AFTER unlinking the source.
         listPartMembersAsShown(effect.destinationParentLogicalId);
+        listMarksWhereShown(effect.destinationParentLogicalId);
         listAdoptedWhereShown(effect.destinationParentLogicalId);
         listMergedWhereShown(effect.destinationParentLogicalId);
         const parent = raw.node(effect.destinationParentLogicalId);

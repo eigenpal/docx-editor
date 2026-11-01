@@ -133,7 +133,7 @@ const LEADING_KIND: Readonly<Record<string, string>> = {
  */
 const AFTER_MARK_PROPERTIES = new Set(['sectPr', 'pPrChange']);
 
-function mayFollowMarkProperties(shell: ChildShell): boolean {
+export function mayFollowMarkProperties(shell: ChildShell): boolean {
   return (
     shell.kind === 'generic' &&
     shell.namespaceUri === WML_NAMESPACE_URI &&
