@@ -238,6 +238,7 @@ export function DialogFrame({
 }: {
   kind:
     | 'revisionMarkup'
+    | 'compareDocuments'
     | 'pageSetup'
     | 'paragraph'
     | 'watermark'

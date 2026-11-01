@@ -668,6 +668,21 @@ export {
 } from './editor/DocxEditorRevisionMarkupDialog';
 
 export type {
+  CompareDocumentsChromeHandlers,
+  CompareDocumentsDialogSession,
+  CompareDocumentsOutcome,
+  CompareDocumentsRequest,
+} from '@docx-editor.dev/core/editor';
+
+export {
+  DocxEditorCompareDocumentsDialog,
+  useCompareDocumentsDialog,
+  type CompareDocumentsDialogValues,
+  type DocxEditorCompareDocumentsDialogProps,
+  type UseCompareDocumentsDialogReturn,
+} from './editor/DocxEditorCompareDocumentsDialog';
+
+export type {
   DrawingGraphicKind,
   DrawingSupport,
   DrawingSupportIssue,

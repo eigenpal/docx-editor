@@ -1,5 +1,6 @@
 import { DocxEditorUnsupportedElement } from '../editor/DocxEditorUnsupportedElement';
 import { DocxEditorRevisionMarkupDialog } from '../editor/DocxEditorRevisionMarkupDialog';
+import { DocxEditorCompareDocumentsDialog } from '../editor/DocxEditorCompareDocumentsDialog';
 import { DocxEditorRevisionMarkup } from '../editor/DocxEditorRevisionMarkup';
 import { DocxEditorExportDialog } from '../editor/DocxEditorExportDialog';
 import { DocxEditorPrintDialog } from '../editor/DocxEditorPrintDialog';
@@ -534,6 +535,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly Loading: typeof DocxEditorLoading;
   readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
   readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
+  readonly CompareDocumentsDialog: typeof DocxEditorCompareDocumentsDialog;
   readonly RevisionMarkup: typeof DocxEditorRevisionMarkup;
   readonly UnsupportedElement: typeof DocxEditorUnsupportedElement;
   readonly AuthorStyle: typeof DocxEditorAuthorStyle;
@@ -616,6 +618,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   ColorByChangeType: DocxEditorColorByChangeType,
   RevisionMarkup: DocxEditorRevisionMarkup,
   RevisionMarkupDialog: DocxEditorRevisionMarkupDialog,
+  CompareDocumentsDialog: DocxEditorCompareDocumentsDialog,
   UnsupportedElement: DocxEditorUnsupportedElement,
   AuthorStyle: DocxEditorAuthorStyle,
   HorizontalRuler: DocxEditorHorizontalRuler,
