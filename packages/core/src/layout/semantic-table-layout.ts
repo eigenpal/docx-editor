@@ -428,7 +428,8 @@ function placeCellParagraph(
     authoredSpacing,
     props,
     options?.firstInCell === true,
-    options?.lastInCell === true
+    options?.lastInCell === true,
+    deps.styleCascade?.fixedParagraphSpacing === true
   );
   const spacing = cellContextualSpacing(
     edgeSpacing,

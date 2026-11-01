@@ -4,8 +4,9 @@
 // Each paragraph carries 12pt before and 12pt after. Collapsed, the second line sits one line
 // plus 12pt below the first; summed, one line plus 24pt.
 //
-// The setting also fixes automatic spacing (ISO/IEC 29500-1 §17.15.3): `w:beforeAutospacing`
-// gives 5pt and `w:afterAutospacing` 10pt, in place of the 14pt HTML paragraph margin.
+// The setting also turns automatic spacing off (ISO/IEC 29500-1 §17.15.3): `w:beforeAutospacing`
+// and `w:afterAutospacing` leave the authored measurement in place of the 14pt HTML paragraph
+// margin, in lists, table cells and at story edges as well.
 
 import { describe, expect, test } from 'bun:test';
 import {
@@ -284,27 +285,45 @@ describe('keep-with-next pricing', () => {
 });
 
 describe('automatic spacing under the setting', () => {
-  test('resolves to 5pt before and 10pt after, outside and inside a list', () => {
+  test('keeps the authored measurement on each side, outside and inside a list', () => {
     const props = [
       {
         localName: 'spacing',
-        attributes: { before: '100', beforeAutospacing: '1', after: '100', afterAutospacing: '1' },
+        attributes: { before: '100', beforeAutospacing: '1', after: '300', afterAutospacing: '1' },
       },
     ];
     expect(paragraphSpacing(props)).toEqual({ before: 14, after: 14 });
-    expect(paragraphSpacing(props, { fixedAutoSpacing: true })).toEqual({ before: 5, after: 10 });
+    expect(paragraphSpacing(props, { fixedAutoSpacing: true })).toEqual({ before: 5, after: 15 });
     expect(paragraphSpacing(props, { fixedAutoSpacing: true, inList: true })).toEqual({
-      before: 0,
-      after: 0,
+      before: 5,
+      after: 15,
     });
   });
 
-  test('an inherited automatic style gives 5pt before and 10pt after, which add up', () => {
+  test('an automatic side without a measurement keeps the inherited one, or none', () => {
+    const flagOnly = [
+      { localName: 'spacing', attributes: { after: '160' } },
+      { localName: 'spacing', attributes: { beforeAutospacing: '1', afterAutospacing: '1' } },
+    ];
+    expect(paragraphSpacing(flagOnly, { fixedAutoSpacing: true })).toEqual({
+      before: 0,
+      after: 8,
+    });
+    const lines = [
+      {
+        localName: 'spacing',
+        attributes: { before: '100', beforeLines: '200', beforeAutospacing: '1' },
+      },
+    ];
+    expect(paragraphSpacing(lines, { fixedAutoSpacing: true }).before).toBe(24);
+  });
+
+  test('an inherited automatic style keeps its measurements, which add up', () => {
     const body = web('One') + web('Two');
     expect(bodyPitch(body)).toBeCloseTo(LINE + 14, 6);
-    expect(bodyPitch(body, FLAG)).toBeCloseTo(LINE + 10 + 5, 6);
+    expect(bodyPitch(body, FLAG)).toBeCloseTo(LINE + 5 + 5, 6);
     const first = (compat: string) => paragraphFragmentsOf(layout(body, compat).pages[0]!)[0]!;
-    // The document's first paragraph takes no automatic gap at the top margin.
+    // Only the substituted automatic gap is dropped at the top margin.
     expect(firstLineY(first(''))).toBeCloseTo(0, 6);
     expect(firstLineY(first(FLAG))).toBeCloseTo(5, 6);
   });
@@ -312,7 +331,7 @@ describe('automatic spacing under the setting', () => {
   test('a direct measurement overrides the inherited automatic side', () => {
     const body = web('One') + web('Two', '<w:spacing w:before="240" w:beforeAutospacing="0"/>');
     expect(bodyPitch(body)).toBeCloseTo(LINE + 14, 6);
-    expect(bodyPitch(body, FLAG)).toBeCloseTo(LINE + 10 + 12, 6);
+    expect(bodyPitch(body, FLAG)).toBeCloseTo(LINE + 5 + 12, 6);
   });
 
   test('an automatic side and a measured side add up', () => {
@@ -321,28 +340,45 @@ describe('automatic spacing under the setting', () => {
     expect(bodyPitch(explicitThenAuto, FLAG)).toBeCloseTo(LINE + 6 + 5, 6);
     const autoThenExplicit = web('One') + paragraph('Two', 'w:before="240"');
     expect(bodyPitch(autoThenExplicit)).toBeCloseTo(LINE + 14, 6);
-    expect(bodyPitch(autoThenExplicit, FLAG)).toBeCloseTo(LINE + 10 + 12, 6);
+    expect(bodyPitch(autoThenExplicit, FLAG)).toBeCloseTo(LINE + 5 + 12, 6);
   });
 
-  test('items of one list still suppress automatic spacing between them', () => {
+  test('items of one list keep their measured spacing between them', () => {
     const item = (text: string) =>
       web(text, '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>');
     const body = item('One') + item('Two') + web('Three');
-    for (const compat of ['', FLAG]) expect(bodyPitch(body, compat)).toBeCloseTo(LINE, 6);
+    expect(bodyPitch(body)).toBeCloseTo(LINE, 6);
+    expect(bodyPitch(body, FLAG)).toBeCloseTo(LINE + 5 + 5, 6);
     // The list keeps its outer margin: the last item's after-spacing meets the next paragraph.
     expect(bodyPitch(body, '', 1)).toBeCloseTo(LINE + 14, 6);
-    expect(bodyPitch(body, FLAG, 1)).toBeCloseTo(LINE + 10 + 5, 6);
+    expect(bodyPitch(body, FLAG, 1)).toBeCloseTo(LINE + 5 + 5, 6);
   });
 
-  test('a table cell drops automatic spacing at its edges and adds it between paragraphs', () => {
+  test('a table cell keeps measured spacing at its edges and adds it between paragraphs', () => {
     const table = `<w:tbl><w:tr><w:tc>${web('One') + web('Two')}</w:tc></w:tr></w:tbl>`;
     const cell = (compat: string) => cellParagraphs(layout(table, compat));
     const [first, second] = cell(FLAG);
-    expect(first!.spacing.before).toBe(0);
-    expect(second!.spacing.after).toBe(0);
-    expect(firstLineY(second!) - firstLineY(first!)).toBeCloseTo(LINE + 10 + 5, 6);
+    expect(first!.spacing.before).toBe(5);
+    expect(second!.spacing.after).toBe(5);
+    expect(firstLineY(second!) - firstLineY(first!)).toBeCloseTo(LINE + 5 + 5, 6);
     const [base, next] = cell('');
+    expect(base!.spacing.before).toBe(0);
+    expect(next!.spacing.after).toBe(0);
     expect(firstLineY(next!) - firstLineY(base!)).toBeCloseTo(LINE + 14, 6);
+  });
+
+  test('a header keeps the measured space before its first paragraph', () => {
+    const firstHeaderParagraph = (compat: string) =>
+      layoutHeaderFooterStory(
+        read(`<w:hdr xmlns:w="${W}">${web('One')}</w:hdr>`, '/word/header1.xml'),
+        400,
+        measurer,
+        'test',
+        undefined,
+        cascade(compat)
+      ).fragments.find((fragment) => fragment.kind === 'paragraph') as ParagraphFragmentRecord;
+    expect(firstHeaderParagraph('').spacing.before).toBe(0);
+    expect(firstHeaderParagraph(FLAG).spacing.before).toBe(5);
   });
 });
 

@@ -1473,7 +1473,7 @@ function* layoutBlocksPass(
     prepared.length,
     options.compatibilityMode,
     () => firstParagraphOfSection,
-    // The HTML automatic gap only: the fixed 5pt setting keeps its value.
+    // The HTML automatic gap only: under the setting the authored measurement stays.
     styleCascade?.fixedParagraphSpacing !== true && pageIndexStart === 0 && flowStartY === 0
   );
 
