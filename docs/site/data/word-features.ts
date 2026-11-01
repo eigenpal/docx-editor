@@ -1095,14 +1095,14 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'fields.styleref',
-    name: 'Character-style header references',
+    name: 'Style header references',
     category: 'fields',
     editing: 'none',
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Header STYLEREF fields resolve directly applied character styles by display name. The default selects the first page occurrence; \\l selects the last. Pages without a match search backward, then forward. Visible revision text supplies results. Header height adjusts per page. Pagination retains each page’s largest admitted live header reserve while painting the current result. Headers from a continued section do not enlarge the shared sheet. Unsupported switches, missing matches, nested result fields, and oversized results keep saved values. Body, footer, paragraph-style, and style-alias references stay cached. Save preserves source fields.',
+      'Header STYLEREF fields resolve directly applied character and paragraph styles by display name. A paragraph style supplies the whole paragraph text, field results included; an empty paragraph supplies an empty result. The default selects the first page occurrence; \\l selects the last. Pages without a match search backward, then forward. Visible revision text supplies results. Header height adjusts per page. Pagination retains each page’s largest admitted live header reserve while painting the current result. Headers from a continued section do not enlarge the shared sheet. Unsupported switches, missing matches, nested result fields, and oversized results keep saved values. Body, footer, and style-alias references stay cached. Save preserves source fields.',
     docsLink: '/docs/2.x/guides/fields',
   },
   {
