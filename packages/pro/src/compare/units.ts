@@ -8,6 +8,7 @@
  */
 import type { OoxmlNode, OoxmlPackage } from '@docx-editor.dev/core/store';
 import { relationshipsOf } from '@docx-editor.dev/core/store';
+import { textBoxesOf, withBoxMarkers } from './text-boxes.ts';
 import {
   attributeOf,
   childNamed,
@@ -46,6 +47,8 @@ export interface Atom {
   readonly markers: readonly string[];
   /** The note a footnote or endnote reference points at. */
   readonly note?: { readonly kind: 'footnote' | 'endnote'; readonly id: string };
+  /** The object element, kept when it holds text boxes (compared as stories). */
+  readonly node?: ElementNode;
 }
 
 export interface ParagraphUnit {
@@ -406,6 +409,7 @@ function pushObject(
   const delXml = xml
     .replace(/^<w:instrText\b/, '<w:delInstrText')
     .replace(/<\/w:instrText>$/, '</w:delInstrText>');
+  const boxes = textBoxesOf(node).length > 0;
   const noteKind =
     node.localName === 'footnoteReference'
       ? 'footnote'
@@ -419,11 +423,16 @@ function pushObject(
     xml,
     delXml,
     // Note references align by position; their notes compare as stories of their own.
-    key: noteKind ? `noteRef:${noteKind}` : side.keyOf(raw),
+    key: noteKind
+      ? `noteRef:${noteKind}`
+      : boxes
+        ? side.keyOf(side.scope.serialize(withBoxMarkers(node)))
+        : side.keyOf(raw),
     rPr,
     wrappers,
     markers: takePending(state),
     ...(noteKind && noteId !== undefined ? { note: { kind: noteKind, id: noteId } } : {}),
+    ...(boxes ? { node } : {}),
   });
 }
 

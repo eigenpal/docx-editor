@@ -7,6 +7,7 @@
  * deleted, split, and merged paragraphs all fall out of the same word-level diff.
  */
 import { diffKeys, type DiffOp } from './sequence-diff.ts';
+import { objectWithBoxes } from './text-boxes.ts';
 import {
   emitContent,
   notePlaceholder,
@@ -223,6 +224,8 @@ function emitHunk(
             });
             atom = { ...atom, xml: baseAtom.xml };
           }
+          if (baseAtom.node && atom.node)
+            atom = { ...atom, xml: objectWithBoxes(baseAtom, atom, ctx) };
           items.push({ mark: 'eq', atom, baseRPr: baseAtom.rPr, markers: baseAtom.markers });
         }
       } else if (left.kind === 'mark' && right.kind === 'mark') {
@@ -243,6 +246,14 @@ function emitHunk(
           ctx.state.newNotes.push({ kind: atom.note.kind, revised: atom.note.id });
           const id = notePlaceholder(atom.note.kind, atom.note.id);
           atom = { ...atom, xml: atom.xml.replace(/\bw:id="[^"]*"/, `w:id="${id}"`) };
+        }
+        if (atom.node) {
+          const xml = objectWithBoxes(
+            mark === 'del' ? atom : null,
+            mark === 'ins' ? atom : null,
+            ctx
+          );
+          atom = { ...atom, xml, delXml: xml };
         }
         items.push({ mark, atom, baseRPr: '', markers: mark === 'del' ? atom.markers : [] });
       }
