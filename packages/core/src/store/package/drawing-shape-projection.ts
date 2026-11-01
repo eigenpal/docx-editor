@@ -209,6 +209,11 @@ export interface TextboxStoryProjection {
    * follows its text when laid out.
    */
   readonly fitHeightToText?: true;
+  /**
+   * The fit comes from DrawingML `a:spAutoFit`, which also fits an inline or turned box. A
+   * legacy VML box that fits its text keeps its extent when inline or turned.
+   */
+  readonly drawingFit?: true;
   /** Outline dash pattern in multiples of the outline width; absent for solid. */
   readonly strokeDash?: readonly number[];
   /** How outline dashes end; absent for flat ends. */
@@ -873,10 +878,10 @@ export function projectTextboxStory(
     resolveStyleMatrixReference
   );
   if (!story) return story;
-  // `a:spAutoFit` resizes a top-level box to its text. A group member keeps its member size:
-  // the group's own extent places every member.
+  // `a:spAutoFit` resizes a top-level box to its text, inline or anchored, turned or not. A
+  // group member keeps its member size: the group's own extent places every member.
   const fitted: TextboxStoryProjection =
-    story.autofit === 'shape' ? { ...story, fitHeightToText: true } : story;
+    story.autofit === 'shape' ? { ...story, fitHeightToText: true, drawingFit: true } : story;
   const spPr = shapeProperties(wsp);
   if (!spPr) return fitted;
   // A top-level box paints the outline of its geometry, turns, and flows its text vertically;

@@ -238,7 +238,7 @@ export function breakParagraph(
   const visiblePieces = splitAtSpacedSoundMarks(
     splitAtAutomaticSpacing(
       returnUncoveredHintedText(
-        continuationPiecesWithRules(allPieces, startOffset, flow?.showFieldCodes, available),
+        continuationPiecesWithRules(allPieces, startOffset, flow, available),
         measurer
       ),
       typography,

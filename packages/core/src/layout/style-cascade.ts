@@ -681,7 +681,9 @@ export function cascadeParagraphWithNumbering(
     paragraphPropertyNodes,
     runProperties: applyLigatureCompatibility(runProperties, table.disableOptionalLigatures),
     markRunProperties,
-    styleId: styleId ?? null,
+    // The style that applies: the default paragraph style when `w:pStyle` names no paragraph
+    // style, so contextual spacing compares that paragraph as a default-style neighbour.
+    styleId: chain.at(-1)?.styleId ?? styleId ?? null,
   };
 }
 

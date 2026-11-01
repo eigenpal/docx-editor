@@ -699,6 +699,8 @@ describe('layout applies Heading1 / Heading2 cascade', () => {
       const run = cascaded.runProperties.find((property) => property.localName === 'color');
       expect(run?.attributes?.val).toBe('102030');
       expect(cascaded.runProperties.some((property) => property.localName === 'b')).toBe(false);
+      // Contextual spacing compares it as a default-style paragraph.
+      expect(cascaded.styleId).toBe('Normal');
     }
   });
 

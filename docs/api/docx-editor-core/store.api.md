@@ -5133,6 +5133,7 @@ export interface TextboxStoryProjection {
     readonly chromeByVector?: true;
     readonly content: OoxmlElement;
     readonly contentNodeId: string;
+    readonly drawingFit?: true;
     readonly drawingText?: true;
     readonly fillHex: string | null;
     readonly fitHeightToText?: true;

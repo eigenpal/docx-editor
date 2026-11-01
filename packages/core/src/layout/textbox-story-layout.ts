@@ -718,9 +718,12 @@ export function layoutTextboxStory(
   }
 
   // A box that fits its text takes the text's height, or its width when the text runs
-  // vertically; it never clips or anchors. A turned shape keeps its box.
+  // vertically; it never clips or anchors. A legacy box keeps its extent when it is inline or
+  // turned; a DrawingML box fits there too, and its line reserves the fitted size
+  // (`withFittedInlineTextboxes`).
   const fits =
-    story.fitHeightToText === true && projection.wrap !== 'inline' && !legacy?.rotationDegrees;
+    story.fitHeightToText === true &&
+    (story.drawingFit === true || (projection.wrap !== 'inline' && !legacy?.rotationDegrees));
   const fitFor = (height: number) =>
     fitTextboxFrame(
       height,
