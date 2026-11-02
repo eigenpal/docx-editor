@@ -169,29 +169,54 @@ export function compareTable(
   const baseRows = base ? rowsOf(base) : [];
   const revisedRows = revised ? rowsOf(revised) : [];
   const extras = carriedExtras(base, revised, TABLE_OWN, 'tr', ctx);
-  if (!base) for (const row of revisedRows) out += insertedRow(row, ctx);
-  else if (!revised)
-    baseRows.forEach((row, index) => (out += extrasAt(extras, index) + deletedRow(row, ctx)));
+  // An extra sits before the rows that follow it in both documents: it is written where as many
+  // original rows and as many revised rows precede it as in each input, so both an accept and
+  // a reject keep it in place. With no such place, it cannot be kept.
+  let baseCount = 0;
+  let revisedCount = 0;
+  let next = 0;
+  const place = () => {
+    while (next < extras.length) {
+      const at = extras[next]!.at;
+      const baseAt = !base || baseCount === at;
+      const revisedAt = !revised || revisedCount === at;
+      if (!baseAt || !revisedAt) {
+        // Past its place on either side: no output position keeps it in both.
+        if ((base && baseCount > at) || (revised && revisedCount > at)) {
+          ctx.state.untracked++;
+          next++;
+          continue;
+        }
+        return;
+      }
+      out += extras[next]!.xml;
+      next++;
+    }
+  };
+  const emit = (row: string, fromBase: boolean, fromRevised: boolean) => {
+    place();
+    out += row;
+    if (fromBase) baseCount++;
+    if (fromRevised) revisedCount++;
+  };
+  if (!base) for (const row of revisedRows) emit(insertedRow(row, ctx), false, true);
+  else if (!revised) for (const row of baseRows) emit(deletedRow(row, ctx), true, false);
   else {
-    // Extras are the same in both documents: each goes before the revised row it preceded.
-    const before = (index: number) => extrasAt(extras, index);
     let pendingBase: ElementNode[] = [];
-    let pendingRevised: number[] = [];
+    let pendingRevised: ElementNode[] = [];
     const flush = () => {
       // Pair rows of a change run in order while their cell counts agree.
       let k = 0;
       while (
         k < pendingBase.length &&
         k < pendingRevised.length &&
-        cellsOf(pendingBase[k]!).length === cellsOf(revisedRows[pendingRevised[k]!]!).length
+        cellsOf(pendingBase[k]!).length === cellsOf(pendingRevised[k]!).length
       ) {
-        const index = pendingRevised[k]!;
-        out += before(index) + rowPair(pendingBase[k]!, revisedRows[index]!, ctx, tableBundle);
+        emit(rowPair(pendingBase[k]!, pendingRevised[k]!, ctx, tableBundle), true, true);
         k++;
       }
-      for (const row of pendingBase.slice(k)) out += deletedRow(row, ctx);
-      for (const index of pendingRevised.slice(k))
-        out += before(index) + insertedRow(revisedRows[index]!, ctx);
+      for (const row of pendingBase.slice(k)) emit(deletedRow(row, ctx), true, false);
+      for (const row of pendingRevised.slice(k)) emit(insertedRow(row, ctx), false, true);
       pendingBase = [];
       pendingRevised = [];
     };
@@ -200,17 +225,19 @@ export function compareTable(
         flush();
         const left = baseRows[op.a]!;
         const right = revisedRows[op.b]!;
-        out +=
-          before(op.b) +
-          (cellsOf(left).length === cellsOf(right).length
-            ? rowPair(left, right, ctx, tableBundle)
-            : deletedRow(left, ctx) + insertedRow(right, ctx));
+        if (cellsOf(left).length === cellsOf(right).length)
+          emit(rowPair(left, right, ctx, tableBundle), true, true);
+        else {
+          emit(deletedRow(left, ctx), true, false);
+          emit(insertedRow(right, ctx), false, true);
+        }
       } else if (op.op === 'del') pendingBase.push(baseRows[op.a]!);
-      else pendingRevised.push(op.b);
+      else pendingRevised.push(revisedRows[op.b]!);
     }
     flush();
   }
-  out += extrasAt(extras, revised ? revisedRows.length : baseRows.length);
+  place();
+  if (next < extras.length) ctx.state.untracked++;
   void own;
   return `${out}</w:tbl>`;
 }
@@ -286,10 +313,17 @@ export function compareSdt(
 ): string {
   const own = revised ?? base!;
   const side = revised ? ctx.revised : ctx.base;
-  const shell = elementChildren(own)
-    .filter((child) => child.localName === 'sdtPr' || child.localName === 'sdtEndPr')
-    .map((child) => side.serialize(child))
-    .join('');
+  const shellOf = (node: ElementNode, sideOf: SideContext) =>
+    elementChildren(node)
+      .filter((child) => child.localName === 'sdtPr' || child.localName === 'sdtEndPr')
+      .map((child) => sideOf.serialize(child))
+      .join('');
+  const shell = shellOf(own, side);
+  // A control's properties have no revision form, and its shell stays when all of its content
+  // is rejected or accepted away: a control with other properties, or one only one document
+  // has, is not recorded.
+  if (!base || !revised || normalize(shellOf(base, ctx.base)) !== normalize(shell))
+    ctx.state.untracked++;
   const content = (node: ElementNode | null, sideOf: SideContext) => {
     const holder = node ? childNamed(node, 'sdtContent') : undefined;
     return holder ? unitsOf(holder, sideOf) : [];

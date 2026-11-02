@@ -13,6 +13,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import {
   applyTreeOp,
   readOoxmlPackage,
+  type OoxmlNode,
   type OoxmlPackage,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
@@ -59,6 +60,11 @@ import { relatedPart } from './related-parts.ts';
  * holds some thirteen thousand.
  */
 const MAX_BLOCKS = 100_000;
+/**
+ * The compare keeps per-character state for every story; text over this many UTF-16 code units
+ * in both documents together is refused before any work (about two 1,300-page documents).
+ */
+const MAX_TEXT_UNITS = 1_500_000;
 /** Roots of the parts a compare reads; a file's declared content type is not trusted. */
 const STORY_ROOTS = new Set(['document', 'hdr', 'ftr', 'footnotes', 'endnotes', 'comments']);
 
@@ -105,7 +111,12 @@ export function comparePackages(
     };
   }
   // Before any work that scales with the documents, accepting their revisions included.
-  if (storyBlocks(original) + storyBlocks(revised) > MAX_BLOCKS) {
+  const baseSize = storySize(original);
+  const revisedSize = storySize(revised);
+  if (
+    baseSize.blocks + revisedSize.blocks > MAX_BLOCKS ||
+    baseSize.text + revisedSize.text > MAX_TEXT_UNITS
+  ) {
     return { ok: false, code: 'too-large', message: 'The documents are too large to compare.' };
   }
   const basePkg = acceptAll(original);
@@ -316,29 +327,31 @@ function acceptAll(pkg: OoxmlPackage): OoxmlPackage | null {
 const BLOCKS = new Set(['p', 'tbl', 'tr', 'tc', 'sdt']);
 
 /** Blocks in every story part of `pkg`, so no part escapes the bound. */
-function storyBlocks(pkg: OoxmlPackage): number {
-  let count = 0;
+function storySize(pkg: OoxmlPackage): { blocks: number; text: number } {
+  const size = { blocks: 0, text: 0 };
   for (const part of pkg.parts.values()) {
     const root = part.root as ElementNode;
     const story = STORY_ROOTS.has(root.localName) && root.namespaceUri === W_NS;
-    if (story || part.name === pkg.mainDocumentPart) count += countBlocks(root);
+    if (story || part.name === pkg.mainDocumentPart) countStory(root, size);
   }
-  return count;
+  return size;
 }
 
 /**
- * Paragraphs, tables, rows, cells, and content controls under `node`, text box content
- * included; properties do not count.
+ * Adds the paragraphs, tables, rows, cells, and content controls under `node` (text box content
+ * included; properties do not count) and its text length to `size`.
  */
-function countBlocks(node: ElementNode): number {
-  let count = 0;
-  const stack = [...elementChildren(node)];
+function countStory(node: ElementNode, size: { blocks: number; text: number }): void {
+  const stack: OoxmlNode[] = [...node.children];
   while (stack.length > 0) {
     const child = stack.pop()!;
-    if (BLOCKS.has(child.localName)) count++;
-    pushAll(stack, elementChildren(child));
+    if (child.kind === 'textValue') {
+      size.text += child.value.length;
+      continue;
+    }
+    if (BLOCKS.has(child.localName)) size.blocks++;
+    pushAll(stack, child.children);
   }
-  return count;
 }
 
 /** Minute precision, as revision timestamps are usually written. */

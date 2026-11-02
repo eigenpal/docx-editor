@@ -30,7 +30,7 @@ import {
 } from './emit.ts';
 import { findMoves, movedParagraph, NO_MOVES, type Moves } from './moves.ts';
 import { compareSdt, compareTable } from './table-compare.ts';
-import type { BlockUnit, ParagraphUnit, Unit } from './units.ts';
+import type { Atom, BlockUnit, ParagraphUnit, Unit } from './units.ts';
 import { pushAll } from './arrays.ts';
 
 interface Hunk {
@@ -110,6 +110,13 @@ export function compareContainer(
  * A container's last paragraph mark can never be inserted or deleted, so a trailing hunk takes
  * in the matched paragraph before it and the two final marks are forced to match.
  */
+/** The inline content controls around an atom, outermost first. */
+const controlsOf = (atom: Atom) =>
+  atom.wrappers
+    .filter((wrapper) => wrapper.key.startsWith('sdt|'))
+    .map((wrapper) => wrapper.key)
+    .join('\u0003');
+
 function foldTrailingPair(steps: Step[]): void {
   const last = steps[steps.length - 1];
   const before = steps[steps.length - 2];
@@ -202,7 +209,8 @@ function emitHunk(
       a,
       b
     ),
-    a
+    a,
+    b
   );
   let out = '';
   let items: Item[] = [];
@@ -252,6 +260,12 @@ function emitHunk(
           }
           if (baseAtom.node && atom.node)
             atom = { ...atom, xml: objectWithBoxes(baseAtom, atom, ctx) };
+          // Content control properties have no revision form: equal text inside controls with
+          // other properties is not recorded. (A control added or removed around text keeps
+          // its shell on the other side, as documented.)
+          const before = controlsOf(baseAtom);
+          const after = controlsOf(atom);
+          if (before !== '' && after !== '' && before !== after) ctx.state.untracked++;
           items.push({
             mark: 'eq',
             atom,
@@ -370,7 +384,11 @@ function pairBlocks(ops: readonly DiffOp[], a: readonly Token[], b: readonly Tok
  * Inserted text opens a paragraph that a block cannot enter, so a deleted block after it would
  * land behind the deleted text that follows the block in the original.
  */
-function deletedBlocksFirst(ops: readonly HunkOp[], a: readonly Token[]): HunkOp[] {
+function deletedBlocksFirst(
+  ops: readonly HunkOp[],
+  a: readonly Token[],
+  b: readonly Token[]
+): HunkOp[] {
   const out: HunkOp[] = [];
   let i = 0;
   while (i < ops.length) {
@@ -388,9 +406,11 @@ function deletedBlocksFirst(ops: readonly HunkOp[], a: readonly Token[]): HunkOp
     dels.forEach((item, k) => {
       if (item.op === 'del' && a[item.a]!.kind === 'block') cut = k;
     });
-    // Nothing deleted after the block: the insertions can stay first.
-    if (cut < 0 || cut === dels.length - 1 || !run.some((item) => item.op === 'ins'))
-      pushAll(out, run);
+    // Insertions can stay first only when they close their own paragraph: inserted text that
+    // runs on into the next paragraph would hold the deleted block back behind that paragraph.
+    const lastIns = [...run].reverse().find((item) => item.op === 'ins');
+    const closed = lastIns !== undefined && b[lastIns.b]!.kind === 'mark';
+    if (cut < 0 || !lastIns || (cut === dels.length - 1 && closed)) pushAll(out, run);
     else {
       const inss = run.filter((item) => item.op === 'ins');
       pushAll(out, dels.slice(0, cut + 1), inss, dels.slice(cut + 1));

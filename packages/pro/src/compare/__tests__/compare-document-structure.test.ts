@@ -125,7 +125,7 @@ test('an earlier section header with no counterpart is refused', () => {
   if (!result.ok) expect(result.code).toBe('unsupported-content');
 });
 
-test('block content controls that go one after another', () => {
+test('block content controls that go are refused: their shells would stay', () => {
   const control = (text: string) =>
     `<w:sdt><w:sdtPr><w:alias w:val="${text}"/></w:sdtPr><w:sdtContent>${p(text)}</w:sdtContent></w:sdt>`;
   const base = docx(
@@ -134,11 +134,8 @@ test('block content controls that go one after another', () => {
   const revised = docx(
     `${p('Kept')}<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc>${p('Cell')}</w:tc></w:tr></w:tbl>${p('End')}<w:sectPr/>`
   );
-  const { files, revisionCount } = compare(base, revised);
-  expect(revisionCount).toBeGreaterThan(0);
-  const document = strFromU8(files['word/document.xml']!);
-  expect(document).toContain('<w:delText>First control</w:delText>');
-  expect(document).toContain('<w:delText>Second control</w:delText>');
+  const result = compareDocuments(base, revised, { authorName: 'Test', date: DATE });
+  expect(result.ok ? '' : result.code).toBe('unsupported-content');
 });
 
 test('notes that nothing references do not take part', () => {

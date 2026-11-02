@@ -127,12 +127,19 @@ export function paragraphTokens(unit: ParagraphUnit, last: boolean, out: Token[]
 
 function tokenKey(atoms: readonly Atom[], from: number, to: number): string {
   let key = '';
+  let wrappers = '';
   for (let i = from; i < to; i++) {
     const atom = atoms[i]!;
+    // Every link or field boundary inside a word is part of the word: one that starts or ends
+    // mid-word makes the words differ, so the original's wrapper comes back on reject. Inline
+    // content controls do not split words; equal words in different controls are refused.
+    const signature = atom.wrappers
+      .filter((wrapper) => !wrapper.key.startsWith('sdt|'))
+      .map((wrapper) => wrapper.key)
+      .join('\u0003');
+    if (i === from ? signature !== '' : signature !== wrappers) key += `\u0002${signature}\u0002`;
+    wrappers = signature;
     key += atom.kind === 'char' ? atom.text : `\u0001${atom.key}\u0001`;
   }
-  // Inline content controls do not split or change words; links and fields do.
-  const wrappers = atoms[from]!.wrappers.filter((wrapper) => !wrapper.key.startsWith('sdt|'));
-  if (wrappers.length > 0) key += `\u0002${wrappers.map((wrapper) => wrapper.key).join('\u0003')}`;
   return key;
 }
