@@ -124,14 +124,17 @@ export async function waitForSiteRun({
   }
 }
 
+/** Conclusions that end a site run without success. */
+const UNFINISHED = ['failure', 'timed_out', 'cancelled', 'startup_failure', 'action_required'];
+
 /** `job / step` for each failed step of a finished run, so the log names the cause. */
 export function failedSteps(jobs) {
   return (jobs ?? []).flatMap((job) => {
-    if (!['failure', 'timed_out'].includes(job.conclusion)) return [];
-    const steps = (job.steps ?? []).filter((step) =>
-      ['failure', 'timed_out'].includes(step.conclusion)
-    );
-    return steps.length ? steps.map((step) => `${job.name} / ${step.name}`) : [job.name];
+    if (!UNFINISHED.includes(job.conclusion)) return [];
+    const steps = (job.steps ?? []).filter((step) => UNFINISHED.includes(step.conclusion));
+    return steps.length
+      ? steps.map((step) => `${job.name} / ${step.name} (${step.conclusion})`)
+      : [`${job.name} (${job.conclusion})`];
   });
 }
 

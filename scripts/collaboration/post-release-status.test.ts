@@ -395,7 +395,18 @@ test('a failed site run names its failed steps', () => {
         ],
       },
       { name: 'deploy', conclusion: 'timed_out' },
+      {
+        name: 'merge',
+        conclusion: 'cancelled',
+        steps: [{ name: 'Wait', conclusion: 'cancelled' }],
+      },
+      { name: 'setup', conclusion: 'startup_failure' },
     ])
-  ).toEqual(['sync / Mint release-pal App token', 'deploy']);
+  ).toEqual([
+    'sync / Mint release-pal App token (failure)',
+    'deploy (timed_out)',
+    'merge / Wait (cancelled)',
+    'setup (startup_failure)',
+  ]);
   expect(failedSteps(undefined)).toEqual([]);
 });
