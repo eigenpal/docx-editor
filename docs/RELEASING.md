@@ -87,6 +87,8 @@ The publish path runs lint, formatting, type checks, tests, parity, license, and
 
 If no changesets are pending and every published package version is already on npm, the run is idle. The **Detect release mode** job lists the result, and every later job is skipped. A registry lookup that fails counts as an unpublished version, so the run takes the publish path.
 
+Stable releases run only from `main`. If you run the Release workflow on another branch, such as the unmerged `changeset-release/main` branch, the run stops after **Detect release mode** with a warning. It does not update the release PR or publish.
+
 ### Check documentation before merging
 
 Match the pending changesets against the user guides, package READMEs, API snapshots, and `docs/site/data/word-features.ts`. Include usage instructions, upgrade steps, and unsupported cases for new behavior. Add Python release notes through the converter changeset, including the first Python release.
@@ -124,6 +126,37 @@ For Python changes, check all five platform jobs in **Python wheels**. A passing
 | Publish step crashed after PR merged | Re-run the workflow manually (`workflow_dispatch` is kept for this). If every version reached npm, the re-run is idle. Check npm for partial publication before retrying. For failures after successful publication, see [Recover post-release updates without publishing](#recover-post-release-updates-without-publishing). |
 | Breaking public API change | Add a `major` changeset and document the migration before merging. |
 | No pending changesets | If a package version is not on npm yet, the workflow takes the publish path and publishes it. If every version is on npm, the run is idle and skips every job after **Detect release mode**. |
+
+## Canary builds
+
+The Release workflow also publishes a canary each night at 03:23 UTC. To start one manually, run the Release workflow with **channel** set to `canary`.
+
+1. **Detect release mode** finds the newest `main` commit whose CI run passed. It runs only in `eigenpal/docx-editor` on `main`.
+2. The run is idle in these cases:
+   - No changeset at that commit releases a package.
+   - A published package has no `latest` version yet. npm would point `latest` at the canary, so publish a new package through a stable release first.
+   - Every published package already has a canary from that commit. If a publication stopped partway, the next run publishes the whole set again.
+   - A registry lookup failed.
+   - The stable-release gate is closed. See the next list.
+3. The **Canary** job runs `changeset version --snapshot canary` on the runner. Every published package gets the version that the pending changesets will release, plus a suffix, such as `2.35.0-canary.20261103032300.sha-b20ba9f`. Internal peer and runtime ranges pin to that exact version.
+4. The job builds the packages, generates notices, and checks the package artifacts. It installs the exact tarballs in consumer apps, including the PDF converter.
+5. The job checks the stable-release gate again. Then it runs `changeset publish --tag canary --no-git-tag` with npm provenance.
+
+A canary never publishes while a stable release might publish, because two writes to one npm package at the same time can fail. The stable-release gate is closed in these cases:
+
+- `main` has no pending changesets. The release PR was merged, so a stable publish is due.
+- Another Release run that is not scheduled is queued or running.
+- The GitHub API does not answer.
+
+A closed gate skips that night. It does not fail the run.
+
+A canary creates no commit, git tag, changelog entry, GitHub Release, Python wheel, or downstream site update. The `latest` tag does not move, and Post-release updates skips scheduled runs. Canary runs use their own concurrency group, so they never cancel a queued release-PR update. Canaries post nothing to Slack, whether they publish, skip, or fail. A failed canary shows only as a failed Release run in GitHub Actions.
+
+Canaries publish from `release.yml`, because npm allows one Trusted Publisher per package. They need no additional npm or GitHub configuration. If you restrict a Trusted Publisher to a GitHub environment, the **Canary** job must use the same environment.
+
+The snapshot settings live in `.changeset/config.json` under `snapshot`. The suffix prefixes the commit with `sha-`, because an all-digit short hash with a leading zero is not a valid version identifier.
+
+After a stable release, `canary` keeps pointing at the last prerelease until the next changeset lands on `main`. Install `latest` to get the release.
 
 ## Configure release automation
 
