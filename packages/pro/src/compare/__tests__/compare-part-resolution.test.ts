@@ -77,6 +77,8 @@ test('a new relationship is recorded in an empty relationships part', () => {
   const rels = (inner: string) =>
     '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"' +
     (inner ? `>${inner}</Relationships>` : '/>');
+  // A target with a quote has no field form, so the inserted link keeps its own element and
+  // needs a relationship of the header.
   const link =
     '<w:p><w:hyperlink xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
     'r:id="rIdL1"><w:r><w:t>Visit</w:t></w:r></w:hyperlink></w:p>';
@@ -90,7 +92,7 @@ test('a new relationship is recorded in an empty relationships part', () => {
     }),
     (files) => {
       files['word/_rels/header1.xml.rels'] = rels(
-        '<Relationship Id="rIdL1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/" TargetMode="External"/>'
+        '<Relationship Id="rIdL1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/?q=&quot;x&quot;" TargetMode="External"/>'
       );
     }
   );

@@ -45,14 +45,15 @@ test('a replaced image is inserted with the revised bytes', () => {
 test('a changed link target is inserted with the revised address', () => {
   const { files } = compared('fields', 'hyperlink-target');
   const document = strFromU8(files['word/document.xml']!);
-  const rels = strFromU8(files['word/_rels/document.xml.rels']!);
-  const ids = [...document.matchAll(/<w:hyperlink\b[^>]*\bid="([^"]+)"/g)].map(
-    (match) => match[1]!
+  // Each whole link is a hyperlink field inside its revision: no link element stays behind
+  // empty when the revision is accepted or rejected.
+  expect(document).not.toContain('<w:hyperlink');
+  expect(document).toMatch(
+    /<w:ins\b[^>]*>(?:(?!<\/w:ins>).)*<w:instrText[^>]*> HYPERLINK &quot;https:\/\/example\.com\/b&quot; </s
   );
-  const targets = ids.map((id) => relationshipTarget(rels, id));
-  expect(targets).toContain('https://example.com/a');
-  expect(targets).toContain('https://example.com/b');
-  expect(rels).toContain('TargetMode="External"');
+  expect(document).toMatch(
+    /<w:del\b[^>]*>(?:(?!<\/w:del>).)*<w:delInstrText[^>]*> HYPERLINK &quot;https:\/\/example\.com\/a&quot; </s
+  );
 });
 
 test('an image added to a header is copied with a relationship of that header', () => {

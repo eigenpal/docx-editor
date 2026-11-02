@@ -41,6 +41,17 @@ export interface Wrapper {
   readonly key: string;
   readonly start: string;
   readonly end: string;
+  /**
+   * The field instruction that expresses this wrapper (a hyperlink or a simple field), so a
+   * wrapper whose whole content is inserted or deleted can be written as a field inside the
+   * revision. A shell left outside the revision would stay, empty, after accept or reject.
+   */
+  readonly field?: string;
+}
+
+/** A complex field (`w:fldChar` begin to end) that atoms sit in; `instr` grows as it is read. */
+export interface FieldContext {
+  instr: string;
 }
 
 export interface Atom {
@@ -64,6 +75,8 @@ export interface Atom {
   readonly node?: ElementNode;
   /** A paragraph-level element (math, unknown extensions): written outside any run. */
   readonly outsideRun?: true;
+  /** The complex fields this atom sits in, outermost first (field characters included). */
+  readonly fields?: readonly FieldContext[];
 }
 
 export interface ParagraphUnit {
@@ -207,6 +220,12 @@ export class SideContext {
       this.#mediaKeys.set(id, key);
     }
     return key;
+  }
+
+  /** The target of an external relationship, or undefined. */
+  externalTarget(id: string): string | undefined {
+    const rel = this.#rels.get(id);
+    return rel?.external ? rel.target : undefined;
   }
 
   /** Serialized node, with relationship ids as written. */
@@ -399,6 +418,25 @@ function plainText(node: OoxmlNode): string {
 interface WalkState {
   readonly atoms: Atom[];
   pending: string[];
+  /** Open complex fields of the paragraph, and a shared copy for the atoms inside them. */
+  readonly fieldStack: FieldContext[];
+  fields: readonly FieldContext[] | undefined;
+}
+
+const W_MAIN = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+/** Opens and closes complex fields around `push`, which adds the field character's atom. */
+function trackFieldChar(node: ElementNode, state: WalkState, push: () => void): void {
+  const type = attributeOf(node, 'fldCharType', W_MAIN);
+  if (type === 'begin') {
+    state.fieldStack.push({ instr: '' });
+    state.fields = [...state.fieldStack];
+  }
+  push();
+  if (type === 'end' && state.fieldStack.length > 0) {
+    state.fieldStack.pop();
+    state.fields = state.fieldStack.length > 0 ? [...state.fieldStack] : undefined;
+  }
 }
 
 export function paragraphUnit(node: ElementNode, side: SideContext): ParagraphUnit {
@@ -411,7 +449,7 @@ export function paragraphUnit(node: ElementNode, side: SideContext): ParagraphUn
     else if (child.localName === 'sectPr') sectPr = child;
     else if (child.localName !== 'pPrChange') pPr.push(side.serialize(child));
   }
-  const state: WalkState = { atoms: [], pending: [] };
+  const state: WalkState = { atoms: [], pending: [], fieldStack: [], fields: undefined };
   for (const child of node.children) {
     if (isElement(child) && child.localName !== 'pPr') walkInline(child, side, [], state);
   }
@@ -471,9 +509,25 @@ function walkInline(
   if (WRAPPERS.has(name)) {
     const wrapper = wrapperOf(node, side);
     const content = name === 'sdt' ? childNamed(node, 'sdtContent') : node;
+    const before = state.atoms.length;
     for (const child of content ? elementChildren(content) : []) {
       if (WRAPPER_PROPERTIES[name]?.has(child.localName)) continue;
       walkInline(child, side, [...wrappers, wrapper], state);
+    }
+    // An empty wrapper is still content (a simple field with no result shows its value): one
+    // atom with nothing of its own keeps it in the output and lets it compare.
+    if (state.atoms.length === before) {
+      state.atoms.push({
+        kind: 'object',
+        text: OBJECT_TEXT,
+        xml: '',
+        delXml: '',
+        key: 'empty',
+        rPr: '',
+        wrappers: [...wrappers, wrapper],
+        markers: takePending(state),
+        ...(state.fields ? { fields: state.fields } : {}),
+      });
     }
     return;
   }
@@ -509,7 +563,48 @@ function wrapperOf(node: ElementNode, side: SideContext): Wrapper {
   }
   const rid = attributeOf(node, 'id', R_NS);
   const key = `${name}|${rid ? side.relKey(rid) : ''}|${side.keyOf(start)}`;
-  return { key, start: side.remap(start), end };
+  const field = fieldInstruction(node, side, rid);
+  return { key, start: side.remap(start), end, ...(field === undefined ? {} : { field }) };
+}
+
+/** A field argument in quotes; undefined when the value cannot be quoted. */
+const quoted = (value: string) => (/["\\]/.test(value) ? undefined : `"${value}"`);
+
+/**
+ * The field instruction equal to a hyperlink or a simple field: `HYPERLINK "target" \l "anchor"`,
+ * or the simple field's own instruction. Undefined when there is none (an internal link target,
+ * a field with field data), and then the wrapper keeps its own form.
+ */
+function fieldInstruction(
+  node: ElementNode,
+  side: SideContext,
+  rid: string | undefined
+): string | undefined {
+  if (node.localName === 'fldSimple') {
+    if (childNamed(node, 'fldData')) return undefined;
+    const instr = attributeOf(node, 'instr', W_MAIN);
+    return instr && instr.trim() !== '' ? instr : undefined;
+  }
+  if (node.localName !== 'hyperlink') return undefined;
+  const parts = ['HYPERLINK'];
+  if (rid) {
+    const target = side.externalTarget(rid);
+    const value = target === undefined ? undefined : quoted(target);
+    if (value === undefined) return undefined;
+    parts.push(value);
+  }
+  for (const [attribute, switchName] of [
+    ['anchor', 'l'],
+    ['tooltip', 'o'],
+    ['tgtFrame', 't'],
+  ] as const) {
+    const raw = attributeOf(node, attribute, W_MAIN);
+    if (raw === undefined) continue;
+    const value = quoted(raw);
+    if (value === undefined) return undefined;
+    parts.push(`\\${switchName} ${value}`);
+  }
+  return parts.length > 1 ? ` ${parts.join(' ')} ` : undefined;
 }
 
 function runAtoms(
@@ -539,6 +634,7 @@ function runAtoms(
             rPr,
             wrappers,
             markers: takePending(state),
+            ...(state.fields ? { fields: state.fields } : {}),
           });
         }
         break;
@@ -547,6 +643,18 @@ function runAtoms(
         // A comment's reference run is a range marker, not compared content.
         const reference = `<w:r>${rPr ? `<w:rPr>${rPr}</w:rPr>` : ''}${side.serialize(child)}</w:r>`;
         state.pending.push(side.name === 'base' ? reference : revisedCommentMarker(reference));
+        break;
+      }
+      case 'fldChar':
+        trackFieldChar(child, state, () => pushObject(child, rPr, side, wrappers, state));
+        break;
+      case 'instrText': {
+        const top = state.fieldStack[state.fieldStack.length - 1];
+        if (top)
+          top.instr += child.children
+            .map((item) => (item.kind === 'textValue' ? item.value : ''))
+            .join('');
+        pushObject(child, rPr, side, wrappers, state);
         break;
       }
       default:
@@ -601,6 +709,7 @@ function pushObject(
     ...(noteKind && noteId !== undefined ? { note: { kind: noteKind, id: noteId } } : {}),
     ...(boxes ? { node } : {}),
     ...(outsideRun ? { outsideRun: true as const } : {}),
+    ...(state.fields ? { fields: state.fields } : {}),
   });
 }
 

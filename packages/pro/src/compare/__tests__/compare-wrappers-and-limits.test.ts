@@ -44,10 +44,13 @@ test('a link that starts inside a word comes back on reject', () => {
       `${run('bar')}</w:hyperlink>${run(' now')}</w:p>`,
   });
   const plain = docx(`<w:p>${run('Click foo')}${run('bar')}${run(' now')}</w:p>`);
+  // The deleted link is written as a hyperlink field inside the deletion, so reject restores it.
   expect(resolved(compared(linked, plain), 'rejectAllRevisions')).toMatch(
-    /<w:hyperlink\b[^>]*>.*bar.*<\/w:hyperlink>/s
+    /HYPERLINK \\l &quot;target&quot;.*fldCharType="separate".*bar.*fldCharType="end"/s
   );
-  expect(resolved(compared(plain, linked), 'rejectAllRevisions')).not.toContain('<w:hyperlink');
+  const rejected = resolved(compared(plain, linked), 'rejectAllRevisions');
+  expect(rejected).not.toContain('<w:hyperlink');
+  expect(rejected).not.toContain('HYPERLINK');
 });
 
 test('content controls with other properties are refused', () => {

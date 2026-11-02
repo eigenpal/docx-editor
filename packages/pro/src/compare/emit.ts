@@ -9,6 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { sectionRecord } from './section-record.ts';
 import {
   MARK,
+  OBJECT_TEXT,
   placeholderValue,
   type Atom,
   type ParagraphUnit,
@@ -119,8 +120,81 @@ export class EmitContext {
 const sameWrappers = (a: readonly Wrapper[], b: readonly Wrapper[]) =>
   a.length === b.length && a.every((wrapper, i) => wrapper.key === b[i]!.key);
 
+/**
+ * Items with each hyperlink or simple field whose whole content carries one revision mark
+ * rewritten as a complex field inside that revision. Its own element would sit outside the
+ * revision and stay, empty, after the revision is rejected (an insertion) or accepted (a
+ * deletion); a field's characters go with its content.
+ */
+function withFieldForms(items: readonly Item[]): Item[] {
+  const out: Item[] = [];
+  let i = 0;
+  while (i < items.length) {
+    const item = items[i]!;
+    const depth = item.atom.wrappers.findIndex((wrapper) => wrapper.field !== undefined);
+    if (depth < 0 || item.mark === 'eq') {
+      out.push(item);
+      i++;
+      continue;
+    }
+    const wrapper = item.atom.wrappers[depth]!;
+    let j = i + 1;
+    while (j < items.length && items[j]!.atom.wrappers[depth] === wrapper) j++;
+    const whole =
+      (i === 0 || items[i - 1]!.atom.wrappers[depth] !== wrapper) &&
+      items.slice(i, j).every((other) => other.mark === item.mark);
+    if (!whole) {
+      out.push(...items.slice(i, j));
+      i = j;
+      continue;
+    }
+    const outer = item.atom.wrappers.slice(0, depth);
+    const synthetic = (xml: string, delXml: string, markers: readonly string[] = []): Item => ({
+      mark: item.mark,
+      baseRPr: '',
+      markers,
+      atom: {
+        kind: 'object',
+        text: OBJECT_TEXT,
+        xml,
+        delXml,
+        key: '',
+        rPr: '',
+        wrappers: outer,
+        markers,
+      },
+    });
+    const fldChar = (type: string) => {
+      const xml = `<w:fldChar w:fldCharType="${type}"/>`;
+      return synthetic(xml, xml);
+    };
+    const instr = escapeText(wrapper.field!);
+    const inner = items.slice(i, j).map((other, k) => ({
+      ...other,
+      markers: k === 0 ? [] : other.markers,
+      atom: {
+        ...other.atom,
+        wrappers: [...outer, ...other.atom.wrappers.slice(depth + 1)],
+      },
+    }));
+    out.push(
+      { ...fldChar('begin'), markers: item.markers },
+      synthetic(
+        `<w:instrText xml:space="preserve">${instr}</w:instrText>`,
+        `<w:delInstrText xml:space="preserve">${instr}</w:delInstrText>`
+      ),
+      fldChar('separate'),
+      ...withFieldForms(inner),
+      fldChar('end')
+    );
+    i = j;
+  }
+  return out;
+}
+
 /** Paragraph content (everything after `w:pPr`) for a list of items. */
-export function emitContent(items: readonly Item[], ctx: EmitContext): string {
+export function emitContent(source: readonly Item[], ctx: EmitContext): string {
+  const items = source.some((item) => item.mark !== 'eq') ? withFieldForms(source) : source;
   let out = '';
   const open: Wrapper[] = [];
   let openMark: Mark = 'eq';

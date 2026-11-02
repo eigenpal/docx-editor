@@ -21,6 +21,7 @@ import {
   readOoxmlPart,
   resolveHeaderFooterResolutionBySection,
   serializeOoxmlPart,
+  type OoxmlNode,
   type OoxmlPackage,
   type OoxmlPart,
   type ParagraphDigest,
@@ -81,11 +82,150 @@ const isNotesPart = (part: OoxmlPart) =>
   part.root.localName === 'footnotes' || part.root.localName === 'endnotes';
 
 /** Paragraph text (and, at the properties level, paragraph properties) per story, sorted. */
+const W_MAIN = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+/**
+ * One field instruction, in a form that a hyperlink element and its field share: the link
+ * target is a relationship on one and text on the other, so only the anchor takes part.
+ */
+function normalInstruction(instr: string): string {
+  const text = instr.replace(/\s+/g, ' ').trim();
+  if (!/^HYPERLINK\b/i.test(text)) return text;
+  const anchor = /\\l\s+"([^"]*)"/.exec(text);
+  return anchor ? `HYPERLINK \\l ${anchor[1]}` : 'HYPERLINK';
+}
+
+/**
+ * The part without field codes, and its field instructions in document order. Field codes are
+ * not text a reader sees; a hyperlink or simple field and the same field written with field
+ * characters compare as equal, and any instruction difference still shows.
+ */
+const fieldFree = new WeakMap<OoxmlPart, { part: OoxmlPart; fields: string }>();
+
+function withoutFieldCodes(part: OoxmlPart): { part: OoxmlPart; fields: string } {
+  let known = fieldFree.get(part);
+  if (!known) fieldFree.set(part, (known = fieldCodesRemoved(part)));
+  return known;
+}
+
+function fieldCodesRemoved(part: OoxmlPart): { part: OoxmlPart; fields: string } {
+  const fields: string[] = [];
+  const open: { instr: string; index: number }[] = [];
+  let untyped = false;
+  const walk = (node: ElementNode, paragraph: ElementNode | null, control = false): ElementNode => {
+    const name = node.localName;
+    const inParagraph = name === 'p' ? node : paragraph;
+    // A content control's content is digested from its typed tree: change it by a re-read.
+    const inControl = control || name === 'sdt';
+    if (name === 'hyperlink') {
+      const anchor = attributeOf(node, 'anchor', W_MAIN);
+      fields.push(anchor === undefined ? 'HYPERLINK' : `HYPERLINK \\l ${anchor}`);
+    } else if (name === 'fldChar') {
+      const type = attributeOf(node, 'fldCharType', W_MAIN);
+      if (type === 'begin') {
+        open.push({ instr: '', index: fields.length });
+        fields.push('');
+      } else if (type === 'end') {
+        const field = open.pop();
+        if (field) fields[field.index] = normalInstruction(field.instr);
+      }
+    }
+    let changed = false;
+    const children: OoxmlNode[] = [];
+    for (const child of node.children) {
+      if (!isElement(child)) {
+        children.push(child);
+        continue;
+      }
+      if (child.localName === 'instrText' || child.localName === 'delInstrText') {
+        const top = open[open.length - 1];
+        if (top)
+          top.instr += child.children.map((item) => (isElement(item) ? '' : item.value)).join('');
+        changed = true;
+        continue;
+      }
+      if (child.localName === 'fldSimple') {
+        // A simple field shows its result like a field with field characters does.
+        fields.push(normalInstruction(attributeOf(child, 'instr', W_MAIN) ?? ''));
+        const inner = elementChildren(child)
+          .filter((item) => item.localName !== 'fldData')
+          .map((item) => walk(item, inParagraph, inControl));
+        // Content under a simple field is read untyped; type it, so its runs show their text.
+        const typed = inParagraph && !inControl ? typedContent(part, inParagraph, inner) : null;
+        if (typed) children.push(...typed);
+        else {
+          children.push(...inner);
+          untyped = true;
+        }
+        changed = true;
+        continue;
+      }
+      const next = walk(child, inParagraph, inControl);
+      if (next !== child) changed = true;
+      children.push(next);
+    }
+    return changed ? ({ ...node, children } as ElementNode) : node;
+  };
+  if (!isElement(part.root)) return { part, fields: '' };
+  const root = walk(part.root, null);
+  if (root === part.root) return { part, fields: oneEntryPerLink(fields) };
+  const changed = { ...part, root } as OoxmlPart;
+  if (!untyped) return { part: changed, fields: oneEntryPerLink(fields) };
+  // Re-read, so the typed tree the digest reads holds the changed content.
+  const reread = readOoxmlPart(serializeOoxmlPart(changed), {
+    name: part.name,
+    contentType: part.contentType,
+  });
+  return { part: reread.ok ? reread.part : changed, fields: oneEntryPerLink(fields) };
+}
+
+/**
+ * Inline content as the reader types it inside a paragraph: `content` is serialized in a copy
+ * of `paragraph` (which keeps its namespace scope) within the part's root, and read back.
+ */
+function typedContent(
+  part: OoxmlPart,
+  paragraph: ElementNode,
+  content: readonly ElementNode[]
+): readonly OoxmlNode[] | null {
+  if (!isElement(part.root)) return null;
+  const p = { ...paragraph, children: content } as ElementNode;
+  const body = elementChildren(part.root).find((child) => child.localName === 'body');
+  const holder = body ? [{ ...body, children: [p] } as ElementNode] : [p];
+  const fragment = readOoxmlPart(
+    serializeOoxmlPart({ ...part, root: { ...part.root, children: holder } } as OoxmlPart),
+    { name: part.name, contentType: part.contentType }
+  );
+  if (!fragment.ok || !isElement(fragment.part.root)) return null;
+  const top = elementChildren(fragment.part.root)[0];
+  const read = top?.localName === 'body' ? elementChildren(top)[0] : top;
+  return read?.localName === 'p' ? read.children.filter((child) => isElement(child)) : null;
+}
+
+/**
+ * A link split in pieces around a revision (or around a field inside it) is still one link:
+ * a piece repeats the previous link entry when no other link comes between them.
+ */
+function oneEntryPerLink(fields: readonly string[]): string {
+  let lastLink = '';
+  const out: string[] = [];
+  for (const field of fields) {
+    if (field.startsWith('HYPERLINK')) {
+      if (field === lastLink) continue;
+      lastLink = field;
+    }
+    out.push(field);
+  }
+  return out.join('|');
+}
+
 function fingerprint(list: readonly OoxmlPart[], level: Level): string {
   const stories: string[] = [];
   const referenced = referencedNotes(list);
   for (const story of list) {
-    const part = isNotesPart(story) ? referencedOnly(story, referenced) : story;
+    const { part, fields } = withoutFieldCodes(
+      isNotesPart(story) ? referencedOnly(story, referenced) : story
+    );
     const digest = digestPart(part);
     if (!digest) continue;
     // Empty paragraphs carry no text. A note whose reference was rejected (or accepted away)
@@ -97,7 +237,7 @@ function fingerprint(list: readonly OoxmlPart[], level: Level): string {
       .map((paragraph) => paragraphFingerprint(paragraph, level));
     // Empty stories carry no content (a deleted header, a notes part with only separators).
     if (digest.paragraphs.every((paragraph) => paragraph.text.trim() === '')) continue;
-    stories.push(paragraphs.join('\n'));
+    stories.push(`${paragraphs.join('\n')}${fields ? `\n\u0002${fields}` : ''}`);
   }
   return stories.sort().join('\n\n');
 }

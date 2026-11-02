@@ -133,10 +133,12 @@ function tokenKey(atoms: readonly Atom[], from: number, to: number): string {
     // Every link or field boundary inside a word is part of the word: one that starts or ends
     // mid-word makes the words differ, so the original's wrapper comes back on reject. Inline
     // content controls do not split words; equal words in different controls are refused.
-    const signature = atom.wrappers
-      .filter((wrapper) => !isControlWrapper(wrapper.key))
-      .map((wrapper) => wrapper.key)
-      .join('\u0003');
+    // Text in a complex field is part of the field: it never equals the same text outside it,
+    // or in a field with another instruction, so the whole field is deleted and inserted.
+    const signature = [
+      ...atom.wrappers.filter((wrapper) => !isControlWrapper(wrapper.key)).map((w) => w.key),
+      ...(atom.fields ?? []).map((field) => `F:${field.instr.trim().replace(/\s+/g, ' ')}`),
+    ].join('\u0003');
     if (i === from ? signature !== '' : signature !== wrappers) key += `\u0002${signature}\u0002`;
     wrappers = signature;
     key += atom.kind === 'char' ? atom.text : `\u0001${atom.key}\u0001`;
