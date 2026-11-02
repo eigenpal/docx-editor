@@ -887,6 +887,11 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         tableWidthTwips: number;
         target: TableRightEdgeResizeTarget;
     };
+    compareDocuments: {
+        authorName?: string;
+        detectFormatChanges?: boolean;
+        revised: Uint8Array;
+    };
     copy: Record<never, never>;
     cut: Record<never, never>;
     // (undocumented)
@@ -932,6 +937,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     navigateReviewChange: {
         direction: 'next' | 'previous';
     };
+    openCompareDocumentsDialog: Record<never, never>;
     openRevisionMarkupDialog: Record<never, never>;
     paste: {
         html?: string;

@@ -3,6 +3,7 @@
     "automation": [
       "CollaborationFailureCode",
       "CollaborationModuleContribution",
+      "CompareDocumentsEngine",
       "DocumentPropertyName",
       "DocumentPropertyWrites",
       "HeaderFooterVariant",
@@ -50,6 +51,7 @@
       "OoxmlPart",
       "OoxmlProperty",
       "OpenTreeSessionOptions",
+      "PackageReplacementResult",
       "ParagraphAnchorIndex",
       "ReplaceImageOptions",
       "ReviewItem",
@@ -81,10 +83,12 @@
       "OoxmlElement"
     ],
     "contracts-modules": [
+      "CompareDocumentsDialogSession",
       "EditorCollaborationSession",
       "EditorDiagnostic",
       "EditorDiagnosticKind",
       "OoxmlElement",
+      "OoxmlPackage",
       "ReviewPaneOptions",
       "RevisionMarkupDialogSession"
     ],
@@ -167,6 +171,7 @@
       "OoxmlElement",
       "OoxmlPackage",
       "OoxmlPart",
+      "PackageReplacementResult",
       "PackageWatermarkWrite",
       "PackageWriteOptions",
       "PaginatedSurfacePerf",
@@ -247,6 +252,7 @@
     "index": [
       "EditorCollaborationSession",
       "OoxmlElement",
+      "OoxmlPackage",
       "OoxmlPart",
       "OpeningIndicatorHost",
       "PaginatedSurface",
@@ -464,6 +470,7 @@
   "@docx-editor.dev/react": {
     "index": [
       "BookmarkDialogRoot",
+      "CompareDocumentsDialogRoot",
       "ContentControlFields",
       "ContentControlHeader",
       "ContentControlRemove",

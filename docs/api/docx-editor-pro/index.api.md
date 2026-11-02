@@ -33,6 +33,37 @@ export interface CollaborationModuleOptions extends ProLicenseOptions {
 export type CommentMarkerStyle = 'initials' | 'icon';
 
 // @public
+export function compareDocuments(original: Uint8Array, revised: Uint8Array, options?: CompareDocumentsOptions): CompareDocumentsResult;
+
+// @public
+export type CompareDocumentsErrorCode =
+/** One of the inputs is not a readable DOCX package. */
+'invalid-original' | 'invalid-revised'
+/** The inputs exceed the engine's size limits. */
+| 'too-large'
+/** The engine could not produce a result that reproduces both inputs. */
+| 'unsupported-content';
+
+// @public
+export interface CompareDocumentsOptions {
+    readonly authorName?: string;
+    readonly date?: Date;
+    readonly detectFormatChanges?: boolean;
+    readonly removeDateAndTime?: boolean;
+}
+
+// @public
+export type CompareDocumentsResult = {
+    readonly bytes: Uint8Array;
+    readonly ok: true;
+    readonly revisionCount: number;
+} | {
+    readonly code: CompareDocumentsErrorCode;
+    readonly message: string;
+    readonly ok: false;
+};
+
+// @public
 export const CUSTOM_NODE_STORE_ROOT = "docxEditor";
 
 // @public

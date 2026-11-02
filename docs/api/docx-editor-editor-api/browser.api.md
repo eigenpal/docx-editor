@@ -12,6 +12,7 @@ import { AutomationStyleRead } from '@docx-editor.dev/core/automation';
 import { AutomationValue } from '@docx-editor.dev/core/automation';
 import { ByteSizeBucket } from '@docx-editor.dev/core/automation';
 import { CollaborationModuleContribution } from '@docx-editor.dev/core/collaboration';
+import { CompareDocumentsEngine } from '@docx-editor.dev/core/editor';
 import { DiagnosticCode } from '@docx-editor.dev/core/automation';
 import { DiagnosticErrorName } from '@docx-editor.dev/core/automation';
 import { DocumentOpenDiagnosticCode } from '@docx-editor.dev/core/automation';
@@ -259,6 +260,16 @@ export interface CommitPreviewOptions {
 }
 
 // @public
+export enum CompareTarget {
+    // (undocumented)
+    compareTargetCurrent = "CompareTargetCurrent",
+    // (undocumented)
+    compareTargetNew = "CompareTargetNew",
+    // (undocumented)
+    compareTargetSelected = "CompareTargetSelected"
+}
+
+// @public
 export class ContentControl extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): ContentControl;
@@ -396,6 +407,8 @@ class Document_2 extends ModelObject {
     get changeTrackingMode(): ChangeTrackingMode | 'Off' | 'TrackAll' | 'TrackMineOnly';
     set changeTrackingMode(mode: ChangeTrackingMode | 'Off' | 'TrackAll' | 'TrackMineOnly');
     get comments(): CommentCollection;
+    compare(filePath: string, documentCompareOptions?: DocumentCompareOptions): void;
+    compareFromBase64(base64File: string, documentCompareOptions?: DocumentCompareOptions): void;
     get contentControls(): ContentControlCollection;
     deleteBookmark(name: string): void;
     get endnotes(): NoteItemCollection;
@@ -426,6 +439,17 @@ export interface DocumentCapabilities {
     readonly save: boolean;
     readonly scrolling: boolean;
     readonly selection: boolean;
+}
+
+// @public
+export interface DocumentCompareOptions {
+    addToRecentFiles?: boolean;
+    authorName?: string;
+    compareTarget?: CompareTarget | 'CompareTargetCurrent' | 'CompareTargetNew' | 'CompareTargetSelected';
+    detectFormatChanges?: boolean;
+    ignoreAllComparisonWarnings?: boolean;
+    removeDateAndTime?: boolean;
+    removePersonalInformation?: boolean;
 }
 
 // @public
@@ -624,6 +648,9 @@ export interface EditorModule {
     // (undocumented)
     readonly id: string;
     readonly onDiagnostic?: (event: RuntimeDiagnostic) => void;
+    readonly review?: {
+        readonly compareDocuments?: CompareDocumentsEngine;
+    };
 }
 
 // @public

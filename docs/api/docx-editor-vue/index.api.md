@@ -28,6 +28,10 @@ import { ClearAnchorHighlightOptions } from '@docx-editor.dev/core/contracts/edi
 import { ClearRefreshHighlightsOptions } from '@docx-editor.dev/core/editor';
 import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsChromeHandlers } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsDialogSession } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsOutcome } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsRequest } from '@docx-editor.dev/core/editor';
 import { Component } from 'vue';
 import { ComponentCustomProps } from 'vue';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
@@ -241,6 +245,23 @@ export { ClearAnchorHighlightOptions }
 export { ClearRefreshHighlightsOptions }
 
 export { commandForSlot }
+
+export { CompareDocumentsChromeHandlers }
+
+export { CompareDocumentsDialogSession }
+
+// @public
+export interface CompareDocumentsDialogValues {
+    // (undocumented)
+    readonly authorName: string;
+    // (undocumented)
+    readonly detectFormatChanges: boolean;
+    readonly revised: File | null;
+}
+
+export { CompareDocumentsOutcome }
+
+export { CompareDocumentsRequest }
 
 export { composeFontConfiguration }
 
@@ -2804,6 +2825,76 @@ export type DocxEditorChildren = VNode;
 // @public (undocumented)
 export const DocxEditorColorByChangeType: vue.DefineComponent<{}, () => null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
+// @public
+export const DocxEditorCompareDocumentsDialog: {
+    new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
+        children: PropType<DocxEditorChildren>;
+        className: StringConstructor;
+        preset: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        session: {
+            default: null;
+            type: PropType<CompareDocumentsDialogSession | null>;
+        };
+        style: PropType<CSSProperties>;
+    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        preset: boolean;
+        session: CompareDocumentsDialogSession | null;
+    }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
+        B: {};
+        C: {};
+        D: {};
+        Defaults: {};
+        M: {};
+        P: {};
+    }, Readonly<vue.ExtractPropTypes<{
+        children: PropType<DocxEditorChildren>;
+        className: StringConstructor;
+        preset: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        session: {
+            default: null;
+            type: PropType<CompareDocumentsDialogSession | null>;
+        };
+        style: PropType<CSSProperties>;
+    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        preset: boolean;
+        session: CompareDocumentsDialogSession | null;
+    }>;
+    __isFragment?: never;
+    __isTeleport?: never;
+    __isSuspense?: never;
+} & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
+    children: PropType<DocxEditorChildren>;
+    className: StringConstructor;
+    preset: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
+    session: {
+        default: null;
+        type: PropType<CompareDocumentsDialogSession | null>;
+    };
+    style: PropType<CSSProperties>;
+}>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    preset: boolean;
+    session: CompareDocumentsDialogSession | null;
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Apply" | "Body" | "Cancel" | "Error" | "Footer" | "Header" | "Reset" | "Title", vue.DefineComponent<DialogPartProps>> & {
+    Field: vue.DefineComponent<DialogPartProps & {
+        name: keyof CompareDocumentsDialogValues;
+    }>;
+};
+
+// @public
+export interface DocxEditorCompareDocumentsDialogProps extends DialogCustomizationProps {
+    // (undocumented)
+    session: CompareDocumentsDialogSession | null;
+}
+
 // @public (undocumented)
 export const DocxEditorContent: vue.DefineComponent<vue.ExtractPropTypes<{
     class: {
@@ -3652,6 +3743,8 @@ export interface DocxEditorNamespace {
     // (undocumented)
     readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
     // (undocumented)
+    readonly CompareDocumentsDialog: typeof DocxEditorCompareDocumentsDialog;
+    // (undocumented)
     readonly Content: typeof DocxEditorContent;
     // (undocumented)
     readonly ContentControl: typeof DocxEditorContentControl;
@@ -4316,6 +4409,7 @@ export type DocxEditorPopup<P extends object> = false | ((props: P) => DocxEdito
 // @public
 export interface DocxEditorPopups {
     bookmark?: DocxEditorPopup<DocxEditorBookmarkDialogProps>;
+    compareDocuments?: DocxEditorPopup<DocxEditorCompareDocumentsDialogProps>;
     // (undocumented)
     contentControl?: DocxEditorPopup<ContentControlProps>;
     contentControlCheckbox?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
@@ -7759,6 +7853,14 @@ export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): Com
 
 // @public
 export function useCommentDraftRequest(handler: (() => void) | null | undefined): void;
+
+// @public
+export function useCompareDocumentsDialog(): UseCompareDocumentsDialogReturn;
+
+// @public
+export interface UseCompareDocumentsDialogReturn extends UseDialogReturn<CompareDocumentsDialogValues> {
+    readonly busy: Readonly<Ref<boolean>>;
+}
 
 // @public (undocumented)
 export function useContentControl(): UseContentControlResult;
