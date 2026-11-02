@@ -69,10 +69,38 @@ export function relatedPart(pkg: OoxmlPackage, kind: RelatedPartKind): OoxmlPart
   }
 }
 
-/** `wanted`, or `wanted` numbered (`styles2.xml`), whichever no part of `pkg` holds. */
+const targetNames = new WeakMap<OoxmlPackage, ReadonlySet<string>>();
+
+/**
+ * Every part name an internal relationship of `pkg` resolves to, lowercased, whether or not the
+ * part exists. A new part never takes one, so a broken reference stays broken.
+ */
+export function relationshipTargets(pkg: OoxmlPackage): ReadonlySet<string> {
+  let names = targetNames.get(pkg);
+  if (names) return names;
+  const out = new Set<string>();
+  for (const records of pkg.relationships.values()) {
+    for (const record of records) {
+      const resolved = resolveRelationship(record);
+      if (resolved.mode === 'Internal' && resolved.target.ok)
+        out.add(resolved.target.partName.toLowerCase());
+    }
+  }
+  targetNames.set(pkg, (names = out));
+  return names;
+}
+
+/**
+ * `wanted`, or `wanted` numbered (`styles2.xml`), whichever no part of `pkg` holds and no
+ * relationship of `pkg` points at.
+ */
 export function freePartName(pkg: OoxmlPackage, wanted: string): string {
+  const targets = relationshipTargets(pkg);
   const taken = (name: string) =>
-    pkg.parts.has(name) || pkg.partBytes.has(name) || pkg.partBytes.has(name.slice(1));
+    pkg.parts.has(name) ||
+    pkg.partBytes.has(name) ||
+    pkg.partBytes.has(name.slice(1)) ||
+    targets.has(name.toLowerCase());
   if (!taken(wanted)) return wanted;
   for (let n = 2; ; n++) {
     const name = wanted.replace(/\.xml$/, `${n}.xml`);

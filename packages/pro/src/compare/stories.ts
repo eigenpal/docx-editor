@@ -416,7 +416,14 @@ export function compareNotes(
           id === own ? xml : xml.replace(/^(<[^>]*?\bw:id=")[^"]*"/, (_, head) => `${head}${id}"`);
       }
     }
-    const nextId = freeIds([...baseNotes.keys(), ...copiedSeparators, ...baseReferences]);
+    // A new id never takes one a reference in either document names without a note: those
+    // references keep their own id and must keep resolving to nothing.
+    const nextId = freeIds([
+      ...baseNotes.keys(),
+      ...copiedSeparators,
+      ...baseReferences,
+      ...referencedIds(revisedPkg, new Set([`${kind}Reference`]), 'id'),
+    ]);
     for (const revisedId of added) {
       const note = revisedNotes.get(revisedId);
       if (!note || ids.has(revisedId)) continue;

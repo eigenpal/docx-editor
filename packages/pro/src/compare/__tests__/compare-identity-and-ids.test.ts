@@ -7,8 +7,19 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // attributes take part, ids with any characters survive assembly, and list merges stay linear.
 import { expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import { buildDocx } from '../../../../../scripts/compare-corpus/docx-builder.ts';
-import { commented, inlineImage, p, r } from '../../../../../scripts/compare-corpus/xml.ts';
+import {
+  buildDocx,
+  DEFAULT_NUMBERING,
+  solidPng,
+} from '../../../../../scripts/compare-corpus/docx-builder.ts';
+import {
+  commented,
+  footnoteRef,
+  inlineImage,
+  listPr,
+  p,
+  r,
+} from '../../../../../scripts/compare-corpus/xml.ts';
 import { compareDocuments } from '../index.ts';
 
 const DATE = new Date('2026-01-10T12:00:00Z');
@@ -17,9 +28,9 @@ function compared(base: Uint8Array, revised: Uint8Array) {
   const result = compareDocuments(base, revised, { authorName: 'Test', date: DATE });
   if (!result.ok) throw new Error(result.message);
   const files: Record<string, string> = {};
-  for (const [name, bytes] of Object.entries(unzipSync(result.bytes)))
-    if (!name.includes('media/')) files[name] = strFromU8(bytes);
-  return { revisions: result.revisionCount, files };
+  const entries = Object.entries(unzipSync(result.bytes));
+  for (const [name, bytes] of entries) if (!name.includes('media/')) files[name] = strFromU8(bytes);
+  return { revisions: result.revisionCount, files, names: entries.map(([name]) => name) };
 }
 
 /** Two different payloads of one length with the same 32-bit FNV-1a hash. */
@@ -98,6 +109,68 @@ test('many list instances sharing one definition merge in linear time', () => {
   });
   expect(result.ok ? '' : result.code).toBe('too-large');
 }, 60_000);
+
+test('a revised list reference without a list never takes a copied list id', () => {
+  // Revised list 2 uses another definition than the original's, so it is copied under a new id.
+  const numbering = DEFAULT_NUMBERING.replace(
+    '<w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>',
+    '<w:num w:numId="2"><w:abstractNumId w:val="2"/></w:num>'
+  );
+  const { files } = compared(
+    buildDocx({ body: p('Intro') + p('Plain') }),
+    buildDocx({ body: p('Intro') + p('Item', listPr(2)) + p('Plain', listPr(5)), numbering })
+  );
+  const defined = [...files['word/numbering.xml']!.matchAll(/<w:num\b[^>]*w:numId="(\d+)"/g)];
+  expect(defined.map((m) => m[1])).not.toContain('5');
+  expect(files['word/document.xml']).toContain('w:numId w:val="5"');
+});
+
+test('a revised note reference without a note never takes a copied note id', () => {
+  const notes: Record<number, string> = {};
+  let refs = '';
+  for (let i = 1; i <= 6; i++) {
+    notes[i] = `Note ${i}`;
+    refs += r(` t${i}`) + footnoteRef(i);
+  }
+  const { files } = compared(
+    buildDocx({ body: `<w:p>${refs}</w:p>${p('End')}`, footnotes: notes }),
+    buildDocx({
+      body: `<w:p>${refs}${r(' new')}${footnoteRef(8)}${r(' gone')}${footnoteRef(7)}</w:p>${p('End')}`,
+      footnotes: { ...notes, 8: 'Brand new note' },
+    })
+  );
+  const refIds = [...files['word/document.xml']!.matchAll(/footnoteReference w:id="([^"]+)"/g)];
+  const noteIds = [...files['word/footnotes.xml']!.matchAll(/<w:footnote\b[^>]*w:id="([^"]+)"/g)];
+  expect(new Set(refIds.map((m) => m[1])).size).toBe(refIds.length);
+  expect(noteIds.map((m) => m[1])).not.toContain('7');
+});
+
+test('relationships the original names but lacks stay missing', () => {
+  const image = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
+  const png = solidPng(4, 4, [255, 0, 0]);
+  const revisedPicture = `<w:p>${inlineImage('rImg', 2)}</w:p>`;
+  const media = [{ name: 'red.png', bytes: png, rId: 'rImg' }];
+  // A picture naming an id no relationship defines.
+  const missingId = `<w:p>${inlineImage('rIdCmp1', 1)}</w:p>`;
+  const out = compared(
+    buildDocx({ body: p('Intro') + missingId }),
+    buildDocx({ body: p('Intro') + missingId + revisedPicture, media })
+  ).files;
+  expect(out['word/_rels/document.xml.rels']).not.toContain('Id="rIdCmp1"');
+  // A relationship whose target part is missing.
+  const files = unzipSync(
+    buildDocx({ body: p('Intro') + `<w:p>${inlineImage('rBroken', 1)}</w:p>` })
+  );
+  files['word/_rels/document.xml.rels'] = strToU8(
+    strFromU8(files['word/_rels/document.xml.rels']!).replace(
+      '</Relationships>',
+      `<Relationship Id="rBroken" Type="${image}" Target="media/compare1.png"/></Relationships>`
+    )
+  );
+  const result = compared(zipSync(files), buildDocx({ body: p('Intro') + revisedPicture, media }));
+  expect(result.names).not.toContain('word/media/compare1.png');
+  expect(result.files['word/_rels/document.xml.rels']).toContain('Target="media/compare1.png"');
+});
 
 /** A built document with every `token` in its main story, relationships, and comments replaced. */
 function withRaw(bytes: Uint8Array, token: string, raw: string): Uint8Array {

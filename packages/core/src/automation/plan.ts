@@ -177,6 +177,11 @@ const APPLIED: AutomationValue = Object.freeze({ kind: 'applied' as const });
 /** Planning state remains separate for each story and scoped body. */
 interface StoryPlan {
   externalCreatedCount: number;
+  /**
+   * Set when a command replaces the whole package (a compare). Its new paragraphs bind to no
+   * slot, so settling does not count them. Such a command commits alone.
+   */
+  wholesale: boolean;
   readonly reads: AutomationStoryReads;
   /** The symbolic story order: bound slots for paragraphs that exist, unbound for created ones. */
   readonly order: Slot[];
@@ -219,6 +224,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     });
     const fresh: StoryPlan = {
       externalCreatedCount: 0,
+      wholesale: false,
       reads,
       order,
       slotById,
@@ -1617,7 +1623,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           reads: packageReads,
           engine: host.compareDocuments,
           collaborative: host.collaborative ?? false,
-          pin: () => pinWrite(planFor(packageReads.body!)),
+          pin: () => {
+            const plan = planFor(packageReads.body!);
+            const refusal = pinWrite(plan);
+            if (!refusal) plan.wholesale = true;
+            return refusal;
+          },
         });
       case 'removeDocumentInformation':
       case 'getDocumentProperty':
@@ -2872,7 +2883,10 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         }
         const before = new Set(pinned.reads.paragraphIds);
         const fresh = after.paragraphIds.filter((id) => !before.has(id));
-        if (fresh.length !== pinned.created.length + pinned.externalCreatedCount) {
+        if (
+          !pinned.wholesale &&
+          fresh.length !== pinned.created.length + pinned.externalCreatedCount
+        ) {
           return {
             ok: false,
             detail: `planned ${String(pinned.created.length + pinned.externalCreatedCount)} new paragraphs, the transaction made ${String(fresh.length)}`,

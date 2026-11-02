@@ -297,12 +297,13 @@ function mergeNumbering(
     ...ours.abstracts.keys(),
     ...referencedIds(base, DEFINITION_REFERENCES),
   ]);
-  // A new id never takes one the original names without defining it: those paragraphs number
-  // nothing and must keep numbering nothing.
+  // A new id never takes one either document names without defining it: those paragraphs
+  // number nothing and must keep numbering nothing.
   const nextNum = freeIds([
     ...ours.nums.keys(),
     ...theirs.nums.keys(),
     ...referencedIds(base, LIST_REFERENCES),
+    ...referencedIds(revised, LIST_REFERENCES),
   ]);
   let abstracts = '';
   let nums = '';

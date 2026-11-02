@@ -75,6 +75,39 @@ test('server compare writes the differences as tracked revisions by the given au
   }
 });
 
+test('compare syncs when it inserts or deletes whole paragraphs', async () => {
+  const cases: [string, Uint8Array, string][] = [
+    [
+      'insert',
+      docx(p('New first.') + p('The quick brown fox jumps.') + p('Second paragraph stays.')),
+      'New first.',
+    ],
+    ['delete', docx(p('Second paragraph stays.')), 'The quick brown fox jumps.'],
+  ];
+  for (const [name, revised, changed] of cases) {
+    const runtime = await DocxEditor.createServer(ORIGINAL, { modules: [reviewModule()] });
+    try {
+      // A paragraph an earlier batch created gives the compare's own paragraphs fresh ids too.
+      await runtime.run(async (context) => {
+        context.document.body.insertParagraph('Added earlier.', 'End');
+        await context.sync();
+      });
+      await runtime.run(async (context) => {
+        context.document.compareFromBase64(base64Of(revised), { authorName: 'Legal' });
+        await context.sync();
+        const revisions = context.document.body.revisions;
+        revisions.load('items/type');
+        await context.sync();
+        const ranges = revisions.items.map((item) => item.range.load('text'));
+        await context.sync();
+        expect(ranges.map((range) => range.text).join('|'), name).toContain(changed);
+      });
+    } finally {
+      runtime.dispose();
+    }
+  }
+});
+
 test('removeDateAndTime writes revisions without dates', async () => {
   const runtime = await DocxEditor.createServer(ORIGINAL, { modules: [reviewModule()] });
   try {

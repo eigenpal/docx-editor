@@ -22,8 +22,33 @@ import {
   type OoxmlPackage,
 } from '@docx-editor.dev/core/store';
 import type { StoryOutput } from './stories.ts';
+import { relationshipTargets } from './related-parts.ts';
 import { fromPlaceholder, MARK, REL_PLACEHOLDER } from './units.ts';
-import { escapeAttribute } from './xml-fragments.ts';
+import { escapeAttribute, isElement, R_NS, type ElementNode } from './xml-fragments.ts';
+
+const O_NS = 'urn:schemas-microsoft-com:office:office';
+
+/**
+ * Relationship ids the content of `owner` names, defined or not. A minted id never takes one,
+ * so a reference to a missing relationship stays missing.
+ */
+function referencedRelationshipIds(pkg: OoxmlPackage, owner: string): string[] {
+  const root = pkg.parts.get(owner)?.root;
+  if (!root || !isElement(root)) return [];
+  const out: string[] = [];
+  const stack: ElementNode[] = [root];
+  for (let node = stack.pop(); node; node = stack.pop()) {
+    for (const attribute of node.attributes) {
+      if (
+        attribute.namespaceUri === R_NS ||
+        (attribute.namespaceUri === O_NS && attribute.localName === 'relid')
+      )
+        out.push(attribute.value);
+    }
+    for (const child of node.children) if (isElement(child)) stack.push(child);
+  }
+  return out;
+}
 
 const PLACEHOLDER = new RegExp(`${REL_PLACEHOLDER}([^§"|]+)\\|([^§"]+)§`, 'g');
 const NEW_PART = new RegExp(`${MARK}NEW:([^§"]+)§`, 'g');
@@ -122,6 +147,7 @@ class RelationshipPlan {
         ...this.base.externalTargets
           .filter((record) => record.ownerPart === owner)
           .map((record) => record.id),
+        ...referencedRelationshipIds(this.base, owner),
       ]);
       this.#used.set(owner, used);
     }
@@ -175,7 +201,7 @@ export function assemblePackage(
     const extension = /\.[A-Za-z0-9]+$/.exec(source)?.[0] ?? '';
     let copied: string;
     do copied = `/word/media/compare${mediaCounter++}${extension}`;
-    while (partExists(pkg, copied));
+    while (partExists(pkg, copied) || relationshipTargets(base).has(copied.toLowerCase()));
     media.set(source, copied);
     pkg = withBinaryPart(
       pkg,

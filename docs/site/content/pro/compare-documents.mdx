@@ -100,7 +100,7 @@ The compare also refuses with `unsupported-content` in these cases:
 - The documents differ in block content that has no tracked-change form, such as an embedded file chunk, or a bookmark or content control around table rows and cells.
 - The documents differ in the properties of a content control, smart tag, custom XML element, or simple field with field data, or only one document has a block content control. These elements keep no record of their properties, and their shell stays after their content is rejected.
 - The revised document adds a section or table setting, such as page borders, that has no value a tracked change can restore on reject.
-- The documents have a different number of sections, and a header or footer that only an earlier section shows differs. The compare also refuses when an earlier section of the revised document shows a header or footer that the original's section lacks.
+- A header or footer that only an earlier section shows differs, and the compare cannot pair it with one header or footer of the original. This happens when the documents have a different number of sections, when an earlier section of the revised document shows a header or footer that the original's section lacks, and when the revised document splits a header or footer that sections of the original share.
 - The original document enforces read-only, comments, or forms protection. A compare would rewrite its content.
 - The original document enforces tracked-changes protection and holds tracked changes. A compare would accept them. Without tracked changes, the compare runs, because it writes only tracked changes.
 
