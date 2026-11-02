@@ -349,6 +349,18 @@ function changedRange(probe: SemanticLayout, previous: SemanticLayout): [number,
   return [first, from >= previous.pages.length ? Number.POSITIVE_INFINITY : from];
 }
 
+/** The first page whose reserve differs between `a` and `b`; a missing page reserves nothing. */
+function firstDifferentReserve(a: Reserves, b: Reserves): number {
+  let first = Number.POSITIVE_INFINITY;
+  for (const [index, height] of a) {
+    if (index < first && (b.get(index) ?? 0) !== height) first = index;
+  }
+  for (const [index, height] of b) {
+    if (index < first && (a.get(index) ?? 0) !== height) first = index;
+  }
+  return first;
+}
+
 /** Report only the pages the walk has decided, so a host shows no undecided page. */
 function* decidedProgress<T>(steps: LayoutSteps<T>, decided: () => number): LayoutSteps<T> {
   for (;;) {
@@ -475,6 +487,20 @@ export function* searchFootnoteReserves(
     throughPage: number,
     neededPage: number
   ): LayoutSteps<ReserveWalkRound> {
+    // The probe already laid these pages: a page depends only on the reserves of the pages up
+    // to it, so the probe's pages before the first reserve that differs are this round's. Its
+    // last page is left out, so the walk reads no page as whole that this round would cut.
+    if (probe) {
+      const shared = Math.min(
+        firstDifferentReserve(probe.used, reserves),
+        probe.layout.pages.length - 1
+      );
+      if (shared >= neededPage + 2) {
+        const layout = { ...probe.layout, pages: probe.layout.pages.slice(0, shared) };
+        reference = layout;
+        return { layout, whole: false };
+      }
+    }
     let limit = atSectionEnd(blockLimitThrough(throughPage + 1));
     for (;;) {
       const whole = limit >= blocks.length;
