@@ -134,6 +134,20 @@ const DROPPED = new Set(['proofErr', 'lastRenderedPageBreak', 'noProof']);
 /** Inline wrappers whose content is flattened into atoms. */
 const WRAPPERS = new Set(['hyperlink', 'sdt', 'fldSimple', 'smartTag', 'customXml', 'dir', 'bdo']);
 
+/** A wrapper's own properties child, which belongs to its shell, never to its content. */
+const WRAPPER_PROPERTIES: Readonly<Record<string, ReadonlySet<string>>> = {
+  sdt: new Set(['sdtPr', 'sdtEndPr']),
+  smartTag: new Set(['smartTagPr']),
+  customXml: new Set(['customXmlPr']),
+};
+
+/**
+ * Wrappers whose properties have no revision form and whose shell stays when their content is
+ * rejected: equal text inside two of them with other properties is refused, not recorded.
+ */
+export const isControlWrapper = (key: string) =>
+  key.startsWith('sdt|') || key.startsWith('smartTag|') || key.startsWith('customXml|');
+
 /** Per-side context: relationship resolution and serialization. */
 export class SideContext {
   readonly #rels: ReadonlyMap<string, { type: string; target: string; external: boolean }>;
@@ -200,10 +214,11 @@ export class SideContext {
 
   remap(xml: string): string {
     if (this.name === 'base') return xml;
+    const declared = localDeclarations(xml);
     return xml.replace(
       REL_ATTRIBUTE,
       (whole, lead: string, prefix: string, name: string, id: string) =>
-        this.#isRelationshipPrefix(prefix, name, xml)
+        this.#isRelationshipPrefix(prefix, name, declared)
           ? `${lead}${REL_PLACEHOLDER}${this.partName}|${id}§"`
           : whole
     );
@@ -211,18 +226,35 @@ export class SideContext {
 
   /** Key of a raw serialized fragment, with relationship ids resolved to their targets. */
   keyOf(raw: string): string {
+    const declared = localDeclarations(raw);
     return raw.replace(
       REL_ATTRIBUTE,
       (whole, lead: string, prefix: string, name: string, id: string) =>
-        this.#isRelationshipPrefix(prefix, name, raw) ? `${lead}${this.relKey(id)}"` : whole
+        this.#isRelationshipPrefix(prefix, name, declared) ? `${lead}${this.relKey(id)}"` : whole
     );
   }
 
-  /** Whether `prefix` names the relationships namespace in `xml` or in the root scope. */
-  #isRelationshipPrefix(prefix: string, name: string, xml: string): boolean {
-    const local = new RegExp(`\\sxmlns:${prefix}="([^"]*)"`).exec(xml);
-    return (local ? local[1] : this.scope.uriOf(prefix)) === (name === 'relid' ? O_NS : R_NS);
+  /** Whether `prefix` names the relationships namespace in the fragment or the root scope. */
+  #isRelationshipPrefix(
+    prefix: string,
+    name: string,
+    declared: ReadonlyMap<string, string>
+  ): boolean {
+    const uri = declared.get(prefix) ?? this.scope.uriOf(prefix);
+    return uri === (name === 'relid' ? O_NS : R_NS);
   }
+}
+
+/**
+ * Prefix declarations in a serialized fragment, the first declaration of each prefix. Read once
+ * per fragment, so a fragment with many relationship attributes is scanned once.
+ */
+function localDeclarations(xml: string): Map<string, string> {
+  const out = new Map<string, string>();
+  if (!xml.includes('xmlns:')) return out;
+  for (const match of xml.matchAll(/\sxmlns:([^\s=]+)="([^"]*)"/g))
+    if (!out.has(match[1]!)) out.set(match[1]!, match[2]!);
+  return out;
 }
 
 function normalizePath(path: string): string {
@@ -374,8 +406,7 @@ function walkInline(
     const wrapper = wrapperOf(node, side);
     const content = name === 'sdt' ? childNamed(node, 'sdtContent') : node;
     for (const child of content ? elementChildren(content) : []) {
-      if (name === 'sdt' && (child.localName === 'sdtPr' || child.localName === 'sdtEndPr'))
-        continue;
+      if (WRAPPER_PROPERTIES[name]?.has(child.localName)) continue;
       walkInline(child, side, [...wrappers, wrapper], state);
     }
     return;
@@ -388,12 +419,10 @@ function walkInline(
 function wrapperOf(node: ElementNode, side: SideContext): Wrapper {
   const name = node.localName;
   // Shell: the element with its content children removed.
-  const keep =
-    name === 'sdt'
-      ? elementChildren(node).filter(
-          (child) => child.localName === 'sdtPr' || child.localName === 'sdtEndPr'
-        )
-      : [];
+  const properties = WRAPPER_PROPERTIES[name];
+  const keep = properties
+    ? elementChildren(node).filter((child) => properties.has(child.localName))
+    : [];
   const content = name === 'sdt' ? childNamed(node, 'sdtContent') : undefined;
   const shellNode = {
     ...node,
@@ -408,7 +437,9 @@ function wrapperOf(node: ElementNode, side: SideContext): Wrapper {
     start = xml.slice(0, at) + shell.start;
     end = `${shell.end}</w:sdt>`;
   } else {
+    // The properties child stays in the shell, first, as the schema orders it.
     ({ start, end } = shellOf(xml));
+    if (keep.length > 0) start += innerOf(xml);
   }
   const rid = attributeOf(node, 'id', R_NS);
   const key = `${name}|${rid ? side.relKey(rid) : ''}|${side.keyOf(start)}`;

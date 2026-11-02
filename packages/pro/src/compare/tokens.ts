@@ -7,7 +7,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * Word tokens of a compare: the tokenizer and the token kinds a hunk diffs.
  */
 import type { MoveEnd } from './moves.ts';
-import type { Atom, BlockUnit, ParagraphUnit } from './units.ts';
+import { isControlWrapper, type Atom, type BlockUnit, type ParagraphUnit } from './units.ts';
 
 /** Character classes of the word tokenizer. */
 const HAN = /[\p{sc=Han}\u3000-\u303F\uFF01-\uFF0F\uFF1A-\uFF20]/u;
@@ -134,7 +134,7 @@ function tokenKey(atoms: readonly Atom[], from: number, to: number): string {
     // mid-word makes the words differ, so the original's wrapper comes back on reject. Inline
     // content controls do not split words; equal words in different controls are refused.
     const signature = atom.wrappers
-      .filter((wrapper) => !wrapper.key.startsWith('sdt|'))
+      .filter((wrapper) => !isControlWrapper(wrapper.key))
       .map((wrapper) => wrapper.key)
       .join('\u0003');
     if (i === from ? signature !== '' : signature !== wrappers) key += `\u0002${signature}\u0002`;

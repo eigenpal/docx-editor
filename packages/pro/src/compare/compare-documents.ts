@@ -325,8 +325,25 @@ function acceptAll(pkg: OoxmlPackage): OoxmlPackage | null {
 }
 
 const BLOCKS = new Set(['p', 'tbl', 'tr', 'tc', 'sdt']);
+/** Run content that the compare keeps as one character-like atom each; it counts as text. */
+const OBJECT_ATOMS = new Set([
+  'tab',
+  'ptab',
+  'br',
+  'cr',
+  'sym',
+  'noBreakHyphen',
+  'softHyphen',
+  'fldChar',
+  'drawing',
+  'pict',
+  'object',
+  'footnoteReference',
+  'endnoteReference',
+  'commentReference',
+]);
 
-/** Blocks in every story part of `pkg`, so no part escapes the bound. */
+/** Blocks and text units in every story part of `pkg`, so no part escapes the bounds. */
 function storySize(pkg: OoxmlPackage): { blocks: number; text: number } {
   const size = { blocks: 0, text: 0 };
   for (const part of pkg.parts.values()) {
@@ -350,6 +367,7 @@ function countStory(node: ElementNode, size: { blocks: number; text: number }): 
       continue;
     }
     if (BLOCKS.has(child.localName)) size.blocks++;
+    else if (OBJECT_ATOMS.has(child.localName)) size.text++;
     pushAll(stack, child.children);
   }
 }

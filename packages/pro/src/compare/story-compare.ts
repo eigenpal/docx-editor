@@ -30,7 +30,13 @@ import {
 } from './emit.ts';
 import { findMoves, movedParagraph, NO_MOVES, type Moves } from './moves.ts';
 import { compareSdt, compareTable } from './table-compare.ts';
-import type { Atom, BlockUnit, ParagraphUnit, Unit } from './units.ts';
+import {
+  isControlWrapper,
+  type Atom,
+  type BlockUnit,
+  type ParagraphUnit,
+  type Unit,
+} from './units.ts';
 import { pushAll } from './arrays.ts';
 
 interface Hunk {
@@ -113,7 +119,7 @@ export function compareContainer(
 /** The inline content controls around an atom, outermost first. */
 const controlsOf = (atom: Atom) =>
   atom.wrappers
-    .filter((wrapper) => wrapper.key.startsWith('sdt|'))
+    .filter((wrapper) => isControlWrapper(wrapper.key))
     .map((wrapper) => wrapper.key)
     .join('\u0003');
 
@@ -351,17 +357,23 @@ function pairBlocks(ops: readonly DiffOp[], a: readonly Token[], b: readonly Tok
     const deleted = run.filter((op): op is Extract<DiffOp, { op: 'del' }> => op.op === 'del');
     let fromIns = 0;
     let fromDel = 0;
+    // Deleted block positions by kind, each with a cursor: the scan stays linear.
+    const blocksByKind = new Map<string, { positions: number[]; next: number }>();
+    deleted.forEach((op, d) => {
+      const candidate = a[op.a]!;
+      if (candidate.kind !== 'block') return;
+      const entry = blocksByKind.get(candidate.unit.kind) ?? { positions: [], next: 0 };
+      entry.positions.push(d);
+      blocksByKind.set(candidate.unit.kind, entry);
+    });
     for (let k = 0; k < inserted.length; k++) {
       const token = b[inserted[k]!.b]!;
       if (token.kind !== 'block' || token.unit.kind === 'opaque') continue;
-      let match = -1;
-      for (let d = fromDel; d < deleted.length; d++) {
-        const candidate = a[deleted[d]!.a]!;
-        if (candidate.kind === 'block' && candidate.unit.kind === token.unit.kind) {
-          match = d;
-          break;
-        }
-      }
+      const entry = blocksByKind.get(token.unit.kind);
+      if (!entry) continue;
+      while (entry.next < entry.positions.length && entry.positions[entry.next]! < fromDel)
+        entry.next++;
+      const match = entry.positions[entry.next] ?? -1;
       if (match < 0) continue;
       pushAll(out, inserted.slice(fromIns, k), deleted.slice(fromDel, match));
       out.push({
