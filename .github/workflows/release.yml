@@ -33,7 +33,9 @@ name: Release
 # runs queue and get cancelled, leaving the release PR stale.
 #
 # Manual workflow_dispatch is kept for the rare case of triggering a publish
-# without a fresh push (e.g. recovering from a failed publish step).
+# without a fresh push (e.g. recovering from a failed publish step). Every stable
+# job requires main, so a manual run on any other branch never updates the
+# release PR or publishes; versions reach npm only from main.
 #
 # Canary channel. The nightly schedule, or a manual run with channel=canary,
 # publishes the newest main commit that passed CI as a prerelease on the
@@ -124,12 +126,20 @@ jobs:
           GH_TOKEN: ${{ env.RELEASE_CHANNEL == 'canary' && github.token || '' }}
         run: node scripts/release-mode.mjs
 
+      # Every stable job requires main. A manual run on another branch, such as the
+      # unmerged release PR branch, stops here: no release PR update, no publish.
+      - name: Refuse stable releases outside main
+        if: ${{ env.RELEASE_CHANNEL == 'release' && github.ref != 'refs/heads/main' }}
+        env:
+          REF: ${{ github.ref }}
+        run: echo "::warning::Stable releases run only from main. This run on $REF stops after mode detection."
+
   # Independent checks run concurrently. Publish path only — contributor PRs
   # already run the same checks, and the PR-update path only rewrites versions.
   checks:
     name: Prepublish ${{ matrix.label }}
     needs: mode
-    if: ${{ needs.mode.outputs.mode == 'publish' }}
+    if: ${{ github.ref == 'refs/heads/main' && needs.mode.outputs.mode == 'publish' }}
     strategy:
       fail-fast: true
       matrix:
@@ -193,7 +203,7 @@ jobs:
   build:
     name: Prepublish build
     needs: mode
-    if: ${{ needs.mode.outputs.mode == 'publish' }}
+    if: ${{ github.ref == 'refs/heads/main' && needs.mode.outputs.mode == 'publish' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -280,7 +290,7 @@ jobs:
   collaboration:
     name: Prepublish collaboration (${{ matrix.shard }})
     needs: [mode, build]
-    if: ${{ needs.mode.outputs.mode == 'publish' }}
+    if: ${{ github.ref == 'refs/heads/main' && needs.mode.outputs.mode == 'publish' }}
     strategy:
       fail-fast: false
       matrix:
@@ -325,7 +335,7 @@ jobs:
     needs: [mode, checks, build, collaboration]
     # PR updates accept skipped checks/build. Publication requires every gate
     # to succeed. The idle path has no work.
-    if: ${{ !cancelled() && needs.mode.result == 'success' && ((needs.mode.outputs.mode == 'pending' && (needs.checks.result == 'success' || needs.checks.result == 'skipped') && (needs.build.result == 'success' || needs.build.result == 'skipped')) || (needs.mode.outputs.mode == 'publish' && needs.checks.result == 'success' && needs.build.result == 'success' && needs.collaboration.result == 'success')) }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.mode.result == 'success' && ((needs.mode.outputs.mode == 'pending' && (needs.checks.result == 'success' || needs.checks.result == 'skipped') && (needs.build.result == 'success' || needs.build.result == 'skipped')) || (needs.mode.outputs.mode == 'publish' && needs.checks.result == 'success' && needs.build.result == 'success' && needs.collaboration.result == 'success')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:

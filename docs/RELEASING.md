@@ -87,6 +87,8 @@ The publish path runs lint, formatting, type checks, tests, parity, license, and
 
 If no changesets are pending and every published package version is already on npm, the run is idle. The **Detect release mode** job lists the result, and every later job is skipped. A registry lookup that fails counts as an unpublished version, so the run takes the publish path.
 
+Stable releases run only from `main`. If you run the Release workflow on another branch, such as the unmerged `changeset-release/main` branch, the run stops after **Detect release mode** with a warning. It does not update the release PR or publish.
+
 ### Check documentation before merging
 
 Match the pending changesets against the user guides, package READMEs, API snapshots, and `docs/site/data/word-features.ts`. Include usage instructions, upgrade steps, and unsupported cases for new behavior. Add Python release notes through the converter changeset, including the first Python release.

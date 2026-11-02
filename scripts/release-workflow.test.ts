@@ -19,9 +19,18 @@ const workflow = Bun.YAML.parse(
 
 // Evaluate the repository's trusted condition with the same boolean operators.
 // Tests supply only the contexts and status function used by this workflow.
-function condition(expression: string, needs: unknown, cancelled = false): boolean {
+function condition(
+  expression: string,
+  needs: unknown,
+  cancelled = false,
+  ref = 'refs/heads/main'
+): boolean {
   const source = expression.replace(/^\$\{\{\s*/, '').replace(/\s*\}\}$/, '');
-  return new Function('needs', 'cancelled', `return Boolean(${source});`)(needs, () => cancelled);
+  return new Function('needs', 'cancelled', 'github', `return Boolean(${source});`)(
+    needs,
+    () => cancelled,
+    { ref }
+  );
 }
 function context(mode: string, results: Record<string, string> = {}) {
   return {
@@ -50,6 +59,24 @@ test('manual and push publication require every prepublish gate to succeed', () 
   expect(
     condition(release.if!, { ...context('publish'), mode: { result: 'failure', outputs: {} } })
   ).toBe(false);
+});
+
+test('no stable job runs outside main, so other branches never publish', () => {
+  const skipped = { checks: 'skipped', build: 'skipped', collaboration: 'skipped' };
+  for (const ref of ['refs/heads/changeset-release/main', 'refs/heads/feature', 'refs/tags/v1']) {
+    for (const job of ['checks', 'build', 'collaboration'])
+      expect(condition(workflow.jobs[job].if!, context('publish'), false, ref)).toBe(false);
+    expect(condition(workflow.jobs.release.if!, context('publish'), false, ref)).toBe(false);
+    expect(condition(workflow.jobs.release.if!, context('pending', skipped), false, ref)).toBe(
+      false
+    );
+  }
+  const refusal = workflow.jobs.mode.steps.find(
+    (step) => (step as { name?: string }).name === 'Refuse stable releases outside main'
+  )!;
+  expect(refusal.if).toBe(
+    "${{ env.RELEASE_CHANNEL == 'release' && github.ref != 'refs/heads/main' }}"
+  );
 });
 
 test('pending changesets keep the PR update path and idle releases remain skipped', () => {
