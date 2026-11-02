@@ -525,7 +525,7 @@ function HyperLinkFields({ className, hidden }: HyperLinkPartProps) {
         onKeyDown={onKeyDown}
       />
       <label className="docx-editor-sr-only" htmlFor={urlId}>
-        {t('hyperlinkPopup.urlPlaceholder')}
+        {t('hyperlinkPopup.urlLabel')}
       </label>
       <input
         id={urlId}

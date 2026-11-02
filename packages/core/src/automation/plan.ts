@@ -50,6 +50,7 @@ import { insertTextOps, lineBreakRefusal, PARAGRAPH_MARK_IN_TEXT } from './line-
 import { edgeTableOf, paragraphTextRefusal } from './plan-story-edge.ts';
 import { automationListLevelExists } from './list-authoring.ts';
 import { planListAuthoring } from './plan-list-authoring.ts';
+import { hyperlinkStyleFor } from '../store/package/hyperlink-style-edit.ts';
 // What each operation MEANS, as reads off a snapshot and `TreeDocOp`s for one transaction.
 // The planner is pure with respect to the document: it reads a snapshot and produces ops. Every
 // question ("what does inserting a paragraph before another one do to identity", "what does
@@ -1428,15 +1429,20 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     }
     const conflict = touch(plan, range.start.paragraphId);
     if (conflict) return conflict;
-    const styleId = reads.styles().characterIdOf('hyperlink');
-    return staged((aim) => ({
+    // A document without the hyperlink character style gets the built-in one in the same
+    // commit, so the new link is visibly a link.
+    const { styleId, edit } = hyperlinkStyleFor(packageReads.package);
+    const linked = staged((aim) => ({
       op: 'insertHyperlink',
       paragraphId: range.start.paragraphId,
       start: range.start.offset,
       end: range.end.offset,
       ...aim,
-      ...(styleId === null ? {} : { styleId }),
+      styleId,
     }));
+    return edit && linked.ok && linked.kind === 'command'
+      ? { ...linked, packageEdits: [edit] }
+      : linked;
   };
 
   const planSelect = (

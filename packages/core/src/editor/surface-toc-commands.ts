@@ -17,19 +17,25 @@ import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
 export interface TocCommandDeps {
   readonly session: Pick<
     TreeDocxSessionView,
-    'part' | 'documentOutline' | 'editable' | 'subscribe'
+    'part' | 'documentOutline' | 'editable' | 'subscribe' | 'paragraphIds'
   >;
   readonly editingMode: () => SurfaceEditingMode;
   /** The addressed table of contents, or the one at the right-click or the caret. */
   readonly target: (tocId?: string) => DetectedToc | null;
   /** Why the surface would refuse these ops now, or null. */
   readonly writeRefusal: (ops: readonly TreeDocOp[]) => string | null;
-  /** Commit body ops as one undo step. */
-  readonly apply: (ops: readonly TreeDocOp[]) => TreeApplyResult;
+  /**
+   * Commit body ops as one undo step. `before` is where undo puts the caret back: the table
+   * of contents itself, so undo returns the view to the edit rather than to wherever the
+   * caret was when the menu opened.
+   */
+  readonly apply: (ops: readonly TreeDocOp[], before: SelectionMark | undefined) => TreeApplyResult;
   /** Called after a removal commits: the table of contents is gone, so is its menu. */
   readonly removed: () => void;
   /** Put the caret where the table of contents was. */
   readonly select: (at: SemanticPosition) => void;
+  /** The table of contents the last right-click landed on, or null. */
+  readonly pointedTocId: () => string | null;
   /** Publish a refusal, with a reason the user reads. */
   readonly refuse: (reason: string, raw: string) => void;
 }
@@ -51,7 +57,37 @@ const REMOVAL_REFUSALS: Readonly<Record<string, string>> = {
   'not-a-block': 'the table of contents holds a table or a content control',
 };
 
+/**
+ * A collapsed mark just outside a table of contents, for the caret and for undo: the start of
+ * the paragraph after it, or the start of the paragraph before it when nothing follows.
+ * Undefined when the table of contents is the whole body, so the caret stays where it is.
+ */
+export function tocSelectionMark(
+  toc: DetectedToc,
+  bodyParagraphIds: readonly string[]
+): SelectionMark | undefined {
+  const end = bodyParagraphIds.indexOf(toc.endParagraphId);
+  const begin = bodyParagraphIds.indexOf(toc.beginParagraphId);
+  const paragraphId =
+    (end >= 0 ? bodyParagraphIds[end + 1] : undefined) ??
+    (begin > 0 ? bodyParagraphIds[begin - 1] : undefined);
+  return paragraphId === undefined ? undefined : { paragraphId, start: 0, end: 0 };
+}
+
 export function createTocCommands(deps: TocCommandDeps) {
+  /**
+   * The undo mark for a command on `toc`, just outside it. A command from the table of
+   * contents' own menu acts where the user pointed, so the caret moves there first. Undo then
+   * returns there, in a collaboration session too, where undo restores the selection the
+   * session recorded with the step.
+   */
+  function pointAtToc(toc: DetectedToc): SelectionMark | undefined {
+    const mark = tocSelectionMark(toc, deps.session.paragraphIds());
+    if (mark && deps.pointedTocId() === toc.id)
+      deps.select({ paragraphId: mark.paragraphId, offset: 0 });
+    return mark;
+  }
+
   function canRefreshToc(tocId?: string): boolean {
     if (deps.editingMode() === 'view' || !deps.session.editable) return false;
     const toc = deps.target(tocId);
@@ -65,7 +101,11 @@ export function createTocCommands(deps: TocCommandDeps) {
   }
 
   /** The removal op and why it cannot run, if it cannot. */
-  function removal(tocId?: string): { op?: TreeDocOp; refusal: TocRemovalRefusal | null } {
+  function removal(tocId?: string): {
+    op?: TreeDocOp;
+    toc?: DetectedToc;
+    refusal: TocRemovalRefusal | null;
+  } {
     const toc = deps.target(tocId);
     if (!toc) return { refusal: { code: 'notFound', reason: NO_TOC } };
     const op: TreeDocOp = { op: 'removeToc', tocId: toc.id };
@@ -73,7 +113,7 @@ export function createTocCommands(deps: TocCommandDeps) {
     const reason = rejection
       ? (REMOVAL_REFUSALS[rejection] ?? CANNOT_REMOVE)
       : deps.writeRefusal([op]);
-    return { op, refusal: reason ? { code: 'unsupported', reason } : null };
+    return { op, toc, refusal: reason ? { code: 'unsupported', reason } : null };
   }
 
   function removeTocRefusal(tocId?: string): TocRemovalRefusal | null {
@@ -83,8 +123,8 @@ export function createTocCommands(deps: TocCommandDeps) {
 
   /** Remove the addressed table of contents; false, with a published refusal, when it cannot. */
   function removeToc(tocId?: string): boolean {
-    const { op, refusal } = removal(tocId);
-    if (!op || refusal) {
+    const { op, toc, refusal } = removal(tocId);
+    if (!op || !toc || refusal) {
       deps.refuse(refusal?.reason ?? CANNOT_REMOVE, 'table-of-contents-refused');
       return false;
     }
@@ -95,7 +135,7 @@ export function createTocCommands(deps: TocCommandDeps) {
     });
     let applied: TreeApplyResult;
     try {
-      applied = deps.apply([op]);
+      applied = deps.apply([op], pointAtToc(toc));
     } finally {
       stop();
     }
@@ -109,5 +149,5 @@ export function createTocCommands(deps: TocCommandDeps) {
     return true;
   }
 
-  return { canRefreshToc, removal: { removeTocRefusal, removeToc } };
+  return { canRefreshToc, pointAtToc, removal: { removeTocRefusal, removeToc } };
 }

@@ -68,7 +68,7 @@ async function peer(name: string, host?: { ydoc: Y.Doc }, bytes: Uint8Array = fi
     ydoc.destroy();
   };
   opened.push(destroy);
-  return { ydoc, editor, destroy };
+  return { ydoc, editor, destroy, container };
 }
 type Peer = Awaited<ReturnType<typeof peer>>;
 
@@ -214,4 +214,29 @@ test('a field cut out of ordinary paragraphs converges with typing on both sides
   sync(a, b);
   await converged(a, b);
   expect(tocs(b)).toBe(0);
+});
+
+test('undo of a removal in a session puts the caret back at the table of contents', async () => {
+  const a = await peer('Alice');
+  const b = await peer('Bob', a);
+  caret(a, 'Body words', 2);
+  const bodyParagraph = a.editor.surface!.state().selection.head.paragraphId;
+  // The command comes from the table of contents' own menu.
+  const row = [...a.container.querySelectorAll<HTMLElement>('[data-paragraph-id]')].find((el) =>
+    el.textContent?.includes('Alpha 1')
+  )!;
+  row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  expect(a.editor.exec({ type: 'removeToc' })).toEqual({ ok: true, changed: true });
+  sync(a, b);
+  expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
+  sync(a, b);
+  await converged(a, b);
+  const head = a.editor.surface!.state().selection.head.paragraphId;
+  expect(head).not.toBe(bodyParagraph);
+  const toc = detectBodyTocs(a.editor.surface!.session.part())[0]!;
+  const order = a.editor.surface!.session.paragraphIds();
+  const tocStart = order.indexOf(toc.beginParagraphId);
+  const tocEnd = order.indexOf(toc.endParagraphId);
+  // Right next to the table of contents, never inside it.
+  expect([tocStart - 1, tocEnd + 1]).toContain(order.indexOf(head));
 });

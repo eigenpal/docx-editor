@@ -391,9 +391,13 @@ describe('editing a hyperlink through the editor', () => {
       true
     );
     caret(mounted, 0, 8);
-    // A reference to a style the document does not declare would be a dangling one; the
-    // link works and simply looks like its surroundings.
+    // The built-in style is defined with the link (see hyperlink-style-creation.test.ts).
     expect(mounted.editor.surface!.hyperlinks.linkAtCaret()?.href).toBe('https://example.com');
+    const saved = unzipSync(mounted.editor.surface!.session.save());
+    expect(new TextDecoder().decode(saved['word/document.xml'])).toContain(
+      '<w:rStyle w:val="Hyperlink"/>'
+    );
+    expect(new TextDecoder().decode(saved['word/styles.xml'])).toContain('w:styleId="Hyperlink"');
   });
 
   test('a link’s text can be restyled, and the direct formatting wins over the style', () => {

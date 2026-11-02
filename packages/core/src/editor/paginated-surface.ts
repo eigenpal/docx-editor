@@ -2417,17 +2417,17 @@ export function mountPaginatedSurface(
    * The engine paints no menu of its own. A host's context menu is one primitive with one
    * set of rows, icons, shortcut column and keyboard model; a second panel painted here
    * would be a second place for all of that to drift, and it looked like one too. What the
-   * engine owns is the part a host cannot work out for itself: a right-click does not move
-   * the caret, and a TOC refuses the caret entirely, so nothing in `selection` says which
-   * table of contents is under the pointer. That is what this publishes.
+   * engine owns is the part a host cannot work out for itself: a TOC refuses the caret, so
+   * nothing in `selection` says which table of contents is under the pointer. That is what
+   * this publishes.
    */
   function onTocContextMenu(event: MouseEvent): void {
     const toc = tocForGesture(event);
-    const reachable = toc && (canRefreshToc(toc.id) || !tocRemoval.removeTocRefusal(toc.id));
+    const reachable = toc && (canRefreshToc(toc.id) || !removal.removeTocRefusal(toc.id));
     setContextTocId(reachable ? toc.id : null);
   }
 
-  /** The TOC the last right-click addressed. Cleared by a right-click anywhere else. */
+  /** The TOC the last right-click addressed. Cleared by any other right-click or click. */
   let contextTocId: string | null = null;
 
   function setContextTocId(next: string | null): void {
@@ -2437,6 +2437,7 @@ export function mountPaginatedSurface(
   }
 
   function onTocRowClick(event: MouseEvent): void {
+    if (event.button === 0) setContextTocId(null);
     if (event.button !== 0 || (event.target as Element | null)?.closest('a.docx-hyperlink')) return;
     // A range ends a drag (see the link lane).
     if (!selectionsEqual(selection, collapsedAt(selection.head))) return;
@@ -4067,14 +4068,15 @@ export function mountPaginatedSurface(
     return result;
   }
 
-  const { canRefreshToc, removal: tocRemoval } = createTocCommands({
+  const { canRefreshToc, pointAtToc, removal } = createTocCommands({
     session,
     editingMode: () => editingMode,
     target: targetToc,
     writeRefusal: (ops) => writeRefusal(true, ops, false),
-    apply: (ops) => applyJournaledOps(ops, undefined, undefined, BODY_STORY),
+    apply: (ops, before) => applyJournaledOps(ops, before, undefined, BODY_STORY),
     removed: () => setContextTocId(null),
     select: (at) => setSelection(collapsedAt(at)),
+    pointedTocId: () => contextTocId,
     refuse: (reason, raw) => void (lastRejection = refuse(reason, raw)),
   });
 
@@ -4201,7 +4203,7 @@ export function mountPaginatedSurface(
     const op = insertTocOp();
     if (!op) return false;
     const existing = new Set(detectBodyTocs(session.part()).map((toc) => toc.id));
-    const inserted = applyJournaledOps([op], undefined, undefined, BODY_STORY);
+    const inserted = applyJournaledOps([op], selectionMark(), undefined, BODY_STORY);
     if (!inserted.committed) {
       lastRejection = refuse(
         inserted.reason ?? 'the table of contents could not be inserted',
@@ -4222,6 +4224,7 @@ export function mountPaginatedSurface(
     const sources = resolveTocSources(session.part(), outline, toc.instruction);
     if (!sources) return false;
     const outlineBlockIds = sources.map((entry) => entry.blockId);
+    const before = pointAtToc(toc);
 
     if (mode === 'entire') {
       const plan = planTocEntries(
@@ -4241,7 +4244,7 @@ export function mountPaginatedSurface(
             bookmarksToCreate: plan.bookmarksToCreate,
           },
         ],
-        undefined,
+        before,
         undefined,
         BODY_STORY
       );
@@ -4279,7 +4282,7 @@ export function mountPaginatedSurface(
       previousSignature = signature;
       const rewritten = applyJournaledOps(
         [{ op: 'rewriteTocPageNumbers', tocId: toc.id, updates }],
-        undefined,
+        before,
         undefined,
         BODY_STORY
       );
@@ -5121,7 +5124,7 @@ export function mountPaginatedSurface(
     canEditTextFormField: () => textFormInteraction?.canEdit() ?? false,
     editTextFormField: () => textFormInteraction?.edit() ?? false,
     refreshToc,
-    ...tocRemoval,
+    ...removal,
     refreshRefFieldResults,
     save: () => saveSurfaceDocument(surface, container, () => destroyed),
     saveSteps: () => saveSurfaceDocumentSteps(surface, container, () => destroyed),
