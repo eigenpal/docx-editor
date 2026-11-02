@@ -134,9 +134,9 @@ const Impl = defineComponent({
         detectFormatChanges: values.value.detectFormatChanges,
       });
       if (outcome.ok || session.signal.aborted) return;
-      error.value = translate('compareDocuments.failed' as Parameters<typeof translate>[0], {
-        message: outcome.message,
-      });
+      error.value = translate(
+        `compareDocuments.errors.${outcome.reason}` as Parameters<typeof translate>[0]
+      );
       busy.value = false;
     };
     const apply = () => {

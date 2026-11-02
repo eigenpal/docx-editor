@@ -114,7 +114,7 @@ test('a refused compare shows its reason in the error part', async () => {
     () =>
       container
         .querySelector('[data-docx-part="error"]')
-        ?.textContent?.includes('Could not compare the documents') ?? false
+        ?.textContent?.includes('not a document that can be compared') ?? false
   );
   expect(container.querySelector('dialog')).not.toBeNull();
 });

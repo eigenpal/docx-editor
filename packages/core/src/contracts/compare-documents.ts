@@ -8,10 +8,38 @@ export interface CompareDocumentsRequest {
   readonly detectFormatChanges?: boolean;
 }
 
+/**
+ * Why a compare was refused, as a stable code a dialog translates: the engine's refusals of the
+ * documents (`invalidOriginal`, `invalidRevised`, `tooLarge`, `unsupportedContent`), and the
+ * editor's (`unavailable`: no review module, document, or mount; `protected`; `collaboration`;
+ * `viewing`; `closed`: the dialog was closed; `empty`: no revised bytes; `failed`: anything
+ * else).
+ *
+ * @public
+ */
+export type CompareDocumentsRefusal =
+  | 'invalidOriginal'
+  | 'invalidRevised'
+  | 'tooLarge'
+  | 'unsupportedContent'
+  | 'unavailable'
+  | 'protected'
+  | 'collaboration'
+  | 'viewing'
+  | 'closed'
+  | 'empty'
+  | 'failed';
+
 /** The outcome of one compare. @public */
 export type CompareDocumentsOutcome =
   | { readonly ok: true; readonly revisionCount: number }
-  | { readonly ok: false; readonly message: string };
+  | {
+      readonly ok: false;
+      /** What to tell the user, as a code to translate. */
+      readonly reason: CompareDocumentsRefusal;
+      /** Diagnostic detail, in English; not for display. */
+      readonly message: string;
+    };
 
 /**
  * One open Compare documents dialog. The editor owns it: the session aborts when the dialog

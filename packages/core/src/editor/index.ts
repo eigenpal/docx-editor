@@ -673,6 +673,7 @@ export type {
   CompareDocumentsChromeHandlers,
   CompareDocumentsDialogSession,
   CompareDocumentsOutcome,
+  CompareDocumentsRefusal,
   CompareDocumentsRequest,
 } from '../contracts/compare-documents.ts';
 

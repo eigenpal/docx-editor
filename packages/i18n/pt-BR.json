@@ -1179,11 +1179,23 @@
     "comparing": "Comparando…",
     "description": "O documento aberto é o original. Escolha o documento revisado. As diferenças aparecem aqui como alterações controladas.",
     "detectFormatting": "Detectar alterações de formatação",
-    "failed": "Não foi possível comparar os documentos: {message}",
     "fileRequired": "Escolha primeiro o documento revisado.",
     "noFile": "Nenhum arquivo escolhido",
     "readFailed": "Não foi possível ler o arquivo escolhido.",
     "revisedFile": "Documento revisado",
-    "title": "Comparar documentos"
+    "title": "Comparar documentos",
+    "errors": {
+      "invalidOriginal": "Não é possível ler o documento aberto para comparação.",
+      "invalidRevised": "O arquivo escolhido não é um documento que possa ser comparado.",
+      "tooLarge": "Os documentos são grandes demais para comparar.",
+      "unsupportedContent": "Os documentos diferem em conteúdo que não pode aparecer como alterações controladas, ou o documento aberto está protegido.",
+      "unavailable": "Comparar documentos não está disponível para este documento.",
+      "protected": "Este documento está protegido contra edição.",
+      "collaboration": "Comparar documentos não está disponível enquanto outras pessoas editam este documento.",
+      "viewing": "O documento está aberto somente para leitura.",
+      "closed": "A caixa de diálogo foi fechada antes da comparação.",
+      "empty": "O arquivo escolhido está vazio.",
+      "failed": "Não foi possível comparar os documentos."
+    }
   }
 }

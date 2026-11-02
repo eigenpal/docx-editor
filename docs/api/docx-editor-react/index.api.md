@@ -31,6 +31,7 @@ import { commandForSlot } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsChromeHandlers } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsDialogSession } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsOutcome } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsRefusal } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsRequest } from '@docx-editor.dev/core/editor';
 import { ComponentType } from 'react';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
@@ -250,6 +251,8 @@ export interface CompareDocumentsDialogValues {
 }
 
 export { CompareDocumentsOutcome }
+
+export { CompareDocumentsRefusal }
 
 export { CompareDocumentsRequest }
 

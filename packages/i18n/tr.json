@@ -1179,11 +1179,23 @@
     "comparing": "Karşılaştırılıyor…",
     "description": "Açık belge özgün belgedir. Düzeltilmiş belgeyi seçin. Farkları burada izlenen değişiklikler olarak görünür.",
     "detectFormatting": "Biçimlendirme değişikliklerini algıla",
-    "failed": "Belgeler karşılaştırılamadı: {message}",
     "fileRequired": "Önce düzeltilmiş belgeyi seçin.",
     "noFile": "Dosya seçilmedi",
     "readFailed": "Seçilen dosya okunamadı.",
     "revisedFile": "Düzeltilmiş belge",
-    "title": "Belgeleri karşılaştır"
+    "title": "Belgeleri karşılaştır",
+    "errors": {
+      "invalidOriginal": "Açık belge karşılaştırma için okunamıyor.",
+      "invalidRevised": "Seçilen dosya karşılaştırılabilecek bir belge değil.",
+      "tooLarge": "Belgeler karşılaştırmak için çok büyük.",
+      "unsupportedContent": "Belgeler, izlenen değişiklik olarak gösterilemeyen içerikte farklı veya açık belge korumalı.",
+      "unavailable": "Belgeleri karşılaştırma bu belge için kullanılamıyor.",
+      "protected": "Bu belge düzenlemeye karşı korumalı.",
+      "collaboration": "Başkaları bu belgeyi düzenlerken belgeleri karşılaştırma kullanılamaz.",
+      "viewing": "Belge yalnızca görüntüleme için açık.",
+      "closed": "İletişim kutusu karşılaştırmadan önce kapatıldı.",
+      "empty": "Seçilen dosya boş.",
+      "failed": "Belgeler karşılaştırılamadı."
+    }
   }
 }

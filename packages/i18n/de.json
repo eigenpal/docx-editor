@@ -1179,11 +1179,23 @@
     "comparing": "Wird verglichen…",
     "description": "Das geöffnete Dokument ist das Original. Wählen Sie das überarbeitete Dokument. Seine Unterschiede erscheinen hier als nachverfolgte Änderungen.",
     "detectFormatting": "Formatierungsänderungen erkennen",
-    "failed": "Die Dokumente konnten nicht verglichen werden: {message}",
     "fileRequired": "Wählen Sie zuerst das überarbeitete Dokument.",
     "noFile": "Keine Datei ausgewählt",
     "readFailed": "Die ausgewählte Datei konnte nicht gelesen werden.",
     "revisedFile": "Überarbeitetes Dokument",
-    "title": "Dokumente vergleichen"
+    "title": "Dokumente vergleichen",
+    "errors": {
+      "invalidOriginal": "Das geöffnete Dokument kann für einen Vergleich nicht gelesen werden.",
+      "invalidRevised": "Die ausgewählte Datei ist kein vergleichbares Dokument.",
+      "tooLarge": "Die Dokumente sind zu groß für einen Vergleich.",
+      "unsupportedContent": "Die Dokumente unterscheiden sich in Inhalten, die nicht als Änderungen nachverfolgt werden können, oder das geöffnete Dokument ist geschützt.",
+      "unavailable": "Dokumente vergleichen ist für dieses Dokument nicht verfügbar.",
+      "protected": "Dieses Dokument ist gegen Bearbeitung geschützt.",
+      "collaboration": "Dokumente vergleichen ist nicht verfügbar, während andere dieses Dokument bearbeiten.",
+      "viewing": "Das Dokument ist nur zum Lesen geöffnet.",
+      "closed": "Das Dialogfeld wurde vor dem Vergleich geschlossen.",
+      "empty": "Die ausgewählte Datei ist leer.",
+      "failed": "Die Dokumente konnten nicht verglichen werden."
+    }
   }
 }

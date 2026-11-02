@@ -256,7 +256,7 @@ describe('compare documents dialog session', () => {
     editor.setCompareDocumentsChrome({ onRequest: (s) => (session = s) });
     editor.exec({ type: 'openCompareDocumentsDialog' });
     const outcome = await session!.apply({ revised: docx('Revised') });
-    expect(outcome).toEqual({ ok: false, message: 'too large' });
+    expect(outcome).toEqual({ ok: false, reason: 'tooLarge', message: 'too large' });
     expect(session!.signal.aborted).toBe(false);
     session!.cancel();
     expect(session!.signal.aborted).toBe(true);

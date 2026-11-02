@@ -1179,11 +1179,23 @@
     "comparing": "Porównywanie…",
     "description": "Otwarty dokument jest oryginałem. Wybierz poprawiony dokument. Jego różnice pojawią się tutaj jako śledzone zmiany.",
     "detectFormatting": "Wykrywaj zmiany formatowania",
-    "failed": "Nie można porównać dokumentów: {message}",
     "fileRequired": "Najpierw wybierz poprawiony dokument.",
     "noFile": "Nie wybrano pliku",
     "readFailed": "Nie można odczytać wybranego pliku.",
     "revisedFile": "Poprawiony dokument",
-    "title": "Porównaj dokumenty"
+    "title": "Porównaj dokumenty",
+    "errors": {
+      "invalidOriginal": "Nie można odczytać otwartego dokumentu do porównania.",
+      "invalidRevised": "Wybrany plik nie jest dokumentem, który można porównać.",
+      "tooLarge": "Dokumenty są zbyt duże, aby je porównać.",
+      "unsupportedContent": "Dokumenty różnią się treścią, której nie można pokazać jako śledzonych zmian, lub otwarty dokument jest chroniony.",
+      "unavailable": "Porównywanie dokumentów jest niedostępne dla tego dokumentu.",
+      "protected": "Ten dokument jest chroniony przed edycją.",
+      "collaboration": "Porównywanie dokumentów jest niedostępne, gdy inne osoby edytują ten dokument.",
+      "viewing": "Dokument jest otwarty tylko do odczytu.",
+      "closed": "Okno dialogowe zostało zamknięte przed porównaniem.",
+      "empty": "Wybrany plik jest pusty.",
+      "failed": "Nie udało się porównać dokumentów."
+    }
   }
 }

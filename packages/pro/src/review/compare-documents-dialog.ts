@@ -138,7 +138,7 @@ export function createCompareDocumentsDialog(
           detectFormatChanges: formatting.checked,
         });
         if (outcome.ok || host.signal.aborted) return;
-        error.textContent = t('failed', { message: outcome.message });
+        error.textContent = t(`errors.${outcome.reason}`);
         setBusy(false);
       });
 

@@ -54,7 +54,7 @@ if (!result.ok) showMessage(result.reason);
 
 The command refuses while the editor is in viewing mode or the document is protected against edits. It also refuses in a collaborative session.
 
-To replace the dialog, pass a component as `popups.compareDocuments`. For more information, see [Customize dialogs](/docs/2.x/customization/dialogs).
+To replace the dialog, pass a component as `popups.compareDocuments`. When a compare is refused, the session's `apply` result carries a `reason` code, such as `tooLarge` or `protected`, to translate for your users. Its `message` is diagnostic English, not display text. For more information, see [Customize dialogs](/docs/2.x/customization/dialogs).
 
 ## Compare with the document API
 

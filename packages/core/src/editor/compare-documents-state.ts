@@ -3,8 +3,10 @@ import type {
   CompareDocumentsChromeHandlers,
   CompareDocumentsDialogSession,
   CompareDocumentsOutcome,
+  CompareDocumentsRefusal,
   CompareDocumentsRequest,
 } from '../contracts/compare-documents.ts';
+import type { DocumentCompareErrorCode } from '../contracts/document-compare.ts';
 import type { CompareDocumentsDialog, ReviewModuleContribution } from '../contracts/modules.ts';
 import { readDocumentProtection } from '../store/package/document-protection.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
@@ -28,6 +30,37 @@ export interface CompareDocumentsStateHost {
   surface(): PaginatedSurface | null;
   /** Whether the document is open for viewing only (view-only host or viewing mode). */
   viewing(): boolean;
+}
+
+const VIEWING_REASON = 'the document is open for viewing';
+const EMPTY_REASON = 'the revised document is empty';
+const CLOSED_REASON = 'the dialog is closed';
+
+const ENGINE_REFUSALS: Readonly<Record<DocumentCompareErrorCode, CompareDocumentsRefusal>> = {
+  'invalid-original': 'invalidOriginal',
+  'invalid-revised': 'invalidRevised',
+  'too-large': 'tooLarge',
+  'unsupported-content': 'unsupportedContent',
+};
+
+type CompareExec = ExecResult & {
+  readonly revisionCount?: number;
+  readonly engineCode?: DocumentCompareErrorCode;
+};
+
+/** The stable code a dialog translates for one refused compare. */
+function refusalOf(
+  result: { readonly code?: string; readonly reason?: string },
+  engineCode?: DocumentCompareErrorCode
+): CompareDocumentsRefusal {
+  if (engineCode) return ENGINE_REFUSALS[engineCode];
+  if (result.reason === COMPARE_COLLABORATION_REASON) return 'collaboration';
+  if (result.reason === VIEWING_REASON) return 'viewing';
+  if (result.reason === EMPTY_REASON) return 'empty';
+  if (result.reason === CLOSED_REASON) return 'closed';
+  if (result.reason === PRO_REVIEW_REASON || result.code === 'notFound') return 'unavailable';
+  if (result.code === 'locked' || result.code === 'protected') return 'protected';
+  return 'failed';
 }
 
 const isBytes = (value: unknown): value is Uint8Array =>
@@ -55,8 +88,7 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
     if (!surface) return { ok: false, code: 'notFound', reason: 'no document is open' };
     if (surface.collaborationSession())
       return { ok: false, code: 'unsupported', reason: COMPARE_COLLABORATION_REASON };
-    if (host.viewing())
-      return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
+    if (host.viewing()) return { ok: false, code: 'locked', reason: VIEWING_REASON };
     const protectedWrite = commandProtectionRefusal(
       { type: 'compareDocuments', revised: new Uint8Array() },
       surface
@@ -84,11 +116,11 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
     return { ok: true };
   };
 
-  const compare = (request: CompareDocumentsRequest): ExecResult & { revisionCount?: number } => {
+  const compare = (request: CompareDocumentsRequest): CompareExec => {
     const allowed = canCompare();
     if (!allowed.ok) return allowed;
     if (!isBytes(request.revised) || request.revised.byteLength === 0)
-      return { ok: false, code: 'invalidArgs', reason: 'the revised document is empty' };
+      return { ok: false, code: 'invalidArgs', reason: EMPTY_REASON };
     const surface = host.surface()!;
     surface.flushPendingInput();
     const authorName = request.authorName?.trim() || surface.author();
@@ -100,7 +132,8 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
         detectFormatChanges: request.detectFormatChanges !== false,
       }
     );
-    if (!result.ok) return { ok: false, code: 'invalidArgs', reason: result.message };
+    if (!result.ok)
+      return { ok: false, code: 'invalidArgs', reason: result.message, engineCode: result.code };
     const replaced = surface.session.replacePackage(result.package);
     if (!replaced.ok)
       return {
@@ -132,19 +165,27 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
       async apply(request): Promise<CompareDocumentsOutcome> {
         if (!session.canApply()) {
           const refusal = canCompare();
-          return { ok: false, message: refusal.ok ? 'the dialog is closed' : refusal.reason };
+          if (refusal.ok) return { ok: false, reason: 'closed', message: CLOSED_REASON };
+          return { ok: false, reason: refusalOf(refusal), message: refusal.reason };
         }
         running = true;
         // One task so the dialog can paint its busy state before the synchronous compare.
         await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0));
         try {
-          if (controller.signal.aborted) return { ok: false, message: 'the dialog is closed' };
+          if (controller.signal.aborted)
+            return { ok: false, reason: 'closed', message: CLOSED_REASON };
           const result = compare(request);
-          if (!result.ok) return { ok: false, message: result.reason };
+          if (!result.ok)
+            return {
+              ok: false,
+              reason: refusalOf(result, result.engineCode),
+              message: result.reason,
+            };
           session.cancel();
           return { ok: true, revisionCount: result.revisionCount ?? 0 };
         } catch (error) {
-          return { ok: false, message: error instanceof Error ? error.message : String(error) };
+          const message = error instanceof Error ? error.message : String(error);
+          return { ok: false, reason: 'failed', message };
         } finally {
           running = false;
         }
@@ -207,7 +248,8 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
       if (command.type === 'openCompareDocumentsDialog') return open();
       if (command.type !== 'compareDocuments') return null;
       const result = compare(command);
-      return result.ok ? { ok: true, changed: result.changed } : result;
+      if (result.ok) return { ok: true, changed: result.changed };
+      return { ok: false, code: result.code, reason: result.reason };
     },
     /** `can` for the two compare commands; null for every other command. */
     can(command: EditorCommand): CanResult | null {

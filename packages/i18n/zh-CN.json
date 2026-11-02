@@ -1179,11 +1179,23 @@
     "comparing": "正在比较…",
     "description": "打开的文档为原始文档。请选择修订后的文档。其差异将作为修订显示在此处。",
     "detectFormatting": "检测格式更改",
-    "failed": "无法比较文档：{message}",
     "fileRequired": "请先选择修订后的文档。",
     "noFile": "未选择文件",
     "readFailed": "无法读取所选文件。",
     "revisedFile": "修订后的文档",
-    "title": "比较文档"
+    "title": "比较文档",
+    "errors": {
+      "invalidOriginal": "无法读取已打开的文档进行比较。",
+      "invalidRevised": "所选文件不是可以比较的文档。",
+      "tooLarge": "文档太大，无法比较。",
+      "unsupportedContent": "文档在无法显示为修订的内容上存在差异，或已打开的文档受保护。",
+      "unavailable": "此文档无法使用比较文档。",
+      "protected": "此文档受保护，禁止编辑。",
+      "collaboration": "其他人正在编辑此文档时无法使用比较文档。",
+      "viewing": "文档以只读方式打开。",
+      "closed": "对话框在比较运行前已关闭。",
+      "empty": "所选文件为空。",
+      "failed": "无法比较文档。"
+    }
   }
 }

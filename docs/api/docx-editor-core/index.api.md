@@ -1087,7 +1087,11 @@ export type CompareDocumentsOutcome = {
 } | {
     readonly message: string;
     readonly ok: false;
+    readonly reason: CompareDocumentsRefusal;
 };
+
+// @public
+export type CompareDocumentsRefusal = 'invalidOriginal' | 'invalidRevised' | 'tooLarge' | 'unsupportedContent' | 'unavailable' | 'protected' | 'collaboration' | 'viewing' | 'closed' | 'empty' | 'failed';
 
 // @public
 export interface CompareDocumentsRequest {

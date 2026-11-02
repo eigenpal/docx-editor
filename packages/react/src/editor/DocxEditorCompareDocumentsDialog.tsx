@@ -97,7 +97,7 @@ function CompareDocumentsForm({
       detectFormatChanges: values.detectFormatChanges,
     });
     if (outcome.ok || session.signal.aborted) return;
-    setError(translate('compareDocuments.failed' as TranslationKey, { message: outcome.message }));
+    setError(translate(`compareDocuments.errors.${outcome.reason}` as TranslationKey));
     setBusy(false);
   };
   const state: UseCompareDocumentsDialogReturn = {

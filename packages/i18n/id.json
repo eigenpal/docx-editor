@@ -1179,11 +1179,23 @@
     "comparing": "Membandingkan…",
     "description": "Dokumen yang terbuka adalah dokumen asli. Pilih dokumen revisi. Perbedaannya muncul di sini sebagai perubahan terlacak.",
     "detectFormatting": "Deteksi perubahan format",
-    "failed": "Tidak dapat membandingkan dokumen: {message}",
     "fileRequired": "Pilih dokumen revisi terlebih dahulu.",
     "noFile": "Tidak ada file yang dipilih",
     "readFailed": "Tidak dapat membaca file yang dipilih.",
     "revisedFile": "Dokumen revisi",
-    "title": "Bandingkan dokumen"
+    "title": "Bandingkan dokumen",
+    "errors": {
+      "invalidOriginal": "Dokumen yang terbuka tidak dapat dibaca untuk dibandingkan.",
+      "invalidRevised": "File yang dipilih bukan dokumen yang dapat dibandingkan.",
+      "tooLarge": "Dokumen terlalu besar untuk dibandingkan.",
+      "unsupportedContent": "Dokumen berbeda dalam konten yang tidak dapat ditampilkan sebagai perubahan terlacak, atau dokumen yang terbuka dilindungi.",
+      "unavailable": "Bandingkan dokumen tidak tersedia untuk dokumen ini.",
+      "protected": "Dokumen ini dilindungi dari pengeditan.",
+      "collaboration": "Bandingkan dokumen tidak tersedia saat orang lain mengedit dokumen ini.",
+      "viewing": "Dokumen dibuka hanya untuk dilihat.",
+      "closed": "Dialog ditutup sebelum perbandingan dijalankan.",
+      "empty": "File yang dipilih kosong.",
+      "failed": "Dokumen tidak dapat dibandingkan."
+    }
   }
 }

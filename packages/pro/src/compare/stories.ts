@@ -225,6 +225,7 @@ export function compareNotes(
   };
   const xml = storyXml(scope, holder.root as ElementNode, () => {
     let out = '';
+    const copiedSeparators: string[] = [];
     if (basePart) {
       for (const note of elementChildren(basePart.root)) {
         const id = attributeOf(note, 'id');
@@ -248,14 +249,18 @@ export function compareNotes(
         }
       }
     } else if (revisedPart) {
-      // A new notes part keeps the revised document's separators.
+      // A new notes part keeps the revised document's separators, under their own ids.
       for (const note of elementChildren(revisedPart.root)) {
         const type = attributeOf(note, 'type');
-        if (type && NOTE_SEPARATORS.has(type)) out += revisedSide.serialize(note);
+        if (!type || !NOTE_SEPARATORS.has(type)) continue;
+        out += revisedSide.serialize(note);
+        const id = attributeOf(note, 'id');
+        if (id !== undefined) copiedSeparators.push(id);
       }
     }
     const nextId = freeIds([
       ...baseNotes.keys(),
+      ...copiedSeparators,
       ...referencedIds(basePkg, new Set([`${kind}Reference`]), 'id'),
     ]);
     for (const revisedId of added) {

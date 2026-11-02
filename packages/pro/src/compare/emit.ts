@@ -216,7 +216,13 @@ export function sectPrXml(
   revised: ElementNode | null,
   ctx: EmitContext,
   /** References to header and footer parts the output adds. */
-  extraRefs = ''
+  extraRefs = '',
+  /**
+   * The body's final section, which every document has: a side without a `w:sectPr` uses the
+   * default settings, so the difference is recorded like any other. A section break, by
+   * contrast, travels with its paragraph mark and is passed one-sided on purpose.
+   */
+  finalSection = false
 ): string {
   const source = revised ?? base;
   if (!source) return '';
@@ -228,10 +234,11 @@ export function sectPrXml(
           .map((child) => ctx.base.serialize(child))
           .join('')
       : '') + extraRefs;
-  const body = sectPrBody(source, side);
+  // The final section of a revised document without one takes the default settings.
+  const body = revised || !finalSection ? sectPrBody(source, side) : '';
   let change = '';
-  if (base && revised && ctx.detectFormatChanges) {
-    const before = sectPrBody(base, ctx.base);
+  if (ctx.detectFormatChanges && (finalSection || (base && revised))) {
+    const before = base ? sectPrBody(base, ctx.base) : '';
     if (normalizeSect(before) !== normalizeSect(body))
       change = `<w:sectPrChange${ctx.attrs()}><w:sectPr>${before}</w:sectPr></w:sectPrChange>`;
   }

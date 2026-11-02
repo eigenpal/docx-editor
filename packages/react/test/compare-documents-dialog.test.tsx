@@ -96,7 +96,7 @@ test('a refused compare shows its reason in the error part', async () => {
   await waitFor(
     () => {
       const text = view.container.querySelector('[data-docx-part="error"]')?.textContent ?? '';
-      if (!text.includes('Could not compare the documents')) throw new Error(text);
+      if (!text.includes('not a document that can be compared')) throw new Error(text);
     },
     { timeout: 5000 }
   );

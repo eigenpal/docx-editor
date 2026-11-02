@@ -1182,7 +1182,19 @@
     "compare": "Compare",
     "cancel": "Cancel",
     "comparing": "Comparing…",
-    "failed": "Could not compare the documents: {message}",
+    "errors": {
+      "invalidOriginal": "The open document cannot be read for a compare.",
+      "invalidRevised": "The chosen file is not a document that can be compared.",
+      "tooLarge": "The documents are too large to compare.",
+      "unsupportedContent": "The documents differ in content that cannot be shown as tracked changes, or the open document is protected.",
+      "unavailable": "Compare documents is not available for this document.",
+      "protected": "This document is protected against edits.",
+      "collaboration": "Compare documents is not available while others edit this document.",
+      "viewing": "The document is open for viewing only.",
+      "closed": "The dialog was closed before the compare ran.",
+      "empty": "The chosen file is empty.",
+      "failed": "Could not compare the documents."
+    },
     "readFailed": "Could not read the chosen file.",
     "fileRequired": "Choose the revised document first."
   }

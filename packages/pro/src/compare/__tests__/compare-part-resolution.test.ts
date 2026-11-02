@@ -127,3 +127,47 @@ test('styles go to a part every reader finds, never to an unrelated styles.xml',
   );
   expect(stylesPart).toBeDefined();
 });
+
+test('a final section only one document declares records its settings as a change', () => {
+  const a4 =
+    '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="2000" w:right="2000" ' +
+    'w:bottom="2000" w:left="2000" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>';
+  const without = edited(buildDocx({ body: p('Same text.') }), (files) => {
+    files['word/document.xml'] = files['word/document.xml']!.replace(
+      /<w:sectPr>[\s\S]*<\/w:sectPr>/,
+      ''
+    );
+  });
+  const withA4 = buildDocx({ body: p('Same text.'), sectPr: a4 });
+  for (const [base, revised] of [
+    [without, withA4],
+    [withA4, without],
+  ] as const) {
+    expect(compared(base, revised)['word/document.xml']).toContain('<w:sectPrChange');
+  }
+});
+
+test('a new note never takes the id of a separator copied with it', () => {
+  const reference = '<w:r><w:footnoteReference w:id="2"/></w:r>';
+  const revised = edited(
+    buildDocx({
+      body: `<w:p><w:r><w:t>Claim.</w:t></w:r>${reference}</w:p>`,
+      footnotes: { 2: p('Source note.') },
+    }),
+    (files) => {
+      files['word/footnotes.xml'] = files['word/footnotes.xml']!.replace(
+        'w:type="separator" w:id="-1"',
+        'w:type="separator" w:id="0"'
+      ).replace(
+        'w:type="continuationSeparator" w:id="0"',
+        'w:type="continuationSeparator" w:id="1"'
+      );
+    }
+  );
+  const out = compared(buildDocx({ body: p('Claim.') }), revised);
+  const ids = [...out['word/footnotes.xml']!.matchAll(/<w:footnote\b[^>]*w:id="([^"]+)"/g)].map(
+    (match) => match[1]
+  );
+  expect(ids).toContain('1');
+  expect(new Set(ids).size).toBe(ids.length);
+});

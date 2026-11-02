@@ -96,7 +96,7 @@ test('a refused compare shows the reason and keeps the dialog open', async () =>
   const alert = await waitFor(
     () => {
       const node = container.querySelector('[role="alert"]');
-      if (!node?.textContent?.includes('Could not compare the documents'))
+      if (!node?.textContent?.includes('not a document that can be compared'))
         throw new Error('no refusal yet');
       return node;
     },
