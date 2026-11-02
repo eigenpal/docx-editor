@@ -219,3 +219,73 @@ test('the limit counts a main story of any declared type and text box content', 
   const inBoxes = compare(boxed, boxed);
   expect(inBoxes.ok ? '' : inBoxes.code).toBe('too-large');
 });
+
+test('notes, styles, lists, and comments are found through relationships, not part types', () => {
+  const WML = 'application/vnd.openxmlformats-officedocument.wordprocessingml';
+  // Unrelated copies with the right content types, listed before the related parts.
+  const withDecoys = (docx: Uint8Array, comments = false) => {
+    const zip = unzipSync(docx);
+    const out: Record<string, Uint8Array> = {};
+    const decoys: Record<string, [string, string]> = {
+      'word/a.xml': ['word/footnotes.xml', 'footnotes'],
+      'word/b.xml': ['word/styles.xml', 'styles'],
+      'word/c.xml': ['word/numbering.xml', 'numbering'],
+    };
+    let types = strFromU8(zip['[Content_Types].xml']!);
+    for (const [name, [source, kind]] of Object.entries(decoys)) {
+      types = types.replace(
+        '<Override ',
+        `<Override PartName="/${name}" ContentType="${WML}.${kind}+xml"/><Override `
+      );
+      out[name] = zip[source]!;
+    }
+    out['[Content_Types].xml'] = strToU8(types);
+    if (comments) {
+      zip['word/_rels/document.xml.rels'] = strToU8(
+        strFromU8(zip['word/_rels/document.xml.rels']!).replace(
+          'Target="comments.xml"',
+          'Target="./comments.xml"'
+        )
+      );
+    }
+    for (const [name, bytes] of Object.entries(zip)) if (!(name in out)) out[name] = bytes;
+    return zipSync(out, { mtime: new Date(2026, 0, 1) });
+  };
+  const fancy = '<w:style w:type="paragraph" w:styleId="Fancy"><w:name w:val="Fancy"/></w:style>';
+  const body = `<w:p>${r('Body')}<w:r><w:footnoteReference w:id="1"/></w:r></w:p>`;
+  const base = withDecoys(
+    buildDocx({
+      body: body + commented(0, 'Kept'),
+      footnotes: { 1: p('Alpha note') },
+      numbering,
+      comments: [{ id: 0, author: 'A', text: 'base comment' }],
+    }),
+    true
+  );
+  const revised = buildDocx({
+    body:
+      body +
+      commented(0, 'Kept') +
+      p('Fancy line', '<w:pStyle w:val="Fancy"/>') +
+      p('roman', listPr(1)) +
+      commented(1, 'Added'),
+    footnotes: { 1: p('Beta note') },
+    numbering: numbering.replace('decimal', 'upperRoman'),
+    extraStyles: fancy,
+    comments: [
+      { id: 0, author: 'A', text: 'base comment' },
+      { id: 1, author: 'B', text: 'revised comment' },
+    ],
+  });
+  const out = files(base, revised);
+  expect(out['word/footnotes.xml']).toContain('Beta');
+  expect(out['word/a.xml']).not.toContain('<w:ins');
+  expect(out['word/styles.xml']).toContain('w:styleId="Fancy"');
+  expect(out['word/b.xml']).not.toContain('Fancy');
+  expect(out['word/numbering.xml']).toContain('upperRoman');
+  expect(out['word/c.xml']).not.toContain('upperRoman');
+  expect(Object.keys(out).filter((name) => /^word\/comments\d*\.xml$/.test(name))).toEqual([
+    'word/comments.xml',
+  ]);
+  expect(out['word/comments.xml']).toContain('revised comment');
+});

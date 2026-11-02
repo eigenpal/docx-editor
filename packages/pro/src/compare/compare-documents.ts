@@ -13,7 +13,6 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import {
   applyTreeOp,
   readOoxmlPackage,
-  relationshipsOf,
   type OoxmlPackage,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
@@ -45,6 +44,7 @@ import {
   type ElementNode,
 } from './xml-fragments.ts';
 import { pushAll } from './arrays.ts';
+import { relatedPart } from './related-parts.ts';
 
 /** Inputs larger than this many blocks (paragraphs, tables, rows, cells) are refused. */
 /**
@@ -249,20 +249,7 @@ function protectedAgainstEdits(pkg: OoxmlPackage, formatChangesTracked: boolean)
 const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
 /** The settings part the main document's relationship names, as the editor reads it. */
-function settingsPart(pkg: OoxmlPackage): OoxmlPart | undefined {
-  const rel = relationshipsOf(pkg, pkg.mainDocumentPart).find((record) =>
-    record.type.endsWith('/settings')
-  );
-  if (!rel || rel.targetMode === 'External') return undefined;
-  const dir = pkg.mainDocumentPart.slice(0, pkg.mainDocumentPart.lastIndexOf('/') + 1);
-  const target = rel.rawTarget.startsWith('/') ? rel.rawTarget : `${dir}${rel.rawTarget}`;
-  const pieces: string[] = [];
-  for (const piece of target.split('/')) {
-    if (piece === '..') pieces.pop();
-    else if (piece !== '.' && piece !== '') pieces.push(piece);
-  }
-  return pkg.parts.get(`/${pieces.join('/')}`);
-}
+const settingsPart = (pkg: OoxmlPackage) => relatedPart(pkg, 'settings');
 
 function unacceptable(side: 'original' | 'revised'): ComparePackagesResult {
   return {

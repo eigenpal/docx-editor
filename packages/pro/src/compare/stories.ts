@@ -22,6 +22,7 @@ import {
   shellOf,
   type ElementNode,
 } from './xml-fragments.ts';
+import { freePartName, relatedPart, wordprocessingType } from './related-parts.ts';
 
 /** One output part. */
 export interface StoryOutput {
@@ -180,11 +181,8 @@ export function comparedStoryParts(pkg: OoxmlPackage): OoxmlPart[] {
   return [...names].flatMap((name) => pkg.parts.get(name) ?? []);
 }
 
-function notesPart(pkg: OoxmlPackage, kind: NoteKind): OoxmlPart | undefined {
-  for (const part of pkg.parts.values())
-    if (part.contentType.endsWith(`.${kind}s+xml`)) return part;
-  return undefined;
-}
+const notesPart = (pkg: OoxmlPackage, kind: NoteKind): OoxmlPart | undefined =>
+  relatedPart(pkg, `${kind}s`);
 
 function notesById(part: OoxmlPart | undefined, kind: NoteKind): Map<string, ElementNode> {
   const out = new Map<string, ElementNode>();
@@ -294,8 +292,8 @@ export function compareNotes(
   void notePlaceholder;
   return {
     output: {
-      partName: basePart?.name ?? `/word/${kind}s.xml`,
-      contentType: holder.contentType,
+      partName: basePart?.name ?? freePartName(basePkg, `/word/${kind}s.xml`),
+      contentType: basePart?.contentType ?? wordprocessingType(`${kind}s`),
       xml,
       isNew: !basePart,
       relType: `${REL_BASE}/${kind}s`,

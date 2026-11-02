@@ -16,6 +16,7 @@ import { serializeOoxmlPart, type OoxmlPackage, type OoxmlPart } from '@docx-edi
 import type { StoryOutput } from './stories.ts';
 import { freeIds, referencedIds } from './free-ids.ts';
 import { attributeOf, childNamed, elementChildren, type ElementNode } from './xml-fragments.ts';
+import { freePartName, relatedPart, wordprocessingType } from './related-parts.ts';
 
 const REL_BASE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
@@ -38,10 +39,9 @@ export function withMappedNumbering(xml: string, map: ReadonlyMap<string, string
   });
 }
 
-function partOfType(pkg: OoxmlPackage, suffix: string): OoxmlPart | undefined {
-  for (const part of pkg.parts.values()) if (part.contentType.endsWith(suffix)) return part;
-  return undefined;
-}
+/** The styles or numbering part the main document relates to; content types decide nothing. */
+const partOfType = (pkg: OoxmlPackage, kind: 'styles' | 'numbering'): OoxmlPart | undefined =>
+  relatedPart(pkg, kind);
 
 /** An element serialized on its own, with the declarations it needs. */
 function fragment(node: ElementNode): string {
@@ -88,12 +88,10 @@ const asCopy = (xml: string) =>
     .replace(/\s[\w.-]+:durableId="[^"]*"/g, '');
 
 function newPart(pkg: OoxmlPackage, xml: string, source: OoxmlPart, kind: string): StoryOutput {
-  let name = `/word/${kind}.xml`;
-  for (let n = 2; pkg.parts.has(name) || pkg.partBytes.has(name.slice(1)); n++)
-    name = `/word/${kind}${n}.xml`;
+  void source;
   return {
-    partName: name,
-    contentType: source.contentType,
+    partName: freePartName(pkg, `/word/${kind}.xml`),
+    contentType: wordprocessingType(kind),
     xml,
     isNew: true,
     relType: `${REL_BASE}/${kind}`,
@@ -110,9 +108,9 @@ function mergeStyles(
   revised: OoxmlPackage,
   lists: ReadonlyMap<string, string>
 ): StoryOutput | null {
-  const from = partOfType(revised, '.styles+xml');
+  const from = partOfType(revised, 'styles');
   if (!from) return null;
-  const into = partOfType(base, '.styles+xml');
+  const into = partOfType(base, 'styles');
   // A style the original names but does not define keeps its meaning too: a revised style must
   // not take it over, or original paragraphs would change look with no revision.
   const known = new Set<string | undefined>(referencedIds(base, STYLE_REFERENCES));
@@ -259,17 +257,17 @@ function mergeNumbering(
   revised: OoxmlPackage
 ): { readonly map: Map<string, string>; readonly output: StoryOutput | null } {
   const map = new Map<string, string>();
-  const from = partOfType(revised, '.numbering+xml');
-  const into = partOfType(base, '.numbering+xml');
+  const from = partOfType(revised, 'numbering');
+  const into = partOfType(base, 'numbering');
   if (!from) {
     // The revised document defines no lists, so none of its list references numbers anything.
     for (const id of into ? listDefinitions(into, undefined).nums.keys() : []) map.set(id, '0');
     return { map, output: null };
   }
   const ours: ListDefinitions = into
-    ? listDefinitions(into, partOfType(base, '.styles+xml'))
+    ? listDefinitions(into, partOfType(base, 'styles'))
     : { abstracts: new Map(), nums: new Map(), styleLists: new Map() };
-  const theirs = listDefinitions(from, partOfType(revised, '.styles+xml'));
+  const theirs = listDefinitions(from, partOfType(revised, 'styles'));
   const ourKey = numKeys(ours);
   const theirKey = numKeys(theirs);
   const ourGroups = groups(ours);

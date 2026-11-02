@@ -8,7 +8,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * document's comments under the smallest ids the original does not use. A comment both
  * documents hold appears twice, once at each anchor, as the reference result shows it.
  */
-import { relationshipsOf, type OoxmlPackage, type OoxmlPart } from '@docx-editor.dev/core/store';
+import type { OoxmlPackage } from '@docx-editor.dev/core/store';
 import type { StoryOutput } from './stories.ts';
 import { storyXml } from './stories.ts';
 import { freeIds, referencedIds } from './free-ids.ts';
@@ -16,6 +16,7 @@ import { freeIds, referencedIds } from './free-ids.ts';
 const COMMENT_MARKERS = new Set(['commentRangeStart', 'commentRangeEnd', 'commentReference']);
 import { MARK, SideContext } from './units.ts';
 import { attributeOf, elementChildren, NamespaceScope, type ElementNode } from './xml-fragments.ts';
+import { freePartName, relatedPart } from './related-parts.ts';
 
 const COMMENTS_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
@@ -23,16 +24,7 @@ const COMMENTS_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml';
 const PLACEHOLDER = new RegExp(`${MARK}CMT:([^§"]+)§`, 'g');
 
-function commentsPart(pkg: OoxmlPackage): OoxmlPart | undefined {
-  const main = pkg.mainDocumentPart;
-  const rel = relationshipsOf(pkg, main).find(
-    (record) => record.type === COMMENTS_TYPE && record.targetMode !== 'External'
-  );
-  if (!rel) return undefined;
-  const dir = main.slice(0, main.lastIndexOf('/') + 1);
-  const name = rel.rawTarget.startsWith('/') ? rel.rawTarget : `${dir}${rel.rawTarget}`;
-  return pkg.parts.get(name);
-}
+const commentsPart = (pkg: OoxmlPackage) => relatedPart(pkg, 'comments');
 
 /**
  * Numbers the revised comments the stories refer to, rewrites their placeholders, and returns
@@ -86,7 +78,7 @@ export function mergeComments(
   if (ids.size === 0) return rewritten;
 
   const scope = new NamespaceScope();
-  const partName = basePart?.name ?? freeName(base, '/word/comments.xml');
+  const partName = basePart?.name ?? freePartName(base, '/word/comments.xml');
   const baseSide = basePart ? new SideContext('base', base, basePart.name, scope) : null;
   const revisedSide = new SideContext('revised', revised, revisedPart!.name, scope);
   const root = (basePart ?? revisedPart)!.root as ElementNode;
@@ -111,12 +103,4 @@ export function mergeComments(
     ...(basePart ? {} : { relType: COMMENTS_TYPE }),
   });
   return rewritten;
-}
-
-function freeName(pkg: OoxmlPackage, wanted: string): string {
-  if (!pkg.parts.has(wanted) && !pkg.partBytes.has(wanted)) return wanted;
-  for (let n = 2; ; n++) {
-    const name = wanted.replace(/\.xml$/, `${n}.xml`);
-    if (!pkg.parts.has(name) && !pkg.partBytes.has(name)) return name;
-  }
 }

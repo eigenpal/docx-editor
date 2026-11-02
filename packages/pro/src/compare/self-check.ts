@@ -65,7 +65,7 @@ function referencedNotes(parts: readonly OoxmlPart[]): ReadonlyMap<string, numbe
  * separators: notes nothing references never show.
  */
 function referencedOnly(part: OoxmlPart, referenced: ReadonlyMap<string, number>): OoxmlPart {
-  const kind = part.contentType.endsWith('.footnotes+xml') ? 'footnote' : 'endnote';
+  const kind = part.root.localName === 'footnotes' ? 'footnote' : 'endnote';
   const keyOf = (note: ElementNode) => `${kind}:${attributeOf(note, 'id') ?? ''}`;
   const all = elementChildren(part.root);
   const others = all.filter((note) => note.localName !== kind);
@@ -76,20 +76,21 @@ function referencedOnly(part: OoxmlPart, referenced: ReadonlyMap<string, number>
   return { ...part, root: { ...part.root, children } as OoxmlPart['root'] };
 }
 
+const isNotesPart = (part: OoxmlPart) =>
+  part.root.localName === 'footnotes' || part.root.localName === 'endnotes';
+
 /** Paragraph text (and, at the properties level, paragraph properties) per story, sorted. */
 function fingerprint(list: readonly OoxmlPart[], level: Level): string {
   const stories: string[] = [];
   const referenced = referencedNotes(list);
   for (const story of list) {
-    const part = story.contentType.endsWith('notes+xml')
-      ? referencedOnly(story, referenced)
-      : story;
+    const part = isNotesPart(story) ? referencedOnly(story, referenced) : story;
     const digest = digestPart(part);
     if (!digest) continue;
     // Empty paragraphs carry no text. A note whose reference was rejected (or accepted away)
     // stays as an empty note, and a deleted block content control keeps an empty paragraph
     // when no paragraph follows it to join.
-    const notes = part.contentType.endsWith('notes+xml');
+    const notes = isNotesPart(part);
     const paragraphs = digest.paragraphs
       .filter((paragraph) => (level === 'properties' && !notes) || paragraph.text.trim() !== '')
       .map((paragraph) => paragraphFingerprint(paragraph, level));
