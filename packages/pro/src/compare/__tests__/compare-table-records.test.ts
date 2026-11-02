@@ -79,3 +79,34 @@ test('a reject restores the original grid', () => {
   const base = docx(grid([4680, 4680]));
   expect(rejectedTable(base, docx(grid([2000, 7360]))).rejected).toBe(tableOf(mainXml(base)));
 });
+
+test('markup around rows and cells stays in a compared table', () => {
+  const cell = (text: string) => `<w:tc>${p(text)}</w:tc>`;
+  const markup = (text: string) =>
+    docx(
+      `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr><w:tblGrid><w:gridCol w:w="4000"/>` +
+        `<w:gridCol w:w="4000"/></w:tblGrid><w:bookmarkStart w:id="7" w:name="RowMark"/>` +
+        `<w:tr><w:bookmarkStart w:id="8" w:name="CellMark"/>${cell('a')}<w:bookmarkEnd w:id="8"/>` +
+        `${cell(text)}</w:tr><w:bookmarkEnd w:id="7"/><w:sdt><w:sdtPr><w:id w:val="5"/></w:sdtPr>` +
+        `<w:sdtContent><w:tr>${cell('')}${cell('')}</w:tr></w:sdtContent></w:sdt></w:tbl>${p('')}`
+    );
+  const base = markup('b');
+  const { out, rejected } = rejectedTable(base, markup('b2'));
+  expect(rejected).toBe(tableOf(mainXml(base)));
+  expect(out.match(/<w:bookmarkStart\b/g)?.length).toBe(2);
+  expect(out).toContain('<w:sdt>');
+});
+
+test('markup only the revised table has is refused', () => {
+  const table = (extra: string) =>
+    docx(
+      `<w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>${extra}` +
+        `<w:tr><w:tc>${p('a')}</w:tc></w:tr></w:tbl>${p('')}`
+    );
+  const result = compareDocuments(
+    table(''),
+    table('<w:bookmarkStart w:id="1" w:name="New"/><w:bookmarkEnd w:id="1"/>'),
+    { authorName: 'Test', date: DATE }
+  );
+  expect(result.ok ? '' : result.code).toBe('unsupported-content');
+});

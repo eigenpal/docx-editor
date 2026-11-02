@@ -94,6 +94,65 @@ const rowsOf = (table: ElementNode) =>
 const cellsOf = (row: ElementNode) =>
   elementChildren(row).filter((child) => child.localName === 'tc');
 
+/**
+ * Other children of a table (around its rows) or a row (around its cells): bookmarks, comment
+ * and permission ranges, and content controls or custom XML around rows and cells. Each sits
+ * before the row or cell with index `at`.
+ */
+interface Extra {
+  readonly at: number;
+  readonly xml: string;
+}
+
+const TABLE_OWN = new Set(['tblPr', 'tblGrid', 'tr']);
+const ROW_OWN = new Set(['tblPrEx', 'trPr', 'tc']);
+
+function extrasOf(
+  node: ElementNode | null,
+  own: ReadonlySet<string>,
+  item: string,
+  side: SideContext
+): Extra[] {
+  const out: Extra[] = [];
+  let at = 0;
+  for (const child of node ? elementChildren(node) : []) {
+    if (child.localName === item) at++;
+    else if (!own.has(child.localName)) out.push({ at, xml: side.serialize(child) });
+  }
+  return out;
+}
+
+const sameExtras = (a: readonly Extra[], b: readonly Extra[]) =>
+  a.length === b.length &&
+  a.every((extra, i) => extra.at === b[i]!.at && normalize(extra.xml) === normalize(b[i]!.xml));
+
+/**
+ * The extras an output table or row carries. They have no revision form, so they are kept only
+ * when a reject and an accept both keep them: the same in both documents, or in a deleted
+ * table or row (from the original). Inserted ones, or ones that differ, refuse the compare.
+ */
+function carriedExtras(
+  base: ElementNode | null,
+  revised: ElementNode | null,
+  own: ReadonlySet<string>,
+  item: string,
+  ctx: EmitContext
+): Extra[] {
+  const before = extrasOf(base, own, item, ctx.base);
+  if (!revised) return before;
+  const after = extrasOf(revised, own, item, ctx.revised);
+  if (after.length > 0 && (!base || !sameExtras(before, after))) ctx.state.untracked++;
+  else if (before.length > 0 && !sameExtras(before, after)) ctx.state.untracked++;
+  return base ? before : [];
+}
+
+/** The extras that sit before item `at`. */
+const extrasAt = (extras: readonly Extra[], at: number) =>
+  extras
+    .filter((extra) => extra.at === at)
+    .map((extra) => extra.xml)
+    .join('');
+
 export function compareTable(
   base: ElementNode | null,
   revised: ElementNode | null,
@@ -109,24 +168,30 @@ export function compareTable(
     (propertiesDiffer('tblPr', base, revised, ctx) || grid.includes('<w:tblGridChange'));
   const baseRows = base ? rowsOf(base) : [];
   const revisedRows = revised ? rowsOf(revised) : [];
+  const extras = carriedExtras(base, revised, TABLE_OWN, 'tr', ctx);
   if (!base) for (const row of revisedRows) out += insertedRow(row, ctx);
-  else if (!revised) for (const row of baseRows) out += deletedRow(row, ctx);
+  else if (!revised)
+    baseRows.forEach((row, index) => (out += extrasAt(extras, index) + deletedRow(row, ctx)));
   else {
+    // Extras are the same in both documents: each goes before the revised row it preceded.
+    const before = (index: number) => extrasAt(extras, index);
     let pendingBase: ElementNode[] = [];
-    let pendingRevised: ElementNode[] = [];
+    let pendingRevised: number[] = [];
     const flush = () => {
       // Pair rows of a change run in order while their cell counts agree.
       let k = 0;
       while (
         k < pendingBase.length &&
         k < pendingRevised.length &&
-        cellsOf(pendingBase[k]!).length === cellsOf(pendingRevised[k]!).length
+        cellsOf(pendingBase[k]!).length === cellsOf(revisedRows[pendingRevised[k]!]!).length
       ) {
-        out += rowPair(pendingBase[k]!, pendingRevised[k]!, ctx, tableBundle);
+        const index = pendingRevised[k]!;
+        out += before(index) + rowPair(pendingBase[k]!, revisedRows[index]!, ctx, tableBundle);
         k++;
       }
       for (const row of pendingBase.slice(k)) out += deletedRow(row, ctx);
-      for (const row of pendingRevised.slice(k)) out += insertedRow(row, ctx);
+      for (const index of pendingRevised.slice(k))
+        out += before(index) + insertedRow(revisedRows[index]!, ctx);
       pendingBase = [];
       pendingRevised = [];
     };
@@ -136,14 +201,16 @@ export function compareTable(
         const left = baseRows[op.a]!;
         const right = revisedRows[op.b]!;
         out +=
-          cellsOf(left).length === cellsOf(right).length
+          before(op.b) +
+          (cellsOf(left).length === cellsOf(right).length
             ? rowPair(left, right, ctx, tableBundle)
-            : deletedRow(left, ctx) + insertedRow(right, ctx);
+            : deletedRow(left, ctx) + insertedRow(right, ctx));
       } else if (op.op === 'del') pendingBase.push(baseRows[op.a]!);
-      else pendingRevised.push(revisedRows[op.b]!);
+      else pendingRevised.push(op.b);
     }
     flush();
   }
+  out += extrasAt(extras, revised ? revisedRows.length : baseRows.length);
   void own;
   return `${out}</w:tbl>`;
 }
@@ -183,23 +250,27 @@ function rowPair(
     propertiesDiffer('trPr', base, revised, ctx) ||
     propertiesDiffer('tblPrEx', base, revised, ctx) ||
     revisedCells.some((cell, index) => propertiesDiffer('tcPr', baseCells[index]!, cell, ctx));
+  const extras = carriedExtras(base, revised, ROW_OWN, 'tc', ctx);
   let out = `<w:tr>${rowException(base, revised, ctx)}${properties('trPr', base, revised, ctx)}`;
   revisedCells.forEach((cell, index) => {
     const original = baseCells[index]!;
-    out += `<w:tc>${properties('tcPr', original, cell, ctx, '', bundled)}${compareContainer(unitsOf(original, ctx.base), unitsOf(cell, ctx.revised), ctx)}</w:tc>`;
+    out += `${extrasAt(extras, index)}<w:tc>${properties('tcPr', original, cell, ctx, '', bundled)}${compareContainer(unitsOf(original, ctx.base), unitsOf(cell, ctx.revised), ctx)}</w:tc>`;
   });
-  return `${out}</w:tr>`;
+  return `${out}${extrasAt(extras, revisedCells.length)}</w:tr>`;
 }
 
 function deletedRow(row: ElementNode, ctx: EmitContext): string {
+  const extras = carriedExtras(row, null, ROW_OWN, 'tc', ctx);
   let out = `<w:tr>${rowStart(row, ctx.base)}${properties('trPr', row, null, ctx, `<w:del${ctx.attrs()}/>`)}`;
-  for (const cell of cellsOf(row)) {
-    out += `<w:tc>${properties('tcPr', cell, null, ctx)}${compareContainer(unitsOf(cell, ctx.base), [], ctx)}</w:tc>`;
+  const cells = cellsOf(row);
+  for (const [index, cell] of cells.entries()) {
+    out += `${extrasAt(extras, index)}<w:tc>${properties('tcPr', cell, null, ctx)}${compareContainer(unitsOf(cell, ctx.base), [], ctx)}</w:tc>`;
   }
-  return `${out}</w:tr>`;
+  return `${out}${extrasAt(extras, cells.length)}</w:tr>`;
 }
 
 function insertedRow(row: ElementNode, ctx: EmitContext): string {
+  carriedExtras(null, row, ROW_OWN, 'tc', ctx);
   let out = `<w:tr>${rowStart(row, ctx.revised)}${properties('trPr', null, row, ctx, `<w:ins${ctx.attrs()}/>`)}`;
   for (const cell of cellsOf(row)) {
     out += `<w:tc>${properties('tcPr', null, cell, ctx)}${compareContainer([], unitsOf(cell, ctx.revised), ctx)}</w:tc>`;
