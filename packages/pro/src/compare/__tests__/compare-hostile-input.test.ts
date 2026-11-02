@@ -289,3 +289,37 @@ test('notes, styles, lists, and comments are found through relationships, not pa
   ]);
   expect(out['word/comments.xml']).toContain('revised comment');
 });
+
+test('definitions merge into the parts the editor reads, through its fallbacks and decoding', () => {
+  const mine = (color: string) =>
+    '<w:style w:type="paragraph" w:customStyle="1" w:styleId="Mine"><w:name w:val="Mine"/>' +
+    `<w:rPr><w:color w:val="${color}"/></w:rPr></w:style>`;
+  const list = (text: string) => p(text, listPr(1));
+  // No styles relationship (the reader falls back to styles.xml) and a percent-encoded
+  // numbering target (the reader decodes it).
+  const zip = unzipSync(
+    buildDocx({
+      body: p('Keep me', '<w:pStyle w:val="Mine"/>') + list('Item') + p('hello'),
+      extraStyles: mine('FF0000'),
+      numbering,
+    })
+  );
+  zip['word/_rels/document.xml.rels'] = strToU8(
+    strFromU8(zip['word/_rels/document.xml.rels']!)
+      .replace(/<Relationship [^>]*Type="[^"]*\/styles"[^>]*\/>/, '')
+      .replace('Target="numbering.xml"', 'Target="num%62ering.xml"')
+  );
+  const base = zipSync(zip, { mtime: new Date(2026, 0, 1) });
+  const revised = buildDocx({
+    body: p('Keep me', '<w:pStyle w:val="Mine"/>') + list('Item') + p('hello world'),
+    extraStyles: mine('0000FF'),
+    numbering,
+  });
+  const out = files(base, revised);
+  expect(
+    Object.keys(out).filter((name) => /^word\/(styles|numbering)\d+\.xml$/.test(name))
+  ).toEqual([]);
+  expect(out['word/styles.xml']).toContain('FF0000');
+  // The unchanged list item records no property change.
+  expect(out['word/document.xml']).not.toContain('pPrChange');
+});

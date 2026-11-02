@@ -311,6 +311,7 @@ export { resolveTocRowHeadings } from './toc-rows.ts';
 export {
   deriveOoxmlIndexes,
   indexStyles,
+  numberingRootOf,
   stylesPartOf,
   type OoxmlIndexes,
   type ParagraphIndexEntry,
@@ -481,6 +482,7 @@ export {
   hasAnyComment,
   type CommentDeletionOwner,
 } from './comment-lifecycle.ts';
+export { commentsPartNameForStory } from './comment-lifecycle-scan.ts';
 export {
   NO_TRACKING_SETTINGS,
   readTrackingSettings,

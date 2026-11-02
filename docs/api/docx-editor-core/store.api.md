@@ -580,6 +580,9 @@ export function commentsExtendedPartNameOf(pkg: OoxmlPackage, storyPartName: str
 export function commentsOfPart(part: OoxmlPart): CommentRecord[];
 
 // @public
+export function commentsPartNameForStory(pkg: OoxmlPackage, storyPartName: string): string | null;
+
+// @public
 export interface CommentThreadState {
     // (undocumented)
     readonly done: boolean;
@@ -3238,6 +3241,9 @@ export function noteTypeOf(node: OoxmlNode): NoteType | undefined;
 
 // @public
 export function nullRecord<T = unknown>(): Record<string, T>;
+
+// @public
+export function numberingRootOf(pkg: OoxmlPackage): OoxmlElement | null;
 
 // @public (undocumented)
 export function observeHistoryGroup<T>(group: HistoryGroup, report: (kind: HistoryCaptureKind, reason?: HistoryCaptureReason) => void, run: () => T): T;

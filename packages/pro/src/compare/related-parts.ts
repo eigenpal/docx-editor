@@ -3,34 +3,51 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-import { relationshipsOf, type OoxmlPackage, type OoxmlPart } from '@docx-editor.dev/core/store';
+import {
+  commentsPartNameForStory,
+  numberingRootOf,
+  resolveNotesPart,
+  settingsPartOf,
+  stylesPartOf,
+  type OoxmlPackage,
+  type OoxmlPart,
+} from '@docx-editor.dev/core/store';
+
+/** A document-level part a compare reads and writes. */
+export type RelatedPartKind =
+  | 'styles'
+  | 'numbering'
+  | 'settings'
+  | 'footnotes'
+  | 'endnotes'
+  | 'comments';
 
 /**
- * The part the main document relates to with a `kind` relationship (`styles`, `numbering`,
- * `footnotes`, `endnotes`, `comments`, `settings`), as readers find it. A part's declared
- * content type is file data and decides nothing: an unrelated part of the right type is a
- * decoy. A matching relationship that is external, names no part, or names a part with
- * another root is skipped, so a bad first match cannot hide a usable later one.
+ * The part of `kind` that the editor's own readers use, with their relationship resolution and
+ * fallbacks, so the compare merges into exactly the part the editor paints with. A part's
+ * declared content type alone decides nothing.
  */
-export function relatedPart(
-  pkg: OoxmlPackage,
-  kind: string,
-  root: string = kind
-): OoxmlPart | undefined {
-  const owner = pkg.mainDocumentPart;
-  const dir = owner.slice(0, owner.lastIndexOf('/') + 1);
-  for (const rel of relationshipsOf(pkg, owner)) {
-    if (!rel.type.endsWith(`/${kind}`) || rel.targetMode === 'External') continue;
-    const target = rel.rawTarget.startsWith('/') ? rel.rawTarget : `${dir}${rel.rawTarget}`;
-    const pieces: string[] = [];
-    for (const piece of target.split('/')) {
-      if (piece === '..') pieces.pop();
-      else if (piece !== '.' && piece !== '') pieces.push(piece);
+export function relatedPart(pkg: OoxmlPackage, kind: RelatedPartKind): OoxmlPart | undefined {
+  switch (kind) {
+    case 'styles':
+      return stylesPartOf(pkg);
+    case 'numbering': {
+      const root = numberingRootOf(pkg);
+      if (!root) return undefined;
+      for (const part of pkg.parts.values()) if (part.root === root) return part;
+      return undefined;
     }
-    const part = pkg.parts.get(`/${pieces.join('/')}`);
-    if (part && part.root.localName === root) return part;
+    case 'settings':
+      return settingsPartOf(pkg) ?? undefined;
+    case 'footnotes':
+      return resolveNotesPart(pkg, 'footnote') ?? undefined;
+    case 'endnotes':
+      return resolveNotesPart(pkg, 'endnote') ?? undefined;
+    case 'comments': {
+      const name = commentsPartNameForStory(pkg, pkg.mainDocumentPart);
+      return name === null ? undefined : pkg.parts.get(name);
+    }
   }
-  return undefined;
 }
 
 /** `wanted`, or `wanted` numbered (`styles2.xml`), whichever no part of `pkg` holds. */
