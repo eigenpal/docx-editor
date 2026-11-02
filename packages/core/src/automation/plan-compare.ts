@@ -4,7 +4,7 @@
 // INTERNAL. The engine comes from the host (a review module); the core ships none. The result
 // replaces the package in one transaction, so it commits, replicates, and undoes as one unit.
 
-import type { CompareDocumentsEngine } from '../contracts/modules.ts';
+import type { CompareDocumentsEngine } from '../contracts/document-compare.ts';
 import type { AutomationOperation } from './operations.ts';
 import { decodeBase64 } from './pictures.ts';
 import type { PlannedOperation } from './plan-types.ts';

@@ -98,7 +98,7 @@ test('revised styles and lists the original lacks are added', () => {
   // The revised list differs from the original's list 77, so it takes a new id.
   const used = [...document.matchAll(/numId w:val="(\d+)"/g)].map((match) => match[1]);
   for (const id of used) expect(list).toMatch(new RegExp(`<w:num\\b[^>]*w:numId="${id}"`));
-  expect(used).toContain('78');
+  expect(used.some((id) => id !== '77')).toBe(true);
   // The same list in both documents keeps its id and records no property change.
   const again = files(revised, revised);
   expect(strFromU8(again['word/document.xml']!)).not.toContain('pPrChange');

@@ -12,7 +12,7 @@ import type { AutomationStoryId } from './stories.ts';
 export interface BatchPlannerHost {
   readonly collaborative?: boolean;
   /** The host's document compare engine, when a review module provides one. */
-  readonly compareDocuments?: import('../contracts/modules.ts').CompareDocumentsEngine;
+  readonly compareDocuments?: import('../contracts/document-compare.ts').CompareDocumentsEngine;
   readonly trackedRangeReplacement?: boolean;
   readonly fieldPageContext?: (
     story: AutomationStoryId,

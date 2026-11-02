@@ -8,8 +8,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  *
  * The output keeps the original's definitions. A style only the revised document defines is
  * added. A revised list keeps its id only when the original has the same definition under that
- * id; every other revised list is added under new ids, so it never reads as an original list
- * with the same number, and two revised lists that look alike still number apart.
+ * id, shared with the same other lists; every other revised list is added under new ids, so it
+ * never reads as an original list with the same number, and two revised lists that number
+ * apart still do.
  */
 import { serializeOoxmlPart, type OoxmlPackage, type OoxmlPart } from '@docx-editor.dev/core/store';
 import type { StoryOutput } from './stories.ts';
@@ -76,6 +77,15 @@ const withoutPictureBullets = (xml: string) =>
     .replace(/<(?:[\w.-]+:)?numPicBullet\b[\s\S]*?<\/(?:[\w.-]+:)?numPicBullet>/g, '')
     .replace(/<(?:[\w.-]+:)?lvlPicBulletId\b[^>]*\/>/g, '');
 
+/**
+ * A copied list definition without the identities the original may share: its list identity
+ * (`w:nsid`), its durable id, and the style links that belong to the original's styles.
+ */
+const asCopy = (xml: string) =>
+  withoutPictureBullets(xml)
+    .replace(/<(?:[\w.-]+:)?(?:nsid|styleLink|numStyleLink)\b[^>]*\/>/g, '')
+    .replace(/\s[\w.-]+:durableId="[^"]*"/g, '');
+
 function newPart(pkg: OoxmlPackage, xml: string, source: OoxmlPart, kind: string): StoryOutput {
   let name = `/word/${kind}.xml`;
   for (let n = 2; pkg.parts.has(name) || pkg.partBytes.has(name.slice(1)); n++)
@@ -113,7 +123,10 @@ function mergeStyles(
     const id = attributeOf(style, 'styleId');
     if (id === undefined || known.has(id)) continue;
     known.add(id);
-    added += withMappedNumbering(fragment(style), lists);
+    // The original's default styles stay the defaults.
+    const shell = /^<[^>]*>/.exec(fragment(style))![0];
+    const xml = fragment(style).replace(shell, shell.replace(/\s[\w.-]*:?default="[^"]*"/, ''));
+    added += withMappedNumbering(xml, lists);
   }
   if (!added) return null;
   return {
@@ -124,10 +137,14 @@ function mergeStyles(
   };
 }
 
-/** Identity of a list definition: its levels, without its own ids. */
+/** Identity of a list definition: its levels, without its own ids or style links. */
 function abstractKey(node: ElementNode): string {
   const levels = elementChildren(node).filter(
-    (child) => child.localName !== 'nsid' && child.localName !== 'tmpl'
+    (child) =>
+      child.localName !== 'nsid' &&
+      child.localName !== 'tmpl' &&
+      child.localName !== 'styleLink' &&
+      child.localName !== 'numStyleLink'
   );
   return levels.map(fragment).join('');
 }
@@ -135,9 +152,11 @@ function abstractKey(node: ElementNode): string {
 interface ListDefinitions {
   readonly abstracts: Map<string, ElementNode>;
   readonly nums: Map<string, ElementNode>;
+  /** List style id to the list id its paragraph properties name. */
+  readonly styleLists: Map<string, string>;
 }
 
-function listDefinitions(part: OoxmlPart): ListDefinitions {
+function listDefinitions(part: OoxmlPart, styles: OoxmlPart | undefined): ListDefinitions {
   const abstracts = new Map<string, ElementNode>();
   const nums = new Map<string, ElementNode>();
   for (const child of elementChildren(part.root)) {
@@ -149,11 +168,43 @@ function listDefinitions(part: OoxmlPart): ListDefinitions {
       if (id !== undefined) nums.set(id, child);
     }
   }
-  return { abstracts, nums };
+  const styleLists = new Map<string, string>();
+  for (const style of styles ? elementChildren(styles.root) : []) {
+    if (style.localName !== 'style') continue;
+    const id = attributeOf(style, 'styleId');
+    const pPr = childNamed(style, 'pPr');
+    const numPr = pPr && childNamed(pPr, 'numPr');
+    const numId = numPr && childNamed(numPr, 'numId');
+    const value = numId && attributeOf(numId, 'val');
+    if (id !== undefined && value !== undefined) styleLists.set(id, value);
+  }
+  return { abstracts, nums, styleLists };
 }
 
 const abstractIdOf = (num: ElementNode) =>
   attributeOf(childNamed(num, 'abstractNumId') ?? num, 'val');
+
+/** List style links a definition may follow, in a chain. */
+const MAX_STYLE_LINKS = 4;
+
+/**
+ * The definition a list instance numbers with: its own, or, when that one only links to a list
+ * style (`w:numStyleLink`), the definition of the list that style names.
+ */
+function definitionOf(num: ElementNode, lists: ListDefinitions): string | undefined {
+  let id = abstractIdOf(num);
+  for (let hops = 0; id !== undefined && hops < MAX_STYLE_LINKS; hops++) {
+    const abstract = lists.abstracts.get(id);
+    const link = abstract && childNamed(abstract, 'numStyleLink');
+    const style = link && attributeOf(link, 'val');
+    const target = style === undefined ? undefined : lists.styleLists.get(style);
+    const linked = target === undefined ? undefined : lists.nums.get(target);
+    const next = linked && abstractIdOf(linked);
+    if (next === undefined || next === id) return id;
+    id = next;
+  }
+  return id;
+}
 
 /**
  * Identity of a list instance: its definition and its level overrides. Each definition is
@@ -162,7 +213,7 @@ const abstractIdOf = (num: ElementNode) =>
 function numKeys(lists: ListDefinitions): (num: ElementNode) => string {
   const keys = new Map<string, string>();
   return (num) => {
-    const abstractId = abstractIdOf(num) ?? '';
+    const abstractId = definitionOf(num, lists) ?? '';
     let key = keys.get(abstractId);
     if (key === undefined) {
       const abstract = lists.abstracts.get(abstractId);
@@ -177,18 +228,34 @@ function numKeys(lists: ListDefinitions): (num: ElementNode) => string {
   };
 }
 
-const maxId = (ids: Iterable<string>) => {
-  let max = 0;
-  for (const id of ids) {
-    const n = Number(id);
-    if (Number.isSafeInteger(n) && n > max) max = n;
+/** Hands out the smallest positive ids no definition uses yet. */
+function freeIds(used: Iterable<string>): () => string {
+  const taken = new Set(used);
+  let next = 1;
+  return () => {
+    while (taken.has(String(next))) next++;
+    taken.add(String(next));
+    return String(next);
+  };
+}
+
+/** Groups instances by the definition they number with. */
+function groups(lists: ListDefinitions): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const [id, num] of lists.nums) {
+    const definition = definitionOf(num, lists);
+    if (definition === undefined) continue;
+    const list = out.get(definition) ?? [];
+    list.push(id);
+    out.set(definition, list);
   }
-  return max;
-};
+  return out;
+}
 
 /**
- * Instances that share a revised definition share its copy, or the original's definition when
- * one of them kept its id, so they keep numbering together.
+ * Instances that share a revised definition share one output definition: the original's when
+ * the whole group kept its ids, else one copy. Counters run per definition, so this keeps
+ * lists that number together together and lists that number apart apart.
  */
 function mergeNumbering(
   base: OoxmlPackage,
@@ -202,45 +269,61 @@ function mergeNumbering(
     const xml = withoutPictureBullets(fragment(from.root as ElementNode));
     return { map, output: newPart(base, xml, from, 'numbering') };
   }
-  const ours = listDefinitions(into);
-  const theirs = listDefinitions(from);
+  const ours = listDefinitions(into, partOfType(base, '.styles+xml'));
+  const theirs = listDefinitions(from, partOfType(revised, '.styles+xml'));
   const ourKey = numKeys(ours);
   const theirKey = numKeys(theirs);
+  const ourGroups = groups(ours);
   // Revised definition id to the output definition id its instances use.
   const definitions = new Map<string, string>();
   const kept = new Set<string>();
-  for (const [id, num] of theirs.nums) {
-    const same = ours.nums.get(id);
-    if (!same || ourKey(same) !== theirKey(num)) continue;
-    kept.add(id);
-    const abstractId = abstractIdOf(num);
-    const target = abstractIdOf(same);
-    if (abstractId !== undefined && target !== undefined && !definitions.has(abstractId))
-      definitions.set(abstractId, target);
+  for (const [definition, ids] of groups(theirs)) {
+    let target: string | undefined;
+    const keeps = ids.every((id) => {
+      const same = ours.nums.get(id);
+      if (!same || ourKey(same) !== theirKey(theirs.nums.get(id)!)) return false;
+      const ourDefinition = definitionOf(same, ours);
+      target ??= ourDefinition;
+      return ourDefinition === target;
+    });
+    // The original's group may hold more instances, but none the revised document groups apart.
+    const together =
+      target !== undefined &&
+      (ourGroups.get(target) ?? []).every((id) => !theirs.nums.has(id) || ids.includes(id));
+    if (!keeps || !together || target === undefined) continue;
+    for (const id of ids) kept.add(id);
+    definitions.set(definition, target);
   }
-  let nextAbstract = maxId(ours.abstracts.keys()) + 1;
-  let nextNum = maxId(ours.nums.keys()) + 1;
+  const nextAbstract = freeIds(ours.abstracts.keys());
+  const nextNum = freeIds([...ours.nums.keys(), ...theirs.nums.keys()]);
   let abstracts = '';
   let nums = '';
   for (const [id, num] of theirs.nums) {
     if (kept.has(id)) continue;
-    const abstractId = abstractIdOf(num);
-    const abstract = abstractId === undefined ? undefined : theirs.abstracts.get(abstractId);
-    if (!abstract || abstractId === undefined) continue;
-    let target = definitions.get(abstractId);
-    if (target === undefined) {
-      target = String(nextAbstract++);
-      definitions.set(abstractId, target);
-      abstracts += withoutPictureBullets(
-        fragment(abstract).replace(/(\babstractNumId=")[^"]*"/, `$1${target}"`)
-      );
+    const definition = definitionOf(num, theirs);
+    const abstract = definition === undefined ? undefined : theirs.abstracts.get(definition);
+    if (!abstract || definition === undefined) {
+      // An instance without a definition numbers nothing.
+      map.set(id, '0');
+      continue;
     }
-    const newId = String(nextNum++);
-    nums += fragment(num)
-      .replace(/(\bnumId=")[^"]*"/, `$1${newId}"`)
-      .replace(/(<(?:[\w.-]+:)?abstractNumId\b[^>]*?\s(?:[\w.-]+:)?val=")[^"]*"/, `$1${target}"`);
+    let target = definitions.get(definition);
+    if (target === undefined) {
+      target = nextAbstract();
+      definitions.set(definition, target);
+      abstracts += asCopy(fragment(abstract).replace(/(\babstractNumId=")[^"]*"/, `$1${target}"`));
+    }
+    const newId = nextNum();
+    nums += asCopy(
+      fragment(num)
+        .replace(/(\bnumId=")[^"]*"/, `$1${newId}"`)
+        .replace(/(<(?:[\w.-]+:)?abstractNumId\b[^>]*?\s(?:[\w.-]+:)?val=")[^"]*"/, `$1${target}"`)
+    );
     map.set(id, newId);
   }
+  // A revised reference to a list the revised document does not define numbers nothing; it
+  // must not pick up the original's list with that id.
+  for (const id of ours.nums.keys()) if (!theirs.nums.has(id) && !map.has(id)) map.set(id, '0');
   if (!abstracts && !nums) return { map, output: null };
   let xml = insertBefore(into, ['num', 'numIdMacAtCleanup'], abstracts);
   xml = insertBeforeIn(xml, ['numIdMacAtCleanup'], nums);

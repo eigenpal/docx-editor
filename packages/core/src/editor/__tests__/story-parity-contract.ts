@@ -128,6 +128,8 @@ export const SLOT_PARITY: Readonly<Record<ChromeSlotId, ParityRule>> = Object.fr
   'review.paragraphMarks': { parity: 'same' },
   'review.bookmarks': { parity: 'same' },
   'review.protectDocument': { parity: 'same' },
+  // Compare works on the whole document, so the caret's story does not change it.
+  'review.compareDocuments': { parity: 'same' },
   'review.addComment': { parity: 'same' },
   'review.authors': { parity: 'same' },
   'review.editingMode': { parity: 'same' },

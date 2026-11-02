@@ -13,6 +13,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import {
   applyTreeOp,
   readOoxmlPackage,
+  relationshipsOf,
   type OoxmlPackage,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
@@ -81,7 +82,7 @@ export function comparePackages(
   /** @internal Diagnostics only: return the result even when the self-check fails. */
   unchecked = false
 ): ComparePackagesResult {
-  if (protectedAgainstEdits(original)) {
+  if (protectedAgainstEdits(original, options.detectFormatChanges ?? true)) {
     return {
       ok: false,
       code: 'unsupported-content',
@@ -219,22 +220,39 @@ const PROTECTED_EDITS = new Set(['readOnly', 'comments', 'forms']);
  * as tracked changes, which is all a compare writes, unless the original holds tracked changes
  * of its own: the compare would accept them.
  */
-function protectedAgainstEdits(pkg: OoxmlPackage): boolean {
-  for (const part of pkg.parts.values()) {
-    if (!part.contentType.endsWith('.settings+xml')) continue;
-    const protection = elementChildren(part.root).find(
-      (child) => child.localName === 'documentProtection'
+function protectedAgainstEdits(pkg: OoxmlPackage, formatChangesTracked: boolean): boolean {
+  const settings = settingsPart(pkg);
+  const protection =
+    settings &&
+    elementChildren(settings.root).find(
+      (child) => child.localName === 'documentProtection' && child.namespaceUri === W_NS
     );
-    if (!protection) return false;
-    const edit = attributeOf(protection, 'edit') ?? '';
-    const enforcement = attributeOf(protection, 'enforcement');
-    if (enforcement === undefined || OFF_VALUES.has(enforcement)) return false;
-    if (PROTECTED_EDITS.has(edit)) return true;
-    return (
-      edit === 'trackedChanges' && [...pkg.parts.values()].some((story) => hasRevision(story.root))
-    );
+  if (!protection) return false;
+  const edit = attributeOf(protection, 'edit', W_NS) ?? '';
+  const enforcement = attributeOf(protection, 'enforcement', W_NS);
+  if (enforcement === undefined || OFF_VALUES.has(enforcement)) return false;
+  if (PROTECTED_EDITS.has(edit)) return true;
+  if (edit !== 'trackedChanges') return false;
+  // Without format detection, formatting and section differences are written untracked.
+  return !formatChangesTracked || [...pkg.parts.values()].some((part) => hasRevision(part.root));
+}
+
+const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+/** The settings part the main document's relationship names, as the editor reads it. */
+function settingsPart(pkg: OoxmlPackage): OoxmlPart | undefined {
+  const rel = relationshipsOf(pkg, pkg.mainDocumentPart).find((record) =>
+    record.type.endsWith('/settings')
+  );
+  if (!rel || rel.targetMode === 'External') return undefined;
+  const dir = pkg.mainDocumentPart.slice(0, pkg.mainDocumentPart.lastIndexOf('/') + 1);
+  const target = rel.rawTarget.startsWith('/') ? rel.rawTarget : `${dir}${rel.rawTarget}`;
+  const pieces: string[] = [];
+  for (const piece of target.split('/')) {
+    if (piece === '..') pieces.pop();
+    else if (piece !== '.' && piece !== '') pieces.push(piece);
   }
-  return false;
+  return pkg.parts.get(`/${pieces.join('/')}`);
 }
 
 function unacceptable(side: 'original' | 'revised'): ComparePackagesResult {

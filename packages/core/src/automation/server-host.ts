@@ -119,7 +119,7 @@ export interface ServerAutomationHostOptions {
    * Document compare engine from the module registry (the review module's). Absent,
    * `compareFromBase64` refuses.
    */
-  readonly compareDocuments?: import('../contracts/modules.ts').CompareDocumentsEngine;
+  readonly compareDocuments?: import('../contracts/document-compare.ts').CompareDocumentsEngine;
   /**
    * Opt-in relaxation of `w:lock` for run-property writes (`setFont`): content-locked controls
    * can be restyled but not retyped. Absent, they refuse both.
