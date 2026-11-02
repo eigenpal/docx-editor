@@ -166,6 +166,20 @@ export function compareFurniture(
 
 const NOTE_SEPARATORS = new Set(['separator', 'continuationSeparator', 'continuationNotice']);
 
+/**
+ * The story parts a compare reads, which the self-check verifies: the main story (found through
+ * the package relationship, whatever content type it declares) first, then the final section's
+ * headers and footers and the notes parts.
+ */
+export function comparedStoryParts(pkg: OoxmlPackage): OoxmlPart[] {
+  const names = new Set<string>([pkg.mainDocumentPart, ...finalSectionFurniture(pkg)]);
+  for (const kind of ['footnote', 'endnote'] as const) {
+    const part = notesPart(pkg, kind);
+    if (part) names.add(part.name);
+  }
+  return [...names].flatMap((name) => pkg.parts.get(name) ?? []);
+}
+
 function notesPart(pkg: OoxmlPackage, kind: NoteKind): OoxmlPart | undefined {
   for (const part of pkg.parts.values())
     if (part.contentType.endsWith(`.${kind}s+xml`)) return part;

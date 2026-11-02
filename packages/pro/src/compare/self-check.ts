@@ -24,30 +24,11 @@ import {
   type OoxmlPart,
   type ParagraphDigest,
 } from '@docx-editor.dev/core/store';
-import { finalSectionFurniture } from './stories.ts';
+import { comparedStoryParts } from './stories.ts';
 import { attributeOf, elementChildren, isElement, type ElementNode } from './xml-fragments.ts';
 
-const STORY_TYPES = [
-  'document.main+xml',
-  '.header+xml',
-  '.footer+xml',
-  '.footnotes+xml',
-  '.endnotes+xml',
-];
-
-const isStoryType = (part: OoxmlPart) =>
-  STORY_TYPES.some((suffix) => part.contentType.endsWith(suffix));
-
-const isFurniture = (part: OoxmlPart) =>
-  part.contentType.endsWith('.header+xml') || part.contentType.endsWith('.footer+xml');
-
-/** The compared story parts of `pkg`. */
-function storyParts(pkg: OoxmlPackage): OoxmlPart[] {
-  const furniture = finalSectionFurniture(pkg);
-  return [...pkg.parts.values()].filter(
-    (part) => isStoryType(part) && (!isFurniture(part) || furniture.has(part.name))
-  );
-}
+/** The compared story parts of `pkg`, the main story first. */
+const storyParts = comparedStoryParts;
 
 type Level = 'text' | 'properties';
 
@@ -62,7 +43,7 @@ const NOTE_REFERENCES: Readonly<Record<string, 'footnote' | 'endnote'>> = {
  */
 function referencedNotes(parts: readonly OoxmlPart[]): ReadonlyMap<string, number> {
   const out = new Map<string, number>();
-  const main = parts.find((part) => part.contentType.endsWith('document.main+xml'));
+  const main = parts[0];
   const stack: ElementNode[] = main ? [main.root as ElementNode] : [];
   while (stack.length > 0) {
     const node = stack.pop()!;

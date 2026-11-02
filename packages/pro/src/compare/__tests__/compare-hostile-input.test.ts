@@ -9,7 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { W_NS, buildDocx } from '../../../../../scripts/compare-corpus/docx-builder.ts';
-import { listPr, p, r } from '../../../../../scripts/compare-corpus/xml.ts';
+import { listPr, p, pRaw, r, textBox } from '../../../../../scripts/compare-corpus/xml.ts';
 import { compareDocuments } from '../index.ts';
 
 const DATE = new Date('2026-01-10T12:00:00Z');
@@ -193,4 +193,29 @@ test('many deleted paragraphs compare in linear time, and the limit counts every
     buildDocx({ body: p('y'), footnotes: notes })
   );
   expect(result.ok ? '' : result.code).toBe('too-large');
+});
+
+test('the limit counts a main story of any declared type and text box content', () => {
+  const macroEnabled = (docx: Uint8Array) => {
+    const zip = unzipSync(docx);
+    zip['[Content_Types].xml'] = strToU8(
+      strFromU8(zip['[Content_Types].xml']!).replace(
+        /(PartName="\/word\/document\.xml" ContentType=")[^"]+"/,
+        '$1application/vnd.ms-word.document.macroEnabled.main+xml"'
+      )
+    );
+    return zipSync(zip, { mtime: new Date(2026, 0, 1) });
+  };
+  const body = p('a').repeat(60_000);
+  const typed = compare(macroEnabled(buildDocx({ body })), macroEnabled(buildDocx({ body })));
+  expect(typed.ok ? '' : typed.code).toBe('too-large');
+  // A small document of that type compares, its main story checked like any other.
+  const small = compare(
+    macroEnabled(buildDocx({ body: p('one two') })),
+    macroEnabled(buildDocx({ body: p('one three') }))
+  );
+  expect(small.ok && small.revisionCount).toBeGreaterThan(0);
+  const boxed = buildDocx({ body: pRaw(textBox(body, 1)) + p('tail') });
+  const inBoxes = compare(boxed, boxed);
+  expect(inBoxes.ok ? '' : inBoxes.code).toBe('too-large');
 });

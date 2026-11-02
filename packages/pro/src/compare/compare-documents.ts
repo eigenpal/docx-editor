@@ -53,14 +53,8 @@ import { pushAll } from './arrays.ts';
  * holds some thirteen thousand.
  */
 const MAX_BLOCKS = 100_000;
-const STORY_PARTS = [
-  'document.main+xml',
-  '.header+xml',
-  '.footer+xml',
-  '.footnotes+xml',
-  '.endnotes+xml',
-  '.comments+xml',
-];
+/** Roots of the parts a compare reads; a file's declared content type is not trusted. */
+const STORY_ROOTS = new Set(['document', 'hdr', 'ftr', 'footnotes', 'endnotes', 'comments']);
 
 export function compareDocuments(
   original: Uint8Array,
@@ -304,21 +298,24 @@ const BLOCKS = new Set(['p', 'tbl', 'tr', 'tc', 'sdt']);
 function storyBlocks(pkg: OoxmlPackage): number {
   let count = 0;
   for (const part of pkg.parts.values()) {
-    if (STORY_PARTS.some((suffix) => part.contentType.endsWith(suffix)))
-      count += countBlocks(part.root as ElementNode);
+    const root = part.root as ElementNode;
+    const story = STORY_ROOTS.has(root.localName) && root.namespaceUri === W_NS;
+    if (story || part.name === pkg.mainDocumentPart) count += countBlocks(root);
   }
   return count;
 }
 
-/** Paragraphs, tables, rows, cells, and content controls under `node`; properties do not count. */
+/**
+ * Paragraphs, tables, rows, cells, and content controls under `node`, text box content
+ * included; properties do not count.
+ */
 function countBlocks(node: ElementNode): number {
   let count = 0;
   const stack = [...elementChildren(node)];
   while (stack.length > 0) {
     const child = stack.pop()!;
     if (BLOCKS.has(child.localName)) count++;
-    // Paragraph content holds no blocks the compare aligns.
-    if (child.localName !== 'p') pushAll(stack, elementChildren(child));
+    pushAll(stack, elementChildren(child));
   }
   return count;
 }
