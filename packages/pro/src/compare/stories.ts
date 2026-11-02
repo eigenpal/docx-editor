@@ -366,6 +366,8 @@ export function compareNotes(
   const xml = storyXml(scope, holder.root as ElementNode, () => {
     let out = '';
     const copiedSeparators: string[] = [];
+    // The output separator of each type, so a reference to a separator keeps pointing at one.
+    const separatorOf = new Map<string, string>();
     if (basePart) {
       for (const note of elementChildren(basePart.root)) {
         const id = attributeOf(note, 'id');
@@ -373,6 +375,8 @@ export function compareNotes(
         const revisedId = id === undefined ? undefined : pairs.get(id);
         const revisedNote = revisedId === undefined ? undefined : revisedNotes.get(revisedId);
         if (note.localName !== kind || (type && NOTE_SEPARATORS.has(type)) || id === undefined) {
+          if (note.localName === kind && type && id !== undefined && !separatorOf.has(type))
+            separatorOf.set(type, id);
           out += baseSide.serialize(note);
         } else if (revisedNote) {
           const shell = noteShell(note, baseSide);
@@ -404,6 +408,8 @@ export function compareNotes(
         if (id !== undefined) {
           taken.add(id);
           copiedSeparators.push(id);
+          const type = attributeOf(note, 'type')!;
+          if (!separatorOf.has(type)) separatorOf.set(type, id);
         }
         const xml = revisedSide.serialize(note);
         out +=
@@ -414,6 +420,15 @@ export function compareNotes(
     for (const revisedId of added) {
       const note = revisedNotes.get(revisedId);
       if (!note || ids.has(revisedId)) continue;
+      const type = attributeOf(note, 'type');
+      if (type !== undefined && NOTE_SEPARATORS.has(type)) {
+        // A reference to a separator is not a note of its own: it points at the output's
+        // separator of that type, and a document without one cannot express it.
+        const separator = separatorOf.get(type);
+        if (separator === undefined) state.untracked++;
+        else ids.set(revisedId, separator);
+        continue;
+      }
       const id = nextId();
       ids.set(revisedId, id);
       const shell = noteShell(note, revisedSide, id);

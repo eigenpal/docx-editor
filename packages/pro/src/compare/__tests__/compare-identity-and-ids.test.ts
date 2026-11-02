@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // Object identity is exact (a weak hash collision never hides a changed image), note reference
 // attributes take part, ids with any characters survive assembly, and list merges stay linear.
 import { expect, test } from 'bun:test';
-import { strFromU8, unzipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { buildDocx } from '../../../../../scripts/compare-corpus/docx-builder.ts';
 import { commented, inlineImage, p, r } from '../../../../../scripts/compare-corpus/xml.ts';
 import { compareDocuments } from '../index.ts';
@@ -98,3 +98,117 @@ test('many list instances sharing one definition merge in linear time', () => {
   });
   expect(result.ok ? '' : result.code).toBe('too-large');
 }, 60_000);
+
+/** A built document with every `token` in its main story, relationships, and comments replaced. */
+function withRaw(bytes: Uint8Array, token: string, raw: string): Uint8Array {
+  const files = unzipSync(bytes);
+  for (const name of ['word/document.xml', 'word/_rels/document.xml.rels', 'word/comments.xml'])
+    if (files[name]) files[name] = strToU8(strFromU8(files[name]!).replaceAll(token, raw));
+  return zipSync(files);
+}
+
+test('relationship ids written with character references keep their targets', () => {
+  const doc = (bytes: Uint8Array) =>
+    withRaw(
+      buildDocx({
+        body: `<w:p><w:r>${inlineImage('RIDX', 1)}</w:r></w:p>${p('Caption')}`,
+        media: [{ name: 'image1.png', bytes, rId: 'RIDX' }],
+      }),
+      'RIDX',
+      'r&amp;1'
+    );
+  const { revisions, files } = compared(
+    doc(new Uint8Array([1, 1, 1, 1])),
+    doc(new Uint8Array([2, 2, 2, 2]))
+  );
+  expect(revisions).toBeGreaterThan(0);
+  const rels = files['word/_rels/document.xml.rels']!;
+  const embeds = [...files['word/document.xml']!.matchAll(/:embed="([^"]*)"/g)].map((m) => m[1]!);
+  expect(embeds.length).toBe(2);
+  for (const id of embeds) expect(rels).toContain(`Id="${id}"`);
+});
+
+test('comment ids written with numeric character references keep their markers', () => {
+  for (const raw of ['x&#9;y', 'x&#xA0;y', 'a&amp;lt;b']) {
+    const revised = withRaw(
+      buildDocx({
+        body: `<w:p>${r('Alpha ')}${commented('CID' as never, r('beta'))}${r(' gamma')}</w:p>`,
+        comments: [{ id: 'CID' as never, author: 'Rev', text: 'Why?' }],
+      }),
+      'CID',
+      raw
+    );
+    const { files } = compared(buildDocx({ body: p('Alpha beta gamma') }), revised);
+    const markers = [
+      ...files['word/document.xml']!.matchAll(
+        /<w:comment(?:Reference|RangeStart|RangeEnd)\b[^>]*w:id="([^"]*)"/g
+      ),
+    ].map((m) => m[1]);
+    const comments = [...files['word/comments.xml']!.matchAll(/<w:comment\b[^>]*w:id="([^"]*)"/g)];
+    expect(markers.length).toBe(3);
+    expect(comments.length).toBe(1);
+    for (const id of markers) expect(id).toBe(comments[0]![1]);
+  }
+});
+
+test('note references without a note of their own keep their ids', () => {
+  const refs = (xml: string) =>
+    [...xml.matchAll(/<w:footnoteReference\b[^>]*w:id="([^"]*)"/g)].map((m) => m[1]);
+  const cases: [string, Record<number, string> | undefined][] = [
+    ['5', undefined],
+    ['5', { 1: 'x' }],
+    ['0', { 1: 'x' }],
+    ['-1', { 1: 'x' }],
+  ];
+  for (const [id, footnotes] of cases) {
+    const { files } = compared(
+      buildDocx({ body: p('Claim') + p('End'), footnotes }),
+      buildDocx({
+        body: `<w:p>${r('Claim')}<w:r><w:footnoteReference w:id="${id}"/></w:r></w:p>${p('End')}`,
+        footnotes,
+      })
+    );
+    expect(refs(files['word/document.xml']!)).toEqual([id]);
+    // A reference to a separator never copies the separator as a new note.
+    if (footnotes)
+      expect([...files['word/footnotes.xml']!.matchAll(/<w:footnote\b/g)].length).toBe(3);
+  }
+});
+
+test('a relationship graph that fans in compares in linear time', () => {
+  const image = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
+  const make = (text: string, depth: number) => {
+    const files = unzipSync(
+      buildDocx({
+        body: `<w:p><w:r>${inlineImage('rIdImg', 1)}</w:r></w:p>${p(text)}`,
+        media: [{ name: 'image1.png', bytes: new Uint8Array([1, 2, 3]), rId: 'rIdImg' }],
+      })
+    );
+    // Each part links the next one twice, so an identity built by concatenation doubles per level.
+    const chain = ['image1.png', ...Array.from({ length: depth }, (_, i) => `x${i}.png`)];
+    for (let i = 0; i < chain.length; i++) {
+      files[`word/media/${chain[i]}`] ??= new Uint8Array([i & 255, 7]);
+      if (i + 1 < chain.length)
+        files[`word/media/_rels/${chain[i]}.rels`] = strToU8(
+          '<?xml version="1.0" encoding="UTF-8"?>' +
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+            `<Relationship Id="r0" Type="${image}" Target="${chain[i + 1]}"/>` +
+            `<Relationship Id="r1" Type="${image}" Target="${chain[i + 1]}"/></Relationships>`
+        );
+    }
+    return zipSync(files);
+  };
+  // A shallow graph compares; a deep one passes the closure bound and is refused. Both are fast.
+  for (const [depth, ok] of [
+    [6, true],
+    [40, false],
+  ] as const) {
+    const started = performance.now();
+    const result = compareDocuments(make('Before', depth), make('After', depth), {
+      authorName: 'Test',
+      date: DATE,
+    });
+    expect(performance.now() - started).toBeLessThan(5_000);
+    expect(result.ok).toBe(ok);
+  }
+}, 30_000);

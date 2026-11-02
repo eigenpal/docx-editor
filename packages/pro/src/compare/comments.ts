@@ -25,13 +25,7 @@ const COMMENTS_CONTENT_TYPE =
 const PLACEHOLDER = new RegExp(`${MARK}CMT:([^§"]+)§`, 'g');
 
 /** The comment id a placeholder names, as the comments part's attribute reads it. */
-const commentId = (encoded: string) =>
-  fromPlaceholder(encoded)
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&amp;/g, '&');
+const commentId = (encoded: string) => fromPlaceholder(encoded);
 
 const commentsPart = (pkg: OoxmlPackage) => relatedPart(pkg, 'comments');
 

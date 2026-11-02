@@ -24,6 +24,7 @@ import {
   withInheritedBindings,
   shellOf,
   R_NS,
+  unescapeXml,
   type ElementNode,
   type NamespaceScope,
 } from './xml-fragments.ts';
@@ -197,7 +198,8 @@ export class SideContext {
     if (key === undefined) {
       const dir = this.partName.slice(0, this.partName.lastIndexOf('/') + 1);
       const target = rel.target.startsWith('/') ? rel.target : normalizePath(dir + rel.target);
-      key = `${rel.type}|${partIdentity(this.pkg, target, new Set())}`;
+      const walk = { seen: new Set<string>(), visits: 0, local: false };
+      key = `${rel.type}|${partIdentity(this.pkg, target, walk)}`;
       this.#mediaKeys.set(id, key);
     }
     return key;
@@ -226,7 +228,7 @@ export class SideContext {
       REL_ATTRIBUTE,
       (whole, lead: string, prefix: string, name: string, id: string) =>
         this.#isRelationshipPrefix(prefix, name, declared)
-          ? `${lead}${REL_PLACEHOLDER}${placeholderValue(this.partName)}|${placeholderValue(id)}§"`
+          ? `${lead}${REL_PLACEHOLDER}${placeholderValue(this.partName)}|${placeholderValue(unescapeXml(id))}§"`
           : whole
     );
   }
@@ -237,7 +239,9 @@ export class SideContext {
     return raw.replace(
       REL_ATTRIBUTE,
       (whole, lead: string, prefix: string, name: string, id: string) =>
-        this.#isRelationshipPrefix(prefix, name, declared) ? `${lead}${this.relKey(id)}"` : whole
+        this.#isRelationshipPrefix(prefix, name, declared)
+          ? `${lead}${this.relKey(unescapeXml(id))}"`
+          : whole
     );
   }
 
@@ -283,15 +287,29 @@ const MAX_CLOSURE = 256;
  * reader models) and of every part it reaches through its own relationships. Two images,
  * charts, or embedded objects compare as equal only when all of that is equal.
  */
-function partIdentity(pkg: OoxmlPackage, name: string, seen: Set<string>): string {
+interface IdentityWalk {
+  readonly seen: Set<string>;
+  /** Relationships followed so far, repeated ones included. */
+  visits: number;
+  /** Set when an identity depends on a cycle or the bound: it holds only for this walk. */
+  local: boolean;
+}
+
+function partIdentity(pkg: OoxmlPackage, name: string, walk: IdentityWalk): string {
   let cache = identities.get(pkg);
   if (!cache) identities.set(pkg, (cache = new Map()));
   const known = cache.get(name);
   if (known !== undefined) return known;
-  if (seen.has(name)) return `cycle:${name}`;
+  if (walk.seen.has(name)) {
+    walk.local = true;
+    return `cycle:${name}`;
+  }
   // A closure past the bound is unique, so it never matches another.
-  if (seen.size >= MAX_CLOSURE) return `overflow:${pkg.mainDocumentPart}:${name}:${seen.size}`;
-  seen.add(name);
+  if (walk.seen.size >= MAX_CLOSURE || walk.visits >= MAX_CLOSURE) {
+    walk.local = true;
+    return `overflow:${pkg.mainDocumentPart}:${name}:${walk.visits}`;
+  }
+  walk.seen.add(name);
   const part = pkg.parts.get(name);
   const bytes =
     pkg.partBytes.get(name) ??
@@ -299,19 +317,25 @@ function partIdentity(pkg: OoxmlPackage, name: string, seen: Set<string>): strin
     (part ? encoder.encode(serializeOoxmlPart(part)) : undefined);
   let identity = bytes ? sha256Bytes(bytes) : `missing:${name}`;
   const dir = name.slice(0, name.lastIndexOf('/') + 1);
+  const wasLocal = walk.local;
+  walk.local = false;
   for (const rel of relationshipsOf(pkg, name)) {
+    walk.visits++;
     const target =
       rel.targetMode === 'External'
         ? `external:${rel.rawTarget}`
         : partIdentity(
             pkg,
             rel.rawTarget.startsWith('/') ? rel.rawTarget : normalizePath(dir + rel.rawTarget),
-            seen
+            walk
           );
     identity += `|${rel.id}:${rel.type}:${target}`;
   }
-  // Identities that depend on a cycle or the bound hold only for this walk.
-  if (!identity.includes('cycle:') && !identity.includes('overflow:')) cache.set(name, identity);
+  walk.seen.delete(name);
+  // Each identity is one fixed-size digest, however many parts it reaches.
+  identity = sha256Bytes(encoder.encode(identity));
+  if (!walk.local) cache.set(name, identity);
+  walk.local ||= wasLocal;
   return identity;
 }
 
@@ -583,7 +607,10 @@ function pushObject(
 
 /** A revised-document comment marker, with its comment id as an assembly placeholder. */
 function revisedCommentMarker(xml: string): string {
-  return xml.replace(/\bw:id="([^"]*)"/, (_, id: string) => `w:id="${commentPlaceholder(id)}"`);
+  return xml.replace(
+    /\bw:id="([^"]*)"/,
+    (_, id: string) => `w:id="${commentPlaceholder(unescapeXml(id))}"`
+  );
 }
 
 function takePending(state: WalkState): readonly string[] {

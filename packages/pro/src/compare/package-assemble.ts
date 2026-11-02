@@ -234,14 +234,14 @@ export function assemblePackage(
         // input. An id the output part uses for something else would point at that instead.
         if (relationshipOf(base, story.partName, id))
           failure = `The revised document refers to a missing relationship (${id}).`;
-        return id;
+        return escapeAttribute(id);
       }
       let target = rel.target;
       if (!rel.external) {
         const copied = copyPart(resolveTarget(revisedOwner, rel.target), 0);
         if (typeof copied !== 'string') {
           failure = copied.failure;
-          return id;
+          return escapeAttribute(id);
         }
         target = relativeTarget(story.partName, copied);
       }

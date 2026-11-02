@@ -98,6 +98,27 @@ export function escapeAttribute(text: string): string {
   return escapeText(text).replace(/"/g, '&quot;');
 }
 
+const NAMED_REFERENCES: Readonly<Record<string, string>> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+};
+
+/**
+ * An attribute value as serialized XML writes it, decoded: named and numeric character
+ * references become the characters they stand for, as the reader's tree holds them.
+ */
+export function unescapeXml(text: string): string {
+  if (!text.includes('&')) return text;
+  return text.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|[A-Za-z]+);/g, (whole, body: string) => {
+    if (body[0] !== '#') return NAMED_REFERENCES[body] ?? whole;
+    const code = body[1] === 'x' ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10);
+    return code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+  });
+}
+
 const DECLARATION = /\s+xmlns(?::([A-Za-z_][\w.-]*))?="([^"]*)"/g;
 
 /**

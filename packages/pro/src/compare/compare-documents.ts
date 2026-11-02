@@ -45,6 +45,7 @@ import { compareContainer } from './story-compare.ts';
 import { SideContext, unitsOf } from './units.ts';
 import {
   attributeOf,
+  escapeAttribute,
   childNamed,
   elementChildren,
   isElement,
@@ -267,11 +268,14 @@ function replaceNoteIds(
   kind: NoteKind,
   ids: ReadonlyMap<string, string>
 ): void {
-  if (ids.size === 0) return;
-  // One pass per story, whatever the number of notes.
+  // One pass per story, whatever the number of notes. Runs without notes too, so a
+  // dangling reference still loses its placeholder.
   for (let i = 0; i < stories.length; i++) {
     const xml = stories[i]!.xml.replace(NOTE_PLACEHOLDER, (whole, noteKind: string, id: string) =>
-      noteKind === kind ? (ids.get(fromPlaceholder(id)) ?? whole) : whole
+      // A reference to a note the revised document does not define keeps its own id.
+      noteKind === kind
+        ? (ids.get(fromPlaceholder(id)) ?? escapeAttribute(fromPlaceholder(id)))
+        : whole
     );
     stories[i] = { ...stories[i]!, xml };
   }
