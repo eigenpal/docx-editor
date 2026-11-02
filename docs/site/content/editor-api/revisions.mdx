@@ -772,7 +772,7 @@ The following options are supported:
 
 `addToRecentFiles` and `ignoreAllComparisonWarnings` have no effect. `CompareTargetNew`, `CompareTargetSelected`, and `removePersonalInformation: true` refuse with `NotSupported`. Empty or invalid base64 and unreadable packages refuse with `InvalidArgument`. `document.compare(filePath)` always refuses with `NotSupported`, because the document model has no file system. Collaborative sessions refuse the compare.
 
-Both documents are compared with their existing revisions accepted. Comments, bookmarks, and header and footer references come from the open document.
+Both documents are compared with their existing revisions accepted. The result keeps the comments of both documents. Bookmarks and header and footer references come from the open document.
 
 ## Try the demo
 

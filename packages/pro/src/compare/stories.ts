@@ -11,7 +11,8 @@ import { relationshipsOf, type OoxmlPackage, type OoxmlPart } from '@docx-editor
 import { notePlaceholder, type EmitContext, type NoteKind } from './emit.ts';
 import { compareContainer } from './story-compare.ts';
 import { partExists } from './package-assemble.ts';
-import { SideContext, unitsOf } from './units.ts';
+import { freeIds } from './free-ids.ts';
+import { MARK, SideContext, unitsOf } from './units.ts';
 import {
   attributeOf,
   childNamed,
@@ -157,7 +158,7 @@ export function compareFurniture(
         relType: `${REL_BASE}/${ref.kind}`,
       });
       // Declared here: the original's main story need not declare the relationships namespace.
-      extraRefs += `<w:${ref.kind}Reference xmlns:r="${R_NS}" w:type="${ref.type}" r:id="§NEW:${partName}§"/>`;
+      extraRefs += `<w:${ref.kind}Reference xmlns:r="${R_NS}" w:type="${ref.type}" r:id="${MARK}NEW:${partName}§"/>`;
     }
   }
   return { outputs, extraRefs };
@@ -260,11 +261,11 @@ export function compareNotes(
         if (type && NOTE_SEPARATORS.has(type)) out += revisedSide.serialize(note);
       }
     }
-    let next = Math.max(0, ...[...baseNotes.keys()].map(Number).filter(Number.isFinite)) + 1;
+    const nextId = freeIds(baseNotes.keys());
     for (const revisedId of added) {
       const note = revisedNotes.get(revisedId);
       if (!note || ids.has(revisedId)) continue;
-      const id = String(next++);
+      const id = nextId();
       ids.set(revisedId, id);
       const shell = noteShell(note, revisedSide, id);
       out +=

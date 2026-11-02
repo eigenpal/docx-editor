@@ -3,6 +3,8 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
+import { pushAll } from './arrays.ts';
+
 /**
  * Bounded Myers diff over string keys.
  *
@@ -33,7 +35,7 @@ export function diffKeys(
   }
   const out: DiffOp[] = [];
   for (let i = 0; i < start; i++) out.push({ op: 'eq', a: i, b: i });
-  out.push(...middle(a, b, start, endA, start, endB, maxEdits));
+  pushAll(out, middle(a, b, start, endA, start, endB, maxEdits));
   for (let i = 0; endA + i < a.length; i++) out.push({ op: 'eq', a: endA + i, b: endB + i });
   return out;
 }
@@ -119,7 +121,7 @@ export function orderHunks(ops: readonly DiffOp[]): DiffOp[] {
   let dels: DiffOp[] = [];
   let inss: DiffOp[] = [];
   const flush = () => {
-    out.push(...inss, ...dels);
+    pushAll(out, inss, dels);
     dels = [];
     inss = [];
   };

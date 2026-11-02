@@ -14,6 +14,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import { serializeOoxmlPart, type OoxmlPackage, type OoxmlPart } from '@docx-editor.dev/core/store';
 import type { StoryOutput } from './stories.ts';
+import { freeIds } from './free-ids.ts';
 import { attributeOf, childNamed, elementChildren, type ElementNode } from './xml-fragments.ts';
 
 const REL_BASE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -99,6 +100,26 @@ function newPart(pkg: OoxmlPackage, xml: string, source: OoxmlPart, kind: string
   };
 }
 
+const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const LIST_REFERENCES = new Set(['numId']);
+const STYLE_REFERENCES = new Set(['pStyle', 'rStyle', 'tblStyle', 'basedOn', 'next', 'link']);
+
+/** The `w:val` of every element named one of `names` in any part of `pkg`, defined or not. */
+function referencedIds(pkg: OoxmlPackage, names: ReadonlySet<string>): Set<string> {
+  const ids = new Set<string>();
+  for (const part of pkg.parts.values()) {
+    const stack: ElementNode[] = [part.root as ElementNode];
+    for (let node = stack.pop(); node; node = stack.pop()) {
+      if (names.has(node.localName) && node.namespaceUri === W_NS) {
+        const value = attributeOf(node, 'val');
+        if (value !== undefined) ids.add(value);
+      }
+      for (const child of elementChildren(node)) stack.push(child);
+    }
+  }
+  return ids;
+}
+
 function mergeStyles(
   base: OoxmlPackage,
   revised: OoxmlPackage,
@@ -107,16 +128,12 @@ function mergeStyles(
   const from = partOfType(revised, '.styles+xml');
   if (!from) return null;
   const into = partOfType(base, '.styles+xml');
-  // A style that names a list names it by the revised id, which the output may have moved.
-  if (!into) {
-    const xml = withMappedNumbering(fragment(from.root as ElementNode), lists);
-    return newPart(base, xml, from, 'styles');
+  // A style the original names but does not define keeps its meaning too: a revised style must
+  // not take it over, or original paragraphs would change look with no revision.
+  const known = new Set<string | undefined>(referencedIds(base, STYLE_REFERENCES));
+  for (const style of into ? elementChildren(into.root) : []) {
+    if (style.localName === 'style') known.add(attributeOf(style, 'styleId'));
   }
-  const known = new Set(
-    elementChildren(into.root)
-      .filter((style) => style.localName === 'style')
-      .map((style) => attributeOf(style, 'styleId'))
-  );
   let added = '';
   for (const style of elementChildren(from.root)) {
     if (style.localName !== 'style') continue;
@@ -126,9 +143,14 @@ function mergeStyles(
     // The original's default styles stay the defaults.
     const shell = /^<[^>]*>/.exec(fragment(style))![0];
     const xml = fragment(style).replace(shell, shell.replace(/\s[\w.-]*:?default="[^"]*"/, ''));
+    // A style that names a list names it by the revised id, which the output may have moved.
     added += withMappedNumbering(xml, lists);
   }
   if (!added) return null;
+  // Without an original styles part the added styles go in a new one, with no document
+  // defaults: the original keeps the look it had.
+  if (!into)
+    return newPart(base, `<w:styles xmlns:w="${W_NS}">${added}</w:styles>`, from, 'styles');
   return {
     partName: into.name,
     contentType: into.contentType,
@@ -229,16 +251,6 @@ function numKeys(lists: ListDefinitions): (num: ElementNode) => string {
 }
 
 /** Hands out the smallest positive ids no definition uses yet. */
-function freeIds(used: Iterable<string>): () => string {
-  const taken = new Set(used);
-  let next = 1;
-  return () => {
-    while (taken.has(String(next))) next++;
-    taken.add(String(next));
-    return String(next);
-  };
-}
-
 /** Groups instances by the definition they number with. */
 function groups(lists: ListDefinitions): Map<string, string[]> {
   const out = new Map<string, string[]>();
@@ -263,13 +275,15 @@ function mergeNumbering(
 ): { readonly map: Map<string, string>; readonly output: StoryOutput | null } {
   const map = new Map<string, string>();
   const from = partOfType(revised, '.numbering+xml');
-  if (!from) return { map, output: null };
   const into = partOfType(base, '.numbering+xml');
-  if (!into) {
-    const xml = withoutPictureBullets(fragment(from.root as ElementNode));
-    return { map, output: newPart(base, xml, from, 'numbering') };
+  if (!from) {
+    // The revised document defines no lists, so none of its list references numbers anything.
+    for (const id of into ? listDefinitions(into, undefined).nums.keys() : []) map.set(id, '0');
+    return { map, output: null };
   }
-  const ours = listDefinitions(into, partOfType(base, '.styles+xml'));
+  const ours: ListDefinitions = into
+    ? listDefinitions(into, partOfType(base, '.styles+xml'))
+    : { abstracts: new Map(), nums: new Map(), styleLists: new Map() };
   const theirs = listDefinitions(from, partOfType(revised, '.styles+xml'));
   const ourKey = numKeys(ours);
   const theirKey = numKeys(theirs);
@@ -295,7 +309,13 @@ function mergeNumbering(
     definitions.set(definition, target);
   }
   const nextAbstract = freeIds(ours.abstracts.keys());
-  const nextNum = freeIds([...ours.nums.keys(), ...theirs.nums.keys()]);
+  // A new id never takes one the original names without defining it: those paragraphs number
+  // nothing and must keep numbering nothing.
+  const nextNum = freeIds([
+    ...ours.nums.keys(),
+    ...theirs.nums.keys(),
+    ...referencedIds(base, LIST_REFERENCES),
+  ]);
   let abstracts = '';
   let nums = '';
   for (const [id, num] of theirs.nums) {
@@ -325,6 +345,10 @@ function mergeNumbering(
   // must not pick up the original's list with that id.
   for (const id of ours.nums.keys()) if (!theirs.nums.has(id) && !map.has(id)) map.set(id, '0');
   if (!abstracts && !nums) return { map, output: null };
+  if (!into) {
+    const xml = `<w:numbering xmlns:w="${W_NS}">${abstracts}${nums}</w:numbering>`;
+    return { map, output: newPart(base, xml, from, 'numbering') };
+  }
   let xml = insertBefore(into, ['num', 'numIdMacAtCleanup'], abstracts);
   xml = insertBeforeIn(xml, ['numIdMacAtCleanup'], nums);
   return {

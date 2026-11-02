@@ -9,6 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import { orderHunks, type DiffOp } from './sequence-diff.ts';
 import { END_KEY, type Token } from './tokens.ts';
+import { pushAll } from './arrays.ts';
 
 /**
  * A deletion that could sit one token earlier with the same result moves there, as far as it
@@ -30,7 +31,7 @@ export function slideLeft(ops: readonly DiffOp[], a: readonly Token[]): DiffOp[]
     i = j;
     // A run next to an insertion is a replacement and stays.
     if ((j < ops.length && ops[j]!.op !== 'eq') || dels.some((op) => !plainText(a[op.a]!))) {
-      out.push(...dels);
+      pushAll(out, dels);
       continue;
     }
     // The run covers consecutive tokens, and so do the equal tokens before it: shifting by k
@@ -46,7 +47,7 @@ export function slideLeft(ops: readonly DiffOp[], a: readonly Token[]): DiffOp[]
       k++;
     }
     if (k === 0) {
-      out.push(...dels);
+      pushAll(out, dels);
       continue;
     }
     const moved = out.splice(out.length - k, k) as Extract<DiffOp, { op: 'eq' }>[];
@@ -140,10 +141,10 @@ export function replaceWholeParagraphs(
         ...segment.filter((item) => item.op === 'del'),
         { op: 'del', a: op.a }
       );
-    } else out.push(...segment, op);
+    } else pushAll(out, segment, [op]);
     start = i + 1;
   }
-  out.push(...ops.slice(start));
+  pushAll(out, ops.slice(start));
   return out;
 }
 
@@ -179,7 +180,7 @@ export function coalesceGaps(ops: readonly DiffOp[], a: readonly Token[]): DiffO
       for (const eq of ops.slice(i, j) as Extract<DiffOp, { op: 'eq' }>[]) {
         out.push({ op: 'del', a: eq.a }, { op: 'ins', b: eq.b });
       }
-    } else out.push(...ops.slice(i, j));
+    } else pushAll(out, ops.slice(i, j));
     i = j;
   }
   return orderHunks(out);

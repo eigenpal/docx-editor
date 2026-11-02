@@ -44,6 +44,7 @@ import {
   NamespaceScope,
   type ElementNode,
 } from './xml-fragments.ts';
+import { pushAll } from './arrays.ts';
 
 /** Inputs larger than this many blocks (paragraphs, tables, rows, cells) are refused. */
 const MAX_BLOCKS = 200_000;
@@ -293,7 +294,7 @@ function countBlocks(node: ElementNode): number {
     const child = stack.pop()!;
     if (BLOCKS.has(child.localName)) count++;
     // Paragraph content holds no blocks the compare aligns.
-    if (child.localName !== 'p') stack.push(...elementChildren(child));
+    if (child.localName !== 'p') pushAll(stack, elementChildren(child));
   }
   return count;
 }

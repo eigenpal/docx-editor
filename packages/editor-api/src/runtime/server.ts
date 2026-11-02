@@ -19,7 +19,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { serverPagination, type ServerPaginationOptions } from './pagination.ts';
 export type { ServerPaginationOptions } from './pagination.ts';
 import { createServerAutomationHost, openDiagnosticCode } from '@docx-editor.dev/core/automation';
-import type { CompareDocumentsEngine } from '@docx-editor.dev/core/editor';
+import type { CompareDocumentsEngine } from '@docx-editor.dev/core/automation';
 import type {
   CollaborationModuleContribution,
   EditorCollaborationSession,

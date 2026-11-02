@@ -4,7 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // The result keeps the comments of both documents: the original's with their ids, the revised
-// document's renumbered after them, each anchored where its text lands.
+// document's renumbered into the smallest free ids, each anchored where its text lands.
 import { expect, test } from 'bun:test';
 import { strFromU8, unzipSync } from 'fflate';
 import { allCases } from '../../../../../scripts/compare-corpus/cases.ts';
@@ -33,10 +33,10 @@ test('comments of both documents are kept and the revised ones renumbered', () =
   const comments = text('word/comments.xml');
   expect(comments).toContain('First view.');
   expect(comments).toContain('Second view.');
-  expect(commentIds(comments).sort()).toEqual(['1', '2']);
+  expect(commentIds(comments).sort()).toEqual(['0', '1']);
   const document = text('word/document.xml');
   for (const kind of ['commentRangeStart', 'commentRangeEnd', 'commentReference'])
-    expect(markerIds(document, kind).sort()).toEqual(['1', '2']);
+    expect(markerIds(document, kind).sort()).toEqual(['0', '1']);
   expect(document).not.toContain('§');
 });
 

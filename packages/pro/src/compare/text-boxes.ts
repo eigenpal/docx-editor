@@ -13,10 +13,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type { EmitContext } from './emit.ts';
 import { compareContainer } from './story-compare.ts';
-import { unitsOf, type Atom, type SideContext } from './units.ts';
+import { MARK, unitsOf, type Atom, type SideContext } from './units.ts';
 import { isElement, type ElementNode } from './xml-fragments.ts';
 
-const MARKER = (index: number) => `§TXBX:${index}§`;
+const MARKER = (index: number) => `${MARK}TXBX:${index}§`;
 
 /** Every `w:txbxContent` under `node`, in document order. */
 export function textBoxesOf(node: OoxmlNode): ElementNode[] {

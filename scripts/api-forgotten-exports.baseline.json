@@ -3,12 +3,12 @@
     "automation": [
       "CollaborationFailureCode",
       "CollaborationModuleContribution",
-      "CompareDocumentsEngine",
       "DocumentPropertyName",
       "DocumentPropertyWrites",
       "HeaderFooterVariant",
       "HeadlessDocumentView",
       "NoteKind",
+      "OoxmlPackage",
       "OoxmlPackageLimits",
       "OoxmlPackageRejection",
       "ReviewRevisionItem",

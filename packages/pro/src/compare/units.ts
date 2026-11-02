@@ -88,8 +88,17 @@ export type Unit = ParagraphUnit | BlockUnit;
 
 export const OBJECT_TEXT = '￼';
 
+/**
+ * Start of every marker the engine writes into output XML and replaces on assembly. The random
+ * nonce keeps text or attribute values a document holds from matching a marker: a document that
+ * contains marker-like text must keep it unchanged.
+ */
+export const MARK = `§${[...globalThis.crypto.getRandomValues(new Uint32Array(4))]
+  .map((word) => word.toString(16).padStart(8, '0'))
+  .join('')}`;
+
 /** Id placeholder of a comment taken from the revised document. */
-export const commentPlaceholder = (id: string) => `§CMT:${id}§`;
+export const commentPlaceholder = (id: string) => `${MARK}CMT:${id}§`;
 
 /**
  * Candidate relationship-valued attributes. The serializer chooses its own prefixes, so the
@@ -101,10 +110,10 @@ const REL_ATTRIBUTE =
 /** VML image data names its relationship with `o:relid`, in the Office VML namespace. */
 const O_NS = 'urn:schemas-microsoft-com:office:office';
 /**
- * Revised-side relationship ids are written as `§REL:<revised owner part>|<id>§` and resolved
+ * Revised-side relationship ids are written as `<MARK>REL:<revised owner part>|<id>§` and resolved
  * on assembly against the output part that holds the fragment.
  */
-export const REL_PLACEHOLDER = '§REL:';
+export const REL_PLACEHOLDER = `${MARK}REL:`;
 
 const MARKERS = new Set([
   'bookmarkStart',

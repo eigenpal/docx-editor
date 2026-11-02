@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 /**
  * Serializes compare output: runs, revision wrappers, and paragraph properties.
  */
-import type { Atom, ParagraphUnit, SideContext, Wrapper } from './units.ts';
+import { MARK, type Atom, type ParagraphUnit, type SideContext, type Wrapper } from './units.ts';
 import {
   elementChildren,
   escapeAttribute,
@@ -44,7 +44,8 @@ export class CompareState {
 }
 
 /** Placeholder for the id of a note added from the revised document. */
-export const notePlaceholder = (kind: NoteKind, revisedId: string) => `§NOTE:${kind}:${revisedId}§`;
+export const notePlaceholder = (kind: NoteKind, revisedId: string) =>
+  `${MARK}NOTE:${kind}:${revisedId}§`;
 
 export class EmitContext {
   constructor(

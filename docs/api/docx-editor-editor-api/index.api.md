@@ -12,7 +12,7 @@ import { AutomationStyleRead } from '@docx-editor.dev/core/automation';
 import { AutomationValue } from '@docx-editor.dev/core/automation';
 import { ByteSizeBucket } from '@docx-editor.dev/core/automation';
 import { CollaborationModuleContribution } from '@docx-editor.dev/core/collaboration';
-import { CompareDocumentsEngine } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsEngine } from '@docx-editor.dev/core/automation';
 import { DiagnosticCode } from '@docx-editor.dev/core/automation';
 import { DiagnosticErrorName } from '@docx-editor.dev/core/automation';
 import { DocumentOpenDiagnosticCode } from '@docx-editor.dev/core/automation';

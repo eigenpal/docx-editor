@@ -31,6 +31,7 @@ import {
 import { findMoves, movedParagraph, NO_MOVES, type Moves } from './moves.ts';
 import { compareSdt, compareTable } from './table-compare.ts';
 import type { BlockUnit, ParagraphUnit, Unit } from './units.ts';
+import { pushAll } from './arrays.ts';
 
 interface Hunk {
   readonly base: Unit[];
@@ -348,7 +349,7 @@ function pairBlocks(ops: readonly DiffOp[], a: readonly Token[], b: readonly Tok
         }
       }
       if (match < 0) continue;
-      out.push(...inserted.slice(fromIns, k), ...deleted.slice(fromDel, match));
+      pushAll(out, inserted.slice(fromIns, k), deleted.slice(fromDel, match));
       out.push({
         op: 'pair',
         base: (a[deleted[match]!.a] as BlockToken).unit,
@@ -357,7 +358,7 @@ function pairBlocks(ops: readonly DiffOp[], a: readonly Token[], b: readonly Tok
       fromIns = k + 1;
       fromDel = match + 1;
     }
-    out.push(...inserted.slice(fromIns), ...deleted.slice(fromDel));
+    pushAll(out, inserted.slice(fromIns), deleted.slice(fromDel));
     i = j;
   }
   return out;
@@ -389,10 +390,10 @@ function deletedBlocksFirst(ops: readonly HunkOp[], a: readonly Token[]): HunkOp
     });
     // Nothing deleted after the block: the insertions can stay first.
     if (cut < 0 || cut === dels.length - 1 || !run.some((item) => item.op === 'ins'))
-      out.push(...run);
+      pushAll(out, run);
     else {
       const inss = run.filter((item) => item.op === 'ins');
-      out.push(...dels.slice(0, cut + 1), ...inss, ...dels.slice(cut + 1));
+      pushAll(out, dels.slice(0, cut + 1), inss, dels.slice(cut + 1));
     }
     i = j;
   }

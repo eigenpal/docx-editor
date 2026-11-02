@@ -122,6 +122,13 @@ export {
 } from './server-host.ts';
 // `ServerAutomationHostOptions.contentLockPolicy` takes it.
 export type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
+// `ServerAutomationHostOptions.compareDocuments` takes it.
+export type {
+  CompareDocumentsEngine,
+  DocumentCompareErrorCode,
+  DocumentCompareOptions,
+  DocumentCompareResult,
+} from '../contracts/document-compare.ts';
 
 export {
   createAutomationPaginationProvider,

@@ -16,6 +16,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
+import { pushAll } from './arrays.ts';
 
 export const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
@@ -63,7 +64,7 @@ function valuePrefixes(node: ElementNode): Set<string> {
         if (token) out.add(colon < 0 ? token : token.slice(0, colon));
       }
     }
-    stack.push(...elementChildren(element));
+    pushAll(stack, elementChildren(element));
   }
   return out;
 }

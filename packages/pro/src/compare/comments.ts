@@ -5,19 +5,21 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 /**
  * Comments of a compare: the result keeps the original's comments and adds the revised
- * document's comments, renumbered after the original's highest id.
+ * document's comments under the smallest ids the original does not use. A comment both
+ * documents hold appears twice, once at each anchor, as the reference result shows it.
  */
 import { relationshipsOf, type OoxmlPackage, type OoxmlPart } from '@docx-editor.dev/core/store';
 import type { StoryOutput } from './stories.ts';
 import { storyXml } from './stories.ts';
-import { SideContext } from './units.ts';
+import { freeIds } from './free-ids.ts';
+import { MARK, SideContext } from './units.ts';
 import { attributeOf, elementChildren, NamespaceScope, type ElementNode } from './xml-fragments.ts';
 
 const COMMENTS_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
 const COMMENTS_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml';
-const PLACEHOLDER = /§CMT:([^§"]+)§/g;
+const PLACEHOLDER = new RegExp(`${MARK}CMT:([^§"]+)§`, 'g');
 
 function commentsPart(pkg: OoxmlPackage): OoxmlPart | undefined {
   const main = pkg.mainDocumentPart;
@@ -51,23 +53,30 @@ export function mergeComments(
     const id = child.localName === 'comment' ? attributeOf(child, 'id') : undefined;
     if (id !== undefined && used.has(id)) revisedComments.set(id, child);
   }
-  let next = 0;
+  const baseIds: string[] = [];
   for (const child of basePart ? elementChildren(basePart.root as ElementNode) : []) {
-    const id = Number(attributeOf(child, 'id'));
-    if (Number.isInteger(id) && id >= next) next = id + 1;
+    const id = attributeOf(child, 'id');
+    if (id !== undefined) baseIds.push(id);
   }
+  const nextId = freeIds(baseIds, 0);
   const ids = new Map<string, string>();
-  for (const id of revisedComments.keys()) ids.set(id, String(next++));
+  for (const id of revisedComments.keys()) ids.set(id, nextId());
   const rewritten = stories.map((story) => ({
     ...story,
     xml: story.xml
       // A marker of a comment the revised document does not define is dropped.
       .replace(
-        /<w:comment(?:RangeStart|RangeEnd)\b[^>]*w:id="§CMT:([^§"]+)§"[^>]*\/>/g,
+        new RegExp(
+          `<w:comment(?:RangeStart|RangeEnd)\\b[^>]*w:id="${MARK}CMT:([^§"]+)§"[^>]*/>`,
+          'g'
+        ),
         (whole, id) => (ids.has(id) ? whole : '')
       )
       .replace(
-        /<w:r>(?:(?!<\/w:r>).)*?<w:commentReference\b[^>]*w:id="§CMT:([^§"]+)§"[^>]*\/><\/w:r>/gs,
+        new RegExp(
+          `<w:r>(?:(?!</w:r>).)*?<w:commentReference\\b[^>]*w:id="${MARK}CMT:([^§"]+)§"[^>]*/></w:r>`,
+          'gs'
+        ),
         (whole, id) => (ids.has(id) ? whole : '')
       )
       .replace(PLACEHOLDER, (_, id: string) => ids.get(id) ?? ''),

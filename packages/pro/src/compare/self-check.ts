@@ -56,26 +56,42 @@ const NOTE_REFERENCES: Readonly<Record<string, 'footnote' | 'endnote'>> = {
   endnoteReference: 'endnote',
 };
 
-/** Note ids, as `footnote:3`, that the main story references. */
-function referencedNotes(parts: readonly OoxmlPart[]): ReadonlySet<string> {
-  const out = new Set<string>();
+/**
+ * Note ids, as `footnote:3`, that the main story references, each with the position of its
+ * first reference. A notes part may list notes in any order; readers show them by reference.
+ */
+function referencedNotes(parts: readonly OoxmlPart[]): ReadonlyMap<string, number> {
+  const out = new Map<string, number>();
   const main = parts.find((part) => part.contentType.endsWith('document.main+xml'));
-  const stack: ElementNode[] = main ? [...elementChildren(main.root)] : [];
+  const stack: ElementNode[] = main ? [main.root as ElementNode] : [];
   while (stack.length > 0) {
     const node = stack.pop()!;
     const kind = NOTE_REFERENCES[node.localName];
-    if (kind) out.add(`${kind}:${attributeOf(node, 'id') ?? ''}`);
-    else stack.push(...elementChildren(node));
+    if (kind) {
+      const key = `${kind}:${attributeOf(node, 'id') ?? ''}`;
+      if (!out.has(key)) out.set(key, out.size);
+      continue;
+    }
+    // Children are pushed last first, so they are visited in document order.
+    const children = elementChildren(node);
+    for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]!);
   }
   return out;
 }
 
-/** A notes part without the notes nothing references: those never show. */
-function referencedOnly(part: OoxmlPart, referenced: ReadonlySet<string>): OoxmlPart {
+/**
+ * A notes part with only the notes something references, in reference order, after its
+ * separators: notes nothing references never show.
+ */
+function referencedOnly(part: OoxmlPart, referenced: ReadonlyMap<string, number>): OoxmlPart {
   const kind = part.contentType.endsWith('.footnotes+xml') ? 'footnote' : 'endnote';
-  const children = elementChildren(part.root).filter(
-    (note) => note.localName !== kind || referenced.has(`${kind}:${attributeOf(note, 'id') ?? ''}`)
-  );
+  const keyOf = (note: ElementNode) => `${kind}:${attributeOf(note, 'id') ?? ''}`;
+  const all = elementChildren(part.root);
+  const others = all.filter((note) => note.localName !== kind);
+  const notes = all
+    .filter((note) => note.localName === kind && referenced.has(keyOf(note)))
+    .sort((a, b) => referenced.get(keyOf(a))! - referenced.get(keyOf(b))!);
+  const children = [...others, ...notes];
   return { ...part, root: { ...part.root, children } as OoxmlPart['root'] };
 }
 

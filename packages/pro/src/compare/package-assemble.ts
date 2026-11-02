@@ -22,11 +22,11 @@ import {
   type OoxmlPackage,
 } from '@docx-editor.dev/core/store';
 import type { StoryOutput } from './stories.ts';
-import { REL_PLACEHOLDER } from './units.ts';
+import { MARK, REL_PLACEHOLDER } from './units.ts';
 import { escapeAttribute } from './xml-fragments.ts';
 
 const PLACEHOLDER = new RegExp(`${REL_PLACEHOLDER}([^§"|]+)\\|([^§"]+)§`, 'g');
-const NEW_PART = /§NEW:([^§"]+)§/g;
+const NEW_PART = new RegExp(`${MARK}NEW:([^§"]+)§`, 'g');
 const RELS_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const RELS_CONTENT_TYPE = 'application/vnd.openxmlformats-package.relationships+xml';
 
