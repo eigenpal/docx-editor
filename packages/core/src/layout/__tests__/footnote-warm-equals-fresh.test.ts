@@ -219,6 +219,20 @@ describe('a warm footnote pass matches a fresh one after each edit', () => {
       modes: [15, 14],
       seeds: ALL_SEEDS,
     },
+    // These seeds make an edit remove or add a blank parity sheet: the pages after it start
+    // where earlier pages did, one page off, so the previous decisions do not apply.
+    {
+      label: 'a blank parity sheet that an edit removes',
+      shape: { minCount: 60, sections: true },
+      modes: [14],
+      seeds: [13, 68],
+    },
+    {
+      label: 'a blank parity sheet that an edit removes',
+      shape: { minCount: 60, sections: true },
+      modes: [15],
+      seeds: [83],
+    },
     // Tall table documents are slow to lay out fresh; this seed splits a row so that two
     // pages open inside one row.
     {

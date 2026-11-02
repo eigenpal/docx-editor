@@ -515,6 +515,7 @@ export function* searchFootnoteReserves(
       : {}),
     round,
     growAfterReserve: sectionEnds.length > 1,
+    parityStarts: options.parityStarts,
     compute: (layout, used, deferral, range) => {
       decided = range.from;
       return options.compute(layout, used, deferral, range);

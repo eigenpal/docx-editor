@@ -100,6 +100,12 @@ export interface ReserveWalkOptions {
    * before the reserve holds costs more than the round it saves.
    */
   readonly growAfterReserve?: boolean;
+  /**
+   * Some section starts on an odd or even page. The previous walk's pages after a matching
+   * start then apply only when they move by an even number of pages: an odd move turns each
+   * odd page even, so a blank sheet the previous walk made falls elsewhere or not at all.
+   */
+  readonly parityStarts?: boolean;
   readonly compute: (
     layout: SemanticLayout,
     used: Reserves,
@@ -295,7 +301,11 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
       const next = pages[floor];
       // An empty signature names no one place (see `startOf`), so it never matches.
       const signature = next && previous && floor < reliable ? options.startOf(next, carry) : '';
-      const from = signature ? previousStarts.get(signature) : undefined;
+      const found = signature ? previousStarts.get(signature) : undefined;
+      const from =
+        found !== undefined && (!options.parityStarts || (next!.index - found) % 2 === 0)
+          ? found
+          : undefined;
       if (next && previous && from !== undefined) {
         used = new Map([...used, ...shiftedTail(previous.record, from, next.index)]);
         for (let index = from; index < previous.record.starts.length; index += 1) {
