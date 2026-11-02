@@ -90,7 +90,10 @@ export interface ReserveWalkOptions {
     allowOrphanDeferral: boolean,
     range: ReserveComputeRange
   ) => ReserveComputeResult;
-  /** The start signature of a page with the notes carried into it. */
+  /**
+   * The start signature of a page with the notes carried into it; empty when the page start
+   * names no one place, which keeps the page out of the shortcut.
+   */
   readonly startOf: (page: PageRecord, carry: unknown) => string;
   /** True when a newer edit replaces this pass. */
   readonly stopped: () => boolean;
@@ -169,7 +172,7 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
     const { record, unchangedFrom } = previous;
     for (let index = Math.max(0, unchangedFrom); index < record.starts.length; index += 1) {
       const signature = record.starts[index];
-      if (signature !== undefined && !previousStarts.has(signature)) {
+      if (signature && !previousStarts.has(signature)) {
         previousStarts.set(signature, index);
       }
     }
@@ -264,12 +267,9 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
       enter(floor);
       // The rest of the previous walk applies once a page starts where one of its pages did.
       const next = pages[floor];
-      // A page with no content starts nowhere in particular: every blank sheet of one size
-      // looks alike, so only a page that opens with content can match a previous page.
-      const from =
-        next && previous && floor < reliable && next.fragments.length > 0 && !next.parityBlank
-          ? previousStarts.get(options.startOf(next, carry))
-          : undefined;
+      // An empty signature names no one place (see `startOf`), so it never matches.
+      const signature = next && previous && floor < reliable ? options.startOf(next, carry) : '';
+      const from = signature ? previousStarts.get(signature) : undefined;
       if (next && previous && from !== undefined) {
         used = new Map([...used, ...shiftedTail(previous.record, from, next.index)]);
         for (let index = from; index < previous.record.starts.length; index += 1) {

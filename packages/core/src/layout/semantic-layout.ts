@@ -204,7 +204,7 @@ import { refTokenForTableBlock } from './field-ref.ts';
 import { createListFirstLineMetrics, markerLineStart, publishListMarker } from './list-marker.ts';
 import { FlowCheckpointOwner, flowCheckpointsMatch } from './flow-checkpoint.ts';
 import { sectionReserveResume } from './note-reserve-resume.ts';
-import type { FlowCheckpoint } from './layout-session.ts';
+import { createLayoutSession, type FlowCheckpoint } from './layout-session.ts';
 import { furnitureForSection, layoutMultiSectionDocumentSteps } from './multi-section-layout.ts';
 import { hostedStoryFlowDeps, layoutTextboxStory } from './textbox-story-layout.ts';
 import { inlineDrawingFlow } from './inline-textbox-flow.ts';
@@ -260,7 +260,11 @@ export function layoutSemanticDocumentSteps(
   revision: number,
   options: SemanticLayoutOptions
 ): LayoutSteps<SemanticLayout> {
-  return stepsInFieldResultsMode(options.fieldResults, layoutInModeSteps(part, revision, options));
+  // The footnote search lays the body out several times; a private session lets each round
+  // reuse the last one's work, as a cold open with a session does.
+  const opts =
+    options.notes && !options.session ? { ...options, session: createLayoutSession() } : options;
+  return stepsInFieldResultsMode(options.fieldResults, layoutInModeSteps(part, revision, opts));
 }
 
 function* layoutInModeSteps(

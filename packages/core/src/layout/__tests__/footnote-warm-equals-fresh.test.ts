@@ -50,6 +50,11 @@ interface DocumentShape {
    * some breaks add a blank sheet, and sets two columns.
    */
   readonly sections?: boolean;
+  /**
+   * The share of paragraphs that a two-column table follows. Its rows may repeat as a header
+   * or refuse to split, and its cells cite notes.
+   */
+  readonly tables?: number;
 }
 
 const PAGE =
@@ -74,6 +79,34 @@ function documentBytes(next: () => number, shape: DocumentShape = {}): Uint8Arra
       cite = `<w:r><w:footnoteReference w:id="${id}"/></w:r>`;
     }
     const text = Array.from({ length: words }, (_, k) => `w${i}x${k}`).join(' ');
+    if (shape.tables && next() < shape.tables) {
+      const rows = 2 + Math.floor(next() * 8);
+      const header = next() < 0.5 ? '<w:trPr><w:tblHeader/></w:trPr>' : '';
+      let markup = '';
+      for (let r = 0; r < rows; r += 1) {
+        const cantSplit = next() < 0.3 ? '<w:trPr><w:cantSplit/></w:trPr>' : '';
+        let cells = '';
+        for (let c = 0; c < 2; c += 1) {
+          let cellCite = '';
+          if (next() < 0.3) {
+            notes.push(1 + Math.floor(next() * 6));
+            const id = notes.length + Math.max(0, continuationId);
+            cellCite = `<w:r><w:footnoteReference w:id="${id}"/></w:r>`;
+          }
+          const length = 1 + Math.floor(next() * 40);
+          const cellText = Array.from({ length }, (_, k) => `c${i}r${r}k${k}`).join(' ');
+          cells +=
+            '<w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr>' +
+            `<w:p><w:pPr>${EXACT} w:after="0"/></w:pPr>` +
+            `<w:r><w:t xml:space="preserve">${cellText}</w:t></w:r>${cellCite}</w:p></w:tc>`;
+        }
+        markup += `<w:tr>${r === 0 ? header : cantSplit}${cells}</w:tr>`;
+      }
+      body.push(
+        '<w:tbl><w:tblPr><w:tblW w:w="4000" w:type="dxa"/></w:tblPr>' +
+          `<w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>${markup}</w:tbl>`
+      );
+    }
     let section = '';
     if (shape.sections && i > 0 && i % 15 === 0) {
       const odd = (i / 15) % 2 === 1;
@@ -172,15 +205,34 @@ function paragraphIds(part: OoxmlPart): string[] {
 }
 
 describe('a warm footnote pass matches a fresh one after each edit', () => {
-  const variants: readonly { readonly label: string; readonly shape: DocumentShape }[] = [
-    { label: 'one section', shape: {} },
-    { label: 'odd-page sections and columns', shape: { minCount: 60, sections: true } },
+  const ALL_SEEDS = Array.from({ length: 12 }, (_, i) => i + 1);
+  const variants: readonly {
+    readonly label: string;
+    readonly shape: DocumentShape;
+    readonly modes: readonly number[];
+    readonly seeds: readonly number[];
+  }[] = [
+    { label: 'one section', shape: {}, modes: [15, 14], seeds: ALL_SEEDS },
+    {
+      label: 'odd-page sections and columns',
+      shape: { minCount: 60, sections: true },
+      modes: [15, 14],
+      seeds: ALL_SEEDS,
+    },
+    // Tall table documents are slow to lay out fresh; this seed splits a row so that two
+    // pages open inside one row.
+    {
+      label: 'tables with split rows',
+      shape: { minCount: 60, tables: 0.2 },
+      modes: [15],
+      seeds: [12],
+    },
   ];
-  for (const { label, shape } of variants)
-    for (const mode of [15, 14]) {
+  for (const { label, shape, modes, seeds } of variants)
+    for (const mode of modes) {
       test(`${label}, compatibility mode ${mode}`, () => {
         const mismatches: string[] = [];
-        for (let seed = 1; seed <= 12; seed += 1) {
+        for (const seed of seeds) {
           const next = random(seed * 7919 + mode);
           const loaded = readOoxmlPackage(documentBytes(next, shape));
           if (!loaded.ok) throw new Error(loaded.reason);

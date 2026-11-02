@@ -110,18 +110,23 @@ function sameInputs(a: ReserveSearchInputs, b: ReserveSearchInputs): boolean {
   return a.others.length === b.others.length && a.others.every((value, i) => value === b.others[i]);
 }
 
-/** Where a page starts: its first block and offset, its geometry, and the notes it carries in. */
+/**
+ * Where a page starts: its first block and offset, its geometry, and the notes it carries in.
+ * Empty when the start does not name one place in the document: a page with no content, or
+ * a page that opens inside a split table row, whose cells each resume at their own offset.
+ */
 function pageStart(page: PageRecord, carry: string): string {
   const first = page.fragments[0];
-  const at = !first
-    ? '-'
-    : first.kind === 'paragraph'
-      ? `p:${first.paragraphId}:${first.range.start}:${first.fragmentIndex}`
-      : first.kind === 'table'
-        ? `t:${first.tableId}:${first.fragmentIndex}:${first.rows.map((row) => row.id).join(',')}`
-        : 'other';
+  if (!first || page.parityBlank) return '';
+  let at: string;
+  if (first.kind === 'paragraph') {
+    at = `p:${first.paragraphId}:${first.range.start}:${first.fragmentIndex}`;
+  } else {
+    if (first.rows.some((row) => row.isContinuation)) return '';
+    at = `t:${first.tableId}:${first.fragmentIndex}:${first.rows.map((row) => row.id).join(',')}`;
+  }
   const box = page.contentBox;
-  return `${at}|${box.width}x${box.height}|${page.parityBlank ? 'b' : ''}|${carry}`;
+  return `${at}|${box.width}x${box.height}|${carry}`;
 }
 
 function footnoteNodes(part: OoxmlPart | null): Map<string, OoxmlNode> {
