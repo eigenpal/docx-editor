@@ -171,3 +171,62 @@ test('a new note never takes the id of a separator copied with it', () => {
   expect(ids).toContain('1');
   expect(new Set(ids).size).toBe(ids.length);
 });
+
+test('a section record names the settings only the revised document states', () => {
+  const margins =
+    '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" ' +
+    'w:footer="720" w:gutter="0"/>';
+  const base = buildDocx({
+    body: p('Same text.'),
+    sectPr: `<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>${margins}</w:sectPr>`,
+  });
+  const revised = buildDocx({
+    body: p('Same text.'),
+    sectPr:
+      `<w:sectPr><w:pgSz w:w="15840" w:h="12240" w:orient="landscape"/>${margins}` +
+      '<w:vAlign w:val="center"/><w:titlePg/><w:pgNumType w:start="5"/></w:sectPr>',
+  });
+  const record = /<w:sectPrChange\b[\s\S]*?<\/w:sectPrChange>/.exec(
+    compared(base, revised)['word/document.xml']!
+  )?.[0];
+  expect(record).toContain('w:orient="portrait"');
+  expect(record).toContain('<w:vAlign w:val="top"/>');
+  expect(record).toContain('<w:titlePg w:val="0"/>');
+  expect(record).toContain('<w:pgNumType w:start="0"/>');
+});
+
+test('a section setting with no value to restore is refused', () => {
+  const base = buildDocx({ body: p('Same text.') });
+  const revised = edited(base, (files) => {
+    files['word/document.xml'] = files['word/document.xml']!.replace(
+      '</w:sectPr>',
+      '<w:pgBorders><w:top w:val="single" w:sz="4" w:space="24" w:color="auto"/></w:pgBorders></w:sectPr>'
+    );
+  });
+  const result = compareDocuments(base, revised, { authorName: 'Test', date: DATE });
+  expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.code).toBe('unsupported-content');
+});
+
+test('a copied separator never takes an id the original references', () => {
+  // The original holds a dangling reference to id 0 and no notes part.
+  const ref = (id: number) => `<w:r><w:footnoteReference w:id="${id}"/></w:r>`;
+  const para = (text: string, reference = '') =>
+    `<w:p><w:r><w:t>${text}</w:t></w:r>${reference}</w:p>`;
+  const base = buildDocx({ body: para('Alpha', ref(0)) + para('Beta') });
+  const revised = buildDocx({
+    body: para('Alpha') + para('Beta', ref(1)),
+    footnotes: { 1: 'New note' },
+  });
+  const notes =
+    Object.entries(compared(base, revised)).find(([name]) =>
+      /footnotes\d*\.xml$/.test(name)
+    )?.[1] ?? '';
+  const separatorIds = [
+    ...notes.matchAll(
+      /<w:footnote\b(?=[^>]*w:type="(?:separator|continuationSeparator)")[^>]*w:id="([^"]+)"/g
+    ),
+  ].map((match) => match[1]);
+  expect(separatorIds.length).toBeGreaterThan(0);
+  expect(separatorIds).not.toContain('0');
+});

@@ -175,6 +175,14 @@ export function comparePackages(
         'The documents differ in block content that has no tracked-change form, such as an embedded file chunk.',
     };
   }
+  if (ctx.state.unrecordedSections > 0) {
+    return {
+      ok: false,
+      code: 'unsupported-content',
+      message:
+        'The revised document adds section settings, such as page borders, that a tracked change cannot restore on reject.',
+    };
+  }
   const assembled = assemblePackage(
     basePkg,
     revisedPkg,

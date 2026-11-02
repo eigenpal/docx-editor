@@ -6,6 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 /**
  * Serializes compare output: runs, revision wrappers, and paragraph properties.
  */
+import { sectionRecord } from './section-record.ts';
 import { MARK, type Atom, type ParagraphUnit, type SideContext, type Wrapper } from './units.ts';
 import {
   elementChildren,
@@ -33,6 +34,8 @@ export class CompareState {
   count = 0;
   /** Blocks the engine could not track (kept or dropped without a revision). */
   untracked = 0;
+  /** Section settings the revised document adds that a record cannot name with a value. */
+  unrecordedSections = 0;
   /** Move ranges written so far; names each range pair. */
   moves = 0;
   /** Note references matched between the documents: compare the two notes. */
@@ -198,10 +201,15 @@ function runXml(
 const isRef = (node: ElementNode) =>
   node.localName === 'headerReference' || node.localName === 'footerReference';
 
+/** `w:sectPr` children without header and footer references. */
+const sectPrFields = (node: ElementNode | null) =>
+  node
+    ? elementChildren(node).filter((child) => !isRef(child) && child.localName !== 'sectPrChange')
+    : [];
+
 /** `w:sectPr` children without header and footer references, serialized. */
 function sectPrBody(node: ElementNode, side: SideContext): string {
-  return elementChildren(node)
-    .filter((child) => !isRef(child) && child.localName !== 'sectPrChange')
+  return sectPrFields(node)
     .map((child) => side.serialize(child))
     .join('');
 }
@@ -239,8 +247,12 @@ export function sectPrXml(
   let change = '';
   if (ctx.detectFormatChanges && (finalSection || (base && revised))) {
     const before = base ? sectPrBody(base, ctx.base) : '';
-    if (normalizeSect(before) !== normalizeSect(body))
-      change = `<w:sectPrChange${ctx.attrs()}><w:sectPr>${before}</w:sectPr></w:sectPrChange>`;
+    if (normalizeSect(before) !== normalizeSect(body)) {
+      // A reject keeps every setting the record leaves out, so the record names them all.
+      const record = sectionRecord(sectPrFields(base), body ? sectPrFields(source) : [], ctx.base);
+      if (record === null) ctx.state.unrecordedSections++;
+      change = `<w:sectPrChange${ctx.attrs()}><w:sectPr>${record ?? before}</w:sectPr></w:sectPrChange>`;
+    }
   }
   const shell = side.raw({ ...source, children: [] } as ElementNode);
   const start = shell.replace(/\/>$/, '>');

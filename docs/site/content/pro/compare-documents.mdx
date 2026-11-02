@@ -98,6 +98,7 @@ The compare also refuses with `unsupported-content` in these cases:
 - The documents differ inside a content control that is locked or bound to custom XML data. Tracked changes there cannot be accepted or rejected.
 - The original or the revised document holds tracked changes that cannot be accepted, so its final state is unknown.
 - The documents differ in block content that has no tracked-change form, such as an embedded file chunk.
+- The revised document adds a section setting, such as page borders, that has no value a tracked change can restore on reject.
 - The original document enforces read-only, comments, or forms protection. A compare would rewrite its content.
 - The original document enforces tracked-changes protection and holds tracked changes. A compare would accept them. Without tracked changes, the compare runs, because it writes only tracked changes.
 

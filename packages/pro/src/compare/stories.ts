@@ -223,6 +223,7 @@ export function compareNotes(
       end: shell.end,
     };
   };
+  const baseReferences = referencedIds(basePkg, new Set([`${kind}Reference`]), 'id');
   const xml = storyXml(scope, holder.root as ElementNode, () => {
     let out = '';
     const copiedSeparators: string[] = [];
@@ -249,20 +250,28 @@ export function compareNotes(
         }
       }
     } else if (revisedPart) {
-      // A new notes part keeps the revised document's separators, under their own ids.
-      for (const note of elementChildren(revisedPart.root)) {
+      // A new notes part keeps the revised document's separators. One whose id the original
+      // already references takes a free id, so that reference never resolves to a separator.
+      const separators = elementChildren(revisedPart.root).filter((note) => {
         const type = attributeOf(note, 'type');
-        if (!type || !NOTE_SEPARATORS.has(type)) continue;
-        out += revisedSide.serialize(note);
-        const id = attributeOf(note, 'id');
-        if (id !== undefined) copiedSeparators.push(id);
+        return type !== undefined && NOTE_SEPARATORS.has(type);
+      });
+      const separatorIds = separators.map((note) => attributeOf(note, 'id') ?? '');
+      const freeSeparatorId = freeIds([...baseReferences, ...separatorIds]);
+      const taken = new Set(baseReferences);
+      for (const note of separators) {
+        const own = attributeOf(note, 'id');
+        const id = own !== undefined && taken.has(own) ? freeSeparatorId() : own;
+        if (id !== undefined) {
+          taken.add(id);
+          copiedSeparators.push(id);
+        }
+        const xml = revisedSide.serialize(note);
+        out +=
+          id === own ? xml : xml.replace(/^(<[^>]*?\bw:id=")[^"]*"/, (_, head) => `${head}${id}"`);
       }
     }
-    const nextId = freeIds([
-      ...baseNotes.keys(),
-      ...copiedSeparators,
-      ...referencedIds(basePkg, new Set([`${kind}Reference`]), 'id'),
-    ]);
+    const nextId = freeIds([...baseNotes.keys(), ...copiedSeparators, ...baseReferences]);
     for (const revisedId of added) {
       const note = revisedNotes.get(revisedId);
       if (!note || ids.has(revisedId)) continue;
