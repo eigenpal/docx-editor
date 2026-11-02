@@ -85,23 +85,44 @@ test('a header added to an original that declares no relationships namespace', (
   expect(strFromU8(files[added!]!)).toContain('New header');
 });
 
-test('earlier sections keep the original headers', () => {
-  const section = (id: string) =>
-    `<w:p><w:pPr><w:sectPr><w:headerReference w:type="default" r:id="${id}"/></w:sectPr></w:pPr><w:r><w:t>Section one</w:t></w:r></w:p>`;
-  const base = docx(
-    `${section('rId1')}${p('Section two')}<w:sectPr><w:headerReference w:type="default" r:id="rId2"/></w:sectPr>`,
-    [header('header1.xml', 'First original'), header('header2.xml', 'Last original')]
+const twoSections = (first: string, last: string, text = 'Section two') =>
+  docx(
+    `<w:p><w:pPr><w:sectPr><w:headerReference w:type="default" r:id="rId1"/></w:sectPr></w:pPr><w:r><w:t>Section one</w:t></w:r></w:p>${p(text)}<w:sectPr><w:headerReference w:type="default" r:id="rId2"/></w:sectPr>`,
+    [header('header1.xml', first), header('header2.xml', last)]
   );
-  const revised = docx(
-    `${section('rId1')}${p('Section two changed')}<w:sectPr><w:headerReference w:type="default" r:id="rId2"/></w:sectPr>`,
-    [header('header1.xml', 'First revised'), header('header2.xml', 'Last revised')]
-  );
+
+test('the final section header compares when earlier headers are the same', () => {
+  const base = twoSections('First header', 'Last original');
+  const revised = twoSections('First header', 'Last revised', 'Section two changed');
   const { files } = compare(base, revised);
-  expect(strFromU8(files['word/header1.xml']!)).toContain('First original');
   expect(strFromU8(files['word/header1.xml']!)).not.toContain('<w:ins');
   const last = strFromU8(files['word/header2.xml']!);
   expect(last).toContain('<w:ins');
   expect(last).toContain('<w:del');
+});
+
+test('a changed header that only an earlier section shows is compared', () => {
+  const { files } = compare(
+    twoSections('First original', 'Last header'),
+    twoSections('First revised', 'Last header')
+  );
+  const first = strFromU8(files['word/header1.xml']!);
+  expect(first).toContain('<w:ins');
+  expect(first).toContain('<w:del');
+  expect(strFromU8(files['word/header2.xml']!)).not.toContain('<w:ins');
+});
+
+test('an earlier section header with no counterpart is refused', () => {
+  const oneHeader = docx(
+    `<w:p><w:pPr><w:sectPr/></w:pPr><w:r><w:t>Section one</w:t></w:r></w:p>${p('Section two')}<w:sectPr/>`
+  );
+  const result = compareDocuments(oneHeader, twoSections('First header', 'Last header'), {
+    authorName: 'Test',
+    date: DATE,
+  });
+  // The revised document's first section shows a header the original's lacks.
+  expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.code).toBe('unsupported-content');
 });
 
 test('block content controls that go one after another', () => {

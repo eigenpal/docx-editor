@@ -260,6 +260,8 @@ export function unitsOf(container: OoxmlNode, side: SideContext): Unit[] {
         });
         break;
       case 'sectPr':
+      // A cell's properties are written by the table compare, never copied as content.
+      case 'tcPr':
         break;
       default:
         units.push({

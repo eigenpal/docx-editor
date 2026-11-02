@@ -18,34 +18,56 @@ import { childNamed, elementChildren, type ElementNode } from './xml-fragments.t
 const NO_DROP: ReadonlySet<string> = new Set();
 const DROP_CHANGE = (name: string): ReadonlySet<string> => new Set([name]);
 
-/** Properties element with an optional change record of the original's properties. */
+/**
+ * Properties element with an optional change record of the original's properties. `bundled`
+ * records the original's properties even when they are equal: a reject restores the formatting
+ * of a row, and of a table with alignment or grid history, as one decision, and resets every
+ * cell of such a row that carries no record.
+ */
 function properties(
   name: 'tblPr' | 'trPr' | 'tcPr',
   base: ElementNode | null,
   revised: ElementNode | null,
   ctx: EmitContext,
-  marker = ''
+  marker = '',
+  bundled = false
 ): string {
   const change = `${name}Change`;
   const own = revised ?? base!;
   const side = revised ? ctx.revised : ctx.base;
-  const ownProps = childNamed(own, name);
-  // Row revision markers are never carried over from an input; inputs are pre-accepted.
-  const drop =
-    name === 'trPr'
-      ? new Set([change, 'ins', 'del'])
-      : name === 'tcPr'
-        ? new Set([change, 'cellIns', 'cellDel', 'cellMerge'])
-        : DROP_CHANGE(change);
-  let inner = propertiesInner(ownProps, side, drop);
+  let inner = propertiesInner(childNamed(own, name), side, DROPS[name]);
   inner += marker;
-  if (base && revised && ctx.detectFormatChanges) {
-    const before = propertiesInner(childNamed(base, name), ctx.base, drop);
-    const after = propertiesInner(ownProps, ctx.revised, drop);
-    if (normalize(before) !== normalize(after))
-      inner += `<w:${change}${ctx.attrs()}><w:${name}>${before}</w:${name}></w:${change}>`;
+  if (
+    base &&
+    revised &&
+    ctx.detectFormatChanges &&
+    (bundled || propertiesDiffer(name, base, revised, ctx))
+  ) {
+    const before = propertiesInner(childNamed(base, name), ctx.base, DROPS[name]);
+    inner += `<w:${change}${ctx.attrs()}><w:${name}>${before}</w:${name}></w:${change}>`;
   }
   return inner ? `<w:${name}>${inner}</w:${name}>` : '';
+}
+
+type PropertiesName = 'tblPr' | 'trPr' | 'tcPr' | 'tblPrEx';
+
+/** Children never carried over from an input: change records and pre-accepted markers. */
+const DROPS: Readonly<Record<PropertiesName, ReadonlySet<string>>> = {
+  tblPr: DROP_CHANGE('tblPrChange'),
+  trPr: new Set(['trPrChange', 'ins', 'del']),
+  tcPr: new Set(['tcPrChange', 'cellIns', 'cellDel', 'cellMerge']),
+  tblPrEx: DROP_CHANGE('tblPrExChange'),
+};
+
+function propertiesDiffer(
+  name: PropertiesName,
+  base: ElementNode,
+  revised: ElementNode,
+  ctx: EmitContext
+): boolean {
+  const before = propertiesInner(childNamed(base, name), ctx.base, DROPS[name]);
+  const after = propertiesInner(childNamed(revised, name), ctx.revised, DROPS[name]);
+  return normalize(before) !== normalize(after);
 }
 
 const normalize = (xml: string) => xml.replace(/\sw:rsid\w*="[^"]*"/g, '');
@@ -78,7 +100,13 @@ export function compareTable(
   ctx: EmitContext
 ): string {
   const own = revised ?? base!;
-  let out = `<w:tbl>${properties('tblPr', base, revised, ctx)}${gridXml(base, revised, ctx)}`;
+  const grid = gridXml(base, revised, ctx);
+  let out = `<w:tbl>${properties('tblPr', base, revised, ctx)}${grid}`;
+  // Alignment or grid history binds to the table's cell history only when cells record one.
+  const tableBundle =
+    !!base &&
+    !!revised &&
+    (propertiesDiffer('tblPr', base, revised, ctx) || grid.includes('<w:tblGridChange'));
   const baseRows = base ? rowsOf(base) : [];
   const revisedRows = revised ? rowsOf(revised) : [];
   if (!base) for (const row of revisedRows) out += insertedRow(row, ctx);
@@ -94,7 +122,7 @@ export function compareTable(
         k < pendingRevised.length &&
         cellsOf(pendingBase[k]!).length === cellsOf(pendingRevised[k]!).length
       ) {
-        out += rowPair(pendingBase[k]!, pendingRevised[k]!, ctx);
+        out += rowPair(pendingBase[k]!, pendingRevised[k]!, ctx, tableBundle);
         k++;
       }
       for (const row of pendingBase.slice(k)) out += deletedRow(row, ctx);
@@ -109,7 +137,7 @@ export function compareTable(
         const right = revisedRows[op.b]!;
         out +=
           cellsOf(left).length === cellsOf(right).length
-            ? rowPair(left, right, ctx)
+            ? rowPair(left, right, ctx, tableBundle)
             : deletedRow(left, ctx) + insertedRow(right, ctx);
       } else if (op.op === 'del') pendingBase.push(baseRows[op.a]!);
       else pendingRevised.push(revisedRows[op.b]!);
@@ -125,13 +153,40 @@ function rowStart(row: ElementNode, side: SideContext): string {
   return exception ? side.serialize(exception) : '';
 }
 
-function rowPair(base: ElementNode, revised: ElementNode, ctx: EmitContext): string {
-  let out = `<w:tr>${rowStart(revised, ctx.revised)}${properties('trPr', base, revised, ctx)}`;
+/** Row-level table property exceptions of a matched row, with a record when they differ. */
+function rowException(base: ElementNode, revised: ElementNode, ctx: EmitContext): string {
+  const own = childNamed(revised, 'tblPrEx');
+  const old = childNamed(base, 'tblPrEx');
+  if (!ctx.detectFormatChanges || !propertiesDiffer('tblPrEx', base, revised, ctx))
+    return rowStart(revised, ctx.revised);
+  // A one-sided exception has no record a reject restores in full.
+  if (!own || !old) {
+    ctx.state.unrecordedProperties++;
+    return rowStart(revised, ctx.revised);
+  }
+  const before = propertiesInner(old, ctx.base, DROPS.tblPrEx);
+  const after = propertiesInner(own, ctx.revised, DROPS.tblPrEx);
+  return `<w:tblPrEx>${after}<w:tblPrExChange${ctx.attrs()}><w:tblPrEx>${before}</w:tblPrEx></w:tblPrExChange></w:tblPrEx>`;
+}
+
+function rowPair(
+  base: ElementNode,
+  revised: ElementNode,
+  ctx: EmitContext,
+  tableBundle: boolean
+): string {
   const baseCells = cellsOf(base);
   const revisedCells = cellsOf(revised);
+  // Any formatting record in the row makes a reject restore every cell of it.
+  const bundled =
+    tableBundle ||
+    propertiesDiffer('trPr', base, revised, ctx) ||
+    propertiesDiffer('tblPrEx', base, revised, ctx) ||
+    revisedCells.some((cell, index) => propertiesDiffer('tcPr', baseCells[index]!, cell, ctx));
+  let out = `<w:tr>${rowException(base, revised, ctx)}${properties('trPr', base, revised, ctx)}`;
   revisedCells.forEach((cell, index) => {
     const original = baseCells[index]!;
-    out += `<w:tc>${properties('tcPr', original, cell, ctx)}${compareContainer(unitsOf(original, ctx.base), unitsOf(cell, ctx.revised), ctx)}</w:tc>`;
+    out += `<w:tc>${properties('tcPr', original, cell, ctx, '', bundled)}${compareContainer(unitsOf(original, ctx.base), unitsOf(cell, ctx.revised), ctx)}</w:tc>`;
   });
   return `${out}</w:tr>`;
 }

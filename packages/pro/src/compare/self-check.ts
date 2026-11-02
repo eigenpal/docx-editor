@@ -12,8 +12,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * around existing text, a section break added or removed), and refusing the whole compare for
  * it would be worse than showing every text change.
  *
- * Only the compared stories are checked: the main story, the notes, and the headers and footers
- * of the final section. Other sections keep the original's headers and footers.
+ * Only these stories are checked: the main story, the notes, and the headers and footers of the
+ * final section. Earlier sections' headers and footers compare with the same engine.
  */
 import {
   applyTreeOp,

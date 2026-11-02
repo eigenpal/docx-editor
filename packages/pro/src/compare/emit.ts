@@ -34,8 +34,8 @@ export class CompareState {
   count = 0;
   /** Blocks the engine could not track (kept or dropped without a revision). */
   untracked = 0;
-  /** Section settings the revised document adds that a record cannot name with a value. */
-  unrecordedSections = 0;
+  /** Section or table settings the revised document adds that a record cannot restore. */
+  unrecordedProperties = 0;
   /** Move ranges written so far; names each range pair. */
   moves = 0;
   /** Note references matched between the documents: compare the two notes. */
@@ -250,7 +250,7 @@ export function sectPrXml(
     if (normalizeSect(before) !== normalizeSect(body)) {
       // A reject keeps every setting the record leaves out, so the record names them all.
       const record = sectionRecord(sectPrFields(base), body ? sectPrFields(source) : [], ctx.base);
-      if (record === null) ctx.state.unrecordedSections++;
+      if (record === null) ctx.state.unrecordedProperties++;
       change = `<w:sectPrChange${ctx.attrs()}><w:sectPr>${record ?? before}</w:sectPr></w:sectPrChange>`;
     }
   }

@@ -4,11 +4,12 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 /**
- * Stories other than the main one: headers and footers of the final section, footnotes, and
+ * Stories other than the main one: headers and footers of every section, footnotes, and
  * endnotes. Each compares with the same container engine, in its own part.
  */
 import {
   resolveHeaderFooterResolutionBySection,
+  serializeOoxmlPart,
   type OoxmlPackage,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
@@ -66,17 +67,90 @@ interface FurnitureRef {
  * reference of a type, and carries a slot over from an earlier section that declares it.
  */
 function furnitureRefs(pkg: OoxmlPackage): Map<string, FurnitureRef> {
-  const out = new Map<string, FurnitureRef>();
   const sections = resolveHeaderFooterResolutionBySection(pkg);
   const final = sections[sections.length - 1];
-  if (!final) return out;
+  return final ? slotRefs(final) : new Map();
+}
+
+type SectionFurniture = ReturnType<typeof resolveHeaderFooterResolutionBySection>[number];
+
+function slotRefs(section: SectionFurniture): Map<string, FurnitureRef> {
+  const out = new Map<string, FurnitureRef>();
   for (const [kind, slots] of [
-    ['header', final.headers],
-    ['footer', final.footers],
+    ['header', section.headers],
+    ['footer', section.footers],
   ] as const) {
     for (const [type, slot] of slots) out.set(`${kind}:${type}`, { kind, type, part: slot.part });
   }
   return out;
+}
+
+/** Headers and footers that only earlier sections show, as `kind:type` plus content. */
+function earlierFurniture(pkg: OoxmlPackage): Set<string> {
+  const sections = resolveHeaderFooterResolutionBySection(pkg);
+  const finalParts = finalSectionFurniture(pkg);
+  const out = new Set<string>();
+  for (const section of sections.slice(0, -1)) {
+    for (const ref of slotRefs(section).values()) {
+      if (finalParts.has(ref.part.name)) continue;
+      const xml = serializeOoxmlPart(ref.part).replace(/\sw:rsid\w*="[^"]*"/g, '');
+      out.add(`${ref.kind}:${ref.type}:${xml}`);
+    }
+  }
+  return out;
+}
+
+interface FurniturePair {
+  readonly base: FurnitureRef;
+  /** Absent when the revised document shows nothing there: the content is deleted. */
+  readonly revised: FurnitureRef | undefined;
+}
+
+/**
+ * Original headers and footers that only earlier sections show, each paired with the revised
+ * part that the same section and slot shows. Sections pair by position when both documents
+ * have as many; otherwise those parts must be the same in both. Null when a part cannot be
+ * paired: one document shows a slot the other lacks, or one original part would take two
+ * different revised parts. An original part the revised document does not show is deleted.
+ */
+function earlierFurniturePairs(
+  basePkg: OoxmlPackage,
+  revisedPkg: OoxmlPackage
+): FurniturePair[] | null {
+  const baseSections = resolveHeaderFooterResolutionBySection(basePkg);
+  const revisedSections = resolveHeaderFooterResolutionBySection(revisedPkg);
+  if (baseSections.length !== revisedSections.length) {
+    const base = earlierFurniture(basePkg);
+    const revised = earlierFurniture(revisedPkg);
+    const same = base.size === revised.size && [...base].every((entry) => revised.has(entry));
+    return same ? [] : null;
+  }
+  // Each original part takes exactly one revised part, starting with the final section's.
+  const target = new Map<string, string>();
+  const finalBase = furnitureRefs(basePkg);
+  const finalRevised = furnitureRefs(revisedPkg);
+  for (const [key, ref] of finalBase)
+    target.set(ref.part.name, finalRevised.get(key)?.part.name ?? '');
+  const pairs: FurniturePair[] = [];
+  for (let index = 0; index < baseSections.length - 1; index++) {
+    const baseSlots = slotRefs(baseSections[index]!);
+    const revisedSlots = slotRefs(revisedSections[index]!);
+    for (const key of new Set([...baseSlots.keys(), ...revisedSlots.keys()])) {
+      const base = baseSlots.get(key);
+      const revised = revisedSlots.get(key);
+      // A slot only the revised document shows needs a new part and reference: not recorded.
+      if (!base) return null;
+      const wanted = revised?.part.name ?? '';
+      const mapped = target.get(base.part.name);
+      if (mapped !== undefined) {
+        if (mapped !== wanted) return null;
+        continue;
+      }
+      target.set(base.part.name, wanted);
+      pairs.push({ base, revised });
+    }
+  }
+  return pairs;
 }
 
 /** Names of the header and footer parts the final section of `pkg`'s main story shows. */
@@ -84,12 +158,49 @@ export function finalSectionFurniture(pkg: OoxmlPackage): ReadonlySet<string> {
   return new Set([...furnitureRefs(pkg).values()].map((ref) => ref.part.name));
 }
 
-/** Compares the final section's headers and footers by kind and type. */
+/** One header or footer story compared, in the part the output gives it. */
+function compareFurnitureStory(
+  basePkg: OoxmlPackage,
+  revisedPkg: OoxmlPackage,
+  base: FurnitureRef | undefined,
+  revised: FurnitureRef | undefined,
+  ctx: EmitContext
+): string {
+  const scope = new NamespaceScope();
+  const baseSide = new SideContext(
+    'base',
+    basePkg,
+    base?.part.name ?? basePkg.mainDocumentPart,
+    scope
+  );
+  const revisedSide = new SideContext(
+    'revised',
+    revisedPkg,
+    revised?.part.name ?? revisedPkg.mainDocumentPart,
+    scope
+  );
+  const story = ctx.withSides(baseSide, revisedSide);
+  const root = (base ?? revised)!.part.root as ElementNode;
+  return storyXml(scope, root, () =>
+    compareContainer(
+      base ? unitsOf(base.part.root, baseSide) : [],
+      revised ? unitsOf(revised.part.root, revisedSide) : [],
+      story,
+      !base || !revised
+    )
+  );
+}
+
+/**
+ * Compares the final section's headers and footers by kind and type, then the original's parts
+ * that only earlier sections show against the revised parts in the same place. `unpaired` when
+ * an earlier section's header or footer cannot be paired, so its difference has no record.
+ */
 export function compareFurniture(
   basePkg: OoxmlPackage,
   revisedPkg: OoxmlPackage,
   ctx: EmitContext
-): { readonly outputs: StoryOutput[]; readonly extraRefs: string } {
+): { readonly outputs: StoryOutput[]; readonly extraRefs: string; readonly unpaired: boolean } {
   const baseRefs = furnitureRefs(basePkg);
   const revisedRefs = furnitureRefs(revisedPkg);
   const outputs: StoryOutput[] = [];
@@ -97,29 +208,7 @@ export function compareFurniture(
   for (const key of new Set([...baseRefs.keys(), ...revisedRefs.keys()])) {
     const base = baseRefs.get(key);
     const revised = revisedRefs.get(key);
-    const scope = new NamespaceScope();
-    const baseSide = new SideContext(
-      'base',
-      basePkg,
-      base?.part.name ?? basePkg.mainDocumentPart,
-      scope
-    );
-    const revisedSide = new SideContext(
-      'revised',
-      revisedPkg,
-      revised?.part.name ?? revisedPkg.mainDocumentPart,
-      scope
-    );
-    const story = ctx.withSides(baseSide, revisedSide);
-    const root = (base ?? revised)!.part.root as ElementNode;
-    const xml = storyXml(scope, root, () =>
-      compareContainer(
-        base ? unitsOf(base.part.root, baseSide) : [],
-        revised ? unitsOf(revised.part.root, revisedSide) : [],
-        story,
-        !base || !revised
-      )
-    );
+    const xml = compareFurnitureStory(basePkg, revisedPkg, base, revised, ctx);
     if (base) {
       outputs.push({
         partName: base.part.name,
@@ -143,7 +232,16 @@ export function compareFurniture(
       extraRefs += `<w:${ref.kind}Reference xmlns:r="${R_NS}" w:type="${ref.type}" r:id="${MARK}NEW:${partName}§"/>`;
     }
   }
-  return { outputs, extraRefs };
+  const earlier = earlierFurniturePairs(basePkg, revisedPkg);
+  for (const { base, revised } of earlier ?? []) {
+    outputs.push({
+      partName: base.part.name,
+      contentType: base.part.contentType,
+      xml: compareFurnitureStory(basePkg, revisedPkg, base, revised, ctx),
+      isNew: false,
+    });
+  }
+  return { outputs, extraRefs, unpaired: earlier === null };
 }
 
 const NOTE_SEPARATORS = new Set(['separator', 'continuationSeparator', 'continuationNotice']);

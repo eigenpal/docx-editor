@@ -143,7 +143,11 @@ export function comparePackages(
   const revisedSect = childNamed(revisedBody, 'sectPr');
   const bodyShell = shellXml(scope, baseBody);
   const furnitureCtx = ctx;
-  let furniture: ReturnType<typeof compareFurniture> = { outputs: [], extraRefs: '' };
+  let furniture: ReturnType<typeof compareFurniture> = {
+    outputs: [],
+    extraRefs: '',
+    unpaired: false,
+  };
   const documentXml = storyXml(scope, baseDoc.root as ElementNode, () => {
     const content = compareContainer(unitsOf(baseBody, base), unitsOf(revisedBody, next), ctx);
     furniture = compareFurniture(basePkg, revisedPkg, furnitureCtx);
@@ -175,12 +179,20 @@ export function comparePackages(
         'The documents differ in block content that has no tracked-change form, such as an embedded file chunk.',
     };
   }
-  if (ctx.state.unrecordedSections > 0) {
+  if (furniture.unpaired) {
     return {
       ok: false,
       code: 'unsupported-content',
       message:
-        'The revised document adds section settings, such as page borders, that a tracked change cannot restore on reject.',
+        'The documents differ in a header or footer of an earlier section that has no matching header or footer in the other document.',
+    };
+  }
+  if (ctx.state.unrecordedProperties > 0) {
+    return {
+      ok: false,
+      code: 'unsupported-content',
+      message:
+        'The revised document adds section or table settings, such as page borders, that a tracked change cannot restore on reject.',
     };
   }
   const assembled = assemblePackage(
