@@ -86,14 +86,6 @@ export interface ParagraphSpacing {
 export const AUTO_PARAGRAPH_SPACING_PT = 14;
 
 /**
- * The fixed automatic spacing of `w:doNotUseHTMLParagraphAutoSpacing` (ISO/IEC 29500-1 §17.15.3,
- * "Use Fixed Paragraph Spacing for HTML Auto Setting"): with the setting on, `w:beforeAutospacing`
- * gives 5pt before and `w:afterAutospacing` 10pt after, in place of the HTML `<p>` margin.
- */
-const FIXED_AUTO_SPACING_BEFORE_PT = 5;
-const FIXED_AUTO_SPACING_AFTER_PT = 10;
-
-/**
  * Where a paragraph sits, for the contexts in which Word's auto spacing resolves to 0
  * instead of {@link AUTO_PARAGRAPH_SPACING_PT}.
  *
@@ -119,8 +111,10 @@ export interface ParagraphAutoSpacingContext {
   /** Section grid pitch in points; no grid uses Word's fixed 12pt line unit. */
   readonly lineUnitPt?: number;
   /**
-   * `w:doNotUseHTMLParagraphAutoSpacing` is on: automatic spacing outside a list resolves to
-   * the fixed 5pt before and 10pt after instead of {@link AUTO_PARAGRAPH_SPACING_PT}.
+   * `w:doNotUseHTMLParagraphAutoSpacing` is on (§17.15.3, "Use Fixed Paragraph Spacing for
+   * HTML Auto Setting"): `w:beforeAutospacing` / `w:afterAutospacing` have no effect, and each
+   * side keeps its authored measurement, in a list, a table cell or at a story edge alike.
+   * Captured references put 5pt on each side for `w:before="100"` and 15pt for `"300"`.
    */
   readonly fixedAutoSpacing?: boolean;
 }
@@ -325,12 +319,17 @@ export function cascadedParagraphAttributes(
  * rather than an authored measurement.
  *
  * Callers that know a paragraph sits at a container edge need this: the auto value is
- * suppressed there, an authored one is not.
+ * suppressed there, an authored one is not. With `fixedAutoSpacing`
+ * (`w:doNotUseHTMLParagraphAutoSpacing`) nothing is substituted, so neither side is.
  */
-export function paragraphAutoSpacingSides(props: readonly OoxmlProperty[]): {
+export function paragraphAutoSpacingSides(
+  props: readonly OoxmlProperty[],
+  context?: Pick<ParagraphAutoSpacingContext, 'fixedAutoSpacing'>
+): {
   readonly before: boolean;
   readonly after: boolean;
 } {
+  if (context?.fixedAutoSpacing === true) return { before: false, after: false };
   let before = false;
   let after = false;
   for (const property of props) {
@@ -350,7 +349,8 @@ export function paragraphAutoSpacingSides(props: readonly OoxmlProperty[]): {
  * height, not the gap between paragraphs — and is not resolved here.
  *
  * `w:beforeAutospacing` / `w:afterAutospacing` REPLACE the authored measurement on their own
- * side rather than adding to it; see {@link AUTO_PARAGRAPH_SPACING_PT}.
+ * side rather than adding to it; see {@link AUTO_PARAGRAPH_SPACING_PT}. With
+ * {@link ParagraphAutoSpacingContext.fixedAutoSpacing} they are ignored instead.
  */
 export function paragraphSpacing(
   props: readonly OoxmlProperty[],
@@ -396,12 +396,10 @@ export function paragraphSpacing(
       (afterLines * (context?.lineUnitPt ?? 12)) / 100,
       MAX_PARAGRAPH_SPACING_PT
     );
-  if (beforeAuto || afterAuto) {
-    const fixed = context?.fixedAutoSpacing === true;
-    const autoBefore = fixed ? FIXED_AUTO_SPACING_BEFORE_PT : AUTO_PARAGRAPH_SPACING_PT;
-    const autoAfter = fixed ? FIXED_AUTO_SPACING_AFTER_PT : AUTO_PARAGRAPH_SPACING_PT;
-    if (beforeAuto) before = context?.inList ? 0 : autoBefore;
-    if (afterAuto) after = context?.inList ? 0 : autoAfter;
+  if (context?.fixedAutoSpacing !== true) {
+    const auto = context?.inList ? 0 : AUTO_PARAGRAPH_SPACING_PT;
+    if (beforeAuto) before = auto;
+    if (afterAuto) after = auto;
   }
   return { before, after };
 }

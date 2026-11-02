@@ -501,3 +501,19 @@ test('paragraph mark backgrounds use the custom author color', () => {
     'color-mix(in srgb, blue 15%, var(--doc-revision-color-white))'
   );
 });
+
+test('a change bar stands half an inch outside the text, or mid-margin when the margin is narrower', () => {
+  const { layout } = render(`<w:p>${revision('ins', 'text')}</w:p>`, {});
+  const page = layout.pages[0]!;
+  const at = (margin: number) =>
+    collectPageChangeBars(
+      { ...page, contentBox: { ...page.contentBox, x: page.box.x + margin } },
+      1,
+      'all-markup',
+      false,
+      DEFAULT_REVISION_MARKUP
+    ).left;
+  expect(at(54)).toBe(27);
+  expect(at(72)).toBe(36);
+  expect(at(90)).toBe(54);
+});

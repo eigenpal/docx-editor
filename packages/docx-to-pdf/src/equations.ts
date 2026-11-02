@@ -91,6 +91,19 @@ export function paintEquation(
         bar(g.bar, x, y);
         node(g.body, x, y);
         return;
+      case 'borderBox': {
+        for (const stroke of g.rules) bar(stroke, x, y);
+        const height = pageHeight(page);
+        const px = (value: number) => (x + value - visit.page.box.x).toFixed(3);
+        const py = (value: number) => (height - (y + value - visit.page.box.y)).toFixed(3);
+        for (const line of g.diagonals)
+          out.push(
+            `q ${color(visit.span.style.color)} RG ${g.thickness.toFixed(3)} w ` +
+              `${px(line.x1)} ${py(line.y1)} m ${px(line.x2)} ${py(line.y2)} l S Q`
+          );
+        node(g.body, x, y);
+        return;
+      }
       case 'script':
         node(g.base, x, y);
         if (g.subscript) node(g.subscript, x, y);

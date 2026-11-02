@@ -7,6 +7,7 @@ import { equationDisplayText } from './equation-display-text.ts';
 import { equationInk } from './equation-ink.ts';
 import { fitEquationLineExtent, type EquationTextBand } from './equation-line-extent.ts';
 import { attachScripts, box, naryLimitsBeside, shifted } from './equation-scripts.ts';
+import { layoutBorderBox } from './equation-border-box.ts';
 import {
   equationAtomSpaces,
   equationTextAtoms,
@@ -104,6 +105,24 @@ export interface EquationBarGeometry extends EquationGeometryBase {
   readonly bar: LayoutBox;
 }
 
+/** A straight stroke between two points, relative to its node's box. */
+export interface EquationDiagonal {
+  readonly x1: number;
+  readonly y1: number;
+  readonly x2: number;
+  readonly y2: number;
+}
+
+export interface EquationBorderBoxGeometry extends EquationGeometryBase {
+  readonly kind: 'borderBox';
+  readonly body: EquationGeometry;
+  /** Edges and horizontal or vertical strikes, as filled rectangles. */
+  readonly rules: readonly LayoutBox[];
+  /** Diagonal strikes, stroked at {@link thickness}. */
+  readonly diagonals: readonly EquationDiagonal[];
+  readonly thickness: number;
+}
+
 export interface EquationScriptGeometry extends EquationGeometryBase {
   readonly kind: 'script';
   readonly base: EquationGeometry;
@@ -125,6 +144,7 @@ export type EquationGeometry =
   | EquationFractionGeometry
   | EquationRadicalGeometry
   | EquationBarGeometry
+  | EquationBorderBoxGeometry
   | EquationScriptGeometry
   | EquationNaryGeometry;
 
@@ -712,6 +732,13 @@ function layoutExpression(
         baseline: -top,
       });
     }
+    case 'borderBox':
+      return layoutBorderBox(
+        expression,
+        layoutExpression(expression.body, measurer, style, scale, cache),
+        structureSizePt(expression, scale, cache),
+        measurer
+      );
     case 'script': {
       const base = layoutExpression(expression.base, measurer, style, scale, cache);
       const subscript = expression.subscript

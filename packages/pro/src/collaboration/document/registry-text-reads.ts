@@ -5,12 +5,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 /**
  * What makes a paragraph's text read differently while the text itself is unchanged: a mark
- * that arrives late (`paragraph-text-marks.ts`), or a deletion record that arrives or that an
- * undo withdraws (`paragraph-text-deletions.ts`). Those paragraphs read again.
+ * that arrives late (`paragraph-text-marks.ts`), or a deletion or decision record that arrives or
+ * that an undo withdraws (`paragraph-text-deletions.ts`, `paragraph-text-decisions.ts`). Those
+ * paragraphs read again.
  */
 import type * as Y from 'yjs';
 import type { LogicalId } from './identity.ts';
 import type { InlineIndex } from './paragraph-inline-index.ts';
+import { textDecisionsOf } from './paragraph-text-decisions.ts';
 import { textDeletionsOf } from './paragraph-text-deletions.ts';
 import { textMarksOf } from './paragraph-text-marks.ts';
 
@@ -32,6 +34,7 @@ export interface TextReadsHost {
 export function subscribeTextReads(doc: Y.Doc, host: TextReadsHost): () => void {
   const marks = textMarksOf(doc);
   const deletions = textDeletionsOf(doc);
+  const decisions = textDecisionsOf(doc);
   let pending: Set<Y.Text> | 'all' | null = null;
   const collect = (texts: ReadonlySet<Y.Text> | 'all'): void => {
     if (host.loading()) return;
@@ -42,7 +45,7 @@ export function subscribeTextReads(doc: Y.Doc, host: TextReadsHost): () => void 
     pending ??= new Set();
     for (const text of texts) pending.add(text);
   };
-  // Registered after both indexes, which register theirs when they are first read above.
+  // Registered after the indexes, which register theirs when they are first read above.
   const flush = (): void => {
     const texts = pending;
     pending = null;
@@ -52,10 +55,12 @@ export function subscribeTextReads(doc: Y.Doc, host: TextReadsHost): () => void 
   };
   const stopMarks = marks.subscribe(collect);
   const stopDeletions = deletions.subscribe((runs) => collect(marks.textsReading(runs)));
+  const stopDecisions = decisions.subscribe((runs) => collect(marks.textsReading(runs)));
   doc.on('beforeObserverCalls', flush);
   return () => {
     stopMarks();
     stopDeletions();
+    stopDecisions();
     doc.off('beforeObserverCalls', flush);
   };
 }

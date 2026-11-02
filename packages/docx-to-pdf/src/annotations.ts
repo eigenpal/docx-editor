@@ -67,7 +67,9 @@ export function linkAnnotation(
 export function destinations(
   doc: PDFDocument,
   pages: PDFPage[],
-  layout: ExportSemanticLayout
+  layout: ExportSemanticLayout,
+  /** Moves a page point to where the page is painted on its sheet. */
+  place: (pageIndex: number, x: number, y: number) => [number, number] = (_, x, y) => [x, y]
 ): Set<string> {
   const names: (PDFHexString | PDFArray)[] = [];
   const added = new Set<string>();
@@ -82,15 +84,14 @@ export function destinations(
       record = layout.pages[dest.pageIndex];
     if (!page || !record) continue;
     added.add(dest.anchor.name);
+    const [x, y] = place(
+      dest.pageIndex,
+      dest.pageStack.x - record.box.x,
+      pageHeight(page) - dest.pageStack.y + record.box.y
+    );
     names.push(
       PDFHexString.fromText(dest.anchor.name),
-      doc.context.obj([
-        page.ref,
-        'XYZ',
-        dest.pageStack.x - record.box.x,
-        pageHeight(page) - dest.pageStack.y + record.box.y,
-        null,
-      ])
+      doc.context.obj([page.ref, 'XYZ', x, y, null])
     );
   }
   if (names.length)

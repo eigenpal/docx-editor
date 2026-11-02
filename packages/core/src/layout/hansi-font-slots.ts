@@ -2,6 +2,7 @@
 // ranges intact; only derived layout pieces select a different measurement face.
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { themeFontFamilyOf } from '../store/package/theme-font-scheme.ts';
+import { paintedFontFamilyName } from '../store/package/font-family-name.ts';
 import { isEastAsiaHintSymbol, hasEastAsiaSymbolHint } from './east-asia-symbol-hint.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 import { segmentGraphemes } from './grapheme.ts';
@@ -15,8 +16,10 @@ function slotFace(
   attrs: Readonly<Record<string, string>> | undefined,
   theme: ThemeFonts | undefined
 ): string | undefined {
-  const face = (theme ? themeFontFamilyOf(attrs?.hAnsiTheme, theme) : null) ?? attrs?.hAnsi;
-  return face && face.length <= 128 ? face : undefined;
+  const face =
+    (theme ? themeFontFamilyOf(attrs?.hAnsiTheme, theme) : null) ??
+    paintedFontFamilyName(attrs?.hAnsi);
+  return face ?? undefined;
 }
 
 /**

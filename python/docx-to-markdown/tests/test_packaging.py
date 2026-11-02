@@ -60,6 +60,7 @@ def test_every_font_file_has_a_license():
         "LiberationSerif": "LICENSE-Liberation.txt",
         "LiberationMono": "LICENSE-Liberation.txt",
         "TeXGyreAdventor": "GUST-FONT-LICENSE.txt",
+        "Selawik": "OFL-Selawik.txt",
     }
     assert fonts == set(expected)
     for family, license_file in expected.items():

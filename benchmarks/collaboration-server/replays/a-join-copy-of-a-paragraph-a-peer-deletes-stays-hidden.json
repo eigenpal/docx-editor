@@ -1,0 +1,743 @@
+{
+  "config": "reorderControls",
+  "seed": 47,
+  "replicas": 3,
+  "delivery": "server",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 2,
+          "text": "rem "
+        },
+        "paragraphs": [10]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveBlocks",
+          "parentId": "",
+          "moves": [
+            [1, 0],
+            [8, 0]
+          ]
+        },
+        "targets": [
+          {
+            "field": "parentId",
+            "localName": "body",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveBlocks",
+          "parentId": "",
+          "moves": [
+            [0, 8],
+            [4, 8]
+          ]
+        },
+        "targets": [
+          {
+            "field": "parentId",
+            "localName": "body",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveTable",
+          "tableId": "",
+          "beforeBlockId": ""
+        },
+        "targets": [
+          {
+            "field": "tableId",
+            "localName": "tbl",
+            "index": 1
+          },
+          {
+            "field": "beforeBlockId",
+            "localName": "tbl",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 6
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveBlocks",
+          "parentId": "",
+          "moves": [[6, 7]]
+        },
+        "targets": [
+          {
+            "field": "parentId",
+            "localName": "body",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 22
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "undo",
+      "replica": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 3,
+          "text": "e"
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveTable",
+          "tableId": "",
+          "beforeBlockId": ""
+        },
+        "targets": [
+          {
+            "field": "tableId",
+            "localName": "tbl",
+            "index": 1
+          },
+          {
+            "field": "beforeBlockId",
+            "localName": "p",
+            "index": 8
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveTable",
+          "tableId": "",
+          "beforeBlockId": ""
+        },
+        "targets": [
+          {
+            "field": "tableId",
+            "localName": "tbl",
+            "index": 0
+          },
+          {
+            "field": "beforeBlockId",
+            "localName": "p",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveBlocks",
+          "parentId": "",
+          "moves": [
+            [0, 0],
+            [1, 0]
+          ]
+        },
+        "targets": [
+          {
+            "field": "parentId",
+            "localName": "body",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveTable",
+          "tableId": "",
+          "beforeBlockId": ""
+        },
+        "targets": [
+          {
+            "field": "tableId",
+            "localName": "tbl",
+            "index": 1
+          },
+          {
+            "field": "beforeBlockId",
+            "localName": "p",
+            "index": 1
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 2,
+          "text": "rem "
+        },
+        "paragraphs": [2]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "undo",
+      "replica": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 25,
+          "text": "🈀 am"
+        },
+        "paragraphs": [4]
+      }
+    },
+    {
+      "kind": "undo",
+      "replica": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 6,
+          "end": 8
+        },
+        "paragraphs": [5]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 15
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 0
+        },
+        "paragraphs": [7]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "row",
+        "table": 0,
+        "row": 1,
+        "op": {
+          "op": "deleteTableRow",
+          "tableId": "",
+          "rowId": ""
+        }
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveBlocks",
+          "parentId": "",
+          "moves": [[1, 0]]
+        },
+        "targets": [
+          {
+            "field": "parentId",
+            "localName": "body",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveBlocks",
+          "parentId": "",
+          "moves": [
+            [1, 3],
+            [2, 13]
+          ]
+        },
+        "targets": [
+          {
+            "field": "parentId",
+            "localName": "body",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 14,
+          "text": "dolo"
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "joinParagraphs",
+          "firstId": "",
+          "secondId": ""
+        },
+        "paragraphs": [0, 1]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteBlock",
+          "blockId": ""
+        },
+        "paragraphs": [0]
+      }
+    }
+  ]
+}

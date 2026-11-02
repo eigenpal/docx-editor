@@ -44,10 +44,23 @@ for (const formatting of [
     }
     const marked = await exportPdf(input, { displayMode: 'all-markup', useSystemFonts: false });
     const stream = await commands(marked.bytes);
-    expect(stream).toContain('0 0.501961 0 rg');
-    expect(stream).toContain('0.752941 0 0 rg');
+    // One author: the insertion and the deletion share that author's color.
+    expect(stream).toContain('0.443137 0.376471 0.909804 rg');
+    expect(stream).not.toContain('0 0.501961 0 rg');
+    expect(stream).not.toContain('0.752941 0 0 rg');
   });
 }
+
+test('an export without a display mode shows tracked changes', async () => {
+  const input = docx(
+    '<w:p><w:del w:id="1" w:author="Reviewer"><w:r><w:delText>Old</w:delText></w:r></w:del>' +
+      '<w:ins w:id="2" w:author="Reviewer"><w:r><w:t>New</w:t></w:r></w:ins></w:p>'
+  );
+  const omitted = await exportPdf(input, { useSystemFonts: false });
+  const marked = await exportPdf(input, { displayMode: 'all-markup', useSystemFonts: false });
+  expect(omitted.displayMode).toBe('all-markup');
+  expect(await commands(omitted.bytes)).toBe(await commands(marked.bytes));
+});
 
 test('custom revision colors, double marks, and change bars reach PDF commands', async () => {
   const input = docx(
@@ -125,8 +138,8 @@ test('Simple Markup change bars retain distinct author colors', async () => {
     revisionMarkup: { changedLines: { color: 'byAuthor' } },
   });
   const stream = await commands(result.bytes);
-  expect(stream).toContain('0.752941 0.223529 0.168627 rg');
-  expect(stream).toContain('0.121569 0.435294 0.698039 rg');
+  expect(stream).toContain('0.443137 0.376471 0.909804 rg');
+  expect(stream).toContain('0.011765 0.513725 0.529412 rg');
 });
 
 test('tracked cell shading uses the configured named color', async () => {
@@ -170,7 +183,7 @@ test('captured author slots preserve session colors after another author disappe
     revisionAuthorSlots: { Remaining: 3 },
   } as const;
   const result = await exportPdf(input, options);
-  expect(await commands(result.bytes)).toContain('0.066667 0.478431 0.396078 rg');
+  expect(await commands(result.bytes)).toContain('0.811765 0.058824 0.121569 rg');
   await expect(
     exportPdf(input, { ...options, revisionAuthorSlots: { Remaining: -1 } })
   ).rejects.toThrow('revisionAuthorSlots');
@@ -248,6 +261,19 @@ for (const mark of ['none', 'colorOnly', 'bold', 'italic'] as const) {
   });
 }
 
+test.each(['ins', 'del'] as const)(
+  'tracked %s rows print no cell fill with the default markup',
+  async (kind) => {
+    const input = docx(
+      `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:trPr><w:${kind} w:id="9" w:author="Reviewer"/></w:trPr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`
+    );
+    const result = await exportPdf(input, { useSystemFonts: false, fidelityPolicy: 'best-effort' });
+    const ops = await commands(result.bytes);
+    expect(ops).not.toContain('1 0.752941 0.796078 rg');
+    expect(ops).not.toContain('0.878431 0.952941 0.980392 rg');
+  }
+);
+
 test.each([
   ['ins', 'inserted'],
   ['del', 'deleted'],
@@ -302,8 +328,8 @@ test('cell author colors use captured slots and explicit cell attribution before
     revisionAuthorSlots: { 'Row author': 3, 'Cell author': 1 },
   });
   const stream = await commands(result.bytes);
-  expect(stream).toContain('0.066667 0.478431 0.396078 rg');
-  expect(stream).toContain('0.121569 0.435294 0.698039 rg');
+  expect(stream).toContain('0.811765 0.058824 0.121569 rg');
+  expect(stream).toContain('0.011765 0.513725 0.529412 rg');
 });
 
 test('cell-only authors retain distinct PDF colors', async () => {
@@ -320,8 +346,8 @@ test('cell-only authors retain distinct PDF colors', async () => {
     }
   );
   const stream = await commands(result.bytes);
-  expect(stream).toContain('0.752941 0.223529 0.168627 rg');
-  expect(stream).toContain('0.121569 0.435294 0.698039 rg');
+  expect(stream).toContain('0.443137 0.376471 0.909804 rg');
+  expect(stream).toContain('0.011765 0.513725 0.529412 rg');
 });
 
 test.each([
@@ -381,7 +407,7 @@ test('author backgrounds use a light tint independently from text color', async 
       changedLines: { mark: 'none' },
     },
   });
-  expect(await commands(result.bytes)).toContain('0.866667 0.913725 0.952941 rg');
+  expect(await commands(result.bytes)).toContain('0.85098 0.92549 0.929412 rg');
 });
 
 test('move fallback uses insertion background in PDF', async () => {
@@ -581,6 +607,56 @@ test('cell-only authors in a text box retain distinct PDF colors', async () => {
     }
   );
   const stream = await commands(result.bytes);
-  expect(stream).toContain('0.752941 0.223529 0.168627 rg');
-  expect(stream).toContain('0.121569 0.435294 0.698039 rg');
+  expect(stream).toContain('0.443137 0.376471 0.909804 rg');
+  expect(stream).toContain('0.011765 0.513725 0.529412 rg');
+});
+
+const LIST_PARTS = {
+  'word/_rels/document.xml.rels':
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rN" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/></Relationships>',
+  'word/numbering.xml':
+    '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num></w:numbering>',
+};
+
+test('a list number shows the deletion of its paragraph mark, across the gap to the text', async () => {
+  const item = (markDeleted: boolean) =>
+    `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>${markDeleted ? '<w:rPr><w:del w:id="2" w:author="Reviewer"/></w:rPr>' : ''}</w:pPr><w:del w:id="1" w:author="Reviewer"><w:r><w:delText>Gone</w:delText></w:r></w:del></w:p><w:p><w:r><w:t>After</w:t></w:r></w:p>`;
+  const rules = async (markDeleted: boolean) =>
+    (
+      await commands(
+        (await exportPdf(docx(item(markDeleted), LIST_PARTS), { useSystemFonts: false })).bytes
+      )
+    )
+      .split('\n')
+      .filter((line) => / re f$/.test(line));
+  const kept = await rules(false);
+  const deleted = await rules(true);
+  // One more rule: the struck number, which runs on to where the text starts at 36pt.
+  const extra = deleted.filter((line) => !kept.includes(line));
+  expect(extra).toHaveLength(1);
+  const [x, , width] = extra[0]!.split(' rg ')[1]!.split(' ').map(Number);
+  expect(x! + width!).toBeCloseTo(72 + 36, 0);
+});
+
+test('a comment range across paragraphs is tinted on every line and ticked only at its ends', async () => {
+  const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+  const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const input = docx(
+    '<w:p><w:commentRangeStart w:id="0"/><w:r><w:t>First part</w:t></w:r></w:p><w:p><w:r><w:t>Second part</w:t></w:r></w:p><w:p><w:r><w:t>Third part</w:t></w:r><w:commentRangeEnd w:id="0"/><w:r><w:commentReference w:id="0"/></w:r></w:p>',
+    {
+      'word/_rels/document.xml.rels': `<Relationships xmlns="${REL}"><Relationship Id="comments" Type="${R}/comments" Target="comments.xml"/></Relationships>`,
+      'word/comments.xml': `<w:comments xmlns:w="${W}"><w:comment w:id="0" w:author="Reviewer" w:initials="RV"><w:p><w:r><w:t>Note</w:t></w:r></w:p></w:comment></w:comments>`,
+    }
+  );
+  const ops = (await commands((await exportPdf(input, { useSystemFonts: false })).bytes)).split(
+    '\n'
+  );
+  const start = ops.indexOf('/DocxMarkupMultiply gs');
+  expect(start).toBeGreaterThan(-1);
+  const marks = ops.slice(start + 1, ops.indexOf('Q', start));
+  // The first author's tint: one band per line, and no bar under any of them.
+  expect(marks.filter((line) => line.endsWith('re f'))).toHaveLength(3);
+  const ticks = marks.filter((line) => /^\S+ \S+ m \S+ \S+ l S$/.test(line));
+  expect(ticks).toHaveLength(2);
 });

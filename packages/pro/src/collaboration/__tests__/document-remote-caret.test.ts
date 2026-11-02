@@ -404,6 +404,40 @@ describe('local caret across remote edits', () => {
     }
   });
 
+  test('a caret beside a tab this user inserted is carried on its character once the tab is built', async () => {
+    const { surface, room, peer, harness, textOf, cleanup } = await editorWithPeer();
+    try {
+      const id = surface.session.paragraphIds()[0]!;
+      // "Alpha\t| paragraph": no build holds the local tab yet, so the caret has no anchor.
+      surface.setSelection({
+        anchor: { paragraphId: id, offset: 5 },
+        head: { paragraphId: id, offset: 5 },
+      });
+      surface.insertTab();
+      expect(surface.state().selection.head).toEqual({ paragraphId: id, offset: 6 });
+      // A peer edit elsewhere leaves the caret where it is, and builds the tab.
+      harness.apply(peer, [
+        { op: 'insertText', paragraphId: harness.paragraphIdAt(peer, 1), offset: 0, text: 'Big ' },
+      ]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(surface.state().selection.head).toEqual({ paragraphId: id, offset: 6 });
+      harness.apply(peer, [
+        { op: 'insertText', paragraphId: harness.paragraphIdAt(peer, 0), offset: 0, text: 'Big ' },
+      ]);
+      // The next change is carried on the tab before the caret, not left to text mapping.
+      expect(room.session.remoteSelectionMove?.()).toEqual({
+        from: { anchor: { nodeId: id, offset: 6 }, head: { nodeId: id, offset: 6 } },
+        to: { anchor: { nodeId: id, offset: 10 }, head: { nodeId: id, offset: 10 } },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      surface.type('!');
+      // The peer's text reads text values only, so the tab before the "!" does not show here.
+      expect(textOf(0)).toBe('Big Alpha! paragraph');
+    } finally {
+      cleanup();
+    }
+  });
+
   test('a peer splitting and joining back the caret paragraph keeps the caret after its character', async () => {
     const { surface, peer, harness, textOf, cleanup } = await editorWithPeer();
     try {

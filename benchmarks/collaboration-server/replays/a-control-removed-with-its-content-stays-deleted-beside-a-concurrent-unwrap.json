@@ -1,0 +1,84 @@
+{
+  "config": "reorderControls",
+  "seed": 92,
+  "replicas": 3,
+  "delivery": "server",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveTable",
+          "tableId": "",
+          "beforeBlockId": ""
+        },
+        "targets": [
+          {
+            "field": "tableId",
+            "localName": "tbl",
+            "index": 0
+          },
+          {
+            "field": "beforeBlockId",
+            "localName": "p",
+            "index": 17
+          }
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "removeContentControl",
+          "controlId": "",
+          "keepContent": true
+        },
+        "targets": [
+          {
+            "field": "controlId",
+            "localName": "sdt",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 0,
+          "text": "lo"
+        },
+        "paragraphs": [9]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "removeContentControl",
+          "controlId": "",
+          "keepContent": false
+        },
+        "targets": [
+          {
+            "field": "controlId",
+            "localName": "sdt",
+            "index": 0
+          }
+        ]
+      }
+    }
+  ]
+}

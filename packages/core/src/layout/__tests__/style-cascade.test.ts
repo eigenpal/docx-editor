@@ -223,18 +223,39 @@ describe('default paragraph style when pStyle is absent', () => {
 });
 
 describe('character rStyle cascade and default character style', () => {
-  test('default character style applies when rStyle is absent', () => {
+  test('the default character style contributes nothing, named or not', () => {
     const styles =
       `<w:style w:type="character" w:default="1" w:styleId="DefaultParagraphFont">` +
-      `<w:rPr><w:color w:val="AA5500"/></w:rPr></w:style>`;
+      `<w:rPr><w:color w:val="AA5500"/><w:sz w:val="40"/></w:rPr></w:style>`;
     const table = buildStyleCascadeTable(loadStyles(styles));
     expect(table.defaultCharacterStyleId).toBe('DefaultParagraphFont');
-    const merged = cascadeRunProperties(
+    const inherited = [{ localName: 'sz', attributes: { val: '18' } }];
+    for (const direct of [
       [],
-      [{ localName: 'sz', attributes: { val: '24' } }],
-      table
+      [{ localName: 'rStyle', attributes: { val: 'DefaultParagraphFont' } }],
+    ]) {
+      const style = resolveRunStyle(cascadeRunProperties(inherited, direct, table));
+      expect(style.fontSizePt).toBe(9);
+      expect(style.color ?? null).toBeNull();
+    }
+  });
+
+  test('a character style based on the default one applies only its own properties', () => {
+    const styles =
+      `<w:style w:type="character" w:default="1" w:styleId="DefaultParagraphFont">` +
+      `<w:rPr><w:color w:val="AA5500"/><w:sz w:val="40"/></w:rPr></w:style>` +
+      `<w:style w:type="character" w:styleId="Strong"><w:basedOn w:val="DefaultParagraphFont"/>` +
+      `<w:rPr><w:b/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const style = resolveRunStyle(
+      cascadeRunProperties(
+        [{ localName: 'sz', attributes: { val: '18' } }],
+        [{ localName: 'rStyle', attributes: { val: 'Strong' } }],
+        table
+      )
     );
-    expect(resolveRunStyle(merged)).toMatchObject({ fontSizePt: 12, color: 'AA5500' });
+    expect(style).toMatchObject({ fontSizePt: 9, bold: true });
+    expect(style.color ?? null).toBeNull();
   });
 
   test('explicit rStyle basedOn chain with direct formatting precedence', () => {
@@ -644,7 +665,7 @@ describe('layout applies Heading1 / Heading2 cascade', () => {
     });
   });
 
-  test('default paragraph + character styles reach layout without explicit style refs', () => {
+  test('the default paragraph style reaches layout, and the default character style does not', () => {
     const styles =
       DOC_DEFAULTS +
       `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
@@ -658,8 +679,29 @@ describe('layout applies Heading1 / Heading2 cascade', () => {
       fontFamily: 'Arial',
       fontSizePt: 11,
       color: '102030',
-      italic: true,
+      italic: false,
     });
+  });
+
+  test('a pStyle naming a character style or no style applies the default paragraph style', () => {
+    const styles =
+      DOC_DEFAULTS +
+      `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
+      `<w:pPr><w:spacing w:after="160"/></w:pPr><w:rPr><w:color w:val="102030"/></w:rPr></w:style>` +
+      `<w:style w:type="character" w:styleId="Strong"><w:rPr><w:b/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    for (const named of ['Strong', 'Missing']) {
+      const cascaded = cascadeParagraphFormatting(
+        table,
+        paragraphPPr(`<w:p><w:pPr><w:pStyle w:val="${named}"/></w:pPr></w:p>`)
+      );
+      expect(paragraphSpacing(cascaded.paragraphProperties).after).toBe(8);
+      const run = cascaded.runProperties.find((property) => property.localName === 'color');
+      expect(run?.attributes?.val).toBe('102030');
+      expect(cascaded.runProperties.some((property) => property.localName === 'b')).toBe(false);
+      // Contextual spacing compares it as a default-style paragraph.
+      expect(cascaded.styleId).toBe('Normal');
+    }
   });
 
   test('rStyle in a run reaches layout with direct override', () => {

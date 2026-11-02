@@ -94,6 +94,15 @@ function lastBase(text: string): string {
   return '';
 }
 
+/**
+ * False when neither side of a boundary can be East Asian, read from code units alone. Every
+ * East Asian script this module spaces lies at U+1100 or above, and no combining mark lies
+ * below U+0300, so a last unit below U+0300 is its own base. Empty text stays undecided.
+ */
+function boundaryMayBeEastAsian(before: string, after: string): boolean {
+  return !(before.charCodeAt(before.length - 1) < 0x0300 && after.charCodeAt(0) < 0x1100);
+}
+
 /** A same-line boundary advance; callers omit it after a break or an exclusion jump. */
 export function automaticTextGap(
   before: TextBoundary,
@@ -101,6 +110,7 @@ export function automaticTextGap(
   policy: CjkParagraphTypography,
   measurer?: TextMeasurer
 ): number {
+  if (!boundaryMayBeEastAsian(before.text, after.text)) return 0;
   if (!ordinaryText(before) || !ordinaryText(after)) return 0;
   const left = script(lastBase(before.text));
   const right = script(String.fromCodePoint(after.text.codePointAt(0) ?? 0));
@@ -248,7 +258,8 @@ export function automaticLineTextGap(
     !previous ||
     previous.range.paragraphId !== paragraphId ||
     previous.range.end !== start ||
-    Math.abs(lineOrigin() + line.width - previous.box.x - previous.box.width) > 0.001
+    Math.abs(lineOrigin() + line.width - previous.box.x - previous.box.width) > 0.001 ||
+    !boundaryMayBeEastAsian(previous.text, text)
   )
     return 0;
   return automaticTextGap(
@@ -257,6 +268,80 @@ export function automaticLineTextGap(
     policy,
     measurer
   );
+}
+
+/**
+ * Whether a paragraph laid out from these pieces can take any automatic gap. Every gap has an
+ * East Asian side, and every boundary line layout prices is cut from these pieces' text, so
+ * without East Asian text (or with both policies off) every gap is 0.
+ */
+export function piecesMayTakeAutomaticSpacing(
+  pieces: readonly { readonly text: string }[],
+  policy: CjkParagraphTypography
+): boolean {
+  if (policy.autoSpaceDE === false && policy.autoSpaceDN === false) return false;
+  return pieces.some((piece) => EAST_ASIAN_TEXT.test(piece.text));
+}
+
+/** What {@link candidateAutomaticGap} needs to price a candidate against its line. */
+export interface CandidateGapContext {
+  /** The line being filled now; paragraph flow replaces it when a line closes. */
+  readonly line: () => { readonly spans: readonly StyleSpanRecord[]; readonly width: number };
+  readonly lineOrigin: () => number;
+  readonly paragraphId: string;
+  readonly typography: CjkParagraphTypography;
+  readonly measurer?: TextMeasurer | undefined;
+}
+
+const noAutomaticGap = (): number => 0;
+
+/**
+ * The automatic gap before one candidate, asked several times while it is placed. The answer
+ * is kept while every input {@link automaticLineTextGap} reads is unchanged: the line's last
+ * span (its text, end and box), the line width, the pen origin, and the asked text and start.
+ * A wrap or an optical fit changes one of them, so the gap is priced again on the new line.
+ * Without a context (a paragraph that cannot take a gap) the answer is always 0.
+ */
+export function candidateAutomaticGap(
+  context: CandidateGapContext | false,
+  piece: FieldAwarePiece,
+  faceStyle: ResolvedRunStyle,
+  candidate: string,
+  candidateStart: number
+): (text?: string, start?: number) => number {
+  if (!context) return noAutomaticGap;
+  let key: readonly unknown[] | undefined;
+  let value = 0;
+  return (text = candidate, start = candidateStart) => {
+    const line = context.line();
+    const last = line.spans.at(-1);
+    const origin = context.lineOrigin();
+    const next = [
+      last,
+      last?.text,
+      last?.range.end,
+      last?.box.x,
+      last?.box.width,
+      line.width,
+      origin,
+      text,
+      start,
+    ];
+    if (key && next.every((part, index) => part === key![index])) return value;
+    value = automaticLineTextGap(
+      line,
+      context.lineOrigin,
+      context.paragraphId,
+      start,
+      piece,
+      text,
+      faceStyle,
+      context.typography,
+      context.measurer
+    );
+    key = next;
+    return value;
+  };
 }
 
 /**

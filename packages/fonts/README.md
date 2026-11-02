@@ -20,12 +20,13 @@ Load open-licensed substitutes for common document fonts. The docx-editor engine
 | Arial           | Liberation Sans   | SIL OFL           |
 | Courier New     | Liberation Mono   | SIL OFL           |
 | Century Gothic  | TeX Gyre Adventor | GUST Font License |
+| Segoe UI        | Selawik           | SIL OFL           |
 
-Helvetica shares Arial's advance widths, so `packagedFonts()` also serves Helvetica with Liberation Sans. The first five substitutes target matching advance widths for the glyphs they cover. TeX Gyre Adventor is slightly narrower than Century Gothic; the measured difference stays within 1% in `bun run check:font-width-fidelity`. Kerning and glyph differences can still change line breaks. For the original glyphs, supply licensed font bytes through `loadFonts()` from `@docx-editor.dev/core/editor`.
+Helvetica shares Arial's advance widths, so `packagedFonts()` also serves Helvetica with Liberation Sans. The first five substitutes target matching advance widths for the glyphs they cover. TeX Gyre Adventor is slightly narrower than Century Gothic; the measured difference stays within 1% in `bun run check:font-width-fidelity`. Selawik matches Segoe UI's advance widths and takes Segoe UI's line height. Selawik has no italic faces, so italic Segoe UI text uses the upright faces, slanted. Kerning and glyph differences can still change line breaks. For the original glyphs, supply licensed font bytes through `loadFonts()` from `@docx-editor.dev/core/editor`.
 
 Packaged faces do not cover every script. Liberation Sans has no Arabic glyphs. The editor keeps native family fallback available for missing glyphs. Exact metrics still depend on the font available for that script.
 
-`loadDefaultFonts()` and `defaultFonts()` load five package defaults: Calibri, Cambria, Times New Roman, Arial, and Courier New. To include Century Gothic, pass `families: ALL_DEFAULT_FONT_FAMILIES`. Its substitute adds about 709 KB. Alternatively, `googleFonts()` loads it from packaged assets when the document requests it.
+`loadDefaultFonts()` and `defaultFonts()` load five package defaults: Calibri, Cambria, Times New Roman, Arial, and Courier New. To include Century Gothic and Segoe UI, pass `families: ALL_DEFAULT_FONT_FAMILIES`. Their substitutes add about 709 KB and 88 KB. Alternatively, `packagedFonts()` and `googleFonts()` load them from packaged assets when the document requests them.
 
 ## Default family names
 
@@ -206,6 +207,6 @@ From the repository root, run `bun run check:google-catalog` to check the commit
 
 ## Licenses
 
-The packaged fonts include license texts in `licenses/`. Carlito, Caladea, and Liberation use the SIL Open Font License. TeX Gyre Adventor uses the GUST Font License. The package code uses Apache-2.0.
+The packaged fonts include license texts in `licenses/`. Carlito, Caladea, Liberation, and Selawik use the SIL Open Font License. TeX Gyre Adventor uses the GUST Font License. The package code uses Apache-2.0.
 
 The GUST Font License incorporates the LaTeX Project Public License 1.3c or any later version. It also requests that you rename modified fonts. Both texts ship in `licenses/`. The package identifies this license as `LicenseRef-GUST-Font-License` because GUST has no SPDX identifier.

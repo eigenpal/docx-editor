@@ -13,6 +13,7 @@ import './scenario-clock.ts';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createInterface } from 'node:readline';
 import { parseArgs } from 'node:util';
 import { defaultMatrixWidth, matrixJobs, runMatrix } from './scenario-matrix.ts';
 import {
@@ -357,6 +358,24 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
+  // Many seeds, as a matrix worker: one JSON job per input line, one JSON result line each.
+  if (command === 'worker') {
+    const fallback = new Uint8Array(readFileSync(values.document!));
+    for await (const line of createInterface({ input: process.stdin })) {
+      const job = JSON.parse(line) as { config: string; delivery: Delivery; seed: number };
+      const shape = configFor(job.config);
+      const report = await runScenario({
+        ...scenarioOptions(shape, job.seed, documentFor(shape, fallback), job.delivery),
+        strict,
+      });
+      const problem = report.problems[0] ?? null;
+      console.log(
+        JSON.stringify({ applied: report.applied, problem, rss: process.memoryUsage().rss })
+      );
+    }
+    process.exit(0);
+  }
+
   if (command === 'matrix') {
     const shapes = values.configs
       ? values.configs.split(',').map((name) => configFor(name.trim()))
@@ -372,25 +391,56 @@ async function main(): Promise<void> {
       // Six seeds per shape unless `--seeds` says otherwise; `run` keeps its own default.
       process.argv.some((arg) => arg === '--seeds' || arg.startsWith('--seeds='))
         ? Number(values.seeds)
-        : 6
+        : 6,
+      // Shapes on the large sample document take the longest.
+      (name) => {
+        const shape = SCENARIO_CONFIGS[name as ScenarioConfig] as {
+          documentPath?: string;
+          documentBody?: string;
+        };
+        return shape.documentPath === undefined && shape.documentBody === undefined;
+      }
     );
     const width = values.jobs ? Number(values.jobs) : defaultMatrixWidth();
     const started = performance.now();
     console.log(`${jobs.length} seeds across ${width} processes`);
+    // A long sweep says how far it is: every 25 seeds, and at least once a minute.
+    let done = 0;
+    let failures = 0;
+    let reported = started;
+    const progress = (): void => {
+      const now = performance.now();
+      const elapsed = (now - started) / 1000;
+      const left = jobs.length - done;
+      // The heaviest shapes run first, so the estimate falls as the sweep goes on.
+      const estimate = done > 0 ? `, about ${Math.round((elapsed / done) * left)} s left` : '';
+      console.log(
+        `progress: ${done} of ${jobs.length} seeds done, ${left} remaining, ` +
+          `${failures} failed, ${Math.round(elapsed)} s${estimate}`
+      );
+      reported = now;
+    };
+    const ticker = setInterval(() => {
+      if (performance.now() - reported >= 60_000) progress();
+    }, 5_000);
     const results = await runMatrix(
       fileURLToPath(import.meta.url),
       values.document!,
       jobs,
       width,
       (result) => {
+        done += 1;
         if (result.problem) {
+          failures += 1;
           console.log(
             `FAIL ${result.config} ${result.delivery} seed ${result.seed}: ${result.problem.slice(0, 160)}`
           );
         }
+        if (done % 25 === 0 && done < jobs.length) progress();
       },
       strict ? ['--strict'] : []
     );
+    clearInterval(ticker);
     const groups = new Map<string, { clean: number; total: number; applied: number }>();
     for (const result of results) {
       const key = `${result.config}, ${result.delivery} delivery`;
@@ -542,7 +592,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  throw new Error(`unknown command ${command}; use run, matrix, shrink, or replay`);
+  throw new Error(`unknown command ${command}; use run, matrix, worker, shrink, or replay`);
 }
 
 if (import.meta.main) await main();

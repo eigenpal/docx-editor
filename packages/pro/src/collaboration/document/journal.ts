@@ -6,6 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { projectedTextTarget } from './projected-text-target.ts';
 import { routeInlineEffects, type InlinePlan } from './paragraph-text-writer.ts';
 import { recordRelocatedMarkers } from './relocated-markers.ts';
+import { textOfRemovedContainers } from './removed-container-text.ts';
 import { writeTypedInsert, type TypedInsert } from './paragraph-text-typing.ts';
 import {
   applyInlinePlan,
@@ -689,8 +690,9 @@ function applyPlannedJournal(
     });
     tombstoneRemoved(registry, effects, planned, formerChildren);
     const removed = deleteCopiesOfRemoved(registry, planned.removed);
+    const nested = textOfRemovedContainers(registry, planned, formerChildren);
     const written: InlineWritten = plan
-      ? applyInlinePlan(registry, plan, tokens)
+      ? applyInlinePlan(registry, plan, tokens, new Set(planned.removed))
       : { copied: new Set<string>(), deleted: new Set<string>(), embedded: new Set<string>() };
     recordRelocatedMarkers(
       registry,
@@ -700,7 +702,7 @@ function applyPlannedJournal(
       plan?.paragraphs.map(({ after }) => after) ?? []
     );
     deleteHeldOriginals(registry, removed.held, written.copied);
-    recordDeletions(registry, written, removed.shown);
+    recordDeletions(registry, written, new Map([...removed.shown, ...nested]));
     deleteEmbedsOfRemoved(registry, removed.embeds, planned.removed, written);
   }, JOURNAL_ORIGIN);
 }

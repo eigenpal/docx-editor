@@ -61,7 +61,7 @@
 // `FontSourceSubstitution` — assignable by shape — so this package has no runtime or
 // type dependency on the engine and the engine has none on it.
 
-import { FACES, FAMILY_PLANS, planFaceFile, planLineBox } from './family-plans.ts';
+import { FACES, FAMILY_PLANS, planFaceFile, planLineBox, planSourceFace } from './family-plans.ts';
 import type { DefaultFontFamily } from './family-plans.ts';
 import { packagedAssetRootOverride, resolvePackagedAssetRoot } from './asset-root.ts';
 import { FONT_ASSET_MANIFEST, FONT_ASSET_URLS } from './manifest.generated.ts';
@@ -218,6 +218,7 @@ export const DEFAULT_FONT_FAMILIES: readonly DefaultFontFamily[] = Object.freeze
 export const ALL_DEFAULT_FONT_FAMILIES: readonly DefaultFontFamily[] = Object.freeze([
   ...DEFAULT_FONT_FAMILIES,
   'Century Gothic',
+  'Segoe UI',
 ]);
 
 /** @deprecated Use {@link DEFAULT_FONT_FAMILIES}. */
@@ -256,7 +257,8 @@ export async function loadDefaultFonts(
     const plan = FAMILY_PLANS.get(family);
     if (!plan) continue; // Unknown name: nothing to stand in for.
     for (const face of FACES) {
-      const file = planFaceFile(plan, face.suffix);
+      const source = planSourceFace(plan, face);
+      const file = planFaceFile(plan, source.suffix);
       const manifest = manifestByFile.get(file);
       if (!manifest) {
         failures.push({ family, file, diagnostic: 'face missing from packaged manifest' });
@@ -265,9 +267,11 @@ export async function loadDefaultFonts(
       const lineMetrics = planLineBox(plan, face.weight);
       substitutions.push({
         from: { family, weight: face.weight, style: face.style },
-        to: { family: plan.substitute, weight: face.weight, style: face.style },
+        to: { family: plan.substitute, weight: source.weight, style: source.style },
         ...(lineMetrics ? { lineMetrics } : {}),
       });
+      // An italic served by its upright twin loads no bytes of its own.
+      if (source !== face) continue;
       jobs.push(
         (async () => {
           try {
@@ -583,14 +587,16 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
     // regular is covered but whose bold is not would leave the bold with neither bytes nor
     // a substitution — which is exactly what the family-grained version of this check did.
     const fullyCovered = (family: DefaultFontFamily): boolean => {
-      const substitute = FAMILY_PLANS.get(family)!.substitute;
-      return FACES.every(
+      const plan = FAMILY_PLANS.get(family)!;
+      return FACES.every((face) => {
         // Under the Word name the document wrote, or under the face this would load: an
         // earlier origin may have reported either.
-        (face) =>
+        const source = planSourceFace(plan, face);
+        return (
           already.has(faceKey(family, face.weight, face.style)) ||
-          already.has(faceKey(substitute, face.weight, face.style))
-      );
+          already.has(faceKey(plan.substitute, source.weight, source.style))
+        );
+      });
     };
     // The default family counts as declared: a document whose runs name no font still
     // renders in one, and leaving it out would load nothing for a file that is entirely
@@ -627,9 +633,10 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
         for (const face of FACES) {
           if (already.has(faceKey(family, face.weight, face.style))) continue;
           const lineMetrics = planLineBox(plan, face.weight);
+          const source = planSourceFace(plan, face);
           aliasOnly.push({
             from: { family, weight: face.weight, style: face.style },
-            to: { family: plan.substitute, weight: face.weight, style: face.style },
+            to: { family: plan.substitute, weight: source.weight, style: source.style },
             ...(lineMetrics ? { lineMetrics } : {}),
           });
         }
@@ -645,9 +652,14 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
       for (const face of FACES) {
         const lineMetrics = planLineBox(plan, face.weight);
         const own = already.has(faceKey(family, face.weight, face.style));
+        const source = own ? face : planSourceFace(plan, face);
         aliasOnly.push({
           from: { family: alias, weight: face.weight, style: face.style },
-          to: { family: own ? family : plan.substitute, weight: face.weight, style: face.style },
+          to: {
+            family: own ? family : plan.substitute,
+            weight: source.weight,
+            style: source.style,
+          },
           ...(lineMetrics ? { lineMetrics } : {}),
         });
       }

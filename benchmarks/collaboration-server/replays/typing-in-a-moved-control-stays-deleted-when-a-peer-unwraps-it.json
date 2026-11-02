@@ -1,0 +1,92 @@
+{
+  "config": "reorderControls",
+  "seed": 91,
+  "replicas": 3,
+  "delivery": "server",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "moveBlocks",
+          "parentId": "",
+          "moves": [
+            [6, 0],
+            [4, 5]
+          ]
+        },
+        "targets": [
+          {
+            "field": "parentId",
+            "localName": "body",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 6,
+          "text": "ips"
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "removeContentControl",
+          "controlId": "",
+          "keepContent": true
+        },
+        "targets": [
+          {
+            "field": "controlId",
+            "localName": "sdt",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "removeContentControl",
+          "controlId": "",
+          "keepContent": false
+        },
+        "targets": [
+          {
+            "field": "controlId",
+            "localName": "sdt",
+            "index": 0
+          }
+        ]
+      }
+    }
+  ]
+}

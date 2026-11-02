@@ -137,6 +137,26 @@ describe('interopHtmlFromFragment', () => {
     expect(bare).not.toContain('margin-bottom');
   });
 
+  test('the default character style adds nothing to a copied run', () => {
+    const styles =
+      FORMAT_DOC_DEFAULTS +
+      '<w:style w:type="character" w:default="1" w:styleId="DefaultParagraphFont">' +
+      '<w:rPr><w:color w:val="FF0000"/></w:rPr></w:style>' +
+      '<w:style w:type="character" w:styleId="Strong"><w:basedOn w:val="DefaultParagraphFont"/>' +
+      '<w:rPr><w:b/></w:rPr></w:style>';
+    const run = (rPr: string) => `<w:r><w:rPr>${rPr}</w:rPr><w:t>x</w:t></w:r>`;
+    const html = interopHtmlFromFragment(
+      fragment({
+        styles,
+        body:
+          `<w:p>${run('')}${run('<w:rStyle w:val="DefaultParagraphFont"/>')}` +
+          `${run('<w:rStyle w:val="Strong"/>')}</w:p>`,
+      })
+    );
+    expect(html).not.toContain('#ff0000');
+    expect(html).toContain('font-weight:bold');
+  });
+
   test('a formatted run carries its resolved inline CSS', () => {
     const html = interopHtmlFromFragment(
       fragment({

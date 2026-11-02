@@ -54,7 +54,7 @@ Use `openDocumentForExport` and `exportPdfFrom` to reuse font resolution and lay
 | Option | Default | Behavior |
 | --- | --- | --- |
 | `fidelityPolicy` | `'strict'` | Rejects unsupported or approximate output. Use `'best-effort'` to return available output with diagnostics. |
-| `displayMode` | `'proposed'` | Includes proposed revisions. Use `'original'` for the original content or `'all-markup'` to show revisions. |
+| `displayMode` | `'all-markup'` | Shows tracked insertions and deletions. Use `'proposed'` for the text with all changes accepted or `'original'` for the original content. |
 | `comments` | `true` | Includes native PDF annotations. Set to `false` to omit them. |
 | `useSystemFonts` | `true` | Searches standard operating system directories for supported font files. Set to `false` to disable this search. |
 | `timeoutMs` | `60000` | Sets the conversion deadline in milliseconds. |

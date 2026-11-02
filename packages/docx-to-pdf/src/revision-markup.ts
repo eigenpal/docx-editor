@@ -35,7 +35,23 @@ const COLORS: Record<string, string> = {
   lightGreen: 'E2EFD9',
   gray: 'D9D9D9',
 };
-const AUTHORS = ['C0392B', '1F6FB2', '7D3C98', '117A65', '9A6206', 'C2185B', '2E4053', '2E7D32'];
+/**
+ * Print colors by author: the mark for an author's revisions and comment balloon outline,
+ * then the balloon's tint. Each author keeps one color for every mark.
+ */
+export const AUTHOR_PALETTE: readonly (readonly [mark: string, tint: string])[] = [
+  ['7160E8', 'DEDAFA'],
+  ['038387', 'D6FDFE'],
+  ['498205', 'ECFDD7'],
+  ['CF0F1F', 'FCD8DB'],
+  ['4E6AED', 'D9DFFB'],
+  ['5C2E91', 'EADFF4'],
+  ['CC3595', 'F7DDED'],
+  ['0B6A0B', 'D9FBD9'],
+  ['750B1C', 'FCD8DD'],
+  ['D13438', 'F8DCDD'],
+];
+const AUTHORS = AUTHOR_PALETTE.map(([mark]) => mark);
 export function markupColor(color: RevisionMarkupColor, authorSlot = 0, auto = '000000'): string {
   return color === 'auto'
     ? auto

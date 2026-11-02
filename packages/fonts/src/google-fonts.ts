@@ -68,6 +68,7 @@ import {
   FACES,
   FAMILY_PLANS,
   PACKAGED_ONLY_FAMILIES,
+  planSourceFace,
   type DefaultFontFamily,
 } from './family-plans.ts';
 import {
@@ -560,11 +561,13 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
         // covered but whose bold is not would leave the bold with no bytes at all.
         const bundledCovered =
           plan !== undefined &&
-          FACES.every(
-            (face) =>
+          FACES.every((face) => {
+            const source = planSourceFace(plan, face);
+            return (
               already.has(faceKey(declared, face.weight, face.style)) ||
-              already.has(faceKey(plan.substitute, face.weight, face.style))
-          );
+              already.has(faceKey(plan.substitute, source.weight, source.style))
+            );
+          });
         if (plan && (!allowed || allowed.has(plan.substitute.toLowerCase())) && !bundledCovered) {
           packaged.set(declared, bundled);
         }

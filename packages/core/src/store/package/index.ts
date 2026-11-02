@@ -181,6 +181,8 @@ export {
   linearMathToOmml,
   parseLinearMath,
   projectOmmlEquation,
+  type EquationBoxEdges,
+  type EquationBoxStrikes,
   type EquationControlSource,
   type EquationExpression,
   type LinearMathOmmlResult,

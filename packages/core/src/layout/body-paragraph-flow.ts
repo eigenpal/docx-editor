@@ -93,6 +93,17 @@ export function bodyParagraphCacheKey(
 }
 
 /**
+ * The flow options that differ for a paragraph in a text frame. Line placement clips an ordinary
+ * paragraph's inline pictures to the sheet later, while a frame keeps the flow clip. A frame
+ * also lays a manual page break out as absent, so the frame stays on its page.
+ */
+export function framedParagraphFlow(
+  framed: boolean
+): { readonly deferInlineDrawingHorizontalClip: true } | { readonly pageBreaksIgnored: true } {
+  return framed ? { pageBreaksIgnored: true } : { deferInlineDrawingHorizontalClip: true };
+}
+
+/**
  * The horizontal bounds a body paragraph breaks within, from the column's left edge. A
  * negative left indent, or a first line that hangs left of it, starts the text left of the
  * column; a negative right indent ends it past the column. Wrap passages are cut from these

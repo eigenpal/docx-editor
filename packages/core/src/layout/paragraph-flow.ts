@@ -70,9 +70,10 @@ import {
 } from './cjk-spacing.ts';
 import { lineEndMarksMayHang, resolveCjkTypography } from './cjk-typography.ts';
 import {
-  automaticLineTextGap,
   automaticTextSpan,
+  candidateAutomaticGap,
   justifiedGroupGapSlack,
+  piecesMayTakeAutomaticSpacing,
   splitAtAutomaticSpacing,
 } from './cjk-automatic-spacing.ts';
 import {
@@ -182,8 +183,9 @@ export function breakParagraph(
   if (cached) return cached;
 
   const lineSpacing = flow?.lineSpacing ?? SINGLE_LINE_SPACING;
-  // A manual page break inside a table cell keeps its model offset but has no geometry.
-  const pageBreaksIgnored = flow?.cellAnchorScope?.inTableCell === true;
+  // A manual page break in a table cell or a text frame keeps its offset but has no geometry.
+  const pageBreaksIgnored =
+    flow?.cellAnchorScope?.inTableCell === true || flow?.pageBreaksIgnored === true;
 
   // Collect deleted ranges during projection: removed content has no visible span.
   const deletedRanges: { start: number; end: number }[] = [];
@@ -238,7 +240,7 @@ export function breakParagraph(
   const visiblePieces = splitAtSpacedSoundMarks(
     splitAtAutomaticSpacing(
       returnUncoveredHintedText(
-        continuationPiecesWithRules(allPieces, startOffset, flow?.showFieldCodes, available),
+        continuationPiecesWithRules(allPieces, startOffset, flow, available),
         measurer
       ),
       typography,
@@ -248,6 +250,7 @@ export function breakParagraph(
   );
   const { preserveColonAdvances } = advances;
   const pieces = compressCjkPieces(visiblePieces, typography, measurer, advances);
+  const automaticSpacing = piecesMayTakeAutomaticSpacing(pieces, typography);
   const seamNaturalWidths = cjkSeamNaturalWidths(pieces, visiblePieces, measurer);
   const placeableSuffixes = placeableContentSuffixes(pieces, pageBreaksIgnored);
   const replayScope = cellTabReplayScope(flow?.cellAnchorScope, rawPieces);
@@ -1270,18 +1273,13 @@ export function breakParagraph(
       // Measured as DRAWN: `w:caps` changes the glyphs, so measuring the source text
       // would size the line for characters the reader never sees. Note marks may reserve
       // a wider measureText (eachPage) while painting the real digits.
-      const automaticGap = (text = candidate, start = spanRange.start): number =>
-        automaticLineTextGap(
-          line,
-          lineOrigin,
-          paragraphId,
-          start,
-          piece,
-          text,
-          faceStyle,
-          typography,
-          measurer
-        );
+      const automaticGap = candidateAutomaticGap(
+        automaticSpacing && { line: () => line, lineOrigin, paragraphId, typography, measurer },
+        piece,
+        faceStyle,
+        candidate,
+        spanRange.start
+      );
       const measureSource = piece.measureText ?? candidate;
       let width = piece.noteSeparator
         ? Math.min(piece.noteSeparator === 'separator' ? 144 : lineAvailable(), lineAvailable())

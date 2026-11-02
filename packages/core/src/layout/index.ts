@@ -424,6 +424,8 @@ export type { CjkTypographySettings } from './cjk-typography.ts';
 export {
   layoutEquation,
   type EquationBarGeometry,
+  type EquationBorderBoxGeometry,
+  type EquationDiagonal,
   type EquationFractionGeometry,
   type EquationGeometry,
   type EquationNaryGeometry,

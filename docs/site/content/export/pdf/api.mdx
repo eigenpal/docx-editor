@@ -49,8 +49,8 @@ For both formats from one layout, see [Compare PDF and Markdown conversion](/doc
 | `fidelityPolicy` | `'strict'` | Reject unsupported or approximate PDF content. `'best-effort'` returns available output with diagnostics. |
 | `revisionAuthorSlots` | Omitted | Author names mapped to stable, nonnegative safe integer color slots from the editor session. |
 | `revisionMarkup` | Omitted | Viewer markup preferences. Set during session creation to keep layout and paint consistent. |
-| `displayMode` | `'proposed'` | Choose `'proposed'`, `'original'`, `'all-markup'`, or `'simple-markup'` for tracked changes. |
-| `comments` | `true` | Include native PDF annotations. |
+| `displayMode` | `'all-markup'` | Choose `'proposed'`, `'original'`, `'all-markup'`, or `'simple-markup'` for tracked changes. |
+| `comments` | `true` | Include comments as native PDF annotations. In `'all-markup'`, also shrink each page beside a pane of comment balloons. |
 | `useSystemFonts` | `true` | Search supported installed font files. Disable for consistent font selection across hosts. |
 | `fonts` | — | Resolve these font sources before installed and packaged sources. |
 | `fallbackFonts` | — | Resolve missing faces after packaged substitutes. |

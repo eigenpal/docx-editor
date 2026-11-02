@@ -192,11 +192,11 @@ test('an oversized contiguous styled occurrence never exposes a partial result',
   ]);
   expect(values[0]!.size).toBe(0);
 });
-test('a body scan limit refuses incomplete fallback selection', () => {
+test('a body past the scan limit gives no index, so saved results stay', () => {
   const f = fixture(p('Short', 'Base'));
   let root = f.main.root;
   for (let n = 0; n < 66; n += 1) root = { ...root, children: [root] };
-  expect(() => characterStyleIndex({ ...f.main, root }, f.options)).toThrow('scan bound');
+  expect(characterStyleIndex({ ...f.main, root }, f.options)).toBeUndefined();
 });
 test('section page restarts preserve logical PAGE and physical even-header selection', () => {
   const f = fixture(p('Seed', 'Base'));
@@ -394,9 +394,27 @@ test('page geometry edits reset live header reserves', () => {
   expect(warm.pages[0]!.contentBox.y).toBe(15);
 });
 
+/**
+ * The first answer of a mocked run, with a header taller than the projected one. A first pass
+ * whose header heights all hold settles without projected passes, so these tests start from a
+ * height that moves to reach the projected passes they check.
+ */
+function tallerFirstHeader(layout: SemanticLayout): SemanticLayout {
+  const [first, ...rest] = layout.pages;
+  const header = first!.header!;
+  return {
+    ...layout,
+    pages: [
+      { ...first!, header: { ...header, box: { ...header.box, height: header.box.height + 10 } } },
+      ...rest,
+    ],
+  };
+}
+
 for (const value of ['Alpha', 'Alpha Beta Gamma Delta Epsilon Zeta']) {
   test(`stable live header avoids a reserve-only repeat: ${value}`, () => {
     const f = fixture(p(value, 'Base'));
+    const tall = tallerFirstHeader(f.laid);
     const session = createLayoutSession();
     const options = { ...f.options, session };
     let calls = 0;
@@ -406,7 +424,7 @@ for (const value of ['Alpha', 'Alpha Beta Gamma Delta Epsilon Zeta']) {
       tokens.push(characterHeaderPageToken(input.furniture!));
       headerStoryForPage(input.furniture, 'default', 0);
       characterHeaderReserveHeight(input.furniture, 0);
-      return f.laid;
+      return calls === 1 ? tall : f.laid;
     };
     layoutWithCharacterHeaders(f.main, options, run);
     expect(calls).toBe(2);
@@ -419,6 +437,7 @@ for (const value of ['Alpha', 'Alpha Beta Gamma Delta Epsilon Zeta']) {
 
 test('a projected header without an inset read does not reserve the shared page', () => {
   const f = fixture(p('Alpha Beta Gamma Delta Epsilon Zeta', 'Base'));
+  const tall = tallerFirstHeader(f.laid);
   let calls = 0;
   layoutWithCharacterHeaders(f.main, f.options, (input) => {
     calls += 1;
@@ -426,7 +445,7 @@ test('a projected header without an inset read does not reserve the shared page'
     // after an earlier section already consumed that sheet's inset.
     characterHeaderReserveHeight(input.furniture, 0);
     headerStoryForPage(input.furniture, 'default', 0);
-    return f.laid;
+    return calls === 1 ? tall : f.laid;
   });
   expect(calls).toBe(2);
 });

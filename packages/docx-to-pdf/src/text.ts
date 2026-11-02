@@ -1,5 +1,5 @@
 import type { ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
-import { markupColor, spanMarkup, spanRevisions, type RowRevision } from './revision-markup.ts';
+import { markupColor, spanMarkup, type RowRevision } from './revision-markup.ts';
 /*
 Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
@@ -208,7 +208,7 @@ export class TextWriter {
     readonly session: FontBackedExportCapabilities,
     readonly work: Work,
     readonly showRevisionMarkup: boolean,
-    readonly revisionMarkup?: ResolvedRevisionMarkup,
+    readonly revisionMarkup: ResolvedRevisionMarkup,
     readonly authorSlots: ReadonlyMap<string, number> = new Map(),
     readonly rowRevisions: ReadonlyMap<BlockFragmentRecord, RowRevision> = new Map()
   ) {}
@@ -305,32 +305,25 @@ export class TextWriter {
     // Automatic text takes white on dark run shading, else on dark paragraph shading. A named
     // highlight replaces the run shading behind the text, so only the paragraph's counts then.
     const shading = HIGHLIGHT_NAME.test(style.highlight ?? '') ? null : style.shading;
-    let foreground = style.color ?? automaticTextColor(shading ?? visit.paragraph.shading ?? null);
+    const authored = style.color ?? automaticTextColor(shading ?? visit.paragraph.shading ?? null);
+    let foreground = authored;
     const row = marker ? undefined : this.rowRevisions.get(visit.paragraph);
-    const revisions = this.showRevisionMarkup ? spanRevisions(visit, row) : [];
-    const insert = revisions.some((r) => r.kind === 'insert' || r.kind === 'moveTo');
-    const deleted = revisions.some((r) => r.kind === 'delete' || r.kind === 'moveFrom');
-    if (insert) foreground = '008000';
-    if (deleted) foreground = 'C00000';
-    const markup =
-      this.showRevisionMarkup && this.revisionMarkup
-        ? spanMarkup(visit, this.revisionMarkup, row)
-        : null;
+    const markup = this.showRevisionMarkup ? spanMarkup(visit, this.revisionMarkup, row) : null;
     if (markup)
       foreground =
+        // An unmarked change (formatting by default) keeps the text's own color, automatic
+        // white on dark shading included.
         markup.mark === 'none'
-          ? style.color
+          ? authored
           : markupColor(
               markup.color,
               this.authorSlots.get(markup.author) ?? 0,
-              style.color ?? '000000'
+              authored ?? undefined
             );
-    const revisionUnderline = markup
-      ? markup.mark === 'underline' || markup.mark === 'doubleUnderline'
-      : insert;
-    const revisionStrike = markup
-      ? markup.mark === 'strikethrough' || markup.mark === 'doubleStrikethrough'
-      : deleted;
+    const revisionUnderline =
+      markup !== null && (markup.mark === 'underline' || markup.mark === 'doubleUnderline');
+    const revisionStrike =
+      markup !== null && (markup.mark === 'strikethrough' || markup.mark === 'doubleStrikethrough');
     const replacesAuthoredDecoration = markup !== null && (revisionUnderline || revisionStrike);
     // A color face is never selected as a text font: its glyphs are painted as layers below.
     const out = [`${color(foreground)} rg`, 'BT'];

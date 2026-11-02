@@ -4,7 +4,7 @@ Use `exportPdf(source, options)` and `exportMarkdown(source, options)` for one-s
 
 ## Share conversion settings
 
-Set `displayMode` explicitly when your application produces both formats. Markdown defaults to `'all-markup'`; PDF defaults to `'proposed'`. Without an explicit setting, the outputs can contain different text.
+Both formats default to `'all-markup'`. Set `displayMode` explicitly when your application needs another revision view in both outputs.
 
 Share your font sources and disable PDF system-font discovery for consistent font selection across hosts. Use `documentLigatures: false` on PDF to align with Markdown's default shaping policy. PDF otherwise honors optional document ligatures by default.
 

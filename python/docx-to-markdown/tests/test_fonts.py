@@ -89,7 +89,7 @@ def test_font_files_scans_a_directory(font_assets):
     from docx_to_markdown import font_files
 
     faces = font_files(font_assets)
-    assert len(faces) == 24
+    assert len(faces) == 26
     families = {f.family for f in faces}
     assert {"Carlito", "Caladea", "Liberation Sans", "TeX Gyre Adventor"} <= families
     carlito = sorted((f.weight, f.style) for f in faces if f.family == "Carlito")

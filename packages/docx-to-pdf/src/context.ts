@@ -137,6 +137,14 @@ export function unicodeHex(text: string): string {
   for (let i = 0; i < text.length; i++) out.push(hex(text.charCodeAt(i)));
   return out.join('');
 }
+/** Device grid the reference paints on: 1/300 inch. */
+const PAGE_GRID_PT = 0.24;
+
+/** Round a page dimension onto the device grid, as the reference writes it. */
+export function onDeviceGrid(value: number): number {
+  return Number((Math.round(value / PAGE_GRID_PT) * PAGE_GRID_PT).toFixed(6));
+}
+
 export function color(value: string | null | undefined): string {
   const v = value && /^[a-f\d]{6}$/i.test(value) ? value : '000000';
   return [0, 2, 4].map((i) => number(parseInt(v.slice(i, i + 2), 16) / 255)).join(' ');

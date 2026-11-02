@@ -41,10 +41,13 @@ import {
   Commands,
   rect,
   widenToGridEdge,
+  onDeviceGrid,
 } from './context.ts';
 import { cellDiagonalCommands } from './table-cell-diagonals.ts';
 import { TextWriter } from './text.ts';
 import { comments, destinations, linkAnnotation } from './annotations.ts';
+import { markerMarkBox, markerRevisions } from './marker-markup.ts';
+import * as pane from './markup-pane.ts';
 import { ImageWriter } from './images.ts';
 import { paintEquation } from './equations.ts';
 import { groupMemberStoryOf, openMemberClip } from './group-text.ts';
@@ -236,7 +239,12 @@ function decorations(
             out.push(`${color(cell.shading)} rg ${rect(cell.box, x, y, pageHeight(page), true)} f`);
           if (markup && cell.revisionShading) {
             const shade = markup.cells[cell.revisionShading];
-            if (shade !== 'none')
+            // The default colors of inserted and deleted rows and cells are not printed: the
+            // text marks show those changes. Another color the caller sets is printed.
+            const printed =
+              (cell.revisionShading !== 'inserted' && cell.revisionShading !== 'deleted') ||
+              shade !== DEFAULT_REVISION_MARKUP.cells[cell.revisionShading];
+            if (shade !== 'none' && printed)
               out.push(
                 `${color(markupColor(shade, authorSlots?.get(cell.revisionShadingAuthor ?? '') ?? 0))} rg ${rect(cell.box, x, y, pageHeight(page), true)} f`
               );
@@ -300,13 +308,6 @@ const HIGHLIGHTS: Record<string, string> = {
   black: '000000',
   white: 'FFFFFF',
 };
-/** Device grid the reference paints on: 1/300 inch. */
-const PAGE_GRID_PT = 0.24;
-
-/** Round a page dimension onto the device grid, as the reference writes it. */
-function onDeviceGrid(value: number): number {
-  return Number((Math.round(value / PAGE_GRID_PT) * PAGE_GRID_PT).toFixed(6));
-}
 
 export async function paint(
   doc: PDFDocument,
@@ -320,6 +321,8 @@ export async function paint(
   // 595.20 x 841.92 — 2480 and 3508 units. Twenty-three reference documents agree, Letter
   // included, where the authored size is already on the grid and nothing moves. Leaving the
   // exact size in shifts every top-down position by the height's own remainder.
+  // Without viewer preferences, revision marks follow the defaults: one color per author.
+  const revisionMarkup = layout.revisionMarkup ?? DEFAULT_REVISION_MARKUP;
   const pages = layout.pages.map((p) => {
     if (p.box.width <= 0 || p.box.height <= 0 || p.box.width > 14400 || p.box.height > 14400)
       throw new RangeError('Invalid PDF page dimensions');
@@ -329,24 +332,13 @@ export async function paint(
     if (
       layout.displayMode === 'all-markup' &&
       artifact.kind === 'tracked-change' &&
-      ![
-        'insert',
-        'delete',
-        'replace',
-        ...(layout.revisionMarkup ? ['moveFrom', 'moveTo', 'format'] : []),
-      ].includes(artifact.change) &&
-      // Tracked rows are painted in every All Markup export: their text takes the row's mark.
+      !['insert', 'delete', 'replace', 'moveFrom', 'moveTo', 'format'].includes(artifact.change) &&
+      // Tracked rows and cells paint in every All Markup export.
       !(
-        artifact.change === 'structural' &&
-        artifact.structuralChanges?.length &&
-        artifact.structuralChanges.every((kind) => kind === 'rowInsert' || kind === 'rowDelete')
-      ) &&
-      !(
-        layout.revisionMarkup &&
         artifact.change === 'structural' &&
         artifact.structuralChanges?.length &&
         artifact.structuralChanges.every((kind) =>
-          ['cellInsert', 'cellDelete', 'cellMerge'].includes(kind)
+          ['rowInsert', 'rowDelete', 'cellInsert', 'cellDelete', 'cellMerge'].includes(kind)
         )
       )
     )
@@ -375,11 +367,7 @@ export async function paint(
   // Match the visible document order before adding authors from resolved-away revisions.
   forEachSemanticSpan(layout, (visit) => {
     for (const revision of visit.span.revisions ?? []) addAuthor(revision.author);
-    const markup = spanMarkup(
-      visit,
-      layout.revisionMarkup ?? DEFAULT_REVISION_MARKUP,
-      rowRevisions.get(visit.paragraph)
-    );
+    const markup = spanMarkup(visit, revisionMarkup, rowRevisions.get(visit.paragraph));
     if (markup) addAuthor(markup.author);
   });
   const addCellAuthors = (blocks: readonly BlockFragmentRecord[]): void => {
@@ -393,20 +381,31 @@ export async function paint(
     }
   };
   forEachStoryBlocks(addCellAuthors);
+  // Comment authors last: a comment takes its author's revision color.
   for (const artifact of layout.reviewArtifacts) {
     if (artifact.kind === 'tracked-change') addAuthor(artifact.author);
+  }
+  for (const artifact of layout.reviewArtifacts) {
+    if (artifact.kind === 'comment') addAuthor(artifact.author);
   }
   const text = new TextWriter(
     doc,
     session,
     work,
     layout.displayMode === 'all-markup',
-    layout.revisionMarkup,
+    // Without viewer preferences, marks follow the defaults: one color per author.
+    revisionMarkup,
     authorSlots,
     rowRevisions
   );
   const images = new ImageWriter(doc, session, work);
-  const names = destinations(doc, pages, layout);
+  // All Markup with comments shrinks each page beside a pane of comment balloons, so link
+  // targets move with the page.
+  const places = pane.markupPanePlacements(layout, includeComments);
+  const names = destinations(doc, pages, layout, (pageIndex, x, y) => {
+    const place = places?.[pageIndex];
+    return place ? pane.sheetPoint(place, pageHeight(pages[pageIndex]!), x, y) : [x, y];
+  });
   // Bottom to top: a `back` page border, then the header and footer as one layer under the
   // main document (their own behind-text drawings, text, and in-front drawings, in that
   // order), then the body's behind-text drawings, the body, and a `front` page border.
@@ -427,24 +426,24 @@ export async function paint(
   for (const record of layout.pages) {
     const out = streams[record.index]!;
     const simple = layout.reviewDisplayMode === 'simple-markup';
-    if ((layout.revisionMarkup && layout.displayMode === 'all-markup') || simple) {
-      const markup = layout.revisionMarkup ?? DEFAULT_REVISION_MARKUP;
+    // All Markup draws changed-line bars by default, as Simple Markup does.
+    if (layout.displayMode === 'all-markup' || simple) {
       const bars = collectPageChangeBars(
         record,
         1,
         simple ? 'simple-markup' : 'all-markup',
         false,
-        markup,
+        revisionMarkup,
         layout.facingPages
       );
       for (const bar of bars.runs) {
         const ink = markupColor(
-          markup.changedLines.color,
+          revisionMarkup.changedLines.color,
           authorSlots.get(bar.author ?? '') ?? 0,
-          simple ? 'EA3425' : 'A4A4A4'
+          simple ? 'EA3425' : '000000'
         );
         out.push(
-          `${color(ink)} rg ${n(bars.left)} ${n(pageHeight(pages[record.index]!) - bar.bottom)} ${simple ? '1.5' : '0.75'} ${n(bar.bottom - bar.top)} re f`
+          `${color(ink)} rg ${n(bars.left)} ${n(pageHeight(pages[record.index]!) - bar.bottom)} ${simple ? '1.5' : '0.72'} ${n(bar.bottom - bar.top)} re f`
         );
       }
     }
@@ -510,7 +509,7 @@ export async function paint(
         pages[root.page.index]!,
         work,
         root.page.index,
-        layout.displayMode === 'all-markup' ? layout.revisionMarkup : undefined,
+        layout.displayMode === 'all-markup' ? revisionMarkup : undefined,
         authorSlots
       )
     );
@@ -735,13 +734,9 @@ export async function paint(
                     style: piece.style,
                     box: piece.box,
                     link: undefined,
-                    revisions: undefined,
+                    revisions: markerRevisions(visit),
                   },
-                  absoluteBox: {
-                    ...piece.box,
-                    x: piece.box.x + visit.storyOrigin.x,
-                    y: piece.box.y + visit.storyOrigin.y,
-                  },
+                  absoluteBox: markerMarkBox(visit, piece.box, !marker.pieces),
                 },
                 page,
                 true
@@ -751,8 +746,8 @@ export async function paint(
           );
     }
     const markup =
-      layout.displayMode === 'all-markup' && layout.revisionMarkup
-        ? spanMarkup(visit, layout.revisionMarkup, rowRevisions.get(visit.paragraph))
+      layout.displayMode === 'all-markup'
+        ? spanMarkup(visit, revisionMarkup, rowRevisions.get(visit.paragraph))
         : null;
     const fill =
       markup && markup.background !== 'none'
@@ -849,7 +844,7 @@ export async function paint(
           page,
           work,
           visit.page.index,
-          layout.displayMode === 'all-markup' ? layout.revisionMarkup : undefined,
+          layout.displayMode === 'all-markup' ? revisionMarkup : undefined,
           authorSlots
         ),
         ...(buffers?.get(story) ?? []),
@@ -880,7 +875,7 @@ export async function paint(
         page,
         work,
         visit.page.index,
-        layout.displayMode === 'all-markup' ? layout.revisionMarkup : undefined,
+        layout.displayMode === 'all-markup' ? revisionMarkup : undefined,
         authorSlots
       ),
       ...(textboxBuffers.get(visit.page.index)?.get(d) ?? []),
@@ -941,19 +936,34 @@ export async function paint(
   // `w:zOrder="front"` puts the page frame over EVERYTHING on the page, in-front drawings
   // included, so it goes into the stream after them, not before.
   for (let i = 0; i < streams.length; i++) streams[i]!.push(...frontBorders[i]!);
+  const fonts = places && (await pane.embedBalloonFonts(doc));
   for (let i = 0; i < pages.length; i++) {
     work.check();
+    const place = places?.[i];
+    const sheet = place && pane.paintMarkupPane(layout, i, place, fonts!, work, authorSlots);
+    const ranges = place
+      ? pane.commentRangeCommands(layout, i, pageHeight(pages[i]!), authorSlots)
+      : [];
+    if (ranges.length) {
+      streams[i]!.push(...ranges);
+      pane.addRangeBlend(pages[i]!);
+    }
+    const layers = [backBorders, furnitureBehind, furniture, behindStreams, streams];
+    const body = layers.map((layer) => layer[i]!.join('\n')).join('\n');
     pages[i]!.node.addContentStream(
       doc.context.register(
         flateStream(
           doc.context,
-          [backBorders, furnitureBehind, furniture, behindStreams, streams]
-            .map((layer) => layer[i]!.join('\n'))
-            .join('\n')
+          place
+            ? `q ${pane.markupPaneMatrix(place, pageHeight(pages[i]!))}\n${sheet!.under}\n${body}\n${sheet!.shapes.join('\n')}\nQ`
+            : body
         )
       )
     );
+    sheet?.paintText(pages[i]!);
   }
   for (const face of text.faces.values()) await face.finish(work);
   if (includeComments) comments(doc, pages, layout, work);
+  const shown = places && pane.commentsWithBalloons(layout, authorSlots);
+  places?.forEach((place, i) => pane.placeOnSheet(pages[i]!, place, shown!));
 }

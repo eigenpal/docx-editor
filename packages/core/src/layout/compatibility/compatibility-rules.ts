@@ -199,6 +199,10 @@ export const MODE_RULES = {
     'Paragraphs that split inside table cells apply widow and orphan control',
     'ECMA-376 Part 1 §17.3.1.44 widowControl'
   ),
+  unreachedGridColumnsTakeNoWidth: modern(
+    'Trailing grid columns that no cell reaches take no width, even when a row end skip spans them',
+    'ECMA-376 Part 1 §17.4.49 tblGrid'
+  ),
   vMergeTextMovesPastHeadRow: modern(
     'Merged cell text moves whole into the next row when the head row cannot hold it',
     'ECMA-376 Part 1 §17.4.84 vMerge'
@@ -229,7 +233,7 @@ export const PROFILE_RULES = {
   },
   fixedParagraphSpacing: {
     behavior:
-      'Adjacent paragraph spacing adds up, and automatic spacing is a fixed 5pt before and 10pt after',
+      'Adjacent paragraph spacing adds up, and automatic spacing keeps the authored measurement',
     source: 'ECMA-376 Part 4 §14.8.3.15 doNotUseHTMLParagraphAutoSpacing',
     applies: (p) => p.legacy.doNotUseHTMLParagraphAutoSpacing === true,
   },

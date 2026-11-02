@@ -123,6 +123,16 @@ export const FONT_ASSET_MANIFEST: readonly FontAssetManifestEntry[] = [
     hash: 'sha256:058ea80864aef09a23f45cbec2bb5400bc3dfbdea01c3f10538a21fcb497fb74',
   },
   {
+    file: 'Selawik-Bold.ttf',
+    byteLength: 44068,
+    hash: 'sha256:f0db5e174a90e0956ad7d2844bdca1d5e6da92ec65b2c04e57ba9b180668c904',
+  },
+  {
+    file: 'Selawik-Regular.ttf',
+    byteLength: 44224,
+    hash: 'sha256:e9d98518d8ac2817782a9a382430463a2e0793ea68350b695bb727d9a830ee1c',
+  },
+  {
     file: 'TeXGyreAdventor-Bold.otf',
     byteLength: 180292,
     hash: 'sha256:881fcd422499d3c269697e37e4d483ee91a617a28428cdb6037029924dc47129',
@@ -189,6 +199,8 @@ export const FONT_ASSET_URLS: Readonly<Record<string, URL | string>> = {
   ),
   'LiberationSerif-Italic.ttf': new URL('../assets/LiberationSerif-Italic.ttf', import.meta.url),
   'LiberationSerif-Regular.ttf': new URL('../assets/LiberationSerif-Regular.ttf', import.meta.url),
+  'Selawik-Bold.ttf': new URL('../assets/Selawik-Bold.ttf', import.meta.url),
+  'Selawik-Regular.ttf': new URL('../assets/Selawik-Regular.ttf', import.meta.url),
   'TeXGyreAdventor-Bold.otf': new URL('../assets/TeXGyreAdventor-Bold.otf', import.meta.url),
   'TeXGyreAdventor-BoldItalic.otf': new URL(
     '../assets/TeXGyreAdventor-BoldItalic.otf',

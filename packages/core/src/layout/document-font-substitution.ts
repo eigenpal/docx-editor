@@ -7,7 +7,7 @@ import {
   fontFamilyClassFromName,
   type FontFamilyClass,
 } from '../store/package/font-family-class.ts';
-import { fontFamilyName } from '../store/package/font-family-name.ts';
+import { fontFamilyName, paintedFontFamilyName } from '../store/package/font-family-name.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import { SYMBOL_ENCODED_FAMILIES } from '../store/package/symbol-encoding.ts';
@@ -171,7 +171,10 @@ function scriptDefaults(
             ['eastAsia', eastAsia],
             ['cs', complex],
           ] as const) {
-            const family = fontFamilyName(wordAttribute(node, slot));
+            // The family the slot paints in: a list's first item, or the unmatched face.
+            const family = fontFamilyName(
+              paintedFontFamilyName(wordAttribute(node, slot)) ?? undefined
+            );
             if (!family || !target) continue;
             const key = family.trim().toLowerCase();
             const targets = needs.get(key) ?? new Set<string>();
@@ -303,9 +306,13 @@ export function applyDocumentFontSubstitutions(
         if (sources.has(fontRequestKey(from))) continue;
         // A family the host substitutes itself (Arial to Liberation Sans) keeps that face unless
         // the document names a face the host supplies directly, as before: following the host's
-        // substitutions for a fallback is only for families the host has no answer for.
+        // substitutions for a fallback is only for families the host has no answer for. The
+        // class fallback is not a face the document names: a host substitute (Segoe UI to its
+        // metric twin) keeps the family even when the host has the fallback face installed.
         const hostAnswered = hostSubstitutions.has(fontRequestKey(from));
-        for (const candidate of [english, alternate, fallback]) {
+        for (const candidate of hostAnswered
+          ? [english, alternate]
+          : [english, alternate, fallback]) {
           if (!candidate || candidate.trim().toLowerCase() === key) continue;
           const request = { family: candidate, weight, style };
           const direct = sources.get(fontRequestKey(request));

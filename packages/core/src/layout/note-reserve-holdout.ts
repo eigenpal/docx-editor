@@ -726,7 +726,7 @@ function stacksInOneColumn(page: PageRecord): boolean {
 /**
  * Whether the page's body ends with a manual page break: its last paragraph line, the kept
  * empty line of a leading break included. Text frames and collapsed section marks sit
- * outside the flow and do not end it.
+ * outside the flow and do not end it; a page break a frame holds opens no page.
  */
 function endsWithPageBreak(page: PageRecord): boolean {
   let ends = pageBreakEnds.get(page);
@@ -737,7 +737,7 @@ function endsWithPageBreak(page: PageRecord): boolean {
       if (fragment.kind !== 'paragraph') break;
       const last = fragment.lines[fragment.lines.length - 1];
       const breaks = last?.spans.some((span) => span.text === PAGE_BREAK_CHAR) ?? false;
-      if (!breaks && (fragment.positionedFrame || fragment.outOfFlow)) continue;
+      if (fragment.positionedFrame || (!breaks && fragment.outOfFlow)) continue;
       ends = breaks;
       break;
     }

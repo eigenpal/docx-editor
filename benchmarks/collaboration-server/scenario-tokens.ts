@@ -61,6 +61,18 @@ function paragraphCells(table: OoxmlNode): Map<string, string> {
   return cells;
 }
 
+/** The ids of every paragraph under `root`, cells and controls included. */
+function paragraphIds(root: OoxmlNode): Set<string> {
+  const ids = new Set<string>();
+  const walk = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return;
+    if (node.kind === 'paragraph') ids.add(node.id);
+    for (const child of node.children) walk(child);
+  };
+  walk(root);
+  return ids;
+}
+
 /** Whether any part of `pkg` holds a paragraph with `id`. */
 function hasParagraph(pkg: OoxmlPackage, id: string): boolean {
   for (const part of pkg.parts.values()) {
@@ -97,9 +109,20 @@ export class TypedTokens {
   private readonly structureDeleted = new Set<string>();
   /** Tokens something other than a row or column deletion took out: text deletes, undos. */
   private readonly removedOtherwise = new Set<string>();
+  /**
+   * The paragraph each split made, by the paragraph it was split off from. A split moves the
+   * end of a paragraph's text into the new paragraph, which then goes where the paragraph it
+   * came from goes. When a peer's merge moves that paragraph out of the cells a row or column
+   * deletion removes, the split's paragraph comes along, with the text typed into it.
+   */
+  private readonly splitFrom = new Map<string, string>();
   /** The edit between `beforeEdit` and `afterEdit`, and the cells its table's paragraphs were in. */
-  private editing: { readonly op: TreeDocOp; readonly cells: Map<string, string> | null } | null =
-    null;
+  private editing: {
+    readonly op: TreeDocOp;
+    readonly cells: Map<string, string> | null;
+    /** The paragraphs of the body before a split, to name the paragraph the split made. */
+    readonly paragraphs: ReadonlySet<string> | null;
+  } | null = null;
 
   /** The edit with a fresh token added to its typed text, or the edit as it is. */
   tag(addressed: Addressed): { readonly addressed: Addressed; readonly token: string | null } {
@@ -130,6 +153,7 @@ export class TypedTokens {
     this.editing = {
       op,
       cells: table ? paragraphCells(table) : null,
+      paragraphs: op.op === 'splitParagraph' ? paragraphIds(store.bodyStore().part.root) : null,
     };
     return DELETING.has(op.op) ? this.shownIn(store.currentPackage(), () => true) : null;
   }
@@ -150,6 +174,11 @@ export class TypedTokens {
           this.mergedAway.add(paragraph);
           this.mergedBy.set(paragraph, replica);
         }
+      }
+    }
+    if (editing?.paragraphs && editing.op.op === 'splitParagraph') {
+      for (const id of paragraphIds(store.bodyStore().part.root)) {
+        if (!editing.paragraphs.has(id)) this.splitFrom.set(id, editing.op.paragraphId);
       }
     }
     if (!before) return;
@@ -293,6 +322,20 @@ export class TypedTokens {
     return problems;
   }
 
+  /**
+   * The paragraph a merge moved away that `paragraph` is, or was split off from, directly or
+   * through earlier splits. Null when no merge moved any of them.
+   */
+  private mergedParagraphOf(paragraph: string): string | null {
+    let at: string | undefined = paragraph;
+    // Each split names an older paragraph, so the chain ends; the bound guards a cycle anyway.
+    for (let steps = 0; at !== undefined && steps <= this.splitFrom.size; steps += 1) {
+      if (this.mergedAway.has(at)) return at;
+      at = this.splitFrom.get(at);
+    }
+    return null;
+  }
+
   /** Problems with typed text in the final document, read from each typist's store. */
   check(packages: readonly OoxmlPackage[]): string[] {
     const counts = new Map<string, number>();
@@ -309,13 +352,12 @@ export class TypedTokens {
       const name = `typed token ${tokenNumber(token)} of replica ${typed.replica}`;
       if (count > 1) problems.push(`${name} shows ${count} times`);
       const deleter = this.deletedBy.get(token);
-      const keptByMerge = this.mergedAway.has(typed.paragraph) && this.structureDeleted.has(token);
+      const merged = this.mergedParagraphOf(typed.paragraph);
+      const keptByMerge = merged !== null && this.structureDeleted.has(token);
       // A merge moved the paragraph out of the cells a row or column deletion removed, and
       // nothing else removed the token: it must still show.
       const keptOnlyByMerge =
-        keptByMerge &&
-        !this.removedOtherwise.has(token) &&
-        !this.mergeMaybeUndone.has(typed.paragraph);
+        keptByMerge && !this.removedOtherwise.has(token) && !this.mergeMaybeUndone.has(merged);
       if (count > 0 && deleter !== undefined && !keptByMerge) {
         problems.push(`${name} shows again after replica ${deleter} deleted it`);
       }

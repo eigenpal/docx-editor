@@ -13,6 +13,8 @@
 //     the shipped `FAMILY_PLANS` and compares against those Word numbers. Restating the
 //     plan's literal on both sides made the assertion a tautology: a wrong `lineMetrics`
 //     still passed.
+//   - Segoe UI's line box comes from its subsets' `hhea`, 2210/-514/0 over 2048 upem. Its
+//     widths come from the same subsets; Selawik carries them unchanged.
 //   - Montserrat's line box comes from its subsets' `hhea`, 968/-251/0 over 1000 upem.
 //     The catalogued face carries the same values, so the engine's own fallback and Word
 //     agree here; the case pins that they keep agreeing.
@@ -42,7 +44,7 @@ import { GOOGLE_METRIC_SUBSTITUTES } from '../src/google-fonts.ts';
 import { FAMILY_PLANS, planFaceFile, planLineBox } from '../src/family-plans.ts';
 
 /** The Word families this gate covers that resolve through a PACKAGED plan. */
-type PackagedFamily = 'Century Gothic';
+type PackagedFamily = 'Century Gothic' | 'Segoe UI';
 
 interface WidthCase {
   readonly family: PackagedFamily | 'Montserrat' | 'Montserrat Light';
@@ -105,6 +107,26 @@ const WIDTH_CASES: readonly WidthCase[] = [
     wordWidthPt: 141.6,
     wordLineHeightPt: 48.49609375,
     wordBaselinePt: 39.6875,
+  },
+  // Segoe UI Regular, from the subsets Word embeds: widths from `/Widths`, the line box from
+  // `hhea` 2210/-514/0 over 2048 upem. Word's references carry no bold or italic Segoe UI.
+  {
+    family: 'Segoe UI',
+    weight: 400,
+    style: 'normal',
+    text: 'Shape of the layout',
+    wordWidthPt: 85.92,
+    wordLineHeightPt: 13.30078125,
+    wordBaselinePt: 10.791015625,
+  },
+  {
+    family: 'Segoe UI',
+    weight: 400,
+    style: 'normal',
+    text: 'Wide margins, clean text.',
+    wordWidthPt: 110.45,
+    wordLineHeightPt: 13.30078125,
+    wordBaselinePt: 10.791015625,
   },
   // Montserrat Regular's subset carries no lowercase, so this case is upper-case only.
   //
@@ -188,7 +210,7 @@ function planFor(family: PackagedFamily): NonNullable<ReturnType<typeof FAMILY_P
 }
 
 const isPackaged = (testCase: WidthCase): testCase is WidthCase & { family: PackagedFamily } =>
-  testCase.family === 'Century Gothic';
+  testCase.family === 'Century Gothic' || testCase.family === 'Segoe UI';
 
 async function bytesFor(testCase: WidthCase): Promise<Uint8Array> {
   if (isPackaged(testCase)) {

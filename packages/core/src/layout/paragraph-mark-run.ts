@@ -28,7 +28,7 @@
 
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
-import { styleChain, styleIdFromProps } from './style-chain.ts';
+import { characterStyleRunProperties, styleIdFromProps } from './style-chain.ts';
 import { combineStyleToggles } from './style-toggles.ts';
 
 /**
@@ -69,9 +69,7 @@ export function paragraphMarkRunProperties(
     ])
   );
   const styleId = styleIdFromProps(markProperties, 'rStyle');
-  const characterProperties = styleId
-    ? styleChain(table, styleId, 'character').flatMap((style) => style.runProperties)
-    : [];
+  const characterProperties = styleId ? characterStyleRunProperties(table, styleId) : [];
   if (characterProperties.length === 0) return unstyled;
   const styled = finish(
     combineStyleToggles([

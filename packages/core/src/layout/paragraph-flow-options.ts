@@ -157,6 +157,12 @@ export interface ParagraphFlowOptions {
   /** With {@link anchorCellBox}: what decides the cell's anchors' `layoutInCell`. */
   readonly cellAnchorScope?: CellAnchorScope;
   /**
+   * A manual page break keeps its model offset but has no geometry, as in a table cell. Set for
+   * a paragraph in a text frame (`w:framePr`): the frame stays on its page, and the text after
+   * the break continues on the same line.
+   */
+  readonly pageBreaksIgnored?: true;
+  /**
    * Instruction-only TOC paragraphs and ending field chrome can carry no measurable text.
    * When set, an otherwise empty break returns no lines. A paragraph mark after a TOC
    * separator belongs to the result and must retain its ordinary empty line instead.

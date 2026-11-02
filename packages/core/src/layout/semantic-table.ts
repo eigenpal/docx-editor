@@ -566,6 +566,7 @@ function readTableStructureUncached(
   const claims: CellWidthClaim[] = [];
   let hasOmittedRows = false;
   let derivedColumns = 1;
+  let cellEnd = 0;
   // A content control may sit between the table and its rows (`CT_SdtRow`) or between a row and
   // its cells (`CT_SdtCell`). It is a label on that row or cell, not a box around it, so it is
   // unwrapped HERE — before the kind filter — and the grid pass, the cell pass and pagination all
@@ -655,6 +656,7 @@ function readTableStructureUncached(
       });
     }
     if (gridColumns > derivedColumns) derivedColumns = gridColumns;
+    if (cursor > cellEnd) cellEnd = cursor;
     plans.push({
       node: rowNode,
       revision,
@@ -668,8 +670,11 @@ function readTableStructureUncached(
     });
   }
 
-  const gridCols = gridColumnElements(table);
+  const authoredGrid = gridColumnElements(table);
+  const gridCols = reachedGridColumns(authoredGrid, cellEnd, hasOmittedRows, compatibilityMode);
   const columnCount = gridCols.length > 0 ? gridCols.length : derivedColumns;
+  // Table style conditions, such as the last column, count the authored grid.
+  const styleColumns = authoredGrid.length > 0 ? authoredGrid.length : derivedColumns;
   const bodyRows = plans.length;
 
   const rows: SemanticTableRow[] = [];
@@ -687,8 +692,8 @@ function readTableStructureUncached(
       rowIndex,
       rowCount: bodyRows,
       gridColumn: 0,
-      gridSpan: Math.max(1, columnCount),
-      columnCount: Math.max(1, columnCount),
+      gridSpan: Math.max(1, styleColumns),
+      columnCount: Math.max(1, styleColumns),
       rowProperties,
       cellProperties: undefined,
     });
@@ -711,7 +716,7 @@ function readTableStructureUncached(
         rowCount: bodyRows,
         gridColumn,
         gridSpan,
-        columnCount,
+        columnCount: styleColumns,
         // A producer may state the conditions itself rather than leave them to be derived.
         rowProperties,
         cellProperties,
@@ -865,7 +870,7 @@ function readTableStructureUncached(
     indentPt: readIndentPt,
     indentStated: Boolean(tblPr && childNamed(tblPr, 'tblInd')) || styleIndentPt !== undefined,
     tableBorders,
-    claims,
+    claims: claimsWithinGrid(claims, columnCount),
     gridCols,
     textBox,
   });
@@ -992,3 +997,4 @@ function readTableStructureUncached(
   };
 }
 import { physicalTableRows, withTableContentBorders } from './table-content-borders.ts';
+import { claimsWithinGrid, reachedGridColumns } from './table-reached-grid.ts';

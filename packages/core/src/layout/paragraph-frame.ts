@@ -96,9 +96,14 @@ export function supportsParagraphFrameContent(
       ].includes(node.localName)
     )
       return false;
+    // A manual page break stays in the frame and takes no geometry there (see
+    // `ParagraphFlowOptions.pageBreaksIgnored`). A column break still leaves the frame unmodeled.
     if (
       node.localName === 'br' &&
-      node.attributes.some((attr) => attr.localName === 'type' && attr.value !== 'textWrapping')
+      node.attributes.some(
+        (attr) =>
+          attr.localName === 'type' && attr.value !== 'textWrapping' && attr.value !== 'page'
+      )
     )
       return false;
     if (count + pending.length + node.children.length > MAX_FRAME_NODES) return false;

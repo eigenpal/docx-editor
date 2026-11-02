@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Painted and copied text can take formatting from the default character style.",
+  "after": "Painted and copied text omit formatting from the default character style.",
+  "reason": "Only style resolution for layout and clipboard export changes. Source ranges, canonical OOXML, operations, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/style-cascade.test.ts",
+    "packages/core/src/editor/__tests__/clipboard-html-write.test.ts",
+    "packages/core/src/editor/__tests__/inherited-complex-script-formatting.test.ts",
+    "packages/core/src/binding/__tests__/document-rendered-fonts.test.ts"
+  ],
+  "changeset": "default-character-style",
+  "migration": null
+}
