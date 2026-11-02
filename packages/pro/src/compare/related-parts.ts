@@ -69,25 +69,37 @@ export function relatedPart(pkg: OoxmlPackage, kind: RelatedPartKind): OoxmlPart
   }
 }
 
-const targetNames = new WeakMap<OoxmlPackage, ReadonlySet<string>>();
+const takenNames = new WeakMap<OoxmlPackage, ReadonlySet<string>>();
+
+/** A part name folded the way OPC compares names: ASCII letters ignore case. */
+const foldName = (name: string): string =>
+  (name.startsWith('/') ? name : `/${name}`).replace(/[A-Z]/g, (c) => c.toLowerCase());
 
 /**
- * Every part name an internal relationship of `pkg` resolves to, lowercased, whether or not the
- * part exists. A new part never takes one, so a broken reference stays broken.
+ * Whether a new part named `name` would collide in `pkg`: with a part whose name differs at
+ * most in case, or with the target of an internal relationship, whether or not that part
+ * exists. A broken reference stays broken.
  */
-export function relationshipTargets(pkg: OoxmlPackage): ReadonlySet<string> {
-  let names = targetNames.get(pkg);
-  if (names) return names;
-  const out = new Set<string>();
+export function isPartNameTaken(pkg: OoxmlPackage, name: string): boolean {
+  let names = takenNames.get(pkg);
+  if (!names) {
+    const out = new Set<string>();
+    for (const part of pkg.parts.keys()) out.add(foldName(part));
+    for (const part of pkg.partBytes.keys()) out.add(foldName(part));
+    addRelationshipTargets(pkg, out);
+    takenNames.set(pkg, (names = out));
+  }
+  return names.has(foldName(name));
+}
+
+function addRelationshipTargets(pkg: OoxmlPackage, out: Set<string>): void {
   for (const records of pkg.relationships.values()) {
     for (const record of records) {
       const resolved = resolveRelationship(record);
       if (resolved.mode === 'Internal' && resolved.target.ok)
-        out.add(resolved.target.partName.toLowerCase());
+        out.add(foldName(resolved.target.partName));
     }
   }
-  targetNames.set(pkg, (names = out));
-  return names;
 }
 
 /**
@@ -95,12 +107,7 @@ export function relationshipTargets(pkg: OoxmlPackage): ReadonlySet<string> {
  * relationship of `pkg` points at.
  */
 export function freePartName(pkg: OoxmlPackage, wanted: string): string {
-  const targets = relationshipTargets(pkg);
-  const taken = (name: string) =>
-    pkg.parts.has(name) ||
-    pkg.partBytes.has(name) ||
-    pkg.partBytes.has(name.slice(1)) ||
-    targets.has(name.toLowerCase());
+  const taken = (name: string) => isPartNameTaken(pkg, name);
   if (!taken(wanted)) return wanted;
   for (let n = 2; ; n++) {
     const name = wanted.replace(/\.xml$/, `${n}.xml`);

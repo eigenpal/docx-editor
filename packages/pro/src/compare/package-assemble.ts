@@ -22,7 +22,7 @@ import {
   type OoxmlPackage,
 } from '@docx-editor.dev/core/store';
 import type { StoryOutput } from './stories.ts';
-import { relationshipTargets } from './related-parts.ts';
+import { isPartNameTaken } from './related-parts.ts';
 import { fromPlaceholder, MARK, REL_PLACEHOLDER } from './units.ts';
 import { escapeAttribute, isElement, R_NS, type ElementNode } from './xml-fragments.ts';
 
@@ -201,7 +201,7 @@ export function assemblePackage(
     const extension = /\.[A-Za-z0-9]+$/.exec(source)?.[0] ?? '';
     let copied: string;
     do copied = `/word/media/compare${mediaCounter++}${extension}`;
-    while (partExists(pkg, copied) || relationshipTargets(base).has(copied.toLowerCase()));
+    while (partExists(pkg, copied) || isPartNameTaken(base, copied));
     media.set(source, copied);
     pkg = withBinaryPart(
       pkg,
@@ -299,7 +299,16 @@ export function assemblePackage(
       return { ok: false, message: `A relationship part is not valid XML (${next.reason}).` };
     pkg = withPart(pkg, next.part);
   }
-  const bytes = writeOoxmlPackage(pkg);
+  let bytes: Uint8Array;
+  try {
+    bytes = writeOoxmlPackage(pkg);
+  } catch (error) {
+    // The writer refuses what it cannot write (two names for one part); never throw past here.
+    return {
+      ok: false,
+      message: `The compared package cannot be written (${(error as Error).message}).`,
+    };
+  }
   const check = readOoxmlPackage(bytes);
   if (!check.ok)
     return { ok: false, message: `The compared package does not read back (${check.reason}).` };

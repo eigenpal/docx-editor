@@ -15,7 +15,6 @@ import {
 } from '@docx-editor.dev/core/store';
 import { notePlaceholder, type EmitContext, type NoteKind } from './emit.ts';
 import { compareContainer } from './story-compare.ts';
-import { partExists } from './package-assemble.ts';
 import { freeIds, referencedIds } from './free-ids.ts';
 import { MARK, SideContext, unitsOf } from './units.ts';
 import {
@@ -27,7 +26,7 @@ import {
   shellOf,
   type ElementNode,
 } from './xml-fragments.ts';
-import { freePartName, relatedPart, wordprocessingType } from './related-parts.ts';
+import { freePartName, isPartNameTaken, relatedPart, wordprocessingType } from './related-parts.ts';
 
 /** One output part. */
 export interface StoryOutput {
@@ -159,7 +158,7 @@ function earlierFurniturePairs(
 /** The part a header or footer only the revised final section shows takes in the output. */
 function newFurniturePartName(basePkg: OoxmlPackage, ref: FurnitureRef): string {
   let partName = `/word/compare-${ref.kind}-${ref.type}.xml`;
-  for (let n = 2; partExists(basePkg, partName); n++)
+  for (let n = 2; isPartNameTaken(basePkg, partName); n++)
     partName = `/word/compare-${ref.kind}-${ref.type}-${n}.xml`;
   return partName;
 }

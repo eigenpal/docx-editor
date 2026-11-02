@@ -172,6 +172,31 @@ test('relationships the original names but lacks stay missing', () => {
   expect(result.files['word/_rels/document.xml.rels']).toContain('Target="media/compare1.png"');
 });
 
+test('new parts never take a name an original part holds in another case', () => {
+  const withFile = (bytes: Uint8Array, name: string, data: Uint8Array) => {
+    const files = unzipSync(bytes);
+    files[name] = new Uint8Array(data);
+    return zipSync(files);
+  };
+  const media = compared(
+    withFile(buildDocx({ body: p('Intro') }), 'word/media/Compare1.png', solidPng(2, 2, [9, 9, 9])),
+    buildDocx({
+      body: p('Intro') + `<w:p>${inlineImage('rImg', 2)}</w:p>`,
+      media: [{ name: 'red.png', bytes: solidPng(4, 4, [255, 0, 0]), rId: 'rImg' }],
+    })
+  );
+  expect(media.names).not.toContain('word/media/compare1.png');
+  const comments = compared(
+    withFile(buildDocx({ body: p('Intro text') }), 'word/Comments.xml', strToU8('<x/>')),
+    buildDocx({
+      body: `<w:p>${r('Intro ')}${commented(1, r('text'))}</w:p>`,
+      comments: [{ id: 1, author: 'A', text: 'note' }],
+    })
+  );
+  expect(comments.names).toContain('word/Comments.xml');
+  expect(comments.names).not.toContain('word/comments.xml');
+});
+
 /** A built document with every `token` in its main story, relationships, and comments replaced. */
 function withRaw(bytes: Uint8Array, token: string, raw: string): Uint8Array {
   const files = unzipSync(bytes);
