@@ -163,14 +163,15 @@ export type {
   CompareDocumentsRefusal,
   CompareDocumentsRequest,
 } from './contracts/compare-documents.ts';
+export { COMPARE_DOCUMENTS_ACCEPT } from './contracts/compare-documents.ts';
 
 // ─── Capability modules (what `@docx-editor.dev/pro` implements) ─────────────
 export type {
   CollectReviewItems,
   CompareDocumentsEngine,
-  DocumentCompareErrorCode,
-  DocumentCompareOptions,
-  DocumentCompareResult,
+  CompareDocumentsErrorCode,
+  CompareDocumentsEngineOptions,
+  CompareDocumentsEngineResult,
   EditorModule,
   ReviewModelInput,
   ReviewModuleContribution,

@@ -136,8 +136,32 @@ export declare namespace DocxEditor {
     versions = 'Versions',
   }
 
+  /** Where a compare writes its result. Only CompareTargetCurrent is supported. @public */
+  export enum CompareTarget {
+    compareTargetCurrent = 'CompareTargetCurrent',
+    compareTargetNew = 'CompareTargetNew',
+    compareTargetSelected = 'CompareTargetSelected',
+  }
+
+  /** Options of a document compare. @public */
+  export interface DocumentCompareOptions {
+    addToRecentFiles?: boolean;
+    authorName?: string;
+    compareTarget?:
+      | CompareTarget
+      | 'CompareTargetCurrent'
+      | 'CompareTargetNew'
+      | 'CompareTargetSelected';
+    detectFormatChanges?: boolean;
+    ignoreAllComparisonWarnings?: boolean;
+    removeDateAndTime?: boolean;
+    removePersonalInformation?: boolean;
+  }
+
   export class Document {
     changeTrackingMode: 'Off' | 'TrackAll' | 'TrackMineOnly';
+    compare(filePath: string, documentCompareOptions?: DocumentCompareOptions): void;
+    compareFromBase64(base64File: string, documentCompareOptions?: DocumentCompareOptions): void;
     readonly properties: DocumentProperties;
     removeDocumentInformation(removeDocInfoType: RemoveDocInfoType): void;
     removeDocumentInformation(

@@ -52,6 +52,45 @@ export type ColorValue = {
 export type CommentMarkerStyle = 'initials' | 'icon';
 
 // @public
+export const COMPARE_DOCUMENTS_ACCEPT = ".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+// @public
+export interface CompareDocumentsChromeHandlers {
+    // (undocumented)
+    readonly onRequest?: (session: CompareDocumentsDialogSession) => void;
+}
+
+// @public
+export interface CompareDocumentsDialogSession {
+    apply(request: CompareDocumentsRequest): Promise<CompareDocumentsOutcome>;
+    canApply(): boolean;
+    cancel(): void;
+    readonly defaultAuthor: string;
+    readonly signal: AbortSignal;
+}
+
+// @public
+export type CompareDocumentsOutcome = {
+    readonly ok: true;
+    readonly revisionCount: number;
+} | {
+    readonly message: string;
+    readonly ok: false;
+    readonly reason: CompareDocumentsRefusal;
+};
+
+// @public
+export type CompareDocumentsRefusal = 'invalidOriginal' | 'invalidRevised' | 'tooLarge' | 'unsupportedContent' | 'unavailable' | 'protected' | 'collaboration' | 'viewing' | 'closed' | 'empty' | 'failed';
+
+// @public
+export interface CompareDocumentsRequest {
+    readonly authorName?: string;
+    readonly detectFormatChanges?: boolean;
+    readonly removeDateAndTime?: boolean;
+    readonly revised: Uint8Array;
+}
+
+// @public
 export type ContainerRef = {
     part: 'body';
 } | {
@@ -200,12 +239,14 @@ export type ExecErrorCode = 'notFound' | 'ambiguous' | 'locked' | 'bound' | 'typ
 // @public
 export type ExecResult = {
     changed: boolean;
+    compareDocuments?: CompareDocumentsOutcome;
     history?: HistoryGroupOutcome;
     ok: true;
     revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
 } | {
     code: ExecErrorCode;
+    compareDocuments?: CompareDocumentsOutcome;
     ok: false;
     reason: string;
     revisionAuthors?: RevisionAuthorResult;

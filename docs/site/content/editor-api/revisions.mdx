@@ -746,6 +746,7 @@ Call `document.compareFromBase64(base64File, options)` to record the differences
 This method requires the Pro review module. Pass `reviewModule()` from `@docx-editor.dev/pro` in the runtime or editor `modules` list. Without it, the call refuses with `NotSupported`.
 
 ```ts
+import { DocxEditor } from '@docx-editor.dev/editor-api';
 import { reviewModule } from '@docx-editor.dev/pro';
 
 const runtime = await DocxEditor.createServer(originalBytes, {
@@ -770,7 +771,20 @@ The following options are supported:
 - `removeDateAndTime` writes the revisions without dates.
 - `compareTarget` supports `CompareTargetCurrent` only.
 
-`addToRecentFiles` and `ignoreAllComparisonWarnings` have no effect. `CompareTargetNew`, `CompareTargetSelected`, and `removePersonalInformation: true` refuse with `NotSupported`. Empty or invalid base64 and unreadable packages refuse with `InvalidArgument`. `document.compare(filePath)` always refuses with `NotSupported`, because the document model has no file system. Collaborative sessions refuse the compare.
+`addToRecentFiles` and `ignoreAllComparisonWarnings` have no effect. The compare shows no warnings: it accepts the existing revisions of both documents without asking. `CompareTargetNew`, `CompareTargetSelected`, and `removePersonalInformation: true` refuse with `NotSupported`. An option value of the wrong type, such as `detectFormatChanges: 'false'`, refuses with `InvalidArgument`. `document.compare(filePath)` always refuses with `NotSupported`, because the document model has no file system.
+
+A refused compare changes nothing. `debugInfo.innerError.code` names the cause:
+
+| Cause | Error code | `innerError.code` |
+| --- | --- | --- |
+| No review module | `NotSupported` | `edit.review-module-required` |
+| A collaborative session | `NotSupported` | `edit.operation-unsupported` |
+| Documents over the size limit | `NotSupported` | `edit.resource-limit` |
+| Empty or invalid base64, or a file that is not a DOCX package | `InvalidArgument` | `edit.invalid-argument` |
+| The open document enforces protection that the compare would break | `NotImplemented` | `edit.protected-content` |
+| Differences that no tracked change can record | `NotImplemented` | `edit.unsupported-content` |
+
+For the cases behind the last two rows, see [Compare documents](/docs/2.x/pro/compare-documents).
 
 Both documents are compared with their existing revisions accepted. The result keeps the comments of both documents. Bookmarks and header and footer references come from the open document.
 

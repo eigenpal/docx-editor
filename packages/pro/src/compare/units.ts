@@ -604,7 +604,11 @@ function fieldInstruction(
     if (value === undefined) return undefined;
     parts.push(`\\${switchName} ${value}`);
   }
-  return parts.length > 1 ? ` ${parts.join(' ')} ` : undefined;
+  if (parts.length === 1) return undefined;
+  // A field link without `\h` reads back as a link with history; one with it, without.
+  const history = attributeOf(node, 'history', W_MAIN);
+  if (history !== '1' && history !== 'true' && history !== 'on') parts.push('\\h');
+  return ` ${parts.join(' ')} `;
 }
 
 function runAtoms(

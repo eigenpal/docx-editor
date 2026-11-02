@@ -1191,6 +1191,9 @@ export interface CommentDraftChromeHandlers {
 export type CommentMarkerStyle = 'initials' | 'icon';
 
 // @public
+export const COMPARE_DOCUMENTS_ACCEPT = ".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+// @public
 export interface CompareDocumentsChromeHandlers {
     // (undocumented)
     readonly onRequest?: (session: CompareDocumentsDialogSession) => void;
@@ -1222,7 +1225,43 @@ export interface CompareDocumentsDialogSession {
 }
 
 // @public
-export type CompareDocumentsEngine = (original: OoxmlPackage, revised: Uint8Array, options: DocumentCompareOptions) => DocumentCompareResult;
+export type CompareDocumentsEngine = (original: OoxmlPackage, revised: Uint8Array, options: CompareDocumentsEngineOptions) => CompareDocumentsEngineResult;
+
+// @public
+export interface CompareDocumentsEngineOptions {
+    readonly authorName?: string;
+    readonly detectFormatChanges?: boolean;
+    readonly removeDateAndTime?: boolean;
+}
+
+// @public
+export type CompareDocumentsEngineResult = {
+    readonly ok: true;
+    readonly package: OoxmlPackage;
+    readonly revisionCount: number;
+} | {
+    readonly code: CompareDocumentsErrorCode;
+    readonly message: string;
+    readonly ok: false;
+};
+
+// @public
+export type CompareDocumentsErrorCode =
+/** The original document is not a readable DOCX package. */
+'invalid-original'
+/** The revised document is not a readable DOCX package. */
+| 'invalid-revised'
+/** The documents exceed the compare's size limits. */
+| 'too-large'
+/**
+* The original document enforces protection that the compare would break: read-only,
+* comments, or forms protection. Tracked-changes protection refuses too when the original
+* holds tracked changes, which a compare accepts, or when formatting detection is off, which
+* writes formatting differences untracked.
+*/
+| 'protected'
+/** The differences include content that no tracked change can record. */
+| 'unsupported-content';
 
 // @public
 export type CompareDocumentsOutcome = {
@@ -1241,6 +1280,7 @@ export type CompareDocumentsRefusal = 'invalidOriginal' | 'invalidRevised' | 'to
 export interface CompareDocumentsRequest {
     readonly authorName?: string;
     readonly detectFormatChanges?: boolean;
+    readonly removeDateAndTime?: boolean;
     readonly revised: Uint8Array;
 }
 
@@ -1440,27 +1480,6 @@ export function defineFontResolver<T extends FontResolver>(resolve: T): MarkedFo
 
 // @public
 export function disposeLayoutShaping(shaping: LayoutShapingOptions): void;
-
-// @public
-export type DocumentCompareErrorCode = 'invalid-original' | 'invalid-revised' | 'too-large' | 'unsupported-content';
-
-// @public
-export interface DocumentCompareOptions {
-    readonly authorName?: string;
-    readonly detectFormatChanges?: boolean;
-    readonly removeDateAndTime?: boolean;
-}
-
-// @public
-export type DocumentCompareResult = {
-    readonly ok: true;
-    readonly package: OoxmlPackage;
-    readonly revisionCount: number;
-} | {
-    readonly code: DocumentCompareErrorCode;
-    readonly message: string;
-    readonly ok: false;
-};
 
 // @public
 export interface DocumentRefresh {

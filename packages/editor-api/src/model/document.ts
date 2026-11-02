@@ -185,6 +185,25 @@ export class Document extends ModelObject {
       if (typeof base64File !== 'string' || base64File.length === 0) {
         fail({ code: 'InvalidArgument', target });
       }
+      for (const flag of [
+        'detectFormatChanges',
+        'removeDateAndTime',
+        'removePersonalInformation',
+        'addToRecentFiles',
+        'ignoreAllComparisonWarnings',
+      ] as const) {
+        if (options[flag] !== undefined && typeof options[flag] !== 'boolean') {
+          fail({ code: 'InvalidArgument', target: `${target}.${flag}` });
+        }
+      }
+      if (
+        options.compareTarget !== undefined &&
+        !['CompareTargetCurrent', 'CompareTargetNew', 'CompareTargetSelected'].includes(
+          options.compareTarget
+        )
+      ) {
+        fail({ code: 'InvalidArgument', target: `${target}.compareTarget` });
+      }
       if (options.compareTarget !== undefined && options.compareTarget !== 'CompareTargetCurrent') {
         fail({ code: 'NotSupported', target: `${target}.compareTarget` });
       }
@@ -200,10 +219,10 @@ export class Document extends ModelObject {
         ...(options.authorName === undefined ? {} : { authorName: options.authorName }),
         ...(options.detectFormatChanges === undefined
           ? {}
-          : { detectFormatChanges: options.detectFormatChanges !== false }),
+          : { detectFormatChanges: options.detectFormatChanges }),
         ...(options.removeDateAndTime === undefined
           ? {}
-          : { removeDateAndTime: options.removeDateAndTime === true }),
+          : { removeDateAndTime: options.removeDateAndTime }),
       };
     });
   }

@@ -9,6 +9,7 @@ import { comparePackages } from './compare-documents.ts';
 
 export { compareDocuments } from './compare-documents.ts';
 export type {
+  CompareDocumentsEngineOptions,
   CompareDocumentsErrorCode,
   CompareDocumentsOptions,
   CompareDocumentsResult,

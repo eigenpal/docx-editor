@@ -6,7 +6,7 @@ import type {
   CompareDocumentsRefusal,
   CompareDocumentsRequest,
 } from '../contracts/compare-documents.ts';
-import type { DocumentCompareErrorCode } from '../contracts/document-compare.ts';
+import type { CompareDocumentsErrorCode } from '../contracts/document-compare.ts';
 import type { CompareDocumentsDialog, ReviewModuleContribution } from '../contracts/modules.ts';
 import { readDocumentProtection } from '../store/package/document-protection.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
@@ -36,22 +36,23 @@ const VIEWING_REASON = 'the document is open for viewing';
 const EMPTY_REASON = 'the revised document is empty';
 const CLOSED_REASON = 'the dialog is closed';
 
-const ENGINE_REFUSALS: Readonly<Record<DocumentCompareErrorCode, CompareDocumentsRefusal>> = {
+const ENGINE_REFUSALS: Readonly<Record<CompareDocumentsErrorCode, CompareDocumentsRefusal>> = {
   'invalid-original': 'invalidOriginal',
   'invalid-revised': 'invalidRevised',
   'too-large': 'tooLarge',
+  protected: 'protected',
   'unsupported-content': 'unsupportedContent',
 };
 
 type CompareExec = ExecResult & {
   readonly revisionCount?: number;
-  readonly engineCode?: DocumentCompareErrorCode;
+  readonly engineCode?: CompareDocumentsErrorCode;
 };
 
 /** The stable code a dialog translates for one refused compare. */
 function refusalOf(
   result: { readonly code?: string; readonly reason?: string },
-  engineCode?: DocumentCompareErrorCode
+  engineCode?: CompareDocumentsErrorCode
 ): CompareDocumentsRefusal {
   if (engineCode) return ENGINE_REFUSALS[engineCode];
   if (result.reason === COMPARE_COLLABORATION_REASON) return 'collaboration';
@@ -130,6 +131,7 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
       {
         ...(authorName ? { authorName } : {}),
         detectFormatChanges: request.detectFormatChanges !== false,
+        ...(request.removeDateAndTime === true ? { removeDateAndTime: true } : {}),
       }
     );
     if (!result.ok)
@@ -181,8 +183,10 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
               reason: refusalOf(result, result.engineCode),
               message: result.reason,
             };
-          session.cancel();
-          return { ok: true, revisionCount: result.revisionCount ?? 0 };
+          const revisionCount = result.revisionCount ?? 0;
+          // With no differences the dialog stays open, so it can say so.
+          if (revisionCount > 0) session.cancel();
+          return { ok: true, revisionCount };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           return { ok: false, reason: 'failed', message };
@@ -248,8 +252,22 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
       if (command.type === 'openCompareDocumentsDialog') return open();
       if (command.type !== 'compareDocuments') return null;
       const result = compare(command);
-      if (result.ok) return { ok: true, changed: result.changed };
-      return { ok: false, code: result.code, reason: result.reason };
+      if (result.ok)
+        return {
+          ok: true,
+          changed: result.changed,
+          compareDocuments: { ok: true, revisionCount: result.revisionCount ?? 0 },
+        };
+      return {
+        ok: false,
+        code: result.code,
+        reason: result.reason,
+        compareDocuments: {
+          ok: false,
+          reason: refusalOf(result, result.engineCode),
+          message: result.reason,
+        },
+      };
     },
     /** `can` for the two compare commands; null for every other command. */
     can(command: EditorCommand): CanResult | null {

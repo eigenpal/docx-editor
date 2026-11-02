@@ -185,7 +185,12 @@ describe('compare documents commands', () => {
       head: { paragraphId: first!, offset: 8 },
     });
     const result = editor.exec({ type: 'compareDocuments', revised: docx('Revised text') });
-    expect(result).toEqual({ ok: true, changed: true });
+    expect(result).toMatchObject({
+      ok: true,
+      changed: true,
+      // The engine's revision count, as the dialog session reports it.
+      compareDocuments: { ok: true, revisionCount: 2 },
+    });
     expect(bodyText(editor)).toBe('Revised text');
     expect(editor.surface!.session.packageRevision()).toBe(revision + 1);
     // The selection still addresses a live paragraph.
@@ -213,15 +218,24 @@ describe('compare documents commands', () => {
     ]);
     expect(
       editor.exec({ type: 'compareDocuments', revised: docx('x'), detectFormatChanges: false })
-    ).toEqual({ ok: false, code: 'invalidArgs', reason: 'not a document' });
+    ).toEqual({
+      ok: false,
+      code: 'invalidArgs',
+      reason: 'not a document',
+      // The refusal as a code to translate, the same one the dialog shows.
+      compareDocuments: { ok: false, reason: 'invalidRevised', message: 'not a document' },
+    });
     editor.exec({ type: 'compareDocuments', revised: docx('x'), authorName: ' Editor ' });
+    editor.exec({ type: 'compareDocuments', revised: docx('x'), removeDateAndTime: true });
     expect(calls).toEqual([
       { authorName: 'Reviewer', detectFormatChanges: false },
       { authorName: 'Editor', detectFormatChanges: true },
+      { authorName: 'Reviewer', detectFormatChanges: true, removeDateAndTime: true },
     ]);
     expect(editor.exec({ type: 'compareDocuments', revised: new Uint8Array() })).toMatchObject({
       ok: false,
       code: 'invalidArgs',
+      compareDocuments: { ok: false, reason: 'empty' },
     });
     expect(bodyText(editor)).toBe('Original text');
   });
@@ -244,6 +258,33 @@ describe('compare documents dialog session', () => {
     expect(session.signal.aborted).toBe(true);
     expect(bodyText(editor)).toBe('Revised text');
     dispose();
+  });
+
+  test('a compare with no differences keeps the session open, so the dialog can say so', async () => {
+    const editor = mount([
+      reviewModule({
+        compareDocuments: (original) => ({ ok: true, package: original, revisionCount: 0 }),
+      }),
+    ]);
+    let session: CompareDocumentsDialogSession | null = null;
+    editor.setCompareDocumentsChrome({ onRequest: (s) => (session = s) });
+    editor.exec({ type: 'openCompareDocumentsDialog' });
+    const outcome = await session!.apply({ revised: docx('Original text') });
+    expect(outcome).toEqual({ ok: true, revisionCount: 0 });
+    expect(session!.signal.aborted).toBe(false);
+    expect(session!.canApply()).toBe(true);
+    expect(bodyText(editor)).toBe('Original text');
+    session!.cancel();
+  });
+
+  test('a protected original is refused with its own reason', async () => {
+    const editor = mount([
+      reviewModule({
+        compareDocuments: () => ({ ok: false, code: 'protected', message: 'protected' }),
+      }),
+    ]);
+    const result = editor.exec({ type: 'compareDocuments', revised: docx('x') });
+    expect(result).toMatchObject({ ok: false, compareDocuments: { reason: 'protected' } });
   });
 
   test('a refused compare keeps the session open with the message', async () => {

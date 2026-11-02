@@ -2,9 +2,9 @@ import type { CompareDocumentsDialogSession } from './compare-documents.ts';
 import type { CompareDocumentsEngine } from './document-compare.ts';
 export type {
   CompareDocumentsEngine,
-  DocumentCompareErrorCode,
-  DocumentCompareOptions,
-  DocumentCompareResult,
+  CompareDocumentsErrorCode,
+  CompareDocumentsEngineOptions,
+  CompareDocumentsEngineResult,
 } from './document-compare.ts';
 import type { RevisionMarkupDialogSession } from './revision-markup.ts';
 import type { ReviewPaneOptions } from './review-pane.ts';

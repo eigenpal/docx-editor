@@ -15,6 +15,7 @@ import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { CompareTarget, DocxEditor } from '@docx-editor.dev/editor-api';
 import { DocxEditor as BrowserDocxEditor } from '@docx-editor.dev/editor-api/browser';
 import { reviewModule } from '../../../../pro/src/review/review-module.ts';
+import { buildDocx } from '../../../../../scripts/compare-corpus/docx-builder.ts';
 import { docx, p } from './support/documents.ts';
 
 const ORIGINAL = docx(p('The quick brown fox jumps.') + p('Second paragraph stays.'));
@@ -151,10 +152,40 @@ test('compare refuses without the review module and leaves the document unchange
         context.document.compareFromBase64(base64Of(REVISED));
         await context.sync();
       })
-    ).rejects.toMatchObject({ code: 'NotSupported' });
+    ).rejects.toMatchObject({
+      code: 'NotSupported',
+      debugInfo: { innerError: { code: 'edit.review-module-required' } },
+    });
     expect(await runtime.save()).toEqual(before);
   } finally {
     runtime.dispose();
+  }
+});
+
+test('each compare refusal names its cause in innerError', async () => {
+  const runtime = await DocxEditor.createServer(ORIGINAL, { modules: [reviewModule()] });
+  const protectedDocument = buildDocx({
+    body: p('Locked text.'),
+    settings: '<w:documentProtection w:edit="readOnly" w:enforcement="1"/>',
+  });
+  const locked = await DocxEditor.createServer(protectedDocument, { modules: [reviewModule()] });
+  try {
+    const refusal = (target: typeof runtime, base64: string) =>
+      target.run(async (context) => {
+        context.document.compareFromBase64(base64);
+        await context.sync();
+      });
+    await expect(refusal(runtime, base64Of(new Uint8Array([1, 2, 3])))).rejects.toMatchObject({
+      code: 'InvalidArgument',
+      debugInfo: { innerError: { code: 'edit.invalid-argument' } },
+    });
+    await expect(refusal(locked, base64Of(REVISED))).rejects.toMatchObject({
+      code: 'NotImplemented',
+      debugInfo: { innerError: { code: 'edit.protected-content' } },
+    });
+  } finally {
+    runtime.dispose();
+    locked.dispose();
   }
 });
 
@@ -184,6 +215,27 @@ test('unsupported options, file paths and bad input refuse at sync', async () =>
       ['InvalidArgument', (d) => d.compareFromBase64('')],
       ['InvalidArgument', (d) => d.compareFromBase64('not base64 at all!')],
       ['InvalidArgument', (d) => d.compareFromBase64(base64Of(new Uint8Array([1, 2, 3, 4])))],
+      [
+        'InvalidArgument',
+        (d) =>
+          d.compareFromBase64(base64Of(REVISED), {
+            detectFormatChanges: 'false' as unknown as boolean,
+          }),
+      ],
+      [
+        'InvalidArgument',
+        (d) =>
+          d.compareFromBase64(base64Of(REVISED), {
+            removeDateAndTime: 1 as unknown as boolean,
+          }),
+      ],
+      [
+        'InvalidArgument',
+        (d) =>
+          d.compareFromBase64(base64Of(REVISED), {
+            compareTarget: 'Elsewhere' as unknown as 'CompareTargetCurrent',
+          }),
+      ],
     ];
     for (const [code, call] of refusals) {
       await expect(

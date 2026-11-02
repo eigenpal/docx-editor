@@ -130,6 +130,7 @@ test('a document that enforces protection is refused', () => {
     buildDocx({ body, settings: `<w:documentProtection w:edit="${edit}" w:enforcement="1"/>` });
   for (const edit of ['readOnly', 'comments', 'forms']) {
     const result = compare(protectedBy(edit), changed);
+    expect(result.ok ? '' : result.code).toBe('protected');
     expect(result.ok ? '' : result.message).toContain('protected against edits');
   }
   // Tracked-changes protection allows tracked changes, unless the compare would accept some.

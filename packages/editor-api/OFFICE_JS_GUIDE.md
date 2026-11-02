@@ -697,3 +697,5 @@ await runtime.run(async (context) => {
 ```
 
 Only `CompareTargetCurrent` is supported. `CompareTargetNew`, `CompareTargetSelected`, `removePersonalInformation: true`, `document.compare(filePath)`, and collaborative sessions refuse with `NotSupported`. Invalid base64 and unreadable packages refuse with `InvalidArgument`. Pass the revised document as plain base64 data; do not pass proxies to a job queue.
+
+A refused compare writes nothing. Read `debugInfo.innerError.code` for the cause: `edit.review-module-required`, `edit.resource-limit`, `edit.invalid-argument`, `edit.protected-content` (the open document enforces protection), or `edit.unsupported-content` (a difference that no tracked change can record). Do not retry the same pair; report the cause instead.

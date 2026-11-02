@@ -1,4 +1,5 @@
 import type { ResolvedRevisionMarkup } from './revision-markup.ts';
+import type { CompareDocumentsRequest } from './compare-documents.ts';
 import type { ResolvedReviewPane } from './review-pane.ts';
 /**
  * `@docx-editor.dev/core/contracts/editor` — the `Editor` contract adapters are written against.
@@ -981,9 +982,11 @@ export interface EditorCommands
   openCompareDocumentsDialog: Record<never, never>;
   /**
    * Compare the open document (the original) with a revised DOCX and record the differences in
-   * it as tracked changes, as one undoable step. For hosts with their own file picker.
+   * it as tracked changes, as one undoable step. For hosts with their own file picker. The
+   * result's `compareDocuments` field carries the revision count, or the refusal as a code to
+   * translate (`compareDocuments.errors.<reason>`).
    */
-  compareDocuments: { revised: Uint8Array; authorName?: string; detectFormatChanges?: boolean };
+  compareDocuments: CompareDocumentsRequest;
   /** Word's Show/Hide paragraph marks; presentation only. */
   toggleParagraphMarks: Record<never, never>;
   /** Word's Protect Document: enforce filling-in-forms protection, or lift the enforced one. */

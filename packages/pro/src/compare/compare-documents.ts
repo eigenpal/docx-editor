@@ -117,7 +117,7 @@ export function comparePackages(
   if (protectedAgainstEdits(original, options.detectFormatChanges ?? true)) {
     return {
       ok: false,
-      code: 'unsupported-content',
+      code: 'protected',
       message:
         'The original document is protected against edits. A compare would rewrite its content or its tracked changes.',
     };

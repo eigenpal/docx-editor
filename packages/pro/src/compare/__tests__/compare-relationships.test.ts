@@ -49,10 +49,10 @@ test('a changed link target is inserted with the revised address', () => {
   // empty when the revision is accepted or rejected.
   expect(document).not.toContain('<w:hyperlink');
   expect(document).toMatch(
-    /<w:ins\b[^>]*>(?:(?!<\/w:ins>).)*<w:instrText[^>]*> HYPERLINK &quot;https:\/\/example\.com\/b&quot; </s
+    /<w:ins\b[^>]*>(?:(?!<\/w:ins>).)*<w:instrText[^>]*> HYPERLINK &quot;https:\/\/example\.com\/b&quot; \\h </s
   );
   expect(document).toMatch(
-    /<w:del\b[^>]*>(?:(?!<\/w:del>).)*<w:delInstrText[^>]*> HYPERLINK &quot;https:\/\/example\.com\/a&quot; </s
+    /<w:del\b[^>]*>(?:(?!<\/w:del>).)*<w:delInstrText[^>]*> HYPERLINK &quot;https:\/\/example\.com\/a&quot; \\h </s
   );
 });
 

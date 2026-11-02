@@ -7,7 +7,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { fireEvent, getByLabelText, getByRole, waitFor } from '@testing-library/react';
 import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { reviewModule } from '../review/review-module';
-import { COMPARE_DOCUMENTS_ACCEPT } from '../review/compare-documents-dialog';
+import { COMPARE_DOCUMENTS_ACCEPT } from '@docx-editor.dev/core/editor';
 import { zipDocument } from '../collaboration/__tests__/document-peer-support';
 
 const paragraphs = (...texts: string[]) =>

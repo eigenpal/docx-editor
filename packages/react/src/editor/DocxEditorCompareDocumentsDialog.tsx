@@ -1,5 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import type { CompareDocumentsDialogSession } from '@docx-editor.dev/core/editor';
+import {
+  COMPARE_DOCUMENTS_ACCEPT,
+  type CompareDocumentsDialogSession,
+} from '@docx-editor.dev/core/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../i18n';
 import {
@@ -10,7 +13,6 @@ import {
 } from './dialog-parts';
 
 /** File types the revised-document picker offers. */
-const ACCEPT = '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 /** Compare documents session and presentation. @public */
 export interface DocxEditorCompareDocumentsDialogProps extends DialogCustomizationProps {
@@ -96,8 +98,13 @@ function CompareDocumentsForm({
       authorName: values.authorName,
       detectFormatChanges: values.detectFormatChanges,
     });
-    if (outcome.ok || session.signal.aborted) return;
-    setError(translate(`compareDocuments.errors.${outcome.reason}` as TranslationKey));
+    if (session.signal.aborted) return;
+    // With no differences the dialog stays open and says so; nothing changed.
+    setError(
+      outcome.ok
+        ? translate('compareDocuments.noDifferences')
+        : translate(`compareDocuments.errors.${outcome.reason}` as TranslationKey)
+    );
     setBusy(false);
   };
   const state: UseCompareDocumentsDialogReturn = {
@@ -142,7 +149,7 @@ function CompareDocumentsForm({
                 <span>{t('revisedFile')}</span>
                 <input
                   type="file"
-                  accept={ACCEPT}
+                  accept={COMPARE_DOCUMENTS_ACCEPT}
                   disabled={busy}
                   onChange={(event) =>
                     state.setValue('revised', event.currentTarget.files?.[0] ?? null)

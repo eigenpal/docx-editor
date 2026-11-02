@@ -7,7 +7,7 @@ order: 64
 
 Compare documents records the differences between an original document and a revised document as tracked changes. Accept all changes to get the revised document. Reject all changes to get the original.
 
-Compare documents requires the review module and an EigenPal Pro License. Follow [Tracked changes](/docs/2.x/pro/tracked-changes) to enable review features. Without the review module, every compare entry point refuses with a stable reason.
+Compare documents requires an EigenPal Pro License. The editor command and `Document.compareFromBase64` also require the review module. Without it, they refuse with a stable reason. Follow [Tracked changes](/docs/2.x/pro/tracked-changes) to enable review features. The `compareDocuments` function needs no module.
 
 You can compare documents in three ways:
 
@@ -43,18 +43,26 @@ editor.attach(container);
 To compare without the dialog, for example from your own file picker, run the `compareDocuments` command:
 
 ```ts
-const result = editor.exec({
+const { compareDocuments: outcome } = editor.exec({
   type: 'compareDocuments',
   revised: revisedBytes,
   authorName: 'Legal',
   detectFormatChanges: true,
 });
-if (!result.ok) showMessage(result.reason);
+if (outcome && !outcome.ok) {
+  showMessage(t(`compareDocuments.errors.${outcome.reason}`));
+} else if (outcome?.revisionCount === 0) {
+  showMessage(t('compareDocuments.noDifferences'));
+}
 ```
+
+The result's `compareDocuments` field holds the outcome. A refused compare carries a `reason` code, such as `tooLarge` or `protected`. The `compareDocuments.errors.*` keys of `@docx-editor.dev/i18n` translate every code. A compare with no differences succeeds with a `revisionCount` of 0 and leaves the document unchanged.
+
+If you omit `authorName`, the revisions carry the editor's author. If the editor has no author, they carry the revised document's last author.
 
 The command refuses while the editor is in viewing mode or the document is protected against edits. It also refuses in a collaborative session.
 
-To replace the dialog, pass a component as `popups.compareDocuments`. When a compare is refused, the session's `apply` result carries a `reason` code, such as `tooLarge` or `protected`, to translate for your users. Its `message` is diagnostic English, not display text. For more information, see [Customize dialogs](/docs/2.x/customization/dialogs).
+To replace the dialog, pass a component as `popups.compareDocuments`. The session's `apply` result has the same outcome shape. Its `message` is diagnostic English, not display text. Use `COMPARE_DOCUMENTS_ACCEPT` from `@docx-editor.dev/core` as the `accept` value of your file input. For more information, see [Customize dialogs](/docs/2.x/customization/dialogs).
 
 ## Compare with the document API
 
@@ -81,6 +89,7 @@ For supported options and refusals, see [Tracked changes](/docs/2.x/editor-api/r
 The `compareDocuments` function needs no editor or runtime. It returns the result as DOCX bytes:
 
 ```ts
+import { writeFile } from 'node:fs/promises';
 import { compareDocuments } from '@docx-editor.dev/pro';
 
 const result = compareDocuments(originalBytes, revisedBytes, {
@@ -91,7 +100,12 @@ if (result.ok) await writeFile('redline.docx', result.bytes);
 else console.error(result.code, result.message);
 ```
 
-The function checks every result before it returns it: accepting all changes must give the revised text, and rejecting all changes must give the original text. A result that fails the check is not returned; the function refuses with `unsupported-content` instead. It refuses with `invalid-original` or `invalid-revised` for a file it cannot read, and with `too-large` for documents over its size limit.
+The function checks every result before it returns it: accepting all changes must give the revised text, and rejecting all changes must give the original text. A result that fails the check is not returned; the function refuses with `unsupported-content` instead. It refuses with `invalid-original` or `invalid-revised` for a file it cannot read, and with `too-large` for documents over its size limit. If you omit `authorName`, the revisions carry the revised document's last author.
+
+The function refuses with `protected` when the original document enforces protection that a compare would break:
+
+- Read-only, comments, or forms protection. A compare would rewrite its content.
+- Tracked-changes protection, when the original holds tracked changes. A compare would accept them. Without tracked changes, the compare runs, because it writes only tracked changes.
 
 The compare also refuses with `unsupported-content` in these cases:
 
@@ -102,7 +116,5 @@ The compare also refuses with `unsupported-content` in these cases:
 - The revised document adds a section or table setting, such as page borders, that has no value a tracked change can restore on reject.
 - A header or footer that only an earlier section shows differs, and the compare cannot pair it with one header or footer of the original. This happens when the documents have a different number of sections, when an earlier section of the revised document shows a header or footer that the original's section lacks, and when the revised document splits a header or footer that sections of the original share.
 - The result needs a new relationship part, and the original document declares no content type for relationship parts.
-- The original document enforces read-only, comments, or forms protection. A compare would rewrite its content.
-- The original document enforces tracked-changes protection and holds tracked changes. A compare would accept them. Without tracked changes, the compare runs, because it writes only tracked changes.
 
-The dialog shows the reason, and the `compareDocuments` command returns it. `Document.compareFromBase64` rejects `context.sync()` with a stable error code instead of the message: `NotImplemented` for these refusals, `InvalidArgument` for a revised file it cannot read, and `NotSupported` for documents over the size limit.
+The dialog shows the reason, and the `compareDocuments` command returns it. `Document.compareFromBase64` rejects `context.sync()` with a stable error code instead of the message: `NotImplemented` for these refusals and for `protected`, `InvalidArgument` for a revised file it cannot read, and `NotSupported` for documents over the size limit. The error's `debugInfo.innerError.code` names the cause, such as `edit.protected-content` or `edit.unsupported-content`.

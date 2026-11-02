@@ -10,7 +10,10 @@ import {
   type PropType,
   type Ref,
 } from 'vue';
-import type { CompareDocumentsDialogSession } from '@docx-editor.dev/core/editor';
+import {
+  COMPARE_DOCUMENTS_ACCEPT,
+  type CompareDocumentsDialogSession,
+} from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useTranslation } from '../i18n';
 import {
@@ -21,7 +24,6 @@ import {
 } from './dialog-parts';
 
 /** File types the revised-document picker offers. */
-const ACCEPT = '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 /** The Compare documents draft. @public */
 export interface CompareDocumentsDialogValues {
@@ -133,10 +135,11 @@ const Impl = defineComponent({
         authorName: values.value.authorName,
         detectFormatChanges: values.value.detectFormatChanges,
       });
-      if (outcome.ok || session.signal.aborted) return;
-      error.value = translate(
-        `compareDocuments.errors.${outcome.reason}` as Parameters<typeof translate>[0]
-      );
+      if (session.signal.aborted) return;
+      // With no differences the dialog stays open and says so; nothing changed.
+      error.value = outcome.ok
+        ? translate('compareDocuments.noDifferences')
+        : translate(`compareDocuments.errors.${outcome.reason}` as Parameters<typeof translate>[0]);
       busy.value = false;
     };
     const apply = () => {
@@ -166,7 +169,7 @@ const Impl = defineComponent({
               <span>{t('revisedFile')}</span>
               <input
                 type="file"
-                accept={ACCEPT}
+                accept={COMPARE_DOCUMENTS_ACCEPT}
                 disabled={busy.value}
                 onChange={(event) =>
                   setValue('revised', (event.target as HTMLInputElement).files?.[0] ?? null)

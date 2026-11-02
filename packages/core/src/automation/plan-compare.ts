@@ -26,13 +26,19 @@ export function planCompare(
   operation: Extract<AutomationOperation, { op: 'compareFromBase64' }>,
   context: ComparePlannerContext
 ): PlannedOperation {
-  const capability = (message: string): PlannedOperation => ({
+  // Each refusal names a public diagnostic code (`debugInfo.innerError.code`), so a caller can
+  // tell the causes apart without reading the message.
+  const capability = (message: string, detail: string): PlannedOperation => ({
     ok: false,
-    error: { code: 'unsupported-capability', message },
+    error: { code: 'unsupported-capability', message, detail },
   });
-  if (!context.engine) return capability('Document compare needs the review module.');
+  if (!context.engine)
+    return capability('Document compare needs the review module.', 'review-module-required');
   if (context.collaborative) {
-    return capability('Document compare is not available in a collaboration session.');
+    return capability(
+      'Document compare is not available in a collaboration session.',
+      'edit.operation-unsupported'
+    );
   }
   const original = context.reads.package;
   if (!original)
@@ -44,6 +50,7 @@ export function planCompare(
       error: {
         code: 'unsupported-content',
         message: 'base64File is not valid base64 of a supported size.',
+        detail: 'edit.invalid-argument',
       },
     };
   }
@@ -59,11 +66,34 @@ export function planCompare(
   if (!result.ok) {
     switch (result.code) {
       case 'invalid-revised':
-        return { ok: false, error: { code: 'unsupported-content', message: result.message } };
+        return {
+          ok: false,
+          error: {
+            code: 'unsupported-content',
+            message: result.message,
+            detail: 'edit.invalid-argument',
+          },
+        };
       case 'too-large':
-        return capability(result.message);
+        return capability(result.message, 'edit.resource-limit');
+      case 'protected':
+        return {
+          ok: false,
+          error: {
+            code: 'unsupported-revision',
+            message: result.message,
+            detail: 'edit.protected-content',
+          },
+        };
       default:
-        return { ok: false, error: { code: 'unsupported-revision', message: result.message } };
+        return {
+          ok: false,
+          error: {
+            code: 'unsupported-revision',
+            message: result.message,
+            detail: 'edit.unsupported-content',
+          },
+        };
     }
   }
   const conflict = context.pin();

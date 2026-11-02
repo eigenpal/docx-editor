@@ -36,20 +36,34 @@ export type CommentMarkerStyle = 'initials' | 'icon';
 export function compareDocuments(original: Uint8Array, revised: Uint8Array, options?: CompareDocumentsOptions): CompareDocumentsResult;
 
 // @public
+export interface CompareDocumentsEngineOptions {
+    readonly authorName?: string;
+    readonly detectFormatChanges?: boolean;
+    readonly removeDateAndTime?: boolean;
+}
+
+// @public
 export type CompareDocumentsErrorCode =
-/** One of the inputs is not a readable DOCX package. */
-'invalid-original' | 'invalid-revised'
-/** The inputs exceed the engine's size limits. */
+/** The original document is not a readable DOCX package. */
+'invalid-original'
+/** The revised document is not a readable DOCX package. */
+| 'invalid-revised'
+/** The documents exceed the compare's size limits. */
 | 'too-large'
-/** The engine could not produce a result that reproduces both inputs. */
+/**
+* The original document enforces protection that the compare would break: read-only,
+* comments, or forms protection. Tracked-changes protection refuses too when the original
+* holds tracked changes, which a compare accepts, or when formatting detection is off, which
+* writes formatting differences untracked.
+*/
+| 'protected'
+/** The differences include content that no tracked change can record. */
 | 'unsupported-content';
 
 // @public
-export interface CompareDocumentsOptions {
+export interface CompareDocumentsOptions extends CompareDocumentsEngineOptions {
     readonly authorName?: string;
     readonly date?: Date;
-    readonly detectFormatChanges?: boolean;
-    readonly removeDateAndTime?: boolean;
 }
 
 // @public

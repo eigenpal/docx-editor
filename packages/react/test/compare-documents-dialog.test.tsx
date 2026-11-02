@@ -103,6 +103,26 @@ test('a refused compare shows its reason in the error part', async () => {
   expect(view.getByRole('dialog')).toBeTruthy();
 });
 
+test('a compare with no differences says so and keeps the dialog open', async () => {
+  const { view, editor } = mount();
+  await waitFor(() => expect(editor()).toBeTruthy());
+  await act(async () => {
+    editor().exec({ type: 'openCompareDocumentsDialog' });
+  });
+  await act(async () => chooseFile(view.getByLabelText('Revised document'), ORIGINAL));
+  await act(async () => {
+    fireEvent.click(view.getByText('Compare'));
+  });
+  await waitFor(
+    () => {
+      const text = view.container.querySelector('[data-docx-part="error"]')?.textContent ?? '';
+      if (!text.includes('The documents have no differences.')) throw new Error(text);
+    },
+    { timeout: 5000 }
+  );
+  expect(view.getByRole('dialog')).toBeTruthy();
+});
+
 test('named parts replace defaults; popup false and replacements get cancellable sessions', async () => {
   function AuthorEcho() {
     return <span>Author: {useCompareDocumentsDialog().values.authorName}</span>;

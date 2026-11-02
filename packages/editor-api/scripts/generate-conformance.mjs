@@ -97,6 +97,8 @@ function collectKnownTypeNames(manifest) {
     'HeaderFooterType',
     'ChangeTrackingVersion',
     'RemoveDocInfoType',
+    'CompareTarget',
+    'DocumentCompareOptions',
   ]);
 }
 

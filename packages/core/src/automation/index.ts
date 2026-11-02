@@ -125,9 +125,9 @@ export type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
 // `ServerAutomationHostOptions.compareDocuments` takes it.
 export type {
   CompareDocumentsEngine,
-  DocumentCompareErrorCode,
-  DocumentCompareOptions,
-  DocumentCompareResult,
+  CompareDocumentsErrorCode,
+  CompareDocumentsEngineOptions,
+  CompareDocumentsEngineResult,
 } from '../contracts/document-compare.ts';
 
 export {

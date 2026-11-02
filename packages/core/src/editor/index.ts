@@ -307,9 +307,9 @@ export {
   resolveEditorModules,
   type CollectReviewItems,
   type CompareDocumentsEngine,
-  type DocumentCompareErrorCode,
-  type DocumentCompareOptions,
-  type DocumentCompareResult,
+  type CompareDocumentsErrorCode,
+  type CompareDocumentsEngineOptions,
+  type CompareDocumentsEngineResult,
   type EditorModule,
   type EditorModuleRegistry,
   type ReviewModelInput,
@@ -676,6 +676,7 @@ export type {
   CompareDocumentsRefusal,
   CompareDocumentsRequest,
 } from '../contracts/compare-documents.ts';
+export { COMPARE_DOCUMENTS_ACCEPT } from '../contracts/compare-documents.ts';
 
 /** The watermark shape box that `setWatermark` writes, for previews. */
 export {

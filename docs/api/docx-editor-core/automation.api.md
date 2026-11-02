@@ -1830,7 +1830,43 @@ export function byteSizeBucket(bytes: number): ByteSizeBucket;
 export type CollaborationDiagnosticCode = `collab.${CollaborationFailureCode}`;
 
 // @public
-export type CompareDocumentsEngine = (original: OoxmlPackage, revised: Uint8Array, options: DocumentCompareOptions) => DocumentCompareResult;
+export type CompareDocumentsEngine = (original: OoxmlPackage, revised: Uint8Array, options: CompareDocumentsEngineOptions) => CompareDocumentsEngineResult;
+
+// @public
+export interface CompareDocumentsEngineOptions {
+    readonly authorName?: string;
+    readonly detectFormatChanges?: boolean;
+    readonly removeDateAndTime?: boolean;
+}
+
+// @public
+export type CompareDocumentsEngineResult = {
+    readonly ok: true;
+    readonly package: OoxmlPackage;
+    readonly revisionCount: number;
+} | {
+    readonly code: CompareDocumentsErrorCode;
+    readonly message: string;
+    readonly ok: false;
+};
+
+// @public
+export type CompareDocumentsErrorCode =
+/** The original document is not a readable DOCX package. */
+'invalid-original'
+/** The revised document is not a readable DOCX package. */
+| 'invalid-revised'
+/** The documents exceed the compare's size limits. */
+| 'too-large'
+/**
+* The original document enforces protection that the compare would break: read-only,
+* comments, or forms protection. Tracked-changes protection refuses too when the original
+* holds tracked changes, which a compare accepts, or when formatting detection is off, which
+* writes formatting differences untracked.
+*/
+| 'protected'
+/** The differences include content that no tracked change can record. */
+| 'unsupported-content';
 
 // @public
 export interface ContentLockPolicy {
@@ -1887,27 +1923,6 @@ export interface DiagnosticExplanation {
 
 // @public
 export type DiagnosticPayload<T> = T extends unknown ? Omit<T, 'schemaVersion' | 'editorSessionId' | 'time'> : never;
-
-// @public
-export type DocumentCompareErrorCode = 'invalid-original' | 'invalid-revised' | 'too-large' | 'unsupported-content';
-
-// @public
-export interface DocumentCompareOptions {
-    readonly authorName?: string;
-    readonly detectFormatChanges?: boolean;
-    readonly removeDateAndTime?: boolean;
-}
-
-// @public
-export type DocumentCompareResult = {
-    readonly ok: true;
-    readonly package: OoxmlPackage;
-    readonly revisionCount: number;
-} | {
-    readonly code: DocumentCompareErrorCode;
-    readonly message: string;
-    readonly ok: false;
-};
 
 // @public
 export type DocumentOpenDiagnosticCode = 'open.unsupported-source' | 'open.zip-corrupt' | 'open.zip-invalid-entry-name' | 'open.zip-entry-limit' | 'open.zip-size-limit' | 'open.zip-ratio-limit' | 'open.xml-malformed' | 'open.xml-dtd-forbidden' | 'open.xml-part-size-limit' | 'open.xml-depth-limit' | 'open.xml-element-limit' | 'open.invalid-limits' | 'open.content-types-invalid' | 'open.missing-main-document' | 'open.relationships-invalid' | 'open.relationship-limit' | 'open.part-limit' | 'open.failed';

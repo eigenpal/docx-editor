@@ -1,3 +1,11 @@
+/**
+ * The `accept` value for a file input that picks the revised document: DOCX files only.
+ *
+ * @public
+ */
+export const COMPARE_DOCUMENTS_ACCEPT =
+  '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
 /** What one compare request carries: the revised DOCX and its options. @public */
 export interface CompareDocumentsRequest {
   /** The revised document's DOCX bytes. The open document is the original. */
@@ -6,6 +14,8 @@ export interface CompareDocumentsRequest {
   readonly authorName?: string;
   /** Record formatting differences as formatting revisions. Default `true`. */
   readonly detectFormatChanges?: boolean;
+  /** Write the revisions without dates. Default `false`. */
+  readonly removeDateAndTime?: boolean;
 }
 
 /**
@@ -56,8 +66,8 @@ export interface CompareDocumentsDialogSession {
   canApply(): boolean;
   /**
    * Compare the open document with the revised DOCX and record the differences in it as
-   * tracked changes, as one undoable step. Closes the session on success. A refusal leaves it
-   * open with a message to show.
+   * tracked changes, as one undoable step. Closes the session when it records changes. With no
+   * differences (`revisionCount` 0) or a refusal, the session stays open with a message to show.
    */
   apply(request: CompareDocumentsRequest): Promise<CompareDocumentsOutcome>;
   /** Close without comparing. */

@@ -4,14 +4,11 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
-import type {
-  CompareDocumentsDialog,
-  CompareDocumentsDialogHost,
+import {
+  COMPARE_DOCUMENTS_ACCEPT,
+  type CompareDocumentsDialog,
+  type CompareDocumentsDialogHost,
 } from '@docx-editor.dev/core/editor';
-
-/** File types the revised-document picker offers. */
-export const COMPARE_DOCUMENTS_ACCEPT =
-  '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 let nextId = 0;
 
@@ -137,8 +134,9 @@ export function createCompareDocumentsDialog(
           authorName: author.value,
           detectFormatChanges: formatting.checked,
         });
-        if (outcome.ok || host.signal.aborted) return;
-        error.textContent = t(`errors.${outcome.reason}`);
+        if (host.signal.aborted) return;
+        // With no differences the dialog stays open and says so; nothing changed.
+        error.textContent = outcome.ok ? t('noDifferences') : t(`errors.${outcome.reason}`);
         setBusy(false);
       });
 
