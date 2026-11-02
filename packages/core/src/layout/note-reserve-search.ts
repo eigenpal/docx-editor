@@ -452,7 +452,11 @@ export function* searchFootnoteReserves(
     return Math.min(blocks.length, Math.ceil(((reached + 1) * (page + 2)) / pages.length) + 16);
   };
   let decided = startFloor;
-  function* round(reserves: Reserves, throughPage: number): LayoutSteps<ReserveWalkRound> {
+  function* round(
+    reserves: Reserves,
+    throughPage: number,
+    neededPage: number
+  ): LayoutSteps<ReserveWalkRound> {
     let limit = blockLimitThrough(throughPage + 1);
     for (;;) {
       const whole = limit >= blocks.length;
@@ -462,7 +466,8 @@ export function* searchFootnoteReserves(
       );
       reference = layout;
       if (whole) wholeReference = layout;
-      if (whole || layout.pages.length >= throughPage + 2) return { layout, whole };
+      // A round short of its target still serves when the walk can decide a page from it.
+      if (whole || layout.pages.length >= neededPage + 2) return { layout, whole };
       // Too few pages: grow by the pages still missing, as the blocks so far fill them. The
       // last page of a cut-short layout is partial, so it does not count.
       const filled = Math.max(1, layout.pages.length - 1);

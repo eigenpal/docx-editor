@@ -82,8 +82,16 @@ export interface ReserveWalkOptions {
     /** Previous page index from which pages hold unchanged content. */
     readonly unchangedFrom: number;
   };
-  /** Lay out with `reserves`, so that pages through `throughPage` are complete. */
-  readonly round: (reserves: Reserves, throughPage: number) => LayoutSteps<ReserveWalkRound>;
+  /**
+   * Lay out with `reserves`, so that pages through `throughPage` are complete. A round may
+   * stop short of that once pages through `neededPage` are complete: the walk decides the
+   * pages it can and asks for more.
+   */
+  readonly round: (
+    reserves: Reserves,
+    throughPage: number,
+    neededPage: number
+  ) => LayoutSteps<ReserveWalkRound>;
   readonly compute: (
     layout: SemanticLayout,
     used: Reserves,
@@ -216,7 +224,7 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
       exhausted = true;
       break;
     }
-    const round = yield* options.round(used, floor + span);
+    const round = yield* options.round(used, floor + span, floor + LOOKAHEAD_PAGES);
     last = round;
     lastUsed = used;
     const pages = round.layout.pages;
