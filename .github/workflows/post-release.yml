@@ -12,8 +12,9 @@ permissions:
 
 jobs:
   source:
-    # Never consume artifacts from a fork or a pull-request workflow.
-    if: github.event.workflow_run.head_repository.full_name == github.repository
+    # Never consume artifacts from a fork or a pull-request workflow. Scheduled Release
+    # runs only publish canaries, which have no post-release work.
+    if: github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.event != 'schedule'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
