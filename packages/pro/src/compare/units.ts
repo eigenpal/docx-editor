@@ -92,7 +92,11 @@ export const commentPlaceholder = (id: string) => `§CMT:${id}§`;
  * Candidate relationship-valued attributes. The serializer chooses its own prefixes, so the
  * prefix is checked against the relationships namespace before the value counts as an id.
  */
-const REL_ATTRIBUTE = /(\b([A-Za-z_][\w.-]*):(?:id|embed|link|pict|href|dm|lo|qs|cs)=")([^"]+)"/g;
+const REL_ATTRIBUTE =
+  /(\b([A-Za-z_][\w.-]*):(id|embed|link|pict|href|dm|lo|qs|cs|relid)=")([^"]+)"/g;
+
+/** VML image data names its relationship with `o:relid`, in the Office VML namespace. */
+const O_NS = 'urn:schemas-microsoft-com:office:office';
 /**
  * Revised-side relationship ids are written as `§REL:<revised owner part>|<id>§` and resolved
  * on assembly against the output part that holds the fragment.
@@ -181,24 +185,28 @@ export class SideContext {
 
   remap(xml: string): string {
     if (this.name === 'base') return xml;
-    return xml.replace(REL_ATTRIBUTE, (whole, lead: string, prefix: string, id: string) =>
-      this.#isRelationshipPrefix(prefix, xml)
-        ? `${lead}${REL_PLACEHOLDER}${this.partName}|${id}§"`
-        : whole
+    return xml.replace(
+      REL_ATTRIBUTE,
+      (whole, lead: string, prefix: string, name: string, id: string) =>
+        this.#isRelationshipPrefix(prefix, name, xml)
+          ? `${lead}${REL_PLACEHOLDER}${this.partName}|${id}§"`
+          : whole
     );
   }
 
   /** Key of a raw serialized fragment, with relationship ids resolved to their targets. */
   keyOf(raw: string): string {
-    return raw.replace(REL_ATTRIBUTE, (whole, lead: string, prefix: string, id: string) =>
-      this.#isRelationshipPrefix(prefix, raw) ? `${lead}${this.relKey(id)}"` : whole
+    return raw.replace(
+      REL_ATTRIBUTE,
+      (whole, lead: string, prefix: string, name: string, id: string) =>
+        this.#isRelationshipPrefix(prefix, name, raw) ? `${lead}${this.relKey(id)}"` : whole
     );
   }
 
   /** Whether `prefix` names the relationships namespace in `xml` or in the root scope. */
-  #isRelationshipPrefix(prefix: string, xml: string): boolean {
+  #isRelationshipPrefix(prefix: string, name: string, xml: string): boolean {
     const local = new RegExp(`\\sxmlns:${prefix}="([^"]*)"`).exec(xml);
-    return (local ? local[1] : this.scope.uriOf(prefix)) === R_NS;
+    return (local ? local[1] : this.scope.uriOf(prefix)) === (name === 'relid' ? O_NS : R_NS);
   }
 }
 

@@ -15,38 +15,45 @@ import { END_KEY, type Token } from './tokens.ts';
  * can: `a{- b} c` rather than `a {-b }c`. Insertions stay where the diff put them. Only text
  * tokens of characters slide.
  */
-export function slideLeft(input: readonly DiffOp[], a: readonly Token[]): DiffOp[] {
-  const ops = [...input];
+export function slideLeft(ops: readonly DiffOp[], a: readonly Token[]): DiffOp[] {
+  const out: DiffOp[] = [];
   let i = 0;
   while (i < ops.length) {
     if (ops[i]!.op !== 'del') {
+      out.push(ops[i]!);
       i++;
       continue;
     }
     let j = i;
     while (j < ops.length && ops[j]!.op === 'del') j++;
-    if (j < ops.length && ops[j]!.op !== 'eq') {
-      i = j;
+    const dels = ops.slice(i, j) as Extract<DiffOp, { op: 'del' }>[];
+    i = j;
+    // A run next to an insertion is a replacement and stays.
+    if ((j < ops.length && ops[j]!.op !== 'eq') || dels.some((op) => !plainText(a[op.a]!))) {
+      out.push(...dels);
       continue;
     }
-    while (i > 0 && ops[i - 1]!.op === 'eq') {
-      const before = ops[i - 1] as Extract<DiffOp, { op: 'eq' }>;
-      const dels = ops.slice(i, j) as Extract<DiffOp, { op: 'del' }>[];
-      const last = dels[dels.length - 1]!;
-      if (!plainText(a[before.a]!) || a[before.a]!.key !== a[last.a]!.key) break;
-      if (dels.some((op) => !plainText(a[op.a]!))) break;
-      // Shift the run one token left: the equal token takes the run's last position.
-      ops.splice(i - 1, j - i + 1, { op: 'del', a: before.a }, ...dels.slice(0, -1), {
-        op: 'eq',
-        a: last.a,
-        b: before.b,
-      });
-      i--;
-      j--;
+    // The run covers consecutive tokens, and so do the equal tokens before it: shifting by k
+    // needs each of the k tokens before the run to equal the token k places from its end.
+    const first = dels[0]!.a;
+    const last = dels[dels.length - 1]!.a;
+    let k = 0;
+    while (k < out.length) {
+      const before = out[out.length - 1 - k]!;
+      if (before.op !== 'eq' || before.a !== first - 1 - k) break;
+      const token = a[before.a]!;
+      if (!plainText(token) || token.key !== a[last - k]!.key) break;
+      k++;
     }
-    i = j;
+    if (k === 0) {
+      out.push(...dels);
+      continue;
+    }
+    const moved = out.splice(out.length - k, k) as Extract<DiffOp, { op: 'eq' }>[];
+    for (let n = first - k; n <= last - k; n++) out.push({ op: 'del', a: n });
+    moved.forEach((op, t) => out.push({ op: 'eq', a: last - k + 1 + t, b: op.b }));
   }
-  return ops;
+  return out;
 }
 
 /** Below this share of equal words, a hunk of several paragraphs is unrelated text. */

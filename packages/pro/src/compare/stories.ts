@@ -10,6 +10,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { relationshipsOf, type OoxmlPackage, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { notePlaceholder, type EmitContext, type NoteKind } from './emit.ts';
 import { compareContainer } from './story-compare.ts';
+import { partExists } from './package-assemble.ts';
 import { SideContext, unitsOf } from './units.ts';
 import {
   attributeOf,
@@ -59,6 +60,9 @@ function resolvePart(pkg: OoxmlPackage, owner: string, target: string): string {
   return name.startsWith('/') ? name : `/${name}`;
 }
 
+/** The header and footer reference types a section can hold. */
+const FURNITURE_TYPES = new Set(['default', 'first', 'even']);
+
 interface FurnitureRef {
   readonly kind: 'header' | 'footer';
   readonly type: string;
@@ -76,6 +80,8 @@ function furnitureRefs(
     if (ref.localName !== 'headerReference' && ref.localName !== 'footerReference') continue;
     const kind = ref.localName === 'headerReference' ? 'header' : 'footer';
     const type = attributeOf(ref, 'type') ?? 'default';
+    // Only the defined types take part; the value is file data that names a part.
+    if (!FURNITURE_TYPES.has(type)) continue;
     const rid = attributeOf(ref, 'id', R_NS);
     const rel = rels.find((record) => record.id === rid);
     if (!rel) continue;
@@ -140,7 +146,9 @@ export function compareFurniture(
       });
     } else {
       const ref = revised!;
-      const partName = `/word/compare-${ref.kind}-${ref.type}.xml`;
+      let partName = `/word/compare-${ref.kind}-${ref.type}.xml`;
+      for (let n = 2; partExists(basePkg, partName); n++)
+        partName = `/word/compare-${ref.kind}-${ref.type}-${n}.xml`;
       outputs.push({
         partName,
         contentType: ref.part.contentType,

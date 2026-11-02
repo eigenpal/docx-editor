@@ -66,6 +66,14 @@ function resolveTarget(owner: string, target: string): string {
   return name.startsWith('/') ? name : `/${name}`;
 }
 
+/** Related parts a copied part may reach through its own relationships, in a chain. */
+const MAX_COPY_DEPTH = 8;
+
+/** Whether `pkg` already holds a part with this name. */
+export function partExists(pkg: OoxmlPackage, name: string): boolean {
+  return pkg.parts.has(name) || pkg.partBytes.has(name) || pkg.partBytes.has(name.slice(1));
+}
+
 /** Target of `part` written relative to `owner`'s folder. */
 function relativeTarget(owner: string, part: string): string {
   const dir = owner.slice(0, owner.lastIndexOf('/') + 1);
@@ -127,6 +135,64 @@ export function assemblePackage(
   }
   const media = new Map<string, string>();
   let mediaCounter = 1;
+  /**
+   * Copies a revised part under a name the output does not use, with the parts its own
+   * relationships reach (a chart's workbook), and returns the new name.
+   */
+  const copyPart = (source: string, depth: number): string | { failure: string } => {
+    const known = media.get(source);
+    if (known) return known;
+    const bytes = revised.partBytes.get(source) ?? revised.partBytes.get(source.slice(1));
+    if (!bytes) return { failure: `The revised document refers to a missing part (${source}).` };
+    if (depth > MAX_COPY_DEPTH)
+      return { failure: 'The revised document nests related parts too deeply.' };
+    const extension = /\.[A-Za-z0-9]+$/.exec(source)?.[0] ?? '';
+    let copied: string;
+    do copied = `/word/media/compare${mediaCounter++}${extension}`;
+    while (partExists(pkg, copied));
+    media.set(source, copied);
+    pkg = withBinaryPart(
+      pkg,
+      copied,
+      bytes,
+      resolveContentTypeOf(revised, source) ?? 'application/octet-stream'
+    );
+    const own = [
+      ...relationshipsOf(revised, source).map((record) => ({
+        id: record.id,
+        type: record.type,
+        target: record.rawTarget,
+        external: record.targetMode === 'External',
+      })),
+      ...revised.externalTargets
+        .filter((record) => record.ownerPart === source)
+        .map((record) => ({
+          id: record.id,
+          type: record.type,
+          target: record.rawTarget,
+          external: true,
+        })),
+    ];
+    if (own.length === 0) return copied;
+    let entries = '';
+    for (const rel of own) {
+      let target = rel.target;
+      if (!rel.external) {
+        const inner = copyPart(resolveTarget(source, rel.target), depth + 1);
+        if (typeof inner !== 'string') return inner;
+        target = relativeTarget(copied, inner);
+      }
+      entries += `<Relationship Id="${escapeAttribute(rel.id)}" Type="${escapeAttribute(rel.type)}" Target="${escapeAttribute(target)}"${rel.external ? ' TargetMode="External"' : ''}/>`;
+    }
+    const relsName = relsPartNameFor(copied);
+    const rels = readOoxmlPart(`<Relationships xmlns="${RELS_NS}">${entries}</Relationships>`, {
+      name: relsName,
+      contentType: RELS_CONTENT_TYPE,
+    });
+    if (!rels.ok) return { failure: `A relationship part is not valid XML (${rels.reason}).` };
+    pkg = withPart(pkg, rels.part);
+    return copied;
+  };
   for (const story of stories) {
     const imported = new Map<string, string>();
     let failure: string | null = null;
@@ -146,23 +212,10 @@ export function assemblePackage(
       }
       let target = rel.target;
       if (!rel.external) {
-        const source = resolveTarget(revisedOwner, rel.target);
-        let copied = media.get(source);
-        if (!copied) {
-          const bytes = revised.partBytes.get(source) ?? revised.partBytes.get(source.slice(1));
-          if (!bytes) {
-            failure = `The revised document refers to a missing part (${source}).`;
-            return id;
-          }
-          const extension = /\.[A-Za-z0-9]+$/.exec(source)?.[0] ?? '';
-          copied = `/word/media/compare${mediaCounter++}${extension}`;
-          pkg = withBinaryPart(
-            pkg,
-            copied,
-            bytes,
-            resolveContentTypeOf(revised, source) ?? 'application/octet-stream'
-          );
-          media.set(source, copied);
+        const copied = copyPart(resolveTarget(revisedOwner, rel.target), 0);
+        if (typeof copied !== 'string') {
+          failure = copied.failure;
+          return id;
         }
         target = relativeTarget(story.partName, copied);
       }
