@@ -289,6 +289,14 @@ function emitHunk(
     const token = op.op === 'del' ? a[op.a]! : b[op.b]!;
     const mark = op.op;
     if (token.kind === 'text') {
+      // A simple field with field data keeps its shell, data included, when all of its result
+      // is accepted or rejected away: such a field's changes are not recorded.
+      const atoms = token.unit.atoms;
+      for (let k = token.from; k < token.to; k++)
+        if (atoms[k]!.wrappers.some((wrapper) => wrapper.start.includes(':fldData'))) {
+          ctx.state.untracked++;
+          break;
+        }
       for (let k = token.from; k < token.to; k++) {
         let atom = token.unit.atoms[k]!;
         if (atom.note && mark === 'del')

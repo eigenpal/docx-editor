@@ -139,6 +139,7 @@ const WRAPPER_PROPERTIES: Readonly<Record<string, ReadonlySet<string>>> = {
   sdt: new Set(['sdtPr', 'sdtEndPr']),
   smartTag: new Set(['smartTagPr']),
   customXml: new Set(['customXmlPr']),
+  fldSimple: new Set(['fldData']),
 };
 
 /**

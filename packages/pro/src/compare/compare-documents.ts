@@ -325,6 +325,11 @@ function acceptAll(pkg: OoxmlPackage): OoxmlPackage | null {
 }
 
 const BLOCKS = new Set(['p', 'tbl', 'tr', 'tc', 'sdt']);
+/**
+ * What one run costs against the text limit: its per-run state weighs about as much as a dozen
+ * characters, so many tiny runs cannot use more memory than plain text within the limit.
+ */
+const RUN_WEIGHT = 12;
 /** Run content that the compare keeps as one character-like atom each; it counts as text. */
 const OBJECT_ATOMS = new Set([
   'tab',
@@ -368,6 +373,7 @@ function countStory(node: ElementNode, size: { blocks: number; text: number }): 
     }
     if (BLOCKS.has(child.localName)) size.blocks++;
     else if (OBJECT_ATOMS.has(child.localName)) size.text++;
+    else if (child.localName === 'r') size.text += RUN_WEIGHT;
     pushAll(stack, child.children);
   }
 }

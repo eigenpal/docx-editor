@@ -153,3 +153,29 @@ test('smart tag and custom XML properties never land inside a revision', () => {
     expect(body).not.toMatch(/<w:(ins|del)\b[^>]*>\s*<w:(smartTagPr|customXmlPr)\b/);
   } else expect(result.code).toBe('unsupported-content');
 });
+
+test('field data never lands inside a revision', () => {
+  const field = (data: string, result: string) =>
+    `<w:p>${run('By ')}<w:fldSimple w:instr=" AUTHOR "><w:fldData>${data}</w:fldData>` +
+    `${run(result)}</w:fldSimple></w:p>`;
+  for (const [before, after] of [
+    [field('AAAA', 'Ann'), field('BBBB', 'Ann')],
+    [field('AAAA', 'Ann'), field('AAAA', 'Bob')],
+    [field('AAAA', 'Ann'), `<w:p>${run('By Ann')}</w:p>`],
+  ] as const) {
+    const result = compareDocuments(docx(before), docx(after), { authorName: 'Test', date: DATE });
+    if (!result.ok) {
+      expect(result.code).toBe('unsupported-content');
+      continue;
+    }
+    const body = strFromU8(unzipSync(result.bytes)['word/document.xml']!);
+    expect(body).not.toMatch(/<w:(ins|del)\b[^>]*>\s*<w:fldData\b/);
+    expect(body.match(/<w:fldData\b/g)?.length ?? 0).toBeLessThanOrEqual(1);
+  }
+});
+
+test('many tiny runs count against the size limit', () => {
+  const tabs = (count: number) => '<w:r><w:tab/></w:r>'.repeat(count);
+  const doc = (count: number, end: string) => docx(`<w:p>${tabs(count)}</w:p>${p(end)}`);
+  expect(refusal(doc(70_000, 'a'), doc(70_000, 'b'))).toBe('too-large');
+});
