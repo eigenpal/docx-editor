@@ -31,21 +31,25 @@ import { MC_NAMESPACE_URI, WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type { OoxmlAttribute, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 import { REVISION_ID_BEARING } from '../store/tree-op-revision-ids.ts';
 
+interface PairedRange {
+  readonly family: string;
+  readonly start: boolean;
+}
+
 /** The ranges whose start and end share one revision id, keyed by element local name. */
-const PAIRED_RANGES: ReadonlyMap<string, { readonly family: string; readonly start: boolean }> =
-  new Map(
-    [
-      'moveFrom',
-      'moveTo',
-      'customXmlIns',
-      'customXmlDel',
-      'customXmlMoveFrom',
-      'customXmlMoveTo',
-    ].flatMap((family) => [
-      [`${family}RangeStart`, { family, start: true }] as const,
-      [`${family}RangeEnd`, { family, start: false }] as const,
-    ])
-  );
+const PAIRED_RANGES: ReadonlyMap<string, PairedRange> = new Map(
+  [
+    'moveFrom',
+    'moveTo',
+    'customXmlIns',
+    'customXmlDel',
+    'customXmlMoveFrom',
+    'customXmlMoveTo',
+  ].flatMap((family): [string, PairedRange][] => [
+    [`${family}RangeStart`, { family, start: true }],
+    [`${family}RangeEnd`, { family, start: false }],
+  ])
+);
 
 const MIN_REVISION_ID = -MAX_DECIMAL_ID - 1;
 
