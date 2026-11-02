@@ -3,7 +3,13 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import { run } from './common.mjs';
 
-const REQUIRED = ['build', ...[1, 2, 3, 4].map((shard) => `collaboration (${shard}/4)`)];
+// Must match the `collaboration` matrix in ci.yml. catalog-merge.test.ts fails when they
+// drift, and a finished CI run without one of these checks fails here instead of waiting.
+export const COLLABORATION_SHARDS = ['1/2', '2/2'];
+export const REQUIRED = [
+  'build',
+  ...COLLABORATION_SHARDS.map((shard) => `collaboration (${shard})`),
+];
 
 export function catalogMergeState(pr, runs, version, repository) {
   if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Expected a stable version');
@@ -43,12 +49,10 @@ export function catalogMergeState(pr, runs, version, repository) {
     } else if (check.state === 'PENDING' || check.state === 'EXPECTED') pending = true;
     else if (check.state !== 'SUCCESS') throw new Error(`Check failed: ${check.context}`);
   }
-  if (
-    REQUIRED.some(
-      (name) => !checks.some((check) => check.name === name && check.conclusion === 'SUCCESS')
-    )
-  )
-    pending = true;
+  const missing = REQUIRED.filter(
+    (name) => !checks.some((check) => check.name === name && check.conclusion === 'SUCCESS')
+  );
+  if (missing.length) pending = true;
   // Jobs appear in stages. A green set of currently registered checks is not
   // enough: wait for the entire CI workflow at this exact PR head to finish.
   const ci = runs
@@ -61,7 +65,19 @@ export function catalogMergeState(pr, runs, version, repository) {
     .sort((a, b) => b.id - a.id)[0];
   if (!ci || ci.status !== 'completed') pending = true;
   else if (ci.conclusion !== 'success') throw new Error(`CI workflow failed: ${ci.conclusion}`);
+  // CI finished green, so a missing required check will never appear. Fail now with the
+  // name rather than wait out the deadline.
+  else if (missing.length && !checksRunning(checks))
+    throw new Error(`CI finished without required checks: ${missing.join(', ')}`);
   return pending ? 'pending' : 'ready';
+}
+
+function checksRunning(checks) {
+  return checks.some((check) =>
+    check.__typename === 'CheckRun'
+      ? check.status !== 'COMPLETED'
+      : check.state === 'PENDING' || check.state === 'EXPECTED'
+  );
 }
 
 async function main() {

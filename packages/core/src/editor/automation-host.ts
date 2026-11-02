@@ -283,6 +283,7 @@ function sessionPort(
         ? layoutProjectionOf(editor.surface.revisionDisplayMode())
         : DEFAULT_FORMATTING_DISPLAY_MODE,
     collaborative: () => !!editor.surface?.collaborationSession(),
+    setupOutsideUndo: () => true,
     allocationActor: () => editor.surface?.collaborationSession()?.identity.actorId,
     trackedRangeReplacement: () => !editor.surface?.collaborationSession(),
     replacementLanding: (paragraphId, start, end) =>

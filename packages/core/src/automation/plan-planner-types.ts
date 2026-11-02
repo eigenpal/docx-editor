@@ -11,6 +11,8 @@ import type { AutomationStoryId } from './stories.ts';
 
 export interface BatchPlannerHost {
   readonly collaborative?: boolean;
+  /** See `AutomationDocumentPort.setupOutsideUndo`. */
+  readonly setupOutsideUndo?: boolean;
   readonly trackedRangeReplacement?: boolean;
   readonly fieldPageContext?: (
     story: AutomationStoryId,

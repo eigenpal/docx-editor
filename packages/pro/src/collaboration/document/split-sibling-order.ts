@@ -209,7 +209,8 @@ export function splitSiblingRanks(
       first = at;
     }
     for (const block of blocks)
-      for (const item of block.items) if (!item.deleted) heads.push(headId(item));
+      for (const item of block.items)
+        if (!item.deleted) for (const id of item.content.getContent()) heads.push(id as LogicalId);
     const idsOf = (list: readonly Block[]): LogicalId[] =>
       list.flatMap((block) =>
         block.items
@@ -765,9 +766,9 @@ interface OrderEntry {
  * its text or its marks arrive, when an update waits for another one, so a listing that did
  * not change can still need another order: `takeChanged`, which a view calls once per build,
  * reads a run again when one of its paragraphs that held nothing to order by changed length,
- * or when a split character its order named arrived.
- * Every other read, such as each comparison of document order or each keystroke in a run
- * paragraph, uses the stored order.
+ * when a split character its order named arrived, or when the text or marks of a paragraph
+ * one of its runs read changed (`textChanged`). Every other read, such as each comparison of
+ * document order, uses the stored order.
  */
 export class SplitSiblingOrders {
   private readonly built = new WeakMap<readonly LogicalId[], OrderEntry>();
@@ -777,6 +778,10 @@ export class SplitSiblingOrders {
   private readonly grouped = new Set<LogicalId>();
   /** Parents whose child array changed, with the order they showed before. */
   private readonly recheck = new Map<LogicalId, readonly LogicalId[]>();
+  /** For each paragraph a concurrent run read, the parents whose stored order read it. */
+  private readonly readers = new Map<LogicalId, Set<LogicalId>>();
+  /** For each parent, the paragraphs its stored order read in concurrent runs. */
+  private readonly membersOf = new Map<LogicalId, readonly LogicalId[]>();
 
   constructor(
     /** A node's shared record. */
@@ -852,6 +857,35 @@ export class SplitSiblingOrders {
     if (!this.recheck.has(parentId)) this.recheck.set(parentId, known.shown);
   }
 
+  /**
+   * A paragraph's text, or the marks of its characters, changed. A run orders its members by
+   * the moved copies each one holds, and a peer's update can bring copies to a member that
+   * already held some, with no change to the listing. Each parent whose stored order read the
+   * paragraph is read again, and `takeChanged` reports it if it moved.
+   */
+  textChanged(paragraphId: LogicalId): void {
+    for (const parentId of this.readers.get(paragraphId) ?? []) this.forget(parentId);
+  }
+
+  /** Record which paragraphs a parent's stored order read, replacing what it read before. */
+  private noteMembers(parentId: LogicalId, members: readonly LogicalId[]): void {
+    for (const id of this.membersOf.get(parentId) ?? []) {
+      const parents = this.readers.get(id);
+      parents?.delete(parentId);
+      if (parents?.size === 0) this.readers.delete(id);
+    }
+    if (members.length === 0) {
+      this.membersOf.delete(parentId);
+      return;
+    }
+    this.membersOf.set(parentId, members);
+    for (const id of members) {
+      let parents = this.readers.get(id);
+      if (!parents) this.readers.set(id, (parents = new Set()));
+      parents.add(parentId);
+    }
+  }
+
   private lengthsKey(heads: readonly LogicalId[]): string {
     return heads.map((id) => this.textOf(id)?.length ?? -1).join(',');
   }
@@ -884,7 +918,10 @@ export class SplitSiblingOrders {
     const entry = { ranks, shown, waiting, lengths: this.lengthsKey(waiting), groups, missing };
     if (groups.length > 0) this.grouped.add(parentId);
     else this.grouped.delete(parentId);
-    if (listing) this.built.set(listing, entry);
+    if (listing) {
+      this.built.set(listing, entry);
+      this.noteMembers(parentId, heads);
+    }
     if ((waiting.length > 0 || missing.length > 0) && listing) this.withRuns.add(parentId);
     else this.withRuns.delete(parentId);
     return entry;
