@@ -4937,6 +4937,9 @@ export interface SetTextFormFieldDefaultOp {
 export function settingsPartOf(pkg: OoxmlPackage): OoxmlPart | null;
 
 // @public
+export const sha256Bytes: (bytes: Uint8Array) => string;
+
+// @public
 export interface ShapeColor {
     readonly alpha: number;
     readonly hex: string;

@@ -7,7 +7,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * Serializes compare output: runs, revision wrappers, and paragraph properties.
  */
 import { sectionRecord } from './section-record.ts';
-import { MARK, type Atom, type ParagraphUnit, type SideContext, type Wrapper } from './units.ts';
+import {
+  MARK,
+  placeholderValue,
+  type Atom,
+  type ParagraphUnit,
+  type SideContext,
+  type Wrapper,
+} from './units.ts';
 import {
   attributeOf,
   elementChildren,
@@ -54,7 +61,10 @@ export class CompareState {
 
 /** Placeholder for the id of a note added from the revised document. */
 export const notePlaceholder = (kind: NoteKind, revisedId: string) =>
-  `${MARK}NOTE:${kind}:${revisedId}§`;
+  `${MARK}NOTE:${kind}:${placeholderValue(revisedId)}§`;
+
+/** Every note placeholder: the kind and the encoded revised id. */
+export const NOTE_PLACEHOLDER = new RegExp(`${MARK}NOTE:(footnote|endnote):([^§"]+)§`, 'g');
 
 export class EmitContext {
   constructor(

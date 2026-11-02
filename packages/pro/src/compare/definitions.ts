@@ -284,9 +284,10 @@ function mergeNumbering(
       return ourDefinition === target;
     });
     // The original's group may hold more instances, but none the revised document groups apart.
+    const members = new Set(ids);
     const together =
       target !== undefined &&
-      (ourGroups.get(target) ?? []).every((id) => !theirs.nums.has(id) || ids.includes(id));
+      (ourGroups.get(target) ?? []).every((id) => !theirs.nums.has(id) || members.has(id));
     if (!keeps || !together || target === undefined) continue;
     for (const id of ids) kept.add(id);
     definitions.set(definition, target);

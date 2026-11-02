@@ -12,7 +12,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * field) it sits in, so the emitter can rebuild runs from either side.
  */
 import type { OoxmlNode, OoxmlPackage } from '@docx-editor.dev/core/store';
-import { relationshipsOf } from '@docx-editor.dev/core/store';
+import { relationshipsOf, serializeOoxmlPart, sha256Bytes } from '@docx-editor.dev/core/store';
 import { textBoxesOf, withBoxMarkers } from './text-boxes.ts';
 import { numberingMapOf, withMappedNumbering } from './definitions.ts';
 import {
@@ -98,7 +98,14 @@ export const MARK = `§${[...globalThis.crypto.getRandomValues(new Uint32Array(4
   .join('')}`;
 
 /** Id placeholder of a comment taken from the revised document. */
-export const commentPlaceholder = (id: string) => `${MARK}CMT:${id}§`;
+export const commentPlaceholder = (id: string) => `${MARK}CMT:${placeholderValue(id)}§`;
+
+/**
+ * A file-supplied value (an id or a part name) inside a placeholder, encoded so that it holds
+ * neither the terminator `§` nor the separators `|` and `"`. `fromPlaceholder` reverses it.
+ */
+export const placeholderValue = (value: string) => encodeURIComponent(value);
+export const fromPlaceholder = (value: string) => decodeURIComponent(value);
 
 /**
  * Candidate relationship-valued attributes. The serializer chooses its own prefixes, so the
@@ -190,8 +197,7 @@ export class SideContext {
     if (key === undefined) {
       const dir = this.partName.slice(0, this.partName.lastIndexOf('/') + 1);
       const target = rel.target.startsWith('/') ? rel.target : normalizePath(dir + rel.target);
-      const bytes = this.pkg.partBytes.get(target) ?? this.pkg.partBytes.get(target.slice(1));
-      key = `${rel.type}|${bytes ? fnv(bytes) : target}`;
+      key = `${rel.type}|${partIdentity(this.pkg, target, new Set())}`;
       this.#mediaKeys.set(id, key);
     }
     return key;
@@ -220,7 +226,7 @@ export class SideContext {
       REL_ATTRIBUTE,
       (whole, lead: string, prefix: string, name: string, id: string) =>
         this.#isRelationshipPrefix(prefix, name, declared)
-          ? `${lead}${REL_PLACEHOLDER}${this.partName}|${id}§"`
+          ? `${lead}${REL_PLACEHOLDER}${placeholderValue(this.partName)}|${placeholderValue(id)}§"`
           : whole
     );
   }
@@ -267,10 +273,46 @@ function normalizePath(path: string): string {
   return `/${out.join('/')}`;
 }
 
-function fnv(bytes: Uint8Array): string {
-  let hash = 0x811c9dc5;
-  for (const byte of bytes) hash = Math.imul(hash ^ byte, 0x01000193) >>> 0;
-  return `${bytes.length}:${hash.toString(16)}`;
+const identities = new WeakMap<OoxmlPackage, Map<string, string>>();
+const encoder = new TextEncoder();
+/** Parts one identity follows through relationships; a larger closure counts as different. */
+const MAX_CLOSURE = 256;
+
+/**
+ * Content identity of a part: a SHA-256 digest of its bytes (or of its XML, for parts the
+ * reader models) and of every part it reaches through its own relationships. Two images,
+ * charts, or embedded objects compare as equal only when all of that is equal.
+ */
+function partIdentity(pkg: OoxmlPackage, name: string, seen: Set<string>): string {
+  let cache = identities.get(pkg);
+  if (!cache) identities.set(pkg, (cache = new Map()));
+  const known = cache.get(name);
+  if (known !== undefined) return known;
+  if (seen.has(name)) return `cycle:${name}`;
+  // A closure past the bound is unique, so it never matches another.
+  if (seen.size >= MAX_CLOSURE) return `overflow:${pkg.mainDocumentPart}:${name}:${seen.size}`;
+  seen.add(name);
+  const part = pkg.parts.get(name);
+  const bytes =
+    pkg.partBytes.get(name) ??
+    pkg.partBytes.get(name.slice(1)) ??
+    (part ? encoder.encode(serializeOoxmlPart(part)) : undefined);
+  let identity = bytes ? sha256Bytes(bytes) : `missing:${name}`;
+  const dir = name.slice(0, name.lastIndexOf('/') + 1);
+  for (const rel of relationshipsOf(pkg, name)) {
+    const target =
+      rel.targetMode === 'External'
+        ? `external:${rel.rawTarget}`
+        : partIdentity(
+            pkg,
+            rel.rawTarget.startsWith('/') ? rel.rawTarget : normalizePath(dir + rel.rawTarget),
+            seen
+          );
+    identity += `|${rel.id}:${rel.type}:${target}`;
+  }
+  // Identities that depend on a cycle or the bound hold only for this walk.
+  if (!identity.includes('cycle:') && !identity.includes('overflow:')) cache.set(name, identity);
+  return identity;
 }
 
 /** Units of a block container (`w:body`, `w:tc`, `w:sdtContent`, ...). */
@@ -516,9 +558,17 @@ function pushObject(
     text: OBJECT_TEXT,
     xml,
     delXml,
-    // Note references align by position; their notes compare as stories of their own.
+    // Note references align by position; their notes compare as stories of their own. Every
+    // attribute but the id (a custom mark) takes part, so a changed one is recorded.
     key: noteKind
-      ? `noteRef:${noteKind}`
+      ? `noteRef:${noteKind}:${node.attributes
+          .filter((attribute) => attribute.localName !== 'id')
+          .map(
+            (attribute) =>
+              `${attribute.namespaceUri ?? ''}|${attribute.localName}=${attribute.value}`
+          )
+          .sort()
+          .join(' ')}`
       : boxes
         ? side.keyOf(side.raw(withBoxMarkers(node)))
         : side.keyOf(raw),

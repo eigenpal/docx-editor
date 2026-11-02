@@ -123,6 +123,7 @@ export {
   ooxmlTreesEqual,
 } from './ooxml-tree.ts';
 export { readOnOffChild, isContentRevisionKind, isRangeMarkerKind } from './ooxml-shared.ts';
+export { sha256FontBytes as sha256Bytes } from './sha256.ts';
 export {
   relationshipsOf,
   relsPartNameFor,

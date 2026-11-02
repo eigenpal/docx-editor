@@ -28,7 +28,8 @@ export type ComparePackagesResult =
       readonly revisionCount: number;
     }
   | Extract<CompareDocumentsResult, { ok: false }>;
-import { CompareState, EmitContext, notePlaceholder, sectPrXml, type NoteKind } from './emit.ts';
+import { CompareState, EmitContext, NOTE_PLACEHOLDER, sectPrXml, type NoteKind } from './emit.ts';
+import { fromPlaceholder } from './units.ts';
 import { assemblePackage } from './package-assemble.ts';
 import { mergeDefinitions } from './definitions.ts';
 import { mergeComments } from './comments.ts';
@@ -66,7 +67,17 @@ const MAX_BLOCKS = 100_000;
  */
 const MAX_TEXT_UNITS = 1_500_000;
 /** Roots of the parts a compare reads; a file's declared content type is not trusted. */
-const STORY_ROOTS = new Set(['document', 'hdr', 'ftr', 'footnotes', 'endnotes', 'comments']);
+// Definition parts count too: the list and style merges walk every definition and instance.
+const STORY_ROOTS = new Set([
+  'document',
+  'hdr',
+  'ftr',
+  'footnotes',
+  'endnotes',
+  'comments',
+  'numbering',
+  'styles',
+]);
 
 export function compareDocuments(
   original: Uint8Array,
@@ -257,9 +268,11 @@ function replaceNoteIds(
   ids: ReadonlyMap<string, string>
 ): void {
   if (ids.size === 0) return;
+  // One pass per story, whatever the number of notes.
   for (let i = 0; i < stories.length; i++) {
-    let xml = stories[i]!.xml;
-    for (const [revisedId, id] of ids) xml = xml.split(notePlaceholder(kind, revisedId)).join(id);
+    const xml = stories[i]!.xml.replace(NOTE_PLACEHOLDER, (whole, noteKind: string, id: string) =>
+      noteKind === kind ? (ids.get(fromPlaceholder(id)) ?? whole) : whole
+    );
     stories[i] = { ...stories[i]!, xml };
   }
 }
@@ -324,7 +337,7 @@ function acceptAll(pkg: OoxmlPackage): OoxmlPackage | null {
   return parts ? { ...pkg, parts } : pkg;
 }
 
-const BLOCKS = new Set(['p', 'tbl', 'tr', 'tc', 'sdt']);
+const BLOCKS = new Set(['p', 'tbl', 'tr', 'tc', 'sdt', 'num', 'abstractNum', 'style']);
 /**
  * What one run costs against the text limit: its per-run state weighs about as much as a dozen
  * characters, so many tiny runs cannot use more memory than plain text within the limit.

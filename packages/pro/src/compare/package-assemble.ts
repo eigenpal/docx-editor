@@ -22,7 +22,7 @@ import {
   type OoxmlPackage,
 } from '@docx-editor.dev/core/store';
 import type { StoryOutput } from './stories.ts';
-import { MARK, REL_PLACEHOLDER } from './units.ts';
+import { fromPlaceholder, MARK, REL_PLACEHOLDER } from './units.ts';
 import { escapeAttribute } from './xml-fragments.ts';
 
 const PLACEHOLDER = new RegExp(`${REL_PLACEHOLDER}([^§"|]+)\\|([^§"]+)§`, 'g');
@@ -221,7 +221,9 @@ export function assemblePackage(
     const imported = new Map<string, string>();
     let failure: string | null = null;
     let xml = story.xml.replace(NEW_PART, (_, partName: string) => newPartIds.get(partName) ?? '');
-    xml = xml.replace(PLACEHOLDER, (_, revisedOwner: string, id: string) => {
+    xml = xml.replace(PLACEHOLDER, (_, owner: string, encodedId: string) => {
+      const revisedOwner = fromPlaceholder(owner);
+      const id = fromPlaceholder(encodedId);
       const key = `${revisedOwner}|${id}`;
       const known = imported.get(key);
       if (known) return known;

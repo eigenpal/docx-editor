@@ -116,6 +116,9 @@ export function compareContainer(
  * A container's last paragraph mark can never be inserted or deleted, so a trailing hunk takes
  * in the matched paragraph before it and the two final marks are forced to match.
  */
+/** A field data element in a serialized simple field shell. */
+const FIELD_DATA = /<[A-Za-z_][\w.-]*:fldData[\s/>]/;
+
 /** The inline content controls around an atom, outermost first. */
 const controlsOf = (atom: Atom) =>
   atom.wrappers
@@ -293,7 +296,11 @@ function emitHunk(
       // is accepted or rejected away: such a field's changes are not recorded.
       const atoms = token.unit.atoms;
       for (let k = token.from; k < token.to; k++)
-        if (atoms[k]!.wrappers.some((wrapper) => wrapper.start.includes(':fldData'))) {
+        if (
+          atoms[k]!.wrappers.some(
+            (wrapper) => wrapper.key.startsWith('fldSimple|') && FIELD_DATA.test(wrapper.start)
+          )
+        ) {
           ctx.state.untracked++;
           break;
         }

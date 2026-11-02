@@ -14,7 +14,7 @@ import { storyXml } from './stories.ts';
 import { freeIds, referencedIds } from './free-ids.ts';
 
 const COMMENT_MARKERS = new Set(['commentRangeStart', 'commentRangeEnd', 'commentReference']);
-import { MARK, SideContext } from './units.ts';
+import { fromPlaceholder, MARK, SideContext } from './units.ts';
 import { attributeOf, elementChildren, NamespaceScope, type ElementNode } from './xml-fragments.ts';
 import { freePartName, relatedPart } from './related-parts.ts';
 
@@ -23,6 +23,15 @@ const COMMENTS_TYPE =
 const COMMENTS_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml';
 const PLACEHOLDER = new RegExp(`${MARK}CMT:([^§"]+)§`, 'g');
+
+/** The comment id a placeholder names, as the comments part's attribute reads it. */
+const commentId = (encoded: string) =>
+  fromPlaceholder(encoded)
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
 
 const commentsPart = (pkg: OoxmlPackage) => relatedPart(pkg, 'comments');
 
@@ -38,7 +47,7 @@ export function mergeComments(
 ): StoryOutput[] {
   const used = new Set<string>();
   for (const story of stories)
-    for (const match of story.xml.matchAll(PLACEHOLDER)) used.add(match[1]!);
+    for (const match of story.xml.matchAll(PLACEHOLDER)) used.add(commentId(match[1]!));
   if (used.size === 0) return [...stories];
   const basePart = commentsPart(base);
   const revisedPart = commentsPart(revised);
@@ -64,16 +73,16 @@ export function mergeComments(
           `<w:comment(?:RangeStart|RangeEnd)\\b[^>]*w:id="${MARK}CMT:([^§"]+)§"[^>]*/>`,
           'g'
         ),
-        (whole, id) => (ids.has(id) ? whole : '')
+        (whole, id: string) => (ids.has(commentId(id)) ? whole : '')
       )
       .replace(
         new RegExp(
           `<w:r>(?:(?!</w:r>).)*?<w:commentReference\\b[^>]*w:id="${MARK}CMT:([^§"]+)§"[^>]*/></w:r>`,
           'gs'
         ),
-        (whole, id) => (ids.has(id) ? whole : '')
+        (whole, id: string) => (ids.has(commentId(id)) ? whole : '')
       )
-      .replace(PLACEHOLDER, (_, id: string) => ids.get(id) ?? ''),
+      .replace(PLACEHOLDER, (_, id: string) => ids.get(commentId(id)) ?? ''),
   }));
   if (ids.size === 0) return rewritten;
 
