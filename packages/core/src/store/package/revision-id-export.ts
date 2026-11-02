@@ -33,8 +33,9 @@ import { MAX_DECIMAL_ID } from './actor-scoped-ids.ts';
 import { fnv1a32 } from './para-id.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { MC_NAMESPACE_URI, WML_NAMESPACE_URI } from './ooxml-shared.ts';
-import type { OoxmlAttribute, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
+import type { OoxmlAttribute, OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 import { REVISION_ID_BEARING } from '../store/tree-op-revision-ids.ts';
+import { blockScanSummary, PAIRED_RANGE_FAMILIES } from './block-scan-summary.ts';
 
 interface PairedRange {
   readonly family: string;
@@ -43,14 +44,7 @@ interface PairedRange {
 
 /** The ranges whose start and end share one revision id, keyed by element local name. */
 const PAIRED_RANGES: ReadonlyMap<string, PairedRange> = new Map(
-  [
-    'moveFrom',
-    'moveTo',
-    'customXmlIns',
-    'customXmlDel',
-    'customXmlMoveFrom',
-    'customXmlMoveTo',
-  ].flatMap((family): [string, PairedRange][] => [
+  PAIRED_RANGE_FAMILIES.flatMap((family): [string, PairedRange][] => [
     [`${family}RangeStart`, { family, start: true }],
     [`${family}RangeEnd`, { family, start: false }],
   ])
@@ -111,24 +105,29 @@ function revisionIdOf(node: OoxmlNode): string | undefined {
 }
 
 /**
- * The story `node` opens inside its part, or undefined when it opens none. Each note, comment
- * and text box is a story of its own, and the review pane never joins two stories into one
- * change. A note or comment is named by its own id; a text box by its place in the part, so
- * that every peer names it alike. `nextTextBox` counts the part's text boxes.
+ * What the walk does at a WML element, by local name: claim its id, close a range, or enter a
+ * story. Each note, comment and text box is a story of its own, and the review pane never joins
+ * two stories into one change. A note or comment is named by its own id; a text box by its place
+ * in the part, so that every peer names it alike.
  */
-function storyOf(node: OoxmlNode, nextTextBox: () => number): string | undefined {
-  if (node.kind === 'textValue' || node.namespaceUri !== WML_NAMESPACE_URI) return undefined;
-  switch (node.localName) {
-    case 'footnote':
-    case 'endnote':
-    case 'comment':
-      return `${node.localName}:${wmlAttributeOf(node, 'id') ?? ''}`;
-    case 'txbxContent':
-      return `txbx:${nextTextBox()}`;
-    default:
-      return undefined;
-  }
-}
+type WmlRole = 'single' | 'note' | 'textBox' | PairedRange;
+
+const WML_ROLES: ReadonlyMap<string, WmlRole> = new Map<string, WmlRole>([
+  ...[...REVISION_ID_BEARING].map((name): [string, WmlRole] => [name, 'single']),
+  ...PAIRED_RANGES,
+  ['footnote', 'note'],
+  ['endnote', 'note'],
+  ['comment', 'note'],
+  ['txbxContent', 'textBox'],
+]);
+
+/**
+ * Tables and part roots that hold no revision id, with the text boxes they hold; a paragraph
+ * or row answers through `blockScanSummary`.
+ * The tree is immutable, so a later save skips them while the text boxes after them keep their
+ * numbers. A save after an edit then walks only what the edit replaced.
+ */
+const quietSubtrees = new WeakMap<OoxmlNode, number>();
 
 /** WML parts in the order the pass gives out ids: the main document, then by name. */
 function partsInOrder(pkg: OoxmlPackage): OoxmlPart[] {
@@ -158,10 +157,20 @@ class RevisionIdScan {
   private readonly changes = new Map<string, Conflict | null>();
   /** Conflicts seen so far per authored id, for each conflict's seed. */
   private readonly repeats = new Map<string, number>();
-  /** The story the walk is in, inside its part; see `storyOf`. */
+  /** The story the walk is in, inside its part; see `WmlRole`. */
   private story = '';
   /** Range starts seen so far, so that each range is a change of its own. */
   private ranges = 0;
+  /** Revision ids met so far, so a subtree that met none is known to be quiet. */
+  private events = 0;
+  /** Text boxes met so far in the part being walked. */
+  private textBoxes = 0;
+  private partName = '';
+  /**
+   * Open range starts by family and authored id, newest last, so an end closes the start it
+   * nests in. Ranges do not cross parts.
+   */
+  private open = new Map<string, (Conflict | null)[]>();
 
   /**
    * The conflict of the change `node` belongs to, or null when the change keeps its id.
@@ -173,6 +182,7 @@ class RevisionIdScan {
     value: string,
     annotation = ''
   ): Conflict | null {
+    this.events += 1;
     const parsed = parseRevisionId(value);
     const element = node as { readonly attributes: readonly OoxmlAttribute[] };
     const change = [
@@ -202,78 +212,120 @@ class RevisionIdScan {
   }
 
   scanPart(part: OoxmlPart): void {
-    // Open range starts by family and authored id, newest last, so an end closes the start
-    // it nests in. Ranges do not cross parts.
-    const open = new Map<string, (Conflict | null)[]>();
-    let textBoxes = 0;
-    const visit = (node: OoxmlNode): void => {
-      if (node.kind === 'textValue') return;
-      const story = storyOf(node, () => (textBoxes += 1));
-      if (story !== undefined) {
-        const outer = this.story;
-        this.story = story;
-        for (const child of node.children) visit(child);
-        this.story = outer;
-        return;
-      }
-      if (node.namespaceUri === WML_NAMESPACE_URI) {
-        if (REVISION_ID_BEARING.has(node.localName)) {
-          this.single(part.name, node);
-        } else {
-          const range = PAIRED_RANGES.get(node.localName);
-          if (range) this.range(part.name, node, range.family, range.start, open);
-        }
-      } else if (node.namespaceUri === MC_NAMESPACE_URI && node.localName === 'Fallback') {
-        // A fallback holds a second copy of the content its choice holds, ids included; only
-        // one of the two is read, and save re-syncs a text box fallback from its choice. Its
-        // ids are not rewritten, but no new id may take one of them.
-        this.reserve(node);
-        return;
-      }
-      for (const child of node.children) visit(child);
-    };
+    this.partName = part.name;
     this.story = '';
-    visit(part.root);
+    this.textBoxes = 0;
+    this.open = new Map();
+    this.visit(part.root, part.root);
+  }
+
+  private visit(node: Exclude<OoxmlNode, { kind: 'textValue' }>, root: OoxmlNode): void {
+    if (node.kind === 'paragraph' || node.kind === 'tableRow') {
+      // Shared with the text box pass, which walks the same blocks next.
+      const summary = blockScanSummary(node);
+      if (!summary.revisionIds) {
+        this.textBoxes += summary.textBoxes;
+        return;
+      }
+      if (summary.revisionElements) {
+        // One story, nothing to skip: read the elements the summary found, in order.
+        for (const element of summary.revisionElements) this.element(element);
+        return;
+      }
+    }
+    const memoized = node.kind === 'table' || node === root;
+    if (memoized) {
+      const quiet = quietSubtrees.get(node);
+      if (quiet !== undefined) {
+        this.textBoxes += quiet;
+        return;
+      }
+    }
+    const events = this.events;
+    const textBoxes = this.textBoxes;
+    let outer: string | undefined;
+    if (node.namespaceUri === WML_NAMESPACE_URI) {
+      const role = WML_ROLES.get(node.localName);
+      if (role === 'single') this.single(node);
+      else if (role !== undefined && typeof role !== 'string') {
+        this.range(node, role.family, role.start);
+      } else if (role === 'note') {
+        outer = this.story;
+        this.story = `${node.localName}:${wmlAttributeOf(node, 'id') ?? ''}`;
+      } else if (role === 'textBox') {
+        outer = this.story;
+        this.textBoxes += 1;
+        this.story = `txbx:${this.textBoxes}`;
+      }
+    } else if (node.namespaceUri === MC_NAMESPACE_URI && node.localName === 'Fallback') {
+      // A fallback holds a second copy of the content its choice holds, ids included; only
+      // one of the two is read, and save re-syncs a text box fallback from its choice. Its
+      // ids are not rewritten, but no new id may take one of them.
+      this.events += 1;
+      this.reserve(node);
+      return;
+    }
+    const children = node.children;
+    for (let index = 0; index < children.length; index += 1) {
+      const child = children[index]!;
+      if (child.kind === 'textValue') continue;
+      // Most elements are leaves (`w:b`, `w:sz`): one without a role holds nothing to read.
+      if (
+        child.children.length === 0 &&
+        !(child.namespaceUri === WML_NAMESPACE_URI && WML_ROLES.has(child.localName))
+      ) {
+        continue;
+      }
+      this.visit(child, root);
+    }
+    if (outer !== undefined) this.story = outer;
+    if (memoized && this.events === events) {
+      quietSubtrees.set(node, this.textBoxes - textBoxes);
+    }
+  }
+
+  /** Claims the id of one revision id element: a single one, or a range start or end. */
+  private element(node: OoxmlElement): void {
+    const role = WML_ROLES.get(node.localName);
+    if (role === 'single') this.single(node);
+    else if (role !== undefined && typeof role !== 'string') {
+      this.range(node, role.family, role.start);
+    }
   }
 
   /** Marks every revision id under `node` as used, without claiming or rewriting any. */
   private reserve(node: OoxmlNode): void {
     if (node.kind === 'textValue') return;
-    if (
-      node.namespaceUri === WML_NAMESPACE_URI &&
-      (REVISION_ID_BEARING.has(node.localName) || PAIRED_RANGES.has(node.localName))
-    ) {
-      const value = revisionIdOf(node);
-      const parsed = value === undefined ? null : parseRevisionId(value);
-      if (parsed !== null) this.used.add(parsed);
+    if (node.namespaceUri === WML_NAMESPACE_URI) {
+      const role = WML_ROLES.get(node.localName);
+      if (role !== undefined && role !== 'note' && role !== 'textBox') {
+        const value = revisionIdOf(node);
+        const parsed = value === undefined ? null : parseRevisionId(value);
+        if (parsed !== null) this.used.add(parsed);
+      }
     }
     for (const child of node.children) this.reserve(child);
   }
 
-  private single(partName: string, node: OoxmlNode): void {
+  private single(node: OoxmlNode): void {
     const value = revisionIdOf(node);
-    if (value !== undefined) this.claim(partName, node, value);
+    if (value !== undefined) this.claim(this.partName, node, value);
   }
 
-  private range(
-    partName: string,
-    node: OoxmlNode,
-    family: string,
-    start: boolean,
-    open: Map<string, (Conflict | null)[]>
-  ): void {
+  private range(node: OoxmlNode, family: string, start: boolean): void {
     const value = revisionIdOf(node);
     if (value === undefined) return;
+    this.events += 1;
     const key = `${family}\u0000${value}`;
     if (start) {
       // A range is never a piece of a split change: two ranges on one id are two annotations.
-      const conflict = this.claim(partName, node, value, `range:${(this.ranges += 1)}`);
-      const stack = open.get(key);
+      const conflict = this.claim(this.partName, node, value, `range:${(this.ranges += 1)}`);
+      const stack = this.open.get(key);
       if (stack) stack.push(conflict);
-      else open.set(key, [conflict]);
+      else this.open.set(key, [conflict]);
       return;
     }
-    const stack = open.get(key);
+    const stack = this.open.get(key);
     if (stack && stack.length > 0) {
       // The end takes whatever id its start ends up with.
       const conflict = stack.pop();
@@ -281,7 +333,7 @@ class RevisionIdScan {
       return;
     }
     // An end with no start is an annotation of its own.
-    this.single(partName, node);
+    this.single(node);
   }
 
   /** New ids for every conflict, in the order they were found. */

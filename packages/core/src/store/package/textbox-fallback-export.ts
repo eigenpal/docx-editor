@@ -13,6 +13,7 @@
 // The decision reads canonical content only, never peer-local state, so every participant in a
 // collaboration session saves the same bytes for the same document.
 
+import { blockScanSummary } from './block-scan-summary.ts';
 import { runWithoutJournalCapture } from './canonical-primitive-capture.ts';
 import { resolveRunLevelMcAtom } from './drawing-projection.ts';
 import {
@@ -109,30 +110,14 @@ function cloneWithFreshIds(node: OoxmlNode, nextId: () => string): OoxmlNode {
 }
 
 /**
- * Node counts of paragraphs and table rows that hold no `mc:AlternateContent`, by identity.
- *
- * Trees are immutable, so a block found clean stays clean. A save after an edit then walks
- * only the blocks the edit rebuilt. The count is what walking the block would have cost, so
- * the scan budget runs out on the same documents it did before.
+ * The node count of a block that holds no `mc:AlternateContent`, or null when it holds a text
+ * box wrapper. The count is what walking the block would have cost, so the scan budget runs
+ * out on the same documents it did before. The walk is shared with the revision id pass and
+ * kept by block identity, so a save after an edit walks only the blocks the edit rebuilt.
  */
-const alternateContentFreeSizes = new WeakMap<OoxmlElement, number>();
-
-/** The node count of a clean block, or null when it holds a text box wrapper. */
 function alternateContentFreeSize(block: OoxmlElement): number | null {
-  const known = alternateContentFreeSizes.get(block);
-  if (known !== undefined) return known;
-  let size = 0;
-  const stack: OoxmlNode[] = [block];
-  while (stack.length > 0) {
-    const node = stack.pop()!;
-    size += 1;
-    if (size > MAX_SCANNED_NODES) return size;
-    if (node.kind === 'textValue') continue;
-    if (isMcAlternateContent(node)) return null;
-    for (const child of node.children) stack.push(child);
-  }
-  alternateContentFreeSizes.set(block, size);
-  return size;
+  const summary = blockScanSummary(block);
+  return summary.alternateContent ? null : summary.size;
 }
 
 /**
