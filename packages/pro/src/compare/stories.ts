@@ -11,7 +11,7 @@ import { relationshipsOf, type OoxmlPackage, type OoxmlPart } from '@docx-editor
 import { notePlaceholder, type EmitContext, type NoteKind } from './emit.ts';
 import { compareContainer } from './story-compare.ts';
 import { partExists } from './package-assemble.ts';
-import { freeIds } from './free-ids.ts';
+import { freeIds, referencedIds } from './free-ids.ts';
 import { MARK, SideContext, unitsOf } from './units.ts';
 import {
   attributeOf,
@@ -261,7 +261,10 @@ export function compareNotes(
         if (type && NOTE_SEPARATORS.has(type)) out += revisedSide.serialize(note);
       }
     }
-    const nextId = freeIds(baseNotes.keys());
+    const nextId = freeIds([
+      ...baseNotes.keys(),
+      ...referencedIds(basePkg, new Set([`${kind}Reference`]), 'id'),
+    ]);
     for (const revisedId of added) {
       const note = revisedNotes.get(revisedId);
       if (!note || ids.has(revisedId)) continue;

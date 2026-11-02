@@ -438,6 +438,8 @@ export function revisionStructuralReach(
     const target = tableRevisionContentTarget(part, site, action);
     if (target) reach.set(target.id, true);
   }
+  // Child positions per container, built once: one lookup per resolved mark, not one scan.
+  const positions = new Map<string, Map<string, number>>();
   for (const site of matched) {
     if (
       !site.paragraphMark ||
@@ -451,14 +453,17 @@ export function revisionStructuralReach(
     const id = paragraphOwning(part, site.node.id);
     const container = id && parentNodeOf(part, id);
     if (!container) continue;
-    const at = container.children.findIndex((n) => n.id === id);
-    const next = container.children
-      .slice(at + 1)
-      .find(
-        (n) =>
-          !removed.has(n.id) &&
-          (n.kind === 'paragraph' || n.kind === 'table' || n.kind === 'contentControl')
-      );
+    let index = positions.get(container.id);
+    if (!index) {
+      index = new Map(container.children.map((n, i) => [n.id, i]));
+      positions.set(container.id, index);
+    }
+    let next: OoxmlNode | undefined;
+    for (let i = (index.get(id) ?? -1) + 1; i < container.children.length && !next; i++) {
+      const n = container.children[i]!;
+      const block = n.kind === 'paragraph' || n.kind === 'table' || n.kind === 'contentControl';
+      if (block && !removed.has(n.id)) next = n;
+    }
     if (next) {
       const target = tableParagraphMergeTarget(next, removed);
       if (target) reach.set(target.id, false);

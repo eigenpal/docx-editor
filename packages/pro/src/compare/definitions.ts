@@ -14,7 +14,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import { serializeOoxmlPart, type OoxmlPackage, type OoxmlPart } from '@docx-editor.dev/core/store';
 import type { StoryOutput } from './stories.ts';
-import { freeIds } from './free-ids.ts';
+import { freeIds, referencedIds } from './free-ids.ts';
 import { attributeOf, childNamed, elementChildren, type ElementNode } from './xml-fragments.ts';
 
 const REL_BASE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -102,23 +102,8 @@ function newPart(pkg: OoxmlPackage, xml: string, source: OoxmlPart, kind: string
 
 const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const LIST_REFERENCES = new Set(['numId']);
+const DEFINITION_REFERENCES = new Set(['abstractNumId']);
 const STYLE_REFERENCES = new Set(['pStyle', 'rStyle', 'tblStyle', 'basedOn', 'next', 'link']);
-
-/** The `w:val` of every element named one of `names` in any part of `pkg`, defined or not. */
-function referencedIds(pkg: OoxmlPackage, names: ReadonlySet<string>): Set<string> {
-  const ids = new Set<string>();
-  for (const part of pkg.parts.values()) {
-    const stack: ElementNode[] = [part.root as ElementNode];
-    for (let node = stack.pop(); node; node = stack.pop()) {
-      if (names.has(node.localName) && node.namespaceUri === W_NS) {
-        const value = attributeOf(node, 'val');
-        if (value !== undefined) ids.add(value);
-      }
-      for (const child of elementChildren(node)) stack.push(child);
-    }
-  }
-  return ids;
-}
 
 function mergeStyles(
   base: OoxmlPackage,
@@ -308,7 +293,11 @@ function mergeNumbering(
     for (const id of ids) kept.add(id);
     definitions.set(definition, target);
   }
-  const nextAbstract = freeIds(ours.abstracts.keys());
+  // Like list ids: an instance in the original may name a definition it does not hold.
+  const nextAbstract = freeIds([
+    ...ours.abstracts.keys(),
+    ...referencedIds(base, DEFINITION_REFERENCES),
+  ]);
   // A new id never takes one the original names without defining it: those paragraphs number
   // nothing and must keep numbering nothing.
   const nextNum = freeIds([

@@ -11,7 +11,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { relationshipsOf, type OoxmlPackage, type OoxmlPart } from '@docx-editor.dev/core/store';
 import type { StoryOutput } from './stories.ts';
 import { storyXml } from './stories.ts';
-import { freeIds } from './free-ids.ts';
+import { freeIds, referencedIds } from './free-ids.ts';
+
+const COMMENT_MARKERS = new Set(['commentRangeStart', 'commentRangeEnd', 'commentReference']);
 import { MARK, SideContext } from './units.ts';
 import { attributeOf, elementChildren, NamespaceScope, type ElementNode } from './xml-fragments.ts';
 
@@ -58,7 +60,7 @@ export function mergeComments(
     const id = attributeOf(child, 'id');
     if (id !== undefined) baseIds.push(id);
   }
-  const nextId = freeIds(baseIds, 0);
+  const nextId = freeIds([...baseIds, ...referencedIds(base, COMMENT_MARKERS, 'id')], 0);
   const ids = new Map<string, string>();
   for (const id of revisedComments.keys()) ids.set(id, nextId());
   const rewritten = stories.map((story) => ({

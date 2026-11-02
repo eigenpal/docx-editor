@@ -136,3 +136,61 @@ test('an original list reference with no original definition keeps numbering not
   )![0];
   expect(paragraph).toMatch(/<w:pPrChange\b[\s\S]*<w:numId w:val="1"\/>/);
 });
+
+test('new notes, comments, and list definitions avoid ids the original names but lacks', () => {
+  const note = (text: string, id: number) =>
+    `<w:p>${r(text)}<w:r><w:footnoteReference w:id="${id}"/></w:r></w:p>`;
+  const noteOut = files(
+    buildDocx({ body: note('Alpha', 1) + note('Dangling', 2), footnotes: { 1: p('one') } }),
+    buildDocx({
+      body: note('Alpha', 1) + note('Dangling', 2) + note('New', 3),
+      footnotes: { 1: p('one'), 3: p('revised note') },
+    })
+  );
+  const noteIds = [...noteOut['word/footnotes.xml']!.matchAll(/<w:footnote\b[^>]*w:id="(\d+)"/g)];
+  expect(noteIds.map((match) => match[1])).not.toContain('2');
+
+  const dangling =
+    `<w:p><w:commentRangeStart w:id="0"/>${r('Kept')}<w:commentRangeEnd w:id="0"/>` +
+    '<w:r><w:commentReference w:id="0"/></w:r></w:p>';
+  const commentOut = files(
+    buildDocx({ body: dangling + p('tail') }),
+    buildDocx({
+      body: p('Kept') + commented(5, 'tail'),
+      comments: [{ id: 5, author: 'R', text: 'revised comment' }],
+    })
+  );
+  expect(commentIds(commentOut['word/comments.xml']!)).not.toContain('0');
+
+  // The original's list 2 names definition 1, which it does not hold.
+  const orphan = '<w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>';
+  const listOut = files(
+    buildDocx({
+      body: p('orphan item', listPr(2)) + p('tail'),
+      numbering: numbering.replace('</w:numbering>', `${orphan}</w:numbering>`),
+    }),
+    buildDocx({
+      body: p('orphan item') + p('new item', listPr(1)),
+      numbering: numbering.replace('decimal', 'upperRoman'),
+    })
+  );
+  const definitions = [
+    ...listOut['word/numbering.xml']!.matchAll(/<w:abstractNum\b[^>]*w:abstractNumId="(\d+)"/g),
+  ].map((match) => match[1]);
+  expect(definitions).not.toContain('1');
+});
+
+test('many deleted paragraphs compare in linear time, and the limit counts every story', () => {
+  const started = performance.now();
+  const many = buildDocx({ body: p('a').repeat(30_000) });
+  expect(compare(many, buildDocx({ body: p('a') })).ok).toBe(true);
+  expect(performance.now() - started).toBeLessThan(15_000);
+  // The bound counts notes too, and refuses before any revision is accepted.
+  const notes: Record<number, string> = {};
+  for (let id = 1; id <= 60_000; id++) notes[id] = '';
+  const result = compare(
+    buildDocx({ body: p('x'), footnotes: notes }),
+    buildDocx({ body: p('y'), footnotes: notes })
+  );
+  expect(result.ok ? '' : result.code).toBe('too-large');
+});

@@ -47,7 +47,20 @@ import {
 import { pushAll } from './arrays.ts';
 
 /** Inputs larger than this many blocks (paragraphs, tables, rows, cells) are refused. */
-const MAX_BLOCKS = 200_000;
+/**
+ * Blocks over both documents' story parts. Cost is linear in blocks, at about a fifth of a
+ * millisecond each, so the bound keeps the worst case near ten seconds; a 500-page document
+ * holds some thirteen thousand.
+ */
+const MAX_BLOCKS = 100_000;
+const STORY_PARTS = [
+  'document.main+xml',
+  '.header+xml',
+  '.footer+xml',
+  '.footnotes+xml',
+  '.endnotes+xml',
+  '.comments+xml',
+];
 
 export function compareDocuments(
   original: Uint8Array,
@@ -91,6 +104,10 @@ export function comparePackages(
         'The original document is protected against edits. A compare would rewrite its content or its tracked changes.',
     };
   }
+  // Before any work that scales with the documents, accepting their revisions included.
+  if (storyBlocks(original) + storyBlocks(revised) > MAX_BLOCKS) {
+    return { ok: false, code: 'too-large', message: 'The documents are too large to compare.' };
+  }
   const basePkg = acceptAll(original);
   const revisedPkg = acceptAll(revised);
   if (!basePkg) return unacceptable('original');
@@ -112,9 +129,6 @@ export function comparePackages(
       code: 'invalid-revised',
       message: 'The revised document has no main story.',
     };
-  }
-  if (countBlocks(baseBody) + countBlocks(revisedBody) > MAX_BLOCKS) {
-    return { ok: false, code: 'too-large', message: 'The documents are too large to compare.' };
   }
 
   // Before any revised content is serialized: it registers the revised list id map.
@@ -285,6 +299,16 @@ function acceptAll(pkg: OoxmlPackage): OoxmlPackage | null {
 }
 
 const BLOCKS = new Set(['p', 'tbl', 'tr', 'tc', 'sdt']);
+
+/** Blocks in every story part of `pkg`, so no part escapes the bound. */
+function storyBlocks(pkg: OoxmlPackage): number {
+  let count = 0;
+  for (const part of pkg.parts.values()) {
+    if (STORY_PARTS.some((suffix) => part.contentType.endsWith(suffix)))
+      count += countBlocks(part.root as ElementNode);
+  }
+  return count;
+}
 
 /** Paragraphs, tables, rows, cells, and content controls under `node`; properties do not count. */
 function countBlocks(node: ElementNode): number {
