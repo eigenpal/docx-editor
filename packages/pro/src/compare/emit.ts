@@ -140,8 +140,11 @@ function withFieldForms(items: readonly Item[]): Item[] {
     const wrapper = item.atom.wrappers[depth]!;
     let j = i + 1;
     while (j < items.length && items[j]!.atom.wrappers[depth] === wrapper) j++;
+    // Equal content of a link keeps the revised side's wrapper, so the original's wrapper
+    // around deleted items can look whole while part of the link stays: count its atoms.
     const whole =
       (i === 0 || items[i - 1]!.atom.wrappers[depth] !== wrapper) &&
+      j - i === wrapper.atomCount &&
       items.slice(i, j).every((other) => other.mark === item.mark);
     if (!whole) {
       out.push(...items.slice(i, j));

@@ -34,6 +34,22 @@ function mainXml(bytes: Uint8Array, op?: 'acceptAllRevisions' | 'rejectAllRevisi
 
 const link = (text: string) => `<w:hyperlink w:anchor="terms">${run(text)}</w:hyperlink>`;
 
+test('a link that keeps part of its text stays a link, with no field for its deleted words', () => {
+  const linked = (words: string[]) =>
+    docx(para(`<w:hyperlink w:anchor="terms">${words.map(run).join('')}</w:hyperlink>`));
+  const out = compared(
+    linked(['of ', 'DOCX ', 'support ', 'in ', 'calibre']),
+    linked(['Demonstration ', 'standard ', 'internal ', 'record ', 'calibre'])
+  );
+  const xml = mainXml(out);
+  // A field for each deleted piece nests fields inside a table of contents entry, and the
+  // file becomes unreadable.
+  expect(xml).not.toContain('HYPERLINK');
+  expect(xml).not.toContain('fldChar');
+  expect(mainXml(out, 'acceptAllRevisions')).toContain('Demonstration');
+  expect(mainXml(out, 'rejectAllRevisions')).toContain('DOCX');
+});
+
 test('an added link is a hyperlink field inside the insertion, so reject leaves no link', () => {
   const plain = docx(para(`${run('See ')}${run('the terms')}${run(' now.')}`));
   const linked = docx(para(`${run('See ')}${link('the terms')}${run(' now.')}`));

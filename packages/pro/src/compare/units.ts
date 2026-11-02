@@ -47,6 +47,11 @@ export interface Wrapper {
    * revision. A shell left outside the revision would stay, empty, after accept or reject.
    */
   readonly field?: string;
+  /**
+   * How many atoms this wrapper holds in its paragraph, set once its content is read. Only a
+   * run of items that covers all of them is the whole wrapper.
+   */
+  atomCount?: number;
 }
 
 /** A complex field (`w:fldChar` begin to end) that atoms sit in; `instr` grows as it is read. */
@@ -529,6 +534,7 @@ function walkInline(
         ...(state.fields ? { fields: state.fields } : {}),
       });
     }
+    wrapper.atomCount = state.atoms.length - before;
     return;
   }
   // Anything else inline (math, unknown extensions) is one object atom with no run properties,
