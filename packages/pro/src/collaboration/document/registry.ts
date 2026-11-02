@@ -169,7 +169,8 @@ export class DocumentRegistry {
           },
           a,
           b
-        )
+        ),
+      (id) => this.splitSiblings.textChanged(id)
     );
     this.adoption = new AdoptionIndex(this.schema.nodes, {
       kindOf: (id) => this.kindOf(id),

@@ -79,6 +79,7 @@ import type { CollaborationHandle, CollaborationIdentityUpdate } from './types.t
 import type { DocumentCollaborationSession } from './document-session-contract.ts';
 import { UndoGroups, type CollaborationUndoGroup } from './document-undo-group.ts';
 import { restoreLostTombstones } from './document/tombstone-guard.ts';
+import { keepShownOrders, shownOrdersBefore } from './document/split-sibling-pin.ts';
 import type { CreateDocumentCollaborationOptions } from './document-session-options.ts';
 
 /**
@@ -590,8 +591,9 @@ class DocumentSession implements DocumentCollaborationSession {
     if (!this.canWriteSharedState()) return;
     let transient = false;
     this.historySelections.noteBefore();
-    const refusal = this.historyGroups.capture(historyGroupOfJournal(journal), () =>
-      this.ydoc.transact((): CollaborationFailure | null => {
+    const orders = shownOrdersBefore(this.registry, shared);
+    const refusal = this.historyGroups.capture(historyGroupOfJournal(journal), () => {
+      const failed = this.ydoc.transact((): CollaborationFailure | null => {
         if (blobs !== null) {
           const published = putJournalBlobs(this.blobs, blobs.payloads);
           if (published !== null) return published;
@@ -610,8 +612,11 @@ class DocumentSession implements DocumentCollaborationSession {
           };
         }
         return null;
-      }, this.localOrigin)
-    );
+      }, this.localOrigin);
+      // The blocks the edit left show where the author saw them (`split-sibling-pin.ts`).
+      if (failed === null) keepShownOrders(this.registry, this.ydoc, this.localOrigin, orders);
+      return failed;
+    });
     if (refusal === null) {
       this.refusals.published();
       // Shared state can show this edit differently from the tree the editor computed: an ID
