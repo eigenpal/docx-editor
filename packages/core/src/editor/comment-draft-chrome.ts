@@ -8,7 +8,11 @@
 // The registration lives on the editor, not on a surface: chrome mounts after the editor
 // exists, and a document that reloads must keep it.
 
+import type { Editor } from '@docx-editor.dev/core/contracts/editor';
+import type { SemanticPosition } from '@docx-editor.dev/core/layout';
+import { caretWordSelection } from '../layout/caret-word.ts';
 import type { CommentDraftChromeHandlers } from './docx-editor-types.ts';
+import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { createRequestChrome, type BookmarkChromeHost } from './bookmark-chrome.ts';
 
 /** What the toolbar asks of the registered comment draft chrome. */
@@ -46,4 +50,16 @@ export function bindCommentDraftRequests(editor: object, requests: CommentDraftR
 /** The comment draft requests of a facade, or null for an editor that has none. */
 export function commentDraftRequestsOf(editor: object): CommentDraftRequests | null {
   return requestsByEditor.get(editor) ?? null;
+}
+
+/**
+ * The word a comment takes when the caret is collapsed inside one and nothing is selected.
+ * Null while a review card is activated, which the selection placement also declines.
+ */
+export function commentWordAtCaret(
+  editor: Editor
+): { readonly from: SemanticPosition; readonly to: SemanticPosition } | null {
+  const surface = (editor as Editor & { readonly surface?: PaginatedSurface | null }).surface;
+  if (!surface || surface.activatedReviewKey() !== null) return null;
+  return caretWordSelection(surface.publishedLayout(), surface.state().selection);
 }

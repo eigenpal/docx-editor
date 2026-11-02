@@ -24,7 +24,7 @@ for (const adapter of ADAPTERS) {
     const link = page.getByRole('button', { name: /^Insert link/ });
     await expect(link).toBeEnabled();
     await link.click();
-    await expect(page.getByRole('textbox', { name: 'https://example.com' })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'URL', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Cancel' }).click();
 
     await page.getByRole('menuitem', { name: 'File' }).click();

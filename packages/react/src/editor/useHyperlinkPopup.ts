@@ -331,6 +331,9 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
       });
       return;
     }
+    // A caret inside a word links that word: it becomes the selection and the display text.
+    const word = editor?.surface?.hyperlinks.wordAtCaret() ?? null;
+    if (word) editor?.surface?.setSelection({ anchor: word.from, head: word.to });
     const selected = editor?.query({ type: 'selectedText' }) ?? '';
     // The text stays SELECTED while the panel is up. Focusing the URL field moves the
     // browser's one selection into it, so without this the highlight the user is about to
