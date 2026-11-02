@@ -7,7 +7,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * Stories other than the main one: headers and footers of the final section, footnotes, and
  * endnotes. Each compares with the same container engine, in its own part.
  */
-import { relationshipsOf, type OoxmlPackage, type OoxmlPart } from '@docx-editor.dev/core/store';
+import {
+  resolveHeaderFooterResolutionBySection,
+  type OoxmlPackage,
+  type OoxmlPart,
+} from '@docx-editor.dev/core/store';
 import { notePlaceholder, type EmitContext, type NoteKind } from './emit.ts';
 import { compareContainer } from './story-compare.ts';
 import { partExists } from './package-assemble.ts';
@@ -50,67 +54,44 @@ export function storyXml(
   return `${start}${wrap?.open ?? ''}${inner}${wrap?.close ?? ''}${shell.end}`;
 }
 
-function resolvePart(pkg: OoxmlPackage, owner: string, target: string): string {
-  if (target.startsWith('/')) return target;
-  const out = owner.split('/').slice(0, -1);
-  for (const piece of target.split('/')) {
-    if (piece === '..') out.pop();
-    else if (piece !== '.' && piece !== '') out.push(piece);
-  }
-  const name = out.join('/');
-  void pkg;
-  return name.startsWith('/') ? name : `/${name}`;
-}
-
-/** The header and footer reference types a section can hold. */
-const FURNITURE_TYPES = new Set(['default', 'first', 'even']);
-
 interface FurnitureRef {
   readonly kind: 'header' | 'footer';
   readonly type: string;
   readonly part: OoxmlPart;
 }
 
-function furnitureRefs(
-  pkg: OoxmlPackage,
-  sectPr: ElementNode | undefined
-): Map<string, FurnitureRef> {
+/**
+ * The final section's headers and footers, by `kind:type`, exactly as the editor paints them:
+ * the store's resolver checks each relationship's type, decodes its target, keeps the first
+ * reference of a type, and carries a slot over from an earlier section that declares it.
+ */
+function furnitureRefs(pkg: OoxmlPackage): Map<string, FurnitureRef> {
   const out = new Map<string, FurnitureRef>();
-  if (!sectPr) return out;
-  const rels = relationshipsOf(pkg, pkg.mainDocumentPart);
-  for (const ref of elementChildren(sectPr)) {
-    if (ref.localName !== 'headerReference' && ref.localName !== 'footerReference') continue;
-    const kind = ref.localName === 'headerReference' ? 'header' : 'footer';
-    const type = attributeOf(ref, 'type') ?? 'default';
-    // Only the defined types take part; the value is file data that names a part.
-    if (!FURNITURE_TYPES.has(type)) continue;
-    const rid = attributeOf(ref, 'id', R_NS);
-    const rel = rels.find((record) => record.id === rid);
-    if (!rel) continue;
-    const part = pkg.parts.get(resolvePart(pkg, pkg.mainDocumentPart, rel.rawTarget));
-    if (part) out.set(`${kind}:${type}`, { kind, type, part });
+  const sections = resolveHeaderFooterResolutionBySection(pkg);
+  const final = sections[sections.length - 1];
+  if (!final) return out;
+  for (const [kind, slots] of [
+    ['header', final.headers],
+    ['footer', final.footers],
+  ] as const) {
+    for (const [type, slot] of slots) out.set(`${kind}:${type}`, { kind, type, part: slot.part });
   }
   return out;
 }
 
-/** Names of the header and footer parts the final section of `pkg`'s main story references. */
+/** Names of the header and footer parts the final section of `pkg`'s main story shows. */
 export function finalSectionFurniture(pkg: OoxmlPackage): ReadonlySet<string> {
-  const main = pkg.parts.get(pkg.mainDocumentPart);
-  const body = main && childNamed(main.root, 'body');
-  const refs = furnitureRefs(pkg, body ? childNamed(body, 'sectPr') : undefined);
-  return new Set([...refs.values()].map((ref) => ref.part.name));
+  return new Set([...furnitureRefs(pkg).values()].map((ref) => ref.part.name));
 }
 
 /** Compares the final section's headers and footers by kind and type. */
 export function compareFurniture(
   basePkg: OoxmlPackage,
   revisedPkg: OoxmlPackage,
-  baseSect: ElementNode | undefined,
-  revisedSect: ElementNode | undefined,
   ctx: EmitContext
 ): { readonly outputs: StoryOutput[]; readonly extraRefs: string } {
-  const baseRefs = furnitureRefs(basePkg, baseSect);
-  const revisedRefs = furnitureRefs(revisedPkg, revisedSect);
+  const baseRefs = furnitureRefs(basePkg);
+  const revisedRefs = furnitureRefs(revisedPkg);
   const outputs: StoryOutput[] = [];
   let extraRefs = '';
   for (const key of new Set([...baseRefs.keys(), ...revisedRefs.keys()])) {

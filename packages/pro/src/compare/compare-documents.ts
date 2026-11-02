@@ -146,7 +146,7 @@ export function comparePackages(
   let furniture: ReturnType<typeof compareFurniture> = { outputs: [], extraRefs: '' };
   const documentXml = storyXml(scope, baseDoc.root as ElementNode, () => {
     const content = compareContainer(unitsOf(baseBody, base), unitsOf(revisedBody, next), ctx);
-    furniture = compareFurniture(basePkg, revisedPkg, baseSect, revisedSect, furnitureCtx);
+    furniture = compareFurniture(basePkg, revisedPkg, furnitureCtx);
     const finalSect = sectPrXml(baseSect ?? null, revisedSect ?? null, ctx, furniture.extraRefs);
     return `${bodyShell.start}${content}${finalSect}${bodyShell.end}`;
   });

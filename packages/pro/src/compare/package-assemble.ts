@@ -74,6 +74,32 @@ export function partExists(pkg: OoxmlPackage, name: string): boolean {
   return pkg.parts.has(name) || pkg.partBytes.has(name) || pkg.partBytes.has(name.slice(1));
 }
 
+/**
+ * `xml` (a serialized relationships part) with `added` appended inside its root, whether the root
+ * is written with an end tag or self-closed; null when the root is neither.
+ */
+function withRelationships(xml: string, added: readonly string[]): string | null {
+  const entriesFor = (prefix: string) =>
+    (prefix
+      ? added.map((entry) => entry.replace('<Relationship ', `<${prefix}Relationship `))
+      : added
+    ).join('');
+  const closed = /<\/((?:[\w.-]+:)?)Relationships>\s*$/;
+  if (closed.test(xml))
+    return xml.replace(
+      closed,
+      (_, prefix: string) => `${entriesFor(prefix)}</${prefix}Relationships>`
+    );
+  const empty = /<((?:[\w.-]+:)?)Relationships(\b[^>]*?)\s*\/>\s*$/;
+  if (empty.test(xml))
+    return xml.replace(
+      empty,
+      (_, prefix: string, attributes: string) =>
+        `<${prefix}Relationships${attributes}>${entriesFor(prefix)}</${prefix}Relationships>`
+    );
+  return null;
+}
+
 /** Target of `part` written relative to `owner`'s folder. */
 function relativeTarget(owner: string, part: string): string {
   const dir = owner.slice(0, owner.lastIndexOf('/') + 1);
@@ -232,16 +258,11 @@ export function assemblePackage(
     const relsName = relsPartNameFor(owner);
     const existing = pkg.parts.get(relsName);
     const relsXml = existing
-      ? serializeOoxmlPart(existing).replace(
-          /<\/((?:[\w.-]+:)?)Relationships>\s*$/,
-          (_, prefix: string) => {
-            const entries = prefix
-              ? added.map((entry) => entry.replace('<Relationship ', `<${prefix}Relationship `))
-              : added;
-            return `${entries.join('')}</${prefix}Relationships>`;
-          }
-        )
+      ? withRelationships(serializeOoxmlPart(existing), added)
       : `<Relationships xmlns="${RELS_NS}">${added.join('')}</Relationships>`;
+    // Never write a reference whose relationship was not recorded.
+    if (relsXml === null)
+      return { ok: false, message: 'A relationship part has no root to add relationships to.' };
     const next = readOoxmlPart(relsXml, {
       name: relsName,
       contentType: existing?.contentType || RELS_CONTENT_TYPE,

@@ -6,12 +6,16 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import {
   commentsPartNameForStory,
   numberingRootOf,
+  relationshipsOf,
+  resolveRelationship,
   resolveNotesPart,
   settingsPartOf,
   stylesPartOf,
   type OoxmlPackage,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
+
+const STYLES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
 
 /** A document-level part a compare reads and writes. */
 export type RelatedPartKind =
@@ -29,8 +33,23 @@ export type RelatedPartKind =
  */
 export function relatedPart(pkg: OoxmlPackage, kind: RelatedPartKind): OoxmlPart | undefined {
   switch (kind) {
-    case 'styles':
-      return stylesPartOf(pkg);
+    case 'styles': {
+      // The painting session reads the relationship, else exactly /word/styles.xml; the
+      // indexes accept any part named styles.xml. Only a part both agree on is used, so
+      // without one the compare adds a related styles part that every reader finds.
+      const part = stylesPartOf(pkg);
+      if (!part) return undefined;
+      const related = relationshipsOf(pkg, pkg.mainDocumentPart).some((rel) => {
+        if (rel.type !== STYLES_REL) return false;
+        const resolved = resolveRelationship(rel);
+        return (
+          resolved.mode === 'Internal' &&
+          resolved.target.ok &&
+          resolved.target.partName === part.name
+        );
+      });
+      return related || part.name === '/word/styles.xml' ? part : undefined;
+    }
     case 'numbering': {
       const root = numberingRootOf(pkg);
       if (!root) return undefined;
