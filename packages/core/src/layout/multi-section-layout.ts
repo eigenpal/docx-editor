@@ -461,8 +461,10 @@ export function* layoutMultiSectionDocumentSteps(
   layoutSectionSteps: LayoutSectionStepsFn
 ): LayoutSteps<SemanticLayout> {
   const { session, ...rest } = options;
-  // A prefix pass of a sliced open: page fields finalize again when the full pass runs.
-  const provisional = options.bodyBlockLimit !== undefined;
+  // A prefix pass of a sliced open, or a round of the footnote reserve walk: page fields
+  // finalize again when the full pass runs.
+  const provisional =
+    options.bodyBlockLimit !== undefined || options.noteRoundBlockLimit !== undefined;
   const multi = ensureMultiState(session, multiSectionKeys(sections, options));
   // One retention pass over the UNION of every section's live keys. Retaining inside each
   // section's pass evicted every other section's entries — the multi-section break cache

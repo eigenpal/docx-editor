@@ -115,6 +115,13 @@ export interface ReserveWalkResult {
  */
 const LOOKAHEAD_PAGES = 3;
 
+/**
+ * The most pages past the decided one that a round lays out. A round that decides every page
+ * it holds without a new reserve lays out twice as far the next time, up to this limit, so
+ * the pages between note pages cost a few rounds rather than one round for each page.
+ */
+const MAX_ROUND_PAGES = 16;
+
 /** The reserve one page settles on when its need cycles. */
 function cycleAnswer(seen: ReadonlyMap<number, number>, fallback: number | undefined): number {
   if (fallback !== undefined) return fallback;
@@ -195,6 +202,8 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
   let last: ReserveWalkRound | null = null;
   let lastUsed: Reserves | null = null;
   let complete = false;
+  // Pages past the decided one that the next round lays out.
+  let span = LOOKAHEAD_PAGES;
 
   for (;;) {
     if (options.stopped()) {
@@ -207,7 +216,7 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
       exhausted = true;
       break;
     }
-    const round = yield* options.round(used, floor + LOOKAHEAD_PAGES);
+    const round = yield* options.round(used, floor + span);
     last = round;
     lastUsed = used;
     const pages = round.layout.pages;
@@ -283,7 +292,11 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
       }
     }
     if (finished) break;
-    if (relayout) continue;
+    if (relayout) {
+      span = LOOKAHEAD_PAGES;
+      continue;
+    }
+    span = Math.min(MAX_ROUND_PAGES, span * 2);
     if (round.whole && floor >= pages.length) {
       complete = true;
       break;

@@ -27,6 +27,7 @@ import {
 } from './note-reserve-walk.ts';
 import type { PageRecord, SemanticLayout } from './semantic-records.ts';
 import type { DocumentSection } from './section-properties.ts';
+import { W14_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -106,8 +107,76 @@ function reservesEqual(a: Reserves, b: Reserves): boolean {
   return true;
 }
 
+/** A paragraph's `w14:paraId` or `w14:textId`: identity only, which layout never reads. */
+function isParagraphIdentity(attribute: { localName: string; namespaceUri?: string }): boolean {
+  return (
+    attribute.namespaceUri === W14_NAMESPACE_URI &&
+    (attribute.localName === 'paraId' || attribute.localName === 'textId')
+  );
+}
+
+/**
+ * Two note stories that lay out alike: equal, or equal apart from paragraph identity, which
+ * an editor adds to every paragraph when it opens a file.
+ */
+function sameStory(a: OoxmlNode, b: OoxmlNode): boolean {
+  if (a === b) return true;
+  if (a.kind === 'textValue' || b.kind === 'textValue') {
+    return a.kind === 'textValue' && b.kind === 'textValue' && a.value === b.value;
+  }
+  if (a.localName !== b.localName || a.namespaceUri !== b.namespaceUri) return false;
+  const left = a.attributes.filter((attribute) => !isParagraphIdentity(attribute));
+  const right = b.attributes.filter((attribute) => !isParagraphIdentity(attribute));
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    const was = left[index]!;
+    const now = right[index]!;
+    if (
+      was.localName !== now.localName ||
+      was.namespaceUri !== now.namespaceUri ||
+      was.value !== now.value
+    ) {
+      return false;
+    }
+  }
+  if (a.children.length !== b.children.length) return false;
+  for (let index = 0; index < a.children.length; index += 1) {
+    if (!sameStory(a.children[index]!, b.children[index]!)) return false;
+  }
+  return true;
+}
+
+/** Two note stories that lay out alike, by digest first. */
+function sameNote(was: OoxmlNode, now: OoxmlNode): boolean {
+  return was === now || layoutNodeDigest(was) === layoutNodeDigest(now) || sameStory(was, now);
+}
+
+/**
+ * A notes part with the same notes: the same object, or one whose root holds the same
+ * stories. Only the root's own attributes may differ; they declare namespaces, and a store
+ * can add one to the root without changing a note.
+ */
+function samePart(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  const left = a as Partial<OoxmlPart> | null;
+  const right = b as Partial<OoxmlPart> | null;
+  if (!left?.root || !right?.root || left.name !== right.name) return false;
+  const before = left.root.children;
+  const after = right.root.children;
+  if (before.length !== after.length) return false;
+  for (let index = 0; index < before.length; index += 1) {
+    const was = before[index]!;
+    const now = after[index]!;
+    if (!sameNote(was, now)) return false;
+  }
+  return true;
+}
+
 function sameInputs(a: ReserveSearchInputs, b: ReserveSearchInputs): boolean {
-  return a.others.length === b.others.length && a.others.every((value, i) => value === b.others[i]);
+  return (
+    a.others.length === b.others.length &&
+    a.others.every((value, i) => samePart(value, b.others[i]))
+  );
 }
 
 /**
@@ -151,7 +220,7 @@ function changedFootnotes(before: OoxmlPart | null, after: OoxmlPart | null): nu
   const changed = new Set<string>();
   for (const [id, node] of now) {
     const was = old.get(id);
-    if (was !== node && (!was || layoutNodeDigest(was) !== layoutNodeDigest(node))) changed.add(id);
+    if (!was || !sameNote(was, node)) changed.add(id);
   }
   for (const id of old.keys()) if (!now.has(id)) changed.add(id);
   const ids: number[] = [];
@@ -194,6 +263,69 @@ function pagesHolding(
   return first < 0 ? null : [first, lastPage];
 }
 
+/** Blocks a page holds, as a walk with no layout to read guesses for its first round. */
+const COLD_BLOCKS_PER_PAGE = 8;
+
+/** Deeper records than this count as different; layout records stay far below it. */
+const MAX_RECORD_DEPTH = 32;
+
+/**
+ * Two layout records hold the same values. Shared objects compare by identity first, so a
+ * reused subtree costs one step.
+ */
+function sameRecord(a: unknown, b: unknown, depth = 0): boolean {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) {
+    return Number.isNaN(a) && Number.isNaN(b);
+  }
+  if (depth >= MAX_RECORD_DEPTH || Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    const other = b as unknown[];
+    if (a.length !== other.length) return false;
+    for (let index = 0; index < a.length; index += 1) {
+      if (!sameRecord(a[index], other[index], depth + 1)) return false;
+    }
+    return true;
+  }
+  const left = a as Record<string, unknown>;
+  const right = b as Record<string, unknown>;
+  const keys = Object.keys(left);
+  if (keys.length !== Object.keys(right).length) return false;
+  const pageField = isPageFieldSpan(left) && isPageFieldSpan(right);
+  for (const key of keys) {
+    if (pageField && (key === 'text' || key === 'box')) continue;
+    // A picture's loading state: its box comes from the authored extent, never from the image.
+    if (key === 'resource') continue;
+    if (!Object.hasOwn(right, key) || !sameRecord(left[key], right[key], depth + 1)) return false;
+  }
+  return true;
+}
+
+/**
+ * A span that shows a page number or page count. Its text is projected after layout, and a
+ * published layout counts the note-only sheets that the body pass does not, so the text can
+ * differ while the body is the same.
+ */
+function isPageFieldSpan(record: Record<string, unknown>): boolean {
+  const atom = record['fieldAtom'];
+  return (
+    record['projected'] === true &&
+    typeof atom === 'object' &&
+    atom !== null &&
+    typeof (atom as { pageField?: unknown }).pageField === 'object'
+  );
+}
+
+/**
+ * A page holds the same body content as a previous page. A reused page can carry new
+ * fragment objects with the same values: a pass refreshes page-count field text on every
+ * page that shows it.
+ */
+function sameBody(page: PageRecord | undefined, previous: PageRecord): boolean {
+  if (!page) return false;
+  return page.fragments === previous.fragments || sameRecord(page.fragments, previous.fragments);
+}
+
 /**
  * The first page whose body differs from the previous layout, and the first previous page
  * from which every page is reused unchanged (Infinity when none is).
@@ -201,14 +333,12 @@ function pagesHolding(
 function changedRange(probe: SemanticLayout, previous: SemanticLayout): [number, number] {
   const shared = Math.min(probe.pages.length, previous.pages.length);
   let first = 0;
-  while (first < shared && probe.pages[first]!.fragments === previous.pages[first]!.fragments) {
-    first += 1;
-  }
+  while (first < shared && sameBody(probe.pages[first], previous.pages[first]!)) first += 1;
   const delta = probe.pages.length - previous.pages.length;
   let from = previous.pages.length;
   while (from > 0) {
     const at = from - 1 + delta;
-    if (at < first || probe.pages[at]?.fragments !== previous.pages[from - 1]!.fragments) break;
+    if (at < first || !sameBody(probe.pages[at], previous.pages[from - 1]!)) break;
     from -= 1;
   }
   return [first, from >= previous.pages.length ? Number.POSITIVE_INFINITY : from];
@@ -289,12 +419,13 @@ export function* searchFootnoteReserves(
   }
   const restore = session ? snapshotLayoutSession(session) : null;
 
-  // How many blocks a round lays out: through the first block of the page after `page` in
-  // the latest layout that reaches it, and the whole body when none does.
+  // The latest round's layout, and the latest layout that reached the end of the body.
   let reference: SemanticLayout | null = probeLayout ?? previousLayout;
-  const blockLimitThrough = (page: number): number => {
-    const next = reference?.pages[page + 1];
-    for (const fragment of next?.fragments ?? []) {
+  let wholeReference = reference;
+  const blockAt = (page: PageRecord | undefined, last: boolean): number | undefined => {
+    const fragments = page?.fragments ?? [];
+    for (let at = 0; at < fragments.length; at += 1) {
+      const fragment = fragments[last ? fragments.length - 1 - at : at]!;
       const id =
         fragment.kind === 'paragraph'
           ? fragment.paragraphId
@@ -302,9 +433,23 @@ export function* searchFootnoteReserves(
             ? fragment.tableId
             : undefined;
       const index = id === undefined ? undefined : blockIndex.get(id);
-      if (index !== undefined) return index + 1;
+      if (index !== undefined) return index;
     }
-    return blocks.length;
+    return undefined;
+  };
+  // How many blocks a round lays out: through the first block of the page after `page`. The
+  // latest round is cut short, so a page past its end is looked up in the latest whole layout,
+  // and estimated from the blocks per page so far when no layout names it.
+  const blockLimitThrough = (page: number): number => {
+    const index =
+      blockAt(reference?.pages[page + 1], false) ?? blockAt(wholeReference?.pages[page + 1], false);
+    if (index !== undefined) return index + 1;
+    const pages = reference?.pages ?? [];
+    // With no layout at all, a first round guesses a few blocks a page and grows from there.
+    if (pages.length === 0) return Math.min(blocks.length, (page + 2) * COLD_BLOCKS_PER_PAGE);
+    const reached = blockAt(pages[pages.length - 1], true);
+    if (reached === undefined) return blocks.length;
+    return Math.min(blocks.length, Math.ceil(((reached + 1) * (page + 2)) / pages.length) + 16);
   };
   let decided = startFloor;
   function* round(reserves: Reserves, throughPage: number): LayoutSteps<ReserveWalkRound> {
@@ -316,15 +461,23 @@ export function* searchFootnoteReserves(
         () => decided
       );
       reference = layout;
+      if (whole) wholeReference = layout;
       if (whole || layout.pages.length >= throughPage + 2) return { layout, whole };
-      limit = Math.min(blocks.length, limit * 2 + 16);
+      // Too few pages: grow by the pages still missing, as the blocks so far fill them. The
+      // last page of a cut-short layout is partial, so it does not count.
+      const filled = Math.max(1, layout.pages.length - 1);
+      const grown = Math.ceil((limit * (throughPage + 2)) / filled);
+      limit = Math.min(blocks.length, Math.max(limit + 16, grown));
     }
   }
 
   const prefix = reuse?.record;
   // Nothing the notes read moved: the previous answer stands, and so does its layout.
   if (unchanged && probe && prefix?.complete && reuse) {
-    return { layout: probe.layout, reserves: probe.used, exhausted: reuse.exhausted, state: reuse };
+    // Keep this pass's inputs: the next pass then compares against these objects by identity
+    // instead of comparing every note story again.
+    const state = { ...reuse, inputs: options.inputs };
+    return { layout: probe.layout, reserves: probe.used, exhausted: reuse.exhausted, state };
   }
   const walked = yield* walkFootnoteReserves({
     start: {
