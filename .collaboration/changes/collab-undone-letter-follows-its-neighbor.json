@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A put-back copy of typed text followed the anchor of the whole typed insert. That anchor names what the first character of the insert was typed after. An undo that put back a later character alone, behind a deleted item, gave it that anchor. So the character followed into another paragraph, away from the characters typed before it, and could show there as well as in its own paragraph.",
+  "after": "A put-back copy of the first character of a typed insert follows the insert's anchor. A put-back copy of a later character follows the character typed right before it. An insert that its mark keeps where it was typed still stays. Out of a deleted paragraph, a put-back copy still goes where the typing went as one insert.",
+  "reason": "The change is in how a replica reads the shared marks it already holds. No field, mark, identity, or write changes, so every replica that holds the same updates shows the same text. The format that reads put-back copies by follow marks has not been released yet. sharedSchemaVersion and repairVersion do not change.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-undone-letter-follows-its-neighbor.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-following-copy-hides-original.test.ts"
+  ],
+  "changeset": "collab-undone-letter-follows-its-neighbor",
+  "migration": null
+}

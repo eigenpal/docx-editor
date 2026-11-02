@@ -137,10 +137,12 @@ function spanOf(
 export interface MarkLookup {
   origin(kind: 'move' | 'restore', client: number, clock: number): Origin | null;
   follow(client: number, clock: number): FollowAnchor | null;
+  /** The first clock of the follow-marked insert that holds `clock`, or null. */
+  followStart(client: number, clock: number): number | null;
 }
 
 /** The marks of a text that belongs to no document: none. */
-const NO_MARKS: MarkLookup = { origin: () => null, follow: () => null };
+const NO_MARKS: MarkLookup = { origin: () => null, follow: () => null, followStart: () => null };
 
 /** The marks of one document, indexed for lookup by any clock of an insert. */
 export class TextMarks implements MarkLookup {
@@ -185,6 +187,11 @@ export class TextMarks implements MarkLookup {
   /** The follow anchor of the insert that holds `clock` of `client`. */
   follow(client: number, clock: number): FollowAnchor | null {
     return this.find('follow', client, clock)?.follow ?? null;
+  }
+
+  /** The first clock of the follow-marked insert that holds `clock` of `client`. */
+  followStart(client: number, clock: number): number | null {
+    return this.find('follow', client, clock)?.firstClock ?? null;
   }
 
   /**
