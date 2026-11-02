@@ -3856,6 +3856,8 @@ export interface SemanticLayoutOptions {
     readonly noteMarks?: NoteMarkContext;
     // @internal
     readonly noteRoundBlockLimit?: number;
+    // @internal
+    readonly noteRoundContext?: object;
     readonly notes?: NotesLayoutInput;
     readonly numberingIndex?: NumberingIndex;
     readonly pageBottomReserves?: ReadonlyMap<number, number>;

@@ -66,6 +66,8 @@ export interface ReserveSearchOptions {
   readonly inputs: ReserveSearchInputs;
   /** The pass's body block limit, or -1. */
   readonly limit: number;
+  /** The block index each section of the body ends before, in order. */
+  readonly sectionEnds?: readonly number[];
   /** Body paragraph ids that cite each footnote id. */
   readonly citingParagraphs: (noteId: number) => readonly string[];
   /**
@@ -263,6 +265,9 @@ function pagesHolding(
   return first < 0 ? null : [first, lastPage];
 }
 
+/** How many blocks past its target a round lays out to end at a section end. */
+const SECTION_END_REACH_BLOCKS = 400;
+
 /** Blocks a page holds, as a walk with no layout to read guesses for its first round. */
 const COLD_BLOCKS_PER_PAGE = 8;
 
@@ -452,12 +457,25 @@ export function* searchFootnoteReserves(
     return Math.min(blocks.length, Math.ceil(((reached + 1) * (page + 2)) / pages.length) + 16);
   };
   let decided = startFloor;
+  // A round ends at a section end when one is near. Each section it lays out is then complete,
+  // as in every other round, so the next round reuses those sections and their table rows
+  // instead of laying them out again; a cut inside a section matches no other round's cut.
+  const sectionEnds = options.sectionEnds ?? [];
+  const atSectionEnd = (limit: number): number => {
+    for (const end of sectionEnds) {
+      if (end < limit) continue;
+      // The last section ends with the body: a round that reached it would be whole.
+      if (end >= blocks.length) return limit;
+      return end - limit <= SECTION_END_REACH_BLOCKS ? Math.min(blocks.length, end) : limit;
+    }
+    return limit;
+  };
   function* round(
     reserves: Reserves,
     throughPage: number,
     neededPage: number
   ): LayoutSteps<ReserveWalkRound> {
-    let limit = blockLimitThrough(throughPage + 1);
+    let limit = atSectionEnd(blockLimitThrough(throughPage + 1));
     for (;;) {
       const whole = limit >= blocks.length;
       const layout = yield* decidedProgress(
@@ -472,7 +490,7 @@ export function* searchFootnoteReserves(
       // last page of a cut-short layout is partial, so it does not count.
       const filled = Math.max(1, layout.pages.length - 1);
       const grown = Math.ceil((limit * (throughPage + 2)) / filled);
-      limit = Math.min(blocks.length, Math.max(limit + 16, grown));
+      limit = atSectionEnd(Math.min(blocks.length, Math.max(limit + 16, grown)));
     }
   }
 
@@ -496,6 +514,7 @@ export function* searchFootnoteReserves(
       ? { previous: { record: prefix, unchangedFrom } }
       : {}),
     round,
+    growAfterReserve: sectionEnds.length > 1,
     compute: (layout, used, deferral, range) => {
       decided = range.from;
       return options.compute(layout, used, deferral, range);

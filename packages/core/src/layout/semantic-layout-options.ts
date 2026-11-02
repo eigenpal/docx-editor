@@ -202,6 +202,13 @@ export interface SemanticLayoutOptions {
    * @internal
    */
   readonly noteRoundBlockLimit?: number;
+  /**
+   * One object for every round of one footnote reserve walk. Between such rounds only the
+   * reserves and the block limit move, so a section with the same blocks, flow state and
+   * reserves on its pages takes its result from the round before.
+   * @internal
+   */
+  readonly noteRoundContext?: object;
   /** Derived note marks for body/note projection (provisional or final). */
   readonly noteMarks?: import('./note-projection.ts').NoteMarkContext;
   /** Inline drawing projection for typed `w:drawing` / `wp:inline` nodes. */

@@ -2514,6 +2514,8 @@ export function* layoutSemanticDocumentWithNotesSteps<Opts extends NotesBodyOpti
       }
     );
   const session = optionsWithLists.session as LayoutSession | undefined;
+  // The rounds of this walk share it; see `SemanticLayoutOptions.noteRoundContext`.
+  const noteRoundContext = {};
   const search = yield* searchFootnoteReserves({
     session,
     state: (notesMemo?.walk ?? null) as ReserveSearchState | null,
@@ -2531,6 +2533,7 @@ export function* layoutSemanticDocumentWithNotesSteps<Opts extends NotesBodyOpti
       ],
     },
     limit: (optionsWithLists as { bodyBlockLimit?: number }).bodyBlockLimit ?? -1,
+    sectionEnds: sections.map((section) => section.blockEndExclusive),
     parityStarts: sections.some(
       ({ properties }) => properties.breakType === 'oddPage' || properties.breakType === 'evenPage'
     ),
@@ -2546,7 +2549,11 @@ export function* layoutSemanticDocumentWithNotesSteps<Opts extends NotesBodyOpti
         ...(follow
           ? { pageBottomReservesFromPreviousPass: true, pageBottomReservesFollowFlow: true }
           : {}),
-        ...(blockLimit !== undefined ? { noteRoundBlockLimit: blockLimit } : {}),
+        // A round cut short knows only the blocks it lays out: a cache sweep from it would
+        // drop the entries of every block after the cut, which the next rounds lay out again.
+        ...(blockLimit !== undefined
+          ? { noteRoundBlockLimit: blockLimit, retainKeys: false, noteRoundContext }
+          : {}),
       }),
     followedReserves: (given) => {
       const moved = takeMovedSeedReserves(session);

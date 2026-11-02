@@ -92,6 +92,14 @@ export interface ReserveWalkOptions {
     throughPage: number,
     neededPage: number
   ) => LayoutSteps<ReserveWalkRound>;
+  /**
+   * Whether a round after a new reserve also lays out further, as a round after a decided
+   * page does. Set when rounds end at section ends: the round then lays out the decided page
+   * again and the next section, so the next note page's search starts in that round. Without
+   * section ends the pages past the decided one move with its reserve, so laying them out
+   * before the reserve holds costs more than the round it saves.
+   */
+  readonly growAfterReserve?: boolean;
   readonly compute: (
     layout: SemanticLayout,
     used: Reserves,
@@ -126,7 +134,8 @@ const LOOKAHEAD_PAGES = 3;
 /**
  * The most pages past the decided one that a round lays out. A round that decides every page
  * it holds without a new reserve lays out twice as far the next time, up to this limit, so
- * the pages between note pages cost a few rounds rather than one round for each page.
+ * the pages between note pages cost a few rounds rather than one round for each page. See
+ * `growAfterReserve` for a round after a new reserve.
  */
 const MAX_ROUND_PAGES = 16;
 
@@ -300,11 +309,12 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
       }
     }
     if (finished) break;
-    if (relayout) {
+    if (relayout && !options.growAfterReserve) {
       span = LOOKAHEAD_PAGES;
       continue;
     }
     span = Math.min(MAX_ROUND_PAGES, span * 2);
+    if (relayout) continue;
     if (round.whole && floor >= pages.length) {
       complete = true;
       break;

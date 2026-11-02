@@ -14,6 +14,11 @@ import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { finalizePageFieldProjection, withPageFieldSources } from './field-projection.ts';
 import { recordMovedSeedReserves } from './note-reserves.ts';
 import { sectionReadCollector } from './note-reserve-resume.ts';
+import {
+  rememberSectionRound,
+  replayedSectionRound,
+  sectionRoundInputs,
+} from './note-round-section-replay.ts';
 import { pageRefAssignmentToken } from './field-page-furniture.ts';
 import { currentFinal } from './published-story-projections.ts';
 import { framedTokenJoin } from './layout-cache.ts';
@@ -646,46 +651,66 @@ export function* layoutMultiSectionDocumentSteps(
           )
         : undefined;
     const progressStart = section.properties.pageNumbering?.start ?? nextDisplayed;
-    const laid: SectionLayoutResult = yield* sectionProgress(
-      layoutSectionSteps(slice, revision, {
-        ...rest,
-        ...(sectionReserves ? { pageBottomReserves: sectionReserves } : {}),
-        retainKeys,
-        geometry,
-        furniture,
-        sectionColumns: section.properties.columns,
-        paragraphLineUnitPt: sectionLineGridPt(section.properties),
-        ...(section.properties.pageBorders
-          ? { sectionPageBorders: section.properties.pageBorders }
-          : {}),
-        ...(balanceColumns ? { balanceColumns } : {}),
-        // The empty paragraph that carries this section's mark takes no flow height when the
-        // next section is continuous: the next section starts where the content ended.
-        ...(endsContinuous ? { sectionMarkCollapses: true } : {}),
-        ...(markJoinsBreakSheet ? { markJoinsBreakSheet } : {}),
-        lineCounterStart: lineCounter,
-        // A continued section's local page 0 IS the host sheet, so its document page index
-        // is one behind the stack; every other section starts a fresh sheet at `startIndex`.
-        pageIndexStart: continues ? startIndex - 1 : startIndex,
-        furniturePageNumberStart:
-          section.properties.pageNumbering?.start ?? nextDisplayed - (continues ? 1 : 0),
-        // Paragraph spacing still collapses across a section boundary on a new sheet.
-        // Carry only the after-spacing budget there, never the prior sheet's cursor.
-        spaceBeforeCarry: flowSpaceAfter,
-        ...(continues ? { flowStartY: flowCursorY } : {}),
-        ...(continuedPageInsets ? { continuedPageInsets } : {}),
-        ...(continuedPageFurniture ? { continuedPageFurniture } : {}),
-        ...(measuredPageNumberFormat !== undefined
-          ? { bodyPageNumberFormat: measuredPageNumberFormat }
-          : {}),
-        ...(sectionSession ? { session: sectionSession } : {}),
-      }),
-      continues ? null : [...pages],
-      sheetY,
-      progressStart,
-      section.properties.pageNumbering?.fmt,
-      revision
-    );
+    const roundInputs = sectionRoundInputs(options, retainKeys, continues, sectionSession, {
+      blocks: slice,
+      pageIndexStart: startIndex,
+      entry: () => [
+        multi?.sectionKeys[sectionIndex],
+        furniture === undefined ? 'n' : furniture === options.furniture ? 'd' : 's',
+        sectionLineGridPt(section.properties),
+        lineCounter,
+        flowSpaceAfter,
+        nextDisplayed,
+        balanceColumns,
+        endsContinuous,
+        markJoinsBreakSheet,
+        provisional,
+      ],
+    });
+    const replayed = roundInputs && replayedSectionRound<SectionLayoutResult>(roundInputs);
+    const laid: SectionLayoutResult =
+      replayed ??
+      (yield* sectionProgress(
+        layoutSectionSteps(slice, revision, {
+          ...rest,
+          ...(sectionReserves ? { pageBottomReserves: sectionReserves } : {}),
+          retainKeys,
+          geometry,
+          furniture,
+          sectionColumns: section.properties.columns,
+          paragraphLineUnitPt: sectionLineGridPt(section.properties),
+          ...(section.properties.pageBorders
+            ? { sectionPageBorders: section.properties.pageBorders }
+            : {}),
+          ...(balanceColumns ? { balanceColumns } : {}),
+          // The empty paragraph that carries this section's mark takes no flow height when the
+          // next section is continuous: the next section starts where the content ended.
+          ...(endsContinuous ? { sectionMarkCollapses: true } : {}),
+          ...(markJoinsBreakSheet ? { markJoinsBreakSheet } : {}),
+          lineCounterStart: lineCounter,
+          // A continued section's local page 0 IS the host sheet, so its document page index
+          // is one behind the stack; every other section starts a fresh sheet at `startIndex`.
+          pageIndexStart: continues ? startIndex - 1 : startIndex,
+          furniturePageNumberStart:
+            section.properties.pageNumbering?.start ?? nextDisplayed - (continues ? 1 : 0),
+          // Paragraph spacing still collapses across a section boundary on a new sheet.
+          // Carry only the after-spacing budget there, never the prior sheet's cursor.
+          spaceBeforeCarry: flowSpaceAfter,
+          ...(continues ? { flowStartY: flowCursorY } : {}),
+          ...(continuedPageInsets ? { continuedPageInsets } : {}),
+          ...(continuedPageFurniture ? { continuedPageFurniture } : {}),
+          ...(measuredPageNumberFormat !== undefined
+            ? { bodyPageNumberFormat: measuredPageNumberFormat }
+            : {}),
+          ...(sectionSession ? { session: sectionSession } : {}),
+        }),
+        continues ? null : [...pages],
+        sheetY,
+        progressStart,
+        section.properties.pageNumbering?.fmt,
+        revision
+      ));
+    if (roundInputs && !replayed) rememberSectionRound(roundInputs, laid);
     sectionShells.push({ startIndex, at: laid.overflowShellAt });
     sectionReads.take(sectionSession);
     lineCounter = laid.lineCounter;
