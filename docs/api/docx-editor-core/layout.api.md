@@ -2170,7 +2170,7 @@ export const MAX_NOTE_FRAGMENTS = 512;
 // @public
 export const MAX_NOTE_OVERFLOW_PAGES = 256;
 
-// @public
+// @public @deprecated
 export const MAX_NOTE_REFLOW_ATTEMPTS = 64;
 
 // @public
@@ -3854,6 +3854,8 @@ export interface SemanticLayoutOptions {
     // (undocumented)
     readonly measurer: TextMeasurer;
     readonly noteMarks?: NoteMarkContext;
+    // @internal
+    readonly noteRoundBlockLimit?: number;
     readonly notes?: NotesLayoutInput;
     readonly numberingIndex?: NumberingIndex;
     readonly pageBottomReserves?: ReadonlyMap<number, number>;
