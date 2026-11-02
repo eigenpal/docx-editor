@@ -208,6 +208,9 @@ export type HistoryGroup = symbol;
 export function historyGroupOfJournal(journal: CanonicalPrimitiveJournal): HistoryGroup | undefined;
 
 // @public
+export function isJournalOutsideUndo(journal: CanonicalPrimitiveJournal): boolean;
+
+// @public
 export function mapOffsetAcrossText(offset: number, before: string, after: string): number;
 
 // @internal

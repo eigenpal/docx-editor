@@ -39,10 +39,9 @@ import type {
   CollaborationSelectionMove,
   CollaborationStatusSnapshot,
 } from '@docx-editor.dev/core/collaboration';
-import {
-  historyGroupOfJournal,
-  type CanonicalPrimitiveJournal,
-  type CollaborationDocumentPort,
+import type {
+  CanonicalPrimitiveJournal,
+  CollaborationDocumentPort,
 } from '@docx-editor.dev/core/collaboration/replication';
 import {
   createCollaborationStatusTracker,
@@ -592,7 +591,7 @@ class DocumentSession implements DocumentCollaborationSession {
     let transient = false;
     this.historySelections.noteBefore();
     const orders = shownOrdersBefore(this.registry, shared);
-    const refusal = this.historyGroups.capture(historyGroupOfJournal(journal), () => {
+    const publish = () => {
       const failed = this.ydoc.transact((): CollaborationFailure | null => {
         if (blobs !== null) {
           const published = putJournalBlobs(this.blobs, blobs.payloads);
@@ -616,7 +615,8 @@ class DocumentSession implements DocumentCollaborationSession {
       // The blocks the edit left show where the author saw them (`split-sibling-pin.ts`).
       if (failed === null) keepShownOrders(this.registry, this.ydoc, this.localOrigin, orders);
       return failed;
-    });
+    };
+    const refusal = this.historyGroups.captureJournal(journal, this.localOrigin, publish);
     if (refusal === null) {
       this.refusals.published();
       // Shared state can show this edit differently from the tree the editor computed: an ID

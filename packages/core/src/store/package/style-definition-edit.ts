@@ -22,8 +22,26 @@ export type StyleElementFactory = (
   children?: readonly OoxmlElement[]
 ) => OoxmlElement;
 
+type PackageEdit = (pkg: OoxmlPackage) => OoxmlPackage;
+const setupEdits = new WeakSet<PackageEdit>();
+
+/**
+ * Mark a package edit as document setup: a definition that content may come to depend on,
+ * such as a built-in style. A collaboration session commits setup on its own, outside shared
+ * undo, so undoing the edit that first needed it cannot take it from content added since.
+ */
+export function markDocumentSetupEdit<T extends PackageEdit>(edit: T): T {
+  setupEdits.add(edit);
+  return edit;
+}
+
+/** Whether `edit` is document setup (see `markDocumentSetupEdit`). */
+export function isDocumentSetupEdit(edit: PackageEdit): boolean {
+  return setupEdits.has(edit);
+}
+
 /** Attribute value of a `w:` attribute on an element, or undefined. */
-function attributeOf(node: OoxmlElement, localName: string): string | undefined {
+export function attributeOf(node: OoxmlElement, localName: string): string | undefined {
   return node.attributes.find((a) => a.localName === localName)?.value;
 }
 
@@ -57,7 +75,7 @@ export function ensureStyleDefinition(
   styleId: string,
   build: (factory: StyleElementFactory, stylesRoot: OoxmlElement) => OoxmlElement
 ): (pkg: OoxmlPackage) => OoxmlPackage {
-  return (pkg) => {
+  return markDocumentSetupEdit((pkg) => {
     const existing = stylesPartOf(pkg);
     const name = existing?.name ?? '/word/styles.xml';
     const parsed = existing
@@ -99,5 +117,5 @@ export function ensureStyleDefinition(
     const related = withRelationship(next, pkg.mainDocumentPart, STYLES_RELATIONSHIP, name);
     if (!related.ok) throw new Error(`Cannot link style ${styleId}`);
     return related.pkg;
-  };
+  });
 }
