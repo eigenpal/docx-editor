@@ -7,7 +7,7 @@
 // styles a merge can leave when two participants add one while apart.
 
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import type { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
+import type { EditorCollaborationSession } from '../collaboration/index.ts';
 import { ORIGIN_IDS, type StoryScope, type TreeDocOp } from '@docx-editor.dev/core/store';
 import { runOutsideSharedUndo } from '../store/package/canonical-primitive-capture.ts';
 import { isDocumentSetupEdit } from '../store/package/style-definition-edit.ts';
