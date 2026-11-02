@@ -19,6 +19,17 @@ import { SHARED_BLOBS_KEY, SharedBlobStore } from './shared-blob-store.ts';
 import { CollaborationSchemaError } from './errors.ts';
 import { droppedContentDetail } from './document/schema.ts';
 
+/** Options for {@link readCollaborationDocument}. @public */
+export interface ReadCollaborationDocumentOptions {
+  /**
+   * Keep every revision `w:id` as the room holds it. Pass `true` for the export that
+   * `migrateCollaborationRoom` seeds a new room with: one change keeps one id across its
+   * pieces, so the new room shows the same review items. Omitted or `false`, the file gives
+   * each revision element its own in-range id, as a file for anyone to open needs.
+   */
+  readonly keepRevisionIds?: boolean;
+}
+
 /**
  * Read the document a synchronized `Y.Doc` holds, as `.docx` bytes.
  *
@@ -40,14 +51,23 @@ import { droppedContentDetail } from './document/schema.ts';
  *
  * Synchronous, and it materializes the whole package per call — this is a job, not a render.
  *
+ * For a room migration export, pass `{ keepRevisionIds: true }`; see
+ * {@link ReadCollaborationDocumentOptions.keepRevisionIds}.
+ *
  * @throws CollaborationSchemaError — `not-initialized`, `concurrent-seed`,
  * `protocol-version-mismatch`, `schema-version-mismatch`, `blob-digest-mismatch`,
  * `materialize-dropped-content`, `no-main-document-part`, or a limit code. Incomplete or
  * corrupt shared state refuses instead of producing an incomplete DOCX.
  * @public
  */
-export function readCollaborationDocument(ydoc: Y.Doc): Uint8Array {
-  return readRoomDocument(ydoc, writeOoxmlPackage);
+export function readCollaborationDocument(
+  ydoc: Y.Doc,
+  options?: ReadCollaborationDocumentOptions
+): Uint8Array {
+  return readRoomDocument(
+    ydoc,
+    options?.keepRevisionIds === true ? writeOoxmlPackageKeepingRevisionIds : writeOoxmlPackage
+  );
 }
 
 /**

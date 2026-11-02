@@ -134,6 +134,26 @@ function earlierRoom(): Uint8Array {
   }
 }
 
+test('a migration export that keeps revision ids gives the new room the same review items', async () => {
+  const { alice } = await harness.pair(zipDocument(`${FORMATTED}<w:sectPr/>`));
+  expect(reviewCount(harness.packageOf(alice))).toBe(1);
+  const earlier = new Y.Doc();
+  opened.push(earlier);
+  Y.applyUpdate(earlier, Y.encodeStateAsUpdate(alice.ydoc));
+  // The default export renumbers the shared id, so a room seeded from it would split the item.
+  expect(revisionIds(opening(readCollaborationDocument(earlier)))[1]).not.toBe('rPrChange:1');
+  const exported = readCollaborationDocument(earlier, { keepRevisionIds: true });
+  expect(revisionIds(opening(exported))).toEqual(['rPrChange:1', 'rPrChange:1']);
+  const migrated = await migrateCollaborationRoom({ state: earlierRoom(), exported });
+  if (!migrated.ok) throw new Error(JSON.stringify(migrated));
+  const room = new Y.Doc();
+  opened.push(room);
+  Y.applyUpdate(room, migrated.state);
+  const kept = opening(readCollaborationDocument(room, { keepRevisionIds: true }));
+  expect(revisionIds(kept)).toEqual(['rPrChange:1', 'rPrChange:1']);
+  expect(reviewCount(kept)).toBe(1);
+});
+
 test('migration passes its check when two move range pairs share an id', async () => {
   const pair = (kind: 'moveFrom' | 'moveTo', text: string) =>
     `<w:p><w:${kind}RangeStart w:id="5" w:author="Ada" w:name="move1"/>` +

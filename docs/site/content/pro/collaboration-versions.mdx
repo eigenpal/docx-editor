@@ -337,7 +337,7 @@ npm init -y && npm pkg set type=module
 npm install @docx-editor.dev/pro@2.27.0 @docx-editor.dev/core@2.27.0 yjs@^13.6.32
 ```
 
-In that directory, export each room with `readCollaborationDocument`, and compute the SHA-256 of the exact state you exported. The following function returns both. Call it for each room, and store both values with the room:
+In that directory, export each room with `readCollaborationDocument`, and compute the SHA-256 of the exact state you exported. If the earlier build accepts the `keepRevisionIds` option, pass `{ keepRevisionIds: true }`. Without it, that build gives each revision element its own ID, and a change that used one ID across several pieces shows as several review items in the new room. Builds without the option keep the IDs, and do not accept it. The following function returns both values. Call it for each room, and store both values with the room:
 
 ```ts
 import { createHash } from 'node:crypto';

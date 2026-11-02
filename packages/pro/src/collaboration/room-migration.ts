@@ -183,7 +183,8 @@ export interface MigrateCollaborationRoomOptions {
   readonly state: Uint8Array;
   /**
    * The `.docx` that the build which created the room exported from `state`, with
-   * `readCollaborationDocument`.
+   * `readCollaborationDocument`. Pass `{ keepRevisionIds: true }` to it when that build has
+   * the option, so that the new room groups its revisions as the earlier room did.
    */
   readonly exported: Uint8Array;
   /**

@@ -868,7 +868,10 @@ export type { DocumentCollaborationSession } from './document-session-contract.t
 export type DocumentCollaborationHandle = CollaborationHandle<DocumentCollaborationSession>;
 
 export type { CreateDocumentCollaborationOptions } from './document-session-options.ts';
-export { readCollaborationDocument } from './document-read.ts';
+export {
+  readCollaborationDocument,
+  type ReadCollaborationDocumentOptions,
+} from './document-read.ts';
 
 /**
  * Create or join one full-document collaboration replica.
