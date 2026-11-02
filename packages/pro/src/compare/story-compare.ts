@@ -404,17 +404,28 @@ function compareBlockPair(base: BlockUnit, revised: BlockUnit, ctx: EmitContext)
   return compareSdt(base.node, revised.node, ctx);
 }
 
+const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+/** WordprocessingML blocks that hold content the compare cannot track. */
+const CONTENT_BLOCKS = new Set(['altChunk', 'customXml', 'r', 'hyperlink', 'fldSimple']);
+
+/**
+ * Content the compare cannot track: an embedded chunk, a custom XML block, a stray run, or an
+ * element of another vocabulary. Markers and misplaced properties carry no content.
+ */
+const holdsContent = (unit: BlockUnit) =>
+  unit.node.namespaceUri !== W_NS || CONTENT_BLOCKS.has(unit.node.localName);
+
 function deletedBlock(unit: BlockUnit, ctx: EmitContext): string {
   if (unit.kind === 'table') return compareTable(unit.node, null, ctx);
   if (unit.kind === 'sdt') return compareSdt(unit.node, null, ctx);
-  // Untrackable original content stays.
-  ctx.state.untracked++;
+  // A marker of the original stays; untrackable content stays and refuses the compare.
+  if (holdsContent(unit)) ctx.state.untracked++;
   return ctx.base.serialize(unit.node);
 }
 
 function insertedBlock(unit: BlockUnit, ctx: EmitContext): string {
   if (unit.kind === 'table') return compareTable(null, unit.node, ctx);
   if (unit.kind === 'sdt') return compareSdt(null, unit.node, ctx);
-  ctx.state.untracked++;
+  if (holdsContent(unit)) ctx.state.untracked++;
   return '';
 }

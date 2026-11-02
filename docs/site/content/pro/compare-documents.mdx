@@ -24,7 +24,7 @@ The compare aligns the two documents block by block, then compares matched text 
 - Character, paragraph, table, and section formatting, when formatting detection is on.
 - Changes in headers and footers of the final section, footnotes, and endnotes.
 
-The compare runs on both documents with their existing tracked changes accepted. The result keeps the comments of both documents. Bookmarks and header and footer references come from the original. Field results are compared as saved; the compare never updates or runs fields.
+The compare runs on both documents with their existing tracked changes accepted. The result keeps the comments of both documents. Bookmarks and header and footer references come from the original. Styles and lists keep the original's definitions, and the styles and lists that only the revised document defines are added. Field results are compared as saved; the compare never updates or runs fields.
 
 ## Compare in the editor
 
@@ -97,5 +97,7 @@ The compare also refuses with `unsupported-content` in these cases:
 
 - The documents differ inside a content control that is locked or bound to custom XML data. Tracked changes there cannot be accepted or rejected.
 - The original or the revised document holds tracked changes that cannot be accepted, so its final state is unknown.
+- The documents differ in block content that has no tracked-change form, such as an embedded file chunk.
+- The original document enforces document protection of any kind. A compare would rewrite its content and its tracked changes.
 
-Every compare entry point reports the same reason: the dialog shows it, the `compareDocuments` command returns it, and `Document.compareFromBase64` rejects `context.sync()` with it.
+The dialog shows the reason, and the `compareDocuments` command returns it. `Document.compareFromBase64` rejects `context.sync()` with a stable error code instead of the message: `NotImplemented` for these refusals, `InvalidArgument` for a revised file it cannot read, and `NotSupported` for documents over the size limit.

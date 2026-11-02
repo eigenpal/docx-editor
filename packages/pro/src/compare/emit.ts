@@ -146,6 +146,12 @@ export function emitContent(items: readonly Item[], ctx: EmitContext): string {
       if (first.mark !== 'eq') out += `<w:${first.mark}${ctx.attrs()}>`;
       openMark = first.mark;
     }
+    if (first.atom.outsideRun) {
+      // The revision wrapper may hold it directly; a run may not.
+      out += first.atom.xml;
+      i = j;
+      continue;
+    }
     out += runXml(
       items.slice(i, j),
       formatChange ? first.baseRPr : null,

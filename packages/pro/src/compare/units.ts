@@ -14,6 +14,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type { OoxmlNode, OoxmlPackage } from '@docx-editor.dev/core/store';
 import { relationshipsOf } from '@docx-editor.dev/core/store';
 import { textBoxesOf, withBoxMarkers } from './text-boxes.ts';
+import { numberingMapOf, withMappedNumbering } from './definitions.ts';
 import {
   attributeOf,
   childNamed,
@@ -55,6 +56,8 @@ export interface Atom {
   readonly note?: { readonly kind: 'footnote' | 'endnote'; readonly id: string };
   /** The object element, kept when it holds text boxes (compared as stories). */
   readonly node?: ElementNode;
+  /** A paragraph-level element (math, unknown extensions): written outside any run. */
+  readonly outsideRun?: true;
 }
 
 export interface ParagraphUnit {
@@ -173,9 +176,12 @@ export class SideContext {
   /** Serialized node, with relationship ids as written. */
   raw(node: OoxmlNode): string {
     const root = this.pkg.parts.get(this.partName)?.root;
-    return this.scope.serialize(
+    const xml = this.scope.serialize(
       withInheritedBindings(node, root && isElement(root) ? root.namespaceBindings : [])
     );
+    // Revised lists take their output ids, so equal lists compare equal.
+    const lists = this.name === 'revised' ? numberingMapOf(this.pkg) : undefined;
+    return lists ? withMappedNumbering(xml, lists) : xml;
   }
 
   /** Serialized node; revised-side relationship ids become import placeholders. */
@@ -363,8 +369,9 @@ function walkInline(
     }
     return;
   }
-  // Anything else inline (math, unknown extensions) is one object atom with no run properties.
-  pushObject(node, '', side, wrappers, state);
+  // Anything else inline (math, unknown extensions) is one object atom with no run properties,
+  // a child of the paragraph rather than of a run.
+  pushObject(node, '', side, wrappers, state, true);
 }
 
 function wrapperOf(node: ElementNode, side: SideContext): Wrapper {
@@ -445,7 +452,8 @@ function pushObject(
   rPr: string,
   side: SideContext,
   wrappers: readonly Wrapper[],
-  state: WalkState
+  state: WalkState,
+  outsideRun = false
 ): void {
   const raw = side.raw(node);
   const xml = side.remap(raw);
@@ -476,6 +484,7 @@ function pushObject(
     markers: takePending(state),
     ...(noteKind && noteId !== undefined ? { note: { kind: noteKind, id: noteId } } : {}),
     ...(boxes ? { node } : {}),
+    ...(outsideRun ? { outsideRun: true as const } : {}),
   });
 }
 

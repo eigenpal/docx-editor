@@ -26,11 +26,25 @@ const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
 
-function docx(text: string): Uint8Array {
+function docx(text: string, protection?: string): Uint8Array {
+  const settings = protection
+    ? {
+        'word/settings.xml': strToU8(
+          `<w:settings xmlns:w="${W}"><w:documentProtection w:edit="${protection}" w:enforcement="1"/></w:settings>`
+        ),
+        'word/_rels/document.xml.rels': strToU8(
+          `<Relationships xmlns="${REL}"><Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/></Relationships>`
+        ),
+      }
+    : {};
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        (protection
+          ? '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>'
+          : '') +
+        '</Types>'
     ),
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
@@ -38,6 +52,7 @@ function docx(text: string): Uint8Array {
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`
     ),
+    ...settings,
   });
 }
 
@@ -65,12 +80,16 @@ function reviewModule(review: Partial<ReviewModuleContribution> = {}): EditorMod
 let cleanup: () => void = () => {};
 afterEach(() => cleanup());
 
-function mount(modules: EditorModule[], options: { mode?: 'view' } = {}): DocxEditorInstance {
+function mount(
+  modules: EditorModule[],
+  options: { mode?: 'view' } = {},
+  original = docx('Original text')
+): DocxEditorInstance {
   const container = document.createElement('div');
   document.body.append(container);
   const editor = createDocxEditor({
     container,
-    document: docx('Original text'),
+    document: original,
     author: 'Reviewer',
     modules,
     ...options,
@@ -143,6 +162,17 @@ describe('compare documents commands', () => {
       ok: false,
       code: 'locked',
     });
+  });
+
+  test('refuse under tracked-changes and comments protection', () => {
+    for (const edit of ['trackedChanges', 'comments']) {
+      const editor = mount([reviewModule()], {}, docx('Original text', edit));
+      expect(editor.can({ type: 'compareDocuments', revised: docx('x') })).toMatchObject({
+        ok: false,
+        code: 'locked',
+      });
+      cleanup();
+    }
   });
 
   test('installs the result as one undo step; redo reapplies it', () => {

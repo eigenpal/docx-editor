@@ -18,6 +18,7 @@ import { createSessionChrome } from './text-form-field-chrome.ts';
 export const COMPARE_COLLABORATION_REASON = 'collaboration-compare-unsupported';
 export const COMPARE_FORMS_PROTECTION_REASON =
   'this document is protected; only form fields can be filled';
+const COMPARE_PROTECTION_REASON = 'this document is protected against edits';
 
 export interface CompareDocumentsStateHost {
   container(): HTMLElement | null;
@@ -66,6 +67,10 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
     );
     if (protection.enforced && protection.edit === 'forms')
       return { ok: false, code: 'locked', reason: COMPARE_FORMS_PROTECTION_REASON };
+    // Tracked-changes and comments protection guard the existing revisions and their authors,
+    // which a compare rewrites.
+    if (protection.enforced)
+      return { ok: false, code: 'locked', reason: COMPARE_PROTECTION_REASON };
     return { ok: true };
   };
 

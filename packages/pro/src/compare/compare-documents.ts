@@ -29,12 +29,14 @@ export type ComparePackagesResult =
   | Extract<CompareDocumentsResult, { ok: false }>;
 import { CompareState, EmitContext, notePlaceholder, sectPrXml, type NoteKind } from './emit.ts';
 import { assemblePackage } from './package-assemble.ts';
+import { mergeDefinitions } from './definitions.ts';
 import { mergeComments } from './comments.ts';
 import { hasRevision, selfCheck } from './self-check.ts';
 import { compareFurniture, compareNotes, storyXml, type StoryOutput } from './stories.ts';
 import { compareContainer } from './story-compare.ts';
 import { SideContext, unitsOf } from './units.ts';
 import {
+  attributeOf,
   childNamed,
   elementChildren,
   isElement,
@@ -79,6 +81,14 @@ export function comparePackages(
   /** @internal Diagnostics only: return the result even when the self-check fails. */
   unchecked = false
 ): ComparePackagesResult {
+  if (protectedAgainstEdits(original)) {
+    return {
+      ok: false,
+      code: 'unsupported-content',
+      message:
+        'The original document is protected against edits. A compare would rewrite its content and tracked changes.',
+    };
+  }
   const basePkg = acceptAll(original);
   const revisedPkg = acceptAll(revised);
   if (!basePkg) return unacceptable('original');
@@ -105,6 +115,8 @@ export function comparePackages(
     return { ok: false, code: 'too-large', message: 'The documents are too large to compare.' };
   }
 
+  // Before any revised content is serialized: it registers the revised list id map.
+  const definitions = mergeDefinitions(basePkg, revisedPkg);
   const state = new CompareState();
   const scope = new NamespaceScope();
   const base = new SideContext('base', basePkg, basePkg.mainDocumentPart, scope);
@@ -132,11 +144,20 @@ export function comparePackages(
   const stories: StoryOutput[] = [
     { partName: baseDoc.name, contentType: baseDoc.contentType, xml: documentXml, isNew: false },
     ...furniture.outputs,
+    ...definitions,
   ];
   for (const kind of ['footnote', 'endnote'] as const) {
     const notes = compareNotes(basePkg, revisedPkg, kind, ctx);
     if (notes.output) stories.push(notes.output);
     replaceNoteIds(stories, kind, notes.ids);
+  }
+  if (ctx.state.untracked > 0) {
+    return {
+      ok: false,
+      code: 'unsupported-content',
+      message:
+        'The documents differ in block content that has no tracked-change form, such as an embedded file chunk.',
+    };
   }
   const assembled = assemblePackage(
     basePkg,
@@ -186,6 +207,28 @@ function replaceNoteIds(
     for (const [revisedId, id] of ids) xml = xml.split(notePlaceholder(kind, revisedId)).join(id);
     stories[i] = { ...stories[i]!, xml };
   }
+}
+
+const OFF_VALUES = new Set(['0', 'false', 'off']);
+
+/** Whether the settings enforce document protection (`w:documentProtection`) of any kind. */
+function protectedAgainstEdits(pkg: OoxmlPackage): boolean {
+  for (const part of pkg.parts.values()) {
+    if (!part.contentType.endsWith('.settings+xml')) continue;
+    const protection = elementChildren(part.root).find(
+      (child) => child.localName === 'documentProtection'
+    );
+    if (!protection) return false;
+    const edit = attributeOf(protection, 'edit');
+    const enforcement = attributeOf(protection, 'enforcement');
+    return (
+      edit !== undefined &&
+      edit !== 'none' &&
+      enforcement !== undefined &&
+      !OFF_VALUES.has(enforcement)
+    );
+  }
+  return false;
 }
 
 function unacceptable(side: 'original' | 'revised'): ComparePackagesResult {
