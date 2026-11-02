@@ -2087,6 +2087,10 @@ export interface HyperlinkOps {
     linksInCaretParagraph(): SurfaceHyperlink[];
     removeHyperlink(linkId?: string): boolean;
     selectionIsPendingDeletion(): boolean;
+    wordAtCaret(): {
+        readonly from: SemanticPosition;
+        readonly to: SemanticPosition;
+    } | null;
 }
 
 // @public

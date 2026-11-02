@@ -65,7 +65,10 @@ jobs:
     # the results of the jobs that passed.
     if: needs.source.outputs.published == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # Several API calls per PR and issue, so a large release takes long: 2.34.0 shipped
+    # 148 PRs and hit a 10-minute limit after 202 comments. The comments skip threads that
+    # already have one, so a rerun after a timeout continues where it stopped.
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:

@@ -147,7 +147,9 @@ export class InlineIndex {
     private readonly nodes: Y.Map<Y.Map<unknown>>,
     private readonly limits: DocumentLimits,
     private readonly isDeleted: (paragraphId: LogicalId) => boolean,
-    order: DocumentOrder
+    order: DocumentOrder,
+    /** Hears each paragraph whose text or marks changed, before the index is first built too. */
+    private readonly textChanged: (paragraphId: LogicalId) => void = () => {}
   ) {
     this.follow = new TextFollow(
       (id) => this.textOf(id),
@@ -352,6 +354,7 @@ export class InlineIndex {
 
   /** Read one paragraph's text again after it changed. */
   paragraphChanged(paragraphId: LogicalId): void {
+    this.textChanged(paragraphId);
     // Before the first read, the first read builds from the whole document instead.
     if (!this.built) return;
     const before = this.idsOf.get(paragraphId) ?? new Set<string>();

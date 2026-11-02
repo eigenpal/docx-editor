@@ -270,6 +270,33 @@ describe('DocxEditor.HyperLink', () => {
     expect(mounted.editor().surface!.hyperlinks.linkAtCaret()?.href).toBe('https://typed.example');
   });
 
+  test('a caret inside a word opens with that word, and Enter links the word', () => {
+    const mounted = mount(PLAIN);
+    caret(mounted, 8);
+    pressCommandK(mounted);
+    const text = mounted.view.getByTestId('hyperlink-popup-text') as HTMLInputElement;
+    expect(text.value).toBe('example');
+    const url = mounted.view.getByTestId('hyperlink-popup-url-input') as HTMLInputElement;
+    act(() => {
+      fireEvent.change(url, { target: { value: 'https://typed.example' } });
+    });
+    act(() => {
+      fireEvent.keyDown(url, { key: 'Enter' });
+    });
+    caret(mounted, 8);
+    const link = mounted.editor().surface!.hyperlinks.linkAtCaret();
+    expect(link?.text).toBe('example');
+    expect(bodyText(mounted)).toBe('Visit example today');
+  });
+
+  test('a caret at a word edge opens with no display text', () => {
+    const mounted = mount(PLAIN);
+    caret(mounted, 13);
+    pressCommandK(mounted);
+    const text = mounted.view.getByTestId('hyperlink-popup-text') as HTMLInputElement;
+    expect(text.value).toBe('');
+  });
+
   test('a refused scheme is not applied and the document is untouched', () => {
     const mounted = mount(PLAIN);
     select(mounted, 6, 13);

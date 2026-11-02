@@ -648,6 +648,42 @@
         "package-lock.json": "dc56ff7c0c06e543ad06d26d0c2944a7b2498e6db21b799d96056b0cc64b9fa4",
         "fixture.json": "34edd7efeacaa8d5cfbb768354f6b2b8679b29c83c0035d0a417e493c84f1011"
       }
+    },
+    {
+      "version": "2.34.0",
+      "commit": "4692431a8eb1d4d38a495bd6ea1babc87413811a",
+      "sourceLockHash": "b99e90649d9a921fade047db63b38397c013ee6578f4b81b1e30b283b9db0c29",
+      "format": "docx-collaboration:1.5.3.1",
+      "versions": {
+        "protocolVersion": 1,
+        "sharedSchemaVersion": 5,
+        "repairVersion": 3,
+        "canonicalModelVersion": 1
+      },
+      "directory": ".collaboration/releases/2.34.0",
+      "packages": {
+        "@docx-editor.dev/i18n": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/i18n/-/i18n-2.34.0.tgz",
+          "integrity": "sha512-X85SigpdmH1dzn8H73ZMI/BoiYWluepCAgJXANaGdJGAqYWsaJPPMROff0DcLG3h2BIb/QrR5AlxVplHuCEfgQ=="
+        },
+        "@docx-editor.dev/core": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/core/-/core-2.34.0.tgz",
+          "integrity": "sha512-FjiB7oYoKGXkFY29RLz3V2vy3gETtgRDCUPlwouaWQqxdAWTp0y3CWvrN//8I0IS7mmJ/ki8ZyIbeRjSKeiQ5g=="
+        },
+        "@docx-editor.dev/editor-api": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/editor-api/-/editor-api-2.34.0.tgz",
+          "integrity": "sha512-/431lNfZnMW8dY804PQmqgCartgC1ej3zLP/NPAsMLgpIQ55WXj6BvNtZ9fdRBFRGFMYkc/9T+S6EpAjlnzF5w=="
+        },
+        "@docx-editor.dev/pro": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/pro/-/pro-2.34.0.tgz",
+          "integrity": "sha512-p6YUq4An7DIIwbkir5lYFTVzoErUgFvNVyhvnP3nAH7V6fWU4Gah0YB9qkwTLABFv6+uOXtbGV0MnYC8aVWgaQ=="
+        }
+      },
+      "hashes": {
+        "package.json": "b1841b412240c532871f9cefb706a2fc1f0d281ea2f4a03313473f434cfb6250",
+        "package-lock.json": "4db90a6922a5ee2bdec3afc7f20e89bc8ddad9714eca2ff2d794f78c7d9e0e60",
+        "fixture.json": "6a7a4dc67b613ba2e6e7ede8d414636f47ecb044c7bbd9eb025c720bf037c792"
+      }
     }
   ]
 }

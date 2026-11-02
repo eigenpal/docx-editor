@@ -2,7 +2,13 @@ import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { jobLabel, summarizeJobs } from './post-release-report.mjs';
 import { withRetries } from './common.mjs';
-import { selectSiteRun, siteRunResult, updateSite, waitForSiteRun } from './site-update.mjs';
+import {
+  failedSteps,
+  selectSiteRun,
+  siteRunResult,
+  updateSite,
+  waitForSiteRun,
+} from './site-update.mjs';
 
 const workflow = (name: string): any =>
   Bun.YAML.parse(
@@ -373,4 +379,34 @@ test('only verification holds the downstream concurrency group, not the site wai
   expect(recovery.concurrency).toBeUndefined();
   expect(recovery.jobs.sites.concurrency).toBeUndefined();
   expect(recovery.jobs.sites.env.REQUEST_ID).toContain('${{ github.run_id }}');
+});
+
+test('a failed site run names its failed steps', () => {
+  expect(
+    failedSteps([
+      { name: 'build', conclusion: 'success', steps: [] },
+      {
+        name: 'sync',
+        conclusion: 'failure',
+        steps: [
+          { name: 'Checkout', conclusion: 'success' },
+          { name: 'Mint release-pal App token', conclusion: 'failure' },
+          { name: 'Merge', conclusion: 'skipped' },
+        ],
+      },
+      { name: 'deploy', conclusion: 'timed_out' },
+      {
+        name: 'merge',
+        conclusion: 'cancelled',
+        steps: [{ name: 'Wait', conclusion: 'cancelled' }],
+      },
+      { name: 'setup', conclusion: 'startup_failure' },
+    ])
+  ).toEqual([
+    'sync / Mint release-pal App token (failure)',
+    'deploy (timed_out)',
+    'merge / Wait (cancelled)',
+    'setup (startup_failure)',
+  ]);
+  expect(failedSteps(undefined)).toEqual([]);
 });
