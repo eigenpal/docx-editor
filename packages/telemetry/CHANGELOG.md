@@ -1,5 +1,11 @@
 # @docx-editor.dev/telemetry
 
+## 2.34.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.34.0, @docx-editor.dev/pro@2.34.0
+
 ## 2.33.0
 
 ### Patch Changes
