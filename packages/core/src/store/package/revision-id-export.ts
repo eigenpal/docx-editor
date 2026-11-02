@@ -83,6 +83,30 @@ interface Conflict {
   readonly seed: string;
 }
 
+/** The change that keeps an id: where it is, and its first element. */
+interface ChangeOwner {
+  readonly partName: string;
+  readonly story: string;
+  readonly annotation: string;
+  readonly node: OoxmlNode;
+  /** The author and date of `node`, read when a second element meets the id. */
+  author: string | undefined;
+  date: string | undefined;
+}
+
+/** Whether `node` has the author and date of the change that owns its id, as its pieces do. */
+function sameChangeFields(owner: ChangeOwner, node: OoxmlNode): boolean {
+  if (owner.author === undefined) {
+    owner.author = wmlAttributeOf(owner.node as OoxmlElement, 'author') ?? '';
+    owner.date = wmlAttributeOf(owner.node as OoxmlElement, 'date') ?? '';
+  }
+  const element = node as OoxmlElement;
+  return (
+    (wmlAttributeOf(element, 'author') ?? '') === owner.author &&
+    (wmlAttributeOf(element, 'date') ?? '') === owner.date
+  );
+}
+
 /** New ids fall in `[0, 2^30)`, the lower half of the non-negative 32-bit range. */
 const NEW_ID_MASK = (1 << 30) - 1;
 
@@ -91,7 +115,9 @@ function wmlAttributeOf(
   node: { readonly attributes: readonly OoxmlAttribute[] },
   localName: string
 ): string | undefined {
-  for (const attribute of node.attributes) {
+  const attributes = node.attributes;
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
     if (attribute.localName === localName && attribute.namespaceUri === WML_NAMESPACE_URI) {
       return attribute.value;
     }
@@ -151,10 +177,16 @@ function partsInOrder(pkg: OoxmlPackage): OoxmlPart[] {
  * piece of it takes the same new id when it must move.
  */
 class RevisionIdScan {
-  readonly used = new Set<number>();
+  /** Ids that no change owns and no new id may take: fallback copies' ids, then new ids. */
+  private readonly reserved = new Set<number>();
   readonly conflicts: Conflict[] = [];
-  /** Each change seen so far: null when it keeps its id, else its conflict. */
-  private readonly changes = new Map<string, Conflict | null>();
+  /**
+   * The change that keeps each id. Most changes keep theirs, so they need no string key: a piece
+   * is compared field by field with the change that owns its id.
+   */
+  private readonly owners = new Map<number, ChangeOwner>();
+  /** Each change that must move, keyed by all its fields, so its pieces share one conflict. */
+  private readonly changes = new Map<string, Conflict>();
   /** Conflicts seen so far per authored id, for each conflict's seed. */
   private readonly repeats = new Map<string, number>();
   /** The story the walk is in, inside its part; see `WmlRole`. */
@@ -184,24 +216,43 @@ class RevisionIdScan {
   ): Conflict | null {
     this.events += 1;
     const parsed = parseRevisionId(value);
-    const element = node as { readonly attributes: readonly OoxmlAttribute[] };
+    const story = this.story;
+    // An id met for the first time needs no author or date: most ids name one element.
+    if (parsed !== null) {
+      const owner = this.owners.get(parsed);
+      if (owner === undefined) {
+        if (this.reserved.size === 0 || !this.reserved.has(parsed)) {
+          this.owners.set(parsed, {
+            partName,
+            story,
+            annotation,
+            node,
+            author: undefined,
+            date: undefined,
+          });
+          return null;
+        }
+      } else if (
+        owner.partName === partName &&
+        owner.story === story &&
+        owner.annotation === annotation &&
+        sameChangeFields(owner, node)
+      ) {
+        return null;
+      }
+    }
     const change = [
       partName,
-      this.story,
+      story,
       annotation,
       parsed === null ? `raw:${value}` : String(parsed),
-      wmlAttributeOf(element, 'author') ?? '',
-      wmlAttributeOf(element, 'date') ?? '',
+      wmlAttributeOf(node as OoxmlElement, 'author') ?? '',
+      wmlAttributeOf(node as OoxmlElement, 'date') ?? '',
     ].join('\u0000');
-    if (this.changes.has(change)) {
-      const known = this.changes.get(change)!;
-      known?.nodeIds.push(node.id);
+    const known = this.changes.get(change);
+    if (known !== undefined) {
+      known.nodeIds.push(node.id);
       return known;
-    }
-    if (parsed !== null && !this.used.has(parsed)) {
-      this.used.add(parsed);
-      this.changes.set(change, null);
-      return null;
     }
     const count = this.repeats.get(value) ?? 0;
     this.repeats.set(value, count + 1);
@@ -301,7 +352,7 @@ class RevisionIdScan {
       if (role !== undefined && role !== 'note' && role !== 'textBox') {
         const value = revisionIdOf(node);
         const parsed = value === undefined ? null : parseRevisionId(value);
-        if (parsed !== null) this.used.add(parsed);
+        if (parsed !== null && !this.owners.has(parsed)) this.reserved.add(parsed);
       }
     }
     for (const child of node.children) this.reserve(child);
@@ -340,11 +391,11 @@ class RevisionIdScan {
   assign(): Map<string, Map<string, string>> {
     const byPart = new Map<string, Map<string, string>>();
     for (const conflict of this.conflicts) {
-      // The used set holds at most one id per element read, far fewer than the 2^30 values
+      // The ids in use are at most one per element read, far fewer than the 2^30 values
       // the probe can walk, so it reaches a free one quickly.
       let id = fnv1a32(conflict.seed) & NEW_ID_MASK;
-      while (this.used.has(id)) id = (id + 1) & NEW_ID_MASK;
-      this.used.add(id);
+      while (this.owners.has(id) || this.reserved.has(id)) id = (id + 1) & NEW_ID_MASK;
+      this.reserved.add(id);
       let changes = byPart.get(conflict.partName);
       if (!changes) byPart.set(conflict.partName, (changes = new Map()));
       for (const nodeId of conflict.nodeIds) changes.set(nodeId, String(id));

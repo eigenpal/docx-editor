@@ -46,6 +46,29 @@ export interface BlockScanSummary {
 
 const summaries = new WeakMap<OoxmlElement, BlockScanSummary>();
 
+/** What a block walk counts inside one `mc:Fallback`: no text box there is a story. */
+function fallbackScan(fallback: OoxmlElement): {
+  size: number;
+  revisionIds: boolean;
+  alternateContent: boolean;
+} {
+  let size = 0;
+  let revisionIds = false;
+  let alternateContent = false;
+  const nodes: OoxmlNode[] = [fallback];
+  while (nodes.length > 0) {
+    const node = nodes.pop()!;
+    size += 1;
+    if (node.kind === 'textValue') continue;
+    if (node.namespaceUri === WML_NAMESPACE_URI && REVISION_ID_ELEMENTS.has(node.localName)) {
+      revisionIds = true;
+    }
+    if (isMcAlternateContent(node)) alternateContent = true;
+    for (const child of node.children) nodes.push(child);
+  }
+  return { size, revisionIds, alternateContent };
+}
+
 /** The summary of a paragraph or table row, from one walk per block identity. */
 export function blockScanSummary(block: OoxmlElement): BlockScanSummary {
   const known = summaries.get(block);
@@ -56,13 +79,10 @@ export function blockScanSummary(block: OoxmlElement): BlockScanSummary {
   let textBoxes = 0;
   let nested = false;
   const elements: OoxmlElement[] = [];
-  // Children go on the stack last first, so nodes leave it in document order. A fallback's
-  // copies are not stories of their own; see `RevisionIdScan.visit`.
+  // Children go on the stack last first, so nodes leave it in document order.
   const nodes: OoxmlNode[] = [block];
-  const inFallback: boolean[] = [false];
   while (nodes.length > 0) {
     const node = nodes.pop()!;
-    const fallback = inFallback.pop()!;
     size += 1;
     if (node.kind === 'textValue') continue;
     if (node.namespaceUri === WML_NAMESPACE_URI) {
@@ -71,19 +91,23 @@ export function blockScanSummary(block: OoxmlElement): BlockScanSummary {
         elements.push(node);
       } else if (node.localName === 'txbxContent') {
         nested = true;
-        if (!fallback) textBoxes += 1;
+        textBoxes += 1;
       }
-    } else if (node.namespaceUri === MC_NAMESPACE_URI && node.localName === 'Fallback') {
-      nested = true;
+    } else if (node.namespaceUri === MC_NAMESPACE_URI) {
+      if (node.localName === 'Fallback') {
+        // A fallback's copies are not stories of their own; see `RevisionIdScan.visit`. It is
+        // rare, so it takes a walk of its own, and the main walk tracks no fallback state.
+        nested = true;
+        const inside = fallbackScan(node);
+        size += inside.size - 1;
+        if (inside.revisionIds) revisionIds = true;
+        if (inside.alternateContent) alternateContent = true;
+        continue;
+      }
+      if (!alternateContent && isMcAlternateContent(node)) alternateContent = true;
     }
-    if (!alternateContent && isMcAlternateContent(node)) alternateContent = true;
-    const childFallback =
-      fallback || (node.namespaceUri === MC_NAMESPACE_URI && node.localName === 'Fallback');
     const children = node.children;
-    for (let index = children.length - 1; index >= 0; index -= 1) {
-      nodes.push(children[index]!);
-      inFallback.push(childFallback);
-    }
+    for (let index = children.length - 1; index >= 0; index -= 1) nodes.push(children[index]!);
   }
   const summary = {
     size,
