@@ -61,6 +61,15 @@ async function paragraphTexts(runtime: DocxEditorServerRuntime): Promise<string[
   });
 }
 
+async function revisionCount(runtime: DocxEditorServerRuntime): Promise<number> {
+  return runtime.run(async (context) => {
+    const revisions = context.document.body.revisions;
+    revisions.load('items');
+    await context.sync();
+    return revisions.items.length;
+  });
+}
+
 const SHAPED = [['Results'], ['Region', 'Q1', 'Q2'], ['North', '10', '12'], ['', '', '']];
 
 describe('merge and split in a pending tracked table', () => {
@@ -73,12 +82,23 @@ describe('merge and split in a pending tracked table', () => {
       expect(xml).toContain('<w:gridSpan w:val="3"/>');
       const rows = xml.match(/<w:tr>[\s\S]*?<\/w:tr>/g) ?? [];
       expect(rows).toHaveLength(4);
-      // Every row, and every paragraph mark in it, is part of the one table insertion.
+      // Every row, and every paragraph mark in it, is part of the one table insertion. The
+      // saved file gives each element its own id; the reopened table is still one change.
       for (const row of rows) {
-        expect(row).toMatch(/^<w:tr><w:trPr><w:ins w:author="Writer" [^>]*w:id="0"\/><\/w:trPr>/);
+        expect(row).toMatch(/^<w:tr><w:trPr><w:ins w:author="Writer" [^>]*w:id="\d+"\/><\/w:trPr>/);
         const marks = row.match(/<w:p [^>]*>/g) ?? [];
-        const insertedMarks = row.match(/<w:pPr><w:rPr><w:ins [^>]*w:id="0"\/>/g) ?? [];
+        const insertedMarks = row.match(/<w:pPr><w:rPr><w:ins w:author="Writer" /g) ?? [];
         expect(insertedMarks.length).toBe(marks.length);
+      }
+      const ids = [...xml.matchAll(/<w:ins [^>]*w:id="(\d+)"/g)].map((match) => match[1]);
+      expect(new Set(ids).size).toBe(ids.length);
+      const live = await revisionCount(runtime);
+      expect(live).toBeGreaterThan(0);
+      const reopened = await reopen(runtime);
+      try {
+        expect(await revisionCount(reopened)).toBe(live);
+      } finally {
+        reopened.dispose();
       }
     } finally {
       runtime.dispose();

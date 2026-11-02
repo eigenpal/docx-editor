@@ -23,7 +23,7 @@ import * as Y from 'yjs';
 import type { Awareness } from 'y-protocols/awareness';
 import {
   ORIGIN_IDS,
-  writeOoxmlPackage,
+  writeOoxmlPackageKeepingRevisionIds,
   type OoxmlPackage,
   type StoryScope,
   type TreeDocOp,
@@ -868,7 +868,10 @@ export type { DocumentCollaborationSession } from './document-session-contract.t
 export type DocumentCollaborationHandle = CollaborationHandle<DocumentCollaborationSession>;
 
 export type { CreateDocumentCollaborationOptions } from './document-session-options.ts';
-export { readCollaborationDocument } from './document-read.ts';
+export {
+  readCollaborationDocument,
+  type ReadCollaborationDocumentOptions,
+} from './document-read.ts';
 
 /**
  * Create or join one full-document collaboration replica.
@@ -964,8 +967,9 @@ async function bootstrapDocumentReplica(
       throw new CollaborationSchemaError(materialized.code);
     }
     // Serialize before the session exists: a throw here must not orphan a live session
-    // whose registry and materializer the catch below is about to tear down.
-    const document = writeOoxmlPackage(materialized.package);
+    // whose registry and materializer the catch below is about to tear down. The replica
+    // loads these bytes as the shared document, so revision ids stay as shared state holds them.
+    const document = writeOoxmlPackageKeepingRevisionIds(materialized.package);
     const session = new DocumentSession(
       options.ydoc,
       options.awareness,

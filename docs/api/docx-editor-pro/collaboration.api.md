@@ -268,7 +268,12 @@ export function prepareCollaborationServerDocument(document: Y.Doc): () => void;
 export const PROTOCOL_VERSION = 1;
 
 // @public
-export function readCollaborationDocument(ydoc: Y.Doc): Uint8Array;
+export function readCollaborationDocument(ydoc: Y.Doc, options?: ReadCollaborationDocumentOptions): Uint8Array;
+
+// @public
+export interface ReadCollaborationDocumentOptions {
+    readonly keepRevisionIds?: boolean;
+}
 
 // @public
 export function readCollaborationFormatVersion(ydoc: Y.Doc): string;

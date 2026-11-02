@@ -8,12 +8,27 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 import type * as Y from 'yjs';
-import { writeOoxmlPackage } from '@docx-editor.dev/core/store';
+import {
+  writeOoxmlPackage,
+  writeOoxmlPackageKeepingRevisionIds,
+  type OoxmlPackage,
+} from '@docx-editor.dev/core/store';
 import { DocumentRegistry, PackageMaterializer } from './document/index.ts';
 import { admitSharedState } from './document-bootstrap.ts';
 import { SHARED_BLOBS_KEY, SharedBlobStore } from './shared-blob-store.ts';
 import { CollaborationSchemaError } from './errors.ts';
 import { droppedContentDetail } from './document/schema.ts';
+
+/** Options for {@link readCollaborationDocument}. @public */
+export interface ReadCollaborationDocumentOptions {
+  /**
+   * Keep every revision `w:id` as the room holds it. Pass `true` for the export that
+   * `migrateCollaborationRoom` seeds a new room with: one change keeps one id across its
+   * pieces, so the new room shows the same review items. Omitted or `false`, the file gives
+   * each revision element its own in-range id, as a file for anyone to open needs.
+   */
+  readonly keepRevisionIds?: boolean;
+}
 
 /**
  * Read the document a synchronized `Y.Doc` holds, as `.docx` bytes.
@@ -36,13 +51,39 @@ import { droppedContentDetail } from './document/schema.ts';
  *
  * Synchronous, and it materializes the whole package per call — this is a job, not a render.
  *
+ * For a room migration export, pass `{ keepRevisionIds: true }`; see
+ * {@link ReadCollaborationDocumentOptions.keepRevisionIds}.
+ *
  * @throws CollaborationSchemaError — `not-initialized`, `concurrent-seed`,
  * `protocol-version-mismatch`, `schema-version-mismatch`, `blob-digest-mismatch`,
  * `materialize-dropped-content`, `no-main-document-part`, or a limit code. Incomplete or
  * corrupt shared state refuses instead of producing an incomplete DOCX.
  * @public
  */
-export function readCollaborationDocument(ydoc: Y.Doc): Uint8Array {
+export function readCollaborationDocument(
+  ydoc: Y.Doc,
+  options?: ReadCollaborationDocumentOptions
+): Uint8Array {
+  return readRoomDocument(
+    ydoc,
+    options?.keepRevisionIds === true ? writeOoxmlPackageKeepingRevisionIds : writeOoxmlPackage
+  );
+}
+
+/**
+ * {@link readCollaborationDocument}, keeping every revision `w:id` as the room holds it.
+ *
+ * For bytes that go back into a room, as compaction and migration seed a new generation
+ * with them: participants must see the same revisions, grouped the same way, after the new
+ * generation as before it. A file for anyone to open uses {@link readCollaborationDocument}.
+ *
+ * @internal
+ */
+export function readCollaborationDocumentKeepingRevisionIds(ydoc: Y.Doc): Uint8Array {
+  return readRoomDocument(ydoc, writeOoxmlPackageKeepingRevisionIds);
+}
+
+function readRoomDocument(ydoc: Y.Doc, write: (pkg: OoxmlPackage) => Uint8Array): Uint8Array {
   const registry = new DocumentRegistry(ydoc);
   let materializer: PackageMaterializer | null = null;
   // Owned here, so released here — whether the read succeeded or refused. This runs once per
@@ -70,7 +111,7 @@ export function readCollaborationDocument(ydoc: Y.Doc): Uint8Array {
     if (!materialized.package.parts.has(materialized.package.mainDocumentPart)) {
       throw new CollaborationSchemaError('no-main-document-part');
     }
-    return writeOoxmlPackage(materialized.package);
+    return write(materialized.package);
   } finally {
     materializer?.destroy();
     registry.destroy();
