@@ -8,11 +8,17 @@
 
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { EditorCollaborationSession } from '../collaboration/index.ts';
-import { ORIGIN_IDS, type StoryScope, type TreeDocOp } from '@docx-editor.dev/core/store';
+import {
+  DEPENDENCY_KEY_IDS,
+  ORIGIN_IDS,
+  type HistoryGroup,
+  type StoryScope,
+  type TreeDocOp,
+  type TreeModelChange,
+} from '@docx-editor.dev/core/store';
 import { runOutsideSharedUndo } from '../store/package/canonical-primitive-capture.ts';
 import { isDocumentSetupEdit } from '../store/package/style-definition-edit.ts';
 import { duplicateSetupStylesEdit } from '../store/package/setup-style-repair.ts';
-import type { HistoryGroup } from '@docx-editor.dev/core/store';
 
 type ApplyTreeOps = TreeDocxSessionView['applyTreeOps'];
 type PackageEdits = NonNullable<Parameters<ApplyTreeOps>[4]>['packageEdits'];
@@ -94,9 +100,14 @@ export function createJournaledApply(deps: JournaledApplyDeps) {
   }
 
   let repairQueued = false;
-  /** After a change from another participant: repair once that change has settled. */
-  function noteRemoteChange(): void {
+  /**
+   * After a change from another participant: repair once that change has settled. A change
+   * narrowed to the main story's paragraphs (remote typing) cannot reach the styles part.
+   */
+  function noteRemoteChange(change: Pick<TreeModelChange, 'dependencyKeys'>): void {
     if (!collaboration || repairQueued) return;
+    const keys = change.dependencyKeys;
+    if (keys.length > 0 && keys.every((key) => key === DEPENDENCY_KEY_IDS.story)) return;
     repairQueued = true;
     deps.later(() => {
       repairQueued = false;

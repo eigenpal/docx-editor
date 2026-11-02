@@ -3,13 +3,14 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// A new link in a document with no hyperlink character style, between an editor and a peer.
+// A new link in a collaboration session, in a document with no hyperlink character style.
 //
-// The editor adds the style to the styles part as document setup, outside shared undo. The
-// peer must receive the style with the link, undo must take back the link and leave the style
-// that other participants' links may use, a concurrent edit by the peer must converge, an
-// offline link must arrive with its style on reconnect, and copies that participants add
-// while apart must merge into one.
+// The editor adds the style to the existing styles part as document setup, outside shared
+// undo. The peer must receive the style with the link, undo must take back the link and leave
+// the style that other participants' links may use, a concurrent edit by the peer must
+// converge, an offline link must arrive with its style on reconnect, and copies that
+// participants add while apart must merge into one. A session never creates the styles part:
+// two participants who each created it would leave the main part with two relationships.
 
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
@@ -33,9 +34,50 @@ afterAll(() => {
 });
 
 const DOCUMENT_ID = 'hyperlink-style-room';
-const SOURCE = zipDocument(
+/** A document with no styles part. */
+const BARE_SOURCE = zipDocument(
   '<w:p><w:r><w:t xml:space="preserve">Visit example today and tomorrow</w:t></w:r></w:p>' +
     '<w:sectPr/>'
+);
+
+/** The same body, with a styles part that has no hyperlink style: the usual case. */
+const STYLED_SOURCE = zipDocument(
+  '<w:p><w:r><w:t xml:space="preserve">Visit example today and tomorrow</w:t></w:r></w:p>' +
+    '<w:sectPr/>',
+  {
+    overrides:
+      '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>',
+    documentRels:
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rIdS" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '</Relationships>',
+    extraXml: {
+      'word/styles.xml':
+        '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+        '</w:styles>',
+    },
+  }
+);
+
+/** The same body, with a styles part that already defines the hyperlink style. */
+const HYPERLINK_SOURCE = zipDocument(
+  '<w:p><w:r><w:t xml:space="preserve">Visit example today and tomorrow</w:t></w:r></w:p>' +
+    '<w:sectPr/>',
+  {
+    overrides:
+      '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>',
+    documentRels:
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rIdS" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '</Relationships>',
+    extraXml: {
+      'word/styles.xml':
+        '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+        '<w:style w:type="character" w:styleId="Hyperlink"><w:name w:val="Hyperlink"/>' +
+        '<w:rPr><w:u w:val="single"/></w:rPr></w:style></w:styles>',
+    },
+  }
 );
 
 const cleanups: (() => void)[] = [];
@@ -67,6 +109,21 @@ function runStyles(pkg: OoxmlPackage): string[] {
   return values;
 }
 
+/** Number of `w:hyperlink` elements in the main document part. */
+function linkCount(pkg: OoxmlPackage): number {
+  let count = 0;
+  walk(pkg.parts.get(pkg.mainDocumentPart)!.root, (node: OoxmlNode) => {
+    if (node.kind !== 'textValue' && node.localName === 'hyperlink') count += 1;
+  });
+  return count;
+}
+
+/** Whether the package has a styles part. */
+function hasStylesPart(pkg: OoxmlPackage): boolean {
+  for (const part of pkg.parts.values()) if (part.root.localName === 'styles') return true;
+  return false;
+}
+
 function bodyText(pkg: OoxmlPackage): string {
   const texts: string[] = [];
   walk(pkg.parts.get(pkg.mainDocumentPart)!.root, (node: OoxmlNode) => {
@@ -75,7 +132,7 @@ function bodyText(pkg: OoxmlPackage): string {
   return texts.join('');
 }
 
-async function editorWithPeer() {
+async function editorWithPeer(source: Uint8Array = STYLED_SOURCE) {
   const { createDocxEditor } = await import('@docx-editor.dev/core/editor');
   const harness = createPeerHarness(DOCUMENT_ID);
   const ydoc = new Y.Doc();
@@ -85,7 +142,7 @@ async function editorWithPeer() {
     awareness,
     documentId: DOCUMENT_ID,
     identity: { actorId: 'editor-user', name: 'Editor user' },
-    bootstrap: { kind: 'create', document: SOURCE },
+    bootstrap: { kind: 'create', document: source },
   });
   const container = document.createElement('div');
   document.body.append(container);
@@ -156,6 +213,7 @@ describe('a new link adds the hyperlink style for every participant', () => {
 
     ctx.surface.undo();
     await ctx.settle();
+    expect(linkCount(peerPkg())).toBe(0);
     expect(runStyles(peerPkg())).toEqual([]);
     // The style is document setup, outside undo: it stays for content made since.
     expect(hyperlinkStyles(peerPkg())).toEqual(['Hyperlink']);
@@ -198,27 +256,28 @@ describe('a new link adds the hyperlink style for every participant', () => {
     expect(runStyles(peerPkg)).toEqual(['Hyperlink', 'Hyperlink']);
     ctx.harness.expectConverged(ctx.peer, await ctx.observer());
   });
-});
 
-/** The same body, with a styles part that has no hyperlink style: the usual case. */
-const STYLED_SOURCE = zipDocument(
-  '<w:p><w:r><w:t xml:space="preserve">Visit example today and tomorrow</w:t></w:r></w:p>' +
-    '<w:sectPr/>',
-  {
-    overrides:
-      '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>',
-    documentRels:
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-      '<Relationship Id="rIdS" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
-      '</Relationships>',
-    extraXml: {
-      'word/styles.xml':
-        '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
-        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
-        '</w:styles>',
-    },
-  }
-);
+  test("a document's own hyperlink style is used, and no copy is added", async () => {
+    const ctx = await editorWithPeer(HYPERLINK_SOURCE);
+    ctx.link(6, 13);
+    await ctx.settle();
+    const peerPkg = ctx.harness.packageOf(ctx.peer);
+    expect(runStyles(peerPkg)).toEqual(['Hyperlink']);
+    expect(hyperlinkStyles(peerPkg)).toEqual(['Hyperlink']);
+    ctx.harness.expectConverged(ctx.peer, await ctx.observer());
+  });
+
+  test('a document without a styles part gets no styles part and an unstyled link', async () => {
+    const ctx = await editorWithPeer(BARE_SOURCE);
+    ctx.link(6, 13);
+    await ctx.settle();
+    const peerPkg = ctx.harness.packageOf(ctx.peer);
+    expect(linkCount(peerPkg)).toBe(1);
+    expect(runStyles(peerPkg)).toEqual([]);
+    expect(hasStylesPart(peerPkg)).toBe(false);
+    ctx.harness.expectConverged(ctx.peer, await ctx.observer());
+  });
+});
 
 describe('two editors in one room', () => {
   let room = 0;
@@ -298,11 +357,11 @@ describe('two editors in one room', () => {
     expect(editor.exec({ type: 'insertHyperlink', href: 'https://example.com' }).ok).toBe(true);
   };
 
-  for (const [label, source] of [
-    ['without a styles part', SOURCE],
-    ['with a styles part', STYLED_SOURCE],
+  for (const [label, source, styled] of [
+    ['without a styles part', BARE_SOURCE, false],
+    ['with a styles part', STYLED_SOURCE, true],
   ] as const) {
-    test(`first links made while apart converge on one style, ${label}`, async () => {
+    test(`first links made while apart converge, ${label}`, async () => {
       const room = await pair(source);
       room.offline();
       linkWith(room.left, 6, 13);
@@ -310,19 +369,18 @@ describe('two editors in one room', () => {
       await room.reconnect();
       for (const editor of [room.left, room.right]) {
         const pkg = editor.surface!.session.currentPackage();
-        expect(runStyles(pkg)).toEqual(['Hyperlink', 'Hyperlink']);
-        expect(hyperlinkStyles(pkg)).toEqual(['Hyperlink']);
+        expect(linkCount(pkg)).toBe(2);
+        expect(runStyles(pkg)).toEqual(styled ? ['Hyperlink', 'Hyperlink'] : []);
+        expect(hyperlinkStyles(pkg)).toEqual(styled ? ['Hyperlink'] : []);
+        expect(hasStylesPart(pkg)).toBe(styled);
         expect(bodyText(pkg)).toBe('Visit example today and tomorrow');
       }
     });
   }
 
-  for (const [label, source] of [
-    ['without a styles part', SOURCE],
-    ['with a styles part', STYLED_SOURCE],
-  ] as const) {
-    test(`undo of the first link keeps the style a later link uses, ${label}`, async () => {
-      const room = await pair(source);
+  {
+    test('undo of the first link keeps the style a later link uses', async () => {
+      const room = await pair(STYLED_SOURCE);
       linkWith(room.left, 6, 13);
       await room.settle();
       linkWith(room.right, 24, 32);

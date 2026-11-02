@@ -41,7 +41,7 @@ export function isDocumentSetupEdit(edit: PackageEdit): boolean {
 }
 
 /** Attribute value of a `w:` attribute on an element, or undefined. */
-function attributeOf(node: OoxmlElement, localName: string): string | undefined {
+export function attributeOf(node: OoxmlElement, localName: string): string | undefined {
   return node.attributes.find((a) => a.localName === localName)?.value;
 }
 

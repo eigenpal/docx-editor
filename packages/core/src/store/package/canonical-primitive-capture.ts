@@ -37,19 +37,21 @@ interface CaptureFrame {
   suppressDepth: number;
 }
 
-let outsideUndoDepth = 0;
+let outsideUndoArmed = false;
 
 /**
- * Run `body` so that the store transactions it opens publish journals marked outside shared
- * undo (`isJournalOutsideUndo`). Local history is the caller's own choice; this marks only
- * the published journal.
+ * Run `body`, one store transaction, so that the journal it publishes is marked outside
+ * shared undo (`isJournalOutsideUndo`). Only that transaction's frame takes the mark: a
+ * transaction a subscriber opens while it publishes is an ordinary one. Local history is the
+ * caller's own choice; this marks only the published journal.
  */
 export function runOutsideSharedUndo<T>(body: () => T): T {
-  outsideUndoDepth += 1;
+  const previous = outsideUndoArmed;
+  outsideUndoArmed = true;
   try {
     return body();
   } finally {
-    outsideUndoDepth -= 1;
+    outsideUndoArmed = previous;
   }
 }
 
@@ -136,13 +138,9 @@ function storeObserverCount(store: object): number {
 function pushFrame(observed: boolean, historyGroup: HistoryGroup | undefined): void {
   const effects = observed ? [] : null;
   if (observed) allocationCount += 1;
-  frames.push({
-    observed,
-    effects,
-    historyGroup,
-    outsideUndo: outsideUndoDepth > 0,
-    suppressDepth: 0,
-  });
+  const outsideUndo = outsideUndoArmed;
+  outsideUndoArmed = false;
+  frames.push({ observed, effects, historyGroup, outsideUndo, suppressDepth: 0 });
 }
 
 function popFrame(): CaptureFrame | undefined {

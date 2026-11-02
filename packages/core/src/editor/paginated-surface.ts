@@ -1322,6 +1322,7 @@ export function mountPaginatedSurface(
 
   const hyperlinks = createHyperlinkOps({
     session: gatedSession,
+    collaborative: !!collaborationSession,
     // A HYPERLINK field is not a tree node, so its link resolves from the layout projection
     // plus the field-link registry rather than the typed tree walk.
     layout: editingLayout,
@@ -1854,7 +1855,7 @@ export function mountPaginatedSurface(
     pendingFormats = null;
     if (!flushingTypeBuffer) typingHistory.noteForeignChange(modelChange);
     if (modelChange.origin === ORIGIN_IDS.mutationRemote) {
-      noteRemoteChange();
+      noteRemoteChange(modelChange);
       remoteCaret.note(
         selection,
         modelChange.dirty,
@@ -2935,7 +2936,7 @@ export function mountPaginatedSurface(
     collaboration: collaborationSession,
     historyGroup: () => commitHistoryGroup.value,
     defaultScope: () => storyScope(),
-    canRepair: () => editingMode !== 'view' && session.editable,
+    canRepair: () => !destroyed && editingMode !== 'view' && session.editable,
     later: (task) => timers.setTimeout(fieldScope.wrap(task), 0),
   });
 

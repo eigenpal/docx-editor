@@ -2,43 +2,42 @@
 //
 // Two participants who both make the first link while apart each append the built-in style
 // to the styles part. Both inserts survive the merge, so the part holds the style twice. Every
-// participant removes the same copies: all but the first of each id, in document order. That
-// order is the same on every replica, so the removals agree and the first copy is never
-// removed by anyone.
+// participant removes the same copies: each style that is an exact copy (same content, any
+// node ids) of an earlier style with the same id, in document order. That order is the same
+// on every replica, so the removals agree and the first copy is never removed by anyone.
+// Removing an exact copy changes nothing a reader resolves, so a copy the file already held
+// may go too.
 
-import type { OoxmlElement } from './ooxml-tree.ts';
+import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 import { withPart, type OoxmlPackage } from './ooxml-package.ts';
 import { stylesPartOf } from './ooxml-indexes.ts';
 import { removeNode } from './ooxml-edit.ts';
-import { markDocumentSetupEdit, styleElementsOf } from './style-definition-edit.ts';
+import { attributeOf, markDocumentSetupEdit, styleElementsOf } from './style-definition-edit.ts';
 
-/** Names of the styles document setup adds, the only ones this repair touches. */
-const SETUP_STYLE_NAMES = new Set(['hyperlink', 'list paragraph']);
-
-function attributeOf(node: OoxmlElement, localName: string): string | undefined {
-  return node.attributes.find((a) => a.localName === localName)?.value;
+/** A node's content without its node ids, for comparing two copies. */
+function contentOf(node: OoxmlNode): string {
+  if (node.kind === 'textValue') return JSON.stringify(node.value);
+  const attributes = node.attributes
+    .map((a) => `${a.namespaceUri ?? ''}|${a.localName}=${a.value}`)
+    .sort()
+    .join(',');
+  return `<${node.namespaceUri ?? ''}|${node.localName} ${attributes}>${node.children
+    .map(contentOf)
+    .join('')}</>`;
 }
 
-function nameOf(style: OoxmlElement): string | undefined {
-  for (const child of style.children) {
-    if (child.kind !== 'textValue' && child.localName === 'name') return attributeOf(child, 'val');
-  }
-  return undefined;
-}
-
-/** Node ids of setup style copies after the first with the same id, type and name. */
+/** Node ids of styles that exactly copy an earlier style with the same id. */
 export function duplicateSetupStyleIds(pkg: OoxmlPackage): string[] {
   const root = stylesPartOf(pkg)?.root;
   if (!root) return [];
-  const seen = new Set<string>();
+  const firstById = new Map<string, OoxmlElement>();
   const duplicates: string[] = [];
   for (const style of styleElementsOf(root)) {
-    const name = nameOf(style)?.toLowerCase();
     const styleId = attributeOf(style, 'styleId');
-    if (!name || !styleId || !SETUP_STYLE_NAMES.has(name)) continue;
-    const key = `${attributeOf(style, 'type') ?? ''}\u0000${styleId}\u0000${name}`;
-    if (seen.has(key)) duplicates.push(style.id);
-    else seen.add(key);
+    if (!styleId) continue;
+    const first = firstById.get(styleId);
+    if (!first) firstById.set(styleId, style);
+    else if (contentOf(first) === contentOf(style)) duplicates.push(style.id);
   }
   return duplicates;
 }

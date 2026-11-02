@@ -273,6 +273,8 @@ export function fieldLinkAtomIdAtPosition(
 
 export interface HyperlinkOpsDeps {
   readonly session: TreeDocxSessionView;
+  /** In a collaboration session, a new link never creates the styles part. */
+  readonly collaborative?: boolean;
   /** The current layout projection, for resolving a field link at the caret. */
   readonly layout: () => SemanticLayout;
   /** Resolve a field-link id minted by the field-link registry back to its record. */
@@ -575,7 +577,9 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
             // A copy left bare comes out unlinked once the strikes are accepted — so
             // propose a FRESH link over the copy, and still retarget the old one in case
             // a zero-length marker keeps it alive.
-            const style = hyperlinkStyleFor(deps.session.currentPackage());
+            const style = hyperlinkStyleFor(deps.session.currentPackage(), {
+              createPart: !deps.collaborative,
+            });
             if (style.edit) retargetEdits = [style.edit];
             ops.push(
               { op: 'setHyperlinkTarget', linkId: existing.id, ...target },
@@ -670,7 +674,9 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
       // not define the style gets the built-in definition in the same transaction, so the
       // reference never dangles. The definition is document setup: in a collaboration
       // session it commits outside shared undo (see `surface-journaled-apply.ts`).
-      const { styleId, edit } = hyperlinkStyleFor(deps.session.currentPackage());
+      const { styleId, edit } = hyperlinkStyleFor(deps.session.currentPackage(), {
+        createPart: !deps.collaborative,
+      });
       const packageEdits = edit ? [edit] : undefined;
       ops.push({
         op: 'insertHyperlink',

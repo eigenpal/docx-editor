@@ -19,15 +19,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type { HistoryGroup } from '@docx-editor.dev/core/store';
 import type * as Y from 'yjs';
 import {
-  registerUndoHistoryPosition,
-  reportHistoryGroup,
-} from '@docx-editor.dev/core/collaboration/replication';
-import { markGroupStep } from './history-undone.ts';
-import {
   historyGroupOfJournal,
   isJournalOutsideUndo,
+  registerUndoHistoryPosition,
+  reportHistoryGroup,
   type CanonicalPrimitiveJournal,
 } from '@docx-editor.dev/core/collaboration/replication';
+import { markGroupStep } from './history-undone.ts';
 import { publishOutsideUndo } from '../document-outside-undo.ts';
 
 type StackItem = Y.UndoManager['undoStack'][number];

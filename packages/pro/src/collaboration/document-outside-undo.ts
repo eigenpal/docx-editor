@@ -14,9 +14,9 @@ export function publishOutsideUndo<T>(
   origin: unknown,
   publish: () => T
 ): T {
+  // No `stopCapturing()`: setup, or a repair a peer's change caused, must not split the
+  // undo step the user is in the middle of.
   const tracked = undoManager.trackedOrigins.delete(origin);
-  // The next tracked edit starts its own item rather than merging into the one before setup.
-  undoManager.stopCapturing();
   try {
     return publish();
   } finally {
