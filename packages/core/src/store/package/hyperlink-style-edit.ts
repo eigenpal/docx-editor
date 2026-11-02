@@ -7,6 +7,7 @@ import { collectThemeColorScheme, packageThemeRoot } from './theme-color-resolut
 import {
   defaultStyleIdOf,
   ensureStyleDefinition,
+  markDocumentSetupEdit,
   styleElementsOf,
 } from './style-definition-edit.ts';
 
@@ -34,7 +35,7 @@ export function freeHyperlinkStyleId(usedIds: ReadonlySet<string>): string {
  * when the document has one.
  */
 export function ensureHyperlinkStyle(styleId: string): (pkg: OoxmlPackage) => OoxmlPackage {
-  return (pkg) => {
+  return markDocumentSetupEdit((pkg) => {
     const themeHex = collectThemeColorScheme(packageThemeRoot(pkg)).get('hlink');
     const themed = themeHex !== undefined && HEX.test(themeHex);
     // The theme reference only where the document has a theme: without one, a reader resolves
@@ -53,13 +54,14 @@ export function ensureHyperlinkStyle(styleId: string): (pkg: OoxmlPackage) => Oo
         element('rPr', {}, [element('color', color), element('u', { val: 'single' })]),
       ]);
     })(pkg);
-  };
+  });
 }
 
 /**
  * The hyperlink character style id a new link should name, and the package edit that
- * defines it when the document does not. With `addMissing` false (a collaboration session),
- * a document without the style gets no edit and a null id: the link takes no style. A character style matches by id `Hyperlink` first,
+ * defines it when the document does not. With `addMissing` false (a collaborative automation
+ * host, which commits no setup outside shared undo), a document without the style gets no
+ * edit and a null id: the link takes no style. A character style matches by id `Hyperlink` first,
  * then by name `Hyperlink` (a localized id, or a `HyperlinkN` added here), case-insensitively.
  */
 export function hyperlinkStyleFor(

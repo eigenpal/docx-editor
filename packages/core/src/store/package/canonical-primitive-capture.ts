@@ -32,7 +32,25 @@ interface CaptureFrame {
   readonly effects: CanonicalPrimitiveEffect[] | null;
   /** The gesture the transaction named, carried onto the journal it publishes. */
   readonly historyGroup: HistoryGroup | undefined;
+  /** Opened inside `runOutsideSharedUndo`: the journal is marked to stay out of undo. */
+  readonly outsideUndo: boolean;
   suppressDepth: number;
+}
+
+let outsideUndoDepth = 0;
+
+/**
+ * Run `body` so that the store transactions it opens publish journals marked outside shared
+ * undo (`isJournalOutsideUndo`). Local history is the caller's own choice; this marks only
+ * the published journal.
+ */
+export function runOutsideSharedUndo<T>(body: () => T): T {
+  outsideUndoDepth += 1;
+  try {
+    return body();
+  } finally {
+    outsideUndoDepth -= 1;
+  }
 }
 
 const observersByStore = new WeakMap<object, Set<(journal: CanonicalPrimitiveJournal) => void>>();
@@ -118,7 +136,13 @@ function storeObserverCount(store: object): number {
 function pushFrame(observed: boolean, historyGroup: HistoryGroup | undefined): void {
   const effects = observed ? [] : null;
   if (observed) allocationCount += 1;
-  frames.push({ observed, effects, historyGroup, suppressDepth: 0 });
+  frames.push({
+    observed,
+    effects,
+    historyGroup,
+    outsideUndo: outsideUndoDepth > 0,
+    suppressDepth: 0,
+  });
 }
 
 function popFrame(): CaptureFrame | undefined {
@@ -144,7 +168,7 @@ export function runObservedStoreTransaction<T>(
     const result = run();
     const frame = popFrame();
     if (observed && frame?.effects && committed(result)) {
-      publishCanonicalPrimitiveJournal(store, frame.effects, frame.historyGroup);
+      publishCanonicalPrimitiveJournal(store, frame.effects, frame.historyGroup, frame.outsideUndo);
     }
     return result;
   } catch (error) {

@@ -305,6 +305,7 @@ import { listDefinitionReads } from './list-level-geometry.ts';
 import { MIN_TABLE_COLUMN_WIDTH_TWIPS } from '../store/store/table-constraints.ts';
 import { createFieldLinkRegistry } from './surface-field-links.ts';
 import { createHyperlinkOps } from './surface-hyperlinks.ts';
+import { createJournaledApply } from './surface-journaled-apply.ts';
 import { createEquationInteraction, createEquationOps } from './surface-equations.ts';
 import { createSurfaceNavigation } from './surface-navigation.ts';
 import { drawingLinkByIdFromLayout } from './drawing-link-index.ts';
@@ -1321,7 +1322,6 @@ export function mountPaginatedSurface(
 
   const hyperlinks = createHyperlinkOps({
     session: gatedSession,
-    collaborative: !!collaborationSession,
     // A HYPERLINK field is not a tree node, so its link resolves from the layout projection
     // plus the field-link registry rather than the typed tree walk.
     layout: editingLayout,
@@ -1854,6 +1854,7 @@ export function mountPaginatedSurface(
     pendingFormats = null;
     if (!flushingTypeBuffer) typingHistory.noteForeignChange(modelChange);
     if (modelChange.origin === ORIGIN_IDS.mutationRemote) {
+      noteRemoteChange();
       remoteCaret.note(
         selection,
         modelChange.dirty,
@@ -2875,7 +2876,6 @@ export function mountPaginatedSurface(
 
   /** The main story. Named once so the automation entry cannot drift from the session default. */
   const BODY_STORY: StoryScope = Object.freeze({ kind: 'body' as const });
-  let collaborationOperationCounter = 0;
 
   /**
    * Commit ops, attributing them when the surface is suggesting.
@@ -2930,49 +2930,14 @@ export function mountPaginatedSurface(
     return result;
   }
 
-  /**
-   * Gate and attribute a write the way typing does, without the TOC-read-only rule.
-   *
-   * Refresh rewrites TOC result paragraphs, so `applyOps` would refuse the write that
-   * exists to update them. The collaboration gate and the actor still apply.
-   */
-  function applyJournaledOps(
-    ops: readonly TreeDocOp[],
-    selectionBefore?: Parameters<TreeDocxSession['applyTreeOps']>[1],
-    selectionAfter?: Parameters<TreeDocxSession['applyTreeOps']>[2],
-    scope: StoryScope = storyScope(),
-    packageEdits?: NonNullable<Parameters<TreeDocxSession['applyTreeOps']>[4]>['packageEdits']
-  ): ReturnType<TreeDocxSession['applyTreeOps']> {
-    const collaborationRefusal = collaborationSession?.gateOperations(ops, scope);
-    if (collaborationRefusal) {
-      return {
-        committed: false,
-        rejected: true,
-        opCount: 0,
-        reason: collaborationRefusal,
-      };
-    }
-    collaborationOperationCounter += 1;
-    // The group of the commit in flight, if any: it travels with the transaction into local
-    // history and, through the journal, to the collaboration undo authority.
-    const historyGroup = commitHistoryGroup.value;
-    return session.applyTreeOps(
-      ops,
-      selectionBefore,
-      selectionAfter,
-      scope,
-      collaborationSession
-        ? {
-            packageEdits,
-            origin: ORIGIN_IDS.mutationHuman,
-            actorId: collaborationSession.identity.actorId,
-            operationId: `${collaborationSession.identity.actorId}:${collaborationSession.sessionId}:browser:${collaborationOperationCounter}`,
-            recordsHistory: false,
-            historyToken: historyGroup,
-          }
-        : { packageEdits, historyToken: historyGroup }
-    );
-  }
+  const { apply: applyJournaledOps, noteRemoteChange } = createJournaledApply({
+    session,
+    collaboration: collaborationSession,
+    historyGroup: () => commitHistoryGroup.value,
+    defaultScope: () => storyScope(),
+    canRepair: () => editingMode !== 'view' && session.editable,
+    later: (task) => timers.setTimeout(fieldScope.wrap(task), 0),
+  });
 
   /**
    * Why a write would be refused right now, or null when it would be allowed.

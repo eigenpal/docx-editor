@@ -194,14 +194,29 @@ function freezeCanonicalNodeDescriptor(
   });
 }
 
+/** Journals no user undo may take back (see `runOutsideSharedUndo`). Keyed by identity. */
+const journalsOutsideUndo = new WeakSet<CanonicalPrimitiveJournal>();
+
+/**
+ * Whether the transaction behind `journal` ran outside shared undo: document setup, such as
+ * a built-in style that content of every participant may come to use. A collaboration session
+ * publishes it without an undo entry, so one participant's undo cannot remove what another
+ * participant's content needs. @public
+ */
+export function isJournalOutsideUndo(journal: CanonicalPrimitiveJournal): boolean {
+  return journalsOutsideUndo.has(journal);
+}
+
 /** Freeze a captured effect list into one journal object. */
 export function freezeCanonicalPrimitiveJournal(
   effects: readonly CanonicalPrimitiveEffect[],
-  historyGroup?: HistoryGroup
+  historyGroup?: HistoryGroup,
+  outsideUndo = false
 ): CanonicalPrimitiveJournal {
   const journal: CanonicalPrimitiveJournal = Object.freeze({
     effects: Object.freeze(effects.map(freezeCanonicalPrimitiveEffect)),
   });
   if (historyGroup !== undefined) journalHistoryGroups.set(journal, historyGroup);
+  if (outsideUndo) journalsOutsideUndo.add(journal);
   return journal;
 }
