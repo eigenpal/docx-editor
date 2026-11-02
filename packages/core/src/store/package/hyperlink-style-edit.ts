@@ -58,11 +58,15 @@ export function ensureHyperlinkStyle(styleId: string): (pkg: OoxmlPackage) => Oo
 
 /**
  * The hyperlink character style id a new link should name, and the package edit that
- * defines it when the document does not. A character style matches by id `Hyperlink` first,
+ * defines it when the document does not. With `addMissing` false (a collaboration session),
+ * a document without the style gets no edit and a null id: the link takes no style. A character style matches by id `Hyperlink` first,
  * then by name `Hyperlink` (a localized id, or a `HyperlinkN` added here), case-insensitively.
  */
-export function hyperlinkStyleFor(pkg: OoxmlPackage | null): {
-  readonly styleId: string;
+export function hyperlinkStyleFor(
+  pkg: OoxmlPackage | null,
+  addMissing = true
+): {
+  readonly styleId: string | null;
   readonly edit: ((pkg: OoxmlPackage) => OoxmlPackage) | null;
 } {
   const root = pkg ? (stylesPartOf(pkg)?.root ?? null) : null;
@@ -84,6 +88,7 @@ export function hyperlinkStyleFor(pkg: OoxmlPackage | null): {
     if (named === null && value?.toLowerCase() === 'hyperlink') named = id;
   }
   if (named !== null) return { styleId: named, edit: null };
+  if (!addMissing) return { styleId: null, edit: null };
   const styleId = freeHyperlinkStyleId(used);
   return { styleId, edit: ensureHyperlinkStyle(styleId) };
 }

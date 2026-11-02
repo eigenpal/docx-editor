@@ -273,6 +273,8 @@ export function fieldLinkAtomIdAtPosition(
 
 export interface HyperlinkOpsDeps {
   readonly session: TreeDocxSessionView;
+  /** In a collaboration session, a new link never adds the hyperlink style to the document. */
+  readonly collaborative?: boolean;
   /** The current layout projection, for resolving a field link at the caret. */
   readonly layout: () => SemanticLayout;
   /** Resolve a field-link id minted by the field-link registry back to its record. */
@@ -575,7 +577,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
             // A copy left bare comes out unlinked once the strikes are accepted — so
             // propose a FRESH link over the copy, and still retarget the old one in case
             // a zero-length marker keeps it alive.
-            const style = hyperlinkStyleFor(deps.session.currentPackage());
+            const style = hyperlinkStyleFor(deps.session.currentPackage(), !deps.collaborative);
             if (style.edit) retargetEdits = [style.edit];
             ops.push(
               { op: 'setHyperlinkTarget', linkId: existing.id, ...target },
@@ -586,7 +588,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
                 start: landing,
                 end: landing + input.text.length,
                 ...target,
-                styleId: style.styleId,
+                ...(style.styleId ? { styleId: style.styleId } : {}),
               }
             );
           } else {
@@ -668,8 +670,12 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
       // like the words around it and nothing shows that the command worked. The op carries
       // the style, so wrapping and marking are one step and one undo. A document that does
       // not define the style gets the built-in definition in the same transaction, so the
-      // reference never dangles.
-      const { styleId, edit } = hyperlinkStyleFor(deps.session.currentPackage());
+      // reference never dangles. Not in a collaboration session: there the link takes no
+      // style, because one participant's undo would take the definition from all of them.
+      const { styleId, edit } = hyperlinkStyleFor(
+        deps.session.currentPackage(),
+        !deps.collaborative
+      );
       const packageEdits = edit ? [edit] : undefined;
       ops.push({
         op: 'insertHyperlink',
@@ -677,7 +683,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
         start,
         end,
         ...target,
-        styleId,
+        ...(styleId ? { styleId } : {}),
       });
 
       let committed = false;

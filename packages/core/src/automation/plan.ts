@@ -1430,15 +1430,15 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const conflict = touch(plan, range.start.paragraphId);
     if (conflict) return conflict;
     // A document without the hyperlink character style gets the built-in one in the same
-    // commit, so the new link is visibly a link.
-    const { styleId, edit } = hyperlinkStyleFor(packageReads.package);
+    // commit, so the new link is visibly a link. Not on a collaborative host (see the editor).
+    const { styleId, edit } = hyperlinkStyleFor(packageReads.package, !host.collaborative);
     const linked = staged((aim) => ({
       op: 'insertHyperlink',
       paragraphId: range.start.paragraphId,
       start: range.start.offset,
       end: range.end.offset,
       ...aim,
-      styleId,
+      ...(styleId === null ? {} : { styleId }),
     }));
     return edit && linked.ok && linked.kind === 'command'
       ? { ...linked, packageEdits: [edit] }
