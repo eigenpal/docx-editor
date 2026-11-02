@@ -7,9 +7,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * Styles and lists that content taken from the revised document needs.
  *
  * The output keeps the original's definitions. A style only the revised document defines is
- * added. A revised list whose definition the original has under some id takes that id; any
- * other revised list is added under new ids, so it never reads as an original list with the
- * same number.
+ * added. A revised list keeps its id only when the original has the same definition under that
+ * id; every other revised list is added under new ids, so it never reads as an original list
+ * with the same number, and two revised lists that look alike still number apart.
  */
 import { serializeOoxmlPart, type OoxmlPackage, type OoxmlPart } from '@docx-editor.dev/core/store';
 import type { StoryOutput } from './stories.ts';
@@ -70,24 +70,38 @@ function insertBeforeIn(text: string, before: readonly string[], xml: string): s
 const insertBefore = (part: OoxmlPart, before: readonly string[], xml: string) =>
   insertBeforeIn(fragment(part.root as ElementNode), before, xml);
 
-function newPart(pkg: OoxmlPackage, source: OoxmlPart, kind: string): StoryOutput {
+/** Picture bullets name pictures the output does not copy; the levels fall back to text. */
+const withoutPictureBullets = (xml: string) =>
+  xml
+    .replace(/<(?:[\w.-]+:)?numPicBullet\b[\s\S]*?<\/(?:[\w.-]+:)?numPicBullet>/g, '')
+    .replace(/<(?:[\w.-]+:)?lvlPicBulletId\b[^>]*\/>/g, '');
+
+function newPart(pkg: OoxmlPackage, xml: string, source: OoxmlPart, kind: string): StoryOutput {
   let name = `/word/${kind}.xml`;
   for (let n = 2; pkg.parts.has(name) || pkg.partBytes.has(name.slice(1)); n++)
     name = `/word/${kind}${n}.xml`;
   return {
     partName: name,
     contentType: source.contentType,
-    xml: fragment(source.root as ElementNode),
+    xml,
     isNew: true,
     relType: `${REL_BASE}/${kind}`,
   };
 }
 
-function mergeStyles(base: OoxmlPackage, revised: OoxmlPackage): StoryOutput | null {
+function mergeStyles(
+  base: OoxmlPackage,
+  revised: OoxmlPackage,
+  lists: ReadonlyMap<string, string>
+): StoryOutput | null {
   const from = partOfType(revised, '.styles+xml');
   if (!from) return null;
   const into = partOfType(base, '.styles+xml');
-  if (!into) return newPart(base, from, 'styles');
+  // A style that names a list names it by the revised id, which the output may have moved.
+  if (!into) {
+    const xml = withMappedNumbering(fragment(from.root as ElementNode), lists);
+    return newPart(base, xml, from, 'styles');
+  }
   const known = new Set(
     elementChildren(into.root)
       .filter((style) => style.localName === 'style')
@@ -99,7 +113,7 @@ function mergeStyles(base: OoxmlPackage, revised: OoxmlPackage): StoryOutput | n
     const id = attributeOf(style, 'styleId');
     if (id === undefined || known.has(id)) continue;
     known.add(id);
-    added += fragment(style);
+    added += withMappedNumbering(fragment(style), lists);
   }
   if (!added) return null;
   return {
@@ -138,20 +152,44 @@ function listDefinitions(part: OoxmlPart): ListDefinitions {
   return { abstracts, nums };
 }
 
-/** Identity of a list instance: its definition and its level overrides. */
-function numKey(num: ElementNode, lists: ListDefinitions): string {
-  const abstractId = attributeOf(childNamed(num, 'abstractNumId') ?? num, 'val');
-  const abstract = abstractId === undefined ? undefined : lists.abstracts.get(abstractId);
-  const overrides = elementChildren(num)
-    .filter((child) => child.localName !== 'abstractNumId')
-    .map(fragment)
-    .join('');
-  return `${abstract ? abstractKey(abstract) : `missing:${abstractId}`}\u0001${overrides}`;
+const abstractIdOf = (num: ElementNode) =>
+  attributeOf(childNamed(num, 'abstractNumId') ?? num, 'val');
+
+/**
+ * Identity of a list instance: its definition and its level overrides. Each definition is
+ * serialized once, however many instances share it.
+ */
+function numKeys(lists: ListDefinitions): (num: ElementNode) => string {
+  const keys = new Map<string, string>();
+  return (num) => {
+    const abstractId = abstractIdOf(num) ?? '';
+    let key = keys.get(abstractId);
+    if (key === undefined) {
+      const abstract = lists.abstracts.get(abstractId);
+      key = abstract ? abstractKey(abstract) : `missing:${abstractId}`;
+      keys.set(abstractId, key);
+    }
+    const overrides = elementChildren(num)
+      .filter((child) => child.localName !== 'abstractNumId')
+      .map(fragment)
+      .join('');
+    return `${key}\u0001${overrides}`;
+  };
 }
 
-const maxId = (ids: Iterable<string>) =>
-  Math.max(0, ...[...ids].map(Number).filter((n) => Number.isSafeInteger(n) && n >= 0));
+const maxId = (ids: Iterable<string>) => {
+  let max = 0;
+  for (const id of ids) {
+    const n = Number(id);
+    if (Number.isSafeInteger(n) && n > max) max = n;
+  }
+  return max;
+};
 
+/**
+ * Instances that share a revised definition share its copy, or the original's definition when
+ * one of them kept its id, so they keep numbering together.
+ */
 function mergeNumbering(
   base: OoxmlPackage,
   revised: OoxmlPackage
@@ -160,46 +198,48 @@ function mergeNumbering(
   const from = partOfType(revised, '.numbering+xml');
   if (!from) return { map, output: null };
   const into = partOfType(base, '.numbering+xml');
-  if (!into) return { map, output: newPart(base, from, 'numbering') };
+  if (!into) {
+    const xml = withoutPictureBullets(fragment(from.root as ElementNode));
+    return { map, output: newPart(base, xml, from, 'numbering') };
+  }
   const ours = listDefinitions(into);
   const theirs = listDefinitions(from);
-  const byKey = new Map<string, string>();
-  for (const [id, num] of ours.nums) {
-    const key = numKey(num, ours);
-    if (!byKey.has(key)) byKey.set(key, id);
+  const ourKey = numKeys(ours);
+  const theirKey = numKeys(theirs);
+  // Revised definition id to the output definition id its instances use.
+  const definitions = new Map<string, string>();
+  const kept = new Set<string>();
+  for (const [id, num] of theirs.nums) {
+    const same = ours.nums.get(id);
+    if (!same || ourKey(same) !== theirKey(num)) continue;
+    kept.add(id);
+    const abstractId = abstractIdOf(num);
+    const target = abstractIdOf(same);
+    if (abstractId !== undefined && target !== undefined && !definitions.has(abstractId))
+      definitions.set(abstractId, target);
   }
   let nextAbstract = maxId(ours.abstracts.keys()) + 1;
   let nextNum = maxId(ours.nums.keys()) + 1;
-  const copiedAbstracts = new Map<string, string>();
   let abstracts = '';
   let nums = '';
   for (const [id, num] of theirs.nums) {
-    const key = numKey(num, theirs);
-    const same = ours.nums.get(id);
-    if (same && numKey(same, ours) === key) continue;
-    const existing = byKey.get(key);
-    if (existing !== undefined) {
-      map.set(id, existing);
-      continue;
-    }
-    const abstractId = attributeOf(childNamed(num, 'abstractNumId') ?? num, 'val');
+    if (kept.has(id)) continue;
+    const abstractId = abstractIdOf(num);
     const abstract = abstractId === undefined ? undefined : theirs.abstracts.get(abstractId);
     if (!abstract || abstractId === undefined) continue;
-    let copied = copiedAbstracts.get(abstractId);
-    if (copied === undefined) {
-      copied = String(nextAbstract++);
-      copiedAbstracts.set(abstractId, copied);
-      abstracts += fragment(abstract)
-        .replace(/(\babstractNumId=")[^"]*"/, `$1${copied}"`)
-        // Picture bullets name the revised document's pictures, which are not copied.
-        .replace(/<(?:[\w.-]+:)?lvlPicBulletId\b[^>]*\/>/g, '');
+    let target = definitions.get(abstractId);
+    if (target === undefined) {
+      target = String(nextAbstract++);
+      definitions.set(abstractId, target);
+      abstracts += withoutPictureBullets(
+        fragment(abstract).replace(/(\babstractNumId=")[^"]*"/, `$1${target}"`)
+      );
     }
     const newId = String(nextNum++);
     nums += fragment(num)
       .replace(/(\bnumId=")[^"]*"/, `$1${newId}"`)
-      .replace(/(<(?:[\w.-]+:)?abstractNumId\b[^>]*?\s(?:[\w.-]+:)?val=")[^"]*"/, `$1${copied}"`);
+      .replace(/(<(?:[\w.-]+:)?abstractNumId\b[^>]*?\s(?:[\w.-]+:)?val=")[^"]*"/, `$1${target}"`);
     map.set(id, newId);
-    byKey.set(key, newId);
   }
   if (!abstracts && !nums) return { map, output: null };
   let xml = insertBefore(into, ['num', 'numIdMacAtCleanup'], abstracts);
@@ -217,7 +257,7 @@ function mergeNumbering(
 export function mergeDefinitions(base: OoxmlPackage, revised: OoxmlPackage): StoryOutput[] {
   const numbering = mergeNumbering(base, revised);
   NUMBERING_MAPS.set(revised, numbering.map);
-  return [mergeStyles(base, revised), numbering.output].filter(
+  return [mergeStyles(base, revised, numbering.map), numbering.output].filter(
     (output): output is StoryOutput => output !== null
   );
 }

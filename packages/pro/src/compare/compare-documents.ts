@@ -86,7 +86,7 @@ export function comparePackages(
       ok: false,
       code: 'unsupported-content',
       message:
-        'The original document is protected against edits. A compare would rewrite its content and tracked changes.',
+        'The original document is protected against edits. A compare would rewrite its content or its tracked changes.',
     };
   }
   const basePkg = acceptAll(original);
@@ -210,8 +210,15 @@ function replaceNoteIds(
 }
 
 const OFF_VALUES = new Set(['0', 'false', 'off']);
+/** The protection kinds a compare refuses outright. */
+const PROTECTED_EDITS = new Set(['readOnly', 'comments', 'forms']);
 
-/** Whether the settings enforce document protection (`w:documentProtection`) of any kind. */
+/**
+ * Whether enforced document protection (`w:documentProtection`) forbids the compare. Read-only,
+ * comments, and forms protection forbid content edits. Tracked-changes protection allows them
+ * as tracked changes, which is all a compare writes, unless the original holds tracked changes
+ * of its own: the compare would accept them.
+ */
 function protectedAgainstEdits(pkg: OoxmlPackage): boolean {
   for (const part of pkg.parts.values()) {
     if (!part.contentType.endsWith('.settings+xml')) continue;
@@ -219,13 +226,12 @@ function protectedAgainstEdits(pkg: OoxmlPackage): boolean {
       (child) => child.localName === 'documentProtection'
     );
     if (!protection) return false;
-    const edit = attributeOf(protection, 'edit');
+    const edit = attributeOf(protection, 'edit') ?? '';
     const enforcement = attributeOf(protection, 'enforcement');
+    if (enforcement === undefined || OFF_VALUES.has(enforcement)) return false;
+    if (PROTECTED_EDITS.has(edit)) return true;
     return (
-      edit !== undefined &&
-      edit !== 'none' &&
-      enforcement !== undefined &&
-      !OFF_VALUES.has(enforcement)
+      edit === 'trackedChanges' && [...pkg.parts.values()].some((story) => hasRevision(story.root))
     );
   }
   return false;

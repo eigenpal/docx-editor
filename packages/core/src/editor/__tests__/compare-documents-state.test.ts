@@ -164,15 +164,15 @@ describe('compare documents commands', () => {
     });
   });
 
-  test('refuse under tracked-changes and comments protection', () => {
-    for (const edit of ['trackedChanges', 'comments']) {
-      const editor = mount([reviewModule()], {}, docx('Original text', edit));
-      expect(editor.can({ type: 'compareDocuments', revised: docx('x') })).toMatchObject({
-        ok: false,
-        code: 'locked',
-      });
-      cleanup();
-    }
+  test('refuse under comments protection; tracked-changes protection is left to the engine', () => {
+    const editor = mount([reviewModule()], {}, docx('Original text', 'comments'));
+    expect(editor.can({ type: 'compareDocuments', revised: docx('x') })).toMatchObject({
+      ok: false,
+      code: 'locked',
+    });
+    cleanup();
+    const tracked = mount([reviewModule()], {}, docx('Original text', 'trackedChanges'));
+    expect(tracked.can({ type: 'compareDocuments', revised: docx('x') }).ok).toBe(true);
   });
 
   test('installs the result as one undo step; redo reapplies it', () => {

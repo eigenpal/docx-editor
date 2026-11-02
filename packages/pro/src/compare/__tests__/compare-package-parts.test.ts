@@ -125,19 +125,25 @@ test('a long run of repeated deleted words compares in linear time', () => {
 });
 
 test('a document that enforces protection is refused', () => {
-  for (const edit of ['readOnly', 'comments', 'trackedChanges', 'forms']) {
-    const base = buildDocx({
-      body: p('Body text.'),
-      settings: `<w:documentProtection w:edit="${edit}" w:enforcement="1"/>`,
-    });
-    const result = compare(base, buildDocx({ body: p('Body text changed.') }));
+  const changed = buildDocx({ body: p('Body text changed.') });
+  const protectedBy = (edit: string, body = p('Body text.')) =>
+    buildDocx({ body, settings: `<w:documentProtection w:edit="${edit}" w:enforcement="1"/>` });
+  for (const edit of ['readOnly', 'comments', 'forms']) {
+    const result = compare(protectedBy(edit), changed);
     expect(result.ok ? '' : result.message).toContain('protected against edits');
   }
+  // Tracked-changes protection allows tracked changes, unless the compare would accept some.
+  expect(compare(protectedBy('trackedChanges'), changed).ok).toBe(true);
+  const tracked =
+    '<w:p><w:ins w:id="9" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>Body text.</w:t></w:r></w:ins></w:p>';
+  const withChanges = compare(protectedBy('trackedChanges', tracked), changed);
+  expect(withChanges.ok ? '' : withChanges.message).toContain('protected against edits');
+  // Protection that is not enforced, or of a kind the format does not define, does not refuse.
   const off = buildDocx({
     body: p('Body text.'),
     settings: '<w:documentProtection w:edit="readOnly" w:enforcement="0"/>',
   });
-  expect(compare(off, buildDocx({ body: p('Body text changed.') })).ok).toBe(true);
+  expect(compare(off, changed).ok).toBe(true);
 });
 
 test('block content with no tracked-change form is refused, not dropped', () => {

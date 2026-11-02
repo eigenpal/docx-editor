@@ -157,22 +157,20 @@ export function assemblePackage(
       bytes,
       resolveContentTypeOf(revised, source) ?? 'application/octet-stream'
     );
-    const own = [
-      ...relationshipsOf(revised, source).map((record) => ({
-        id: record.id,
+    // An external relationship can appear in both lists; each id is written once.
+    const byId = new Map<string, { type: string; target: string; external: boolean }>();
+    for (const record of relationshipsOf(revised, source)) {
+      byId.set(record.id, {
         type: record.type,
         target: record.rawTarget,
         external: record.targetMode === 'External',
-      })),
-      ...revised.externalTargets
-        .filter((record) => record.ownerPart === source)
-        .map((record) => ({
-          id: record.id,
-          type: record.type,
-          target: record.rawTarget,
-          external: true,
-        })),
-    ];
+      });
+    }
+    for (const record of revised.externalTargets) {
+      if (record.ownerPart !== source || byId.has(record.id)) continue;
+      byId.set(record.id, { type: record.type, target: record.rawTarget, external: true });
+    }
+    const own = [...byId].map(([id, rel]) => ({ id, ...rel }));
     if (own.length === 0) return copied;
     let entries = '';
     for (const rel of own) {
