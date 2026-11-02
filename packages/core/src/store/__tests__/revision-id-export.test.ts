@@ -1,6 +1,7 @@
-// Saved revision elements each carry their own `@w:id`, unique across all parts and within
-// the 32-bit signed range. The live tree keeps the ids it holds, and a file whose ids are
-// already unique saves unchanged.
+// Saved changes each carry their own `@w:id`, unique across all parts and within the 32-bit
+// signed range. The pieces of one change (one part, one id, author and date) keep one id, so
+// the file reopens with the same changes. The live tree keeps the ids it holds, and a file
+// whose ids already name one change each saves unchanged.
 
 import { describe, expect, test } from 'bun:test';
 import { strToU8, unzipSync, zipSync } from 'fflate';
@@ -115,11 +116,11 @@ function named(entries: readonly string[], kept: readonly string[]): string[] {
 const run = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
 const ins = (id: string, text: string, author = 'Other') =>
   `<w:ins w:id="${id}" w:author="${author}" ${DATE}>${run(text)}</w:ins>`;
-const del = (id: string, text: string) =>
-  `<w:del w:id="${id}" w:author="Other" ${DATE}><w:r><w:delText>${text}</w:delText></w:r></w:del>`;
+const del = (id: string, text: string, author = 'Other') =>
+  `<w:del w:id="${id}" w:author="${author}" ${DATE}><w:r><w:delText>${text}</w:delText></w:r></w:del>`;
 
 describe('saved revision ids', () => {
-  test('typing inside another author’s insertion saves three distinct ids', () => {
+  test('typing inside another author’s insertion keeps one id for each of the two changes', () => {
     const pkg = open(docx(`<w:p>${run('Hello ')}${ins('1', 'world')}</w:p>`));
     const store = new TreePackageStore(pkg, pkg.parts.get(pkg.mainDocumentPart)!);
     const paragraphId = firstParagraphId(store.bodyStore().part.root);
@@ -139,11 +140,39 @@ describe('saved revision ids', () => {
     // The split halves keep the one id the editor reviews them under.
     expect(ids(live)).toEqual(['ins:1', 'ins:2', 'ins:1']);
 
-    const reopened = saved(live);
-    expect(named(ids(reopened), ['1', '2'])).toEqual(['ins:1', 'ins:2', 'ins:A']);
+    // Both halves are one change, so they save under the one id and reopen as one.
+    expect(ids(saved(live))).toEqual(['ins:1', 'ins:2', 'ins:1']);
     // Save is a projection: the live tree still holds the ids it had.
     expect(ids(store.currentPackage())).toEqual(['ins:1', 'ins:2', 'ins:1']);
     expect(store.currentPackage()).toBe(live);
+  });
+
+  test('the pieces of one change keep one id, and a second change moves off it whole', () => {
+    const body =
+      `<w:p>${ins('4', 'a')}${run('plain')}${ins('4', 'b')}</w:p>` +
+      `<w:p>${ins('4', 'c', 'Third')}${ins('4', 'd')}${del('4', 'e', 'Third')}</w:p>`;
+    expect(named(ids(saved(open(docx(body)))), ['4'])).toEqual([
+      'ins:4',
+      'ins:4',
+      'ins:A',
+      'ins:4',
+      'del:A',
+    ]);
+  });
+
+  test('a change in a header moves off an id the body uses, every piece together', () => {
+    const pkg = open(
+      docx(
+        `<w:p>${ins('4', 'body')}</w:p>`,
+        `<w:p>${ins('4', 'h1')}${run('x')}${ins('4', 'h2')}</w:p>`
+      )
+    );
+    const reopened = saved(pkg);
+    expect(named([...ids(reopened), ...ids(reopened, '/word/header1.xml')], ['4'])).toEqual([
+      'ins:4',
+      'ins:A',
+      'ins:A',
+    ]);
   });
 
   test('a header revision and a body revision with one id get distinct ids', () => {
@@ -167,7 +196,9 @@ describe('saved revision ids', () => {
 
   test('a file that uses the ceiling still gets free in-range ids', () => {
     const pkg = open(
-      docx(`<w:p>${ins('2147483647', 'a')}${ins('0', 'b')}${ins('0', 'c')}${ins('x', 'd')}</w:p>`)
+      docx(
+        `<w:p>${ins('2147483647', 'a')}${ins('0', 'b')}${ins('0', 'c', 'Third')}${ins('x', 'd')}</w:p>`
+      )
     );
     expect(named(ids(saved(pkg)), ['2147483647', '0'])).toEqual([
       'ins:2147483647',
@@ -179,12 +210,12 @@ describe('saved revision ids', () => {
 
   test('property and structural revisions share the one id space', () => {
     const body =
-      '<w:p><w:pPr><w:pPrChange w:id="3" w:author="Other"><w:pPr/></w:pPrChange></w:pPr>' +
-      '<w:r><w:rPr><w:b/><w:rPrChange w:id="3" w:author="Other"><w:rPr/></w:rPrChange></w:rPr>' +
+      '<w:p><w:pPr><w:pPrChange w:id="3" w:author="A1"><w:pPr/></w:pPrChange></w:pPr>' +
+      '<w:r><w:rPr><w:b/><w:rPrChange w:id="3" w:author="A2"><w:rPr/></w:rPrChange></w:rPr>' +
       '<w:t>x</w:t></w:r></w:p>' +
       '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr><w:tblGrid><w:gridCol w:w="100"/></w:tblGrid>' +
-      '<w:tr><w:trPr><w:ins w:id="3" w:author="Other"/></w:trPr>' +
-      '<w:tc><w:tcPr><w:cellIns w:id="3" w:author="Other"/></w:tcPr><w:p/></w:tc></w:tr></w:tbl>';
+      '<w:tr><w:trPr><w:ins w:id="3" w:author="A3"/></w:trPr>' +
+      '<w:tc><w:tcPr><w:cellIns w:id="3" w:author="A4"/></w:tcPr><w:p/></w:tc></w:tr></w:tbl>';
     expect(named(ids(saved(open(docx(body)))), ['3'])).toEqual([
       'pPrChange:3',
       'rPrChange:A',
@@ -208,7 +239,8 @@ describe('saved revision ids', () => {
       'moveFrom:6',
       'moveFromRangeEnd:A',
       'moveToRangeStart:B',
-      'moveTo:C',
+      // The same author and date as the move-from content: one change.
+      'moveTo:6',
       'moveToRangeEnd:B',
     ]);
   });
@@ -216,7 +248,7 @@ describe('saved revision ids', () => {
   test('bookmarks and comments with colliding numbers are untouched', () => {
     const body =
       '<w:p><w:bookmarkStart w:id="1" w:name="b"/><w:commentRangeStart w:id="1"/>' +
-      `${ins('1', 'a')}${del('1', 'b')}<w:bookmarkEnd w:id="1"/><w:commentRangeEnd w:id="1"/>` +
+      `${ins('1', 'a')}${del('1', 'b', 'Third')}<w:bookmarkEnd w:id="1"/><w:commentRangeEnd w:id="1"/>` +
       '<w:r><w:commentReference w:id="1"/></w:r></w:p>';
     expect(named(ids(saved(open(docx(body)))), ['1'])).toEqual([
       'bookmarkStart:1',
@@ -242,7 +274,7 @@ describe('saved revision ids', () => {
     // The id the first repeat of `1` would get, written in a fallback.
     const taken = String(fnv1a32('1\u00000') & (NEW_ID_LIMIT - 1));
     const body =
-      `<w:p>${ins('1', 'a')}${ins('1', 'b')}<mc:AlternateContent><mc:Choice Requires="w14">` +
+      `<w:p>${ins('1', 'a')}${ins('1', 'b', 'Third')}<mc:AlternateContent><mc:Choice Requires="w14">` +
       `${ins('3', 'c')}</mc:Choice><mc:Fallback>${ins(taken, 'c')}</mc:Fallback>` +
       '</mc:AlternateContent></w:p>';
     const found = ids(saved(open(docx(body))));
@@ -252,13 +284,15 @@ describe('saved revision ids', () => {
   });
 
   test('new ids stay put when an edit elsewhere mints or splits a revision', () => {
-    const second = `<w:p>${ins('2', 'c')}${run('plain')}${ins('2', 'd')}</w:p>`;
-    const before = ids(saved(open(docx(`<w:p>${ins('1', 'a')}${ins('1', 'b')}</w:p>${second}`))));
+    const second = `<w:p>${ins('2', 'c')}${run('plain')}${ins('2', 'd', 'Third')}</w:p>`;
+    const before = ids(
+      saved(open(docx(`<w:p>${ins('1', 'a')}${ins('1', 'b', 'Third')}</w:p>${second}`)))
+    );
     const after = ids(
       saved(
         open(
           docx(
-            `<w:p>${ins('9', 'new')}${ins('1', 'a')}${ins('1', 'x')}${ins('1', 'b')}</w:p>${second}`
+            `<w:p>${ins('9', 'new')}${ins('1', 'a')}${ins('1', 'x', 'Fourth')}${ins('1', 'b', 'Third')}</w:p>${second}`
           )
         )
       )
@@ -287,7 +321,7 @@ describe('saved revision ids', () => {
   });
 
   test('keeping revision ids writes them as the package holds them', () => {
-    const pkg = open(docx(`<w:p>${ins('1', 'a')}${ins('1', 'b')}</w:p>`));
+    const pkg = open(docx(`<w:p>${ins('1', 'a')}${ins('1', 'b', 'Third')}</w:p>`));
     expect(ids(open(writeOoxmlPackageKeepingRevisionIds(pkg)))).toEqual(['ins:1', 'ins:1']);
     expect(named(ids(saved(pkg)), ['1'])).toEqual(['ins:1', 'ins:A']);
   });
@@ -308,7 +342,9 @@ describe('saved revision ids', () => {
   });
 
   test('a repeated save hands back the same renumbered copy', () => {
-    const pkg = open(docx(`<w:p>${ins('1', 'a')}${ins('1', 'b')}</w:p><w:p>${run('plain')}</w:p>`));
+    const pkg = open(
+      docx(`<w:p>${ins('1', 'a')}${ins('1', 'b', 'Third')}</w:p><w:p>${run('plain')}</w:p>`)
+    );
     const first = uniqueRevisionIdsExportPackage(pkg);
     const second = uniqueRevisionIdsExportPackage(pkg);
     expect(first).not.toBe(pkg);

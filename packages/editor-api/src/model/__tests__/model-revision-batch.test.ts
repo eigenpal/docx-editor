@@ -53,13 +53,8 @@ for (const action of ['accept', 'reject'] as const) {
           const result = context.document.revisions.resolve(action);
           await context.sync();
           expect(result.value.resolved).toEqual([]);
-          // The saved file gives the repeated row insertion its own id, so the reopened
-          // document reports each of the two records.
-          expect(result.value.skipped).toHaveLength(2);
-          for (const skipped of result.value.skipped) {
-            expect(skipped).toMatchObject({ revision: { author: 'Grace' } });
-          }
-          expect(result.value.remaining).toBe(2);
+          expect(result.value.skipped).toHaveLength(1);
+          expect(result.value.remaining).toBe(1);
         });
       } finally {
         reopened.dispose();

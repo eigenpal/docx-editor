@@ -5,9 +5,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // Two participants make tracked edits in one room, one of them inside the other's pending
 // insertion, which splits it into two halves that share its id. A save from either replica
-// gives every revision element its own id. The save does not change the ids either replica
-// holds, so both still converge, a peer that joins afterwards loads the shared ids, and undo
-// and redo after the save reach the same states on both peers.
+// keeps the two halves of that one change on the one id, in range, and both replicas save
+// the same ids. The save does not change the ids either replica holds, so both still
+// converge, a peer that joins afterwards loads the shared ids, and undo and redo after the
+// save reach the same states on both peers.
 import { afterAll, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { readOoxmlPackage, type OoxmlNode, type OoxmlPackage } from '@docx-editor.dev/core/store';
@@ -65,9 +66,8 @@ async function saved(r: Room, index: number): Promise<OoxmlPackage> {
   return opened(new Uint8Array(await r.peers[index]!.editor.save()));
 }
 
-function expectUniqueInRange(ids: readonly string[]): void {
+function expectInRange(ids: readonly string[]): void {
   const values = ids.map((entry) => entry.slice(entry.indexOf(':') + 1));
-  expect(new Set(values).size).toBe(values.length);
   for (const value of values) {
     expect(value).toMatch(/^\d{1,10}$/);
     expect(Number(value)).toBeLessThanOrEqual(2_147_483_647);
@@ -81,7 +81,7 @@ function hasSharedId(ids: readonly string[]): boolean {
 }
 
 for (const order of Object.keys(ORDERS) as Order[])
-  test(`${order}: a save gives unique ids and leaves both replicas' ids as they are`, async () => {
+  test(`${order}: a save keeps each change on one id and leaves both replicas' ids`, async () => {
     const r = await room(order);
     try {
       await concurrently(r, typeInside, typeElsewhere);
@@ -92,7 +92,9 @@ for (const order of Object.keys(ORDERS) as Order[])
 
       const fromReviewer = await saved(r, 0);
       const fromCounterparty = await saved(r, 1);
-      expectUniqueInRange(revisionIds(fromReviewer));
+      // The shared id is the two halves of one change, so the saved file keeps it.
+      expect(revisionIds(fromReviewer)).toEqual(before);
+      expectInRange(revisionIds(fromReviewer));
       // Both replicas hold one tree, so both save the same ids.
       expect(revisionIds(fromCounterparty)).toEqual(revisionIds(fromReviewer));
 
@@ -118,7 +120,7 @@ for (const order of Object.keys(ORDERS) as Order[])
     }
   });
 
-test('undo and redo after a save converge and save unique ids again', async () => {
+test('undo and redo after a save converge and save the same ids again', async () => {
   const r = await room();
   try {
     const original = await converged(r);
@@ -126,7 +128,7 @@ test('undo and redo after a save converge and save unique ids again', async () =
     r.sync();
     const written = await converged(r);
     const shared = live(r, 0);
-    expectUniqueInRange(revisionIds(await saved(r, 0)));
+    expect(revisionIds(await saved(r, 0))).toEqual(shared);
 
     expect(r.peers[0]!.editor.exec({ type: 'undo' }).ok).toBe(true);
     r.sync();
@@ -139,8 +141,8 @@ test('undo and redo after a save converge and save unique ids again', async () =
     expect(live(r, 0)).toEqual(shared);
     expect(live(r, 1)).toEqual(shared);
     const again = revisionIds(await saved(r, 1));
-    expectUniqueInRange(again);
-    expect(again.filter((entry) => entry.startsWith('ins:'))).toHaveLength(shared.length);
+    expect(again).toEqual(shared);
+    expectInRange(again);
   } finally {
     r.close();
   }
