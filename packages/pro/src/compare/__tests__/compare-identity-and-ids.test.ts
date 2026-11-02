@@ -310,3 +310,57 @@ test('a relationship graph that fans in compares in linear time', () => {
     expect(result.ok).toBe(ok);
   }
 }, 30_000);
+
+test('percent-encoded targets copy the part the revised document shows', () => {
+  const blue = new Uint8Array(solidPng(3, 3, [0, 0, 255]));
+  const red = new Uint8Array(solidPng(4, 4, [255, 0, 0]));
+  const files = unzipSync(
+    buildDocx({
+      body: p('Alpha') + `<w:p>${inlineImage('rImg', 5)}</w:p>`,
+      media: [{ name: 'x.png', bytes: blue, rId: 'rImg' }],
+    })
+  );
+  // The target decodes to aA.png; the zip entry a%2541.png is the part named a%41.png.
+  delete files['word/media/x.png'];
+  files['word/media/aA.png'] = blue;
+  files['word/media/a%2541.png'] = red;
+  files['word/media/b 1.png'] = red;
+  const rels = 'word/_rels/document.xml.rels';
+  const withTarget = (target: string) => {
+    files[rels] = strToU8(
+      strFromU8(files[rels]!).replace(/Target="media\/[^"]*"/, `Target="${target}"`)
+    );
+    const result = compareDocuments(buildDocx({ body: p('Alpha') }), zipSync(files), {
+      authorName: 'Test',
+      date: DATE,
+    });
+    if (!result.ok) throw new Error(result.message);
+    return unzipSync(result.bytes)['word/media/compare1.png'];
+  };
+  expect(withTarget('media/a%41.png')).toEqual(blue);
+  // A target with an escaped space resolves to its part instead of a missing one.
+  expect(withTarget('media/b%201.png')).toEqual(red);
+});
+
+test('a new relationship part the original cannot type is refused', () => {
+  // Every part typed by an override, with no default for relationship parts.
+  const files = unzipSync(buildDocx({ body: p('Alpha') }));
+  const types = strFromU8(files['[Content_Types].xml']!).replace(/<Default [^>]*\/>/g, '');
+  const overrides = Object.keys(files)
+    .filter((name) => name !== '[Content_Types].xml' && !types.includes(`PartName="/${name}"`))
+    .map((name) => {
+      const type = name.endsWith('.rels')
+        ? 'application/vnd.openxmlformats-package.relationships+xml'
+        : 'application/xml';
+      return `<Override PartName="/${name}" ContentType="${type}"/>`;
+    })
+    .join('');
+  files['[Content_Types].xml'] = strToU8(types.replace('</Types>', `${overrides}</Types>`));
+  const revised = buildDocx({
+    body: p('Alpha'),
+    media: [{ name: 'h.png', bytes: solidPng(2, 2, [1, 2, 3]), rId: 'rH' }],
+    headers: { default: `<w:p>${inlineImage('rH', 6)}</w:p>`, first: undefined, even: undefined },
+  });
+  const result = compareDocuments(zipSync(files), revised, { authorName: 'Test', date: DATE });
+  expect(result.ok ? '' : result.code).toBe('unsupported-content');
+});

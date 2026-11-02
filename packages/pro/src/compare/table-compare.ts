@@ -200,7 +200,8 @@ export function compareTable(
     if (fromRevised) revisedCount++;
   };
   if (!base) for (const row of revisedRows) emit(insertedRow(row, ctx), false, true);
-  else if (!revised) for (const row of baseRows) emit(deletedRow(row, ctx), true, false);
+  else if (!revised)
+    for (const row of baseRows) emit(deletedRow(row, ctx, tableBundle), true, false);
   else {
     let pendingBase: ElementNode[] = [];
     let pendingRevised: ElementNode[] = [];
@@ -215,7 +216,7 @@ export function compareTable(
         emit(rowPair(pendingBase[k]!, pendingRevised[k]!, ctx, tableBundle), true, true);
         k++;
       }
-      for (const row of pendingBase.slice(k)) emit(deletedRow(row, ctx), true, false);
+      for (const row of pendingBase.slice(k)) emit(deletedRow(row, ctx, tableBundle), true, false);
       for (const row of pendingRevised.slice(k)) emit(insertedRow(row, ctx), false, true);
       pendingBase = [];
       pendingRevised = [];
@@ -228,7 +229,7 @@ export function compareTable(
         if (cellsOf(left).length === cellsOf(right).length)
           emit(rowPair(left, right, ctx, tableBundle), true, true);
         else {
-          emit(deletedRow(left, ctx), true, false);
+          emit(deletedRow(left, ctx, tableBundle), true, false);
           emit(insertedRow(right, ctx), false, true);
         }
       } else if (op.op === 'del') pendingBase.push(baseRows[op.a]!);
@@ -286,12 +287,21 @@ function rowPair(
   return `${out}${extrasAt(extras, revisedCells.length)}</w:tr>`;
 }
 
-function deletedRow(row: ElementNode, ctx: EmitContext): string {
+/**
+ * A row only the original has. With table history (`tableBundle`), each cell records its own
+ * formatting unchanged, because a reject restores table history only through cell records.
+ */
+function deletedRow(row: ElementNode, ctx: EmitContext, tableBundle: boolean): string {
   const extras = carriedExtras(row, null, ROW_OWN, 'tc', ctx);
+  const cellProperties = (cell: ElementNode) => {
+    if (!tableBundle || !ctx.detectFormatChanges) return properties('tcPr', cell, null, ctx);
+    const inner = propertiesInner(childNamed(cell, 'tcPr'), ctx.base, DROPS.tcPr);
+    return `<w:tcPr>${inner}<w:tcPrChange${ctx.attrs()}><w:tcPr>${inner}</w:tcPr></w:tcPrChange></w:tcPr>`;
+  };
   let out = `<w:tr>${rowStart(row, ctx.base)}${properties('trPr', row, null, ctx, `<w:del${ctx.attrs()}/>`)}`;
   const cells = cellsOf(row);
   for (const [index, cell] of cells.entries()) {
-    out += `${extrasAt(extras, index)}<w:tc>${properties('tcPr', cell, null, ctx)}${compareContainer(unitsOf(cell, ctx.base), [], ctx)}</w:tc>`;
+    out += `${extrasAt(extras, index)}<w:tc>${cellProperties(cell)}${compareContainer(unitsOf(cell, ctx.base), [], ctx)}</w:tc>`;
   }
   return `${out}${extrasAt(extras, cells.length)}</w:tr>`;
 }

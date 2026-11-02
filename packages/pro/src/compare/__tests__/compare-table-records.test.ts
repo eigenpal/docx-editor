@@ -19,7 +19,8 @@ const docx = (body: string) => buildDocx({ body });
 const tableOf = (xml: string) =>
   xml
     .slice(xml.indexOf('<w:tbl>'), xml.indexOf('</w:tbl>') + 8)
-    .replace(/<w:(trPr|tcPr|tblPrEx)\/>/g, '');
+    .replace(/<w:(trPr|tcPr|tblPrEx)\/>/g, '')
+    .replace(/<w:pPr><w:rPr\/><\/w:pPr>/g, '');
 
 function mainXml(bytes: Uint8Array): string {
   const read = readOoxmlPackage(bytes);
@@ -60,6 +61,11 @@ const cases: readonly [string, string, string][] = [
     table([['a', { text: 'b', tcPr: '<w:vAlign w:val="center"/>' }, 'c']]),
   ],
   ['table centered', table([['a', 'b']]), table([['a', 'b']], { tblPr: '<w:jc w:val="center"/>' })],
+  [
+    'table centered and a row deleted',
+    table([['a'], ['b'], ['c']]),
+    table([['a'], ['c']], { tblPr: '<w:jc w:val="center"/>' }),
+  ],
 ];
 
 for (const [name, before, after] of cases) {

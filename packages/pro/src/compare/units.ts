@@ -12,7 +12,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * field) it sits in, so the emitter can rebuild runs from either side.
  */
 import type { OoxmlNode, OoxmlPackage } from '@docx-editor.dev/core/store';
-import { relationshipsOf, serializeOoxmlPart, sha256Bytes } from '@docx-editor.dev/core/store';
+import {
+  relationshipsOf,
+  resolveInternalTarget,
+  serializeOoxmlPart,
+  sha256Bytes,
+} from '@docx-editor.dev/core/store';
 import { textBoxesOf, withBoxMarkers } from './text-boxes.ts';
 import { numberingMapOf, withMappedNumbering } from './definitions.ts';
 import {
@@ -196,8 +201,7 @@ export class SideContext {
     if (rel.external) return `${rel.type}|${rel.target}`;
     let key = this.#mediaKeys.get(id);
     if (key === undefined) {
-      const dir = this.partName.slice(0, this.partName.lastIndexOf('/') + 1);
-      const target = rel.target.startsWith('/') ? rel.target : normalizePath(dir + rel.target);
+      const target = partNameOf(this.partName, rel.target);
       const walk = { seen: new Set<string>(), visits: 0, local: false };
       key = `${rel.type}|${partIdentity(this.pkg, target, walk)}`;
       this.#mediaKeys.set(id, key);
@@ -268,13 +272,13 @@ function localDeclarations(xml: string): Map<string, string> {
   return out;
 }
 
-function normalizePath(path: string): string {
-  const out: string[] = [];
-  for (const piece of path.split('/')) {
-    if (piece === '..') out.pop();
-    else if (piece !== '.' && piece !== '') out.push(piece);
-  }
-  return `/${out.join('/')}`;
+/**
+ * The part an internal target names from `owner`, decoded as the package reader decodes it.
+ * A target that is not a valid part name keeps a key of its own, which names no part.
+ */
+function partNameOf(owner: string, target: string): string {
+  const resolved = resolveInternalTarget(owner, target);
+  return resolved.ok ? resolved.partName : `invalid:${owner}|${target}`;
 }
 
 const identities = new WeakMap<OoxmlPackage, Map<string, string>>();
@@ -316,7 +320,6 @@ function partIdentity(pkg: OoxmlPackage, name: string, walk: IdentityWalk): stri
     pkg.partBytes.get(name.slice(1)) ??
     (part ? encoder.encode(serializeOoxmlPart(part)) : undefined);
   let identity = bytes ? sha256Bytes(bytes) : `missing:${name}`;
-  const dir = name.slice(0, name.lastIndexOf('/') + 1);
   const wasLocal = walk.local;
   walk.local = false;
   for (const rel of relationshipsOf(pkg, name)) {
@@ -324,11 +327,7 @@ function partIdentity(pkg: OoxmlPackage, name: string, walk: IdentityWalk): stri
     const target =
       rel.targetMode === 'External'
         ? `external:${rel.rawTarget}`
-        : partIdentity(
-            pkg,
-            rel.rawTarget.startsWith('/') ? rel.rawTarget : normalizePath(dir + rel.rawTarget),
-            walk
-          );
+        : partIdentity(pkg, partNameOf(name, rel.rawTarget), walk);
     identity += `|${rel.id}:${rel.type}:${target}`;
   }
   walk.seen.delete(name);

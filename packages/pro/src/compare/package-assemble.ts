@@ -11,6 +11,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import {
   readOoxmlPackage,
   readOoxmlPart,
+  resolveInternalTarget,
   relationshipsOf,
   relsPartNameFor,
   resolveContentTypeOf,
@@ -20,6 +21,7 @@ import {
   withPart,
   writeOoxmlPackage,
   type OoxmlPackage,
+  type OoxmlPart,
 } from '@docx-editor.dev/core/store';
 import type { StoryOutput } from './stories.ts';
 import { isPartNameTaken } from './related-parts.ts';
@@ -55,6 +57,19 @@ const NEW_PART = new RegExp(`${MARK}NEW:([^§"]+)§`, 'g');
 const RELS_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const RELS_CONTENT_TYPE = 'application/vnd.openxmlformats-package.relationships+xml';
 
+const UNTYPED_RELATIONSHIPS =
+  'The original document declares no content type for relationship parts, which the compare result needs.';
+
+/**
+ * `pkg` with a relationship part, or null when nothing types it: a package may declare each
+ * part's type by an override and omit the relationship default, and the package model writes
+ * no override for a relationship part.
+ */
+function withRelationshipPart(pkg: OoxmlPackage, part: OoxmlPart): OoxmlPackage | null {
+  const next = withPart(pkg, part);
+  return resolveContentTypeOf(next, part.name) === null ? null : next;
+}
+
 export type AssembleResult =
   | { readonly ok: true; readonly bytes: Uint8Array; readonly pkg: OoxmlPackage }
   | { readonly ok: false; readonly message: string };
@@ -80,15 +95,14 @@ function relationshipOf(pkg: OoxmlPackage, owner: string, id: string): Rel | nul
   return null;
 }
 
-function resolveTarget(owner: string, target: string): string {
-  if (target.startsWith('/')) return target;
-  const out = owner.split('/').slice(0, -1);
-  for (const piece of target.split('/')) {
-    if (piece === '..') out.pop();
-    else if (piece !== '.' && piece !== '') out.push(piece);
-  }
-  const name = out.join('/');
-  return name.startsWith('/') ? name : `/${name}`;
+/**
+ * The part name an internal target names from `owner`, decoded as the package reader decodes
+ * it (percent escapes, dot segments), so lookups find the part the editor shows. Null when the
+ * target is not a valid part name.
+ */
+function resolveTarget(owner: string, target: string): string | null {
+  const resolved = resolveInternalTarget(owner, target);
+  return resolved.ok ? resolved.partName : null;
 }
 
 /** Related parts a copied part may reach through its own relationships, in a chain. */
@@ -228,7 +242,10 @@ export function assemblePackage(
     for (const rel of own) {
       let target = rel.target;
       if (!rel.external) {
-        const inner = copyPart(resolveTarget(source, rel.target), depth + 1);
+        const resolved = resolveTarget(source, rel.target);
+        if (resolved === null)
+          return { failure: `The revised document has an invalid part name (${rel.target}).` };
+        const inner = copyPart(resolved, depth + 1);
         if (typeof inner !== 'string') return inner;
         target = relativeTarget(copied, inner);
       }
@@ -240,7 +257,9 @@ export function assemblePackage(
       contentType: RELS_CONTENT_TYPE,
     });
     if (!rels.ok) return { failure: `A relationship part is not valid XML (${rels.reason}).` };
-    pkg = withPart(pkg, rels.part);
+    const typed = withRelationshipPart(pkg, rels.part);
+    if (!typed) return { failure: UNTYPED_RELATIONSHIPS };
+    pkg = typed;
     return copied;
   };
   for (const story of stories) {
@@ -264,7 +283,11 @@ export function assemblePackage(
       }
       let target = rel.target;
       if (!rel.external) {
-        const copied = copyPart(resolveTarget(revisedOwner, rel.target), 0);
+        const resolved = resolveTarget(revisedOwner, rel.target);
+        const copied =
+          resolved === null
+            ? { failure: `The revised document has an invalid part name (${rel.target}).` }
+            : copyPart(resolved, 0);
         if (typeof copied !== 'string') {
           failure = copied.failure;
           return escapeAttribute(id);
@@ -297,7 +320,9 @@ export function assemblePackage(
     });
     if (!next.ok)
       return { ok: false, message: `A relationship part is not valid XML (${next.reason}).` };
-    pkg = withPart(pkg, next.part);
+    const typed = withRelationshipPart(pkg, next.part);
+    if (!typed) return { ok: false, message: UNTYPED_RELATIONSHIPS };
+    pkg = typed;
   }
   let bytes: Uint8Array;
   try {
