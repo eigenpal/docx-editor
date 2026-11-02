@@ -2531,6 +2531,9 @@ export function* layoutSemanticDocumentWithNotesSteps<Opts extends NotesBodyOpti
       ],
     },
     limit: (optionsWithLists as { bodyBlockLimit?: number }).bodyBlockLimit ?? -1,
+    parityStarts: sections.some(
+      ({ properties }) => properties.breakType === 'oddPage' || properties.breakType === 'evenPage'
+    ),
     citingParagraphs: (noteId) =>
       allHits.flatMap((hit) =>
         hit.noteKind === 'footnote' && hit.noteId === noteId ? [hit.paragraphId] : []

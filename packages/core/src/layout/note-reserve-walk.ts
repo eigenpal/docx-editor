@@ -264,8 +264,10 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
       enter(floor);
       // The rest of the previous walk applies once a page starts where one of its pages did.
       const next = pages[floor];
+      // A page with no content starts nowhere in particular: every blank sheet of one size
+      // looks alike, so only a page that opens with content can match a previous page.
       const from =
-        next && previous && floor < reliable
+        next && previous && floor < reliable && next.fragments.length > 0 && !next.parityBlank
           ? previousStarts.get(options.startOf(next, carry))
           : undefined;
       if (next && previous && from !== undefined) {

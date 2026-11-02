@@ -45,7 +45,16 @@ interface DocumentShape {
   readonly minCount?: number;
   /** The ids of the separator and the continuation separator. */
   readonly separatorIds?: readonly [number, number];
+  /**
+   * A section break every 15 paragraphs. Every second section starts on an odd page, so
+   * some breaks add a blank sheet, and sets two columns.
+   */
+  readonly sections?: boolean;
 }
+
+const PAGE =
+  '<w:pgSz w:w="4000" w:h="6000"/>' +
+  '<w:pgMar w:top="0" w:right="0" w:bottom="0" w:left="0" w:header="0" w:footer="0"/>';
 
 function documentBytes(next: () => number, shape: DocumentShape = {}): Uint8Array {
   const count = (shape.minCount ?? 20) + Math.floor(next() * 40);
@@ -65,9 +74,15 @@ function documentBytes(next: () => number, shape: DocumentShape = {}): Uint8Arra
       cite = `<w:r><w:footnoteReference w:id="${id}"/></w:r>`;
     }
     const text = Array.from({ length: words }, (_, k) => `w${i}x${k}`).join(' ');
+    let section = '';
+    if (shape.sections && i > 0 && i % 15 === 0) {
+      const odd = (i / 15) % 2 === 1;
+      const columns = odd ? '<w:cols w:num="2" w:space="200"/>' : '';
+      section = `<w:sectPr><w:type w:val="${odd ? 'oddPage' : 'nextPage'}"/>${PAGE}${columns}</w:sectPr>`;
+    }
     body.push(
       `<w:p><w:pPr>${keepNext}<w:widowControl w:val="${widow}"/>${EXACT} w:after="${after}"/>` +
-        `${indent}</w:pPr><w:r><w:t xml:space="preserve">${text}</w:t></w:r>${cite}</w:p>`
+        `${indent}${section}</w:pPr><w:r><w:t xml:space="preserve">${text}</w:t></w:r>${cite}</w:p>`
     );
   }
   const note = (lines: number, k: number) =>
@@ -91,9 +106,8 @@ function documentBytes(next: () => number, shape: DocumentShape = {}): Uint8Arra
       `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
     ),
     'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body.join('')}<w:sectPr>` +
-        '<w:pgSz w:w="4000" w:h="6000"/><w:pgMar w:top="0" w:right="0" w:bottom="0" w:left="0" w:header="0" w:footer="0"/>' +
-        '</w:sectPr></w:body></w:document>'
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body.join('')}` +
+        `<w:sectPr>${PAGE}</w:sectPr></w:body></w:document>`
     ),
     'word/footnotes.xml': strToU8(
       `<w:footnotes xmlns:w="${W}">${separator('separator', separatorId)}` +
@@ -113,8 +127,9 @@ function layoutOptions(footnotesPart: OoxmlPart | null, mode: number, session?: 
     notes: {
       footnotesPart,
       endnotesPart: null,
-      footnotePropsBySection: [footnoteProps],
-      endnotePropsBySection: [endnoteProps],
+      // Enough entries for every section a document here has.
+      footnotePropsBySection: Array.from({ length: 10 }, () => footnoteProps),
+      endnotePropsBySection: Array.from({ length: 10 }, () => endnoteProps),
       documentFootnoteProps: footnoteProps,
       documentEndnoteProps: endnoteProps,
       measurer,
@@ -157,37 +172,42 @@ function paragraphIds(part: OoxmlPart): string[] {
 }
 
 describe('a warm footnote pass matches a fresh one after each edit', () => {
-  for (const mode of [15, 14]) {
-    test(`compatibility mode ${mode}`, () => {
-      const mismatches: string[] = [];
-      for (let seed = 1; seed <= 12; seed += 1) {
-        const next = random(seed * 7919 + mode);
-        const loaded = readOoxmlPackage(documentBytes(next));
-        if (!loaded.ok) throw new Error(loaded.reason);
-        const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
-        const footnotesPart = resolveNotesPart(loaded.package, 'footnote');
-        const store = new TreeDocumentStore(part);
-        const session = createLayoutSession();
-        lay(store.part, footnotesPart, mode, 1, session);
-        for (let step = 0; step < 10; step += 1) {
-          const ids = paragraphIds(store.part);
-          const paragraphId = ids[Math.floor(next() * ids.length)]!;
-          const text = next() < 0.5 ? 'abc ' : 'a thirty-eight character phrase here. ';
-          const result = store.transact((tx) =>
-            tx.apply({ op: 'insertText', paragraphId, offset: 0, text })
-          );
-          expect(result.ok).toBe(true);
-          const warm = lay(store.part, footnotesPart, mode, step + 2, session);
-          const fresh = lay(store.part, footnotesPart, mode, step + 2);
-          if (JSON.stringify(warm.pages) !== JSON.stringify(fresh.pages)) {
-            mismatches.push(`seed ${seed} step ${step}`);
-            break;
+  const variants: readonly { readonly label: string; readonly shape: DocumentShape }[] = [
+    { label: 'one section', shape: {} },
+    { label: 'odd-page sections and columns', shape: { minCount: 60, sections: true } },
+  ];
+  for (const { label, shape } of variants)
+    for (const mode of [15, 14]) {
+      test(`${label}, compatibility mode ${mode}`, () => {
+        const mismatches: string[] = [];
+        for (let seed = 1; seed <= 12; seed += 1) {
+          const next = random(seed * 7919 + mode);
+          const loaded = readOoxmlPackage(documentBytes(next, shape));
+          if (!loaded.ok) throw new Error(loaded.reason);
+          const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+          const footnotesPart = resolveNotesPart(loaded.package, 'footnote');
+          const store = new TreeDocumentStore(part);
+          const session = createLayoutSession();
+          lay(store.part, footnotesPart, mode, 1, session);
+          for (let step = 0; step < 10; step += 1) {
+            const ids = paragraphIds(store.part);
+            const paragraphId = ids[Math.floor(next() * ids.length)]!;
+            const text = next() < 0.5 ? 'abc ' : 'a thirty-eight character phrase here. ';
+            const result = store.transact((tx) =>
+              tx.apply({ op: 'insertText', paragraphId, offset: 0, text })
+            );
+            expect(result.ok).toBe(true);
+            const warm = lay(store.part, footnotesPart, mode, step + 2, session);
+            const fresh = lay(store.part, footnotesPart, mode, step + 2);
+            if (JSON.stringify(warm.pages) !== JSON.stringify(fresh.pages)) {
+              mismatches.push(`seed ${seed} step ${step}`);
+              break;
+            }
           }
         }
-      }
-      expect(mismatches).toEqual([]);
-    }, 60000);
-  }
+        expect(mismatches).toEqual([]);
+      }, 60000);
+    }
 
   test('after a pass that a newer edit cut short', () => {
     const mismatches: string[] = [];

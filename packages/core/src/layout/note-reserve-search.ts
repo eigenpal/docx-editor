@@ -68,6 +68,11 @@ export interface ReserveSearchOptions {
   /** Body paragraph ids that cite each footnote id. */
   readonly citingParagraphs: (noteId: number) => readonly string[];
   /**
+   * Some section starts on an odd or even page. A page's answer then may read the page after
+   * a blank sheet that only one of its trial reserves makes.
+   */
+  readonly parityStarts: boolean;
+  /**
    * Lay out the body under `reserves`. `blockLimit` lays out only that many blocks; `follow`
    * reads each page's reserve where its content stood in the previous pass.
    */
@@ -267,7 +272,7 @@ export function* searchFootnoteReserves(
         from = Math.max(from, held[1] + 1);
       }
       // A page's answer reads the next page, or the one after a blank parity sheet.
-      const reads = previousLayout!.pages[first - 1]?.parityBlank ? 2 : 1;
+      const reads = options.parityStarts || previousLayout!.pages[first - 1]?.parityBlank ? 2 : 1;
       startFloor = Math.max(0, Math.min(first - reads, reuse.record.decided));
       // The walk starts from the notes carried into its first page; a page with no record of
       // them starts earlier.
