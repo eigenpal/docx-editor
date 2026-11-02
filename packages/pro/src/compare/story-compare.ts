@@ -56,6 +56,19 @@ export function compareContainer(
   wholeStory = false
 ): string {
   if (base.length === 0 && revised.length === 0) return '';
+  // Markers after the last paragraph (a bookmark or permission end) are not content: the final
+  // paragraph mark is the one before them, so they compare on their own after it.
+  const baseEnd = contentEnd(base);
+  const revisedEnd = contentEnd(revised);
+  if (
+    (baseEnd < base.length || revisedEnd < revised.length) &&
+    base[baseEnd - 1]?.kind === 'paragraph' &&
+    revised[revisedEnd - 1]?.kind === 'paragraph'
+  )
+    return (
+      compareContainer(base.slice(0, baseEnd), revised.slice(0, revisedEnd), ctx, wholeStory) +
+      compareContainer(base.slice(baseEnd), revised.slice(revisedEnd), ctx)
+    );
   const steps: Step[] = [];
   let hunk: Hunk | null = null;
   for (const op of diffKeys(
@@ -125,6 +138,21 @@ const controlsOf = (atom: Atom) =>
     .filter((wrapper) => isControlWrapper(wrapper.key))
     .map((wrapper) => wrapper.key)
     .join('\u0003');
+
+/** Range markers, which hold no content of their own. */
+const RANGE_MARKER =
+  /^(?:bookmarkStart|bookmarkEnd|permStart|permEnd|proofErr|commentRangeStart|commentRangeEnd|(?:moveFrom|moveTo)Range(?:Start|End))$/;
+
+/** The end of a container's content: the index after its last unit that is not a range marker. */
+function contentEnd(units: readonly Unit[]): number {
+  let end = units.length;
+  while (end > 0) {
+    const unit = units[end - 1]!;
+    if (unit.kind !== 'opaque' || !RANGE_MARKER.test(unit.node.localName)) break;
+    end--;
+  }
+  return end;
+}
 
 function foldTrailingPair(steps: Step[]): void {
   const last = steps[steps.length - 1];
