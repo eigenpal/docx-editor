@@ -16,6 +16,7 @@ import {
 } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useTranslation } from '../i18n';
+import { useEditorState } from './useEditorState';
 import {
   NativeDialog,
   createDialogComposition,
@@ -102,12 +103,12 @@ const Impl = defineComponent({
       notice.value = undefined;
       values.value = { ...values.value, [name]: value };
     };
+    // The session's own state (viewing, protection, collaboration) moves with the editor.
+    const canApply = useEditorState(() => p.session?.canApply() ?? false, Object.is, {
+      extraDeps: () => p.session,
+    });
     const enabled = computed(
-      () =>
-        !closed.value &&
-        !busy.value &&
-        values.value.revised !== null &&
-        (p.session?.canApply() ?? false)
+      () => !closed.value && !busy.value && values.value.revised !== null && canApply.value
     );
     const cancel = () => {
       if (!busy.value) p.session?.cancel();
@@ -144,7 +145,7 @@ const Impl = defineComponent({
       if (outcome.ok) notice.value = translate('compareDocuments.noDifferences');
       else
         error.value = translate(
-          `compareDocuments.errors.${outcome.reason}` as Parameters<typeof translate>[0]
+          `compareDocuments.errors.${outcome.code}` as Parameters<typeof translate>[0]
         );
       busy.value = false;
     };
@@ -219,15 +220,10 @@ const Impl = defineComponent({
           </p>
           <div data-docx-part="footer" class="docx-compare-documents-actions">
             <button data-docx-part="cancel" type="button" disabled={busy.value} onClick={cancel}>
-              {t('cancel')}
+              {/* After a compare with no differences, nothing remains to cancel. */}
+              {notice.value ? translate('common.close') : t('cancel')}
             </button>
-            <button
-              data-docx-part="apply"
-              type="button"
-              disabled={!enabled.value}
-              aria-busy={busy.value}
-              onClick={apply}
-            >
+            <button data-docx-part="apply" type="button" disabled={!enabled.value} onClick={apply}>
               {t(busy.value ? 'comparing' : 'compare')}
             </button>
           </div>
@@ -241,6 +237,7 @@ const Impl = defineComponent({
           sessionSignal={p.session.signal}
           dismissOutside={false}
           describedBy={`${id}-description`}
+          busy={busy.value}
           class={['docx-compare-documents-dialog', p.className]}
           style={p.style}
           content={() =>

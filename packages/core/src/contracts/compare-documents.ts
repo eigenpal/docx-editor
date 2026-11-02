@@ -48,8 +48,8 @@ export type CompareDocumentsOutcome =
   | {
       readonly ok: true;
       /**
-       * Revision elements written. A replacement counts its deletion and its insertion, so
-       * this is not the number of review items.
+       * Revision elements written. A replacement counts its deletion and its insertion, and
+       * a move counts both ends, so this is not the number of review items.
        */
       readonly revisionCount: number;
       /**
@@ -60,8 +60,8 @@ export type CompareDocumentsOutcome =
     }
   | {
       readonly ok: false;
-      /** What to tell the user, as a code to translate. */
-      readonly reason: CompareDocumentsRefusal;
+      /** Why the compare was refused. `compareDocuments.errors.<code>` translates it. */
+      readonly code: CompareDocumentsRefusal;
       /** Diagnostic detail, in English; not for display. */
       readonly message: string;
     };

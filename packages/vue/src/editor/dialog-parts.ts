@@ -245,6 +245,8 @@ export const NativeDialog = defineComponent({
     sessionSignal: Object as PropType<AbortSignal>,
     /** The id of the element that describes the dialog, such as an alert's message. */
     describedBy: String,
+    /** True while the dialog works, such as during a compare. */
+    busy: Boolean,
     content: Function as PropType<() => import('vue').VNodeChild>,
   },
   setup(p, { attrs, slots }) {
@@ -304,6 +306,7 @@ export const NativeDialog = defineComponent({
           'aria-modal': true,
           'aria-label': p.label,
           ...(p.describedBy ? { 'aria-describedby': p.describedBy } : {}),
+          ...(p.busy ? { 'aria-busy': 'true' } : {}),
           'data-docx-dialog': p.kind,
           class: [
             'docx-dialog',

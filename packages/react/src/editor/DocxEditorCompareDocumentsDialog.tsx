@@ -103,7 +103,7 @@ function CompareDocumentsForm({
     if (session.signal.aborted) return;
     // With no differences the dialog stays open and says so; nothing changed.
     if (outcome.ok) setNotice(translate('compareDocuments.noDifferences'));
-    else setError(translate(`compareDocuments.errors.${outcome.reason}` as TranslationKey));
+    else setError(translate(`compareDocuments.errors.${outcome.code}` as TranslationKey));
     setBusy(false);
   };
   const state: UseCompareDocumentsDialogReturn = {
@@ -135,6 +135,7 @@ function CompareDocumentsForm({
       dismissOutside={false}
       sessionSignal={session.signal}
       describedBy={`${ids}-description`}
+      busy={busy}
     >
       <parts.Composition
         state={state}
@@ -191,13 +192,13 @@ function CompareDocumentsForm({
             </p>
             <div data-docx-part="footer" className="docx-compare-documents-actions">
               <button data-docx-part="cancel" type="button" disabled={busy} onClick={state.cancel}>
-                {t('cancel')}
+                {/* After a compare with no differences, nothing remains to cancel. */}
+                {notice ? translate('common.close') : t('cancel')}
               </button>
               <button
                 data-docx-part="apply"
                 type="button"
                 disabled={!state.isEnabled}
-                aria-busy={busy}
                 onClick={state.apply}
               >
                 {t(busy ? 'comparing' : 'compare')}

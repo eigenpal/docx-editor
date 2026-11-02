@@ -82,6 +82,22 @@ const STORY_ROOTS = new Set([
   'styles',
 ]);
 
+/**
+ * Compares an original and a revised DOCX and returns the original with the differences
+ * recorded as tracked changes: insertions, deletions, moves, and, with `detectFormatChanges`,
+ * formatting revisions. An input it cannot compare gives `{ ok: false }` with a stable
+ * `code`. When the documents have no differences, `changed` is false and
+ * `bytes` are the original bytes.
+ *
+ * @example
+ * ```ts
+ * const result = compareDocuments(original, revised, { authorName: 'Legal review' });
+ * if (!result.ok) throw new Error(`compare refused: ${result.code}`);
+ * if (result.changed) await saveFile('redline.docx', result.bytes);
+ * ```
+ *
+ * @public
+ */
 export function compareDocuments(
   original: Uint8Array,
   revised: Uint8Array,

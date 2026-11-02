@@ -9,7 +9,7 @@ export interface CompareDocumentsEngineOptions {
    * white space.
    */
   readonly authorName?: string;
-  /** Record formatting differences as property-change revisions. Default `true`. */
+  /** Record formatting differences as formatting revisions. Default `true`. */
   readonly detectFormatChanges?: boolean;
   /** Omit the revision timestamps. Default `false`. */
   readonly removeDateAndTime?: boolean;

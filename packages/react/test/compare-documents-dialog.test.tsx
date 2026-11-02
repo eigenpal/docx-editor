@@ -124,6 +124,8 @@ test('a compare with no differences says so and keeps the dialog open', async ()
   expect(view.container.querySelector('[data-docx-part="error"]')?.textContent).toBe('');
   expect(view.getByRole('status').textContent).toBe('The documents have no differences.');
   expect(view.getByRole('dialog')).toBeTruthy();
+  // Nothing remains to cancel: the button closes the dialog.
+  expect(view.getByRole('button', { name: 'Close' })).toBeTruthy();
 });
 
 test('named parts replace defaults; popup false and replacements get cancellable sessions', async () => {

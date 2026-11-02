@@ -142,6 +142,8 @@ test('a compare with no differences shows a notice and records nothing', async (
   );
   expect(notice.closest('dialog')).not.toBeNull();
   expect(container.querySelector('[role="alert"]')?.textContent).toBe('');
+  const buttons = [...notice.closest('dialog')!.querySelectorAll('button')];
+  expect(buttons.map((button) => button.textContent)).toContain('Close');
   expect(editor.surface!.session.packageRevision()).toBe(revision);
   expect(editor.can({ type: 'undo' }).ok).toBe(false);
 });

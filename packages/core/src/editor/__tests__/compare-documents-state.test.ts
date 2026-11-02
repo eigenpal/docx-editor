@@ -227,7 +227,7 @@ describe('compare documents commands', () => {
       code: 'invalidArgs',
       reason: 'not a document',
       // The refusal as a code to translate, the same one the dialog shows.
-      compareDocuments: { ok: false, reason: 'invalidRevised', message: 'not a document' },
+      compareDocuments: { ok: false, code: 'invalidRevised', message: 'not a document' },
     });
     editor.exec({ type: 'compareDocuments', revised: docx('x'), authorName: ' Editor ' });
     editor.exec({ type: 'compareDocuments', revised: docx('x'), removeDateAndTime: true });
@@ -239,7 +239,7 @@ describe('compare documents commands', () => {
     expect(editor.exec({ type: 'compareDocuments', revised: new Uint8Array() })).toMatchObject({
       ok: false,
       code: 'invalidArgs',
-      compareDocuments: { ok: false, reason: 'empty' },
+      compareDocuments: { ok: false, code: 'empty' },
     });
     expect(bodyText(editor)).toBe('Original text');
   });
@@ -305,7 +305,7 @@ describe('compare documents dialog session', () => {
       // A refusal from before the compare carries the outcome too.
       if (command.type === 'compareDocuments')
         expect(editor.exec(command, { historyGroup: gesture })).toMatchObject({
-          compareDocuments: { ok: false, reason: 'failed' },
+          compareDocuments: { ok: false, code: 'failed' },
         });
     }
     expect(editor.surface!.session.packageRevision()).toBe(revision);
@@ -319,7 +319,68 @@ describe('compare documents dialog session', () => {
       }),
     ]);
     const result = editor.exec({ type: 'compareDocuments', revised: docx('x') });
-    expect(result).toMatchObject({ ok: false, compareDocuments: { reason: 'protected' } });
+    // The exec code names the kind of refusal, not an argument error.
+    expect(result).toMatchObject({
+      ok: false,
+      code: 'locked',
+      compareDocuments: { code: 'protected' },
+    });
+  });
+
+  test('limits and content refusals answer unsupported', () => {
+    for (const code of ['tooLarge', 'unsupportedContent'] as const) {
+      const editor = mount([
+        reviewModule({ compareDocuments: () => ({ ok: false, code, message: code }) }),
+      ]);
+      expect(editor.exec({ type: 'compareDocuments', revised: docx('x') })).toMatchObject({
+        ok: false,
+        code: 'unsupported',
+        compareDocuments: { code },
+      });
+      cleanup();
+    }
+  });
+
+  test('options of the wrong type are refused, not coerced', () => {
+    let calls = 0;
+    const editor = mount([
+      reviewModule({
+        compareDocuments: (original) => {
+          calls++;
+          return { ok: true, package: original, revisionCount: 0, changed: false };
+        },
+      }),
+    ]);
+    for (const options of [
+      { detectFormatChanges: 'false' },
+      { removeDateAndTime: 1 },
+      { authorName: 7 },
+    ])
+      expect(
+        editor.exec({ type: 'compareDocuments', revised: docx('x'), ...options } as never)
+      ).toMatchObject({
+        ok: false,
+        code: 'invalidArgs',
+        compareDocuments: { ok: false, code: 'invalidOptions' },
+      });
+    expect(calls).toBe(0);
+  });
+
+  test('an engine that throws gives a failed result, not a throw', () => {
+    const editor = mount([
+      reviewModule({
+        compareDocuments: () => {
+          throw new Error('engine defect');
+        },
+      }),
+    ]);
+    expect(editor.exec({ type: 'compareDocuments', revised: docx('x') })).toEqual({
+      ok: false,
+      code: 'unsupported',
+      reason: 'engine defect',
+      compareDocuments: { ok: false, code: 'failed', message: 'engine defect' },
+    });
+    expect(bodyText(editor)).toBe('Original text');
   });
 
   test('a refused compare keeps the session open with the message', async () => {
@@ -332,7 +393,7 @@ describe('compare documents dialog session', () => {
     editor.setCompareDocumentsChrome({ onRequest: (s) => (session = s) });
     editor.exec({ type: 'openCompareDocumentsDialog' });
     const outcome = await session!.apply({ revised: docx('Revised') });
-    expect(outcome).toEqual({ ok: false, reason: 'tooLarge', message: 'too large' });
+    expect(outcome).toEqual({ ok: false, code: 'tooLarge', message: 'too large' });
     expect(session!.signal.aborted).toBe(false);
     session!.cancel();
     expect(session!.signal.aborted).toBe(true);

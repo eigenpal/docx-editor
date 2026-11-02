@@ -782,7 +782,7 @@ const count = await runtime.run(async (context) => {
   context.document.compareFromBase64(revisedBase64, { authorName: 'Legal' });
   await context.sync();
   const revisions = context.document.revisions;
-  revisions.load('items');
+  revisions.load('items/type');
   await context.sync();
   return revisions.items.length;
 });

@@ -133,6 +133,7 @@ test('a compare with no differences shows a notice, not an error', async () => {
   );
   expect(container.querySelector('[data-docx-part="error"]')?.textContent ?? '').toBe('');
   expect(container.querySelector('dialog')).not.toBeNull();
+  expect(container.querySelector('[data-docx-part="cancel"]')?.textContent).toBe('Close');
 });
 
 for (const mode of ['parts', 'false', 'replacement'] as const) {

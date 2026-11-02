@@ -235,6 +235,7 @@ export function DialogFrame({
   sessionSignal,
   restoreFocus = true,
   describedBy,
+  busy,
 }: {
   kind:
     | 'revisionMarkup'
@@ -263,6 +264,8 @@ export function DialogFrame({
   restoreFocus?: boolean;
   /** The id of the element that describes the dialog, such as an alert's message. */
   describedBy?: string;
+  /** True while the dialog works, such as during a compare. */
+  busy?: boolean;
 }) {
   const ownRef = useRef<HTMLDialogElement | null>(null);
   const ref = panelRef ?? ownRef;
@@ -303,6 +306,7 @@ export function DialogFrame({
       aria-modal="true"
       aria-label={label}
       aria-describedby={describedBy}
+      aria-busy={busy || undefined}
       className={`docx-dialog${ownScope ? ` docx-editor${chromeDark ? ' dark' : ''}` : ''}${className ? ` ${className}` : ''}`}
       style={style}
       data-docx-dialog={kind}

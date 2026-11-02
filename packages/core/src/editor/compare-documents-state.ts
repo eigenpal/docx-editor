@@ -1,4 +1,5 @@
 import type { CanResult, EditorCommand, ExecResult } from '../contracts/editor.ts';
+import type { ExecErrorCode } from '../contracts/types.ts';
 import type {
   CompareDocumentsChromeHandlers,
   CompareDocumentsDialogSession,
@@ -61,6 +62,23 @@ function refusalOf(
 const isBytes = (value: unknown): value is Uint8Array =>
   Object.prototype.toString.call(value) === '[object Uint8Array]';
 
+/** The `exec` code of an engine refusal that is not about the arguments. */
+const ENGINE_EXEC_CODES: Partial<Record<CompareDocumentsErrorCode, ExecErrorCode>> = {
+  protected: 'locked',
+  tooLarge: 'unsupported',
+  unsupportedContent: 'unsupported',
+};
+
+/** Why the command's options are not valid, or null. Options are checked, never coerced. */
+function invalidOption(request: CompareDocumentsRequest): string | null {
+  if (request.authorName !== undefined && typeof request.authorName !== 'string')
+    return 'authorName must be a string';
+  for (const name of ['detectFormatChanges', 'removeDateAndTime'] as const)
+    if (request[name] !== undefined && typeof request[name] !== 'boolean')
+      return `${name} must be a boolean`;
+  return null;
+}
+
 /**
  * A refusal of the `compareDocuments` command from outside the compare itself (a blocked
  * write, an unsupported history group), with the outcome every compare result carries.
@@ -72,7 +90,7 @@ export function withCompareOutcome(
   if (command.type !== 'compareDocuments') return result;
   return {
     ...result,
-    compareDocuments: { ok: false, reason: refusalOf(result), message: result.reason },
+    compareDocuments: { ok: false, code: refusalOf(result), message: result.reason },
   };
 }
 
@@ -147,6 +165,9 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
     if (!allowed.ok) return allowed;
     if (!isBytes(request.revised) || request.revised.byteLength === 0)
       return { ok: false, code: 'invalidArgs', reason: EMPTY_REASON };
+    const invalid = invalidOption(request);
+    if (invalid)
+      return { ok: false, code: 'invalidArgs', reason: invalid, engineCode: 'invalidOptions' };
     const surface = host.surface()!;
     surface.flushPendingInput();
     const authorName = request.authorName?.trim() || surface.author();
@@ -160,7 +181,12 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
       }
     );
     if (!result.ok)
-      return { ok: false, code: 'invalidArgs', reason: result.message, engineCode: result.code };
+      return {
+        ok: false,
+        code: ENGINE_EXEC_CODES[result.code] ?? 'invalidArgs',
+        reason: result.message,
+        engineCode: result.code,
+      };
     const replaced = surface.session.replacePackage(result.package);
     if (!replaced.ok)
       return {
@@ -192,20 +218,20 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
       async apply(request): Promise<CompareDocumentsOutcome> {
         if (!session.canApply()) {
           const refusal = canCompare();
-          if (refusal.ok) return { ok: false, reason: 'closed', message: CLOSED_REASON };
-          return { ok: false, reason: refusalOf(refusal), message: refusal.reason };
+          if (refusal.ok) return { ok: false, code: 'closed', message: CLOSED_REASON };
+          return { ok: false, code: refusalOf(refusal), message: refusal.reason };
         }
         running = true;
         // The dialog paints its busy state before the synchronous compare.
         await afterPaint();
         try {
           if (controller.signal.aborted)
-            return { ok: false, reason: 'closed', message: CLOSED_REASON };
+            return { ok: false, code: 'closed', message: CLOSED_REASON };
           const result = compare(request);
           if (!result.ok)
             return {
               ok: false,
-              reason: refusalOf(result, result.engineCode),
+              code: refusalOf(result, result.engineCode),
               message: result.reason,
             };
           const revisionCount = result.revisionCount ?? 0;
@@ -214,7 +240,7 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
           return { ok: true, revisionCount, changed: result.changed };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          return { ok: false, reason: 'failed', message };
+          return { ok: false, code: 'failed', message };
         } finally {
           running = false;
         }
@@ -276,7 +302,19 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
     exec(command: EditorCommand): ExecResult | null {
       if (command.type === 'openCompareDocumentsDialog') return open();
       if (command.type !== 'compareDocuments') return null;
-      const result = compare(command);
+      let result: CompareExec;
+      try {
+        result = compare(command);
+      } catch (error) {
+        // A write answers with a result, never a throw.
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: message,
+          compareDocuments: { ok: false, code: 'failed', message },
+        };
+      }
       if (result.ok)
         return {
           ok: true,
@@ -293,7 +331,7 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
         reason: result.reason,
         compareDocuments: {
           ok: false,
-          reason: refusalOf(result, result.engineCode),
+          code: refusalOf(result, result.engineCode),
           message: result.reason,
         },
       };

@@ -13,6 +13,8 @@ import { BODY_STORY } from './stories.ts';
 
 /** Largest revised document accepted, in decoded bytes. */
 const MAX_REVISED_BYTES = 128 * 1024 * 1024;
+/** The longest base64 text of a document within {@link MAX_REVISED_BYTES}. */
+const MAX_REVISED_BASE64 = Math.ceil(MAX_REVISED_BYTES / 3) * 4;
 
 export interface ComparePlannerContext {
   readonly reads: AutomationPackageReads;
@@ -43,13 +45,17 @@ export function planCompare(
   const original = context.reads.package;
   if (!original)
     return { ok: false, error: { code: 'document-unavailable', message: 'document unavailable' } };
+  // Over the limit is a resource refusal, like the engine's own size limits; a string that is
+  // not base64 is an argument error.
+  if (typeof operation.base64 === 'string' && operation.base64.length > MAX_REVISED_BASE64)
+    return capability('base64File is larger than the compare size limit.', 'edit.resource-limit');
   const revised = decodeBase64(operation.base64, MAX_REVISED_BYTES);
   if (!revised) {
     return {
       ok: false,
       error: {
         code: 'unsupported-content',
-        message: 'base64File is not valid base64 of a supported size.',
+        message: 'base64File is not valid base64.',
         detail: 'edit.invalid-argument',
       },
     };

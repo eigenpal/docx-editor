@@ -200,9 +200,9 @@ export type CompareDocumentsOutcome = {
     readonly ok: true;
     readonly revisionCount: number;
 } | {
+    readonly code: CompareDocumentsRefusal;
     readonly message: string;
     readonly ok: false;
-    readonly reason: CompareDocumentsRefusal;
 };
 
 // @public

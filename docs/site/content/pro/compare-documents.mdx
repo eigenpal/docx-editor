@@ -32,7 +32,7 @@ Add `reviewModule()` to the editor modules. The **Review** menu then shows **Com
 
 The differences replace the open document's content as one undoable step. One undo restores the original. When the documents have no differences, the document, its undo history, and its saved state stay as they were.
 
-The compare runs on the page's main thread. Documents of a few hundred pages take up to a few seconds, and the dialog shows that it is busy. The largest documents a compare accepts, about 100,000 paragraphs, table rows and cells, styles, and list definitions, or 1.5 million characters, in both documents together, can take about ten seconds. Larger documents refuse with `tooLarge`.
+The compare runs on the page's main thread. Documents of a few hundred pages take up to a few seconds, and the dialog shows that it is busy. A running compare cannot be canceled. The largest documents a compare accepts, about 100,000 paragraphs, table rows and cells, styles, and list definitions, or 1.5 million characters, in both documents together, can take about ten seconds. Larger documents refuse with `tooLarge`.
 
 ```ts
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
@@ -53,13 +53,13 @@ const result = editor.exec({
 });
 const outcome = result.compareDocuments;
 if (!outcome?.ok) {
-  showMessage(t(`compareDocuments.errors.${outcome?.reason ?? 'failed'}`));
+  showMessage(t(`compareDocuments.errors.${outcome?.code ?? 'failed'}`));
 } else if (!outcome.changed) {
   showMessage(t('compareDocuments.noDifferences'));
 }
 ```
 
-The result's `compareDocuments` field holds the outcome of every `compareDocuments` command. A refused compare carries a `reason` code, such as `tooLarge` or `protected`. The `compareDocuments.errors.*` keys of `@docx-editor.dev/i18n` translate every code. A successful compare reports `changed` and `revisionCount`:
+The result's `compareDocuments` field holds the outcome of every `compareDocuments` command. A refused compare carries a `code`, such as `tooLarge` or `protected`. The `compareDocuments.errors.*` keys of `@docx-editor.dev/i18n` translate every code. A successful compare reports `changed` and `revisionCount`:
 
 - `changed` is `false` when the documents have no differences. Nothing is recorded.
 - `revisionCount` counts revision elements, not review items. A replaced word counts a deletion and an insertion.

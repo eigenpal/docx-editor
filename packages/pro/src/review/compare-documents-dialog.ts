@@ -97,6 +97,7 @@ export function createCompareDocumentsDialog(
       const clearMessages = () => {
         error.textContent = '';
         notice.textContent = '';
+        cancel.textContent = t('cancel');
       };
       const footer = el('div');
       footer.className = 'docx-compare-documents-actions';
@@ -144,8 +145,12 @@ export function createCompareDocumentsDialog(
         });
         if (host.signal.aborted) return;
         // With no differences the dialog stays open and says so; nothing changed.
-        if (outcome.ok) notice.textContent = t('noDifferences');
-        else error.textContent = t(`errors.${outcome.reason}`);
+        if (outcome.ok) {
+          notice.textContent = t('noDifferences');
+          // Nothing remains to cancel.
+          cancel.textContent =
+            host.translate?.('common.close') ?? fallback('common.close' as TranslationKey);
+        } else error.textContent = t(`errors.${outcome.code}`);
         setBusy(false);
       });
 
