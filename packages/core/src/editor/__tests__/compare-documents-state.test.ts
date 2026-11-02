@@ -328,7 +328,7 @@ describe('compare documents dialog session', () => {
   });
 
   test('limits and content refusals answer unsupported', () => {
-    for (const code of ['tooLarge', 'unsupportedContent'] as const) {
+    for (const code of ['tooLarge', 'unsupportedContent', 'invalidOriginal'] as const) {
       const editor = mount([
         reviewModule({ compareDocuments: () => ({ ok: false, code, message: code }) }),
       ]);

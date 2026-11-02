@@ -189,7 +189,11 @@ export type ExecResult =
       reason: string;
       target?: DocTarget;
       revisions?: RevisionBatchResult;
-      /** Present on `compareDocuments`: why it was refused, as a code to translate. */
+      /**
+       * Present on `compareDocuments`: why it was refused, as a code to translate. Read this
+       * code rather than the top-level one: `unsupported` there covers both a size limit
+       * (`tooLarge`) and a failed compare (`failed`).
+       */
       compareDocuments?: CompareDocumentsOutcome;
       revisionAuthors?: RevisionAuthorResult;
     };

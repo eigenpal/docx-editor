@@ -65,6 +65,8 @@ const isBytes = (value: unknown): value is Uint8Array =>
 /** The `exec` code of an engine refusal that is not about the arguments. */
 const ENGINE_EXEC_CODES: Partial<Record<CompareDocumentsErrorCode, ExecErrorCode>> = {
   protected: 'locked',
+  // The original is the open document, not an argument.
+  invalidOriginal: 'unsupported',
   tooLarge: 'unsupported',
   unsupportedContent: 'unsupported',
 };

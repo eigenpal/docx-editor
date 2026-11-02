@@ -984,7 +984,7 @@ export interface EditorCommands
    * Compare the open document (the original) with a revised DOCX and record the differences in
    * it as tracked changes, as one undoable step. For hosts with their own file picker. The
    * result's `compareDocuments` field carries the revision count, or the refusal as a code to
-   * translate (`compareDocuments.errors.<reason>`).
+   * translate (`compareDocuments.errors.<code>`).
    */
   compareDocuments: CompareDocumentsRequest;
   /** Word's Show/Hide paragraph marks; presentation only. */
