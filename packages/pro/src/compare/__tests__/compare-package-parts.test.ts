@@ -202,3 +202,69 @@ test('a header reference type outside the defined ones does not take part', () =
   expect(strFromU8(out['word/document.xml']!)).not.toContain('titlePg');
   expect(Object.keys(out).some((name) => name.includes('compare-header'))).toBe(false);
 });
+
+test('two revised lists that look alike keep numbering apart', () => {
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const level =
+    '<w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl>';
+  const item = (text: string, id: number) =>
+    p(text, `<w:numPr><w:ilvl w:val="0"/><w:numId w:val="${id}"/></w:numPr>`);
+  const base = buildDocx({
+    body: item('A1', 1) + p('End.'),
+    numbering:
+      `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="0">${level}</w:abstractNum>` +
+      '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>',
+  });
+  const revised = buildDocx({
+    body: item('A1', 1) + p('Between.') + item('B1', 2) + p('End.'),
+    numbering:
+      `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="0">${level}</w:abstractNum>` +
+      `<w:abstractNum w:abstractNumId="5">${level}</w:abstractNum>` +
+      '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>' +
+      '<w:num w:numId="2"><w:abstractNumId w:val="5"/></w:num></w:numbering>',
+    extraStyles:
+      '<w:style w:type="paragraph" w:styleId="RevList"><w:name w:val="Rev List"/>' +
+      '<w:pPr><w:numPr><w:numId w:val="2"/></w:numPr></w:pPr></w:style>',
+  });
+  const out = files(base, revised);
+  const document = strFromU8(out['word/document.xml']!);
+  const used = new Set([...document.matchAll(/numId w:val="(\d+)"/g)].map((match) => match[1]));
+  expect(used.size).toBe(2);
+  // The copied style names the list by its output id.
+  const styles = strFromU8(out['word/styles.xml']!);
+  const styleList = /w:styleId="RevList"[\s\S]*?numId w:val="(\d+)"/.exec(styles)?.[1];
+  expect(styleList).toBeDefined();
+  expect(styleList).not.toBe('1');
+  expect(strFromU8(out['word/numbering.xml']!)).toMatch(new RegExp(`w:numId="${styleList}"`));
+});
+
+test('an external relationship of a copied part is written once', () => {
+  const chartRel = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart';
+  const oleRel = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject';
+  const base = buildDocx({ body: p('Lead text.') + p('Tail text.') });
+  const plain = unzipSync(buildDocx({ body: p('Lead text.') + p('Tail text.') }));
+  const chart =
+    '<w:p><w:r><w:drawing><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" ' +
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rIdChart"/></w:drawing></w:r></w:p>';
+  plain['word/document.xml'] = strToU8(
+    strFromU8(plain['word/document.xml']!).replace('<w:p>', `${chart}<w:p>`)
+  );
+  plain['word/_rels/document.xml.rels'] = strToU8(
+    strFromU8(plain['word/_rels/document.xml.rels']!).replace(
+      '</Relationships>',
+      `<Relationship Id="rIdChart" Type="${chartRel}" Target="charts/chart1.xml"/></Relationships>`
+    )
+  );
+  plain['word/charts/chart1.xml'] = strToU8(
+    '<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"/>'
+  );
+  plain['word/charts/_rels/chart1.xml.rels'] = strToU8(
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      `<Relationship Id="rIdWb" Type="${oleRel}" Target="file:///C:/data/book.xlsx" TargetMode="External"/></Relationships>`
+  );
+  const out = files(base, zipSync(plain, { mtime: new Date(2026, 0, 1) }));
+  const rels = Object.keys(out).find((name) =>
+    /^word\/media\/_rels\/compare\d+\.xml\.rels$/.test(name)
+  );
+  expect(strFromU8(out[rels!]!).match(/Id="rIdWb"/g)?.length).toBe(1);
+});
