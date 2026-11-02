@@ -12,8 +12,6 @@ import {
   type UseDialogReturn,
 } from './dialog-parts';
 
-/** File types the revised-document picker offers. */
-
 /** Compare documents session and presentation. @public */
 export interface DocxEditorCompareDocumentsDialogProps extends DialogCustomizationProps {
   session: CompareDocumentsDialogSession | null;
@@ -29,6 +27,8 @@ export interface CompareDocumentsDialogValues {
 export interface UseCompareDocumentsDialogReturn extends UseDialogReturn<CompareDocumentsDialogValues> {
   /** True while the chosen file is read and compared. */
   readonly busy: boolean;
+  /** A message that is not an error, such as that the documents have no differences. */
+  readonly notice: string | undefined;
 }
 const parts = createDialogParts<
   keyof CompareDocumentsDialogValues,
@@ -58,6 +58,7 @@ function CompareDocumentsForm({
     detectFormatChanges: true,
   }));
   const [error, setError] = useState<string | undefined>();
+  const [notice, setNotice] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [closed, setClosed] = useState(session.signal.aborted);
   const lifetime = useRef<CompareDocumentsDialogSession | null>(null);
@@ -82,6 +83,7 @@ function CompareDocumentsForm({
     }
     setBusy(true);
     setError(undefined);
+    setNotice(undefined);
     let revised: Uint8Array;
     try {
       revised = new Uint8Array(await file.arrayBuffer());
@@ -100,22 +102,21 @@ function CompareDocumentsForm({
     });
     if (session.signal.aborted) return;
     // With no differences the dialog stays open and says so; nothing changed.
-    setError(
-      outcome.ok
-        ? translate('compareDocuments.noDifferences')
-        : translate(`compareDocuments.errors.${outcome.reason}` as TranslationKey)
-    );
+    if (outcome.ok) setNotice(translate('compareDocuments.noDifferences'));
+    else setError(translate(`compareDocuments.errors.${outcome.reason}` as TranslationKey));
     setBusy(false);
   };
   const state: UseCompareDocumentsDialogReturn = {
     values,
     setValue(name, value) {
       setError(undefined);
+      setNotice(undefined);
       setValues((previous) => ({ ...previous, [name]: value }));
     },
     errors: error === undefined ? {} : { form: error },
     isEnabled: !closed && !busy && values.revised !== null && session.canApply(),
     busy,
+    notice,
     apply() {
       void compare();
     },
@@ -184,6 +185,9 @@ function CompareDocumentsForm({
             </div>
             <p data-docx-part="error" role="alert" className="docx-compare-documents-error">
               {state.errors.form}
+            </p>
+            <p data-docx-part="notice" role="status" className="docx-compare-documents-notice">
+              {notice}
             </p>
             <div data-docx-part="footer" className="docx-compare-documents-actions">
               <button data-docx-part="cancel" type="button" disabled={busy} onClick={state.cancel}>

@@ -7863,6 +7863,7 @@ export function useCompareDocumentsDialog(): UseCompareDocumentsDialogReturn;
 // @public
 export interface UseCompareDocumentsDialogReturn extends UseDialogReturn<CompareDocumentsDialogValues> {
     readonly busy: Readonly<Ref<boolean>>;
+    readonly notice: Readonly<Ref<string | undefined>>;
 }
 
 // @public (undocumented)

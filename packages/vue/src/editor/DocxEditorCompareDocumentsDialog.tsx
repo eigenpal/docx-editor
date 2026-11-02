@@ -23,8 +23,6 @@ import {
   type UseDialogReturn,
 } from './dialog-parts';
 
-/** File types the revised-document picker offers. */
-
 /** The Compare documents draft. @public */
 export interface CompareDocumentsDialogValues {
   /** The revised document. The open document is the original. */
@@ -37,6 +35,8 @@ const composition = createDialogComposition<CompareDocumentsDialogValues>('Compa
 export interface UseCompareDocumentsDialogReturn extends UseDialogReturn<CompareDocumentsDialogValues> {
   /** True while the chosen file is read and compared. */
   readonly busy: Readonly<Ref<boolean>>;
+  /** A message that is not an error, such as that the documents have no differences. */
+  readonly notice: Readonly<Ref<string | undefined>>;
 }
 /** Access the Compare documents draft and actions. @public */
 export function useCompareDocumentsDialog(): UseCompareDocumentsDialogReturn {
@@ -67,6 +67,7 @@ const Impl = defineComponent({
       detectFormatChanges: true,
     });
     const error = ref<string | undefined>();
+    const notice = ref<string | undefined>();
     const busy = ref(false);
     const closed = ref(false);
     watch(
@@ -74,6 +75,7 @@ const Impl = defineComponent({
       (session, _old, cleanup) => {
         closed.value = !session || session.signal.aborted;
         error.value = undefined;
+        notice.value = undefined;
         busy.value = false;
         if (!session) return;
         values.value = {
@@ -97,6 +99,7 @@ const Impl = defineComponent({
       value: CompareDocumentsDialogValues[K]
     ) => {
       error.value = undefined;
+      notice.value = undefined;
       values.value = { ...values.value, [name]: value };
     };
     const enabled = computed(
@@ -119,6 +122,7 @@ const Impl = defineComponent({
       }
       busy.value = true;
       error.value = undefined;
+      notice.value = undefined;
       let revised: Uint8Array;
       try {
         revised = new Uint8Array(await file.arrayBuffer());
@@ -137,9 +141,11 @@ const Impl = defineComponent({
       });
       if (session.signal.aborted) return;
       // With no differences the dialog stays open and says so; nothing changed.
-      error.value = outcome.ok
-        ? translate('compareDocuments.noDifferences')
-        : translate(`compareDocuments.errors.${outcome.reason}` as Parameters<typeof translate>[0]);
+      if (outcome.ok) notice.value = translate('compareDocuments.noDifferences');
+      else
+        error.value = translate(
+          `compareDocuments.errors.${outcome.reason}` as Parameters<typeof translate>[0]
+        );
       busy.value = false;
     };
     const apply = () => {
@@ -150,6 +156,7 @@ const Impl = defineComponent({
       errors: computed(() => (error.value === undefined ? {} : { form: error.value })),
       isEnabled: enabled,
       busy,
+      notice,
       setValue,
       apply,
       cancel,
@@ -206,6 +213,9 @@ const Impl = defineComponent({
           </div>
           <p data-docx-part="error" role="alert" class="docx-compare-documents-error">
             {error.value ?? null}
+          </p>
+          <p data-docx-part="notice" role="status" class="docx-compare-documents-notice">
+            {notice.value ?? null}
           </p>
           <div data-docx-part="footer" class="docx-compare-documents-actions">
             <button data-docx-part="cancel" type="button" disabled={busy.value} onClick={cancel}>

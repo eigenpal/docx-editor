@@ -1,3 +1,5 @@
+import type { CompareDocumentsErrorCode } from './document-compare.ts';
+
 /**
  * The `accept` value for a file input that picks the revised document: DOCX files only.
  *
@@ -10,7 +12,10 @@ export const COMPARE_DOCUMENTS_ACCEPT =
 export interface CompareDocumentsRequest {
   /** The revised document's DOCX bytes. The open document is the original. */
   readonly revised: Uint8Array;
-  /** Author recorded on every revision. The editor's author when absent. */
+  /**
+   * Author recorded on every revision. The editor's author when absent, empty, or only white
+   * space, else the revised document's last author.
+   */
   readonly authorName?: string;
   /** Record formatting differences as formatting revisions. Default `true`. */
   readonly detectFormatChanges?: boolean;
@@ -19,21 +24,19 @@ export interface CompareDocumentsRequest {
 }
 
 /**
- * Why a compare was refused, as a stable code a dialog translates: the engine's refusals of the
- * documents (`invalidOriginal`, `invalidRevised`, `tooLarge`, `unsupportedContent`), and the
- * editor's (`unavailable`: no review module, document, or mount; `protected`; `collaboration`;
- * `viewing`; `closed`: the dialog was closed; `empty`: no revised bytes; `failed`: anything
- * else).
+ * Why a compare was refused, as a stable code to translate with
+ * `compareDocuments.errors.<code>` in `@docx-editor.dev/i18n`: every engine code
+ * (`CompareDocumentsErrorCode`), plus the editor's own: `unavailable` (no review module,
+ * document, or mount), `collaboration` (a collaboration session is attached), `viewing`,
+ * `closed` (the dialog closed first), `empty` (no revised bytes), and `failed` (anything else).
+ * The editor also answers `protected` for protection it enforces itself, such as forms or
+ * comments protection.
  *
  * @public
  */
 export type CompareDocumentsRefusal =
-  | 'invalidOriginal'
-  | 'invalidRevised'
-  | 'tooLarge'
-  | 'unsupportedContent'
+  | CompareDocumentsErrorCode
   | 'unavailable'
-  | 'protected'
   | 'collaboration'
   | 'viewing'
   | 'closed'
@@ -42,7 +45,19 @@ export type CompareDocumentsRefusal =
 
 /** The outcome of one compare. @public */
 export type CompareDocumentsOutcome =
-  | { readonly ok: true; readonly revisionCount: number }
+  | {
+      readonly ok: true;
+      /**
+       * Revision elements written. A replacement counts its deletion and its insertion, so
+       * this is not the number of review items.
+       */
+      readonly revisionCount: number;
+      /**
+       * Whether the document changed. False when the documents have no differences: the
+       * document, its undo history, and its saved state stay as they were.
+       */
+      readonly changed: boolean;
+    }
   | {
       readonly ok: false;
       /** What to tell the user, as a code to translate. */
@@ -66,8 +81,9 @@ export interface CompareDocumentsDialogSession {
   canApply(): boolean;
   /**
    * Compare the open document with the revised DOCX and record the differences in it as
-   * tracked changes, as one undoable step. Closes the session when it records changes. With no
-   * differences (`revisionCount` 0) or a refusal, the session stays open with a message to show.
+   * tracked changes, as one undoable step. Closes the session when the document changes. With
+   * no differences (`changed` false) or a refusal, the session stays open with a message to
+   * show.
    */
   apply(request: CompareDocumentsRequest): Promise<CompareDocumentsOutcome>;
   /** Close without comparing. */

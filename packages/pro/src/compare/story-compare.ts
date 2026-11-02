@@ -269,6 +269,10 @@ function emitHunk(
           }
           if (baseAtom.node && atom.node)
             atom = { ...atom, xml: objectWithBoxes(baseAtom, atom, ctx) };
+          else if (atom.kind === 'object' && baseAtom.kind === 'object' && !atom.note)
+            // Equal objects (pictures, charts, embedded objects) keep the original's markup and
+            // relationships, so an unchanged picture is not copied as a new part.
+            atom = { ...atom, xml: baseAtom.xml, delXml: baseAtom.delXml };
           // Content control properties have no revision form: equal text inside controls with
           // other properties is not recorded. (A control added or removed around text keeps
           // its shell on the other side, as documented.)

@@ -16,7 +16,11 @@ import type {
   EditorModule,
   ReviewModuleContribution,
 } from '../../contracts/modules.ts';
-import type { CompareDocumentsDialogSession } from '../../contracts/compare-documents.ts';
+import type {
+  CompareDocumentsDialogSession,
+  CompareDocumentsRefusal,
+} from '../../contracts/compare-documents.ts';
+import en from '../../../../i18n/en.json' with { type: 'json' };
 import { PRO_REVIEW_REASON } from '../opening-editing-mode.ts';
 import { COMPARE_COLLABORATION_REASON } from '../compare-documents-state.ts';
 import { stubCollaborationModule, stubCollaborationSession } from './collaboration-test-module.ts';
@@ -59,8 +63,8 @@ function docx(text: string, protection?: string): Uint8Array {
 /** Answers with the revised package, the way a compare would answer with the redline. */
 const replaceWithRevised: CompareDocumentsEngine = (_original, revised) => {
   const read = readOoxmlPackage(revised);
-  if (!read.ok) return { ok: false, code: 'invalid-revised', message: 'unreadable' };
-  return { ok: true, package: read.package, revisionCount: 2 };
+  if (!read.ok) return { ok: false, code: 'invalidRevised', message: 'unreadable' };
+  return { ok: true, package: read.package, revisionCount: 2, changed: true };
 };
 
 function reviewModule(review: Partial<ReviewModuleContribution> = {}): EditorModule {
@@ -189,7 +193,7 @@ describe('compare documents commands', () => {
       ok: true,
       changed: true,
       // The engine's revision count, as the dialog session reports it.
-      compareDocuments: { ok: true, revisionCount: 2 },
+      compareDocuments: { ok: true, revisionCount: 2, changed: true },
     });
     expect(bodyText(editor)).toBe('Revised text');
     expect(editor.surface!.session.packageRevision()).toBe(revision + 1);
@@ -212,7 +216,7 @@ describe('compare documents commands', () => {
       reviewModule({
         compareDocuments: (_original, _revised, options) => {
           calls.push(options);
-          return { ok: false, code: 'invalid-revised', message: 'not a document' };
+          return { ok: false, code: 'invalidRevised', message: 'not a document' };
         },
       }),
     ]);
@@ -254,7 +258,7 @@ describe('compare documents dialog session', () => {
     expect(session.defaultAuthor).toBe('Reviewer');
     expect(session.canApply()).toBe(true);
     const outcome = await session.apply({ revised: docx('Revised text') });
-    expect(outcome).toEqual({ ok: true, revisionCount: 2 });
+    expect(outcome).toEqual({ ok: true, revisionCount: 2, changed: true });
     expect(session.signal.aborted).toBe(true);
     expect(bodyText(editor)).toBe('Revised text');
     dispose();
@@ -263,18 +267,49 @@ describe('compare documents dialog session', () => {
   test('a compare with no differences keeps the session open, so the dialog can say so', async () => {
     const editor = mount([
       reviewModule({
-        compareDocuments: (original) => ({ ok: true, package: original, revisionCount: 0 }),
+        compareDocuments: (original) => ({
+          ok: true,
+          package: original,
+          revisionCount: 0,
+          changed: false,
+        }),
       }),
     ]);
     let session: CompareDocumentsDialogSession | null = null;
     editor.setCompareDocumentsChrome({ onRequest: (s) => (session = s) });
     editor.exec({ type: 'openCompareDocumentsDialog' });
+    const revision = editor.surface!.session.packageRevision();
     const outcome = await session!.apply({ revised: docx('Original text') });
-    expect(outcome).toEqual({ ok: true, revisionCount: 0 });
+    expect(outcome).toEqual({ ok: true, revisionCount: 0, changed: false });
+    // No step: nothing to undo, and the document is not marked as changed.
+    expect(editor.surface!.session.packageRevision()).toBe(revision);
+    expect(editor.can({ type: 'undo' }).ok).toBe(false);
     expect(session!.signal.aborted).toBe(false);
     expect(session!.canApply()).toBe(true);
     expect(bodyText(editor)).toBe('Original text');
     session!.cancel();
+  });
+
+  test('a history group is refused, never ignored', () => {
+    const editor = mount([reviewModule()]);
+    const revision = editor.surface!.session.packageRevision();
+    const gesture = editor.beginHistoryGroup();
+    for (const command of [
+      { type: 'compareDocuments', revised: docx('Revised text') } as const,
+      { type: 'openCompareDocumentsDialog' } as const,
+    ]) {
+      expect(editor.exec(command, { historyGroup: gesture })).toMatchObject({
+        ok: false,
+        code: 'unsupported',
+      });
+      // A refusal from before the compare carries the outcome too.
+      if (command.type === 'compareDocuments')
+        expect(editor.exec(command, { historyGroup: gesture })).toMatchObject({
+          compareDocuments: { ok: false, reason: 'failed' },
+        });
+    }
+    expect(editor.surface!.session.packageRevision()).toBe(revision);
+    gesture.end();
   });
 
   test('a protected original is refused with its own reason', async () => {
@@ -290,7 +325,7 @@ describe('compare documents dialog session', () => {
   test('a refused compare keeps the session open with the message', async () => {
     const editor = mount([
       reviewModule({
-        compareDocuments: () => ({ ok: false, code: 'too-large', message: 'too large' }),
+        compareDocuments: () => ({ ok: false, code: 'tooLarge', message: 'too large' }),
       }),
     ]);
     let session: CompareDocumentsDialogSession | null = null;
@@ -322,4 +357,26 @@ describe('compare documents dialog session', () => {
     expect(hosts[0]!.signal.aborted).toBe(true);
     expect(destroyed).toBe(1);
   });
+});
+
+// Every refusal code, engine codes included, has a message: the dialogs translate
+// `compareDocuments.errors.<reason>` with a cast the type checker cannot follow.
+test('every compare refusal has an English message', () => {
+  const reasons: Record<CompareDocumentsRefusal, true> = {
+    invalidOptions: true,
+    invalidOriginal: true,
+    invalidRevised: true,
+    tooLarge: true,
+    protected: true,
+    unsupportedContent: true,
+    unavailable: true,
+    collaboration: true,
+    viewing: true,
+    closed: true,
+    empty: true,
+    failed: true,
+  };
+  const messages = en.compareDocuments.errors as Record<string, string>;
+  for (const reason of Object.keys(reasons)) expect(messages[reason]).toBeString();
+  expect(Object.keys(messages).sort()).toEqual(Object.keys(reasons).sort());
 });

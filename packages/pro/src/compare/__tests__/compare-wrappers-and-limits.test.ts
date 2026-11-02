@@ -59,13 +59,13 @@ test('content controls with other properties are refused', () => {
       `${p('One')}<w:sdt><w:sdtPr><w:tag w:val="${tag}"/></w:sdtPr><w:sdtContent>${p('Inside')}` +
         `</w:sdtContent></w:sdt>${p('Three')}`
     );
-  expect(refusal(block('A'), block('B'))).toBe('unsupported-content');
+  expect(refusal(block('A'), block('B'))).toBe('unsupportedContent');
   const inline = (tag: string) =>
     docx(
       `<w:p>${run('Click ')}<w:sdt><w:sdtPr><w:tag w:val="${tag}"/></w:sdtPr><w:sdtContent>` +
         `${run('here')}</w:sdtContent></w:sdt>${run(' now')}</w:p>`
     );
-  expect(refusal(inline('A'), inline('B'))).toBe('unsupported-content');
+  expect(refusal(inline('A'), inline('B'))).toBe('unsupportedContent');
 });
 
 test('a bookmark between rows stays in place when the next row is deleted', () => {
@@ -100,7 +100,7 @@ test('a deleted table never lands after inserted closing text', () => {
 
 test('text over the size limit is refused before any work', () => {
   const long = docx(p('a'.repeat(800_000)));
-  expect(refusal(long, docx(p('b'.repeat(800_000))))).toBe('too-large');
+  expect(refusal(long, docx(p('b'.repeat(800_000))))).toBe('tooLarge');
 });
 
 // Each shape took 13 s or more with a quadratic step; the bounds leave room for a busy machine.
@@ -154,7 +154,7 @@ test('smart tag and custom XML properties never land inside a revision', () => {
   if (result.ok) {
     const body = strFromU8(unzipSync(result.bytes)['word/document.xml']!);
     expect(body).not.toMatch(/<w:(ins|del)\b[^>]*>\s*<w:(smartTagPr|customXmlPr)\b/);
-  } else expect(result.code).toBe('unsupported-content');
+  } else expect(result.code).toBe('unsupportedContent');
 });
 
 test('field data never lands inside a revision', () => {
@@ -168,7 +168,7 @@ test('field data never lands inside a revision', () => {
   ] as const) {
     const result = compareDocuments(docx(before), docx(after), { authorName: 'Test', date: DATE });
     if (!result.ok) {
-      expect(result.code).toBe('unsupported-content');
+      expect(result.code).toBe('unsupportedContent');
       continue;
     }
     const body = strFromU8(unzipSync(result.bytes)['word/document.xml']!);
@@ -180,5 +180,5 @@ test('field data never lands inside a revision', () => {
 test('many tiny runs count against the size limit', () => {
   const tabs = (count: number) => '<w:r><w:tab/></w:r>'.repeat(count);
   const doc = (count: number, end: string) => docx(`<w:p>${tabs(count)}</w:p>${p(end)}`);
-  expect(refusal(doc(70_000, 'a'), doc(70_000, 'b'))).toBe('too-large');
+  expect(refusal(doc(70_000, 'a'), doc(70_000, 'b'))).toBe('tooLarge');
 });

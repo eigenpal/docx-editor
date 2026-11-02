@@ -119,6 +119,22 @@ test('a refused compare shows its reason in the error part', async () => {
   expect(container.querySelector('dialog')).not.toBeNull();
 });
 
+test('a compare with no differences shows a notice, not an error', async () => {
+  const { container, editor } = await mountEditor();
+  editor.exec({ type: 'openCompareDocumentsDialog' });
+  await nextTick();
+  chooseFile(label(container, 'Revised document'), ORIGINAL);
+  await nextTick();
+  (container.querySelector('[data-docx-part="apply"]') as HTMLButtonElement).click();
+  await until(
+    () =>
+      container.querySelector('[data-docx-part="notice"]')?.textContent ===
+      'The documents have no differences.'
+  );
+  expect(container.querySelector('[data-docx-part="error"]')?.textContent ?? '').toBe('');
+  expect(container.querySelector('dialog')).not.toBeNull();
+});
+
 for (const mode of ['parts', 'false', 'replacement'] as const) {
   test(`Vue popup configuration: compareDocuments ${mode}`, async () => {
     let requested: CompareDocumentsDialogSession | undefined;

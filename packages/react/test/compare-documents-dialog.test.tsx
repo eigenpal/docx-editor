@@ -115,11 +115,14 @@ test('a compare with no differences says so and keeps the dialog open', async ()
   });
   await waitFor(
     () => {
-      const text = view.container.querySelector('[data-docx-part="error"]')?.textContent ?? '';
+      const text = view.container.querySelector('[data-docx-part="notice"]')?.textContent ?? '';
       if (!text.includes('The documents have no differences.')) throw new Error(text);
     },
     { timeout: 5000 }
   );
+  // A notice, not an error.
+  expect(view.container.querySelector('[data-docx-part="error"]')?.textContent).toBe('');
+  expect(view.getByRole('status').textContent).toBe('The documents have no differences.');
   expect(view.getByRole('dialog')).toBeTruthy();
 });
 

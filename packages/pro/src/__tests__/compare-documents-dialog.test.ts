@@ -125,3 +125,23 @@ test('Cancel and Escape close without comparing; editing keys stay in the dialog
   expect(container.querySelector('dialog')).toBeNull();
   expect(bodyText(editor)).toBe('The quick brown fox.\nIt jumps over the dog.');
 });
+
+test('a compare with no differences shows a notice and records nothing', async () => {
+  const { container, editor } = setup();
+  const revision = editor.surface!.session.packageRevision();
+  editor.exec({ type: 'openCompareDocumentsDialog' });
+  chooseFile(getByLabelText(container, 'Revised document') as HTMLInputElement, ORIGINAL);
+  fireEvent.click(getByRole(container, 'button', { name: 'Compare' }));
+  const notice = await waitFor(
+    () => {
+      const node = container.querySelector('[role="status"]');
+      if (node?.textContent !== 'The documents have no differences.') throw new Error('not yet');
+      return node;
+    },
+    { timeout: 5000 }
+  );
+  expect(notice.closest('dialog')).not.toBeNull();
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe('');
+  expect(editor.surface!.session.packageRevision()).toBe(revision);
+  expect(editor.can({ type: 'undo' }).ok).toBe(false);
+});

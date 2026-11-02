@@ -122,7 +122,7 @@ test('an earlier section header with no counterpart is refused', () => {
   });
   // The revised document's first section shows a header the original's lacks.
   expect(result.ok).toBe(false);
-  if (!result.ok) expect(result.code).toBe('unsupported-content');
+  if (!result.ok) expect(result.code).toBe('unsupportedContent');
 });
 
 test('block content controls that go are refused: their shells would stay', () => {
@@ -135,7 +135,7 @@ test('block content controls that go are refused: their shells would stay', () =
     `${p('Kept')}<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc>${p('Cell')}</w:tc></w:tr></w:tbl>${p('End')}<w:sectPr/>`
   );
   const result = compareDocuments(base, revised, { authorName: 'Test', date: DATE });
-  expect(result.ok ? '' : result.code).toBe('unsupported-content');
+  expect(result.ok ? '' : result.code).toBe('unsupportedContent');
 });
 
 test('notes that nothing references do not take part', () => {
@@ -164,7 +164,7 @@ test('a change inside a content-locked control is refused with its reason', () =
   const result = compareDocuments(base, revised, { authorName: 'Test', date: DATE });
   expect(result.ok).toBe(false);
   if (!result.ok) {
-    expect(result.code).toBe('unsupported-content');
+    expect(result.code).toBe('unsupportedContent');
     expect(result.message).toContain('locked or bound to data');
   }
   // Text outside the control still compares.

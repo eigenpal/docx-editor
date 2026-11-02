@@ -9,7 +9,6 @@ import { comparePackages } from './compare-documents.ts';
 
 export { compareDocuments } from './compare-documents.ts';
 export type {
-  CompareDocumentsEngineOptions,
   CompareDocumentsErrorCode,
   CompareDocumentsOptions,
   CompareDocumentsResult,
@@ -21,12 +20,17 @@ export const compareDocumentsEngine: CompareDocumentsEngine = (original, revised
   if (!read.ok) {
     return {
       ok: false,
-      code: 'invalid-revised',
+      code: 'invalidRevised',
       message: `The revised document cannot be read (${read.reason}).`,
     };
   }
   const result = comparePackages(original, read.package, options);
   return result.ok
-    ? { ok: true, package: result.package, revisionCount: result.revisionCount }
+    ? {
+        ok: true,
+        package: result.package,
+        revisionCount: result.revisionCount,
+        changed: result.changed,
+      }
     : result;
 };

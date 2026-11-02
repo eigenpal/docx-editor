@@ -107,7 +107,7 @@ test('many list instances sharing one definition merge in linear time', () => {
     authorName: 'Test',
     date: DATE,
   });
-  expect(result.ok ? '' : result.code).toBe('too-large');
+  expect(result.ok ? '' : result.code).toBe('tooLarge');
 }, 60_000);
 
 test('a revised list reference without a list never takes a copied list id', () => {
@@ -275,7 +275,8 @@ test('note references without a note of their own keep their ids', () => {
 
 test('a relationship graph that fans in compares in linear time', () => {
   const image = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
-  const make = (text: string, depth: number) => {
+  // The revised picture differs, so the compare copies it with its whole closure.
+  const make = (text: string, depth: number, picture: number) => {
     const files = unzipSync(
       buildDocx({
         body: `<w:p><w:r>${inlineImage('rIdImg', 1)}</w:r></w:p>${p(text)}`,
@@ -283,6 +284,7 @@ test('a relationship graph that fans in compares in linear time', () => {
       })
     );
     // Each part links the next one twice, so an identity built by concatenation doubles per level.
+    files['word/media/image1.png'] = new Uint8Array([picture, 2, 3]);
     const chain = ['image1.png', ...Array.from({ length: depth }, (_, i) => `x${i}.png`)];
     for (let i = 0; i < chain.length; i++) {
       files[`word/media/${chain[i]}`] ??= new Uint8Array([i & 255, 7]);
@@ -302,7 +304,7 @@ test('a relationship graph that fans in compares in linear time', () => {
     [40, false],
   ] as const) {
     const started = performance.now();
-    const result = compareDocuments(make('Before', depth), make('After', depth), {
+    const result = compareDocuments(make('Before', depth, 1), make('After', depth, 9), {
       authorName: 'Test',
       date: DATE,
     });
@@ -362,5 +364,5 @@ test('a new relationship part the original cannot type is refused', () => {
     headers: { default: `<w:p>${inlineImage('rH', 6)}</w:p>`, first: undefined, even: undefined },
   });
   const result = compareDocuments(zipSync(files), revised, { authorName: 'Test', date: DATE });
-  expect(result.ok ? '' : result.code).toBe('unsupported-content');
+  expect(result.ok ? '' : result.code).toBe('unsupportedContent');
 });

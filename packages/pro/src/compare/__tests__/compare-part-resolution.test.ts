@@ -208,7 +208,7 @@ test('a section setting with no value to restore is refused', () => {
   });
   const result = compareDocuments(base, revised, { authorName: 'Test', date: DATE });
   expect(result.ok).toBe(false);
-  if (!result.ok) expect(result.code).toBe('unsupported-content');
+  if (!result.ok) expect(result.code).toBe('unsupportedContent');
 });
 
 test('a copied separator never takes an id the original references', () => {

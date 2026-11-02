@@ -53,6 +53,7 @@ export type {
   ColorValue,
   CompareDocumentsOutcome,
   CompareDocumentsRefusal,
+  CompareDocumentsErrorCode,
   ContainerRef,
   ContentControl,
   ContentControlFilter,

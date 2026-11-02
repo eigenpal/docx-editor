@@ -4,7 +4,10 @@ import type { OoxmlPackage } from '@docx-editor.dev/core/store';
 
 /** Options of one document compare. @public */
 export interface CompareDocumentsEngineOptions {
-  /** Author recorded on every revision. The engine picks a default when absent. */
+  /**
+   * Author recorded on every revision. The engine picks a default when absent, empty, or only
+   * white space.
+   */
   readonly authorName?: string;
   /** Record formatting differences as property-change revisions. Default `true`. */
   readonly detectFormatChanges?: boolean;
@@ -12,14 +15,22 @@ export interface CompareDocumentsEngineOptions {
   readonly removeDateAndTime?: boolean;
 }
 
-/** Why a document compare was refused. @public */
+/**
+ * Why a document compare was refused. The same codes name the editor's refusals
+ * (`CompareDocumentsRefusal`), and `compareDocuments.errors.<code>` in
+ * `@docx-editor.dev/i18n` translates each one.
+ *
+ * @public
+ */
 export type CompareDocumentsErrorCode =
+  /** An option has a value of the wrong type, such as a `date` that is not a valid date. */
+  | 'invalidOptions'
   /** The original document is not a readable DOCX package. */
-  | 'invalid-original'
+  | 'invalidOriginal'
   /** The revised document is not a readable DOCX package. */
-  | 'invalid-revised'
+  | 'invalidRevised'
   /** The documents exceed the compare's size limits. */
-  | 'too-large'
+  | 'tooLarge'
   /**
    * The original document enforces protection that the compare would break: read-only,
    * comments, or forms protection. Tracked-changes protection refuses too when the original
@@ -28,15 +39,29 @@ export type CompareDocumentsErrorCode =
    */
   | 'protected'
   /** The differences include content that no tracked change can record. */
-  | 'unsupported-content';
+  | 'unsupportedContent';
 
 /** Result of one document compare. @public */
 export type CompareDocumentsEngineResult =
   | {
       readonly ok: true;
-      /** The original package with the differences recorded as tracked changes. */
+      /**
+       * The original package with the differences recorded as tracked changes. When nothing
+       * changed, this is the original package itself.
+       */
       readonly package: OoxmlPackage;
+      /**
+       * Revision elements written. A replacement counts its deletion and its insertion, and a
+       * move counts both ends, so this is not the number of review items.
+       */
       readonly revisionCount: number;
+      /**
+       * Whether the result differs from the original. False when the documents have no
+       * differences. True with no revisions when the only differences are written untracked,
+       * such as formatting with `detectFormatChanges: false`, or the original's own tracked
+       * changes, which a compare accepts.
+       */
+      readonly changed: boolean;
     }
   | {
       readonly ok: false;

@@ -3,8 +3,9 @@ import { createEditorEvents } from './editor-events.ts';
 import { createEditorDiagnostics, reportEditorFontError } from './editor-diagnostics.ts';
 import { surfaceFieldResultsScope } from './field-results-scope.ts';
 import { createReviewDialogs } from './review-dialogs.ts';
+import { withCompareOutcome } from './compare-documents-state.ts';
 import { queryEditorDocument, watermarkOf } from './docx-editor-query.ts';
-import { previewAllows, refreshWriteBlocked, writeBlockReason } from './refresh-write-guard.ts';
+import { refreshWriteBlocked, writeBlockRefusal } from './refresh-write-guard.ts';
 import type { PaginatedSurfaceRuntimeOptions } from './surface-runtime-options.ts';
 import { endEditorPreview, registerEditorPreviewHost } from './editor-preview.ts';
 import { registerRefreshHost, type RefreshHost } from './document-refresh-host.ts';
@@ -1954,8 +1955,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
 
     exec(command, options) {
-      if (container && refreshWriteBlocked(container) && !previewAllows(container, command))
-        return { ok: false, code: 'unsupported', reason: writeBlockReason(container) };
+      // Before every command path: a history group a command cannot join is refused, not ignored.
+      const refusal = writeBlockRefusal(container, command) ?? historyGroups.gate(command, options);
+      if (refusal) return withCompareOutcome(command, refusal);
       // A command inside the yield window addresses the just-loaded document: mount now.
       // (`can` does NOT flush — chrome polls it per render; a read must not defeat the yield.)
       openScheduler.flush();
@@ -1963,8 +1965,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (reviewDialog) return reviewDialog;
       const dialog = views.dialog(command, true);
       if (dialog) return dialog;
-      const historyRefusal = historyGroups.gate(command, options);
-      if (historyRefusal) return historyRefusal;
       historyGroups.note(command);
       // A view command: it edits nothing, so it runs before the document gate, and it works
       // on a document that failed to open — the pane is still the reader's to close. Not on a
@@ -2052,8 +2052,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
 
     can(command, options): CanResult {
-      if (container && refreshWriteBlocked(container) && !previewAllows(container, command))
-        return { ok: false, code: 'unsupported', reason: writeBlockReason(container) };
+      const blocked = writeBlockRefusal(container, command);
+      if (blocked) return blocked;
       const reviewDialog = reviewDialogs.can(command);
       if (reviewDialog) return reviewDialog;
       const dialog = views.dialog(command, false);

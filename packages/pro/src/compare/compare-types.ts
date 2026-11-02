@@ -5,21 +5,29 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 /** Public types of the document compare engine. */
 
-import type {
-  CompareDocumentsEngineOptions,
-  CompareDocumentsErrorCode,
-} from '@docx-editor.dev/core/editor';
+import type { CompareDocumentsErrorCode } from '@docx-editor.dev/core/editor';
 
-export type { CompareDocumentsEngineOptions, CompareDocumentsErrorCode };
+export type { CompareDocumentsErrorCode };
 
 /** Options for {@link compareDocuments}. @public */
-export interface CompareDocumentsOptions extends CompareDocumentsEngineOptions {
+export interface CompareDocumentsOptions {
   /**
-   * Author recorded on every revision. Defaults to the revised document's last author
-   * (`cp:lastModifiedBy`, then `dc:creator`), else `Comparison`.
+   * Author recorded on every revision. When absent, empty, or only white space, the revised
+   * document's last author (`cp:lastModifiedBy`, then `dc:creator`), else `Comparison`.
    */
   readonly authorName?: string;
-  /** Revision timestamp. Defaults to the current time, truncated to the minute. */
+  /**
+   * Record formatting differences as formatting revisions. Default `true`. When `false`, the
+   * result takes the revised formatting untracked, so rejecting all changes gives the
+   * original text with the revised formatting.
+   */
+  readonly detectFormatChanges?: boolean;
+  /** Write the revisions without dates. Default `false`. */
+  readonly removeDateAndTime?: boolean;
+  /**
+   * Revision timestamp. Defaults to the current time, truncated to the minute. A value that is
+   * not a valid date refuses with `invalidOptions`.
+   */
   readonly date?: Date;
 }
 
@@ -27,13 +35,28 @@ export interface CompareDocumentsOptions extends CompareDocumentsEngineOptions {
 export type CompareDocumentsResult =
   | {
       readonly ok: true;
-      /** The original document with the differences recorded as tracked changes. */
+      /**
+       * The original document with the differences recorded as tracked changes. When nothing
+       * changed, these are the original bytes.
+       */
       readonly bytes: Uint8Array;
-      /** Number of revision elements written. */
+      /**
+       * Revision elements written. A replacement counts its deletion and its insertion, and a
+       * move counts both ends, so this is not the number of review items.
+       */
       readonly revisionCount: number;
+      /**
+       * Whether the result differs from the original. False when the documents have no
+       * differences. True with no revisions when the only differences are written untracked:
+       * formatting with `detectFormatChanges: false`, or the original's own tracked changes,
+       * which a compare accepts.
+       */
+      readonly changed: boolean;
     }
   | {
       readonly ok: false;
+      /** Why the compare was refused. `compareDocuments.errors.<code>` translates it. */
       readonly code: CompareDocumentsErrorCode;
+      /** Diagnostic detail, in English; not for display. */
       readonly message: string;
     };

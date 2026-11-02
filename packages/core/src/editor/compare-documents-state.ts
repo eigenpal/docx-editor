@@ -37,14 +37,6 @@ const VIEWING_REASON = 'the document is open for viewing';
 const EMPTY_REASON = 'the revised document is empty';
 const CLOSED_REASON = 'the dialog is closed';
 
-const ENGINE_REFUSALS: Readonly<Record<CompareDocumentsErrorCode, CompareDocumentsRefusal>> = {
-  'invalid-original': 'invalidOriginal',
-  'invalid-revised': 'invalidRevised',
-  'too-large': 'tooLarge',
-  protected: 'protected',
-  'unsupported-content': 'unsupportedContent',
-};
-
 type CompareExec = ExecResult & {
   readonly revisionCount?: number;
   readonly engineCode?: CompareDocumentsErrorCode;
@@ -55,7 +47,8 @@ function refusalOf(
   result: { readonly code?: string; readonly reason?: string },
   engineCode?: CompareDocumentsErrorCode
 ): CompareDocumentsRefusal {
-  if (engineCode) return ENGINE_REFUSALS[engineCode];
+  // The engine's codes are refusal codes as they are.
+  if (engineCode) return engineCode;
   if (result.reason === COMPARE_COLLABORATION_REASON) return 'collaboration';
   if (result.reason === VIEWING_REASON) return 'viewing';
   if (result.reason === EMPTY_REASON) return 'empty';
@@ -67,6 +60,21 @@ function refusalOf(
 
 const isBytes = (value: unknown): value is Uint8Array =>
   Object.prototype.toString.call(value) === '[object Uint8Array]';
+
+/**
+ * A refusal of the `compareDocuments` command from outside the compare itself (a blocked
+ * write, an unsupported history group), with the outcome every compare result carries.
+ */
+export function withCompareOutcome(
+  command: EditorCommand,
+  result: Extract<CanResult, { ok: false }>
+): ExecResult {
+  if (command.type !== 'compareDocuments') return result;
+  return {
+    ...result,
+    compareDocuments: { ok: false, reason: refusalOf(result), message: result.reason },
+  };
+}
 
 /**
  * Compare documents: the command that records a revised DOCX's differences in the open
@@ -202,8 +210,8 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
             };
           const revisionCount = result.revisionCount ?? 0;
           // With no differences the dialog stays open, so it can say so.
-          if (revisionCount > 0) session.cancel();
-          return { ok: true, revisionCount };
+          if (result.changed) session.cancel();
+          return { ok: true, revisionCount, changed: result.changed };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           return { ok: false, reason: 'failed', message };
@@ -273,7 +281,11 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
         return {
           ok: true,
           changed: result.changed,
-          compareDocuments: { ok: true, revisionCount: result.revisionCount ?? 0 },
+          compareDocuments: {
+            ok: true,
+            revisionCount: result.revisionCount ?? 0,
+            changed: result.changed,
+          },
         };
       return {
         ok: false,

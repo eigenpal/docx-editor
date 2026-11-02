@@ -114,5 +114,5 @@ test('markup only the revised table has is refused', () => {
     table('<w:bookmarkStart w:id="1" w:name="New"/><w:bookmarkEnd w:id="1"/>'),
     { authorName: 'Test', date: DATE }
   );
-  expect(result.ok ? '' : result.code).toBe('unsupported-content');
+  expect(result.ok ? '' : result.code).toBe('unsupportedContent');
 });

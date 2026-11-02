@@ -5,7 +5,7 @@ category: 'Pro'
 order: 64
 ---
 
-Compare documents records the differences between an original document and a revised document as tracked changes. Accept all changes to get the revised document. Reject all changes to get the original.
+Compare documents records the differences between an original document and a revised document as tracked changes. Accept all changes to get the revised document. Reject all changes to get the original. If you turn formatting detection off, the result takes the revised formatting without tracked changes, so rejecting all changes gives the original text with the revised formatting.
 
 Compare documents requires an EigenPal Pro License. The editor command and `Document.compareFromBase64` also require the review module. Without it, they refuse with a stable reason. Follow [Tracked changes](/docs/2.x/pro/tracked-changes) to enable review features. The `compareDocuments` function needs no module.
 
@@ -30,7 +30,9 @@ The compare runs on both documents with their existing tracked changes accepted.
 
 Add `reviewModule()` to the editor modules. The **Review** menu then shows **Compare documents**. The dialog asks for the revised DOCX file, the author name for the revisions, and whether to detect formatting changes. The open document is the original.
 
-The differences replace the open document's content as one undoable step. One undo restores the original.
+The differences replace the open document's content as one undoable step. One undo restores the original. When the documents have no differences, the document, its undo history, and its saved state stay as they were.
+
+The compare runs on the page's main thread. Documents of a few hundred pages take up to a few seconds, and the dialog shows that it is busy. The largest documents a compare accepts, about 100,000 paragraphs, table rows and cells, styles, and list definitions, or 1.5 million characters, in both documents together, can take about ten seconds. Larger documents refuse with `tooLarge`.
 
 ```ts
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
@@ -43,24 +45,29 @@ editor.attach(container);
 To compare without the dialog, for example from your own file picker, run the `compareDocuments` command:
 
 ```ts
-const { compareDocuments: outcome } = editor.exec({
+const result = editor.exec({
   type: 'compareDocuments',
   revised: revisedBytes,
   authorName: 'Legal',
   detectFormatChanges: true,
 });
-if (outcome && !outcome.ok) {
-  showMessage(t(`compareDocuments.errors.${outcome.reason}`));
-} else if (outcome?.revisionCount === 0) {
+const outcome = result.compareDocuments;
+if (!outcome?.ok) {
+  showMessage(t(`compareDocuments.errors.${outcome?.reason ?? 'failed'}`));
+} else if (!outcome.changed) {
   showMessage(t('compareDocuments.noDifferences'));
 }
 ```
 
-The result's `compareDocuments` field holds the outcome. A refused compare carries a `reason` code, such as `tooLarge` or `protected`. The `compareDocuments.errors.*` keys of `@docx-editor.dev/i18n` translate every code. A compare with no differences succeeds with a `revisionCount` of 0 and leaves the document unchanged.
+The result's `compareDocuments` field holds the outcome of every `compareDocuments` command. A refused compare carries a `reason` code, such as `tooLarge` or `protected`. The `compareDocuments.errors.*` keys of `@docx-editor.dev/i18n` translate every code. A successful compare reports `changed` and `revisionCount`:
+
+- `changed` is `false` when the documents have no differences. Nothing is recorded.
+- `revisionCount` counts revision elements, not review items. A replaced word counts a deletion and an insertion.
+- `changed` is `true` with a `revisionCount` of 0 when the only differences take no tracked change: formatting with detection off, or the original's own tracked changes, which a compare accepts.
 
 If you omit `authorName`, the revisions carry the editor's author. If the editor has no author, they carry the revised document's last author.
 
-The command refuses while the editor is in viewing mode or the document is protected against edits. It also refuses in a collaborative session.
+The command refuses while the editor is in viewing mode or the document is protected against edits. It also refuses while a collaboration session is attached, even when no one else is connected.
 
 To replace the dialog, pass a component as `popups.compareDocuments`. The session's `apply` result has the same outcome shape. Its `message` is diagnostic English, not display text. Use `COMPARE_DOCUMENTS_ACCEPT` from `@docx-editor.dev/core` as the `accept` value of your file input. For more information, see [Customize dialogs](/docs/2.x/customization/dialogs).
 
@@ -86,7 +93,7 @@ For supported options and refusals, see [Tracked changes](/docs/2.x/editor-api/r
 
 ## Compare two files on a server
 
-The `compareDocuments` function needs no editor or runtime. It returns the result as DOCX bytes:
+The `compareDocuments` function needs no editor or runtime. It returns the result as DOCX bytes. When the documents have no differences, `changed` is `false` and `bytes` are the original bytes:
 
 ```ts
 import { writeFile } from 'node:fs/promises';
@@ -96,18 +103,21 @@ const result = compareDocuments(originalBytes, revisedBytes, {
   authorName: 'Legal',
   detectFormatChanges: true,
 });
-if (result.ok) await writeFile('redline.docx', result.bytes);
-else console.error(result.code, result.message);
+if (!result.ok) console.error(result.code, result.message);
+else if (result.changed) await writeFile('redline.docx', result.bytes);
 ```
 
-The function checks every result before it returns it: accepting all changes must give the revised text, and rejecting all changes must give the original text. A result that fails the check is not returned; the function refuses with `unsupported-content` instead. It refuses with `invalid-original` or `invalid-revised` for a file it cannot read, and with `too-large` for documents over its size limit. If you omit `authorName`, the revisions carry the revised document's last author.
+The function checks every result before it returns it: accepting all changes must give the revised text, and rejecting all changes must give the original text. A result that fails the check is not returned; the function refuses with `unsupportedContent` instead. It refuses with `invalidOriginal` or `invalidRevised` for a file it cannot read, with `tooLarge` for documents over its size limit, and with `invalidOptions` for an option of the wrong type, such as a `date` that is not a valid date. If you omit `authorName`, or it is empty, the revisions carry the revised document's last author. The function refuses with a code and never throws for these cases. Translate a code with the same `compareDocuments.errors.*` keys the editor uses.
 
 The function refuses with `protected` when the original document enforces protection that a compare would break:
 
 - Read-only, comments, or forms protection. A compare would rewrite its content.
-- Tracked-changes protection, when the original holds tracked changes. A compare would accept them. Without tracked changes, the compare runs, because it writes only tracked changes.
+- Tracked-changes protection, when the original holds tracked changes. A compare would accept them.
+- Tracked-changes protection, when formatting detection is off. A compare would write formatting differences without tracked changes.
 
-The compare also refuses with `unsupported-content` in these cases:
+With tracked-changes protection, no tracked changes in the original, and formatting detection on, the compare runs, because it writes only tracked changes.
+
+The compare also refuses with `unsupportedContent` in these cases:
 
 - The documents differ inside a content control that is locked or bound to custom XML data. Tracked changes there cannot be accepted or rejected.
 - The original or the revised document holds tracked changes that cannot be accepted, so its final state is unknown.

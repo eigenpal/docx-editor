@@ -41,7 +41,6 @@ export {
 } from './review/review-module.ts';
 export {
   compareDocuments,
-  type CompareDocumentsEngineOptions,
   type CompareDocumentsErrorCode,
   type CompareDocumentsOptions,
   type CompareDocumentsResult,

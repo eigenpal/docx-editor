@@ -12,6 +12,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import {
   applyTreeOp,
+  ooxmlTreesEqual,
   readOoxmlPackage,
   type OoxmlNode,
   type OoxmlPackage,
@@ -26,6 +27,7 @@ export type ComparePackagesResult =
       readonly bytes: Uint8Array;
       readonly package: OoxmlPackage;
       readonly revisionCount: number;
+      readonly changed: boolean;
     }
   | Extract<CompareDocumentsResult, { ok: false }>;
 import { CompareState, EmitContext, NOTE_PLACEHOLDER, sectPrXml, type NoteKind } from './emit.ts';
@@ -89,7 +91,7 @@ export function compareDocuments(
   if (!baseRead.ok) {
     return {
       ok: false,
-      code: 'invalid-original',
+      code: 'invalidOriginal',
       message: `The original document cannot be read (${baseRead.reason}).`,
     };
   }
@@ -97,14 +99,19 @@ export function compareDocuments(
   if (!revisedRead.ok) {
     return {
       ok: false,
-      code: 'invalid-revised',
+      code: 'invalidRevised',
       message: `The revised document cannot be read (${revisedRead.reason}).`,
     };
   }
   const result = comparePackages(baseRead.package, revisedRead.package, options);
-  return result.ok
-    ? { ok: true, bytes: result.bytes, revisionCount: result.revisionCount }
-    : result;
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    // Nothing changed: the caller gets its own bytes back, not a re-serialized copy.
+    bytes: result.changed ? result.bytes : original,
+    revisionCount: result.revisionCount,
+    changed: result.changed,
+  };
 }
 
 export function comparePackages(
@@ -113,6 +120,31 @@ export function comparePackages(
   options: CompareDocumentsOptions = {},
   /** @internal Diagnostics only: return the result even when the self-check fails. */
   unchecked = false
+): ComparePackagesResult {
+  const invalid = invalidOption(options);
+  if (invalid) return { ok: false, code: 'invalidOptions', message: invalid };
+  // One timestamp for the compare and its no-difference oracle.
+  const fixed: CompareDocumentsOptions = { ...options, date: options.date ?? new Date() };
+  const result = compareOnce(original, revised, fixed, unchecked);
+  if (!result.ok || result.revisionCount > 0) return result;
+  // No revision written. The result still differs from the original when the compare accepted
+  // the original's own tracked changes, or wrote a difference untracked (formatting with
+  // detection off, comments, styles, or lists of the revised document). The original compared
+  // with itself goes through the same normalization, so a result equal to that one adds
+  // nothing: the original itself is the answer, and an editor records no step.
+  if (![...original.parts.values()].some((part) => hasRevision(part.root))) {
+    const itself = compareOnce(original, original, fixed, true);
+    if (itself.ok && samePackage(result.package, itself.package))
+      return { ...result, package: original, changed: false };
+  }
+  return result;
+}
+
+function compareOnce(
+  original: OoxmlPackage,
+  revised: OoxmlPackage,
+  options: CompareDocumentsOptions,
+  unchecked: boolean
 ): ComparePackagesResult {
   if (protectedAgainstEdits(original, options.detectFormatChanges ?? true)) {
     return {
@@ -129,7 +161,7 @@ export function comparePackages(
     baseSize.blocks + revisedSize.blocks > MAX_BLOCKS ||
     baseSize.text + revisedSize.text > MAX_TEXT_UNITS
   ) {
-    return { ok: false, code: 'too-large', message: 'The documents are too large to compare.' };
+    return { ok: false, code: 'tooLarge', message: 'The documents are too large to compare.' };
   }
   const basePkg = acceptAll(original);
   const revisedPkg = acceptAll(revised);
@@ -142,14 +174,14 @@ export function comparePackages(
   if (!baseDoc || !baseBody) {
     return {
       ok: false,
-      code: 'invalid-original',
+      code: 'invalidOriginal',
       message: 'The original document has no main story.',
     };
   }
   if (!revisedDoc || !revisedBody) {
     return {
       ok: false,
-      code: 'invalid-revised',
+      code: 'invalidRevised',
       message: 'The revised document has no main story.',
     };
   }
@@ -164,7 +196,7 @@ export function comparePackages(
   const next = new SideContext('revised', revisedPkg, revisedPkg.mainDocumentPart, scope);
   const ctx = new EmitContext(
     state,
-    options.authorName ?? defaultAuthor(revisedPkg),
+    options.authorName?.trim() ? options.authorName : defaultAuthor(revisedPkg),
     options.removeDateAndTime ? undefined : revisionDate(options.date ?? new Date()),
     options.detectFormatChanges ?? true,
     base,
@@ -205,7 +237,7 @@ export function comparePackages(
   if (ctx.state.untracked > 0) {
     return {
       ok: false,
-      code: 'unsupported-content',
+      code: 'unsupportedContent',
       message:
         'The documents differ in block content that has no tracked-change form, such as an embedded file chunk.',
     };
@@ -213,7 +245,7 @@ export function comparePackages(
   if (furniture.unpaired) {
     return {
       ok: false,
-      code: 'unsupported-content',
+      code: 'unsupportedContent',
       message:
         'The documents differ in a header or footer of an earlier section that has no matching header or footer in the other document.',
     };
@@ -221,7 +253,7 @@ export function comparePackages(
   if (ctx.state.unrecordedProperties > 0) {
     return {
       ok: false,
-      code: 'unsupported-content',
+      code: 'unsupportedContent',
       message:
         'The revised document adds section or table settings, such as page borders, that a tracked change cannot restore on reject.',
     };
@@ -231,12 +263,12 @@ export function comparePackages(
     revisedPkg,
     mergeComments(basePkg, revisedPkg, stories)
   );
-  if (!assembled.ok) return { ok: false, code: 'unsupported-content', message: assembled.message };
+  if (!assembled.ok) return { ok: false, code: 'unsupportedContent', message: assembled.message };
   const check = selfCheck(assembled.pkg, basePkg, revisedPkg);
   if (!unchecked && (!check.accept || !check.reject) && check.guard) {
     return {
       ok: false,
-      code: 'unsupported-content',
+      code: 'unsupportedContent',
       message:
         'The documents differ inside a content control that is locked or bound to data. ' +
         'Changes there cannot be accepted or rejected.',
@@ -245,7 +277,7 @@ export function comparePackages(
   if (!unchecked && (!check.accept || !check.reject)) {
     return {
       ok: false,
-      code: 'unsupported-content',
+      code: 'unsupportedContent',
       message: `The compare result does not reproduce both documents (${check.detail ?? ''}).`,
     };
   }
@@ -254,7 +286,67 @@ export function comparePackages(
     bytes: assembled.bytes,
     package: assembled.pkg,
     revisionCount: ctx.revisionCount,
+    changed: true,
   };
+}
+
+/** Why an option is unusable, or null. Every check matches a documented option type. */
+function invalidOption(options: CompareDocumentsOptions): string | null {
+  const { authorName, detectFormatChanges, removeDateAndTime, date } = options;
+  if (authorName !== undefined && typeof authorName !== 'string')
+    return 'authorName must be a string.';
+  if (detectFormatChanges !== undefined && typeof detectFormatChanges !== 'boolean')
+    return 'detectFormatChanges must be a boolean.';
+  if (removeDateAndTime !== undefined && typeof removeDateAndTime !== 'boolean')
+    return 'removeDateAndTime must be a boolean.';
+  if (
+    date !== undefined &&
+    (Object.prototype.toString.call(date) !== '[object Date]' || Number.isNaN(date.getTime()))
+  )
+    return 'date must be a valid Date.';
+  return null;
+}
+
+/**
+ * Whether two compare results say the same: the same parts with equal trees (node ids aside)
+ * or equal bytes, the same relationships, and the same main story.
+ */
+function samePackage(a: OoxmlPackage, b: OoxmlPackage): boolean {
+  if (a.mainDocumentPart !== b.mainDocumentPart) return false;
+  if (a.parts.size !== b.parts.size || a.partBytes.size !== b.partBytes.size) return false;
+  for (const [name, part] of a.parts) {
+    const other = b.parts.get(name);
+    if (!other || other.contentType !== part.contentType || !ooxmlTreesEqual(part, other))
+      return false;
+  }
+  for (const [name, bytes] of a.partBytes) {
+    // Trees compare above; relationship parts compare as records below.
+    if (a.parts.has(name) || name.endsWith('.rels') || name === '/[Content_Types].xml') continue;
+    const other = b.partBytes.get(name);
+    if (!other || !sameBytes(bytes, other)) return false;
+  }
+  return (
+    relationshipKey(a) === relationshipKey(b) &&
+    JSON.stringify(a.externalTargets) === JSON.stringify(b.externalTargets)
+  );
+}
+
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+function relationshipKey(pkg: OoxmlPackage): string {
+  return JSON.stringify(
+    [...pkg.relationships.entries()]
+      .filter(([, records]) => records.length > 0)
+      .sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))
+      .map(([owner, records]) => [
+        owner,
+        records.map((r) => [r.id, r.type, r.rawTarget, r.targetMode]),
+      ])
+  );
 }
 
 function shellXml(scope: NamespaceScope, node: ElementNode): { start: string; end: string } {
@@ -316,7 +408,7 @@ const settingsPart = (pkg: OoxmlPackage) => relatedPart(pkg, 'settings');
 function unacceptable(side: 'original' | 'revised'): ComparePackagesResult {
   return {
     ok: false,
-    code: 'unsupported-content',
+    code: 'unsupportedContent',
     message: `The ${side} document holds tracked changes that cannot be accepted, so its final state is unknown.`,
   };
 }

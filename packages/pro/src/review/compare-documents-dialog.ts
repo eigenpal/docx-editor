@@ -91,6 +91,13 @@ export function createCompareDocumentsDialog(
       const error = el('p');
       error.className = 'docx-compare-documents-error';
       error.setAttribute('role', 'alert');
+      const notice = el('p');
+      notice.className = 'docx-compare-documents-notice';
+      notice.setAttribute('role', 'status');
+      const clearMessages = () => {
+        error.textContent = '';
+        notice.textContent = '';
+      };
       const footer = el('div');
       footer.className = 'docx-compare-documents-actions';
       const cancel = el('button', t('cancel'));
@@ -108,7 +115,7 @@ export function createCompareDocumentsDialog(
         dialog?.setAttribute('aria-busy', String(next));
       };
       file.addEventListener('change', () => {
-        error.textContent = '';
+        clearMessages();
         setBusy(false);
       });
       compare.addEventListener('click', async () => {
@@ -117,6 +124,7 @@ export function createCompareDocumentsDialog(
           error.textContent = t('fileRequired');
           return;
         }
+        clearMessages();
         setBusy(true);
         let revised: Uint8Array;
         try {
@@ -136,11 +144,12 @@ export function createCompareDocumentsDialog(
         });
         if (host.signal.aborted) return;
         // With no differences the dialog stays open and says so; nothing changed.
-        error.textContent = outcome.ok ? t('noDifferences') : t(`errors.${outcome.reason}`);
+        if (outcome.ok) notice.textContent = t('noDifferences');
+        else error.textContent = t(`errors.${outcome.reason}`);
         setBusy(false);
       });
 
-      dialog.append(title, description, body, error, footer);
+      dialog.append(title, description, body, error, notice, footer);
       host.container.append(dialog);
       setBusy(false);
       dialog.showModal();

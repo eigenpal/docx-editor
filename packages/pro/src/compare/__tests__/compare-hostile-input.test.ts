@@ -192,7 +192,7 @@ test('many deleted paragraphs compare in linear time, and the limit counts every
     buildDocx({ body: p('x'), footnotes: notes }),
     buildDocx({ body: p('y'), footnotes: notes })
   );
-  expect(result.ok ? '' : result.code).toBe('too-large');
+  expect(result.ok ? '' : result.code).toBe('tooLarge');
   // The body asserts its own 15 s bound; the runner's 5 s default fails on a loaded machine.
 }, 30_000);
 
@@ -209,7 +209,7 @@ test('the limit counts a main story of any declared type and text box content', 
   };
   const body = p('a').repeat(60_000);
   const typed = compare(macroEnabled(buildDocx({ body })), macroEnabled(buildDocx({ body })));
-  expect(typed.ok ? '' : typed.code).toBe('too-large');
+  expect(typed.ok ? '' : typed.code).toBe('tooLarge');
   // A small document of that type compares, its main story checked like any other.
   const small = compare(
     macroEnabled(buildDocx({ body: p('one two') })),
@@ -218,7 +218,7 @@ test('the limit counts a main story of any declared type and text box content', 
   expect(small.ok && small.revisionCount).toBeGreaterThan(0);
   const boxed = buildDocx({ body: pRaw(textBox(body, 1)) + p('tail') });
   const inBoxes = compare(boxed, boxed);
-  expect(inBoxes.ok ? '' : inBoxes.code).toBe('too-large');
+  expect(inBoxes.ok ? '' : inBoxes.code).toBe('tooLarge');
 });
 
 test('notes, styles, lists, and comments are found through relationships, not part types', () => {

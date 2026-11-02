@@ -8916,10 +8916,19 @@ p.docx-review__refused {
   color: var(--doc-text);
   background: var(--doc-bg);
 }
-.docx-compare-documents-dialog .docx-compare-documents-error {
+.docx-compare-documents-dialog .docx-compare-documents-error,
+.docx-compare-documents-dialog .docx-compare-documents-notice {
   min-height: 1.25rem;
   margin: 0.5rem 0 0;
+}
+.docx-compare-documents-dialog .docx-compare-documents-error {
   color: var(--doc-error);
+}
+/* One message line: the notice takes the error's place, never a second line. */
+.docx-compare-documents-dialog
+  .docx-compare-documents-error:empty:has(+ .docx-compare-documents-notice:not(:empty)),
+.docx-compare-documents-dialog .docx-compare-documents-notice:empty {
+  display: none;
 }
 .docx-compare-documents-actions {
   display: flex;

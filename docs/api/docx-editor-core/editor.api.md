@@ -1236,6 +1236,7 @@ export interface CompareDocumentsEngineOptions {
 
 // @public
 export type CompareDocumentsEngineResult = {
+    readonly changed: boolean;
     readonly ok: true;
     readonly package: OoxmlPackage;
     readonly revisionCount: number;
@@ -1247,12 +1248,14 @@ export type CompareDocumentsEngineResult = {
 
 // @public
 export type CompareDocumentsErrorCode =
+/** An option has a value of the wrong type, such as a `date` that is not a valid date. */
+'invalidOptions'
 /** The original document is not a readable DOCX package. */
-'invalid-original'
+| 'invalidOriginal'
 /** The revised document is not a readable DOCX package. */
-| 'invalid-revised'
+| 'invalidRevised'
 /** The documents exceed the compare's size limits. */
-| 'too-large'
+| 'tooLarge'
 /**
 * The original document enforces protection that the compare would break: read-only,
 * comments, or forms protection. Tracked-changes protection refuses too when the original
@@ -1261,10 +1264,11 @@ export type CompareDocumentsErrorCode =
 */
 | 'protected'
 /** The differences include content that no tracked change can record. */
-| 'unsupported-content';
+| 'unsupportedContent';
 
 // @public
 export type CompareDocumentsOutcome = {
+    readonly changed: boolean;
     readonly ok: true;
     readonly revisionCount: number;
 } | {
@@ -1274,7 +1278,7 @@ export type CompareDocumentsOutcome = {
 };
 
 // @public
-export type CompareDocumentsRefusal = 'invalidOriginal' | 'invalidRevised' | 'tooLarge' | 'unsupportedContent' | 'unavailable' | 'protected' | 'collaboration' | 'viewing' | 'closed' | 'empty' | 'failed';
+export type CompareDocumentsRefusal = CompareDocumentsErrorCode | 'unavailable' | 'collaboration' | 'viewing' | 'closed' | 'empty' | 'failed';
 
 // @public
 export interface CompareDocumentsRequest {

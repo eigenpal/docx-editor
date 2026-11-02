@@ -65,7 +65,8 @@ export function planCompare(
   });
   if (!result.ok) {
     switch (result.code) {
-      case 'invalid-revised':
+      case 'invalidRevised':
+      case 'invalidOptions':
         return {
           ok: false,
           error: {
@@ -74,7 +75,7 @@ export function planCompare(
             detail: 'edit.invalid-argument',
           },
         };
-      case 'too-large':
+      case 'tooLarge':
         return capability(result.message, 'edit.resource-limit');
       case 'protected':
         return {

@@ -3328,6 +3328,7 @@ export function useCompareDocumentsDialog(): UseCompareDocumentsDialogReturn;
 // @public
 export interface UseCompareDocumentsDialogReturn extends UseDialogReturn<CompareDocumentsDialogValues> {
     readonly busy: boolean;
+    readonly notice: string | undefined;
 }
 
 // @public
