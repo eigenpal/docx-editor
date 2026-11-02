@@ -11,6 +11,7 @@ import type { CompareDocumentsDialog, ReviewModuleContribution } from '../contra
 import { readDocumentProtection } from '../store/package/document-protection.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import { commandProtectionRefusal } from './command-protection.ts';
+import { hostTimers } from './host-realm.ts';
 import { PRO_REVIEW_REASON } from './opening-editing-mode.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import type { PopupChromeRegistrationOptions } from './popup-sessions.ts';
@@ -79,6 +80,22 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
   let dialog: CompareDocumentsDialog | null = null;
   let active: CompareDocumentsDialogSession | null = null;
   const chrome = createSessionChrome<CompareDocumentsDialogSession>();
+  const timers = hostTimers(() => host.container());
+
+  // A frame callback runs before the paint it belongs to, so the work goes in a task queued
+  // from it: the first slot after the busy state is on screen. A hidden window fires no
+  // frames, so a timer goes on without one.
+  const afterPaint = () =>
+    new Promise<void>((resolve) => {
+      const fallback = timers.setTimeout(() => {
+        timers.cancelAnimationFrame(frame);
+        resolve();
+      }, 250);
+      const frame = timers.requestAnimationFrame(() => {
+        timers.clearTimeout(fallback);
+        timers.setTimeout(resolve, 0);
+      });
+    });
 
   const canCompare = (): CanResult => {
     if (host.destroyed())
@@ -171,8 +188,8 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
           return { ok: false, reason: refusalOf(refusal), message: refusal.reason };
         }
         running = true;
-        // One task so the dialog can paint its busy state before the synchronous compare.
-        await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0));
+        // The dialog paints its busy state before the synchronous compare.
+        await afterPaint();
         try {
           if (controller.signal.aborted)
             return { ok: false, reason: 'closed', message: CLOSED_REASON };
