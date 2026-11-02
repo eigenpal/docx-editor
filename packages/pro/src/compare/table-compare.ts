@@ -84,7 +84,7 @@ function gridXml(base: ElementNode | null, revised: ElementNode | null, ctx: Emi
       DROP_CHANGE('tblGridChange')
     );
     if (before !== inner)
-      inner += `<w:tblGridChange${ctx.attrs()}><w:tblGrid>${before}</w:tblGrid></w:tblGridChange>`;
+      inner += `<w:tblGridChange${ctx.idOnly()}><w:tblGrid>${before}</w:tblGrid></w:tblGridChange>`;
   }
   return `<w:tblGrid>${inner}</w:tblGrid>`;
 }

@@ -59,6 +59,8 @@ interface FurnitureRef {
   readonly kind: 'header' | 'footer';
   readonly type: string;
   readonly part: OoxmlPart;
+  /** The main story's relationship id for the part. */
+  readonly rId: string;
 }
 
 /**
@@ -80,7 +82,8 @@ function slotRefs(section: SectionFurniture): Map<string, FurnitureRef> {
     ['header', section.headers],
     ['footer', section.footers],
   ] as const) {
-    for (const [type, slot] of slots) out.set(`${kind}:${type}`, { kind, type, part: slot.part });
+    for (const [type, slot] of slots)
+      out.set(`${kind}:${type}`, { kind, type, part: slot.part, rId: slot.rId });
   }
   return out;
 }
@@ -153,6 +156,46 @@ function earlierFurniturePairs(
   return pairs;
 }
 
+/** The part a header or footer only the revised final section shows takes in the output. */
+function newFurniturePartName(basePkg: OoxmlPackage, ref: FurnitureRef): string {
+  let partName = `/word/compare-${ref.kind}-${ref.type}.xml`;
+  for (let n = 2; partExists(basePkg, partName); n++)
+    partName = `/word/compare-${ref.kind}-${ref.type}-${n}.xml`;
+  return partName;
+}
+
+/**
+ * For each header or footer reference the revised main story declares, the relationship id
+ * the output gives the same content: the original part it is compared into, or the new part
+ * for content only the revised final section shows. A section break the revised document
+ * adds then shows the compared header and footer after accept. References with no output
+ * part are absent.
+ */
+export function furnitureOutputIds(
+  basePkg: OoxmlPackage,
+  revisedPkg: OoxmlPackage
+): Map<string, string> {
+  const byRevisedPart = new Map<string, string>();
+  const finalBase = furnitureRefs(basePkg);
+  for (const [key, revised] of furnitureRefs(revisedPkg)) {
+    const base = finalBase.get(key);
+    const id = base ? base.rId : `${MARK}NEW:${newFurniturePartName(basePkg, revised)}§`;
+    if (!byRevisedPart.has(revised.part.name)) byRevisedPart.set(revised.part.name, id);
+  }
+  for (const { base, revised } of earlierFurniturePairs(basePkg, revisedPkg) ?? []) {
+    if (revised && !byRevisedPart.has(revised.part.name))
+      byRevisedPart.set(revised.part.name, base.rId);
+  }
+  const out = new Map<string, string>();
+  for (const section of resolveHeaderFooterResolutionBySection(revisedPkg)) {
+    for (const ref of slotRefs(section).values()) {
+      const id = byRevisedPart.get(ref.part.name);
+      if (id !== undefined && !out.has(ref.rId)) out.set(ref.rId, id);
+    }
+  }
+  return out;
+}
+
 /** Names of the header and footer parts the final section of `pkg`'s main story shows. */
 export function finalSectionFurniture(pkg: OoxmlPackage): ReadonlySet<string> {
   return new Set([...furnitureRefs(pkg).values()].map((ref) => ref.part.name));
@@ -218,9 +261,7 @@ export function compareFurniture(
       });
     } else {
       const ref = revised!;
-      let partName = `/word/compare-${ref.kind}-${ref.type}.xml`;
-      for (let n = 2; partExists(basePkg, partName); n++)
-        partName = `/word/compare-${ref.kind}-${ref.type}-${n}.xml`;
+      const partName = newFurniturePartName(basePkg, ref);
       outputs.push({
         partName,
         contentType: ref.part.contentType,

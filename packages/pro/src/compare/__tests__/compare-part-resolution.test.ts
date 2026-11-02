@@ -10,6 +10,7 @@ import { expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { buildDocx } from '../../../../../scripts/compare-corpus/docx-builder.ts';
 import { p } from '../../../../../scripts/compare-corpus/xml.ts';
+import { applyTreeOp, readOoxmlPackage, serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import { compareDocuments } from '../index.ts';
 
 const DATE = new Date('2026-01-10T12:00:00Z');
@@ -229,4 +230,69 @@ test('a copied separator never takes an id the original references', () => {
   ].map((match) => match[1]);
   expect(separatorIds.length).toBeGreaterThan(0);
   expect(separatorIds).not.toContain('0');
+});
+
+const sectionBreaks = (xml: string) => xml.match(/<w:sectPr\b[\s\S]*?<\/w:sectPr>/g) ?? [];
+
+function acceptedMain(bytes: Uint8Array): string {
+  const read = readOoxmlPackage(bytes);
+  if (!read.ok) throw new Error(read.reason);
+  const part = read.package.parts.get(read.package.mainDocumentPart)!;
+  const accepted = applyTreeOp(part, { op: 'acceptAllRevisions' });
+  if (!accepted.ok) throw new Error(accepted.reason);
+  return serializeOoxmlPart(accepted.part);
+}
+
+test('a section break the revised document moves keeps its header', () => {
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const sections = (breakAfter: string) =>
+    edited(withHeader('Final header'), (files) => {
+      files['word/header2.xml'] = `<w:hdr xmlns:w="${W}">${p('Section one header')}</w:hdr>`;
+      files['[Content_Types].xml'] = files['[Content_Types].xml']!.replace(
+        '</Types>',
+        '<Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/></Types>'
+      );
+      files['word/_rels/document.xml.rels'] = files['word/_rels/document.xml.rels']!.replace(
+        '</Relationships>',
+        '<Relationship Id="rIdH2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header2.xml"/></Relationships>'
+      );
+      const sect =
+        '<w:sectPr><w:headerReference w:type="default" r:id="rIdH2"/><w:type w:val="continuous"/></w:sectPr>';
+      files['word/document.xml'] = files['word/document.xml']!.replace(
+        p('Body text.'),
+        ['One.', 'Two.', 'Three.']
+          .map((text) =>
+            text === breakAfter
+              ? `<w:p><w:pPr>${sect}</w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`
+              : p(text)
+          )
+          .join('')
+      );
+    });
+  const result = compareDocuments(sections('One.'), sections('Two.'), {
+    authorName: 'Test',
+    date: DATE,
+  });
+  if (!result.ok) throw new Error(result.message);
+  expect(sectionBreaks(acceptedMain(result.bytes))[0]).toContain('<w:headerReference');
+});
+
+test('section records follow the schema order and grid records carry only an id', () => {
+  const grid = (widths: string, sect: string) =>
+    buildDocx({
+      body:
+        `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr><w:tblGrid>${widths}</w:tblGrid>` +
+        `<w:tr><w:tc>${p('a')}</w:tc></w:tr></w:tbl>${p('End.')}`,
+      sectPr: sect,
+    });
+  const fields = '<w:pgSz w:w="12240" w:h="15840"/><w:docGrid w:linePitch="360"/>';
+  const out = compared(
+    grid('<w:gridCol w:w="4000"/>', `<w:sectPr>${fields}</w:sectPr>`),
+    grid('<w:gridCol w:w="6000"/>', `<w:sectPr><w:type w:val="continuous"/>${fields}</w:sectPr>`)
+  )['word/document.xml']!;
+  const record = /<w:sectPrChange\b[^>]*><w:sectPr>([\s\S]*?)<\/w:sectPr>/.exec(out)?.[1] ?? '';
+  const names = [...record.matchAll(/<w:([A-Za-z]+)/g)].map((match) => match[1]);
+  expect(names).toContain('type');
+  expect(names.indexOf('type')).toBeLessThan(names.indexOf('pgSz'));
+  expect(out).toMatch(/<w:tblGridChange w:id="\d+">/);
 });

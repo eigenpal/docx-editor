@@ -65,7 +65,12 @@ export function sectionRecord(
   const baseByName = new Map(
     base.filter((node) => node.namespaceUri === W_NS).map((node) => [node.localName, node])
   );
-  let out = base.map((node) => side.serialize(node)).join('');
+  // Record fields by name, in schema order at the end.
+  const fields: { name: string; xml: string }[] = base.map((node) => ({
+    name: node.namespaceUri === W_NS ? node.localName : '',
+    xml: side.serialize(node),
+  }));
+  const add = (name: string, xml: string) => fields.push({ name, xml });
   for (const node of revised) {
     if (node.namespaceUri !== W_NS) return null;
     const name = node.localName;
@@ -73,7 +78,7 @@ export function sectionRecord(
     const old = baseByName.get(name);
     if (!old) {
       if (ON_OFF.has(name)) {
-        out += `<w:${name} w:val="0"/>`;
+        add(name, `<w:${name} w:val="0"/>`);
         continue;
       }
       // An empty field states nothing, so keeping it on reject changes nothing.
@@ -88,7 +93,7 @@ export function sectionRecord(
         if (value === undefined) return null;
         attributes += ` w:${key}="${value}"`;
       }
-      out += `<w:${name}${attributes}/>`;
+      add(name, `<w:${name}${attributes}/>`);
       continue;
     }
     // Attributes only the revised field states take their defaults in the record.
@@ -109,9 +114,40 @@ export function sectionRecord(
       added += ` w:${key}="${value}"`;
     }
     if (added) {
-      const serialized = side.serialize(old);
-      out = out.replace(serialized, serialized.replace(/^(<[^\s/>]+)/, `$1${added}`));
+      const field = fields.find((entry) => entry.name === name);
+      if (field) field.xml = field.xml.replace(/^(<[^\s/>]+)/, `$1${added}`);
     }
   }
-  return out;
+  const rank = (name: string) => {
+    const index = SECTION_ORDER.indexOf(name);
+    return index < 0 ? SECTION_ORDER.length : index;
+  };
+  return fields
+    .map((field, index) => ({ ...field, index }))
+    .sort((a, b) => rank(a.name) - rank(b.name) || a.index - b.index)
+    .map((field) => field.xml)
+    .join('');
 }
+
+/** `w:sectPr` content order (a sequence in the schema), without header and footer references. */
+const SECTION_ORDER: readonly string[] = [
+  'footnotePr',
+  'endnotePr',
+  'type',
+  'pgSz',
+  'pgMar',
+  'paperSrc',
+  'pgBorders',
+  'lnNumType',
+  'pgNumType',
+  'cols',
+  'formProt',
+  'vAlign',
+  'noEndnote',
+  'titlePg',
+  'textDirection',
+  'bidi',
+  'rtlGutter',
+  'docGrid',
+  'printerSettings',
+];

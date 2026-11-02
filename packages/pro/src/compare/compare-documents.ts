@@ -32,7 +32,13 @@ import { assemblePackage } from './package-assemble.ts';
 import { mergeDefinitions } from './definitions.ts';
 import { mergeComments } from './comments.ts';
 import { hasRevision, selfCheck } from './self-check.ts';
-import { compareFurniture, compareNotes, storyXml, type StoryOutput } from './stories.ts';
+import {
+  compareFurniture,
+  compareNotes,
+  furnitureOutputIds,
+  storyXml,
+  type StoryOutput,
+} from './stories.ts';
 import { compareContainer } from './story-compare.ts';
 import { SideContext, unitsOf } from './units.ts';
 import {
@@ -128,6 +134,8 @@ export function comparePackages(
   // Before any revised content is serialized: it registers the revised list id map.
   const definitions = mergeDefinitions(basePkg, revisedPkg);
   const state = new CompareState();
+  for (const [revisedId, outputId] of furnitureOutputIds(basePkg, revisedPkg))
+    state.furnitureIds.set(revisedId, outputId);
   const scope = new NamespaceScope();
   const base = new SideContext('base', basePkg, basePkg.mainDocumentPart, scope);
   const next = new SideContext('revised', revisedPkg, revisedPkg.mainDocumentPart, scope);

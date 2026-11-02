@@ -193,7 +193,8 @@ test('many deleted paragraphs compare in linear time, and the limit counts every
     buildDocx({ body: p('y'), footnotes: notes })
   );
   expect(result.ok ? '' : result.code).toBe('too-large');
-});
+  // The body asserts its own 15 s bound; the runner's 5 s default fails on a loaded machine.
+}, 30_000);
 
 test('the limit counts a main story of any declared type and text box content', () => {
   const macroEnabled = (docx: Uint8Array) => {

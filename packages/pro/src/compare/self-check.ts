@@ -19,6 +19,7 @@ import {
   applyTreeOp,
   digestPart,
   readOoxmlPart,
+  resolveHeaderFooterResolutionBySection,
   serializeOoxmlPart,
   type OoxmlPackage,
   type OoxmlPart,
@@ -162,6 +163,57 @@ function resolved(
   return out;
 }
 
+/**
+ * What every section shows in its header and footer slots, as `kind:type=text` per section.
+ * With `op`, the main story and every header and footer part are resolved first.
+ */
+function sectionFurniture(
+  pkg: OoxmlPackage,
+  op?: 'acceptAllRevisions' | 'rejectAllRevisions',
+  /** The main story already resolved with `op`. */
+  main?: OoxmlPart
+): string {
+  let view = pkg;
+  if (op) {
+    const parts = new Map(pkg.parts);
+    if (main?.name !== pkg.mainDocumentPart) main = undefined;
+    if (main) parts.set(pkg.mainDocumentPart, main);
+    const names = new Set<string>();
+    for (const section of resolveHeaderFooterResolutionBySection(pkg))
+      for (const slots of [section.headers, section.footers])
+        for (const slot of slots.values()) names.add(slot.part.name);
+    if (!main) names.add(pkg.mainDocumentPart);
+    for (const name of names) {
+      const part = parts.get(name);
+      if (!part || !hasRevision(part.root)) continue;
+      const result = applyTreeOp(part, { op });
+      if (!result.ok) continue;
+      // Re-read, so renamed elements (a restored `w:instrText`) take their typed kinds.
+      const reread = readOoxmlPart(serializeOoxmlPart(result.part), {
+        name: result.part.name,
+        contentType: result.part.contentType,
+      });
+      parts.set(name, reread.ok ? reread.part : result.part);
+    }
+    view = { ...pkg, parts };
+  }
+  return resolveHeaderFooterResolutionBySection(view)
+    .map((section) => {
+      const entries: string[] = [];
+      for (const [kind, slots] of [
+        ['header', section.headers],
+        ['footer', section.footers],
+      ] as const)
+        for (const [type, slot] of slots) {
+          // An empty header or footer shows the same as none.
+          const text = fingerprint([slot.part], 'text');
+          if (text !== '') entries.push(`${kind}:${type}=${text}`);
+        }
+      return entries.sort().join('|');
+    })
+    .join('\n');
+}
+
 export interface SelfCheckResult {
   /** Accepting every revision gives the revised document's text. */
   readonly accept: boolean;
@@ -207,7 +259,20 @@ export function selfCheck(
             : undefined,
     };
   };
-  const text = check('text');
+  const furniture = (): ReturnType<typeof check> => {
+    const accept =
+      sectionFurniture(output, 'acceptAllRevisions', accepted[0]) === sectionFurniture(revised);
+    const reject =
+      sectionFurniture(output, 'rejectAllRevisions', rejected[0]) === sectionFurniture(original);
+    const which = !accept ? 'accept' : !reject ? 'reject' : undefined;
+    return {
+      accept,
+      reject,
+      detail: which && `${which}: a section shows other headers or footers`,
+    };
+  };
+  const stories = check('text');
+  const text = stories.accept && stories.reject ? furniture() : stories;
   const properties = text.accept && text.reject ? check('properties') : text;
   const detail = text.detail ?? properties.detail;
   return {

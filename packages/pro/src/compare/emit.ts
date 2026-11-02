@@ -9,12 +9,16 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { sectionRecord } from './section-record.ts';
 import { MARK, type Atom, type ParagraphUnit, type SideContext, type Wrapper } from './units.ts';
 import {
+  attributeOf,
   elementChildren,
   escapeAttribute,
   escapeText,
   innerOf,
+  R_NS,
   type ElementNode,
 } from './xml-fragments.ts';
+
+const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
 export type Mark = 'eq' | 'ins' | 'del' | 'moveFrom' | 'moveTo';
 
@@ -34,6 +38,8 @@ export class CompareState {
   count = 0;
   /** Blocks the engine could not track (kept or dropped without a revision). */
   untracked = 0;
+  /** Output relationship ids for the revised main story's header and footer references. */
+  readonly furnitureIds = new Map<string, string>();
   /** Section or table settings the revised document adds that a record cannot restore. */
   unrecordedProperties = 0;
   /** Move ranges written so far; names each range pair. */
@@ -87,6 +93,12 @@ export class EmitContext {
   }
 
   /** The `w:id w:author w:date` attribute triple of one new revision. */
+  /** Revision attributes of a record whose schema type declares only an id (`w:tblGridChange`). */
+  idOnly(): string {
+    this.state.count++;
+    return ` w:id="${this.state.nextId++}"`;
+  }
+
   attrs(): string {
     this.state.count++;
     const date = this.date === undefined ? '' : ` w:date="${this.date}"`;
@@ -241,7 +253,9 @@ export function sectPrXml(
           .filter(isRef)
           .map((child) => ctx.base.serialize(child))
           .join('')
-      : '') + extraRefs;
+      : revised && !finalSection
+        ? addedSectionRefs(revised, ctx)
+        : '') + extraRefs;
   // The final section of a revised document without one takes the default settings.
   const body = revised || !finalSection ? sectPrBody(source, side) : '';
   let change = '';
@@ -257,6 +271,24 @@ export function sectPrXml(
   const shell = side.raw({ ...source, children: [] } as ElementNode);
   const start = shell.replace(/\/>$/, '>');
   return `${start}${refs}${body}${change}</w:sectPr>`;
+}
+
+/**
+ * Header and footer references of a section break only the revised document has: each points
+ * at the output part that holds the revised content, so the section shows it after accept.
+ */
+function addedSectionRefs(revised: ElementNode, ctx: EmitContext): string {
+  let out = '';
+  for (const child of elementChildren(revised).filter(isRef)) {
+    const type = attributeOf(child, 'type', W_NS) ?? 'default';
+    const id = ctx.state.furnitureIds.get(attributeOf(child, 'id', R_NS) ?? '');
+    if (id === undefined || !/^(default|first|even)$/.test(type)) {
+      ctx.state.unrecordedProperties++;
+      continue;
+    }
+    out += `<w:${child.localName} xmlns:r="${R_NS}" w:type="${type}" r:id="${escapeAttribute(id)}"/>`;
+  }
+  return out;
 }
 
 /** Revision-session ids are not settings. */
