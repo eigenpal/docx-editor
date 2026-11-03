@@ -36,9 +36,9 @@ export type CompareDocumentsEngineErrorCode =
   | 'tooLarge'
   /**
    * The original document enforces protection that the compare would break: read-only,
-   * comments, or forms protection. Tracked-changes protection refuses too when the original
-   * holds tracked changes, which a compare accepts, or when formatting detection is off, which
-   * writes formatting differences untracked.
+   * comments, forms, or tracked-changes protection. A compare also writes differences that
+   * have no tracked form, such as style definitions and content control properties, so
+   * tracked-changes protection refuses too.
    */
   | 'protected'
   /** The differences include content that no tracked change can record. */

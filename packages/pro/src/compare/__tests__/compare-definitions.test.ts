@@ -155,15 +155,16 @@ test('a revised default style never becomes a second default', () => {
   ]);
 });
 
-test('tracked-changes protection refuses a compare that writes untracked formatting', () => {
+test('tracked-changes protection refuses with and without format detection', () => {
   const protection = '<w:documentProtection w:edit="trackedChanges" w:enforcement="1"/>';
   const base = buildDocx({ body: p('hello there') + p('two'), settings: protection });
   const revised = buildDocx({
     body: p('hello there', '<w:jc w:val="center"/>', '<w:b/>') + p('two'),
   });
-  expect(compare(base, revised, true).ok).toBe(true);
-  const result = compare(base, revised, false);
-  expect(result.ok ? '' : result.message).toContain('protected against edits');
+  for (const detect of [true, false]) {
+    const result = compare(base, revised, detect);
+    expect(result.ok ? '' : result.code).toBe('protected');
+  }
 });
 
 test('protection is read from the settings part the main document names', () => {

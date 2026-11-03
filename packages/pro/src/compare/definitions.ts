@@ -106,8 +106,7 @@ const STYLE_REFERENCES = new Set(['pStyle', 'rStyle', 'tblStyle', 'basedOn', 'ne
 function mergeStyles(
   base: OoxmlPackage,
   revised: OoxmlPackage,
-  lists: ReadonlyMap<string, string>,
-  out: { replacedStyles: boolean }
+  lists: ReadonlyMap<string, string>
 ): StoryOutput | null {
   const from = partOfType(revised, 'styles');
   if (!from) return null;
@@ -144,7 +143,6 @@ function mergeStyles(
     // A style that names a list names it by the revised id, which the output may have moved.
     added += withMappedNumbering(xml, lists);
   }
-  out.replacedStyles = replaced.size > 0;
   if (!added && replaced.size === 0) return null;
   // Without an original styles part the added styles go in a new one, with no document
   // defaults: the original keeps the look it had.
@@ -441,26 +439,14 @@ function mergeNumbering(
   };
 }
 
-/** The definition parts a compare writes. */
-export interface MergedDefinitions {
-  readonly outputs: StoryOutput[];
-  /**
-   * Whether a style both documents define takes the revised definition. That change has no
-   * tracked form, so rejecting changes keeps it.
-   */
-  readonly replacedStyles: boolean;
-}
-
 /**
  * Plans the styles and lists the output adds, and registers the revised list id map that the
  * revised side's serialization applies. Call before any revised content is serialized.
  */
-export function mergeDefinitions(base: OoxmlPackage, revised: OoxmlPackage): MergedDefinitions {
+export function mergeDefinitions(base: OoxmlPackage, revised: OoxmlPackage): StoryOutput[] {
   const numbering = mergeNumbering(base, revised);
   NUMBERING_MAPS.set(revised, numbering.map);
-  const flags = { replacedStyles: false };
-  const outputs = [mergeStyles(base, revised, numbering.map, flags), numbering.output].filter(
+  return [mergeStyles(base, revised, numbering.map), numbering.output].filter(
     (output): output is StoryOutput => output !== null
   );
-  return { outputs, replacedStyles: flags.replacedStyles };
 }

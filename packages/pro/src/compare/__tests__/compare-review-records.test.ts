@@ -389,144 +389,29 @@ test('a revised style keeps the namespaces its own content declares', () => {
   expect(namespaceOf(find(styles.root, 'payload'))).toBe('urn:new');
 });
 
-test('tracked-changes protection refuses a revised style definition, not a new style', () => {
+test('tracked-changes protection refuses every compare, tracked differences included', () => {
   const settings = '<w:documentProtection w:edit="trackedChanges" w:enforcement="1"/>';
-  const changed = compare(
-    buildDocx({ body: styled, extraStyles: STYLE('FF0000'), settings }),
-    buildDocx({ body: styled, extraStyles: STYLE('0000FF') })
-  );
-  expect(changed).toMatchObject({ ok: false, code: 'protected' });
-  const added = compared(
-    buildDocx({ body: p('Old words'), settings }),
-    buildDocx({ body: p('New words'), extraStyles: UNUSED(40) })
-  );
-  expect(added.revisionCount).toBe(2);
-});
-
-test('tracked-changes protection refuses changed content control properties', () => {
-  const settings = '<w:documentProtection w:edit="trackedChanges" w:enforcement="1"/>';
-  const control = (pr: string, text: string) =>
-    `<w:p><w:r><w:t xml:space="preserve">Name: </w:t></w:r><w:sdt><w:sdtPr><w:id w:val="42"/>` +
-    `${pr}</w:sdtPr><w:sdtContent><w:r><w:t>${text}</w:t></w:r></w:sdtContent></w:sdt></w:p>`;
-  const cases = [
-    [control('<w:showingPlcHdr/>', 'Enter a name.'), control('', 'Jane Doe')],
-    [control('<w:lock w:val="contentLocked"/>', 'Jane Doe'), control('', 'Jane Doe')],
-  ] as const;
-  for (const [before, after] of cases) {
-    expect(
-      compare(buildDocx({ body: before, settings }), buildDocx({ body: after }))
-    ).toMatchObject({ ok: false, code: 'protected' });
-  }
-  // Without the protection the filled control compares.
-  expect(compared(buildDocx({ body: cases[0][0] }), buildDocx({ body: cases[0][1] })).ok).toBe(
-    true
-  );
-});
-
-test('tracked-changes protection covers earlier headers and controls that change id', () => {
-  const settings = '<w:documentProtection w:edit="trackedChanges" w:enforcement="1"/>';
-  const inline = (alias: string) =>
-    `<w:p><w:sdt><w:sdtPr><w:id w:val="42"/><w:alias w:val="${alias}"/></w:sdtPr>` +
-    `<w:sdtContent><w:r><w:t>Same text</w:t></w:r></w:sdtContent></w:sdt></w:p>`;
-  const body = breakAfter('One', '<w:headerReference w:type="default" r:id="rIdX9"/>') + p('Two');
-  const header = (alias: string, protect: boolean) =>
-    withEarlierHeader(
-      buildDocx({ body, headers: finalHeader, ...(protect ? { settings } : {}) }),
-      inline(alias)
-    );
-  expect(compare(header('A', true), header('B', false))).toMatchObject({
-    ok: false,
-    code: 'protected',
-  });
-  const block = (id: number, alias: string) =>
-    `<w:sdt><w:sdtPr><w:id w:val="${id}"/><w:alias w:val="${alias}"/></w:sdtPr>` +
-    `<w:sdtContent>${p('Same text')}</w:sdtContent></w:sdt>${p('After.')}`;
-  expect(
-    compare(buildDocx({ body: block(42, 'A'), settings }), buildDocx({ body: block(43, 'B') }))
-  ).toMatchObject({ ok: false, code: 'protected' });
-  // Controls without an id are checked by their place.
-  const unnamed = (alias: string) =>
-    `<w:sdt><w:sdtPr><w:alias w:val="${alias}"/></w:sdtPr>` +
-    `<w:sdtContent>${p('Same text')}</w:sdtContent></w:sdt>`;
-  expect(
-    compare(
-      buildDocx({ body: unnamed('Old') + p('After.'), settings }),
-      buildDocx({ body: unnamed('New') + p('After.') })
-    )
-  ).toMatchObject({ ok: false, code: 'protected' });
-  // Two controls that swap their properties keep their content, so the swap is caught.
-  const cell = (alias: string, text: string) =>
-    `<w:tc><w:sdt><w:sdtPr><w:alias w:val="${alias}"/></w:sdtPr>` +
-    `<w:sdtContent>${p(text)}</w:sdtContent></w:sdt></w:tc>`;
-  const row = (first: string, second: string) =>
-    `<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>` +
-    `<w:tr>${cell(first, 'One')}${cell(second, 'Two')}</w:tr></w:tbl>${p('After.')}`;
-  expect(
-    compare(buildDocx({ body: row('A', 'B'), settings }), buildDocx({ body: row('B', 'A') }))
-  ).toMatchObject({ ok: false, code: 'protected' });
-  // An inserted control with the original properties does not stand in for the changed one:
-  // after a reject only its empty shell is left.
-  const placeholder = (alias: string) =>
-    `<w:tc><w:sdt><w:sdtPr><w:alias w:val="${alias}"/><w:showingPlcHdr/></w:sdtPr>` +
-    `<w:sdtContent>${p('Type here')}</w:sdtContent></w:sdt></w:tc>`;
-  const cells = (...inner: string[]) =>
-    `<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>` +
-    `<w:tr>${inner.join('')}</w:tr></w:tbl>${p('After.')}`;
-  expect(
-    compare(
-      buildDocx({ body: cells(placeholder('A'), `<w:tc>${p('')}</w:tc>`), settings }),
-      buildDocx({ body: cells(placeholder('B'), placeholder('A')) })
-    )
-  ).toMatchObject({ ok: false, code: 'protected' });
-  // A control without an id has no identity, so any compare with one refuses, even a tracked
-  // insertion, and a placeholder of spaces cannot stand in for the changed control.
-  const inserted = `<w:sdt><w:sdtPr><w:alias w:val="Added"/></w:sdtPr><w:sdtContent>${p(
-    'Added text'
-  )}</w:sdtContent></w:sdt>`;
-  expect(
-    compare(
-      buildDocx({ body: unnamed('Old') + p('After.'), settings }),
-      buildDocx({ body: inserted + unnamed('Old') + p('After.') })
-    )
-  ).toMatchObject({ ok: false, code: 'protected' });
-  const spaces = (alias: string) =>
-    `<w:tc><w:sdt><w:sdtPr><w:alias w:val="${alias}"/><w:showingPlcHdr/></w:sdtPr>` +
-    `<w:sdtContent>${p('     ')}</w:sdtContent></w:sdt></w:tc>`;
-  expect(
-    compare(
-      buildDocx({ body: cells(spaces('A'), `<w:tc>${p('')}</w:tc>`), settings }),
-      buildDocx({ body: cells(spaces('B'), spaces('A')) })
-    )
-  ).toMatchObject({ ok: false, code: 'protected' });
-  // A control with no `w:sdtPr` has no id either, and the end formatting is a property too.
-  const endFormatted = (pr: string, rPr: string) =>
-    `<w:p><w:sdt>${pr}<w:sdtEndPr><w:rPr>${rPr}</w:rPr></w:sdtEndPr>` +
-    `<w:sdtContent><w:r><w:t>Same text</w:t></w:r></w:sdtContent></w:sdt></w:p>${p('After.')}`;
-  for (const pr of ['', '<w:sdtPr><w:id w:val="7"/></w:sdtPr>']) {
-    expect(
-      compare(
-        buildDocx({ body: endFormatted(pr, ''), settings }),
-        buildDocx({ body: endFormatted(pr, '<w:b/>') })
-      )
-    ).toMatchObject({ ok: false, code: 'protected' });
-  }
-  // Without protection the same compare records the insertion.
-  expect(
-    compared(
-      buildDocx({ body: unnamed('Old') + p('After.') }),
-      buildDocx({ body: inserted + unnamed('Old') + p('After.') })
-    ).revisionCount
-  ).toBeGreaterThan(0);
-  // A text change inside an unchanged control is tracked, so it compares.
-  const text = (words: string) =>
-    `<w:sdt><w:sdtPr><w:id w:val="42"/><w:alias w:val="A"/></w:sdtPr>` +
+  const control = (alias: string, words: string) =>
+    `<w:sdt><w:sdtPr><w:id w:val="42"/><w:alias w:val="${alias}"/></w:sdtPr>` +
     `<w:sdtContent>${p(words)}</w:sdtContent></w:sdt>${p('After.')}`;
-  expect(
-    compared(
-      buildDocx({ body: text('Old words'), settings }),
-      buildDocx({ body: text('New words') })
-    ).revisionCount
-  ).toBe(2);
+  const cases = [
+    // Only tracked differences: text in a control.
+    [{ body: control('A', 'Old words') }, { body: control('A', 'New words') }],
+    // A style definition and a control property, which have no tracked form.
+    [
+      { body: styled, extraStyles: STYLE('FF0000') },
+      { body: styled, extraStyles: STYLE('0000FF') },
+    ],
+    [{ body: control('A', 'Same') }, { body: control('B', 'Same') }],
+  ] as const;
+  for (const [base, revised] of cases) {
+    expect(compare(buildDocx({ ...base, settings }), buildDocx(revised))).toMatchObject({
+      ok: false,
+      code: 'protected',
+    });
+    // Without the protection each one compares.
+    expect(compared(buildDocx(base), buildDocx(revised)).changed).toBe(true);
+  }
 });
 
 test('a drawing path command named like a move is not a revision', () => {

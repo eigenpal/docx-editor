@@ -174,12 +174,12 @@ function compareOnce(
   unchecked: boolean,
   progress?: CompareProgress
 ): ComparePackagesResult {
-  if (protectedAgainstEdits(original, options.detectFormatChanges ?? true)) {
+  if (protectedAgainstEdits(original)) {
     return {
       ok: false,
       code: 'protected',
       message:
-        'The original document is protected against edits. A compare would rewrite its content or its tracked changes.',
+        'The original document is protected against edits. A compare writes some differences, such as style definitions or content control properties, without tracked changes.',
     };
   }
   // Before any work that scales with the documents, accepting their revisions included.
@@ -217,15 +217,6 @@ function compareOnce(
 
   // Before any revised content is serialized: it registers the revised list id map.
   const definitions = mergeDefinitions(basePkg, revisedPkg);
-  // Tracked-changes protection allows only tracked edits; a revised style definition is not one.
-  if (definitions.replacedStyles && enforcedProtection(original) === 'trackedChanges') {
-    return {
-      ok: false,
-      code: 'protected',
-      message:
-        'The original document allows only tracked changes, and the revised document changes a style definition, which has no tracked form.',
-    };
-  }
   const state = new CompareState();
   for (const [revisedId, outputId] of furnitureOutputIds(basePkg, revisedPkg))
     state.furnitureIds.set(revisedId, outputId);
@@ -269,7 +260,7 @@ function compareOnce(
   const stories: StoryOutput[] = [
     { partName: baseDoc.name, contentType: baseDoc.contentType, xml: documentXml, isNew: false },
     ...furniture.outputs,
-    ...definitions.outputs,
+    ...definitions,
   ];
   for (const kind of ['footnote', 'endnote'] as const) {
     const notes = compareNotes(basePkg, revisedPkg, kind, ctx);
@@ -317,8 +308,7 @@ function compareOnce(
       message: assembled.message,
     };
   }
-  const trackedOnly = enforcedProtection(original) === 'trackedChanges';
-  const check = selfCheck(assembled.pkg, basePkg, revisedPkg, trackedOnly);
+  const check = selfCheck(assembled.pkg, basePkg, revisedPkg);
   // A revision that cannot be decided fails the compare even when the text matches: a
   // formatting record in a locked control, say, leaves no way back to the original.
   const locked = /\b(?:locked|bound)\b/.test(check.guard ?? '');
@@ -330,15 +320,6 @@ function compareOnce(
       message:
         'The documents differ inside a content control that is locked or bound to data. ' +
         'Changes there cannot be accepted or rejected.',
-    };
-  }
-  // Tracked-changes protection allows only tracked edits; control properties are not one.
-  if (!check.controls) {
-    return {
-      ok: false,
-      code: 'protected',
-      message:
-        'The original document allows only tracked changes, and the revised document changes the properties of a content control, which have no tracked form.',
     };
   }
   if (!unchecked && (!check.accept || !check.reject || check.guard)) {
@@ -459,22 +440,19 @@ function replaceNoteIds(
 }
 
 const OFF_VALUES = new Set(['0', 'false', 'off']);
-/** The protection kinds a compare refuses outright. */
-const PROTECTED_EDITS = new Set(['readOnly', 'comments', 'forms']);
+/** The protection kinds a compare refuses. */
+const PROTECTED_EDITS = new Set(['readOnly', 'comments', 'forms', 'trackedChanges']);
 
 /**
  * Whether enforced document protection (`w:documentProtection`) forbids the compare. Read-only,
- * comments, and forms protection forbid content edits. Tracked-changes protection allows them
- * as tracked changes, which is all a compare writes, unless the original holds tracked changes
- * of its own: the compare would accept them.
+ * comments, and forms protection forbid content edits. Tracked-changes protection allows only
+ * tracked ones, and a compare also writes differences that have no tracked form: style and
+ * list definitions, content control properties, comments, and the parts that inserted content
+ * brings. A reject cannot take those back, so the compare refuses.
  */
-function protectedAgainstEdits(pkg: OoxmlPackage, formatChangesTracked: boolean): boolean {
+function protectedAgainstEdits(pkg: OoxmlPackage): boolean {
   const edit = enforcedProtection(pkg);
-  if (edit === undefined) return false;
-  if (PROTECTED_EDITS.has(edit)) return true;
-  if (edit !== 'trackedChanges') return false;
-  // Without format detection, formatting and section differences are written untracked.
-  return !formatChangesTracked || [...pkg.parts.values()].some((part) => hasRevision(part.root));
+  return edit !== undefined && PROTECTED_EDITS.has(edit);
 }
 
 /** The edit kind of the original's enforced document protection, if any. */

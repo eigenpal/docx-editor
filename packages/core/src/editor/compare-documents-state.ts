@@ -200,9 +200,12 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
     );
     if (protection.enforced && protection.edit === 'forms')
       return { ok: false, code: 'locked', reason: COMPARE_FORMS_PROTECTION_REASON };
-    // Comments protection forbids content edits. Tracked-changes protection allows tracked
-    // ones; the engine refuses when the original holds tracked changes it would accept.
-    if (protection.enforced && protection.edit === 'comments')
+    // Comments protection forbids content edits. Tracked-changes protection allows only
+    // tracked ones, and a compare also writes differences that have no tracked form.
+    if (
+      protection.enforced &&
+      (protection.edit === 'comments' || protection.edit === 'trackedChanges')
+    )
       return { ok: false, code: 'locked', reason: COMPARE_PROTECTION_REASON };
     return { ok: true };
   };

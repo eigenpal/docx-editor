@@ -407,84 +407,12 @@ export interface SelfCheckResult {
   /** Paragraph properties also agree in both directions. */
   readonly properties: boolean;
   /**
-   * Rejecting every revision gives each content control of the original its own properties
-   * back. A control takes the revised properties untracked, so this is false when they differ.
-   * Checked only with `checkControls`; true otherwise.
-   */
-  readonly controls: boolean;
-  /**
    * Why some revisions cannot be accepted or rejected, comma-separated: `locked` or `bound` for
    * a lock or a data binding on a content control, `undecided` for any other refusal or a
    * revision left behind. Any guard fails the check, whatever the text shows.
    */
   readonly guard?: string;
   readonly detail?: string;
-}
-
-/** The properties of a story's content controls by id, and how many controls have no id. */
-interface ControlProperties {
-  readonly byId: Map<string, string>;
-  readonly unnamed: number;
-}
-
-function controlProperties(parts: readonly OoxmlPart[]): ControlProperties {
-  const byId = new Map<string, string>();
-  let unnamed = 0;
-  const walk = (node: ElementNode, part: OoxmlPart) => {
-    if (node.localName === 'sdt' && node.namespaceUri === W_NS) {
-      // Both property elements: `w:sdtPr`, and `w:sdtEndPr` for the formatting of the end.
-      const shell = elementChildren(node).filter(
-        (child) => child.localName === 'sdtPr' || child.localName === 'sdtEndPr'
-      );
-      const properties = shell.find((child) => child.localName === 'sdtPr');
-      const id = properties && elementChildren(properties).find((c) => c.localName === 'id');
-      const value = id && attributeOf(id, 'val', W_NS);
-      // A control with no `w:sdtPr` has no id either.
-      if (value === undefined) unnamed++;
-      else if (!byId.has(value))
-        byId.set(
-          value,
-          shell.map((child) => serializeOoxmlPart({ ...part, root: child } as OoxmlPart)).join('')
-        );
-    }
-    for (const child of elementChildren(node))
-      if (child.localName !== 'sdtPr' && child.localName !== 'sdtEndPr') walk(child, part);
-  };
-  for (const part of parts) if (isElement(part.root)) walk(part.root, part);
-  return { byId, unnamed };
-}
-
-/**
- * `stories` (decided already, for an output) and the header and footer parts that only earlier
- * sections show, decided by a reject when they hold revisions.
- */
-function withEarlierFurniture(pkg: OoxmlPackage, stories: readonly OoxmlPart[]): OoxmlPart[] {
-  const out = [...stories];
-  const seen = new Set(storyParts(pkg).map((part) => part.name));
-  for (const section of resolveHeaderFooterResolutionBySection(pkg))
-    for (const slots of [section.headers, section.footers])
-      for (const slot of slots.values()) {
-        const part = slot.part;
-        if (seen.has(part.name)) continue;
-        seen.add(part.name);
-        out.push(hasRevision(part.root) ? decide(part, 'rejectAllRevisions', new Set()) : part);
-      }
-  return out;
-}
-
-/**
- * Whether every control of the original is back after a reject with the same properties, under
- * its id. A control without an id has no identity that shows which control owns which
- * properties after a reject, so with one in either document the answer is no.
- */
-function sameControls(
-  after: ControlProperties,
-  before: ControlProperties,
-  revised: ControlProperties
-): boolean {
-  if (before.unnamed > 0 || revised.unnamed > 0) return false;
-  for (const [id, properties] of before.byId) if (after.byId.get(id) !== properties) return false;
-  return true;
 }
 
 function firstDifference(a: string, b: string): string {
@@ -496,8 +424,7 @@ function firstDifference(a: string, b: string): string {
 export function selfCheck(
   output: OoxmlPackage,
   original: OoxmlPackage,
-  revised: OoxmlPackage,
-  checkControls = false
+  revised: OoxmlPackage
 ): SelfCheckResult {
   const guards = new Set<string>();
   const accepted = resolved(output, 'acceptAllRevisions', guards);
@@ -540,13 +467,6 @@ export function selfCheck(
     accept: text.accept,
     reject: text.reject,
     properties: properties.accept && properties.reject,
-    controls:
-      !checkControls ||
-      sameControls(
-        controlProperties(withEarlierFurniture(output, rejected)),
-        controlProperties(withEarlierFurniture(original, storyParts(original))),
-        controlProperties(withEarlierFurniture(revised, storyParts(revised)))
-      ),
     ...(guards.size > 0 ? { guard: [...guards].sort().join(',') } : {}),
     ...(detail === undefined ? {} : { detail }),
   };

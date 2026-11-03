@@ -128,17 +128,12 @@ test('a document that enforces protection is refused', () => {
   const changed = buildDocx({ body: p('Body text changed.') });
   const protectedBy = (edit: string, body = p('Body text.')) =>
     buildDocx({ body, settings: `<w:documentProtection w:edit="${edit}" w:enforcement="1"/>` });
-  for (const edit of ['readOnly', 'comments', 'forms']) {
+  // Tracked-changes protection too: a compare writes some differences without tracked changes.
+  for (const edit of ['readOnly', 'comments', 'forms', 'trackedChanges']) {
     const result = compare(protectedBy(edit), changed);
     expect(result.ok ? '' : result.code).toBe('protected');
     expect(result.ok ? '' : result.message).toContain('protected against edits');
   }
-  // Tracked-changes protection allows tracked changes, unless the compare would accept some.
-  expect(compare(protectedBy('trackedChanges'), changed).ok).toBe(true);
-  const tracked =
-    '<w:p><w:ins w:id="9" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>Body text.</w:t></w:r></w:ins></w:p>';
-  const withChanges = compare(protectedBy('trackedChanges', tracked), changed);
-  expect(withChanges.ok ? '' : withChanges.message).toContain('protected against edits');
   // Protection that is not enforced, or of a kind the format does not define, does not refuse.
   const off = buildDocx({
     body: p('Body text.'),
