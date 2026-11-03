@@ -134,11 +134,16 @@ describe('section vertical alignment before a pass ends', () => {
     });
 
   test('a page with a footnote stays top-aligned while the pass runs', () => {
-    const body =
+    // A pass reports only the pages whose reserves it has decided. After an edit on a later
+    // page, it keeps the decided footnote page from the previous pass and reports it.
+    const bodyWith = (edited: number) =>
       `<w:p><w:pPr>${SIZE}</w:pPr>${run('cited')}<w:r>${SIZE}<w:footnoteReference w:id="1"/></w:r></w:p>` +
       // A short first page: the note fits beside the body in every report.
       `<w:p><w:pPr>${SIZE}</w:pPr><w:r>${SIZE}<w:br w:type="page"/></w:r></w:p>` +
-      Array.from({ length: 4 }, (_, index) => p(`line ${index}`)).join('');
+      Array.from({ length: 40 }, (_, index) =>
+        p(index === edited ? 'edited' : `line ${index}`)
+      ).join('');
+    const body = bodyWith(-1);
     const note = (inner: string) => `<w:p><w:pPr>${SIZE}</w:pPr><w:r>${SIZE}${inner}</w:r></w:p>`;
     const entries = {
       '[Content_Types].xml': `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/></Types>`,
@@ -164,10 +169,21 @@ describe('section vertical alignment before a pass ends', () => {
       measurer,
       producer: 'section-vertical-align-progress-test',
     };
-    const { shown, final } = progressLayouts(source, createLayoutSession(), null, { notes });
+    const session = createLayoutSession();
+    const first = layoutSemanticDocument(source, 1, { measurer, geometry, session, notes });
+    expect(first.pages[0]!.footnotes).toBeDefined();
+    const edit = readOoxmlPart(
+      `<w:document xmlns:w="${W}"><w:body>${bodyWith(30)}${SECT}</w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'application/xml' }
+    );
+    if (!edit.ok) throw new Error(edit.reason);
+    const { shown, final } = progressLayouts(edit.part, session, first, { notes });
     expect(final.pages[0]!.footnotes).toBeDefined();
     expect(lineTops(final.pages[0]!)[0]).toBe(0);
     expect(shown.length).toBeGreaterThan(0);
-    for (const layout of shown) expect(lineTops(layout.pages[0]!)[0]).toBe(0);
+    for (const layout of shown) {
+      expect(layout.pages[0]!.footnotes).toBeDefined();
+      expect(lineTops(layout.pages[0]!)[0]).toBe(0);
+    }
   });
 });
