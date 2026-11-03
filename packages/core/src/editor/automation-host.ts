@@ -285,6 +285,7 @@ function sessionPort(
         : DEFAULT_FORMATTING_DISPLAY_MODE,
     collaborative: () => !!editor.surface?.collaborationSession(),
     ...compareEnginePort(editor),
+    setupOutsideUndo: () => true,
     allocationActor: () => editor.surface?.collaborationSession()?.identity.actorId,
     trackedRangeReplacement: () => !editor.surface?.collaborationSession(),
     replacementLanding: (paragraphId, start, end) =>

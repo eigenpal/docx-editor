@@ -211,3 +211,62 @@ test('removes the comments and footnotes whose anchors were in the table of cont
   expect(strFromU8(restored['word/comments.xml']!)).toContain('Check');
   expect(strFromU8(restored['word/footnotes.xml']!)).toContain('Row note');
 });
+
+test('undo of a removal or a refresh puts the caret back at the table of contents', () => {
+  const { editor, surface, container } = mount(DOCUMENT);
+  const ids = surface.session.paragraphIds();
+  const bodyParagraph = ids[ids.length - 1]!;
+  // The caret is elsewhere when the menu opens: a right-click does not move it into a TOC.
+  surface.setSelection({
+    anchor: { paragraphId: bodyParagraph, offset: 2 },
+    head: { paragraphId: bodyParagraph, offset: 2 },
+  });
+  const tocParagraphs = new Set(
+    detectBodyTocs(surface.session.part()).flatMap((toc) => [
+      toc.beginParagraphId,
+      toc.endParagraphId,
+      ...toc.resultParagraphIds,
+    ])
+  );
+  const nearToc = (paragraphId: string) => {
+    const order = surface.session.paragraphIds();
+    const at = order.indexOf(paragraphId);
+    const tocAt = order.findIndex((id) => tocParagraphs.has(id));
+    const tocEnd = order.length - 1 - [...order].reverse().findIndex((id) => tocParagraphs.has(id));
+    return at >= tocAt - 1 && at <= tocEnd + 1;
+  };
+
+  rightClick(container, 'Beta 1');
+  expect(editor.exec({ type: 'removeToc' }).ok).toBe(true);
+  expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+  const afterUndo = surface.state().selection.head.paragraphId;
+  expect(afterUndo).not.toBe(bodyParagraph);
+  expect(nearToc(afterUndo)).toBe(true);
+
+  surface.setSelection({
+    anchor: { paragraphId: bodyParagraph, offset: 2 },
+    head: { paragraphId: bodyParagraph, offset: 2 },
+  });
+  rightClick(container, 'Beta 1');
+  expect(editor.exec({ type: 'refreshToc' }).ok).toBe(true);
+  expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+  const afterRefreshUndo = surface.state().selection.head.paragraphId;
+  expect(afterRefreshUndo).not.toBe(bodyParagraph);
+  expect(nearToc(afterRefreshUndo)).toBe(true);
+  // Next to the table of contents, never inside its field result.
+  expect(editor.query({ type: 'isInsideToc', pos: 0 })).toBe(false);
+});
+
+test('a click after the menu closes ends its hold: a later refresh leaves the caret', () => {
+  const { editor, surface, container } = mount(DOCUMENT);
+  const ids = surface.session.paragraphIds();
+  const bodyParagraph = ids[ids.length - 1]!;
+  rightClick(container, 'Beta 1');
+  const caret = { paragraphId: bodyParagraph, offset: 2 };
+  surface.setSelection({ anchor: caret, head: caret });
+  const page = container.querySelector<HTMLElement>(`[data-paragraph-id="${bodyParagraph}"]`)!;
+  page.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+  expect(surface.state().contextTocId).toBeNull();
+  editor.exec({ type: 'refreshToc' });
+  expect(surface.state().selection.head).toEqual(caret);
+});

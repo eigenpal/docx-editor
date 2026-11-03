@@ -305,6 +305,7 @@ import { listDefinitionReads } from './list-level-geometry.ts';
 import { MIN_TABLE_COLUMN_WIDTH_TWIPS } from '../store/store/table-constraints.ts';
 import { createFieldLinkRegistry } from './surface-field-links.ts';
 import { createHyperlinkOps } from './surface-hyperlinks.ts';
+import { createJournaledApply } from './surface-journaled-apply.ts';
 import { createEquationInteraction, createEquationOps } from './surface-equations.ts';
 import { createSurfaceNavigation } from './surface-navigation.ts';
 import { drawingLinkByIdFromLayout } from './drawing-link-index.ts';
@@ -1321,6 +1322,7 @@ export function mountPaginatedSurface(
 
   const hyperlinks = createHyperlinkOps({
     session: gatedSession,
+    collaborative: !!collaborationSession,
     // A HYPERLINK field is not a tree node, so its link resolves from the layout projection
     // plus the field-link registry rather than the typed tree walk.
     layout: editingLayout,
@@ -1853,6 +1855,7 @@ export function mountPaginatedSurface(
     pendingFormats = null;
     if (!flushingTypeBuffer) typingHistory.noteForeignChange(modelChange);
     if (modelChange.origin === ORIGIN_IDS.mutationRemote) {
+      noteRemoteChange(modelChange);
       remoteCaret.note(
         selection,
         modelChange.dirty,
@@ -2417,17 +2420,17 @@ export function mountPaginatedSurface(
    * The engine paints no menu of its own. A host's context menu is one primitive with one
    * set of rows, icons, shortcut column and keyboard model; a second panel painted here
    * would be a second place for all of that to drift, and it looked like one too. What the
-   * engine owns is the part a host cannot work out for itself: a right-click does not move
-   * the caret, and a TOC refuses the caret entirely, so nothing in `selection` says which
-   * table of contents is under the pointer. That is what this publishes.
+   * engine owns is the part a host cannot work out for itself: a TOC refuses the caret, so
+   * nothing in `selection` says which table of contents is under the pointer. That is what
+   * this publishes.
    */
   function onTocContextMenu(event: MouseEvent): void {
     const toc = tocForGesture(event);
-    const reachable = toc && (canRefreshToc(toc.id) || !tocRemoval.removeTocRefusal(toc.id));
+    const reachable = toc && (canRefreshToc(toc.id) || !removal.removeTocRefusal(toc.id));
     setContextTocId(reachable ? toc.id : null);
   }
 
-  /** The TOC the last right-click addressed. Cleared by a right-click anywhere else. */
+  /** The TOC the last right-click addressed. Cleared by any other right-click or click. */
   let contextTocId: string | null = null;
 
   function setContextTocId(next: string | null): void {
@@ -2437,6 +2440,7 @@ export function mountPaginatedSurface(
   }
 
   function onTocRowClick(event: MouseEvent): void {
+    if (event.button === 0) setContextTocId(null);
     if (event.button !== 0 || (event.target as Element | null)?.closest('a.docx-hyperlink')) return;
     // A range ends a drag (see the link lane).
     if (!selectionsEqual(selection, collapsedAt(selection.head))) return;
@@ -2873,7 +2877,6 @@ export function mountPaginatedSurface(
 
   /** The main story. Named once so the automation entry cannot drift from the session default. */
   const BODY_STORY: StoryScope = Object.freeze({ kind: 'body' as const });
-  let collaborationOperationCounter = 0;
 
   /**
    * Commit ops, attributing them when the surface is suggesting.
@@ -2928,49 +2931,14 @@ export function mountPaginatedSurface(
     return result;
   }
 
-  /**
-   * Gate and attribute a write the way typing does, without the TOC-read-only rule.
-   *
-   * Refresh rewrites TOC result paragraphs, so `applyOps` would refuse the write that
-   * exists to update them. The collaboration gate and the actor still apply.
-   */
-  function applyJournaledOps(
-    ops: readonly TreeDocOp[],
-    selectionBefore?: Parameters<TreeDocxSession['applyTreeOps']>[1],
-    selectionAfter?: Parameters<TreeDocxSession['applyTreeOps']>[2],
-    scope: StoryScope = storyScope(),
-    packageEdits?: NonNullable<Parameters<TreeDocxSession['applyTreeOps']>[4]>['packageEdits']
-  ): ReturnType<TreeDocxSession['applyTreeOps']> {
-    const collaborationRefusal = collaborationSession?.gateOperations(ops, scope);
-    if (collaborationRefusal) {
-      return {
-        committed: false,
-        rejected: true,
-        opCount: 0,
-        reason: collaborationRefusal,
-      };
-    }
-    collaborationOperationCounter += 1;
-    // The group of the commit in flight, if any: it travels with the transaction into local
-    // history and, through the journal, to the collaboration undo authority.
-    const historyGroup = commitHistoryGroup.value;
-    return session.applyTreeOps(
-      ops,
-      selectionBefore,
-      selectionAfter,
-      scope,
-      collaborationSession
-        ? {
-            packageEdits,
-            origin: ORIGIN_IDS.mutationHuman,
-            actorId: collaborationSession.identity.actorId,
-            operationId: `${collaborationSession.identity.actorId}:${collaborationSession.sessionId}:browser:${collaborationOperationCounter}`,
-            recordsHistory: false,
-            historyToken: historyGroup,
-          }
-        : { packageEdits, historyToken: historyGroup }
-    );
-  }
+  const { apply: applyJournaledOps, noteRemoteChange } = createJournaledApply({
+    session,
+    collaboration: collaborationSession,
+    historyGroup: () => commitHistoryGroup.value,
+    defaultScope: () => storyScope(),
+    canRepair: () => !destroyed && editingMode !== 'view' && session.editable,
+    later: (task) => timers.setTimeout(fieldScope.wrap(task), 0),
+  });
 
   /**
    * Why a write would be refused right now, or null when it would be allowed.
@@ -4067,14 +4035,15 @@ export function mountPaginatedSurface(
     return result;
   }
 
-  const { canRefreshToc, removal: tocRemoval } = createTocCommands({
+  const { canRefreshToc, pointAtToc, removal } = createTocCommands({
     session,
     editingMode: () => editingMode,
     target: targetToc,
     writeRefusal: (ops) => writeRefusal(true, ops, false),
-    apply: (ops) => applyJournaledOps(ops, undefined, undefined, BODY_STORY),
+    apply: (ops, before) => applyJournaledOps(ops, before, undefined, BODY_STORY),
     removed: () => setContextTocId(null),
     select: (at) => setSelection(collapsedAt(at)),
+    pointedTocId: () => contextTocId,
     refuse: (reason, raw) => void (lastRejection = refuse(reason, raw)),
   });
 
@@ -4201,7 +4170,7 @@ export function mountPaginatedSurface(
     const op = insertTocOp();
     if (!op) return false;
     const existing = new Set(detectBodyTocs(session.part()).map((toc) => toc.id));
-    const inserted = applyJournaledOps([op], undefined, undefined, BODY_STORY);
+    const inserted = applyJournaledOps([op], selectionMark(), undefined, BODY_STORY);
     if (!inserted.committed) {
       lastRejection = refuse(
         inserted.reason ?? 'the table of contents could not be inserted',
@@ -4222,6 +4191,7 @@ export function mountPaginatedSurface(
     const sources = resolveTocSources(session.part(), outline, toc.instruction);
     if (!sources) return false;
     const outlineBlockIds = sources.map((entry) => entry.blockId);
+    const before = pointAtToc(toc);
 
     if (mode === 'entire') {
       const plan = planTocEntries(
@@ -4241,7 +4211,7 @@ export function mountPaginatedSurface(
             bookmarksToCreate: plan.bookmarksToCreate,
           },
         ],
-        undefined,
+        before,
         undefined,
         BODY_STORY
       );
@@ -4279,7 +4249,7 @@ export function mountPaginatedSurface(
       previousSignature = signature;
       const rewritten = applyJournaledOps(
         [{ op: 'rewriteTocPageNumbers', tocId: toc.id, updates }],
-        undefined,
+        before,
         undefined,
         BODY_STORY
       );
@@ -5121,7 +5091,7 @@ export function mountPaginatedSurface(
     canEditTextFormField: () => textFormInteraction?.canEdit() ?? false,
     editTextFormField: () => textFormInteraction?.edit() ?? false,
     refreshToc,
-    ...tocRemoval,
+    ...removal,
     refreshRefFieldResults,
     save: () => saveSurfaceDocument(surface, container, () => destroyed),
     saveSteps: () => saveSurfaceDocumentSteps(surface, container, () => destroyed),

@@ -227,6 +227,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       capabilities,
       collaborative: port.collaborative?.() ?? false,
       ...(port.compareDocuments ? { compareDocuments: port.compareDocuments } : {}),
+      setupOutsideUndo: port.setupOutsideUndo?.() ?? false,
       trackedRangeReplacement: port.trackedRangeReplacement?.() ?? true,
       // Read ONCE per batch: the formatting lanes must not answer one operation against
       // All Markup and the next against the resolved result.

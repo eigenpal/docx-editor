@@ -58,6 +58,18 @@ npm install @docx-editor.dev/editor-api @docx-editor.dev/core
 npm install @docx-editor.dev/fonts
 ```
 
+### Try a canary build
+
+Canary builds let you test fixes from the `main` branch before the next release. A canary publishes each night when `main` has unreleased changes that passed CI. Canaries have no support guarantee, so use them only to test.
+
+To install a canary, use the `canary` tag on every `@docx-editor.dev` package in your app:
+
+```bash
+npm install @docx-editor.dev/react@canary @docx-editor.dev/core@canary
+```
+
+A canary version has the form `2.35.0-canary.20261103032300.sha-b20ba9f`. The parts are the next release version, the UTC build time, and the source commit. The packages of one canary pin each other to that exact version, so install them from the same tag. Version ranges such as `^2.34.0` never select a canary.
+
 ## Mount the editor
 
 Import the component and the stylesheet once. This example creates an empty document:

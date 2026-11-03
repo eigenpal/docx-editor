@@ -156,8 +156,8 @@ export interface PaginatedSurfaceState {
   /**
    * The TOC the last right-click landed on, or null.
    *
-   * A right-click deliberately does not move the caret, and a TOC refuses the caret
-   * entirely, so `selection` can never say which table of contents the user is pointing at.
+   * A TOC refuses the caret entirely, so a right-click on one leaves the caret where it was
+   * and `selection` can never say which table of contents the user is pointing at.
    * This is how a host's context menu learns it. Surface chrome, not document state.
    */
   readonly contextTocId: string | null;

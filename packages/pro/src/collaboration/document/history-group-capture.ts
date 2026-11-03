@@ -19,10 +19,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type { HistoryGroup } from '@docx-editor.dev/core/store';
 import type * as Y from 'yjs';
 import {
+  historyGroupOfJournal,
+  isJournalOutsideUndo,
   registerUndoHistoryPosition,
   reportHistoryGroup,
+  type CanonicalPrimitiveJournal,
 } from '@docx-editor.dev/core/collaboration/replication';
 import { markGroupStep } from './history-undone.ts';
+import { publishOutsideUndo } from '../document-outside-undo.ts';
 
 type StackItem = Y.UndoManager['undoStack'][number];
 
@@ -99,6 +103,16 @@ export class HistoryGroupCapture {
       this.capturing = false;
       this.undoManager.captureTimeout = window;
     }
+  }
+
+  /**
+   * Publish one local journal: setup outside undo (see `isJournalOutsideUndo`), anything
+   * else as a frame of its history group.
+   */
+  captureJournal<T>(journal: CanonicalPrimitiveJournal, origin: unknown, publish: () => T): T {
+    return isJournalOutsideUndo(journal)
+      ? publishOutsideUndo(this.undoManager, origin, publish)
+      : this.capture(historyGroupOfJournal(journal), publish);
   }
 
   /** Forget the open gesture: undo, redo and a refused journal are boundaries. */

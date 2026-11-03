@@ -44,7 +44,11 @@ import {
 import { IMAGE_WRAP_TARGETS, type ImageWrapTarget } from '../store/package/drawing-projection.ts';
 import type { ReviewAuthorInfo } from '../output/revision-presentation.ts';
 
-import { NO_COMMENT_DRAFT_VIEW, commentDraftRequestsOf } from './comment-draft-chrome.ts';
+import {
+  NO_COMMENT_DRAFT_VIEW,
+  commentDraftRequestsOf,
+  commentWordAtCaret,
+} from './comment-draft-chrome.ts';
 import { LINK_PROBE, NO_LINK_VIEW, linkControlState, linkRequestsOf } from './link-chrome.ts';
 
 /** Instance-only surface on the concrete facade — not part of the public `Editor` contract. */
@@ -367,7 +371,9 @@ function addCommentState(editor: Editor): ToolbarCommandState {
     return refuse('the document is open for viewing');
   }
   if (!commentDraftRequestsOf(editor)?.canOpen()) return refuse(NO_COMMENT_DRAFT_VIEW);
-  if (editor.getSelectionPlacement() === null) return refuse('a comment needs a selected range');
+  if (editor.getSelectionPlacement() === null && !commentWordAtCaret(editor)) {
+    return refuse('a comment needs a selected range');
+  }
   return { id, enabled: true, disabledReason: null, active: false };
 }
 
@@ -853,9 +859,14 @@ export function runToolbarCommand(
         reason: state.disabledReason ?? NO_COMMENT_DRAFT_VIEW,
       };
     }
-    return commentDraftRequestsOf(editor)?.open()
-      ? { ok: true, changed: false }
-      : { ok: false, code: 'unsupported', reason: NO_COMMENT_DRAFT_VIEW };
+    // A caret inside a word comments on that word: select it, then open the draft on it.
+    const word = editor.getSelectionPlacement() === null ? commentWordAtCaret(editor) : null;
+    const surface = word ? surfaceOf(editor) : null;
+    const caret = surface?.state().selection;
+    if (word) surface?.setSelection({ anchor: word.from, head: word.to });
+    if (commentDraftRequestsOf(editor)?.open()) return { ok: true, changed: false };
+    if (caret) surface?.setSelection(caret); // No draft opened: the caret goes back.
+    return { ok: false, code: 'unsupported', reason: NO_COMMENT_DRAFT_VIEW };
   }
   if (id === 'contentControl.showAll') {
     const surface = surfaceOf(editor);
