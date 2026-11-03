@@ -444,6 +444,26 @@ test('tracked-changes protection covers earlier headers and controls that change
   expect(
     compare(buildDocx({ body: block(42, 'A'), settings }), buildDocx({ body: block(43, 'B') }))
   ).toMatchObject({ ok: false, code: 'protected' });
+  // Controls without an id are checked by their place.
+  const unnamed = (alias: string) =>
+    `<w:sdt><w:sdtPr><w:alias w:val="${alias}"/></w:sdtPr>` +
+    `<w:sdtContent>${p('Same text')}</w:sdtContent></w:sdt>`;
+  expect(
+    compare(
+      buildDocx({ body: unnamed('Old') + p('After.'), settings }),
+      buildDocx({ body: unnamed('New') + p('After.') })
+    )
+  ).toMatchObject({ ok: false, code: 'protected' });
+  // A new control before an unchanged one is a tracked insertion.
+  const inserted = `<w:sdt><w:sdtPr><w:alias w:val="Added"/></w:sdtPr><w:sdtContent>${p(
+    'Added text'
+  )}</w:sdtContent></w:sdt>`;
+  expect(
+    compared(
+      buildDocx({ body: unnamed('Old') + p('After.'), settings }),
+      buildDocx({ body: inserted + unnamed('Old') + p('After.') })
+    ).revisionCount
+  ).toBeGreaterThan(0);
   // A text change inside an unchanged control is tracked, so it compares.
   const text = (words: string) =>
     `<w:sdt><w:sdtPr><w:id w:val="42"/><w:alias w:val="A"/></w:sdtPr>` +

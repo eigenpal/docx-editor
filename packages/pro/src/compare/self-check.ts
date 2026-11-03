@@ -421,21 +421,28 @@ export interface SelfCheckResult {
   readonly detail?: string;
 }
 
-/** The properties of every content control with an id, by id, in story order. */
-function controlProperties(parts: readonly OoxmlPart[]): Map<string, string> {
-  const out = new Map<string, string>();
+/** The properties of a story's content controls: by id, and a count of those without one. */
+interface ControlProperties {
+  readonly byId: Map<string, string>;
+  readonly unnamed: Map<string, number>;
+}
+
+function controlProperties(parts: readonly OoxmlPart[]): ControlProperties {
+  const byId = new Map<string, string>();
+  const unnamed = new Map<string, number>();
   const walk = (node: ElementNode, part: OoxmlPart) => {
     if (node.localName === 'sdtPr' && node.namespaceUri === W_NS) {
       const id = elementChildren(node).find((child) => child.localName === 'id');
       const value = id && attributeOf(id, 'val', W_NS);
-      if (value !== undefined && !out.has(value))
-        out.set(value, serializeOoxmlPart({ ...part, root: node } as OoxmlPart));
+      const xml = serializeOoxmlPart({ ...part, root: node } as OoxmlPart);
+      if (value === undefined) unnamed.set(xml, (unnamed.get(xml) ?? 0) + 1);
+      else if (!byId.has(value)) byId.set(value, xml);
       return;
     }
     for (const child of elementChildren(node)) walk(child, part);
   };
   for (const part of parts) if (isElement(part.root)) walk(part.root, part);
-  return out;
+  return { byId, unnamed };
 }
 
 /**
@@ -456,9 +463,15 @@ function withEarlierFurniture(pkg: OoxmlPackage, stories: readonly OoxmlPart[]):
   return out;
 }
 
-/** Whether every control of the original is back, with the same properties, after a reject. */
-function sameControls(after: Map<string, string>, before: Map<string, string>): boolean {
-  for (const [id, properties] of before) if (after.get(id) !== properties) return false;
+/**
+ * Whether every control of the original is back after a reject with the same properties. A
+ * control with an id must keep them under that id; the properties of controls without one
+ * must all still occur, wherever they are (an inserted control may stand before them).
+ */
+function sameControls(after: ControlProperties, before: ControlProperties): boolean {
+  for (const [id, properties] of before.byId) if (after.byId.get(id) !== properties) return false;
+  for (const [properties, count] of before.unnamed)
+    if ((after.unnamed.get(properties) ?? 0) < count) return false;
   return true;
 }
 
