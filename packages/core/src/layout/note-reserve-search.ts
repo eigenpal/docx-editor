@@ -25,7 +25,7 @@ import {
   type ReserveWalkRecord,
   type ReserveWalkRound,
 } from './note-reserve-walk.ts';
-import type { PageRecord, SemanticLayout } from './semantic-records.ts';
+import type { BlockFragmentRecord, PageRecord, SemanticLayout } from './semantic-records.ts';
 import type { DocumentSection } from './section-properties.ts';
 import { W14_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import {
@@ -255,14 +255,33 @@ function pagesHolding(
   let first = -1;
   let lastPage = -1;
   layout.pages.forEach((page, index) => {
-    const holds = page.fragments.some(
-      (fragment) => fragment.kind === 'paragraph' && paragraphIds.has(fragment.paragraphId)
-    );
-    if (!holds) return;
+    if (!holdsParagraph(page.fragments, paragraphIds, 0)) return;
     if (first < 0) first = index;
     lastPage = index;
   });
   return first < 0 ? null : [first, lastPage];
+}
+
+/** Fragments, table cell content included, hold a fragment of one of `paragraphIds`. */
+function holdsParagraph(
+  fragments: readonly BlockFragmentRecord[],
+  paragraphIds: ReadonlySet<string>,
+  depth: number
+): boolean {
+  // Past the depth bound, count the page as holding one: a wider changed range is only slower.
+  if (depth > MAX_RECORD_DEPTH) return true;
+  for (const fragment of fragments) {
+    if (fragment.kind === 'paragraph') {
+      if (paragraphIds.has(fragment.paragraphId)) return true;
+      continue;
+    }
+    for (const row of fragment.rows) {
+      for (const cell of row.cells) {
+        if (holdsParagraph(cell.blocks, paragraphIds, depth + 1)) return true;
+      }
+    }
+  }
+  return false;
 }
 
 /** How many blocks past its target a round lays out to end at a section end. */
@@ -327,8 +346,28 @@ function isPageFieldSpan(record: Record<string, unknown>): boolean {
  * page that shows it.
  */
 function sameBody(page: PageRecord | undefined, previous: PageRecord): boolean {
-  if (!page) return false;
+  if (!page || !sameFrame(page, previous)) return false;
   return page.fragments === previous.fragments || sameRecord(page.fragments, previous.fragments);
+}
+
+/**
+ * Two pages have the same sheet size and margins. The note area limit comes from them, so a
+ * page size edit changes a page's reserve also when its body stays the same. The sheet's
+ * position on the canvas is not compared: it moves with every page above it.
+ */
+function sameFrame(page: PageRecord, previous: PageRecord): boolean {
+  const a = page.box;
+  const b = previous.box;
+  const ac = page.contentBox;
+  const bc = previous.contentBox;
+  return (
+    a.width === b.width &&
+    a.height === b.height &&
+    ac.width === bc.width &&
+    ac.height === bc.height &&
+    ac.x - a.x === bc.x - b.x &&
+    ac.y - a.y === bc.y - b.y
+  );
 }
 
 /**
