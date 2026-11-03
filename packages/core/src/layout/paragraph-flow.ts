@@ -236,7 +236,9 @@ export function breakParagraph(
   const firstLineOffset = indentOpen ? (flow?.firstLineOffset ?? 0) : 0;
   const markerBaselineFloor = slotOpen ? (flow?.firstLineMinimumBaseline ?? 0) : 0;
   const markerAscent = slotOpen ? Math.max(0, flow?.firstLineMarkerAscent ?? 0) : 0;
-  const typography = flow?.typography ?? resolveCjkTypography(paragraphProperties());
+  const typography =
+    flow?.typography ??
+    resolveCjkTypography(paragraphProperties(), undefined, flow?.markRunProperties);
   const visiblePieces = splitAtSpacedSoundMarks(
     splitAtAutomaticSpacing(
       returnUncoveredHintedText(
