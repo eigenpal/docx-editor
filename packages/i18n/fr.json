@@ -1196,6 +1196,15 @@
       "closed": "La boîte de dialogue a été fermée avant la comparaison.",
       "empty": "Le fichier choisi est vide.",
       "failed": "Impossible de comparer les documents."
+    },
+    "reasons": {
+      "headerFooter": "Les documents diffèrent par un en-tête ou un pied de page que les sections des deux documents partagent différemment.",
+      "lockedContent": "Les documents diffèrent dans un contrôle de contenu verrouillé ou lié à des données : ces modifications ne peuvent pas être révisées. Supprimez le verrou ou le lien, puis comparez de nouveau.",
+      "packageStructure": "Le document ouvert ne peut pas contenir le résultat de cette comparaison.",
+      "unrecordedSettings": "Le document révisé ajoute des paramètres de section ou de tableau que le refus des modifications ne pourrait pas annuler.",
+      "unresolvedRevisions": "Un document contient des modifications suivies qui ne peuvent pas être acceptées. Acceptez-les ou refusez-les dans ce document, puis comparez de nouveau.",
+      "untrackedContent": "Les documents diffèrent par un contenu qui ne peut pas être affiché sous forme de modifications suivies, comme un fichier incorporé.",
+      "unverified": "Le résultat de la comparaison ne reproduirait pas les deux documents. Il n'a donc pas été appliqué."
     }
   }
 }

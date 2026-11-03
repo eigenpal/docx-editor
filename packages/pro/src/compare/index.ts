@@ -10,6 +10,7 @@ import { comparePackages } from './compare-documents.ts';
 export { compareDocuments } from './compare-documents.ts';
 export type {
   CompareDocumentsErrorCode,
+  CompareDocumentsRefusalReason,
   CompareDocumentsOptions,
   CompareDocumentsResult,
 } from './compare-types.ts';

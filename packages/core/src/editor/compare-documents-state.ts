@@ -11,6 +11,7 @@ import type {
   CompareDocumentsEngineOptions,
   CompareDocumentsErrorCode,
   CompareDocumentsProgress,
+  CompareDocumentsRefusalReason,
 } from '../contracts/document-compare.ts';
 import {
   readOoxmlPackage,
@@ -53,7 +54,12 @@ const APPLYING_FRACTION = 0.95;
 type CompareExec = ExecResult & {
   readonly revisionCount?: number;
   readonly engineCode?: CompareDocumentsErrorCode;
+  readonly engineReason?: CompareDocumentsRefusalReason;
 };
+
+/** The outcome's `reason` for an engine refusal that names one. */
+const reasonOf = (result: CompareExec) =>
+  result.engineReason === undefined ? {} : { reason: result.engineReason };
 
 /** The stable code a dialog translates for one refused compare. */
 function refusalOf(
@@ -200,11 +206,16 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
     };
   };
 
-  const engineRefusal = (result: { code: CompareDocumentsErrorCode; message: string }) => ({
+  const engineRefusal = (result: {
+    code: CompareDocumentsErrorCode;
+    reason?: CompareDocumentsRefusalReason;
+    message: string;
+  }) => ({
     ok: false as const,
     code: ENGINE_EXEC_CODES[result.code] ?? 'invalidArgs',
     reason: result.message,
     engineCode: result.code,
+    ...(result.reason === undefined ? {} : { engineReason: result.reason }),
   });
 
   /** Install a compare result as one package undo unit. */
@@ -320,6 +331,7 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
             return {
               ok: false,
               code: refusalOf(result, result.engineCode),
+              ...reasonOf(result),
               message: result.reason,
             };
           const revisionCount = result.revisionCount ?? 0;
@@ -423,6 +435,7 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
         compareDocuments: {
           ok: false,
           code: refusalOf(result, result.engineCode),
+          ...reasonOf(result),
           message: result.reason,
         },
       };

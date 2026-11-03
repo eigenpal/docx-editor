@@ -149,7 +149,8 @@ test('a header the revised earlier section adds over an inherited one is refused
     date: DATE,
   });
   expect(result.ok).toBe(false);
-  if (!result.ok) expect(result.code).toBe('unsupportedContent');
+  if (!result.ok)
+    expect(result).toMatchObject({ code: 'unsupportedContent', reason: 'headerFooter' });
 });
 
 test('block content controls that go are compared: their content is deleted, their shells stay', () => {

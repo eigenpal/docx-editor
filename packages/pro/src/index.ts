@@ -42,6 +42,7 @@ export {
 export {
   compareDocuments,
   type CompareDocumentsErrorCode,
+  type CompareDocumentsRefusalReason,
   type CompareDocumentsOptions,
   type CompareDocumentsResult,
 } from './compare/index.ts';

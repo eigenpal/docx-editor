@@ -43,6 +43,7 @@ export type CompareDocumentsBackgroundResult = {
     readonly code: CompareDocumentsErrorCode;
     readonly message: string;
     readonly ok: false;
+    readonly reason?: CompareDocumentsRefusalReason;
 };
 
 // @public
@@ -81,6 +82,7 @@ export type CompareDocumentsEngineResult = {
     readonly code: CompareDocumentsErrorCode;
     readonly message: string;
     readonly ok: false;
+    readonly reason?: CompareDocumentsRefusalReason;
 };
 
 // @public
@@ -123,6 +125,23 @@ export interface CompareDocumentsProgress {
     readonly fraction: number;
     readonly phase: CompareDocumentsPhase;
 }
+
+// @public
+export type CompareDocumentsRefusalReason =
+/** The documents differ inside a content control that is locked or bound to data. */
+'lockedContent'
+/** A document holds tracked changes that cannot be accepted, so its final state is unknown. */
+| 'unresolvedRevisions'
+/** The documents differ in content with no tracked-change form, such as an embedded file. */
+| 'untrackedContent'
+/** The revised document adds section or table settings that a reject cannot restore. */
+| 'unrecordedSettings'
+/** A header or footer of an earlier section cannot be paired with one of the original. */
+| 'headerFooter'
+/** The result needs a part type that the original document does not declare. */
+| 'packageStructure'
+/** The result does not reproduce both documents when all changes are accepted or rejected. */
+| 'unverified';
 
 // @public
 export interface EditorModule {

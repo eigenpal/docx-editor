@@ -267,6 +267,7 @@ function compareOnce(
     return {
       ok: false,
       code: 'unsupportedContent',
+      reason: 'untrackedContent',
       message:
         'The documents differ in block content that has no tracked-change form, such as an embedded file chunk.',
     };
@@ -275,6 +276,7 @@ function compareOnce(
     return {
       ok: false,
       code: 'unsupportedContent',
+      reason: 'headerFooter',
       message:
         'A header or footer that several sections of the original share has different content in those sections of the revised document.',
     };
@@ -283,6 +285,7 @@ function compareOnce(
     return {
       ok: false,
       code: 'unsupportedContent',
+      reason: 'unrecordedSettings',
       message:
         'The revised document adds section or table settings, such as page borders, that a tracked change cannot restore on reject.',
     };
@@ -293,12 +296,20 @@ function compareOnce(
     revisedPkg,
     mergeComments(basePkg, revisedPkg, stories)
   );
-  if (!assembled.ok) return { ok: false, code: 'unsupportedContent', message: assembled.message };
+  if (!assembled.ok) {
+    return {
+      ok: false,
+      code: 'unsupportedContent',
+      reason: 'packageStructure',
+      message: assembled.message,
+    };
+  }
   const check = selfCheck(assembled.pkg, basePkg, revisedPkg);
   if (!unchecked && (!check.accept || !check.reject) && check.guard) {
     return {
       ok: false,
       code: 'unsupportedContent',
+      reason: 'lockedContent',
       message:
         'The documents differ inside a content control that is locked or bound to data. ' +
         'Changes there cannot be accepted or rejected.',
@@ -308,6 +319,7 @@ function compareOnce(
     return {
       ok: false,
       code: 'unsupportedContent',
+      reason: 'unverified',
       message: `The compare result does not reproduce both documents (${check.detail ?? ''}).`,
     };
   }
@@ -456,6 +468,7 @@ function unacceptable(side: 'original' | 'revised'): ComparePackagesResult {
   return {
     ok: false,
     code: 'unsupportedContent',
+    reason: 'unresolvedRevisions',
     message: `The ${side} document holds tracked changes that cannot be accepted, so its final state is unknown.`,
   };
 }

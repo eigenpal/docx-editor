@@ -1196,6 +1196,15 @@
       "closed": "İletişim kutusu karşılaştırmadan önce kapatıldı.",
       "empty": "Seçilen dosya boş.",
       "failed": "Belgeler karşılaştırılamadı."
+    },
+    "reasons": {
+      "headerFooter": "Belgeler, iki belgenin bölümlerinin farklı şekilde paylaştığı bir üst bilgi veya alt bilgide farklılık gösteriyor.",
+      "lockedContent": "Belgeler, kilitli veya veriye bağlı bir içerik denetiminin içinde farklılık gösteriyor; bu nedenle oradaki değişiklikler gözden geçirilemez. Kilidi veya bağlantıyı kaldırıp yeniden karşılaştırın.",
+      "packageStructure": "Açık belge bu karşılaştırmanın sonucunu tutamaz.",
+      "unrecordedSettings": "Düzeltilmiş belge, değişiklikleri reddederek geri alınamayacak bölüm veya tablo ayarları ekliyor.",
+      "unresolvedRevisions": "Bir belge, kabul edilemeyen izlenen değişiklikler içeriyor. Bunları o belgede kabul edin veya reddedin, ardından yeniden karşılaştırın.",
+      "untrackedContent": "Belgeler, gömülü bir dosya gibi izlenen değişiklik olarak gösterilemeyen içerikte farklılık gösteriyor.",
+      "unverified": "Karşılaştırma sonucu iki belgeyi de yeniden üretmeyeceği için uygulanmadı."
     }
   }
 }

@@ -6,6 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
 import {
   COMPARE_DOCUMENTS_ACCEPT,
+  compareDocumentsErrorKey,
   type CompareDocumentsDialog,
   type CompareDocumentsDialogHost,
 } from '@docx-editor.dev/core/editor';
@@ -20,9 +21,9 @@ export function createCompareDocumentsDialog(
   let dialog: HTMLDialogElement | null = null;
   let opener: HTMLElement | null = null;
   const fallback = createT(en);
+  const translate = (full: string) => host.translate?.(full) ?? fallback(full as TranslationKey);
   const t = (key: string, values?: Record<string, string>) => {
-    const full = `compareDocuments.${key}`;
-    const text = host.translate?.(full) ?? fallback(full as TranslationKey);
+    const text = translate(`compareDocuments.${key}`);
     return values
       ? text.replace(/\{(\w+)\}/g, (match, name: string) => values[name] ?? match)
       : text;
@@ -161,9 +162,8 @@ export function createCompareDocumentsDialog(
         if (outcome.ok) {
           notice.textContent = t('noDifferences');
           // Nothing remains to cancel.
-          cancel.textContent =
-            host.translate?.('common.close') ?? fallback('common.close' as TranslationKey);
-        } else error.textContent = t(`errors.${outcome.code}`);
+          cancel.textContent = translate('common.close');
+        } else error.textContent = translate(compareDocumentsErrorKey(outcome));
         setBusy(false);
       });
 

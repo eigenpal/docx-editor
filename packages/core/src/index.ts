@@ -162,7 +162,10 @@ export type {
   CompareDocumentsOutcome,
   CompareDocumentsRequest,
 } from './contracts/compare-documents.ts';
-export { COMPARE_DOCUMENTS_ACCEPT } from './contracts/compare-documents.ts';
+export {
+  COMPARE_DOCUMENTS_ACCEPT,
+  compareDocumentsErrorKey,
+} from './contracts/compare-documents.ts';
 
 // ─── Capability modules (what `@docx-editor.dev/pro` implements) ─────────────
 export type {
@@ -171,6 +174,7 @@ export type {
   CompareDocumentsBackgroundResult,
   CompareDocumentsEngine,
   CompareDocumentsErrorCode,
+  CompareDocumentsRefusalReason,
   CompareDocumentsEngineOptions,
   CompareDocumentsEngineResult,
   CompareDocumentsPhase,

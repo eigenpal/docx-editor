@@ -79,6 +79,8 @@ editor.attach(container);
 To compare without the dialog, for example from your own file picker, run the `compareDocuments` command:
 
 ```ts
+import { compareDocumentsErrorKey } from '@docx-editor.dev/core/editor';
+
 const result = editor.exec({
   type: 'compareDocuments',
   revised: revisedBytes,
@@ -87,13 +89,13 @@ const result = editor.exec({
 });
 const outcome = result.compareDocuments;
 if (!outcome?.ok) {
-  showMessage(t(`compareDocuments.errors.${outcome?.code ?? 'failed'}`));
+  showMessage(t(compareDocumentsErrorKey(outcome ?? { code: 'failed' })));
 } else if (!outcome.changed) {
   showMessage(t('compareDocuments.noDifferences'));
 }
 ```
 
-The result's `compareDocuments` field holds the outcome of every `compareDocuments` command. A refused compare carries a `code`, such as `tooLarge` or `protected`. The `compareDocuments.errors.*` keys of `@docx-editor.dev/i18n` translate every code. A successful compare reports `changed` and `revisionCount`:
+The result's `compareDocuments` field holds the outcome of every `compareDocuments` command. A refused compare carries a `code`, such as `tooLarge` or `protected`, and for `unsupportedContent` a `reason`. The `compareDocuments.errors.*` and `compareDocuments.reasons.*` keys of `@docx-editor.dev/i18n` translate them, and `compareDocumentsErrorKey` picks the right key. A successful compare reports `changed` and `revisionCount`:
 
 - `changed` is `false` when the documents have no differences. Nothing is recorded.
 - `revisionCount` counts review items, as `revisions` collections and the review pane list them, in the body, headers, footers, and notes. A replaced word counts a deletion and an insertion.
@@ -141,7 +143,7 @@ if (!result.ok) console.error(result.code, result.message);
 else if (result.changed) await writeFile('redline.docx', result.bytes);
 ```
 
-The function checks every result before it returns it: accepting all changes must give the revised text, and rejecting all changes must give the original text. A result that fails the check is not returned; the function refuses with `unsupportedContent` instead. It refuses with `invalidOriginal` or `invalidRevised` for a file it cannot read, with `tooLarge` for documents over its size limit, and with `invalidOptions` for an option of the wrong type, such as a `date` that is not a valid date. If you omit `authorName`, or it is empty, the revisions carry the revised document's last author. The function refuses with a code and never throws for these cases. Translate a code with the same `compareDocuments.errors.*` keys the editor uses.
+The function checks every result before it returns it: accepting all changes must give the revised text, and rejecting all changes must give the original text. A result that fails the check is not returned; the function refuses with `unsupportedContent` instead. It refuses with `invalidOriginal` or `invalidRevised` for a file it cannot read, with `tooLarge` for documents over its size limit, and with `invalidOptions` for an option of the wrong type, such as a `date` that is not a valid date. If you omit `authorName`, or it is empty, the revisions carry the revised document's last author. The function refuses with a code and never throws for these cases. An `unsupportedContent` refusal also names its `reason`. To translate a refusal, pass it to `compareDocumentsErrorKey` and use the key with `@docx-editor.dev/i18n`, as the editor does.
 
 The function refuses with `protected` when the original document enforces protection that a compare would break:
 
@@ -162,4 +164,13 @@ The compare also refuses with `unsupportedContent` in these cases:
 - An earlier section of the revised document shows its own header or footer where the original's section inherits one from the section before it. Rejecting the change would show an empty header or footer there.
 - The result needs a new relationship part, and the original document declares no content type for relationship parts.
 
-The dialog shows the message for the refusal code, and the `compareDocuments` command returns the code. `Document.compareFromBase64` rejects `context.sync()` with a stable error code instead of the message: `NotImplemented` for these refusals and for `protected`, `InvalidArgument` for a revised file it cannot read, and `NotSupported` for documents over the size limit. The error's `debugInfo.innerError.code` names the cause, such as `edit.protected-content` or `edit.unsupported-content`.
+An `unsupportedContent` refusal also carries a `reason` that names its case: `lockedContent`, `unresolvedRevisions`, `untrackedContent`, `unrecordedSettings`, `headerFooter`, `packageStructure`, or `unverified`. The dialog shows the message for the reason when there is one, else the message for the code. The `compareDocuments` command and `compareDocuments()` return both. If you build your own dialog, `compareDocumentsErrorKey(outcome)` gives the `@docx-editor.dev/i18n` key of that message:
+
+```ts
+import { compareDocumentsErrorKey } from '@docx-editor.dev/core/editor';
+
+const outcome = await session.apply({ revised });
+if (!outcome.ok) setError(t(compareDocumentsErrorKey(outcome)));
+```
+
+`Document.compareFromBase64` rejects `context.sync()` with a stable error code instead of the message: `NotImplemented` for these refusals and for `protected`, `InvalidArgument` for a revised file it cannot read, and `NotSupported` for documents over the size limit. The error's `debugInfo.innerError.code` names the cause, such as `edit.protected-content` or `edit.unsupported-content`.

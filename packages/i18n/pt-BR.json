@@ -1196,6 +1196,15 @@
       "closed": "A caixa de diálogo foi fechada antes da comparação.",
       "empty": "O arquivo escolhido está vazio.",
       "failed": "Não foi possível comparar os documentos."
+    },
+    "reasons": {
+      "headerFooter": "Os documentos diferem em um cabeçalho ou rodapé que as seções dos dois documentos compartilham de formas diferentes.",
+      "lockedContent": "Os documentos diferem dentro de um controle de conteúdo bloqueado ou vinculado a dados, então essas alterações não podem ser revisadas. Remova o bloqueio ou o vínculo e compare novamente.",
+      "packageStructure": "O documento aberto não pode conter o resultado desta comparação.",
+      "unrecordedSettings": "O documento revisado adiciona configurações de seção ou de tabela que não poderiam ser desfeitas ao rejeitar as alterações.",
+      "unresolvedRevisions": "Um documento contém alterações controladas que não podem ser aceitas. Aceite-as ou rejeite-as nesse documento e compare novamente.",
+      "untrackedContent": "Os documentos diferem em conteúdo que não pode ser mostrado como alterações controladas, como um arquivo incorporado.",
+      "unverified": "O resultado da comparação não reproduziria os dois documentos, por isso não foi aplicado."
     }
   }
 }

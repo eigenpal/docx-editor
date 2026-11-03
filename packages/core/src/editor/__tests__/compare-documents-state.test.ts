@@ -16,8 +16,14 @@ import type {
   EditorModule,
   ReviewModuleContribution,
 } from '../../contracts/modules.ts';
-import type { CompareDocumentsDialogSession } from '../../contracts/compare-documents.ts';
-import type { CompareDocumentsErrorCode } from '../../contracts/document-compare.ts';
+import {
+  compareDocumentsErrorKey,
+  type CompareDocumentsDialogSession,
+} from '../../contracts/compare-documents.ts';
+import type {
+  CompareDocumentsErrorCode,
+  CompareDocumentsRefusalReason,
+} from '../../contracts/document-compare.ts';
 import en from '../../../../i18n/en.json' with { type: 'json' };
 import { PRO_REVIEW_REASON } from '../opening-editing-mode.ts';
 import { COMPARE_COLLABORATION_REASON } from '../compare-documents-state.ts';
@@ -325,6 +331,33 @@ describe('compare documents dialog session', () => {
     });
   });
 
+  test('an engine refusal reason reaches the command and the dialog session', async () => {
+    const refusal = {
+      ok: false as const,
+      code: 'unsupportedContent' as const,
+      reason: 'lockedContent' as const,
+      message: 'locked',
+    };
+    const editor = mount([reviewModule({ compareDocuments: () => refusal })]);
+    expect(editor.exec({ type: 'compareDocuments', revised: docx('x') })).toMatchObject({
+      compareDocuments: { ok: false, code: 'unsupportedContent', reason: 'lockedContent' },
+    });
+    let session: CompareDocumentsDialogSession | undefined;
+    editor.setCompareDocumentsChrome({ onRequest: (s) => (session = s) });
+    editor.exec({ type: 'openCompareDocumentsDialog' });
+    const outcome = await session!.apply({ revised: docx('x') });
+    expect(outcome).toEqual({
+      ok: false,
+      code: 'unsupportedContent',
+      reason: 'lockedContent',
+      message: 'locked',
+    });
+    expect(compareDocumentsErrorKey(outcome as typeof refusal)).toBe(
+      'compareDocuments.reasons.lockedContent'
+    );
+    expect(compareDocumentsErrorKey({ code: 'tooLarge' })).toBe('compareDocuments.errors.tooLarge');
+  });
+
   test('limits and content refusals answer unsupported', () => {
     for (const code of ['tooLarge', 'unsupportedContent', 'invalidOriginal'] as const) {
       const editor = mount([
@@ -438,4 +471,15 @@ test('every compare refusal has an English message', () => {
   const messages = en.compareDocuments.errors as Record<string, string>;
   for (const reason of Object.keys(reasons)) expect(messages[reason]).toBeString();
   expect(Object.keys(messages).sort()).toEqual(Object.keys(reasons).sort());
+  const details: Record<CompareDocumentsRefusalReason, true> = {
+    lockedContent: true,
+    unresolvedRevisions: true,
+    untrackedContent: true,
+    unrecordedSettings: true,
+    headerFooter: true,
+    packageStructure: true,
+    unverified: true,
+  };
+  const detailMessages = en.compareDocuments.reasons as Record<string, string>;
+  expect(Object.keys(detailMessages).sort()).toEqual(Object.keys(details).sort());
 });

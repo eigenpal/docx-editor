@@ -33,6 +33,7 @@ import { CompareDocumentsDialogSession } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsErrorCode } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsOutcome } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsProgress } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsRefusalReason } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsRequest } from '@docx-editor.dev/core/editor';
 import { Component } from 'vue';
 import { ComponentCustomProps } from 'vue';
@@ -264,6 +265,8 @@ export interface CompareDocumentsDialogValues {
 export { CompareDocumentsErrorCode }
 
 export { CompareDocumentsOutcome }
+
+export { CompareDocumentsRefusalReason }
 
 export { CompareDocumentsRequest }
 

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   COMPARE_DOCUMENTS_ACCEPT,
+  compareDocumentsErrorKey,
   type CompareDocumentsDialogSession,
   type CompareDocumentsProgress,
 } from '@docx-editor.dev/core/editor';
@@ -116,7 +117,7 @@ function CompareDocumentsForm({
     setProgress(null);
     // With no differences the dialog stays open and says so; nothing changed.
     if (outcome.ok) setNotice(translate('compareDocuments.noDifferences'));
-    else setError(translate(`compareDocuments.errors.${outcome.code}` as TranslationKey));
+    else setError(translate(compareDocumentsErrorKey(outcome)));
     setBusy(false);
   };
   const state: UseCompareDocumentsDialogReturn = {

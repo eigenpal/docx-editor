@@ -1196,6 +1196,15 @@
       "closed": "Dialog ditutup sebelum perbandingan dijalankan.",
       "empty": "File yang dipilih kosong.",
       "failed": "Dokumen tidak dapat dibandingkan."
+    },
+    "reasons": {
+      "headerFooter": "Dokumen berbeda dalam header atau footer yang dibagikan secara berbeda oleh bagian-bagian kedua dokumen.",
+      "lockedContent": "Dokumen berbeda di dalam kontrol konten yang terkunci atau tertaut ke data, sehingga perubahan di sana tidak dapat ditinjau. Hapus kunci atau tautannya, lalu bandingkan lagi.",
+      "packageStructure": "Dokumen yang terbuka tidak dapat menampung hasil perbandingan ini.",
+      "unrecordedSettings": "Dokumen revisi menambahkan pengaturan bagian atau tabel yang tidak dapat dibatalkan dengan menolak perubahan.",
+      "unresolvedRevisions": "Sebuah dokumen berisi perubahan terlacak yang tidak dapat diterima. Terima atau tolak perubahan itu di dokumen tersebut, lalu bandingkan lagi.",
+      "untrackedContent": "Dokumen berbeda dalam konten yang tidak dapat ditampilkan sebagai perubahan terlacak, seperti file tersemat.",
+      "unverified": "Hasil perbandingan tidak akan mereproduksi kedua dokumen, sehingga tidak diterapkan."
     }
   }
 }

@@ -54,6 +54,28 @@ export type CompareDocumentsErrorCode =
   /** Editor only: any other failure. */
   | 'failed';
 
+/**
+ * What an `unsupportedContent` refusal is about, as a stable code.
+ * `compareDocuments.reasons.<reason>` in `@docx-editor.dev/i18n` translates every reason.
+ *
+ * @public
+ */
+export type CompareDocumentsRefusalReason =
+  /** The documents differ inside a content control that is locked or bound to data. */
+  | 'lockedContent'
+  /** A document holds tracked changes that cannot be accepted, so its final state is unknown. */
+  | 'unresolvedRevisions'
+  /** The documents differ in content with no tracked-change form, such as an embedded file. */
+  | 'untrackedContent'
+  /** The revised document adds section or table settings that a reject cannot restore. */
+  | 'unrecordedSettings'
+  /** A header or footer of an earlier section cannot be paired with one of the original. */
+  | 'headerFooter'
+  /** The result needs a part type that the original document does not declare. */
+  | 'packageStructure'
+  /** The result does not reproduce both documents when all changes are accepted or rejected. */
+  | 'unverified';
+
 /** Result of one document compare. @public */
 export type CompareDocumentsEngineResult =
   | {
@@ -80,6 +102,8 @@ export type CompareDocumentsEngineResult =
   | {
       readonly ok: false;
       readonly code: CompareDocumentsErrorCode;
+      /** Set with `unsupportedContent`: what the refusal is about. */
+      readonly reason?: CompareDocumentsRefusalReason;
       readonly message: string;
     };
 
@@ -126,6 +150,8 @@ export type CompareDocumentsBackgroundResult =
   | {
       readonly ok: false;
       readonly code: CompareDocumentsErrorCode;
+      /** Set with `unsupportedContent`: what the refusal is about. */
+      readonly reason?: CompareDocumentsRefusalReason;
       readonly message: string;
     };
 

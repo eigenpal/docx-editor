@@ -1195,6 +1195,15 @@
       "empty": "The chosen file is empty.",
       "failed": "Could not compare the documents."
     },
+    "reasons": {
+      "lockedContent": "The documents differ inside a content control that is locked or linked to data, so the changes there cannot be reviewed. Remove the lock or the link, then compare again.",
+      "unresolvedRevisions": "A document holds tracked changes that cannot be accepted. Accept or reject them in that document, then compare again.",
+      "untrackedContent": "The documents differ in content that cannot be shown as tracked changes, such as an embedded file.",
+      "unrecordedSettings": "The revised document adds section or table settings that could not be undone by rejecting changes.",
+      "headerFooter": "The documents differ in a header or footer that the sections of the two documents share in different ways.",
+      "packageStructure": "The open document cannot hold the result of this compare.",
+      "unverified": "The compare result would not reproduce both documents, so it was not applied."
+    },
     "readFailed": "Could not read the chosen file.",
     "fileRequired": "Choose the revised document first."
   }

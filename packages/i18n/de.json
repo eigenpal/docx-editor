@@ -1196,6 +1196,15 @@
       "closed": "Das Dialogfeld wurde vor dem Vergleich geschlossen.",
       "empty": "Die ausgewählte Datei ist leer.",
       "failed": "Die Dokumente konnten nicht verglichen werden."
+    },
+    "reasons": {
+      "headerFooter": "Die Dokumente unterscheiden sich in einer Kopf- oder Fußzeile, die die Abschnitte der beiden Dokumente unterschiedlich teilen.",
+      "lockedContent": "Die Dokumente unterscheiden sich in einem Inhaltssteuerelement, das gesperrt oder mit Daten verknüpft ist. Die Änderungen dort können nicht überprüft werden. Entfernen Sie die Sperre oder die Verknüpfung und vergleichen Sie erneut.",
+      "packageStructure": "Das geöffnete Dokument kann das Ergebnis dieses Vergleichs nicht aufnehmen.",
+      "unrecordedSettings": "Das überarbeitete Dokument fügt Abschnitts- oder Tabelleneinstellungen hinzu, die sich durch Ablehnen der Änderungen nicht rückgängig machen lassen.",
+      "unresolvedRevisions": "Ein Dokument enthält nachverfolgte Änderungen, die nicht angenommen werden können. Nehmen Sie sie in diesem Dokument an oder lehnen Sie sie ab und vergleichen Sie erneut.",
+      "untrackedContent": "Die Dokumente unterscheiden sich in Inhalten, die nicht als nachverfolgte Änderungen angezeigt werden können, zum Beispiel einer eingebetteten Datei.",
+      "unverified": "Das Vergleichsergebnis würde nicht beide Dokumente wiedergeben und wurde daher nicht übernommen."
     }
   }
 }

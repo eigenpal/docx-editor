@@ -1,4 +1,8 @@
-import type { CompareDocumentsErrorCode, CompareDocumentsProgress } from './document-compare.ts';
+import type {
+  CompareDocumentsErrorCode,
+  CompareDocumentsProgress,
+  CompareDocumentsRefusalReason,
+} from './document-compare.ts';
 
 /**
  * The `accept` value for a file input that picks the revised document: DOCX files only.
@@ -7,6 +11,30 @@ import type { CompareDocumentsErrorCode, CompareDocumentsProgress } from './docu
  */
 export const COMPARE_DOCUMENTS_ACCEPT =
   '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+/**
+ * The `@docx-editor.dev/i18n` key of the message for a refused compare:
+ * `compareDocuments.reasons.<reason>` when the refusal names a reason, else
+ * `compareDocuments.errors.<code>`.
+ *
+ * @example
+ * ```ts
+ * const outcome = await session.apply({ revised });
+ * if (!outcome.ok) showError(t(compareDocumentsErrorKey(outcome)));
+ * ```
+ *
+ * @public
+ */
+export function compareDocumentsErrorKey(refusal: {
+  readonly code: CompareDocumentsErrorCode;
+  readonly reason?: CompareDocumentsRefusalReason;
+}):
+  | `compareDocuments.errors.${CompareDocumentsErrorCode}`
+  | `compareDocuments.reasons.${CompareDocumentsRefusalReason}` {
+  return refusal.reason === undefined
+    ? `compareDocuments.errors.${refusal.code}`
+    : `compareDocuments.reasons.${refusal.reason}`;
+}
 
 /** What one compare request carries: the revised DOCX and its options. @public */
 export interface CompareDocumentsRequest {
@@ -43,6 +71,11 @@ export type CompareDocumentsOutcome =
       readonly ok: false;
       /** Why the compare was refused. `compareDocuments.errors.<code>` translates it. */
       readonly code: CompareDocumentsErrorCode;
+      /**
+       * Set with `unsupportedContent`: what the refusal is about.
+       * `compareDocuments.reasons.<reason>` translates it more precisely than the code.
+       */
+      readonly reason?: CompareDocumentsRefusalReason;
       /** Diagnostic detail, in English; not for display. */
       readonly message: string;
     };

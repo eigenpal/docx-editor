@@ -12,6 +12,7 @@ import {
 } from 'vue';
 import {
   COMPARE_DOCUMENTS_ACCEPT,
+  compareDocumentsErrorKey,
   type CompareDocumentsDialogSession,
   type CompareDocumentsProgress,
 } from '@docx-editor.dev/core/editor';
@@ -158,10 +159,7 @@ const Impl = defineComponent({
       progress.value = null;
       // With no differences the dialog stays open and says so; nothing changed.
       if (outcome.ok) notice.value = translate('compareDocuments.noDifferences');
-      else
-        error.value = translate(
-          `compareDocuments.errors.${outcome.code}` as Parameters<typeof translate>[0]
-        );
+      else error.value = translate(compareDocumentsErrorKey(outcome));
       busy.value = false;
     };
     const apply = () => {

@@ -8,6 +8,10 @@ import type {
 } from '@docx-editor.dev/core/editor';
 import { reviewModule } from '../../pro/src/index';
 import { zipDocument } from '../../pro/src/collaboration/__tests__/document-peer-support';
+import {
+  answeringCompareWorker,
+  LOCKED_CONTENT_REFUSAL,
+} from '../../pro/src/compare/__tests__/support/fake-compare-worker';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
@@ -234,4 +238,26 @@ test('Cancel stops a running background compare and leaves the document as it wa
   expect(view.queryByRole('dialog')).toBeNull();
   expect(editor().surface!.session.bodyText()).toBe('The quick brown fox.');
   expect(editor().can({ type: 'undo' }).ok).toBe(false);
+});
+
+test('a refusal with a reason shows the message for that reason', async () => {
+  const { view, editor } = mount(undefined, {
+    compareWorker: answeringCompareWorker(LOCKED_CONTENT_REFUSAL),
+  });
+  await waitFor(() => expect(editor()).toBeTruthy());
+  await act(async () => {
+    editor().exec({ type: 'openCompareDocumentsDialog' });
+  });
+  await act(async () => chooseFile(view.getByLabelText('Revised document'), REVISED));
+  await act(async () => {
+    fireEvent.click(view.getByText('Compare'));
+  });
+  await waitFor(
+    () => {
+      const text = view.container.querySelector('[data-docx-part="error"]')?.textContent ?? '';
+      if (!text.includes('locked or linked to data')) throw new Error(text);
+    },
+    { timeout: 5000 }
+  );
+  expect(editor().surface!.session.bodyText()).toBe('The quick brown fox.');
 });

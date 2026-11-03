@@ -10,6 +10,7 @@ export type * from './review-pane.ts';
 export type * from './compare-documents.ts';
 export type {
   CompareDocumentsErrorCode,
+  CompareDocumentsRefusalReason,
   CompareDocumentsPhase,
   CompareDocumentsProgress,
 } from './document-compare.ts';

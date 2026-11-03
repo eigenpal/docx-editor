@@ -8,6 +8,7 @@ export type {
   CompareDocumentsBackgroundResult,
   CompareDocumentsEngine,
   CompareDocumentsErrorCode,
+  CompareDocumentsRefusalReason,
   CompareDocumentsEngineOptions,
   CompareDocumentsEngineResult,
   CompareDocumentsPhase,

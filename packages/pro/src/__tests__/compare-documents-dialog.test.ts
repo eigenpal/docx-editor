@@ -9,6 +9,10 @@ import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core
 import { reviewModule } from '../review/review-module';
 import { COMPARE_DOCUMENTS_ACCEPT } from '@docx-editor.dev/core/editor';
 import { zipDocument } from '../collaboration/__tests__/document-peer-support';
+import {
+  answeringCompareWorker,
+  LOCKED_CONTENT_REFUSAL,
+} from '../compare/__tests__/support/fake-compare-worker';
 
 const paragraphs = (...texts: string[]) =>
   texts.map((text) => `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`).join('');
@@ -202,4 +206,21 @@ test('Cancel stops a running background compare and leaves the document as it wa
 
 test('reviewModule refuses a compareWorker that is not a function', () => {
   expect(() => reviewModule({ compareWorker: 'worker.js' as never })).toThrow(TypeError);
+});
+
+test('a refusal with a reason shows the message for that reason', async () => {
+  const { container, editor } = setup({
+    compareWorker: answeringCompareWorker(LOCKED_CONTENT_REFUSAL),
+  });
+  editor.exec({ type: 'openCompareDocumentsDialog' });
+  chooseFile(getByLabelText(container, 'Revised document') as HTMLInputElement, REVISED);
+  fireEvent.click(getByRole(container, 'button', { name: 'Compare' }));
+  await waitFor(
+    () => {
+      const node = container.querySelector('[role="alert"]');
+      if (!node?.textContent?.includes('locked or linked to data')) throw new Error('no refusal');
+    },
+    { timeout: 5000 }
+  );
+  expect(bodyText(editor)).toBe('The quick brown fox.\nIt jumps over the dog.');
 });

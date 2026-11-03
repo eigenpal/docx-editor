@@ -5,9 +5,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 /** Public types of the document compare engine. */
 
-import type { CompareDocumentsErrorCode } from '@docx-editor.dev/core/editor';
+import type {
+  CompareDocumentsErrorCode,
+  CompareDocumentsRefusalReason,
+} from '@docx-editor.dev/core/editor';
 
-export type { CompareDocumentsErrorCode };
+export type { CompareDocumentsErrorCode, CompareDocumentsRefusalReason };
 
 /** Options for {@link compareDocuments}. @public */
 export interface CompareDocumentsOptions {
@@ -58,6 +61,11 @@ export type CompareDocumentsResult =
       readonly ok: false;
       /** Why the compare was refused. `compareDocuments.errors.<code>` translates it. */
       readonly code: CompareDocumentsErrorCode;
+      /**
+       * Set with `unsupportedContent`: what the refusal is about.
+       * `compareDocuments.reasons.<reason>` translates it.
+       */
+      readonly reason?: CompareDocumentsRefusalReason;
       /** Diagnostic detail, in English; not for display. */
       readonly message: string;
     };

@@ -1196,6 +1196,15 @@
       "closed": "Okno dialogowe zostało zamknięte przed porównaniem.",
       "empty": "Wybrany plik jest pusty.",
       "failed": "Nie udało się porównać dokumentów."
+    },
+    "reasons": {
+      "headerFooter": "Dokumenty różnią się nagłówkiem lub stopką, które sekcje obu dokumentów współdzielą w inny sposób.",
+      "lockedContent": "Dokumenty różnią się w kontrolce zawartości, która jest zablokowana lub powiązana z danymi, więc tych zmian nie można przejrzeć. Usuń blokadę lub powiązanie i porównaj ponownie.",
+      "packageStructure": "Otwarty dokument nie może pomieścić wyniku tego porównania.",
+      "unrecordedSettings": "Poprawiony dokument dodaje ustawienia sekcji lub tabeli, których nie da się cofnąć przez odrzucenie zmian.",
+      "unresolvedRevisions": "Dokument zawiera śledzone zmiany, których nie można zaakceptować. Zaakceptuj je lub odrzuć w tym dokumencie i porównaj ponownie.",
+      "untrackedContent": "Dokumenty różnią się zawartością, której nie można pokazać jako śledzonych zmian, na przykład osadzonym plikiem.",
+      "unverified": "Wynik porównania nie odtworzyłby obu dokumentów, więc nie został zastosowany."
     }
   }
 }

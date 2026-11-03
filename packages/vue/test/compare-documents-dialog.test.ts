@@ -15,6 +15,10 @@ import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import type { DocxEditorPopups } from '../src/editor/popup-config';
 import { reviewModule } from '../../pro/src/index';
 import { zipDocument } from '../../pro/src/collaboration/__tests__/document-peer-support';
+import {
+  answeringCompareWorker,
+  LOCKED_CONTENT_REFUSAL,
+} from '../../pro/src/compare/__tests__/support/fake-compare-worker';
 
 const paragraph = (text: string) => `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 const ORIGINAL = zipDocument(paragraph('The quick brown fox.'));
@@ -233,4 +237,22 @@ test('Cancel stops a running background compare and leaves the document as it wa
   await until(() => container.querySelector('dialog') === null);
   expect(editor.surface!.session.bodyText()).toBe('The quick brown fox.');
   expect(editor.can({ type: 'undo' }).ok).toBe(false);
+});
+
+test('a refusal with a reason shows the message for that reason', async () => {
+  const { container, editor } = await mountEditor(undefined, {
+    compareWorker: answeringCompareWorker(LOCKED_CONTENT_REFUSAL),
+  });
+  editor.exec({ type: 'openCompareDocumentsDialog' });
+  await nextTick();
+  chooseFile(label(container, 'Revised document'), REVISED);
+  await nextTick();
+  (container.querySelector('[data-docx-part="apply"]') as HTMLButtonElement).click();
+  await until(
+    () =>
+      container
+        .querySelector('[data-docx-part="error"]')
+        ?.textContent?.includes('locked or linked to data') ?? false
+  );
+  expect(container.querySelector('dialog')).not.toBeNull();
 });

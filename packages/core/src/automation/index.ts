@@ -126,6 +126,7 @@ export type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
 export type {
   CompareDocumentsEngine,
   CompareDocumentsErrorCode,
+  CompareDocumentsRefusalReason,
   CompareDocumentsEngineOptions,
   CompareDocumentsEngineResult,
 } from '../contracts/document-compare.ts';

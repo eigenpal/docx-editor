@@ -310,6 +310,7 @@ export {
   type CompareDocumentsBackgroundResult,
   type CompareDocumentsEngine,
   type CompareDocumentsErrorCode,
+  type CompareDocumentsRefusalReason,
   type CompareDocumentsEngineOptions,
   type CompareDocumentsEngineResult,
   type CompareDocumentsPhase,
@@ -679,7 +680,10 @@ export type {
   CompareDocumentsOutcome,
   CompareDocumentsRequest,
 } from '../contracts/compare-documents.ts';
-export { COMPARE_DOCUMENTS_ACCEPT } from '../contracts/compare-documents.ts';
+export {
+  COMPARE_DOCUMENTS_ACCEPT,
+  compareDocumentsErrorKey,
+} from '../contracts/compare-documents.ts';
 
 /** The watermark shape box that `setWatermark` writes, for previews. */
 export {
