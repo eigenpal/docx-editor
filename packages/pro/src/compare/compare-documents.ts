@@ -38,6 +38,7 @@ import { mergeDefinitions } from './definitions.ts';
 import { mergeComments } from './comments.ts';
 import { hasRevision, selfCheck } from './self-check.ts';
 import {
+  addedSectionReferences,
   compareFurniture,
   compareNotes,
   furnitureOutputIds,
@@ -218,6 +219,7 @@ function compareOnce(
   const state = new CompareState();
   for (const [revisedId, outputId] of furnitureOutputIds(basePkg, revisedPkg))
     state.furnitureIds.set(revisedId, outputId);
+  state.sectionReferences = addedSectionReferences(basePkg, revisedPkg);
   const scope = new NamespaceScope();
   const base = new SideContext('base', basePkg, basePkg.mainDocumentPart, scope);
   const next = new SideContext('revised', revisedPkg, revisedPkg.mainDocumentPart, scope);
@@ -274,7 +276,7 @@ function compareOnce(
       ok: false,
       code: 'unsupportedContent',
       message:
-        'The documents differ in a header or footer of an earlier section that has no matching header or footer in the other document.',
+        'A header or footer that several sections of the original share has different content in those sections of the revised document.',
     };
   }
   if (ctx.state.unrecordedProperties > 0) {

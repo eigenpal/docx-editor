@@ -13,7 +13,7 @@ import {
   type OoxmlPackage,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
-import { notePlaceholder, type EmitContext, type NoteKind } from './emit.ts';
+import { notePlaceholder, type EmitContext, type NoteKind, type SectionReference } from './emit.ts';
 import { compareContainer } from './story-compare.ts';
 import { freeIds, referencedIds } from './free-ids.ts';
 import { MARK, SideContext, unitsOf } from './units.ts';
@@ -108,24 +108,47 @@ interface FurniturePair {
   readonly revised: FurnitureRef | undefined;
 }
 
+interface EarlierFurniture {
+  readonly pairs: FurniturePair[];
+  /**
+   * Slots only the revised document shows in an earlier section, with that section's index.
+   * The output adds a reference to each in the original's section break.
+   */
+  readonly added: { readonly index: number; readonly ref: FurnitureRef }[];
+}
+
+const earlierCache = new WeakMap<OoxmlPackage, WeakMap<OoxmlPackage, EarlierFurniture | null>>();
+
 /**
  * Original headers and footers that only earlier sections show, each paired with the revised
- * part that the same section and slot shows. Sections pair by position when both documents
- * have as many; otherwise those parts must be the same in both. Null when a part cannot be
- * paired: one document shows a slot the other lacks, or one original part would take two
- * different revised parts. An original part the revised document does not show is deleted.
+ * part that the same section and slot shows, plus the slots only the revised document shows
+ * there. Sections pair by position when both documents have as many; otherwise those parts
+ * must be the same in both. Null when a part cannot be paired: one original part would take
+ * two different revised parts. An original part the revised document does not show is deleted.
  */
 function earlierFurniturePairs(
   basePkg: OoxmlPackage,
   revisedPkg: OoxmlPackage
-): FurniturePair[] | null {
+): EarlierFurniture | null {
+  let byRevised = earlierCache.get(basePkg);
+  if (!byRevised) earlierCache.set(basePkg, (byRevised = new WeakMap()));
+  if (byRevised.has(revisedPkg)) return byRevised.get(revisedPkg)!;
+  const result = pairEarlierFurniture(basePkg, revisedPkg);
+  byRevised.set(revisedPkg, result);
+  return result;
+}
+
+function pairEarlierFurniture(
+  basePkg: OoxmlPackage,
+  revisedPkg: OoxmlPackage
+): EarlierFurniture | null {
   const baseSections = resolveHeaderFooterResolutionBySection(basePkg);
   const revisedSections = resolveHeaderFooterResolutionBySection(revisedPkg);
   if (baseSections.length !== revisedSections.length) {
     const base = earlierFurniture(basePkg);
     const revised = earlierFurniture(revisedPkg);
     const same = base.size === revised.size && [...base].every((entry) => revised.has(entry));
-    return same ? [] : null;
+    return same ? { pairs: [], added: [] } : null;
   }
   // Each original part takes exactly one revised part, starting with the final section's.
   const target = new Map<string, string>();
@@ -134,14 +157,20 @@ function earlierFurniturePairs(
   for (const [key, ref] of finalBase)
     target.set(ref.part.name, finalRevised.get(key)?.part.name ?? '');
   const pairs: FurniturePair[] = [];
+  const added: EarlierFurniture['added'] = [];
   for (let index = 0; index < baseSections.length - 1; index++) {
     const baseSlots = slotRefs(baseSections[index]!);
     const revisedSlots = slotRefs(revisedSections[index]!);
     for (const key of new Set([...baseSlots.keys(), ...revisedSlots.keys()])) {
       const base = baseSlots.get(key);
       const revised = revisedSlots.get(key);
-      // A slot only the revised document shows needs a new part and reference: not recorded.
-      if (!base) return null;
+      // A slot only the revised document shows takes a reference in this section. After a
+      // reject its part is all deleted, which shows the same as no part here; the self-check
+      // refuses the compare when a later section inherited the slot instead.
+      if (!base) {
+        added.push({ index, ref: revised! });
+        continue;
+      }
       const wanted = revised?.part.name ?? '';
       const mapped = target.get(base.part.name);
       if (mapped !== undefined) {
@@ -152,7 +181,7 @@ function earlierFurniturePairs(
       pairs.push({ base, revised });
     }
   }
-  return pairs;
+  return { pairs, added };
 }
 
 /** The part a header or footer only the revised final section shows takes in the output. */
@@ -161,6 +190,70 @@ function newFurniturePartName(basePkg: OoxmlPackage, ref: FurnitureRef): string 
   for (let n = 2; isPartNameTaken(basePkg, partName); n++)
     partName = `/word/compare-${ref.kind}-${ref.type}-${n}.xml`;
   return partName;
+}
+
+interface FurnitureOutputs {
+  /** The output relationship id of each revised header or footer part, by part name. */
+  readonly ids: Map<string, string>;
+  /** Revised parts only earlier sections show that no original part takes: each gets a new part. */
+  readonly created: { readonly partName: string; readonly ref: FurnitureRef }[];
+}
+
+/**
+ * Where each revised header or footer goes in the output: the original part of the final
+ * section's slot, the original part an earlier section pairs it with, or a new part.
+ */
+function revisedFurnitureOutputs(
+  basePkg: OoxmlPackage,
+  revisedPkg: OoxmlPackage
+): FurnitureOutputs {
+  const ids = new Map<string, string>();
+  const finalBase = furnitureRefs(basePkg);
+  const taken = new Set<string>();
+  for (const [key, revised] of furnitureRefs(revisedPkg)) {
+    const base = finalBase.get(key);
+    let id = base?.rId;
+    if (!id) {
+      const partName = newFurniturePartName(basePkg, revised);
+      taken.add(partName);
+      id = `${MARK}NEW:${partName}§`;
+    }
+    if (!ids.has(revised.part.name)) ids.set(revised.part.name, id);
+  }
+  const earlier = earlierFurniturePairs(basePkg, revisedPkg);
+  for (const { base, revised } of earlier?.pairs ?? []) {
+    if (revised && !ids.has(revised.part.name)) ids.set(revised.part.name, base.rId);
+  }
+  const created: FurnitureOutputs['created'][number][] = [];
+  for (const { index, ref } of earlier?.added ?? []) {
+    if (ids.has(ref.part.name)) continue;
+    const stem = `/word/compare-${ref.kind}-${ref.type}-s${index + 1}`;
+    let partName = `${stem}.xml`;
+    for (let n = 2; isPartNameTaken(basePkg, partName) || taken.has(partName); n++)
+      partName = `${stem}-${n}.xml`;
+    taken.add(partName);
+    ids.set(ref.part.name, `${MARK}NEW:${partName}§`);
+    created.push({ partName, ref });
+  }
+  return { ids, created };
+}
+
+/**
+ * References the output adds to the original's earlier section breaks, by section index: one
+ * for each header or footer slot only the revised document shows in that section.
+ */
+export function addedSectionReferences(
+  basePkg: OoxmlPackage,
+  revisedPkg: OoxmlPackage
+): Map<number, SectionReference[]> {
+  const { ids } = revisedFurnitureOutputs(basePkg, revisedPkg);
+  const out = new Map<number, SectionReference[]>();
+  for (const { index, ref } of earlierFurniturePairs(basePkg, revisedPkg)?.added ?? []) {
+    const list = out.get(index) ?? [];
+    list.push({ kind: ref.kind, type: ref.type, id: ids.get(ref.part.name)! });
+    out.set(index, list);
+  }
+  return out;
 }
 
 /**
@@ -174,17 +267,7 @@ export function furnitureOutputIds(
   basePkg: OoxmlPackage,
   revisedPkg: OoxmlPackage
 ): Map<string, string> {
-  const byRevisedPart = new Map<string, string>();
-  const finalBase = furnitureRefs(basePkg);
-  for (const [key, revised] of furnitureRefs(revisedPkg)) {
-    const base = finalBase.get(key);
-    const id = base ? base.rId : `${MARK}NEW:${newFurniturePartName(basePkg, revised)}§`;
-    if (!byRevisedPart.has(revised.part.name)) byRevisedPart.set(revised.part.name, id);
-  }
-  for (const { base, revised } of earlierFurniturePairs(basePkg, revisedPkg) ?? []) {
-    if (revised && !byRevisedPart.has(revised.part.name))
-      byRevisedPart.set(revised.part.name, base.rId);
-  }
+  const byRevisedPart = revisedFurnitureOutputs(basePkg, revisedPkg).ids;
   const out = new Map<string, string>();
   for (const section of resolveHeaderFooterResolutionBySection(revisedPkg)) {
     for (const ref of slotRefs(section).values()) {
@@ -273,12 +356,21 @@ export function compareFurniture(
     }
   }
   const earlier = earlierFurniturePairs(basePkg, revisedPkg);
-  for (const { base, revised } of earlier ?? []) {
+  for (const { base, revised } of earlier?.pairs ?? []) {
     outputs.push({
       partName: base.part.name,
       contentType: base.part.contentType,
       xml: compareFurnitureStory(basePkg, revisedPkg, base, revised, ctx),
       isNew: false,
+    });
+  }
+  for (const { partName, ref } of revisedFurnitureOutputs(basePkg, revisedPkg).created) {
+    outputs.push({
+      partName,
+      contentType: ref.part.contentType,
+      xml: compareFurnitureStory(basePkg, revisedPkg, undefined, ref, ctx),
+      isNew: true,
+      relType: `${REL_BASE}/${ref.kind}`,
     });
   }
   return { outputs, extraRefs, unpaired: earlier === null };

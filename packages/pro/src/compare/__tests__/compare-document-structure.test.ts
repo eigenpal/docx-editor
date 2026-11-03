@@ -112,15 +112,42 @@ test('a changed header that only an earlier section shows is compared', () => {
   expect(strFromU8(files['word/header2.xml']!)).not.toContain('<w:ins');
 });
 
-test('an earlier section header with no counterpart is refused', () => {
-  const oneHeader = docx(
+test('a header that only the revised earlier section shows is inserted in a new part', () => {
+  const noHeaders = docx(
     `<w:p><w:pPr><w:sectPr/></w:pPr><w:r><w:t>Section one</w:t></w:r></w:p>${p('Section two')}<w:sectPr/>`
   );
-  const result = compareDocuments(oneHeader, twoSections('First header', 'Last header'), {
+  const { files } = compare(noHeaders, twoSections('First header', 'Last header'));
+  const document = strFromU8(files['word/document.xml']!);
+  // The first section break now references a header part that holds the inserted text.
+  const firstBreak = /<w:pPr><w:sectPr>(.*?)<\/w:sectPr>/.exec(document)?.[1] ?? '';
+  const id = /<w:headerReference\b[^>]*\br:id="([^"]+)"/.exec(firstBreak)?.[1];
+  expect(id).toBeDefined();
+  const rels = strFromU8(files['word/_rels/document.xml.rels']!);
+  const target = new RegExp(`Id="${id}"[^>]*Target="([^"]+)"`).exec(rels)?.[1];
+  const part = strFromU8(files[`word/${target}`]!);
+  expect(part).toContain('First header');
+  expect(part).toContain('<w:ins');
+  expect(part).not.toContain('Last header');
+});
+
+test('a header the revised earlier section adds over an inherited one is refused', () => {
+  // The original's second section inherits the first one's header. A reference there would
+  // show an empty header after reject instead, so the compare has no faithful record.
+  const threeSections = (middle: boolean) =>
+    docx(
+      `<w:p><w:pPr><w:sectPr><w:headerReference w:type="default" r:id="rId1"/></w:sectPr></w:pPr><w:r><w:t>One</w:t></w:r></w:p>` +
+        `<w:p><w:pPr><w:sectPr>${middle ? '<w:headerReference w:type="default" r:id="rId3"/>' : ''}</w:sectPr></w:pPr><w:r><w:t>Two</w:t></w:r></w:p>` +
+        `${p('Three')}<w:sectPr><w:headerReference w:type="default" r:id="rId2"/></w:sectPr>`,
+      [
+        header('header1.xml', 'Inherited header'),
+        header('header2.xml', 'Last header'),
+        header('header3.xml', 'Middle header'),
+      ]
+    );
+  const result = compareDocuments(threeSections(false), threeSections(true), {
     authorName: 'Test',
     date: DATE,
   });
-  // The revised document's first section shows a header the original's lacks.
   expect(result.ok).toBe(false);
   if (!result.ok) expect(result.code).toBe('unsupportedContent');
 });

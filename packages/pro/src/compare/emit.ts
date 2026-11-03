@@ -40,6 +40,15 @@ export interface Item {
 
 export type NoteKind = 'footnote' | 'endnote';
 
+/** A header or footer reference the output adds to a section break. */
+export interface SectionReference {
+  readonly kind: 'header' | 'footer';
+  /** One of `default`, `first`, or `even`. */
+  readonly type: string;
+  /** The output relationship id. */
+  readonly id: string;
+}
+
 /** State shared by every story of one compare: revision ids and note bookkeeping. */
 export class CompareState {
   nextId = 1;
@@ -48,6 +57,14 @@ export class CompareState {
   untracked = 0;
   /** Output relationship ids for the revised main story's header and footer references. */
   readonly furnitureIds = new Map<string, string>();
+  /**
+   * Header and footer references to add to the original's earlier section breaks, by section
+   * index: slots only the revised document shows there.
+   */
+  sectionReferences: ReadonlyMap<number, readonly SectionReference[]> = new Map();
+  /** The index of each original section break written so far, in the order first written. */
+  readonly baseSectionIndex = new WeakMap<object, number>();
+  baseSections = 0;
   /** Section or table settings the revised document adds that a record cannot restore. */
   unrecordedProperties = 0;
   /** Move ranges written so far; names each range pair. */
@@ -343,7 +360,7 @@ export function sectPrXml(
       ? elementChildren(base)
           .filter(isRef)
           .map((child) => ctx.base.serialize(child))
-          .join('')
+          .join('') + (finalSection ? '' : addedBaseSectionRefs(base, ctx))
       : revised && !finalSection
         ? addedSectionRefs(revised, ctx)
         : '') + extraRefs;
@@ -379,6 +396,20 @@ function addedSectionRefs(revised: ElementNode, ctx: EmitContext): string {
     }
     out += `<w:${child.localName} xmlns:r="${R_NS}" w:type="${type}" r:id="${escapeAttribute(id)}"/>`;
   }
+  return out;
+}
+
+/**
+ * References the output adds to an original section break other than the final one: header
+ * and footer slots only the revised document shows in that section.
+ */
+function addedBaseSectionRefs(base: ElementNode, ctx: EmitContext): string {
+  const state = ctx.state;
+  let index = state.baseSectionIndex.get(base);
+  if (index === undefined) state.baseSectionIndex.set(base, (index = state.baseSections++));
+  let out = '';
+  for (const { kind, type, id } of state.sectionReferences.get(index) ?? [])
+    out += `<w:${kind}Reference xmlns:r="${R_NS}" w:type="${type}" r:id="${escapeAttribute(id)}"/>`;
   return out;
 }
 
