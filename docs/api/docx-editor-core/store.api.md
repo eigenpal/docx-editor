@@ -6455,6 +6455,9 @@ export function wrapTargetToAnchorSpec(target: ImageWrapTarget): {
 // @public
 export function writeOoxmlPackage(pkg: OoxmlPackage): Uint8Array;
 
+// @internal
+export function writeOoxmlPackageKeepingRevisionIds(pkg: OoxmlPackage): Uint8Array;
+
 // @public
 export function writeZip(entries: ReadonlyMap<string, Uint8Array>): Uint8Array;
 

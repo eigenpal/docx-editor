@@ -20,7 +20,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import * as Y from 'yjs';
 import { DocumentRegistry, seedPackage } from './document/index.ts';
 import { openBaselinePackage, recordFreshSize, recordSeed } from './document-bootstrap.ts';
-import { readCollaborationDocument } from './document-read.ts';
+import { readCollaborationDocumentKeepingRevisionIds } from './document-read.ts';
 import { PACKAGE_META_KEY } from './document/schema.ts';
 import { keepFormattingMarkers } from './document/yjs-items.ts';
 import { CollaborationSchemaError } from './errors.ts';
@@ -119,9 +119,13 @@ export async function compactCollaborationState(
     // Measured against a fresh build of the content the room holds now. The size the room had
     // when it was seeded is no bound: deleting most of a document makes the fresh build far
     // smaller than the seed while the stored state hardly grows.
-    const compacted = await seedGeneration(readCollaborationDocument(stored), documentId, {
-      keepBound: true,
-    });
+    const compacted = await seedGeneration(
+      readCollaborationDocumentKeepingRevisionIds(stored),
+      documentId,
+      {
+        keepBound: true,
+      }
+    );
     if (state.byteLength / Math.max(1, compacted.byteLength) >= minimumGain) return compacted;
     rememberNotWorthIt(key);
     return null;

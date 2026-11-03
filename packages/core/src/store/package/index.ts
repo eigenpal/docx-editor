@@ -194,6 +194,7 @@ export {
 export {
   readOoxmlPackage,
   writeOoxmlPackage,
+  writeOoxmlPackageKeepingRevisionIds,
   withPart,
   DEFAULT_OOXML_PACKAGE_LIMITS,
   type OoxmlPackage,
