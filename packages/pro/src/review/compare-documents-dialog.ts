@@ -142,7 +142,10 @@ export function createCompareDocumentsDialog(
         }
         compare.disabled = next || !file.files?.length || !host.canApply();
         compare.textContent = t(next ? 'comparing' : 'compare');
-        dialog?.setAttribute('aria-busy', String(next));
+        // The bar is the busy region; the dialog gets a styling hook only, because aria-busy
+        // on the whole modal would hold back its live regions.
+        progress.setAttribute('aria-busy', String(next));
+        dialog?.toggleAttribute('data-docx-busy', next);
         // Compare disabled itself: keep focus in the dialog, on a control that still works.
         if (next) (cancel.disabled ? phase : cancel).focus({ preventScroll: true });
       };

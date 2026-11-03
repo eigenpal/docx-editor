@@ -8924,15 +8924,113 @@ p.docx-review__refused {
 .docx-compare-documents-dialog .docx-compare-documents-error {
   color: var(--doc-error);
 }
+/* While a compare runs: a thin bar that fills with each reported step, a band that sweeps
+ * across it until the first step, and a spinner in the Compare button. */
 .docx-compare-documents-dialog .docx-compare-documents-progress {
+  appearance: none;
+  display: block;
+  box-sizing: border-box;
   width: 100%;
+  height: 0.375rem;
   margin: 0.75rem 0 0;
-  accent-color: var(--doc-primary);
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  color: var(--doc-primary);
+  background-color: var(--doc-border);
+  animation: docx-compare-documents-appear 0.2s ease-out;
+}
+.docx-compare-documents-dialog .docx-compare-documents-progress::-webkit-progress-bar {
+  background: transparent;
+}
+.docx-compare-documents-dialog .docx-compare-documents-progress::-webkit-progress-value {
+  border-radius: inherit;
+  background: var(--doc-primary);
+  transition: inline-size 0.3s ease-out;
+}
+.docx-compare-documents-dialog .docx-compare-documents-progress::-moz-progress-bar {
+  border-radius: inherit;
+  background: var(--doc-primary);
+}
+.docx-compare-documents-dialog .docx-compare-documents-progress:indeterminate {
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    var(--doc-primary) 30%,
+    var(--doc-primary) 70%,
+    transparent
+  );
+  background-repeat: no-repeat;
+  background-size: 40% 100%;
+  animation:
+    docx-compare-documents-appear 0.2s ease-out,
+    docx-compare-documents-sweep 1.4s ease-in-out infinite;
+}
+.docx-compare-documents-dialog .docx-compare-documents-progress:indeterminate::-moz-progress-bar {
+  background: transparent;
 }
 .docx-compare-documents-dialog .docx-compare-documents-phase {
   display: block;
   margin: 0.25rem 0 0;
   color: var(--doc-text-muted);
+  font-variant-numeric: tabular-nums;
+  animation: docx-compare-documents-appear 0.2s ease-out;
+}
+/* The Compare button stays legible while it works, with a spinner before its label. */
+.docx-compare-documents-dialog[data-docx-busy] .docx-compare-documents-actions button:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  opacity: 0.85;
+}
+.docx-compare-documents-dialog[data-docx-busy]
+  .docx-compare-documents-actions
+  button:last-child::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 0.875em;
+  height: 0.875em;
+  box-sizing: border-box;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: docx-compare-documents-spin 0.7s linear infinite;
+}
+@keyframes docx-compare-documents-sweep {
+  /* With a band of 40% width, -67% and 167% start and end it fully outside the bar. */
+  from {
+    background-position: -67% 0;
+  }
+  to {
+    background-position: 167% 0;
+  }
+}
+@keyframes docx-compare-documents-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes docx-compare-documents-appear {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docx-compare-documents-dialog .docx-compare-documents-progress,
+  .docx-compare-documents-dialog .docx-compare-documents-progress:indeterminate,
+  .docx-compare-documents-dialog .docx-compare-documents-phase,
+  .docx-compare-documents-dialog[data-docx-busy]
+    .docx-compare-documents-actions
+    button:last-child::before {
+    animation: none;
+  }
+  /* A still band in the middle still says that work is under way. */
+  .docx-compare-documents-dialog .docx-compare-documents-progress:indeterminate {
+    background-position: 50% 0;
+  }
+  .docx-compare-documents-dialog .docx-compare-documents-progress::-webkit-progress-value {
+    transition: none;
+  }
 }
 /* One message line: the notice takes the error's place, never a second line. An empty
  * message region stays in the accessibility tree, so a later message is announced; it is

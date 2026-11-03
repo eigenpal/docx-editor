@@ -210,7 +210,7 @@ test('Cancel stops a running background compare and leaves the document as it wa
   fireEvent.click(getByRole(container, 'button', { name: 'Compare' }));
   const cancel = getByRole(container, 'button', { name: 'Cancel' }) as HTMLButtonElement;
   await waitFor(() => {
-    if (container.querySelector('dialog')?.getAttribute('aria-busy') !== 'true')
+    if (container.querySelector('progress')?.getAttribute('aria-busy') !== 'true')
       throw new Error('not busy');
   });
   expect(cancel.disabled).toBe(false);

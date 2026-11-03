@@ -310,7 +310,8 @@ export const NativeDialog = defineComponent({
           'aria-modal': true,
           'aria-label': p.label,
           ...(p.describedBy ? { 'aria-describedby': p.describedBy } : {}),
-          ...(p.busy ? { 'aria-busy': 'true' } : {}),
+          // A styling hook only: aria-busy on the whole modal would hold back its live regions.
+          ...(p.busy ? { 'data-docx-busy': '' } : {}),
           'data-docx-dialog': p.kind,
           class: [
             'docx-dialog',

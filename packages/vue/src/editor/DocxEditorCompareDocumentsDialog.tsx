@@ -180,7 +180,12 @@ const Impl = defineComponent({
             detectFormatChanges: values.value.detectFormatChanges,
             ...(values.value.removeDateAndTime ? { removeDateAndTime: true } : {}),
           },
-          { onProgress: (step) => (progress.value = step) }
+          {
+            // A replaced or closed session's late steps never reach this form.
+            onProgress: (step) => {
+              if (p.session === session && !session.signal.aborted) progress.value = step;
+            },
+          }
         );
         // A replaced session owns the form now; this outcome is not its own.
         if (session.signal.aborted || p.session !== session) return;
@@ -267,7 +272,7 @@ const Impl = defineComponent({
             </label>
           </div>
           {busy.value ? (
-            <div data-docx-part="progress">
+            <div data-docx-part="progress" aria-busy="true">
               {/* Indeterminate until the compare reports its first step. */}
               <progress
                 class="docx-compare-documents-progress"
@@ -314,7 +319,8 @@ const Impl = defineComponent({
           onClose={cancel}
           sessionSignal={p.session.signal}
           dismissOutside={false}
-          describedBy={`${id}-description`}
+          // The description is part of the preset; without it the reference would point nowhere.
+          describedBy={p.preset === false ? undefined : `${id}-description`}
           busy={busy.value}
           panelRef={panel}
           class={['docx-compare-documents-dialog', p.className]}
@@ -327,9 +333,11 @@ const Impl = defineComponent({
     };
   },
 });
+// The compare draft has nothing to reset, so it has no Reset part (as in React).
+const { Reset: _reset, ...sharedParts } = composition.parts;
 /** Compare documents with replaceable controls and layout. @public */
 export const DocxEditorCompareDocumentsDialog = Object.assign(Impl, {
-  ...composition.parts,
+  ...sharedParts,
   /** The progress bar and the running step in words, shown while a compare runs. */
   Progress: composition.part('Progress'),
   /** A message that is not an error, such as that the documents have no differences. */

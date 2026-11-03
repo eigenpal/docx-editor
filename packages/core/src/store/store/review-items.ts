@@ -338,14 +338,23 @@ export function isReplacementPair(
   deletion: ReviewRevisionItem,
   insertion: ReviewRevisionItem
 ): boolean {
-  const end = deletion.ranges[deletion.ranges.length - 1];
-  const start = insertion.ranges[0];
   return (
     deletion.revisionKind === 'delete' &&
     insertion.revisionKind === 'insert' &&
     deletion.author === insertion.author &&
     deletion.readOnly === insertion.readOnly &&
     deletion.nesting === insertion.nesting &&
+    // Typing over a selection writes the deletion first; a document compare writes the
+    // insertion first. Either way the two touch, and they are one replacement.
+    (touches(deletion, insertion) || touches(insertion, deletion))
+  );
+}
+
+/** Whether `after` starts exactly where `before` ends. */
+function touches(before: ReviewRevisionItem, after: ReviewRevisionItem): boolean {
+  const end = before.ranges[before.ranges.length - 1];
+  const start = after.ranges[0];
+  return (
     end !== undefined &&
     start !== undefined &&
     end.partName === start.partName &&

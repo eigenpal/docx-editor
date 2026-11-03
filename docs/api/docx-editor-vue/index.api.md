@@ -2906,7 +2906,6 @@ export const DocxEditorCompareDocumentsDialog: {
     Header: vue.DefineComponent<DialogPartProps>;
     Notice: vue.DefineComponent<DialogPartProps>;
     Progress: vue.DefineComponent<DialogPartProps>;
-    Reset: vue.DefineComponent<DialogPartProps>;
     Title: vue.DefineComponent<DialogPartProps>;
 };
 

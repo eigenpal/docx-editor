@@ -47,14 +47,19 @@ const pairable = isReplacementPair;
 /** Pairs by deletion, so one queue revision yields the same pair object on every read. */
 const pairCache = new WeakMap<ReviewRevisionItem, ReviewRevisionItem>();
 
-function pairOf(deletion: ReviewRevisionItem, insertion: ReviewRevisionItem): ReviewRevisionItem {
+function pairOf(
+  deletion: ReviewRevisionItem,
+  insertion: ReviewRevisionItem,
+  /** The half that comes first in the document: the pair sits where it does. */
+  first: ReviewRevisionItem
+): ReviewRevisionItem {
   const cached = pairCache.get(deletion);
   if (cached && halvesOf.get(cached)?.insertion === insertion) return cached;
   const date = insertion.date ?? deletion.date;
   const pair: ReviewRevisionItem = {
     kind: 'revision',
     id: replacementPairId(deletion.id, insertion.id),
-    address: deletion.address,
+    address: first.address,
     addresses: [...deletion.addresses, ...insertion.addresses],
     replacedText: deletion.text,
     revisionKind: 'replace',
@@ -76,8 +81,8 @@ function pairOf(deletion: ReviewRevisionItem, insertion: ReviewRevisionItem): Re
 }
 
 /**
- * Replace each deletion that is followed, among the queue's revisions, by a touching
- * insertion from the same author with one `replace` item at the deletion's position.
+ * Replace each deletion and the touching insertion from the same author next to it, in either
+ * order, among the queue's revisions, with one `replace` item at the first half's position.
  */
 function pairReplacements(items: readonly ReviewItem[]): {
   readonly items: readonly ReviewItem[];
@@ -88,12 +93,15 @@ function pairReplacements(items: readonly ReviewItem[]): {
   const absorbed = new Set<ReviewItem>();
   const renamed = new Map<string, string>();
   for (let index = 0; index + 1 < revisions.length; index += 1) {
-    const deletion = revisions[index]!;
-    const insertion = revisions[index + 1]!;
+    const first = revisions[index]!;
+    const second = revisions[index + 1]!;
+    // The pair takes the place of whichever half comes first.
+    const [deletion, insertion] =
+      first.revisionKind === 'insert' ? [second, first] : [first, second];
     if (!pairable(deletion, insertion)) continue;
-    const pair = pairOf(deletion, insertion);
-    pairs.set(deletion, pair);
-    absorbed.add(insertion);
+    const pair = pairOf(deletion, insertion, first);
+    pairs.set(first, pair);
+    absorbed.add(second);
     renamed.set(deletion.id, pair.id);
     renamed.set(insertion.id, pair.id);
     index += 1;

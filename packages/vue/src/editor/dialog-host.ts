@@ -1,6 +1,6 @@
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { isHTMLElementNode, hostDocumentOf } from '@docx-editor.dev/core/editor';
-import { renderPopup } from './popup-renderer';
+import { renderPopup, sessionKey } from './popup-renderer';
 import { useEditorState } from './useEditorState';
 import {
   defineComponent,
@@ -257,7 +257,10 @@ export const DialogHost = defineComponent({
                     { session: host.revisionSession.value },
                     host.revisionSession.value
                   )
-                : h(DocxEditorRevisionMarkupDialog, { session: host.revisionSession.value })
+                : h(DocxEditorRevisionMarkupDialog, {
+                    session: host.revisionSession.value,
+                    key: sessionKey(host.revisionSession.value),
+                  })
               : null,
             host.compareSession.value && p.popups?.compareDocuments !== false
               ? p.popups?.compareDocuments
@@ -266,7 +269,10 @@ export const DialogHost = defineComponent({
                     { session: host.compareSession.value },
                     host.compareSession.value
                   )
-                : h(DocxEditorCompareDocumentsDialog, { session: host.compareSession.value })
+                : h(DocxEditorCompareDocumentsDialog, {
+                    session: host.compareSession.value,
+                    key: sessionKey(host.compareSession.value),
+                  })
               : null,
             host.session.value && p.popups?.textFormField !== false
               ? p.popups?.textFormField
@@ -275,7 +281,10 @@ export const DialogHost = defineComponent({
                     { session: host.session.value },
                     host.session.value
                   )
-                : h(DocxEditorTextFormFieldDialog, { session: host.session.value })
+                : h(DocxEditorTextFormFieldDialog, {
+                    session: host.session.value,
+                    key: sessionKey(host.session.value),
+                  })
               : null,
           ])
         : null,

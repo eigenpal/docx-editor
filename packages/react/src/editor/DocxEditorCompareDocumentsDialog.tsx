@@ -205,7 +205,8 @@ function CompareDocumentsForm({
       panelRef={panel}
       dismissOutside={false}
       sessionSignal={session.signal}
-      describedBy={`${ids}-description`}
+      // The description is part of the preset; without it the reference would point nowhere.
+      describedBy={preset === false ? undefined : `${ids}-description`}
       busy={busy}
     >
       <parts.Composition
@@ -256,7 +257,7 @@ function CompareDocumentsForm({
               </label>
             </div>
             {busy ? (
-              <div data-docx-part="progress">
+              <div data-docx-part="progress" aria-busy="true">
                 {/* Indeterminate until the compare reports its first step. */}
                 <progress
                   className="docx-compare-documents-progress"

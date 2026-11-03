@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/rules-of-hooks -- Vue composables in defineComponent setup */
 import './dom-setup.ts';
 import { afterEach, expect, test } from 'bun:test';
 import { createApp, defineComponent, h, nextTick, shallowRef, type VNodeChild } from 'vue';
@@ -112,6 +113,26 @@ test('the packaged Vue dialog compares into the open document as one undo step',
   editor.exec({ type: 'undo' });
   expect(session.reviewItems()).toHaveLength(0);
   expect(session.bodyText()).toBe('The quick brown fox.');
+});
+
+test('the dialog host mounts a new form for each session, so no chosen file carries over', async () => {
+  const { container, editor } = await mountEditor();
+  editor.exec({ type: 'openCompareDocumentsDialog' });
+  await nextTick();
+  const firstInput = label(container, 'Revised document');
+  chooseFile(firstInput, REVISED);
+  await nextTick();
+  const apply = () => container.querySelector('[data-docx-part="apply"]') as HTMLButtonElement;
+  expect(apply().disabled).toBe(false);
+  // A second request replaces the session while the dialog is open.
+  expect(editor.exec({ type: 'openCompareDocumentsDialog' }).ok).toBe(true);
+  await nextTick();
+  await nextTick();
+  // A new form: the file input is a new element with no file, and Compare waits for one.
+  const nextInput = label(container, 'Revised document');
+  expect(nextInput).not.toBe(firstInput);
+  expect(nextInput.files?.length ?? 0).toBe(0);
+  expect(apply().disabled).toBe(true);
 });
 
 test('a refused compare shows its reason in the error part', async () => {

@@ -306,7 +306,8 @@ export function DialogFrame({
       aria-modal="true"
       aria-label={label}
       aria-describedby={describedBy}
-      aria-busy={busy || undefined}
+      // A styling hook only: aria-busy on the whole modal would hold back its live regions.
+      data-docx-busy={busy ? '' : undefined}
       className={`docx-dialog${ownScope ? ` docx-editor${chromeDark ? ' dark' : ''}` : ''}${className ? ` ${className}` : ''}`}
       style={style}
       data-docx-dialog={kind}
