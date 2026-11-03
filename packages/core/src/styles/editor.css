@@ -477,7 +477,15 @@
    where it clamps to zero, landing on a dark olive that reads as a redaction bar. Word keeps
    a highlight its authored colour, so the run is inverted back — the same treatment media
    already gets, for the same reason. */
-.docx-editor.dark .docx-page-content [data-highlight] {
+.docx-editor.dark
+  :is(
+    .docx-page-content,
+    .docx-page > .docx-hf > :not([data-no-color-invert]),
+    .docx-page > .docx-hf-behind-layer,
+    .docx-page > .docx-notes,
+    .docx-page > .docx-drawing-layer
+  )
+  [data-highlight] {
   filter: invert(1) hue-rotate(180deg);
 }
 
@@ -485,21 +493,45 @@
    the filter receives, not what the user sees. A normal blue came out orange; this is the
    pre-image that inverts back to the accent blue. The comment further up claiming the
    selection overlay sits outside the inverted page is true of the legacy lane only. */
-.docx-editor.dark .docx-page-content ::selection {
+.docx-editor.dark
+  :is(
+    .docx-page-content,
+    .docx-page > .docx-hf > :not([data-no-color-invert]),
+    .docx-page > .docx-hf-behind-layer,
+    .docx-page > .docx-notes,
+    .docx-page > .docx-drawing-layer
+  )
+  ::selection {
   background-color: rgba(177, 98, 0, 0.32);
 }
-.docx-editor.dark .docx-page-content {
+/* Every layer of document ink is inverted, not only the body. The header and footer
+   bands, the notes area, and the floating drawing layers are siblings of
+   `.docx-page-content` on the sheet, so a rule naming the body alone painted header text
+   black on the dark page. A band's CHILDREN are inverted rather than the band, so its hover
+   tint and edit border stay chrome colours, and the engine caret is left out. */
+.docx-editor.dark
+  :is(
+    .docx-page-content,
+    .docx-page > .docx-hf > :not([data-no-color-invert]),
+    .docx-page > .docx-hf-behind-layer,
+    .docx-page > .docx-notes,
+    .docx-page > .docx-drawing-layer
+  ) {
   /* contrast(0.92) softens the pure black/white extremes a plain invert
     * produces, landing on Word's gentler off-white text / dark-grey fills
     * rather than #fff on #000. The page FRAME sits outside this filter, so
     * its own shadow needs no counter-treatment. */
   filter: invert(1) hue-rotate(180deg) contrast(0.92);
 }
-.docx-editor.dark .docx-page-content img,
-.docx-editor.dark .docx-page-content svg,
-.docx-editor.dark .docx-page-content canvas,
-.docx-editor.dark .docx-page-content video,
-.docx-editor.dark .docx-page-content [data-no-color-invert] {
+.docx-editor.dark
+  :is(
+    .docx-page-content,
+    .docx-page > .docx-hf > :not([data-no-color-invert]),
+    .docx-page > .docx-hf-behind-layer,
+    .docx-page > .docx-notes,
+    .docx-page > .docx-drawing-layer
+  )
+  :is(img, svg, canvas, video, [data-no-color-invert]) {
   filter: invert(1) hue-rotate(180deg);
 }
 
@@ -3231,12 +3263,23 @@ a.docx-hyperlink:focus-visible {
    inversion here, printing in dark mode left near-white text on paper the printer drops to
    white — blank pages. `print-color-adjust` stops the sheet colour being dropped too. */
 @media print {
-  .docx-editor.dark .docx-page-content,
-  .docx-editor.dark .docx-page-content img,
-  .docx-editor.dark .docx-page-content svg,
-  .docx-editor.dark .docx-page-content canvas,
-  .docx-editor.dark .docx-page-content video,
-  .docx-editor.dark .docx-page-content [data-no-color-invert] {
+  .docx-editor.dark
+    :is(
+      .docx-page-content,
+      .docx-page > .docx-hf > :not([data-no-color-invert]),
+      .docx-page > .docx-hf-behind-layer,
+      .docx-page > .docx-notes,
+      .docx-page > .docx-drawing-layer
+    ),
+  .docx-editor.dark
+    :is(
+      .docx-page-content,
+      .docx-page > .docx-hf > :not([data-no-color-invert]),
+      .docx-page > .docx-hf-behind-layer,
+      .docx-page > .docx-notes,
+      .docx-page > .docx-drawing-layer
+    )
+    :is(img, svg, canvas, video, [data-no-color-invert]) {
     filter: none !important;
   }
   :is(.docx-paginated-surface, .docx-preview-surface) .docx-page {
