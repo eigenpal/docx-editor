@@ -32,7 +32,37 @@ Add `reviewModule()` to the editor modules. The **Review** menu then shows **Com
 
 The differences replace the open document's content as one undoable step. One undo restores the original. When the documents have no differences, the document, its undo history, and its saved state stay as they were.
 
-The compare runs on the page's main thread. Documents of a few hundred pages take up to a few seconds, and the dialog shows that it is busy. A running compare cannot be canceled. The largest documents a compare accepts, about 100,000 paragraphs, table rows and cells, styles, and list definitions, or 1.5 million characters, in both documents together, can take about ten seconds. Larger documents refuse with `tooLarge`.
+Documents of a few hundred pages take up to a few seconds to compare. The largest documents a compare accepts, about 100,000 paragraphs, table rows and cells, styles, and list definitions, or 1.5 million characters, in both documents together, can take about ten seconds. Larger documents refuse with `tooLarge`.
+
+### Compare in a worker
+
+By default, the dialog compares on the page's main thread. The page does not respond until the compare ends, and a running compare cannot be canceled. To compare in a worker, pass a function that starts the compare worker, `@docx-editor.dev/pro/compare-worker`, as the `compareWorker` option. The dialog then shows a progress bar, the page stays responsive, and **Cancel** stops a running compare and leaves the document unchanged.
+
+If you build with Vite, import the worker with the `?worker` suffix:
+
+```ts
+import CompareWorker from '@docx-editor.dev/pro/compare-worker?worker';
+import { reviewModule } from '@docx-editor.dev/pro';
+
+const modules = [reviewModule({ compareWorker: () => new CompareWorker() })];
+```
+
+If you build with webpack 5 or Next.js, create a module worker from the package URL:
+
+```ts
+import { reviewModule } from '@docx-editor.dev/pro';
+
+const modules = [
+  reviewModule({
+    compareWorker: () =>
+      new Worker(new URL('@docx-editor.dev/pro/compare-worker', import.meta.url), {
+        type: 'module',
+      }),
+  }),
+];
+```
+
+The editor starts one worker for each compare and ends it when the compare ends. While the worker runs, the main thread only copies the open document and applies the result. The `compareDocuments` command stays synchronous and always compares on the main thread. If the document changes while a compare runs, the result is not applied, and the dialog reports the `failed` code.
 
 ```ts
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
@@ -69,7 +99,7 @@ If you omit `authorName`, the revisions carry the editor's author. If the editor
 
 The command refuses while the editor is in viewing mode or the document is protected against edits. It also refuses while a collaboration session is attached, even when no one else is connected.
 
-To replace the dialog, pass a component as `popups.compareDocuments`. The session's `apply` result has the same outcome shape. Its `message` is diagnostic English, not display text. Use `COMPARE_DOCUMENTS_ACCEPT` from `@docx-editor.dev/core` as the `accept` value of your file input. For more information, see [Customize dialogs](/docs/2.x/customization/dialogs).
+To replace the dialog, pass a component as `popups.compareDocuments`. The session's `apply` result has the same outcome shape. With the compare worker, pass `onProgress` as the second argument of `apply` to get each step, and check `cancelable` to know whether `cancel()` can stop a running compare. Its `message` is diagnostic English, not display text. Use `COMPARE_DOCUMENTS_ACCEPT` from `@docx-editor.dev/core` as the `accept` value of your file input. For more information, see [Customize dialogs](/docs/2.x/customization/dialogs).
 
 ## Compare with the document API
 

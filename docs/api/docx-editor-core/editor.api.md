@@ -1194,6 +1194,24 @@ export type CommentMarkerStyle = 'initials' | 'icon';
 export const COMPARE_DOCUMENTS_ACCEPT = ".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 // @public
+export type CompareDocumentsBackgroundEngine = (original: Uint8Array, revised: Uint8Array, options: CompareDocumentsEngineOptions, control: {
+    readonly onProgress: (progress: CompareDocumentsProgress) => void;
+    readonly signal: AbortSignal;
+}) => Promise<CompareDocumentsBackgroundResult>;
+
+// @public
+export type CompareDocumentsBackgroundResult = {
+    readonly bytes: Uint8Array | null;
+    readonly changed: boolean;
+    readonly ok: true;
+    readonly revisionCount: number;
+} | {
+    readonly code: CompareDocumentsErrorCode;
+    readonly message: string;
+    readonly ok: false;
+};
+
+// @public
 export interface CompareDocumentsChromeHandlers {
     // (undocumented)
     readonly onRequest?: (session: CompareDocumentsDialogSession) => void;
@@ -1217,9 +1235,12 @@ export interface CompareDocumentsDialogHost extends CompareDocumentsDialogSessio
 
 // @public
 export interface CompareDocumentsDialogSession {
-    apply(request: CompareDocumentsRequest): Promise<CompareDocumentsOutcome>;
+    apply(request: CompareDocumentsRequest, options?: {
+        readonly onProgress?: (progress: CompareDocumentsProgress) => void;
+    }): Promise<CompareDocumentsOutcome>;
     canApply(): boolean;
     cancel(): void;
+    readonly cancelable: boolean;
     readonly defaultAuthor: string;
     readonly signal: AbortSignal;
 }
@@ -1264,7 +1285,19 @@ export type CompareDocumentsErrorCode =
 */
 | 'protected'
 /** The differences include content that no tracked change can record. */
-| 'unsupportedContent';
+| 'unsupportedContent'
+/** Editor only: no review module, no open document, or no mount. */
+| 'unavailable'
+/** Editor only: a collaboration session is attached. */
+| 'collaboration'
+/** Editor only: the document is open for viewing only. */
+| 'viewing'
+/** Editor only: the dialog closed, or the compare was canceled, before it finished. */
+| 'closed'
+/** Editor only: the revised file is empty. */
+| 'empty'
+/** Editor only: any other failure. */
+| 'failed';
 
 // @public
 export type CompareDocumentsOutcome = {
@@ -1272,13 +1305,19 @@ export type CompareDocumentsOutcome = {
     readonly ok: true;
     readonly revisionCount: number;
 } | {
-    readonly code: CompareDocumentsRefusal;
+    readonly code: CompareDocumentsErrorCode;
     readonly message: string;
     readonly ok: false;
 };
 
 // @public
-export type CompareDocumentsRefusal = CompareDocumentsErrorCode | 'unavailable' | 'collaboration' | 'viewing' | 'closed' | 'empty' | 'failed';
+export type CompareDocumentsPhase = 'reading' | 'comparing' | 'checking' | 'applying';
+
+// @public
+export interface CompareDocumentsProgress {
+    readonly fraction: number;
+    readonly phase: CompareDocumentsPhase;
+}
 
 // @public
 export interface CompareDocumentsRequest {
@@ -3420,6 +3459,7 @@ export interface ReviewModelInput {
 export interface ReviewModuleContribution {
     readonly collectReviewItems: CollectReviewItems;
     readonly compareDocuments?: CompareDocumentsEngine;
+    readonly compareDocumentsInBackground?: CompareDocumentsBackgroundEngine;
     readonly createCompareDocumentsDialog?: (host: CompareDocumentsDialogHost) => CompareDocumentsDialog;
     readonly createRevisionMarkupDialog?: (host: RevisionMarkupDialogHost) => RevisionMarkupDialog;
     readonly displayModes: readonly ReviewDisplayMode[];

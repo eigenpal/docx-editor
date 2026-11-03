@@ -1,10 +1,17 @@
 import type { CompareDocumentsDialogSession } from './compare-documents.ts';
-import type { CompareDocumentsEngine } from './document-compare.ts';
+import type {
+  CompareDocumentsBackgroundEngine,
+  CompareDocumentsEngine,
+} from './document-compare.ts';
 export type {
+  CompareDocumentsBackgroundEngine,
+  CompareDocumentsBackgroundResult,
   CompareDocumentsEngine,
   CompareDocumentsErrorCode,
   CompareDocumentsEngineOptions,
   CompareDocumentsEngineResult,
+  CompareDocumentsPhase,
+  CompareDocumentsProgress,
 } from './document-compare.ts';
 import type { RevisionMarkupDialogSession } from './revision-markup.ts';
 import type { ReviewPaneOptions } from './review-pane.ts';
@@ -105,6 +112,12 @@ export interface CompareDocumentsDialogHost extends CompareDocumentsDialogSessio
 export interface ReviewModuleContribution {
   /** Document compare. Absent, compare commands refuse. */
   readonly compareDocuments?: CompareDocumentsEngine;
+  /**
+   * The same compare off the main thread. When present, the Compare documents dialog uses it,
+   * reports progress, and can stop a running compare. The `compareDocuments` command stays
+   * synchronous and uses `compareDocuments`.
+   */
+  readonly compareDocumentsInBackground?: CompareDocumentsBackgroundEngine;
   /** Create the Compare documents dialog when a host opens it. */
   readonly createCompareDocumentsDialog?: (
     host: CompareDocumentsDialogHost

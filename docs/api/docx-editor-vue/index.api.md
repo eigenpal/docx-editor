@@ -30,8 +30,9 @@ import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsChromeHandlers } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsDialogSession } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsErrorCode } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsOutcome } from '@docx-editor.dev/core/editor';
-import { CompareDocumentsRefusal } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsProgress } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsRequest } from '@docx-editor.dev/core/editor';
 import { Component } from 'vue';
 import { ComponentCustomProps } from 'vue';
@@ -260,9 +261,9 @@ export interface CompareDocumentsDialogValues {
     readonly revised: File | null;
 }
 
-export { CompareDocumentsOutcome }
+export { CompareDocumentsErrorCode }
 
-export { CompareDocumentsRefusal }
+export { CompareDocumentsOutcome }
 
 export { CompareDocumentsRequest }
 
@@ -7863,7 +7864,9 @@ export function useCompareDocumentsDialog(): UseCompareDocumentsDialogReturn;
 // @public
 export interface UseCompareDocumentsDialogReturn extends UseDialogReturn<CompareDocumentsDialogValues> {
     readonly busy: Readonly<Ref<boolean>>;
+    readonly cancelable: Readonly<Ref<boolean>>;
     readonly notice: Readonly<Ref<string | undefined>>;
+    readonly progress: Readonly<Ref<CompareDocumentsProgress | null>>;
 }
 
 // @public (undocumented)

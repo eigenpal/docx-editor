@@ -1,4 +1,4 @@
-import type { CompareDocumentsErrorCode } from './document-compare.ts';
+import type { CompareDocumentsErrorCode, CompareDocumentsProgress } from './document-compare.ts';
 
 /**
  * The `accept` value for a file input that picks the revised document: DOCX files only.
@@ -65,9 +65,19 @@ export interface CompareDocumentsDialogSession {
    * tracked changes, as one undoable step. Closes the session when the document changes. With
    * no differences (`changed` false) or a refusal, the session stays open with a message to
    * show.
+   *
+   * When the review module runs compares in the background, `onProgress` reports each step,
+   * and `cancel()` stops a running compare: `apply` then answers `closed`. Otherwise the
+   * compare runs on the main thread, `onProgress` is not called, and nothing can stop the
+   * compare once it starts.
    */
-  apply(request: CompareDocumentsRequest): Promise<CompareDocumentsOutcome>;
-  /** Close without comparing. */
+  apply(
+    request: CompareDocumentsRequest,
+    options?: { readonly onProgress?: (progress: CompareDocumentsProgress) => void }
+  ): Promise<CompareDocumentsOutcome>;
+  /** Whether `cancel()` can stop a running compare: true when compares run in the background. */
+  readonly cancelable: boolean;
+  /** Close the dialog. A running background compare stops, and nothing changes. */
   cancel(): void;
 }
 

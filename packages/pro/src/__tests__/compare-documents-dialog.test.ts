@@ -19,14 +19,17 @@ const REVISED = zipDocument(paragraphs('The quick red fox.', 'It jumps over the 
 let cleanup = () => {};
 afterEach(() => cleanup());
 
-function setup(): { container: HTMLElement; editor: DocxEditorInstance } {
+function setup(review: Parameters<typeof reviewModule>[0] = {}): {
+  container: HTMLElement;
+  editor: DocxEditorInstance;
+} {
   const container = document.createElement('div');
   document.body.append(container);
   const editor = createDocxEditor({
     container,
     document: ORIGINAL,
     author: 'Reviewer',
-    modules: [reviewModule({})],
+    modules: [reviewModule(review)],
   });
   cleanup = () => {
     editor.destroy();
@@ -146,4 +149,57 @@ test('a compare with no differences shows a notice and records nothing', async (
   expect(buttons.map((button) => button.textContent)).toContain('Close');
   expect(editor.surface!.session.packageRevision()).toBe(revision);
   expect(editor.can({ type: 'undo' }).ok).toBe(false);
+});
+
+const WORKER = new URL('../compare-worker.ts', import.meta.url).href;
+
+test('with the compare worker, the dialog shows progress and compares off the main thread', async () => {
+  const { container, editor } = setup({
+    compareWorker: () => new Worker(WORKER, { type: 'module' }),
+  });
+  editor.exec({ type: 'openCompareDocumentsDialog' });
+  const progress = container.querySelector('.docx-compare-documents-progress') as HTMLElement;
+  expect(progress.hidden).toBe(true);
+  chooseFile(getByLabelText(container, 'Revised document') as HTMLInputElement, REVISED);
+  fireEvent.click(getByRole(container, 'button', { name: 'Compare' }));
+  await waitFor(() => {
+    if (progress.hidden) throw new Error('no progress');
+  });
+  await waitFor(
+    () => {
+      if (container.querySelector('dialog')) throw new Error('the dialog is still open');
+    },
+    { timeout: 10000 }
+  );
+  expect(bodyText(editor)).toContain('red');
+});
+
+test('Cancel stops a running background compare and leaves the document as it was', async () => {
+  const ended: string[] = [];
+  const silent = () =>
+    ({
+      postMessage() {},
+      addEventListener() {},
+      terminate: () => ended.push('terminated'),
+    }) as unknown as Worker;
+  const { container, editor } = setup({ compareWorker: silent });
+  const before = bodyText(editor);
+  editor.exec({ type: 'openCompareDocumentsDialog' });
+  chooseFile(getByLabelText(container, 'Revised document') as HTMLInputElement, REVISED);
+  fireEvent.click(getByRole(container, 'button', { name: 'Compare' }));
+  const cancel = getByRole(container, 'button', { name: 'Cancel' }) as HTMLButtonElement;
+  await waitFor(() => {
+    if (container.querySelector('dialog')?.getAttribute('aria-busy') !== 'true')
+      throw new Error('not busy');
+  });
+  expect(cancel.disabled).toBe(false);
+  fireEvent.click(cancel);
+  await waitFor(() => expect(ended).toEqual(['terminated']));
+  expect(container.querySelector('dialog')).toBeNull();
+  expect(bodyText(editor)).toBe(before);
+  expect(editor.can({ type: 'undo' }).ok).toBe(false);
+});
+
+test('reviewModule refuses a compareWorker that is not a function', () => {
+  expect(() => reviewModule({ compareWorker: 'worker.js' as never })).toThrow(TypeError);
 });

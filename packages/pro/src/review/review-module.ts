@@ -25,6 +25,7 @@ import { collectReviewItems, revisionItemsOfParagraph } from './review-model.ts'
 import type { ProLicenseOptions } from '../license.ts';
 import { installDrawing } from '../drawing/index.ts';
 import { compareDocumentsEngine } from '../compare/index.ts';
+import { createCompareWorkerEngine } from '../compare/worker-engine.ts';
 
 export type {
   CommentMarkerStyle,
@@ -50,6 +51,29 @@ export interface ReviewModuleOptions extends ProLicenseOptions {
    * value throws a `TypeError`.
    */
   readonly pane?: ReviewPaneOptions;
+  /**
+   * Starts the compare worker, `@docx-editor.dev/pro/compare-worker`, as a module worker. With
+   * it, the Compare documents dialog compares off the page's main thread, shows progress, and
+   * can stop a running compare. Without it, the dialog compares on the main thread. The editor
+   * starts one worker for each compare and ends it when the compare ends.
+   *
+   * @example Vite
+   * ```ts
+   * import CompareWorker from '@docx-editor.dev/pro/compare-worker?worker';
+   * reviewModule({ compareWorker: () => new CompareWorker() });
+   * ```
+   *
+   * @example webpack 5 and Next.js
+   * ```ts
+   * reviewModule({
+   *   compareWorker: () =>
+   *     new Worker(new URL('@docx-editor.dev/pro/compare-worker', import.meta.url), {
+   *       type: 'module',
+   *     }),
+   * });
+   * ```
+   */
+  readonly compareWorker?: () => Worker;
 }
 
 /**
@@ -61,10 +85,14 @@ export function reviewModule(options: ReviewModuleOptions = {}): EditorModule {
   // Validate now, so a misspelled setting fails where the host wrote it.
   const pane = options.pane === undefined ? undefined : { ...resolveReviewPane(options.pane) };
   installDrawing(options);
+  if (options.compareWorker !== undefined && typeof options.compareWorker !== 'function')
+    throw new TypeError('reviewModule: compareWorker must be a function that returns a Worker');
+  const background = options.compareWorker && createCompareWorkerEngine(options.compareWorker);
   return {
     id: 'review',
     review: {
       compareDocuments: compareDocumentsEngine,
+      ...(background ? { compareDocumentsInBackground: background } : {}),
       createCompareDocumentsDialog,
       createRevisionMarkupDialog,
       displayModes: ['all-markup', 'simple-markup', 'proposed', 'original'],

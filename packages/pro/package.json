@@ -60,6 +60,9 @@
       "import": "./dist/drawing/index.js",
       "require": "./dist/drawing/index.cjs"
     },
+    "./compare-worker": {
+      "import": "./dist/compare-worker.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import {
   COMPARE_DOCUMENTS_ACCEPT,
   type CompareDocumentsDialogSession,
+  type CompareDocumentsProgress,
 } from '@docx-editor.dev/core/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../i18n';
@@ -27,6 +28,13 @@ export interface CompareDocumentsDialogValues {
 export interface UseCompareDocumentsDialogReturn extends UseDialogReturn<CompareDocumentsDialogValues> {
   /** True while the chosen file is read and compared. */
   readonly busy: boolean;
+  /**
+   * How far the running compare is, when the editor compares in the background (see
+   * `reviewModule({ compareWorker })`). Null when no compare runs or none reports its steps.
+   */
+  readonly progress: CompareDocumentsProgress | null;
+  /** Whether `cancel()` stops a running compare. True when the editor compares in the background. */
+  readonly cancelable: boolean;
   /** A message that is not an error, such as that the documents have no differences. */
   readonly notice: string | undefined;
 }
@@ -60,6 +68,7 @@ function CompareDocumentsForm({
   const [error, setError] = useState<string | undefined>();
   const [notice, setNotice] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<CompareDocumentsProgress | null>(null);
   const [closed, setClosed] = useState(session.signal.aborted);
   const lifetime = useRef<CompareDocumentsDialogSession | null>(null);
   useEffect(() => {
@@ -95,12 +104,16 @@ function CompareDocumentsForm({
       return;
     }
     if (session.signal.aborted) return;
-    const outcome = await session.apply({
-      revised,
-      authorName: values.authorName,
-      detectFormatChanges: values.detectFormatChanges,
-    });
+    const outcome = await session.apply(
+      {
+        revised,
+        authorName: values.authorName,
+        detectFormatChanges: values.detectFormatChanges,
+      },
+      { onProgress: setProgress }
+    );
     if (session.signal.aborted) return;
+    setProgress(null);
     // With no differences the dialog stays open and says so; nothing changed.
     if (outcome.ok) setNotice(translate('compareDocuments.noDifferences'));
     else setError(translate(`compareDocuments.errors.${outcome.code}` as TranslationKey));
@@ -116,12 +129,14 @@ function CompareDocumentsForm({
     errors: error === undefined ? {} : { form: error },
     isEnabled: !closed && !busy && values.revised !== null && session.canApply(),
     busy,
+    progress,
+    cancelable: session.cancelable,
     notice,
     apply() {
       void compare();
     },
     cancel() {
-      if (!busy) session.cancel();
+      if (!busy || session.cancelable) session.cancel();
     },
   };
   if (closed) return null;
@@ -184,6 +199,15 @@ function CompareDocumentsForm({
                 {t('detectFormatting')}
               </label>
             </div>
+            {busy ? (
+              <progress
+                data-docx-part="progress"
+                className="docx-compare-documents-progress"
+                max={1}
+                value={progress?.fraction}
+                aria-label={t('comparing')}
+              />
+            ) : null}
             <p data-docx-part="error" role="alert" className="docx-compare-documents-error">
               {state.errors.form}
             </p>
@@ -191,7 +215,12 @@ function CompareDocumentsForm({
               {notice}
             </p>
             <div data-docx-part="footer" className="docx-compare-documents-actions">
-              <button data-docx-part="cancel" type="button" disabled={busy} onClick={state.cancel}>
+              <button
+                data-docx-part="cancel"
+                type="button"
+                disabled={busy && !session.cancelable}
+                onClick={state.cancel}
+              >
                 {/* After a compare with no differences, nothing remains to cancel. */}
                 {notice ? translate('common.close') : t('cancel')}
               </button>

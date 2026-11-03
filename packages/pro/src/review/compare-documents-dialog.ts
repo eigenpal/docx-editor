@@ -58,7 +58,7 @@ export function createCompareDocumentsDialog(
         dialog.addEventListener(type, (event) => event.stopPropagation());
       dialog.addEventListener('cancel', (event) => {
         event.preventDefault();
-        if (!busy) host.cancel();
+        if (!busy || host.cancelable) host.cancel();
       });
       const title = el('h2', t('title'));
       title.id = `docx-compare-documents-title-${id}`;
@@ -99,6 +99,12 @@ export function createCompareDocumentsDialog(
         notice.textContent = '';
         cancel.textContent = t('cancel');
       };
+      // Shown while a compare runs: with a value when the compare reports its steps.
+      const progress = el('progress');
+      progress.className = 'docx-compare-documents-progress';
+      progress.max = 1;
+      progress.hidden = true;
+      progress.setAttribute('aria-label', t('comparing'));
       const footer = el('div');
       footer.className = 'docx-compare-documents-actions';
       const cancel = el('button', t('cancel'));
@@ -110,7 +116,11 @@ export function createCompareDocumentsDialog(
 
       const setBusy = (next: boolean) => {
         busy = next;
-        for (const control of [file, author, formatting, cancel]) control.disabled = next;
+        for (const control of [file, author, formatting]) control.disabled = next;
+        // A background compare can stop; a compare on the main thread cannot.
+        cancel.disabled = next && !host.cancelable;
+        progress.hidden = !next;
+        if (!next) progress.removeAttribute('value');
         compare.disabled = next || !file.files?.length || !host.canApply();
         compare.textContent = t(next ? 'comparing' : 'compare');
         dialog?.setAttribute('aria-busy', String(next));
@@ -138,11 +148,14 @@ export function createCompareDocumentsDialog(
           return;
         }
         if (host.signal.aborted) return;
-        const outcome = await host.apply({
-          revised,
-          authorName: author.value,
-          detectFormatChanges: formatting.checked,
-        });
+        const outcome = await host.apply(
+          {
+            revised,
+            authorName: author.value,
+            detectFormatChanges: formatting.checked,
+          },
+          { onProgress: (step) => (progress.value = step.fraction) }
+        );
         if (host.signal.aborted) return;
         // With no differences the dialog stays open and says so; nothing changed.
         if (outcome.ok) {
@@ -154,7 +167,7 @@ export function createCompareDocumentsDialog(
         setBusy(false);
       });
 
-      dialog.append(title, description, body, error, notice, footer);
+      dialog.append(title, description, body, progress, error, notice, footer);
       host.container.append(dialog);
       setBusy(false);
       dialog.showModal();

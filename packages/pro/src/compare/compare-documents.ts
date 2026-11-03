@@ -131,18 +131,26 @@ export function compareDocuments(
   };
 }
 
+/** Reports a compare step: the phase that starts and the share of the work done before it. */
+export type CompareProgress = (phase: 'comparing' | 'checking', fraction: number) => void;
+
+/** Share of the work done when the stories are compared, and when the result is checked. */
+const COMPARING_FRACTION = 0.1;
+const CHECKING_FRACTION = 0.7;
+
 export function comparePackages(
   original: OoxmlPackage,
   revised: OoxmlPackage,
   options: CompareDocumentsOptions = {},
   /** @internal Diagnostics only: return the result even when the self-check fails. */
-  unchecked = false
+  unchecked = false,
+  progress?: CompareProgress
 ): ComparePackagesResult {
   const invalid = invalidOption(options);
   if (invalid) return { ok: false, code: 'invalidOptions', message: invalid };
   // One timestamp for the compare and its no-difference oracle.
   const fixed: CompareDocumentsOptions = { ...options, date: options.date ?? new Date() };
-  const result = compareOnce(original, revised, fixed, unchecked);
+  const result = compareOnce(original, revised, fixed, unchecked, progress);
   if (!result.ok || result.revisionCount > 0) return result;
   // No revision written. The result still differs from the original when the compare accepted
   // the original's own tracked changes, or wrote a difference untracked (formatting with
@@ -161,7 +169,8 @@ function compareOnce(
   original: OoxmlPackage,
   revised: OoxmlPackage,
   options: CompareDocumentsOptions,
-  unchecked: boolean
+  unchecked: boolean,
+  progress?: CompareProgress
 ): ComparePackagesResult {
   if (protectedAgainstEdits(original, options.detectFormatChanges ?? true)) {
     return {
@@ -180,6 +189,7 @@ function compareOnce(
   ) {
     return { ok: false, code: 'tooLarge', message: 'The documents are too large to compare.' };
   }
+  progress?.('comparing', COMPARING_FRACTION);
   const basePkg = acceptAll(original);
   const revisedPkg = acceptAll(revised);
   if (!basePkg) return unacceptable('original');
@@ -275,6 +285,7 @@ function compareOnce(
         'The revised document adds section or table settings, such as page borders, that a tracked change cannot restore on reject.',
     };
   }
+  progress?.('checking', CHECKING_FRACTION);
   const assembled = assemblePackage(
     basePkg,
     revisedPkg,

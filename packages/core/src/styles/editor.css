@@ -8924,6 +8924,11 @@ p.docx-review__refused {
 .docx-compare-documents-dialog .docx-compare-documents-error {
   color: var(--doc-error);
 }
+.docx-compare-documents-dialog .docx-compare-documents-progress {
+  width: 100%;
+  margin: 0.75rem 0 0;
+  accent-color: var(--doc-primary);
+}
 /* One message line: the notice takes the error's place, never a second line. */
 .docx-compare-documents-dialog
   .docx-compare-documents-error:empty:has(+ .docx-compare-documents-notice:not(:empty)),

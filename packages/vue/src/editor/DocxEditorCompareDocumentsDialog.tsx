@@ -13,6 +13,7 @@ import {
 import {
   COMPARE_DOCUMENTS_ACCEPT,
   type CompareDocumentsDialogSession,
+  type CompareDocumentsProgress,
 } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useTranslation } from '../i18n';
@@ -36,6 +37,13 @@ const composition = createDialogComposition<CompareDocumentsDialogValues>('Compa
 export interface UseCompareDocumentsDialogReturn extends UseDialogReturn<CompareDocumentsDialogValues> {
   /** True while the chosen file is read and compared. */
   readonly busy: Readonly<Ref<boolean>>;
+  /**
+   * How far the running compare is, when the editor compares in the background (see
+   * `reviewModule({ compareWorker })`). Null when no compare runs or none reports its steps.
+   */
+  readonly progress: Readonly<Ref<CompareDocumentsProgress | null>>;
+  /** Whether `cancel()` stops a running compare. True when the editor compares in the background. */
+  readonly cancelable: Readonly<Ref<boolean>>;
   /** A message that is not an error, such as that the documents have no differences. */
   readonly notice: Readonly<Ref<string | undefined>>;
 }
@@ -70,6 +78,8 @@ const Impl = defineComponent({
     const error = ref<string | undefined>();
     const notice = ref<string | undefined>();
     const busy = ref(false);
+    const progress = shallowRef<CompareDocumentsProgress | null>(null);
+    const cancelable = computed(() => p.session?.cancelable ?? false);
     const closed = ref(false);
     watch(
       () => p.session,
@@ -78,6 +88,7 @@ const Impl = defineComponent({
         error.value = undefined;
         notice.value = undefined;
         busy.value = false;
+        progress.value = null;
         if (!session) return;
         values.value = {
           revised: null,
@@ -111,7 +122,7 @@ const Impl = defineComponent({
       () => !closed.value && !busy.value && values.value.revised !== null && canApply.value
     );
     const cancel = () => {
-      if (!busy.value) p.session?.cancel();
+      if (!busy.value || cancelable.value) p.session?.cancel();
     };
     const compare = async () => {
       const session = p.session;
@@ -135,12 +146,16 @@ const Impl = defineComponent({
         return;
       }
       if (session.signal.aborted) return;
-      const outcome = await session.apply({
-        revised,
-        authorName: values.value.authorName,
-        detectFormatChanges: values.value.detectFormatChanges,
-      });
+      const outcome = await session.apply(
+        {
+          revised,
+          authorName: values.value.authorName,
+          detectFormatChanges: values.value.detectFormatChanges,
+        },
+        { onProgress: (step) => (progress.value = step) }
+      );
       if (session.signal.aborted) return;
+      progress.value = null;
       // With no differences the dialog stays open and says so; nothing changed.
       if (outcome.ok) notice.value = translate('compareDocuments.noDifferences');
       else
@@ -157,6 +172,8 @@ const Impl = defineComponent({
       errors: computed(() => (error.value === undefined ? {} : { form: error.value })),
       isEnabled: enabled,
       busy,
+      progress,
+      cancelable,
       notice,
       setValue,
       apply,
@@ -212,6 +229,15 @@ const Impl = defineComponent({
               {t('detectFormatting')}
             </label>
           </div>
+          {busy.value ? (
+            <progress
+              data-docx-part="progress"
+              class="docx-compare-documents-progress"
+              max={1}
+              value={progress.value?.fraction}
+              aria-label={t('comparing')}
+            />
+          ) : null}
           <p data-docx-part="error" role="alert" class="docx-compare-documents-error">
             {error.value ?? null}
           </p>
@@ -219,7 +245,12 @@ const Impl = defineComponent({
             {notice.value ?? null}
           </p>
           <div data-docx-part="footer" class="docx-compare-documents-actions">
-            <button data-docx-part="cancel" type="button" disabled={busy.value} onClick={cancel}>
+            <button
+              data-docx-part="cancel"
+              type="button"
+              disabled={busy.value && !cancelable.value}
+              onClick={cancel}
+            >
               {/* After a compare with no differences, nothing remains to cancel. */}
               {notice.value ? translate('common.close') : t('cancel')}
             </button>

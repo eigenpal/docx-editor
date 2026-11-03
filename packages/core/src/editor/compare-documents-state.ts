@@ -6,7 +6,17 @@ import type {
   CompareDocumentsOutcome,
   CompareDocumentsRequest,
 } from '../contracts/compare-documents.ts';
-import type { CompareDocumentsErrorCode } from '../contracts/document-compare.ts';
+import type {
+  CompareDocumentsBackgroundEngine,
+  CompareDocumentsEngineOptions,
+  CompareDocumentsErrorCode,
+  CompareDocumentsProgress,
+} from '../contracts/document-compare.ts';
+import {
+  readOoxmlPackage,
+  writeOoxmlPackage,
+  type OoxmlPackage,
+} from '../store/package/ooxml-package.ts';
 import type { CompareDocumentsDialog, ReviewModuleContribution } from '../contracts/modules.ts';
 import { readDocumentProtection } from '../store/package/document-protection.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
@@ -36,6 +46,9 @@ export interface CompareDocumentsStateHost {
 const VIEWING_REASON = 'the document is open for viewing';
 const EMPTY_REASON = 'the revised document is empty';
 const CLOSED_REASON = 'the dialog is closed';
+const CHANGED_REASON = 'the document changed while the compare ran';
+/** Where progress stands while the result is applied: the layout of the result remains. */
+const APPLYING_FRACTION = 0.95;
 
 type CompareExec = ExecResult & {
   readonly revisionCount?: number;
@@ -161,41 +174,104 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
     return { ok: true };
   };
 
-  const compare = (request: CompareDocumentsRequest): CompareExec => {
+  /** The checks and engine options of one compare, or why it cannot run. */
+  const prepare = (
+    request: CompareDocumentsRequest
+  ): { readonly refused: CompareExec } | { readonly options: CompareDocumentsEngineOptions } => {
     const allowed = canCompare();
-    if (!allowed.ok) return allowed;
+    if (!allowed.ok) return { refused: allowed };
     if (!isBytes(request.revised) || request.revised.byteLength === 0)
-      return { ok: false, code: 'invalidArgs', reason: EMPTY_REASON };
+      return { refused: { ok: false, code: 'invalidArgs', reason: EMPTY_REASON } };
     const invalid = invalidOption(request);
-    if (invalid)
-      return { ok: false, code: 'invalidArgs', reason: invalid, engineCode: 'invalidOptions' };
+    if (invalid) {
+      return {
+        refused: { ok: false, code: 'invalidArgs', reason: invalid, engineCode: 'invalidOptions' },
+      };
+    }
     const surface = host.surface()!;
     surface.flushPendingInput();
     const authorName = request.authorName?.trim() || surface.author();
-    const result = host.contribution()!.compareDocuments!(
-      surface.session.currentPackage(),
-      request.revised,
-      {
+    return {
+      options: {
         ...(authorName ? { authorName } : {}),
         detectFormatChanges: request.detectFormatChanges !== false,
         ...(request.removeDateAndTime === true ? { removeDateAndTime: true } : {}),
-      }
-    );
-    if (!result.ok)
-      return {
-        ok: false,
-        code: ENGINE_EXEC_CODES[result.code] ?? 'invalidArgs',
-        reason: result.message,
-        engineCode: result.code,
-      };
-    const replaced = surface.session.replacePackage(result.package);
+      },
+    };
+  };
+
+  const engineRefusal = (result: { code: CompareDocumentsErrorCode; message: string }) => ({
+    ok: false as const,
+    code: ENGINE_EXEC_CODES[result.code] ?? 'invalidArgs',
+    reason: result.message,
+    engineCode: result.code,
+  });
+
+  /** Install a compare result as one package undo unit. */
+  const install = (pkg: OoxmlPackage, revisionCount: number): CompareExec => {
+    const replaced = host.surface()!.session.replacePackage(pkg);
     if (!replaced.ok)
       return {
         ok: false,
         code: 'unsupported',
         reason: `the compare result was refused: ${replaced.reason}`,
       };
-    return { ok: true, changed: replaced.change !== null, revisionCount: result.revisionCount };
+    return { ok: true, changed: replaced.change !== null, revisionCount };
+  };
+
+  const compare = (request: CompareDocumentsRequest): CompareExec => {
+    const prepared = prepare(request);
+    if ('refused' in prepared) return prepared.refused;
+    const surface = host.surface()!;
+    const result = host.contribution()!.compareDocuments!(
+      surface.session.currentPackage(),
+      request.revised,
+      prepared.options
+    );
+    if (!result.ok) return engineRefusal(result);
+    return install(result.package, result.revisionCount);
+  };
+
+  /**
+   * The same compare through the background engine. Only the copy of the original and the
+   * install of the result run on the main thread. The open document must not change while
+   * the compare runs: a result for an older document is never installed.
+   */
+  const compareInBackground = async (
+    request: CompareDocumentsRequest,
+    engine: CompareDocumentsBackgroundEngine,
+    signal: AbortSignal,
+    onProgress: (progress: CompareDocumentsProgress) => void
+  ): Promise<CompareExec> => {
+    const prepared = prepare(request);
+    if ('refused' in prepared) return prepared.refused;
+    const surface = host.surface()!;
+    const start = surface.session.currentPackage();
+    const result = await engine(writeOoxmlPackage(start), request.revised, prepared.options, {
+      signal,
+      onProgress,
+    });
+    if (!result.ok) return engineRefusal(result);
+    const current = (): CanResult => {
+      const allowed = canCompare();
+      if (!allowed.ok) return allowed;
+      if (host.surface() !== surface || surface.session.currentPackage() !== start)
+        return { ok: false, code: 'unsupported', reason: CHANGED_REASON };
+      return allowed;
+    };
+    const before = current();
+    if (!before.ok) return before;
+    if (!result.changed || !result.bytes)
+      return { ok: true, changed: false, revisionCount: result.revisionCount };
+    onProgress({ phase: 'applying', fraction: APPLYING_FRACTION });
+    await afterPaint();
+    signal.throwIfAborted();
+    const after = current();
+    if (!after.ok) return after;
+    const read = readOoxmlPackage(result.bytes);
+    if (!read.ok)
+      return { ok: false, code: 'unsupported', reason: `the compare result cannot be read` };
+    return install(read.package, result.revisionCount);
   };
 
   const destroyDialog = (): void => {
@@ -210,13 +286,22 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
 
   const createSession = (): CompareDocumentsDialogSession => {
     const controller = new AbortController();
+    const background = host.contribution()?.compareDocumentsInBackground;
     let running = false;
     const session: CompareDocumentsDialogSession = {
       signal: controller.signal,
       defaultAuthor: host.surface()?.author() ?? '',
       canApply: () =>
         active === session && !controller.signal.aborted && !running && canCompare().ok,
-      async apply(request): Promise<CompareDocumentsOutcome> {
+      cancelable: background !== undefined,
+      async apply(request, options): Promise<CompareDocumentsOutcome> {
+        // Progress never goes back, and stops once the dialog closes.
+        let reached = 0;
+        const report = (progress: CompareDocumentsProgress): void => {
+          if (controller.signal.aborted || progress.fraction < reached) return;
+          reached = progress.fraction;
+          options?.onProgress?.(progress);
+        };
         if (!session.canApply()) {
           const refusal = canCompare();
           if (refusal.ok) return { ok: false, code: 'closed', message: CLOSED_REASON };
@@ -228,7 +313,9 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
         try {
           if (controller.signal.aborted)
             return { ok: false, code: 'closed', message: CLOSED_REASON };
-          const result = compare(request);
+          const result = background
+            ? await compareInBackground(request, background, controller.signal, report)
+            : compare(request);
           if (!result.ok)
             return {
               ok: false,
@@ -240,6 +327,8 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
           if (result.changed) session.cancel();
           return { ok: true, revisionCount, changed: result.changed };
         } catch (error) {
+          if (controller.signal.aborted)
+            return { ok: false, code: 'closed', message: CLOSED_REASON };
           const message = error instanceof Error ? error.message : String(error);
           return { ok: false, code: 'failed', message };
         } finally {
@@ -262,6 +351,7 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
     dialog = host.contribution()!.createCompareDocumentsDialog!({
       signal: session.signal,
       defaultAuthor: session.defaultAuthor,
+      cancelable: session.cancelable,
       canApply: session.canApply,
       apply: session.apply,
       cancel: session.cancel,

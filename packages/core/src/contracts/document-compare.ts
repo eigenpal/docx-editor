@@ -94,3 +94,54 @@ export type CompareDocumentsEngine = (
   revised: Uint8Array,
   options: CompareDocumentsEngineOptions
 ) => CompareDocumentsEngineResult;
+
+/**
+ * A step of a compare that runs in the background, in order: `reading` the two documents,
+ * `comparing` them, `checking` that the result reproduces both, and `applying` it to the
+ * open document.
+ *
+ * @public
+ */
+export type CompareDocumentsPhase = 'reading' | 'comparing' | 'checking' | 'applying';
+
+/** How far a background compare is. @public */
+export interface CompareDocumentsProgress {
+  /** The step that runs now. */
+  readonly phase: CompareDocumentsPhase;
+  /** The share of the work done, from 0 to 1. It never decreases. */
+  readonly fraction: number;
+}
+
+/** Result of one background compare: like {@link CompareDocumentsEngineResult}, as bytes. @public */
+export type CompareDocumentsBackgroundResult =
+  | {
+      readonly ok: true;
+      /** The original with the differences as tracked changes, or `null` when unchanged. */
+      readonly bytes: Uint8Array | null;
+      /** Tracked changes recorded, one per review decision. */
+      readonly revisionCount: number;
+      /** Whether the result differs from the original. */
+      readonly changed: boolean;
+    }
+  | {
+      readonly ok: false;
+      readonly code: CompareDocumentsErrorCode;
+      readonly message: string;
+    };
+
+/**
+ * Runs a compare off the page's main thread, for example in a worker. The editor's Compare
+ * documents dialog uses it when the review module provides one. It reports progress, and it
+ * stops when `signal` aborts: the promise then rejects with the signal's reason.
+ *
+ * @public
+ */
+export type CompareDocumentsBackgroundEngine = (
+  original: Uint8Array,
+  revised: Uint8Array,
+  options: CompareDocumentsEngineOptions,
+  control: {
+    readonly signal: AbortSignal;
+    readonly onProgress: (progress: CompareDocumentsProgress) => void;
+  }
+) => Promise<CompareDocumentsBackgroundResult>;

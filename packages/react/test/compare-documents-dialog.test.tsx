@@ -23,14 +23,14 @@ const paragraph = (text: string) => `<w:p><w:r><w:t xml:space="preserve">${text}
 const ORIGINAL = zipDocument(paragraph('The quick brown fox.'));
 const REVISED = zipDocument(paragraph('The quick red fox.'));
 
-function mount(popups?: DocxEditorPopups) {
+function mount(popups?: DocxEditorPopups, review: Parameters<typeof reviewModule>[0] = {}) {
   let instance: DocxEditorInstance;
   const view = render(
     <StrictMode>
       <DocxEditorRoot
         document={ORIGINAL}
         author="Reviewer"
-        modules={[reviewModule({})]}
+        modules={[reviewModule(review)]}
         popups={popups}
         onReady={(editor) => {
           instance = editor as DocxEditorInstance;
@@ -179,4 +179,59 @@ test('named parts replace defaults; popup false and replacements get cancellable
     fireEvent.click(replaced.view.getByText('Custom popup'));
   });
   expect(session!.signal.aborted).toBe(true);
+});
+
+const WORKER = new URL('../../pro/src/compare-worker.ts', import.meta.url).href;
+
+test('with the compare worker, the dialog shows progress and compares off the main thread', async () => {
+  const { view, editor } = mount(undefined, {
+    compareWorker: () => new Worker(WORKER, { type: 'module' }),
+  });
+  await waitFor(() => expect(editor()).toBeTruthy());
+  await act(async () => {
+    editor().exec({ type: 'openCompareDocumentsDialog' });
+  });
+  await act(async () => chooseFile(view.getByLabelText('Revised document'), REVISED));
+  await act(async () => {
+    fireEvent.click(view.getByText('Compare'));
+  });
+  await waitFor(
+    () => {
+      if (view.container.querySelector('dialog')) throw new Error('the dialog is still open');
+    },
+    { timeout: 10000 }
+  );
+  expect(editor().surface!.session.reviewItems().length).toBeGreaterThan(0);
+});
+
+test('Cancel stops a running background compare and leaves the document as it was', async () => {
+  const ended: string[] = [];
+  // A worker that never answers: the compare runs until Cancel.
+  const silent = () =>
+    ({
+      postMessage() {},
+      addEventListener() {},
+      terminate: () => ended.push('terminated'),
+    }) as unknown as Worker;
+  const { view, editor } = mount(undefined, { compareWorker: silent });
+  await waitFor(() => expect(editor()).toBeTruthy());
+  await act(async () => {
+    editor().exec({ type: 'openCompareDocumentsDialog' });
+  });
+  await act(async () => chooseFile(view.getByLabelText('Revised document'), REVISED));
+  await act(async () => {
+    fireEvent.click(view.getByText('Compare'));
+  });
+  await waitFor(() => {
+    if (!view.container.querySelector('[data-docx-part="progress"]')) throw new Error('no bar');
+  });
+  const cancel = view.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement;
+  expect(cancel.disabled).toBe(false);
+  await act(async () => {
+    fireEvent.click(cancel);
+  });
+  await waitFor(() => expect(ended).toEqual(['terminated']));
+  expect(view.queryByRole('dialog')).toBeNull();
+  expect(editor().surface!.session.bodyText()).toBe('The quick brown fox.');
+  expect(editor().can({ type: 'undo' }).ok).toBe(false);
 });

@@ -39,6 +39,8 @@ const REACT_ENTRIES = {
   'collaboration/webrtc': 'src/collaboration/webrtc.ts',
   'collaboration/hocuspocus': 'src/collaboration/hocuspocus.ts',
   'drawing/index': 'src/drawing/index.ts',
+  // A module worker entry: no exports, so it has no declarations and no API report.
+  'compare-worker': 'src/compare-worker.ts',
 };
 
 const VUE_ENTRIES = {

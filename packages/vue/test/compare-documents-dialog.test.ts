@@ -37,7 +37,10 @@ function mount(render: () => VNodeChild) {
   return container;
 }
 
-async function mountEditor(popups?: DocxEditorPopups) {
+async function mountEditor(
+  popups?: DocxEditorPopups,
+  review: Parameters<typeof reviewModule>[0] = {}
+) {
   let editor: DocxEditorInstance | undefined;
   const container = mount(() =>
     h(
@@ -45,7 +48,7 @@ async function mountEditor(popups?: DocxEditorPopups) {
       {
         document: ORIGINAL,
         author: 'Reviewer',
-        modules: [reviewModule()],
+        modules: [reviewModule(review)],
         popups,
         onReady: (value: unknown) => {
           editor = value as DocxEditorInstance;
@@ -191,3 +194,43 @@ for (const mode of ['parts', 'false', 'replacement'] as const) {
     }
   });
 }
+
+const WORKER = new URL('../../pro/src/compare-worker.ts', import.meta.url).href;
+
+test('with the compare worker, the dialog compares off the main thread', async () => {
+  const { container, editor } = await mountEditor(undefined, {
+    compareWorker: () => new Worker(WORKER, { type: 'module' }),
+  });
+  editor.exec({ type: 'openCompareDocumentsDialog' });
+  await nextTick();
+  chooseFile(label(container, 'Revised document'), REVISED);
+  await nextTick();
+  (container.querySelector('[data-docx-part="apply"]') as HTMLButtonElement).click();
+  await until(() => container.querySelector('dialog') === null, 10000);
+  expect(editor.surface!.session.reviewItems().length).toBeGreaterThan(0);
+});
+
+test('Cancel stops a running background compare and leaves the document as it was', async () => {
+  const ended: string[] = [];
+  // A worker that never answers: the compare runs until Cancel.
+  const silent = () =>
+    ({
+      postMessage() {},
+      addEventListener() {},
+      terminate: () => ended.push('terminated'),
+    }) as unknown as Worker;
+  const { container, editor } = await mountEditor(undefined, { compareWorker: silent });
+  editor.exec({ type: 'openCompareDocumentsDialog' });
+  await nextTick();
+  chooseFile(label(container, 'Revised document'), REVISED);
+  await nextTick();
+  (container.querySelector('[data-docx-part="apply"]') as HTMLButtonElement).click();
+  await until(() => container.querySelector('[data-docx-part="progress"]') !== null);
+  const cancel = container.querySelector('[data-docx-part="cancel"]') as HTMLButtonElement;
+  expect(cancel.disabled).toBe(false);
+  cancel.click();
+  await until(() => ended.length === 1);
+  await until(() => container.querySelector('dialog') === null);
+  expect(editor.surface!.session.bodyText()).toBe('The quick brown fox.');
+  expect(editor.can({ type: 'undo' }).ok).toBe(false);
+});

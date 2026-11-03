@@ -687,7 +687,7 @@ Page dimensions, margins, and paragraph indents use twips: 1,440 per inch. Parag
 
 `useRevisionMarkupDialog()` also provides `reset()`, which restores the draft defaults without applying them.
 
-`useCompareDocumentsDialog()` also provides `busy`, which is `true` while the chosen file is read and compared. `apply()` compares the open document with the chosen file and records the differences as tracked changes in one undoable step.
+`useCompareDocumentsDialog()` also provides `busy`, which is `true` while the chosen file is read and compared. With the compare worker, `progress` gives the running step and its `fraction` from 0 to 1, and `cancelable` is `true`, so `cancel()` stops a running compare. For more information, see [Compare in a worker](/docs/2.x/pro/compare-documents#compare-in-a-worker). `apply()` compares the open document with the chosen file and records the differences as tracked changes in one undoable step.
 
 `useSplitCellDialog()` also provides `limits`, the most rows and columns the cell at the selection splits into. The draft keeps each count as typed text.
 

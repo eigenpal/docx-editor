@@ -8,7 +8,11 @@ export type { HistoryGroupOutcome, RevisionAuthorResult, RevisionBatchResult };
 export type * from './revision-markup.ts';
 export type * from './review-pane.ts';
 export type * from './compare-documents.ts';
-export type { CompareDocumentsErrorCode } from './document-compare.ts';
+export type {
+  CompareDocumentsErrorCode,
+  CompareDocumentsPhase,
+  CompareDocumentsProgress,
+} from './document-compare.ts';
 export type { CollaborationFailureCode, CollaborationStatus } from '../collaboration/index.ts';
 export type {
   DocumentProtectionEdit,

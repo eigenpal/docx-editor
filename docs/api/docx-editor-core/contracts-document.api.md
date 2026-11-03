@@ -45,7 +45,19 @@ export type CompareDocumentsErrorCode =
 */
 | 'protected'
 /** The differences include content that no tracked change can record. */
-| 'unsupportedContent';
+| 'unsupportedContent'
+/** Editor only: no review module, no open document, or no mount. */
+| 'unavailable'
+/** Editor only: a collaboration session is attached. */
+| 'collaboration'
+/** Editor only: the document is open for viewing only. */
+| 'viewing'
+/** Editor only: the dialog closed, or the compare was canceled, before it finished. */
+| 'closed'
+/** Editor only: the revised file is empty. */
+| 'empty'
+/** Editor only: any other failure. */
+| 'failed';
 
 // @public
 export type CompareDocumentsOutcome = {
@@ -53,13 +65,10 @@ export type CompareDocumentsOutcome = {
     readonly ok: true;
     readonly revisionCount: number;
 } | {
-    readonly code: CompareDocumentsRefusal;
+    readonly code: CompareDocumentsErrorCode;
     readonly message: string;
     readonly ok: false;
 };
-
-// @public
-export type CompareDocumentsRefusal = CompareDocumentsErrorCode | 'unavailable' | 'collaboration' | 'viewing' | 'closed' | 'empty' | 'failed';
 
 // @public
 export type ContainerRef = {

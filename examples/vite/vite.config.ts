@@ -182,6 +182,11 @@ export default defineConfig(async (): Promise<UserConfig> => {
               find: '@docx-editor.dev/pro/collaboration',
               replacement: path.join(monorepoRoot, 'packages/pro/src/collaboration/index.ts'),
             },
+            // A regular expression, so the `?worker` query survives the alias.
+            {
+              find: /^@docx-editor\.dev\/pro\/compare-worker(\?.*)?$/,
+              replacement: `${path.join(monorepoRoot, 'packages/pro/src/compare-worker.ts')}$1`,
+            },
             {
               find: '@docx-editor.dev/pro/drawing',
               replacement: path.join(monorepoRoot, 'packages/pro/src/drawing/index.ts'),
