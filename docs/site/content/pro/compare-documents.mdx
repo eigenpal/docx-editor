@@ -25,21 +25,7 @@ const editor = createDocxEditor({
 });
 ```
 
-The **Review** menu then shows **Compare documents**. The open document is the original, and you choose the revised file in the dialog. The changes apply as one step, so one undo restores the original.
-
-### Compare in a worker
-
-The dialog compares in a web worker, so the page stays responsive, the dialog shows progress, and **Cancel** stops a running compare. You do not need to set anything up.
-
-If the worker cannot start, the dialog compares on the main thread. If your bundler cannot load the worker from the package, pass your own worker. For example, with the `?worker` import of Vite:
-
-```ts
-import CompareWorker from '@docx-editor.dev/pro/compare-worker?worker';
-
-reviewModule({ compareWorker: () => new CompareWorker() });
-```
-
-To always compare on the main thread, pass `compareWorker: false`.
+The **Review** menu then shows **Compare documents**. The open document is the original, and you choose the revised file in the dialog. The dialog compares in a web worker, so the page stays responsive, and **Cancel** stops a running compare. The changes apply as one step, so one undo restores the original.
 
 ### Compare from code
 
@@ -117,3 +103,4 @@ A refused compare changes nothing and returns a `code`. Pass the outcome to `com
 
 - The compare treats tracked changes that are already in either document as accepted. The dialog shows a notice when the open document has them.
 - Reject all does not restore style definitions, content control properties, or comments. To restore the complete original, use undo.
+- If the worker cannot start, the dialog compares on the main thread. If your bundler cannot load the worker from the package, pass your own, for example `reviewModule({ compareWorker: () => new CompareWorker() })` with `import CompareWorker from '@docx-editor.dev/pro/compare-worker?worker'` in Vite. To always compare on the main thread, pass `compareWorker: false`.
