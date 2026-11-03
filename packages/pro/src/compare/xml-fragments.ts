@@ -141,7 +141,10 @@ export class NamespaceScope {
 
   strip(xml: string): string {
     return xml.replace(DECLARATION, (whole, prefix: string | undefined, uri: string) => {
-      const key = prefix ?? '';
+      // A default namespace (or its `xmlns=""` reset) holds only for the element that declares
+      // it and its content: it stays there, so the element keeps its namespace.
+      if (prefix === undefined) return whole;
+      const key = prefix;
       const bound = this.#bindings.get(key);
       if (bound === undefined) {
         this.#bindings.set(key, uri);

@@ -195,7 +195,9 @@ function newFurniturePartName(basePkg: OoxmlPackage, ref: FurnitureRef): string 
 interface FurnitureOutputs {
   /** The output relationship id of each revised header or footer part, by part name. */
   readonly ids: Map<string, string>;
-  /** Revised parts only earlier sections show that no original part takes: each gets a new part. */
+  /** The output part that holds a revised part's content all inserted, where there is one. */
+  readonly insertedIds: Map<string, string>;
+  /** Revised parts that slots added to earlier sections show: each gets a new inserted part. */
   readonly created: { readonly partName: string; readonly ref: FurnitureRef }[];
 }
 
@@ -208,6 +210,8 @@ function revisedFurnitureOutputs(
   revisedPkg: OoxmlPackage
 ): FurnitureOutputs {
   const ids = new Map<string, string>();
+  // Output parts that hold a revised part's content all inserted, by revised part name.
+  const insertedIds = new Map<string, string>();
   const finalBase = furnitureRefs(basePkg);
   const taken = new Set<string>();
   for (const [key, revised] of furnitureRefs(revisedPkg)) {
@@ -217,6 +221,7 @@ function revisedFurnitureOutputs(
       const partName = newFurniturePartName(basePkg, revised);
       taken.add(partName);
       id = `${MARK}NEW:${partName}§`;
+      if (!insertedIds.has(revised.part.name)) insertedIds.set(revised.part.name, id);
     }
     if (!ids.has(revised.part.name)) ids.set(revised.part.name, id);
   }
@@ -224,18 +229,23 @@ function revisedFurnitureOutputs(
   for (const { base, revised } of earlier?.pairs ?? []) {
     if (revised && !ids.has(revised.part.name)) ids.set(revised.part.name, base.rId);
   }
+  // A slot only the revised document shows in an earlier section takes a part whose content
+  // is all inserted, so a reject leaves it empty there. A part the original shows elsewhere
+  // would bring back that part's original content instead.
   const created: FurnitureOutputs['created'][number][] = [];
   for (const { index, ref } of earlier?.added ?? []) {
-    if (ids.has(ref.part.name)) continue;
+    if (insertedIds.has(ref.part.name)) continue;
     const stem = `/word/compare-${ref.kind}-${ref.type}-s${index + 1}`;
     let partName = `${stem}.xml`;
     for (let n = 2; isPartNameTaken(basePkg, partName) || taken.has(partName); n++)
       partName = `${stem}-${n}.xml`;
     taken.add(partName);
-    ids.set(ref.part.name, `${MARK}NEW:${partName}§`);
+    const id = `${MARK}NEW:${partName}§`;
+    insertedIds.set(ref.part.name, id);
+    if (!ids.has(ref.part.name)) ids.set(ref.part.name, id);
     created.push({ partName, ref });
   }
-  return { ids, created };
+  return { ids, insertedIds, created };
 }
 
 /**
@@ -246,11 +256,11 @@ export function addedSectionReferences(
   basePkg: OoxmlPackage,
   revisedPkg: OoxmlPackage
 ): Map<number, SectionReference[]> {
-  const { ids } = revisedFurnitureOutputs(basePkg, revisedPkg);
+  const { insertedIds } = revisedFurnitureOutputs(basePkg, revisedPkg);
   const out = new Map<number, SectionReference[]>();
   for (const { index, ref } of earlierFurniturePairs(basePkg, revisedPkg)?.added ?? []) {
     const list = out.get(index) ?? [];
-    list.push({ kind: ref.kind, type: ref.type, id: ids.get(ref.part.name)! });
+    list.push({ kind: ref.kind, type: ref.type, id: insertedIds.get(ref.part.name)! });
     out.set(index, list);
   }
   return out;

@@ -12,6 +12,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import {
   applyTreeOp,
+  collectSectionPropertyNodes,
   ooxmlTreesEqual,
   readOoxmlPackage,
   revisionItemsOf,
@@ -216,10 +217,22 @@ function compareOnce(
 
   // Before any revised content is serialized: it registers the revised list id map.
   const definitions = mergeDefinitions(basePkg, revisedPkg);
+  // Tracked-changes protection allows only tracked edits; a revised style definition is not one.
+  if (definitions.replacedStyles && enforcedProtection(original) === 'trackedChanges') {
+    return {
+      ok: false,
+      code: 'protected',
+      message:
+        'The original document allows only tracked changes, and the revised document changes a style definition, which has no tracked form.',
+    };
+  }
   const state = new CompareState();
   for (const [revisedId, outputId] of furnitureOutputIds(basePkg, revisedPkg))
     state.furnitureIds.set(revisedId, outputId);
   state.sectionReferences = addedSectionReferences(basePkg, revisedPkg);
+  collectSectionPropertyNodes(baseDoc.root).forEach((node, index) => {
+    if (node) state.baseSectionIndex.set(node, index);
+  });
   const scope = new NamespaceScope();
   const base = new SideContext('base', basePkg, basePkg.mainDocumentPart, scope);
   const next = new SideContext('revised', revisedPkg, revisedPkg.mainDocumentPart, scope);
@@ -256,7 +269,7 @@ function compareOnce(
   const stories: StoryOutput[] = [
     { partName: baseDoc.name, contentType: baseDoc.contentType, xml: documentXml, isNew: false },
     ...furniture.outputs,
-    ...definitions,
+    ...definitions.outputs,
   ];
   for (const kind of ['footnote', 'endnote'] as const) {
     const notes = compareNotes(basePkg, revisedPkg, kind, ctx);
@@ -278,7 +291,7 @@ function compareOnce(
       code: 'unsupportedContent',
       reason: 'headerFooter',
       message:
-        'A header or footer that several sections of the original share has different content in those sections of the revised document.',
+        'A header or footer of an earlier section differs, and that section has no matching section in the other document that uses the same headers and footers.',
     };
   }
   if (ctx.state.unrecordedProperties > 0) {
@@ -304,8 +317,12 @@ function compareOnce(
       message: assembled.message,
     };
   }
-  const check = selfCheck(assembled.pkg, basePkg, revisedPkg);
-  if (!unchecked && (!check.accept || !check.reject) && check.guard) {
+  const trackedOnly = enforcedProtection(original) === 'trackedChanges';
+  const check = selfCheck(assembled.pkg, basePkg, revisedPkg, trackedOnly);
+  // A revision that cannot be decided fails the compare even when the text matches: a
+  // formatting record in a locked control, say, leaves no way back to the original.
+  const locked = /\b(?:locked|bound)\b/.test(check.guard ?? '');
+  if (!unchecked && locked) {
     return {
       ok: false,
       code: 'unsupportedContent',
@@ -315,12 +332,21 @@ function compareOnce(
         'Changes there cannot be accepted or rejected.',
     };
   }
-  if (!unchecked && (!check.accept || !check.reject)) {
+  // Tracked-changes protection allows only tracked edits; control properties are not one.
+  if (!check.controls) {
+    return {
+      ok: false,
+      code: 'protected',
+      message:
+        'The original document allows only tracked changes, and the revised document changes the properties of a content control, which have no tracked form.',
+    };
+  }
+  if (!unchecked && (!check.accept || !check.reject || check.guard)) {
     return {
       ok: false,
       code: 'unsupportedContent',
       reason: 'unverified',
-      message: `The compare result does not reproduce both documents (${check.detail ?? ''}).`,
+      message: `The compare result does not reproduce both documents (${check.detail ?? check.guard ?? ''}).`,
     };
   }
   return {
@@ -443,20 +469,26 @@ const PROTECTED_EDITS = new Set(['readOnly', 'comments', 'forms']);
  * of its own: the compare would accept them.
  */
 function protectedAgainstEdits(pkg: OoxmlPackage, formatChangesTracked: boolean): boolean {
+  const edit = enforcedProtection(pkg);
+  if (edit === undefined) return false;
+  if (PROTECTED_EDITS.has(edit)) return true;
+  if (edit !== 'trackedChanges') return false;
+  // Without format detection, formatting and section differences are written untracked.
+  return !formatChangesTracked || [...pkg.parts.values()].some((part) => hasRevision(part.root));
+}
+
+/** The edit kind of the original's enforced document protection, if any. */
+function enforcedProtection(pkg: OoxmlPackage): string | undefined {
   const settings = settingsPart(pkg);
   const protection =
     settings &&
     elementChildren(settings.root).find(
       (child) => child.localName === 'documentProtection' && child.namespaceUri === W_NS
     );
-  if (!protection) return false;
-  const edit = attributeOf(protection, 'edit', W_NS) ?? '';
+  if (!protection) return undefined;
   const enforcement = attributeOf(protection, 'enforcement', W_NS);
-  if (enforcement === undefined || OFF_VALUES.has(enforcement)) return false;
-  if (PROTECTED_EDITS.has(edit)) return true;
-  if (edit !== 'trackedChanges') return false;
-  // Without format detection, formatting and section differences are written untracked.
-  return !formatChangesTracked || [...pkg.parts.values()].some((part) => hasRevision(part.root));
+  if (enforcement === undefined || OFF_VALUES.has(enforcement)) return undefined;
+  return attributeOf(protection, 'edit', W_NS) ?? '';
 }
 
 const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

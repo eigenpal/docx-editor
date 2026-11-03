@@ -14,6 +14,8 @@ import { readOoxmlPackage } from '@docx-editor.dev/core/store';
 import { comparePackages } from './compare/compare-documents.ts';
 import {
   COMPARE_WORKER_PROTOCOL,
+  isCompareRequest,
+  ownProtocol,
   type CompareWorkerMessage,
   type CompareWorkerRequest,
 } from './compare/worker-protocol.ts';
@@ -24,21 +26,6 @@ interface WorkerScope {
 }
 
 const scope = globalThis as unknown as WorkerScope;
-
-const isBytes = (value: unknown): value is Uint8Array =>
-  Object.prototype.toString.call(value) === '[object Uint8Array]';
-
-function isRequest(data: unknown): data is CompareWorkerRequest {
-  const request = data as Partial<CompareWorkerRequest> | null;
-  return (
-    typeof request === 'object' &&
-    request !== null &&
-    request.protocol === COMPARE_WORKER_PROTOCOL &&
-    request.type === 'compare' &&
-    isBytes(request.original) &&
-    isBytes(request.revised)
-  );
-}
 
 function run(request: CompareWorkerRequest): CompareWorkerMessage {
   const base = readOoxmlPackage(request.original);
@@ -78,7 +65,16 @@ const result = (value: Extract<CompareWorkerMessage, { type: 'result' }>['result
   ({ protocol: COMPARE_WORKER_PROTOCOL, type: 'result', result: value }) as const;
 
 scope.onmessage = (event) => {
-  if (!isRequest(event.data)) return;
+  // Messages of other code that shares the worker get no answer.
+  if (!ownProtocol(event.data)) return;
+  if (!isCompareRequest(event.data)) {
+    scope.postMessage({
+      protocol: COMPARE_WORKER_PROTOCOL,
+      type: 'error',
+      message: 'The compare request is malformed.',
+    });
+    return;
+  }
   scope.postMessage({
     protocol: COMPARE_WORKER_PROTOCOL,
     type: 'progress',

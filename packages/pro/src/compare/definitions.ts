@@ -106,7 +106,8 @@ const STYLE_REFERENCES = new Set(['pStyle', 'rStyle', 'tblStyle', 'basedOn', 'ne
 function mergeStyles(
   base: OoxmlPackage,
   revised: OoxmlPackage,
-  lists: ReadonlyMap<string, string>
+  lists: ReadonlyMap<string, string>,
+  out: { replacedStyles: boolean }
 ): StoryOutput | null {
   const from = partOfType(revised, 'styles');
   if (!from) return null;
@@ -114,13 +115,27 @@ function mergeStyles(
   // A style the original names but does not define keeps its meaning too: a revised style must
   // not take it over, or original paragraphs would change look with no revision.
   const known = new Set<string | undefined>(referencedIds(base, STYLE_REFERENCES));
+  const defined = new Map<string, ElementNode>();
   for (const style of into ? elementChildren(into.root) : []) {
-    if (style.localName === 'style') known.add(attributeOf(style, 'styleId'));
+    if (style.localName !== 'style') continue;
+    const id = attributeOf(style, 'styleId');
+    known.add(id);
+    if (id !== undefined && !defined.has(id)) defined.set(id, style);
   }
   let added = '';
+  // Styles both documents define take the revised definition, as the reference compare does:
+  // revised content shows as the revised document shows it, and rejecting changes keeps the
+  // definitions. The original's style element keeps its type, id, and default flag.
+  const replaced = new Map<ElementNode, string>();
   for (const style of elementChildren(from.root)) {
     if (style.localName !== 'style') continue;
     const id = attributeOf(style, 'styleId');
+    const original = id === undefined ? undefined : defined.get(id);
+    if (original && !replaced.has(original)) {
+      const xml = revisedDefinition(original, style, lists);
+      if (xml !== null) replaced.set(original, xml);
+      continue;
+    }
     if (id === undefined || known.has(id)) continue;
     known.add(id);
     // The original's default styles stay the defaults.
@@ -129,7 +144,8 @@ function mergeStyles(
     // A style that names a list names it by the revised id, which the output may have moved.
     added += withMappedNumbering(xml, lists);
   }
-  if (!added) return null;
+  out.replacedStyles = replaced.size > 0;
+  if (!added && replaced.size === 0) return null;
   // Without an original styles part the added styles go in a new one, with no document
   // defaults: the original keeps the look it had.
   if (!into)
@@ -137,9 +153,88 @@ function mergeStyles(
   return {
     partName: into.name,
     contentType: into.contentType,
-    xml: insertBefore(into, [], added),
+    xml: replaced.size === 0 ? insertBefore(into, [], added) : rebuiltStyles(into, replaced, added),
     isNew: false,
   };
+}
+
+/**
+ * The revised definition of a style the original also defines, in the original's element
+ * (its `w:type`, `w:styleId`, and `w:default`), or null when the two are the same. A list the
+ * revised definition names goes by the id the output gives that list.
+ */
+function revisedDefinition(
+  original: ElementNode,
+  revised: ElementNode,
+  lists: ReadonlyMap<string, string>
+): string | null {
+  const before = fragment(original);
+  // Compared with the list ids mapped: equal ids can name different lists in the output.
+  const after = withMappedNumbering(fragment(revised), lists);
+  if (normalStyle(before) === normalStyle(after)) return null;
+  const shell = revisedShell(/^<[^>]*?\/?>/.exec(before)![0], /^<[^>]*?\/?>/.exec(after)![0]);
+  if (shell === null) return after;
+  const name = /^<([^\s/>]+)/.exec(before)![1];
+  return `${shell}${innerOfFragment(after)}</${name}>`;
+}
+
+/**
+ * The original's start tag with the revised start tag's namespace declarations, which the
+ * revised content needs. Null when an original name uses a prefix that the revised element
+ * binds to another namespace: the revised element is then taken as it is.
+ */
+function revisedShell(original: string, revised: string): string | null {
+  const bindings = new Map<string, string>();
+  for (const match of revised.matchAll(DECLARATION)) bindings.set(match[1] ?? '', match[2]!);
+  const own = new Map<string, string>();
+  for (const match of original.matchAll(DECLARATION)) own.set(match[1] ?? '', match[2]!);
+  const name = /^<([^\s/>]+)/.exec(original)![1]!;
+  const attributes = [...original.matchAll(ATTRIBUTE)]
+    .map((match) => match[0])
+    .filter((attribute) => !/^\s*xmlns(?::|=)/.test(attribute));
+  for (const used of [name, ...attributes.map((attribute) => attribute.trim())]) {
+    const prefix = /^([\w.-]+):/.exec(used)?.[1];
+    if (prefix === undefined || prefix === 'xml') continue;
+    const bound = bindings.get(prefix);
+    if (bound !== undefined && own.has(prefix) && bound !== own.get(prefix)) return null;
+  }
+  let declarations = '';
+  for (const [prefix, uri] of own)
+    if (!bindings.has(prefix)) declarations += declaration(prefix, uri);
+  for (const [prefix, uri] of bindings) declarations += declaration(prefix, uri);
+  return `<${name}${declarations}${attributes.join('')}>`;
+}
+
+const declaration = (prefix: string, uri: string) =>
+  prefix === '' ? ` xmlns="${uri}"` : ` xmlns:${prefix}="${uri}"`;
+
+const ATTRIBUTE = /\s[\w.:-]+="[^"]*"/g;
+const DECLARATION = /\sxmlns(?::([A-Za-z_][\w.-]*))?="([^"]*)"/g;
+
+/** A style definition without revision-session ids, which are not formatting. */
+const normalStyle = (xml: string) =>
+  xml.replace(/\s[\w.-]+:rsid\w*="[^"]*"/g, '').replace(/<(?:[\w.-]+:)?rsid\b[^>]*\/>/g, '');
+
+/** Inner XML of a serialized element (empty when self-closing). */
+function innerOfFragment(xml: string): string {
+  if (/^<[^>]*\/>$/.test(xml)) return '';
+  const open = /^<[^>]*>/.exec(xml)![0];
+  return xml.slice(open.length, xml.lastIndexOf('</'));
+}
+
+/** The original styles part with some style elements replaced and new ones appended. */
+function rebuiltStyles(
+  into: OoxmlPart,
+  replaced: ReadonlyMap<ElementNode, string>,
+  added: string
+): string {
+  const root = into.root as ElementNode;
+  const whole = fragment(root);
+  const shell = /^<[^>]*?\/?>/.exec(whole)![0].replace(/\/>$/, '>');
+  const name = /^<([^\s/>]+)/.exec(whole)![1];
+  let inner = '';
+  for (const child of elementChildren(root)) inner += replaced.get(child) ?? fragment(child);
+  return `${shell}${inner}${added}</${name}>`;
 }
 
 /** Identity of a list definition: its levels, without its own ids or style links. */
@@ -346,14 +441,26 @@ function mergeNumbering(
   };
 }
 
+/** The definition parts a compare writes. */
+export interface MergedDefinitions {
+  readonly outputs: StoryOutput[];
+  /**
+   * Whether a style both documents define takes the revised definition. That change has no
+   * tracked form, so rejecting changes keeps it.
+   */
+  readonly replacedStyles: boolean;
+}
+
 /**
  * Plans the styles and lists the output adds, and registers the revised list id map that the
  * revised side's serialization applies. Call before any revised content is serialized.
  */
-export function mergeDefinitions(base: OoxmlPackage, revised: OoxmlPackage): StoryOutput[] {
+export function mergeDefinitions(base: OoxmlPackage, revised: OoxmlPackage): MergedDefinitions {
   const numbering = mergeNumbering(base, revised);
   NUMBERING_MAPS.set(revised, numbering.map);
-  return [mergeStyles(base, revised, numbering.map), numbering.output].filter(
+  const flags = { replacedStyles: false };
+  const outputs = [mergeStyles(base, revised, numbering.map, flags), numbering.output].filter(
     (output): output is StoryOutput => output !== null
   );
+  return { outputs, replacedStyles: flags.replacedStyles };
 }

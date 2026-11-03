@@ -132,7 +132,7 @@ function tokenKey(atoms: readonly Atom[], from: number, to: number): string {
     const atom = atoms[i]!;
     // Every link or field boundary inside a word is part of the word: one that starts or ends
     // mid-word makes the words differ, so the original's wrapper comes back on reject. Inline
-    // content controls do not split words; equal words in different controls are refused.
+    // content controls do not split words; equal words in different controls move between them.
     // Text in a complex field is part of the field: it never equals the same text outside it,
     // or in a field with another instruction, so the whole field is deleted and inserted.
     const signature = [

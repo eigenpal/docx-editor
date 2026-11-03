@@ -26,6 +26,7 @@ import {
   type OoxmlPart,
   type ParagraphDigest,
 } from '@docx-editor.dev/core/store';
+import { pushAll } from './arrays.ts';
 import { comparedStoryParts } from './stories.ts';
 import { attributeOf, elementChildren, isElement, type ElementNode } from './xml-fragments.ts';
 
@@ -180,9 +181,9 @@ function fieldCodesRemoved(part: OoxmlPart): { part: OoxmlPart; fields: string }
           .map((item) => walk(item, inParagraph, inControl));
         // Content under a simple field is read untyped; type it, so its runs show their text.
         const typed = inParagraph && !inControl ? typedContent(part, inParagraph, inner) : null;
-        if (typed) children.push(...typed);
+        if (typed) pushAll(children, typed);
         else {
-          children.push(...inner);
+          pushAll(children, inner);
           untyped = true;
         }
         changed = true;
@@ -280,7 +281,8 @@ function paragraphFingerprint(paragraph: ParagraphDigest, level: Level): string 
   return `${paragraph.text}\u0001${properties.join('|')}`;
 }
 
-const REVISION_NAMES = new Set([
+/** Every revision element a decision resolves; `numberingChange` is dropped by every decision. */
+export const REVISION_NAMES: ReadonlySet<string> = new Set([
   'ins',
   'del',
   'moveFrom',
@@ -289,23 +291,29 @@ const REVISION_NAMES = new Set([
   'pPrChange',
   'sectPrChange',
   'tblPrChange',
+  'tblPrExChange',
   'trPrChange',
   'tcPrChange',
   'tblGridChange',
   'numberingChange',
   'cellIns',
   'cellDel',
+  'cellMerge',
 ]);
 
-/** Whether `node` holds a revision element. */
+const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+/** Whether `node` holds a revision element. Drawing path commands such as `a:moveTo` are not. */
 export function hasRevision(node: OoxmlPart['root'] | ElementNode): boolean {
   if (!isElement(node)) return false;
-  if (REVISION_NAMES.has(node.localName)) return true;
+  if (node.namespaceUri === W_NS && REVISION_NAMES.has(node.localName)) return true;
   return node.children.some((child) => isElement(child) && hasRevision(child));
 }
 
 /** Reasons a review decision refuses that come from the content, not from the compare. */
 const GUARDS = new Set(['locked', 'bound']);
+/** A decision refused for another reason, or one that left a revision behind. */
+const UNDECIDED = 'undecided';
 
 function resolved(
   pkg: OoxmlPackage,
@@ -318,17 +326,31 @@ function resolved(
       out.push(part);
       continue;
     }
-    const result = applyTreeOp(part, { op });
-    if (!result.ok && GUARDS.has(result.reason)) guards.add(result.reason);
-    const next = result.ok ? result.part : part;
-    // Re-read, so renamed elements (a restored `w:instrText`) take their typed kinds.
-    const reread = readOoxmlPart(serializeOoxmlPart(next), {
-      name: next.name,
-      contentType: next.contentType,
-    });
-    out.push(reread.ok ? reread.part : next);
+    out.push(decide(part, op, guards));
   }
   return out;
+}
+
+/**
+ * `part` with every revision decided by `op`, re-read so renamed elements (a restored
+ * `w:instrText`) take their typed kinds. Every revision the compare wrote must resolve: a
+ * refused decision, or one that leaves a revision behind, means a reviewer cannot reach that
+ * document. The guard names a refusal the content causes; any other one is `undecided`.
+ */
+function decide(
+  part: OoxmlPart,
+  op: 'acceptAllRevisions' | 'rejectAllRevisions',
+  guards: Set<string>
+): OoxmlPart {
+  const result = applyTreeOp(part, { op });
+  if (!result.ok) guards.add(GUARDS.has(result.reason) ? result.reason : UNDECIDED);
+  else if (hasRevision(result.part.root)) guards.add(UNDECIDED);
+  const next = result.ok ? result.part : part;
+  const reread = readOoxmlPart(serializeOoxmlPart(next), {
+    name: next.name,
+    contentType: next.contentType,
+  });
+  return reread.ok ? reread.part : next;
 }
 
 /**
@@ -339,7 +361,8 @@ function sectionFurniture(
   pkg: OoxmlPackage,
   op?: 'acceptAllRevisions' | 'rejectAllRevisions',
   /** The main story already resolved with `op`. */
-  main?: OoxmlPart
+  main?: OoxmlPart,
+  guards: Set<string> = new Set()
 ): string {
   let view = pkg;
   if (op) {
@@ -354,14 +377,8 @@ function sectionFurniture(
     for (const name of names) {
       const part = parts.get(name);
       if (!part || !hasRevision(part.root)) continue;
-      const result = applyTreeOp(part, { op });
-      if (!result.ok) continue;
-      // Re-read, so renamed elements (a restored `w:instrText`) take their typed kinds.
-      const reread = readOoxmlPart(serializeOoxmlPart(result.part), {
-        name: result.part.name,
-        contentType: result.part.contentType,
-      });
-      parts.set(name, reread.ok ? reread.part : result.part);
+      // Parts only earlier sections show are decided here, so their refusals count too.
+      parts.set(name, decide(part, op, guards));
     }
     view = { ...pkg, parts };
   }
@@ -390,11 +407,59 @@ export interface SelfCheckResult {
   /** Paragraph properties also agree in both directions. */
   readonly properties: boolean;
   /**
-   * A lock or a data binding on a content control keeps some revisions from being accepted or
-   * rejected: `locked` or `bound`.
+   * Rejecting every revision gives each content control of the original its own properties
+   * back. A control takes the revised properties untracked, so this is false when they differ.
+   * Checked only with `checkControls`; true otherwise.
+   */
+  readonly controls: boolean;
+  /**
+   * Why some revisions cannot be accepted or rejected, comma-separated: `locked` or `bound` for
+   * a lock or a data binding on a content control, `undecided` for any other refusal or a
+   * revision left behind. Any guard fails the check, whatever the text shows.
    */
   readonly guard?: string;
   readonly detail?: string;
+}
+
+/** The properties of every content control with an id, by id, in story order. */
+function controlProperties(parts: readonly OoxmlPart[]): Map<string, string> {
+  const out = new Map<string, string>();
+  const walk = (node: ElementNode, part: OoxmlPart) => {
+    if (node.localName === 'sdtPr' && node.namespaceUri === W_NS) {
+      const id = elementChildren(node).find((child) => child.localName === 'id');
+      const value = id && attributeOf(id, 'val', W_NS);
+      if (value !== undefined && !out.has(value))
+        out.set(value, serializeOoxmlPart({ ...part, root: node } as OoxmlPart));
+      return;
+    }
+    for (const child of elementChildren(node)) walk(child, part);
+  };
+  for (const part of parts) if (isElement(part.root)) walk(part.root, part);
+  return out;
+}
+
+/**
+ * `stories` (decided already, for an output) and the header and footer parts that only earlier
+ * sections show, decided by a reject when they hold revisions.
+ */
+function withEarlierFurniture(pkg: OoxmlPackage, stories: readonly OoxmlPart[]): OoxmlPart[] {
+  const out = [...stories];
+  const seen = new Set(storyParts(pkg).map((part) => part.name));
+  for (const section of resolveHeaderFooterResolutionBySection(pkg))
+    for (const slots of [section.headers, section.footers])
+      for (const slot of slots.values()) {
+        const part = slot.part;
+        if (seen.has(part.name)) continue;
+        seen.add(part.name);
+        out.push(hasRevision(part.root) ? decide(part, 'rejectAllRevisions', new Set()) : part);
+      }
+  return out;
+}
+
+/** Whether every control of the original is back, with the same properties, after a reject. */
+function sameControls(after: Map<string, string>, before: Map<string, string>): boolean {
+  for (const [id, properties] of before) if (after.get(id) !== properties) return false;
+  return true;
 }
 
 function firstDifference(a: string, b: string): string {
@@ -406,7 +471,8 @@ function firstDifference(a: string, b: string): string {
 export function selfCheck(
   output: OoxmlPackage,
   original: OoxmlPackage,
-  revised: OoxmlPackage
+  revised: OoxmlPackage,
+  checkControls = false
 ): SelfCheckResult {
   const guards = new Set<string>();
   const accepted = resolved(output, 'acceptAllRevisions', guards);
@@ -429,9 +495,11 @@ export function selfCheck(
   };
   const furniture = (): ReturnType<typeof check> => {
     const accept =
-      sectionFurniture(output, 'acceptAllRevisions', accepted[0]) === sectionFurniture(revised);
+      sectionFurniture(output, 'acceptAllRevisions', accepted[0], guards) ===
+      sectionFurniture(revised);
     const reject =
-      sectionFurniture(output, 'rejectAllRevisions', rejected[0]) === sectionFurniture(original);
+      sectionFurniture(output, 'rejectAllRevisions', rejected[0], guards) ===
+      sectionFurniture(original);
     const which = !accept ? 'accept' : !reject ? 'reject' : undefined;
     return {
       accept,
@@ -447,6 +515,12 @@ export function selfCheck(
     accept: text.accept,
     reject: text.reject,
     properties: properties.accept && properties.reject,
+    controls:
+      !checkControls ||
+      sameControls(
+        controlProperties(withEarlierFurniture(output, rejected)),
+        controlProperties(withEarlierFurniture(original, storyParts(original)))
+      ),
     ...(guards.size > 0 ? { guard: [...guards].sort().join(',') } : {}),
     ...(detail === undefined ? {} : { detail }),
   };

@@ -192,6 +192,16 @@ const WRAPPER_PROPERTIES: Readonly<Record<string, ReadonlySet<string>>> = {
 export const isControlWrapper = (key: string) =>
   key.startsWith('sdt|') || key.startsWith('smartTag|') || key.startsWith('customXml|');
 
+/**
+ * Which control a wrapper is: a content control by its id, which stays when the control is
+ * filled in or its other properties change; any other control by all of its properties.
+ */
+export function controlIdentity(key: string): string {
+  if (!key.startsWith('sdt|')) return key;
+  const id = /<w:id w:val="([^"]*)"/.exec(key)?.[1];
+  return id === undefined ? key : `sdt#${id}`;
+}
+
 /** Per-side context: relationship resolution and serialization. */
 export class SideContext {
   readonly #rels: ReadonlyMap<string, { type: string; target: string; external: boolean }>;
@@ -330,6 +340,8 @@ const identities = new WeakMap<OoxmlPackage, Map<string, string>>();
 const encoder = new TextEncoder();
 /** Parts one identity follows through relationships; a larger closure counts as different. */
 const MAX_CLOSURE = 256;
+/** Identities of closures past the bound, each one new. */
+let overflows = 0;
 
 /**
  * Content identity of a part: a SHA-256 digest of its bytes (or of its XML, for parts the
@@ -353,10 +365,11 @@ function partIdentity(pkg: OoxmlPackage, name: string, walk: IdentityWalk): stri
     walk.local = true;
     return `cycle:${name}`;
   }
-  // A closure past the bound is unique, so it never matches another.
+  // A closure past the bound was not read in full, so its identity is unique: it never matches
+  // another, even one with the same names and shape. It is never cached (`local`).
   if (walk.seen.size >= MAX_CLOSURE || walk.visits >= MAX_CLOSURE) {
     walk.local = true;
-    return `overflow:${pkg.mainDocumentPart}:${name}:${walk.visits}`;
+    return `overflow:${++overflows}`;
   }
   walk.seen.add(name);
   const part = pkg.parts.get(name);

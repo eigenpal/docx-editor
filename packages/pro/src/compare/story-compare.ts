@@ -31,6 +31,7 @@ import {
 import { findMoves, movedParagraph, NO_MOVES, type Moves } from './moves.ts';
 import { compareSdt, compareTable } from './table-compare.ts';
 import {
+  controlIdentity,
   isControlWrapper,
   type Atom,
   type BlockUnit,
@@ -134,16 +135,6 @@ export function compareContainer(
 /** A field data element in a serialized simple field shell. */
 const FIELD_DATA = /<[A-Za-z_][\w.-]*:fldData[\s/>]/;
 
-/**
- * Which control a wrapper is: a content control by its id, which stays when the control is
- * filled in or its other properties change; any other control by all of its properties.
- */
-function controlIdentity(key: string): string {
-  if (!key.startsWith('sdt|')) return key;
-  const id = /<w:id w:val="([^"]*)"/.exec(key)?.[1];
-  return id === undefined ? key : `sdt#${id}`;
-}
-
 /** The inline controls around an atom, outermost first, by identity. */
 const controlsOf = (atom: Atom) =>
   atom.wrappers
@@ -246,16 +237,41 @@ function emitHunk(
   ctx: EmitContext,
   moves: Moves = NO_MOVES
 ): string {
-  const anchor = controlAnchor(base, revised, ctx);
-  if (anchor) {
-    // The content on each side of the pair stays on that side in both documents.
-    const [i, j] = anchor;
-    return (
-      emitHunk(base.slice(0, i), revised.slice(0, j), lastBase, lastRevised, ctx, moves) +
-      compareBlockPair(base[i] as BlockUnit, revised[j] as BlockUnit, ctx) +
-      emitHunk(base.slice(i + 1), revised.slice(j + 1), lastBase, lastRevised, ctx, moves)
+  const anchors = controlAnchors(base, revised, ctx);
+  if (anchors.length === 0) return emitTokens(base, revised, lastBase, lastRevised, ctx, moves);
+  // The content on each side of a pair stays on that side in both documents.
+  let out = '';
+  let fromBase = 0;
+  let fromRevised = 0;
+  for (const [i, j] of anchors) {
+    out += emitTokens(
+      base.slice(fromBase, i),
+      revised.slice(fromRevised, j),
+      lastBase,
+      lastRevised,
+      ctx,
+      moves
     );
+    out += compareBlockPair(base[i] as BlockUnit, revised[j] as BlockUnit, ctx);
+    fromBase = i + 1;
+    fromRevised = j + 1;
   }
+  return (
+    out +
+    emitTokens(base.slice(fromBase), revised.slice(fromRevised), lastBase, lastRevised, ctx, moves)
+  );
+}
+
+/** One run of units without a control pair: a token-level diff of both sides. */
+function emitTokens(
+  base: readonly Unit[],
+  revised: readonly Unit[],
+  lastBase: Unit | null,
+  lastRevised: Unit | null,
+  ctx: EmitContext,
+  moves: Moves
+): string {
+  if (base.length === 0 && revised.length === 0) return '';
   const a = tokensOf(base, lastBase, moves);
   const b = tokensOf(revised, lastRevised, moves);
   const ops = deletedBlocksFirst(
@@ -546,27 +562,43 @@ function controlShell(unit: Unit, side: EmitContext['base']): string | null {
 }
 
 /**
- * The first block content control of a hunk, by position on each side, that has the same
- * properties as a control of the other document: the hunk is cut there, so the two controls
- * compare as a pair. A control holds its own content, so content outside it in one document
- * cannot be compared with content inside it in the other, and no paragraph joins across a
- * control that stays. Null when there is no such pair, or the hunk has nothing else.
+ * The block content control pairs of a hunk, in order on both sides: each original control in
+ * turn pairs with the next revised control after the previous pair that has the same
+ * properties. The hunk is cut at each pair, so the two controls compare as a pair. A control
+ * holds its own content, so content outside it in one document cannot be compared with content
+ * inside it in the other, and no paragraph joins across a control that stays. Each shell is
+ * read once, so the pass is linear in the hunk. Empty when the hunk has nothing else.
  */
-function controlAnchor(
+function controlAnchors(
   base: readonly Unit[],
   revised: readonly Unit[],
   ctx: EmitContext
-): readonly [number, number] | null {
-  if (base.length + revised.length <= 2) return null;
-  const revisedShells = revised.map((unit) => controlShell(unit, ctx.revised));
-  if (!revisedShells.some((shell) => shell !== null)) return null;
+): (readonly [number, number])[] {
+  if (base.length + revised.length <= 2) return [];
+  // Revised positions by shell, each list with a cursor.
+  const positions = new Map<string, { readonly at: number[]; next: number }>();
+  revised.forEach((unit, j) => {
+    const shell = controlShell(unit, ctx.revised);
+    if (shell === null) return;
+    const entry = positions.get(shell) ?? { at: [], next: 0 };
+    entry.at.push(j);
+    positions.set(shell, entry);
+  });
+  const anchors: (readonly [number, number])[] = [];
+  if (positions.size === 0) return anchors;
+  let after = -1;
   for (let i = 0; i < base.length; i++) {
     const shell = controlShell(base[i]!, ctx.base);
-    if (shell === null) continue;
-    const j = revisedShells.indexOf(shell);
-    if (j >= 0) return [i, j];
+    const entry = shell === null ? undefined : positions.get(shell);
+    if (!entry) continue;
+    while (entry.next < entry.at.length && entry.at[entry.next]! <= after) entry.next++;
+    const j = entry.at[entry.next];
+    if (j === undefined) continue;
+    entry.next++;
+    anchors.push([i, j]);
+    after = j;
   }
-  return null;
+  return anchors;
 }
 
 function compareBlockPair(base: BlockUnit, revised: BlockUnit, ctx: EmitContext): string {

@@ -6,6 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 /** Public types of the document compare engine. */
 
 import type {
+  CompareDocumentsEngineErrorCode,
   CompareDocumentsErrorCode,
   CompareDocumentsRefusalReason,
 } from '@docx-editor.dev/core/editor';
@@ -52,15 +53,15 @@ export type CompareDocumentsResult =
       /**
        * Whether the result differs from the original. False when the documents have no
        * differences. True with no revisions when the only differences are written untracked:
-       * formatting with `detectFormatChanges: false`, or the original's own tracked changes,
-       * which a compare accepts.
+       * formatting with `detectFormatChanges: false`, style definitions, or the original's
+       * own tracked changes, which a compare accepts.
        */
       readonly changed: boolean;
     }
   | {
       readonly ok: false;
       /** Why the compare was refused. `compareDocuments.errors.<code>` translates it. */
-      readonly code: CompareDocumentsErrorCode;
+      readonly code: CompareDocumentsEngineErrorCode;
       /**
        * Set with `unsupportedContent`: what the refusal is about.
        * `compareDocuments.reasons.<reason>` translates it.

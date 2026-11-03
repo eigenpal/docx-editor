@@ -6,8 +6,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 /**
  * Serializes compare output: runs, revision wrappers, and paragraph properties.
  */
+import { pushAll } from './arrays.ts';
 import { sectionRecord } from './section-record.ts';
 import {
+  controlIdentity,
+  isControlWrapper,
   MARK,
   OBJECT_TEXT,
   placeholderValue,
@@ -62,9 +65,11 @@ export class CompareState {
    * index: slots only the revised document shows there.
    */
   sectionReferences: ReadonlyMap<number, readonly SectionReference[]> = new Map();
-  /** The index of each original section break written so far, in the order first written. */
+  /**
+   * The section index of each original section break, in the order the section resolver
+   * counts them (breaks inside block controls included), set before any story is written.
+   */
   readonly baseSectionIndex = new WeakMap<object, number>();
-  baseSections = 0;
   /** Section or table settings the revised document adds that a record cannot restore. */
   unrecordedProperties = 0;
   /** Move ranges written so far; names each range pair. */
@@ -164,7 +169,7 @@ function withFieldForms(items: readonly Item[]): Item[] {
       j - i === wrapper.atomCount &&
       items.slice(i, j).every((other) => other.mark === item.mark);
     if (!whole) {
-      out.push(...items.slice(i, j));
+      pushAll(out, items.slice(i, j));
       i = j;
       continue;
     }
@@ -197,24 +202,65 @@ function withFieldForms(items: readonly Item[]): Item[] {
         wrappers: [...outer, ...other.atom.wrappers.slice(depth + 1)],
       },
     }));
-    out.push(
-      { ...fldChar('begin'), markers: item.markers },
-      synthetic(
-        `<w:instrText xml:space="preserve">${instr}</w:instrText>`,
-        `<w:delInstrText xml:space="preserve">${instr}</w:delInstrText>`
-      ),
-      fldChar('separate'),
-      ...withFieldForms(inner),
-      fldChar('end')
+    // One item per character: the list goes in without a spread, which a long link overflows.
+    pushAll(
+      out,
+      [
+        { ...fldChar('begin'), markers: item.markers },
+        synthetic(
+          `<w:instrText xml:space="preserve">${instr}</w:instrText>`,
+          `<w:delInstrText xml:space="preserve">${instr}</w:delInstrText>`
+        ),
+        fldChar('separate'),
+      ],
+      withFieldForms(inner),
+      [fldChar('end')]
     );
     i = j;
   }
   return out;
 }
 
+const FROM_ORIGINAL: ReadonlySet<Mark> = new Set(['del', 'moveFrom']);
+
+/**
+ * Deleted content and the revised content next to it in the same control (the same content
+ * control id, say, of a field the revised document fills in) share one control: the revised
+ * one, whose properties the result takes. Otherwise the original's shell would stay as a
+ * second control with the same id, empty after accept. Only neighbors merge, so two unrelated
+ * controls that happen to repeat an id stay apart.
+ */
+function unifyControls(items: readonly Item[]): readonly Item[] {
+  const alias = new Map<Wrapper, Wrapper>();
+  const resolve = (wrapper: Wrapper) => alias.get(wrapper) ?? wrapper;
+  for (let i = 1; i < items.length; i++) {
+    const left = items[i - 1]!;
+    const right = items[i]!;
+    const leftOriginal = FROM_ORIGINAL.has(left.mark);
+    if (leftOriginal === FROM_ORIGINAL.has(right.mark)) continue;
+    const [original, revised] = leftOriginal ? [left, right] : [right, left];
+    const depth = Math.min(original.atom.wrappers.length, revised.atom.wrappers.length);
+    for (let d = 0; d < depth; d++) {
+      const from = resolve(original.atom.wrappers[d]!);
+      const to = resolve(revised.atom.wrappers[d]!);
+      if (from === to || from.key === to.key) continue;
+      if (!isControlWrapper(from.key) || controlIdentity(from.key) !== controlIdentity(to.key))
+        break;
+      alias.set(from, to);
+    }
+  }
+  if (alias.size === 0) return items;
+  return items.map((item) =>
+    item.atom.wrappers.some((wrapper) => alias.has(wrapper))
+      ? { ...item, atom: { ...item.atom, wrappers: item.atom.wrappers.map(resolve) } }
+      : item
+  );
+}
+
 /** Paragraph content (everything after `w:pPr`) for a list of items. */
 export function emitContent(source: readonly Item[], ctx: EmitContext): string {
-  const items = source.some((item) => item.mark !== 'eq') ? withFieldForms(source) : source;
+  const unified = unifyControls(source);
+  const items = unified.some((item) => item.mark !== 'eq') ? withFieldForms(unified) : unified;
   let out = '';
   const open: Wrapper[] = [];
   let openMark: Mark = 'eq';
@@ -405,8 +451,9 @@ function addedSectionRefs(revised: ElementNode, ctx: EmitContext): string {
  */
 function addedBaseSectionRefs(base: ElementNode, ctx: EmitContext): string {
   const state = ctx.state;
-  let index = state.baseSectionIndex.get(base);
-  if (index === undefined) state.baseSectionIndex.set(base, (index = state.baseSections++));
+  const index = state.baseSectionIndex.get(base);
+  // A break the resolver does not count shows nothing of its own: nothing to add.
+  if (index === undefined) return '';
   let out = '';
   for (const { kind, type, id } of state.sectionReferences.get(index) ?? [])
     out += `<w:${kind}Reference xmlns:r="${R_NS}" w:type="${type}" r:id="${escapeAttribute(id)}"/>`;

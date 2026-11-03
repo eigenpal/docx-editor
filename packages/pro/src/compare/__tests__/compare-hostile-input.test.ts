@@ -320,7 +320,9 @@ test('definitions merge into the parts the editor reads, through its fallbacks a
   expect(
     Object.keys(out).filter((name) => /^word\/(styles|numbering)\d+\.xml$/.test(name))
   ).toEqual([]);
-  expect(out['word/styles.xml']).toContain('FF0000');
+  // A style both documents define takes the revised definition, in the part the editor reads.
+  expect(out['word/styles.xml']).toContain('0000FF');
+  expect(out['word/styles.xml']).not.toContain('FF0000');
   // The unchanged list item records no property change.
   expect(out['word/document.xml']).not.toContain('pPrChange');
 });
