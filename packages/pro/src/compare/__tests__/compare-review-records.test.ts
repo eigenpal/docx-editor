@@ -464,6 +464,20 @@ test('tracked-changes protection covers earlier headers and controls that change
   expect(
     compare(buildDocx({ body: row('A', 'B'), settings }), buildDocx({ body: row('B', 'A') }))
   ).toMatchObject({ ok: false, code: 'protected' });
+  // An inserted control with the original properties does not stand in for the changed one:
+  // after a reject only its empty shell is left.
+  const placeholder = (alias: string) =>
+    `<w:tc><w:sdt><w:sdtPr><w:alias w:val="${alias}"/><w:showingPlcHdr/></w:sdtPr>` +
+    `<w:sdtContent>${p('Type here')}</w:sdtContent></w:sdt></w:tc>`;
+  const cells = (...inner: string[]) =>
+    `<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>` +
+    `<w:tr>${inner.join('')}</w:tr></w:tbl>${p('After.')}`;
+  expect(
+    compare(
+      buildDocx({ body: cells(placeholder('A'), `<w:tc>${p('')}</w:tc>`), settings }),
+      buildDocx({ body: cells(placeholder('B'), placeholder('A')) })
+    )
+  ).toMatchObject({ ok: false, code: 'protected' });
   // A new control before an unchanged one is a tracked insertion.
   const inserted = `<w:sdt><w:sdtPr><w:alias w:val="Added"/></w:sdtPr><w:sdtContent>${p(
     'Added text'

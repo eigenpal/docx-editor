@@ -434,18 +434,23 @@ function controlProperties(parts: readonly OoxmlPart[]): ControlProperties {
   const byId = new Map<string, string>();
   const unnamed = new Map<string, string[]>();
   const walk = (node: ElementNode, part: OoxmlPart) => {
-    if (node.localName === 'sdtPr' && node.namespaceUri === W_NS) {
-      const id = elementChildren(node).find((child) => child.localName === 'id');
+    const properties =
+      node.localName === 'sdt' && node.namespaceUri === W_NS
+        ? elementChildren(node).find((child) => child.localName === 'sdtPr')
+        : undefined;
+    if (properties) {
+      const id = elementChildren(properties).find((child) => child.localName === 'id');
       const value = id && attributeOf(id, 'val', W_NS);
-      const xml = serializeOoxmlPart({ ...part, root: node } as OoxmlPart);
+      const xml = serializeOoxmlPart({ ...part, root: properties } as OoxmlPart);
       if (value === undefined) {
+        // With its text, so the empty shell of an inserted control left by a reject never
+        // stands in for an original control.
         const list = unnamed.get(part.name) ?? [];
-        list.push(xml);
+        list.push(`${xml}\u0001${textOf(node)}`);
         unnamed.set(part.name, list);
       } else if (!byId.has(value)) byId.set(value, xml);
-      return;
     }
-    for (const child of elementChildren(node)) walk(child, part);
+    for (const child of elementChildren(node)) if (child !== properties) walk(child, part);
   };
   for (const part of parts) if (isElement(part.root)) walk(part.root, part);
   return { byId, unnamed };
