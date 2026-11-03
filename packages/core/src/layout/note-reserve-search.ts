@@ -434,7 +434,9 @@ export function* searchFootnoteReserves(
   } else if (session) {
     noteBodyGeometryChanged(session, previousLayout ?? { revision: 0, pages: [] }, part);
   }
-  const restore = session ? snapshotLayoutSession(session) : null;
+  // The session as the probe left it, saved before the first round the walk lays out: a walk
+  // whose rounds the probe answers changes nothing in it.
+  const saved: { restore?: () => void } = {};
 
   // The latest round's layout, and the latest layout that reached the end of the body.
   let reference: SemanticLayout | null = probeLayout ?? previousLayout;
@@ -506,6 +508,7 @@ export function* searchFootnoteReserves(
         return { layout, whole: false };
       }
     }
+    if (session && !saved.restore) saved.restore = snapshotLayoutSession(session);
     let limit = atSectionEnd(blockLimitThrough(throughPage + 1));
     for (;;) {
       const whole = limit >= blocks.length;
@@ -559,10 +562,10 @@ export function* searchFootnoteReserves(
   if (walked.last?.whole && walked.lastCurrent) {
     layout = walked.last.layout;
   } else if (probe && reservesEqual(probe.used, walked.reserves)) {
-    restore?.();
+    saved.restore?.();
     layout = probe.layout;
   } else {
-    restore?.();
+    saved.restore?.();
     decided = Number.POSITIVE_INFINITY;
     layout = yield* options.body(walked.reserves, undefined, false);
   }
