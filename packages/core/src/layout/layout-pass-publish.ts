@@ -29,7 +29,10 @@ export function publishLayoutPass(
       part,
       allBlocks
     );
-  const aligned = alignSectionPagesVertically(layout, sections, blocks);
-  const published = publish(aligned);
-  return { published, retained: aligned === layout ? published : publish(layout) };
+  // Align the RETAINED pages, not the raw ones: the next pass hands back the retained pages,
+  // so the per-page alignment memo must be keyed on them, or every page moves and repaints
+  // again on a pass that changed nothing.
+  const retained = publish(layout);
+  const aligned = alignSectionPagesVertically(retained, sections, blocks);
+  return { published: aligned === retained ? retained : publish(aligned), retained };
 }

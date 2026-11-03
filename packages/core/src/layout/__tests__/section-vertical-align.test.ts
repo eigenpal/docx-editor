@@ -170,6 +170,28 @@ describe('section vertical alignment', () => {
     expect(after!.x).toBe(before!.x);
   });
 
+  test('a page with a content control keeps its identity and bounds on an unchanged pass', () => {
+    const session = createLayoutSession();
+    const control =
+      '<w:sdt><w:sdtPr><w:id w:val="7"/><w:alias w:val="Field"/></w:sdtPr><w:sdtContent>' +
+      `${p('inside')}</w:sdtContent></w:sdt>`;
+    const source = part(p('alpha') + control + sectPr('center'));
+    const options = { measurer, geometry, session };
+    const first = layoutSemanticDocument(source, 1, options);
+    const again = layoutSemanticDocument(source, 1, options);
+    const third = layoutSemanticDocument(source, 1, options);
+    expect(tops(first)).toEqual([66, 80]);
+    // Each unchanged pass hands back the retained pages; none moves or repaints again.
+    expect(again.pages[0]).toBe(first.pages[0]);
+    expect(third.pages[0]).toBe(first.pages[0]);
+    expect(tops(third)).toEqual([66, 80]);
+    // The control's bounds follow the moved text.
+    const bounds = third.contentControls!.find((record) => record.alias === 'Field')!;
+    const line = third.pages[0]!.fragments[1]!;
+    expect(bounds.fragments[0]!.box.y).toBeGreaterThanOrEqual(line.box.y - 1);
+    expect(bounds.fragments[0]!.box.y).toBeLessThan(line.box.y + 14);
+  });
+
   test('an incremental session keeps page identity and never moves a page twice', () => {
     const session = createLayoutSession();
     const run1 = (body: string) =>
