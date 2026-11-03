@@ -257,6 +257,29 @@ describe('section vertical alignment', () => {
     for (const shown of interim) expect(tops(shown, 0)).toEqual(tops(next.value, 0));
   });
 
+  test('changing the alignment in the same session moves the unchanged page again', () => {
+    const session = createLayoutSession();
+    const pass = (vAlign: string) =>
+      layoutSemanticDocument(part(p('alpha') + sectPr(vAlign)), 1, { measurer, geometry, session });
+    expect(tops(pass('center'))).toEqual([73]);
+    expect(tops(pass('bottom'))).toEqual([146]);
+    expect(tops(pass('both'))).toEqual([0]);
+    expect(tops(pass('center'))).toEqual([73]);
+  });
+
+  test('only the page that holds the end of a continuous-break paragraph stays top-aligned', () => {
+    // Fifteen lines in one paragraph that ends the centered section: eleven fill the first page.
+    const lineBreak = `<w:r>${SIZE}<w:br/></w:r>`;
+    const lines = Array.from({ length: 15 }, (_, index) => run(`l${index}`)).join(lineBreak);
+    const body =
+      `<w:p><w:pPr><w:widowControl w:val="0"/>${SIZE}${sectPr('center')}</w:pPr>${lines}</w:p>` +
+      sectPr('center', 'continuous');
+    const value = layout(body);
+    expect(value.pages).toHaveLength(2);
+    expect(tops(value, 0)[0]).toBe(3);
+    expect(tops(value, 1)[0]).toBe(0);
+  });
+
   test('a new page count does not move the bodies of unchanged pages again', () => {
     const session = createLayoutSession();
     const lines = (count: number) =>
@@ -285,12 +308,12 @@ describe('section vertical alignment with furniture and drawings', () => {
     dpiY: 96,
   });
   /** A 36pt square picture, positioned from `frame`, behind the text or wrapped square. */
-  const picture = (frame: string, wrap: 'none' | 'square') =>
+  const picture = (frame: string, wrap: 'none' | 'square', offsetEmu = 0) =>
     '<w:p><w:r><w:drawing>' +
     `<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" behindDoc="${wrap === 'none' ? 1 : 0}" locked="0"` +
     ' allowOverlap="1" layoutInCell="1" relativeHeight="1"><wp:simplePos x="0" y="0"/>' +
     '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
-    `<wp:positionV relativeFrom="${frame}"><wp:posOffset>0</wp:posOffset></wp:positionV>` +
+    `<wp:positionV relativeFrom="${frame}"><wp:posOffset>${offsetEmu}</wp:posOffset></wp:positionV>` +
     '<wp:extent cx="457200" cy="457200"/>' +
     (wrap === 'none' ? '<wp:wrapNone/>' : '<wp:wrapSquare wrapText="bothSides"/>') +
     '<wp:docPr id="1" name="pic1"/>' +
@@ -341,6 +364,14 @@ describe('section vertical alignment with furniture and drawings', () => {
         value.pages[0]!.anchoredDrawings![0]!.verticalFrameOrigin;
       expect(fromFrame(centered)).toBeCloseTo(fromFrame(top), 6);
     }
+  });
+
+  test('a page with a moving drawing that the page edge cuts stays top-aligned', () => {
+    // 40pt above its paragraph: the picture starts 20pt above the page.
+    const body = picture('paragraph', 'none', -508000) + p('text');
+    const top = withDrawing(body + sectPr());
+    expect(top.pages[0]!.anchoredDrawings![0]!.paintBounds.height).toBeLessThan(36);
+    expect(tops(withDrawing(body + sectPr('center')))).toEqual(tops(top));
   });
 
   test('a page with a drawing that wraps text stays top-aligned', () => {

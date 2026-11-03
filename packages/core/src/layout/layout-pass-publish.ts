@@ -4,7 +4,7 @@ import type { OoxmlElement, OoxmlPart } from '@docx-editor.dev/core/store';
 import { attachContentControlBoundaries } from './content-control-boundary-layout.ts';
 import { withSectionBreakMarks } from './section-break-marks.ts';
 import type { DocumentSection } from './section-properties.ts';
-import { alignSectionPagesVertically } from './section-vertical-align.ts';
+import { alignSectionPagesVertically, rememberPublishedPages } from './section-vertical-align.ts';
 import type { SemanticLayout } from './semantic-records.ts';
 
 /**
@@ -34,5 +34,7 @@ export function publishLayoutPass(
   // again on a pass that changed nothing.
   const retained = publish(layout);
   const aligned = alignSectionPagesVertically(retained, sections, blocks);
-  return { published: aligned === retained ? retained : publish(aligned), retained };
+  const published = aligned === retained ? retained : publish(aligned);
+  rememberPublishedPages(published, retained);
+  return { published, retained };
 }

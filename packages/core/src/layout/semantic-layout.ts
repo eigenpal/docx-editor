@@ -210,7 +210,7 @@ import { furnitureForSection, layoutMultiSectionDocumentSteps } from './multi-se
 import { hostedStoryFlowDeps, layoutTextboxStory } from './textbox-story-layout.ts';
 import { inlineDrawingFlow } from './inline-textbox-flow.ts';
 import { convergeExclusionLayout } from './exclusion-layout-steps.ts';
-import { withInterimLayout, withRelabeledProgress } from './interim-layout.ts';
+import { withAlignedProgress, withInterimLayout, withRelabeledProgress } from './interim-layout.ts';
 import { layoutWithFurnitureRetry } from './furniture-retry-layout.ts';
 import { drainLayoutSteps, stepsInFieldResultsMode, type LayoutSteps } from './layout-steps.ts';
 import { preparedBlocks } from './prepared-block-memo.ts';
@@ -338,8 +338,7 @@ function* layoutInModeSteps(
           layoutBlocksWithGeometrySteps
         ),
         optionsWithLists.listItems,
-        options.measurer,
-        interimSectionAligner(sections, blocks)
+        options.measurer
       );
     }
 
@@ -352,7 +351,6 @@ function* layoutInModeSteps(
       revision,
       numbering: sectionNumbering,
       listItems: optionsWithLists.listItems,
-      align: interimSectionAligner(sections, blocks),
     };
     const laid = yield* withInterimLayout(
       layoutBlocksWithGeometrySteps(blocks, revision, {
@@ -420,28 +418,24 @@ function* layoutInModeSteps(
     return pass.published;
   };
 
-  if (!options.notes) {
-    if (options.session) {
-      options.session.notes = null;
-      options.session.notePageBottomReserves = null;
-    }
-    return finish(yield* layoutWithCharacterHeadersSteps(part, optionsForBody, runBodySteps));
+  if (!options.notes && options.session) {
+    options.session.notes = null;
+    options.session.notePageBottomReserves = null;
   }
-
   // Notes inherit the body's projector seams and document properties (link, field link, doc
   // props) unless the notes input pinned its own — see `inheritNotesLayoutInput`. The REF
   // context rides along the same way: the note flow folds each paragraph's resolved values
   // into its break key and the notes-pass fingerprint folds the values token, so a
   // renumbering edit repaints the notes that cite the renumbered target.
-  const notesInput = inheritNotesLayoutInput(
-    options.notes,
-    refFields ? { ...options, refFields } : options
+  const notesInput =
+    options.notes &&
+    inheritNotesLayoutInput(options.notes, refFields ? { ...options, refFields } : options);
+  const steps = layoutWithCharacterHeadersSteps(part, optionsForBody, (opts) =>
+    notesInput
+      ? layoutSemanticDocumentWithNotesSteps(part, sections, opts, notesInput, runBodySteps)
+      : runBodySteps(opts)
   );
-  return finish(
-    yield* layoutWithCharacterHeadersSteps(part, optionsForBody, (opts) =>
-      layoutSemanticDocumentWithNotesSteps(part, sections, opts, notesInput, runBodySteps)
-    )
-  );
+  return finish(yield* withAlignedProgress(steps, interimSectionAligner(sections, blocks)));
 }
 
 function* layoutBlocksPass(

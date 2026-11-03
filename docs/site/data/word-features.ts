@@ -913,7 +913,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Centered and bottom-aligned sections place the body between the top and bottom of the text area on every page, below a header that is taller than its margin. The empty paragraph that ends a section takes no room. Justified sections spread the free height between paragraphs. These pages stay top-aligned: pages that hold more than one section or a continuous section break, pages of multi-column sections, pages with footnotes or endnotes, pages with text frames, floating tables, or drawings that wrap text in the body, header, or footer, and justified pages that hold a table.',
+      'Centered and bottom-aligned sections place the body between the top and bottom of the text area on every page, below a header that is taller than its margin. The empty paragraph that ends a section takes no room. Justified sections spread the free height between paragraphs. These pages stay top-aligned: pages that hold more than one section or a continuous section break, pages of multi-column sections, pages with footnotes or endnotes, pages with text frames, floating tables, or drawings that wrap text in the body, header, or footer, pages where a drawing that moves with its paragraph is cut by the page edge, and justified pages that hold a table.',
   },
   {
     id: 'layout.background',

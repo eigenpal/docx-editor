@@ -14,8 +14,6 @@ export interface InterimLayoutInput {
   readonly numbering?: { readonly start?: number; readonly fmt?: string };
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
   readonly measurer?: TextMeasurer;
-  /** Section vertical alignment, applied as the finished pass applies it. */
-  readonly align?: (layout: SemanticLayout) => SemanticLayout;
 }
 
 /** `steps`, with every progress report able to build an interim layout of its pages. */
@@ -23,22 +21,19 @@ export function* withInterimLayout<T>(
   steps: LayoutSteps<T>,
   input: InterimLayoutInput
 ): LayoutSteps<T> {
-  const align = input.align ?? ((layout: SemanticLayout) => layout);
   const finalize = (pages: readonly PageRecord[]): SemanticLayout =>
-    align(
-      relabelListMarkers(
-        finalizePageFieldProjection({
-          revision: input.revision,
-          pages: withPageFieldSources(
-            pages,
-            input.numbering?.start ?? 1,
-            pages.length,
-            input.numbering?.fmt
-          ),
-        }),
-        input.listItems,
-        input.measurer
-      )
+    relabelListMarkers(
+      finalizePageFieldProjection({
+        revision: input.revision,
+        pages: withPageFieldSources(
+          pages,
+          input.numbering?.start ?? 1,
+          pages.length,
+          input.numbering?.fmt
+        ),
+      }),
+      input.listItems,
+      input.measurer
     );
   for (;;) {
     const next = steps.next();
@@ -51,8 +46,7 @@ export function* withInterimLayout<T>(
 export function* withRelabeledProgress<T>(
   steps: LayoutSteps<T>,
   listItems: InterimLayoutInput['listItems'],
-  measurer: InterimLayoutInput['measurer'],
-  align: InterimLayoutInput['align'] = (layout) => layout
+  measurer: InterimLayoutInput['measurer']
 ): LayoutSteps<T> {
   for (;;) {
     const next = steps.next();
@@ -62,8 +56,26 @@ export function* withRelabeledProgress<T>(
     yield finalize
       ? {
           ...progress,
-          finalize: (pages) => align(relabelListMarkers(finalize(pages), listItems, measurer)),
+          finalize: (pages) => relabelListMarkers(finalize(pages), listItems, measurer),
         }
       : progress;
+  }
+}
+
+/**
+ * `steps` with every interim layout passed through `align` last, after note areas: section
+ * vertical alignment, applied as the finished pass applies it.
+ */
+export function* withAlignedProgress<T>(
+  steps: LayoutSteps<T>,
+  align: ((layout: SemanticLayout) => SemanticLayout) | undefined
+): LayoutSteps<T> {
+  if (!align) return yield* steps;
+  for (;;) {
+    const next = steps.next();
+    if (next.done) return next.value;
+    const progress = next.value;
+    const finalize = progress?.finalize;
+    yield finalize ? { ...progress, finalize: (pages) => align(finalize(pages)) } : progress;
   }
 }
