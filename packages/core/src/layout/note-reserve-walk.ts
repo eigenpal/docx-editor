@@ -24,11 +24,26 @@ import type { PageRecord, SemanticLayout } from './semantic-records.ts';
 
 type Reserves = ReadonlyMap<number, number>;
 
-/** Where a reserve computation starts: a page index and the notes carried into it. */
+/**
+ * Where a reserve computation starts: a page index and the notes carried into it. With `to`,
+ * it stops before that page position; the pages before it get the answers a computation to
+ * the end gives them, as each page reads only the notes carried into it and the pages after.
+ */
 export interface ReserveComputeRange {
   readonly from: number;
   readonly carry: unknown;
+  readonly to?: number;
 }
+
+/** Pages one computation of the walk covers from the page being decided; see `computeNear`. */
+const COMPUTE_SPAN = 8;
+
+/**
+ * Pages from the decided one that its answer reads: itself, the next page, and the one after
+ * a blank parity sheet. The walk computes again before the decided page comes this close to
+ * the end of what it computed.
+ */
+const COMPUTE_READS = 3;
 
 /** What one reserve computation returns, for the pages from its range on. */
 export interface ReserveComputeResult {
@@ -196,17 +211,30 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
   let floor = start.floor;
   let carry = start.carry;
   let exhausted = false;
-  // The previous walk's pages by start signature, among those with unchanged content after.
-  const previousStarts = new Map<string, number>();
-  if (previous?.record.complete) {
+  // The first page of the previous walk with this start signature, among those with unchanged
+  // content after. A match is mostly a page or two from where unchanged content begins, so a
+  // few lookups scan from there; a walk that looks up more builds the index once.
+  let previousStarts: Map<string, number> | null = null;
+  let scans = 0;
+  const previousStartOf = (signature: string): number | undefined => {
+    if (!previous?.record.complete) return undefined;
     const { record, unchangedFrom } = previous;
-    for (let index = Math.max(0, unchangedFrom); index < record.starts.length; index += 1) {
-      const signature = record.starts[index];
-      if (signature && !previousStarts.has(signature)) {
-        previousStarts.set(signature, index);
+    if (previousStarts === null && scans < 4) {
+      scans += 1;
+      for (let index = Math.max(0, unchangedFrom); index < record.starts.length; index += 1) {
+        if (record.starts[index] === signature) return index;
+      }
+      return undefined;
+    }
+    if (previousStarts === null) {
+      previousStarts = new Map();
+      for (let index = Math.max(0, unchangedFrom); index < record.starts.length; index += 1) {
+        const start = record.starts[index];
+        if (start && !previousStarts.has(start)) previousStarts.set(start, index);
       }
     }
-  }
+    return previousStarts.get(signature);
+  };
   // The page being decided, and its search so far.
   let page = -1;
   let phase: 'strict' | 'deferral' = 'strict';
@@ -251,16 +279,30 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
     const reliable = round.whole ? pages.length : Math.max(0, pages.length - 1 - LOOKAHEAD_PAGES);
     if (page !== floor) enter(floor);
     let computedDeferral = phase === 'deferral';
-    let computed = options.compute(round.layout, used, computedDeferral, { from: floor, carry });
+    // The walk mostly decides a page or two before the previous walk applies, so each
+    // computation covers a few pages from the page being decided, not the rest of the round.
+    let computedTo = 0;
+    const computeNear = (): ReserveComputeResult => {
+      computedTo = Math.min(pages.length, floor + COMPUTE_SPAN);
+      return options.compute(round.layout, used, computedDeferral, {
+        from: floor,
+        carry,
+        to: computedTo,
+      });
+    };
+    let computed = computeNear();
     // `relayout`: the page being decided takes another reserve and needs a new round.
     // `finished`: the rest of the previous walk applies.
     let relayout = false;
     let finished = false;
     while (floor < reliable) {
       const at = pages[floor]!;
-      if (computedDeferral !== (phase === 'deferral')) {
+      if (
+        computedDeferral !== (phase === 'deferral') ||
+        (computedTo < pages.length && floor + COMPUTE_READS > computedTo)
+      ) {
         computedDeferral = phase === 'deferral';
-        computed = options.compute(round.layout, used, computedDeferral, { from: floor, carry });
+        computed = computeNear();
       }
       const have = used.get(at.index) ?? 0;
       const need = computed.reserves.get(at.index) ?? 0;
@@ -301,7 +343,7 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
       const next = pages[floor];
       // An empty signature names no one place (see `startOf`), so it never matches.
       const signature = next && previous && floor < reliable ? options.startOf(next, carry) : '';
-      const found = signature ? previousStarts.get(signature) : undefined;
+      const found = signature ? previousStartOf(signature) : undefined;
       const from =
         found !== undefined && (!options.parityStarts || (next!.index - found) % 2 === 0)
           ? found

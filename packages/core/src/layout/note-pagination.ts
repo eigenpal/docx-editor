@@ -1995,7 +1995,9 @@ function computeFootnoteReservesWithPolicy(
   const recordReserve = (pageIndex: number, needed: number, cap: number): void =>
     recordFootnoteReserve(reserves, pageIndex, Math.min(needed, cap));
 
-  for (let pageAt = range?.from ?? 0; pageAt < layout.pages.length; pageAt += 1) {
+  // A range with an end stops there; the pages before it read only what is carried into them.
+  const end = Math.min(layout.pages.length, range?.to ?? layout.pages.length);
+  for (let pageAt = range?.from ?? 0; pageAt < end; pageAt += 1) {
     const page = layout.pages[pageAt]!;
     carryBefore[pageAt] = carry;
     // A blank parity sheet holds no notes; a continuation carries on past it.
@@ -2153,8 +2155,8 @@ function computeFootnoteReservesWithPolicy(
   // Stable only when the body has already left enough room for the measured reserve.
   // (Needed heights are no longer slack-clipped, so a full-body first pass is unstable.)
   let stable = true;
-  carryBefore[layout.pages.length] = carry;
-  for (const page of layout.pages.slice(range?.from ?? 0)) {
+  carryBefore[end] = carry;
+  for (const page of layout.pages.slice(range?.from ?? 0, end)) {
     const needed = reserves.get(page.index) ?? 0;
     if (needed <= 0) continue;
     const used = bodyFitBottomPt(page);
