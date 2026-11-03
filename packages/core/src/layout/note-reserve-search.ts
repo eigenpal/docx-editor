@@ -383,8 +383,9 @@ export function* searchFootnoteReserves(
 ): LayoutSteps<ReserveSearchResult> {
   const { session, part, blocks, state } = options;
   const previousLayout = previousBodyLayout(session?.previous ?? null);
-  const blockIndex = new Map<string, number>();
-  blocks.forEach((block, index) => blockIndex.set(block.id, index));
+  // Block positions by id, for the rounds' block limits. Built on the first round that needs
+  // one: an edit whose probe answers every round lays out no round.
+  let blockIndex: Map<string, number> | null = null;
 
   // The probe: the body under the previous answer. It is also the published layout when the
   // walk keeps that answer. When the edit moved pages and nothing after it lined up, a second
@@ -400,18 +401,17 @@ export function* searchFootnoteReserves(
     const given = reuse.record.reserves;
     let layout = yield* options.body(given, undefined, false);
     probe = { layout, used: given };
-    if (
-      !Number.isFinite(changedRange(layout, previousLayout!)[1]) &&
-      layout.pages.length !== previousLayout!.pages.length
-    ) {
+    let range = changedRange(layout, previousLayout!);
+    if (!Number.isFinite(range[1]) && layout.pages.length !== previousLayout!.pages.length) {
       layout = yield* options.body(given, undefined, true);
       options.followedReserves(given);
       probe = null;
+      range = changedRange(layout, previousLayout!);
     }
     probeLayout = layout;
     const notes = changedFootnotes(reuse.inputs.footnotesPart, options.inputs.footnotesPart);
     if (!noteBodyGeometryChanged(session, layout, part) && notes !== null) {
-      let [first, from] = changedRange(layout, previousLayout!);
+      let [first, from] = range;
       unchanged =
         probe !== null &&
         notes.length === 0 &&
@@ -449,7 +449,12 @@ export function* searchFootnoteReserves(
           : fragment.kind === 'table'
             ? fragment.tableId
             : undefined;
-      const index = id === undefined ? undefined : blockIndex.get(id);
+      if (id === undefined) continue;
+      if (blockIndex === null) {
+        blockIndex = new Map();
+        for (let at = 0; at < blocks.length; at += 1) blockIndex.set(blocks[at]!.id, at);
+      }
+      const index = blockIndex.get(id);
       if (index !== undefined) return index;
     }
     return undefined;
