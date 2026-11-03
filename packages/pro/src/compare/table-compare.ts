@@ -256,13 +256,16 @@ function rowException(base: ElementNode, revised: ElementNode, ctx: EmitContext)
   const old = childNamed(base, 'tblPrEx');
   if (!ctx.detectFormatChanges || !propertiesDiffer('tblPrEx', base, revised, ctx))
     return rowStart(revised, ctx.revised);
-  // A one-sided exception has no record a reject restores in full.
-  if (!own || !old) {
+  // An exception only the revised row has: a reject may keep every field a record does not
+  // name, and an exception field has no value that means "as the table states".
+  if (!old) {
     ctx.state.unrecordedProperties++;
     return rowStart(revised, ctx.revised);
   }
+  // An exception only the original row has: an empty exception records it, which a reject
+  // restores in full because the record names every field it had.
   const before = propertiesInner(old, ctx.base, DROPS.tblPrEx);
-  const after = propertiesInner(own, ctx.revised, DROPS.tblPrEx);
+  const after = own ? propertiesInner(own, ctx.revised, DROPS.tblPrEx) : '';
   return `<w:tblPrEx>${after}<w:tblPrExChange${ctx.attrs()}><w:tblPrEx>${before}</w:tblPrEx></w:tblPrExChange></w:tblPrEx>`;
 }
 

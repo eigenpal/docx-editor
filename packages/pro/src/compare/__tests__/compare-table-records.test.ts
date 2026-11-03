@@ -127,3 +127,18 @@ test('markup only the revised table has is refused', () => {
   );
   expect(result.ok ? '' : result.code).toBe('unsupportedContent');
 });
+
+test('a row exception only the original has is recorded; a reject restores it', () => {
+  const row = (exception: string, text: string) =>
+    `<w:tr>${exception}<w:tc>${p(text)}</w:tc></w:tr>`;
+  const margins =
+    '<w:tblPrEx><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPrEx>';
+  const doc = (exception: string) =>
+    docx(
+      `<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>${row('', 'First')}${row(exception, 'Second')}</w:tbl>${p('After.')}`
+    );
+  const { out, rejected } = rejectedTable(doc(margins), doc(''));
+  expect(out).toContain('<w:tblPrExChange');
+  expect(rejected).toContain('<w:tr><w:tblPrEx><w:tblCellMar><w:top w:type="dxa" w:w="0"/>');
+  expect(rejected).not.toContain('tblPrExChange');
+});
