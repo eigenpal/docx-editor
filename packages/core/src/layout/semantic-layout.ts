@@ -95,7 +95,7 @@ import { paragraphBoxOutdent } from './paragraph-indent.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import { paragraphFragmentBorders } from './paragraph-fragment-borders.ts';
 import { holdsOnlyPageBreak, lineBreakAfterFields, lineContentX } from './pending-line.ts';
-import { withSectionBreakMarks } from './section-break-marks.ts';
+import { publishLayoutPass } from './layout-pass-publish.ts';
 import { alignLineWithPictures } from './line-picture-alignment.ts';
 import { createLeadingBreakGroups } from './leading-break-border-group.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
@@ -168,7 +168,6 @@ import { createPageContentInsets, registerOverflowPageShell } from './page-furni
 import { convergenceTailShiftAllowed } from './page-reuse-guards.ts';
 import { layoutPassContextKey } from './layout-pass-context-key.ts';
 import {
-  attachContentControlBoundaries,
   contentControlContextToken,
   withContentControlMetadata,
 } from './content-control-boundary-layout.ts';
@@ -412,13 +411,10 @@ function* layoutInModeSteps(
     if (options.session && options.bodyBlockLimit === undefined) {
       projected = relabelListMarkers(projected, optionsWithLists.listItems, options.measurer);
     }
-    const bounded = attachContentControlBoundaries(projected, part, controlToken);
-    const withBoundaries = withSectionBreakMarks(bounded, part, allBlocks);
-    carryLayoutReadCaches(layout, withBoundaries);
-    if (options.session) {
-      options.session.previous = withBoundaries;
-    }
-    return withBoundaries;
+    const pass = publishLayoutPass(projected, part, controlToken, allBlocks, sections, blocks);
+    carryLayoutReadCaches(layout, pass.published);
+    if (options.session) options.session.previous = pass.retained;
+    return pass.published;
   };
 
   if (!options.notes) {

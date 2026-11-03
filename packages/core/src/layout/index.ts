@@ -610,6 +610,7 @@ export {
   type SectionMargins,
   type SectionPageNumbering,
   type SectionProperties,
+  type SectionVerticalAlign,
 } from './section-properties.ts';
 export {
   PAGE_BORDER_SIDES,

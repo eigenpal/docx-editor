@@ -135,7 +135,15 @@ export interface SectionProperties {
    * edge it declares is off or an art border — see {@link parsePageBorders}.
    */
   readonly pageBorders?: SectionPageBorders;
+  /**
+   * Authored `w:vAlign` (§17.6.23) other than `top`: where the body sits between the top and
+   * bottom of the text area. Absent means top alignment.
+   */
+  readonly verticalAlign?: SectionVerticalAlign;
 }
+
+/** `w:sectPr/w:vAlign` values other than the default `top`. */
+export type SectionVerticalAlign = 'center' | 'bottom' | 'both';
 
 /**
  * One section of the body story: contiguous top-level blocks plus the properties that end it.
@@ -375,6 +383,7 @@ function parseSectionPropertiesUncached(sectPr: OoxmlNode): SectionProperties {
 
   const pageNumbering = parsePageNumbering(sectPr);
   const pageBorders = parsePageBorders(sectPr);
+  const verticalAlign = verticalAlignOf(sectPr);
   const count = columnCount(cols);
   const gapTwips = cols
     ? nonNegativeTwips(attribute(cols, 'space'), defaults.columns.gapTwips)
@@ -423,7 +432,14 @@ function parseSectionPropertiesUncached(sectPr: OoxmlNode): SectionProperties {
     breakType: breakTypeOf(sectPr),
     ...(pageNumbering !== undefined ? { pageNumbering } : {}),
     ...(pageBorders !== undefined ? { pageBorders } : {}),
+    ...(verticalAlign !== undefined ? { verticalAlign } : {}),
   };
+}
+
+function verticalAlignOf(sectPr: OoxmlNode): SectionVerticalAlign | undefined {
+  const vAlign = childNamed(sectPr, 'vAlign');
+  const value = vAlign ? attribute(vAlign, 'val') : undefined;
+  return value === 'center' || value === 'bottom' || value === 'both' ? value : undefined;
 }
 
 /** A section's active line-grid pitch in points, or `undefined` when it has no line grid. */
