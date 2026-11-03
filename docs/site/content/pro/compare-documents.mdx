@@ -5,7 +5,7 @@ category: 'Pro'
 order: 64
 ---
 
-Compare documents records the differences between an original document and a revised document as tracked changes. Accept all changes to get the revised document. Reject all changes to get the original. If you turn formatting detection off, the result takes the revised formatting without tracked changes, so rejecting all changes gives the original text with the revised formatting.
+Compare documents records the differences between an original document and a revised document as tracked changes. Accept all changes to get the revised document. Reject all changes to get the original text and its formatting. Some differences have no tracked form, so they stay after a reject: style definitions, content control properties, comments, and empty headers, footers, notes, and parts that inserted content brought. If you turn formatting detection off, the result takes the revised formatting without tracked changes, so rejecting all changes gives the original text with the revised formatting.
 
 Compare documents requires an EigenPal Pro License. The editor command and `Document.compareFromBase64` also require the review module. Without it, they refuse with a stable reason. Follow [Tracked changes](/docs/2.x/pro/tracked-changes) to enable review features. The `compareDocuments` function needs no module.
 

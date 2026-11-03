@@ -374,6 +374,29 @@ test('a style that names a list takes the revised list, by its output id', () =>
   expect(level).toBe('lowerLetter');
 });
 
+test('a style a list of the original links to is not added, so the list keeps its meaning', () => {
+  // The original's list links to style S, which it does not define.
+  const numbering =
+    `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="0">` +
+    `<w:numStyleLink w:val="S"/></w:abstractNum>` +
+    `<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>`;
+  const numberingStyle =
+    '<w:style w:type="numbering" w:customStyle="1" w:styleId="S"><w:name w:val="S"/>' +
+    '<w:pPr><w:numPr><w:numId w:val="1"/></w:numPr></w:pPr></w:style>';
+  const result = compared(
+    buildDocx({
+      body: p('Old words') + p('Item', '<w:numPr><w:numId w:val="1"/></w:numPr>'),
+      numbering,
+    }),
+    buildDocx({
+      body: p('New words') + p('Item', '<w:numPr><w:numId w:val="1"/></w:numPr>'),
+      numbering,
+      extraStyles: numberingStyle,
+    })
+  );
+  expect(stylesOf(result.bytes)).not.toContain('w:styleId="S"');
+});
+
 test('a revised style keeps the namespaces its own content declares', () => {
   const declared = (uri: string) =>
     `<w:style xmlns:x="${uri}" w:type="paragraph" w:customStyle="1" w:styleId="Mine">` +

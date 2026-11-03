@@ -101,7 +101,18 @@ function newPart(pkg: OoxmlPackage, xml: string, source: OoxmlPart, kind: string
 const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const LIST_REFERENCES = new Set(['numId']);
 const DEFINITION_REFERENCES = new Set(['abstractNumId']);
-const STYLE_REFERENCES = new Set(['pStyle', 'rStyle', 'tblStyle', 'basedOn', 'next', 'link']);
+// Every element that names a style by id, list definitions included: a list that links to a
+// style the original does not define must not start to resolve once the compare adds it.
+const STYLE_REFERENCES = new Set([
+  'pStyle',
+  'rStyle',
+  'tblStyle',
+  'basedOn',
+  'next',
+  'link',
+  'numStyleLink',
+  'styleLink',
+]);
 
 function mergeStyles(
   base: OoxmlPackage,
