@@ -263,7 +263,8 @@ export const NativeDialog = defineComponent({
         if (!value) return;
         defaultScope.value = !value.parentElement?.closest('.docx-editor');
         const active = hostDocumentOf(value).activeElement;
-        opener = isHTMLElementNode(active) ? active : null;
+        // The page itself is no opener: restoring it would take focus from the editor.
+        opener = isHTMLElementNode(active) && active !== active.ownerDocument.body ? active : null;
         const abort = () => {
           if (value.open) value.close?.();
         };

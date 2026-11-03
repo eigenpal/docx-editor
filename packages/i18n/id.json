@@ -1178,6 +1178,7 @@
     "compare": "Bandingkan",
     "comparing": "Membandingkan…",
     "description": "Dokumen yang terbuka adalah dokumen asli. Pilih dokumen revisi. Perbedaannya muncul di sini sebagai perubahan terlacak.",
+    "trackedChangesAccepted": "Dokumen yang terbuka memiliki perubahan terlacak. Perbandingan menganggapnya sudah diterima.",
     "detectFormatting": "Deteksi perubahan format",
     "fileRequired": "Pilih dokumen revisi terlebih dahulu.",
     "readFailed": "Tidak dapat membaca file yang dipilih.",

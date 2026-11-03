@@ -283,7 +283,7 @@ test('a refusal with a reason shows the message for that reason', async () => {
 });
 
 /** A session the test drives by hand: `apply` waits until the test answers it. */
-function heldSession(cancelable: boolean) {
+function heldSession(cancelable: boolean, originalHasTrackedChanges = false) {
   const controller = new AbortController();
   const calls: {
     readonly onProgress?: (progress: CompareDocumentsProgress) => void;
@@ -292,6 +292,7 @@ function heldSession(cancelable: boolean) {
   const session: CompareDocumentsDialogSession = {
     signal: controller.signal,
     defaultAuthor: 'Reviewer',
+    originalHasTrackedChanges,
     cancelable,
     canApply: () => !controller.signal.aborted,
     apply: (_request, options) =>
@@ -411,4 +412,22 @@ test('Progress and Notice are named parts', async () => {
   expect(container.querySelector('.host-notice')?.getAttribute('role')).toBe('status');
   await startCompare(container);
   expect(container.querySelector('.host-progress progress')).not.toBeNull();
+});
+
+test('the dialog says before a compare that the open tracked changes count as accepted', async () => {
+  const noteOf = async (tracked: boolean) => {
+    const container = inLocale(() => h(Dialog, { session: heldSession(true, tracked).session }));
+    await nextTick();
+    const dialog = container.querySelector('dialog')!;
+    const note = dialog.querySelector('[data-docx-part="trackedChanges"]');
+    return {
+      text: note?.textContent ?? null,
+      described: note ? (dialog.getAttribute('aria-describedby') ?? '').includes(note.id) : false,
+    };
+  };
+  expect(await noteOf(true)).toEqual({
+    text: 'The open document has tracked changes. The compare treats them as accepted.',
+    described: true,
+  });
+  expect(await noteOf(false)).toEqual({ text: null, described: false });
 });

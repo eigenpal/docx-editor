@@ -1178,6 +1178,7 @@
     "compare": "Comparar",
     "comparing": "Comparando…",
     "description": "El documento abierto es el original. Elija el documento revisado. Sus diferencias aparecen aquí como cambios con seguimiento.",
+    "trackedChangesAccepted": "El documento abierto tiene cambios con seguimiento. La comparación los trata como aceptados.",
     "detectFormatting": "Detectar cambios de formato",
     "fileRequired": "Elija primero el documento revisado.",
     "readFailed": "No se pudo leer el archivo elegido.",

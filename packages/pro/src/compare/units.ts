@@ -292,10 +292,14 @@ export class SideContext {
       );
   }
 
-  /** Key of a raw serialized fragment, with relationship ids resolved to their targets. */
+  /**
+   * Key of a raw serialized fragment, with relationship ids resolved to their targets. Paragraph
+   * identities and revision-save ids are left out: they say nothing about content, and an editor
+   * adds paragraph identities to a document it opens.
+   */
   keyOf(raw: string): string {
     const declared = localDeclarations(raw);
-    return raw.replace(
+    return withoutIdentities(raw).replace(
       REL_ATTRIBUTE,
       (whole, lead: string, prefix: string, name: string, id: string) =>
         this.#isRelationshipPrefix(prefix, name, declared)
@@ -313,6 +317,20 @@ export class SideContext {
     const uri = declared.get(prefix) ?? this.scope.uriOf(prefix);
     return uri === (name === 'relid' ? O_NS : R_NS);
   }
+}
+
+/** Paragraph identity and revision-save id attributes, in any prefix. */
+const IDENTITY_ATTRIBUTE = /\s[\w.-]+:(?:paraId|textId|rsid\w*)="[^"]*"/g;
+const PREFIX_DECLARATION = /\sxmlns:([\w.-]+)="[^"]*"/g;
+
+/** `xml` without identity attributes, and without the declarations only they used. */
+function withoutIdentities(xml: string): string {
+  if (!IDENTITY_ATTRIBUTE.test(xml)) return xml;
+  IDENTITY_ATTRIBUTE.lastIndex = 0;
+  const stripped = xml.replace(IDENTITY_ATTRIBUTE, '');
+  return stripped.replace(PREFIX_DECLARATION, (whole, prefix: string) =>
+    stripped.includes(`${prefix}:`, stripped.indexOf(whole) + whole.length) ? whole : ''
+  );
 }
 
 /**

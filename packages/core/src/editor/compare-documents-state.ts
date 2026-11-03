@@ -369,6 +369,11 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
     const session: CompareDocumentsDialogSession = {
       signal: controller.signal,
       defaultAuthor: host.surface()?.author() ?? '',
+      originalHasTrackedChanges:
+        host
+          .surface()
+          ?.session.reviewItems()
+          .some((item) => item.kind === 'revision') ?? false,
       canApply: () =>
         active === session && !controller.signal.aborted && !running && canCompare().ok,
       cancelable: background !== undefined,
@@ -406,9 +411,12 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
             };
           const revisionCount = result.revisionCount ?? 0;
           // With no differences the dialog stays open, so it can say so. Otherwise it closes,
-          // and the editor's own live region says what the compare recorded.
+          // and the editor's own live region says what the compare recorded. The document takes
+          // focus, so the user can review or undo the result at once: the dialog's opener can be
+          // a menu item that is gone, or the page itself.
           if (result.changed) {
             session.cancel();
+            host.surface()?.focus();
             announceRecorded(revisionCount);
           }
           return { ok: true, revisionCount, changed: result.changed };
@@ -437,6 +445,7 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
     dialog = host.contribution()!.createCompareDocumentsDialog!({
       signal: session.signal,
       defaultAuthor: session.defaultAuthor,
+      originalHasTrackedChanges: session.originalHasTrackedChanges,
       cancelable: session.cancelable,
       canApply: session.canApply,
       apply: session.apply,

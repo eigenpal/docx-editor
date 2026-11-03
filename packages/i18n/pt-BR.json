@@ -1178,6 +1178,7 @@
     "compare": "Comparar",
     "comparing": "Comparando…",
     "description": "O documento aberto é o original. Escolha o documento revisado. As diferenças aparecem aqui como alterações controladas.",
+    "trackedChangesAccepted": "O documento aberto tem alterações controladas. A comparação as trata como aceitas.",
     "detectFormatting": "Detectar alterações de formatação",
     "fileRequired": "Escolha primeiro o documento revisado.",
     "readFailed": "Não foi possível ler o arquivo escolhido.",

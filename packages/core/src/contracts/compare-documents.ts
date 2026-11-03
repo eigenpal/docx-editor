@@ -91,6 +91,11 @@ export interface CompareDocumentsDialogSession {
   readonly signal: AbortSignal;
   /** The author name the dialog offers first: the editor's author, or an empty string. */
   readonly defaultAuthor: string;
+  /**
+   * Whether the open document has tracked changes when the dialog opens. The compare treats
+   * them as accepted, so a dialog says so before the user compares.
+   */
+  readonly originalHasTrackedChanges: boolean;
   /** Whether a compare can run now. */
   canApply(): boolean;
   /**

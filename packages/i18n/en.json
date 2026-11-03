@@ -1175,6 +1175,7 @@
   "compareDocuments": {
     "title": "Compare documents",
     "description": "The open document is the original. Choose the revised document. Its differences appear here as tracked changes.",
+    "trackedChangesAccepted": "The open document has tracked changes. The compare treats them as accepted.",
     "revisedFile": "Revised document",
     "author": "Label changes with",
     "detectFormatting": "Detect formatting changes",

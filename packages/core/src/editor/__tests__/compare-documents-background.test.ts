@@ -213,6 +213,25 @@ test('without a background engine, the session cannot stop a compare and reports
   session.cancel();
 });
 
+test('the document takes focus after a compare that changed it, not after one that did not', async () => {
+  const results = [
+    { ok: true as const, bytes: null, revisionCount: 0, changed: false },
+    { ok: true as const, bytes: docx('Revised text'), revisionCount: 2, changed: true },
+  ];
+  const { editor, session } = open({ compareDocumentsInBackground: async () => results.shift()! });
+  let focused = 0;
+  const surface = editor.surface!;
+  const focus = surface.focus.bind(surface);
+  surface.focus = () => {
+    focused += 1;
+    focus();
+  };
+  expect(await session.apply({ revised: docx('Original text') })).toMatchObject({ changed: false });
+  expect(focused).toBe(0);
+  expect(await session.apply({ revised: docx('Revised text') })).toMatchObject({ changed: true });
+  expect(focused).toBe(1);
+});
+
 test('a worker that never starts falls back to the main thread compare', async () => {
   const { editor, session } = open({
     // A worker whose script is gone fails before its first progress message.

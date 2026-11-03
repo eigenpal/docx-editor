@@ -7882,6 +7882,7 @@ export interface UseCompareDocumentsDialogReturn extends UseDialogReturn<Compare
     readonly busy: Readonly<Ref<boolean>>;
     readonly cancelable: Readonly<Ref<boolean>>;
     readonly notice: Readonly<Ref<string | undefined>>;
+    readonly originalHasTrackedChanges: Readonly<Ref<boolean>>;
     readonly progress: Readonly<Ref<CompareDocumentsProgress | null>>;
 }
 

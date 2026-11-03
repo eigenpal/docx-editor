@@ -58,6 +58,8 @@ export interface UseCompareDocumentsDialogReturn extends UseDialogReturn<Compare
   readonly cancelable: Readonly<Ref<boolean>>;
   /** A message that is not an error, such as that the documents have no differences. */
   readonly notice: Readonly<Ref<string | undefined>>;
+  /** Whether the open document has tracked changes, which the compare treats as accepted. */
+  readonly originalHasTrackedChanges: Readonly<Ref<boolean>>;
 }
 /** Access the Compare documents draft and actions. @public */
 export function useCompareDocumentsDialog(): UseCompareDocumentsDialogReturn {
@@ -93,6 +95,7 @@ const Impl = defineComponent({
     const busy = ref(false);
     const progress = shallowRef<CompareDocumentsProgress | null>(null);
     const cancelable = computed(() => p.session?.cancelable ?? false);
+    const originalHasTrackedChanges = computed(() => p.session?.originalHasTrackedChanges ?? false);
     const closed = ref(false);
     const panel = ref<HTMLDialogElement | null>(null);
     // Compare disables itself while busy: focus moves once the next render is on screen.
@@ -217,6 +220,7 @@ const Impl = defineComponent({
       progress,
       cancelable,
       notice,
+      originalHasTrackedChanges,
       setValue,
       apply,
       cancel,
@@ -230,6 +234,15 @@ const Impl = defineComponent({
           <div data-docx-part="header">
             <h2 data-docx-part="title">{t('title')}</h2>
             <p id={`${id}-description`}>{t('description')}</p>
+            {originalHasTrackedChanges.value ? (
+              <p
+                id={`${id}-tracked`}
+                data-docx-part="trackedChanges"
+                class="docx-compare-documents-tracked"
+              >
+                {t('trackedChangesAccepted')}
+              </p>
+            ) : null}
           </div>
           <div data-docx-part="body" class="docx-compare-documents-body">
             <label data-docx-part="field" data-docx-field="revised">
@@ -320,7 +333,11 @@ const Impl = defineComponent({
           sessionSignal={p.session.signal}
           dismissOutside={false}
           // The description is part of the preset; without it the reference would point nowhere.
-          describedBy={p.preset === false ? undefined : `${id}-description`}
+          describedBy={
+            p.preset === false
+              ? undefined
+              : `${id}-description${originalHasTrackedChanges.value ? ` ${id}-tracked` : ''}`
+          }
           busy={busy.value}
           panelRef={panel}
           class={['docx-compare-documents-dialog', p.className]}

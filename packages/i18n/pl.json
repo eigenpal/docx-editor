@@ -1178,6 +1178,7 @@
     "compare": "Porównaj",
     "comparing": "Porównywanie…",
     "description": "Otwarty dokument jest oryginałem. Wybierz poprawiony dokument. Jego różnice pojawią się tutaj jako śledzone zmiany.",
+    "trackedChangesAccepted": "Otwarty dokument zawiera śledzone zmiany. Porównanie traktuje je jako zaakceptowane.",
     "detectFormatting": "Wykrywaj zmiany formatowania",
     "fileRequired": "Najpierw wybierz poprawiony dokument.",
     "readFailed": "Nie można odczytać wybranego pliku.",

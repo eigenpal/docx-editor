@@ -279,7 +279,9 @@ export function DialogFrame({
     const panel = ref.current;
     if (!panel) return;
     setOwnScope(!panel.parentElement?.closest('.docx-editor'));
-    const opener = panel.ownerDocument.activeElement as HTMLElement | null;
+    // The page itself is no opener: restoring it would take focus from the editor.
+    const active = panel.ownerDocument.activeElement as HTMLElement | null;
+    const opener = active === panel.ownerDocument.body ? null : active;
     const closeNative = () => {
       if (panel.open) panel.close?.();
     };

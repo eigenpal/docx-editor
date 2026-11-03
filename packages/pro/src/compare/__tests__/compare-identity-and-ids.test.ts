@@ -373,3 +373,28 @@ test('a new relationship part the original cannot type is refused', () => {
   const result = compareDocuments(zipSync(files), revised, { authorName: 'Test', date: DATE });
   expect(result.ok ? '' : result.code).toBe('unsupportedContent');
 });
+
+test('paragraph identities and save ids alone are no difference', () => {
+  // An editor adds paragraph identities to a document it opens; the file has none.
+  const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+  const ids = ` xmlns:w14="${W14}" w14:paraId="1A2B3C4D" w14:textId="77777777" w:rsidR="00AB12CD"`;
+  const para = (text: string, withIds: boolean) =>
+    `<w:p${withIds ? ids : ''}><w:r><w:t>${text}</w:t></w:r></w:p>`;
+  const body = (withIds: boolean) =>
+    '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid><w:tr>' +
+    `<w:tc>${para('One', withIds)}</w:tc><w:tc>${para('Two', withIds)}</w:tc></w:tr></w:tbl>` +
+    `<w:sdt><w:sdtPr><w:id w:val="5"/></w:sdtPr><w:sdtContent>${para('Inside', withIds)}` +
+    `</w:sdtContent></w:sdt>${p('After')}`;
+  const result = compareDocuments(
+    buildDocx({ body: body(true) }),
+    buildDocx({ body: body(false) }),
+    {
+      authorName: 'Test',
+      date: DATE,
+    }
+  );
+  expect(result.ok && { changed: result.changed, revisions: result.revisionCount }).toEqual({
+    changed: false,
+    revisions: 0,
+  });
+});

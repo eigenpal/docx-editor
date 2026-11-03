@@ -1178,6 +1178,7 @@
     "compare": "Vergleichen",
     "comparing": "Wird verglichen…",
     "description": "Das geöffnete Dokument ist das Original. Wählen Sie das überarbeitete Dokument. Seine Unterschiede erscheinen hier als nachverfolgte Änderungen.",
+    "trackedChangesAccepted": "Das geöffnete Dokument enthält nachverfolgte Änderungen. Der Vergleich behandelt sie als angenommen.",
     "detectFormatting": "Formatierungsänderungen erkennen",
     "fileRequired": "Wählen Sie zuerst das überarbeitete Dokument.",
     "readFailed": "Die ausgewählte Datei konnte nicht gelesen werden.",

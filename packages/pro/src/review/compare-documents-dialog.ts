@@ -70,6 +70,12 @@ export function createCompareDocumentsDialog(
       const description = el('p', t('description'));
       description.id = `docx-compare-documents-description-${id}`;
       dialog.setAttribute('aria-describedby', description.id);
+      // The open document's tracked changes count as accepted: said before the user compares.
+      const tracked = el('p', t('trackedChangesAccepted'));
+      tracked.id = `docx-compare-documents-tracked-${id}`;
+      tracked.className = 'docx-compare-documents-tracked';
+      if (host.originalHasTrackedChanges)
+        dialog.setAttribute('aria-describedby', `${description.id} ${tracked.id}`);
 
       const body = el('div');
       body.className = 'docx-compare-documents-body';
@@ -202,7 +208,9 @@ export function createCompareDocumentsDialog(
         focusAfter(!outcome.ok);
       });
 
-      dialog.append(title, description, body, progress, phase, error, notice, footer);
+      dialog.append(title, description);
+      if (host.originalHasTrackedChanges) dialog.append(tracked);
+      dialog.append(body, progress, phase, error, notice, footer);
       host.container.append(dialog);
       setBusy(false);
       dialog.showModal();

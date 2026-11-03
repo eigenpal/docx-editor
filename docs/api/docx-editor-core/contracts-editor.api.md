@@ -174,6 +174,7 @@ export interface CompareDocumentsDialogSession {
     cancel(): void;
     readonly cancelable: boolean;
     readonly defaultAuthor: string;
+    readonly originalHasTrackedChanges: boolean;
     readonly signal: AbortSignal;
 }
 

@@ -679,6 +679,7 @@ Page dimensions, margins, and paragraph indents use twips: 1,440 per inch. Parag
 - `progress`: with the compare worker, the running step (`phase`) and its `fraction` from 0 to 1. It is `null` until the worker reports its first step, and when no compare runs. The `compareDocuments.phases.<phase>` keys of `@docx-editor.dev/i18n` describe each step.
 - `cancelable`: `true` with the compare worker, so `cancel()` stops a running compare.
 - `notice`: a message that is not an error, such as that the documents have no differences.
+- `originalHasTrackedChanges`: `true` when the open document has tracked changes. The compare treats them as accepted, and the default arrangement says so before you compare.
 
 The `removeDateAndTime` draft key writes the revisions without dates. It defaults to `false`, and the default arrangement has no control for it. Set it from a custom control with `setValue('removeDateAndTime', true)`.
 

@@ -3340,6 +3340,7 @@ export interface UseCompareDocumentsDialogReturn extends UseDialogReturn<Compare
     readonly busy: boolean;
     readonly cancelable: boolean;
     readonly notice: string | undefined;
+    readonly originalHasTrackedChanges: boolean;
     readonly progress: CompareDocumentsProgress | null;
 }
 

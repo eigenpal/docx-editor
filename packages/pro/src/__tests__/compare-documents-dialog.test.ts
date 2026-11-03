@@ -325,3 +325,35 @@ test('an empty notice stays in the accessibility tree', () => {
   const rule = css.slice(css.indexOf('.docx-compare-documents-notice:empty {'));
   expect(rule.slice(0, rule.indexOf('}'))).not.toContain('display: none');
 });
+
+test('the dialog says before a compare that the open tracked changes count as accepted', () => {
+  const tracked = zipDocument(
+    `${paragraphs('Before.')}<w:p><w:ins w:id="1" w:author="Ana" w:date="2026-01-01T00:00:00Z">` +
+      '<w:r><w:t>Added.</w:t></w:r></w:ins></w:p>'
+  );
+  const noteOf = (bytes: Uint8Array) => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({
+      container,
+      document: bytes,
+      modules: [reviewModule()],
+      translate: createT(en as unknown as LocaleStrings) as (key: string) => string,
+    });
+    editor.exec({ type: 'openCompareDocumentsDialog' });
+    const dialog = container.querySelector('dialog')!;
+    const note = dialog.querySelector('.docx-compare-documents-tracked');
+    const result = {
+      text: note?.textContent ?? null,
+      described: note ? (dialog.getAttribute('aria-describedby') ?? '').includes(note.id) : false,
+    };
+    editor.destroy();
+    container.remove();
+    return result;
+  };
+  expect(noteOf(tracked)).toEqual({
+    text: 'The open document has tracked changes. The compare treats them as accepted.',
+    described: true,
+  });
+  expect(noteOf(ORIGINAL)).toEqual({ text: null, described: false });
+});

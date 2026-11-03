@@ -49,6 +49,8 @@ export interface UseCompareDocumentsDialogReturn extends UseDialogReturn<Compare
   readonly cancelable: boolean;
   /** A message that is not an error, such as that the documents have no differences. */
   readonly notice: string | undefined;
+  /** Whether the open document has tracked changes, which the compare treats as accepted. */
+  readonly originalHasTrackedChanges: boolean;
 }
 const parts = createDialogParts<
   keyof CompareDocumentsDialogValues,
@@ -187,6 +189,7 @@ function CompareDocumentsForm({
     progress,
     cancelable: session.cancelable,
     notice,
+    originalHasTrackedChanges: session.originalHasTrackedChanges,
     apply() {
       void compare();
     },
@@ -206,7 +209,11 @@ function CompareDocumentsForm({
       dismissOutside={false}
       sessionSignal={session.signal}
       // The description is part of the preset; without it the reference would point nowhere.
-      describedBy={preset === false ? undefined : `${ids}-description`}
+      describedBy={
+        preset === false
+          ? undefined
+          : `${ids}-description${session.originalHasTrackedChanges ? ` ${ids}-tracked` : ''}`
+      }
       busy={busy}
     >
       <parts.Composition
@@ -217,6 +224,15 @@ function CompareDocumentsForm({
             <div data-docx-part="header">
               <h2 data-docx-part="title">{t('title')}</h2>
               <p id={`${ids}-description`}>{t('description')}</p>
+              {session.originalHasTrackedChanges ? (
+                <p
+                  id={`${ids}-tracked`}
+                  data-docx-part="trackedChanges"
+                  className="docx-compare-documents-tracked"
+                >
+                  {t('trackedChangesAccepted')}
+                </p>
+              ) : null}
             </div>
             <div data-docx-part="body" className="docx-compare-documents-body">
               <label data-docx-part="field" data-docx-field="revised">

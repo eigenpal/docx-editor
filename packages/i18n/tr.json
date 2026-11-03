@@ -1178,6 +1178,7 @@
     "compare": "Karşılaştır",
     "comparing": "Karşılaştırılıyor…",
     "description": "Açık belge özgün belgedir. Düzeltilmiş belgeyi seçin. Farkları burada izlenen değişiklikler olarak görünür.",
+    "trackedChangesAccepted": "Açık belgede izlenen değişiklikler var. Karşılaştırma bunları kabul edilmiş sayar.",
     "detectFormatting": "Biçimlendirme değişikliklerini algıla",
     "fileRequired": "Önce düzeltilmiş belgeyi seçin.",
     "readFailed": "Seçilen dosya okunamadı.",
