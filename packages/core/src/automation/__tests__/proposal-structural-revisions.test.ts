@@ -221,11 +221,14 @@ test("a tracked replacement nests in another author's insertion in one note only
     expect(xml).toMatch(
       /<w:ins w:author="Human" w:id="1"><w:r>[^<]*<w:t[^>]*>head <\/w:t><\/w:r><w:del w:author="Agent"/
     );
-    expect(xml).toContain(
-      '<w:ins w:author="Human" w:id="1"><w:r><w:t>head target tail</w:t></w:r></w:ins>'
+    // The other note's insertion shared the id in the file. It is another note's change, so
+    // the saved copy gives it its own; the pieces of this note's insertion keep id 1.
+    const other = xml.match(
+      /<w:ins w:author="Human" w:id="(\d+)"><w:r><w:t>head target tail<\/w:t><\/w:r><\/w:ins>/
     );
-    // The author's own deletion and insertion each resolve alone, although the insertion
-    // around the deletion shares its identity with the other note.
+    expect(other?.[1]).toBeDefined();
+    expect(other?.[1]).not.toBe('1');
+    // The author's own deletion and insertion each resolve alone.
     const saved = host.save();
     if (!saved.ok) throw new Error(saved.error.code);
     for (const action of ['acceptRevision', 'rejectRevision'] as const) {

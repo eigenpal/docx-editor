@@ -440,6 +440,7 @@ export type { HyperlinkActivation, SurfaceNavigation } from './surface-navigatio
 // `engine-layout` for a parameter type would be reaching past the boundary for a name.
 export type {
   SectionProperties,
+  SectionVerticalAlign,
   NavigationCommand,
   SemanticPosition,
   SemanticSelection,
