@@ -1180,7 +1180,7 @@
     "description": "Bu belgenin başka bir sürümünü seçin. Farklar burada izlenen değişiklikler olarak görünür.",
     "trackedChangesAccepted": "Açık belgede izlenen değişiklikler var. Karşılaştırma bunları kabul edilmiş sayar.",
     "detectFormatting": "Biçimlendirme değişikliklerini dahil et",
-    "fileRequired": "Önce düzeltilmiş belgeyi seçin.",
+    "fileRequired": "Önce karşılaştırılacak bir belge seçin.",
     "readFailed": "Seçilen dosya okunamadı.",
     "revisedFile": "Karşılaştırılacak belge",
     "title": "Belgeleri karşılaştır",
@@ -1213,7 +1213,7 @@
       "headerFooter": "Belgeler, önceki bir bölümün üst veya alt bilgisinde farklılık gösteriyor ve bu bölümün diğer belgede eşleşen bir bölümü yok.",
       "lockedContent": "Belgeler, kilitli veya veriye bağlı bir içerik denetiminin içinde farklılık gösteriyor; bu nedenle oradaki değişiklikler gözden geçirilemez. Kilidi veya bağlantıyı kaldırıp yeniden karşılaştırın.",
       "packageStructure": "Açık belge bu karşılaştırmanın sonucunu tutamaz.",
-      "unrecordedSettings": "Düzeltilmiş belge, değişiklikleri reddederek geri alınamayacak bölüm veya tablo ayarları ekliyor.",
+      "unrecordedSettings": "Diğer sürüm, değişiklikler reddedilerek geri alınamayan bölüm veya tablo ayarları ekliyor.",
       "unresolvedRevisions": "Bir belge, kabul edilemeyen izlenen değişiklikler içeriyor. Bunları o belgede kabul edin veya reddedin, ardından yeniden karşılaştırın.",
       "untrackedContent": "Belgeler, gömülü bir dosya gibi izlenen değişiklik olarak gösterilemeyen içerikte farklılık gösteriyor.",
       "unverified": "Karşılaştırma sonucu iki belgeyi de yeniden üretmeyeceği için uygulanmadı."

@@ -1180,7 +1180,7 @@
     "description": "选择此文档的另一个版本。差异将作为修订显示在此处。",
     "trackedChangesAccepted": "打开的文档包含修订。比较会将其视为已接受。",
     "detectFormatting": "包括格式更改",
-    "fileRequired": "请先选择修订后的文档。",
+    "fileRequired": "请先选择要比较的文档。",
     "readFailed": "无法读取所选文件。",
     "revisedFile": "比较对象",
     "title": "比较文档",
@@ -1213,7 +1213,7 @@
       "headerFooter": "两个文档在前面某一节的页眉或页脚中存在差异，且该节在另一个文档中没有对应的节。",
       "lockedContent": "文档在锁定或链接到数据的内容控件中存在差异，因此无法审阅这些更改。请解除锁定或链接，然后重新比较。",
       "packageStructure": "打开的文档无法容纳此次比较的结果。",
-      "unrecordedSettings": "修订后的文档添加了拒绝更改也无法撤销的节或表格设置。",
+      "unrecordedSettings": "另一个版本添加了拒绝更改后无法撤消的节或表格设置。",
       "unresolvedRevisions": "某个文档包含无法接受的修订。请在该文档中接受或拒绝这些修订，然后重新比较。",
       "untrackedContent": "文档在无法显示为修订的内容中存在差异，例如嵌入的文件。",
       "unverified": "比较结果无法重现两个文档，因此未应用。"

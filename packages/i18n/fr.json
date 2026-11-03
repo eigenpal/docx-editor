@@ -1180,7 +1180,7 @@
     "description": "Choisissez une autre version de ce document. Les différences apparaissent ici comme des modifications suivies.",
     "trackedChangesAccepted": "Le document ouvert contient des modifications suivies. La comparaison les traite comme acceptées.",
     "detectFormatting": "Inclure les modifications de mise en forme",
-    "fileRequired": "Choisissez d'abord le document révisé.",
+    "fileRequired": "Choisissez d’abord un document à comparer.",
     "readFailed": "Impossible de lire le fichier choisi.",
     "revisedFile": "Comparer avec",
     "title": "Comparer des documents",
@@ -1213,7 +1213,7 @@
       "headerFooter": "Les documents diffèrent dans un en-tête ou un pied de page d’une section précédente, et cette section n’a pas de section correspondante dans l’autre document.",
       "lockedContent": "Les documents diffèrent dans un contrôle de contenu verrouillé ou lié à des données : ces modifications ne peuvent pas être révisées. Supprimez le verrou ou le lien, puis comparez de nouveau.",
       "packageStructure": "Le document ouvert ne peut pas contenir le résultat de cette comparaison.",
-      "unrecordedSettings": "Le document révisé ajoute des paramètres de section ou de tableau que le refus des modifications ne pourrait pas annuler.",
+      "unrecordedSettings": "L’autre version ajoute des paramètres de section ou de tableau que le refus des modifications ne peut pas annuler.",
       "unresolvedRevisions": "Un document contient des modifications suivies qui ne peuvent pas être acceptées. Acceptez-les ou refusez-les dans ce document, puis comparez de nouveau.",
       "untrackedContent": "Les documents diffèrent par un contenu qui ne peut pas être affiché sous forme de modifications suivies, comme un fichier incorporé.",
       "unverified": "Le résultat de la comparaison ne reproduirait pas les deux documents. Il n'a donc pas été appliqué."

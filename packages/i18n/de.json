@@ -1180,7 +1180,7 @@
     "description": "Wählen Sie eine andere Version dieses Dokuments. Die Unterschiede erscheinen hier als nachverfolgte Änderungen.",
     "trackedChangesAccepted": "Das geöffnete Dokument enthält nachverfolgte Änderungen. Der Vergleich behandelt sie als angenommen.",
     "detectFormatting": "Formatierungsänderungen einbeziehen",
-    "fileRequired": "Wählen Sie zuerst das überarbeitete Dokument.",
+    "fileRequired": "Wählen Sie zuerst ein Dokument zum Vergleichen.",
     "readFailed": "Die ausgewählte Datei konnte nicht gelesen werden.",
     "revisedFile": "Vergleichen mit",
     "title": "Dokumente vergleichen",
@@ -1213,7 +1213,7 @@
       "headerFooter": "Die Dokumente unterscheiden sich in einer Kopf- oder Fußzeile eines früheren Abschnitts, und dieser Abschnitt hat keinen passenden Abschnitt im anderen Dokument.",
       "lockedContent": "Die Dokumente unterscheiden sich in einem Inhaltssteuerelement, das gesperrt oder mit Daten verknüpft ist. Die Änderungen dort können nicht überprüft werden. Entfernen Sie die Sperre oder die Verknüpfung und vergleichen Sie erneut.",
       "packageStructure": "Das geöffnete Dokument kann das Ergebnis dieses Vergleichs nicht aufnehmen.",
-      "unrecordedSettings": "Das überarbeitete Dokument fügt Abschnitts- oder Tabelleneinstellungen hinzu, die sich durch Ablehnen der Änderungen nicht rückgängig machen lassen.",
+      "unrecordedSettings": "Die andere Version fügt Abschnitts- oder Tabelleneinstellungen hinzu, die sich durch Ablehnen der Änderungen nicht rückgängig machen lassen.",
       "unresolvedRevisions": "Ein Dokument enthält nachverfolgte Änderungen, die nicht angenommen werden können. Nehmen Sie sie in diesem Dokument an oder lehnen Sie sie ab und vergleichen Sie erneut.",
       "untrackedContent": "Die Dokumente unterscheiden sich in Inhalten, die nicht als nachverfolgte Änderungen angezeigt werden können, zum Beispiel einer eingebetteten Datei.",
       "unverified": "Das Vergleichsergebnis würde nicht beide Dokumente wiedergeben und wurde daher nicht übernommen."

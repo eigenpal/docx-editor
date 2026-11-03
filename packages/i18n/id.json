@@ -1180,7 +1180,7 @@
     "description": "Pilih versi lain dari dokumen ini. Perbedaannya muncul di sini sebagai perubahan terlacak.",
     "trackedChangesAccepted": "Dokumen yang terbuka memiliki perubahan terlacak. Perbandingan menganggapnya sudah diterima.",
     "detectFormatting": "Sertakan perubahan format",
-    "fileRequired": "Pilih dokumen revisi terlebih dahulu.",
+    "fileRequired": "Pilih dokumen untuk dibandingkan terlebih dahulu.",
     "readFailed": "Tidak dapat membaca file yang dipilih.",
     "revisedFile": "Bandingkan dengan",
     "title": "Bandingkan dokumen",
@@ -1213,7 +1213,7 @@
       "headerFooter": "Dokumen berbeda pada header atau footer dari bagian sebelumnya, dan bagian itu tidak memiliki bagian yang cocok di dokumen lain.",
       "lockedContent": "Dokumen berbeda di dalam kontrol konten yang terkunci atau tertaut ke data, sehingga perubahan di sana tidak dapat ditinjau. Hapus kunci atau tautannya, lalu bandingkan lagi.",
       "packageStructure": "Dokumen yang terbuka tidak dapat menampung hasil perbandingan ini.",
-      "unrecordedSettings": "Dokumen revisi menambahkan pengaturan bagian atau tabel yang tidak dapat dibatalkan dengan menolak perubahan.",
+      "unrecordedSettings": "Versi lain menambahkan pengaturan bagian atau tabel yang tidak dapat dibatalkan dengan menolak perubahan.",
       "unresolvedRevisions": "Sebuah dokumen berisi perubahan terlacak yang tidak dapat diterima. Terima atau tolak perubahan itu di dokumen tersebut, lalu bandingkan lagi.",
       "untrackedContent": "Dokumen berbeda dalam konten yang tidak dapat ditampilkan sebagai perubahan terlacak, seperti file tersemat.",
       "unverified": "Hasil perbandingan tidak akan mereproduksi kedua dokumen, sehingga tidak diterapkan."

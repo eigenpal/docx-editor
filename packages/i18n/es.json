@@ -1180,7 +1180,7 @@
     "description": "Elija otra versión de este documento. Las diferencias aparecen aquí como cambios con seguimiento.",
     "trackedChangesAccepted": "El documento abierto tiene cambios con seguimiento. La comparación los trata como aceptados.",
     "detectFormatting": "Incluir cambios de formato",
-    "fileRequired": "Elija primero el documento revisado.",
+    "fileRequired": "Primero elija un documento para comparar.",
     "readFailed": "No se pudo leer el archivo elegido.",
     "revisedFile": "Comparar con",
     "title": "Comparar documentos",
@@ -1213,7 +1213,7 @@
       "headerFooter": "Los documentos difieren en un encabezado o pie de página de una sección anterior, y esa sección no tiene una sección equivalente en el otro documento.",
       "lockedContent": "Los documentos difieren dentro de un control de contenido bloqueado o vinculado a datos, por lo que esos cambios no se pueden revisar. Quite el bloqueo o el vínculo y vuelva a comparar.",
       "packageStructure": "El documento abierto no puede contener el resultado de esta comparación.",
-      "unrecordedSettings": "El documento revisado agrega configuraciones de sección o de tabla que no se podrían deshacer al rechazar los cambios.",
+      "unrecordedSettings": "La otra versión agrega configuraciones de sección o de tabla que no se pueden deshacer al rechazar los cambios.",
       "unresolvedRevisions": "Un documento contiene cambios con seguimiento que no se pueden aceptar. Acéptelos o rechácelos en ese documento y vuelva a comparar.",
       "untrackedContent": "Los documentos difieren en contenido que no se puede mostrar como cambios con seguimiento, como un archivo incrustado.",
       "unverified": "El resultado de la comparación no reproduciría ambos documentos, por lo que no se aplicó."

@@ -1180,7 +1180,7 @@
     "description": "Escolha outra versão deste documento. As diferenças aparecem aqui como alterações controladas.",
     "trackedChangesAccepted": "O documento aberto tem alterações controladas. A comparação as trata como aceitas.",
     "detectFormatting": "Incluir alterações de formatação",
-    "fileRequired": "Escolha primeiro o documento revisado.",
+    "fileRequired": "Primeiro escolha um documento para comparar.",
     "readFailed": "Não foi possível ler o arquivo escolhido.",
     "revisedFile": "Comparar com",
     "title": "Comparar documentos",
@@ -1213,7 +1213,7 @@
       "headerFooter": "Os documentos diferem em um cabeçalho ou rodapé de uma seção anterior, e essa seção não tem uma seção correspondente no outro documento.",
       "lockedContent": "Os documentos diferem dentro de um controle de conteúdo bloqueado ou vinculado a dados, então essas alterações não podem ser revisadas. Remova o bloqueio ou o vínculo e compare novamente.",
       "packageStructure": "O documento aberto não pode conter o resultado desta comparação.",
-      "unrecordedSettings": "O documento revisado adiciona configurações de seção ou de tabela que não poderiam ser desfeitas ao rejeitar as alterações.",
+      "unrecordedSettings": "A outra versão adiciona configurações de seção ou de tabela que não podem ser desfeitas ao rejeitar as alterações.",
       "unresolvedRevisions": "Um documento contém alterações controladas que não podem ser aceitas. Aceite-as ou rejeite-as nesse documento e compare novamente.",
       "untrackedContent": "Os documentos diferem em conteúdo que não pode ser mostrado como alterações controladas, como um arquivo incorporado.",
       "unverified": "O resultado da comparação não reproduziria os dois documentos, por isso não foi aplicado."

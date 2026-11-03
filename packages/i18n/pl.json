@@ -1180,7 +1180,7 @@
     "description": "Wybierz inną wersję tego dokumentu. Różnice pojawią się tutaj jako śledzone zmiany.",
     "trackedChangesAccepted": "Otwarty dokument zawiera śledzone zmiany. Porównanie traktuje je jako zaakceptowane.",
     "detectFormatting": "Uwzględniaj zmiany formatowania",
-    "fileRequired": "Najpierw wybierz poprawiony dokument.",
+    "fileRequired": "Najpierw wybierz dokument do porównania.",
     "readFailed": "Nie można odczytać wybranego pliku.",
     "revisedFile": "Porównaj z",
     "title": "Porównaj dokumenty",
@@ -1213,7 +1213,7 @@
       "headerFooter": "Dokumenty różnią się nagłówkiem lub stopką wcześniejszej sekcji, a ta sekcja nie ma odpowiadającej jej sekcji w drugim dokumencie.",
       "lockedContent": "Dokumenty różnią się w kontrolce zawartości, która jest zablokowana lub powiązana z danymi, więc tych zmian nie można przejrzeć. Usuń blokadę lub powiązanie i porównaj ponownie.",
       "packageStructure": "Otwarty dokument nie może pomieścić wyniku tego porównania.",
-      "unrecordedSettings": "Poprawiony dokument dodaje ustawienia sekcji lub tabeli, których nie da się cofnąć przez odrzucenie zmian.",
+      "unrecordedSettings": "Druga wersja dodaje ustawienia sekcji lub tabeli, których nie można cofnąć przez odrzucenie zmian.",
       "unresolvedRevisions": "Dokument zawiera śledzone zmiany, których nie można zaakceptować. Zaakceptuj je lub odrzuć w tym dokumencie i porównaj ponownie.",
       "untrackedContent": "Dokumenty różnią się zawartością, której nie można pokazać jako śledzonych zmian, na przykład osadzonym plikiem.",
       "unverified": "Wynik porównania nie odtworzyłby obu dokumentów, więc nie został zastosowany."
