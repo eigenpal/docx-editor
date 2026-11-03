@@ -89,6 +89,10 @@ function revisionIdReadAs(value: string): number | null {
   while (end > start && isXmlSpace(value.charCodeAt(end - 1))) end -= 1;
   const sign = start < end ? value.charCodeAt(start) : 0;
   let index = sign === 43 || sign === 45 ? start + 1 : start;
+  for (let at = index; at < end; at += 1) {
+    const code = value.charCodeAt(at);
+    if (code < 48 || code > 57) return null;
+  }
   // Keep one digit, so `+0` and `000` read as the id `0`.
   while (index < end - 1 && value.charCodeAt(index) === 48) index += 1;
   const digits = value.slice(index, end);
@@ -210,6 +214,8 @@ class RevisionIdScan {
    * is compared field by field with the change that owns its id.
    */
   private readonly owners = new Map<number, ChangeOwner>();
+  /** Every id a fallback copy uses, a change owns it or not. */
+  private readonly fallbacks = new Set<number>();
   /** Ids that more than one element of a kept change uses, and how many use each. */
   private readonly pieces = new Map<number, number>();
   /** Each change that must move, keyed by all its fields, so its pieces share one conflict. */
@@ -291,8 +297,13 @@ class RevisionIdScan {
   }
 
   /** The ids this scan found in use, for {@link QuietDocument}; none may have moved. */
-  quiet(): Pick<QuietDocument, 'owners' | 'pieces' | 'reserved'> {
-    return { owners: this.owners, pieces: this.pieces, reserved: this.reserved };
+  quiet(): Pick<QuietDocument, 'used' | 'pieces' | 'reserved' | 'fallbacks'> {
+    return {
+      used: new Set(this.owners.keys()),
+      pieces: new Map(this.pieces),
+      reserved: this.reserved,
+      fallbacks: this.fallbacks,
+    };
   }
 
   scanPart(part: OoxmlPart): void {
@@ -385,6 +396,7 @@ class RevisionIdScan {
       if (role !== undefined && role !== 'note' && role !== 'textBox') {
         const value = revisionIdOf(node);
         const parsed = value === undefined ? null : revisionIdReadAs(value);
+        if (parsed !== null) this.fallbacks.add(parsed);
         if (parsed !== null && !this.owners.has(parsed)) this.reserved.add(parsed);
       }
     }
@@ -586,12 +598,17 @@ interface QuietDocument {
   /** The main part's root children, its body included. */
   rootChildren: readonly OoxmlNode[];
   blocks: readonly OoxmlNode[];
-  /** The kept change of each id in use. */
-  readonly owners: Map<number, ChangeOwner>;
+  /** The ids a change keeps. Numbers only, so the state keeps no tree alive. */
+  readonly used: Set<number>;
   /** See `RevisionIdScan.pieces`. */
   readonly pieces: Map<number, number>;
   /** Ids no change owns and no new id may take. */
   readonly reserved: ReadonlySet<number>;
+  /**
+   * Every id a fallback copy uses. A change that owns one keeps it from `reserved`, so an
+   * edit that removes such a change walks the document again.
+   */
+  readonly fallbacks: ReadonlySet<number>;
 }
 
 /** By the main body's first and by its last block, which an edit mostly leaves in place. */
@@ -617,7 +634,7 @@ function mainBody(root: OoxmlNode): OoxmlElement | undefined {
 function rememberQuiet(
   pkg: OoxmlPackage,
   scanned: readonly OoxmlPart[],
-  ids: Pick<QuietDocument, 'owners' | 'pieces' | 'reserved'>
+  ids: Pick<QuietDocument, 'used' | 'pieces' | 'reserved' | 'fallbacks'>
 ): void {
   const main = scanned[0];
   if (!main || main.name !== pkg.mainDocumentPart) return;
@@ -693,23 +710,24 @@ function quietAfterEdit(pkg: OoxmlPackage, scanned: readonly OoxmlPart[]): boole
   for (let index = start; index < endBefore; index += 1) {
     const ids = singleIdsOf(before[index]!);
     if (ids === null) return false;
-    removed.push(...ids);
+    for (const id of ids) removed.push(id);
   }
   const added: number[] = [];
   for (let index = start; index < endAfter; index += 1) {
     const ids = singleIdsOf(blocks[index]!);
     if (ids === null) return false;
-    added.push(...ids);
+    for (const id of ids) added.push(id);
   }
   // How many elements use each id once the removed blocks are gone.
   const left = new Map<number, number>();
   for (const id of removed) {
-    const count = left.get(id) ?? (quiet.owners.has(id) ? (quiet.pieces.get(id) ?? 1) : 0);
+    if (quiet.fallbacks.has(id)) return false;
+    const count = left.get(id) ?? (quiet.used.has(id) ? (quiet.pieces.get(id) ?? 1) : 0);
     left.set(id, count - 1);
   }
   const fresh = new Set<number>();
   for (const id of added) {
-    const inUse = left.get(id) ?? (quiet.owners.has(id) ? (quiet.pieces.get(id) ?? 1) : 0);
+    const inUse = left.get(id) ?? (quiet.used.has(id) ? (quiet.pieces.get(id) ?? 1) : 0);
     // An id another element keeps may be a second change on it, or a piece of the same one:
     // the walk tells them apart.
     if (inUse > 0 || fresh.has(id) || quiet.reserved.has(id)) return false;
@@ -718,18 +736,9 @@ function quietAfterEdit(pkg: OoxmlPackage, scanned: readonly OoxmlPart[]): boole
   for (const [id, count] of left) {
     if (count > 1) quiet.pieces.set(id, count);
     else quiet.pieces.delete(id);
-    if (count <= 0) quiet.owners.delete(id);
+    if (count <= 0) quiet.used.delete(id);
   }
-  for (const id of fresh) {
-    quiet.owners.set(id, {
-      partName: main.name,
-      story: '',
-      annotation: '',
-      node: body,
-      author: undefined,
-      date: undefined,
-    });
-  }
+  for (const id of fresh) quiet.used.add(id);
   quietDocuments.delete(before[0]!);
   quietDocuments.delete(before[before.length - 1]!);
   quiet.rootChildren = children;

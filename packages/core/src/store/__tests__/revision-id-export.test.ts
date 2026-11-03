@@ -80,6 +80,29 @@ function ids(pkg: OoxmlPackage, partName = pkg.mainDocumentPart): string[] {
   return found;
 }
 
+function bodyChildren(root: OoxmlNode): readonly OoxmlNode[] {
+  if (root.kind === 'textValue') return [];
+  const body = root.children.find(
+    (child) => child.kind !== 'textValue' && child.localName === 'body'
+  );
+  return !body || body.kind === 'textValue' ? [] : body.children;
+}
+
+/** `pkg` with the main body's block at `index` replaced, as an edit replaces it. */
+function withBlock(pkg: OoxmlPackage, index: number, block: OoxmlNode): OoxmlPackage {
+  const part = pkg.parts.get(pkg.mainDocumentPart)!;
+  const root = part.root;
+  const children = root.children.map((child) => {
+    if (child.kind === 'textValue' || child.localName !== 'body') return child;
+    const blocks = [...child.children];
+    blocks[index] = block;
+    return { ...child, children: blocks };
+  });
+  const parts = new Map(pkg.parts);
+  parts.set(pkg.mainDocumentPart, { ...part, root: { ...root, children } as typeof root });
+  return { ...pkg, parts };
+}
+
 function bodyParagraphIds(root: OoxmlNode): string[] {
   if (root.kind === 'textValue') return [];
   const body = root.children.find(
@@ -475,6 +498,37 @@ describe('saved revision ids', () => {
       const live = store.currentPackage();
       if (edit.keeps) expect(uniqueRevisionIdsExportPackage(live)).toBe(live);
       expect(ids(saved(live))).toEqual(cold(live));
+    }
+  });
+
+  test('a range end that is no number never closes a start', () => {
+    for (const end of ['+-5', '000-5']) {
+      const body =
+        `<w:p><w:customXmlInsRangeStart w:id="-5" w:author="B"/>${run('x')}` +
+        `<w:customXmlInsRangeEnd w:id="${end}"/></w:p>`;
+      expect(named(ids(saved(open(docx(body)))), ['-5'])).toEqual([
+        'customXmlInsRangeStart:-5',
+        'customXmlInsRangeEnd:A',
+      ]);
+    }
+  });
+
+  test('an edit that removes a change a fallback copy shares an id with walks again', () => {
+    const fallback =
+      `<w:p><mc:AlternateContent><mc:Choice Requires="w14">${run('c')}</mc:Choice>` +
+      `<mc:Fallback>${ins('1', 'c')}</mc:Fallback></mc:AlternateContent></w:p>`;
+    // The paragraphs an edit puts in, from documents where they sit at other positions, so
+    // their node ids are their own.
+    const filler = '<w:p/><w:p/><w:p/><w:p/><w:p/>';
+    const donor = (paragraph: string): OoxmlNode =>
+      bodyChildren(open(docx(filler + paragraph)).parts.get('/word/document.xml')!.root)[5]!;
+    const first = open(docx(`<w:p>${ins('1', 'a')}</w:p>${fallback}<w:p/>`));
+    const removed = withBlock(first, 0, donor(`<w:p>${run('a')}</w:p>`));
+    const added = withBlock(removed, 2, donor(`<w:p>${ins('1', 'b', 'Third')}</w:p>`));
+    for (const pkg of [first, removed, added]) {
+      expect(ids(saved(pkg))).toEqual(
+        ids(saved(open(writeOoxmlPackageKeepingRevisionIds(pkg))))
+      );
     }
   });
 });
