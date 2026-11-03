@@ -46,7 +46,10 @@ function properties(
     const before = propertiesInner(childNamed(base, name), ctx.base, DROPS[name]);
     inner += `<w:${change}${ctx.attrs()}><w:${name}>${before}</w:${name}></w:${change}>`;
   }
-  return inner ? `<w:${name}>${inner}</w:${name}>` : '';
+  if (inner) return `<w:${name}>${inner}</w:${name}>`;
+  // A table must have its properties element: without it, a table reads with legacy defaults
+  // (other cell margins and an automatic width).
+  return name === 'tblPr' ? '<w:tblPr/>' : '';
 }
 
 type PropertiesName = 'tblPr' | 'trPr' | 'tcPr' | 'tblPrEx';

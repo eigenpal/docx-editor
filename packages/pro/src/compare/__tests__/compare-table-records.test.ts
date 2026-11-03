@@ -42,6 +42,17 @@ function rejectedTable(base: Uint8Array, revised: Uint8Array): { out: string; re
   };
 }
 
+test('a compared table with no properties keeps its required properties element', () => {
+  const bare = (text: string) =>
+    docx(
+      `<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc>${p(text)}</w:tc></w:tr></w:tbl>${p('After.')}`
+    );
+  const { out, rejected } = rejectedTable(bare('Cell text'), bare('Other text'));
+  // Without it the table reads with legacy defaults: other margins and an automatic width.
+  expect(out).toMatch(/<w:tbl><w:tblPr\/><w:tblGrid>/);
+  expect(rejected).toMatch(/<w:tbl><w:tblPr\/><w:tblGrid>/);
+});
+
 test('a compared cell keeps one properties element', () => {
   const { out } = rejectedTable(docx(table([['a', 'b']])), docx(table([['a', 'B']])));
   expect(out.match(/<w:tc>/g)?.length).toBe(2);
