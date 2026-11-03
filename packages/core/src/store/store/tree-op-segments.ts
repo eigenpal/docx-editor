@@ -101,8 +101,43 @@ export function isParagraph(node: OoxmlNode | null): node is OoxmlParagraphNode 
  * appliers resolve it with `findNode` and rebuild that run's children, so nesting costs them
  * nothing.
  */
-export function segmentsOf(paragraph: OoxmlParagraphNode): Segment[] {
-  return walkParagraph(paragraph, null, null);
+export function segmentsOf(paragraph: OoxmlParagraphNode): readonly Segment[] {
+  const cached = segmentsCache.get(paragraph);
+  if (cached) return cached;
+  const segments = walkParagraph(paragraph, null, null);
+  segmentsCache.set(paragraph, segments);
+  return segments;
+}
+
+/**
+ * A paragraph's segments as a caller-owned array: {@link segmentsOf} for the public entry
+ * point, which returns the memoized array shared by every internal reader.
+ */
+export function segmentsOfCopy(paragraph: OoxmlParagraphNode): Segment[] {
+  return [...segmentsOf(paragraph)];
+}
+
+/**
+ * MEMOIZED ON NODE IDENTITY, like {@link paragraphOffsetIndex}. One op asks for the same
+ * paragraph's segments several times (validation, the split at each range edge, the apply),
+ * and each walk costs the whole paragraph.
+ */
+const segmentsCache = new FieldResultsModeMemo<OoxmlParagraphNode, readonly Segment[]>();
+
+/**
+ * Hand `previous`'s segments to `next`, a rebuild of it that changed ONLY run properties.
+ *
+ * A `w:rPr` contributes no offsets and every other child is kept by identity, so the
+ * segments are the same values. A formatting press emits one op per run it covers, and
+ * without this each op walked the whole paragraph again: quadratic in its run count.
+ * @internal
+ */
+export function carrySegmentsAcrossRunPropertyEdit(
+  previous: OoxmlParagraphNode,
+  next: OoxmlParagraphNode
+): void {
+  const segments = segmentsCache.get(previous);
+  if (segments && !segmentsCache.has(next)) segmentsCache.set(next, segments);
 }
 
 /** Build segments with field spans already computed by the caller. @internal */
@@ -865,70 +900,11 @@ export function paragraphLength(paragraph: OoxmlParagraphNode): number {
   return segments.length === 0 ? 0 : segments[segments.length - 1]!.end;
 }
 
-/** One inline content control's identity and the UTF-16 span its content covers. */
-export interface InlineControlSpan {
-  readonly controlId: string;
-  readonly start: number;
-  readonly end: number;
-}
-
-function idsUnder(node: OoxmlNode, out: Set<string>): void {
-  out.add(node.id);
-  if (node.kind === 'textValue') return;
-  for (const child of node.children) idsUnder(child, out);
-}
-
-function spanOfControl(
-  paragraph: OoxmlParagraphNode,
-  segments: readonly Segment[],
-  segment: Segment
-): InlineControlSpan | null {
-  const container = inlineContainersOf(paragraph, segmentAncestryNodeId(segment)).find(
-    (ancestor) => ancestor.kind === 'contentControl'
-  );
-  if (!container) return null;
-  const ids = new Set<string>();
-  idsUnder(container, ids);
-  let start = Number.MAX_SAFE_INTEGER;
-  let end = -1;
-  for (const candidate of segments) {
-    if (!ids.has(segmentAncestryNodeId(candidate))) continue;
-    if (candidate.start < start) start = candidate.start;
-    if (candidate.end > end) end = candidate.end;
-  }
-  if (end < 0) return null;
-  return { controlId: container.id, start, end };
-}
-
-/**
- * The innermost inline content control whose content ends exactly at `offset` — the caret
- * at its right outer edge. What Backspace consults to delete the node as ONE unit
- * (pro-review-and-custom-nodes 4.6): deleting its last character from outside would either
- * strip one letter from a content-locked label (refused, so the key looks dead) or leave a
- * half-deleted chip whose tag still claims the full payload.
- */
-export function inlineControlEndingAt(
-  paragraph: OoxmlParagraphNode,
-  offset: number
-): InlineControlSpan | null {
-  const segments = segmentsOf(paragraph);
-  const before = [...segments].reverse().find((s) => s.end === offset && s.end > s.start);
-  if (!before) return null;
-  const span = spanOfControl(paragraph, segments, before);
-  return span && span.end === offset ? span : null;
-}
-
-/** The forward-delete mirror: the control whose content STARTS exactly at `offset`. */
-export function inlineControlStartingAt(
-  paragraph: OoxmlParagraphNode,
-  offset: number
-): InlineControlSpan | null {
-  const segments = segmentsOf(paragraph);
-  const after = segments.find((s) => s.start === offset && s.end > s.start);
-  if (!after) return null;
-  const span = spanOfControl(paragraph, segments, after);
-  return span && span.start === offset ? span : null;
-}
+export {
+  inlineControlEndingAt,
+  inlineControlStartingAt,
+  type InlineControlSpan,
+} from './tree-op-inline-control-spans.ts';
 
 /**
  * Whether `offset` falls strictly inside content that NO split can divide.

@@ -34,17 +34,29 @@ export function markupFormattingRevision(
   props: readonly OoxmlProperty[],
   paragraph: OoxmlNode
 ): RevisionAttribution | undefined {
-  return (
-    formatRevisionOf(props) ??
+  return formatRevisionOf(props) ?? paragraphFormattingRevision(paragraph);
+}
+
+/**
+ * Memoized on node identity: every piece of a paragraph asks, and a paragraph with no
+ * `w:pPr` made each ask scan all of its children, so laying out a paragraph cost its run
+ * count squared.
+ */
+const paragraphFormattingRevisions = new WeakMap<OoxmlNode, RevisionAttribution | null>();
+
+function paragraphFormattingRevision(paragraph: OoxmlNode): RevisionAttribution | undefined {
+  const cached = paragraphFormattingRevisions.get(paragraph);
+  if (cached !== undefined) return cached ?? undefined;
+  const revision =
     formatRevisionOf(
       propertiesOfRunContainer(
         'children' in paragraph
           ? paragraph.children.find((node) => node.kind === 'paragraphProperties')
           : undefined
       )
-    ) ??
-    undefined
-  );
+    ) ?? null;
+  paragraphFormattingRevisions.set(paragraph, revision);
+  return revision ?? undefined;
 }
 
 export function markupRevisionOf(

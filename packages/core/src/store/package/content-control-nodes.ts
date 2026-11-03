@@ -647,6 +647,25 @@ function freezeContentControlEntries(
 }
 
 /**
+ * Hand `previous`'s answer to `next`, a rebuild of it that changed only run properties, when
+ * `previous` holds no control.
+ *
+ * A `w:rPr` cannot hold a control, so a node with none still has none. A node WITH controls is
+ * not carried: the rebuild replaces every control on the path to an edited run, and the entries
+ * would name the old nodes.
+ * @internal
+ */
+export function carryEmptyContentControlsAcrossRunPropertyEdit(
+  previous: OoxmlNode,
+  next: OoxmlNode
+): void {
+  const cached = defaultContentControlsInCache.get(previous);
+  if (cached?.length === 0 && !defaultContentControlsInCache.has(next)) {
+    defaultContentControlsInCache.set(next, cached);
+  }
+}
+
+/**
  * Every control under a node, in document order, bounded in depth and in count.
  *
  * ONE walk, shared. The nesting bound is the same one layout flattens with, so a control
