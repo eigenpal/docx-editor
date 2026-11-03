@@ -431,18 +431,24 @@ function controlProperties(parts: readonly OoxmlPart[]): ControlProperties {
   const byId = new Map<string, string>();
   let unnamed = 0;
   const walk = (node: ElementNode, part: OoxmlPart) => {
-    const properties =
-      node.localName === 'sdt' && node.namespaceUri === W_NS
-        ? elementChildren(node).find((child) => child.localName === 'sdtPr')
-        : undefined;
-    if (properties) {
-      const id = elementChildren(properties).find((child) => child.localName === 'id');
+    if (node.localName === 'sdt' && node.namespaceUri === W_NS) {
+      // Both property elements: `w:sdtPr`, and `w:sdtEndPr` for the formatting of the end.
+      const shell = elementChildren(node).filter(
+        (child) => child.localName === 'sdtPr' || child.localName === 'sdtEndPr'
+      );
+      const properties = shell.find((child) => child.localName === 'sdtPr');
+      const id = properties && elementChildren(properties).find((c) => c.localName === 'id');
       const value = id && attributeOf(id, 'val', W_NS);
-      const xml = serializeOoxmlPart({ ...part, root: properties } as OoxmlPart);
+      // A control with no `w:sdtPr` has no id either.
       if (value === undefined) unnamed++;
-      else if (!byId.has(value)) byId.set(value, xml);
+      else if (!byId.has(value))
+        byId.set(
+          value,
+          shell.map((child) => serializeOoxmlPart({ ...part, root: child } as OoxmlPart)).join('')
+        );
     }
-    for (const child of elementChildren(node)) if (child !== properties) walk(child, part);
+    for (const child of elementChildren(node))
+      if (child.localName !== 'sdtPr' && child.localName !== 'sdtEndPr') walk(child, part);
   };
   for (const part of parts) if (isElement(part.root)) walk(part.root, part);
   return { byId, unnamed };

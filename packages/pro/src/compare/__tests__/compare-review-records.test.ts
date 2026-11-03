@@ -498,6 +498,18 @@ test('tracked-changes protection covers earlier headers and controls that change
       buildDocx({ body: cells(spaces('B'), spaces('A')) })
     )
   ).toMatchObject({ ok: false, code: 'protected' });
+  // A control with no `w:sdtPr` has no id either, and the end formatting is a property too.
+  const endFormatted = (pr: string, rPr: string) =>
+    `<w:p><w:sdt>${pr}<w:sdtEndPr><w:rPr>${rPr}</w:rPr></w:sdtEndPr>` +
+    `<w:sdtContent><w:r><w:t>Same text</w:t></w:r></w:sdtContent></w:sdt></w:p>${p('After.')}`;
+  for (const pr of ['', '<w:sdtPr><w:id w:val="7"/></w:sdtPr>']) {
+    expect(
+      compare(
+        buildDocx({ body: endFormatted(pr, ''), settings }),
+        buildDocx({ body: endFormatted(pr, '<w:b/>') })
+      )
+    ).toMatchObject({ ok: false, code: 'protected' });
+  }
   // Without protection the same compare records the insertion.
   expect(
     compared(
