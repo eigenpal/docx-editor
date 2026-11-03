@@ -96,6 +96,7 @@ import { paragraphShadingBox } from './ooxml-shading.ts';
 import { paragraphFragmentBorders } from './paragraph-fragment-borders.ts';
 import { holdsOnlyPageBreak, lineBreakAfterFields, lineContentX } from './pending-line.ts';
 import { publishLayoutPass } from './layout-pass-publish.ts';
+import { interimSectionAligner } from './section-vertical-align.ts';
 import { alignLineWithPictures } from './line-picture-alignment.ts';
 import { createLeadingBreakGroups } from './leading-break-border-group.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
@@ -337,7 +338,8 @@ function* layoutInModeSteps(
           layoutBlocksWithGeometrySteps
         ),
         optionsWithLists.listItems,
-        options.measurer
+        options.measurer,
+        interimSectionAligner(sections, blocks)
       );
     }
 
@@ -350,6 +352,7 @@ function* layoutInModeSteps(
       revision,
       numbering: sectionNumbering,
       listItems: optionsWithLists.listItems,
+      align: interimSectionAligner(sections, blocks),
     };
     const laid = yield* withInterimLayout(
       layoutBlocksWithGeometrySteps(blocks, revision, {

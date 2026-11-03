@@ -17,6 +17,7 @@ import {
   createFixedMeasurer,
   createLayoutSession,
   layoutSemanticDocument,
+  layoutSemanticDocumentSteps,
 } from '../semantic-layout.ts';
 import type { PageFurniture, PageRecord, SemanticLayout } from '../semantic-records.ts';
 
@@ -221,6 +222,54 @@ describe('section vertical alignment', () => {
     );
     expect(tops(edited, 0)).toEqual(tops(fresh, 0));
   });
+
+  test('a full page keeps its alignment when the section-break paragraph falls past its end', () => {
+    // Eleven lines fill 154 of 160pt; the empty carrier after them does not fit on the page.
+    const lines = Array.from({ length: 11 }, (_, index) => p(`line ${index}`)).join('');
+    const value = layout(lines + carrier('center') + p('next') + sectPr());
+    expect(tops(value, 0)[0]).toBe(3);
+  });
+
+  test('a page with a continuous break stays top-aligned when the next section is empty', () => {
+    const text = `<w:p><w:pPr>${SIZE}${sectPr('center')}</w:pPr>${run('carrier')}</w:p>`;
+    const value = layout(p('alpha') + text + sectPr('center', 'continuous'));
+    expect(value.pages).toHaveLength(1);
+    expect(tops(value)[0]).toBe(0);
+  });
+
+  test('pages shown before a pass ends are aligned as the finished pass aligns them', () => {
+    const body = Array.from({ length: 30 }, (_, index) => p(`line ${index}`)).join('');
+    // A live pass (one with a session) reports each page it completes.
+    const steps = layoutSemanticDocumentSteps(part(body + sectPr('center')), 1, {
+      measurer,
+      geometry,
+      session: createLayoutSession(),
+    });
+    const interim: SemanticLayout[] = [];
+    let next = steps.next();
+    while (!next.done) {
+      const progress = next.value;
+      if (progress?.finalize && progress.pages.length > 1)
+        interim.push(progress.finalize(progress.pages));
+      next = steps.next();
+    }
+    expect(interim.length).toBeGreaterThan(0);
+    for (const shown of interim) expect(tops(shown, 0)).toEqual(tops(next.value, 0));
+  });
+
+  test('a new page count does not move the bodies of unchanged pages again', () => {
+    const session = createLayoutSession();
+    const lines = (count: number) =>
+      Array.from({ length: count }, (_, index) => p(`line ${index}`)).join('');
+    const options = { measurer, geometry, session };
+    const first = layoutSemanticDocument(part(lines(33) + sectPr('center')), 1, options);
+    expect(first.pages).toHaveLength(3);
+    // One more line starts a fourth page; the first page's body is unchanged.
+    const second = layoutSemanticDocument(part(lines(34) + sectPr('center')), 2, options);
+    expect(second.pages).toHaveLength(4);
+    expect(tops(second, 0)).toEqual(tops(first, 0));
+    expect(second.pages[0]!.fragments).toBe(first.pages[0]!.fragments);
+  });
 });
 
 describe('section vertical alignment with furniture and drawings', () => {
@@ -286,12 +335,63 @@ describe('section vertical alignment with furniture and drawings', () => {
       const dy = firstLine(centered) - firstLine(top);
       expect(dy).toBeGreaterThan(0);
       expect(drawingTop(centered)).toBeCloseTo(drawingTop(top) + (moves ? dy : 0), 6);
+      // The offset from the drawing's frame is unchanged, so a resize or move reads it right.
+      const fromFrame = (value: SemanticLayout) =>
+        value.pages[0]!.anchoredDrawings![0]!.y -
+        value.pages[0]!.anchoredDrawings![0]!.verticalFrameOrigin;
+      expect(fromFrame(centered)).toBeCloseTo(fromFrame(top), 6);
     }
   });
 
   test('a page with a drawing that wraps text stays top-aligned', () => {
     const body = picture('page', 'square') + p('text');
     expect(tops(withDrawing(body + sectPr('center')))).toEqual(tops(withDrawing(body + sectPr())));
+  });
+
+  test('a page whose header holds a drawing that wraps body text stays top-aligned', () => {
+    const read = readOoxmlPart(
+      `<w:hdr xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
+        `xmlns:pic="${PIC}" xmlns:r="${R}">${picture('margin', 'square')}</w:hdr>`,
+      { name: '/word/header1.xml', contentType: 'application/xml' }
+    );
+    if (!read.ok) throw new Error(read.reason);
+    const projections = indexInlineDrawingProjectionsInPart(read.part);
+    const story = layoutHeaderFooterStory(
+      read.part,
+      160,
+      measurer,
+      'test',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        ownerPartName: '/word/header1.xml',
+        projectionForAtom: (atomId) => projections.get(atomId) ?? null,
+        project: (node) =>
+          projections.get(node.id) ??
+          projectDrawing(node, {
+            ownerPartName: '/word/header1.xml',
+            limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
+          }),
+        resourceOf: () => READY,
+      }
+    );
+    const furniture: PageFurniture = {
+      titlePage: false,
+      evenAndOddHeaders: false,
+      headers: new Map([['default', story]]),
+      footers: new Map(),
+    };
+    const options = {
+      geometry: { ...geometry, headerDistance: 10, footerDistance: 10 },
+      furniture,
+    };
+    const centered = layout(p('alpha') + sectPr('center'), options);
+    expect(centered.pages[0]!.header?.anchoredDrawings?.length).toBe(1);
+    expect(tops(centered)).toEqual(tops(layout(p('alpha') + sectPr(), options)));
   });
 
   test('a header taller than its margin narrows the area the body centers in', () => {

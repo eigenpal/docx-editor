@@ -5,18 +5,22 @@
 // paragraphs; the lines of one paragraph stay together. The empty paragraph that carries the
 // section break takes no room. A page that holds more than one section stays top-aligned.
 //
-// Applied to a COMPLETE pass, page by page, after pagination and notes. Pagination keeps
-// flowing against top-aligned geometry, so an incremental pass never reads moved records:
-// the layout session keeps the top-aligned pages, and each published page is memoized on the
-// page it moves, so an unchanged page keeps its identity across passes.
+// Applied to a COMPLETE pass, page by page, after pagination and notes, and to the pages a
+// pass shows before it ends. Pagination keeps flowing against top-aligned geometry, so an
+// incremental pass never reads moved records: the layout session keeps the top-aligned pages.
+// Each aligned page is memoized on the page it moves, so an unchanged page keeps its identity
+// across passes, and on its fragment array, so a page rebuilt only for its metadata does not
+// move its body again.
 //
 // Not applied: multi-column sections, pages with notes, text frames, floating tables, or
-// drawings that wrap text, and justified pages that hold a table. Those pages stay
-// top-aligned.
+// drawings that wrap text (in the body, header, or footer), pages that hold a continuous
+// section break, and justified pages that hold a table. Those pages stay top-aligned.
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import type { AnchoredDrawingRecord } from './drawing-layout.ts';
+import { wrapProducesExclusion } from './drawing-exclusion.ts';
 import { shiftAnchoredDrawing } from './drawing-overlap.ts';
+import { storyHasFloatingTable } from './furniture-table-exclusion.ts';
 import { translateParagraphFragment } from './paragraph-frame.ts';
 import {
   paragraphSectionNode,
@@ -32,26 +36,32 @@ import type {
   TableFragmentRecord,
 } from './semantic-records.ts';
 
-const TEXT_WRAPPING = new Set([
-  'square',
-  'squareLeft',
-  'squareRight',
-  'tight',
-  'through',
-  'topAndBottom',
-]);
-
-interface AlignedPage {
+interface AlignedBody {
   readonly alignment: SectionVerticalAlign;
-  readonly carrier: boolean;
-  readonly page: PageRecord;
+  readonly height: number;
+  readonly drawings: PageRecord['anchoredDrawings'];
+  readonly fragments: readonly BlockFragmentRecord[];
+  readonly anchoredDrawings?: PageRecord['anchoredDrawings'];
 }
-const alignedPages = new WeakMap<PageRecord, AlignedPage>();
+// Two memos keep work and identity across passes. A page the next pass hands back unchanged
+// returns the same aligned page; a page rebuilt only for its metadata (a new page count, say)
+// keeps its fragment array, and reuses the moved body by that array.
+const alignedPages = new WeakMap<PageRecord, PageRecord>();
+const alignedBodies = new WeakMap<readonly BlockFragmentRecord[], AlignedBody>();
 const publishedPages = new WeakSet<PageRecord>();
 
 /** Whether any section aligns its pages other than at the top. */
 export function sectionsAlignVertically(sections: readonly DocumentSection[]): boolean {
   return sections.some((section) => section.properties.verticalAlign !== undefined);
+}
+
+interface SectionIndex {
+  readonly sections: readonly DocumentSection[];
+  readonly sectionOfBlock: ReadonlyMap<string, number>;
+  /** Empty paragraphs that only carry a section break. */
+  readonly carriers: ReadonlySet<string>;
+  /** Paragraphs that end a section the next one continues on the same page. */
+  readonly continuous: ReadonlySet<string>;
 }
 
 /**
@@ -66,80 +76,162 @@ export function alignSectionPagesVertically(
   if (!sectionsAlignVertically(sections)) return layout;
   const sectionOfBlock = new Map<string, number>();
   const carriers = new Set<string>();
-  for (const section of sections) {
+  const continuous = new Set<string>();
+  for (let position = 0; position < sections.length; position += 1) {
+    const section = sections[position]!;
     const end = Math.min(section.blockEndExclusive, blocks.length);
     for (let index = section.blockStart; index < end; index += 1)
       sectionOfBlock.set(blocks[index]!.id, section.index);
     const last = blocks[end - 1];
-    if (last && end > section.blockStart && paragraphSectionNode(last)) carriers.add(last.id);
+    if (!last || end <= section.blockStart || !paragraphSectionNode(last)) continue;
+    carriers.add(last.id);
+    if (sections[position + 1]?.properties.breakType === 'continuous') continuous.add(last.id);
   }
+  const index: SectionIndex = { sections, sectionOfBlock, carriers, continuous };
   let changed = false;
   const pages = layout.pages.map((page) => {
-    const next = alignPage(page, sections, sectionOfBlock, carriers);
+    const next = alignPage(page, index);
     if (next !== page) changed = true;
     return next;
   });
   return changed ? { ...layout, pages } : layout;
 }
 
-function alignPage(
-  page: PageRecord,
+/**
+ * Pages built from in-progress pages, aligned as the finished pass aligns them, so pages a
+ * host shows before the pass ends do not move when it ends.
+ */
+export function interimSectionAligner(
   sections: readonly DocumentSection[],
-  sectionOfBlock: ReadonlyMap<string, number>,
-  carriers: ReadonlySet<string>
-): PageRecord {
+  blocks: readonly OoxmlElement[]
+): ((layout: SemanticLayout) => SemanticLayout) | undefined {
+  return sectionsAlignVertically(sections)
+    ? (layout) => alignSectionPagesVertically(layout, sections, blocks)
+    : undefined;
+}
+
+/** A paragraph fragment that holds no text and paints nothing, such as a section-break mark. */
+const isSilentMark = (fragment: BlockFragmentRecord): boolean =>
+  fragment.kind === 'paragraph' &&
+  fragment.outOfFlow === true &&
+  !fragment.positionedFrame &&
+  isEmptyParagraph(fragment);
+
+function alignPage(page: PageRecord, index: SectionIndex): PageRecord {
   if (publishedPages.has(page)) return page;
-  if (page.parityBlank || page.noteStream || page.footnotes || page.endnotes) return page;
-  if (page.fragments.length === 0) return page;
-  let sectionIndex: number | undefined;
-  for (const fragment of page.fragments) {
-    if (fragment.kind === 'paragraph' ? fragment.outOfFlow : fragment.floatingWrap) return page;
-    const index = sectionOfBlock.get(
-      fragment.kind === 'paragraph' ? fragment.paragraphId : fragment.tableId
-    );
-    if (index === undefined || (sectionIndex !== undefined && index !== sectionIndex)) return page;
-    sectionIndex = index;
-  }
-  const properties = sections.find((section) => section.index === sectionIndex)?.properties;
-  const alignment = properties?.verticalAlign;
-  if (alignment === undefined || properties!.columns.count > 1) return page;
-  if (page.anchoredDrawings?.some((drawing) => TEXT_WRAPPING.has(drawing.wrap))) return page;
-
-  const final = page.fragments.at(-1)!;
-  const carrier =
-    final.kind === 'paragraph' && carriers.has(final.paragraphId) && isEmptyParagraph(final);
-  const memo = alignedPages.get(page);
-  if (memo && memo.alignment === alignment && memo.carrier === carrier) return memo.page;
-
-  const measured = carrier ? page.fragments.slice(0, -1) : page.fragments;
-  const offsets = bodyOffsets(measured, page.contentBox.height, alignment);
-  const aligned = offsets ? shiftPageBody(page, offsets) : page;
-  alignedPages.set(page, { alignment, carrier, page: aligned });
+  const known = alignedPages.get(page);
+  if (known) return known;
+  const aligned = alignNewPage(page, index);
+  alignedPages.set(page, aligned);
   if (aligned !== page) publishedPages.add(aligned);
   return aligned;
 }
 
+function alignNewPage(page: PageRecord, index: SectionIndex): PageRecord {
+  if (page.parityBlank || page.noteStream || page.footnotes || page.endnotes) return page;
+  if (page.fragments.length === 0) return page;
+  let sectionIndex: number | undefined;
+  for (const fragment of page.fragments) {
+    if (fragment.kind === 'paragraph') {
+      if (index.continuous.has(fragment.paragraphId)) return page;
+      if (fragment.outOfFlow && !isSilentMark(fragment)) return page;
+    } else if (fragment.floatingWrap) return page;
+    const section = index.sectionOfBlock.get(
+      fragment.kind === 'paragraph' ? fragment.paragraphId : fragment.tableId
+    );
+    if (section === undefined || (sectionIndex !== undefined && section !== sectionIndex))
+      return page;
+    sectionIndex = section;
+  }
+  const properties = index.sections.find((section) => section.index === sectionIndex)?.properties;
+  const alignment = properties?.verticalAlign;
+  if (alignment === undefined || properties!.columns.count > 1) return page;
+  if (page.anchoredDrawings?.some((drawing) => wrapProducesExclusion(drawing.wrap))) return page;
+  // Header and footer drawings and floating tables that wrap body text stay where they are.
+  for (const story of [page.header, page.footer]) {
+    if (!story) continue;
+    if (story.anchoredDrawings?.some((drawing) => wrapProducesExclusion(drawing.wrap))) return page;
+    if (storyHasFloatingTable(story)) return page;
+  }
+
+  const height = page.contentBox.height;
+  const memo = alignedBodies.get(page.fragments);
+  if (
+    memo &&
+    memo.alignment === alignment &&
+    memo.height === height &&
+    memo.drawings === page.anchoredDrawings
+  )
+    return withBody(page, memo.fragments, memo.anchoredDrawings);
+  const offsets = bodyOffsets(page.fragments, index.carriers, height, alignment);
+  const body = offsets
+    ? shiftPageBody(page, offsets)
+    : { fragments: page.fragments, anchoredDrawings: page.anchoredDrawings };
+  alignedBodies.set(page.fragments, {
+    alignment,
+    height,
+    drawings: page.anchoredDrawings,
+    ...body,
+  });
+  return withBody(page, body.fragments, body.anchoredDrawings);
+}
+
+function withBody(
+  page: PageRecord,
+  fragments: readonly BlockFragmentRecord[],
+  anchoredDrawings: PageRecord['anchoredDrawings']
+): PageRecord {
+  if (fragments === page.fragments) return page;
+  return { ...page, fragments, ...(anchoredDrawings ? { anchoredDrawings } : {}) };
+}
+
 /**
- * How far each measured fragment moves; the carrier after them moves with the last one.
- * `null` when nothing moves.
+ * How far each fragment moves, or `null` when nothing moves. Silent marks and the final empty
+ * paragraph that carries the section break take no room; each moves with the fragment before it.
  */
 function bodyOffsets(
-  measured: readonly BlockFragmentRecord[],
+  fragments: readonly BlockFragmentRecord[],
+  carriers: ReadonlySet<string>,
   height: number,
   alignment: SectionVerticalAlign
 ): readonly number[] | null {
+  const last = fragments.length - 1;
+  const measured: boolean[] = [];
+  let count = 0;
   let bottom = 0;
-  for (const fragment of measured) bottom = Math.max(bottom, fragment.box.y + fragment.box.height);
-  const slack = height - bottom;
-  if (measured.length === 0 || slack <= 0.01) return null;
-  if (alignment !== 'both') {
-    const dy = alignment === 'center' ? slack / 2 : slack;
-    return measured.map(() => dy);
+  for (let index = 0; index <= last; index += 1) {
+    const fragment = fragments[index]!;
+    const excluded =
+      isSilentMark(fragment) ||
+      (index === last &&
+        fragment.kind === 'paragraph' &&
+        carriers.has(fragment.paragraphId) &&
+        isEmptyParagraph(fragment));
+    measured.push(!excluded);
+    if (excluded) continue;
+    count += 1;
+    bottom = Math.max(bottom, fragment.box.y + fragment.box.height);
   }
-  // Rows of a justified table spread apart as well; that stays unsupported.
-  if (measured.length < 2 || measured.some((fragment) => fragment.kind === 'table')) return null;
-  const gap = slack / (measured.length - 1);
-  return measured.map((_, index) => index * gap);
+  const slack = height - bottom;
+  if (count === 0 || slack <= 0.01) return null;
+  if (alignment === 'both') {
+    // Rows of a justified table spread apart as well; that stays unsupported.
+    if (count < 2 || fragments.some((fragment) => fragment.kind === 'table')) return null;
+  }
+  const gap = alignment === 'both' ? slack / (count - 1) : 0;
+  const offsets: number[] = [];
+  let seen = 0;
+  let previous: number | undefined;
+  for (let index = 0; index <= last; index += 1) {
+    if (measured[index]) {
+      previous = alignment === 'both' ? seen * gap : alignment === 'center' ? slack / 2 : slack;
+      seen += 1;
+    }
+    offsets.push(
+      previous ?? (alignment === 'both' ? 0 : alignment === 'center' ? slack / 2 : slack)
+    );
+  }
+  return offsets;
 }
 
 function isEmptyParagraph(fragment: ParagraphFragmentRecord): boolean {
@@ -151,27 +243,26 @@ function isEmptyParagraph(fragment: ParagraphFragmentRecord): boolean {
   );
 }
 
-function shiftPageBody(page: PageRecord, offsets: readonly number[]): PageRecord {
+function shiftPageBody(
+  page: PageRecord,
+  offsets: readonly number[]
+): Pick<PageRecord, 'fragments' | 'anchoredDrawings'> {
   const paragraphs = new Map<string, number>();
   const cellParagraphs = new Map<string, number>();
   const fragments = page.fragments.map((fragment, index) =>
-    shiftBlock(
-      fragment,
-      offsets[Math.min(index, offsets.length - 1)]!,
-      paragraphs,
-      cellParagraphs,
-      false
-    )
+    shiftBlock(fragment, offsets[index]!, paragraphs, cellParagraphs, false)
   );
   const anchoredDrawings = page.anchoredDrawings?.map((drawing) => {
     const dy = textOffset(drawing, paragraphs, cellParagraphs);
-    return dy === undefined ? drawing : shiftAnchoredDrawing(drawing, 0, dy);
+    if (dy === undefined || Math.abs(dy) <= 0.000_1) return drawing;
+    // The frame the drawing is positioned from moves with it, so an edit that reads the
+    // drawing's offset from its frame still reads the authored offset.
+    return Object.freeze({
+      ...shiftAnchoredDrawing(drawing, 0, dy),
+      verticalFrameOrigin: drawing.verticalFrameOrigin + dy,
+    });
   });
-  return {
-    ...page,
-    fragments,
-    ...(anchoredDrawings ? { anchoredDrawings: Object.freeze(anchoredDrawings) } : {}),
-  };
+  return { fragments, anchoredDrawings: anchoredDrawings && Object.freeze(anchoredDrawings) };
 }
 
 /**
