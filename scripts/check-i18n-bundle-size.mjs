@@ -20,11 +20,11 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const i18nDir = join(__dirname, '..', 'packages', 'i18n');
 const i18nDist = join(i18nDir, 'dist');
 
-// Current largest per-locale bundle is he.mjs at ~23 KB (Hebrew text encodes
-// large in UTF-8). 80 KB gives ~50% headroom for locale growth while still
-// catching tree-shake regressions, which typically jump past 100 KB and
-// approach the ~220 KB root bundle.
-const MAX_BYTES = 80 * 1024;
+// The largest per-locale bundle is hi.js at ~84 KB: Devanagari takes three
+// bytes per character in UTF-8. 96 KB leaves room for locale growth while
+// still catching tree-shake regressions, which pull the whole locale map and
+// helpers into every per-locale bundle, far past this limit.
+const MAX_BYTES = 96 * 1024;
 
 const codes = readLocaleCodes(i18nDir);
 if (codes.length === 0) {

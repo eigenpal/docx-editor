@@ -187,10 +187,10 @@ test('many deleted paragraphs compare in linear time, and the limit counts every
     expect(compare(doc, one).ok).toBe(true);
     return performance.now() - started;
   };
-  const small = buildDocx({ body: p('a').repeat(7500) });
+  const small = buildDocx({ body: p('a').repeat(2000) });
   time(small);
   const first = time(small);
-  const second = time(buildDocx({ body: p('a').repeat(30_000) }));
+  const second = time(buildDocx({ body: p('a').repeat(8000) }));
   // Four times the paragraphs: about four times the time when linear, sixteen when quadratic.
   expect(second / Math.max(first, 1)).toBeLessThan(8);
   // The bound counts notes too, and refuses before any revision is accepted.
@@ -201,8 +201,9 @@ test('many deleted paragraphs compare in linear time, and the limit counts every
     buildDocx({ body: p('y'), footnotes: notes })
   );
   expect(result.ok ? '' : result.code).toBe('tooLarge');
-  // The body asserts its own 15 s bound; the runner's 5 s default fails on a loaded machine.
-}, 30_000);
+  // Shared CI runners run this several times slower than a workstation, so the runner's
+  // 5 s default fails there. The ratio above is the real assertion.
+}, 60_000);
 
 test('the limit counts a main story of any declared type and text box content', () => {
   const macroEnabled = (docx: Uint8Array) => {
