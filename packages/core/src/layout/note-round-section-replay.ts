@@ -76,7 +76,7 @@ export function sectionRoundInputs(
   section: {
     readonly blocks: readonly OoxmlElement[];
     readonly pageIndexStart: number;
-    readonly entry: () => readonly unknown[];
+    readonly entry: readonly unknown[];
   }
 ): SectionRoundInputs | undefined {
   const round = options.noteRoundContext;
@@ -94,7 +94,7 @@ export function sectionRoundInputs(
     session,
     round,
     blocks: section.blocks,
-    entry: framedTokenJoin(section.entry().map(String)),
+    entry: framedTokenJoin(section.entry.map(String)),
     pageIndexStart: section.pageIndexStart,
     reserves: options.pageBottomReserves,
   };

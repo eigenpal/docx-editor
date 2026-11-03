@@ -91,7 +91,7 @@ describe('note round section replay', () => {
 
   test('only rounds of a walk that sweeps no cache and takes no seed keep results', () => {
     const session = createLayoutSession();
-    const section = { blocks, entry: () => ['entry', 1, true], pageIndexStart: 0 };
+    const section = { blocks, entry: ['entry', 1, true], pageIndexStart: 0 };
     const options = { noteRoundContext: round };
     const inputs = sectionRoundInputs(options, false, false, session, section);
     expect(inputs?.round).toBe(round);
@@ -99,7 +99,7 @@ describe('note round section replay', () => {
     // The entry values are framed, so no two lists alias one key.
     const other = sectionRoundInputs(options, false, false, session, {
       ...section,
-      entry: () => ['entry1', true],
+      entry: ['entry1', true],
     });
     expect(other?.entry).not.toBe(inputs?.entry);
     expect(sectionRoundInputs({}, false, false, session, section)).toBeUndefined();

@@ -651,22 +651,26 @@ export function* layoutMultiSectionDocumentSteps(
           )
         : undefined;
     const progressStart = section.properties.pageNumbering?.start ?? nextDisplayed;
-    const roundInputs = sectionRoundInputs(options, retainKeys, continues, sectionSession, {
-      blocks: slice,
-      pageIndexStart: startIndex,
-      entry: () => [
-        multi?.sectionKeys[sectionIndex],
-        furniture === undefined ? 'n' : furniture === options.furniture ? 'd' : 's',
-        sectionLineGridPt(section.properties),
-        lineCounter,
-        flowSpaceAfter,
-        nextDisplayed,
-        balanceColumns,
-        endsContinuous,
-        markJoinsBreakSheet,
-        provisional,
-      ],
-    });
+    // Only a round of the footnote search reads these. A closure here instead would make the
+    // engine keep every value it names in a heap context on each section of every pass.
+    const roundInputs = options.noteRoundContext
+      ? sectionRoundInputs(options, retainKeys, continues, sectionSession, {
+          blocks: slice,
+          pageIndexStart: startIndex,
+          entry: [
+            multi?.sectionKeys[sectionIndex],
+            furniture === undefined ? 'n' : furniture === options.furniture ? 'd' : 's',
+            sectionLineGridPt(section.properties),
+            lineCounter,
+            flowSpaceAfter,
+            nextDisplayed,
+            balanceColumns,
+            endsContinuous,
+            markJoinsBreakSheet,
+            provisional,
+          ],
+        })
+      : undefined;
     const replayed = roundInputs && replayedSectionRound<SectionLayoutResult>(roundInputs);
     const laid: SectionLayoutResult =
       replayed ??
