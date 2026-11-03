@@ -27,16 +27,24 @@ export function hasParagraphFrames(
     }
     if (hasStyleFrame) return true;
   }
-  return blocks.some(
-    (block) =>
-      block.kind === 'paragraph' &&
-      block.children.some(
-        (child) =>
-          child.kind === 'paragraphProperties' &&
-          child.children.some((property) => property.localName === 'framePr')
-      )
-  );
+  let framed = framedBlockLists.get(blocks);
+  if (framed === undefined) {
+    framed = blocks.some(
+      (block) =>
+        block.kind === 'paragraph' &&
+        block.children.some(
+          (child) =>
+            child.kind === 'paragraphProperties' &&
+            child.children.some((property) => property.localName === 'framePr')
+        )
+    );
+    framedBlockLists.set(blocks, framed);
+  }
+  return framed;
 }
+
+/** Whether a block list holds a framed paragraph, by list; the blocks never change. */
+const framedBlockLists = new WeakMap<readonly OoxmlElement[], boolean>();
 
 /** Each shared frame contributes one exclusion, regardless of its paragraph count. */
 export function addParagraphFrameExclusions(

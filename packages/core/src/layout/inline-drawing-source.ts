@@ -213,6 +213,24 @@ const lastDrawingSourceOrder = new WeakMap<
 >();
 
 /**
+ * `options` with the body's drawing source order, computed from `part` when the caller gave
+ * a drawing layout context but no order.
+ * @internal
+ */
+export function withDrawingSourceOrder<
+  T extends {
+    readonly drawingSourceOrder?: ReadonlyMap<string, number>;
+    readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
+  },
+>(options: T, part: OoxmlPart): T {
+  if (options.drawingSourceOrder || !options.inlineDrawingLayout) return options;
+  return {
+    ...options,
+    drawingSourceOrder: drawingSourceOrderInPart(part, options.inlineDrawingLayout),
+  };
+}
+
+/**
  * Canonical drawing traversal order for one immutable story root.
  *
  * The drawing layout context can remain compatible across a copy-on-write paragraph reorder:

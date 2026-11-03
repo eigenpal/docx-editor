@@ -352,147 +352,104 @@ describe('footnote bottom reservation', () => {
     expect(JSON.stringify(incremental)).toBe(JSON.stringify(clean));
   });
 
-  test('moving a citation re-runs body so a stale prior-page reserve is dropped', () => {
+  test('a citation that cannot keep its note moves on and leaves no note area behind', () => {
     const { part, notes } = loadNotesDoc(singleRefFootnoteDoc());
     const sections = enumerateDocumentSections(part);
     const refs = collectNoteReferences(part);
     expect(refs.length).toBe(1);
     const ref = refs[0]!;
     const contentH = 400;
-    const fillerId = 'filler-para';
+    const fillerH = 380;
+    const lineH = 14;
 
+    // A causal body: page 0 reads only its own reserve. The citing line follows a filler
+    // paragraph and stays on page 0 only while it fits above that page's reserve.
     const reserveCalls: Array<ReadonlyMap<number, number>> = [];
     const runBody = (opts: {
       pageBottomReserves?: ReadonlyMap<number, number>;
     }): SemanticLayout => {
       const reserves = opts.pageBottomReserves ?? new Map<number, number>();
       reserveCalls.push(new Map(reserves));
-      const r0 = reserves.get(0) ?? 0;
-      const r1 = reserves.get(1) ?? 0;
-      const refFrag = paraFrag(ref.paragraphId, {
-        atomEnd: ref.atomOffset + 1,
-        y: 0,
-        height: 14,
-      });
-      const filler = paraFrag(fillerId, {
-        atomEnd: 4,
-        y: 0,
-        height: Math.max(14, contentH - r0 - 1),
-      });
-
-      if (r0 <= 0 && r1 <= 0) {
-        // Provisional: citation on page 0, body fills the column → unstable vs note height.
-        return {
-          revision: 1,
-          pages: [
-            mockPage(
-              0,
-              [
-                paraFrag(ref.paragraphId, {
-                  atomEnd: ref.atomOffset + 1,
-                  y: 0,
-                  height: contentH,
-                }),
-              ],
-              contentH
-            ),
-          ],
-        };
+      const filler = paraFrag('filler-para', { atomEnd: 4, y: 0, height: fillerH });
+      if (fillerH + lineH <= contentH - (reserves.get(0) ?? 0)) {
+        const cite = paraFrag(ref.paragraphId, {
+          atomEnd: ref.atomOffset + 1,
+          y: fillerH,
+          height: lineH,
+        });
+        return { revision: 1, pages: [mockPage(0, [filler, cite], contentH)] };
       }
-
-      if (r0 > 0) {
-        // Monotonic pass still carries page-0 reserve after the citation moved to page 1.
-        // Publishing this layout without a shrink re-run leaves a footnote-sized hole on page 0.
-        return {
-          revision: 1,
-          pages: [mockPage(0, [filler], contentH), mockPage(1, [refFrag], contentH)],
-        };
-      }
-
-      // Exact computed reserves ({1: h} only): page 0 fills again; citation stays on page 1.
+      const cite = paraFrag(ref.paragraphId, { atomEnd: ref.atomOffset + 1, y: 0, height: lineH });
       return {
         revision: 1,
-        pages: [
-          mockPage(0, [paraFrag(fillerId, { atomEnd: 4, y: 0, height: contentH })], contentH),
-          mockPage(1, [refFrag], contentH),
-        ],
+        pages: [mockPage(0, [filler], contentH), mockPage(1, [cite], contentH)],
       };
     };
+    const lay = (session?: ReturnType<typeof createLayoutSession>) =>
+      layoutSemanticDocumentWithNotes(
+        part,
+        sections,
+        {
+          measurer: notes.measurer,
+          producer: 'footnote-reserves-moved-citation',
+          ...(session ? { session } : {}),
+        },
+        notes,
+        runBody
+      );
 
-    const layout = layoutSemanticDocumentWithNotes(
-      part,
-      sections,
-      { measurer: notes.measurer, producer: 'footnote-reserves-stale-drop' },
-      notes,
-      runBody
-    );
-
-    // Must re-run after the stable compute that dropped page 0 — not break on the stale layout.
-    expect(reserveCalls.length).toBeGreaterThanOrEqual(3);
-    const lastReserves = reserveCalls[reserveCalls.length - 1]!;
-    expect(lastReserves.has(0)).toBe(false);
-    expect(lastReserves.get(1) ?? 0).toBeGreaterThan(0);
-
-    const page0 = layout.pages[0]!;
+    const layout = lay();
+    expect(reserveCalls.length).toBeGreaterThanOrEqual(2);
     const host = layout.pages.find((page) =>
       (page.footnotes?.notes ?? []).some((n) => n.noteId === 1 && !n.continuation)
     );
-    expect(host).toBeTruthy();
-    expect(host!.index).toBeGreaterThan(0);
-    const noteHeight = host!.footnotes?.box.height ?? 0;
-    expect(noteHeight).toBeGreaterThan(10);
-    // Stale page-0 reserve would leave a note-sized unused band on the prior page.
-    expect(page0.contentBox.height - bodyUsedHeight(page0)).toBeLessThan(noteHeight * 0.5);
+    // The note starts on the page of its citation, and the page before holds no note area.
+    expect(host?.index).toBe(1);
+    expect(
+      host!.fragments.some((f) => f.kind === 'paragraph' && f.paragraphId === ref.paragraphId)
+    ).toBe(true);
+    expect(layout.pages[0]!.footnotes).toBeUndefined();
+    expect(bodyUsedHeight(layout.pages[0]!)).toBeCloseTo(fillerH, 3);
+
+    // A warm pass over the same input publishes the same pages.
+    const session = createLayoutSession();
+    lay(session);
+    expect(JSON.stringify(lay(session).pages)).toBe(JSON.stringify(layout.pages));
   });
 
-  test('stale seeded reserves still re-run body and drop the abandoned page', () => {
+  test('a reserve left by an earlier pass without a search record is not reused', () => {
     const { part, notes } = loadNotesDoc(singleRefFootnoteDoc());
     const sections = enumerateDocumentSections(part);
     const refs = collectNoteReferences(part);
     const ref = refs[0]!;
     const contentH = 400;
-    const fillerId = 'filler-para';
     const reserveCalls: Array<ReadonlyMap<number, number>> = [];
     const session = {
       previous: null as SemanticLayout | null,
       multi: null as unknown,
-      // Prior published layout reserved page 0; citation has since moved to page 1.
+      // An earlier pass reserved page 0; the citation is now on page 1.
       notePageBottomReserves: new Map<number, number>([[0, 80]]) as ReadonlyMap<
         number,
         number
       > | null,
     };
 
+    // A causal body: the filler fills page 0 down to its reserve and continues on page 1,
+    // above the citing line.
     const runBody = (opts: {
       pageBottomReserves?: ReadonlyMap<number, number>;
     }): SemanticLayout => {
       const reserves = opts.pageBottomReserves ?? new Map<number, number>();
       reserveCalls.push(new Map(reserves));
       const r0 = reserves.get(0) ?? 0;
-      const r1 = reserves.get(1) ?? 0;
-      const refFrag = paraFrag(ref.paragraphId, {
-        atomEnd: ref.atomOffset + 1,
-        y: 0,
-        height: 14,
-      });
-      const filler = paraFrag(fillerId, {
-        atomEnd: 4,
-        y: 0,
-        height: Math.max(14, contentH - r0 - 1),
-      });
-
-      if (r0 > 0 && r1 <= 0) {
-        return {
-          revision: 1,
-          pages: [mockPage(0, [filler], contentH), mockPage(1, [refFrag], contentH)],
-        };
-      }
+      const filler = paraFrag('filler-para', { atomEnd: 4, y: 0, height: contentH - r0 });
+      const page1 = [
+        ...(r0 > 0 ? [paraFrag('filler-tail', { atomEnd: 4, y: 0, height: r0 })] : []),
+        paraFrag(ref.paragraphId, { atomEnd: ref.atomOffset + 1, y: r0, height: 14 }),
+      ];
       return {
         revision: 1,
-        pages: [
-          mockPage(0, [paraFrag(fillerId, { atomEnd: 4, y: 0, height: contentH })], contentH),
-          mockPage(1, [refFrag], contentH),
-        ],
+        pages: [mockPage(0, [filler], contentH), mockPage(1, page1, contentH)],
       };
     };
 
@@ -504,21 +461,15 @@ describe('footnote bottom reservation', () => {
       runBody
     );
 
-    expect(reserveCalls.length).toBeGreaterThanOrEqual(2);
-    expect(reserveCalls[0]!.has(0)).toBe(true);
+    expect(reserveCalls.some((reserves) => reserves.has(0))).toBe(false);
     const last = reserveCalls[reserveCalls.length - 1]!;
-    expect(last.has(0)).toBe(false);
     expect(last.get(1) ?? 0).toBeGreaterThan(0);
     expect(session.notePageBottomReserves!.has(0)).toBe(false);
-
-    const page0 = layout.pages[0]!;
     const host = layout.pages.find((page) =>
       (page.footnotes?.notes ?? []).some((n) => n.noteId === 1 && !n.continuation)
     );
-    expect(host).toBeTruthy();
-    expect(host!.index).toBeGreaterThan(0);
-    const noteHeight = host!.footnotes?.box.height ?? 0;
-    expect(page0.contentBox.height - bodyUsedHeight(page0)).toBeLessThan(noteHeight * 0.5);
+    expect(host?.index).toBe(1);
+    expect(bodyUsedHeight(layout.pages[0]!)).toBeCloseTo(contentH, 3);
   });
 });
 

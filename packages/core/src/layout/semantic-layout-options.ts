@@ -192,10 +192,23 @@ export interface SemanticLayoutOptions {
   readonly pageBottomReservesFromPreviousPass?: boolean;
   /**
    * With a seed: each page reads its reserve where its content stood in the previous pass, and
-   * the pass reports what it read (`takeReadReserves`); see `note-first-round.ts`.
+   * the pass reports what it read (`takeReadReserves`); see `note-reserve-search.ts`.
    * @internal
    */
   readonly pageBottomReservesFollowFlow?: boolean;
+  /**
+   * Lay out only the first this many body blocks: a round of the footnote reserve search,
+   * which reads only the pages near the one it decides. The result is not published.
+   * @internal
+   */
+  readonly noteRoundBlockLimit?: number;
+  /**
+   * One object for every round of one footnote reserve walk. Between such rounds only the
+   * reserves and the block limit move, so a section with the same blocks, flow state and
+   * reserves on its pages takes its result from the round before.
+   * @internal
+   */
+  readonly noteRoundContext?: object;
   /** Derived note marks for body/note projection (provisional or final). */
   readonly noteMarks?: import('./note-projection.ts').NoteMarkContext;
   /** Inline drawing projection for typed `w:drawing` / `wp:inline` nodes. */

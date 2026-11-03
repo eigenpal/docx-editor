@@ -117,8 +117,9 @@ function page(index: number, fragments: readonly ParagraphFragmentRecord[]): Pag
 }
 
 /**
- * A body whose reference sits on page 1 while the seed still reserves page 0, so the search
- * needs a second round to drop the stale reserve. Each run reports its pages once.
+ * A body whose reference sits on page 1 while an earlier pass left a reserve on page 0. The
+ * search keeps no reserve without its own record, so the stale one never reaches a round.
+ * Each run reports its pages once.
  */
 function staleSeedScenario() {
   const { part, notes, sections } = load();
@@ -151,21 +152,31 @@ function staleSeedScenario() {
 }
 
 describe('footnote search as steps', () => {
-  test('progress pages carry their note areas and can be put back', () => {
+  test('progress shows decided pages only, with their note areas, and can be put back', () => {
     const { steps } = staleSeedScenario();
-    const first = steps.next().value as LayoutProgress;
-    expect(first.restorable).not.toBe(false);
-    expect(typeof first.wrapUp).toBe('function');
-    const shown = first.finalize!(first.pages);
-    const notePages = shown.pages.filter((p) => (p.footnotes?.notes ?? []).length > 0);
+    const shown: number[] = [];
+    let next = steps.next();
+    for (; !next.done; next = steps.next()) {
+      const progress = next.value as LayoutProgress | undefined;
+      if (!progress) continue;
+      expect(progress.restorable).not.toBe(false);
+      expect(typeof progress.wrapUp).toBe('function');
+      shown.push(progress.finalize!(progress.pages).pages.length);
+    }
+    // The first round decides no page yet, and no round shows a page it has not decided.
+    expect(shown[0]).toBe(0);
+    expect(shown.every((count, i) => count <= 1 && count >= (shown[i - 1] ?? 0))).toBe(true);
+    const notePages = next.value.pages.filter((p) => (p.footnotes?.notes ?? []).length > 0);
     expect(notePages.map((p) => p.index)).toEqual([1]);
   });
 
-  test('without a wrap-up the search drops the stale reserve in a later round', () => {
+  test('without a wrap-up the search drops the stale reserve', () => {
     const { steps, runs, session } = staleSeedScenario();
     for (let next = steps.next(); !next.done; next = steps.next());
     expect(runs.length).toBeGreaterThanOrEqual(2);
+    expect(runs.some((reserves) => reserves.has(0))).toBe(false);
     expect(session.notePageBottomReserves!.has(0)).toBe(false);
+    expect(session.notePageBottomReserves!.get(1) ?? 0).toBeGreaterThan(0);
   });
 
   test('a wrap-up ends the search after the current round, on the reserves it used', () => {
@@ -175,8 +186,9 @@ describe('footnote search as steps', () => {
     let next = steps.next();
     while (!next.done) next = steps.next();
     expect(runs.length).toBe(1);
-    // The published layout was laid under the seed, so the seed is what the next pass gets.
-    expect([...session.notePageBottomReserves!]).toEqual([[0, 80]]);
+    // The published layout was laid under the first round's reserves, so the next pass gets
+    // those.
+    expect([...(session.notePageBottomReserves ?? new Map())]).toEqual([...runs[0]!]);
     expect(next.value.pages.length).toBe(2);
   });
 });

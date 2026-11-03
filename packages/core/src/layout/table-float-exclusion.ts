@@ -75,7 +75,19 @@ export function hasFloatingTables(
   authors: RevisionAuthorFilter | undefined,
   compatibilityMode?: number
 ): boolean {
-  return blocks.some((block) => {
+  // By list and inputs: a pass asks again for the same list, and the blocks never change.
+  const previous = floatingTableLists.get(blocks);
+  if (
+    previous &&
+    previous.width === width &&
+    previous.styles === styles &&
+    previous.mode === mode &&
+    previous.authors === authors &&
+    previous.compatibilityMode === compatibilityMode
+  ) {
+    return previous.floating;
+  }
+  const floating = blocks.some((block) => {
     if (block.kind !== 'table') return false;
     const float = readTableStructure(
       block,
@@ -88,7 +100,21 @@ export function hasFloatingTables(
     )?.float;
     return float !== undefined && float.ySpec !== 'inline';
   });
+  floatingTableLists.set(blocks, { width, styles, mode, authors, compatibilityMode, floating });
+  return floating;
 }
+
+const floatingTableLists = new WeakMap<
+  readonly OoxmlElement[],
+  {
+    readonly width: number;
+    readonly styles: StyleCascadeTable | undefined;
+    readonly mode: RevisionDisplayMode;
+    readonly authors: RevisionAuthorFilter | undefined;
+    readonly compatibilityMode: number | undefined;
+    readonly floating: boolean;
+  }
+>();
 
 /**
  * How far a floating table's own outer rules reach past its grid, per side.

@@ -1,6 +1,7 @@
 import type { OoxmlPart } from '@docx-editor.dev/core/store';
-import { noteIdOf, notesOf, noteTypeOf } from '../store/package/note-nodes.ts';
+import { noteIdOf } from '../store/package/note-nodes.ts';
 import {
+  findSpecialNote,
   layoutNoteCached,
   type LayoutNoteStoryOptions,
   type NoteLayoutFallbackReason,
@@ -20,7 +21,7 @@ export function footnoteContinuationNotice(
   reasons?: { push(reason: NoteLayoutFallbackReason): unknown }
 ): NoteStoryLayout | undefined {
   if (!part) return undefined;
-  const node = notesOf(part.root).find((note) => noteTypeOf(note) === 'continuationNotice');
+  const node = findSpecialNote(part, 'continuationNotice');
   const id = node ? noteIdOf(node) : null;
   if (id === null) return undefined;
   const laid = layoutNoteCached(part, id, width, opts, cache);
