@@ -19,6 +19,10 @@ You can compare documents in three ways:
 - With `Document.compareFromBase64` in the Office.js-compatible document API, on a server or in the browser.
 - With the `compareDocuments` function from `@docx-editor.dev/pro`, which takes two DOCX files and returns a third.
 
+The following demo shows an original document, a revised document, and the compare result. Select **Compared** to review the tracked changes:
+
+<CompareDocumentsDemo />
+
 ## How a compare works
 
 The compare aligns the two documents block by block, then compares matched text word by word. Headers and footers compare section by section. For the list of differences that a compare records, see [Tracked changes, comments, and notes](/docs/2.x/word-fidelity#tracked-changes-comments-and-notes).
