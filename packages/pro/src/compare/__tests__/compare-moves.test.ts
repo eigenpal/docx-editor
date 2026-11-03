@@ -75,3 +75,22 @@ test('a moved paragraph with the same formatting has no change records', () => {
   expect(out).toContain('<w:moveFrom ');
   expect(out).not.toContain('Change');
 });
+
+// A paragraph moves to the front while the last paragraph is replaced. The moved paragraph's
+// source stays in its place before the replaced text, so reject restores the original order.
+test('a moved paragraph keeps its place before a replaced last paragraph', () => {
+  const line = (n: number) =>
+    para(`Wrapping line ${n} with AV office glyph clusters and fixed vertical metrics.`);
+  const base = line(31) + line(35) + line(40) + line(46);
+  const revised =
+    line(40) +
+    line(31) +
+    line(35) +
+    para('The previous option includes the report service. The balance internal confirms it.');
+  const { out, accepted, rejected } = decided(base, revised);
+  expect(out).toContain('<w:moveFrom ');
+  const order = (xml: string) =>
+    [...xml.matchAll(/Wrapping line (\d+)|(The previous option)/g)].map((m) => m[1] ?? 'new');
+  expect(order(rejected)).toEqual(['31', '35', '40', '46']);
+  expect(order(accepted)).toEqual(['40', '31', '35', 'new']);
+});

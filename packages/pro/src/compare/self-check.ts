@@ -108,6 +108,27 @@ function withoutFieldCodes(part: OoxmlPart): { part: OoxmlPart; fields: string }
   return known;
 }
 
+/** Text under `node`, from its `w:t` elements. */
+function textOf(node: ElementNode): string {
+  let out = '';
+  for (const child of node.children) {
+    if (!isElement(child)) continue;
+    if (child.localName === 't')
+      out += child.children.map((item) => (isElement(item) ? '' : item.value)).join('');
+    else out += textOf(child);
+  }
+  return out;
+}
+
+/** A content control that shows its placeholder and holds nothing but white space. */
+function emptyPlaceholder(control: ElementNode): boolean {
+  const properties = elementChildren(control).find((child) => child.localName === 'sdtPr');
+  if (!properties || !elementChildren(properties).some((c) => c.localName === 'showingPlcHdr'))
+    return false;
+  const content = elementChildren(control).find((child) => child.localName === 'sdtContent');
+  return !content || textOf(content).trim() === '';
+}
+
 function fieldCodesRemoved(part: OoxmlPart): { part: OoxmlPart; fields: string } {
   const fields: string[] = [];
   const open: { instr: string; index: number }[] = [];
@@ -135,6 +156,13 @@ function fieldCodesRemoved(part: OoxmlPart): { part: OoxmlPart; fields: string }
     for (const child of node.children) {
       if (!isElement(child)) {
         children.push(child);
+        continue;
+      }
+      if (child.localName === 'sdt' && emptyPlaceholder(child)) {
+        // A control emptied by a decision shows placeholder spaces, as an emptied control
+        // does in any editor; it carries no text of either document.
+        changed = true;
+        untyped = true;
         continue;
       }
       if (child.localName === 'instrText' || child.localName === 'delInstrText') {

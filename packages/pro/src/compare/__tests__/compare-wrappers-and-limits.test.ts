@@ -188,3 +188,15 @@ test('many tiny runs count against the size limit', () => {
   const doc = (count: number, end: string) => docx(`<w:p>${tabs(count)}</w:p>${p(end)}`);
   expect(refusal(doc(70_000, 'a'), doc(70_000, 'b'))).toBe('tooLarge');
 });
+
+// An emptied control shows placeholder spaces. They carry no text of either document, so the
+// compare is not refused for them.
+test('an inline control whose text goes is compared; its placeholder is no text', () => {
+  const control = (text: string) =>
+    `<w:sdt><w:sdtPr><w:tag w:val="combo"/></w:sdtPr><w:sdtContent>${run(text)}</w:sdtContent></w:sdt>`;
+  const base = docx(`<w:p>${run('Combo box')}${control(' value')}${run(': Medium')}</w:p>`);
+  const revised = docx(`<w:p>${run('Combo box')}${run(': Medium')}</w:p>`);
+  const bytes = compared(base, revised);
+  expect(resolved(bytes, 'rejectAllRevisions')).toContain(' value');
+  expect(resolved(bytes, 'acceptAllRevisions')).toContain('<w:showingPlcHdr/>');
+});

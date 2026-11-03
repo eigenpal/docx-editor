@@ -256,9 +256,18 @@ function emitHunk(
   let out = '';
   let items: Item[] = [];
   let deferred = '';
-  const block = (xml: string) => {
-    if (items.length > 0) deferred += xml;
-    else out += xml;
+  // A block cannot sit inside the open paragraph, so it waits for the paragraph's mark. A block
+  // only one document has may go first instead when the open paragraph holds nothing of that
+  // document: the other document's content vanishes with the block on review, so both orders
+  // stay as they were. Waiting would put that document's later content before the block.
+  const block = (xml: string, side: 'base' | 'revised' | 'both' = 'both') => {
+    const own = side === 'base' ? INSERTED : DELETED;
+    if (
+      items.length === 0 ||
+      (side !== 'both' && deferred === '' && items.every((item) => own.has(item.mark)))
+    )
+      out += xml;
+    else deferred += xml;
   };
   const closeParagraph = (
     mark: 'eq' | 'ins' | 'del',
@@ -370,9 +379,15 @@ function emitHunk(
           mark === 'ins' ? token.unit : null
         );
     } else if (token.kind === 'move') {
-      block(movedParagraph(token.unit, token.end, ctx));
+      block(
+        movedParagraph(token.unit, token.end, ctx),
+        token.end.kind === 'moveFrom' ? 'base' : 'revised'
+      );
     } else {
-      block(mark === 'del' ? deletedBlock(token.unit, ctx) : insertedBlock(token.unit, ctx));
+      block(
+        mark === 'del' ? deletedBlock(token.unit, ctx) : insertedBlock(token.unit, ctx),
+        mark === 'del' ? 'base' : 'revised'
+      );
     }
   }
   if (items.length > 0) {
@@ -382,6 +397,10 @@ function emitHunk(
   }
   return out + deferred;
 }
+
+/** Item marks of content that only the revised document has, and only the original has. */
+const INSERTED: ReadonlySet<string> = new Set(['ins', 'moveTo']);
+const DELETED: ReadonlySet<string> = new Set(['del', 'moveFrom']);
 
 type HunkOp =
   | DiffOp
