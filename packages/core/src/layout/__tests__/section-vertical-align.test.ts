@@ -257,6 +257,17 @@ describe('section vertical alignment', () => {
     for (const shown of interim) expect(tops(shown, 0)).toEqual(tops(next.value, 0));
   });
 
+  test('the empty last line of a split carrier with text takes room', () => {
+    // "alpha" and eleven line breaks: eleven lines fill the first page, the empty last one
+    // sits alone on the second page.
+    const breaks = `<w:r>${SIZE}<w:br/></w:r>`.repeat(11);
+    const carrierWithText =
+      `<w:p><w:pPr><w:widowControl w:val="0"/>${SIZE}${sectPr('center')}</w:pPr>` +
+      `${run('alpha')}${breaks}</w:p>`;
+    const value = layout(carrierWithText + p('next') + sectPr());
+    expect(tops(value, 1)).toEqual([73]);
+  });
+
   test('changing the alignment in the same session moves the unchanged page again', () => {
     const session = createLayoutSession();
     const pass = (vAlign: string) =>
@@ -371,6 +382,38 @@ describe('section vertical alignment with furniture and drawings', () => {
     const body = picture('paragraph', 'none', -508000) + p('text');
     const top = withDrawing(body + sectPr());
     expect(top.pages[0]!.anchoredDrawings![0]!.paintBounds.height).toBeLessThan(36);
+    expect(tops(withDrawing(body + sectPr('center')))).toEqual(tops(top));
+  });
+
+  test('a drawing on a later page moves with its paragraph as well', () => {
+    const pageBreak = `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+    const body =
+      picture('paragraph', 'none') + p('one') + pageBreak + picture('paragraph', 'none') + p('two');
+    const top = withDrawing(body + sectPr());
+    const centered = withDrawing(body + sectPr('center'));
+    expect(centered.pages).toHaveLength(2);
+    const moved = (page: number) =>
+      centered.pages[page]!.anchoredDrawings![0]!.y - top.pages[page]!.anchoredDrawings![0]!.y;
+    expect(moved(0)).toBeGreaterThan(0);
+    expect(moved(1)).toBeGreaterThan(0);
+  });
+
+  test('a page with an inline picture cut by its line stays top-aligned', () => {
+    const inline =
+      `<w:p><w:pPr><w:spacing w:line="280" w:lineRule="exact"/></w:pPr><w:r><w:drawing>` +
+      '<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="457200" cy="457200"/>' +
+      '<wp:docPr id="2" name="pic2"/>' +
+      `<a:graphic><a:graphicData uri="${PIC}"><pic:pic><pic:nvPicPr>` +
+      '<pic:cNvPr id="2" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
+      '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+      '<pic:spPr><a:xfrm><a:ext cx="457200" cy="457200"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
+      '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
+    const body = p('before') + inline;
+    const top = withDrawing(body + sectPr());
+    const fragment = top.pages[0]!.fragments[1]!;
+    if (fragment.kind !== 'paragraph') throw new Error('expected a paragraph');
+    const drawing = fragment.lines[0]!.drawings![0]!;
+    expect(drawing.paintBounds.height).toBeLessThan(drawing.height);
     expect(tops(withDrawing(body + sectPr('center')))).toEqual(tops(top));
   });
 

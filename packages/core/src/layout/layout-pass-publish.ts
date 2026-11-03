@@ -4,7 +4,7 @@ import type { OoxmlElement, OoxmlPart } from '@docx-editor.dev/core/store';
 import { attachContentControlBoundaries } from './content-control-boundary-layout.ts';
 import { withSectionBreakMarks } from './section-break-marks.ts';
 import type { DocumentSection } from './section-properties.ts';
-import { alignSectionPagesVertically, rememberPublishedPages } from './section-vertical-align.ts';
+import { alignSectionPagesVertically, sectionsAlignVertically } from './section-vertical-align.ts';
 import type { SemanticLayout } from './semantic-records.ts';
 
 /**
@@ -34,7 +34,26 @@ export function publishLayoutPass(
   // again on a pass that changed nothing.
   const retained = publish(layout);
   const aligned = alignSectionPagesVertically(retained, sections, blocks);
-  const published = aligned === retained ? retained : publish(aligned);
-  rememberPublishedPages(published, retained);
-  return { published, retained };
+  return { published: aligned === retained ? retained : publish(aligned), retained };
+}
+
+/**
+ * Section vertical alignment for the pages a pass shows before it ends, or `undefined` when no
+ * section aligns. It moves the pages the pass completed, as the finished pass will, and draws
+ * their content-control bounds again where they moved. The pages after them come from the
+ * published layout and are aligned already.
+ */
+export function interimSectionAligner(
+  part: OoxmlPart,
+  controlToken: string,
+  sections: readonly DocumentSection[],
+  blocks: readonly OoxmlElement[]
+): ((layout: SemanticLayout, completed: number) => SemanticLayout) | undefined {
+  if (!sectionsAlignVertically(sections)) return undefined;
+  return (layout, completed) => {
+    const aligned = alignSectionPagesVertically(layout, sections, blocks, completed);
+    return aligned === layout
+      ? layout
+      : attachContentControlBoundaries(aligned, part, controlToken);
+  };
 }

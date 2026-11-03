@@ -48,6 +48,15 @@ function lineTops(page: PageRecord): number[] {
   );
 }
 
+/** Tops of the content-control bounds drawn on a page. */
+function boundTops(page: PageRecord): number[] {
+  return (page.contentControls ?? []).flatMap((control) =>
+    control.fragments
+      .filter((fragment) => fragment.pageIndex === page.index)
+      .map((fragment) => Math.round(fragment.box.y * 1000) / 1000)
+  );
+}
+
 function part(body: string): OoxmlPart {
   const read = readOoxmlPart(
     `<w:document xmlns:w="${W}"><w:body>${body}${SECT}</w:body></w:document>`,
@@ -87,23 +96,42 @@ function progressLayouts(
 }
 
 describe('section vertical alignment before a pass ends', () => {
-  test('pages reused from the previous pass are not moved a second time', () => {
-    // Every fifth line sits in a content control; 40 lines fill four pages.
-    const lines = (first: string) =>
-      Array.from({ length: 40 }, (_, index) => {
-        const paragraph = p(index === 0 ? first : `line ${index}`);
-        return index % 5 === 0 ? control(index + 1, paragraph) : paragraph;
-      }).join('');
-    const session = createLayoutSession();
-    const first = layoutSemanticDocument(part(lines('alpha')), 1, { measurer, geometry, session });
-    expect(first.pages).toHaveLength(4);
-    // An edit on the first page lays it out again; the reports show the old pages after it.
-    const { shown, final } = progressLayouts(part(lines('bravo')), session, first);
-    expect(shown.length).toBeGreaterThan(0);
-    for (const layout of shown)
-      for (let index = 0; index < layout.pages.length; index += 1)
-        expect(lineTops(layout.pages[index]!)).toEqual(lineTops(final.pages[index]!));
-  });
+  // Every fifth line sits in a content control; 40 lines fill four pages.
+  const lines = (edited: number) =>
+    Array.from({ length: 40 }, (_, index) => {
+      const paragraph = p(index === edited ? 'edited' : `line ${index}`);
+      return index % 5 === 0 ? control(index + 1, paragraph) : paragraph;
+    }).join('');
+  const numbered = (body: string, start?: number) =>
+    start ? body.replace('<w:vAlign', `<w:pgNumType w:start="${start}"/><w:vAlign`) : body;
+
+  for (const [name, edited, start] of [
+    ['an edit on the first page', 0, undefined],
+    ['an edit on a later page', 25, undefined],
+    ['an edit that also renumbers the pages', 25, 2],
+  ] as const)
+    test(`reports match the finished pass, bounds too: ${name}`, () => {
+      const session = createLayoutSession();
+      const first = layoutSemanticDocument(part(lines(-1)), 1, { measurer, geometry, session });
+      expect(first.pages).toHaveLength(4);
+      // The reports show the previous pass's pages after the ones this pass completed.
+      const edit = readOoxmlPart(
+        numbered(
+          `<w:document xmlns:w="${W}"><w:body>${lines(edited)}${SECT}</w:body></w:document>`,
+          start
+        ),
+        { name: '/word/document.xml', contentType: 'application/xml' }
+      );
+      if (!edit.ok) throw new Error(edit.reason);
+      const { shown, final } = progressLayouts(edit.part, session, first);
+      expect(shown.length).toBeGreaterThan(0);
+      for (const layout of shown)
+        for (let index = 0; index < layout.pages.length; index += 1) {
+          const page = layout.pages[index]!;
+          expect(lineTops(page)).toEqual(lineTops(final.pages[index]!));
+          if (page.contentControls) expect(boundTops(page)).toEqual(boundTops(final.pages[index]!));
+        }
+    });
 
   test('a page with a footnote stays top-aligned while the pass runs', () => {
     const body =

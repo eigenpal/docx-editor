@@ -95,8 +95,7 @@ import { paragraphBoxOutdent } from './paragraph-indent.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import { paragraphFragmentBorders } from './paragraph-fragment-borders.ts';
 import { holdsOnlyPageBreak, lineBreakAfterFields, lineContentX } from './pending-line.ts';
-import { publishLayoutPass } from './layout-pass-publish.ts';
-import { interimSectionAligner } from './section-vertical-align.ts';
+import { interimSectionAligner, publishLayoutPass } from './layout-pass-publish.ts';
 import { alignLineWithPictures } from './line-picture-alignment.ts';
 import { createLeadingBreakGroups } from './leading-break-border-group.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
@@ -435,7 +434,8 @@ function* layoutInModeSteps(
       ? layoutSemanticDocumentWithNotesSteps(part, sections, opts, notesInput, runBodySteps)
       : runBodySteps(opts)
   );
-  return finish(yield* withAlignedProgress(steps, interimSectionAligner(sections, blocks)));
+  const aligner = interimSectionAligner(part, controlToken, sections, blocks);
+  return finish(yield* withAlignedProgress(steps, aligner));
 }
 
 function* layoutBlocksPass(

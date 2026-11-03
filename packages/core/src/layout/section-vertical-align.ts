@@ -77,7 +77,9 @@ interface SectionIndex {
 export function alignSectionPagesVertically(
   layout: SemanticLayout,
   sections: readonly DocumentSection[],
-  blocks: readonly OoxmlElement[]
+  blocks: readonly OoxmlElement[],
+  /** Align only the pages before this index; the later ones are aligned already. */
+  limit = layout.pages.length
 ): SemanticLayout {
   if (!sectionsAlignVertically(sections)) return layout;
   const sectionOfBlock = new Map<string, number>();
@@ -95,25 +97,13 @@ export function alignSectionPagesVertically(
   }
   const index: SectionIndex = { sections, sectionOfBlock, carriers, continuous };
   let changed = false;
-  const pages = layout.pages.map((page) => {
+  const pages = layout.pages.map((page, position) => {
+    if (position >= limit) return page;
     const next = alignPage(page, index);
     if (next !== page) changed = true;
     return next;
   });
   return changed ? { ...layout, pages } : layout;
-}
-
-/**
- * Pages built from in-progress pages, aligned as the finished pass aligns them, so pages a
- * host shows before the pass ends do not move when it ends.
- */
-export function interimSectionAligner(
-  sections: readonly DocumentSection[],
-  blocks: readonly OoxmlElement[]
-): ((layout: SemanticLayout) => SemanticLayout) | undefined {
-  return sectionsAlignVertically(sections)
-    ? (layout) => alignSectionPagesVertically(layout, sections, blocks)
-    : undefined;
 }
 
 /** A paragraph fragment that holds no text and paints nothing, such as a section-break mark. */
@@ -133,17 +123,6 @@ function alignPage(page: PageRecord, index: SectionIndex): PageRecord {
   alignedPages.set(page, { alignment, page: aligned });
   if (aligned !== page) publishedPages.add(aligned);
   return aligned;
-}
-
-/**
- * Pages of a published pass that alignment produced, wrapped again for content-control bounds
- * and section-break marks: they are final, so an interim layout that reuses them does not
- * move them a second time. `retained` pages are the top-aligned ones and are left out.
- */
-export function rememberPublishedPages(published: SemanticLayout, retained: SemanticLayout): void {
-  if (published === retained) return;
-  const kept = new Set(retained.pages);
-  for (const page of published.pages) if (!kept.has(page)) publishedPages.add(page);
 }
 
 /** The page's alignment, or `undefined` when it stays top-aligned. */
@@ -234,6 +213,7 @@ function bodyOffsets(
       isSilentMark(fragment) ||
       (index === last &&
         fragment.kind === 'paragraph' &&
+        fragment.fragmentIndex === 0 &&
         carriers.has(fragment.paragraphId) &&
         isEmptyParagraph(fragment));
     measured.push(!excluded);
@@ -274,20 +254,24 @@ function isEmptyParagraph(fragment: ParagraphFragmentRecord): boolean {
 
 /**
  * The page body moved by `offsets`, or `null` when a drawing that moves with its paragraph is
- * cut by the page edge before or after the move: its clipped geometry cannot move as it is.
+ * cut, by the page edge before or after the move or by its line: its clipped geometry cannot
+ * move as it is.
  */
 function shiftPageBody(
   page: PageRecord,
   offsets: readonly number[]
 ): Pick<PageRecord, 'fragments' | 'anchoredDrawings'> | null {
+  if (holdsClippedInlineDrawing(page.fragments)) return null;
   const paragraphs = new Map<string, number>();
   const cellParagraphs = new Map<string, number>();
   const fragments = page.fragments.map((fragment, index) =>
     shiftBlock(fragment, offsets[index]!, paragraphs, cellParagraphs, false)
   );
-  // The page edges, in the content-box coordinates drawings use.
-  const top = -page.contentBox.y + 0.01;
-  const bottom = page.box.height - page.contentBox.y - 0.01;
+  // The page edges, in the content-box coordinates drawings use. Both boxes are placed in
+  // the document, so the content box's offset on its own sheet is the difference.
+  const inset = page.contentBox.y - page.box.y;
+  const top = -inset + 0.01;
+  const bottom = page.box.height - inset - 0.01;
   let clipped = false;
   const anchoredDrawings = page.anchoredDrawings?.map((drawing) => {
     const dy = textOffset(drawing, paragraphs, cellParagraphs);
@@ -305,6 +289,25 @@ function shiftPageBody(
   });
   if (clipped) return null;
   return { fragments, anchoredDrawings: anchoredDrawings && Object.freeze(anchoredDrawings) };
+}
+
+/**
+ * Whether an inline drawing shows less than its extent: cut by its line or the body. Turning a
+ * drawing never makes its bounds smaller than its extent, so a smaller area means a clip.
+ */
+function holdsClippedInlineDrawing(blocks: readonly BlockFragmentRecord[]): boolean {
+  for (const block of blocks) {
+    if (block.kind === 'paragraph') {
+      for (const line of block.lines)
+        for (const drawing of line.drawings ?? []) {
+          const paint = drawing.paintBounds;
+          if (paint.width * paint.height < drawing.width * drawing.height - 0.01) return true;
+        }
+    } else
+      for (const row of block.rows)
+        for (const cell of row.cells) if (holdsClippedInlineDrawing(cell.blocks)) return true;
+  }
+  return false;
 }
 
 /**
