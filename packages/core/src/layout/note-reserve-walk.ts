@@ -121,6 +121,10 @@ export interface ReserveWalkOptions {
    * odd page even, so a blank sheet the previous walk made falls elsewhere or not at all.
    */
   readonly parityStarts?: boolean;
+  /**
+   * The reserves `layout` needs from `range.from` on. It reads `used` only for the pages in
+   * the range: the walk may pass just those.
+   */
   readonly compute: (
     layout: SemanticLayout,
     used: Reserves,
@@ -267,7 +271,7 @@ function drawingsKey(page: PageRecord): string {
 }
 
 /** The most pages past a new reserve that its round tries; see `Tried`. */
-const MAX_AHEAD_PAGES = 32;
+const MAX_AHEAD_PAGES = 128;
 
 /** The decided reserves of `record` from page `from`, moved to start at page `to`. */
 function shiftedTail(record: ReserveWalkRecord, from: number, to: number): Map<number, number> {
@@ -414,9 +418,19 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
       reliable = checking.reliable;
       return true;
     };
-    // The reserves the view's pages were laid out with: none on the pages from the base.
-    const viewUsed = (): Reserves =>
-      checking && viewThrough >= 0 ? kept(used, view[viewThrough]!.index) : used;
+    // The reserves the view's pages were laid out with: none on the pages from the base. A
+    // computation reads the reserves of the pages in its range only, so only those are copied;
+    // a copy of every page's reserve for each page grew with the square of the page count.
+    const viewUsed = (to: number): Reserves => {
+      if (!checking || viewThrough < 0) return used;
+      const near = new Map<number, number>();
+      for (let position = floor; position < to && position <= viewThrough; position += 1) {
+        const index = view[position]!.index;
+        const height = used.get(index);
+        if (height !== undefined) near.set(index, height);
+      }
+      return near;
+    };
     let computedDeferral = phase === 'deferral';
     // The walk mostly decides a page or two before the previous walk applies, so each
     // computation covers a few pages from the page being decided, not the rest of the round.
@@ -426,7 +440,7 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
     const computeNear = (to: number): ReserveComputeResult => {
       computedTo = Math.min(view.length, to);
       computedThrough = viewThrough;
-      return options.compute(viewLayout, viewUsed(), computedDeferral, {
+      return options.compute(viewLayout, viewUsed(computedTo), computedDeferral, {
         from: floor,
         carry,
         to: computedTo,
@@ -500,9 +514,11 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
             pending = tryAhead(guess, view, floor, far, viewLayout, reliable, keepsBody);
           }
           if (pending) {
-            for (const [position, height] of pending.values) {
-              used = withReserve(used, view[position]!.index, height);
-            }
+            // One copy for every tried page: a copy per page grew with the reserves held.
+            const next = new Map(used);
+            for (const [position, height] of pending.values)
+              next.set(view[position]!.index, height);
+            used = next;
           }
         }
         relayout = true;
