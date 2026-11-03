@@ -42,6 +42,22 @@ export interface BlockScanSummary {
    * and the revision id pass walks the block itself.
    */
   readonly revisionElements: readonly OoxmlElement[] | null;
+  /** The `w:id` value of each of `revisionElements`, in the same order. */
+  readonly revisionValues: readonly (string | undefined)[] | null;
+  /** Whether every one of `revisionElements` is a single revision element, not a range. */
+  readonly singleOnly: boolean;
+}
+
+/** The value of an element's `w:id`, or undefined when it has none. */
+function wmlIdOf(element: OoxmlElement): string | undefined {
+  const attributes = element.attributes;
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    if (attribute.localName === 'id' && attribute.namespaceUri === WML_NAMESPACE_URI) {
+      return attribute.value;
+    }
+  }
+  return undefined;
 }
 
 const summaries = new WeakMap<OoxmlElement, BlockScanSummary>();
@@ -78,7 +94,9 @@ export function blockScanSummary(block: OoxmlElement): BlockScanSummary {
   let revisionIds = false;
   let textBoxes = 0;
   let nested = false;
+  let singleOnly = true;
   const elements: OoxmlElement[] = [];
+  const values: (string | undefined)[] = [];
   // Children go on the stack last first, so nodes leave it in document order.
   const nodes: OoxmlNode[] = [block];
   while (nodes.length > 0) {
@@ -89,6 +107,8 @@ export function blockScanSummary(block: OoxmlElement): BlockScanSummary {
       if (REVISION_ID_ELEMENTS.has(node.localName)) {
         revisionIds = true;
         elements.push(node);
+        values.push(wmlIdOf(node));
+        if (singleOnly && !REVISION_ID_BEARING.has(node.localName)) singleOnly = false;
       } else if (node.localName === 'txbxContent') {
         nested = true;
         textBoxes += 1;
@@ -115,6 +135,8 @@ export function blockScanSummary(block: OoxmlElement): BlockScanSummary {
     revisionIds,
     textBoxes,
     revisionElements: nested ? null : elements,
+    revisionValues: nested ? null : values,
+    singleOnly,
   };
   summaries.set(block, summary);
   return summary;

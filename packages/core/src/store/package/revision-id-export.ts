@@ -129,11 +129,17 @@ function sameChangeFields(owner: ChangeOwner, node: OoxmlNode): boolean {
     owner.author = wmlAttributeOf(owner.node as OoxmlElement, 'author') ?? '';
     owner.date = wmlAttributeOf(owner.node as OoxmlElement, 'date') ?? '';
   }
-  const element = node as OoxmlElement;
-  return (
-    (wmlAttributeOf(element, 'author') ?? '') === owner.author &&
-    (wmlAttributeOf(element, 'date') ?? '') === owner.date
-  );
+  // Both fields in one scan of the attributes, the first of each as `wmlAttributeOf` reads it.
+  let author: string | undefined;
+  let date: string | undefined;
+  const attributes = (node as OoxmlElement).attributes;
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    if (attribute.namespaceUri !== WML_NAMESPACE_URI) continue;
+    if (attribute.localName === 'author') author ??= attribute.value;
+    else if (attribute.localName === 'date') date ??= attribute.value;
+  }
+  return (author ?? '') === owner.author && (date ?? '') === owner.date;
 }
 
 /** New ids fall in `[0, 2^30)`, the lower half of the non-negative 32-bit range. */
@@ -213,7 +219,12 @@ class RevisionIdScan {
    * The change that keeps each id. Most changes keep theirs, so they need no string key: a piece
    * is compared field by field with the change that owns its id.
    */
-  private readonly owners = new Map<number, ChangeOwner>();
+  private readonly owners = new Map<number, ChangeOwner | OoxmlNode>();
+  /**
+   * The part whose body story owns an id with a bare node in `owners`: most ids are there, so
+   * they cost no owner record.
+   */
+  private firstPart: string | undefined;
   /** Every id a fallback copy uses, a change owns it or not. */
   private readonly fallbacks = new Set<number>();
   /** Ids that more than one element of a kept change uses, and how many use each. */
@@ -252,17 +263,27 @@ class RevisionIdScan {
     const story = this.story;
     // An id met for the first time needs no author or date: most ids name one element.
     if (parsed !== null) {
-      const owner = this.owners.get(parsed);
+      let owner = this.owners.get(parsed);
+      if (owner !== undefined && 'kind' in owner) {
+        // A second element on an id kept as a bare node: give it its full record now.
+        owner = {
+          partName: this.firstPart!,
+          story: '',
+          annotation: '',
+          node: owner,
+          author: undefined,
+          date: undefined,
+        };
+        this.owners.set(parsed, owner);
+      }
       if (owner === undefined) {
         if (this.reserved.size === 0 || !this.reserved.has(parsed)) {
-          this.owners.set(parsed, {
-            partName,
-            story,
-            annotation,
-            node,
-            author: undefined,
-            date: undefined,
-          });
+          this.owners.set(
+            parsed,
+            partName === this.firstPart && story === '' && annotation === ''
+              ? node
+              : { partName, story, annotation, node, author: undefined, date: undefined }
+          );
           return null;
         }
       } else if (
@@ -307,6 +328,7 @@ class RevisionIdScan {
   }
 
   scanPart(part: OoxmlPart): void {
+    this.firstPart ??= part.name;
     this.partName = part.name;
     this.story = '';
     this.textBoxes = 0;
@@ -322,9 +344,18 @@ class RevisionIdScan {
         this.textBoxes += summary.textBoxes;
         return;
       }
-      if (summary.revisionElements) {
+      const elements = summary.revisionElements;
+      if (elements) {
         // One story, nothing to skip: read the elements the summary found, in order.
-        for (const element of summary.revisionElements) this.element(element);
+        if (summary.singleOnly) {
+          const values = summary.revisionValues!;
+          for (let index = 0; index < elements.length; index += 1) {
+            const value = values[index];
+            if (value !== undefined) this.claim(this.partName, elements[index]!, value);
+          }
+        } else {
+          for (const element of elements) this.element(element);
+        }
         return;
       }
     }
