@@ -224,8 +224,7 @@ export function emitContent(source: readonly Item[], ctx: EmitContext): string {
   let i = 0;
   while (i < items.length) {
     const first = items[i]!;
-    const formatChange =
-      first.mark === 'eq' && ctx.detectFormatChanges && first.baseRPr !== first.atom.rPr;
+    const formatChange = recordsFormat(first, ctx);
     let j = i + 1;
     while (j < items.length) {
       const next = items[j]!;
@@ -234,8 +233,7 @@ export function emitContent(source: readonly Item[], ctx: EmitContext): string {
       // Field characters, drawings, and other objects each take a run of their own.
       if (next.atom.kind === 'object' || first.atom.kind === 'object') break;
       if (!sameWrappers(next.atom.wrappers, first.atom.wrappers)) break;
-      const nextChange =
-        next.mark === 'eq' && ctx.detectFormatChanges && next.baseRPr !== next.atom.rPr;
+      const nextChange = recordsFormat(next, ctx);
       if (nextChange !== formatChange || (formatChange && next.baseRPr !== first.baseRPr)) break;
       j++;
     }
@@ -267,6 +265,12 @@ export function emitContent(source: readonly Item[], ctx: EmitContext): string {
   while (open.length > 0) out += open.pop()!.end;
   return out;
 }
+
+/** Whether an item's run records its original formatting: equal or moved text that changed. */
+const recordsFormat = (item: Item, ctx: EmitContext) =>
+  (item.mark === 'eq' || item.mark === 'moveFrom' || item.mark === 'moveTo') &&
+  ctx.detectFormatChanges &&
+  item.baseRPr !== item.atom.rPr;
 
 function runXml(
   items: readonly Item[],
