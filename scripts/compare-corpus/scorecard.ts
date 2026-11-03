@@ -7,7 +7,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * The compare scorecard: one repeatable measure of how well compare works.
  *
  *   bun run compare:scorecard [--baseline FILE] [--write-baseline FILE] [--json FILE]
- *                             [--decide-ours DIR ... --decide-control DIR ...]
+ *                             [--pairs DIR] [--decide-ours DIR ... --decide-control DIR ...]
  *
  * Part 1 runs every synthetic case (scripts/compare-corpus/cases.ts) through the engine and
  * scores it against the committed reference redline. Per family it reports token agreement on
@@ -15,7 +15,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * changes the reference makes and the compare misses), exact paragraph-mark and row
  * revisions, refusals, and time.
  *
- * Part 2 is optional. It reads recorded review results (`<dir>/<group>/<case>/decide.json`:
+ * Part 2 is optional. With --pairs, it compares every `<DIR>/<group>/<case>/base.docx` with
+ * its `revised.docx` and counts the refusals by code and message: the share of real version
+ * pairs a user cannot compare.
+ *
+ * Part 3 is optional. It reads recorded review results (`<dir>/<group>/<case>/decide.json`:
  * the revisions a reference editor lists when it compares the accepted and rejected states of
  * a redline with the two inputs) for our redlines and for the reference editor's own
  * redlines. A case is clean when ours lists no difference, noise when every difference of ours
@@ -71,9 +75,19 @@ interface DecideScore {
 /** Revision types that the reference editor reports for its own property rewrites. */
 const PROPERTY_REWRITES = new Set(['revision table property', 'revision section property']);
 
+interface PairScore {
+  pairs: number;
+  refused: number;
+  /** Refusals by code and message, with up to five cases each. */
+  reasons: Record<string, { count: number; cases: string[] }>;
+  medianMs: number;
+  maxMs: number;
+}
+
 interface Scorecard {
   families: Record<string, FamilyScore>;
   overall: FamilyScore;
+  pairs?: PairScore;
   decide?: DecideScore;
 }
 
@@ -97,6 +111,7 @@ function parseArgs(argv: readonly string[]) {
     baseline: value('--baseline'),
     writeBaseline: value('--write-baseline'),
     json: value('--json'),
+    pairs: value('--pairs'),
     decideOurs: list('--decide-ours'),
     decideControl: list('--decide-control'),
   };
@@ -222,6 +237,35 @@ interface DecideSide {
   }[];
 }
 
+function pairScores(dir: string): PairScore {
+  const score: PairScore = { pairs: 0, refused: 0, reasons: {}, medianMs: 0, maxMs: 0 };
+  const times: number[] = [];
+  for (const group of readdirSync(dir, { withFileTypes: true })) {
+    if (!group.isDirectory()) continue;
+    for (const entry of readdirSync(path.join(dir, group.name), { withFileTypes: true })) {
+      const folder = path.join(dir, group.name, entry.name);
+      if (!entry.isDirectory() || !existsSync(path.join(folder, 'base.docx'))) continue;
+      score.pairs++;
+      const start = performance.now();
+      const result = compareDocuments(
+        new Uint8Array(readFileSync(path.join(folder, 'base.docx'))),
+        new Uint8Array(readFileSync(path.join(folder, 'revised.docx'))),
+        { authorName: 'Scorecard' }
+      );
+      times.push(performance.now() - start);
+      if (result.ok) continue;
+      score.refused++;
+      const reason = `${result.code}: ${result.message.replace(/\s*\(.*\)/, '')}`;
+      const slot = (score.reasons[reason] ??= { count: 0, cases: [] });
+      slot.count++;
+      if (slot.cases.length < 5) slot.cases.push(`${group.name}/${entry.name}`);
+    }
+  }
+  score.medianMs = median(times);
+  score.maxMs = times.length ? Math.max(...times) : 0;
+  return score;
+}
+
 function readDecides(dirs: readonly string[]): Map<string, DecideRecord> {
   const out = new Map<string, DecideRecord>();
   // Later directories override earlier ones, case by case.
@@ -311,6 +355,15 @@ function print(card: Scorecard): void {
     console.log(row.map((cell, i) => (i === 0 ? cell.padEnd(widths[i]!) : cell.padStart(widths[i]!))).join('  '));
   if (card.overall.stale > 0)
     console.log(`\n${card.overall.stale} cases have no reference for their current inputs.`);
+  if (card.pairs) {
+    const q = card.pairs;
+    console.log(
+      `\nVersion pairs: ${q.pairs} compared, ${q.refused} refused (${pct(q.pairs ? q.refused / q.pairs : 0)}), ` +
+        `median ${q.medianMs.toFixed(0)} ms, max ${q.maxMs.toFixed(0)} ms.`
+    );
+    for (const [reason, slot] of Object.entries(q.reasons).sort((a, b) => b[1].count - a[1].count))
+      console.log(`  ${slot.count}  ${reason}\n       ${slot.cases.join(' ')}`);
+  }
   if (card.decide) {
     const d = card.decide;
     console.log(
@@ -335,6 +388,8 @@ function regressions(card: Scorecard, baseline: Scorecard): string[] {
   check('overall', card.overall, baseline.overall);
   for (const [name, score] of Object.entries(card.families))
     check(name, score, baseline.families[name]);
+  if (card.pairs && baseline.pairs && card.pairs.refused > baseline.pairs.refused)
+    out.push(`version pairs: refused ${baseline.pairs.refused} -> ${card.pairs.refused}`);
   for (const key of ['excess', 'excessBeyondProperties'] as const) {
     const now = card.decide?.[key];
     const then = baseline.decide?.[key];
@@ -346,6 +401,7 @@ function regressions(card: Scorecard, baseline: Scorecard): string[] {
 
 const args = parseArgs(process.argv.slice(2));
 const card: Scorecard = syntheticScores();
+if (args.pairs) card.pairs = pairScores(args.pairs);
 if (args.decideOurs.length > 0) card.decide = decideScores(args.decideOurs, args.decideControl);
 print(card);
 if (args.json) writeFileSync(args.json, `${JSON.stringify(card, null, 2)}\n`);

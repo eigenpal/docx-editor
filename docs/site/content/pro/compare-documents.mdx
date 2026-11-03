@@ -24,6 +24,8 @@ The compare aligns the two documents block by block, then compares matched text 
 - Character, paragraph, table, and section formatting, when formatting detection is on.
 - Changes in headers, footers, footnotes, and endnotes. Headers and footers compare section by section.
 
+Block content controls follow the same rules as other content. A control that only one document has is kept, and its content is recorded as inserted or deleted. When accepting or rejecting removes all of its content, an empty control with placeholder text stays. Control properties keep no record, so the result takes the revised document's control properties.
+
 The compare runs on both documents with their existing tracked changes accepted. The result keeps the comments of both documents. Bookmarks and header and footer references come from the original. Styles and lists keep the original's definitions, and the styles and lists that only the revised document defines are added. Field results are compared as saved; the compare never updates or runs fields.
 
 ## Compare in the editor
@@ -152,7 +154,7 @@ The compare also refuses with `unsupportedContent` in these cases:
 - The documents differ inside a content control that is locked or bound to custom XML data. Tracked changes there cannot be accepted or rejected.
 - The original or the revised document holds tracked changes that cannot be accepted, so its final state is unknown.
 - The documents differ in block content that has no tracked-change form, such as an embedded file chunk, or a bookmark or content control around table rows and cells.
-- The documents differ in the properties of a content control, smart tag, custom XML element, or simple field with field data, or only one document has a block content control. These elements keep no record of their properties, and their shell stays after their content is rejected.
+- The documents differ in the properties of an inline content control, smart tag, custom XML element, or simple field with field data. These elements keep no record of their properties, and their shell stays after their content is rejected.
 - The revised document adds a section or table setting, such as page borders, that has no value a tracked change can restore on reject.
 - A header or footer that only an earlier section shows differs, and the compare cannot pair it with one header or footer of the original. This happens when the documents have a different number of sections, when an earlier section of the revised document shows a header or footer that the original's section lacks, and when the revised document splits a header or footer that sections of the original share.
 - The result needs a new relationship part, and the original document declares no content type for relationship parts.

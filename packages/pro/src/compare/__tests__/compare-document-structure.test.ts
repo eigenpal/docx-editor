@@ -125,7 +125,7 @@ test('an earlier section header with no counterpart is refused', () => {
   if (!result.ok) expect(result.code).toBe('unsupportedContent');
 });
 
-test('block content controls that go are refused: their shells would stay', () => {
+test('block content controls that go are compared: their content is deleted, their shells stay', () => {
   const control = (text: string) =>
     `<w:sdt><w:sdtPr><w:alias w:val="${text}"/></w:sdtPr><w:sdtContent>${p(text)}</w:sdtContent></w:sdt>`;
   const base = docx(
@@ -135,7 +135,12 @@ test('block content controls that go are refused: their shells would stay', () =
     `${p('Kept')}<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc>${p('Cell')}</w:tc></w:tr></w:tbl>${p('End')}<w:sectPr/>`
   );
   const result = compareDocuments(base, revised, { authorName: 'Test', date: DATE });
-  expect(result.ok ? '' : result.code).toBe('unsupportedContent');
+  if (!result.ok) throw new Error(result.message);
+  const xml = strFromU8(unzipSync(result.bytes)['word/document.xml']!);
+  // The controls stay, with their text recorded as deleted.
+  expect(xml.match(/<w:sdt>/g)).toHaveLength(2);
+  expect(xml).toMatch(/<w:delText[^>]*>First control<\/w:delText>/);
+  expect(xml).toMatch(/<w:delText[^>]*>Second control<\/w:delText>/);
 });
 
 test('notes that nothing references do not take part', () => {

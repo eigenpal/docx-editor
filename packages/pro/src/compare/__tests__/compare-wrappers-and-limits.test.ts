@@ -53,13 +53,19 @@ test('a link that starts inside a word comes back on reject', () => {
   expect(rejected).not.toContain('HYPERLINK');
 });
 
-test('content controls with other properties are refused', () => {
+test('a block content control takes the revised properties; an inline one with other properties is refused', () => {
   const block = (tag: string) =>
     docx(
       `${p('One')}<w:sdt><w:sdtPr><w:tag w:val="${tag}"/></w:sdtPr><w:sdtContent>${p('Inside')}` +
         `</w:sdtContent></w:sdt>${p('Three')}`
     );
-  expect(refusal(block('A'), block('B'))).toBe('unsupportedContent');
+  // Control properties have no revision form: the result keeps the revised control, unrecorded.
+  const result = compareDocuments(block('A'), block('B'), { authorName: 'Test', date: DATE });
+  if (!result.ok) throw new Error(result.message);
+  expect(result).toMatchObject({ changed: true, revisionCount: 0 });
+  const xml = strFromU8(unzipSync(result.bytes)['word/document.xml']!);
+  expect(xml).toContain('<w:tag w:val="B"/>');
+  expect(xml).toContain('Inside');
   const inline = (tag: string) =>
     docx(
       `<w:p>${run('Click ')}<w:sdt><w:sdtPr><w:tag w:val="${tag}"/></w:sdtPr><w:sdtContent>` +

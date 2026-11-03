@@ -331,12 +331,10 @@ export function compareSdt(
       .filter((child) => child.localName === 'sdtPr' || child.localName === 'sdtEndPr')
       .map((child) => sideOf.serialize(child))
       .join('');
+  // A control's properties have no revision form: the result takes the revised control's
+  // properties. A control only one document has keeps its shell on the other side; when all of
+  // its content is accepted or rejected away, the store leaves an empty placeholder control.
   const shell = shellOf(own, side);
-  // A control's properties have no revision form, and its shell stays when all of its content
-  // is rejected or accepted away: a control with other properties, or one only one document
-  // has, is not recorded.
-  if (!base || !revised || normalize(shellOf(base, ctx.base)) !== normalize(shell))
-    ctx.state.untracked++;
   const content = (node: ElementNode | null, sideOf: SideContext) => {
     const holder = node ? childNamed(node, 'sdtContent') : undefined;
     return holder ? unitsOf(holder, sideOf) : [];
