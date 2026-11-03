@@ -38,6 +38,7 @@ import {
   type Unit,
 } from './units.ts';
 import { pushAll } from './arrays.ts';
+import { childNamed } from './xml-fragments.ts';
 
 interface Hunk {
   readonly base: Unit[];
@@ -225,6 +226,16 @@ function emitHunk(
   ctx: EmitContext,
   moves: Moves = NO_MOVES
 ): string {
+  const anchor = controlAnchor(base, revised, ctx);
+  if (anchor) {
+    // The content on each side of the pair stays on that side in both documents.
+    const [i, j] = anchor;
+    return (
+      emitHunk(base.slice(0, i), revised.slice(0, j), lastBase, lastRevised, ctx, moves) +
+      compareBlockPair(base[i] as BlockUnit, revised[j] as BlockUnit, ctx) +
+      emitHunk(base.slice(i + 1), revised.slice(j + 1), lastBase, lastRevised, ctx, moves)
+    );
+  }
   const a = tokensOf(base, lastBase, moves);
   const b = tokensOf(revised, lastRevised, moves);
   const ops = deletedBlocksFirst(
@@ -500,6 +511,37 @@ function deletedBlocksFirst(
     i = j;
   }
   return out;
+}
+
+/** The properties of a block content control, comparable across the two documents. */
+function controlShell(unit: Unit, side: EmitContext['base']): string | null {
+  if (unit.kind !== 'sdt') return null;
+  const properties = childNamed(unit.node, 'sdtPr');
+  return properties ? side.keyOf(side.raw(properties)) : '';
+}
+
+/**
+ * The first block content control of a hunk, by position on each side, that has the same
+ * properties as a control of the other document: the hunk is cut there, so the two controls
+ * compare as a pair. A control holds its own content, so content outside it in one document
+ * cannot be compared with content inside it in the other, and no paragraph joins across a
+ * control that stays. Null when there is no such pair, or the hunk has nothing else.
+ */
+function controlAnchor(
+  base: readonly Unit[],
+  revised: readonly Unit[],
+  ctx: EmitContext
+): readonly [number, number] | null {
+  if (base.length + revised.length <= 2) return null;
+  const revisedShells = revised.map((unit) => controlShell(unit, ctx.revised));
+  if (!revisedShells.some((shell) => shell !== null)) return null;
+  for (let i = 0; i < base.length; i++) {
+    const shell = controlShell(base[i]!, ctx.base);
+    if (shell === null) continue;
+    const j = revisedShells.indexOf(shell);
+    if (j >= 0) return [i, j];
+  }
+  return null;
 }
 
 function compareBlockPair(base: BlockUnit, revised: BlockUnit, ctx: EmitContext): string {

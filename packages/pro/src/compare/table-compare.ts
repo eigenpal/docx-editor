@@ -15,7 +15,6 @@ import { compareContainer } from './story-compare.ts';
 import { rowKey, unitsOf, type SideContext } from './units.ts';
 import { childNamed, elementChildren, type ElementNode } from './xml-fragments.ts';
 
-const NO_DROP: ReadonlySet<string> = new Set();
 const DROP_CHANGE = (name: string): ReadonlySet<string> => new Set([name]);
 
 /**
@@ -340,6 +339,5 @@ export function compareSdt(
     return holder ? unitsOf(holder, sideOf) : [];
   };
   const body = compareContainer(content(base, ctx.base), content(revised, ctx.revised), ctx);
-  void NO_DROP;
   return `<w:sdt>${shell}<w:sdtContent>${body}</w:sdtContent></w:sdt>`;
 }

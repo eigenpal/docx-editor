@@ -200,3 +200,28 @@ test('an inline control whose text goes is compared; its placeholder is no text'
   expect(resolved(bytes, 'rejectAllRevisions')).toContain(' value');
   expect(resolved(bytes, 'acceptAllRevisions')).toContain('<w:showingPlcHdr/>');
 });
+
+test('a paragraph never joins across a block control that both documents keep', () => {
+  // The revised paragraph holds the text of the paragraphs before and after the control, and
+  // the control moves after it. The two controls compare as a pair; no mark joins across one.
+  const control = (rows: string) =>
+    `<w:sdt><w:sdtPr><w:tag w:val="rows"/></w:sdtPr><w:sdtContent>${rows}</w:sdtContent></w:sdt>`;
+  const base = docx(
+    `${p('Opening section test')}${control(p('Row one') + p('Row two'))}${p('End.')}`
+  );
+  const revised = docx(`${p('Opening section the closing record.')}${control(p(' '))}`);
+  const bytes = compared(base, revised);
+  const text = (xml: string) =>
+    [...xml.matchAll(/<w:p\b[^>]*>(.*?)<\/w:p>|<w:p\b[^>]*\/>/gs)].map((match) =>
+      [...(match[1] ?? '').matchAll(/<w:t[^>]*>([^<]*)</g)].map((t) => t[1]).join('')
+    );
+  expect(text(resolved(bytes, 'acceptAllRevisions'))[0]).toBe(
+    'Opening section the closing record.'
+  );
+  expect(text(resolved(bytes, 'rejectAllRevisions'))).toEqual([
+    'Opening section test',
+    'Row one',
+    'Row two',
+    'End.',
+  ]);
+});
