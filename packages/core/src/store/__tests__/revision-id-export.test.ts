@@ -414,12 +414,7 @@ describe('saved revision ids', () => {
 
   test('a new id never takes an id a fallback copy spells with spaces, a sign or zeros', () => {
     const taken = String(fnv1a32('1\u00000') & (NEW_ID_LIMIT - 1));
-    for (const spelling of [
-      `+${taken}`,
-      `000000000000${taken}`,
-      ` ${taken} `,
-      `  +0${taken} `,
-    ]) {
+    for (const spelling of [`+${taken}`, `000000000000${taken}`, ` ${taken} `, `  +0${taken} `]) {
       const body =
         `<w:p>${ins('1', 'a', 'A')}${ins('1', 'b', 'B')}<mc:AlternateContent>` +
         `<mc:Choice Requires="w14">${ins('3', 'c')}</mc:Choice>` +
@@ -526,9 +521,7 @@ describe('saved revision ids', () => {
     const removed = withBlock(first, 0, donor(`<w:p>${run('a')}</w:p>`));
     const added = withBlock(removed, 2, donor(`<w:p>${ins('1', 'b', 'Third')}</w:p>`));
     for (const pkg of [first, removed, added]) {
-      expect(ids(saved(pkg))).toEqual(
-        ids(saved(open(writeOoxmlPackageKeepingRevisionIds(pkg))))
-      );
+      expect(ids(saved(pkg))).toEqual(ids(saved(open(writeOoxmlPackageKeepingRevisionIds(pkg)))));
     }
   });
 });
