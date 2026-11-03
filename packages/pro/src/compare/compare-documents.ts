@@ -69,9 +69,11 @@ import { relatedPart } from './related-parts.ts';
 const MAX_BLOCKS = 100_000;
 /**
  * The compare keeps per-character state for every story; text over this many UTF-16 code units
- * in both documents together is refused before any work (about two 1,300-page documents).
+ * in both documents together is refused before any work. Two documents of a million characters
+ * each, some 500 pages, compare in about a second with every paragraph changed, at a peak of
+ * about 600 bytes per character.
  */
-const MAX_TEXT_UNITS = 1_500_000;
+const MAX_TEXT_UNITS = 3_000_000;
 /** Roots of the parts a compare reads; a file's declared content type is not trusted. */
 // Definition parts count too: the list and style merges walk every definition and instance.
 const STORY_ROOTS = new Set([

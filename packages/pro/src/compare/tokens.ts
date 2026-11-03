@@ -7,7 +7,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * Word tokens of a compare: the tokenizer and the token kinds a hunk diffs.
  */
 import type { MoveEnd } from './moves.ts';
-import { isControlWrapper, type Atom, type BlockUnit, type ParagraphUnit } from './units.ts';
+import {
+  isControlWrapper,
+  type Atom,
+  type BlockUnit,
+  type ParagraphUnit,
+  type Wrapper,
+} from './units.ts';
 
 /** Character classes of the word tokenizer. */
 const HAN = /[\p{sc=Han}\u3000-\u303F\uFF01-\uFF0F\uFF1A-\uFF20]/u;
@@ -128,20 +134,35 @@ export function paragraphTokens(unit: ParagraphUnit, last: boolean, out: Token[]
 function tokenKey(atoms: readonly Atom[], from: number, to: number): string {
   let key = '';
   let wrappers = '';
+  // The atoms of one run share their wrapper and field arrays, so the signature is computed
+  // again only when those arrays change, not once for every character.
+  let lastWrappers: readonly Wrapper[] | undefined;
+  let lastFields: Atom['fields'] | null = null;
+  let signature = '';
   for (let i = from; i < to; i++) {
     const atom = atoms[i]!;
-    // Every link or field boundary inside a word is part of the word: one that starts or ends
-    // mid-word makes the words differ, so the original's wrapper comes back on reject. Inline
-    // content controls do not split words; equal words in different controls move between them.
-    // Text in a complex field is part of the field: it never equals the same text outside it,
-    // or in a field with another instruction, so the whole field is deleted and inserted.
-    const signature = [
-      ...atom.wrappers.filter((wrapper) => !isControlWrapper(wrapper.key)).map((w) => w.key),
-      ...(atom.fields ?? []).map((field) => `F:${field.instr.trim().replace(/\s+/g, ' ')}`),
-    ].join('\u0003');
+    if (atom.wrappers !== lastWrappers || atom.fields !== lastFields) {
+      signature = signatureOf(atom);
+      lastWrappers = atom.wrappers;
+      lastFields = atom.fields;
+    }
     if (i === from ? signature !== '' : signature !== wrappers) key += `\u0002${signature}\u0002`;
     wrappers = signature;
     key += atom.kind === 'char' ? atom.text : `\u0001${atom.key}\u0001`;
   }
   return key;
+}
+
+/**
+ * Every link or field boundary inside a word is part of the word: one that starts or ends
+ * mid-word makes the words differ, so the original's wrapper comes back on reject. Inline
+ * content controls do not split words; equal words in different controls move between them.
+ * Text in a complex field is part of the field: it never equals the same text outside it,
+ * or in a field with another instruction, so the whole field is deleted and inserted.
+ */
+function signatureOf(atom: Atom): string {
+  return [
+    ...atom.wrappers.filter((wrapper) => !isControlWrapper(wrapper.key)).map((w) => w.key),
+    ...(atom.fields ?? []).map((field) => `F:${field.instr.trim().replace(/\s+/g, ' ')}`),
+  ].join('\u0003');
 }

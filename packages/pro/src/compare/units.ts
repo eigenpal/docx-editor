@@ -765,8 +765,11 @@ function revisedCommentMarker(xml: string): string {
   );
 }
 
+/** Shared by every atom with no markers: one array, not one per character. */
+const NO_MARKERS: readonly string[] = Object.freeze([]);
+
 function takePending(state: WalkState): readonly string[] {
-  if (state.pending.length === 0) return [];
+  if (state.pending.length === 0) return NO_MARKERS;
   const markers = state.pending;
   state.pending = [];
   return markers;

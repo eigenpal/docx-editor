@@ -119,9 +119,23 @@ test('a deleted table never lands after inserted closing text', () => {
 });
 
 test('text over the size limit is refused before any work', () => {
-  const long = docx(p('a'.repeat(800_000)));
-  expect(refusal(long, docx(p('b'.repeat(800_000))))).toBe('tooLarge');
+  const long = docx(p('a'.repeat(1_600_000)));
+  expect(refusal(long, docx(p('b'.repeat(1_600_000))))).toBe('tooLarge');
 });
+
+test('two documents of over a million characters each compare', () => {
+  // 2,000 paragraphs of 600 characters: some 500 pages each, one word changed.
+  const words = (word: string) =>
+    Array.from({ length: 2000 }, (_, i) => p(`${word}${i} `.repeat(100).slice(0, 600)));
+  const base = words('alpha');
+  const revised = [...base];
+  revised[1000] = p('changed '.repeat(75));
+  const result = compareDocuments(docx(base.join('')), docx(revised.join('')), {
+    authorName: 'Test',
+    date: DATE,
+  });
+  expect(result.ok && result.revisionCount).toBe(2);
+}, 60_000);
 
 const timed = (base: Uint8Array, revised: Uint8Array) => {
   const started = performance.now();
@@ -215,7 +229,7 @@ test('field data never lands inside a revision', () => {
 test('many tiny runs count against the size limit', () => {
   const tabs = (count: number) => '<w:r><w:tab/></w:r>'.repeat(count);
   const doc = (count: number, end: string) => docx(`<w:p>${tabs(count)}</w:p>${p(end)}`);
-  expect(refusal(doc(70_000, 'a'), doc(70_000, 'b'))).toBe('tooLarge');
+  expect(refusal(doc(130_000, 'a'), doc(130_000, 'b'))).toBe('tooLarge');
 });
 
 // An emptied control shows placeholder spaces. They carry no text of either document, so the
