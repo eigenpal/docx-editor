@@ -99,11 +99,11 @@ test('the packaged Vue dialog compares into the open document as one undo step',
   await nextTick();
   const dialog = container.querySelector('[data-docx-dialog="compareDocuments"]');
   expect(dialog).not.toBeNull();
-  expect(label(container, 'Label changes with').value).toBe('Reviewer');
-  expect(label(container, 'Detect formatting changes').checked).toBe(true);
+  expect(label(container, 'Author of the changes').value).toBe('Reviewer');
+  expect(label(container, 'Include formatting changes').checked).toBe(true);
   const compare = container.querySelector('[data-docx-part="apply"]') as HTMLButtonElement;
   expect(compare.disabled).toBe(true);
-  chooseFile(label(container, 'Revised document'), REVISED);
+  chooseFile(label(container, 'Compare with'), REVISED);
   await nextTick();
   expect(compare.disabled).toBe(false);
   compare.click();
@@ -119,7 +119,7 @@ test('the dialog host mounts a new form for each session, so no chosen file carr
   const { container, editor } = await mountEditor();
   editor.exec({ type: 'openCompareDocumentsDialog' });
   await nextTick();
-  const firstInput = label(container, 'Revised document');
+  const firstInput = label(container, 'Compare with');
   chooseFile(firstInput, REVISED);
   await nextTick();
   const apply = () => container.querySelector('[data-docx-part="apply"]') as HTMLButtonElement;
@@ -129,7 +129,7 @@ test('the dialog host mounts a new form for each session, so no chosen file carr
   await nextTick();
   await nextTick();
   // A new form: the file input is a new element with no file, and Compare waits for one.
-  const nextInput = label(container, 'Revised document');
+  const nextInput = label(container, 'Compare with');
   expect(nextInput).not.toBe(firstInput);
   expect(nextInput.files?.length ?? 0).toBe(0);
   expect(apply().disabled).toBe(true);
@@ -139,7 +139,7 @@ test('a refused compare shows its reason in the error part', async () => {
   const { container, editor } = await mountEditor();
   editor.exec({ type: 'openCompareDocumentsDialog' });
   await nextTick();
-  chooseFile(label(container, 'Revised document'), new Uint8Array([1]));
+  chooseFile(label(container, 'Compare with'), new Uint8Array([1]));
   await nextTick();
   (container.querySelector('[data-docx-part="apply"]') as HTMLButtonElement).click();
   await until(
@@ -155,7 +155,7 @@ test('a compare with no differences shows a notice, not an error', async () => {
   const { container, editor } = await mountEditor();
   editor.exec({ type: 'openCompareDocumentsDialog' });
   await nextTick();
-  chooseFile(label(container, 'Revised document'), ORIGINAL);
+  chooseFile(label(container, 'Compare with'), ORIGINAL);
   await nextTick();
   (container.querySelector('[data-docx-part="apply"]') as HTMLButtonElement).click();
   await until(
@@ -212,7 +212,7 @@ for (const mode of ['parts', 'false', 'replacement'] as const) {
     if (mode === 'parts') {
       expect(container.textContent).toContain('Custom compare');
       expect(container.textContent).toContain('Author: Reviewer');
-      expect(container.textContent).not.toContain('Detect formatting changes');
+      expect(container.textContent).not.toContain('Include formatting changes');
     }
     if (mode === 'false') expect(container.querySelector('dialog')).toBeNull();
     if (mode === 'replacement') {
@@ -232,7 +232,7 @@ test('with the compare worker, the dialog compares off the main thread', async (
   });
   editor.exec({ type: 'openCompareDocumentsDialog' });
   await nextTick();
-  chooseFile(label(container, 'Revised document'), REVISED);
+  chooseFile(label(container, 'Compare with'), REVISED);
   await nextTick();
   (container.querySelector('[data-docx-part="apply"]') as HTMLButtonElement).click();
   await until(() => container.querySelector('dialog') === null, 10000);
@@ -251,7 +251,7 @@ test('Cancel stops a running background compare and leaves the document as it wa
   const { container, editor } = await mountEditor(undefined, { compareWorker: silent });
   editor.exec({ type: 'openCompareDocumentsDialog' });
   await nextTick();
-  chooseFile(label(container, 'Revised document'), REVISED);
+  chooseFile(label(container, 'Compare with'), REVISED);
   await nextTick();
   (container.querySelector('[data-docx-part="apply"]') as HTMLButtonElement).click();
   await until(() => container.querySelector('[data-docx-part="progress"]') !== null);
@@ -270,7 +270,7 @@ test('a refusal with a reason shows the message for that reason', async () => {
   });
   editor.exec({ type: 'openCompareDocumentsDialog' });
   await nextTick();
-  chooseFile(label(container, 'Revised document'), REVISED);
+  chooseFile(label(container, 'Compare with'), REVISED);
   await nextTick();
   (container.querySelector('[data-docx-part="apply"]') as HTMLButtonElement).click();
   await until(
@@ -307,7 +307,7 @@ const inLocale = (node: () => VNodeChild) =>
   mount(() => h(LocaleProvider, { i18n: en as never }, { default: node }));
 
 async function startCompare(container: HTMLElement) {
-  chooseFile(label(container, 'Revised document'), REVISED);
+  chooseFile(label(container, 'Compare with'), REVISED);
   await nextTick();
   (container.querySelector('[data-docx-part="apply"]') as HTMLButtonElement).click();
   await nextTick();
@@ -390,7 +390,7 @@ test('focus moves to Cancel or the busy status while busy, and to the file after
   expect(second.querySelector('[data-docx-part="error"]')?.textContent).toBe(
     en.compareDocuments.errors.busy
   );
-  expect(document.activeElement).toBe(label(second, 'Revised document'));
+  expect(document.activeElement).toBe(label(second, 'Compare with'));
 });
 
 test('Progress and Notice are named parts', async () => {

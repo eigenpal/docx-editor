@@ -67,11 +67,13 @@ test('the packaged React dialog compares into the open document as one undo step
   });
   const dialog = view.getByRole('dialog', { name: 'Compare documents' });
   expect(dialog.getAttribute('data-docx-dialog')).toBe('compareDocuments');
-  expect((view.getByLabelText('Label changes with') as HTMLInputElement).value).toBe('Reviewer');
-  expect((view.getByLabelText('Detect formatting changes') as HTMLInputElement).checked).toBe(true);
+  expect((view.getByLabelText('Author of the changes') as HTMLInputElement).value).toBe('Reviewer');
+  expect((view.getByLabelText('Include formatting changes') as HTMLInputElement).checked).toBe(
+    true
+  );
   const compare = view.getByText('Compare') as HTMLButtonElement;
   expect(compare.disabled).toBe(true);
-  await act(async () => chooseFile(view.getByLabelText('Revised document'), REVISED));
+  await act(async () => chooseFile(view.getByLabelText('Compare with'), REVISED));
   expect(compare.disabled).toBe(false);
   await act(async () => {
     fireEvent.click(compare);
@@ -97,7 +99,7 @@ test('a refused compare shows its reason in the error part', async () => {
   await act(async () => {
     editor().exec({ type: 'openCompareDocumentsDialog' });
   });
-  await act(async () => chooseFile(view.getByLabelText('Revised document'), new Uint8Array([1])));
+  await act(async () => chooseFile(view.getByLabelText('Compare with'), new Uint8Array([1])));
   await act(async () => {
     fireEvent.click(view.getByText('Compare'));
   });
@@ -117,7 +119,7 @@ test('a compare with no differences says so and keeps the dialog open', async ()
   await act(async () => {
     editor().exec({ type: 'openCompareDocumentsDialog' });
   });
-  await act(async () => chooseFile(view.getByLabelText('Revised document'), ORIGINAL));
+  await act(async () => chooseFile(view.getByLabelText('Compare with'), ORIGINAL));
   await act(async () => {
     fireEvent.click(view.getByText('Compare'));
   });
@@ -154,7 +156,7 @@ test('named parts replace defaults; popup false and replacements get cancellable
     custom.editor().exec({ type: 'openCompareDocumentsDialog' });
   });
   expect(custom.view.getByText('Custom compare')).toBeTruthy();
-  expect(custom.view.queryByLabelText('Detect formatting changes')).toBeNull();
+  expect(custom.view.queryByLabelText('Include formatting changes')).toBeNull();
   expect(custom.view.getByText('Author: Reviewer')).toBeTruthy();
   await act(async () => {
     fireEvent.click(custom.view.getByText('Cancel'));
@@ -199,7 +201,7 @@ test('with the compare worker, the dialog shows progress and compares off the ma
   await act(async () => {
     editor().exec({ type: 'openCompareDocumentsDialog' });
   });
-  await act(async () => chooseFile(view.getByLabelText('Revised document'), REVISED));
+  await act(async () => chooseFile(view.getByLabelText('Compare with'), REVISED));
   await act(async () => {
     fireEvent.click(view.getByText('Compare'));
   });
@@ -226,7 +228,7 @@ test('Cancel stops a running background compare and leaves the document as it wa
   await act(async () => {
     editor().exec({ type: 'openCompareDocumentsDialog' });
   });
-  await act(async () => chooseFile(view.getByLabelText('Revised document'), REVISED));
+  await act(async () => chooseFile(view.getByLabelText('Compare with'), REVISED));
   await act(async () => {
     fireEvent.click(view.getByText('Compare'));
   });
@@ -252,7 +254,7 @@ test('a refusal with a reason shows the message for that reason', async () => {
   await act(async () => {
     editor().exec({ type: 'openCompareDocumentsDialog' });
   });
-  await act(async () => chooseFile(view.getByLabelText('Revised document'), REVISED));
+  await act(async () => chooseFile(view.getByLabelText('Compare with'), REVISED));
   await act(async () => {
     fireEvent.click(view.getByText('Compare'));
   });
@@ -291,7 +293,7 @@ const inLocale = (node: ReactNode) => <LocaleProvider i18n={en as never}>{node}<
 const renderDialog = (node: ReactNode) => render(inLocale(node));
 
 async function startCompare(view: ReturnType<typeof render>) {
-  await act(async () => chooseFile(view.getByLabelText('Revised document'), REVISED));
+  await act(async () => chooseFile(view.getByLabelText('Compare with'), REVISED));
   await act(async () => {
     fireEvent.click(view.getByRole('button', { name: 'Compare' }));
   });
@@ -360,7 +362,7 @@ test('focus moves to Cancel or the busy status while busy, and to the file after
   expect(second.container.querySelector('[data-docx-part="error"]')?.textContent).toBe(
     en.compareDocuments.errors.busy
   );
-  expect(document.activeElement).toBe(second.getByLabelText('Revised document'));
+  expect(document.activeElement).toBe(second.getByLabelText('Compare with'));
 });
 
 test('Progress and Notice are named parts', async () => {
@@ -382,7 +384,7 @@ test('Compare follows the editor state without a re-render from the host', async
   await act(async () => {
     editor().exec({ type: 'openCompareDocumentsDialog' });
   });
-  await act(async () => chooseFile(view.getByLabelText('Revised document'), REVISED));
+  await act(async () => chooseFile(view.getByLabelText('Compare with'), REVISED));
   const compare = view.getByRole('button', { name: 'Compare' }) as HTMLButtonElement;
   expect(compare.disabled).toBe(false);
   await act(async () => {

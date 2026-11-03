@@ -71,12 +71,12 @@ test('the review module enables the command; the dialog compares into the open d
   const dialog = getByRole(container, 'dialog', { name: 'Compare documents' });
   expect(dialog.getAttribute('data-docx-marker')).toBe('');
   expect(dialog.contentEditable).toBe('false');
-  const file = getByLabelText(container, 'Revised document') as HTMLInputElement;
+  const file = getByLabelText(container, 'Compare with') as HTMLInputElement;
   expect(file.accept).toBe(COMPARE_DOCUMENTS_ACCEPT);
-  expect((getByLabelText(container, 'Label changes with') as HTMLInputElement).value).toBe(
+  expect((getByLabelText(container, 'Author of the changes') as HTMLInputElement).value).toBe(
     'Reviewer'
   );
-  const formatting = getByLabelText(container, 'Detect formatting changes') as HTMLInputElement;
+  const formatting = getByLabelText(container, 'Include formatting changes') as HTMLInputElement;
   expect(formatting.checked).toBe(true);
   const compare = getByRole(container, 'button', { name: 'Compare' }) as HTMLButtonElement;
   expect(compare.disabled).toBe(true);
@@ -113,7 +113,7 @@ test('a refused compare shows the reason and keeps the dialog open', async () =>
   const { container, editor } = setup();
   editor.exec({ type: 'openCompareDocumentsDialog' });
   chooseFile(
-    getByLabelText(container, 'Revised document') as HTMLInputElement,
+    getByLabelText(container, 'Compare with') as HTMLInputElement,
     new Uint8Array([1, 2, 3])
   );
   fireEvent.click(getByRole(container, 'button', { name: 'Compare' }));
@@ -140,7 +140,10 @@ test('Cancel and Escape close without comparing; editing keys stay in the dialog
   container.addEventListener('keydown', () => {
     keydown = true;
   });
-  fireEvent.keyDown(getByLabelText(container, 'Label changes with'), { key: 'b', ctrlKey: true });
+  fireEvent.keyDown(getByLabelText(container, 'Author of the changes'), {
+    key: 'b',
+    ctrlKey: true,
+  });
   expect(keydown).toBe(false);
   fireEvent.click(getByRole(container, 'button', { name: 'Cancel' }));
   expect(container.querySelector('dialog')).toBeNull();
@@ -154,7 +157,7 @@ test('a compare with no differences shows a notice and records nothing', async (
   const { container, editor } = setup();
   const revision = editor.surface!.session.packageRevision();
   editor.exec({ type: 'openCompareDocumentsDialog' });
-  chooseFile(getByLabelText(container, 'Revised document') as HTMLInputElement, ORIGINAL);
+  chooseFile(getByLabelText(container, 'Compare with') as HTMLInputElement, ORIGINAL);
   fireEvent.click(getByRole(container, 'button', { name: 'Compare' }));
   const notice = await waitFor(
     () => {
@@ -181,7 +184,7 @@ test('with the compare worker, the dialog shows progress and compares off the ma
   editor.exec({ type: 'openCompareDocumentsDialog' });
   const progress = container.querySelector('.docx-compare-documents-progress') as HTMLElement;
   expect(progress.hidden).toBe(true);
-  chooseFile(getByLabelText(container, 'Revised document') as HTMLInputElement, REVISED);
+  chooseFile(getByLabelText(container, 'Compare with') as HTMLInputElement, REVISED);
   fireEvent.click(getByRole(container, 'button', { name: 'Compare' }));
   await waitFor(() => {
     if (progress.hidden) throw new Error('no progress');
@@ -206,7 +209,7 @@ test('Cancel stops a running background compare and leaves the document as it wa
   const { container, editor } = setup({ compareWorker: silent });
   const before = bodyText(editor);
   editor.exec({ type: 'openCompareDocumentsDialog' });
-  chooseFile(getByLabelText(container, 'Revised document') as HTMLInputElement, REVISED);
+  chooseFile(getByLabelText(container, 'Compare with') as HTMLInputElement, REVISED);
   fireEvent.click(getByRole(container, 'button', { name: 'Compare' }));
   const cancel = getByRole(container, 'button', { name: 'Cancel' }) as HTMLButtonElement;
   await waitFor(() => {
@@ -240,7 +243,7 @@ test('without web workers, the default compares on the main thread', async () =>
   try {
     const { container, editor } = setup();
     editor.exec({ type: 'openCompareDocumentsDialog' });
-    chooseFile(getByLabelText(container, 'Revised document') as HTMLInputElement, REVISED);
+    chooseFile(getByLabelText(container, 'Compare with') as HTMLInputElement, REVISED);
     fireEvent.click(getByRole(container, 'button', { name: 'Compare' }));
     await waitFor(
       () => {
@@ -260,7 +263,7 @@ test('a refusal with a reason shows the message for that reason', async () => {
     compareWorker: answeringCompareWorker(LOCKED_CONTENT_REFUSAL),
   });
   editor.exec({ type: 'openCompareDocumentsDialog' });
-  chooseFile(getByLabelText(container, 'Revised document') as HTMLInputElement, REVISED);
+  chooseFile(getByLabelText(container, 'Compare with') as HTMLInputElement, REVISED);
   fireEvent.click(getByRole(container, 'button', { name: 'Compare' }));
   await waitFor(
     () => {
@@ -295,7 +298,7 @@ function steppingWorker(phase: string, fraction: number): () => Worker {
 test('the running step shows in words, with the bar, and the bar waits for the first step', async () => {
   const { container, editor } = setup({ compareWorker: steppingWorker('checking', 0.6) });
   editor.exec({ type: 'openCompareDocumentsDialog' });
-  chooseFile(getByLabelText(container, 'Revised document') as HTMLInputElement, REVISED);
+  chooseFile(getByLabelText(container, 'Compare with') as HTMLInputElement, REVISED);
   fireEvent.click(getByRole(container, 'button', { name: 'Compare' }));
   const progress = container.querySelector('progress')!;
   const phase = container.querySelector('.docx-compare-documents-phase')!;
@@ -314,7 +317,7 @@ test('focus stays in the dialog when Compare disables itself, and returns after 
   const background = setup({ compareWorker: steppingWorker('comparing', 0.2) });
   background.editor.exec({ type: 'openCompareDocumentsDialog' });
   const container = background.container;
-  chooseFile(getByLabelText(container, 'Revised document') as HTMLInputElement, REVISED);
+  chooseFile(getByLabelText(container, 'Compare with') as HTMLInputElement, REVISED);
   const compare = getByRole(container, 'button', { name: 'Compare' });
   compare.focus();
   fireEvent.click(compare);
@@ -326,7 +329,7 @@ test('focus stays in the dialog when Compare disables itself, and returns after 
   // On the main thread nothing can stop the compare: the busy status takes focus.
   const main = setup({ compareWorker: false });
   main.editor.exec({ type: 'openCompareDocumentsDialog' });
-  const file = getByLabelText(main.container, 'Revised document') as HTMLInputElement;
+  const file = getByLabelText(main.container, 'Compare with') as HTMLInputElement;
   chooseFile(file, new Uint8Array([1, 2, 3]));
   fireEvent.click(getByRole(main.container, 'button', { name: 'Compare' }));
   expect(document.activeElement?.classList.contains('docx-compare-documents-phase')).toBe(true);
