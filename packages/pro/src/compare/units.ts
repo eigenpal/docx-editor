@@ -187,7 +187,7 @@ const WRAPPER_PROPERTIES: Readonly<Record<string, ReadonlySet<string>>> = {
 
 /**
  * Wrappers whose properties have no revision form and whose shell stays when their content is
- * rejected: equal text inside two of them with other properties is refused, not recorded.
+ * rejected: equal text inside two different ones is recorded as moving between them.
  */
 export const isControlWrapper = (key: string) =>
   key.startsWith('sdt|') || key.startsWith('smartTag|') || key.startsWith('customXml|');

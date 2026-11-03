@@ -18,7 +18,7 @@ import {
   replaceWholeParagraphs,
   slideLeft,
 } from './hunk-rules.ts';
-import { END_KEY, paragraphTokens, type BlockToken, type Token } from './tokens.ts';
+import { END_KEY, paragraphTokens, type BlockToken, type TextToken, type Token } from './tokens.ts';
 import { objectWithBoxes } from './text-boxes.ts';
 import {
   emitContent,
@@ -134,12 +134,32 @@ export function compareContainer(
 /** A field data element in a serialized simple field shell. */
 const FIELD_DATA = /<[A-Za-z_][\w.-]*:fldData[\s/>]/;
 
-/** The inline content controls around an atom, outermost first. */
+/**
+ * Which control a wrapper is: a content control by its id, which stays when the control is
+ * filled in or its other properties change; any other control by all of its properties.
+ */
+function controlIdentity(key: string): string {
+  if (!key.startsWith('sdt|')) return key;
+  const id = /<w:id w:val="([^"]*)"/.exec(key)?.[1];
+  return id === undefined ? key : `sdt#${id}`;
+}
+
+/** The inline controls around an atom, outermost first, by identity. */
 const controlsOf = (atom: Atom) =>
   atom.wrappers
     .filter((wrapper) => isControlWrapper(wrapper.key))
-    .map((wrapper) => wrapper.key)
+    .map((wrapper) => controlIdentity(wrapper.key))
     .join('\u0003');
+
+/** Equal text that sits in different controls in the two documents. */
+function inOtherControls(base: TextToken, revised: TextToken): boolean {
+  for (let k = 0; k < base.to - base.from; k++) {
+    const before = controlsOf(base.unit.atoms[base.from + k]!);
+    const after = controlsOf(revised.unit.atoms[revised.from + k]!);
+    if (before !== '' && after !== '' && before !== after) return true;
+  }
+  return false;
+}
 
 /**
  * Block-level elements other than paragraphs, tables, and content controls that hold content.
@@ -298,6 +318,39 @@ function emitHunk(
     out += deferred;
     deferred = '';
   };
+  const changedText = (token: TextToken, mark: 'ins' | 'del') => {
+    // A simple field with field data keeps its shell, data included, when all of its result
+    // is accepted or rejected away: such a field's changes are not recorded.
+    const atoms = token.unit.atoms;
+    for (let k = token.from; k < token.to; k++)
+      if (
+        atoms[k]!.wrappers.some(
+          (wrapper) => wrapper.key.startsWith('fldSimple|') && FIELD_DATA.test(wrapper.start)
+        )
+      ) {
+        ctx.state.untracked++;
+        break;
+      }
+    for (let k = token.from; k < token.to; k++) {
+      let atom = atoms[k]!;
+      if (atom.note && mark === 'del')
+        ctx.state.deletedNotes.push({ kind: atom.note.kind, base: atom.note.id });
+      if (atom.note && mark === 'ins') {
+        ctx.state.newNotes.push({ kind: atom.note.kind, revised: atom.note.id });
+        const id = notePlaceholder(atom.note.kind, atom.note.id);
+        atom = { ...atom, xml: atom.xml.replace(/\bw:id="[^"]*"/, `w:id="${id}"`) };
+      }
+      if (atom.node) {
+        const xml = objectWithBoxes(
+          mark === 'del' ? atom : null,
+          mark === 'ins' ? atom : null,
+          ctx
+        );
+        atom = { ...atom, xml, delXml: xml };
+      }
+      items.push({ mark, atom, baseRPr: '', markers: atom.markers });
+    }
+  };
   for (const op of ops) {
     if (op.op === 'pair') {
       block(compareBlockPair(op.base, op.revised, ctx));
@@ -306,7 +359,12 @@ function emitHunk(
     if (op.op === 'eq') {
       const left = a[op.a]!;
       const right = b[op.b]!;
-      if (left.kind === 'text' && right.kind === 'text') {
+      if (left.kind === 'text' && right.kind === 'text' && inOtherControls(left, right)) {
+        // Equal text in two different controls is content of each control: it leaves one and
+        // enters the other, so each control keeps its own content on accept and on reject.
+        changedText(left, 'del');
+        changedText(right, 'ins');
+      } else if (left.kind === 'text' && right.kind === 'text') {
         for (let k = 0; k < left.to - left.from; k++) {
           const baseAtom = left.unit.atoms[left.from + k]!;
           let atom = right.unit.atoms[right.from + k]!;
@@ -325,12 +383,9 @@ function emitHunk(
             // Equal objects (pictures, charts, embedded objects) keep the original's markup and
             // relationships, so an unchanged picture is not copied as a new part.
             atom = { ...atom, xml: baseAtom.xml, delXml: baseAtom.delXml };
-          // Content control properties have no revision form: equal text inside controls with
-          // other properties is not recorded. (A control added or removed around text keeps
-          // its shell on the other side, as documented.)
-          const before = controlsOf(baseAtom);
-          const after = controlsOf(atom);
-          if (before !== '' && after !== '' && before !== after) ctx.state.untracked++;
+          // Content control properties have no revision form: equal text inside the same
+          // control with other properties takes the revised control, like a block control. (A
+          // control added or removed around text keeps its shell on the other side.)
           items.push({
             mark: 'eq',
             atom,
@@ -348,37 +403,7 @@ function emitHunk(
     const token = op.op === 'del' ? a[op.a]! : b[op.b]!;
     const mark = op.op;
     if (token.kind === 'text') {
-      // A simple field with field data keeps its shell, data included, when all of its result
-      // is accepted or rejected away: such a field's changes are not recorded.
-      const atoms = token.unit.atoms;
-      for (let k = token.from; k < token.to; k++)
-        if (
-          atoms[k]!.wrappers.some(
-            (wrapper) => wrapper.key.startsWith('fldSimple|') && FIELD_DATA.test(wrapper.start)
-          )
-        ) {
-          ctx.state.untracked++;
-          break;
-        }
-      for (let k = token.from; k < token.to; k++) {
-        let atom = token.unit.atoms[k]!;
-        if (atom.note && mark === 'del')
-          ctx.state.deletedNotes.push({ kind: atom.note.kind, base: atom.note.id });
-        if (atom.note && mark === 'ins') {
-          ctx.state.newNotes.push({ kind: atom.note.kind, revised: atom.note.id });
-          const id = notePlaceholder(atom.note.kind, atom.note.id);
-          atom = { ...atom, xml: atom.xml.replace(/\bw:id="[^"]*"/, `w:id="${id}"`) };
-        }
-        if (atom.node) {
-          const xml = objectWithBoxes(
-            mark === 'del' ? atom : null,
-            mark === 'ins' ? atom : null,
-            ctx
-          );
-          atom = { ...atom, xml, delXml: xml };
-        }
-        items.push({ mark, atom, baseRPr: '', markers: atom.markers });
-      }
+      changedText(token, mark);
     } else if (token.kind === 'mark') {
       if (token.key === END_KEY && (a.length === 0 || b.length === 0)) {
         // The final mark of an added or removed story.

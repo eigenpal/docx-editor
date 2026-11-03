@@ -53,7 +53,7 @@ test('a link that starts inside a word comes back on reject', () => {
   expect(rejected).not.toContain('HYPERLINK');
 });
 
-test('a block content control takes the revised properties; an inline one with other properties is refused', () => {
+test('a block content control takes the revised properties; text moves between inline controls', () => {
   const block = (tag: string) =>
     docx(
       `${p('One')}<w:sdt><w:sdtPr><w:tag w:val="${tag}"/></w:sdtPr><w:sdtContent>${p('Inside')}` +
@@ -66,12 +66,26 @@ test('a block content control takes the revised properties; an inline one with o
   const xml = strFromU8(unzipSync(result.bytes)['word/document.xml']!);
   expect(xml).toContain('<w:tag w:val="B"/>');
   expect(xml).toContain('Inside');
-  const inline = (tag: string) =>
+  const inline = (properties: string, text = 'here') =>
     docx(
-      `<w:p>${run('Click ')}<w:sdt><w:sdtPr><w:tag w:val="${tag}"/></w:sdtPr><w:sdtContent>` +
-        `${run('here')}</w:sdtContent></w:sdt>${run(' now')}</w:p>`
+      `<w:p>${run('Click ')}<w:sdt><w:sdtPr>${properties}</w:sdtPr><w:sdtContent>` +
+        `${run(text)}</w:sdtContent></w:sdt>${run(' now')}</w:p>`
     );
-  expect(refusal(inline('A'), inline('B'))).toBe('unsupportedContent');
+  // Two different controls: the text leaves one and enters the other, so each keeps its own.
+  const moved = compared(inline('<w:tag w:val="A"/>'), inline('<w:tag w:val="B"/>'));
+  const accepted = resolved(moved, 'acceptAllRevisions');
+  const rejected = resolved(moved, 'rejectAllRevisions');
+  expect(accepted).toMatch(/<w:tag w:val="B"\/>.*here/s);
+  expect(accepted).not.toMatch(/<w:tag w:val="A"\/><\/w:sdtPr><w:sdtContent>.*here/s);
+  expect(rejected).toMatch(/<w:tag w:val="A"\/><\/w:sdtPr><w:sdtContent>(?:(?!<\/w:sdt>).)*here/s);
+  // The same control, filled in: its equal text stays, and it takes the revised properties.
+  const filled = compared(
+    inline('<w:id w:val="7"/><w:showingPlcHdr/>', 'Type here'),
+    inline('<w:id w:val="7"/>', 'Type here or there')
+  );
+  const filledXml = strFromU8(unzipSync(filled)['word/document.xml']!);
+  expect(filledXml).not.toContain('showingPlcHdr');
+  expect(filledXml).not.toMatch(/<w:delText[^>]*>[^<]*Type/);
 });
 
 test('a bookmark between rows stays in place when the next row is deleted', () => {
