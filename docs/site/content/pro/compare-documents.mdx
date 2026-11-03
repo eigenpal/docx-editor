@@ -5,162 +5,65 @@ category: 'Pro'
 order: 64
 ---
 
-Compare documents records the differences between an original document and a revised document as tracked changes. The compare first accepts the existing tracked changes in both documents. Accepting all of the compare's changes gives the revised document's text. Rejecting them gives the original document's text.
+Compare documents records the differences between an original and a revised DOCX file as tracked changes. Accept all changes to get the revised text. Reject all changes to get the original text.
 
-Rejecting changes does not restore the complete original document. Style and list definitions, content control properties, and comments can stay changed. Empty controls, headers, footers, and notes can stay, and so can parts that inserted content needs. In the editor, undo the compare to restore the complete original document, including its own tracked changes.
-
-If you turn off formatting detection, the result takes the revised formatting without tracking it. Rejecting changes then keeps that formatting.
-
-Compare documents requires an EigenPal Pro License. The editor command and `Document.compareFromBase64` also require the review module. Without it, they refuse with a stable reason. For more information, see [Tracked changes](/docs/2.x/pro/tracked-changes). The `compareDocuments` function needs no module.
-
-You can compare documents in three ways:
-
-- In the editor, from **Compare documents** in the **Review** menu, or with the `compareDocuments` command.
-- With `Document.compareFromBase64` in the Office.js-compatible document API, on a server or in the browser.
-- With the `compareDocuments` function from `@docx-editor.dev/pro`, which takes two DOCX files and returns a third.
-
-The following demo shows an original document, a revised document, and the compare result. Select **Compared** to review the tracked changes:
+Compare documents requires an EigenPal Pro License.
 
 <CompareDocumentsDemo />
 
-## How a compare works
-
-The compare aligns the two documents block by block, then compares matched text word by word. Headers and footers compare section by section. For the list of differences that a compare records, see [Tracked changes, comments, and notes](/docs/2.x/word-fidelity#tracked-changes-comments-and-notes).
-
-Block content controls follow the same rules as other content. A control that only one document has is kept, and its content is recorded as inserted or deleted. If accepting or rejecting removes all of its content, an empty control with placeholder text stays. Control properties keep no record, so the result takes the revised document's control properties.
-
-Inline content controls follow the same rules. A control with the same ID in both documents is the same control, for example a form field that the revised document fills in. Its unchanged text stays, and it takes the revised properties. Rejecting changes does not restore the original properties. So a placeholder that the revised document fills in shows its text as ordinary text after a reject. If equal text belongs to different controls or XML wrappers, the result records a deletion and an insertion. Smart tags and custom XML elements are such wrappers.
-
-If the open document has tracked changes, the dialog says before you compare that the compare accepts them. The result keeps the comments of both documents, without tracking them as changes. Bookmarks come from the original. The result reuses the original's header and footer references where it can. It adds references for headers and footers that only the revised document has.
-
-A style that both documents define takes the revised definition, so revised content looks as it does in the revised document. Rejecting changes does not restore the original style definitions.
-
-Lists keep the original's definitions, and the styles and lists that only the revised document defines are added. Field results are compared as saved; the compare never updates or runs fields.
-
 ## Compare in the editor
 
-Add `reviewModule()` to the editor modules. The **Review** menu then shows **Compare documents**. The dialog asks for the revised DOCX file, the author name for the revisions, and whether to detect formatting changes. The open document is the original.
-
-The differences replace the open document's content as one undoable step. One undo restores the original. If the documents have no differences, the document, its undo history, and its saved state stay as they were.
-
-Both documents together must fit within 100,000 blocks and 3,000,000 text units. If they exceed either limit, the compare refuses with `tooLarge`. Blocks are paragraphs, tables, rows, cells, content controls, styles, list instances, and list definitions. Text units are UTF-16 code units. Each run adds 12 units, and each tab, break, picture, or reference adds one. The counts include the body, headers, footers, notes, comments, styles, and lists. A compare that exceeds a runtime limit, such as the call stack size, also refuses with `tooLarge`.
-
-If the compare changes the document, the dialog closes and the document takes keyboard focus. The editor announces the result to screen readers. If the documents have no differences, the dialog stays open, says so, and focuses **Compare**. **Cancel** becomes **Close**. If the compare is refused, the dialog shows the reason and focuses the revised-file input.
-
-### Compare in a worker
-
-By default, the dialog compares on the page's main thread. The page does not respond until the compare ends, and a running compare cannot be canceled. To compare in a worker, pass a function that starts the compare worker, `@docx-editor.dev/pro/compare-worker`, as the `compareWorker` option. While the worker runs, the dialog shows progress and the page stays responsive. **Cancel** stops the worker and leaves the document unchanged.
-
-The following sample starts an editor that compares in a worker. It imports the worker with the `?worker` suffix of Vite:
+Add `reviewModule()` to the editor modules:
 
 ```ts
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { reviewModule } from '@docx-editor.dev/pro';
+
+const editor = createDocxEditor({
+  document: originalBytes,
+  modules: [reviewModule()],
+});
+```
+
+The **Review** menu then shows **Compare documents**. The open document is the original, and you choose the revised file in the dialog. The changes apply as one step, so one undo restores the original.
+
+### Compare in a worker
+
+To keep the page responsive and show progress, pass the compare worker as the `compareWorker` option. This sample uses the `?worker` import of Vite:
+
+```ts
 import CompareWorker from '@docx-editor.dev/pro/compare-worker?worker';
 
 const editor = createDocxEditor({
   document: originalBytes,
   modules: [reviewModule({ compareWorker: () => new CompareWorker() })],
 });
-editor.attach(container);
 ```
 
-The editor starts one worker for each compare and ends it when the compare ends. While the worker runs, the main thread only copies the open document and applies the result. The `compareDocuments` command stays synchronous and always compares on the main thread.
+With the worker, the dialog shows progress, and **Cancel** stops a running compare.
 
-If the worker fails before it starts, the dialog compares on the main thread instead. This can happen when a deploy removes the worker script while the page stays open. A worker that sends no message within 30 seconds also counts as not started. During this fallback, the page does not respond and **Cancel** cannot stop the compare. A worker that fails after it starts ends the compare with the `failed` code.
+### Compare from code
 
-A compare in a worker can end with two codes of its own:
-
-- `documentChanged`: the open document changed while the compare ran, so the result is not applied. The editor never compares again by itself; compare again to get a result for the current document.
-- `busy`: another compare of the same dialog runs, or a preview or an external document refresh blocks edits. Try again when it ends.
-
-### Compare from your own interface
-
-If your application already has the revised bytes and wants worker progress and cancel, open the dialog session from your own interface. This is the supported way to run a compare in the background without the packaged dialog:
-
-1. Register chrome with `editor.setCompareDocumentsChrome({ onRequest })`. The editor then passes each dialog session to `onRequest` instead of showing its own dialog.
-1. Open a session with `editor.exec({ type: 'openCompareDocumentsDialog' })`.
-1. Call `session.apply(request, { onProgress })`. With the compare worker, `onProgress` receives each step.
-1. Call `session.cancel()` to stop a running compare, or to close a session that stays open after a refusal or a compare with no differences.
-1. Call the function that `setCompareDocumentsChrome` returns when your interface no longer handles compares.
-
-The following sample compares bytes that your application holds and shows each step:
-
-```ts
-import {
-  compareDocumentsErrorKey,
-  type CompareDocumentsDialogSession,
-} from '@docx-editor.dev/core/editor';
-
-let session: CompareDocumentsDialogSession | null = null;
-const dispose = editor.setCompareDocumentsChrome({
-  onRequest: (next) => {
-    session = next;
-  },
-});
-
-async function compareInBackground(revised: Uint8Array) {
-  const opened = editor.exec({ type: 'openCompareDocumentsDialog' });
-  const current = session;
-  if (!opened.ok || !current) return;
-  showCancel(current.cancelable, () => current.cancel());
-  const outcome = await current.apply(
-    { revised, authorName: 'Legal' },
-    {
-      onProgress: ({ phase, fraction }) =>
-        showProgress(t(`compareDocuments.phases.${phase}`), fraction),
-    }
-  );
-  if (!outcome.ok) showMessage(t(compareDocumentsErrorKey(outcome)));
-  else if (!outcome.changed) showMessage(t('compareDocuments.noDifferences'));
-  // A compare that changes the document closes its session; the others stay open.
-  current.cancel();
-}
-
-// When your interface no longer handles compares:
-dispose();
-```
-
-A second `apply` call while a compare runs answers `busy` and starts nothing. A `cancel()` call during a compare in a worker makes `apply` answer `closed`.
-
-### Compare with the command
-
-To compare without the dialog, for example from your own file picker, run the `compareDocuments` command:
+To compare without the dialog, run the `compareDocuments` command:
 
 ```ts
 import { compareDocumentsErrorKey } from '@docx-editor.dev/core/editor';
 
-const result = editor.exec({
+const outcome = editor.exec({
   type: 'compareDocuments',
   revised: revisedBytes,
-  authorName: 'Legal',
-  detectFormatChanges: true,
-});
-const outcome = result.compareDocuments;
-if (!outcome?.ok) {
-  showMessage(t(compareDocumentsErrorKey(outcome ?? { code: 'failed' })));
-} else if (!outcome.changed) {
-  showMessage(t('compareDocuments.noDifferences'));
-}
+  authorName: 'Legal review',
+}).compareDocuments;
+
+if (!outcome?.ok) showError(t(compareDocumentsErrorKey(outcome ?? { code: 'failed' })));
+else if (!outcome.changed) showMessage(t('compareDocuments.noDifferences'));
 ```
 
-The result's `compareDocuments` field holds the outcome of every `compareDocuments` command. A refused compare carries a `code`, such as `tooLarge` or `protected`, and for `unsupportedContent` a `reason`. The `compareDocuments.errors.*` and `compareDocuments.reasons.*` keys of `@docx-editor.dev/i18n` translate them, and `compareDocumentsErrorKey` picks the right key. A successful compare reports `changed` and `revisionCount`:
-
-- `changed` is `false` when the documents have no differences. Nothing is recorded.
-- `revisionCount` counts tracked change items in the body, headers, footers, and notes. A replaced word counts as two items, a deletion and an insertion. The review pane can show the two as one replacement.
-- `changed` can be `true` when `revisionCount` is 0. This happens when the compare changes the document without a tracked change. Examples are formatting with detection off, style definitions, and the original's own tracked changes, which the compare accepts.
-
-A background engine, the `compareDocumentsInBackground` contribution of a review module, returns a `CompareDocumentsBackgroundResult`. Its `bytes` are `null` when the documents have no differences. Read `changed`, not `bytes`, to decide whether to apply or save the result.
-
-If `authorName` is absent or blank, the command uses the editor's author. Without an editor author, it uses the revised document's last author, then its creator, then `Comparison`.
-
-The command refuses while the editor is in viewing mode or the document is protected against edits. It refuses with `busy` while a preview or an external document refresh blocks edits. It also refuses while a collaboration session is attached, even when no one else is connected.
-
-To replace the dialog, pass a component as `popups.compareDocuments`. The session's `apply` result has the same outcome shape. With the compare worker, pass `{ onProgress }` as the second argument of `apply`. Check `cancelable` before you offer **Cancel** for a running compare. The outcome's `message` is diagnostic English, not display text. Use `COMPARE_DOCUMENTS_ACCEPT` from `@docx-editor.dev/core/editor` as the `accept` value of your file input. For more information, see [Customize dialogs](/docs/2.x/customization/dialogs).
+The command compares on the main thread. To replace the dialog, pass your own component as `popups.compareDocuments`. For more information, see [Customize dialogs](/docs/2.x/customization/dialogs).
 
 ## Compare with the document API
 
-`Document.compareFromBase64` follows the Office.js signature. Register `reviewModule()` on the runtime, then call the method with the revised document as base64 data:
+Register `reviewModule()` on the runtime, then call `Document.compareFromBase64`:
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api';
@@ -170,73 +73,48 @@ const runtime = await DocxEditor.createServer(originalBytes, {
   modules: [reviewModule()],
 });
 await runtime.run(async (context) => {
-  context.document.compareFromBase64(revisedBase64, { authorName: 'Legal' });
+  context.document.compareFromBase64(revisedBase64, { authorName: 'Legal review' });
   await context.sync();
 });
 const redline = await runtime.save();
 ```
 
-For supported options and refusals, see [Compare two documents](/docs/2.x/editor-api/revisions#compare-two-documents).
+For options and errors, see [Compare two documents](/docs/2.x/editor-api/revisions#compare-two-documents).
 
 ## Compare two files on a server
 
-The `compareDocuments` function needs no editor or runtime. It returns the result as DOCX bytes. When the documents have no differences, `changed` is `false` and `bytes` are the original bytes:
+The `compareDocuments` function needs no editor. It returns the result as DOCX bytes:
 
 ```ts
-import { writeFile } from 'node:fs/promises';
 import { compareDocuments } from '@docx-editor.dev/pro';
 
-const result = compareDocuments(originalBytes, revisedBytes, {
-  authorName: 'Legal',
-  detectFormatChanges: true,
-});
+const result = compareDocuments(originalBytes, revisedBytes, { authorName: 'Legal review' });
 if (!result.ok) console.error(result.code, result.message);
 else if (result.changed) await writeFile('redline.docx', result.bytes);
 ```
 
-The function checks every result before it returns it. Accepting all changes must give the revised text, and rejecting all changes must give the original text. A result that fails the check is not returned; the function refuses with `unsupportedContent` instead.
+## Options
 
-The function also returns these input error codes:
+| Option | Default | Effect |
+| --- | --- | --- |
+| `authorName` | The editor's author, else the revised document's last author | The author of every tracked change. |
+| `detectFormatChanges` | `true` | Records formatting changes as tracked changes. |
+| `removeDateAndTime` | `false` | Writes the tracked changes without dates. |
 
-- `invalidOriginal` or `invalidRevised`: the function cannot read that file.
-- `tooLarge`: the documents exceed a size limit.
-- `invalidOptions`: an option has the wrong type. For example, `date` must be a valid `Date`.
+## Errors
 
-If `authorName` is absent or blank, the revisions carry the revised document's last author, then its creator, then `Comparison`.
+A refused compare changes nothing and returns a `code`. Pass the outcome to `compareDocumentsErrorKey` to get a translated message from `@docx-editor.dev/i18n`.
 
-The function refuses with a code and never throws for these cases. An `unsupportedContent` refusal also names its `reason`. To translate a refusal, pass it to `compareDocumentsErrorKey` and use the key with `@docx-editor.dev/i18n`, as the editor does.
+| Code | Cause |
+| --- | --- |
+| `invalidRevised`, `invalidOriginal` | A file is not a readable DOCX file. |
+| `tooLarge` | The documents together exceed 100,000 blocks, such as paragraphs and table cells, or about 3,000,000 characters. |
+| `protected` | The open document is protected against edits. |
+| `unsupportedContent` | A difference has no tracked-change form, for example inside a locked content control. `reason` names the case. |
+| `collaboration` | A collaboration session is attached. |
+| `busy` | Another compare, a preview, or a document refresh is running. |
 
-The function refuses with `protected` when the original document enforces protection that a compare would break:
+## Good to know
 
-- Read-only, comments, or forms protection. A compare would rewrite its content.
-- Tracked-changes protection. A compare also writes differences without tracked changes, such as style definitions, content control properties, comments, and parts that inserted pictures need. Rejecting changes cannot take those back.
-
-To compare a protected document, stop the protection first.
-
-The compare also refuses with `unsupportedContent` in these cases:
-
-- The documents differ inside a content control that is locked or bound to custom XML data. Tracked changes there cannot be accepted or rejected.
-- The original or the revised document holds tracked changes that cannot be accepted, so its final state is unknown.
-- The documents differ in block content without a tracked-change form. Examples are embedded file chunks, and bookmarks or content controls around table rows and cells.
-- The documents differ in a simple field with field data. The field keeps no record of its data, and its shell stays after its content is rejected.
-- The revised document adds a section or table setting, such as page borders, that has no value a tracked change can restore on reject.
-- A header or footer that only an earlier section shows differs, and the compare cannot pair it with one header or footer of the original. This can happen when the documents have a different number of sections. It can also happen when the revised document splits a header or footer that sections of the original share.
-- An earlier section of the revised document shows its own header or footer where the original's section inherits one from the section before it. Rejecting the change would show an empty header or footer there.
-- The result needs a new relationship part, and the original document declares no content type for relationship parts.
-
-An `unsupportedContent` refusal also carries a `reason` that names its case: `lockedContent`, `unresolvedRevisions`, `untrackedContent`, `unrecordedSettings`, `headerFooter`, `packageStructure`, or `unverified`. The dialog shows the message for the reason when there is one, else the message for the code. The `compareDocuments` command and `compareDocuments()` return both. If you build your own dialog, `compareDocumentsErrorKey(outcome)` gives the `@docx-editor.dev/i18n` key of that message:
-
-```ts
-import { compareDocumentsErrorKey } from '@docx-editor.dev/core/editor';
-
-const outcome = await session.apply({ revised });
-if (!outcome.ok) setError(t(compareDocumentsErrorKey(outcome)));
-```
-
-For these refusals, `Document.compareFromBase64` rejects `context.sync()` with a stable error code instead of the message. The code names the category:
-
-- `NotImplemented`: protection, or content that a compare cannot record.
-- `InvalidArgument`: a revised file that it cannot read.
-- `NotSupported`: documents over the size limit.
-
-If the error has `debugInfo.innerError`, its `code` names the cause, such as `edit.protected-content` or `edit.unsupported-content`.
+- The compare treats tracked changes that are already in either document as accepted. The dialog shows a notice when the open document has them.
+- Reject all does not restore style definitions, content control properties, or comments. To restore the complete original, use undo.
