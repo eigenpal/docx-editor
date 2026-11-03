@@ -143,20 +143,28 @@ test('many changed block controls compare in linear time', () => {
   const sdt = (i: number, text: string) =>
     `<w:sdt><w:sdtPr><w:id w:val="${100000 + i}"/><w:alias w:val="F${i}"/></w:sdtPr>` +
     `<w:sdtContent><w:p><w:r><w:t>${text} ${i}</w:t></w:r></w:p></w:sdtContent></w:sdt>`;
-  let base = '';
-  let revised = '';
-  for (let i = 0; i < 4000; i++) {
-    base += sdt(i, 'old');
-    revised += sdt(i, 'new');
-  }
-  const started = performance.now();
-  const result = compared(
-    buildDocx({ body: base + p('end') }),
-    buildDocx({ body: revised + p('end') })
-  );
-  // A pairing that scans every later control took more than 30 s here.
-  expect(performance.now() - started).toBeLessThan(15_000);
-  expect(result.revisionCount).toBe(8000);
+  const make = (n: number) => {
+    let base = '';
+    let revised = '';
+    for (let i = 0; i < n; i++) {
+      base += sdt(i, 'old');
+      revised += sdt(i, 'new');
+    }
+    return [buildDocx({ body: base + p('end') }), buildDocx({ body: revised + p('end') })] as const;
+  };
+  const time = ([base, revised]: readonly [Uint8Array, Uint8Array]) => {
+    const started = performance.now();
+    const result = compared(base, revised);
+    return { ms: performance.now() - started, revisions: result.revisionCount };
+  };
+  const small = make(1000);
+  time(small);
+  const first = time(small);
+  const second = time(make(4000));
+  expect(second.revisions).toBe(8000);
+  // Four times the controls: about four times the time when linear, sixteen when quadratic,
+  // as a pairing that scans every later control was. A ratio holds on a slow machine.
+  expect(second.ms / Math.max(first.ms, 1)).toBeLessThan(8);
 });
 
 const NS =

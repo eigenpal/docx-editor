@@ -123,44 +123,59 @@ test('text over the size limit is refused before any work', () => {
   expect(refusal(long, docx(p('b'.repeat(800_000))))).toBe('tooLarge');
 });
 
-// Each shape took 13 s or more with a quadratic step; the bounds leave room for a busy machine.
 const timed = (base: Uint8Array, revised: Uint8Array) => {
   const started = performance.now();
   const result = compareDocuments(base, revised, { authorName: 'Test', date: DATE });
   return { ok: result.ok, ms: performance.now() - started };
 };
 
+/**
+ * How much longer a compare of `make(4 * n)` takes than one of `make(n)`. Linear work grows
+ * about 4 times, a quadratic step 16 times, so the ratio holds on a slow or busy machine where
+ * a fixed time limit does not. The small size runs twice, so the first run warms the engine.
+ */
+function growth(make: (n: number) => readonly [Uint8Array, Uint8Array], n: number): number {
+  const small = make(n);
+  const large = make(4 * n);
+  timed(...small);
+  const first = timed(...small);
+  const second = timed(...large);
+  expect(first.ok && second.ok).toBe(true);
+  return second.ms / Math.max(first.ms, 1);
+}
+
 test('many inserted tables against one long deleted paragraph stay linear', () => {
-  const text = Array.from({ length: 300_000 }, (_, i) => `w${i % 97}`).join(' ');
   const table = (i: number) =>
     `<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc>${p(`c${i}`)}</w:tc></w:tr></w:tbl><w:p/>`;
-  const { ok, ms } = timed(
-    docx(`${p(text)}${p('end')}`),
-    docx(`${Array.from({ length: 8000 }, (_, i) => table(i)).join('')}${p('end')}`)
-  );
-  expect(ok).toBe(true);
-  expect(ms).toBeLessThan(10_000);
-}, 60_000);
+  const make = (n: number) => {
+    const text = Array.from({ length: n * 37 }, (_, i) => `w${i % 97}`).join(' ');
+    return [
+      docx(`${p(text)}${p('end')}`),
+      docx(`${Array.from({ length: n }, (_, i) => table(i)).join('')}${p('end')}`),
+    ] as const;
+  };
+  expect(growth(make, 2000)).toBeLessThan(8);
+}, 120_000);
 
 test('a block with many links stays linear', () => {
-  const links = Array.from(
-    { length: 40_000 },
-    (_, i) => `<w:hyperlink r:id="rIdL1">${run(`l${i % 10} `)}</w:hyperlink>`
-  ).join('');
-  const block = `<w:sdt><w:sdtPr><w:tag w:val="t"/></w:sdtPr><w:sdtContent><w:p>${links}</w:p></w:sdtContent></w:sdt>`;
-  const doc = (text: string) =>
-    buildDocx({ body: block + p(text), hyperlinks: { rIdL1: 'https://example.com/' } });
-  const { ok, ms } = timed(doc('a'), doc('b'));
-  expect(ok).toBe(true);
-  expect(ms).toBeLessThan(10_000);
-}, 60_000);
+  const make = (n: number) => {
+    const links = Array.from(
+      { length: n },
+      (_, i) => `<w:hyperlink r:id="rIdL1">${run(`l${i % 10} `)}</w:hyperlink>`
+    ).join('');
+    const block = `<w:sdt><w:sdtPr><w:tag w:val="t"/></w:sdtPr><w:sdtContent><w:p>${links}</w:p></w:sdtContent></w:sdt>`;
+    const doc = (text: string) =>
+      buildDocx({ body: block + p(text), hyperlinks: { rIdL1: 'https://example.com/' } });
+    return [doc('a'), doc('b')] as const;
+  };
+  expect(growth(make, 10_000)).toBeLessThan(8);
+}, 120_000);
 
 test('a deleted paragraph of many tabs stays linear', () => {
-  const tabs = '<w:r><w:tab/></w:r>'.repeat(32_000);
-  const { ok, ms } = timed(docx(`<w:p>${tabs}</w:p>${p('end')}`), docx(p('end')));
-  expect(ok).toBe(true);
-  expect(ms).toBeLessThan(8_000);
-}, 60_000);
+  const make = (n: number) =>
+    [docx(`<w:p>${'<w:r><w:tab/></w:r>'.repeat(n)}</w:p>${p('end')}`), docx(p('end'))] as const;
+  expect(growth(make, 8000)).toBeLessThan(8);
+}, 120_000);
 
 test('smart tag and custom XML properties never land inside a revision', () => {
   const smartTag = (value: string) =>

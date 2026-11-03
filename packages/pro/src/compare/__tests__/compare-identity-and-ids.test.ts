@@ -99,9 +99,16 @@ test('many list instances sharing one definition merge in linear time', () => {
     `<w:lvlText w:val="%1."/></w:lvl></w:abstractNum>`;
   const doc = (text: string, count: number) =>
     buildDocx({ body: p(text), numbering: `${numbering}${nums(count)}</w:numbering>` });
-  const started = performance.now();
-  compared(doc('a', 40_000), doc('b', 40_000));
-  expect(performance.now() - started).toBeLessThan(8_000);
+  const time = (count: number) => {
+    const pair = [doc('a', count), doc('b', count)] as const;
+    const started = performance.now();
+    compared(...pair);
+    return performance.now() - started;
+  };
+  time(10_000);
+  const first = time(10_000);
+  // Four times the list instances: about four times the time when linear.
+  expect(time(40_000) / Math.max(first, 1)).toBeLessThan(8);
   // List definitions count against the block limit, so their merge is bounded too.
   const result = compareDocuments(doc('a', 60_000), doc('b', 60_000), {
     authorName: 'Test',

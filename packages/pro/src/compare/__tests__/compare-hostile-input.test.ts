@@ -181,10 +181,18 @@ test('new notes, comments, and list definitions avoid ids the original names but
 });
 
 test('many deleted paragraphs compare in linear time, and the limit counts every story', () => {
-  const started = performance.now();
-  const many = buildDocx({ body: p('a').repeat(30_000) });
-  expect(compare(many, buildDocx({ body: p('a') })).ok).toBe(true);
-  expect(performance.now() - started).toBeLessThan(15_000);
+  const one = buildDocx({ body: p('a') });
+  const time = (doc: Uint8Array) => {
+    const started = performance.now();
+    expect(compare(doc, one).ok).toBe(true);
+    return performance.now() - started;
+  };
+  const small = buildDocx({ body: p('a').repeat(7500) });
+  time(small);
+  const first = time(small);
+  const second = time(buildDocx({ body: p('a').repeat(30_000) }));
+  // Four times the paragraphs: about four times the time when linear, sixteen when quadratic.
+  expect(second / Math.max(first, 1)).toBeLessThan(8);
   // The bound counts notes too, and refuses before any revision is accepted.
   const notes: Record<number, string> = {};
   for (let id = 1; id <= 60_000; id++) notes[id] = '';
