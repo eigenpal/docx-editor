@@ -4,53 +4,83 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 /**
- * Drawing ids (`wp:docPr/@id`) are unique in a document. Content taken from the revised document
- * keeps its own id when the output does not use it, and takes the lowest free id otherwise.
+ * Drawing ids (`wp:docPr/@id`) and floating drawing z-orders (`wp:anchor/@relativeHeight`) are
+ * unique in a document; a repeated value is renumbered when the file opens, and a rejected
+ * drawing then differs from the original's. Content taken from the revised document keeps its
+ * own value when the output does not use it, and takes a free one otherwise.
  */
 import type { OoxmlPackage } from '@docx-editor.dev/core/store';
-import { DRAWING_ID_PLACEHOLDER, fromPlaceholder } from './units.ts';
+import { DRAWING_ID_PLACEHOLDER, fromPlaceholder, Z_ORDER_PLACEHOLDER } from './units.ts';
 import { escapeAttribute, isElement, type ElementNode } from './xml-fragments.ts';
 
-const PLACEHOLDER = new RegExp(`${DRAWING_ID_PLACEHOLDER}([^§"]*)§`, 'g');
+const ID_PLACEHOLDER = new RegExp(`${DRAWING_ID_PLACEHOLDER}([^§"]*)§`, 'g');
+const ORDER_PLACEHOLDER = new RegExp(`${Z_ORDER_PLACEHOLDER}([^§"]*)§`, 'g');
 const WRITTEN_ID = /<(?:[A-Za-z_][\w.-]*:)?docPr\b[^>]*?\sid="([^"]*)"/g;
+const WRITTEN_ORDER = /<(?:[A-Za-z_][\w.-]*:)?anchor\b[^>]*?\srelativeHeight="([^"]*)"/g;
 
-/** Hands out drawing ids that the output does not use. */
+/** Largest value of the unsigned 32-bit attributes both values are. */
+const MAX_VALUE = 0xffffffff;
+/** Step between z-orders, as editors space them, so new drawings keep room between them. */
+const Z_ORDER_STEP = 1024;
+
+/** Hands out drawing ids and z-orders that the output does not use. */
 export class DrawingIds {
-  readonly #used = new Set<string>();
-  #next = 1;
+  readonly #ids = new Set<string>();
+  readonly #orders = new Set<string>();
+  #nextId = 1;
 
-  /** Starts from the ids in the original's parts that `replaced` does not name. */
+  /** Starts from the values in the original's parts that `replaced` does not name. */
   constructor(base: OoxmlPackage, replaced: ReadonlySet<string>) {
     for (const [name, part] of base.parts) {
       if (replaced.has(name) || !part.root || !isElement(part.root)) continue;
       const stack: ElementNode[] = [part.root];
       for (let node = stack.pop(); node; node = stack.pop()) {
+        const own = (attribute: string) =>
+          node!.attributes.find((a) => a.localName === attribute && !a.namespaceUri)?.value;
         if (node.localName === 'docPr') {
-          const id = node.attributes.find((a) => a.localName === 'id' && !a.namespaceUri);
-          if (id) this.#used.add(id.value);
+          const id = own('id');
+          if (id !== undefined) this.#ids.add(id);
+        } else if (node.localName === 'anchor') {
+          const order = own('relativeHeight');
+          if (order !== undefined) this.#orders.add(order);
         }
         for (const child of node.children) if (isElement(child)) stack.push(child);
       }
     }
   }
 
-  /** Records the ids a story writes as they are (the original's content). */
+  /** Records the values a story writes as they are (the original's content). */
   reserveWritten(xml: string): void {
-    for (const match of xml.matchAll(WRITTEN_ID)) this.#used.add(match[1]!);
+    for (const match of xml.matchAll(WRITTEN_ID)) this.#ids.add(match[1]!);
+    for (const match of xml.matchAll(WRITTEN_ORDER)) this.#orders.add(match[1]!);
   }
 
-  /** `xml` with every revised drawing id numbered. */
+  /** `xml` with every revised drawing id and z-order numbered. */
   resolve(xml: string): string {
-    return xml.replace(PLACEHOLDER, (_, encoded: string) => {
-      const id = fromPlaceholder(encoded);
-      if (/^[1-9]\d{0,8}$/.test(id) && !this.#used.has(id)) {
-        this.#used.add(id);
-        return escapeAttribute(id);
-      }
-      while (this.#used.has(String(this.#next))) this.#next++;
-      const fresh = String(this.#next);
-      this.#used.add(fresh);
-      return fresh;
-    });
+    return xml
+      .replace(ID_PLACEHOLDER, (_, encoded: string) => {
+        const id = fromPlaceholder(encoded);
+        if (isValue(id) && !this.#ids.has(id)) {
+          this.#ids.add(id);
+          return escapeAttribute(id);
+        }
+        while (this.#ids.has(String(this.#nextId))) this.#nextId++;
+        const fresh = String(this.#nextId);
+        this.#ids.add(fresh);
+        return fresh;
+      })
+      .replace(ORDER_PLACEHOLDER, (_, encoded: string) => {
+        const order = fromPlaceholder(encoded);
+        if (!isValue(order)) return escapeAttribute(order);
+        // Above the revised value, so the drawing keeps its place among the new ones.
+        let value = Number(order);
+        while (this.#orders.has(String(value)) && value + Z_ORDER_STEP <= MAX_VALUE)
+          value += Z_ORDER_STEP;
+        const fresh = String(value);
+        this.#orders.add(fresh);
+        return fresh;
+      });
   }
 }
+
+const isValue = (value: string) => /^\d{1,10}$/.test(value) && Number(value) <= MAX_VALUE;

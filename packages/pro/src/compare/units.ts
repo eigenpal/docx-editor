@@ -154,6 +154,9 @@ export const REL_PLACEHOLDER = `${MARK}REL:`;
  */
 export const DRAWING_ID_PLACEHOLDER = `${MARK}DOCPR:`;
 const DRAWING_ID = /(<(?:[A-Za-z_][\w.-]*:)?docPr\b[^>]*?\sid=")([^"]*)"/g;
+/** A floating drawing's z-order (`wp:anchor/@relativeHeight`), unique in a document the same way. */
+export const Z_ORDER_PLACEHOLDER = `${MARK}ZORDER:`;
+const Z_ORDER = /(<(?:[A-Za-z_][\w.-]*:)?anchor\b[^>]*?\srelativeHeight=")([^"]*)"/g;
 
 const MARKERS = new Set([
   'bookmarkStart',
@@ -271,6 +274,11 @@ export class SideContext {
         DRAWING_ID,
         (_, lead: string, id: string) =>
           `${lead}${DRAWING_ID_PLACEHOLDER}${placeholderValue(unescapeXml(id))}§"`
+      )
+      .replace(
+        Z_ORDER,
+        (_, lead: string, value: string) =>
+          `${lead}${Z_ORDER_PLACEHOLDER}${placeholderValue(unescapeXml(value))}§"`
       );
   }
 

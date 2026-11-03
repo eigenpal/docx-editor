@@ -116,3 +116,30 @@ test('a drawing from the revised document never repeats a drawing id of the orig
   // revised id the original does not use stays as it is.
   expect(ids.sort()).toEqual(['1', '2', '5']);
 });
+
+test('a floating drawing from the revised document never repeats a z-order of the original', () => {
+  const floating = (rId: string) =>
+    inlineImage(rId, 1)
+      .replace(
+        '<wp:inline distT="0" distB="0" distL="0" distR="0">',
+        '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="251659264" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>'
+      )
+      .replace('<wp:docPr', '<wp:wrapNone/><wp:docPr')
+      .replace('</wp:inline>', '</wp:anchor>');
+  const original = buildDocx({
+    body: `<w:p>${floating('rIdA')}${run('Text.')}</w:p>`,
+    media: [{ name: 'a.png', bytes: new Uint8Array([1, 2, 3]), rId: 'rIdA' }],
+  });
+  const revised = buildDocx({
+    body: `<w:p>${floating('rIdB')}${run('Text.')}</w:p>`,
+    media: [{ name: 'b.png', bytes: new Uint8Array([4, 5, 6]), rId: 'rIdB' }],
+  });
+  const result = compareDocuments(original, revised, { date: DATE });
+  if (!result.ok) throw new Error(result.message);
+  const read = readOoxmlPackage(result.bytes);
+  if (!read.ok) throw new Error(read.reason);
+  const xml = serializeOoxmlPart(read.package.parts.get(read.package.mainDocumentPart)!);
+  const orders = [...xml.matchAll(/relativeHeight="([^"]*)"/g)].map((match) => match[1]);
+  // The original's drawing keeps its z-order; the new one takes the next free one above it.
+  expect(orders.sort()).toEqual(['251659264', '251660288']);
+});
