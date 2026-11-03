@@ -25,6 +25,18 @@ export function diffKeys(
   b: readonly string[],
   maxEdits = DEFAULT_MAX_EDITS
 ): DiffOp[] {
+  return diffKeysWithin(a, b, maxEdits) ?? coarseDiff(a, b);
+}
+
+/**
+ * The diff of `a` and `b`, or null when it needs more than `maxEdits` edits after the common
+ * prefix and suffix, so the caller can split the work instead of taking the coarse answer.
+ */
+export function diffKeysWithin(
+  a: readonly string[],
+  b: readonly string[],
+  maxEdits = DEFAULT_MAX_EDITS
+): DiffOp[] | null {
   let start = 0;
   while (start < a.length && start < b.length && a[start] === b[start]) start++;
   let endA = a.length;
@@ -33,9 +45,11 @@ export function diffKeys(
     endA--;
     endB--;
   }
+  const inner = middle(a, b, start, endA, start, endB, maxEdits);
+  if (!inner) return null;
   const out: DiffOp[] = [];
   for (let i = 0; i < start; i++) out.push({ op: 'eq', a: i, b: i });
-  pushAll(out, middle(a, b, start, endA, start, endB, maxEdits));
+  pushAll(out, inner);
   for (let i = 0; endA + i < a.length; i++) out.push({ op: 'eq', a: endA + i, b: endB + i });
   return out;
 }
@@ -48,7 +62,7 @@ function middle(
   b0: number,
   b1: number,
   maxEdits: number
-): DiffOp[] {
+): DiffOp[] | null {
   const n = a1 - a0;
   const m = b1 - b0;
   if (n === 0 && m === 0) return [];
@@ -80,12 +94,7 @@ function middle(
     }
     if (found >= 0) break;
   }
-  if (found < 0) {
-    return [
-      ...Array.from({ length: n }, (_, i) => ({ op: 'del' as const, a: a0 + i })),
-      ...Array.from({ length: m }, (_, i) => ({ op: 'ins' as const, b: b0 + i })),
-    ];
-  }
+  if (found < 0) return null;
   const reversed: DiffOp[] = [];
   let x = n;
   let y = m;
@@ -133,5 +142,66 @@ export function orderHunks(ops: readonly DiffOp[]): DiffOp[] {
     else inss.push(op);
   }
   flush();
+  return out;
+}
+
+/**
+ * Every item between the common prefix and suffix deleted, then every item inserted: always
+ * correct, if coarse. Deletions come first here, as they always have for this answer.
+ */
+function coarseDiff(a: readonly string[], b: readonly string[]): DiffOp[] {
+  let start = 0;
+  while (start < a.length && start < b.length && a[start] === b[start]) start++;
+  let endA = a.length;
+  let endB = b.length;
+  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) {
+    endA--;
+    endB--;
+  }
+  const out: DiffOp[] = [];
+  for (let i = 0; i < start; i++) out.push({ op: 'eq', a: i, b: i });
+  for (let i = start; i < endA; i++) out.push({ op: 'del', a: i });
+  for (let i = start; i < endB; i++) out.push({ op: 'ins', b: i });
+  for (let i = 0; endA + i < a.length; i++) out.push({ op: 'eq', a: endA + i, b: endB + i });
+  return out;
+}
+
+/**
+ * A diff that stays fine-grained past the edit limit. When the whole diff needs more edits,
+ * and `a` and `b` hold the same separators (equal keys, in the same order), the separators pair
+ * and each stretch between them is diffed on its own, within its own limit. Otherwise the
+ * answer is the coarse one. A document whose every paragraph changes a little then still shows
+ * each change, not one deletion of the whole text and one insertion of the new text.
+ */
+export function diffKeysBySeparators(
+  a: readonly string[],
+  b: readonly string[],
+  separatorA: (index: number) => boolean,
+  separatorB: (index: number) => boolean,
+  maxEdits = DEFAULT_MAX_EDITS
+): DiffOp[] {
+  const whole = diffKeysWithin(a, b, maxEdits);
+  if (whole) return whole;
+  const sa: number[] = [];
+  const sb: number[] = [];
+  for (let i = 0; i < a.length; i++) if (separatorA(i)) sa.push(i);
+  for (let i = 0; i < b.length; i++) if (separatorB(i)) sb.push(i);
+  if (sa.length === 0 || sa.length !== sb.length || sa.some((at, k) => a[at] !== b[sb[k]!]))
+    return coarseDiff(a, b);
+  const out: DiffOp[] = [];
+  let fromA = 0;
+  let fromB = 0;
+  for (let k = 0; k <= sa.length; k++) {
+    const toA = k < sa.length ? sa[k]! : a.length;
+    const toB = k < sb.length ? sb[k]! : b.length;
+    for (const op of diffKeys(a.slice(fromA, toA), b.slice(fromB, toB), maxEdits)) {
+      if (op.op === 'eq') out.push({ op: 'eq', a: op.a + fromA, b: op.b + fromB });
+      else if (op.op === 'del') out.push({ op: 'del', a: op.a + fromA });
+      else out.push({ op: 'ins', b: op.b + fromB });
+    }
+    if (k < sa.length) out.push({ op: 'eq', a: toA, b: toB });
+    fromA = toA + 1;
+    fromB = toB + 1;
+  }
   return out;
 }

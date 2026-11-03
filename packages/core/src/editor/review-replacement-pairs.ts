@@ -95,9 +95,13 @@ function pairReplacements(items: readonly ReviewItem[]): {
   for (let index = 0; index + 1 < revisions.length; index += 1) {
     const first = revisions[index]!;
     const second = revisions[index + 1]!;
+    const insertionFirst = first.revisionKind === 'insert';
+    // A deletion with the insertion after it, as typing over a selection writes, pairs first:
+    // an insertion before that deletion stays its own change, as it was before compare pairs.
+    const next = revisions[index + 2];
+    if (insertionFirst && next && pairable(second, next)) continue;
     // The pair takes the place of whichever half comes first.
-    const [deletion, insertion] =
-      first.revisionKind === 'insert' ? [second, first] : [first, second];
+    const [deletion, insertion] = insertionFirst ? [second, first] : [first, second];
     if (!pairable(deletion, insertion)) continue;
     const pair = pairOf(deletion, insertion, first);
     pairs.set(first, pair);

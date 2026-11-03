@@ -162,3 +162,28 @@ test('many fields inside one field with a long instruction stay linear', () => {
   const make = (n: number) => [docx(outer(n, 'old')), docx(outer(n, 'new'))] as const;
   expect(growth(make, 300)).toBeLessThan(8);
 }, 120_000);
+
+test('a word renamed in every paragraph shows each change, not one replacement of the text', () => {
+  // 2,000 paragraphs, one word changed in each: more edits than one diff takes, and no
+  // unchanged paragraph between them to split the work.
+  const doc = (word: string) =>
+    docx(
+      Array.from({ length: 2000 }, (_, i) =>
+        p(`Clause ${i}: the ${word} pays within 30 days.`)
+      ).join('')
+    );
+  const result = compare(doc('Supplier'), doc('Vendor'));
+  // One deletion and one insertion for each paragraph.
+  expect(result.ok && result.revisionCount).toBe(4000);
+}, 60_000);
+
+test('a renamed word with a paragraph added still compares, as one replacement of the text', () => {
+  // Different paragraph marks: the paragraphs cannot pair one to one, so the answer is coarse.
+  const doc = (word: string, extra: boolean) =>
+    docx(
+      Array.from({ length: 2000 }, (_, i) => p(`Clause ${i}: the ${word} pays.`)).join('') +
+        (extra ? p('An added closing clause.') : '')
+    );
+  const result = compare(doc('Supplier', false), doc('Vendor', true));
+  expect(result.ok && result.revisionCount).toBeGreaterThan(0);
+}, 60_000);

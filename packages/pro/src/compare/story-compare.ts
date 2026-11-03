@@ -11,7 +11,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * hunk is diffed as one token stream in which every paragraph mark is a token, so inserted,
  * deleted, split, and merged paragraphs all fall out of the same word-level diff.
  */
-import { diffKeys, type DiffOp } from './sequence-diff.ts';
+import { diffKeys, diffKeysBySeparators, type DiffOp } from './sequence-diff.ts';
 import {
   coalesceGaps,
   dropSparseMatches,
@@ -280,9 +280,13 @@ function emitTokens(
         dropSparseMatches(
           coalesceGaps(
             slideLeft(
-              diffKeys(
+              // Paragraph marks and blocks separate: past the edit limit, each paragraph pair is
+              // diffed on its own when both sides keep the same marks and blocks.
+              diffKeysBySeparators(
                 a.map((token) => token.key),
-                b.map((token) => token.key)
+                b.map((token) => token.key),
+                (index) => a[index]!.kind !== 'text',
+                (index) => b[index]!.kind !== 'text'
               ),
               a
             ),
