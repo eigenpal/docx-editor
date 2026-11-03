@@ -213,6 +213,47 @@ test('without a background engine, the session cannot stop a compare and reports
   session.cancel();
 });
 
+test('a worker that never starts falls back to the main thread compare', async () => {
+  const { editor, session } = open({
+    // A worker whose script is gone fails before its first progress message.
+    compareDocumentsInBackground: async () => {
+      throw new Error('The compare worker failed to run.');
+    },
+    compareDocuments: (_original, revised) => ({
+      ok: true,
+      package: readOk(revised),
+      revisionCount: 2,
+      changed: true,
+    }),
+  });
+  expect(await session.apply({ revised: docx('Revised text') })).toEqual({
+    ok: true,
+    revisionCount: 2,
+    changed: true,
+  });
+  expect(bodyText(editor)).toBe('Revised text');
+});
+
+test('a worker that fails after it started does not compare again on the main thread', async () => {
+  let mainThread = 0;
+  const { editor, session } = open({
+    compareDocumentsInBackground: async (_original, _revised, _options, control) => {
+      control.onProgress({ phase: 'reading', fraction: 0 });
+      throw new Error('The compare worker failed to run: out of memory.');
+    },
+    compareDocuments: (original) => {
+      mainThread += 1;
+      return { ok: true, package: original, revisionCount: 0, changed: false };
+    },
+  });
+  expect(await session.apply({ revised: docx('Revised text') })).toMatchObject({
+    ok: false,
+    code: 'failed',
+  });
+  expect(mainThread).toBe(0);
+  expect(bodyText(editor)).toBe('Original text');
+});
+
 test('the compareDocuments command stays synchronous with a background engine', () => {
   const { engine, calls } = heldEngine();
   const container = document.createElement('div');

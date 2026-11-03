@@ -308,10 +308,27 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
     if ('refused' in prepared) return prepared.refused;
     const surface = host.surface()!;
     const start = surface.session.currentPackage();
-    const result = await engine(writeOoxmlPackage(start), request.revised, prepared.options, {
-      signal,
-      onProgress,
-    });
+    // A worker reports progress as soon as it starts. One that fails before that never ran (for
+    // example, its script is gone after a deploy), so the compare runs on the main thread.
+    let started = false;
+    let result: Awaited<ReturnType<CompareDocumentsBackgroundEngine>>;
+    try {
+      result = await engine(writeOoxmlPackage(start), request.revised, prepared.options, {
+        signal,
+        onProgress: (progress) => {
+          started = true;
+          onProgress(progress);
+        },
+      });
+    } catch (error) {
+      if (started || signal.aborted) throw error;
+      onProgress({ phase: 'comparing', fraction: 0 });
+      await afterPaint();
+      signal.throwIfAborted();
+      if (host.surface() !== surface || surface.session.currentPackage() !== start)
+        return { ok: false, code: 'unsupported', reason: CHANGED_REASON };
+      return compare(request);
+    }
     if (!result.ok) return engineRefusal(result);
     const current = (): CanResult => {
       const allowed = canCompare();

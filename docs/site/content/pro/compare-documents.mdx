@@ -60,6 +60,8 @@ editor.attach(container);
 
 The editor starts one worker for each compare and ends it when the compare ends. While the worker runs, the main thread only copies the open document and applies the result. The `compareDocuments` command stays synchronous and always compares on the main thread.
 
+If the worker fails before it starts, for example because a deploy removed its script while the page stayed open, the dialog compares on the main thread instead. A worker that fails after it starts ends the compare with the `failed` code.
+
 A compare in a worker can end with two codes of its own:
 
 - `documentChanged`: the open document changed while the compare ran, so the result is not applied. The editor never compares again by itself; compare again to get a result for the current document.

@@ -130,8 +130,9 @@ export interface ReviewModuleContribution {
   readonly compareDocuments?: CompareDocumentsEngine;
   /**
    * The same compare off the main thread. When present, the Compare documents dialog uses it,
-   * reports progress, and can stop a running compare. The `compareDocuments` command stays
-   * synchronous and uses `compareDocuments`.
+   * reports progress, and can stop a running compare. If it rejects before its first progress
+   * report, the dialog compares with `compareDocuments` instead. The `compareDocuments` command
+   * stays synchronous and uses `compareDocuments`.
    */
   readonly compareDocumentsInBackground?: CompareDocumentsBackgroundEngine;
   /** Create the Compare documents dialog when a host opens it. */
