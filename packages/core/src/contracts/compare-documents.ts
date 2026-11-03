@@ -23,26 +23,6 @@ export interface CompareDocumentsRequest {
   readonly removeDateAndTime?: boolean;
 }
 
-/**
- * Why a compare was refused, as a stable code to translate with
- * `compareDocuments.errors.<code>` in `@docx-editor.dev/i18n`: every engine code
- * (`CompareDocumentsErrorCode`), plus the editor's own: `unavailable` (no review module,
- * document, or mount), `collaboration` (a collaboration session is attached), `viewing`,
- * `closed` (the dialog closed first), `empty` (no revised bytes), and `failed` (anything else).
- * The editor also answers `protected` for protection it enforces itself, such as forms or
- * comments protection.
- *
- * @public
- */
-export type CompareDocumentsRefusal =
-  | CompareDocumentsErrorCode
-  | 'unavailable'
-  | 'collaboration'
-  | 'viewing'
-  | 'closed'
-  | 'empty'
-  | 'failed';
-
 /** The outcome of one compare. @public */
 export type CompareDocumentsOutcome =
   | {
@@ -61,7 +41,7 @@ export type CompareDocumentsOutcome =
   | {
       readonly ok: false;
       /** Why the compare was refused. `compareDocuments.errors.<code>` translates it. */
-      readonly code: CompareDocumentsRefusal;
+      readonly code: CompareDocumentsErrorCode;
       /** Diagnostic detail, in English; not for display. */
       readonly message: string;
     };

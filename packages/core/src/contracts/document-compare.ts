@@ -16,9 +16,10 @@ export interface CompareDocumentsEngineOptions {
 }
 
 /**
- * Why a document compare was refused. The same codes name the editor's refusals
- * (`CompareDocumentsRefusal`), and `compareDocuments.errors.<code>` in
- * `@docx-editor.dev/i18n` translates each one.
+ * Why a compare was refused, as a stable code. `compareDocuments.errors.<code>` in
+ * `@docx-editor.dev/i18n` translates every code. Every entry point uses this one type: the
+ * engine and `compareDocuments` return the first six codes, and the editor command and dialog
+ * can also return the last six.
  *
  * @public
  */
@@ -39,7 +40,19 @@ export type CompareDocumentsErrorCode =
    */
   | 'protected'
   /** The differences include content that no tracked change can record. */
-  | 'unsupportedContent';
+  | 'unsupportedContent'
+  /** Editor only: no review module, no open document, or no mount. */
+  | 'unavailable'
+  /** Editor only: a collaboration session is attached. */
+  | 'collaboration'
+  /** Editor only: the document is open for viewing only. */
+  | 'viewing'
+  /** Editor only: the dialog closed, or the compare was canceled, before it finished. */
+  | 'closed'
+  /** Editor only: the revised file is empty. */
+  | 'empty'
+  /** Editor only: any other failure. */
+  | 'failed';
 
 /** Result of one document compare. @public */
 export type CompareDocumentsEngineResult =

@@ -666,8 +666,8 @@ export {
 export type {
   CompareDocumentsChromeHandlers,
   CompareDocumentsDialogSession,
+  CompareDocumentsErrorCode,
   CompareDocumentsOutcome,
-  CompareDocumentsRefusal,
   CompareDocumentsRequest,
 } from '@docx-editor.dev/core/editor';
 

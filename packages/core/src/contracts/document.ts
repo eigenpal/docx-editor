@@ -52,7 +52,6 @@ export type {
   Block,
   ColorValue,
   CompareDocumentsOutcome,
-  CompareDocumentsRefusal,
   CompareDocumentsErrorCode,
   ContainerRef,
   ContentControl,

@@ -16,10 +16,8 @@ import type {
   EditorModule,
   ReviewModuleContribution,
 } from '../../contracts/modules.ts';
-import type {
-  CompareDocumentsDialogSession,
-  CompareDocumentsRefusal,
-} from '../../contracts/compare-documents.ts';
+import type { CompareDocumentsDialogSession } from '../../contracts/compare-documents.ts';
+import type { CompareDocumentsErrorCode } from '../../contracts/document-compare.ts';
 import en from '../../../../i18n/en.json' with { type: 'json' };
 import { PRO_REVIEW_REASON } from '../opening-editing-mode.ts';
 import { COMPARE_COLLABORATION_REASON } from '../compare-documents-state.ts';
@@ -423,7 +421,7 @@ describe('compare documents dialog session', () => {
 // Every refusal code, engine codes included, has a message: the dialogs translate
 // `compareDocuments.errors.<reason>` with a cast the type checker cannot follow.
 test('every compare refusal has an English message', () => {
-  const reasons: Record<CompareDocumentsRefusal, true> = {
+  const reasons: Record<CompareDocumentsErrorCode, true> = {
     invalidOptions: true,
     invalidOriginal: true,
     invalidRevised: true,

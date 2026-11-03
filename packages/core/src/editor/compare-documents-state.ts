@@ -4,7 +4,6 @@ import type {
   CompareDocumentsChromeHandlers,
   CompareDocumentsDialogSession,
   CompareDocumentsOutcome,
-  CompareDocumentsRefusal,
   CompareDocumentsRequest,
 } from '../contracts/compare-documents.ts';
 import type { CompareDocumentsErrorCode } from '../contracts/document-compare.ts';
@@ -47,7 +46,7 @@ type CompareExec = ExecResult & {
 function refusalOf(
   result: { readonly code?: string; readonly reason?: string },
   engineCode?: CompareDocumentsErrorCode
-): CompareDocumentsRefusal {
+): CompareDocumentsErrorCode {
   // The engine's codes are refusal codes as they are.
   if (engineCode) return engineCode;
   if (result.reason === COMPARE_COLLABORATION_REASON) return 'collaboration';
