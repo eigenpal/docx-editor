@@ -226,7 +226,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Type Chinese, Japanese, and Korean text with the input method of the operating system, and format it like other text. Runs select their East Asian font through w:rFonts, theme fonts, and language hints. Line breaking keeps closing punctuation, small kana, and full-width number groups with their characters. Korean text can wrap by word. Use googleFonts({ cjk: true }) for regional Noto Sans fonts, or install @docx-editor.dev/fonts-cjk for one self-hosted fallback font. Both load in the background by default. PDF export on Node.js uses the fonts-cjk package when it is installed. The font picker shows the East Asian font of selected East Asian text; spaces, punctuation, and numbers between East Asian words do not change it. An East Asian font pick applies to the whole selection; a Latin font pick applies only to Latin letters and numbers. The i18n package includes Japanese and Simplified Chinese interface translations. Horizontal text is supported; vertical composition (w:textDirection) renders only in table cells. See East Asian typography for spacing and punctuation compression.',
+      'Type Chinese, Japanese, and Korean text with the input method of the operating system, and format it like other text. Runs select their East Asian font through w:rFonts, theme fonts, and language hints. Line breaking keeps closing punctuation, small kana, and full-width number groups with their characters. Korean text can wrap by word. When w:wordWrap is off, lines can break inside words; Latin words stay whole only in Korean-language runs of a paragraph whose mark is also Korean. Use googleFonts({ cjk: true }) for regional Noto Sans fonts, or install @docx-editor.dev/fonts-cjk for one self-hosted fallback font. Both load in the background by default. PDF export on Node.js uses the fonts-cjk package when it is installed. The font picker shows the East Asian font of selected East Asian text; spaces, punctuation, and numbers between East Asian words do not change it. An East Asian font pick applies to the whole selection; a Latin font pick applies only to Latin letters and numbers. The i18n package includes Japanese and Simplified Chinese interface translations. Horizontal text is supported; vertical composition (w:textDirection) renders only in table cells. See East Asian typography for spacing and punctuation compression.',
     docsLink: '/docs/2.x/guides/cjk',
   },
   {
@@ -909,10 +909,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Section vertical alignment (vAlign)',
     category: 'layout',
     editing: 'none',
-    rendering: 'none',
+    rendering: 'partial',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Round-trips; page content stays top-aligned.',
+    notes:
+      'Centered and bottom-aligned sections place the body between the top and bottom of the text area on every page, below a header that is taller than its margin. The empty paragraph that ends a section takes no room. Justified sections spread the free height between paragraphs. These pages stay top-aligned: pages that hold more than one section or a continuous section break, pages of multi-column sections, pages with footnotes or endnotes, pages with text frames, floating tables, or drawings that wrap text in the body, header, or footer, pages where a drawing that moves with its paragraph is cut by the page edge or its line, and justified pages that hold a table.',
   },
   {
     id: 'layout.background',

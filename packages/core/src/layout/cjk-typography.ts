@@ -66,7 +66,15 @@ export interface CjkParagraphTypography {
    * resolved) means the authored switch decides.
    */
   readonly hangingPunctuation?: boolean;
+  /** `w:wordWrap` is off: lines may open between any two characters, not only between words. */
   readonly characterWrap: boolean;
+  /**
+   * Character wrapping keeps Latin words whole in Korean text: the paragraph mark and the run
+   * on both sides of a boundary resolve to a Korean East Asian language. Set only with
+   * `characterWrap`.
+   * @internal
+   */
+  readonly koreanWordWrap?: true;
   /** Automatic spacing at number/East Asian boundaries; absent means enabled. */
   readonly autoSpaceDN?: boolean;
   /** Automatic spacing at Latin/East Asian boundaries; absent means enabled. */
@@ -170,9 +178,29 @@ function compatFlag(compat: OoxmlElement, name: string): boolean {
   return false;
 }
 
+/**
+ * Whether cascaded run properties name Korean as their East Asian language. Only
+ * `w:lang/@w:eastAsia` counts here: a Korean `w:val` alone does not make text Korean for
+ * character wrapping, and a `w:val` in another language does not cancel an inherited
+ * Korean `w:eastAsia`.
+ */
+export function eastAsiaIsKorean(props: readonly OoxmlProperty[]): boolean {
+  let korean = false;
+  for (const prop of props) {
+    const eastAsia = prop.localName === 'lang' ? prop.attributes?.eastAsia : undefined;
+    if (eastAsia) korean = /^ko(?:-|$)/i.test(eastAsia);
+  }
+  return korean;
+}
+
+/**
+ * `markRunProperties` is the paragraph mark's cascaded run properties: its East Asian language
+ * decides whether character wrapping keeps Latin words whole (`koreanWordWrap`).
+ */
 export function resolveCjkTypography(
   props: readonly OoxmlProperty[],
-  settings?: CjkTypographySettings
+  settings?: CjkTypographySettings,
+  markRunProperties?: readonly OoxmlProperty[]
 ): CjkParagraphTypography {
   let { kinsoku, overflowPunctuation, characterWrap } = DEFAULT_CJK_TYPOGRAPHY;
   let justified = false;
@@ -209,6 +237,9 @@ export function resolveCjkTypography(
     hangingPunctuation:
       overflowPunctuation && settings !== undefined && (distributed || hangingAlignment),
     characterWrap,
+    ...(characterWrap && markRunProperties && eastAsiaIsKorean(markRunProperties)
+      ? { koreanWordWrap: true as const }
+      : {}),
     autoSpaceDN,
     autoSpaceDE,
     ...(spacingOff && distributed ? { automaticSpacingNeedsEastAsianFont: true as const } : {}),

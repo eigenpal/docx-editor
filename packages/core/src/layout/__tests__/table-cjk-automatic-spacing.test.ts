@@ -206,12 +206,17 @@ test('a custom unbreakable mixed-script group retains its internal directional g
 });
 
 test('Korean whole-word minimums retain internal text and omit only legal boundary gaps', () => {
+  const korean = '<w:lang w:eastAsia="ko-KR"/>';
   const result = widths(
-    run('한글AB', 24, '<w:lang w:eastAsia="ko-KR"/>'),
-    '<w:wordWrap w:val="0"/>'
+    run('한글AB', 24, korean),
+    `<w:wordWrap w:val="0"/><w:rPr>${korean}</w:rPr>`
   );
   expect(result.min).toBeCloseTo(natural(12, 2), 8);
   expect(result.max).toBeCloseTo(natural(12, 4) + 3, 8);
+  // Without a Korean paragraph mark, character wrapping divides the Latin word as well.
+  const divided = widths(run('한글AB', 24, korean), '<w:wordWrap w:val="0"/>');
+  expect(divided.min).toBeCloseTo(natural(12), 8);
+  expect(divided.max).toBeCloseTo(result.max, 8);
 });
 
 test('an atomic field result prevents an automatic gap across its source range', () => {

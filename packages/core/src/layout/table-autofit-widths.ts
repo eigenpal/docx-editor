@@ -320,7 +320,11 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
     ),
     measurer
   );
-  const typography = resolveCjkTypography(layoutInputs.props, styleCascade?.typography);
+  const typography = resolveCjkTypography(
+    layoutInputs.props,
+    styleCascade?.typography,
+    layoutInputs.markRunProperties
+  );
   const automaticSpacing = automaticAutofitSpacing(typography, measurer);
   let previousText: Parameters<typeof automaticSpacing>[3];
   const cjkBreaks = cjkAutofitBreaks(pieces, layoutInputs, measurer, styleCascade);
