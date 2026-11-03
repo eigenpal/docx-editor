@@ -107,6 +107,33 @@ test('a boundary stays closed only between two Korean runs', () => {
   expect(bodyLines(layout(runs, KO))).toEqual([DIVIDED]);
 });
 
+test('only the East Asian language attribute makes text Korean', () => {
+  const val = (language: string) => `<w:lang w:val="${language}"/>`;
+  // A Korean w:val on the mark and the run, or in the defaults, does not keep words whole.
+  const koreanVal = paragraph(run(LATIN, val('ko-KR')), `${OFF}<w:rPr>${val('ko-KR')}</w:rPr>`);
+  expect(bodyLines(layout(koreanVal))).toEqual([DIVIDED]);
+  expect(bodyLines(layout(paragraph(run(LATIN)), val('ko-KR')))).toEqual([DIVIDED]);
+  // A w:val in another language does not cancel an inherited Korean East Asian language,
+  // on the run or on the mark.
+  expect(bodyLines(layout(paragraph(run(LATIN, val('ja-JP'))), KO))).toEqual([WHOLE]);
+  const japaneseMark = paragraph(run(LATIN), `${OFF}<w:rPr>${val('ja-JP')}</w:rPr>`);
+  expect(bodyLines(layout(japaneseMark, KO))).toEqual([WHOLE]);
+});
+
+test('a combining mark in its own run sets the left side of the next boundary', () => {
+  const COMBINING = '́';
+  // The mark joins the cluster of "b", but the boundary after it touches the Japanese run.
+  const split = (middle: string) =>
+    paragraph(run('alpha b', KO) + run(COMBINING, middle) + run('ravo charlie delta', KO));
+  expect(bodyLines(layout(split(KO), KO))).toEqual([
+    [`alpha `, `b${COMBINING}ravo `, 'charlie ', 'delta'],
+  ]);
+  // With a Japanese mark run, the boundary opens; "ravo" in the Korean run stays whole.
+  expect(bodyLines(layout(split(JA), KO))).toEqual([
+    [`alpha b${COMBINING}`, 'ravo ', 'charlie ', 'delta'],
+  ]);
+});
+
 test('table cell minimum widths follow the same rule', () => {
   const minimum = (defaults: string) => {
     const source = document(paragraph(run('abcdefgh')));

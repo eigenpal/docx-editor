@@ -178,9 +178,20 @@ function compatFlag(compat: OoxmlElement, name: string): boolean {
   return false;
 }
 
-/** Whether an East Asian language tag names Korean. */
-export const isKoreanLanguage = (language: string | undefined): boolean =>
-  language !== undefined && /^ko(?:-|$)/i.test(language);
+/**
+ * Whether cascaded run properties name Korean as their East Asian language. Only
+ * `w:lang/@w:eastAsia` counts here: a Korean `w:val` alone does not make text Korean for
+ * character wrapping, and a `w:val` in another language does not cancel an inherited
+ * Korean `w:eastAsia`.
+ */
+export function eastAsiaIsKorean(props: readonly OoxmlProperty[]): boolean {
+  let korean = false;
+  for (const prop of props) {
+    const eastAsia = prop.localName === 'lang' ? prop.attributes?.eastAsia : undefined;
+    if (eastAsia) korean = /^ko(?:-|$)/i.test(eastAsia);
+  }
+  return korean;
+}
 
 /**
  * `markRunProperties` is the paragraph mark's cascaded run properties: its East Asian language
@@ -226,7 +237,7 @@ export function resolveCjkTypography(
     hangingPunctuation:
       overflowPunctuation && settings !== undefined && (distributed || hangingAlignment),
     characterWrap,
-    ...(characterWrap && markRunProperties && isKoreanLanguage(eastAsianLanguage(markRunProperties))
+    ...(characterWrap && markRunProperties && eastAsiaIsKorean(markRunProperties)
       ? { koreanWordWrap: true as const }
       : {}),
     autoSpaceDN,

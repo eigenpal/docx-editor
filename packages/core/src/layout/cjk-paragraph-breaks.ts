@@ -19,7 +19,7 @@ import {
 } from './cjk-line-break.ts';
 import {
   eastAsianLanguage,
-  isKoreanLanguage,
+  eastAsiaIsKorean,
   kinsokuCharacters,
   koreanFinalMarkHangs,
   type CjkParagraphTypography,
@@ -141,6 +141,11 @@ export function cjkParagraphBreaks(
     eastAsianContext.push(context || isCjk(cluster.text.codePointAt(0)!));
   }
   const languages = pieces.map((piece) => eastAsianLanguage(piece.props));
+  // Korean runs keep Latin words whole under character wrapping (`koreanWordWrap`).
+  const koreanRuns = policy.koreanWordWrap
+    ? pieces.map((piece) => eastAsiaIsKorean(piece.props))
+    : undefined;
+  let lastPieceIndex = 0;
   // The paragraph's last cluster before trailing whitespace.
   let lastVisible = clusters.length - 1;
   while (lastVisible > 0 && /^\s+$/u.test(clusters[lastVisible]!.text)) lastVisible--;
@@ -251,15 +256,14 @@ export function cjkParagraphBreaks(
     // Character wrapping opens every boundary, inside Latin words too, except in Korean text:
     // there, with a Korean paragraph mark and Korean runs on both sides, only Hangul
     // syllables wrap one by one and other words stay whole.
+    // The left side is the run holding the boundary's previous code unit: a combining mark in
+    // its own run belongs to the left cluster but sets the left run.
+    while (lastPieceIndex + 1 < pieces.length && starts.get(pieces[lastPieceIndex + 1]!)! <= at - 1)
+      lastPieceIndex++;
     const hangulPair = isHangul(beforeBase) && isHangul(after);
     const wrapCharacters =
       policy.characterWrap &&
-      (hangulPair ||
-        !(
-          policy.koreanWordWrap &&
-          isKoreanLanguage(languages[leftPieceIndex]) &&
-          isKoreanLanguage(languages[pieceIndex])
-        ));
+      (hangulPair || !(koreanRuns?.[lastPieceIndex] && koreanRuns[pieceIndex]));
     const koreanWord = hangulPair && !wrapCharacters;
     const opens =
       latinCuts.has(at) ||
