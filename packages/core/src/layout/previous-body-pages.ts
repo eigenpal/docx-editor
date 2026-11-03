@@ -16,7 +16,13 @@ const bodyLayouts = new WeakMap<SemanticLayout, SemanticLayout>();
  * index and position the sheets before it gave up.
  */
 export function previousBodyLayout(layout: SemanticLayout | null): SemanticLayout | null {
-  if (!layout || !layout.pages.some((page) => page.noteStream !== undefined)) return layout;
+  if (!layout) return layout;
+  // Every body pass of every section asks; most layouts hold no note-only sheet.
+  let notes = false;
+  for (let at = 0; at < layout.pages.length && !notes; at += 1) {
+    notes = layout.pages[at]!.noteStream !== undefined;
+  }
+  if (!notes) return layout;
   const cached = bodyLayouts.get(layout);
   if (cached) return cached;
   const pages: PageRecord[] = [];
