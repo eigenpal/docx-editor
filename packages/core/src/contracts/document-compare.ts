@@ -64,8 +64,9 @@ export type CompareDocumentsEngineResult =
        */
       readonly package: OoxmlPackage;
       /**
-       * Revision elements written. A replacement counts its deletion and its insertion, and a
-       * move counts both ends, so this is not the number of review items.
+       * Tracked changes recorded, one per review decision: the items that `revisions`
+       * collections and the review pane list, summed over the body, headers, footers, and
+       * notes. A replaced word counts its deletion and its insertion.
        */
       readonly revisionCount: number;
       /**

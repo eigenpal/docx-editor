@@ -14,6 +14,7 @@ import {
   applyTreeOp,
   ooxmlTreesEqual,
   readOoxmlPackage,
+  revisionItemsOf,
   type OoxmlNode,
   type OoxmlPackage,
   type OoxmlPart,
@@ -301,9 +302,26 @@ function compareOnce(
     ok: true,
     bytes: assembled.bytes,
     package: assembled.pkg,
-    revisionCount: ctx.revisionCount,
+    revisionCount: ctx.revisionCount === 0 ? 0 : reviewItemCount(assembled.pkg),
     changed: true,
   };
+}
+
+/** Roots of the stories a reviewer reviews: the body, headers, footers, and notes. */
+const REVIEW_ROOTS = new Set(['document', 'hdr', 'ftr', 'footnotes', 'endnotes']);
+
+/**
+ * Tracked changes as a reviewer sees them: one per decision, as `document.revisions` and the
+ * editor's review queue list them, summed over every story.
+ */
+function reviewItemCount(pkg: OoxmlPackage): number {
+  let count = 0;
+  for (const part of pkg.parts.values()) {
+    const root = part.root as ElementNode;
+    const story = REVIEW_ROOTS.has(root.localName) && root.namespaceUri === W_NS;
+    if (story || part.name === pkg.mainDocumentPart) count += revisionItemsOf(part).length;
+  }
+  return count;
 }
 
 /** Why an option is unusable, or null. Every check matches a documented option type. */

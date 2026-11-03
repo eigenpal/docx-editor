@@ -15,6 +15,7 @@ import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { CompareTarget, DocxEditor } from '@docx-editor.dev/editor-api';
 import { DocxEditor as BrowserDocxEditor } from '@docx-editor.dev/editor-api/browser';
 import { reviewModule } from '../../../../pro/src/review/review-module.ts';
+import { compareDocuments } from '../../../../pro/src/compare/index.ts';
 import { buildDocx } from '../../../../../scripts/compare-corpus/docx-builder.ts';
 import { docx, p } from './support/documents.ts';
 
@@ -291,5 +292,38 @@ test('browser compare refuses without the review module', async () => {
     runtime.dispose();
     editor.destroy();
     container.remove();
+  }
+});
+
+// `revisionCount` counts what a reviewer decides, so it equals the number of items
+// `document.revisions` lists for the same compare.
+test('the compare revision count equals the listed revisions', async () => {
+  const moved = 'This paragraph moves to the end of the document.';
+  const bold = (text: string) =>
+    `<w:p><w:r><w:t xml:space="preserve">Two </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+  const cases: [Uint8Array, Uint8Array][] = [
+    [ORIGINAL, REVISED],
+    [docx(p('One.') + p('Three.')), docx(p('One.') + bold('bold and more.') + p('Three.'))],
+    [
+      docx(p(moved) + p('First kept.') + p('Second kept.') + p('Last.')),
+      docx(p('First kept.') + p('Second kept.') + p(moved) + p('Last.')),
+    ],
+  ];
+  for (const [original, revised] of cases) {
+    const result = compareDocuments(original, revised, { authorName: 'Legal' });
+    if (!result.ok) throw new Error(result.message);
+    const runtime = await DocxEditor.createServer(result.bytes);
+    try {
+      const listed = await runtime.run(async (context) => {
+        const revisions = context.document.revisions;
+        revisions.load('items/type');
+        await context.sync();
+        return revisions.items.length;
+      });
+      expect(result.revisionCount).toBeGreaterThan(0);
+      expect(result.revisionCount).toBe(listed);
+    } finally {
+      runtime.dispose();
+    }
   }
 });

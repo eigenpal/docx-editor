@@ -62,7 +62,7 @@ if (!outcome?.ok) {
 The result's `compareDocuments` field holds the outcome of every `compareDocuments` command. A refused compare carries a `code`, such as `tooLarge` or `protected`. The `compareDocuments.errors.*` keys of `@docx-editor.dev/i18n` translate every code. A successful compare reports `changed` and `revisionCount`:
 
 - `changed` is `false` when the documents have no differences. Nothing is recorded.
-- `revisionCount` counts revision elements, not review items. A replaced word counts a deletion and an insertion.
+- `revisionCount` counts review items, as `revisions` collections and the review pane list them, in the body, headers, footers, and notes. A replaced word counts a deletion and an insertion.
 - `changed` is `true` with a `revisionCount` of 0 when the only differences take no tracked change: formatting with detection off, or the original's own tracked changes, which a compare accepts.
 
 If you omit `authorName`, the revisions carry the editor's author. If the editor has no author, they carry the revised document's last author.
