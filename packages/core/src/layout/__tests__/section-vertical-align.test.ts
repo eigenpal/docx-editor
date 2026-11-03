@@ -398,25 +398,41 @@ describe('section vertical alignment with furniture and drawings', () => {
     expect(moved(1)).toBeGreaterThan(0);
   });
 
+  /** A 36pt square inline picture in a paragraph of its own. */
+  const inlinePicture = (spacing: string, effectEmu = 0, rotation = 0) =>
+    `<w:p><w:pPr>${spacing}</w:pPr><w:r><w:drawing>` +
+    '<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="457200" cy="457200"/>' +
+    `<wp:effectExtent l="${effectEmu}" t="0" r="${effectEmu}" b="0"/>` +
+    '<wp:docPr id="2" name="pic2"/>' +
+    `<a:graphic><a:graphicData uri="${PIC}"><pic:pic><pic:nvPicPr>` +
+    '<pic:cNvPr id="2" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
+    '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+    `<pic:spPr><a:xfrm rot="${rotation}"><a:ext cx="457200" cy="457200"/></a:xfrm>` +
+    '<a:prstGeom prst="rect"/></pic:spPr>' +
+    '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
+
+  test('an inline picture in a line that holds it moves with the body', () => {
+    const body = p('before') + inlinePicture('');
+    const top = tops(withDrawing(body + sectPr()));
+    const centered = tops(withDrawing(body + sectPr('center')));
+    expect(centered[0]!).toBeGreaterThan(top[0]!);
+  });
+
   test('a page with an inline picture cut by its line stays top-aligned', () => {
+    const exact = '<w:spacing w:line="280" w:lineRule="exact"/>';
     // Wide effect extents paint past the extent sideways while the line cuts it vertically.
-    for (const effect of [0, 228600]) {
-      const inline =
-        `<w:p><w:pPr><w:spacing w:line="280" w:lineRule="exact"/></w:pPr><w:r><w:drawing>` +
-        '<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="457200" cy="457200"/>' +
-        `<wp:effectExtent l="${effect}" t="0" r="${effect}" b="0"/>` +
-        '<wp:docPr id="2" name="pic2"/>' +
-        `<a:graphic><a:graphicData uri="${PIC}"><pic:pic><pic:nvPicPr>` +
-        '<pic:cNvPr id="2" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
-        '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
-        '<pic:spPr><a:xfrm><a:ext cx="457200" cy="457200"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
-        '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
-      const body = p('before') + inline;
+    // Turned a quarter, the same picture paints a box as large as its extent.
+    for (const [effect, rotation] of [
+      [0, 0],
+      [228600, 0],
+      [228600, 5400000],
+    ] as const) {
+      const body = p('before') + inlinePicture(exact, effect, rotation);
       const top = withDrawing(body + sectPr());
       const fragment = top.pages[0]!.fragments[1]!;
       if (fragment.kind !== 'paragraph') throw new Error('expected a paragraph');
       const drawing = fragment.lines[0]!.drawings![0]!;
-      expect(drawing.paintBounds.height).toBeLessThan(drawing.height);
+      expect(drawing.paintBounds.y).toBeGreaterThan(drawing.y);
       expect(tops(withDrawing(body + sectPr('center')))).toEqual(tops(top));
     }
   });

@@ -291,12 +291,13 @@ function shiftPageBody(
   return { fragments, anchoredDrawings: anchoredDrawings && Object.freeze(anchoredDrawings) };
 }
 
-/** Whether a page holds an inline drawing that shows less than its extent. */
+/** Whether a page holds an inline drawing that its line or the body may cut. */
 function holdsClippedInlineDrawing(blocks: readonly BlockFragmentRecord[]): boolean {
   for (const block of blocks) {
     if (block.kind === 'paragraph') {
       for (const line of block.lines)
-        for (const drawing of line.drawings ?? []) if (inlineDrawingClipped(drawing)) return true;
+        for (const drawing of line.drawings ?? [])
+          if (inlineDrawingClipped(drawing, line.box)) return true;
     } else
       for (const row of block.rows)
         for (const cell of row.cells) if (holdsClippedInlineDrawing(cell.blocks)) return true;
@@ -305,14 +306,15 @@ function holdsClippedInlineDrawing(blocks: readonly BlockFragmentRecord[]): bool
 }
 
 /**
- * Whether an inline drawing is cut by its line or the body. Effects and flips only grow the
- * painted bounds around the extent, so an upright drawing whose bounds do not cover its extent
- * is cut. A turned drawing's bounds cover an area at least as large as its extent.
+ * Whether an inline drawing may be cut: its extent reaches past its line (an exact line height
+ * cuts it there, at any rotation), or, upright, its painted bounds do not cover its extent.
+ * Effects and flips only grow the painted bounds around the extent.
  */
-function inlineDrawingClipped(drawing: InlineDrawingRecord): boolean {
+function inlineDrawingClipped(drawing: InlineDrawingRecord, line: LayoutBox): boolean {
+  if (drawing.y < line.y - 0.01 || drawing.y + drawing.height > line.y + line.height + 0.01)
+    return true;
+  if (drawing.transform.rotationDegrees % 180 !== 0) return false;
   const paint = drawing.paintBounds;
-  if (drawing.transform.rotationDegrees % 180 !== 0)
-    return paint.width * paint.height < drawing.width * drawing.height - 0.01;
   return (
     paint.y > drawing.y + 0.01 ||
     paint.y + paint.height < drawing.y + drawing.height - 0.01 ||
