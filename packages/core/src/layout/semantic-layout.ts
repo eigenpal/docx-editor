@@ -26,6 +26,7 @@ import { retainedFurnitureWrap } from './furniture-drawing-exclusion.ts';
 import { tocLinkRanges, tocLinkStyleToken } from './toc-link-formatting.ts';
 import { tocCodeRanges } from './field-code-toc.ts';
 import { tocIdsToken, type TocIdSets } from './toc-id-sets.ts';
+import { createLiveExclusionZones } from './live-exclusion-zones.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 import * as sectionPrep from './section-preparation.ts';
 import { resolveListAutoSpacing } from './list-auto-spacing.ts';
@@ -629,7 +630,10 @@ function* layoutBlocksPass(
   );
   let exclusionPageIndex = -1;
   let currentPageZones: readonly ExclusionZone[] = Object.freeze([]);
-  const pageExclusionZones = (): readonly ExclusionZone[] => {
+  const liveZones = createLiveExclusionZones(options, columns, contentWidthForReflow);
+  const pageExclusionZones = (): readonly ExclusionZone[] =>
+    liveZones(pages, pendingAnchoredDrawings, previousPassZones());
+  const previousPassZones = (): readonly ExclusionZone[] => {
     const index = pages.length;
     if (exclusionPageIndex === index) return currentPageZones;
     const bodyZones = options.drawingExclusionZonesByPage?.get(index) ?? Object.freeze([]);
