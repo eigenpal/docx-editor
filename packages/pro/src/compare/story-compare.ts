@@ -56,8 +56,9 @@ export function compareContainer(
   wholeStory = false
 ): string {
   if (base.length === 0 && revised.length === 0) return '';
-  // Markers after the last paragraph (a bookmark or permission end) are not content: the final
-  // paragraph mark is the one before them, so they compare on their own after it.
+  // Markers after the last paragraph (a bookmark or permission end, or an element the container
+  // does not allow) are not content: the final paragraph mark is the one before them, so they
+  // compare on their own after it.
   const baseEnd = contentEnd(base);
   const revisedEnd = contentEnd(revised);
   if (
@@ -139,16 +140,19 @@ const controlsOf = (atom: Atom) =>
     .map((wrapper) => wrapper.key)
     .join('\u0003');
 
-/** Range markers, which hold no content of their own. */
-const RANGE_MARKER =
-  /^(?:bookmarkStart|bookmarkEnd|permStart|permEnd|proofErr|commentRangeStart|commentRangeEnd|(?:moveFrom|moveTo)Range(?:Start|End))$/;
+/**
+ * Block-level elements other than paragraphs, tables, and content controls that hold content.
+ * Every other one (range markers, proofing marks, and elements a block container does not
+ * allow) holds no content of its own.
+ */
+const CONTENT_BLOCK = /^(?:customXml|altChunk|oMathPara|oMath)$/;
 
-/** The end of a container's content: the index after its last unit that is not a range marker. */
+/** The end of a container's content: the index after its last unit that holds content. */
 function contentEnd(units: readonly Unit[]): number {
   let end = units.length;
   while (end > 0) {
     const unit = units[end - 1]!;
-    if (unit.kind !== 'opaque' || !RANGE_MARKER.test(unit.node.localName)) break;
+    if (unit.kind !== 'opaque' || CONTENT_BLOCK.test(unit.node.localName)) break;
     end--;
   }
   return end;

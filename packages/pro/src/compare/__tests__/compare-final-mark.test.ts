@@ -41,6 +41,15 @@ test('a bookmark end after the last paragraph leaves the final mark unmarked', (
   expect(last).toContain('<w:pPrChange');
 });
 
+test('an element the body does not allow after the last paragraph leaves the final mark', () => {
+  const stray = '<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="auto"/></w:pBdr>';
+  const last = lastParagraph(
+    `${para('Kept.')}${para('Content after the break.')}`,
+    `${para('Kept.')}${para('A new closing sentence.')}${stray}`
+  );
+  expect(last).not.toMatch(/<w:pPr>(?:(?!<\/w:pPr>).)*<w:rPr>(?:(?!<\/w:rPr>).)*<w:(?:del|ins)\b/s);
+});
+
 test('the final mark stays unmarked without trailing markers too', () => {
   const last = lastParagraph(
     `${para('Kept.')}${para('Invoices are due in 30 days.')}`,
