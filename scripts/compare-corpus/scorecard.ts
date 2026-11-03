@@ -58,8 +58,18 @@ interface DecideScore {
   clean: number;
   noise: number;
   excess: number;
+  /**
+   * Excess cases with an extra difference other than a table or section property record. The
+   * reference editor rewrites the properties of a table in a document with no default table
+   * style and reports its own rewrite as a difference, so property records alone are not
+   * evidence of a wrong change.
+   */
+  excessBeyondProperties: number;
   unbased: number;
 }
+
+/** Revision types that the reference editor reports for its own property rewrites. */
+const PROPERTY_REWRITES = new Set(['revision table property', 'revision section property']);
 
 interface Scorecard {
   families: Record<string, FamilyScore>;
@@ -243,7 +253,14 @@ function differences(record: DecideRecord): Map<string, number> {
 function decideScores(oursDirs: readonly string[], controlDirs: readonly string[]): DecideScore {
   const ours = readDecides(oursDirs);
   const control = readDecides(controlDirs);
-  const score: DecideScore = { cases: 0, clean: 0, noise: 0, excess: 0, unbased: 0 };
+  const score: DecideScore = {
+    cases: 0,
+    clean: 0,
+    noise: 0,
+    excess: 0,
+    excessBeyondProperties: 0,
+    unbased: 0,
+  };
   for (const [key, record] of ours) {
     score.cases++;
     const mine = differences(record);
@@ -257,9 +274,14 @@ function decideScores(oursDirs: readonly string[], controlDirs: readonly string[
       continue;
     }
     const reference = differences(theirs);
-    const extra = [...mine].some(([diff, n]) => (reference.get(diff) ?? 0) < n);
-    if (extra) score.excess++;
-    else score.noise++;
+    const extra = [...mine].filter(([diff, n]) => (reference.get(diff) ?? 0) < n);
+    if (extra.length === 0) {
+      score.noise++;
+      continue;
+    }
+    score.excess++;
+    if (extra.some(([diff]) => !PROPERTY_REWRITES.has(diff.split('\u0000')[1] ?? '')))
+      score.excessBeyondProperties++;
   }
   return score;
 }
@@ -293,7 +315,8 @@ function print(card: Scorecard): void {
     const d = card.decide;
     console.log(
       `\nRecorded review results: ${d.cases} cases, ${d.clean} clean, ${d.noise} noise, ` +
-        `${d.excess} excess, ${d.unbased} without a reference result.`
+        `${d.excess} excess (${d.excessBeyondProperties} beyond table and section property ` +
+        `records), ${d.unbased} without a reference result.`
     );
   }
 }
@@ -312,8 +335,12 @@ function regressions(card: Scorecard, baseline: Scorecard): string[] {
   check('overall', card.overall, baseline.overall);
   for (const [name, score] of Object.entries(card.families))
     check(name, score, baseline.families[name]);
-  if (card.decide && baseline.decide && card.decide.excess > baseline.decide.excess)
-    out.push(`review results: excess ${baseline.decide.excess} -> ${card.decide.excess}`);
+  for (const key of ['excess', 'excessBeyondProperties'] as const) {
+    const now = card.decide?.[key];
+    const then = baseline.decide?.[key];
+    if (now !== undefined && then !== undefined && now > then)
+      out.push(`review results: ${key} ${then} -> ${now}`);
+  }
   return out;
 }
 
