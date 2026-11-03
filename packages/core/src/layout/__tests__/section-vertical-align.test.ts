@@ -399,22 +399,26 @@ describe('section vertical alignment with furniture and drawings', () => {
   });
 
   test('a page with an inline picture cut by its line stays top-aligned', () => {
-    const inline =
-      `<w:p><w:pPr><w:spacing w:line="280" w:lineRule="exact"/></w:pPr><w:r><w:drawing>` +
-      '<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="457200" cy="457200"/>' +
-      '<wp:docPr id="2" name="pic2"/>' +
-      `<a:graphic><a:graphicData uri="${PIC}"><pic:pic><pic:nvPicPr>` +
-      '<pic:cNvPr id="2" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
-      '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
-      '<pic:spPr><a:xfrm><a:ext cx="457200" cy="457200"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
-      '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
-    const body = p('before') + inline;
-    const top = withDrawing(body + sectPr());
-    const fragment = top.pages[0]!.fragments[1]!;
-    if (fragment.kind !== 'paragraph') throw new Error('expected a paragraph');
-    const drawing = fragment.lines[0]!.drawings![0]!;
-    expect(drawing.paintBounds.height).toBeLessThan(drawing.height);
-    expect(tops(withDrawing(body + sectPr('center')))).toEqual(tops(top));
+    // Wide effect extents paint past the extent sideways while the line cuts it vertically.
+    for (const effect of [0, 228600]) {
+      const inline =
+        `<w:p><w:pPr><w:spacing w:line="280" w:lineRule="exact"/></w:pPr><w:r><w:drawing>` +
+        '<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="457200" cy="457200"/>' +
+        `<wp:effectExtent l="${effect}" t="0" r="${effect}" b="0"/>` +
+        '<wp:docPr id="2" name="pic2"/>' +
+        `<a:graphic><a:graphicData uri="${PIC}"><pic:pic><pic:nvPicPr>` +
+        '<pic:cNvPr id="2" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
+        '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+        '<pic:spPr><a:xfrm><a:ext cx="457200" cy="457200"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
+        '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
+      const body = p('before') + inline;
+      const top = withDrawing(body + sectPr());
+      const fragment = top.pages[0]!.fragments[1]!;
+      if (fragment.kind !== 'paragraph') throw new Error('expected a paragraph');
+      const drawing = fragment.lines[0]!.drawings![0]!;
+      expect(drawing.paintBounds.height).toBeLessThan(drawing.height);
+      expect(tops(withDrawing(body + sectPr('center')))).toEqual(tops(top));
+    }
   });
 
   test('a page with a drawing that wraps text stays top-aligned', () => {

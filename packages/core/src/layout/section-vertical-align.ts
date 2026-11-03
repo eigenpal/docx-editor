@@ -18,7 +18,7 @@
 // justified pages that hold a table. Those pages stay top-aligned.
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
-import type { AnchoredDrawingRecord } from './drawing-layout.ts';
+import type { AnchoredDrawingRecord, InlineDrawingRecord } from './drawing-layout.ts';
 import { wrapProducesExclusion } from './drawing-exclusion.ts';
 import { shiftAnchoredDrawing } from './drawing-overlap.ts';
 import { storyHasFloatingTable } from './furniture-table-exclusion.ts';
@@ -291,23 +291,34 @@ function shiftPageBody(
   return { fragments, anchoredDrawings: anchoredDrawings && Object.freeze(anchoredDrawings) };
 }
 
-/**
- * Whether an inline drawing shows less than its extent: cut by its line or the body. Turning a
- * drawing never makes its bounds smaller than its extent, so a smaller area means a clip.
- */
+/** Whether a page holds an inline drawing that shows less than its extent. */
 function holdsClippedInlineDrawing(blocks: readonly BlockFragmentRecord[]): boolean {
   for (const block of blocks) {
     if (block.kind === 'paragraph') {
       for (const line of block.lines)
-        for (const drawing of line.drawings ?? []) {
-          const paint = drawing.paintBounds;
-          if (paint.width * paint.height < drawing.width * drawing.height - 0.01) return true;
-        }
+        for (const drawing of line.drawings ?? []) if (inlineDrawingClipped(drawing)) return true;
     } else
       for (const row of block.rows)
         for (const cell of row.cells) if (holdsClippedInlineDrawing(cell.blocks)) return true;
   }
   return false;
+}
+
+/**
+ * Whether an inline drawing is cut by its line or the body. Effects and flips only grow the
+ * painted bounds around the extent, so an upright drawing whose bounds do not cover its extent
+ * is cut. A turned drawing's bounds cover an area at least as large as its extent.
+ */
+function inlineDrawingClipped(drawing: InlineDrawingRecord): boolean {
+  const paint = drawing.paintBounds;
+  if (drawing.transform.rotationDegrees % 180 !== 0)
+    return paint.width * paint.height < drawing.width * drawing.height - 0.01;
+  return (
+    paint.y > drawing.y + 0.01 ||
+    paint.y + paint.height < drawing.y + drawing.height - 0.01 ||
+    paint.x > drawing.x + 0.01 ||
+    paint.x + paint.width < drawing.x + drawing.width - 0.01
+  );
 }
 
 /**
