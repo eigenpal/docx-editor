@@ -13,6 +13,8 @@
 // at the edit and reuses the pages after it as any warm pass does.
 
 import { snapshotLayoutSession } from './layout-session-snapshot.ts';
+import { fragmentParagraphs } from './line-segments.ts';
+import { fragmentFlowBottom } from './note-fragment-geometry.ts';
 import type { LayoutSession } from './layout-session.ts';
 import type { LayoutProgress, LayoutSteps } from './layout-steps.ts';
 import { noteBodyGeometryChanged } from './note-body-geometry.ts';
@@ -273,6 +275,9 @@ function holdsParagraph(
   for (const fragment of fragments) {
     if (fragment.kind === 'paragraph') {
       if (paragraphIds.has(fragment.paragraphId)) return true;
+      // A merged fragment of a display mode is named after the paragraph that survives; the
+      // paragraphs it absorbed cite their notes from it too.
+      if (fragmentParagraphs(fragment).some((id) => paragraphIds.has(id))) return true;
       continue;
     }
     for (const row of fragment.rows) {
@@ -286,6 +291,24 @@ function holdsParagraph(
 
 /** How many blocks past its target a round lays out to end at a section end. */
 const SECTION_END_REACH_BLOCKS = 400;
+
+/** The finest step of the round block limit grid; see `onLimitGrid`. */
+const MIN_LIMIT_STEP = 64;
+
+/**
+ * `limit` rounded up to a grid whose step is about a quarter of it, at most `count`.
+ *
+ * A round lays out the blocks before its limit. The body pass keeps its section preparation
+ * while the blocks stay the same, and the walk mostly asks for a few pages past the last
+ * round, so on the grid most rounds cut where the previous one did and prepare nothing again.
+ * The blocks a coarser cut adds past the target are placed only once: the next round resumes
+ * before them and stops where its flow meets the previous round's.
+ */
+function onLimitGrid(limit: number, count: number): number {
+  let step = MIN_LIMIT_STEP;
+  while (step * 8 <= limit) step *= 2;
+  return Math.min(count, Math.ceil(limit / step) * step);
+}
 
 /** Blocks a page holds, as a walk with no layout to read guesses for its first round. */
 const COLD_BLOCKS_PER_PAGE = 8;
@@ -548,7 +571,7 @@ export function* searchFootnoteReserves(
       }
     }
     if (session && !saved.restore) saved.restore = snapshotLayoutSession(session);
-    let limit = atSectionEnd(blockLimitThrough(throughPage + 1));
+    let limit = atSectionEnd(onLimitGrid(blockLimitThrough(throughPage + 1), blocks.length));
     for (;;) {
       const whole = limit >= blocks.length;
       const layout = yield* decidedProgress(
@@ -563,7 +586,7 @@ export function* searchFootnoteReserves(
       // last page of a cut-short layout is partial, so it does not count.
       const filled = Math.max(1, layout.pages.length - 1);
       const grown = Math.ceil((limit * (throughPage + 2)) / filled);
-      limit = atSectionEnd(Math.min(blocks.length, Math.max(limit + 16, grown)));
+      limit = atSectionEnd(onLimitGrid(Math.max(limit + 16, grown), blocks.length));
     }
   }
 
@@ -594,6 +617,8 @@ export function* searchFootnoteReserves(
       return options.compute(layout, used, deferral, range);
     },
     startOf: (page, carry) => pageStart(page, options.carryKey(carry)),
+    keepsBody: (page, reserve) =>
+      fragmentFlowBottom(page.fragments) + reserve <= page.contentBox.height + 0.001,
     stopped: options.stopped,
   });
 
@@ -635,10 +660,28 @@ export function noteRoundBlocks<Block extends OoxmlElement>(
   const limit = options.noteRoundBlockLimit;
   if (limit === undefined || limit >= blocks.length) return [blocks, sections];
   const end = Math.max(1, limit);
+  // Rounds of one search mostly cut where the previous one did: the same arrays then, so the
+  // checks a pass keys on its block list's identity hold.
+  const previous = roundCuts.get(blocks);
+  if (previous && previous.end === end && previous.sections === sections) {
+    return previous.cut as readonly [readonly Block[], readonly DocumentSection[]];
+  }
   const kept: DocumentSection[] = [];
   for (const section of sections) {
     if (section.blockStart >= end && kept.length > 0) break;
     kept.push(section.blockEndExclusive > end ? { ...section, blockEndExclusive: end } : section);
   }
-  return [blocks.slice(0, end), kept];
+  const cut = [blocks.slice(0, end), kept] as const;
+  roundCuts.set(blocks, { end, sections, cut });
+  return cut;
 }
+
+/** The last round cut of each block list; see `noteRoundBlocks`. */
+const roundCuts = new WeakMap<
+  readonly OoxmlElement[],
+  {
+    readonly end: number;
+    readonly sections: readonly DocumentSection[];
+    readonly cut: readonly [readonly OoxmlElement[], readonly DocumentSection[]];
+  }
+>();

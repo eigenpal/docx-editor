@@ -134,6 +134,16 @@ export interface ReserveWalkOptions {
   readonly startOf: (page: PageRecord, carry: unknown) => string;
   /** True when a newer edit replaces this pass. */
   readonly stopped: () => boolean;
+  /**
+   * False to decide every page from rounds without tries (see `Tried`). The answers are the
+   * same either way; tests compare the two.
+   */
+  readonly tryAhead?: boolean;
+  /**
+   * Whether `page` likely keeps its body with `reserve`: the walk tries pages ahead only past
+   * a page that does. A wrong guess costs a round, never an answer. Absent, every page does.
+   */
+  readonly keepsBody?: (page: PageRecord, reserve: number) => boolean;
 }
 
 export interface ReserveWalkResult {
@@ -182,6 +192,82 @@ function withReserve(reserves: Reserves, page: number, value: number): Map<numbe
   if (value > 0) next.set(page, value);
   return next;
 }
+
+/** `reserves` on the pages through index `through`. */
+function kept(reserves: Reserves, through: number): Map<number, number> {
+  const next = new Map<number, number>();
+  for (const [index, height] of reserves) if (index <= through) next.set(index, height);
+  return next;
+}
+
+/**
+ * Pages a new reserve's round tries, by page position, and the round they come from.
+ *
+ * Deciding a page takes a round with its reserve, and that round is also where the walk
+ * reads the next page with no reserve. Where reserves do not move the pages after them, as
+ * on pages that end at a page break, a page with a note on it costs one round each. The walk
+ * then tries ahead: the round for a new reserve also takes the reserves the same computation
+ * gives the next few pages. It still decides each page from the layout the walk without
+ * tries reads, which is this round through the page and `base` after it, the pages there
+ * laid out with no reserve. That holds while each page starts at the same place in both, as
+ * a page depends only on where it starts and on the reserves through it. The first page that
+ * does not, or the first tried reserve that is not the page's first need, ends the tries:
+ * the walk lays out the round it lays out without them.
+ */
+interface Tried {
+  /** Position -> tried reserve, for pages past the decided one. */
+  readonly values: ReadonlyMap<number, number>;
+  /** The last tried position. */
+  readonly last: number;
+  /** The last tried page likely moves its body, so no page after it is tried. */
+  readonly moves: boolean;
+  /** Tried positions whose first need was their tried reserve. */
+  readonly met: Set<number>;
+  /** The layout the tries were computed from: no reserve from the decided page on. */
+  readonly base: SemanticLayout;
+  /** Pages `[0, reliable)` of `base` are complete enough to decide. */
+  readonly reliable: number;
+}
+
+/** The pages after `floor` a new reserve's round tries, or null when none needs one. */
+function tryAhead(
+  computed: ReserveComputeResult,
+  pages: readonly PageRecord[],
+  floor: number,
+  limit: number,
+  base: SemanticLayout,
+  reliable: number,
+  keepsBody: (page: PageRecord, reserve: number) => boolean
+): Tried | null {
+  const values = new Map<number, number>();
+  let last = -1;
+  let moves = false;
+  for (let position = floor + 1; position < limit; position += 1) {
+    const height = computed.reserves.get(pages[position]!.index) ?? 0;
+    if (height <= 0) continue;
+    values.set(position, height);
+    last = position;
+    // The pages after one that moves its body are not where the tries read them.
+    moves = !keepsBody(pages[position]!, height);
+    if (moves) break;
+  }
+  return last < 0 ? null : { values, last, moves, met: new Set(), base, reliable };
+}
+
+/** The carry two pages are compared with when only their bodies matter. */
+const NO_CARRY: ReadonlyMap<string, unknown> = new Map();
+
+/** A page's anchored drawings; a drawing a page defers moves to the next page. */
+function drawingsKey(page: PageRecord): string {
+  const drawings = page.anchoredDrawings;
+  if (!drawings || drawings.length === 0) return '';
+  return drawings
+    .map((drawing) => `${drawing.anchorParagraphId}:${drawing.drawingNodeId}`)
+    .join('|');
+}
+
+/** The most pages past a new reserve that its round tries; see `Tried`. */
+const MAX_AHEAD_PAGES = 32;
 
 /** The decided reserves of `record` from page `from`, moved to start at page `to`. */
 function shiftedTail(record: ReserveWalkRecord, from: number, to: number): Map<number, number> {
@@ -260,6 +346,10 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
   let span = LOOKAHEAD_PAGES;
   let reservedAt = start.floor;
 
+  // The pages the next round tries ahead; see `Tried`.
+  let pending: Tried | null = null;
+  const keepsBody = options.keepsBody ?? (() => true);
+
   for (;;) {
     if (options.stopped()) {
       // A newer edit waits: keep the last whole round as it was laid. Only the page being
@@ -271,7 +361,13 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
       exhausted = true;
       break;
     }
-    const round = yield* options.round(used, floor + span, floor + LOOKAHEAD_PAGES);
+    const tried = pending;
+    pending = null;
+    const round = yield* options.round(
+      used,
+      floor + span,
+      floor + LOOKAHEAD_PAGES + (tried ? tried.last - floor : 0)
+    );
     last = round;
     lastUsed = used;
     const pages = round.layout.pages;
@@ -280,46 +376,134 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
       break;
     }
     // A page is decided only when the pages it reads are complete in this round.
-    const reliable = round.whole ? pages.length : Math.max(0, pages.length - 1 - LOOKAHEAD_PAGES);
+    const roundReliable = round.whole
+      ? pages.length
+      : Math.max(0, pages.length - 1 - LOOKAHEAD_PAGES);
     if (page !== floor) enter(floor);
+    // The layout the walk reads: this round, or while it checks the pages this round tried,
+    // this round through `viewThrough` and the round the tries came from after it.
+    let checking = tried;
+    // Two pages start at the same place, with the same drawings carried in. The same carry on
+    // both sides: only the body is compared.
+    const sameStart = (a: PageRecord, b: PageRecord): boolean => {
+      const signature = options.startOf(a, NO_CARRY);
+      return (
+        signature !== '' &&
+        signature === options.startOf(b, NO_CARRY) &&
+        drawingsKey(a) === drawingsKey(b)
+      );
+    };
+    let view = pages;
+    let viewLayout = round.layout;
+    let viewThrough = -1;
+    let reliable = roundReliable;
+    // Positions through `agreed` start at the same place in this round and in `tried.base`.
+    let agreed = floor;
+    const useView = (through: number): boolean => {
+      if (!checking || through === viewThrough) return true;
+      while (agreed < through + 1) {
+        const a = pages[agreed + 1];
+        const b = checking.base.pages[agreed + 1];
+        if (!a || !b || a.index !== b.index) return false;
+        if (!sameStart(a, b)) return false;
+        agreed += 1;
+      }
+      view = pages.slice(0, through + 1).concat(checking.base.pages.slice(through + 1));
+      viewLayout = { ...checking.base, pages: view };
+      viewThrough = through;
+      reliable = checking.reliable;
+      return true;
+    };
+    // The reserves the view's pages were laid out with: none on the pages from the base.
+    const viewUsed = (): Reserves =>
+      checking && viewThrough >= 0 ? kept(used, view[viewThrough]!.index) : used;
     let computedDeferral = phase === 'deferral';
     // The walk mostly decides a page or two before the previous walk applies, so each
     // computation covers a few pages from the page being decided, not the rest of the round.
     let computedTo = 0;
-    const computeNear = (): ReserveComputeResult => {
-      computedTo = Math.min(pages.length, floor + COMPUTE_SPAN);
-      return options.compute(round.layout, used, computedDeferral, {
+    let computedThrough = -2;
+    let computed: ReserveComputeResult | null = null;
+    const computeNear = (to: number): ReserveComputeResult => {
+      computedTo = Math.min(view.length, to);
+      computedThrough = viewThrough;
+      return options.compute(viewLayout, viewUsed(), computedDeferral, {
         from: floor,
         carry,
         to: computedTo,
       });
     };
-    let computed = computeNear();
     // `relayout`: the page being decided takes another reserve and needs a new round.
     // `finished`: the rest of the previous walk applies.
     let relayout = false;
     let finished = false;
-    while (floor < reliable) {
-      const at = pages[floor]!;
+    for (;;) {
+      if (checking && floor > checking.last) {
+        // Every tried page took its tried reserve, so this round is the one the walk lays out
+        // next without trying ahead.
+        checking = null;
+        view = pages;
+        viewLayout = round.layout;
+        viewThrough = -1;
+        reliable = roundReliable;
+      }
+      const firstTry = checking !== null && checking.values.has(floor) && !checking.met.has(floor);
+      if (checking && !useView(firstTry ? floor - 1 : floor)) {
+        // The page ends elsewhere with its reserve than with none, so the pages after it
+        // move: lay out the round the walk lays out without trying ahead.
+        used = kept(used, pages[floor]!.index);
+        relayout = true;
+        break;
+      }
+      if (floor >= reliable) break;
+      const at = view[floor]!;
       if (
+        computed === null ||
+        computedThrough !== viewThrough ||
         computedDeferral !== (phase === 'deferral') ||
-        (computedTo < pages.length && floor + COMPUTE_READS > computedTo)
+        (computedTo < view.length && floor + COMPUTE_READS > computedTo)
       ) {
         computedDeferral = phase === 'deferral';
-        computed = computeNear();
+        computed = computeNear(floor + COMPUTE_SPAN);
       }
-      const have = used.get(at.index) ?? 0;
+      // A tried page is read first as the walk reads every page first: with no reserve.
+      const have = firstTry ? 0 : (used.get(at.index) ?? 0);
       const need = computed.reserves.get(at.index) ?? 0;
       if (decidedValue === undefined && need !== have) {
         seen.set(have, need);
         rounds += 1;
+        let tryAfter = false;
         if (seen.has(need) || rounds >= MAX_PAGE_RESERVE_ROUNDS) {
           decidedValue = cycleAnswer(seen, phase === 'deferral' ? strictValue : undefined);
           exhausted = true;
           if (decidedValue === have) continue;
           used = withReserve(used, at.index, decidedValue);
+        } else if (firstTry && need === checking!.values.get(floor)) {
+          // The page needs the reserve this round tried, so this round is its next round.
+          checking!.met.add(floor);
+          continue;
         } else {
           used = withReserve(used, at.index, need);
+          tryAfter =
+            have === 0 && rounds === 1 && options.tryAhead !== false && keepsBody(at, need);
+        }
+        // Reserves tried past this page do not hold: its new reserve moves what follows.
+        if (checking) used = kept(used, at.index);
+        if (tryAfter) {
+          // The page's first need: the next round also tries the needs that one computation
+          // gives the pages after it. The computation at hand covers a few pages; a further one
+          // runs only when none of those moves its body.
+          const far = Math.min(reliable, floor + MAX_AHEAD_PAGES + 1);
+          const near = Math.min(far, computedTo - COMPUTE_READS);
+          pending = tryAhead(computed, view, floor, near, viewLayout, reliable, keepsBody);
+          if (near < far && (pending === null || !pending.moves)) {
+            const guess = computeNear(far + COMPUTE_READS);
+            pending = tryAhead(guess, view, floor, far, viewLayout, reliable, keepsBody);
+          }
+          if (pending) {
+            for (const [position, height] of pending.values) {
+              used = withReserve(used, view[position]!.index, height);
+            }
+          }
         }
         relayout = true;
         break;
@@ -327,7 +511,7 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
       if (
         decidedValue === undefined &&
         phase === 'strict' &&
-        pagesRead(pages, floor).some((read) => computed.orphanPages.has(read.index))
+        pagesRead(view, floor).some((read) => computed!.orphanPages.has(read.index))
       ) {
         // The page settles strictly first. A second-line reference on it, or on a page it
         // reads, may then stay with its opening line while its note continues; a page that
@@ -338,13 +522,20 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
         rounds = 0;
         continue;
       }
+      // A page this round tried a reserve on that settles with none: lay out its round.
+      const settledUntried = firstTry;
+      if (settledUntried) used = kept(withReserve(used, at.index, have), at.index);
       starts[at.index] = options.startOf(at, carry);
       carries[at.index] = carry;
       carry = computed.carryBefore[floor + 1] ?? new Map();
       floor += 1;
       enter(floor);
+      if (settledUntried) {
+        relayout = true;
+        break;
+      }
       // The rest of the previous walk applies once a page starts where one of its pages did.
-      const next = pages[floor];
+      const next = view[floor];
       // An empty signature names no one place (see `startOf`), so it never matches.
       const signature = next && previous && floor < reliable ? options.startOf(next, carry) : '';
       const found = signature ? previousStartOf(signature) : undefined;
@@ -353,7 +544,8 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
           ? found
           : undefined;
       if (next && previous && from !== undefined) {
-        used = new Map([...used, ...shiftedTail(previous.record, from, next.index)]);
+        const decidedUsed = checking ? kept(used, next.index - 1) : used;
+        used = new Map([...decidedUsed, ...shiftedTail(previous.record, from, next.index)]);
         for (let index = from; index < previous.record.starts.length; index += 1) {
           const target = index - from + next.index;
           starts[target] = previous.record.starts[index]!;
@@ -365,12 +557,16 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
       }
     }
     if (finished) break;
+    const triedTo = pending ? pending.last - floor : 0;
     if (relayout) reservedAt = floor;
     if (relayout && !options.growAfterReserve) {
-      span = LOOKAHEAD_PAGES;
+      span = LOOKAHEAD_PAGES + triedTo;
       continue;
     }
-    span = Math.min(Math.max(MAX_ROUND_PAGES, floor - reservedAt), span * 2);
+    span = Math.max(
+      Math.min(Math.max(MAX_ROUND_PAGES, floor - reservedAt), span * 2),
+      LOOKAHEAD_PAGES + triedTo
+    );
     if (relayout) continue;
     if (round.whole && floor >= pages.length) {
       complete = true;

@@ -16,6 +16,7 @@ import type { OoxmlPart } from '../../store/index.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
 import { createLayoutSession, type LayoutSession } from '../layout-session.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
+import type { RevisionDisplayMode } from '../revision-projection.ts';
 import type { SemanticLayout } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -70,7 +71,8 @@ function lay(
   footnotesPart: OoxmlPart | null,
   mode: number,
   revision: number,
-  session?: LayoutSession
+  session?: LayoutSession,
+  displayMode?: RevisionDisplayMode
 ): SemanticLayout {
   const footnoteProps = resolveFootnoteProperties(undefined, undefined);
   const endnoteProps = resolveEndnoteProperties(undefined, undefined);
@@ -89,6 +91,7 @@ function lay(
     ...(session ? { session } : {}),
     producer: 'footnote-warm-note-and-page-edits',
     compatibilityMode: mode,
+    ...(displayMode ? { displayMode } : {}),
   });
 }
 
@@ -111,6 +114,27 @@ describe('a warm footnote pass matches a fresh one', () => {
       const warm = lay(before.part, after.footnotesPart, mode, 2, session);
       const freshSession = createLayoutSession();
       const fresh = lay(before.part, after.footnotesPart, mode, 2, freshSession);
+      expect(JSON.stringify(warm.pages)).toBe(JSON.stringify(fresh.pages));
+      expect([...session.notePageBottomReserves!]).toEqual([
+        ...freshSession.notePageBottomReserves!,
+      ]);
+    });
+
+    test(`after a note grows that a joined paragraph cites, mode ${mode}`, () => {
+      // A deleted paragraph mark joins the citing paragraph to the next one in the proposed
+      // view; the joined fragment is named after the next paragraph.
+      const joined =
+        '<w:p><w:pPr><w:spacing w:line="240" w:lineRule="exact" w:after="0"/><w:rPr>' +
+        '<w:del w:id="9" w:author="A" w:date="2026-01-01T00:00:00Z"/></w:rPr></w:pPr>' +
+        `<w:r><w:t xml:space="preserve">Cites a note </w:t></w:r>${REF}</w:p>`;
+      const body = joined + fillers(100);
+      const before = load(documentBytes(body, 'Short note.', 6000));
+      const after = load(documentBytes(body, `Short note. ${'n'.repeat(400)}`, 6000));
+      const session = createLayoutSession();
+      lay(before.part, before.footnotesPart, mode, 1, session, 'proposed');
+      const warm = lay(before.part, after.footnotesPart, mode, 2, session, 'proposed');
+      const freshSession = createLayoutSession();
+      const fresh = lay(before.part, after.footnotesPart, mode, 2, freshSession, 'proposed');
       expect(JSON.stringify(warm.pages)).toBe(JSON.stringify(fresh.pages));
       expect([...session.notePageBottomReserves!]).toEqual([
         ...freshSession.notePageBottomReserves!,

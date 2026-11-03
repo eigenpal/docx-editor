@@ -272,6 +272,8 @@ export function sectionReserveResume(
   const reads = new Map<number, number>();
   let shift = 0;
   let tail: ReadReserves | undefined;
+  /** `tailHolds` answers by previous and current page count. */
+  const tailAnswers = new Map<string, boolean>();
   const reserveAt = (page: number): number | undefined => {
     if (!reading) return reserves?.get(pageIndexStart + page);
     let read = reads.get(page);
@@ -315,16 +317,25 @@ export function sectionReserveResume(
             resumeLimitBeforePage(checkpoints, moved),
             Math.max(0, checkpoints.length - 2)
           ),
-    tailHolds: (mark, pageCount) =>
-      moved === undefined ||
-      (session !== undefined &&
-        tailReservesMatch(
+    tailHolds: (mark, pageCount) => {
+      if (moved === undefined) return true;
+      if (session === undefined) return false;
+      // Asked at each block of a converging page with the same pages: the reserves and the
+      // previous pass stay as they are for the whole pass, so one answer serves them all.
+      const key = `${mark.pageCount},${pageCount}`;
+      let holds = tailAnswers.get(key);
+      if (holds === undefined) {
+        holds = tailReservesMatch(
           session,
           reserves,
           pageIndexStart,
           mark.pageCount,
           pageCount - mark.pageCount
-        )),
+        );
+        tailAnswers.set(key, holds);
+      }
+      return holds;
+    },
     reserveAt,
     followShift: (next) => {
       shift = next;
