@@ -80,6 +80,15 @@ function ids(pkg: OoxmlPackage, partName = pkg.mainDocumentPart): string[] {
   return found;
 }
 
+function bodyParagraphIds(root: OoxmlNode): string[] {
+  if (root.kind === 'textValue') return [];
+  const body = root.children.find(
+    (child) => child.kind !== 'textValue' && child.localName === 'body'
+  );
+  if (!body || body.kind === 'textValue') return [];
+  return body.children.flatMap((child) => (child.kind === 'paragraph' ? [child.id] : []));
+}
+
 function firstParagraphId(node: OoxmlNode): string {
   if (node.kind === 'paragraph') return node.id;
   if (node.kind !== 'textValue') {
@@ -396,6 +405,76 @@ describe('saved revision ids', () => {
       expect(found[1]).not.toBe(`ins:${taken}`);
       // The fallback copy is written as the file holds it.
       expect(found.at(-1)).toBe(`ins:${spelling}`);
+    }
+  });
+
+  test('a range end that spells its start number with a sign or spaces stays paired', () => {
+    for (const end of ['+5', ' 5 ']) {
+      const body =
+        `<w:p>${ins('5', 'kept', 'A')}<w:customXmlInsRangeStart w:id="5" w:author="B"/>` +
+        `${run('x')}<w:customXmlInsRangeEnd w:id="${end}"/></w:p>`;
+      const found = named(ids(saved(open(docx(body)))), ['5']);
+      expect(found).toEqual(['ins:5', 'customXmlInsRangeStart:A', 'customXmlInsRangeEnd:A']);
+    }
+  });
+
+  test('ids crafted to share one new id still get distinct ids quickly', () => {
+    // Every one of these hashes to the same new id, so each probe starts on the same run.
+    const pairs = [
+      ['02e3138af', '03d368c51'],
+      ['000c1212a', '-28aec066'],
+      ['-150c32e4', '0419e6bb1'],
+      ['04802b633', '-74f50b9f'],
+      ['-38e0d21e', '0586de8d1'],
+      ['0-cdbcf38', '067611746'],
+    ];
+    const crafted = Array.from({ length: 65536 }, (_, i) => {
+      let id = 'x0253012f0-6d574098';
+      for (let j = 0; j < 18; j += 1) id += pairs[j % 6]![j < 16 ? (i >> j) & 1 : 0];
+      return id;
+    });
+    const body = crafted.map((id) => `<w:p>${ins(id, 'a')}</w:p>`).join('');
+    const exported = uniqueRevisionIdsExportPackage(open(docx(body)));
+    const found = ids(exported).map((entry) => entry.slice(4));
+    expect(new Set(found).size).toBe(crafted.length);
+    for (const id of found) expect(Number(id)).toBeLessThan(NEW_ID_LIMIT);
+  });
+
+  test('a save after an edit gives the ids a save of the reopened document gives', () => {
+    const body =
+      `<w:p>${ins('1', 'alpha')}${run(' one')}</w:p>` +
+      `<w:p>${run('two ')}${ins('2', 'beta', 'Second')}</w:p>` +
+      `<w:p>${del('3', 'gamma')}${run(' three')}</w:p>`;
+    const pkg = open(docx(body));
+    const store = new TreePackageStore(pkg, pkg.parts.get(pkg.mainDocumentPart)!);
+    const cold = (live: OoxmlPackage) =>
+      ids(saved(open(writeOoxmlPackageKeepingRevisionIds(live))));
+    expect(ids(saved(store.currentPackage()))).toEqual(cold(store.currentPackage()));
+    const tracked = { author: 'Me', date: '2026-02-01T00:00:00Z' };
+    const edits = [
+      // Typing with tracking off: the same ids, so the save keeps the package.
+      { paragraph: 0, offset: 2, revision: undefined, keeps: true },
+      // A tracked insertion by another author takes a new id no element uses.
+      { paragraph: 2, offset: 7, revision: tracked, keeps: true },
+      // Typing inside another author's insertion splits it: the walk decides.
+      { paragraph: 1, offset: 6, revision: tracked, keeps: false },
+    ];
+    for (const edit of edits) {
+      const result = store.transact({ kind: 'body' }, (ctx) => {
+        expect(
+          ctx.apply({
+            op: 'insertText',
+            paragraphId: bodyParagraphIds(store.bodyStore().part.root)[edit.paragraph]!,
+            offset: edit.offset,
+            text: 'X',
+            ...(edit.revision ? { revision: edit.revision } : {}),
+          })
+        ).toBe(true);
+      });
+      expect(result.ok).toBe(true);
+      const live = store.currentPackage();
+      if (edit.keeps) expect(uniqueRevisionIdsExportPackage(live)).toBe(live);
+      expect(ids(saved(live))).toEqual(cold(live));
     }
   });
 });

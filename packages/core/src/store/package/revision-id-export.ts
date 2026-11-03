@@ -210,6 +210,8 @@ class RevisionIdScan {
    * is compared field by field with the change that owns its id.
    */
   private readonly owners = new Map<number, ChangeOwner>();
+  /** Ids that more than one element of a kept change uses, and how many use each. */
+  private readonly pieces = new Map<number, number>();
   /** Each change that must move, keyed by all its fields, so its pieces share one conflict. */
   private readonly changes = new Map<string, Conflict>();
   /** Conflicts seen so far per authored id, for each conflict's seed. */
@@ -263,6 +265,7 @@ class RevisionIdScan {
         owner.annotation === annotation &&
         sameChangeFields(owner, node)
       ) {
+        this.pieces.set(parsed, (this.pieces.get(parsed) ?? 1) + 1);
         return null;
       }
     }
@@ -285,6 +288,11 @@ class RevisionIdScan {
     this.conflicts.push(conflict);
     this.changes.set(change, conflict);
     return conflict;
+  }
+
+  /** The ids this scan found in use, for {@link QuietDocument}; none may have moved. */
+  quiet(): Pick<QuietDocument, 'owners' | 'pieces' | 'reserved'> {
+    return { owners: this.owners, pieces: this.pieces, reserved: this.reserved };
   }
 
   scanPart(part: OoxmlPart): void {
@@ -393,8 +401,8 @@ class RevisionIdScan {
     if (value === undefined) return;
     this.events += 1;
     // The story and the number, so an end in a text box never closes a start in the body, and
-    // `05` closes `5`. A value that is no id pairs by its text.
-    const parsed = parseRevisionId(value);
+    // `05`, `+5` and ` 5 ` close `5`. A value that is no id pairs by its text.
+    const parsed = revisionIdReadAs(value);
     const id = parsed === null ? `raw:${value}` : String(parsed);
     const key = `${family}\u0000${this.story}\u0000${id}`;
     if (start) {
@@ -419,11 +427,20 @@ class RevisionIdScan {
   /** New ids for every conflict, in the order they were found. */
   assign(): Map<string, Map<string, string>> {
     const byPart = new Map<string, Map<string, string>>();
+    // From a taken id, a later id the probe found taken before it: the probe walks each run
+    // of taken ids about once, however many seeds a crafted file sends into one run. The ids
+    // in use are at most one per element read, far fewer than the 2^30 values the probe can
+    // walk, so it ends.
+    const skip = new Map<number, number>();
+    const taken = (id: number): boolean => this.owners.has(id) || this.reserved.has(id);
     for (const conflict of this.conflicts) {
-      // The ids in use are at most one per element read, far fewer than the 2^30 values
-      // the probe can walk, so it reaches a free one quickly.
       let id = fnv1a32(conflict.seed) & NEW_ID_MASK;
-      while (this.owners.has(id) || this.reserved.has(id)) id = (id + 1) & NEW_ID_MASK;
+      const walked: number[] = [];
+      while (taken(id)) {
+        walked.push(id);
+        id = skip.get(id) ?? (id + 1) & NEW_ID_MASK;
+      }
+      for (const at of walked) skip.set(at, id);
       this.reserved.add(id);
       let changes = byPart.get(conflict.partName);
       if (!changes) byPart.set(conflict.partName, (changes = new Map()));
@@ -495,11 +512,13 @@ export function* uniqueRevisionIdsExportPackageSteps(
   if (previous !== undefined && sameParts(previous.parts, scanned)) {
     return withRoots(pkg, previous.roots);
   }
+  if (quietAfterEdit(pkg, scanned)) return pkg;
   const scan = new RevisionIdScan();
   for (const part of scanned) {
     scan.scanPart(part);
     yield;
   }
+  if (scan.conflicts.length === 0) rememberQuiet(pkg, scanned, scan.quiet());
   const roots = new Map<string, OoxmlNode>();
   if (scan.conflicts.length > 0) {
     for (const [partName, changes] of scan.assign()) {
@@ -550,6 +569,174 @@ function withRoots(pkg: OoxmlPackage, roots: ReadonlyMap<string, OoxmlNode>): Oo
     parts.set(partName, { ...part, root: root as typeof part.root });
   }
   return Object.freeze({ ...pkg, parts });
+}
+
+/**
+ * A document whose last walk found no change to move: the parts it read, the main part's
+ * root children and body blocks, and the ids in use.
+ *
+ * A save after an edit mostly changes a few body paragraphs. When those paragraphs hold only
+ * single revision elements, and every id the new ones use is in range and used nowhere else,
+ * a walk would find no change to move either, so the save keeps the package as it is. Any
+ * other edit walks the document again.
+ */
+interface QuietDocument {
+  /** Every part read but the main one, by name and root. */
+  readonly parts: readonly (readonly [string, OoxmlNode])[];
+  /** The main part's root children, its body included. */
+  rootChildren: readonly OoxmlNode[];
+  blocks: readonly OoxmlNode[];
+  /** The kept change of each id in use. */
+  readonly owners: Map<number, ChangeOwner>;
+  /** See `RevisionIdScan.pieces`. */
+  readonly pieces: Map<number, number>;
+  /** Ids no change owns and no new id may take. */
+  readonly reserved: ReadonlySet<number>;
+}
+
+/** By the main body's first and by its last block, which an edit mostly leaves in place. */
+const quietDocuments = new WeakMap<OoxmlNode, QuietDocument>();
+
+/** Body edits past this many blocks walk the document again. */
+const MAX_QUIET_EDIT_BLOCKS = 256;
+
+function mainBody(root: OoxmlNode): OoxmlElement | undefined {
+  if (root.kind === 'textValue') return undefined;
+  for (const child of root.children) {
+    if (
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === 'body'
+    ) {
+      return child;
+    }
+  }
+  return undefined;
+}
+
+function rememberQuiet(
+  pkg: OoxmlPackage,
+  scanned: readonly OoxmlPart[],
+  ids: Pick<QuietDocument, 'owners' | 'pieces' | 'reserved'>
+): void {
+  const main = scanned[0];
+  if (!main || main.name !== pkg.mainDocumentPart) return;
+  const body = mainBody(main.root);
+  if (!body || body.children.length === 0) return;
+  const quiet: QuietDocument = {
+    parts: scanned.slice(1).map((part) => [part.name, part.root] as const),
+    rootChildren: main.root.children,
+    blocks: body.children,
+    ...ids,
+  };
+  quietDocuments.set(body.children[0]!, quiet);
+  quietDocuments.set(body.children[body.children.length - 1]!, quiet);
+}
+
+/**
+ * The ids of a body block's revision elements, when it is a paragraph whose revision
+ * elements are all single, in range and in its own story; null otherwise.
+ */
+function singleIdsOf(block: OoxmlNode): number[] | null {
+  if (block.kind !== 'paragraph') return null;
+  const summary = blockScanSummary(block);
+  if (!summary.revisionIds) return [];
+  if (!summary.revisionElements) return null;
+  const ids: number[] = [];
+  for (const element of summary.revisionElements) {
+    if (WML_ROLES.get(element.localName) !== 'single') return null;
+    const value = revisionIdOf(element);
+    if (value === undefined) continue;
+    const parsed = parseRevisionId(value);
+    if (parsed === null) return null;
+    ids.push(parsed);
+  }
+  return ids;
+}
+
+/** Whether `pkg` is a body edit of a quiet document that leaves it quiet; see `QuietDocument`. */
+function quietAfterEdit(pkg: OoxmlPackage, scanned: readonly OoxmlPart[]): boolean {
+  const main = scanned[0];
+  if (!main || main.name !== pkg.mainDocumentPart) return false;
+  const body = mainBody(main.root);
+  const blocks = body?.children;
+  if (!body || !blocks || blocks.length === 0) return false;
+  const quiet = quietDocuments.get(blocks[0]!) ?? quietDocuments.get(blocks[blocks.length - 1]!);
+  if (!quiet || quiet.parts.length !== scanned.length - 1) return false;
+  for (let index = 1; index < scanned.length; index += 1) {
+    const [name, root] = quiet.parts[index - 1]!;
+    if (scanned[index]!.name !== name || scanned[index]!.root !== root) return false;
+  }
+  // Every root child but the body is the one the walk read.
+  const children = main.root.children;
+  if (children.length !== quiet.rootChildren.length) return false;
+  for (let index = 0; index < children.length; index += 1) {
+    const child = children[index]!;
+    const was = quiet.rootChildren[index]!;
+    if (child === was) continue;
+    // Only the body may be a new node, in the body's place.
+    if (child !== body || was.kind === 'textValue' || was.localName !== 'body') return false;
+  }
+  const before = quiet.blocks;
+  let start = 0;
+  while (start < before.length && start < blocks.length && before[start] === blocks[start]) {
+    start += 1;
+  }
+  let endBefore = before.length;
+  let endAfter = blocks.length;
+  while (endBefore > start && endAfter > start && before[endBefore - 1] === blocks[endAfter - 1]) {
+    endBefore -= 1;
+    endAfter -= 1;
+  }
+  if (endBefore - start + (endAfter - start) > MAX_QUIET_EDIT_BLOCKS) return false;
+  const removed: number[] = [];
+  for (let index = start; index < endBefore; index += 1) {
+    const ids = singleIdsOf(before[index]!);
+    if (ids === null) return false;
+    removed.push(...ids);
+  }
+  const added: number[] = [];
+  for (let index = start; index < endAfter; index += 1) {
+    const ids = singleIdsOf(blocks[index]!);
+    if (ids === null) return false;
+    added.push(...ids);
+  }
+  // How many elements use each id once the removed blocks are gone.
+  const left = new Map<number, number>();
+  for (const id of removed) {
+    const count = left.get(id) ?? (quiet.owners.has(id) ? (quiet.pieces.get(id) ?? 1) : 0);
+    left.set(id, count - 1);
+  }
+  const fresh = new Set<number>();
+  for (const id of added) {
+    const inUse = left.get(id) ?? (quiet.owners.has(id) ? (quiet.pieces.get(id) ?? 1) : 0);
+    // An id another element keeps may be a second change on it, or a piece of the same one:
+    // the walk tells them apart.
+    if (inUse > 0 || fresh.has(id) || quiet.reserved.has(id)) return false;
+    fresh.add(id);
+  }
+  for (const [id, count] of left) {
+    if (count > 1) quiet.pieces.set(id, count);
+    else quiet.pieces.delete(id);
+    if (count <= 0) quiet.owners.delete(id);
+  }
+  for (const id of fresh) {
+    quiet.owners.set(id, {
+      partName: main.name,
+      story: '',
+      annotation: '',
+      node: body,
+      author: undefined,
+      date: undefined,
+    });
+  }
+  quietDocuments.delete(before[0]!);
+  quietDocuments.delete(before[before.length - 1]!);
+  quiet.rootChildren = children;
+  quiet.blocks = blocks;
+  quietDocuments.set(blocks[0]!, quiet);
+  quietDocuments.set(blocks[blocks.length - 1]!, quiet);
+  return true;
 }
 
 /** {@link uniqueRevisionIdsExportPackageSteps}, run to completion. */
