@@ -454,6 +454,16 @@ test('tracked-changes protection covers earlier headers and controls that change
       buildDocx({ body: unnamed('New') + p('After.') })
     )
   ).toMatchObject({ ok: false, code: 'protected' });
+  // Two controls that swap their properties keep their content, so the swap is caught.
+  const cell = (alias: string, text: string) =>
+    `<w:tc><w:sdt><w:sdtPr><w:alias w:val="${alias}"/></w:sdtPr>` +
+    `<w:sdtContent>${p(text)}</w:sdtContent></w:sdt></w:tc>`;
+  const row = (first: string, second: string) =>
+    `<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>` +
+    `<w:tr>${cell(first, 'One')}${cell(second, 'Two')}</w:tr></w:tbl>${p('After.')}`;
+  expect(
+    compare(buildDocx({ body: row('A', 'B'), settings }), buildDocx({ body: row('B', 'A') }))
+  ).toMatchObject({ ok: false, code: 'protected' });
   // A new control before an unchanged one is a tracked insertion.
   const inserted = `<w:sdt><w:sdtPr><w:alias w:val="Added"/></w:sdtPr><w:sdtContent>${p(
     'Added text'
