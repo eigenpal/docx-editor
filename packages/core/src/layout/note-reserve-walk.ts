@@ -399,7 +399,7 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
     let reliable = roundReliable;
     // Positions through `agreed` start at the same place in this round and in `tried.base`.
     let agreed = floor;
-    const useView = (through: number): boolean => {
+    const enterView = (through: number): boolean => {
       if (!checking || through === viewThrough) return true;
       while (agreed < through + 1) {
         const a = pages[agreed + 1];
@@ -447,7 +447,7 @@ export function* walkFootnoteReserves(options: ReserveWalkOptions): LayoutSteps<
         reliable = roundReliable;
       }
       const firstTry = checking !== null && checking.values.has(floor) && !checking.met.has(floor);
-      if (checking && !useView(firstTry ? floor - 1 : floor)) {
+      if (checking && !enterView(firstTry ? floor - 1 : floor)) {
         // The page ends elsewhere with its reserve than with none, so the pages after it
         // move: lay out the round the walk lays out without trying ahead.
         used = kept(used, pages[floor]!.index);
