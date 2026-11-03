@@ -1010,6 +1010,7 @@
     "trackedOnly": "Bu belge yalnızca izlenen değişikliklere izin verir",
     "unavailable": "Bu komut kullanılamıyor",
     "viewing": "Bu belge görüntüleme için açık",
+    "compareCollaboration": "Belgeleri karşılaştırma, paylaşılan bir düzenleme oturumunda kullanılamaz.",
     "bodyOnlyNote": "Dipnotlar ve son notlar belgenin gövdesinden eklenir.",
     "bodyOnlySectionBreak": "Bölüm sonları belgenin gövdesine eklenir.",
     "bodyOnlyToc": "İçindekiler tablosu belgenin gövdesine eklenir.",
@@ -1183,6 +1184,14 @@
     "revisedFile": "Düzeltilmiş belge",
     "title": "Belgeleri karşılaştır",
     "noDifferences": "Belgeler arasında fark yok.",
+    "recorded": "{count, plural, one {Karşılaştırma # değişiklik kaydetti.} other {Karşılaştırma # değişiklik kaydetti.}}",
+    "recordedNoRevisions": "Karşılaştırma belgeyi izlenen değişiklik olmadan güncelledi.",
+    "phases": {
+      "reading": "Belgeler okunuyor…",
+      "comparing": "Karşılaştırılıyor…",
+      "checking": "Sonuç denetleniyor…",
+      "applying": "Değişiklikler uygulanıyor…"
+    },
     "errors": {
       "invalidOptions": "Karşılaştırma seçenekleri geçerli değil.",
       "invalidOriginal": "Açık belge karşılaştırma için okunamıyor.",
@@ -1193,12 +1202,14 @@
       "protected": "Bu belge düzenlemeye karşı korumalı.",
       "collaboration": "Belgeleri karşılaştırma, paylaşılan bir düzenleme oturumunda kullanılamaz.",
       "viewing": "Belge yalnızca görüntüleme için açık.",
-      "closed": "İletişim kutusu karşılaştırmadan önce kapatıldı.",
+      "closed": "Karşılaştırma iptal edildi.",
       "empty": "Seçilen dosya boş.",
+      "busy": "Başka bir karşılaştırma, önizleme veya belge yenilemesi çalışıyor. Bittiğinde yeniden deneyin.",
+      "documentChanged": "Belge karşılaştırılırken değişti. Yeniden karşılaştırın.",
       "failed": "Belgeler karşılaştırılamadı."
     },
     "reasons": {
-      "headerFooter": "Belgeler, iki belgenin bölümlerinin farklı şekilde paylaştığı bir üst bilgi veya alt bilgide farklılık gösteriyor.",
+      "headerFooter": "Belgeler, önceki bir bölümün üst veya alt bilgisinde farklılık gösteriyor ve bu bölümün diğer belgede eşleşen bir bölümü yok.",
       "lockedContent": "Belgeler, kilitli veya veriye bağlı bir içerik denetiminin içinde farklılık gösteriyor; bu nedenle oradaki değişiklikler gözden geçirilemez. Kilidi veya bağlantıyı kaldırıp yeniden karşılaştırın.",
       "packageStructure": "Açık belge bu karşılaştırmanın sonucunu tutamaz.",
       "unrecordedSettings": "Düzeltilmiş belge, değişiklikleri reddederek geri alınamayacak bölüm veya tablo ayarları ekliyor.",

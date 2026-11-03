@@ -1010,6 +1010,7 @@
     "trackedOnly": "Dieses Dokument erlaubt Bearbeitungen nur mit Änderungsverfolgung",
     "unavailable": "Dieser Befehl ist nicht verfügbar",
     "viewing": "Dieses Dokument ist zur Ansicht geöffnet",
+    "compareCollaboration": "Dokumente vergleichen ist in einer gemeinsamen Bearbeitungssitzung nicht verfügbar.",
     "bodyOnlyNote": "Fußnoten und Endnoten werden im Haupttext des Dokuments hinzugefügt.",
     "bodyOnlySectionBreak": "Abschnittsumbrüche werden im Haupttext des Dokuments eingefügt.",
     "bodyOnlyToc": "Ein Inhaltsverzeichnis wird im Haupttext des Dokuments eingefügt.",
@@ -1183,6 +1184,14 @@
     "revisedFile": "Überarbeitetes Dokument",
     "title": "Dokumente vergleichen",
     "noDifferences": "Die Dokumente unterscheiden sich nicht.",
+    "recorded": "{count, plural, one {Der Vergleich hat # Änderung aufgezeichnet.} other {Der Vergleich hat # Änderungen aufgezeichnet.}}",
+    "recordedNoRevisions": "Der Vergleich hat das Dokument ohne nachverfolgte Änderungen aktualisiert.",
+    "phases": {
+      "reading": "Die Dokumente werden gelesen…",
+      "comparing": "Wird verglichen…",
+      "checking": "Das Ergebnis wird geprüft…",
+      "applying": "Die Änderungen werden übernommen…"
+    },
     "errors": {
       "invalidOptions": "Die Vergleichsoptionen sind ungültig.",
       "invalidOriginal": "Das geöffnete Dokument kann für einen Vergleich nicht gelesen werden.",
@@ -1193,12 +1202,14 @@
       "protected": "Dieses Dokument ist gegen Bearbeitung geschützt.",
       "collaboration": "Dokumente vergleichen ist in einer gemeinsamen Bearbeitungssitzung nicht verfügbar.",
       "viewing": "Das Dokument ist nur zum Lesen geöffnet.",
-      "closed": "Das Dialogfeld wurde vor dem Vergleich geschlossen.",
+      "closed": "Der Vergleich wurde abgebrochen.",
       "empty": "Die ausgewählte Datei ist leer.",
+      "busy": "Ein anderer Vergleich, eine Vorschau oder eine Aktualisierung des Dokuments läuft. Versuchen Sie es erneut, wenn der Vorgang beendet ist.",
+      "documentChanged": "Das Dokument wurde während des Vergleichs geändert. Vergleichen Sie erneut.",
       "failed": "Die Dokumente konnten nicht verglichen werden."
     },
     "reasons": {
-      "headerFooter": "Die Dokumente unterscheiden sich in einer Kopf- oder Fußzeile, die die Abschnitte der beiden Dokumente unterschiedlich teilen.",
+      "headerFooter": "Die Dokumente unterscheiden sich in einer Kopf- oder Fußzeile eines früheren Abschnitts, und dieser Abschnitt hat keinen passenden Abschnitt im anderen Dokument.",
       "lockedContent": "Die Dokumente unterscheiden sich in einem Inhaltssteuerelement, das gesperrt oder mit Daten verknüpft ist. Die Änderungen dort können nicht überprüft werden. Entfernen Sie die Sperre oder die Verknüpfung und vergleichen Sie erneut.",
       "packageStructure": "Das geöffnete Dokument kann das Ergebnis dieses Vergleichs nicht aufnehmen.",
       "unrecordedSettings": "Das überarbeitete Dokument fügt Abschnitts- oder Tabelleneinstellungen hinzu, die sich durch Ablehnen der Änderungen nicht rückgängig machen lassen.",

@@ -4,11 +4,15 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { afterEach, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { fireEvent, getByLabelText, getByRole, waitFor } from '@testing-library/react';
 import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { reviewModule } from '../review/review-module';
 import { COMPARE_DOCUMENTS_ACCEPT } from '@docx-editor.dev/core/editor';
 import { zipDocument } from '../collaboration/__tests__/document-peer-support';
+import { COMPARE_WORKER_PROTOCOL } from '../compare/worker-protocol';
+import { createT, type LocaleStrings } from '@docx-editor.dev/i18n';
+import en from '../../../i18n/en.json' with { type: 'json' };
 import {
   answeringCompareWorker,
   LOCKED_CONTENT_REFUSAL,
@@ -23,7 +27,14 @@ const REVISED = zipDocument(paragraphs('The quick red fox.', 'It jumps over the 
 let cleanup = () => {};
 afterEach(() => cleanup());
 
-function setup(review: Parameters<typeof reviewModule>[0] = {}): {
+function setup(
+  review: Parameters<typeof reviewModule>[0] = {},
+  // The source catalog, so the tests read strings this change adds before a build.
+  translate = createT(en as unknown as LocaleStrings) as (
+    key: string,
+    params?: Record<string, string | number>
+  ) => string
+): {
   container: HTMLElement;
   editor: DocxEditorInstance;
 } {
@@ -34,6 +45,7 @@ function setup(review: Parameters<typeof reviewModule>[0] = {}): {
     document: ORIGINAL,
     author: 'Reviewer',
     modules: [reviewModule(review)],
+    translate,
   });
   cleanup = () => {
     editor.destroy();
@@ -82,6 +94,11 @@ test('the review module enables the command; the dialog compares into the open d
 
   const items = editor.surface!.session.reviewItems();
   expect(items.length).toBeGreaterThan(0);
+  // The dialog closed, so the editor's own live region says what the compare recorded.
+  await waitFor(() => {
+    const text = container.querySelector('.docx-editor-announcer')?.textContent ?? '';
+    if (!/^Compare recorded \d+ changes\.$/.test(text)) throw new Error(text);
+  });
   expect(items.every((item) => !('author' in item) || item.author === 'Reviewer')).toBe(true);
   // One undo step restores the original; redo reapplies the compare.
   editor.exec({ type: 'undo' });
@@ -223,4 +240,88 @@ test('a refusal with a reason shows the message for that reason', async () => {
     { timeout: 5000 }
   );
   expect(bodyText(editor)).toBe('The quick brown fox.\nIt jumps over the dog.');
+});
+
+/** A worker that reports one step and never finishes: the compare runs until Cancel. */
+function steppingWorker(phase: string, fraction: number): () => Worker {
+  return () => {
+    let listener: ((event: { data: unknown }) => void) | undefined;
+    return {
+      postMessage() {
+        queueMicrotask(() =>
+          listener?.({
+            data: { protocol: COMPARE_WORKER_PROTOCOL, type: 'progress', phase, fraction },
+          })
+        );
+      },
+      addEventListener(type: string, handler: (event: { data: unknown }) => void) {
+        if (type === 'message') listener = handler;
+      },
+      terminate() {},
+    } as unknown as Worker;
+  };
+}
+
+test('the running step shows in words, with the bar, and the bar waits for the first step', async () => {
+  const { container, editor } = setup({ compareWorker: steppingWorker('checking', 0.6) });
+  editor.exec({ type: 'openCompareDocumentsDialog' });
+  chooseFile(getByLabelText(container, 'Revised document') as HTMLInputElement, REVISED);
+  fireEvent.click(getByRole(container, 'button', { name: 'Compare' }));
+  const progress = container.querySelector('progress')!;
+  const phase = container.querySelector('.docx-compare-documents-phase')!;
+  // Indeterminate until the first step arrives.
+  expect(progress.hasAttribute('value')).toBe(false);
+  expect(phase.textContent).toBe('Comparing…');
+  await waitFor(() => {
+    if (phase.textContent !== 'Checking the result…') throw new Error(phase.textContent ?? '');
+  });
+  expect(progress.getAttribute('aria-valuetext')).toBe('Checking the result…');
+  expect(progress.value).toBe(0.6);
+  fireEvent.click(getByRole(container, 'button', { name: 'Cancel' }));
+});
+
+test('focus stays in the dialog when Compare disables itself, and returns after a refusal', async () => {
+  const background = setup({ compareWorker: steppingWorker('comparing', 0.2) });
+  background.editor.exec({ type: 'openCompareDocumentsDialog' });
+  const container = background.container;
+  chooseFile(getByLabelText(container, 'Revised document') as HTMLInputElement, REVISED);
+  const compare = getByRole(container, 'button', { name: 'Compare' });
+  compare.focus();
+  fireEvent.click(compare);
+  // A background compare can stop: Cancel takes focus.
+  expect(document.activeElement?.textContent).toBe('Cancel');
+  fireEvent.click(getByRole(container, 'button', { name: 'Cancel' }));
+  cleanup();
+
+  // On the main thread nothing can stop the compare: the busy status takes focus.
+  const main = setup();
+  main.editor.exec({ type: 'openCompareDocumentsDialog' });
+  const file = getByLabelText(main.container, 'Revised document') as HTMLInputElement;
+  chooseFile(file, new Uint8Array([1, 2, 3]));
+  fireEvent.click(getByRole(main.container, 'button', { name: 'Compare' }));
+  expect(document.activeElement?.classList.contains('docx-compare-documents-phase')).toBe(true);
+  await waitFor(
+    () => {
+      if (!main.container.querySelector('[role="alert"]')?.textContent) throw new Error('not yet');
+    },
+    { timeout: 5000 }
+  );
+  // After the refusal, the file input takes focus to choose another file.
+  expect(document.activeElement).toBe(file);
+});
+
+test('an empty notice stays in the accessibility tree', () => {
+  const { container, editor } = setup();
+  editor.exec({ type: 'openCompareDocumentsDialog' });
+  const notice = container.querySelector('.docx-compare-documents-notice') as HTMLElement;
+  expect(notice.getAttribute('role')).toBe('status');
+  expect(notice.hidden).toBe(false);
+  expect(notice.hasAttribute('aria-hidden')).toBe(false);
+  // Hidden from view only: the stylesheet never takes the empty region out of the tree.
+  const css = readFileSync(
+    new URL('../../../core/src/styles/editor.css', import.meta.url).pathname,
+    'utf8'
+  );
+  const rule = css.slice(css.indexOf('.docx-compare-documents-notice:empty {'));
+  expect(rule.slice(0, rule.indexOf('}'))).not.toContain('display: none');
 });

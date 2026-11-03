@@ -30,6 +30,7 @@ import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsChromeHandlers } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsDialogSession } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsEngineErrorCode } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsErrorCode } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsOutcome } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsProgress } from '@docx-editor.dev/core/editor';
@@ -259,8 +260,11 @@ export interface CompareDocumentsDialogValues {
     readonly authorName: string;
     // (undocumented)
     readonly detectFormatChanges: boolean;
+    readonly removeDateAndTime: boolean;
     readonly revised: File | null;
 }
+
+export { CompareDocumentsEngineErrorCode }
 
 export { CompareDocumentsErrorCode }
 
@@ -2890,10 +2894,20 @@ export const DocxEditorCompareDocumentsDialog: {
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
     preset: boolean;
     session: CompareDocumentsDialogSession | null;
-}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Apply" | "Body" | "Cancel" | "Error" | "Footer" | "Header" | "Reset" | "Title", vue.DefineComponent<DialogPartProps>> & {
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
+    Apply: vue.DefineComponent<DialogPartProps>;
+    Body: vue.DefineComponent<DialogPartProps>;
+    Cancel: vue.DefineComponent<DialogPartProps>;
+    Error: vue.DefineComponent<DialogPartProps>;
     Field: vue.DefineComponent<DialogPartProps & {
         name: keyof CompareDocumentsDialogValues;
     }>;
+    Footer: vue.DefineComponent<DialogPartProps>;
+    Header: vue.DefineComponent<DialogPartProps>;
+    Notice: vue.DefineComponent<DialogPartProps>;
+    Progress: vue.DefineComponent<DialogPartProps>;
+    Reset: vue.DefineComponent<DialogPartProps>;
+    Title: vue.DefineComponent<DialogPartProps>;
 };
 
 // @public

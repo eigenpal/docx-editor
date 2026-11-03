@@ -7,6 +7,7 @@ export type {
   CompareDocumentsBackgroundEngine,
   CompareDocumentsBackgroundResult,
   CompareDocumentsEngine,
+  CompareDocumentsEngineErrorCode,
   CompareDocumentsErrorCode,
   CompareDocumentsRefusalReason,
   CompareDocumentsEngineOptions,
@@ -67,6 +68,20 @@ export type {
 // definition of the document model. A module author reaches the tree at
 // `@docx-editor.dev/core/store`, which is a published subpath written for exactly that.
 export type { OoxmlPart, RevisionAddress } from '@docx-editor.dev/core/store';
+// The compare engine takes and returns the original as a package, and the dialog contribution
+// receives a session, so a module author can type both.
+export type {
+  ContentTypeIndex,
+  OoxmlExternalTarget,
+  OoxmlPackage,
+  RelationshipRecord,
+  TargetMode,
+} from '@docx-editor.dev/core/store';
+export type {
+  CompareDocumentsDialogSession,
+  CompareDocumentsOutcome,
+  CompareDocumentsRequest,
+} from './compare-documents.ts';
 export type { ReviewDisplayMode, RevisionDisplayMode } from '../layout/revision-projection.ts';
 
 /**

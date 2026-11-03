@@ -22,14 +22,26 @@ import type { CompareDocumentsDialog, ReviewModuleContribution } from '../contra
 import { readDocumentProtection } from '../store/package/document-protection.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import { commandProtectionRefusal } from './command-protection.ts';
+import { createEditorAnnouncer } from './editor-announcer.ts';
+import { createT, en } from '@docx-editor.dev/i18n';
 import { hostTimers } from './host-realm.ts';
 import { PRO_REVIEW_REASON } from './opening-editing-mode.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import type { PopupChromeRegistrationOptions } from './popup-sessions.ts';
 import { createSessionChrome } from './text-form-field-chrome.ts';
+import {
+  PREVIEW_WRITE_REFUSAL,
+  REFRESH_WRITE_REFUSAL,
+  refreshWriteBlocked,
+  writeBlockReason,
+} from './refresh-write-guard.ts';
 
-/** Stable refusal while a collaboration session is attached. */
-export const COMPARE_COLLABORATION_REASON = 'collaboration-compare-unsupported';
+/**
+ * Stable refusal while a collaboration session is attached. `DISABLED_REASON_KEYS` in
+ * `@docx-editor.dev/i18n` translates it; the two must stay the same sentence.
+ */
+export const COMPARE_COLLABORATION_REASON =
+  'documents cannot be compared while a collaboration session is attached';
 export const COMPARE_FORMS_PROTECTION_REASON =
   'this document is protected; only form fields can be filled';
 const COMPARE_PROTECTION_REASON = 'this document is protected against edits';
@@ -38,7 +50,7 @@ export interface CompareDocumentsStateHost {
   container(): HTMLElement | null;
   destroyed(): boolean;
   contribution(): ReviewModuleContribution | null;
-  translate(): ((key: string) => string) | undefined;
+  translate(): ((key: string, params?: Record<string, string | number>) => string) | undefined;
   surface(): PaginatedSurface | null;
   /** Whether the document is open for viewing only (view-only host or viewing mode). */
   viewing(): boolean;
@@ -47,7 +59,10 @@ export interface CompareDocumentsStateHost {
 const VIEWING_REASON = 'the document is open for viewing';
 const EMPTY_REASON = 'the revised document is empty';
 const CLOSED_REASON = 'the dialog is closed';
+const BUSY_REASON = 'another compare of this dialog is running';
 const CHANGED_REASON = 'the document changed while the compare ran';
+const NOT_BYTES_REASON = 'revised must be a Uint8Array';
+const english = createT(en) as (key: string, params?: Record<string, string | number>) => string;
 /** Where progress stands while the result is applied: the layout of the result remains. */
 const APPLYING_FRACTION = 0.95;
 
@@ -72,6 +87,13 @@ function refusalOf(
   if (result.reason === VIEWING_REASON) return 'viewing';
   if (result.reason === EMPTY_REASON) return 'empty';
   if (result.reason === CLOSED_REASON) return 'closed';
+  if (
+    result.reason === BUSY_REASON ||
+    result.reason === REFRESH_WRITE_REFUSAL ||
+    result.reason === PREVIEW_WRITE_REFUSAL
+  )
+    return 'busy';
+  if (result.reason === CHANGED_REASON) return 'documentChanged';
   if (result.reason === PRO_REVIEW_REASON || result.code === 'notFound') return 'unavailable';
   if (result.code === 'locked' || result.code === 'protected') return 'protected';
   return 'failed';
@@ -127,6 +149,17 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
   let active: CompareDocumentsDialogSession | null = null;
   const chrome = createSessionChrome<CompareDocumentsDialogSession>();
   const timers = hostTimers(() => host.container());
+  const announcer = createEditorAnnouncer(() => host.container());
+
+  /** Say what a compare recorded, once the dialog that ran it has closed. */
+  const announceRecorded = (revisionCount: number): void => {
+    const translate = host.translate() ?? english;
+    announcer.announce(
+      revisionCount > 0
+        ? translate('compareDocuments.recorded', { count: revisionCount })
+        : translate('compareDocuments.recordedNoRevisions')
+    );
+  };
 
   // A frame callback runs before the paint it belongs to, so the work goes in a task queued
   // from it: the first slot after the busy state is on screen. A hidden window fires no
@@ -153,6 +186,10 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
     if (surface.collaborationSession())
       return { ok: false, code: 'unsupported', reason: COMPARE_COLLABORATION_REASON };
     if (host.viewing()) return { ok: false, code: 'locked', reason: VIEWING_REASON };
+    // A preview or an external refresh blocks writes; the compare waits for it to end.
+    const container = host.container();
+    if (container && refreshWriteBlocked(container))
+      return { ok: false, code: 'unsupported', reason: writeBlockReason(container) };
     const protectedWrite = commandProtectionRefusal(
       { type: 'compareDocuments', revised: new Uint8Array() },
       surface
@@ -186,7 +223,17 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
   ): { readonly refused: CompareExec } | { readonly options: CompareDocumentsEngineOptions } => {
     const allowed = canCompare();
     if (!allowed.ok) return { refused: allowed };
-    if (!isBytes(request.revised) || request.revised.byteLength === 0)
+    if (!isBytes(request.revised)) {
+      return {
+        refused: {
+          ok: false,
+          code: 'invalidArgs',
+          reason: NOT_BYTES_REASON,
+          engineCode: 'invalidOptions',
+        },
+      };
+    }
+    if (request.revised.byteLength === 0)
       return { refused: { ok: false, code: 'invalidArgs', reason: EMPTY_REASON } };
     const invalid = invalidOption(request);
     if (invalid) {
@@ -314,6 +361,9 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
           options?.onProgress?.(progress);
         };
         if (!session.canApply()) {
+          // A second submission while one runs is refused explicitly; nothing is queued.
+          if (running && active === session && !controller.signal.aborted)
+            return { ok: false, code: 'busy', message: BUSY_REASON };
           const refusal = canCompare();
           if (refusal.ok) return { ok: false, code: 'closed', message: CLOSED_REASON };
           return { ok: false, code: refusalOf(refusal), message: refusal.reason };
@@ -335,8 +385,12 @@ export function createCompareDocumentsState(host: CompareDocumentsStateHost) {
               message: result.reason,
             };
           const revisionCount = result.revisionCount ?? 0;
-          // With no differences the dialog stays open, so it can say so.
-          if (result.changed) session.cancel();
+          // With no differences the dialog stays open, so it can say so. Otherwise it closes,
+          // and the editor's own live region says what the compare recorded.
+          if (result.changed) {
+            session.cancel();
+            announceRecorded(revisionCount);
+          }
           return { ok: true, revisionCount, changed: result.changed };
         } catch (error) {
           if (controller.signal.aborted)

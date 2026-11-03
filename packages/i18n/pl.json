@@ -1010,6 +1010,7 @@
     "trackedOnly": "Ten dokument zezwala tylko na edycję ze śledzeniem zmian",
     "unavailable": "To polecenie jest niedostępne",
     "viewing": "Ten dokument jest otwarty do wyświetlania",
+    "compareCollaboration": "Porównywanie dokumentów jest niedostępne w sesji wspólnej edycji.",
     "bodyOnlyNote": "Przypisy dolne i końcowe dodaje się z treści głównej dokumentu.",
     "bodyOnlySectionBreak": "Podziały sekcji wstawia się w treści głównej dokumentu.",
     "bodyOnlyToc": "Spis treści wstawia się w treści głównej dokumentu.",
@@ -1183,6 +1184,14 @@
     "revisedFile": "Poprawiony dokument",
     "title": "Porównaj dokumenty",
     "noDifferences": "Dokumenty nie różnią się.",
+    "recorded": "{count, plural, one {Porównanie zarejestrowało # zmianę.} few {Porównanie zarejestrowało # zmiany.} many {Porównanie zarejestrowało # zmian.} other {Porównanie zarejestrowało # zmiany.}}",
+    "recordedNoRevisions": "Porównanie zaktualizowało dokument bez śledzonych zmian.",
+    "phases": {
+      "reading": "Odczytywanie dokumentów…",
+      "comparing": "Porównywanie…",
+      "checking": "Sprawdzanie wyniku…",
+      "applying": "Stosowanie zmian…"
+    },
     "errors": {
       "invalidOptions": "Opcje porównania są nieprawidłowe.",
       "invalidOriginal": "Nie można odczytać otwartego dokumentu do porównania.",
@@ -1193,12 +1202,14 @@
       "protected": "Ten dokument jest chroniony przed edycją.",
       "collaboration": "Porównywanie dokumentów jest niedostępne w sesji wspólnej edycji.",
       "viewing": "Dokument jest otwarty tylko do odczytu.",
-      "closed": "Okno dialogowe zostało zamknięte przed porównaniem.",
+      "closed": "Porównanie zostało anulowane.",
       "empty": "Wybrany plik jest pusty.",
+      "busy": "Trwa inne porównanie, podgląd lub odświeżanie dokumentu. Spróbuj ponownie, gdy się zakończy.",
+      "documentChanged": "Dokument zmienił się podczas porównywania. Porównaj ponownie.",
       "failed": "Nie udało się porównać dokumentów."
     },
     "reasons": {
-      "headerFooter": "Dokumenty różnią się nagłówkiem lub stopką, które sekcje obu dokumentów współdzielą w inny sposób.",
+      "headerFooter": "Dokumenty różnią się nagłówkiem lub stopką wcześniejszej sekcji, a ta sekcja nie ma odpowiadającej jej sekcji w drugim dokumencie.",
       "lockedContent": "Dokumenty różnią się w kontrolce zawartości, która jest zablokowana lub powiązana z danymi, więc tych zmian nie można przejrzeć. Usuń blokadę lub powiązanie i porównaj ponownie.",
       "packageStructure": "Otwarty dokument nie może pomieścić wyniku tego porównania.",
       "unrecordedSettings": "Poprawiony dokument dodaje ustawienia sekcji lub tabeli, których nie da się cofnąć przez odrzucenie zmian.",

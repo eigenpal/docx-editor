@@ -1010,6 +1010,7 @@
     "trackedOnly": "Este documento permite apenas edições com controle de alterações",
     "unavailable": "Este comando não está disponível",
     "viewing": "Este documento está aberto para exibição",
+    "compareCollaboration": "Comparar documentos não está disponível em uma sessão de edição compartilhada.",
     "bodyOnlyNote": "As notas de rodapé e de fim são adicionadas a partir do corpo do documento.",
     "bodyOnlySectionBreak": "As quebras de seção devem ficar no corpo do documento.",
     "bodyOnlyToc": "O sumário deve ficar no corpo do documento.",
@@ -1183,6 +1184,14 @@
     "revisedFile": "Documento revisado",
     "title": "Comparar documentos",
     "noDifferences": "Os documentos não têm diferenças.",
+    "recorded": "{count, plural, one {A comparação registrou # alteração.} other {A comparação registrou # alterações.}}",
+    "recordedNoRevisions": "A comparação atualizou o documento sem alterações controladas.",
+    "phases": {
+      "reading": "Lendo os documentos…",
+      "comparing": "Comparando…",
+      "checking": "Verificando o resultado…",
+      "applying": "Aplicando as alterações…"
+    },
     "errors": {
       "invalidOptions": "As opções de comparação não são válidas.",
       "invalidOriginal": "Não é possível ler o documento aberto para comparação.",
@@ -1193,12 +1202,14 @@
       "protected": "Este documento está protegido contra edição.",
       "collaboration": "Comparar documentos não está disponível em uma sessão de edição compartilhada.",
       "viewing": "O documento está aberto somente para leitura.",
-      "closed": "A caixa de diálogo foi fechada antes da comparação.",
+      "closed": "A comparação foi cancelada.",
       "empty": "O arquivo escolhido está vazio.",
+      "busy": "Outra comparação, uma visualização ou uma atualização do documento está em andamento. Tente novamente quando terminar.",
+      "documentChanged": "O documento mudou durante a comparação. Compare novamente.",
       "failed": "Não foi possível comparar os documentos."
     },
     "reasons": {
-      "headerFooter": "Os documentos diferem em um cabeçalho ou rodapé que as seções dos dois documentos compartilham de formas diferentes.",
+      "headerFooter": "Os documentos diferem em um cabeçalho ou rodapé de uma seção anterior, e essa seção não tem uma seção correspondente no outro documento.",
       "lockedContent": "Os documentos diferem dentro de um controle de conteúdo bloqueado ou vinculado a dados, então essas alterações não podem ser revisadas. Remova o bloqueio ou o vínculo e compare novamente.",
       "packageStructure": "O documento aberto não pode conter o resultado desta comparação.",
       "unrecordedSettings": "O documento revisado adiciona configurações de seção ou de tabela que não poderiam ser desfeitas ao rejeitar as alterações.",

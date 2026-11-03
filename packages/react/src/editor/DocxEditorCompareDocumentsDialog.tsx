@@ -1,12 +1,15 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import {
   COMPARE_DOCUMENTS_ACCEPT,
+  COMPARE_DOCUMENTS_PHASE_ATTRIBUTE,
   compareDocumentsErrorKey,
+  focusCompareDocumentsControl,
   type CompareDocumentsDialogSession,
   type CompareDocumentsProgress,
 } from '@docx-editor.dev/core/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../i18n';
+import { useEditorState } from './useEditorState';
 import {
   createDialogParts,
   DialogFrame,
@@ -24,10 +27,18 @@ export interface CompareDocumentsDialogValues {
   readonly revised: File | null;
   readonly authorName: string;
   readonly detectFormatChanges: boolean;
+  /**
+   * Write the revisions without dates. Default `false`. The preset has no control for it; a
+   * custom part sets it with `setValue('removeDateAndTime', true)`.
+   */
+  readonly removeDateAndTime: boolean;
 }
 /** Compare documents draft and actions. @public */
 export interface UseCompareDocumentsDialogReturn extends UseDialogReturn<CompareDocumentsDialogValues> {
-  /** True while the chosen file is read and compared. */
+  /**
+   * True while the chosen file is read and compared. `apply()` does nothing while it is true,
+   * so a second press cannot start a second compare.
+   */
   readonly busy: boolean;
   /**
    * How far the running compare is, when the editor compares in the background (see
@@ -48,8 +59,20 @@ export function useCompareDocumentsDialog(): UseCompareDocumentsDialogReturn {
   return parts.useState();
 }
 
+// A stable key per session: a new session mounts a new form, so no draft, busy state, or
+// progress of the previous session carries over.
+const sessionKeys = new WeakMap<CompareDocumentsDialogSession, number>();
+let nextSessionKey = 0;
+const sessionKey = (session: CompareDocumentsDialogSession): number => {
+  let key = sessionKeys.get(session);
+  if (key === undefined) sessionKeys.set(session, (key = nextSessionKey++));
+  return key;
+};
+
 function CompareDocumentsDialogRoot({ session, ...props }: DocxEditorCompareDocumentsDialogProps) {
-  return session ? <CompareDocumentsForm session={session} {...props} /> : null;
+  return session ? (
+    <CompareDocumentsForm key={sessionKey(session)} session={session} {...props} />
+  ) : null;
 }
 function CompareDocumentsForm({
   session,
@@ -65,12 +88,28 @@ function CompareDocumentsForm({
     revised: null,
     authorName: session.defaultAuthor,
     detectFormatChanges: true,
+    removeDateAndTime: false,
   }));
   const [error, setError] = useState<string | undefined>();
   const [notice, setNotice] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<CompareDocumentsProgress | null>(null);
   const [closed, setClosed] = useState(session.signal.aborted);
+  const panel = useRef<HTMLDialogElement | null>(null);
+  // Where focus goes once the next render is on screen: Compare disables itself while busy.
+  const [focusMoment, setFocusMoment] = useState<{
+    readonly moment: 'busy' | 'refused' | 'unchanged';
+  } | null>(null);
+  useLayoutEffect(() => {
+    if (focusMoment) focusCompareDocumentsControl(panel.current, focusMoment.moment);
+  }, [focusMoment]);
+  // The session's own state (viewing, protection, collaboration, a preview) moves with the
+  // editor; `session.canApply()` stays the authority.
+  const canApply = useEditorState(
+    useCallback(() => session.canApply(), [session]),
+    Object.is
+  );
+  const running = useRef(false);
   const lifetime = useRef<CompareDocumentsDialogSession | null>(null);
   useEffect(() => {
     lifetime.current = session;
@@ -91,35 +130,50 @@ function CompareDocumentsForm({
       setError(t('fileRequired'));
       return;
     }
+    // A duplicate submission while a compare runs is ignored; the session itself answers
+    // `busy` to a second `apply`.
+    if (running.current) return;
+    running.current = true;
     setBusy(true);
+    setFocusMoment({ moment: 'busy' });
     setError(undefined);
     setNotice(undefined);
-    let revised: Uint8Array;
     try {
-      revised = new Uint8Array(await file.arrayBuffer());
-    } catch {
-      if (!session.signal.aborted) {
-        setError(t('readFailed'));
-        setBusy(false);
+      let revised: Uint8Array;
+      try {
+        revised = new Uint8Array(await file.arrayBuffer());
+      } catch {
+        if (!session.signal.aborted) {
+          setError(t('readFailed'));
+          setBusy(false);
+          setFocusMoment({ moment: 'refused' });
+        }
+        return;
       }
-      return;
+      if (session.signal.aborted) return;
+      const outcome = await session.apply(
+        {
+          revised,
+          authorName: values.authorName,
+          detectFormatChanges: values.detectFormatChanges,
+          ...(values.removeDateAndTime ? { removeDateAndTime: true } : {}),
+        },
+        { onProgress: setProgress }
+      );
+      if (session.signal.aborted) return;
+      setProgress(null);
+      // With no differences the dialog stays open and says so; nothing changed.
+      if (outcome.ok) setNotice(translate('compareDocuments.noDifferences'));
+      else setError(translate(compareDocumentsErrorKey(outcome)));
+      setBusy(false);
+      setFocusMoment({ moment: outcome.ok ? 'unchanged' : 'refused' });
+    } finally {
+      running.current = false;
     }
-    if (session.signal.aborted) return;
-    const outcome = await session.apply(
-      {
-        revised,
-        authorName: values.authorName,
-        detectFormatChanges: values.detectFormatChanges,
-      },
-      { onProgress: setProgress }
-    );
-    if (session.signal.aborted) return;
-    setProgress(null);
-    // With no differences the dialog stays open and says so; nothing changed.
-    if (outcome.ok) setNotice(translate('compareDocuments.noDifferences'));
-    else setError(translate(compareDocumentsErrorKey(outcome)));
-    setBusy(false);
   };
+  const phaseText = progress
+    ? translate(`compareDocuments.phases.${progress.phase}` as TranslationKey)
+    : t('comparing');
   const state: UseCompareDocumentsDialogReturn = {
     values,
     setValue(name, value) {
@@ -128,7 +182,7 @@ function CompareDocumentsForm({
       setValues((previous) => ({ ...previous, [name]: value }));
     },
     errors: error === undefined ? {} : { form: error },
-    isEnabled: !closed && !busy && values.revised !== null && session.canApply(),
+    isEnabled: !closed && !busy && values.revised !== null && canApply,
     busy,
     progress,
     cancelable: session.cancelable,
@@ -148,6 +202,7 @@ function CompareDocumentsForm({
       className={['docx-compare-documents-dialog', className].filter(Boolean).join(' ')}
       style={style}
       onClose={state.cancel}
+      panelRef={panel}
       dismissOutside={false}
       sessionSignal={session.signal}
       describedBy={`${ids}-description`}
@@ -201,13 +256,23 @@ function CompareDocumentsForm({
               </label>
             </div>
             {busy ? (
-              <progress
-                data-docx-part="progress"
-                className="docx-compare-documents-progress"
-                max={1}
-                value={progress?.fraction}
-                aria-label={t('comparing')}
-              />
+              <div data-docx-part="progress">
+                {/* Indeterminate until the compare reports its first step. */}
+                <progress
+                  className="docx-compare-documents-progress"
+                  max={1}
+                  value={progress?.fraction}
+                  aria-label={t('comparing')}
+                  aria-valuetext={phaseText}
+                />
+                <span
+                  className="docx-compare-documents-phase"
+                  tabIndex={-1}
+                  {...{ [COMPARE_DOCUMENTS_PHASE_ATTRIBUTE]: '' }}
+                >
+                  {phaseText}
+                </span>
+              </div>
             ) : null}
             <p data-docx-part="error" role="alert" className="docx-compare-documents-error">
               {state.errors.form}
@@ -252,4 +317,8 @@ export const DocxEditorCompareDocumentsDialog = Object.assign(CompareDocumentsDi
   Cancel: parts.Cancel,
   Error: parts.Error,
   Field: parts.Field,
+  /** The progress bar and the running step in words, shown while a compare runs. */
+  Progress: parts.part('progress'),
+  /** A message that is not an error, such as that the documents have no differences. */
+  Notice: parts.part('notice'),
 });

@@ -1,10 +1,14 @@
 import './dom-setup.ts';
 import { afterEach, expect, test } from 'bun:test';
-import { createApp, defineComponent, h, nextTick, type VNodeChild } from 'vue';
+import { createApp, defineComponent, h, nextTick, shallowRef, type VNodeChild } from 'vue';
 import type {
   CompareDocumentsDialogSession,
+  CompareDocumentsOutcome,
+  CompareDocumentsProgress,
   DocxEditorInstance,
 } from '@docx-editor.dev/core/editor';
+import en from '../../i18n/en.json' with { type: 'json' };
+import { LocaleProvider } from '../src/i18n/LocaleContext';
 import {
   DocxEditorCompareDocumentsDialog as Dialog,
   useCompareDocumentsDialog,
@@ -255,4 +259,135 @@ test('a refusal with a reason shows the message for that reason', async () => {
         ?.textContent?.includes('locked or linked to data') ?? false
   );
   expect(container.querySelector('dialog')).not.toBeNull();
+});
+
+/** A session the test drives by hand: `apply` waits until the test answers it. */
+function heldSession(cancelable: boolean) {
+  const controller = new AbortController();
+  const calls: {
+    readonly onProgress?: (progress: CompareDocumentsProgress) => void;
+    readonly answer: (outcome: CompareDocumentsOutcome) => void;
+  }[] = [];
+  const session: CompareDocumentsDialogSession = {
+    signal: controller.signal,
+    defaultAuthor: 'Reviewer',
+    cancelable,
+    canApply: () => !controller.signal.aborted,
+    apply: (_request, options) =>
+      new Promise((answer) => calls.push({ onProgress: options?.onProgress, answer })),
+    cancel: () => controller.abort(),
+  };
+  return { session, calls };
+}
+
+// The source catalog, so the tests read strings this change adds before a build.
+const inLocale = (node: () => VNodeChild) =>
+  mount(() => h(LocaleProvider, { i18n: en as never }, { default: node }));
+
+async function startCompare(container: HTMLElement) {
+  chooseFile(label(container, 'Revised document'), REVISED);
+  await nextTick();
+  (container.querySelector('[data-docx-part="apply"]') as HTMLButtonElement).click();
+  await nextTick();
+  await nextTick();
+}
+
+test('a new session starts a fresh form: no busy state, progress, or draft carries over', async () => {
+  const first = heldSession(true);
+  const second = heldSession(true);
+  const current = shallowRef(first.session);
+  const container = inLocale(() => h(Dialog, { session: current.value }));
+  await nextTick();
+  await startCompare(container);
+  expect(container.querySelector('[data-docx-part="apply"]')?.textContent).toBe('Comparing…');
+  current.value = second.session;
+  await nextTick();
+  await nextTick();
+  const compare = container.querySelector('[data-docx-part="apply"]') as HTMLButtonElement;
+  expect(compare.textContent).toBe('Compare');
+  expect(compare.disabled).toBe(true);
+  expect(container.querySelector('[data-docx-part="progress"]')).toBeNull();
+  expect(first.session.signal.aborted).toBe(true);
+  // The old session's late answer does not reach the new form.
+  first.calls[0]!.answer({ ok: false, code: 'closed', message: 'closed' });
+  await nextTick();
+  expect(container.querySelector('[data-docx-part="error"]')?.textContent ?? '').toBe('');
+});
+
+test('apply ignores a second submission while a compare runs', async () => {
+  const held = heldSession(true);
+  let state: ReturnType<typeof useCompareDocumentsDialog> | null = null;
+  const Capture = defineComponent({
+    setup() {
+      state = useCompareDocumentsDialog();
+      return () => null;
+    },
+  });
+  const container = inLocale(() =>
+    h(Dialog, { session: held.session }, { default: () => [h(Capture)] })
+  );
+  await nextTick();
+  await startCompare(container);
+  expect(state!.busy.value).toBe(true);
+  state!.apply();
+  await nextTick();
+  expect(held.calls).toHaveLength(1);
+});
+
+test('the running step shows in words, with the bar, and the bar waits for the first step', async () => {
+  const held = heldSession(true);
+  const container = inLocale(() => h(Dialog, { session: held.session }));
+  await nextTick();
+  await startCompare(container);
+  const progress = () => container.querySelector('progress')!;
+  const phase = () => container.querySelector('.docx-compare-documents-phase')!;
+  expect(progress().hasAttribute('value')).toBe(false);
+  expect(phase().textContent).toBe(en.compareDocuments.comparing);
+  held.calls[0]!.onProgress?.({ phase: 'checking', fraction: 0.6 });
+  await nextTick();
+  expect(phase().textContent).toBe('Checking the result…');
+  expect(progress().getAttribute('aria-valuetext')).toBe('Checking the result…');
+});
+
+test('focus moves to Cancel or the busy status while busy, and to the file after a refusal', async () => {
+  const background = heldSession(true);
+  const first = inLocale(() => h(Dialog, { session: background.session }));
+  await nextTick();
+  await startCompare(first);
+  expect(document.activeElement).toBe(first.querySelector('[data-docx-part="cancel"]'));
+  for (const fn of cleanup.splice(0)) fn();
+
+  const main = heldSession(false);
+  const second = inLocale(() => h(Dialog, { session: main.session }));
+  await nextTick();
+  await startCompare(second);
+  expect(document.activeElement?.classList.contains('docx-compare-documents-phase')).toBe(true);
+  main.calls[0]!.answer({ ok: false, code: 'busy', message: 'busy' });
+  await until(() => !!second.querySelector('[data-docx-part="error"]')?.textContent);
+  await nextTick();
+  expect(second.querySelector('[data-docx-part="error"]')?.textContent).toBe(
+    en.compareDocuments.errors.busy
+  );
+  expect(document.activeElement).toBe(label(second, 'Revised document'));
+});
+
+test('Progress and Notice are named parts', async () => {
+  const held = heldSession(true);
+  const container = inLocale(() =>
+    h(
+      Dialog,
+      { session: held.session },
+      {
+        default: () => [
+          h(Dialog.Progress, { className: 'host-progress' }),
+          h(Dialog.Notice, { className: 'host-notice' }),
+        ],
+      }
+    )
+  );
+  await nextTick();
+  await nextTick();
+  expect(container.querySelector('.host-notice')?.getAttribute('role')).toBe('status');
+  await startCompare(container);
+  expect(container.querySelector('.host-progress progress')).not.toBeNull();
 });

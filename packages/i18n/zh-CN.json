@@ -1010,6 +1010,7 @@
     "trackedOnly": "此文档仅允许以修订方式编辑",
     "unavailable": "此命令不可用",
     "viewing": "此文档已在查看模式下打开",
+    "compareCollaboration": "共享编辑会话中无法比较文档。",
     "bodyOnlyNote": "脚注和尾注需从文档正文中添加。",
     "bodyOnlySectionBreak": "分节符需插入文档正文。",
     "bodyOnlyToc": "目录需插入文档正文。",
@@ -1183,6 +1184,14 @@
     "revisedFile": "修订后的文档",
     "title": "比较文档",
     "noDifferences": "文档没有差异。",
+    "recorded": "{count, plural, other {比较记录了 # 处更改。}}",
+    "recordedNoRevisions": "比较更新了文档，但没有修订。",
+    "phases": {
+      "reading": "正在读取文档…",
+      "comparing": "正在比较…",
+      "checking": "正在检查结果…",
+      "applying": "正在应用更改…"
+    },
     "errors": {
       "invalidOptions": "比较选项无效。",
       "invalidOriginal": "无法读取已打开的文档进行比较。",
@@ -1193,12 +1202,14 @@
       "protected": "此文档受保护，禁止编辑。",
       "collaboration": "共享编辑会话中无法比较文档。",
       "viewing": "文档以只读方式打开。",
-      "closed": "对话框在比较运行前已关闭。",
+      "closed": "比较已取消。",
       "empty": "所选文件为空。",
+      "busy": "另一个比较、预览或文档刷新正在运行。请在其结束后重试。",
+      "documentChanged": "比较期间文档发生了更改。请重新比较。",
       "failed": "无法比较文档。"
     },
     "reasons": {
-      "headerFooter": "文档在页眉或页脚中存在差异，两个文档的各节对其共享方式不同。",
+      "headerFooter": "两个文档在前面某一节的页眉或页脚中存在差异，且该节在另一个文档中没有对应的节。",
       "lockedContent": "文档在锁定或链接到数据的内容控件中存在差异，因此无法审阅这些更改。请解除锁定或链接，然后重新比较。",
       "packageStructure": "打开的文档无法容纳此次比较的结果。",
       "unrecordedSettings": "修订后的文档添加了拒绝更改也无法撤销的节或表格设置。",

@@ -36,8 +36,11 @@ export type CommentMarkerStyle = 'initials' | 'icon';
 export function compareDocuments(original: Uint8Array, revised: Uint8Array, options?: CompareDocumentsOptions): CompareDocumentsResult;
 
 // @public
-export type CompareDocumentsErrorCode =
-/** An option has a value of the wrong type, such as a `date` that is not a valid date. */
+export type CompareDocumentsEngineErrorCode =
+/**
+* An option has a value of the wrong type, such as a `detectFormatChanges` that is not a
+* boolean, or the revised document is not a `Uint8Array`.
+*/
 'invalidOptions'
 /** The original document is not a readable DOCX package. */
 | 'invalidOriginal'
@@ -53,7 +56,10 @@ export type CompareDocumentsErrorCode =
 */
 | 'protected'
 /** The differences include content that no tracked change can record. */
-| 'unsupportedContent'
+| 'unsupportedContent';
+
+// @public
+export type CompareDocumentsErrorCode = CompareDocumentsEngineErrorCode
 /** Editor only: no review module, no open document, or no mount. */
 | 'unavailable'
 /** Editor only: a collaboration session is attached. */
@@ -62,8 +68,18 @@ export type CompareDocumentsErrorCode =
 | 'viewing'
 /** Editor only: the dialog closed, or the compare was canceled, before it finished. */
 | 'closed'
-/** Editor only: the revised file is empty. */
+/** Editor only: the revised file is a `Uint8Array` with no bytes. */
 | 'empty'
+/**
+* Editor only: another compare of the same dialog runs, or a preview or an external document
+* refresh blocks writes to the document. Try again when it ends.
+*/
+| 'busy'
+/**
+* Editor only: the open document changed while a background compare ran, so its result
+* no longer applies. The editor never retries by itself.
+*/
+| 'documentChanged'
 /** Editor only: any other failure. */
 | 'failed';
 
@@ -99,7 +115,7 @@ export type CompareDocumentsResult = {
     readonly ok: true;
     readonly revisionCount: number;
 } | {
-    readonly code: CompareDocumentsErrorCode;
+    readonly code: CompareDocumentsEngineErrorCode;
     readonly message: string;
     readonly ok: false;
     readonly reason?: CompareDocumentsRefusalReason;

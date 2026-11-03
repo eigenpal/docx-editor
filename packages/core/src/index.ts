@@ -113,6 +113,14 @@ export type {
   DocumentProtectionEdit,
   DocumentProtectionState,
 } from './store/package/document-protection.ts';
+// What the compare engine takes and returns: the original document as a package.
+export type {
+  ContentTypeIndex,
+  OoxmlExternalTarget,
+  OoxmlPackage,
+  RelationshipRecord,
+  TargetMode,
+} from '@docx-editor.dev/core/store';
 
 // ─── Chrome registry: what a toolbar is built from ───────────────────────────
 export {
@@ -173,6 +181,7 @@ export type {
   CompareDocumentsBackgroundEngine,
   CompareDocumentsBackgroundResult,
   CompareDocumentsEngine,
+  CompareDocumentsEngineErrorCode,
   CompareDocumentsErrorCode,
   CompareDocumentsRefusalReason,
   CompareDocumentsEngineOptions,

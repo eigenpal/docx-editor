@@ -676,7 +676,7 @@ Call the composable in a child component of the matching dialog. Each returns `v
 | `useParagraphDialog()` | `UseParagraphDialogReturn['values']['value']` | `alignment`, `indentLeft`, `indentRight`, `special`, `specialBy`, `spaceBefore`, `spaceAfter`, `lineRule`, `lineValue`, `contextualSpacing`, `keepNext`, `keepLines`, `widowControl`, `pageBreakBefore`, `tabStops`, `clearedAllTabStops` |
 | `useTextFormFieldDialog()` | `TextFormFieldDialogFields` | `defaultText`, `type`, `maxLength`, `format`, `enabled` |
 | `useRevisionMarkupDialog()` | `ResolvedRevisionMarkup` | `insertions`, `deletions`, `changedLines`, `movedFrom`, `movedTo`, `cells`, `formatting`, `trackMoves`, `trackFormatting` |
-| `useCompareDocumentsDialog()` | `CompareDocumentsDialogValues` | `revised`, `authorName`, `detectFormatChanges` |
+| `useCompareDocumentsDialog()` | `CompareDocumentsDialogValues` | `revised`, `authorName`, `detectFormatChanges`, `removeDateAndTime` |
 | `useWatermarkDialog()` | `WatermarkDialogFields` | `kind`, `imageData`, `imageName`, `scale`, `washout`, `text`, `fontFamily`, `fontSizePt`, `bold`, `italic`, `transparency`, `color`, `layout` |
 | `useBookmarkDialog()` | `BookmarkDialogFields` | `name`, `sortBy`, `showHidden` |
 | `useSplitCellDialog()` | `SplitCellDialogFields` | `columns`, `rows` |
@@ -687,7 +687,16 @@ Page dimensions, margins, and paragraph indents use twips: 1,440 per inch. Parag
 
 `useRevisionMarkupDialog()` also provides `reset()`, which restores the draft defaults without applying them.
 
-`useCompareDocumentsDialog()` also provides `busy`, which is `true` while the chosen file is read and compared. With the compare worker, `progress` gives the running step and its `fraction` from 0 to 1, and `cancelable` is `true`, so `cancel()` stops a running compare. For more information, see [Compare in a worker](/docs/2.x/pro/compare-documents#compare-in-a-worker). `apply()` compares the open document with the chosen file and records the differences as tracked changes in one undoable step.
+`useCompareDocumentsDialog()` also provides these members: Each member is a ref.
+
+- `busy`: `true` while the chosen file is read and compared. While it is `true`, `apply()` does nothing, so a second press never starts a second compare.
+- `progress`: with the compare worker, the running step (`phase`) and its `fraction` from 0 to 1. It is `null` until the worker reports its first step, and when no compare runs. The `compareDocuments.phases.<phase>` keys of `@docx-editor.dev/i18n` describe each step.
+- `cancelable`: `true` with the compare worker, so `cancel()` stops a running compare.
+- `notice`: a message that is not an error, such as that the documents have no differences.
+
+The `removeDateAndTime` draft key writes the revisions without dates. It defaults to `false`, and the default arrangement has no control for it. Set it from a custom control with `setValue('removeDateAndTime', true)`.
+
+`apply()` compares the open document with the chosen file and records the differences as tracked changes in one undoable step. The dialog also exposes the `Progress` and `Notice` parts: the progress bar with the running step in words, and the region that shows the notice. For more information, see [Compare in a worker](/docs/2.x/pro/compare-documents#compare-in-a-worker).
 
 `useSplitCellDialog()` also provides `limits`, the most rows and columns the cell at the selection splits into. The draft keeps each count as typed text.
 

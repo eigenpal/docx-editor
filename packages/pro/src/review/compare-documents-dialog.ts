@@ -54,6 +54,9 @@ export function createCompareDocumentsDialog(
       dialog.className = 'docx-compare-documents-dialog';
       dialog.contentEditable = 'false';
       dialog.setAttribute('data-docx-marker', '');
+      // Focus lands here when no control can take it, such as during a compare on the main
+      // thread, so it never falls back to the page.
+      dialog.tabIndex = -1;
       // Modal controls must not dispatch page editing shortcuts.
       for (const type of ['keydown', 'mousedown', 'beforeinput'])
         dialog.addEventListener(type, (event) => event.stopPropagation());
@@ -100,12 +103,21 @@ export function createCompareDocumentsDialog(
         notice.textContent = '';
         cancel.textContent = t('cancel');
       };
-      // Shown while a compare runs: with a value when the compare reports its steps.
+      // Shown while a compare runs: indeterminate until the compare reports its first step.
       const progress = el('progress');
       progress.className = 'docx-compare-documents-progress';
       progress.max = 1;
       progress.hidden = true;
       progress.setAttribute('aria-label', t('comparing'));
+      // The step in words, next to the bar. It holds focus while nothing else can.
+      const phase = el('span');
+      phase.className = 'docx-compare-documents-phase';
+      phase.tabIndex = -1;
+      phase.hidden = true;
+      const showPhase = (text: string) => {
+        phase.textContent = text;
+        progress.setAttribute('aria-valuetext', text);
+      };
       const footer = el('div');
       footer.className = 'docx-compare-documents-actions';
       const cancel = el('button', t('cancel'));
@@ -121,10 +133,23 @@ export function createCompareDocumentsDialog(
         // A background compare can stop; a compare on the main thread cannot.
         cancel.disabled = next && !host.cancelable;
         progress.hidden = !next;
-        if (!next) progress.removeAttribute('value');
+        phase.hidden = !next;
+        if (next) showPhase(t('comparing'));
+        else {
+          progress.removeAttribute('value');
+          progress.removeAttribute('aria-valuetext');
+          phase.textContent = '';
+        }
         compare.disabled = next || !file.files?.length || !host.canApply();
         compare.textContent = t(next ? 'comparing' : 'compare');
         dialog?.setAttribute('aria-busy', String(next));
+        // Compare disabled itself: keep focus in the dialog, on a control that still works.
+        if (next) (cancel.disabled ? phase : cancel).focus({ preventScroll: true });
+      };
+      /** After a compare that left the dialog open: the next useful control takes focus. */
+      const focusAfter = (refused: boolean) => {
+        const target = !refused && !compare.disabled ? compare : file;
+        (target.disabled ? (dialog ?? file) : target).focus({ preventScroll: true });
       };
       file.addEventListener('change', () => {
         clearMessages();
@@ -145,6 +170,7 @@ export function createCompareDocumentsDialog(
           if (!host.signal.aborted) {
             error.textContent = t('readFailed');
             setBusy(false);
+            focusAfter(true);
           }
           return;
         }
@@ -155,7 +181,12 @@ export function createCompareDocumentsDialog(
             authorName: author.value,
             detectFormatChanges: formatting.checked,
           },
-          { onProgress: (step) => (progress.value = step.fraction) }
+          {
+            onProgress: (step) => {
+              progress.value = step.fraction;
+              showPhase(t(`phases.${step.phase}`));
+            },
+          }
         );
         if (host.signal.aborted) return;
         // With no differences the dialog stays open and says so; nothing changed.
@@ -165,9 +196,10 @@ export function createCompareDocumentsDialog(
           cancel.textContent = translate('common.close');
         } else error.textContent = translate(compareDocumentsErrorKey(outcome));
         setBusy(false);
+        focusAfter(!outcome.ok);
       });
 
-      dialog.append(title, description, body, progress, error, notice, footer);
+      dialog.append(title, description, body, progress, phase, error, notice, footer);
       host.container.append(dialog);
       setBusy(false);
       dialog.showModal();

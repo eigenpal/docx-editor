@@ -46,6 +46,8 @@ export {
   type CompareDocumentsOptions,
   type CompareDocumentsResult,
 } from './compare/index.ts';
+// The codes `compareDocuments` returns: a subset of `CompareDocumentsErrorCode`.
+export type { CompareDocumentsEngineErrorCode } from '@docx-editor.dev/core/editor';
 export {
   collaborationModule,
   type CollaborationModuleOptions,

@@ -1010,6 +1010,7 @@
     "trackedOnly": "Ce document autorise uniquement les modifications suivies",
     "unavailable": "Cette commande est indisponible",
     "viewing": "Ce document est ouvert en mode affichage",
+    "compareCollaboration": "La comparaison de documents n’est pas disponible dans une session de modification partagée.",
     "bodyOnlyNote": "Les notes de bas de page et de fin s’ajoutent depuis le corps du document.",
     "bodyOnlySectionBreak": "Les sauts de section s’insèrent dans le corps du document.",
     "bodyOnlyToc": "Une table des matières s’insère dans le corps du document.",
@@ -1183,6 +1184,14 @@
     "revisedFile": "Document révisé",
     "title": "Comparer des documents",
     "noDifferences": "Les documents ne présentent aucune différence.",
+    "recorded": "{count, plural, one {La comparaison a enregistré # modification.} many {La comparaison a enregistré # modifications.} other {La comparaison a enregistré # modifications.}}",
+    "recordedNoRevisions": "La comparaison a mis à jour le document sans modifications suivies.",
+    "phases": {
+      "reading": "Lecture des documents…",
+      "comparing": "Comparaison…",
+      "checking": "Vérification du résultat…",
+      "applying": "Application des modifications…"
+    },
     "errors": {
       "invalidOptions": "Les options de comparaison ne sont pas valides.",
       "invalidOriginal": "Le document ouvert ne peut pas être lu pour une comparaison.",
@@ -1193,12 +1202,14 @@
       "protected": "Ce document est protégé contre les modifications.",
       "collaboration": "La comparaison de documents n’est pas disponible dans une session de modification partagée.",
       "viewing": "Le document est ouvert en lecture seule.",
-      "closed": "La boîte de dialogue a été fermée avant la comparaison.",
+      "closed": "La comparaison a été annulée.",
       "empty": "Le fichier choisi est vide.",
+      "busy": "Une autre comparaison, un aperçu ou une actualisation du document est en cours. Réessayez une fois l’opération terminée.",
+      "documentChanged": "Le document a changé pendant la comparaison. Comparez de nouveau.",
       "failed": "Impossible de comparer les documents."
     },
     "reasons": {
-      "headerFooter": "Les documents diffèrent par un en-tête ou un pied de page que les sections des deux documents partagent différemment.",
+      "headerFooter": "Les documents diffèrent dans un en-tête ou un pied de page d’une section précédente, et cette section n’a pas de section correspondante dans l’autre document.",
       "lockedContent": "Les documents diffèrent dans un contrôle de contenu verrouillé ou lié à des données : ces modifications ne peuvent pas être révisées. Supprimez le verrou ou le lien, puis comparez de nouveau.",
       "packageStructure": "Le document ouvert ne peut pas contenir le résultat de cette comparaison.",
       "unrecordedSettings": "Le document révisé ajoute des paramètres de section ou de tableau que le refus des modifications ne pourrait pas annuler.",

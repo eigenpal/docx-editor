@@ -9,6 +9,7 @@ export type * from './revision-markup.ts';
 export type * from './review-pane.ts';
 export type * from './compare-documents.ts';
 export type {
+  CompareDocumentsEngineErrorCode,
   CompareDocumentsErrorCode,
   CompareDocumentsRefusalReason,
   CompareDocumentsPhase,

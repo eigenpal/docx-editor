@@ -666,6 +666,7 @@ export {
 export type {
   CompareDocumentsChromeHandlers,
   CompareDocumentsDialogSession,
+  CompareDocumentsEngineErrorCode,
   CompareDocumentsErrorCode,
   CompareDocumentsRefusalReason,
   CompareDocumentsOutcome,

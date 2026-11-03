@@ -83,12 +83,10 @@
       "OoxmlElement"
     ],
     "contracts-modules": [
-      "CompareDocumentsDialogSession",
       "EditorCollaborationSession",
       "EditorDiagnostic",
       "EditorDiagnosticKind",
       "OoxmlElement",
-      "OoxmlPackage",
       "ReviewPaneOptions",
       "RevisionMarkupDialogSession"
     ],
@@ -252,7 +250,6 @@
     "index": [
       "EditorCollaborationSession",
       "OoxmlElement",
-      "OoxmlPackage",
       "OoxmlPart",
       "OpeningIndicatorHost",
       "PaginatedSurface",

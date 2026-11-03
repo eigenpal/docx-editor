@@ -16,15 +16,17 @@ export interface CompareDocumentsEngineOptions {
 }
 
 /**
- * Why a compare was refused, as a stable code. `compareDocuments.errors.<code>` in
- * `@docx-editor.dev/i18n` translates every code. Every entry point uses this one type: the
- * engine and `compareDocuments` return the first six codes, and the editor command and dialog
- * can also return the last six.
+ * Why the compare engine refused a compare, as a stable code: the codes that the engine,
+ * `compareDocuments`, and a background engine return. `compareDocuments.errors.<code>` in
+ * `@docx-editor.dev/i18n` translates every code.
  *
  * @public
  */
-export type CompareDocumentsErrorCode =
-  /** An option has a value of the wrong type, such as a `date` that is not a valid date. */
+export type CompareDocumentsEngineErrorCode =
+  /**
+   * An option has a value of the wrong type, such as a `detectFormatChanges` that is not a
+   * boolean, or the revised document is not a `Uint8Array`.
+   */
   | 'invalidOptions'
   /** The original document is not a readable DOCX package. */
   | 'invalidOriginal'
@@ -40,7 +42,18 @@ export type CompareDocumentsErrorCode =
    */
   | 'protected'
   /** The differences include content that no tracked change can record. */
-  | 'unsupportedContent'
+  | 'unsupportedContent';
+
+/**
+ * Why a compare was refused, as a stable code. `compareDocuments.errors.<code>` in
+ * `@docx-editor.dev/i18n` translates every code. Every entry point uses this one type: the
+ * engine and `compareDocuments` return the {@link CompareDocumentsEngineErrorCode} codes, and
+ * the editor command and dialog can also return the editor-only codes.
+ *
+ * @public
+ */
+export type CompareDocumentsErrorCode =
+  | CompareDocumentsEngineErrorCode
   /** Editor only: no review module, no open document, or no mount. */
   | 'unavailable'
   /** Editor only: a collaboration session is attached. */
@@ -49,8 +62,18 @@ export type CompareDocumentsErrorCode =
   | 'viewing'
   /** Editor only: the dialog closed, or the compare was canceled, before it finished. */
   | 'closed'
-  /** Editor only: the revised file is empty. */
+  /** Editor only: the revised file is a `Uint8Array` with no bytes. */
   | 'empty'
+  /**
+   * Editor only: another compare of the same dialog runs, or a preview or an external document
+   * refresh blocks writes to the document. Try again when it ends.
+   */
+  | 'busy'
+  /**
+   * Editor only: the open document changed while a background compare ran, so its result
+   * no longer applies. The editor never retries by itself.
+   */
+  | 'documentChanged'
   /** Editor only: any other failure. */
   | 'failed';
 
@@ -101,7 +124,7 @@ export type CompareDocumentsEngineResult =
     }
   | {
       readonly ok: false;
-      readonly code: CompareDocumentsErrorCode;
+      readonly code: CompareDocumentsEngineErrorCode;
       /** Set with `unsupportedContent`: what the refusal is about. */
       readonly reason?: CompareDocumentsRefusalReason;
       readonly message: string;
@@ -140,16 +163,22 @@ export interface CompareDocumentsProgress {
 export type CompareDocumentsBackgroundResult =
   | {
       readonly ok: true;
-      /** The original with the differences as tracked changes, or `null` when unchanged. */
+      /**
+       * The original with the differences as tracked changes, or `null` when `changed` is
+       * false. Read `changed`, not `bytes`, to decide whether to apply or save the result.
+       */
       readonly bytes: Uint8Array | null;
       /** Tracked changes recorded, one per review decision. */
       readonly revisionCount: number;
-      /** Whether the result differs from the original. */
+      /**
+       * Whether the result differs from the original. This tells callers whether to apply or
+       * save the result. False when the documents have no differences: `bytes` is then `null`.
+       */
       readonly changed: boolean;
     }
   | {
       readonly ok: false;
-      readonly code: CompareDocumentsErrorCode;
+      readonly code: CompareDocumentsEngineErrorCode;
       /** Set with `unsupportedContent`: what the refusal is about. */
       readonly reason?: CompareDocumentsRefusalReason;
       readonly message: string;

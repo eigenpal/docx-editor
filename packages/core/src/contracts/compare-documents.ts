@@ -103,6 +103,11 @@ export interface CompareDocumentsDialogSession {
    * and `cancel()` stops a running compare: `apply` then answers `closed`. Otherwise the
    * compare runs on the main thread, `onProgress` is not called, and nothing can stop the
    * compare once it starts.
+   *
+   * A call while another compare of this session runs, or while a preview or an external
+   * document refresh blocks writes, answers `busy` and changes nothing. A background compare
+   * whose document changed before the result applies answers `documentChanged`; the editor
+   * never retries it by itself.
    */
   apply(
     request: CompareDocumentsRequest,

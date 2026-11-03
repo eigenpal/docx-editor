@@ -309,6 +309,7 @@ export {
   type CompareDocumentsBackgroundEngine,
   type CompareDocumentsBackgroundResult,
   type CompareDocumentsEngine,
+  type CompareDocumentsEngineErrorCode,
   type CompareDocumentsErrorCode,
   type CompareDocumentsRefusalReason,
   type CompareDocumentsEngineOptions,
@@ -684,6 +685,10 @@ export {
   COMPARE_DOCUMENTS_ACCEPT,
   compareDocumentsErrorKey,
 } from '../contracts/compare-documents.ts';
+export {
+  COMPARE_DOCUMENTS_PHASE_ATTRIBUTE,
+  focusCompareDocumentsControl,
+} from './compare-documents-focus.ts';
 
 /** The watermark shape box that `setWatermark` writes, for previews. */
 export {

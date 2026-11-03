@@ -30,6 +30,7 @@ import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsChromeHandlers } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsDialogSession } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsEngineErrorCode } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsErrorCode } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsOutcome } from '@docx-editor.dev/core/editor';
 import { CompareDocumentsProgress } from '@docx-editor.dev/core/editor';
@@ -249,8 +250,11 @@ export interface CompareDocumentsDialogValues {
     readonly authorName: string;
     // (undocumented)
     readonly detectFormatChanges: boolean;
+    readonly removeDateAndTime: boolean;
     readonly revised: File | null;
 }
+
+export { CompareDocumentsEngineErrorCode }
 
 export { CompareDocumentsErrorCode }
 
@@ -676,6 +680,8 @@ export const DocxEditorCompareDocumentsDialog: typeof CompareDocumentsDialogRoot
     Header: (props: DialogPartProps & {
         name?: keyof CompareDocumentsDialogValues | undefined;
     }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Notice: (props: DialogPartProps) => react.ReactNode;
+    Progress: (props: DialogPartProps) => react.ReactNode;
     Title: (props: DialogPartProps & {
         name?: keyof CompareDocumentsDialogValues | undefined;
     }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;

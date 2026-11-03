@@ -21,6 +21,7 @@
     "editorNotReady": "El editor no está listo",
     "notWired": "Este control no está conectado a un comando del editor",
     "viewing": "Este documento está abierto en modo de lectura",
+    "compareCollaboration": "Comparar documentos no está disponible en una sesión de edición compartida.",
     "trackedOnly": "Este documento solo permite ediciones como cambios controlados",
     "noDocument": "No hay ningún documento cargado",
     "noReviewAuthors": "Este documento no tiene autores de revisión",
@@ -1183,6 +1184,14 @@
     "revisedFile": "Documento revisado",
     "title": "Comparar documentos",
     "noDifferences": "Los documentos no tienen diferencias.",
+    "recorded": "{count, plural, one {La comparación registró # cambio.} other {La comparación registró # cambios.}}",
+    "recordedNoRevisions": "La comparación actualizó el documento sin cambios con seguimiento.",
+    "phases": {
+      "reading": "Leyendo los documentos…",
+      "comparing": "Comparando…",
+      "checking": "Comprobando el resultado…",
+      "applying": "Aplicando los cambios…"
+    },
     "errors": {
       "invalidOptions": "Las opciones de comparación no son válidas.",
       "invalidOriginal": "No se puede leer el documento abierto para compararlo.",
@@ -1193,12 +1202,14 @@
       "protected": "Este documento está protegido contra modificaciones.",
       "collaboration": "Comparar documentos no está disponible en una sesión de edición compartida.",
       "viewing": "El documento está abierto solo para lectura.",
-      "closed": "El cuadro de diálogo se cerró antes de la comparación.",
+      "closed": "Se canceló la comparación.",
       "empty": "El archivo elegido está vacío.",
+      "busy": "Hay otra comparación, una vista previa o una actualización del documento en curso. Vuelva a intentarlo cuando termine.",
+      "documentChanged": "El documento cambió mientras se comparaba. Vuelva a comparar.",
       "failed": "No se pudieron comparar los documentos."
     },
     "reasons": {
-      "headerFooter": "Los documentos difieren en un encabezado o pie de página que las secciones de los dos documentos comparten de forma distinta.",
+      "headerFooter": "Los documentos difieren en un encabezado o pie de página de una sección anterior, y esa sección no tiene una sección equivalente en el otro documento.",
       "lockedContent": "Los documentos difieren dentro de un control de contenido bloqueado o vinculado a datos, por lo que esos cambios no se pueden revisar. Quite el bloqueo o el vínculo y vuelva a comparar.",
       "packageStructure": "El documento abierto no puede contener el resultado de esta comparación.",
       "unrecordedSettings": "El documento revisado agrega configuraciones de sección o de tabla que no se podrían deshacer al rechazar los cambios.",

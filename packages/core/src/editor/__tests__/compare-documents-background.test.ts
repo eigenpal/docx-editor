@@ -13,6 +13,7 @@ import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { collectReviewItems, readOoxmlPackage } from '@docx-editor.dev/core/store';
 import type { EditorModule, ReviewModuleContribution } from '../../contracts/modules.ts';
 import type { CompareDocumentsDialogSession } from '../../contracts/compare-documents.ts';
+import { setPreviewWriteGuard } from '../refresh-write-guard.ts';
 import type {
   CompareDocumentsBackgroundEngine,
   CompareDocumentsBackgroundResult,
@@ -78,6 +79,7 @@ afterEach(() => cleanup());
 function open(review: Partial<ReviewModuleContribution>): {
   editor: DocxEditorInstance;
   session: CompareDocumentsDialogSession;
+  container: HTMLElement;
 } {
   const container = document.createElement('div');
   document.body.append(container);
@@ -94,7 +96,7 @@ function open(review: Partial<ReviewModuleContribution>): {
   let session: CompareDocumentsDialogSession | null = null;
   editor.setCompareDocumentsChrome({ onRequest: (s) => (session = s) });
   editor.exec({ type: 'openCompareDocumentsDialog' });
-  return { editor, session: session! };
+  return { editor, session: session!, container };
 }
 
 const bodyText = (editor: DocxEditorInstance) => editor.surface!.session.bodyText();
@@ -147,8 +149,37 @@ test('a result for a document that changed meanwhile is not installed', async ()
   await settle();
   editor.surface!.session.replacePackage(readOk(docx('Edited meanwhile')));
   calls[0]!.finish();
-  expect(await outcome).toMatchObject({ ok: false, code: 'failed' });
+  // Its own code, so a dialog can say to compare again. The editor never retries by itself.
+  expect(await outcome).toMatchObject({ ok: false, code: 'documentChanged' });
+  expect(calls).toHaveLength(1);
   expect(bodyText(editor)).toBe('Edited meanwhile');
+});
+
+test('a second apply while a background compare runs answers busy', async () => {
+  const { engine, calls } = heldEngine();
+  const { session } = open({ compareDocumentsInBackground: engine });
+  const first = session.apply({ revised: docx('Revised text') });
+  await settle();
+  expect(await session.apply({ revised: docx('Other text') })).toMatchObject({
+    ok: false,
+    code: 'busy',
+  });
+  expect(calls).toHaveLength(1);
+  calls[0]!.finish();
+  expect(await first).toEqual({ ok: true, revisionCount: 2, changed: true });
+});
+
+test('a preview that opens during a background compare blocks the install with busy', async () => {
+  const { engine, calls } = heldEngine();
+  const { editor, session, container } = open({ compareDocumentsInBackground: engine });
+  const outcome = session.apply({ revised: docx('Revised text') });
+  await settle();
+  setPreviewWriteGuard(container, true);
+  calls[0]!.finish();
+  expect(await outcome).toMatchObject({ ok: false, code: 'busy' });
+  setPreviewWriteGuard(container, false);
+  expect(bodyText(editor)).toBe('Original text');
+  expect(editor.can({ type: 'undo' }).ok).toBe(false);
 });
 
 test('an engine refusal keeps its code', async () => {

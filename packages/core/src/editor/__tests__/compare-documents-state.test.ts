@@ -27,6 +27,10 @@ import type {
 import en from '../../../../i18n/en.json' with { type: 'json' };
 import { PRO_REVIEW_REASON } from '../opening-editing-mode.ts';
 import { COMPARE_COLLABORATION_REASON } from '../compare-documents-state.ts';
+import { setPreviewWriteGuard, setRefreshWriteGuard } from '../refresh-write-guard.ts';
+import { EDITOR_ANNOUNCER_CLASS } from '../editor-announcer.ts';
+import { createT, type LocaleStrings } from '@docx-editor.dev/i18n';
+import { DISABLED_REASON_KEYS } from '../../../../i18n/src/disabled-reasons.ts';
 import { stubCollaborationModule, stubCollaborationSession } from './collaboration-test-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -87,14 +91,17 @@ function reviewModule(review: Partial<ReviewModuleContribution> = {}): EditorMod
 
 let cleanup: () => void = () => {};
 afterEach(() => cleanup());
+let mounted: HTMLElement | null = null;
+type Translate = (key: string, params?: Record<string, string | number>) => string;
 
 function mount(
   modules: EditorModule[],
-  options: { mode?: 'view' } = {},
+  options: { mode?: 'view'; translate?: Translate } = {},
   original = docx('Original text')
 ): DocxEditorInstance {
   const container = document.createElement('div');
   document.body.append(container);
+  mounted = container;
   const editor = createDocxEditor({
     container,
     document: original,
@@ -153,8 +160,14 @@ describe('compare documents commands', () => {
     expect(editor.exec({ type: 'compareDocuments', revised: docx('Revised') })).toMatchObject({
       ok: false,
       reason: COMPARE_COLLABORATION_REASON,
+      compareDocuments: { ok: false, code: 'collaboration' },
     });
     expect(bodyText(editor)).toBe('Original text');
+    // The disabled reason reads as a sentence in the reader's language, not as a code.
+    expect(DISABLED_REASON_KEYS[COMPARE_COLLABORATION_REASON]).toBe(
+      'disabledReason.compareCollaboration'
+    );
+    expect(en.disabledReason.compareCollaboration).toBeString();
   });
 
   test('refuse while viewing and in a view-only editor', () => {
@@ -247,6 +260,107 @@ describe('compare documents commands', () => {
     });
     expect(bodyText(editor)).toBe('Original text');
   });
+
+  test('empty is a zero-length Uint8Array; a revised of another type is invalidOptions', async () => {
+    const editor = mount([reviewModule()]);
+    for (const revised of [null, 'bytes', [1, 2], new ArrayBuffer(4), new Uint16Array(2)])
+      expect(editor.exec({ type: 'compareDocuments', revised } as never)).toMatchObject({
+        ok: false,
+        code: 'invalidArgs',
+        compareDocuments: { ok: false, code: 'invalidOptions' },
+      });
+    let session: CompareDocumentsDialogSession | null = null;
+    editor.setCompareDocumentsChrome({ onRequest: (s) => (session = s) });
+    editor.exec({ type: 'openCompareDocumentsDialog' });
+    expect(await session!.apply({ revised: 'bytes' } as never)).toMatchObject({
+      ok: false,
+      code: 'invalidOptions',
+    });
+    expect(await session!.apply({ revised: new Uint8Array() })).toMatchObject({
+      ok: false,
+      code: 'empty',
+    });
+    expect(bodyText(editor)).toBe('Original text');
+    session!.cancel();
+  });
+
+  test('a preview or an external refresh blocks a compare with busy', async () => {
+    const editor = mount([reviewModule()]);
+    const container = mounted!;
+    let session: CompareDocumentsDialogSession | null = null;
+    editor.setCompareDocumentsChrome({ onRequest: (s) => (session = s) });
+    editor.exec({ type: 'openCompareDocumentsDialog' });
+    for (const guard of [setPreviewWriteGuard, setRefreshWriteGuard]) {
+      guard(container, true);
+      expect(session!.canApply()).toBe(false);
+      expect(await session!.apply({ revised: docx('Revised text') })).toMatchObject({
+        ok: false,
+        code: 'busy',
+      });
+      expect(editor.exec({ type: 'compareDocuments', revised: docx('x') })).toMatchObject({
+        ok: false,
+        compareDocuments: { ok: false, code: 'busy' },
+      });
+      expect(session!.signal.aborted).toBe(false);
+      guard(container, false);
+    }
+    expect(bodyText(editor)).toBe('Original text');
+    expect(session!.canApply()).toBe(true);
+    expect(await session!.apply({ revised: docx('Revised text') })).toMatchObject({ ok: true });
+  });
+
+  test('a second apply while a compare runs answers busy and runs nothing', async () => {
+    let calls = 0;
+    const editor = mount([
+      reviewModule({
+        compareDocuments: (original, revised, options) => {
+          calls++;
+          return replaceWithRevised(original, revised, options);
+        },
+      }),
+    ]);
+    let session: CompareDocumentsDialogSession | null = null;
+    editor.setCompareDocumentsChrome({ onRequest: (s) => (session = s) });
+    editor.exec({ type: 'openCompareDocumentsDialog' });
+    const first = session!.apply({ revised: docx('Revised text') });
+    const second = await session!.apply({ revised: docx('Other text') });
+    expect(second).toMatchObject({ ok: false, code: 'busy' });
+    expect(await first).toEqual({ ok: true, revisionCount: 2, changed: true });
+    expect(calls).toBe(1);
+    expect(bodyText(editor)).toBe('Revised text');
+  });
+
+  test('a compare that changed the document is announced once the dialog closes', async () => {
+    const counts = [2, 0];
+    for (const revisionCount of counts) {
+      const editor = mount(
+        [
+          reviewModule({
+            compareDocuments: (original, revised, options) => {
+              const result = replaceWithRevised(original, revised, options);
+              return result.ok ? { ...result, revisionCount } : result;
+            },
+          }),
+        ],
+        { translate: createT(en as unknown as LocaleStrings) as Translate }
+      );
+      const container = mounted!;
+      let session: CompareDocumentsDialogSession | null = null;
+      editor.setCompareDocumentsChrome({ onRequest: (s) => (session = s) });
+      editor.exec({ type: 'openCompareDocumentsDialog' });
+      await session!.apply({ revised: docx('Revised text') });
+      const region = container.querySelector(`.${EDITOR_ANNOUNCER_CLASS}`)!;
+      expect(region.getAttribute('aria-live')).toBe('polite');
+      expect(region.getAttribute('role')).toBe('status');
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      expect(region.textContent).toBe(
+        revisionCount === 2
+          ? 'Compare recorded 2 changes.'
+          : 'The compare updated the document without tracked changes.'
+      );
+      cleanup();
+    }
+  });
 });
 
 describe('compare documents dialog session', () => {
@@ -291,6 +405,8 @@ describe('compare documents dialog session', () => {
     expect(session!.signal.aborted).toBe(false);
     expect(session!.canApply()).toBe(true);
     expect(bodyText(editor)).toBe('Original text');
+    // The dialog says so itself; the editor announces nothing.
+    expect(mounted!.querySelector(`.${EDITOR_ANNOUNCER_CLASS}`)).toBeNull();
     session!.cancel();
   });
 
@@ -466,6 +582,8 @@ test('every compare refusal has an English message', () => {
     viewing: true,
     closed: true,
     empty: true,
+    busy: true,
+    documentChanged: true,
     failed: true,
   };
   const messages = en.compareDocuments.errors as Record<string, string>;

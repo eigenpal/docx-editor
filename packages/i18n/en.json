@@ -21,6 +21,7 @@
     "editorNotReady": "The editor is not ready",
     "notWired": "This control is not connected to an editor command",
     "viewing": "This document is open for viewing",
+    "compareCollaboration": "Compare documents is not available in a shared editing session.",
     "trackedOnly": "This document permits edits only as tracked changes",
     "noDocument": "No document is loaded",
     "noReviewAuthors": "This document has no review authors",
@@ -1181,6 +1182,14 @@
     "cancel": "Cancel",
     "comparing": "Comparing…",
     "noDifferences": "The documents have no differences.",
+    "recorded": "{count, plural, one {Compare recorded # change.} other {Compare recorded # changes.}}",
+    "recordedNoRevisions": "The compare updated the document without tracked changes.",
+    "phases": {
+      "reading": "Reading the documents…",
+      "comparing": "Comparing…",
+      "checking": "Checking the result…",
+      "applying": "Applying the changes…"
+    },
     "errors": {
       "invalidOptions": "The compare options are not valid.",
       "invalidOriginal": "The open document cannot be read for a compare.",
@@ -1191,8 +1200,10 @@
       "protected": "This document is protected against edits.",
       "collaboration": "Compare documents is not available in a shared editing session.",
       "viewing": "The document is open for viewing only.",
-      "closed": "The dialog was closed before the compare ran.",
+      "closed": "The compare was canceled.",
       "empty": "The chosen file is empty.",
+      "busy": "Another compare, a preview, or a document refresh is running. Try again when it ends.",
+      "documentChanged": "The document changed while it was compared. Compare again.",
       "failed": "Could not compare the documents."
     },
     "reasons": {
@@ -1200,7 +1211,7 @@
       "unresolvedRevisions": "A document holds tracked changes that cannot be accepted. Accept or reject them in that document, then compare again.",
       "untrackedContent": "The documents differ in content that cannot be shown as tracked changes, such as an embedded file.",
       "unrecordedSettings": "The revised document adds section or table settings that could not be undone by rejecting changes.",
-      "headerFooter": "The documents differ in a header or footer that the sections of the two documents share in different ways.",
+      "headerFooter": "The documents differ in a header or footer of an earlier section, and that section has no matching section in the other document.",
       "packageStructure": "The open document cannot hold the result of this compare.",
       "unverified": "The compare result would not reproduce both documents, so it was not applied."
     },

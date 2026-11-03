@@ -8929,11 +8929,27 @@ p.docx-review__refused {
   margin: 0.75rem 0 0;
   accent-color: var(--doc-primary);
 }
-/* One message line: the notice takes the error's place, never a second line. */
+.docx-compare-documents-dialog .docx-compare-documents-phase {
+  display: block;
+  margin: 0.25rem 0 0;
+  color: var(--doc-text-muted);
+}
+/* One message line: the notice takes the error's place, never a second line. An empty
+ * message region stays in the accessibility tree, so a later message is announced; it is
+ * only hidden from view (the `.docx-editor-sr-only` pattern). */
 .docx-compare-documents-dialog
   .docx-compare-documents-error:empty:has(+ .docx-compare-documents-notice:not(:empty)),
 .docx-compare-documents-dialog .docx-compare-documents-notice:empty {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 .docx-compare-documents-actions {
   display: flex;

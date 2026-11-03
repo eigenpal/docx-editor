@@ -3,6 +3,7 @@ import {
   computed,
   defineComponent,
   getCurrentInstance,
+  nextTick,
   ref,
   shallowRef,
   watch,
@@ -12,7 +13,9 @@ import {
 } from 'vue';
 import {
   COMPARE_DOCUMENTS_ACCEPT,
+  COMPARE_DOCUMENTS_PHASE_ATTRIBUTE,
   compareDocumentsErrorKey,
+  focusCompareDocumentsControl,
   type CompareDocumentsDialogSession,
   type CompareDocumentsProgress,
 } from '@docx-editor.dev/core/editor';
@@ -32,11 +35,19 @@ export interface CompareDocumentsDialogValues {
   readonly revised: File | null;
   readonly authorName: string;
   readonly detectFormatChanges: boolean;
+  /**
+   * Write the revisions without dates. Default `false`. The preset has no control for it; a
+   * custom part sets it with `setValue('removeDateAndTime', true)`.
+   */
+  readonly removeDateAndTime: boolean;
 }
 const composition = createDialogComposition<CompareDocumentsDialogValues>('CompareDocumentsDialog');
 /** Compare documents draft and actions. @public */
 export interface UseCompareDocumentsDialogReturn extends UseDialogReturn<CompareDocumentsDialogValues> {
-  /** True while the chosen file is read and compared. */
+  /**
+   * True while the chosen file is read and compared. `apply()` does nothing while it is true,
+   * so a second press cannot start a second compare.
+   */
   readonly busy: Readonly<Ref<boolean>>;
   /**
    * How far the running compare is, when the editor compares in the background (see
@@ -75,6 +86,7 @@ const Impl = defineComponent({
       revised: null,
       authorName: '',
       detectFormatChanges: true,
+      removeDateAndTime: false,
     });
     const error = ref<string | undefined>();
     const notice = ref<string | undefined>();
@@ -82,6 +94,11 @@ const Impl = defineComponent({
     const progress = shallowRef<CompareDocumentsProgress | null>(null);
     const cancelable = computed(() => p.session?.cancelable ?? false);
     const closed = ref(false);
+    const panel = ref<HTMLDialogElement | null>(null);
+    // Compare disables itself while busy: focus moves once the next render is on screen.
+    const focusAfterRender = (moment: 'busy' | 'refused' | 'unchanged') =>
+      void nextTick(() => focusCompareDocumentsControl(panel.value, moment));
+    let running = false;
     watch(
       () => p.session,
       (session, _old, cleanup) => {
@@ -90,11 +107,13 @@ const Impl = defineComponent({
         notice.value = undefined;
         busy.value = false;
         progress.value = null;
+        running = false;
         if (!session) return;
         values.value = {
           revised: null,
           authorName: session.defaultAuthor,
           detectFormatChanges: true,
+          removeDateAndTime: false,
         };
         const abort = () => {
           closed.value = true;
@@ -133,35 +152,55 @@ const Impl = defineComponent({
         error.value = t('fileRequired');
         return;
       }
+      // A duplicate submission while a compare runs is ignored; the session itself answers
+      // `busy` to a second `apply`.
+      if (running) return;
+      running = true;
       busy.value = true;
+      focusAfterRender('busy');
       error.value = undefined;
       notice.value = undefined;
-      let revised: Uint8Array;
       try {
-        revised = new Uint8Array(await file.arrayBuffer());
-      } catch {
-        if (!session.signal.aborted) {
-          error.value = t('readFailed');
-          busy.value = false;
+        let revised: Uint8Array;
+        try {
+          revised = new Uint8Array(await file.arrayBuffer());
+        } catch {
+          if (!session.signal.aborted && p.session === session) {
+            error.value = t('readFailed');
+            busy.value = false;
+            focusAfterRender('refused');
+          }
+          return;
         }
-        return;
+        if (session.signal.aborted) return;
+        const outcome = await session.apply(
+          {
+            revised,
+            authorName: values.value.authorName,
+            detectFormatChanges: values.value.detectFormatChanges,
+            ...(values.value.removeDateAndTime ? { removeDateAndTime: true } : {}),
+          },
+          { onProgress: (step) => (progress.value = step) }
+        );
+        // A replaced session owns the form now; this outcome is not its own.
+        if (session.signal.aborted || p.session !== session) return;
+        progress.value = null;
+        // With no differences the dialog stays open and says so; nothing changed.
+        if (outcome.ok) notice.value = translate('compareDocuments.noDifferences');
+        else error.value = translate(compareDocumentsErrorKey(outcome));
+        busy.value = false;
+        focusAfterRender(outcome.ok ? 'unchanged' : 'refused');
+      } finally {
+        if (p.session === session) running = false;
       }
-      if (session.signal.aborted) return;
-      const outcome = await session.apply(
-        {
-          revised,
-          authorName: values.value.authorName,
-          detectFormatChanges: values.value.detectFormatChanges,
-        },
-        { onProgress: (step) => (progress.value = step) }
-      );
-      if (session.signal.aborted) return;
-      progress.value = null;
-      // With no differences the dialog stays open and says so; nothing changed.
-      if (outcome.ok) notice.value = translate('compareDocuments.noDifferences');
-      else error.value = translate(compareDocumentsErrorKey(outcome));
-      busy.value = false;
     };
+    const phaseText = computed(() =>
+      progress.value
+        ? translate(
+            `compareDocuments.phases.${progress.value.phase}` as Parameters<typeof translate>[0]
+          )
+        : t('comparing')
+    );
     const apply = () => {
       void compare();
     };
@@ -228,13 +267,23 @@ const Impl = defineComponent({
             </label>
           </div>
           {busy.value ? (
-            <progress
-              data-docx-part="progress"
-              class="docx-compare-documents-progress"
-              max={1}
-              value={progress.value?.fraction}
-              aria-label={t('comparing')}
-            />
+            <div data-docx-part="progress">
+              {/* Indeterminate until the compare reports its first step. */}
+              <progress
+                class="docx-compare-documents-progress"
+                max={1}
+                value={progress.value?.fraction}
+                aria-label={t('comparing')}
+                aria-valuetext={phaseText.value}
+              />
+              <span
+                class="docx-compare-documents-phase"
+                tabindex={-1}
+                {...{ [COMPARE_DOCUMENTS_PHASE_ATTRIBUTE]: '' }}
+              >
+                {phaseText.value}
+              </span>
+            </div>
           ) : null}
           <p data-docx-part="error" role="alert" class="docx-compare-documents-error">
             {error.value ?? null}
@@ -267,6 +316,7 @@ const Impl = defineComponent({
           dismissOutside={false}
           describedBy={`${id}-description`}
           busy={busy.value}
+          panelRef={panel}
           class={['docx-compare-documents-dialog', p.className]}
           style={p.style}
           content={() =>
@@ -278,4 +328,10 @@ const Impl = defineComponent({
   },
 });
 /** Compare documents with replaceable controls and layout. @public */
-export const DocxEditorCompareDocumentsDialog = Object.assign(Impl, composition.parts);
+export const DocxEditorCompareDocumentsDialog = Object.assign(Impl, {
+  ...composition.parts,
+  /** The progress bar and the running step in words, shown while a compare runs. */
+  Progress: composition.part('Progress'),
+  /** A message that is not an error, such as that the documents have no differences. */
+  Notice: composition.part('Notice'),
+});

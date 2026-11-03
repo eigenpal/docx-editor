@@ -1062,7 +1062,7 @@ export type CompareDocumentsBackgroundResult = {
     readonly ok: true;
     readonly revisionCount: number;
 } | {
-    readonly code: CompareDocumentsErrorCode;
+    readonly code: CompareDocumentsEngineErrorCode;
     readonly message: string;
     readonly ok: false;
     readonly reason?: CompareDocumentsRefusalReason;
@@ -1106,28 +1106,11 @@ export interface CompareDocumentsDialogSession {
 export type CompareDocumentsEngine = (original: OoxmlPackage, revised: Uint8Array, options: CompareDocumentsEngineOptions) => CompareDocumentsEngineResult;
 
 // @public
-export interface CompareDocumentsEngineOptions {
-    readonly authorName?: string;
-    readonly detectFormatChanges?: boolean;
-    readonly removeDateAndTime?: boolean;
-}
-
-// @public
-export type CompareDocumentsEngineResult = {
-    readonly changed: boolean;
-    readonly ok: true;
-    readonly package: OoxmlPackage;
-    readonly revisionCount: number;
-} | {
-    readonly code: CompareDocumentsErrorCode;
-    readonly message: string;
-    readonly ok: false;
-    readonly reason?: CompareDocumentsRefusalReason;
-};
-
-// @public
-export type CompareDocumentsErrorCode =
-/** An option has a value of the wrong type, such as a `date` that is not a valid date. */
+export type CompareDocumentsEngineErrorCode =
+/**
+* An option has a value of the wrong type, such as a `detectFormatChanges` that is not a
+* boolean, or the revised document is not a `Uint8Array`.
+*/
 'invalidOptions'
 /** The original document is not a readable DOCX package. */
 | 'invalidOriginal'
@@ -1143,7 +1126,30 @@ export type CompareDocumentsErrorCode =
 */
 | 'protected'
 /** The differences include content that no tracked change can record. */
-| 'unsupportedContent'
+| 'unsupportedContent';
+
+// @public
+export interface CompareDocumentsEngineOptions {
+    readonly authorName?: string;
+    readonly detectFormatChanges?: boolean;
+    readonly removeDateAndTime?: boolean;
+}
+
+// @public
+export type CompareDocumentsEngineResult = {
+    readonly changed: boolean;
+    readonly ok: true;
+    readonly package: OoxmlPackage;
+    readonly revisionCount: number;
+} | {
+    readonly code: CompareDocumentsEngineErrorCode;
+    readonly message: string;
+    readonly ok: false;
+    readonly reason?: CompareDocumentsRefusalReason;
+};
+
+// @public
+export type CompareDocumentsErrorCode = CompareDocumentsEngineErrorCode
 /** Editor only: no review module, no open document, or no mount. */
 | 'unavailable'
 /** Editor only: a collaboration session is attached. */
@@ -1152,8 +1158,18 @@ export type CompareDocumentsErrorCode =
 | 'viewing'
 /** Editor only: the dialog closed, or the compare was canceled, before it finished. */
 | 'closed'
-/** Editor only: the revised file is empty. */
+/** Editor only: the revised file is a `Uint8Array` with no bytes. */
 | 'empty'
+/**
+* Editor only: another compare of the same dialog runs, or a preview or an external document
+* refresh blocks writes to the document. Try again when it ends.
+*/
+| 'busy'
+/**
+* Editor only: the open document changed while a background compare ran, so its result
+* no longer applies. The editor never retries by itself.
+*/
+| 'documentChanged'
 /** Editor only: any other failure. */
 | 'failed';
 
@@ -1313,6 +1329,12 @@ export interface ContentControlWidgetSession {
 // @public
 export interface ContentLockPolicy {
     readonly allowFormattingInLockedContent?: boolean;
+}
+
+// @public
+export interface ContentTypeIndex {
+    readonly defaults: ReadonlyMap<string, string>;
+    readonly overrides: ReadonlyMap<string, string>;
 }
 
 // @public
@@ -3313,6 +3335,31 @@ export interface NumberingRef {
 }
 
 // @public
+export interface OoxmlExternalTarget {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly ownerPart: string;
+    // (undocumented)
+    readonly rawTarget: string;
+    readonly sinkSafe: boolean;
+    // (undocumented)
+    readonly type: string;
+}
+
+// @public
+export interface OoxmlPackage {
+    // (undocumented)
+    readonly contentTypes: ContentTypeIndex;
+    // (undocumented)
+    readonly externalTargets: readonly OoxmlExternalTarget[];
+    readonly mainDocumentPart: string;
+    readonly partBytes: ReadonlyMap<string, Uint8Array>;
+    readonly parts: ReadonlyMap<string, OoxmlPart>;
+    readonly relationships: ReadonlyMap<string, readonly RelationshipRecord[]>;
+}
+
+// @public
 export interface PageMargins {
     // (undocumented)
     readonly bottomTwips: number;
@@ -3477,6 +3524,22 @@ export interface Rect {
     readonly x: number;
     // (undocumented)
     readonly y: number;
+}
+
+// @public
+export interface RelationshipRecord {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly order: number;
+    // (undocumented)
+    readonly ownerPart: string;
+    // (undocumented)
+    readonly rawTarget: string;
+    // (undocumented)
+    readonly targetMode: TargetMode;
+    // (undocumented)
+    readonly type: string;
 }
 
 // @public
@@ -4415,6 +4478,9 @@ export interface TableRowOccurrenceTarget {
     // (undocumented)
     readonly tableId: string;
 }
+
+// @public
+export type TargetMode = 'Internal' | 'External';
 
 // @public
 export interface TextMatch {
