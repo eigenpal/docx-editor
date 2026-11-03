@@ -684,7 +684,7 @@ Load `properties.lastAuthor` to read the last saved author. This property has no
 
 ## Compare two documents
 
-To record the differences between the open document and a revised copy as tracked changes, call `document.compareFromBase64(base64File, options)`. The open document is the original. This method requires `reviewModule()` from `@docx-editor.dev/pro` in the runtime `modules` list; without it the call refuses with `NotSupported`. Run the call alone in its sync.
+To record the differences between the open document and a revised copy as tracked changes, call `document.compareFromBase64(base64File, options)`. The open document is the original. This method requires `reviewModule()` from `@docx-editor.dev/pro` in the runtime `modules` list. Without it, the call refuses with `NotSupported`. Run the call alone in its sync.
 
 ```ts
 const runtime = await DocxEditor.createServer(originalBytes, {
@@ -698,4 +698,6 @@ await runtime.run(async (context) => {
 
 Only `CompareTargetCurrent` is supported. `CompareTargetNew`, `CompareTargetSelected`, `removePersonalInformation: true`, `document.compare(filePath)`, and collaborative sessions refuse with `NotSupported`. Invalid base64 and unreadable packages refuse with `InvalidArgument`. Pass the revised document as plain base64 data; do not pass proxies to a job queue.
 
-The default author is the revised document's last author. To count the main-body result, load `document.revisions` with `'items'` after the compare's sync. A refused compare writes nothing. Read `debugInfo.innerError.code` for the cause: `edit.review-module-required`, `edit.resource-limit`, `edit.invalid-argument`, `edit.protected-content` (the open document enforces protection), or `edit.unsupported-content` (a difference that no tracked change can record). Do not retry the same pair; report the cause instead.
+Without `authorName`, the revisions carry the revised document's last author, then its creator, then `Comparison`. To count the main-body result, load `document.revisions` with `'items'` after the compare's `context.sync()`.
+
+A refused compare writes nothing. Handle `error.code` first. If `debugInfo.innerError` exists, its `code` names the cause: `edit.review-module-required`, `edit.resource-limit`, `edit.invalid-argument`, `edit.protected-content`, or `edit.unsupported-content`. Do not retry the same pair; report the cause instead.

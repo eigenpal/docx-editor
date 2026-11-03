@@ -741,7 +741,7 @@ The editor's **Accept all changes shown** and **Reject all changes shown** contr
 
 ## Compare two documents
 
-Call `document.compareFromBase64(base64File, options)` to record the differences between the open document and a revised copy as tracked changes. The open document is the original. After the sync, accepting every change gives the revised text, and rejecting every change gives the original text.
+Call `document.compareFromBase64(base64File, options)` to record the differences between the open document and a revised copy as tracked changes. The open document is the original. The compare first accepts the existing tracked changes in both documents. After `context.sync()`, accepting all of the compare's changes gives the revised document's text. Rejecting them gives the original document's text.
 
 This method requires the Pro review module. Pass `reviewModule()` from `@docx-editor.dev/pro` in the runtime or editor `modules` list. Without it, the call refuses with `NotSupported`.
 
@@ -762,7 +762,7 @@ await runtime.run(async (context) => {
 const redline = await runtime.save();
 ```
 
-The compare replaces the document content in one edit. In the editor, one undo restores the original. Keep the call as the only write in its sync.
+The compare replaces the document content in one edit. In the editor, one undo restores the original. Keep the call as the only write in its sync. The decoded revised DOCX must not exceed 128 MiB, and the compare's block and text limits also apply.
 
 The following options are supported:
 
@@ -771,9 +771,9 @@ The following options are supported:
 - `removeDateAndTime` writes the revisions without dates.
 - `compareTarget` supports `CompareTargetCurrent` only.
 
-`addToRecentFiles` and `ignoreAllComparisonWarnings` have no effect. The compare shows no warnings: it accepts the existing revisions of both documents without asking. `CompareTargetNew`, `CompareTargetSelected`, and `removePersonalInformation: true` refuse with `NotSupported`. An option value of the wrong type, such as `detectFormatChanges: 'false'`, refuses with `InvalidArgument`. `document.compare(filePath)` always refuses with `NotSupported`, because the document model has no file system.
+`addToRecentFiles` and `ignoreAllComparisonWarnings` have no effect. The compare shows no warnings. It accepts the existing tracked changes of both documents without asking. `CompareTargetNew`, `CompareTargetSelected`, and `removePersonalInformation: true` refuse with `NotSupported`. An option value of the wrong type, such as `detectFormatChanges: 'false'`, refuses with `InvalidArgument`. `document.compare(filePath)` always refuses with `NotSupported`, because the document model has no file system.
 
-The default author is the revised document's last author. The editor's `compareDocuments` command uses the editor's author instead, because a person runs it.
+The editor's `compareDocuments` command first uses the editor's author. Without an editor author, it uses the same order as `Document.compareFromBase64`.
 
 `compareFromBase64` returns nothing. To count the tracked changes it recorded in the main body, load `document.revisions` after the compare's sync:
 
@@ -788,20 +788,22 @@ const count = await runtime.run(async (context) => {
 });
 ```
 
-A refused compare changes nothing. `debugInfo.innerError.code` names the cause:
+A refused compare changes nothing. Handle `error.code` first. If `debugInfo.innerError` exists, its `code` gives more detail:
 
 | Cause | Error code | `innerError.code` |
 | --- | --- | --- |
 | No review module | `NotSupported` | `edit.review-module-required` |
 | A collaborative session | `NotSupported` | `edit.operation-unsupported` |
 | Documents over the size limit | `NotSupported` | `edit.resource-limit` |
-| Empty or invalid base64, or a file that is not a DOCX package | `InvalidArgument` | `edit.invalid-argument` |
+| Empty base64, or an option value of the wrong type | `InvalidArgument` | Not provided |
+| Invalid base64, or a file that is not a DOCX package | `InvalidArgument` | `edit.invalid-argument` |
+| `CompareTargetNew`, `CompareTargetSelected`, or `removePersonalInformation: true` | `NotSupported` | Not provided |
 | The open document enforces protection that the compare would break | `NotImplemented` | `edit.protected-content` |
 | Differences that no tracked change can record | `NotImplemented` | `edit.unsupported-content` |
 
 For the cases behind the last two rows, see [Compare documents](/docs/2.x/pro/compare-documents).
 
-Both documents are compared with their existing revisions accepted. The result keeps the comments of both documents. Bookmarks and header and footer references come from the open document.
+The result keeps the comments of both documents. Bookmarks come from the open document. The result reuses the open document's header and footer references where it can. It adds references for headers and footers that only the revised document has.
 
 ## Try the demo
 

@@ -57,6 +57,9 @@ export interface ReviewModuleOptions extends ProLicenseOptions {
    * can stop a running compare. Without it, the dialog compares on the main thread. The editor
    * starts one worker for each compare and ends it when the compare ends.
    *
+   * If the worker never starts, the dialog compares on the main thread instead. That compare
+   * cannot be stopped.
+   *
    * @example Vite
    * ```ts
    * import CompareWorker from '@docx-editor.dev/pro/compare-worker?worker';

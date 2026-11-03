@@ -45,16 +45,16 @@ export type CompareDocumentsResult =
        */
       readonly bytes: Uint8Array;
       /**
-       * Tracked changes recorded, one per review decision: the items that `revisions`
-       * collections and the review pane list, summed over the body, headers, footers, and
-       * notes. A replaced word counts its deletion and its insertion.
+       * Tracked change items recorded in the body, headers, footers, and notes. A replaced word
+       * counts as two items, a deletion and an insertion; the review pane can show them as one
+       * replacement.
        */
       readonly revisionCount: number;
       /**
        * Whether the result differs from the original. False when the documents have no
-       * differences. True with no revisions when the only differences are written untracked:
-       * formatting with `detectFormatChanges: false`, style definitions, or the original's
-       * own tracked changes, which a compare accepts.
+       * differences. Can be true with no revisions: the compare can change the document
+       * without a tracked change. Examples are formatting with `detectFormatChanges: false`,
+       * style definitions, and the original's own tracked changes, which a compare accepts.
        */
       readonly changed: boolean;
     }

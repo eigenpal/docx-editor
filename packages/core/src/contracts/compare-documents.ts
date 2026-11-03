@@ -41,8 +41,8 @@ export interface CompareDocumentsRequest {
   /** The revised document's DOCX bytes. The open document is the original. */
   readonly revised: Uint8Array;
   /**
-   * Author recorded on every revision. The editor's author when absent, empty, or only white
-   * space, else the revised document's last author.
+   * Author recorded on every revision. When absent or blank, the editor's author. Without an
+   * editor author, the revised document's last author, then its creator, then `Comparison`.
    */
   readonly authorName?: string;
   /** Record formatting differences as formatting revisions. Default `true`. */
@@ -56,9 +56,9 @@ export type CompareDocumentsOutcome =
   | {
       readonly ok: true;
       /**
-       * Tracked changes recorded, one per review decision: the items that `revisions`
-       * collections and the review pane list, summed over the body, headers, footers, and
-       * notes. A replaced word counts its deletion and its insertion.
+       * Tracked change items recorded in the body, headers, footers, and notes. A replaced word
+       * counts as two items, a deletion and an insertion; the review pane can show them as one
+       * replacement.
        */
       readonly revisionCount: number;
       /**
@@ -118,7 +118,10 @@ export interface CompareDocumentsDialogSession {
     request: CompareDocumentsRequest,
     options?: { readonly onProgress?: (progress: CompareDocumentsProgress) => void }
   ): Promise<CompareDocumentsOutcome>;
-  /** Whether `cancel()` can stop a running compare: true when compares run in the background. */
+  /**
+   * Whether `cancel()` can stop a running compare: true when compares run in the background.
+   * A compare that falls back to the main thread, because the worker never started, cannot stop.
+   */
   readonly cancelable: boolean;
   /** Close the dialog. A running background compare stops, and nothing changes. */
   cancel(): void;

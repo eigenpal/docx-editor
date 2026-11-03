@@ -46,9 +46,9 @@ export type CompareDocumentsEngineErrorCode =
 
 /**
  * Why a compare was refused, as a stable code. `compareDocuments.errors.<code>` in
- * `@docx-editor.dev/i18n` translates every code. Every entry point uses this one type: the
- * engine and `compareDocuments` return the {@link CompareDocumentsEngineErrorCode} codes, and
- * the editor command and dialog can also return the editor-only codes.
+ * `@docx-editor.dev/i18n` translates every code. The engine and `compareDocuments` return
+ * {@link CompareDocumentsEngineErrorCode} values. The editor command and dialog can also return
+ * the editor-only codes.
  *
  * @public
  */
@@ -96,7 +96,10 @@ export type CompareDocumentsRefusalReason =
   | 'headerFooter'
   /** The result needs a part type that the original document does not declare. */
   | 'packageStructure'
-  /** The result does not reproduce both documents when all changes are accepted or rejected. */
+  /**
+   * The result fails the check: accepting all changes does not give the revised text, rejecting
+   * them does not give the original text, or a tracked change cannot be accepted or rejected.
+   */
   | 'unverified';
 
 /** Result of one document compare. @public */
@@ -109,16 +112,16 @@ export type CompareDocumentsEngineResult =
        */
       readonly package: OoxmlPackage;
       /**
-       * Tracked changes recorded, one per review decision: the items that `revisions`
-       * collections and the review pane list, summed over the body, headers, footers, and
-       * notes. A replaced word counts its deletion and its insertion.
+       * Tracked change items recorded in the body, headers, footers, and notes. A replaced word
+       * counts as two items, a deletion and an insertion; the review pane can show them as one
+       * replacement.
        */
       readonly revisionCount: number;
       /**
        * Whether the result differs from the original. False when the documents have no
-       * differences. True with no revisions when the only differences are written untracked,
-       * such as formatting with `detectFormatChanges: false`, or the original's own tracked
-       * changes, which a compare accepts.
+       * differences. Can be true with no revisions: the compare can change the document
+       * without a tracked change. Examples are formatting with `detectFormatChanges: false`
+       * and the original's own tracked changes, which a compare accepts.
        */
       readonly changed: boolean;
     }
@@ -143,9 +146,12 @@ export type CompareDocumentsEngine = (
 ) => CompareDocumentsEngineResult;
 
 /**
- * A step of a compare that runs in the background, in order: `reading` the two documents,
- * `comparing` them, `checking` that the result reproduces both, and `applying` it to the
- * open document.
+ * A step of a compare that runs in the background. The steps run in this order:
+ *
+ * 1. `reading`: read both documents.
+ * 2. `comparing`: find their differences.
+ * 3. `checking`: check that accepting and rejecting all changes give back each document.
+ * 4. `applying`: apply the result to the open document.
  *
  * @public
  */
@@ -168,7 +174,7 @@ export type CompareDocumentsBackgroundResult =
        * false. Read `changed`, not `bytes`, to decide whether to apply or save the result.
        */
       readonly bytes: Uint8Array | null;
-      /** Tracked changes recorded, one per review decision. */
+      /** Tracked change items recorded. A replaced word counts as two items. */
       readonly revisionCount: number;
       /**
        * Whether the result differs from the original. This tells callers whether to apply or
