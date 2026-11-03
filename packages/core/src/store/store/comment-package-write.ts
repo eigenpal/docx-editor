@@ -19,9 +19,11 @@ import { deleteCommentBatch } from '../package/comment-batch-delete.ts';
 import {
   addComment,
   setCommentResolved,
+  setCommentText,
   type AddCommentRequest,
   type AddCommentResult,
   type SetCommentResolvedResult,
+  type SetCommentTextResult,
 } from './comment-writes.ts';
 import type { StoryScope, TreePackageStore } from './tree-package-store.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
@@ -91,6 +93,44 @@ export function setPackageCommentResolved(
     packageStore,
     () => {
       const result = setCommentResolved(store, commentId, resolved);
+      if (!result.ok) return result;
+      if (!result.changed) return result;
+      store.restoreHistoryStacks(checkpoint);
+      packageStore.replacePackageShell(store.package);
+      packageStore.adoptGroupedPackageUnit(beforePackage, historyGroup);
+      packageStore.publishStoryWrite(result.change);
+      return result;
+    },
+    (result) => result.ok && result.changed,
+    historyGroup
+  );
+}
+
+/**
+ * Replace the text of one comment or reply and publish the new package shell.
+ *
+ * The same observed transaction as resolving a thread, so a peer receives the new body and Undo
+ * restores the old one in one step. A document protected for filling in forms refuses it, as it
+ * refuses every other comment write.
+ */
+export function setPackageCommentText(
+  packageStore: TreePackageStore,
+  commentId: string,
+  text: string,
+  historyGroup?: HistoryGroup
+): SetCommentTextResult {
+  const store = packageStore.bodyStore();
+  const beforePackage = packageStore.currentPackage();
+  const locked = lifecycleProtectionRefusal(settingsPartOf(beforePackage), {
+    op: 'setCommentText',
+  });
+  if (locked) return { ok: false, reason: locked };
+  const checkpoint = store.checkpoint();
+  store.graftPackage(() => packageStore.currentPackage());
+  return runObservedStoreTransaction(
+    packageStore,
+    () => {
+      const result = setCommentText(store, commentId, text);
       if (!result.ok) return result;
       if (!result.changed) return result;
       store.restoreHistoryStacks(checkpoint);

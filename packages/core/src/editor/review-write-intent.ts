@@ -14,5 +14,6 @@ export type ReviewWriteIntent =
   | 'comment-add'
   | 'comment-reply'
   | 'comment-resolve'
+  | 'comment-edit'
   | 'comment-delete'
   | 'package-scoped';
