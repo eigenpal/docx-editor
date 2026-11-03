@@ -19,6 +19,7 @@ import {
 } from './cjk-line-break.ts';
 import {
   eastAsianLanguage,
+  isKoreanLanguage,
   kinsokuCharacters,
   koreanFinalMarkHangs,
   type CjkParagraphTypography,
@@ -247,9 +248,19 @@ export function cjkParagraphBreaks(
       (isCjk(beforeBase) && !isFullwidthAlphanumeric(beforeBase)) ||
       (isCjk(after) && !isFullwidthAlphanumeric(after)) ||
       (eastAsianContext[index - 1]! && /^[\p{P}\p{S}]+$/u.test(left.text));
+    // Character wrapping opens every boundary, inside Latin words too, except in Korean text:
+    // there, with a Korean paragraph mark and Korean runs on both sides, only Hangul
+    // syllables wrap one by one and other words stay whole.
+    const hangulPair = isHangul(beforeBase) && isHangul(after);
     const wrapCharacters =
-      policy.characterWrap && (!hasKorean || (isHangul(beforeBase) && isHangul(after)));
-    const koreanWord = isHangul(beforeBase) && isHangul(after) && !wrapCharacters;
+      policy.characterWrap &&
+      (hangulPair ||
+        !(
+          policy.koreanWordWrap &&
+          isKoreanLanguage(languages[leftPieceIndex]) &&
+          isKoreanLanguage(languages[pieceIndex])
+        ));
+    const koreanWord = hangulPair && !wrapCharacters;
     const opens =
       latinCuts.has(at) ||
       /\s$/u.test(left.text) ||
