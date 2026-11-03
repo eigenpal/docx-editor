@@ -152,6 +152,29 @@ export function comparePackages(
 ): ComparePackagesResult {
   const invalid = invalidOption(options);
   if (invalid) return { ok: false, code: 'invalidOptions', message: invalid };
+  try {
+    return compareChecked(original, revised, options, unchecked, progress);
+  } catch (error) {
+    // Below the size limits, a crafted document can still make a string or a call stack
+    // larger than the engine allows. The caller gets a refusal, not an exception.
+    if (error instanceof RangeError) return TOO_LARGE;
+    throw error;
+  }
+}
+
+const TOO_LARGE: ComparePackagesResult = {
+  ok: false,
+  code: 'tooLarge',
+  message: 'The documents are too large to compare.',
+};
+
+function compareChecked(
+  original: OoxmlPackage,
+  revised: OoxmlPackage,
+  options: CompareDocumentsOptions,
+  unchecked: boolean,
+  progress?: CompareProgress
+): ComparePackagesResult {
   // One timestamp for the compare and its no-difference oracle.
   const fixed: CompareDocumentsOptions = { ...options, date: options.date ?? new Date() };
   const result = compareOnce(original, revised, fixed, unchecked, progress);
@@ -191,7 +214,7 @@ function compareOnce(
     baseSize.blocks + revisedSize.blocks > MAX_BLOCKS ||
     baseSize.text + revisedSize.text > MAX_TEXT_UNITS
   ) {
-    return { ok: false, code: 'tooLarge', message: 'The documents are too large to compare.' };
+    return TOO_LARGE;
   }
   progress?.('comparing', COMPARING_FRACTION);
   const basePkg = acceptAll(original);

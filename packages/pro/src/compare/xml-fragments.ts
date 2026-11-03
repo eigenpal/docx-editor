@@ -119,7 +119,9 @@ export function unescapeXml(text: string): string {
   });
 }
 
-const DECLARATION = /\s+xmlns(?::([A-Za-z_][\w.-]*))?="([^"]*)"/g;
+// A match starts only at the first white space of a run: a long run with no declaration after
+// it is then scanned once, not again from each of its spaces.
+const DECLARATION = /(?<!\s)\s+xmlns(?::([A-Za-z_][\w.-]*))?="([^"]*)"/g;
 
 /**
  * Collects namespace declarations stripped from fragments, so the output root can declare

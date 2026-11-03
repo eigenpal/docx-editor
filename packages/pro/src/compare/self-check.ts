@@ -21,6 +21,7 @@ import {
   readOoxmlPart,
   resolveHeaderFooterResolutionBySection,
   serializeOoxmlPart,
+  sha256Bytes,
   type OoxmlNode,
   type OoxmlPackage,
   type OoxmlPart,
@@ -357,6 +358,8 @@ function decide(
  * What every section shows in its header and footer slots, as `kind:type=text` per section.
  * With `op`, the main story and every header and footer part are resolved first.
  */
+const furnitureEncoder = new TextEncoder();
+
 function sectionFurniture(
   pkg: OoxmlPackage,
   op?: 'acceptAllRevisions' | 'rejectAllRevisions',
@@ -382,6 +385,18 @@ function sectionFurniture(
     }
     view = { ...pkg, parts };
   }
+  // Sections share parts: each part's text is read and hashed once, and a section names it by
+  // the hash, so a long header in many sections is not copied into every section's entry.
+  const texts = new Map<OoxmlPart, string>();
+  const textOf = (part: OoxmlPart) => {
+    let text = texts.get(part);
+    if (text === undefined) {
+      const full = fingerprint([part], 'text');
+      text = full === '' ? '' : sha256Bytes(furnitureEncoder.encode(full));
+      texts.set(part, text);
+    }
+    return text;
+  };
   return resolveHeaderFooterResolutionBySection(view)
     .map((section) => {
       const entries: string[] = [];
@@ -391,7 +406,7 @@ function sectionFurniture(
       ] as const)
         for (const [type, slot] of slots) {
           // An empty header or footer shows the same as none.
-          const text = fingerprint([slot.part], 'text');
+          const text = textOf(slot.part);
           if (text !== '') entries.push(`${kind}:${type}=${text}`);
         }
       return entries.sort().join('|');

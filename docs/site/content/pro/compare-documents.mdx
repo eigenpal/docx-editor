@@ -36,7 +36,7 @@ Add `reviewModule()` to the editor modules. The **Review** menu then shows **Com
 
 The differences replace the open document's content as one undoable step. One undo restores the original. When the documents have no differences, the document, its undo history, and its saved state stay as they were.
 
-Documents of a few hundred pages take up to a few seconds to compare. The largest documents a compare accepts, about 100,000 paragraphs, table rows and cells, styles, and list definitions, or 3 million characters, in both documents together, can take about ten seconds. Larger documents refuse with `tooLarge`.
+For example, two documents of about 500 pages each, with every paragraph changed, compare in one to two seconds. A compare accepts at most about 100,000 blocks, or 3 million characters, in both documents together. Blocks are paragraphs, table rows and cells, styles, and list definitions. Characters are UTF-16 code units, and each run also counts as 12 characters. Larger documents refuse with `tooLarge`.
 
 After a compare that changes the document, the dialog closes and the editor announces the number of recorded changes to screen readers. When the documents have no differences, or the compare is refused, the dialog stays open and shows the message.
 

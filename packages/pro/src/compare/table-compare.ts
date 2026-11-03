@@ -148,12 +148,15 @@ function carriedExtras(
   return base ? before : [];
 }
 
-/** The extras that sit before item `at`. */
-const extrasAt = (extras: readonly Extra[], at: number) =>
-  extras
-    .filter((extra) => extra.at === at)
-    .map((extra) => extra.xml)
-    .join('');
+/**
+ * The extras by the item they sit before, in their order: one pass over the extras, not one
+ * scan of them for every item.
+ */
+function positioned(extras: readonly Extra[]): (at: number) => string {
+  const byItem = new Map<number, string>();
+  for (const extra of extras) byItem.set(extra.at, (byItem.get(extra.at) ?? '') + extra.xml);
+  return (at) => byItem.get(at) ?? '';
+}
 
 export function compareTable(
   base: ElementNode | null,
@@ -283,13 +286,13 @@ function rowPair(
     propertiesDiffer('trPr', base, revised, ctx) ||
     propertiesDiffer('tblPrEx', base, revised, ctx) ||
     revisedCells.some((cell, index) => propertiesDiffer('tcPr', baseCells[index]!, cell, ctx));
-  const extras = carriedExtras(base, revised, ROW_OWN, 'tc', ctx);
+  const extrasAt = positioned(carriedExtras(base, revised, ROW_OWN, 'tc', ctx));
   let out = `<w:tr>${rowException(base, revised, ctx)}${properties('trPr', base, revised, ctx)}`;
   revisedCells.forEach((cell, index) => {
     const original = baseCells[index]!;
-    out += `${extrasAt(extras, index)}<w:tc>${properties('tcPr', original, cell, ctx, '', bundled)}${compareContainer(unitsOf(original, ctx.base), unitsOf(cell, ctx.revised), ctx)}</w:tc>`;
+    out += `${extrasAt(index)}<w:tc>${properties('tcPr', original, cell, ctx, '', bundled)}${compareContainer(unitsOf(original, ctx.base), unitsOf(cell, ctx.revised), ctx)}</w:tc>`;
   });
-  return `${out}${extrasAt(extras, revisedCells.length)}</w:tr>`;
+  return `${out}${extrasAt(revisedCells.length)}</w:tr>`;
 }
 
 /**
@@ -297,7 +300,7 @@ function rowPair(
  * formatting unchanged, because a reject restores table history only through cell records.
  */
 function deletedRow(row: ElementNode, ctx: EmitContext, tableBundle: boolean): string {
-  const extras = carriedExtras(row, null, ROW_OWN, 'tc', ctx);
+  const extrasAt = positioned(carriedExtras(row, null, ROW_OWN, 'tc', ctx));
   const cellProperties = (cell: ElementNode) => {
     if (!tableBundle || !ctx.detectFormatChanges) return properties('tcPr', cell, null, ctx);
     const inner = propertiesInner(childNamed(cell, 'tcPr'), ctx.base, DROPS.tcPr);
@@ -306,9 +309,9 @@ function deletedRow(row: ElementNode, ctx: EmitContext, tableBundle: boolean): s
   let out = `<w:tr>${rowStart(row, ctx.base)}${properties('trPr', row, null, ctx, `<w:del${ctx.attrs()}/>`)}`;
   const cells = cellsOf(row);
   for (const [index, cell] of cells.entries()) {
-    out += `${extrasAt(extras, index)}<w:tc>${cellProperties(cell)}${compareContainer(unitsOf(cell, ctx.base), [], ctx)}</w:tc>`;
+    out += `${extrasAt(index)}<w:tc>${cellProperties(cell)}${compareContainer(unitsOf(cell, ctx.base), [], ctx)}</w:tc>`;
   }
-  return `${out}${extrasAt(extras, cells.length)}</w:tr>`;
+  return `${out}${extrasAt(cells.length)}</w:tr>`;
 }
 
 function insertedRow(row: ElementNode, ctx: EmitContext): string {

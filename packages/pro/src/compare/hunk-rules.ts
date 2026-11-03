@@ -135,11 +135,12 @@ export function replaceWholeParagraphs(
     const both =
       segment.some((item) => item.op === 'ins') && segment.some((item) => item.op === 'del');
     if (textOnly && both && a[op.a]!.key !== END_KEY) {
-      out.push(
-        ...segment.filter((item) => item.op === 'ins'),
-        { op: 'ins', b: op.b },
-        ...segment.filter((item) => item.op === 'del'),
-        { op: 'del', a: op.a }
+      pushAll(
+        out,
+        segment.filter((item) => item.op === 'ins'),
+        [{ op: 'ins', b: op.b }],
+        segment.filter((item) => item.op === 'del'),
+        [{ op: 'del', a: op.a }]
       );
     } else pushAll(out, segment, [op]);
     start = i + 1;

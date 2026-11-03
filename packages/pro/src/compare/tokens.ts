@@ -8,9 +8,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import type { MoveEnd } from './moves.ts';
 import {
+  controlIdentity,
   isControlWrapper,
   type Atom,
   type BlockUnit,
+  type FieldContext,
   type ParagraphUnit,
   type Wrapper,
 } from './units.ts';
@@ -121,31 +123,105 @@ export interface MoveToken {
 }
 export type Token = TextToken | MarkToken | BlockToken | MoveToken;
 
-export function paragraphTokens(unit: ParagraphUnit, last: boolean, out: Token[]): void {
+/**
+ * Short names for word signatures, shared by both sides of one token diff. A word key holds
+ * the name, not the signature: a field instruction can be long, and every word in the field
+ * would otherwise carry a copy of it. Names are computed once for each pair of wrapper and
+ * field arrays, which the atoms of one run share.
+ */
+export class SignatureNames {
+  readonly #byText = new Map<string, string>();
+  readonly #byArrays = new WeakMap<readonly Wrapper[], Map<Atom['fields'], string>>();
+  readonly #wrappers = new WeakMap<Wrapper, string>();
+  readonly #fields = new WeakMap<FieldContext, string>();
+  readonly #controls = new WeakMap<readonly Wrapper[], string>();
+
+  /**
+   * The short name of the inline controls around an atom, outermost first, by identity, or ''
+   * for none. A control without an id is known by its whole properties, which can be long; the
+   * two sides then compare names, not the properties, for every character.
+   */
+  controls(atom: Atom): string {
+    let name = this.#controls.get(atom.wrappers);
+    if (name === undefined) {
+      const text = atom.wrappers
+        .filter((wrapper) => isControlWrapper(wrapper.key))
+        .map((wrapper) => controlIdentity(wrapper.key))
+        .join('\u0003');
+      name = text === '' ? '' : this.#named(`C:${text}`);
+      this.#controls.set(atom.wrappers, name);
+    }
+    return name;
+  }
+
+  of(atom: Atom): string {
+    let byFields = this.#byArrays.get(atom.wrappers);
+    if (!byFields) {
+      byFields = new Map();
+      this.#byArrays.set(atom.wrappers, byFields);
+    }
+    let name = byFields.get(atom.fields);
+    if (name === undefined) {
+      // Each wrapper and field is named once, so a long field instruction is read once, not
+      // again in every combination of fields it takes part in.
+      const parts = [
+        ...atom.wrappers
+          .filter((wrapper) => !isControlWrapper(wrapper.key))
+          .map((wrapper) => this.#cached(this.#wrappers, wrapper, () => wrapper.key)),
+        ...(atom.fields ?? []).map((field) =>
+          this.#cached(this.#fields, field, () => fieldSignature(field))
+        ),
+      ];
+      name = parts.length === 0 ? '' : this.#named(parts.join('\u0003'));
+      byFields.set(atom.fields, name);
+    }
+    return name;
+  }
+
+  #cached<K extends object>(cache: WeakMap<K, string>, key: K, text: () => string): string {
+    let name = cache.get(key);
+    if (name === undefined) {
+      name = this.#named(text());
+      cache.set(key, name);
+    }
+    return name;
+  }
+
+  /**
+   * The short name of a signature text. Every name holds a letter: the word rules test a key for
+   * letters, as they did when it held the signature itself, which always has one.
+   */
+  #named(text: string): string {
+    let name = this.#byText.get(text);
+    if (name === undefined) {
+      name = `S${this.#byText.size}`;
+      this.#byText.set(text, name);
+    }
+    return name;
+  }
+}
+
+export function paragraphTokens(
+  unit: ParagraphUnit,
+  last: boolean,
+  out: Token[],
+  names: SignatureNames
+): void {
   const atoms = unit.atoms;
   let text = '';
   for (const atom of atoms) text += atom.text;
   for (const [from, to] of wordTokens(text)) {
-    out.push({ kind: 'text', key: tokenKey(atoms, from, to), unit, from, to });
+    out.push({ kind: 'text', key: tokenKey(atoms, from, to, names), unit, from, to });
   }
   out.push({ kind: 'mark', key: last ? END_KEY : `${MARK_KEY}${unit.sectPr ? 'S' : ''}`, unit });
 }
 
-function tokenKey(atoms: readonly Atom[], from: number, to: number): string {
+function tokenKey(atoms: readonly Atom[], from: number, to: number, names: SignatureNames): string {
   let key = '';
   let wrappers = '';
-  // The atoms of one run share their wrapper and field arrays, so the signature is computed
-  // again only when those arrays change, not once for every character.
-  let lastWrappers: readonly Wrapper[] | undefined;
-  let lastFields: Atom['fields'] | null = null;
-  let signature = '';
   for (let i = from; i < to; i++) {
     const atom = atoms[i]!;
-    if (atom.wrappers !== lastWrappers || atom.fields !== lastFields) {
-      signature = signatureOf(atom);
-      lastWrappers = atom.wrappers;
-      lastFields = atom.fields;
-    }
+    const signature = names.of(atom);
     if (i === from ? signature !== '' : signature !== wrappers) key += `\u0002${signature}\u0002`;
     wrappers = signature;
     key += atom.kind === 'char' ? atom.text : `\u0001${atom.key}\u0001`;
@@ -160,9 +236,4 @@ function tokenKey(atoms: readonly Atom[], from: number, to: number): string {
  * Text in a complex field is part of the field: it never equals the same text outside it,
  * or in a field with another instruction, so the whole field is deleted and inserted.
  */
-function signatureOf(atom: Atom): string {
-  return [
-    ...atom.wrappers.filter((wrapper) => !isControlWrapper(wrapper.key)).map((w) => w.key),
-    ...(atom.fields ?? []).map((field) => `F:${field.instr.trim().replace(/\s+/g, ' ')}`),
-  ].join('\u0003');
-}
+const fieldSignature = (field: FieldContext) => `F:${field.instr.trim().replace(/\s+/g, ' ')}`;

@@ -18,7 +18,14 @@ import {
   replaceWholeParagraphs,
   slideLeft,
 } from './hunk-rules.ts';
-import { END_KEY, paragraphTokens, type BlockToken, type TextToken, type Token } from './tokens.ts';
+import {
+  END_KEY,
+  paragraphTokens,
+  SignatureNames,
+  type BlockToken,
+  type TextToken,
+  type Token,
+} from './tokens.ts';
 import { objectWithBoxes } from './text-boxes.ts';
 import {
   emitContent,
@@ -30,14 +37,7 @@ import {
 } from './emit.ts';
 import { findMoves, movedParagraph, NO_MOVES, type Moves } from './moves.ts';
 import { compareSdt, compareTable } from './table-compare.ts';
-import {
-  controlIdentity,
-  isControlWrapper,
-  type Atom,
-  type BlockUnit,
-  type ParagraphUnit,
-  type Unit,
-} from './units.ts';
+import { type BlockUnit, type ParagraphUnit, type Unit } from './units.ts';
 import { pushAll } from './arrays.ts';
 import { childNamed } from './xml-fragments.ts';
 
@@ -135,18 +135,11 @@ export function compareContainer(
 /** A field data element in a serialized simple field shell. */
 const FIELD_DATA = /<[A-Za-z_][\w.-]*:fldData[\s/>]/;
 
-/** The inline controls around an atom, outermost first, by identity. */
-const controlsOf = (atom: Atom) =>
-  atom.wrappers
-    .filter((wrapper) => isControlWrapper(wrapper.key))
-    .map((wrapper) => controlIdentity(wrapper.key))
-    .join('\u0003');
-
 /** Equal text that sits in different controls in the two documents. */
-function inOtherControls(base: TextToken, revised: TextToken): boolean {
+function inOtherControls(base: TextToken, revised: TextToken, names: SignatureNames): boolean {
   for (let k = 0; k < base.to - base.from; k++) {
-    const before = controlsOf(base.unit.atoms[base.from + k]!);
-    const after = controlsOf(revised.unit.atoms[revised.from + k]!);
+    const before = names.controls(base.unit.atoms[base.from + k]!);
+    const after = names.controls(revised.unit.atoms[revised.from + k]!);
     if (before !== '' && after !== '' && before !== after) return true;
   }
   return false;
@@ -216,14 +209,19 @@ function identicalCopy(base: BlockUnit['node'], revised: BlockUnit['node'], ctx:
   return ctx.base.remap(before);
 }
 
-function tokensOf(units: readonly Unit[], last: Unit | null, moves: Moves): Token[] {
+function tokensOf(
+  units: readonly Unit[],
+  last: Unit | null,
+  moves: Moves,
+  names: SignatureNames
+): Token[] {
   const out: Token[] = [];
   for (const unit of units) {
     const end = moves.get(unit);
     // A moved paragraph is one token that matches nothing in its hunk.
     if (end && unit.kind === 'paragraph')
       out.push({ kind: 'move', key: `\u0004${end.kind}:${end.name}`, unit, end });
-    else if (unit.kind === 'paragraph') paragraphTokens(unit, unit === last, out);
+    else if (unit.kind === 'paragraph') paragraphTokens(unit, unit === last, out, names);
     else out.push({ kind: 'block', key: unit.key, unit });
   }
   return out;
@@ -272,8 +270,10 @@ function emitTokens(
   moves: Moves
 ): string {
   if (base.length === 0 && revised.length === 0) return '';
-  const a = tokensOf(base, lastBase, moves);
-  const b = tokensOf(revised, lastRevised, moves);
+  // One set of names for both sides: equal signatures must get equal names.
+  const names = new SignatureNames();
+  const a = tokensOf(base, lastBase, moves, names);
+  const b = tokensOf(revised, lastRevised, moves, names);
   const ops = deletedBlocksFirst(
     pairBlocks(
       replaceWholeParagraphs(
@@ -375,7 +375,7 @@ function emitTokens(
     if (op.op === 'eq') {
       const left = a[op.a]!;
       const right = b[op.b]!;
-      if (left.kind === 'text' && right.kind === 'text' && inOtherControls(left, right)) {
+      if (left.kind === 'text' && right.kind === 'text' && inOtherControls(left, right, names)) {
         // Equal text in two different controls is content of each control: it leaves one and
         // enters the other, so each control keeps its own content on accept and on reject.
         changedText(left, 'del');

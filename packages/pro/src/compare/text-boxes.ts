@@ -57,19 +57,23 @@ export function objectWithBoxes(base: Atom | null, revised: Atom | null, ctx: Em
   const own = (revised ?? base)!;
   const side: SideContext = revised ? ctx.revised : ctx.base;
   const node = own.node!;
-  let xml = side.serialize(withBoxMarkers(node));
+  const xml = side.serialize(withBoxMarkers(node));
   const baseBoxes = base?.node ? textBoxesOf(base.node) : [];
   const revisedBoxes = revised?.node ? textBoxesOf(revised.node) : [];
   const count = Math.max(baseBoxes.length, revisedBoxes.length);
+  const contents: string[] = [];
   for (let i = 0; i < count; i++) {
     const before = baseBoxes[i];
     const after = revisedBoxes[i];
-    const content = compareContainer(
-      before ? unitsOf(before, ctx.base) : [],
-      after ? unitsOf(after, ctx.revised) : [],
-      ctx
+    contents.push(
+      compareContainer(
+        before ? unitsOf(before, ctx.base) : [],
+        after ? unitsOf(after, ctx.revised) : [],
+        ctx
+      )
     );
-    xml = xml.split(MARKER(i)).join(content);
   }
-  return xml;
+  // One pass over the object: a replace per box would scan it again for every box.
+  const markers = new RegExp(`${MARK}TXBX:(\\d+)§`, 'g');
+  return xml.replace(markers, (whole, index: string) => contents[Number(index)] ?? whole);
 }
