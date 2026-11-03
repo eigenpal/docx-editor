@@ -1103,7 +1103,7 @@ export function reviewModule(options?: ReviewModuleOptions): EditorModule;
 
 // @public
 export interface ReviewModuleOptions extends ProLicenseOptions {
-    readonly compareWorker?: () => Worker;
+    readonly compareWorker?: (() => Worker) | false;
     readonly pane?: ReviewPaneOptions;
 }
 

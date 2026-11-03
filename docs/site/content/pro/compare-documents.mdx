@@ -29,18 +29,17 @@ The **Review** menu then shows **Compare documents**. The open document is the o
 
 ### Compare in a worker
 
-To keep the page responsive and show progress, pass the compare worker as the `compareWorker` option. This sample uses the `?worker` import of Vite:
+The dialog compares in a web worker, so the page stays responsive, the dialog shows progress, and **Cancel** stops a running compare. You do not need to set anything up.
+
+If the worker cannot start, the dialog compares on the main thread. If your bundler cannot load the worker from the package, pass your own worker. For example, with the `?worker` import of Vite:
 
 ```ts
 import CompareWorker from '@docx-editor.dev/pro/compare-worker?worker';
 
-const editor = createDocxEditor({
-  document: originalBytes,
-  modules: [reviewModule({ compareWorker: () => new CompareWorker() })],
-});
+reviewModule({ compareWorker: () => new CompareWorker() });
 ```
 
-With the worker, the dialog shows progress, and **Cancel** stops a running compare.
+To always compare on the main thread, pass `compareWorker: false`.
 
 ### Compare from code
 

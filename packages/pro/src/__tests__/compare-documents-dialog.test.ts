@@ -223,6 +223,36 @@ test('Cancel stops a running background compare and leaves the document as it wa
 
 test('reviewModule refuses a compareWorker that is not a function', () => {
   expect(() => reviewModule({ compareWorker: 'worker.js' as never })).toThrow(TypeError);
+  expect(() => reviewModule({ compareWorker: true as never })).toThrow(TypeError);
+});
+
+test('the packaged worker is the default, and false compares on the main thread', () => {
+  expect(reviewModule().review?.compareDocumentsInBackground).toBeFunction();
+  expect(reviewModule({ compareWorker: false }).review?.compareDocumentsInBackground).toBe(
+    undefined
+  );
+});
+
+test('without web workers, the default compares on the main thread', async () => {
+  const saved = globalThis.Worker;
+  // A server or an old runtime: the packaged worker cannot start.
+  delete (globalThis as { Worker?: unknown }).Worker;
+  try {
+    const { container, editor } = setup();
+    editor.exec({ type: 'openCompareDocumentsDialog' });
+    chooseFile(getByLabelText(container, 'Revised document') as HTMLInputElement, REVISED);
+    fireEvent.click(getByRole(container, 'button', { name: 'Compare' }));
+    await waitFor(
+      () => {
+        if (container.querySelector('dialog')) throw new Error('not yet');
+      },
+      { timeout: 5000 }
+    );
+    expect(bodyText(editor)).toContain('red');
+    expect(editor.can({ type: 'undo' }).ok).toBe(true);
+  } finally {
+    globalThis.Worker = saved;
+  }
 });
 
 test('a refusal with a reason shows the message for that reason', async () => {
@@ -294,7 +324,7 @@ test('focus stays in the dialog when Compare disables itself, and returns after 
   cleanup();
 
   // On the main thread nothing can stop the compare: the busy status takes focus.
-  const main = setup();
+  const main = setup({ compareWorker: false });
   main.editor.exec({ type: 'openCompareDocumentsDialog' });
   const file = getByLabelText(main.container, 'Revised document') as HTMLInputElement;
   chooseFile(file, new Uint8Array([1, 2, 3]));

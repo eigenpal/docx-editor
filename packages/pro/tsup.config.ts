@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { defineConfig } from 'tsup';
 import { withDeclarations } from '../../scripts/build-declarations.mjs';
 
@@ -43,6 +44,27 @@ const REACT_ENTRIES = {
   'compare-worker': 'src/compare-worker.ts',
 };
 
+/**
+ * The default compare worker names its sibling source file, `./compare-worker.ts`. In `dist/`
+ * the worker is `compare-worker.js`, next to every chunk, so the built URL takes that name.
+ */
+const compareWorkerUrl = {
+  name: 'compare-worker-url',
+  setup(build: {
+    onLoad(
+      options: { filter: RegExp },
+      callback: (args: { path: string }) => Promise<{ contents: string; loader: 'ts' }>
+    ): void;
+  }) {
+    build.onLoad({ filter: /compare-worker-default\.ts$/ }, async (args) => {
+      const source = await readFile(args.path, 'utf8');
+      const contents = source.replace("'./compare-worker.ts'", "'./compare-worker.js'");
+      if (contents === source) throw new Error('compare-worker-default.ts: worker URL not found');
+      return { contents, loader: 'ts' };
+    });
+  },
+};
+
 const VUE_ENTRIES = {
   'vue/index': 'src/vue/index.ts',
   'vue/webrtc': 'src/vue/webrtc.ts',
@@ -62,6 +84,7 @@ export default defineConfig(
     esbuildOptions(options) {
       options.jsx = 'automatic';
     },
+    esbuildPlugins: [compareWorkerUrl],
     declarations: [
       { entry: REACT_ENTRIES },
       { entry: VUE_ENTRIES, compilerOptions: { jsx: 'preserve', jsxImportSource: 'vue' } },

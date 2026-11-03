@@ -676,8 +676,8 @@ Page dimensions, margins, and paragraph indents use twips: 1,440 per inch. Parag
 `useCompareDocumentsDialog()` also provides these members:
 
 - `busy`: `true` while the chosen file is read and compared. While it is `true`, `apply()` does nothing, so a second press never starts a second compare.
-- `progress`: with the compare worker, the running step (`phase`) and its `fraction` from 0 to 1. It is `null` until the worker reports its first step, and when no compare runs. The `compareDocuments.phases.<phase>` keys of `@docx-editor.dev/i18n` describe each step.
-- `cancelable`: `true` with the compare worker. Then `cancel()` stops a running worker. It cannot stop a compare that fell back to the main thread.
+- `progress`: in the compare worker, the running step (`phase`) and its `fraction` from 0 to 1. It is `null` until the worker reports its first step, and when no compare runs. The `compareDocuments.phases.<phase>` keys of `@docx-editor.dev/i18n` describe each step.
+- `cancelable`: `true` when compares run in the compare worker, the default. Then `cancel()` stops a running compare. It is `false` with `compareWorker: false`.
 - `notice`: a message that is not an error, such as that the documents have no differences.
 - `originalHasTrackedChanges`: `true` when the open document had tracked changes as the dialog opened. The compare accepts them first. The default arrangement shows a notice before you compare.
 

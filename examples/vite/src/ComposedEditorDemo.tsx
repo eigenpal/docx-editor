@@ -28,7 +28,6 @@ import {
 // document still opens (final-state view) and the review toolbar controls
 // disable with the engine's own "requires the pro review module" reason.
 import { customNodesModule, reviewModule } from '@docx-editor.dev/pro';
-import CompareWorker from '@docx-editor.dev/pro/compare-worker?worker';
 import { drawingModule } from '@docx-editor.dev/pro/drawing';
 import { CustomNodeContextMenu, DocxEditorReview } from '@docx-editor.dev/pro/react';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
@@ -75,9 +74,7 @@ const PRO_MODULES = [
   drawingModule(),
   // The example starts with the pane closed, so comments show as margin miniatures; the
   // header's settings panel saves other choices over that.
-  // The compare worker keeps the page responsive during Compare documents, with progress
-  // and Cancel.
-  reviewModule({ pane: storedReviewPane(), compareWorker: () => new CompareWorker() }),
+  reviewModule({ pane: storedReviewPane() }),
   customNodesModule({
     nodes: [DEMO_CITATION],
     // A payload comes from a file the sender wrote, so a mismatch is an ordinary property of an

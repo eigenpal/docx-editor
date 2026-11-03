@@ -105,7 +105,10 @@ export type CompareDocumentsRefusalReason =
 | 'headerFooter'
 /** The result needs a part type that the original document does not declare. */
 | 'packageStructure'
-/** The result does not reproduce both documents when all changes are accepted or rejected. */
+/**
+* The result fails the check: accepting all changes does not give the revised text, rejecting
+* them does not give the original text, or a tracked change cannot be accepted or rejected.
+*/
 | 'unverified';
 
 // @public
@@ -407,7 +410,7 @@ export function reviewModule(options?: ReviewModuleOptions): EditorModule;
 
 // @public
 export interface ReviewModuleOptions extends ProLicenseOptions {
-    readonly compareWorker?: () => Worker;
+    readonly compareWorker?: (() => Worker) | false;
     readonly pane?: ReviewPaneOptions;
 }
 

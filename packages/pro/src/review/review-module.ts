@@ -26,6 +26,7 @@ import type { ProLicenseOptions } from '../license.ts';
 import { installDrawing } from '../drawing/index.ts';
 import { compareDocumentsEngine } from '../compare/index.ts';
 import { createCompareWorkerEngine } from '../compare/worker-engine.ts';
+import { startDefaultCompareWorker } from '../compare-worker-default.ts';
 
 export type {
   CommentMarkerStyle,
@@ -52,31 +53,22 @@ export interface ReviewModuleOptions extends ProLicenseOptions {
    */
   readonly pane?: ReviewPaneOptions;
   /**
-   * Starts the compare worker, `@docx-editor.dev/pro/compare-worker`, as a module worker. With
-   * it, the Compare documents dialog compares off the page's main thread, shows progress, and
-   * can stop a running compare. Without it, the dialog compares on the main thread. The editor
-   * starts one worker for each compare and ends it when the compare ends.
+   * The worker that runs the Compare documents dialog's compares off the page's main thread,
+   * so the page stays responsive, the dialog shows progress, and Cancel stops a running
+   * compare. By default, the editor starts the packaged worker,
+   * `@docx-editor.dev/pro/compare-worker`, one for each compare.
    *
-   * If the worker never starts, the dialog compares on the main thread instead. That compare
-   * cannot be stopped.
+   * Pass `false` to compare on the main thread. Pass a function that starts the worker if your
+   * bundler cannot find the packaged one. If a worker fails to start, the dialog compares on
+   * the main thread instead, and that compare cannot be stopped.
    *
-   * @example Vite
+   * @example A Vite worker import
    * ```ts
    * import CompareWorker from '@docx-editor.dev/pro/compare-worker?worker';
    * reviewModule({ compareWorker: () => new CompareWorker() });
    * ```
-   *
-   * @example webpack 5 and Next.js
-   * ```ts
-   * reviewModule({
-   *   compareWorker: () =>
-   *     new Worker(new URL('@docx-editor.dev/pro/compare-worker', import.meta.url), {
-   *       type: 'module',
-   *     }),
-   * });
-   * ```
    */
-  readonly compareWorker?: () => Worker;
+  readonly compareWorker?: (() => Worker) | false;
 }
 
 /**
@@ -88,9 +80,14 @@ export function reviewModule(options: ReviewModuleOptions = {}): EditorModule {
   // Validate now, so a misspelled setting fails where the host wrote it.
   const pane = options.pane === undefined ? undefined : { ...resolveReviewPane(options.pane) };
   installDrawing(options);
-  if (options.compareWorker !== undefined && typeof options.compareWorker !== 'function')
-    throw new TypeError('reviewModule: compareWorker must be a function that returns a Worker');
-  const background = options.compareWorker && createCompareWorkerEngine(options.compareWorker);
+  const worker = options.compareWorker;
+  if (worker !== undefined && worker !== false && typeof worker !== 'function')
+    throw new TypeError(
+      'reviewModule: compareWorker must be false or a function that returns a Worker'
+    );
+  // The packaged worker by default. Where it cannot start, compares run on the main thread.
+  const background =
+    worker === false ? undefined : createCompareWorkerEngine(worker ?? startDefaultCompareWorker);
   return {
     id: 'review',
     review: {
