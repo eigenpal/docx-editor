@@ -478,13 +478,30 @@ test('tracked-changes protection covers earlier headers and controls that change
       buildDocx({ body: cells(placeholder('B'), placeholder('A')) })
     )
   ).toMatchObject({ ok: false, code: 'protected' });
-  // A new control before an unchanged one is a tracked insertion.
+  // A control without an id has no identity, so any compare with one refuses, even a tracked
+  // insertion, and a placeholder of spaces cannot stand in for the changed control.
   const inserted = `<w:sdt><w:sdtPr><w:alias w:val="Added"/></w:sdtPr><w:sdtContent>${p(
     'Added text'
   )}</w:sdtContent></w:sdt>`;
   expect(
-    compared(
+    compare(
       buildDocx({ body: unnamed('Old') + p('After.'), settings }),
+      buildDocx({ body: inserted + unnamed('Old') + p('After.') })
+    )
+  ).toMatchObject({ ok: false, code: 'protected' });
+  const spaces = (alias: string) =>
+    `<w:tc><w:sdt><w:sdtPr><w:alias w:val="${alias}"/><w:showingPlcHdr/></w:sdtPr>` +
+    `<w:sdtContent>${p('     ')}</w:sdtContent></w:sdt></w:tc>`;
+  expect(
+    compare(
+      buildDocx({ body: cells(spaces('A'), `<w:tc>${p('')}</w:tc>`), settings }),
+      buildDocx({ body: cells(spaces('B'), spaces('A')) })
+    )
+  ).toMatchObject({ ok: false, code: 'protected' });
+  // Without protection the same compare records the insertion.
+  expect(
+    compared(
+      buildDocx({ body: unnamed('Old') + p('After.') }),
       buildDocx({ body: inserted + unnamed('Old') + p('After.') })
     ).revisionCount
   ).toBeGreaterThan(0);

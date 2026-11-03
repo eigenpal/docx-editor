@@ -194,6 +194,7 @@ The function refuses with `protected` when the original document enforces protec
 - Tracked-changes protection, when formatting detection is off. A compare would write formatting differences without tracked changes.
 - Tracked-changes protection, when the revised document changes the definition of a style that both documents define. A style definition has no tracked form.
 - Tracked-changes protection, when the revised document changes the properties of a content control, such as its lock or its placeholder state. Control properties have no tracked form.
+- Tracked-changes protection, when either document has a content control without an ID. Without an ID, a compare cannot show that rejecting changes gives each control its own properties back.
 
 With tracked-changes protection, no tracked changes in the original, no changed style definitions or control properties, and formatting detection on, the compare runs, because it writes only tracked changes.
 

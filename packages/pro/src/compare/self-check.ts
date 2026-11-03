@@ -421,18 +421,15 @@ export interface SelfCheckResult {
   readonly detail?: string;
 }
 
-/**
- * The properties of a story's content controls: by id, and for those without one, in document
- * order per part.
- */
+/** The properties of a story's content controls by id, and how many controls have no id. */
 interface ControlProperties {
   readonly byId: Map<string, string>;
-  readonly unnamed: Map<string, string[]>;
+  readonly unnamed: number;
 }
 
 function controlProperties(parts: readonly OoxmlPart[]): ControlProperties {
   const byId = new Map<string, string>();
-  const unnamed = new Map<string, string[]>();
+  let unnamed = 0;
   const walk = (node: ElementNode, part: OoxmlPart) => {
     const properties =
       node.localName === 'sdt' && node.namespaceUri === W_NS
@@ -442,13 +439,8 @@ function controlProperties(parts: readonly OoxmlPart[]): ControlProperties {
       const id = elementChildren(properties).find((child) => child.localName === 'id');
       const value = id && attributeOf(id, 'val', W_NS);
       const xml = serializeOoxmlPart({ ...part, root: properties } as OoxmlPart);
-      if (value === undefined) {
-        // With its text, so the empty shell of an inserted control left by a reject never
-        // stands in for an original control.
-        const list = unnamed.get(part.name) ?? [];
-        list.push(`${xml}\u0001${textOf(node)}`);
-        unnamed.set(part.name, list);
-      } else if (!byId.has(value)) byId.set(value, xml);
+      if (value === undefined) unnamed++;
+      else if (!byId.has(value)) byId.set(value, xml);
     }
     for (const child of elementChildren(node)) if (child !== properties) walk(child, part);
   };
@@ -475,22 +467,17 @@ function withEarlierFurniture(pkg: OoxmlPackage, stories: readonly OoxmlPart[]):
 }
 
 /**
- * Whether every control of the original is back after a reject with the same properties. A
- * control with an id must keep them under that id. Controls without one must come back in
- * their order in each part, so their properties stay with their content; a control inserted
- * between them may remain.
+ * Whether every control of the original is back after a reject with the same properties, under
+ * its id. A control without an id has no identity that shows which control owns which
+ * properties after a reject, so with one in either document the answer is no.
  */
-function sameControls(after: ControlProperties, before: ControlProperties): boolean {
+function sameControls(
+  after: ControlProperties,
+  before: ControlProperties,
+  revised: ControlProperties
+): boolean {
+  if (before.unnamed > 0 || revised.unnamed > 0) return false;
   for (const [id, properties] of before.byId) if (after.byId.get(id) !== properties) return false;
-  for (const [part, list] of before.unnamed) {
-    const later = after.unnamed.get(part) ?? [];
-    let at = 0;
-    for (const properties of list) {
-      while (at < later.length && later[at] !== properties) at++;
-      if (at === later.length) return false;
-      at++;
-    }
-  }
   return true;
 }
 
@@ -551,7 +538,8 @@ export function selfCheck(
       !checkControls ||
       sameControls(
         controlProperties(withEarlierFurniture(output, rejected)),
-        controlProperties(withEarlierFurniture(original, storyParts(original)))
+        controlProperties(withEarlierFurniture(original, storyParts(original))),
+        controlProperties(withEarlierFurniture(revised, storyParts(revised)))
       ),
     ...(guards.size > 0 ? { guard: [...guards].sort().join(',') } : {}),
     ...(detail === undefined ? {} : { detail }),
