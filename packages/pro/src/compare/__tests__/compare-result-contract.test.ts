@@ -96,3 +96,23 @@ test('an unchanged picture keeps its part and is not copied', () => {
   const media = Object.keys(unzipSync(result.bytes)).filter((name) => name.includes('media/'));
   expect(media).toEqual(['word/media/image1.png']);
 });
+
+test('a drawing from the revised document never repeats a drawing id of the original', () => {
+  const original = buildDocx({
+    body: `<w:p>${inlineImage('rIdA', 1)}</w:p><w:p>${run('Text.')}</w:p>`,
+    media: [{ name: 'a.png', bytes: new Uint8Array([1, 2, 3]), rId: 'rIdA' }],
+  });
+  const revised = buildDocx({
+    body: `<w:p>${inlineImage('rIdB', 1)}</w:p><w:p>${run('Text.')}${inlineImage('rIdB', 5)}</w:p>`,
+    media: [{ name: 'b.png', bytes: new Uint8Array([4, 5, 6]), rId: 'rIdB' }],
+  });
+  const result = compareDocuments(original, revised, { date: DATE });
+  if (!result.ok) throw new Error(result.message);
+  const read = readOoxmlPackage(result.bytes);
+  if (!read.ok) throw new Error(read.reason);
+  const xml = serializeOoxmlPart(read.package.parts.get(read.package.mainDocumentPart)!);
+  const ids = [...xml.matchAll(/docPr id="([^"]*)"/g)].map((match) => match[1]);
+  // The original's picture keeps its id, so a rejected drawing is the original's again; a
+  // revised id the original does not use stays as it is.
+  expect(ids.sort()).toEqual(['1', '2', '5']);
+});

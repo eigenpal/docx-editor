@@ -23,6 +23,7 @@ import {
   type OoxmlPackage,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
+import { DrawingIds } from './drawing-ids.ts';
 import type { StoryOutput } from './stories.ts';
 import { isPartNameTaken } from './related-parts.ts';
 import { fromPlaceholder, MARK, REL_PLACEHOLDER } from './units.ts';
@@ -262,10 +263,14 @@ export function assemblePackage(
     pkg = typed;
     return copied;
   };
+  const drawingIds = new DrawingIds(base, new Set(stories.map((story) => story.partName)));
+  for (const story of stories) drawingIds.reserveWritten(story.xml);
   for (const story of stories) {
     const imported = new Map<string, string>();
     let failure: string | null = null;
-    let xml = story.xml.replace(NEW_PART, (_, partName: string) => newPartIds.get(partName) ?? '');
+    let xml = drawingIds.resolve(
+      story.xml.replace(NEW_PART, (_, partName: string) => newPartIds.get(partName) ?? '')
+    );
     xml = xml.replace(PLACEHOLDER, (_, owner: string, encodedId: string) => {
       const revisedOwner = fromPlaceholder(owner);
       const id = fromPlaceholder(encodedId);

@@ -146,6 +146,15 @@ const O_NS = 'urn:schemas-microsoft-com:office:office';
  */
 export const REL_PLACEHOLDER = `${MARK}REL:`;
 
+/**
+ * A drawing's document-wide id (`wp:docPr/@id`) from the revised document, written as
+ * `<MARK>DOCPR:<id>§` and numbered on assembly, so that it never repeats an id the original
+ * uses. A repeated id is renumbered when the file opens, and a rejected drawing then differs
+ * from the original's.
+ */
+export const DRAWING_ID_PLACEHOLDER = `${MARK}DOCPR:`;
+const DRAWING_ID = /(<(?:[A-Za-z_][\w.-]*:)?docPr\b[^>]*?\sid=")([^"]*)"/g;
+
 const MARKERS = new Set([
   'bookmarkStart',
   'bookmarkEnd',
@@ -252,13 +261,17 @@ export class SideContext {
   remap(xml: string): string {
     if (this.name === 'base') return xml;
     const declared = localDeclarations(xml);
-    return xml.replace(
-      REL_ATTRIBUTE,
-      (whole, lead: string, prefix: string, name: string, id: string) =>
+    return xml
+      .replace(REL_ATTRIBUTE, (whole, lead: string, prefix: string, name: string, id: string) =>
         this.#isRelationshipPrefix(prefix, name, declared)
           ? `${lead}${REL_PLACEHOLDER}${placeholderValue(this.partName)}|${placeholderValue(unescapeXml(id))}§"`
           : whole
-    );
+      )
+      .replace(
+        DRAWING_ID,
+        (_, lead: string, id: string) =>
+          `${lead}${DRAWING_ID_PLACEHOLDER}${placeholderValue(unescapeXml(id))}§"`
+      );
   }
 
   /** Key of a raw serialized fragment, with relationship ids resolved to their targets. */
