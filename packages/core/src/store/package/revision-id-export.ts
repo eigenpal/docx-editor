@@ -75,6 +75,31 @@ export function parseRevisionId(value: string): number | null {
   return parsed > MAX_DECIMAL_ID || parsed < MIN_REVISION_ID ? null : parsed;
 }
 
+/**
+ * The number another reader can take a revision id for, or null when it is not a 32-bit
+ * signed integer. Wider than `parseRevisionId`: it also reads XML whitespace around the
+ * value, a `+` sign and any count of leading zeros. It decides which ids a copy the save does
+ * not rewrite holds, so a new id never takes one of them. The walk is one step per character
+ * of the value.
+ */
+function revisionIdReadAs(value: string): number | null {
+  let start = 0;
+  let end = value.length;
+  while (start < end && isXmlSpace(value.charCodeAt(start))) start += 1;
+  while (end > start && isXmlSpace(value.charCodeAt(end - 1))) end -= 1;
+  const sign = start < end ? value.charCodeAt(start) : 0;
+  let index = sign === 43 || sign === 45 ? start + 1 : start;
+  // Keep one digit, so `+0` and `000` read as the id `0`.
+  while (index < end - 1 && value.charCodeAt(index) === 48) index += 1;
+  const digits = value.slice(index, end);
+  return parseRevisionId(sign === 45 ? `-${digits}` : digits);
+}
+
+/** Space, tab, line feed or carriage return. */
+function isXmlSpace(code: number): boolean {
+  return code === 32 || code === 9 || code === 10 || code === 13;
+}
+
 /** One annotation that needs a new id: its element, or a range start and its end. */
 interface Conflict {
   readonly partName: string;
@@ -199,8 +224,8 @@ class RevisionIdScan {
   private textBoxes = 0;
   private partName = '';
   /**
-   * Open range starts by family and authored id, newest last, so an end closes the start it
-   * nests in. Ranges do not cross parts.
+   * Open range starts by family, story and authored id, newest last, so an end closes the
+   * start it nests in. Ranges do not cross parts or stories.
    */
   private open = new Map<string, (Conflict | null)[]>();
 
@@ -351,7 +376,7 @@ class RevisionIdScan {
       const role = WML_ROLES.get(node.localName);
       if (role !== undefined && role !== 'note' && role !== 'textBox') {
         const value = revisionIdOf(node);
-        const parsed = value === undefined ? null : parseRevisionId(value);
+        const parsed = value === undefined ? null : revisionIdReadAs(value);
         if (parsed !== null && !this.owners.has(parsed)) this.reserved.add(parsed);
       }
     }
@@ -367,7 +392,11 @@ class RevisionIdScan {
     const value = revisionIdOf(node);
     if (value === undefined) return;
     this.events += 1;
-    const key = `${family}\u0000${value}`;
+    // The story and the number, so an end in a text box never closes a start in the body, and
+    // `05` closes `5`. A value that is no id pairs by its text.
+    const parsed = parseRevisionId(value);
+    const id = parsed === null ? `raw:${value}` : String(parsed);
+    const key = `${family}\u0000${this.story}\u0000${id}`;
     if (start) {
       // A range is never a piece of a split change: two ranges on one id are two annotations.
       const conflict = this.claim(this.partName, node, value, `range:${(this.ranges += 1)}`);
@@ -461,20 +490,64 @@ function withRevisionIds(
 export function* uniqueRevisionIdsExportPackageSteps(
   pkg: OoxmlPackage
 ): Generator<void, OoxmlPackage> {
+  const scanned = partsInOrder(pkg);
+  const previous = scanned.length > 0 ? lastExports.get(scanned[0]!.root) : undefined;
+  if (previous !== undefined && sameParts(previous.parts, scanned)) {
+    return withRoots(pkg, previous.roots);
+  }
   const scan = new RevisionIdScan();
-  for (const part of partsInOrder(pkg)) {
+  for (const part of scanned) {
     scan.scanPart(part);
     yield;
   }
-  if (scan.conflicts.length === 0) return pkg;
-  const parts = new Map(pkg.parts);
-  for (const [partName, changes] of scan.assign()) {
-    const part = parts.get(partName)!;
-    parts.set(partName, {
-      ...part,
-      root: withRevisionIds(part.root, changes, []) as typeof part.root,
+  const roots = new Map<string, OoxmlNode>();
+  if (scan.conflicts.length > 0) {
+    for (const [partName, changes] of scan.assign()) {
+      roots.set(partName, withRevisionIds(pkg.parts.get(partName)!.root, changes, []));
+      yield;
+    }
+  }
+  if (scanned.length > 0) {
+    lastExports.set(scanned[0]!.root, {
+      parts: scanned.map((part) => [part.name, part.root] as const),
+      roots,
     });
-    yield;
+  }
+  return withRoots(pkg, roots);
+}
+
+/**
+ * The last export of each document, by its first part's root: the parts it read, in order,
+ * and the roots it rewrote. The new ids depend only on those parts, so a save of the same
+ * parts gets the same roots without a walk.
+ */
+const lastExports = new WeakMap<
+  OoxmlNode,
+  {
+    readonly parts: readonly (readonly [string, OoxmlNode])[];
+    readonly roots: ReadonlyMap<string, OoxmlNode>;
+  }
+>();
+
+function sameParts(
+  previous: readonly (readonly [string, OoxmlNode])[],
+  parts: readonly OoxmlPart[]
+): boolean {
+  if (previous.length !== parts.length) return false;
+  for (let index = 0; index < parts.length; index += 1) {
+    const [name, root] = previous[index]!;
+    if (parts[index]!.name !== name || parts[index]!.root !== root) return false;
+  }
+  return true;
+}
+
+/** `pkg` with the rewritten roots, or `pkg` itself when there are none. */
+function withRoots(pkg: OoxmlPackage, roots: ReadonlyMap<string, OoxmlNode>): OoxmlPackage {
+  if (roots.size === 0) return pkg;
+  const parts = new Map(pkg.parts);
+  for (const [partName, root] of roots) {
+    const part = parts.get(partName)!;
+    parts.set(partName, { ...part, root: root as typeof part.root });
   }
   return Object.freeze({ ...pkg, parts });
 }

@@ -352,6 +352,52 @@ describe('saved revision ids', () => {
     // The same copy, so the serializer reuses the markup it cached for it.
     expect(root(second)).toBe(root(first));
   });
+
+  test('a range end in a text box never closes a range start in the body', () => {
+    const textBox =
+      '<w:r><w:pict><w:txbxContent><w:p><w:moveFromRangeEnd w:id="5"/></w:p></w:txbxContent>' +
+      '</w:pict></w:r>';
+    const body =
+      `<w:p>${ins('5', 'kept', 'A')}<w:moveFromRangeStart w:id="5" w:author="B" w:name="m1"/>` +
+      `${textBox}${run('moved')}<w:moveFromRangeEnd w:id="5"/></w:p>`;
+    expect(named(ids(saved(open(docx(body)))), ['5'])).toEqual([
+      'ins:5',
+      'moveFromRangeStart:A',
+      // An end with no start in its own story is an annotation of its own.
+      'moveFromRangeEnd:B',
+      'moveFromRangeEnd:A',
+    ]);
+  });
+
+  test('a range start and end that spell one number differently stay paired', () => {
+    const body =
+      `<w:p>${ins('5', 'kept', 'A')}<w:customXmlInsRangeStart w:id="05" w:author="B"/>` +
+      `${run('x')}<w:customXmlInsRangeEnd w:id="5"/></w:p>`;
+    expect(named(ids(saved(open(docx(body)))), ['5'])).toEqual([
+      'ins:5',
+      'customXmlInsRangeStart:A',
+      'customXmlInsRangeEnd:A',
+    ]);
+  });
+
+  test('a new id never takes an id a fallback copy spells with spaces, a sign or zeros', () => {
+    const taken = String(fnv1a32('1\u00000') & (NEW_ID_LIMIT - 1));
+    for (const spelling of [
+      `+${taken}`,
+      `000000000000${taken}`,
+      ` ${taken} `,
+      `  +0${taken} `,
+    ]) {
+      const body =
+        `<w:p>${ins('1', 'a', 'A')}${ins('1', 'b', 'B')}<mc:AlternateContent>` +
+        `<mc:Choice Requires="w14">${ins('3', 'c')}</mc:Choice>` +
+        `<mc:Fallback>${ins(spelling, 'c', 'C')}</mc:Fallback></mc:AlternateContent></w:p>`;
+      const found = ids(saved(open(docx(body))));
+      expect(found[1]).not.toBe(`ins:${taken}`);
+      // The fallback copy is written as the file holds it.
+      expect(found.at(-1)).toBe(`ins:${spelling}`);
+    }
+  });
 });
 
 describe('parseRevisionId', () => {
