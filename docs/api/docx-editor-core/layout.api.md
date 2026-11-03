@@ -3699,7 +3699,11 @@ export interface SectionProperties {
     };
     // (undocumented)
     readonly titlePage: boolean;
+    readonly verticalAlign?: SectionVerticalAlign;
 }
+
+// @public
+export type SectionVerticalAlign = 'center' | 'bottom' | 'both';
 
 // @public
 export function segmentGraphemes(text: string): readonly GraphemeSegment[];
