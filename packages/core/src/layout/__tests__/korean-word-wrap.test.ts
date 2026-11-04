@@ -1,6 +1,6 @@
-// With `w:wordWrap` on, the default, a space-delimited language breaks at the word level
-// (ECMA-376 §17.3.1.45). A Korean word keeps the ASCII punctuation, digits, and Latin
-// letters that it holds, so a line never ends or opens inside it.
+// Under word wrapping (`w:wordWrap`, ECMA-376 §17.3.1.45), Hangul breaks like a Latin letter.
+// A Korean word keeps the ASCII punctuation, digits, and Latin letters that it holds, so a
+// line never ends or opens inside it.
 import { expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlElement } from '@docx-editor.dev/core/store';
 import { buildStyleCascadeTable, createFixedMeasurer } from '@docx-editor.dev/core/layout';
@@ -27,6 +27,10 @@ test('an opening parenthesis stays in its Korean word', () => {
 test('digits and Latin letters stay in their Korean word', () => {
   expect(texts('가나다라마바사 10회 자차')).toEqual(['가나다라마바사 ', '10회 자차']);
   expect(texts('가나다라마바사 mm이 자차')).toEqual(['가나다라마바사 ', 'mm이 자차']);
+});
+
+test('a Korean word wider than the line breaks at its last fitting character', () => {
+  expect(texts('가나 다라마바사아자차카타파하')).toEqual(['가나 ', '다라마바사아자차카타', '파하']);
 });
 
 test('a table cell is no narrower than its widest Korean word', () => {

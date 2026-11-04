@@ -133,9 +133,8 @@ export function cjkParagraphBreaks(
     : /[\u3040-\u30ff\uff66-\uff9f]/u.test(text)
       ? 'ja-jp'
       : 'zh-cn';
-  // Under word wrapping, Korean is a space-delimited language (ECMA-376 §17.3.1.45): Hangul
-  // breaks as a Latin letter does, so a Korean word keeps its punctuation, digits, and Latin
-  // letters. Ideographs and full-width forms still open East Asian boundaries.
+  // Under word wrapping (`w:wordWrap`, ECMA-376 §17.3.1.45), Hangul breaks like a Latin letter,
+  // so a Korean word keeps its punctuation, digits, and Latin letters. Ideographs and full-width forms still open East Asian boundaries.
   const opensEastAsian = (cp: number) => isCjk(cp) && (policy.characterWrap || !isHangul(cp));
   // Carry script context through punctuation, but never across a Latin word or space. Kinsoku
   // reads the script (`eastAsianContext`); a break after the punctuation reads `breakContext`.
