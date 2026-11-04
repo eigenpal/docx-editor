@@ -94,6 +94,7 @@ const VML_BOX =
 const BODY = '<w:p><w:r><w:t>Body text</w:t></w:r></w:p>';
 
 const editors: DocxEditorInstance[] = [];
+const containers = new WeakMap<DocxEditorInstance, HTMLElement>();
 afterEach(() => {
   for (const editor of editors.splice(0)) editor.destroy();
 });
@@ -110,6 +111,7 @@ function mount(document_: Uint8Array): DocxEditorInstance {
   editors.push(editor);
   editor.setCommentDraftChrome({ onRequest: () => {} });
   container.remove();
+  containers.set(editor, container);
   return editor;
 }
 
@@ -159,6 +161,10 @@ for (const [name, body, header, part] of [
     const range = card?.item.kind === 'comment' ? card.item.range : null;
     expect(range?.start).toEqual({ paragraphId, offset: 0 });
     expect(range?.end).toEqual({ paragraphId, offset: 6 });
+    // The commented text carries its band, as commented body text does.
+    expect(
+      containers.get(editor)!.querySelector('.docx-comment-overlay')!.children.length
+    ).toBeGreaterThan(0);
 
     // Opening the card opens the box it annotates.
     editor.surface!.setActiveScope({ kind: 'body' });

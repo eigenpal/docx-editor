@@ -142,7 +142,6 @@ import {
   createParagraphLayoutCache,
   resolveDefaultSurfaceMeasurer,
   cellSelectionRects,
-  keyedRangeRects,
   formatPageNumber,
   emptyTocPlaceholderParagraphIds,
   paragraphFragmentsOf,
@@ -172,6 +171,7 @@ import {
 import { wordMotionBoundaries } from '../layout/word-navigation-boundaries.ts';
 import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
 import { rangesOnPages } from '../layout/selection-rects.ts';
+import { keyedRangeRectsWithTextboxes } from './textbox-presence-layout.ts';
 import { refreshSurfaceRefFieldResults } from './surface-ref-field-refresh.ts';
 import { type RevisionAuthorFilter } from '../layout/revision-projection.ts';
 import { surfaceRevisionFilter } from './surface-unlisted-filter.ts';
@@ -3619,7 +3619,7 @@ export function mountPaginatedSurface(
         });
       }
     }
-    const byKey = keyedRangeRects(currentLayout, ranges, pages, measurer);
+    const byKey = keyedRangeRectsWithTextboxes(currentLayout, ranges, pages, measurer);
     const rects: (OverlayRect & { key: string })[] = [];
     for (const [key, found] of byKey) for (const rect of found) rects.push({ ...rect, key });
     commentRectCache = { layout: currentLayout, revision, pages, rects };
