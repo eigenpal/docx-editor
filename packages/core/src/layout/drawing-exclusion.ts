@@ -17,7 +17,7 @@ import {
 } from './drawing-layout.ts';
 import { anchoredOutOfCell, type CellAnchorScope } from './cell-anchor-layout.ts';
 import { drawingGeometryFromProjection } from './drawing-geometry.ts';
-import { compareDrawingCollisionOrder } from './drawing-overlap.ts';
+import { paintLayerOf, sortDrawingsForPaint, type DrawingPaintLayer } from './drawing-overlap.ts';
 import { paragraphBandTop, topAndBottomBandAnchorY } from './top-and-bottom-clearance.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
@@ -39,8 +39,8 @@ import type { TextboxStoryLayouter } from './inline-textbox-flow.ts';
 import { textboxPlacementProjection } from './textbox-placement.ts';
 import { turnedWrapBox } from './textbox-wrap-box.ts';
 
-/** Paint layer relative to body text — not the OOXML wrap element. */
-export type DrawingPaintLayer = 'behind' | 'inFront';
+export { compareDrawingPaintOrder, paintLayerOf, sortDrawingsForPaint } from './drawing-overlap.ts';
+export type { DrawingPaintLayer } from './drawing-overlap.ts';
 
 /** Maximum page-to-page deferrals before publishing with {@link AnchoredDrawingLayoutFallback}. */
 export const MAX_ANCHOR_PAGE_DEFERRALS = 8;
@@ -181,10 +181,6 @@ export function columnIndexForDrawing(
   return count - 1;
 }
 
-export function paintLayerOf(drawing: AnchoredDrawingRecord): DrawingPaintLayer {
-  return drawing.behindDocument ? 'behind' : 'inFront';
-}
-
 export function wrapProducesExclusion(wrap: ImageWrapTarget): boolean {
   return wrap !== 'inline' && wrap !== 'behind' && wrap !== 'inFront';
 }
@@ -313,25 +309,6 @@ export function exclusionZoneFromAnchoredDrawing(options: {
     verticalBand: verticalBandOfExclusion(input),
     input,
   });
-}
-
-export function compareDrawingPaintOrder(
-  left: AnchoredDrawingRecord,
-  right: AnchoredDrawingRecord
-): number {
-  const leftLayer = paintLayerOf(left);
-  const rightLayer = paintLayerOf(right);
-  if (leftLayer !== rightLayer) return leftLayer === 'behind' ? -1 : 1;
-  if (left.relativeHeight !== right.relativeHeight) {
-    return left.relativeHeight - right.relativeHeight;
-  }
-  return compareDrawingCollisionOrder(left, right);
-}
-
-export function sortDrawingsForPaint(
-  drawings: readonly AnchoredDrawingRecord[]
-): readonly AnchoredDrawingRecord[] {
-  return Object.freeze([...drawings].sort(compareDrawingPaintOrder));
 }
 
 export function mergeAvailableIntervalsAtY(

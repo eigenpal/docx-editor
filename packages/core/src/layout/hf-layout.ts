@@ -48,6 +48,7 @@ import {
   exclusionLayoutToken,
   type ExclusionZone,
 } from './drawing-exclusion.ts';
+import { sortStoryDrawingsForPaint } from './drawing-overlap.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
 import { noteUnsettledExclusionReflow } from './unsettled-exclusion-layout.ts';
 import {
@@ -741,7 +742,7 @@ export function layoutHeaderFooterStory(
       flowHeight: flow.bottom,
       pageFieldNeeds: needs,
       ...(pendingAnchoredDrawings.length > 0
-        ? { anchoredDrawings: Object.freeze([...pendingAnchoredDrawings]) }
+        ? { anchoredDrawings: sortStoryDrawingsForPaint(pendingAnchoredDrawings) }
         : {}),
       withPageContext: (next) => {
         if (
