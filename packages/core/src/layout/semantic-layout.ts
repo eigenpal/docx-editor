@@ -1679,6 +1679,24 @@ function* layoutBlocksPass(
 
   const tableVerticalFrames = (anchorY: number) =>
     tableFloat.bodyTableVerticalAnchorFrames(anchorFrameBase(), anchorY, geometry.margin.top);
+  /** Room below `anchorY` that the tables waiting for `anchorId` need on this page. */
+  const anchorTableBand = (anchorId: string, anchorY: number, anchorExtent: number): number =>
+    tableWrap.requiredAnchorBand(
+      positionedTables,
+      pendingFloatIds,
+      anchorId,
+      columnWidth(),
+      tableDeps,
+      {
+        anchorY,
+        anchorExtent,
+        frames: anchorFrames(),
+        verticalFrames: tableVerticalFrames(anchorY),
+        earlier: pageFragments,
+        signals: floatSignals,
+        pushOf: stacks.push,
+      }
+    );
 
   const layoutTableInFlow = (
     table: OoxmlElement,
@@ -2054,6 +2072,9 @@ function* layoutBlocksPass(
       (pageFragments.length > 0 || cursorY > 0) &&
       index !== markOnBreakSheet
     ) {
+      const fits = () => cursorY + anchorTableBand(paragraphId, cursorY, 0) <= contentHeight();
+      if (tableWrap.staysBeforeAnchorBreak(positionedTables, pendingFloatIds, paragraphId, fits))
+        noteAnchor(paragraphId, cursorY);
       flushPage();
       previousSpaceAfter = 0;
     }
@@ -2158,22 +2179,7 @@ function* layoutBlocksPass(
         Math.max(
           firstExtent,
           paragraphFrames.requiredAnchorBand(lines),
-          tableWrap.requiredAnchorBand(
-            positionedTables,
-            pendingFloatIds,
-            paragraphId,
-            columnWidth(),
-            tableDeps,
-            {
-              anchorY: prospectiveFirstTop,
-              anchorExtent: firstExtent,
-              frames: anchorFrames(),
-              verticalFrames: tableVerticalFrames(prospectiveFirstTop),
-              earlier: pageFragments,
-              signals: floatSignals,
-              pushOf: stacks.push,
-            }
-          )
+          anchorTableBand(paragraphId, prospectiveFirstTop, firstExtent)
         );
       // `w:keepNext` (§17.3.1.15): priced ONCE per chain, at its head (`keepNextGroupNeed`).
       if (keeps.keepNext && !keepsNext[index - 1]) {

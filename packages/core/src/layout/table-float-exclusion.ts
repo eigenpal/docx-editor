@@ -650,6 +650,28 @@ export function requiredAnchorBand(
 }
 
 /**
+ * Whether the tables that wait for `paragraphId` stay on the page that its `w:pageBreakBefore`
+ * closes. Word places a text-anchored table where the body flow reaches it, and the break moves
+ * only the anchor paragraph. A text-anchored table that breaks across pages does the same.
+ *
+ * The tables stay only when each one is text-anchored and `fits` finds room for them below the
+ * flow on that page (`requiredAnchorBand`). Otherwise they follow their anchor.
+ */
+export function staysBeforeAnchorBreak(
+  anchors: readonly PositionedTableAnchor[],
+  pending: ReadonlySet<string>,
+  paragraphId: string,
+  fits: () => boolean
+): boolean {
+  const waiting = (positionedTablesByAnchor(anchors).get(paragraphId) ?? []).filter((anchor) =>
+    pending.has(anchor.table.id)
+  );
+  return (
+    waiting.length > 0 && waiting.every((anchor) => anchor.float.vertAnchor === 'text') && fits()
+  );
+}
+
+/**
  * Where a text-anchored table placed at its anchor starts: below the earlier text it would
  * cover, then off the floating tables already on the page. `dx` moves it sideways.
  */
