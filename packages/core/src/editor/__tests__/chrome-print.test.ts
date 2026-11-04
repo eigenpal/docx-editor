@@ -1,6 +1,12 @@
 import { afterEach, expect, test } from 'bun:test';
 import { ChromeExportError } from '../chrome-export.ts';
-import { ChromePrintError, isChromePrintShortcut, runChromePrint } from '../chrome-print.ts';
+import {
+  ChromePrintError,
+  initialChromePrintSettings,
+  isChromePrintShortcut,
+  CHROME_PRINT_DISPLAY_MODES,
+  runChromePrint,
+} from '../chrome-print.ts';
 
 const PDF = new TextEncoder().encode('%PDF-1.7\n');
 const editor = { save: async () => new ArrayBuffer(1) };
@@ -222,4 +228,24 @@ test('PDF bytes in shared memory still print', async () => {
   const job = await runChromePrint(editor, { pdf: async () => ({ bytes: shared }) });
   expect(job.url).toStartWith('blob:');
   job.dispose();
+});
+
+test('print settings start from the current view with comments shown', () => {
+  expect(initialChromePrintSettings({ reviewDisplayMode: 'all-markup' })).toEqual({
+    displayMode: 'all-markup',
+    comments: true,
+  });
+  // Comments print in every mode: as a pane in All Markup, as annotations elsewhere.
+  expect(initialChromePrintSettings({ reviewDisplayMode: 'original' })).toEqual({
+    displayMode: 'original',
+    comments: true,
+  });
+  expect(initialChromePrintSettings(null)).toEqual({ displayMode: 'proposed', comments: true });
+  // The form lists the modes in Review menu order.
+  expect(CHROME_PRINT_DISPLAY_MODES.map(({ mode }) => mode)).toEqual([
+    'simple-markup',
+    'all-markup',
+    'proposed',
+    'original',
+  ]);
 });

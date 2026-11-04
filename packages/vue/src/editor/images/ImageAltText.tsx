@@ -9,6 +9,7 @@ import { useEditorValueCommand } from '../useEditorValueCommand';
 import { useToolbarLabel } from '../toolbar/toolbar-context';
 import { chromeControlForSlot, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { Slot } from '../toolbar/Slot';
+import { panelRowContent, triggerClassName, usePanelRow } from '../toolbar/panel-row';
 
 /** @public */
 export interface ImageAltTextProps {
@@ -28,6 +29,7 @@ export const ImageAltText = defineComponent({
   setup(props, { slots }) {
     const popups = usePopupConfig();
     const label = useToolbarLabel();
+    const isPanelRow = usePanelRow();
     const command = useEditorValueCommand('image.altText');
     const open = ref(false);
     watch(
@@ -81,10 +83,11 @@ export const ImageAltText = defineComponent({
       if (props.hidden) return null;
       const control = chromeControlForSlot('image.altText');
       const text = label(control?.labelKey ?? 'formattingBar.altText');
+      const panelRow = isPanelRow(props.asChild, !!slots.default);
       const shared = {
         type: 'button' as const,
         ref: triggerRef,
-        class: `docx-toolbar__button docx-toolbar__alt-text-trigger${props.className ? ` ${props.className}` : ''}`,
+        class: `${triggerClassName(panelRow)} docx-toolbar__alt-text-trigger${props.className ? ` ${props.className}` : ''}`,
         'data-slot': 'image.altText',
         disabled: !command.isEnabled.value,
         ...(!command.isEnabled.value ? { 'data-disabled': '' } : {}),
@@ -117,7 +120,10 @@ export const ImageAltText = defineComponent({
           {props.asChild ? (
             <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>
           ) : (
-            <button {...shared}>{slots.default?.() ?? text}</button>
+            <button {...shared}>
+              {/* The bar shows the label as text; the panel row has no icon for it. */}
+              {panelRow ? panelRowContent(null, text) : (slots.default?.() ?? text)}
+            </button>
           )}
           {open.value && popups.value?.imageAltText !== false ? (
             popups.value?.imageAltText ? (

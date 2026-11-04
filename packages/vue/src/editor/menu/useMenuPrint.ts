@@ -5,7 +5,10 @@ import {
   runChromePrint,
   type ChromeExportHandlers,
   type ChromePrintJob,
+  type ChromePrintSettings,
+  type ResolvedChromePrintSettings,
   hostDocumentOf,
+  initialChromePrintSettings,
 } from '@docx-editor.dev/core/editor';
 import type { Editor } from '@docx-editor.dev/core';
 import { useTranslation } from '../../i18n';
@@ -18,13 +21,21 @@ interface UseMenuPrintReturn {
   /** True from File > Print until the session ends, including while the popup is hidden. */
   readonly active: Ref<boolean>;
   readonly session: Ref<object>;
+  /** True while the settings form shows, before conversion starts. */
+  readonly choosing: Ref<boolean>;
+  readonly settings: Ref<ResolvedChromePrintSettings>;
   readonly execute: (container?: Element | Document) => Promise<void>;
+  readonly changeSettings: (change: ChromePrintSettings) => void;
+  /** Starts conversion with the settings the form shows. */
+  readonly confirm: () => void;
   readonly close: () => void;
 }
 
 /**
  * File > Print state: converts through the PDF handler, then opens the browser print
- * dialog. The popup shows only while the PDF is prepared and after a failure.
+ * dialog. With `settingsStep` on, the popup first shows the print settings form, and
+ * conversion starts when the user confirms. Otherwise the popup shows only while the PDF
+ * is prepared and after a failure.
  *
  * The popup stays up while the PDF loads and closes BEFORE printing starts. It is modal, and a modal dialog makes the rest
  * of the page, including the print frame, inert.
@@ -39,7 +50,8 @@ interface UseMenuPrintReturn {
 export function useMenuPrint(
   editor: Ref<Editor | null>,
   exporters: () => ChromeExportHandlers | undefined,
-  feedback: () => boolean
+  feedback: () => boolean,
+  settingsStep: () => boolean = () => false
 ): UseMenuPrintReturn {
   const { t } = useTranslation();
   // The current print session. Closing the popup clears it, so a conversion that finishes
@@ -52,6 +64,9 @@ export function useMenuPrint(
   const visible = ref(false);
   const active = ref(false);
   const session = shallowRef<object>({});
+  const choosing = ref(false);
+  const settings = ref<ResolvedChromePrintSettings>(initialChromePrintSettings(null));
+  let container: Element | Document | undefined;
 
   const failure = (cause: unknown) => {
     if (cause instanceof ChromeExportError) return t('toolbar.printPdfMissing');
@@ -70,25 +85,19 @@ export function useMenuPrint(
     active.value = false;
     visible.value = false;
     pending.value = false;
+    choosing.value = false;
   };
 
-  const execute = async (container?: Element | Document) => {
-    if (!editor.value || current) return;
-    const token = {};
-    current = token;
-    job?.dispose();
-    job = null;
-    session.value = token;
-    active.value = true;
-    visible.value = true;
+  const convert = async (token: object, chosen: ChromePrintSettings) => {
+    if (!editor.value || current !== token) return;
+    choosing.value = false;
     pending.value = true;
-    error.value = '';
-    url.value = '';
     try {
       const prepared = await runChromePrint(
         editor.value,
         exporters(),
-        container ?? hostDocumentOf(null)
+        container ?? hostDocumentOf(null),
+        chosen
       );
       if (current !== token) {
         prepared.dispose();
@@ -120,6 +129,38 @@ export function useMenuPrint(
     }
   };
 
+  const execute = async (target?: Element | Document) => {
+    if (!editor.value || current) return;
+    const token = {};
+    current = token;
+    container = target;
+    job?.dispose();
+    job = null;
+    session.value = token;
+    active.value = true;
+    visible.value = true;
+    error.value = '';
+    url.value = '';
+    // Without a popup there is no form, so printing starts with the current view. Without
+    // a PDF handler, the setup error shows at once instead of after the form.
+    if (!settingsStep() || !feedback() || !exporters()?.pdf) {
+      await convert(token, {});
+      return;
+    }
+    settings.value = initialChromePrintSettings(editor.value.snapshot());
+    pending.value = false;
+    choosing.value = true;
+  };
+
+  const changeSettings = (change: ChromePrintSettings) => {
+    settings.value = { ...settings.value, ...change };
+  };
+
+  // A double click on Print, or Print and the shortcut together, must convert once.
+  const confirm = () => {
+    if (current && choosing.value) void convert(current, settings.value);
+  };
+
   // Unmounting the menu ends the session and the job, which removes its frame and revokes
   // its URL. A conversion that finishes afterward sees no session and discards its PDF.
   onScopeDispose(() => {
@@ -128,5 +169,18 @@ export function useMenuPrint(
     job = null;
   });
 
-  return { pending, error, url, visible, active, session, execute, close: end };
+  return {
+    pending,
+    error,
+    url,
+    visible,
+    active,
+    session,
+    choosing,
+    settings,
+    execute,
+    changeSettings,
+    confirm,
+    close: end,
+  };
 }

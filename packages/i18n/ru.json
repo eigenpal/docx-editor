@@ -60,7 +60,10 @@
     "bookmarkShortcut": "Ctrl+Shift+F5",
     "goToBookmark": "Перейти к закладке…",
     "goToBookmarkShortcut": "Ctrl+G",
-    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G",
+    "printComments": "Печатать примечания",
+    "printCommentsNote": "Вне режима {mode} примечания печатаются как заметки у комментируемого текста.",
+    "printMarkup": "Разметка"
   },
   "toc": {
     "refresh": "Обновить оглавление",

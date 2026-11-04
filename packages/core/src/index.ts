@@ -140,6 +140,7 @@ export type {
   AttachOptions,
   BookmarkChromeHandlers,
   ChromeExportView,
+  ChromePrintSettings,
   CollaborationModuleContribution,
   ContentControlWidgetChromeHandlers,
   ContentControlWidgetSession,
@@ -230,9 +231,16 @@ export type {
   ChromeExportHandlers,
   ChromeExportResult,
 } from './editor/chrome-export.ts';
-export { runChromePrint, ChromePrintError, isChromePrintShortcut } from './editor/chrome-print.ts';
+export {
+  runChromePrint,
+  ChromePrintError,
+  isChromePrintShortcut,
+  initialChromePrintSettings,
+  CHROME_PRINT_DISPLAY_MODES,
+} from './editor/chrome-print.ts';
 export type {
   ChromePrintErrorCode,
   ChromePrintJob,
   ChromePrintOptions,
+  ResolvedChromePrintSettings,
 } from './editor/chrome-print.ts';

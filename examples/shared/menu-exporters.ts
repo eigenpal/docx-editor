@@ -11,6 +11,8 @@ export const demoExporters: ChromeExportHandlers = {
     const query = new URLSearchParams({
       displayMode: view?.displayMode ?? 'proposed',
       fidelityPolicy: 'strict',
+      // Absent unless the user chose in the print settings; the converter then shows comments.
+      ...(view?.comments === undefined ? {} : { comments: String(view.comments) }),
     });
     const response = await fetch(`/api/convert?${query}`, {
       method: 'POST',

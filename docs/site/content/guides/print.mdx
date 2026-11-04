@@ -4,13 +4,13 @@ description: Connect PDF conversion to the File menu for printing in React and V
 category: Guides
 ---
 
-Select **File > Print** or press Ctrl+P. On macOS, press Cmd+P. The editor converts the current document with your PDF handler, then opens the browser print dialog. Choose the printer, pages, and copies there.
+Select **File > Print** or press Ctrl+P. On macOS, press Cmd+P. The editor asks which markup to print and whether comments print. It then converts the current document with your PDF handler and opens the browser print dialog. Choose the printer, pages, and copies there.
 
 Printing calls `editor.save()` before conversion. Saving commits pending form input and can refresh field results with an undo step. For details, see [Save a document](/docs/2.x/guides/loading-and-saving#save-a-document). The PDF converter determines the printed page layout.
 
 ## Before you begin
 
-Printing uses the same PDF handler as **File > Export > PDF**. The handler receives the review view and markup preferences through its `ChromeExportView` argument. Forward those preferences to the server to preserve revision marks and change bars.
+Printing uses the same PDF handler as **File > Export > PDF**. The handler receives the print settings and markup preferences through its `ChromeExportView` argument. Forward `displayMode`, `revisionMarkup`, `revisionAuthorSlots`, and `comments` to the server to preserve revision marks, change bars, and the user's comment choice.
 
 To configure the handler:
 
@@ -60,10 +60,26 @@ defineProps<{ source: Uint8Array }>();
 
 For a composed editor, pass `exporters` to `DocxEditor.Menu` or `DocxEditorMenu` inside `Root`.
 
+## Choose print settings
+
+Before conversion, the print dialog shows two settings:
+
+- **Markup** selects All Markup, Simple Markup, No Markup, or Original. It starts at the current view on the **Review** tab.
+- **Print comments** is on by default. With All Markup, comments print in a pane beside each page. With the other choices, they print as notes on the commented text.
+
+Select **Print** to continue, or press the print shortcut again. Select **Cancel** to close the dialog without converting.
+
+Your PDF handler receives the choices as `view.displayMode` and `view.comments`. Changing them does not change the view in the editor.
+
+A handler that does not forward `comments` to `exportPdf` always prints comments, and a handler that ignores its `view` argument ignores both settings. Update the handler as shown in [Convert PDF on the server](/docs/2.x/guides/export#convert-pdf-on-the-server), or set `printSettings` to `false`.
+
+To print the current view without asking, set `printSettings` to `false` on the menu. For the packaged editor, pass `menu={{ exporters, printSettings: false }}`. The settings step also does not show when `popups.print` is `false` or when no PDF handler is configured.
+
 ## How printing works
 
 When you select **File > Print**, the editor completes these steps:
 
+1. Show the print settings and wait for **Print**.
 1. Show the preparation dialog.
 1. Save the current document and send its bytes to `exporters.pdf`.
 1. Check the PDF header and load the PDF into a hidden frame.
@@ -104,7 +120,7 @@ To retry, close the dialog and select **File > Print** again.
 
 ## Customize the print dialog
 
-Use `popups.print` to replace progress and error feedback. It accepts `definePopup()`, render callbacks, and `false`. For examples, see [Customize print feedback](/docs/2.x/guides/customize-dialogs#customize-print-feedback).
+Use `popups.print` to replace the settings, progress, and error feedback. It accepts `definePopup()`, render callbacks, and `false`. A custom component shows the settings step only when the menu sets `printSettings` to `true`. For examples, see [Customize print feedback](/docs/2.x/guides/customize-dialogs#customize-print-feedback).
 
 ## Compose the print control
 
@@ -133,7 +149,7 @@ Pass `hidden` to the print part to remove its menu item. `Menu.Item` dispatches 
 
 ## Build a custom print flow
 
-Call `runChromePrint(editor, exporters, container)` from `@docx-editor.dev/core/editor` to prepare a `ChromePrintJob`:
+Call `runChromePrint(editor, exporters, container, settings)` from `@docx-editor.dev/core/editor` to prepare a `ChromePrintJob`:
 
 | Member      | Behavior                                                   |
 | ----------- | ---------------------------------------------------------- |
@@ -142,6 +158,8 @@ Call `runChromePrint(editor, exporters, container)` from `@docx-editor.dev/core/
 | `dispose()` | Removes the hidden frame and revokes `url`.                |
 
 The optional `container` receives the hidden print frame. It accepts a `Document` or `Element` and defaults to `document`. For an editor inside a modal dialog, pass an element inside that dialog.
+
+The optional `settings` argument is a `ChromePrintSettings` object with `displayMode` and `comments`. Omitted settings keep the current view. For your own settings form, `initialChromePrintSettings(editor.snapshot())` returns the starting values, and `CHROME_PRINT_DISPLAY_MODES` lists the modes with their label keys in Review menu order.
 
 This function returns the job after a browser print failure so your UI can offer an **Open PDF** link:
 

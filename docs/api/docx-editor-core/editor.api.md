@@ -931,6 +931,12 @@ export const CHROME_GROUPS: readonly [{
 export const CHROME_MENUS: readonly ChromeMenu[];
 
 // @public
+export const CHROME_PRINT_DISPLAY_MODES: readonly {
+    readonly labelKey: 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original';
+    readonly mode: ReviewDisplayMode;
+}[];
+
+// @public
 export const CHROME_UNAVAILABLE_KEY = "formattingBar.unavailableInPreview";
 
 // @public
@@ -1034,6 +1040,7 @@ export interface ChromeExportResult {
 
 // @public
 export interface ChromeExportView {
+    readonly comments?: boolean;
     // (undocumented)
     readonly displayMode: ReviewDisplayMode;
     readonly revisionAuthorSlots?: Readonly<Record<string, number>>;
@@ -1121,6 +1128,12 @@ export interface ChromePrintJob {
 // @public
 export interface ChromePrintOptions {
     readonly beforePrint?: () => void | Promise<void>;
+}
+
+// @public
+export interface ChromePrintSettings {
+    readonly comments?: boolean;
+    readonly displayMode?: ReviewDisplayMode;
 }
 
 // @public
@@ -2431,6 +2444,9 @@ export type ImageWrapTarget = 'inline' | 'square' | 'squareLeft' | 'squareRight'
 export const inchesToTwips: (inches: number) => number;
 
 // @public
+export function initialChromePrintSettings(snapshot: Pick<EditorSnapshot, 'reviewDisplayMode'> | null | undefined): ResolvedChromePrintSettings;
+
+// @public
 export function initialSplitCellCounts(limits: SplitCellLimits | null, can: (command: Extract<EditorCommand, {
     type: 'splitCell';
 }>) => CanResult): {
@@ -3405,6 +3421,9 @@ export function resizePreservesAspect(handle: ImageResizeHandle, aspectLocked: b
 export function resolveColorValueToCss(color: ColorValue | undefined | null, themeColors: readonly DocumentThemeColorEntry[], defaultHex?: string): string;
 
 // @public
+export type ResolvedChromePrintSettings = Required<ChromePrintSettings>;
+
+// @public
 export interface ResolvedReviewPane {
     readonly commentMarkers: CommentMarkerStyle;
     readonly opening: ReviewPaneOpening;
@@ -3711,10 +3730,10 @@ export interface RulerTick {
 export type RulerUnit = 'inch' | 'cm';
 
 // @public
-export function runChromeExport(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>, format: ChromeExportFormat, handlers?: ChromeExportHandlers): Promise<ChromeExportResult>;
+export function runChromeExport(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>, format: ChromeExportFormat, handlers?: ChromeExportHandlers, settings?: ChromePrintSettings): Promise<ChromeExportResult>;
 
 // @public
-export function runChromePrint(editor: Pick<Editor, 'save'> & Partial<Pick<Editor, 'snapshot'>>, handlers?: ChromeExportHandlers, container?: Document | Element): Promise<ChromePrintJob>;
+export function runChromePrint(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>, handlers?: ChromeExportHandlers, container?: Document | Element, settings?: ChromePrintSettings): Promise<ChromePrintJob>;
 
 // @public
 export function runSave(editor: Editor | null): Promise<ArrayBuffer>;
