@@ -39,6 +39,7 @@ import type { OperationSnapshot } from './resolved-cache.ts';
 import {
   SYNTHETIC_BOLD_ADVANCE_EM,
   isSyntheticBold,
+  syntheticBoldAdvancePt,
   syntheticBoldGlyphCount,
   withSyntheticBoldCaretAdvances,
 } from './synthetic-bold.ts';
@@ -305,6 +306,10 @@ export function createShapedMeasurer(
     hasResolvedFont(style) {
       return resolveFontCached(style) !== null;
     },
+    syntheticBold(style) {
+      const font = resolveFontCached(style);
+      return font !== null && isSyntheticBold(style, font);
+    },
     faceCovers(text, style) {
       const font = resolveFontCached(style);
       if (!font) return undefined;
@@ -473,11 +478,7 @@ export function createShapedMeasurer(
               wordSpacingAdvance(text, style)
           );
         if (!advances || !isSyntheticBold(style, font)) return advances;
-        const extraPt =
-          (layoutRunHalfPointsOf(style) / 2) *
-          SYNTHETIC_BOLD_ADVANCE_EM *
-          glyphSizeFactorOf(style) *
-          (style.horizontalScalePercent / 100);
+        const extraPt = syntheticBoldAdvancePt(style) * (style.horizontalScalePercent / 100);
         return withSyntheticBoldCaretAdvances(advances, run, extraPt);
       } catch {
         return fallbackAdvances(text, style);

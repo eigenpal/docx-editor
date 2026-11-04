@@ -1,8 +1,10 @@
 import {
+  applySyntheticBoldSpacing,
   fieldAnchorStart,
   followingGapPaint,
   paintedGapBetween,
   letterGapSpacing,
+  syntheticBoldSpacingPt,
 } from './semantic-paint-letter-gap.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { paintUnsupportedContent } from './unsupported-elements.ts';
@@ -904,6 +906,7 @@ function paintSpan(
     element.contentEditable = 'false';
   }
   applyRunFaceStyle(element, faceStyle, ctx);
+  applySyntheticBoldSpacing(element, span, ctx.scale);
   if (!kernsText(faceStyle, span.text)) element.style.fontKerning = 'none';
   applyFieldShading(element, span, ctx);
   applyRevisionPresentation(element, span, ctx);
@@ -1260,7 +1263,8 @@ function paintLine(
     const gapAfter = bidi ? 0 : interSpanGapBefore(line, spanIndex + 1, rankOf);
     const owner = gapAfter !== 0 && next !== undefined ? followingGapPaint(span, next) : null;
     previousSpanAbsorbedGap = owner !== null;
-    if (owner === 'wordSpacing') painted.style.wordSpacing = `${gapAfter * scale}px`;
+    if (owner === 'wordSpacing')
+      painted.style.wordSpacing = `${(gapAfter - syntheticBoldSpacingPt(span)) * scale}px`;
     else if (owner === 'letterSpacing')
       painted.style.letterSpacing = letterGapSpacing(span, gapAfter, scale);
     pendingGap = gapAfter;

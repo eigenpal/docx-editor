@@ -202,6 +202,13 @@ export interface StyleSpanRecord {
    * with `styleForFontSlot(span.style, span.fontSlot)`.
    */
   readonly fontSlot?: FontSlot;
+  /**
+   * Set when the text is bold and its face is not, so the bold is synthesized. Layout gave each
+   * inked glyph `SYNTHETIC_BOLD_ADVANCE_EM` of extra advance, as Word does. A browser draws a
+   * synthesized bold at the face's own advances, so screen paint adds the extra itself.
+   * @internal
+   */
+  readonly syntheticBold?: true;
   readonly box: LayoutBox;
   /** Authored trailing spaces that layout may clip at the line's right edge. */
   readonly lineEndWhitespace?: true;

@@ -4583,6 +4583,8 @@ export interface StyleSpanRecord {
     readonly revisions?: readonly RevisionAttribution[];
     readonly style: ResolvedRunStyle;
     // @internal
+    readonly syntheticBold?: true;
+    // @internal
     readonly tabAlignment?: Exclude<TabAlignment, 'left'>;
     readonly tabLeader?: TabLeader;
     readonly tabLeaderAdvancePt?: number;
@@ -4952,6 +4954,8 @@ export interface TextMeasurer {
     };
     measure(text: string, style: ResolvedRunStyle): number;
     strikeoutMetrics?(style: ResolvedRunStyle): StrikeoutStrokePt | undefined;
+    // @internal
+    syntheticBold?(style: ResolvedRunStyle): boolean;
     textOutline?(text: string, style: ResolvedRunStyle): TextOutline | undefined;
 }
 

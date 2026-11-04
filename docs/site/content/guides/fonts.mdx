@@ -66,6 +66,8 @@ The list is a precedence order: the first origin that supplies a face wins, and 
 
 Embedded fonts load automatically. The editor registers them under internal aliases. A document cannot replace a page-wide font family used by your application.
 
+Word embeds the face that draws bold text in the bold slot of a font. If the font has no bold face, that slot holds a copy of the regular face. The editor reads the weight of each embedded face and draws bold text in such a face with a synthesized bold, as Word does. Each glyph of synthesized bold text is 1/50 em wider, so line breaks match Word.
+
 ### Understand the font notice
 
 The packaged font notice lists rendered document families without an available compatible face. It excludes metric-compatible substitutions.
