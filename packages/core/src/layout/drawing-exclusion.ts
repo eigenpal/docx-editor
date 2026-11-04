@@ -64,7 +64,13 @@ export const MAX_DRAWING_EXCLUSION_REFLOW_PASSES = 16;
 /** Passages of a quarter inch or less beside a floating table hold no text. */
 export const TABLE_WRAP_MIN_PASSAGE_PT = 18;
 
-/** Raised when wrap-exclusion reflow does not converge within {@link MAX_DRAWING_EXCLUSION_REFLOW_PASSES}. */
+/**
+ * A layout refusal. A body wrap reflow that does not settle raises it only inside a
+ * column-balance trial (the band does not fit) or before the hidden-furniture retry; otherwise
+ * it publishes its last pass, as a header or footer reflow does
+ * (`unsettled-exclusion-layout.ts`). Wrapping page furniture that leaves body text no room
+ * raises it too; only the hidden-furniture retry handles that case.
+ */
 export class DrawingExclusionConvergenceError extends Error {
   readonly name = 'DrawingExclusionConvergenceError';
   constructor(message = 'drawing exclusion reflow did not converge') {

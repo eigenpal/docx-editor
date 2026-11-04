@@ -221,6 +221,7 @@ import {
   type RemoteCaretLabelHost,
 } from './paginated-surface.ts';
 import { scrollToDocumentStart } from './surface-pages.ts';
+import { openBodyStoryOf, textboxHostParagraphOf } from './review-story-entry.ts';
 import { createZoomLane, zoomFacadeMembers } from './docx-editor-zoom.ts';
 import {
   type CommandRefusal,
@@ -1481,7 +1482,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         reviewActivationFormattingKinds.includes(item.formattingKind ?? ''))
     );
   }
-  const anchorIndexOf = createAnchorIndex();
+  const anchorIndexOf = createAnchorIndex((id) => textboxHostParagraphOf(surface, id));
 
   // Which header, footer, or notes part a card lives in, from the part name its range carries.
   const furnitureHomeOf = (item: ReviewItem) => furnitureHomeOfItem(surface?.session, item);
@@ -2405,9 +2406,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // Card to document. The caret may be parked in a furniture or note scope from the
         // PREVIOUS card — leave it first, exactly as the pointer path does, or the body
         // selection below gets clamped inside the open story and no body card can ever
-        // become active again.
-        surface.exitNote?.();
-        surface.exitHeaderFooter?.();
+        // become active again. A change in a text box opens that box (`review-story-entry.ts`).
+        openBodyStoryOf(surface, (reviewItemSpan(item!) ?? range).start);
         // A CARET AT THE START, not a selection over the span.
         //
         // Opening a card is a request to look at a change, not a request to select its

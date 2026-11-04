@@ -142,7 +142,6 @@ import {
   createParagraphLayoutCache,
   resolveDefaultSurfaceMeasurer,
   cellSelectionRects,
-  keyedRangeRects,
   formatPageNumber,
   emptyTocPlaceholderParagraphIds,
   paragraphFragmentsOf,
@@ -172,6 +171,7 @@ import {
 import { wordMotionBoundaries } from '../layout/word-navigation-boundaries.ts';
 import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
 import { rangesOnPages } from '../layout/selection-rects.ts';
+import { keyedRangeRectsWithTextboxes } from './textbox-presence-layout.ts';
 import { refreshSurfaceRefFieldResults } from './surface-ref-field-refresh.ts';
 import { type RevisionAuthorFilter } from '../layout/revision-projection.ts';
 import { surfaceRevisionFilter } from './surface-unlisted-filter.ts';
@@ -3619,7 +3619,7 @@ export function mountPaginatedSurface(
         });
       }
     }
-    const byKey = keyedRangeRects(currentLayout, ranges, pages, measurer);
+    const byKey = keyedRangeRectsWithTextboxes(currentLayout, ranges, pages, measurer);
     const rects: (OverlayRect & { key: string })[] = [];
     for (const [key, found] of byKey) for (const rect of found) rects.push({ ...rect, key });
     commentRectCache = { layout: currentLayout, revision, pages, rects };
@@ -5341,7 +5341,8 @@ export function mountPaginatedSurface(
       // Viewing has no furniture EDITING scope. Switching while a header was open left the
       // body dimmed and inert under an active band and its whole options bar — a write UI
       // over a document that now refuses writes. Exiting repaints, so this runs first.
-      if (moved && mode !== 'edit') textboxEditing?.exit();
+      // Suggesting keeps the box open: its typing is tracked like any other story's.
+      if (moved && mode === 'view') textboxEditing?.exit();
       if (moved && mode === 'view') hfScope?.exitHeaderFooter();
       if (moved && mode === 'view') noteOps?.exitNote();
       // An armed format painter is a write surface too, and a more misleading one: the pages
@@ -5981,7 +5982,8 @@ export function mountPaginatedSurface(
     pagesLayer,
     part: (paragraphId?: string) =>
       partOfNodeId(session, paragraphId ?? selection.head.paragraphId) ?? session.part(),
-    editable: () => editingMode === 'edit' && !showFieldCodes,
+    // Suggesting presses through, so the write path refuses the untracked toggle with a reason.
+    editable: () => editingMode !== 'view' && !showFieldCodes,
     protected: (paragraphId) =>
       formsProtectionEnabled(session.settingsRoot()) &&
       sectionProtectsForms(partOfNodeId(session, paragraphId) ?? session.part(), paragraphId),
@@ -6082,7 +6084,8 @@ export function mountPaginatedSurface(
     setSelection: (next) => setSelection(next, false, 'none'),
     flush: flushPendingInputAndLayout,
     ...textboxOwnerDeps(session, sectionAtPage, () => ({ hfScope, noteOps })),
-    writable: () => hostEditable && editingMode === 'edit' && session.editable,
+    // Suggesting enters a box too: its typing commits through `applyOps`, which tracks it.
+    writable: () => hostEditable && editingMode !== 'view' && session.editable,
   });
   pointer = createPointerController(
     {

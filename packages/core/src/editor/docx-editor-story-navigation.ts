@@ -5,6 +5,7 @@ import type { SemanticPosition } from '../layout/semantic-interaction.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { drawingSelectionPosition } from './surface-drawing-selection.ts';
 import { captureSearchResult } from './document-search-result.ts';
+import { openTextboxAt } from './review-story-entry.ts';
 
 type ScopedStory =
   | {
@@ -34,9 +35,11 @@ export function enterStoryPosition(
         position,
       })
     : surface.enterHeaderFooter?.({ rId: scope.rId, position });
-  return entered
-    ? { ok: true, changed: false }
-    : { ok: false, code: 'unsupported', reason: 'the header or footer could not be opened' };
+  if (!entered)
+    return { ok: false, code: 'unsupported', reason: 'the header or footer could not be opened' };
+  // A position in a box in the header opens the box too; the header alone clamps it away.
+  openTextboxAt(surface, position, scope.rId);
+  return { ok: true, changed: false };
 }
 
 /** Whether a public view scope is one this helper can open. */

@@ -60,7 +60,10 @@
     "bookmarkShortcut": "Ctrl+Shift+F5",
     "goToBookmark": "बुकमार्क पर जाएं…",
     "goToBookmarkShortcut": "Ctrl+G",
-    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G",
+    "printComments": "टिप्पणियाँ प्रिंट करें",
+    "printCommentsNote": "{mode} के अलावा, टिप्पणियाँ टिप्पणी किए गए टेक्स्ट पर नोट के रूप में प्रिंट होती हैं।",
+    "printMarkup": "मार्कअप"
   },
   "formattingBar": {
     "groups": {

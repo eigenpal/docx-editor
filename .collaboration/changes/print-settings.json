@@ -1,0 +1,16 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "File > Print converted the current review view at once.",
+  "after": "File > Print first asks which markup and comments to print, then converts the saved document with those settings.",
+  "reason": "Print settings are local dialog state passed to the host PDF handler. Printing still reads a saved snapshot and does not change document operations, shared state, or synchronization.",
+  "tests": [
+    "packages/core/src/editor/__tests__/chrome-print.test.ts",
+    "packages/core/src/editor/__tests__/chrome-export.test.ts",
+    "packages/react/test/print-popup.test.tsx",
+    "packages/vue/test/print-popup.test.ts",
+    "e2e/file-print.interaction.spec.ts"
+  ],
+  "changeset": "print-settings",
+  "migration": null
+}
