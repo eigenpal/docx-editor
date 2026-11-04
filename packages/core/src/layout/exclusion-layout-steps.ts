@@ -18,6 +18,7 @@ import {
   type ExclusionZone,
 } from './drawing-exclusion.ts';
 import { noteExclusionLayoutPass } from './exclusion-pass-observer.ts';
+import { refusalRetriesWithoutHiddenFurniture } from './furniture-drawing-exclusion.ts';
 import { createLayoutSession, replaceLayoutSession, type LayoutSession } from './layout-session.ts';
 import type { LayoutSteps } from './layout-steps.ts';
 import * as frameWrap from './paragraph-frame-exclusion.ts';
@@ -25,6 +26,11 @@ import { DEFAULT_REVISION_DISPLAY_MODE } from './revision-projection.ts';
 import type { PageRecord } from './semantic-records.ts';
 import type { ResolvedSectionColumns } from './section-columns.ts';
 import * as tableWrap from './table-float-exclusion.ts';
+import {
+  markResultUnsettled,
+  markSessionUnsettled,
+  takeSessionUnsettled,
+} from './unsettled-exclusion-layout.ts';
 import type { BlockLayoutResult } from './column-balance-layout.ts';
 import type { BlockLayoutOptions } from './semantic-layout.ts';
 
@@ -38,6 +44,21 @@ const MAX_DRAWING_EXCLUSION_STABILIZATION_PASSES = 2;
  * passes keep reaching fewer changed zones.
  */
 const MAX_DRAWING_EXCLUSION_SETTLING_PASSES = 64;
+let reflowPassLimit = MAX_DRAWING_EXCLUSION_REFLOW_PASSES;
+let settlingPassLimit = MAX_DRAWING_EXCLUSION_SETTLING_PASSES;
+
+/**
+ * Lowers the pass budget and the settling ceiling until the returned function runs, so a test
+ * reaches them with a small document. @internal
+ */
+export function limitExclusionPassesForTest(reflow: number, settling: number): () => void {
+  reflowPassLimit = reflow;
+  settlingPassLimit = settling;
+  return () => {
+    reflowPassLimit = MAX_DRAWING_EXCLUSION_REFLOW_PASSES;
+    settlingPassLimit = MAX_DRAWING_EXCLUSION_SETTLING_PASSES;
+  };
+}
 
 /** Passes a settling reflow may run without a new low of changed zones. */
 const SETTLING_PASSES_WITHOUT_PROGRESS = 4;
@@ -74,7 +95,7 @@ export function convergeExclusionLayout(
  * cycle pays for that settle (measured on `page-framed-cycle.test.ts`: 7 passes, against 4 for
  * a fresh layout); later edits that leave the cycle alone keep the one seeded pass. A seeded
  * reflow that runs out of passes costs at most one seeded pass plus twice
- * `MAX_DRAWING_EXCLUSION_SETTLING_PASSES` before the fresh settle throws.
+ * `MAX_DRAWING_EXCLUSION_SETTLING_PASSES` before the fresh settle publishes its last zones.
  */
 function* settleExclusionLayout(
   bodies: readonly OoxmlElement[],
@@ -83,7 +104,14 @@ function* settleExclusionLayout(
   columns: ResolvedSectionColumns,
   contentWidthForReflow: number,
   layout: OnePass,
-  { seedFromPrevious }: { readonly seedFromPrevious: boolean }
+  {
+    seedFromPrevious,
+    // Read once per layout, so a fresh settle after a seeded one uses the same limits.
+    limits = { reflow: reflowPassLimit, settling: settlingPassLimit },
+  }: {
+    readonly seedFromPrevious: boolean;
+    readonly limits?: { readonly reflow: number; readonly settling: number };
+  }
 ): LayoutSteps<BlockLayoutResult | null> {
   if (
     !(
@@ -135,13 +163,17 @@ function* settleExclusionLayout(
   const exclusionPasses = createDrawingExclusionPasses(
     bodies,
     options.inlineDrawingLayout,
-    MAX_DRAWING_EXCLUSION_REFLOW_PASSES,
+    limits.reflow,
     options.compatibilityMode
   );
+  let passCount = 0;
+  let lastCandidateSession: LayoutSession | undefined;
   function* layoutExclusionCandidate(
     candidateOptions: BlockLayoutOptions
   ): LayoutSteps<BlockLayoutResult> {
     noteExclusionLayoutPass();
+    passCount += 1;
+    lastCandidateSession = candidateOptions.session;
     return yield* layout(bodies, revision, candidateOptions);
   }
   function* fallbackUnplaceableFrames(
@@ -168,9 +200,16 @@ function* settleExclusionLayout(
     return fallback;
   }
   const previousPages = seedFromPrevious ? options.session?.previous?.pages : undefined;
+  // Taken by every seeded settle, so a mark never outlives the layout it describes.
+  const previousUnsettled =
+    seedFromPrevious &&
+    options.session !== undefined &&
+    takeSessionUnsettled(options.session) &&
+    previousPages !== undefined;
   const settleFresh = (): LayoutSteps<BlockLayoutResult | null> =>
     settleExclusionLayout(bodies, revision, options, columns, contentWidthForReflow, layout, {
       seedFromPrevious: false,
+      limits,
     });
   if (previousPages) {
     zonesByPage = collectZones(previousPages, true);
@@ -185,7 +224,15 @@ function* settleExclusionLayout(
     // and re-collecting from the same page records under the same inputs reproduces the
     // same zones — the equality below is true by construction. Every no-change section of
     // a multi-section document takes this path on every keystroke.
-    if (result.pages === previousPages) return result;
+    if (result.pages === previousPages) {
+      if (previousUnsettled) {
+        markResultUnsettled(result, passCount);
+        markSessionUnsettled(options.session!);
+      }
+      return result;
+    }
+    // An unsettled layout is no fixed point to seed from (`unsettled-exclusion-layout.ts`).
+    if (previousUnsettled) return yield* settleFresh();
     const nextZones = collectZones(result.pages, true);
     if (exclusionMapsEqual(zonesByPage, nextZones)) return result;
     // A return to the seeded map is a cycle too.
@@ -288,7 +335,7 @@ function* settleExclusionLayout(
       let stab = 0;
       !converged &&
       (stab < MAX_DRAWING_EXCLUSION_STABILIZATION_PASSES ||
-        (settling && exclusionPasses.maxPasses + stab < MAX_DRAWING_EXCLUSION_SETTLING_PASSES));
+        (settling && exclusionPasses.maxPasses + stab < limits.settling));
       stab += 1
     ) {
       const candidateSession = options.session ? createLayoutSession() : undefined;
@@ -312,10 +359,18 @@ function* settleExclusionLayout(
   }
   if (!converged) {
     if (previousPages) return yield* settleFresh();
-    throw new DrawingExclusionConvergenceError(
-      'wrap exclusion reflow did not converge ' +
-        `(settling limit ${MAX_DRAWING_EXCLUSION_SETTLING_PASSES} passes)`
-    );
+    // A column-balance trial treats a refusal as a band that does not fit, and the caller
+    // first retries without hidden header and footer zones, which may settle.
+    if (options.columnBalanceTrial || refusalRetriesWithoutHiddenFurniture(options))
+      throw new DrawingExclusionConvergenceError(
+        `wrap exclusion reflow did not settle in ${passCount} passes`
+      );
+    // Otherwise the last pass publishes: the document opens, and only the wrap that never
+    // settled may sit off by a pass. Laying out once more under its zones is no closer.
+    markResultUnsettled(result!, passCount);
+    const published = publishCandidate(result!, lastCandidateSession);
+    if (options.session) markSessionUnsettled(options.session);
+    return published;
   }
   return yield* publishConverged(zonesByPage);
 }
