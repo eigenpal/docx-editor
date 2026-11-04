@@ -69,16 +69,41 @@ export function updateTableText(
   const changed = structure.rows.filter((row, i) => row !== oldStructure.rows[i]);
   if (changed.length !== 1) return null;
   const source = changed[0]!;
+  const oldSource = oldStructure.rows[structure.rows.indexOf(source)]!;
+  // A continued merge cell holds no content and keeps its finalized record. A merge head is
+  // placed here like any cell: one row's placement lets its content raise the row, so a head
+  // whose content stays within its own row places as the full layout did, and a taller one
+  // changes the row height and takes the full layout. A head is not detached from its row
+  // here: the full layout detaches it only when its span is admitted at that place, which the
+  // finalized records do not keep. Its finalized box spans the merge, so only its blocks are
+  // compared and replaced.
+  const continued = new Set<number>();
+  const heads = new Set<number>();
+  source.cells.forEach((cell, index) => {
+    if (cell.vMergeContinue) continued.add(index);
+    else if (cell.headsVerticalMerge) heads.add(index);
+  });
+  // Cell counts match (checked below), so every index has an old cell.
+  const edited = (index: number) => {
+    const oldBlocks = oldSource.cells[index]!.blocks;
+    const newBlocks = source.cells[index]!.blocks;
+    return newBlocks.length !== oldBlocks.length || newBlocks.some((b, i) => b !== oldBlocks[i]);
+  };
   if (
     source.isHeader ||
-    source.cells.some(
-      (c) =>
-        c.vMergeContinue ||
+    oldSource.cells.length !== source.cells.length ||
+    source.cells.some((c, index) => {
+      const old = oldSource.cells[index]!;
+      if (old.vMergeContinue !== c.vMergeContinue || !!old.headsVerticalMerge !== heads.has(index))
+        return true;
+      if (continued.has(index)) return edited(index);
+      return (
         c.textDirection !== 'horizontal' ||
         c.blocks.some(
           (b) => b.kind !== 'paragraph' || !editableTableParagraph(b) || deps.listItems?.has(b.id)
         )
-    )
+      );
+    })
   )
     return null;
   const occurrences: {
@@ -95,7 +120,6 @@ export function updateTableText(
   if (occurrences.length === 0 || occurrences.length > 4096) return null;
   const oldKeys = new Set<string>();
   const newKeys = new Set<string>();
-  const oldSource = oldStructure.rows[structure.rows.indexOf(source)]!;
   const replacements = new Map<BlockFragmentRecord, BlockFragmentRecord>();
   let oldCursors: readonly CellPlaceCursor[] = initialCellCursors(oldSource);
   let newCursors: readonly CellPlaceCursor[] = initialCellCursors(source);
@@ -110,7 +134,13 @@ export function updateTableText(
       page.anchoredDrawings?.length ||
       // Borders and merge spans stay as finalized; a spent pass budget could have cut them.
       !finalizedWithHeadroom(fragment) ||
-      oldRow.cells.some((c) => c.rowSpan !== 1 || c.vMergeContinue)
+      oldRow.cells.length !== source.cells.length ||
+      oldRow.cells.some(
+        (c, i) =>
+          c.vMergeContinue !== continued.has(i) ||
+          ((c.rowSpan ?? 1) !== 1) !== heads.has(i) ||
+          index + (c.rowSpan ?? 1) > fragment.rows.length
+      )
     )
       return null;
     const baseDeps = index === 0 ? firstRowContentDeps(structure, source, deps) : deps;
@@ -169,7 +199,10 @@ export function updateTableText(
       )[0]!;
       if (
         finalized.cells.some(
-          (cell, i) => JSON.stringify(cell.box) !== JSON.stringify(oldRow.cells[i]?.box)
+          (cell, i) =>
+            !continued.has(i) &&
+            !heads.has(i) &&
+            JSON.stringify(cell.box) !== JSON.stringify(oldRow.cells[i]?.box)
         )
       )
         return null;
@@ -180,7 +213,9 @@ export function updateTableText(
       const old = place(oldSource, oldKeys, candidate, oldCursors);
       if (
         old?.finalized.cells.every(
-          (cell, i) => JSON.stringify(cell.blocks) === JSON.stringify(oldRow.cells[i]!.blocks)
+          (cell, i) =>
+            continued.has(i) ||
+            JSON.stringify(cell.blocks) === JSON.stringify(oldRow.cells[i]!.blocks)
         )
       ) {
         matched = { deps: candidate, remainder: old.remainder };
@@ -196,11 +231,16 @@ export function updateTableText(
     const lineCount = (blocks: readonly BlockFragmentRecord[]) =>
       blocks.reduce((n, b) => n + (b.kind === 'paragraph' ? b.lines.length : 0), 0);
     lineDelta += finalized.cells.reduce(
-      (sum, cell, index) => sum + lineCount(cell.blocks) - lineCount(oldRow.cells[index]!.blocks),
+      (sum, cell, index) =>
+        continued.has(index)
+          ? sum
+          : sum + lineCount(cell.blocks) - lineCount(oldRow.cells[index]!.blocks),
       0
     );
     // Keep stable line ids from the regular body placement convention.
-    const cells = oldRow.cells.map((cell, i) => ({ ...cell, blocks: finalized.cells[i]!.blocks }));
+    const cells = oldRow.cells.map((cell, i) =>
+      continued.has(i) ? cell : { ...cell, blocks: finalized.cells[i]!.blocks }
+    );
     const row = { ...oldRow, cells };
     const prior = replacements.get(fragment) as typeof fragment | undefined;
     const replacement = {
