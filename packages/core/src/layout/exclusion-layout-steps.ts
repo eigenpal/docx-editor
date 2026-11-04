@@ -26,11 +26,7 @@ import { DEFAULT_REVISION_DISPLAY_MODE } from './revision-projection.ts';
 import type { PageRecord } from './semantic-records.ts';
 import type { ResolvedSectionColumns } from './section-columns.ts';
 import * as tableWrap from './table-float-exclusion.ts';
-import {
-  markResultUnsettled,
-  noteSessionResult,
-  sessionLayoutUnsettled,
-} from './unsettled-exclusion-layout.ts';
+import { markResultUnsettled } from './unsettled-exclusion-layout.ts';
 import type { BlockLayoutResult } from './column-balance-layout.ts';
 import type { BlockLayoutOptions } from './semantic-layout.ts';
 
@@ -74,7 +70,7 @@ type OnePass = (
  * produces zones (the caller then lays them out once). `layout` is one ordinary pass. An edit
  * starts from the zones of the session's previous pages; see `settleExclusionLayout`.
  */
-export function* convergeExclusionLayout(
+export function convergeExclusionLayout(
   bodies: readonly OoxmlElement[],
   revision: number,
   options: BlockLayoutOptions,
@@ -82,17 +78,9 @@ export function* convergeExclusionLayout(
   contentWidthForReflow: number,
   layout: OnePass
 ): LayoutSteps<BlockLayoutResult | null> {
-  const result = yield* settleExclusionLayout(
-    bodies,
-    revision,
-    options,
-    columns,
-    contentWidthForReflow,
-    layout,
-    { seedFromPrevious: true }
-  );
-  if (result && options.session) noteSessionResult(options.session, result);
-  return result;
+  return settleExclusionLayout(bodies, revision, options, columns, contentWidthForReflow, layout, {
+    seedFromPrevious: true,
+  });
 }
 
 /**
@@ -223,12 +211,6 @@ function* settleExclusionLayout(
     if (result.pages === previousPages) return result;
     const nextZones = collectZones(result.pages, true);
     if (exclusionMapsEqual(zonesByPage, nextZones)) return result;
-    // A layout published before it settled takes one more pass per edit, not a reflow that
-    // would reach the ceiling twice (`unsettled-exclusion-layout.ts`).
-    if (sessionLayoutUnsettled(options.session)) {
-      markResultUnsettled(result, passCount);
-      return result;
-    }
     // A return to the seeded map is a cycle too.
     exclusionPasses.remember(zonesByPage);
     zonesByPage = new Map(nextZones);

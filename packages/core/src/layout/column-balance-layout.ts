@@ -10,6 +10,7 @@ import { resolveSectionColumns, type ResolvedSectionColumns } from './section-co
 import { DEFAULT_SECTION_PROPERTIES, type SectionColumns } from './section-properties.ts';
 import type { LayoutBox, PageGeometry, PageRecord, SemanticLayout } from './semantic-records.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
+import { resultUnsettled } from './unsettled-exclusion-layout.ts';
 
 /** Result shared by ordinary and column-balanced block-flow passes. @internal */
 export interface BlockLayoutResult {
@@ -205,7 +206,9 @@ export function* layoutBlocksWithColumnBalanceSteps<HostOptions extends object>(
   }
 
   const natural = yield* layoutPass(bodies, revision, trialOptions);
-  if (!natural.pages.length || !natural.endsOpenPage) {
+  // A natural layout whose wrap never settled makes every trial run to the pass ceiling too,
+  // only to refuse: the section keeps its unbalanced layout.
+  if (!natural.pages.length || !natural.endsOpenPage || resultUnsettled(natural)) {
     if (session) session.balanceLimit = null;
     return yield* layoutPass(bodies, revision, options);
   }

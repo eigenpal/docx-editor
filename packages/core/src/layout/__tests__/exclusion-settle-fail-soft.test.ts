@@ -11,6 +11,10 @@ import {
 } from '../../store/package/ooxml-tree.ts';
 import { limitExclusionPassesForTest } from '../exclusion-layout-steps.ts';
 import { refusalRetriesWithoutHiddenFurniture } from '../furniture-drawing-exclusion.ts';
+import { layoutBlocksWithColumnBalance, type BlockLayoutResult } from '../column-balance-layout.ts';
+import type { BlockLayoutOptions } from '../semantic-layout.ts';
+import type { PageRecord } from '../semantic-records.ts';
+import { markResultUnsettled } from '../unsettled-exclusion-layout.ts';
 import { createLayoutSession } from '../layout-session.ts';
 import {
   createFixedMeasurer,
@@ -29,16 +33,18 @@ const EMU_PER_PT = 12700;
  * `count` paragraphs, each a square-wrapped picture at its top and text a little taller than
  * the picture, so each paragraph's last lines wrap the next paragraph's picture.
  */
-function pictureChain(count: number, sectionBreakAfter?: number): string {
+function pictureChain(count: number): string {
   const paragraphs: string[] = [];
   const size = 90 * EMU_PER_PT;
+  const step = 150;
+  const words = 22;
   for (let index = 0; index < count; index += 1) {
     const id = index + 1;
     paragraphs.push(
       '<w:p><w:r><w:drawing>' +
         `<wp:anchor distT="0" distB="0" distL="114300" distR="114300" simplePos="0" behindDoc="0" locked="0" allowOverlap="1" layoutInCell="1" relativeHeight="${id}">` +
         '<wp:simplePos x="0" y="0"/>' +
-        `<wp:positionH relativeFrom="column"><wp:posOffset>${(index % 3) * 150 * EMU_PER_PT}</wp:posOffset></wp:positionH>` +
+        `<wp:positionH relativeFrom="column"><wp:posOffset>${(index % 3) * step * EMU_PER_PT}</wp:posOffset></wp:positionH>` +
         '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
         `<wp:extent cx="${size}" cy="${size}"/>` +
         '<wp:wrapSquare wrapText="bothSides"/>' +
@@ -47,14 +53,8 @@ function pictureChain(count: number, sectionBreakAfter?: number): string {
         '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
         `<pic:spPr><a:xfrm><a:ext cx="${size}" cy="${size}"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr></pic:pic></a:graphicData></a:graphic>` +
         '</wp:anchor></w:drawing></w:r>' +
-        `<w:r><w:t>${'words of text '.repeat(22)}</w:t></w:r></w:p>`
+        `<w:r><w:t>${'words of text '.repeat(words)}</w:t></w:r></w:p>`
     );
-    // A balanced two-column section ends here, laid out by column-balance trials.
-    if (index === sectionBreakAfter)
-      paragraphs.push(
-        '<w:p><w:pPr><w:sectPr><w:type w:val="continuous"/><w:cols w:num="2" w:space="720"/>' +
-          '</w:sectPr></w:pPr></w:p>'
-      );
   }
   return (
     `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
@@ -130,26 +130,41 @@ describe('a wrap reflow that runs out of passes', () => {
     expect(again.pages).toEqual(first.result.pages);
   }, 60_000);
 
-  test('lays each later edit out in one more pass', () => {
+  test('lays an edit out as a fresh layout of the edited document', () => {
     const session = createLayoutSession();
     withPassLimits(() => layout(part, 1, session));
-    let edited = part;
-    for (const revision of [2, 3, 4]) {
-      edited = withLongerText(edited, 20);
-      const edit = withPassLimits(() => countPasses(() => layout(edited, revision, session)));
-      // Not a seeded reflow to the limits and then a fresh one: one pass, as the previous
-      // layout never settled.
-      expect(edit.passes).toBe(1);
-      expect(edit.result.pages.length).toBeGreaterThanOrEqual(3);
-    }
+    const edited = withLongerText(part, 20);
+    const edit = withPassLimits(() => layout(edited, 2, session));
+    expect(edit.pages).toEqual(withPassLimits(() => layout(edited, 2)).pages);
   }, 60_000);
 
-  test('refuses inside a column-balance trial, so the section still lays out', () => {
-    const balanced = load(pictureChain(12, 5));
-    const result = withPassLimits(() => layout(balanced));
-    const drawings = result.pages.flatMap((page) => page.anchoredDrawings ?? []);
-    expect(new Set(drawings.map((drawing) => drawing.drawingNodeId)).size).toBe(12);
-  }, 60_000);
+  test('keeps a balanced section unbalanced instead of running every trial to the limits', () => {
+    // A natural layout that never settled: each balance trial would run to the limits too.
+    let calls = 0;
+    const page = {
+      fragments: [{ kind: 'paragraph', box: { x: 0, y: 0, width: 200, height: 400 }, lines: [] }],
+    } as unknown as PageRecord;
+    const pass = (): BlockLayoutResult => {
+      calls += 1;
+      const result = {
+        pages: [page],
+        endsOpenPage: true,
+        endCursorY: 400,
+        endSpaceAfter: 0,
+        lineCounter: 0,
+      } as unknown as BlockLayoutResult;
+      markResultUnsettled(result, 5);
+      return result;
+    };
+    const options = {
+      geometry: { width: 612, height: 792, margin: { top: 72, right: 72, bottom: 72, left: 72 } },
+      sectionColumns: { count: 2, gapTwips: 720, equalWidth: true },
+      balanceColumns: true,
+    } as unknown as BlockLayoutOptions;
+    layoutBlocksWithColumnBalance([], 1, options, pass);
+    // The natural layout, then the final unbalanced one: no trials.
+    expect(calls).toBe(2);
+  });
 
   test('never asks for the hidden-furniture retry from inside that retry', () => {
     // During the retry, a reflow that does not settle must publish: a refusal there escapes.
