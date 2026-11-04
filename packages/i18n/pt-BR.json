@@ -921,7 +921,8 @@
     "replyCount": "Respostas: {count}",
     "trackedChange": "Alteração controlada",
     "changeAnnouncement": "{change} por {author}: {text}",
-    "replyTargetResolved": "A alteração foi resolvida, então a resposta não foi publicada."
+    "replyTargetResolved": "A alteração foi resolvida, então a resposta não foi publicada.",
+    "compareDocuments": "Comparar documentos"
   },
   "imageAltText": {
     "description": "Descrição",
@@ -1009,6 +1010,7 @@
     "trackedOnly": "Este documento permite apenas edições com controle de alterações",
     "unavailable": "Este comando não está disponível",
     "viewing": "Este documento está aberto para exibição",
+    "compareCollaboration": "Comparar documentos não está disponível em uma sessão de edição compartilhada.",
     "bodyOnlyNote": "As notas de rodapé e de fim são adicionadas a partir do corpo do documento.",
     "bodyOnlySectionBreak": "As quebras de seção devem ficar no corpo do documento.",
     "bodyOnlyToc": "O sumário deve ficar no corpo do documento.",
@@ -1169,5 +1171,52 @@
     "sectionBreakNextColumn": "Quebra de seção (nova coluna)",
     "sectionBreakNextPage": "Quebra de seção (próxima página)",
     "sectionBreakOddPage": "Quebra de seção (página ímpar)"
+  },
+  "compareDocuments": {
+    "author": "Autor das alterações",
+    "cancel": "Cancelar",
+    "compare": "Comparar",
+    "comparing": "Comparando…",
+    "description": "Escolha outra versão deste documento. As diferenças aparecem aqui como alterações controladas.",
+    "trackedChangesAccepted": "O documento aberto tem alterações controladas. A comparação as trata como aceitas.",
+    "detectFormatting": "Incluir alterações de formatação",
+    "fileRequired": "Primeiro escolha um documento para comparar.",
+    "readFailed": "Não foi possível ler o arquivo escolhido.",
+    "revisedFile": "Comparar com",
+    "title": "Comparar documentos",
+    "noDifferences": "Os documentos não têm diferenças.",
+    "recorded": "{count, plural, one {A comparação registrou # alteração.} other {A comparação registrou # alterações.}}",
+    "recordedNoRevisions": "A comparação atualizou o documento sem alterações controladas.",
+    "phases": {
+      "reading": "Lendo os documentos…",
+      "comparing": "Comparando…",
+      "checking": "Verificando o resultado…",
+      "applying": "Aplicando as alterações…"
+    },
+    "errors": {
+      "invalidOptions": "As opções de comparação não são válidas.",
+      "invalidOriginal": "Não é possível ler o documento aberto para comparação.",
+      "invalidRevised": "O arquivo escolhido não é um documento que possa ser comparado.",
+      "tooLarge": "Os documentos são grandes demais para comparar.",
+      "unsupportedContent": "Os documentos diferem em conteúdo que não pode ser mostrado como alterações controladas.",
+      "unavailable": "Comparar documentos não está disponível para este documento.",
+      "protected": "Este documento está protegido contra edição.",
+      "collaboration": "Comparar documentos não está disponível em uma sessão de edição compartilhada.",
+      "viewing": "O documento está aberto somente para leitura.",
+      "closed": "A comparação foi cancelada.",
+      "empty": "O arquivo escolhido está vazio.",
+      "busy": "Outra comparação, uma visualização ou uma atualização do documento está em andamento. Tente novamente quando terminar.",
+      "documentChanged": "O documento mudou durante a comparação. Compare novamente.",
+      "failed": "Não foi possível comparar os documentos."
+    },
+    "reasons": {
+      "headerFooter": "Os documentos diferem em um cabeçalho ou rodapé de uma seção anterior, e essa seção não tem uma seção correspondente no outro documento.",
+      "lockedContent": "Os documentos diferem dentro de um controle de conteúdo bloqueado ou vinculado a dados, então essas alterações não podem ser revisadas. Remova o bloqueio ou o vínculo e compare novamente.",
+      "packageStructure": "O documento aberto não pode conter o resultado desta comparação.",
+      "unrecordedSettings": "A outra versão adiciona configurações de seção ou de tabela que não podem ser desfeitas ao rejeitar as alterações.",
+      "unresolvedRevisions": "Um documento contém alterações controladas que não podem ser aceitas. Aceite-as ou rejeite-as nesse documento e compare novamente.",
+      "untrackedContent": "Os documentos diferem em conteúdo que não pode ser mostrado como alterações controladas, como um arquivo incorporado.",
+      "unverified": "O resultado da comparação não reproduziria os dois documentos, por isso não foi aplicado."
+    }
   }
 }

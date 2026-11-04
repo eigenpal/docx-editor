@@ -155,6 +155,17 @@ export type AutomationOperation =
   /** The document itself — the root every other handle is reached through. */
   | { readonly op: 'getDocument' }
   | { readonly op: 'removeDocumentInformation'; readonly removeDocInfoType: string }
+  /**
+   * Compare the document (the original) with a revised DOCX given as base64 and record the
+   * differences as tracked changes in this document. Needs a host compare engine.
+   */
+  | {
+      readonly op: 'compareFromBase64';
+      readonly base64: string;
+      readonly authorName?: string;
+      readonly detectFormatChanges?: boolean;
+      readonly removeDateAndTime?: boolean;
+    }
   | {
       readonly op: 'getDocumentProperty';
       readonly name: import('../store/package/document-property-writes.ts').DocumentPropertyName;

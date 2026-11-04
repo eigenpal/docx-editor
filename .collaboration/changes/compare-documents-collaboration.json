@@ -1,0 +1,12 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Collaborative sessions have no document compare.",
+  "after": "Document compare refuses in collaborative sessions before any edit.",
+  "reason": "The compare refuses before it plans any operation, so no shared node, operation, or update is written. Shared format and synchronization stay unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/compare-documents-collaboration.test.ts"
+  ],
+  "changeset": "compare-documents",
+  "migration": null
+}

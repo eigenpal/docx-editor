@@ -83,6 +83,8 @@ const FACADE_COMMANDS: ReadonlySet<string> = new Set<EditorCommand['type']>([
   'openBookmarkDialog',
   'openGoTo',
   'openRevisionMarkupDialog',
+  'openCompareDocumentsDialog',
+  'compareDocuments',
   'proposeDeletion',
   'proposeInsertion',
   'proposeReplacement',

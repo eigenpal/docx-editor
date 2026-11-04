@@ -19,6 +19,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { serverPagination, type ServerPaginationOptions } from './pagination.ts';
 export type { ServerPaginationOptions } from './pagination.ts';
 import { createServerAutomationHost, openDiagnosticCode } from '@docx-editor.dev/core/automation';
+import type { CompareDocumentsEngine } from '@docx-editor.dev/core/automation';
 import type {
   CollaborationModuleContribution,
   EditorCollaborationSession,
@@ -36,6 +37,11 @@ import { runtimeDiagnostics, type RuntimeDiagnostic } from './diagnostics.ts';
 export interface EditorModule {
   readonly id: string;
   readonly collaboration?: CollaborationModuleContribution;
+  /**
+   * Review contribution. Its compare engine enables `Document.compareFromBase64`; the rest of
+   * the contribution is ignored here.
+   */
+  readonly review?: { readonly compareDocuments?: CompareDocumentsEngine };
   /**
    * Told about this runtime's anonymous diagnostics: the open, and each refused batch with a
    * known reason. A telemetry module's listener fits here unchanged.
@@ -171,12 +177,15 @@ export async function createServer(
     throw error;
   }
   const collaborationModel = collaborationModelOf(options.modules);
+  const compareDocuments = options.modules?.find((module) => module.review?.compareDocuments)
+    ?.review?.compareDocuments;
   let opened: ReturnType<typeof createServerAutomationHost>;
   try {
     opened = createServerAutomationHost(bytes, {
       ...(options.pagination ? { pagination: serverPagination(options.pagination) } : {}),
       ...(options.limits === undefined ? {} : { limits: options.limits }),
       ...(collaborationModel === undefined ? {} : { collaborationModel }),
+      ...(compareDocuments === undefined ? {} : { compareDocuments }),
     });
   } catch (error) {
     // An engine fault, not a refusal: reported as an open that failed, then rethrown.

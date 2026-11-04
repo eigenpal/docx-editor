@@ -1,4 +1,5 @@
 import type { DocxEditorRevisionMarkupDialogProps } from './DocxEditorRevisionMarkupDialog';
+import type { DocxEditorCompareDocumentsDialogProps } from './DocxEditorCompareDocumentsDialog';
 import type { DocxEditorExportDialogProps } from './DocxEditorExportDialog';
 import type { DocxEditorPrintDialogProps } from './DocxEditorPrintDialog';
 import { renderPopup, type DocxEditorPopup } from './popup-renderer';
@@ -30,6 +31,8 @@ import { useTranslation } from '../i18n';
 export interface DocxEditorPopups {
   /** Track changes options. False cancels the requested settings session. */
   revisionMarkup?: DocxEditorPopup<DocxEditorRevisionMarkupDialogProps>;
+  /** The Compare documents dialog the Review menu opens. Requires the review module. */
+  compareDocuments?: DocxEditorPopup<DocxEditorCompareDocumentsDialogProps>;
   /** File export progress and errors. False hides feedback without stopping conversion. */
   export?: DocxEditorPopup<DocxEditorExportDialogProps>;
   /** File print progress and errors. False hides feedback; printing still runs. */

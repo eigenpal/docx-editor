@@ -727,6 +727,14 @@
     "status": "partial",
     "notes": "Only DocumentProperties removes standard core, extended, and custom property parts and their package relationships. Other modes, TrackMineOnly, and collaboration refuse with NotSupported. Run as the only write in its sync. Malformed or ambiguous part topology refuses before mutation. Content, comments, revisions, and media remain unchanged; this operation does not anonymize document content."
   },
+  "Word.Document#compareFromBase64": {
+    "status": "partial",
+    "notes": "Requires reviewModule() from @docx-editor.dev/pro on the runtime or editor; without it the call refuses with NotSupported. Only CompareTargetCurrent is supported: the differences replace this document's content as tracked revisions in one undoable edit. CompareTargetNew, CompareTargetSelected, and removePersonalInformation: true refuse with NotSupported. authorName, detectFormatChanges, and removeDateAndTime are honored. Without authorName, or with a blank one, the revisions carry cp:lastModifiedBy, then dc:creator, then Comparison. With no differences, the document and its undo history stay unchanged. addToRecentFiles and ignoreAllComparisonWarnings have no effect. Both documents are compared with their existing revisions accepted. The result keeps the comments of both documents, and bookmarks come from this document. Empty or invalid base64, unreadable packages, option values of the wrong type, and unknown compareTarget values refuse with InvalidArgument. Handle the outer error code first. Planner refusals add debugInfo.innerError.code; argument errors, such as empty base64 or a wrong option type, have no innerError. The planner codes are edit.review-module-required, edit.operation-unsupported, edit.resource-limit, edit.invalid-argument, edit.protected-content, and edit.unsupported-content. Documents over the size limit refuse with NotSupported. Enforced read-only, comments, forms, or tracked-changes protection refuses with NotImplemented. So do differences inside a locked or data-bound content control, differences that no tracked change can record, and tracked changes that cannot be accepted. Collaborative sessions refuse with NotSupported. Run as the only write in its sync."
+  },
+  "Word.Document#compare": {
+    "status": "unsupported",
+    "notes": "Always refuses with NotSupported, because the document model has no file system. Read the file and call compareFromBase64 instead."
+  },
   "Word.Range#text": {
     "status": "partial",
     "notes": "Reads the range's text through its paragraph identity and offsets. A range whose text moved since it was read refuses with StaleDocument. Search again after an edit before the range's end in its paragraph."

@@ -3,6 +3,7 @@ import type {
   RevisionMarkupOptions,
   RevisionMarkupChromeHandlers,
 } from '../contracts/revision-markup.ts';
+import type { CompareDocumentsChromeHandlers } from '../contracts/compare-documents.ts';
 import type { FieldResultsMode } from '../store/package/field-result-mode.ts';
 import type { ReviewPaneOptions } from '../contracts/review-pane.ts';
 import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
@@ -396,6 +397,15 @@ export interface DocxEditorInstance extends Editor {
    */
   setRevisionMarkupChrome(
     handlers: RevisionMarkupChromeHandlers | null,
+    options?: PopupChromeRegistrationOptions
+  ): Unsubscribe;
+  /**
+   * Register Compare documents chrome. Disposal cancels its active sessions. Manual renderers
+   * take priority over fallback renderers. Pass null to use the review module's own dialog
+   * until disposal restores the previous registration.
+   */
+  setCompareDocumentsChrome(
+    handlers: CompareDocumentsChromeHandlers | null,
     options?: PopupChromeRegistrationOptions
   ): Unsubscribe;
   /** Register Field Options chrome. Disposal closes sessions owned by this registration. */

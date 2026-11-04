@@ -78,6 +78,8 @@ export { FieldType, type FieldTypeLiteral } from './field-types.ts';
 
 export {
   RemoveDocInfoType,
+  CompareTarget,
+  type DocumentCompareOptions,
   InsertLocation,
   Alignment,
   PageOrientation,

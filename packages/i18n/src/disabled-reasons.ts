@@ -19,6 +19,10 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'not wired to an editor command': 'disabledReason.notWired',
   'this document was opened for viewing': 'disabledReason.viewing',
   'the document is open for viewing': 'disabledReason.viewing',
+  // Keyed on `COMPARE_COLLABORATION_REASON` in the engine's `compare-documents-state.ts`; the
+  // sentences must stay the same.
+  'documents cannot be compared while a collaboration session is attached':
+    'disabledReason.compareCollaboration',
   'this document permits editing only as tracked changes': 'disabledReason.trackedOnly',
   'no document is loaded': 'disabledReason.noDocument',
   'no document is open': 'disabledReason.noDocument',

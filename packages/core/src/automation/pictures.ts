@@ -35,11 +35,11 @@ type Result<T> = ({ readonly ok: true } & T) | { readonly ok: false; readonly de
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
 /** Decode bounded, canonical RFC 4648 base64 without a DOM or Node dependency. */
-function decodeBase64(value: string): Uint8Array | null {
+export function decodeBase64(value: string, maxBytes = MAX_IMAGE_BYTES): Uint8Array | null {
   if (
     typeof value !== 'string' ||
     value.length === 0 ||
-    value.length > Math.ceil(MAX_IMAGE_BYTES / 3) * 4 ||
+    value.length > Math.ceil(maxBytes / 3) * 4 ||
     value.length % 4 !== 0
   )
     return null;

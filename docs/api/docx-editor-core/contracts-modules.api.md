@@ -28,6 +28,180 @@ export interface CommentRecord {
 }
 
 // @public
+export type CompareDocumentsBackgroundEngine = (original: Uint8Array, revised: Uint8Array, options: CompareDocumentsEngineOptions, control: {
+    readonly onProgress: (progress: CompareDocumentsProgress) => void;
+    readonly signal: AbortSignal;
+}) => Promise<CompareDocumentsBackgroundResult>;
+
+// @public
+export type CompareDocumentsBackgroundResult = {
+    readonly bytes: Uint8Array | null;
+    readonly changed: boolean;
+    readonly ok: true;
+    readonly revisionCount: number;
+} | {
+    readonly code: CompareDocumentsEngineErrorCode;
+    readonly message: string;
+    readonly ok: false;
+    readonly reason?: CompareDocumentsRefusalReason;
+};
+
+// @public
+export interface CompareDocumentsDialog {
+    // (undocumented)
+    destroy(): void;
+    // (undocumented)
+    open(): void;
+}
+
+// @public
+export interface CompareDocumentsDialogHost extends CompareDocumentsDialogSession {
+    // (undocumented)
+    readonly container: HTMLElement;
+    // (undocumented)
+    readonly translate?: (key: string) => string | undefined;
+}
+
+// @public
+export interface CompareDocumentsDialogSession {
+    apply(request: CompareDocumentsRequest, options?: {
+        readonly onProgress?: (progress: CompareDocumentsProgress) => void;
+    }): Promise<CompareDocumentsOutcome>;
+    canApply(): boolean;
+    cancel(): void;
+    readonly cancelable: boolean;
+    readonly defaultAuthor: string;
+    readonly originalHasTrackedChanges: boolean;
+    readonly signal: AbortSignal;
+}
+
+// @public
+export type CompareDocumentsEngine = (original: OoxmlPackage, revised: Uint8Array, options: CompareDocumentsEngineOptions) => CompareDocumentsEngineResult;
+
+// @public
+export type CompareDocumentsEngineErrorCode =
+/**
+* An option has a value of the wrong type, such as a `detectFormatChanges` that is not a
+* boolean, or the revised document is not a `Uint8Array`.
+*/
+'invalidOptions'
+/** The original document is not a readable DOCX package. */
+| 'invalidOriginal'
+/** The revised document is not a readable DOCX package. */
+| 'invalidRevised'
+/** The documents exceed the compare's size limits. */
+| 'tooLarge'
+/**
+* The original document enforces protection that the compare would break: read-only,
+* comments, forms, or tracked-changes protection. A compare also writes differences that
+* have no tracked form, such as style definitions and content control properties, so
+* tracked-changes protection refuses too.
+*/
+| 'protected'
+/** The differences include content that no tracked change can record. */
+| 'unsupportedContent';
+
+// @public
+export interface CompareDocumentsEngineOptions {
+    readonly authorName?: string;
+    readonly detectFormatChanges?: boolean;
+    readonly removeDateAndTime?: boolean;
+}
+
+// @public
+export type CompareDocumentsEngineResult = {
+    readonly changed: boolean;
+    readonly ok: true;
+    readonly package: OoxmlPackage;
+    readonly revisionCount: number;
+} | {
+    readonly code: CompareDocumentsEngineErrorCode;
+    readonly message: string;
+    readonly ok: false;
+    readonly reason?: CompareDocumentsRefusalReason;
+};
+
+// @public
+export type CompareDocumentsErrorCode = CompareDocumentsEngineErrorCode
+/** Editor only: no review module, no open document, or no mount. */
+| 'unavailable'
+/** Editor only: a collaboration session is attached. */
+| 'collaboration'
+/** Editor only: the document is open for viewing only. */
+| 'viewing'
+/** Editor only: the dialog closed, or the compare was canceled, before it finished. */
+| 'closed'
+/** Editor only: the revised file is a `Uint8Array` with no bytes. */
+| 'empty'
+/**
+* Editor only: another compare of the same dialog runs, or a preview or an external document
+* refresh blocks writes to the document. Try again when it ends.
+*/
+| 'busy'
+/**
+* Editor only: the open document changed while a background compare ran, so its result
+* no longer applies. The editor never retries by itself.
+*/
+| 'documentChanged'
+/** Editor only: any other failure. */
+| 'failed';
+
+// @public
+export type CompareDocumentsOutcome = {
+    readonly changed: boolean;
+    readonly ok: true;
+    readonly revisionCount: number;
+} | {
+    readonly code: CompareDocumentsErrorCode;
+    readonly message: string;
+    readonly ok: false;
+    readonly reason?: CompareDocumentsRefusalReason;
+};
+
+// @public
+export type CompareDocumentsPhase = 'reading' | 'comparing' | 'checking' | 'applying';
+
+// @public
+export interface CompareDocumentsProgress {
+    readonly fraction: number;
+    readonly phase: CompareDocumentsPhase;
+}
+
+// @public
+export type CompareDocumentsRefusalReason =
+/** The documents differ inside a content control that is locked or bound to data. */
+'lockedContent'
+/** A document holds tracked changes that cannot be accepted, so its final state is unknown. */
+| 'unresolvedRevisions'
+/** The documents differ in content with no tracked-change form, such as an embedded file. */
+| 'untrackedContent'
+/** The revised document adds section or table settings that a reject cannot restore. */
+| 'unrecordedSettings'
+/** A header or footer of an earlier section cannot be paired with one of the original. */
+| 'headerFooter'
+/** The result needs a part type that the original document does not declare. */
+| 'packageStructure'
+/**
+* The result fails the check: accepting all changes does not give the revised text, rejecting
+* them does not give the original text, or a tracked change cannot be accepted or rejected.
+*/
+| 'unverified';
+
+// @public
+export interface CompareDocumentsRequest {
+    readonly authorName?: string;
+    readonly detectFormatChanges?: boolean;
+    readonly removeDateAndTime?: boolean;
+    readonly revised: Uint8Array;
+}
+
+// @public
+export interface ContentTypeIndex {
+    readonly defaults: ReadonlyMap<string, string>;
+    readonly overrides: ReadonlyMap<string, string>;
+}
+
+// @public
 export interface EditorModule {
     readonly collaboration?: CollaborationModuleContribution;
     readonly customNodePayloadNamespaces?: readonly string[];
@@ -54,6 +228,31 @@ export interface EditorModuleRegistry {
 }
 
 // @public
+export interface OoxmlExternalTarget {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly ownerPart: string;
+    // (undocumented)
+    readonly rawTarget: string;
+    readonly sinkSafe: boolean;
+    // (undocumented)
+    readonly type: string;
+}
+
+// @public
+export interface OoxmlPackage {
+    // (undocumented)
+    readonly contentTypes: ContentTypeIndex;
+    // (undocumented)
+    readonly externalTargets: readonly OoxmlExternalTarget[];
+    readonly mainDocumentPart: string;
+    readonly partBytes: ReadonlyMap<string, Uint8Array>;
+    readonly parts: ReadonlyMap<string, OoxmlPart>;
+    readonly relationships: ReadonlyMap<string, readonly RelationshipRecord[]>;
+}
+
+// @public
 export interface OoxmlPart {
     // (undocumented)
     readonly contentType: string;
@@ -62,6 +261,22 @@ export interface OoxmlPart {
     readonly name: string;
     // (undocumented)
     readonly root: OoxmlElement;
+}
+
+// @public
+export interface RelationshipRecord {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly order: number;
+    // (undocumented)
+    readonly ownerPart: string;
+    // (undocumented)
+    readonly rawTarget: string;
+    // (undocumented)
+    readonly targetMode: TargetMode;
+    // (undocumented)
+    readonly type: string;
 }
 
 // @public
@@ -128,6 +343,9 @@ export interface ReviewModelInput {
 // @public
 export interface ReviewModuleContribution {
     readonly collectReviewItems: CollectReviewItems;
+    readonly compareDocuments?: CompareDocumentsEngine;
+    readonly compareDocumentsInBackground?: CompareDocumentsBackgroundEngine;
+    readonly createCompareDocumentsDialog?: (host: CompareDocumentsDialogHost) => CompareDocumentsDialog;
     readonly createRevisionMarkupDialog?: (host: RevisionMarkupDialogHost) => RevisionMarkupDialog;
     readonly displayModes: readonly ReviewDisplayMode[];
     readonly pane?: ReviewPaneOptions;
@@ -224,5 +442,8 @@ export interface RevisionMarkupDialogHost extends RevisionMarkupDialogSession {
     // (undocumented)
     readonly translate?: (key: string) => string | undefined;
 }
+
+// @public
+export type TargetMode = 'Internal' | 'External';
 
 ```

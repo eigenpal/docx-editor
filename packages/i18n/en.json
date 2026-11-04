@@ -21,6 +21,7 @@
     "editorNotReady": "The editor is not ready",
     "notWired": "This control is not connected to an editor command",
     "viewing": "This document is open for viewing",
+    "compareCollaboration": "Compare documents is not available in a shared editing session.",
     "trackedOnly": "This document permits edits only as tracked changes",
     "noDocument": "No document is loaded",
     "noReviewAuthors": "This document has no review authors",
@@ -1030,6 +1031,7 @@
     "acceptAllChanges": "Accept all changes shown",
     "rejectAllChanges": "Reject all changes shown",
     "protectDocument": "Protect Document for Forms",
+    "compareDocuments": "Compare documents",
     "ariaLabel": "Review",
     "empty": "No changes or comments",
     "accept": "Accept",
@@ -1169,5 +1171,52 @@
       "lightGreen": "Light green",
       "gray": "Gray"
     }
+  },
+  "compareDocuments": {
+    "title": "Compare documents",
+    "description": "Choose another version of this document. Its differences appear here as tracked changes.",
+    "trackedChangesAccepted": "The open document has tracked changes. The compare treats them as accepted.",
+    "revisedFile": "Compare with",
+    "author": "Author of the changes",
+    "detectFormatting": "Include formatting changes",
+    "compare": "Compare",
+    "cancel": "Cancel",
+    "comparing": "Comparing…",
+    "noDifferences": "The documents have no differences.",
+    "recorded": "{count, plural, one {Compare recorded # change.} other {Compare recorded # changes.}}",
+    "recordedNoRevisions": "The compare updated the document without tracked changes.",
+    "phases": {
+      "reading": "Reading the documents…",
+      "comparing": "Comparing…",
+      "checking": "Checking the result…",
+      "applying": "Applying the changes…"
+    },
+    "errors": {
+      "invalidOptions": "The compare options are not valid.",
+      "invalidOriginal": "The open document cannot be read for a compare.",
+      "invalidRevised": "The chosen file is not a document that can be compared.",
+      "tooLarge": "The documents are too large to compare.",
+      "unsupportedContent": "The documents differ in content that cannot be shown as tracked changes.",
+      "unavailable": "Compare documents is not available for this document.",
+      "protected": "This document is protected against edits.",
+      "collaboration": "Compare documents is not available in a shared editing session.",
+      "viewing": "The document is open for viewing only.",
+      "closed": "The compare was canceled.",
+      "empty": "The chosen file is empty.",
+      "busy": "Another compare, a preview, or a document refresh is running. Try again when it ends.",
+      "documentChanged": "The document changed while it was compared. Compare again.",
+      "failed": "Could not compare the documents."
+    },
+    "reasons": {
+      "lockedContent": "The documents differ inside a content control that is locked or linked to data, so the changes there cannot be reviewed. Remove the lock or the link, then compare again.",
+      "unresolvedRevisions": "A document holds tracked changes that cannot be accepted. Accept or reject them in that document, then compare again.",
+      "untrackedContent": "The documents differ in content that cannot be shown as tracked changes, such as an embedded file.",
+      "unrecordedSettings": "The other version adds section or table settings that could not be undone by rejecting changes.",
+      "headerFooter": "The documents differ in a header or footer of an earlier section, and that section has no matching section in the other document.",
+      "packageStructure": "The open document cannot hold the result of this compare.",
+      "unverified": "The compare result would not reproduce both documents, so it was not applied."
+    },
+    "readFailed": "Could not read the chosen file.",
+    "fileRequired": "Choose a document to compare with first."
   }
 }

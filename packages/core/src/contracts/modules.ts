@@ -1,3 +1,20 @@
+import type { CompareDocumentsDialogSession } from './compare-documents.ts';
+import type {
+  CompareDocumentsBackgroundEngine,
+  CompareDocumentsEngine,
+} from './document-compare.ts';
+export type {
+  CompareDocumentsBackgroundEngine,
+  CompareDocumentsBackgroundResult,
+  CompareDocumentsEngine,
+  CompareDocumentsEngineErrorCode,
+  CompareDocumentsErrorCode,
+  CompareDocumentsRefusalReason,
+  CompareDocumentsEngineOptions,
+  CompareDocumentsEngineResult,
+  CompareDocumentsPhase,
+  CompareDocumentsProgress,
+} from './document-compare.ts';
 import type { RevisionMarkupDialogSession } from './revision-markup.ts';
 import type { ReviewPaneOptions } from './review-pane.ts';
 import type { EditorDiagnostic, EditorDiagnosticKind } from './diagnostics.ts';
@@ -51,6 +68,20 @@ export type {
 // definition of the document model. A module author reaches the tree at
 // `@docx-editor.dev/core/store`, which is a published subpath written for exactly that.
 export type { OoxmlPart, RevisionAddress } from '@docx-editor.dev/core/store';
+// The compare engine takes and returns the original as a package, and the dialog contribution
+// receives a session, so a module author can type both.
+export type {
+  ContentTypeIndex,
+  OoxmlExternalTarget,
+  OoxmlPackage,
+  RelationshipRecord,
+  TargetMode,
+} from '@docx-editor.dev/core/store';
+export type {
+  CompareDocumentsDialogSession,
+  CompareDocumentsOutcome,
+  CompareDocumentsRequest,
+} from './compare-documents.ts';
 export type { ReviewDisplayMode, RevisionDisplayMode } from '../layout/revision-projection.ts';
 
 /**
@@ -75,6 +106,18 @@ export interface RevisionMarkupDialogHost extends RevisionMarkupDialogSession {
   readonly translate?: (key: string) => string | undefined;
 }
 
+/** Compare documents dialog supplied by the review module. @public */
+export interface CompareDocumentsDialog {
+  open(): void;
+  destroy(): void;
+}
+
+/** What the Compare documents dialog may use: its session, mount, and strings. @public */
+export interface CompareDocumentsDialogHost extends CompareDocumentsDialogSession {
+  readonly container: HTMLElement;
+  readonly translate?: (key: string) => string | undefined;
+}
+
 /**
  * What a review module contributes: the queue derivation, and the revision
  * display modes the editor may enter beyond the free tier's final-state
@@ -83,6 +126,19 @@ export interface RevisionMarkupDialogHost extends RevisionMarkupDialogSession {
  * @public
  */
 export interface ReviewModuleContribution {
+  /** Document compare. Absent, compare commands refuse. */
+  readonly compareDocuments?: CompareDocumentsEngine;
+  /**
+   * The same compare off the main thread. When present, the Compare documents dialog uses it,
+   * reports progress, and can stop a running compare. If it rejects before its first progress
+   * report, the dialog compares with `compareDocuments` instead. The `compareDocuments` command
+   * stays synchronous and uses `compareDocuments`.
+   */
+  readonly compareDocumentsInBackground?: CompareDocumentsBackgroundEngine;
+  /** Create the Compare documents dialog when a host opens it. */
+  readonly createCompareDocumentsDialog?: (
+    host: CompareDocumentsDialogHost
+  ) => CompareDocumentsDialog;
   /** Create local review settings chrome when a host opens the dialog. */
   readonly createRevisionMarkupDialog?: (host: RevisionMarkupDialogHost) => RevisionMarkupDialog;
   /**

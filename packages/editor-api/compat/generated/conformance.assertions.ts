@@ -440,1068 +440,1078 @@ type Auth_Document_comments_readonly_84 = { readonly value: DocxEditor.CommentCo
 type _check_Document_comments_readonly_84 = IsExact<Ref_Document_comments_readonly_84, Auth_Document_comments_readonly_84>;
 type _assert_Document_comments_readonly_84 = Expect<_check_Document_comments_readonly_84>;
 
-type Ref_Document_contentControls_85 = () => DocxEditor.ContentControlCollection;
-type Auth_Document_contentControls_85 = () => DocxEditor.ContentControlCollection;
-type _check_Document_contentControls_85 = IsExact<Ref_Document_contentControls_85, Auth_Document_contentControls_85>;
-type _assert_Document_contentControls_85 = Expect<_check_Document_contentControls_85>;
-
-type Ref_Document_contentControls_readonly_86 = { readonly value: DocxEditor.ContentControlCollection };
-type Auth_Document_contentControls_readonly_86 = { readonly value: DocxEditor.ContentControlCollection };
-type _check_Document_contentControls_readonly_86 = IsExact<Ref_Document_contentControls_readonly_86, Auth_Document_contentControls_readonly_86>;
-type _assert_Document_contentControls_readonly_86 = Expect<_check_Document_contentControls_readonly_86>;
-
-type Ref_Document_deleteBookmark_87 = (name: string) => void;
-type Auth_Document_deleteBookmark_87 = (name: string) => void;
-type _check_Document_deleteBookmark_87 = IsExact<Ref_Document_deleteBookmark_87, Auth_Document_deleteBookmark_87>;
-type _assert_Document_deleteBookmark_87 = Expect<_check_Document_deleteBookmark_87>;
-
-type Ref_Document_getBookmarkRange_88 = (name: string) => DocxEditor.Range;
-type Auth_Document_getBookmarkRange_88 = (name: string) => DocxEditor.Range;
-type _check_Document_getBookmarkRange_88 = IsExact<Ref_Document_getBookmarkRange_88, Auth_Document_getBookmarkRange_88>;
-type _assert_Document_getBookmarkRange_88 = Expect<_check_Document_getBookmarkRange_88>;
-
-type Ref_Document_getBookmarkRangeOrNullObject_89 = (name: string) => DocxEditor.Range;
-type Auth_Document_getBookmarkRangeOrNullObject_89 = (name: string) => DocxEditor.Range;
-type _check_Document_getBookmarkRangeOrNullObject_89 = IsExact<Ref_Document_getBookmarkRangeOrNullObject_89, Auth_Document_getBookmarkRangeOrNullObject_89>;
-type _assert_Document_getBookmarkRangeOrNullObject_89 = Expect<_check_Document_getBookmarkRangeOrNullObject_89>;
-
-type Ref_Document_getStyles_90 = () => DocxEditor.StyleCollection;
-type Auth_Document_getStyles_90 = () => DocxEditor.StyleCollection;
-type _check_Document_getStyles_90 = IsExact<Ref_Document_getStyles_90, Auth_Document_getStyles_90>;
-type _assert_Document_getStyles_90 = Expect<_check_Document_getStyles_90>;
-
-type Ref_Document_paragraphs_91 = () => DocxEditor.ParagraphCollection;
-type Auth_Document_paragraphs_91 = () => DocxEditor.ParagraphCollection;
-type _check_Document_paragraphs_91 = IsExact<Ref_Document_paragraphs_91, Auth_Document_paragraphs_91>;
-type _assert_Document_paragraphs_91 = Expect<_check_Document_paragraphs_91>;
-
-type Ref_Document_paragraphs_readonly_92 = { readonly value: DocxEditor.ParagraphCollection };
-type Auth_Document_paragraphs_readonly_92 = { readonly value: DocxEditor.ParagraphCollection };
-type _check_Document_paragraphs_readonly_92 = IsExact<Ref_Document_paragraphs_readonly_92, Auth_Document_paragraphs_readonly_92>;
-type _assert_Document_paragraphs_readonly_92 = Expect<_check_Document_paragraphs_readonly_92>;
-
-type Ref_Document_properties_93 = () => DocxEditor.DocumentProperties;
-type Auth_Document_properties_93 = () => DocxEditor.DocumentProperties;
-type _check_Document_properties_93 = IsExact<Ref_Document_properties_93, Auth_Document_properties_93>;
-type _assert_Document_properties_93 = Expect<_check_Document_properties_93>;
-
-type Ref_Document_properties_readonly_94 = { readonly value: DocxEditor.DocumentProperties };
-type Auth_Document_properties_readonly_94 = { readonly value: DocxEditor.DocumentProperties };
-type _check_Document_properties_readonly_94 = IsExact<Ref_Document_properties_readonly_94, Auth_Document_properties_readonly_94>;
-type _assert_Document_properties_readonly_94 = Expect<_check_Document_properties_readonly_94>;
-
-type Ref_Document_removeDocumentInformation_95 = (removeDocInfoType: DocxEditor.RemoveDocInfoType) => void;
-type Auth_Document_removeDocumentInformation_95 = (removeDocInfoType: DocxEditor.RemoveDocInfoType) => void;
-type _check_Document_removeDocumentInformation_95 = IsExact<Ref_Document_removeDocumentInformation_95, Auth_Document_removeDocumentInformation_95>;
-type _assert_Document_removeDocumentInformation_95 = Expect<_check_Document_removeDocumentInformation_95>;
-
-type Ref_Document_removeDocumentInformation_96 = (removeDocInfoType: "Comments" | "Revisions" | "Versions" | "RemovePersonalInformation" | "EmailHeader" | "RoutingSlip" | "SendForReview" | "DocumentProperties" | "Template" | "DocumentWorkspace" | "InkAnnotations" | "DocumentServerProperties" | "DocumentManagementPolicy" | "ContentType" | "TaskpaneWebExtensions" | "AtMentions" | "DocumentTasks" | "DocumentIntelligence" | "CommentReactions" | "All") => void;
-type Auth_Document_removeDocumentInformation_96 = (removeDocInfoType: "Comments" | "Revisions" | "Versions" | "RemovePersonalInformation" | "EmailHeader" | "RoutingSlip" | "SendForReview" | "DocumentProperties" | "Template" | "DocumentWorkspace" | "InkAnnotations" | "DocumentServerProperties" | "DocumentManagementPolicy" | "ContentType" | "TaskpaneWebExtensions" | "AtMentions" | "DocumentTasks" | "DocumentIntelligence" | "CommentReactions" | "All") => void;
-type _check_Document_removeDocumentInformation_96 = IsExact<Ref_Document_removeDocumentInformation_96, Auth_Document_removeDocumentInformation_96>;
-type _assert_Document_removeDocumentInformation_96 = Expect<_check_Document_removeDocumentInformation_96>;
-
-type Ref_Document_revisions_97 = () => DocxEditor.RevisionCollection;
-type Auth_Document_revisions_97 = () => DocxEditor.RevisionCollection;
-type _check_Document_revisions_97 = IsExact<Ref_Document_revisions_97, Auth_Document_revisions_97>;
-type _assert_Document_revisions_97 = Expect<_check_Document_revisions_97>;
-
-type Ref_Document_revisions_readonly_98 = { readonly value: DocxEditor.RevisionCollection };
-type Auth_Document_revisions_readonly_98 = { readonly value: DocxEditor.RevisionCollection };
-type _check_Document_revisions_readonly_98 = IsExact<Ref_Document_revisions_readonly_98, Auth_Document_revisions_readonly_98>;
-type _assert_Document_revisions_readonly_98 = Expect<_check_Document_revisions_readonly_98>;
-
-type Ref_Document_sections_99 = () => DocxEditor.SectionCollection;
-type Auth_Document_sections_99 = () => DocxEditor.SectionCollection;
-type _check_Document_sections_99 = IsExact<Ref_Document_sections_99, Auth_Document_sections_99>;
-type _assert_Document_sections_99 = Expect<_check_Document_sections_99>;
-
-type Ref_Document_sections_readonly_100 = { readonly value: DocxEditor.SectionCollection };
-type Auth_Document_sections_readonly_100 = { readonly value: DocxEditor.SectionCollection };
-type _check_Document_sections_readonly_100 = IsExact<Ref_Document_sections_readonly_100, Auth_Document_sections_readonly_100>;
-type _assert_Document_sections_readonly_100 = Expect<_check_Document_sections_readonly_100>;
-
-type Ref_DocumentProperties_author_101 = () => string;
-type Auth_DocumentProperties_author_101 = () => string;
-type _check_DocumentProperties_author_101 = IsExact<Ref_DocumentProperties_author_101, Auth_DocumentProperties_author_101>;
-type _assert_DocumentProperties_author_101 = Expect<_check_DocumentProperties_author_101>;
-
-type Ref_DocumentProperties_author_readonly_102 = { value: string };
-type Auth_DocumentProperties_author_readonly_102 = { value: string };
-type _check_DocumentProperties_author_readonly_102 = IsExact<Ref_DocumentProperties_author_readonly_102, Auth_DocumentProperties_author_readonly_102>;
-type _assert_DocumentProperties_author_readonly_102 = Expect<_check_DocumentProperties_author_readonly_102>;
-
-type Ref_DocumentProperties_category_103 = () => string;
-type Auth_DocumentProperties_category_103 = () => string;
-type _check_DocumentProperties_category_103 = IsExact<Ref_DocumentProperties_category_103, Auth_DocumentProperties_category_103>;
-type _assert_DocumentProperties_category_103 = Expect<_check_DocumentProperties_category_103>;
-
-type Ref_DocumentProperties_category_readonly_104 = { value: string };
-type Auth_DocumentProperties_category_readonly_104 = { value: string };
-type _check_DocumentProperties_category_readonly_104 = IsExact<Ref_DocumentProperties_category_readonly_104, Auth_DocumentProperties_category_readonly_104>;
-type _assert_DocumentProperties_category_readonly_104 = Expect<_check_DocumentProperties_category_readonly_104>;
-
-type Ref_DocumentProperties_comments_105 = () => string;
-type Auth_DocumentProperties_comments_105 = () => string;
-type _check_DocumentProperties_comments_105 = IsExact<Ref_DocumentProperties_comments_105, Auth_DocumentProperties_comments_105>;
-type _assert_DocumentProperties_comments_105 = Expect<_check_DocumentProperties_comments_105>;
-
-type Ref_DocumentProperties_comments_readonly_106 = { value: string };
-type Auth_DocumentProperties_comments_readonly_106 = { value: string };
-type _check_DocumentProperties_comments_readonly_106 = IsExact<Ref_DocumentProperties_comments_readonly_106, Auth_DocumentProperties_comments_readonly_106>;
-type _assert_DocumentProperties_comments_readonly_106 = Expect<_check_DocumentProperties_comments_readonly_106>;
-
-type Ref_DocumentProperties_keywords_107 = () => string;
-type Auth_DocumentProperties_keywords_107 = () => string;
-type _check_DocumentProperties_keywords_107 = IsExact<Ref_DocumentProperties_keywords_107, Auth_DocumentProperties_keywords_107>;
-type _assert_DocumentProperties_keywords_107 = Expect<_check_DocumentProperties_keywords_107>;
-
-type Ref_DocumentProperties_keywords_readonly_108 = { value: string };
-type Auth_DocumentProperties_keywords_readonly_108 = { value: string };
-type _check_DocumentProperties_keywords_readonly_108 = IsExact<Ref_DocumentProperties_keywords_readonly_108, Auth_DocumentProperties_keywords_readonly_108>;
-type _assert_DocumentProperties_keywords_readonly_108 = Expect<_check_DocumentProperties_keywords_readonly_108>;
-
-type Ref_DocumentProperties_lastAuthor_109 = () => string;
-type Auth_DocumentProperties_lastAuthor_109 = () => string;
-type _check_DocumentProperties_lastAuthor_109 = IsExact<Ref_DocumentProperties_lastAuthor_109, Auth_DocumentProperties_lastAuthor_109>;
-type _assert_DocumentProperties_lastAuthor_109 = Expect<_check_DocumentProperties_lastAuthor_109>;
-
-type Ref_DocumentProperties_lastAuthor_readonly_110 = { readonly value: string };
-type Auth_DocumentProperties_lastAuthor_readonly_110 = { readonly value: string };
-type _check_DocumentProperties_lastAuthor_readonly_110 = IsExact<Ref_DocumentProperties_lastAuthor_readonly_110, Auth_DocumentProperties_lastAuthor_readonly_110>;
-type _assert_DocumentProperties_lastAuthor_readonly_110 = Expect<_check_DocumentProperties_lastAuthor_readonly_110>;
-
-type Ref_DocumentProperties_subject_111 = () => string;
-type Auth_DocumentProperties_subject_111 = () => string;
-type _check_DocumentProperties_subject_111 = IsExact<Ref_DocumentProperties_subject_111, Auth_DocumentProperties_subject_111>;
-type _assert_DocumentProperties_subject_111 = Expect<_check_DocumentProperties_subject_111>;
-
-type Ref_DocumentProperties_subject_readonly_112 = { value: string };
-type Auth_DocumentProperties_subject_readonly_112 = { value: string };
-type _check_DocumentProperties_subject_readonly_112 = IsExact<Ref_DocumentProperties_subject_readonly_112, Auth_DocumentProperties_subject_readonly_112>;
-type _assert_DocumentProperties_subject_readonly_112 = Expect<_check_DocumentProperties_subject_readonly_112>;
-
-type Ref_DocumentProperties_title_113 = () => string;
-type Auth_DocumentProperties_title_113 = () => string;
-type _check_DocumentProperties_title_113 = IsExact<Ref_DocumentProperties_title_113, Auth_DocumentProperties_title_113>;
-type _assert_DocumentProperties_title_113 = Expect<_check_DocumentProperties_title_113>;
-
-type Ref_DocumentProperties_title_readonly_114 = { value: string };
-type Auth_DocumentProperties_title_readonly_114 = { value: string };
-type _check_DocumentProperties_title_readonly_114 = IsExact<Ref_DocumentProperties_title_readonly_114, Auth_DocumentProperties_title_readonly_114>;
-type _assert_DocumentProperties_title_readonly_114 = Expect<_check_DocumentProperties_title_readonly_114>;
-
-type Ref_Font_bold_115 = () => boolean;
-type Auth_Font_bold_115 = () => boolean;
-type _check_Font_bold_115 = IsExact<Ref_Font_bold_115, Auth_Font_bold_115>;
-type _assert_Font_bold_115 = Expect<_check_Font_bold_115>;
-
-type Ref_Font_bold_readonly_116 = { value: boolean };
-type Auth_Font_bold_readonly_116 = { value: boolean };
-type _check_Font_bold_readonly_116 = IsExact<Ref_Font_bold_readonly_116, Auth_Font_bold_readonly_116>;
-type _assert_Font_bold_readonly_116 = Expect<_check_Font_bold_readonly_116>;
-
-type Ref_Font_color_117 = () => string;
-type Auth_Font_color_117 = () => string;
-type _check_Font_color_117 = IsExact<Ref_Font_color_117, Auth_Font_color_117>;
-type _assert_Font_color_117 = Expect<_check_Font_color_117>;
-
-type Ref_Font_color_readonly_118 = { value: string };
-type Auth_Font_color_readonly_118 = { value: string };
-type _check_Font_color_readonly_118 = IsExact<Ref_Font_color_readonly_118, Auth_Font_color_readonly_118>;
-type _assert_Font_color_readonly_118 = Expect<_check_Font_color_readonly_118>;
-
-type Ref_Font_italic_119 = () => boolean;
-type Auth_Font_italic_119 = () => boolean;
-type _check_Font_italic_119 = IsExact<Ref_Font_italic_119, Auth_Font_italic_119>;
-type _assert_Font_italic_119 = Expect<_check_Font_italic_119>;
-
-type Ref_Font_italic_readonly_120 = { value: boolean };
-type Auth_Font_italic_readonly_120 = { value: boolean };
-type _check_Font_italic_readonly_120 = IsExact<Ref_Font_italic_readonly_120, Auth_Font_italic_readonly_120>;
-type _assert_Font_italic_readonly_120 = Expect<_check_Font_italic_readonly_120>;
-
-type Ref_Font_name_121 = () => string;
-type Auth_Font_name_121 = () => string;
-type _check_Font_name_121 = IsExact<Ref_Font_name_121, Auth_Font_name_121>;
-type _assert_Font_name_121 = Expect<_check_Font_name_121>;
-
-type Ref_Font_name_readonly_122 = { value: string };
-type Auth_Font_name_readonly_122 = { value: string };
-type _check_Font_name_readonly_122 = IsExact<Ref_Font_name_readonly_122, Auth_Font_name_readonly_122>;
-type _assert_Font_name_readonly_122 = Expect<_check_Font_name_readonly_122>;
-
-type Ref_Font_size_123 = () => number;
-type Auth_Font_size_123 = () => number;
-type _check_Font_size_123 = IsExact<Ref_Font_size_123, Auth_Font_size_123>;
-type _assert_Font_size_123 = Expect<_check_Font_size_123>;
-
-type Ref_Font_size_readonly_124 = { value: number };
-type Auth_Font_size_readonly_124 = { value: number };
-type _check_Font_size_readonly_124 = IsExact<Ref_Font_size_readonly_124, Auth_Font_size_readonly_124>;
-type _assert_Font_size_readonly_124 = Expect<_check_Font_size_readonly_124>;
-
-type Ref_List_getLevelParagraphs_125 = (level: number) => DocxEditor.ParagraphCollection;
-type Auth_List_getLevelParagraphs_125 = (level: number) => DocxEditor.ParagraphCollection;
-type _check_List_getLevelParagraphs_125 = IsExact<Ref_List_getLevelParagraphs_125, Auth_List_getLevelParagraphs_125>;
-type _assert_List_getLevelParagraphs_125 = Expect<_check_List_getLevelParagraphs_125>;
-
-type Ref_List_id_126 = () => number;
-type Auth_List_id_126 = () => number;
-type _check_List_id_126 = IsExact<Ref_List_id_126, Auth_List_id_126>;
-type _assert_List_id_126 = Expect<_check_List_id_126>;
-
-type Ref_List_id_readonly_127 = { readonly value: number };
-type Auth_List_id_readonly_127 = { readonly value: number };
-type _check_List_id_readonly_127 = IsExact<Ref_List_id_readonly_127, Auth_List_id_readonly_127>;
-type _assert_List_id_readonly_127 = Expect<_check_List_id_readonly_127>;
-
-type Ref_List_insertParagraph_128 = (paragraphText: string, insertLocation: "Start" | "End" | "Before" | "After") => DocxEditor.Paragraph;
-type Auth_List_insertParagraph_128 = (paragraphText: string, insertLocation: "Start" | "End" | "Before" | "After") => DocxEditor.Paragraph;
-type _check_List_insertParagraph_128 = IsExact<Ref_List_insertParagraph_128, Auth_List_insertParagraph_128>;
-type _assert_List_insertParagraph_128 = Expect<_check_List_insertParagraph_128>;
-
-type Ref_List_paragraphs_129 = () => DocxEditor.ParagraphCollection;
-type Auth_List_paragraphs_129 = () => DocxEditor.ParagraphCollection;
-type _check_List_paragraphs_129 = IsExact<Ref_List_paragraphs_129, Auth_List_paragraphs_129>;
-type _assert_List_paragraphs_129 = Expect<_check_List_paragraphs_129>;
-
-type Ref_List_paragraphs_readonly_130 = { readonly value: DocxEditor.ParagraphCollection };
-type Auth_List_paragraphs_readonly_130 = { readonly value: DocxEditor.ParagraphCollection };
-type _check_List_paragraphs_readonly_130 = IsExact<Ref_List_paragraphs_readonly_130, Auth_List_paragraphs_readonly_130>;
-type _assert_List_paragraphs_readonly_130 = Expect<_check_List_paragraphs_readonly_130>;
-
-type Ref_ListCollection_getById_131 = (id: number) => DocxEditor.List;
-type Auth_ListCollection_getById_131 = (id: number) => DocxEditor.List;
-type _check_ListCollection_getById_131 = IsExact<Ref_ListCollection_getById_131, Auth_ListCollection_getById_131>;
-type _assert_ListCollection_getById_131 = Expect<_check_ListCollection_getById_131>;
-
-type Ref_ListCollection_getFirst_132 = () => DocxEditor.List;
-type Auth_ListCollection_getFirst_132 = () => DocxEditor.List;
-type _check_ListCollection_getFirst_132 = IsExact<Ref_ListCollection_getFirst_132, Auth_ListCollection_getFirst_132>;
-type _assert_ListCollection_getFirst_132 = Expect<_check_ListCollection_getFirst_132>;
-
-type Ref_ListCollection_items_133 = () => DocxEditor.List[];
-type Auth_ListCollection_items_133 = () => DocxEditor.List[];
-type _check_ListCollection_items_133 = IsExact<Ref_ListCollection_items_133, Auth_ListCollection_items_133>;
-type _assert_ListCollection_items_133 = Expect<_check_ListCollection_items_133>;
-
-type Ref_ListCollection_items_readonly_134 = { readonly value: DocxEditor.List[] };
-type Auth_ListCollection_items_readonly_134 = { readonly value: DocxEditor.List[] };
-type _check_ListCollection_items_readonly_134 = IsExact<Ref_ListCollection_items_readonly_134, Auth_ListCollection_items_readonly_134>;
-type _assert_ListCollection_items_readonly_134 = Expect<_check_ListCollection_items_readonly_134>;
-
-type Ref_ListItem_level_135 = () => number;
-type Auth_ListItem_level_135 = () => number;
-type _check_ListItem_level_135 = IsExact<Ref_ListItem_level_135, Auth_ListItem_level_135>;
-type _assert_ListItem_level_135 = Expect<_check_ListItem_level_135>;
-
-type Ref_ListItem_level_readonly_136 = { value: number };
-type Auth_ListItem_level_readonly_136 = { value: number };
-type _check_ListItem_level_readonly_136 = IsExact<Ref_ListItem_level_readonly_136, Auth_ListItem_level_readonly_136>;
-type _assert_ListItem_level_readonly_136 = Expect<_check_ListItem_level_readonly_136>;
-
-type Ref_NoteItem_body_137 = () => DocxEditor.Body;
-type Auth_NoteItem_body_137 = () => DocxEditor.Body;
-type _check_NoteItem_body_137 = IsExact<Ref_NoteItem_body_137, Auth_NoteItem_body_137>;
-type _assert_NoteItem_body_137 = Expect<_check_NoteItem_body_137>;
-
-type Ref_NoteItem_body_readonly_138 = { readonly value: DocxEditor.Body };
-type Auth_NoteItem_body_readonly_138 = { readonly value: DocxEditor.Body };
-type _check_NoteItem_body_readonly_138 = IsExact<Ref_NoteItem_body_readonly_138, Auth_NoteItem_body_readonly_138>;
-type _assert_NoteItem_body_readonly_138 = Expect<_check_NoteItem_body_readonly_138>;
-
-type Ref_NoteItem_delete_139 = () => void;
-type Auth_NoteItem_delete_139 = () => void;
-type _check_NoteItem_delete_139 = IsExact<Ref_NoteItem_delete_139, Auth_NoteItem_delete_139>;
-type _assert_NoteItem_delete_139 = Expect<_check_NoteItem_delete_139>;
-
-type Ref_NoteItem_getNext_140 = () => DocxEditor.NoteItem;
-type Auth_NoteItem_getNext_140 = () => DocxEditor.NoteItem;
-type _check_NoteItem_getNext_140 = IsExact<Ref_NoteItem_getNext_140, Auth_NoteItem_getNext_140>;
-type _assert_NoteItem_getNext_140 = Expect<_check_NoteItem_getNext_140>;
-
-type Ref_NoteItem_type_141 = () => "Footnote" | "Endnote";
-type Auth_NoteItem_type_141 = () => "Footnote" | "Endnote";
-type _check_NoteItem_type_141 = IsExact<Ref_NoteItem_type_141, Auth_NoteItem_type_141>;
-type _assert_NoteItem_type_141 = Expect<_check_NoteItem_type_141>;
-
-type Ref_NoteItem_type_readonly_142 = { readonly value: "Footnote" | "Endnote" };
-type Auth_NoteItem_type_readonly_142 = { readonly value: "Footnote" | "Endnote" };
-type _check_NoteItem_type_readonly_142 = IsExact<Ref_NoteItem_type_readonly_142, Auth_NoteItem_type_readonly_142>;
-type _assert_NoteItem_type_readonly_142 = Expect<_check_NoteItem_type_readonly_142>;
-
-type Ref_NoteItemCollection_getFirst_143 = () => DocxEditor.NoteItem;
-type Auth_NoteItemCollection_getFirst_143 = () => DocxEditor.NoteItem;
-type _check_NoteItemCollection_getFirst_143 = IsExact<Ref_NoteItemCollection_getFirst_143, Auth_NoteItemCollection_getFirst_143>;
-type _assert_NoteItemCollection_getFirst_143 = Expect<_check_NoteItemCollection_getFirst_143>;
-
-type Ref_NoteItemCollection_items_144 = () => DocxEditor.NoteItem[];
-type Auth_NoteItemCollection_items_144 = () => DocxEditor.NoteItem[];
-type _check_NoteItemCollection_items_144 = IsExact<Ref_NoteItemCollection_items_144, Auth_NoteItemCollection_items_144>;
-type _assert_NoteItemCollection_items_144 = Expect<_check_NoteItemCollection_items_144>;
-
-type Ref_NoteItemCollection_items_readonly_145 = { readonly value: DocxEditor.NoteItem[] };
-type Auth_NoteItemCollection_items_readonly_145 = { readonly value: DocxEditor.NoteItem[] };
-type _check_NoteItemCollection_items_readonly_145 = IsExact<Ref_NoteItemCollection_items_readonly_145, Auth_NoteItemCollection_items_readonly_145>;
-type _assert_NoteItemCollection_items_readonly_145 = Expect<_check_NoteItemCollection_items_readonly_145>;
-
-type Ref_PageSetup_bottomMargin_146 = () => number;
-type Auth_PageSetup_bottomMargin_146 = () => number;
-type _check_PageSetup_bottomMargin_146 = IsExact<Ref_PageSetup_bottomMargin_146, Auth_PageSetup_bottomMargin_146>;
-type _assert_PageSetup_bottomMargin_146 = Expect<_check_PageSetup_bottomMargin_146>;
-
-type Ref_PageSetup_bottomMargin_readonly_147 = { value: number };
-type Auth_PageSetup_bottomMargin_readonly_147 = { value: number };
-type _check_PageSetup_bottomMargin_readonly_147 = IsExact<Ref_PageSetup_bottomMargin_readonly_147, Auth_PageSetup_bottomMargin_readonly_147>;
-type _assert_PageSetup_bottomMargin_readonly_147 = Expect<_check_PageSetup_bottomMargin_readonly_147>;
-
-type Ref_PageSetup_leftMargin_148 = () => number;
-type Auth_PageSetup_leftMargin_148 = () => number;
-type _check_PageSetup_leftMargin_148 = IsExact<Ref_PageSetup_leftMargin_148, Auth_PageSetup_leftMargin_148>;
-type _assert_PageSetup_leftMargin_148 = Expect<_check_PageSetup_leftMargin_148>;
-
-type Ref_PageSetup_leftMargin_readonly_149 = { value: number };
-type Auth_PageSetup_leftMargin_readonly_149 = { value: number };
-type _check_PageSetup_leftMargin_readonly_149 = IsExact<Ref_PageSetup_leftMargin_readonly_149, Auth_PageSetup_leftMargin_readonly_149>;
-type _assert_PageSetup_leftMargin_readonly_149 = Expect<_check_PageSetup_leftMargin_readonly_149>;
-
-type Ref_PageSetup_orientation_150 = () => "Portrait" | "Landscape";
-type Auth_PageSetup_orientation_150 = () => "Portrait" | "Landscape";
-type _check_PageSetup_orientation_150 = IsExact<Ref_PageSetup_orientation_150, Auth_PageSetup_orientation_150>;
-type _assert_PageSetup_orientation_150 = Expect<_check_PageSetup_orientation_150>;
-
-type Ref_PageSetup_orientation_readonly_151 = { value: "Portrait" | "Landscape" };
-type Auth_PageSetup_orientation_readonly_151 = { value: "Portrait" | "Landscape" };
-type _check_PageSetup_orientation_readonly_151 = IsExact<Ref_PageSetup_orientation_readonly_151, Auth_PageSetup_orientation_readonly_151>;
-type _assert_PageSetup_orientation_readonly_151 = Expect<_check_PageSetup_orientation_readonly_151>;
-
-type Ref_PageSetup_pageHeight_152 = () => number;
-type Auth_PageSetup_pageHeight_152 = () => number;
-type _check_PageSetup_pageHeight_152 = IsExact<Ref_PageSetup_pageHeight_152, Auth_PageSetup_pageHeight_152>;
-type _assert_PageSetup_pageHeight_152 = Expect<_check_PageSetup_pageHeight_152>;
-
-type Ref_PageSetup_pageHeight_readonly_153 = { value: number };
-type Auth_PageSetup_pageHeight_readonly_153 = { value: number };
-type _check_PageSetup_pageHeight_readonly_153 = IsExact<Ref_PageSetup_pageHeight_readonly_153, Auth_PageSetup_pageHeight_readonly_153>;
-type _assert_PageSetup_pageHeight_readonly_153 = Expect<_check_PageSetup_pageHeight_readonly_153>;
-
-type Ref_PageSetup_pageWidth_154 = () => number;
-type Auth_PageSetup_pageWidth_154 = () => number;
-type _check_PageSetup_pageWidth_154 = IsExact<Ref_PageSetup_pageWidth_154, Auth_PageSetup_pageWidth_154>;
-type _assert_PageSetup_pageWidth_154 = Expect<_check_PageSetup_pageWidth_154>;
-
-type Ref_PageSetup_pageWidth_readonly_155 = { value: number };
-type Auth_PageSetup_pageWidth_readonly_155 = { value: number };
-type _check_PageSetup_pageWidth_readonly_155 = IsExact<Ref_PageSetup_pageWidth_readonly_155, Auth_PageSetup_pageWidth_readonly_155>;
-type _assert_PageSetup_pageWidth_readonly_155 = Expect<_check_PageSetup_pageWidth_readonly_155>;
-
-type Ref_PageSetup_rightMargin_156 = () => number;
-type Auth_PageSetup_rightMargin_156 = () => number;
-type _check_PageSetup_rightMargin_156 = IsExact<Ref_PageSetup_rightMargin_156, Auth_PageSetup_rightMargin_156>;
-type _assert_PageSetup_rightMargin_156 = Expect<_check_PageSetup_rightMargin_156>;
-
-type Ref_PageSetup_rightMargin_readonly_157 = { value: number };
-type Auth_PageSetup_rightMargin_readonly_157 = { value: number };
-type _check_PageSetup_rightMargin_readonly_157 = IsExact<Ref_PageSetup_rightMargin_readonly_157, Auth_PageSetup_rightMargin_readonly_157>;
-type _assert_PageSetup_rightMargin_readonly_157 = Expect<_check_PageSetup_rightMargin_readonly_157>;
-
-type Ref_PageSetup_topMargin_158 = () => number;
-type Auth_PageSetup_topMargin_158 = () => number;
-type _check_PageSetup_topMargin_158 = IsExact<Ref_PageSetup_topMargin_158, Auth_PageSetup_topMargin_158>;
-type _assert_PageSetup_topMargin_158 = Expect<_check_PageSetup_topMargin_158>;
-
-type Ref_PageSetup_topMargin_readonly_159 = { value: number };
-type Auth_PageSetup_topMargin_readonly_159 = { value: number };
-type _check_PageSetup_topMargin_readonly_159 = IsExact<Ref_PageSetup_topMargin_readonly_159, Auth_PageSetup_topMargin_readonly_159>;
-type _assert_PageSetup_topMargin_readonly_159 = Expect<_check_PageSetup_topMargin_readonly_159>;
-
-type Ref_Paragraph_alignment_160 = () => "Mixed" | "Unknown" | "Left" | "Centered" | "Right" | "Justified";
-type Auth_Paragraph_alignment_160 = () => "Mixed" | "Unknown" | "Left" | "Centered" | "Right" | "Justified";
-type _check_Paragraph_alignment_160 = IsExact<Ref_Paragraph_alignment_160, Auth_Paragraph_alignment_160>;
-type _assert_Paragraph_alignment_160 = Expect<_check_Paragraph_alignment_160>;
-
-type Ref_Paragraph_alignment_readonly_161 = { value: "Mixed" | "Unknown" | "Left" | "Centered" | "Right" | "Justified" };
-type Auth_Paragraph_alignment_readonly_161 = { value: "Mixed" | "Unknown" | "Left" | "Centered" | "Right" | "Justified" };
-type _check_Paragraph_alignment_readonly_161 = IsExact<Ref_Paragraph_alignment_readonly_161, Auth_Paragraph_alignment_readonly_161>;
-type _assert_Paragraph_alignment_readonly_161 = Expect<_check_Paragraph_alignment_readonly_161>;
-
-type Ref_Paragraph_clear_162 = () => void;
-type Auth_Paragraph_clear_162 = () => void;
-type _check_Paragraph_clear_162 = IsExact<Ref_Paragraph_clear_162, Auth_Paragraph_clear_162>;
-type _assert_Paragraph_clear_162 = Expect<_check_Paragraph_clear_162>;
-
-type Ref_Paragraph_contentControls_163 = () => DocxEditor.ContentControlCollection;
-type Auth_Paragraph_contentControls_163 = () => DocxEditor.ContentControlCollection;
-type _check_Paragraph_contentControls_163 = IsExact<Ref_Paragraph_contentControls_163, Auth_Paragraph_contentControls_163>;
-type _assert_Paragraph_contentControls_163 = Expect<_check_Paragraph_contentControls_163>;
-
-type Ref_Paragraph_contentControls_readonly_164 = { readonly value: DocxEditor.ContentControlCollection };
-type Auth_Paragraph_contentControls_readonly_164 = { readonly value: DocxEditor.ContentControlCollection };
-type _check_Paragraph_contentControls_readonly_164 = IsExact<Ref_Paragraph_contentControls_readonly_164, Auth_Paragraph_contentControls_readonly_164>;
-type _assert_Paragraph_contentControls_readonly_164 = Expect<_check_Paragraph_contentControls_readonly_164>;
-
-type Ref_Paragraph_delete_165 = () => void;
-type Auth_Paragraph_delete_165 = () => void;
-type _check_Paragraph_delete_165 = IsExact<Ref_Paragraph_delete_165, Auth_Paragraph_delete_165>;
-type _assert_Paragraph_delete_165 = Expect<_check_Paragraph_delete_165>;
-
-type Ref_Paragraph_firstLineIndent_166 = () => number;
-type Auth_Paragraph_firstLineIndent_166 = () => number;
-type _check_Paragraph_firstLineIndent_166 = IsExact<Ref_Paragraph_firstLineIndent_166, Auth_Paragraph_firstLineIndent_166>;
-type _assert_Paragraph_firstLineIndent_166 = Expect<_check_Paragraph_firstLineIndent_166>;
-
-type Ref_Paragraph_firstLineIndent_readonly_167 = { value: number };
-type Auth_Paragraph_firstLineIndent_readonly_167 = { value: number };
-type _check_Paragraph_firstLineIndent_readonly_167 = IsExact<Ref_Paragraph_firstLineIndent_readonly_167, Auth_Paragraph_firstLineIndent_readonly_167>;
-type _assert_Paragraph_firstLineIndent_readonly_167 = Expect<_check_Paragraph_firstLineIndent_readonly_167>;
-
-type Ref_Paragraph_font_168 = () => DocxEditor.Font;
-type Auth_Paragraph_font_168 = () => DocxEditor.Font;
-type _check_Paragraph_font_168 = IsExact<Ref_Paragraph_font_168, Auth_Paragraph_font_168>;
-type _assert_Paragraph_font_168 = Expect<_check_Paragraph_font_168>;
-
-type Ref_Paragraph_font_readonly_169 = { readonly value: DocxEditor.Font };
-type Auth_Paragraph_font_readonly_169 = { readonly value: DocxEditor.Font };
-type _check_Paragraph_font_readonly_169 = IsExact<Ref_Paragraph_font_readonly_169, Auth_Paragraph_font_readonly_169>;
-type _assert_Paragraph_font_readonly_169 = Expect<_check_Paragraph_font_readonly_169>;
-
-type Ref_Paragraph_getReviewedText_170 = (changeTrackingVersion?: DocxEditor.ChangeTrackingVersion) => DocxEditor.ClientResult<string>;
-type Auth_Paragraph_getReviewedText_170 = (changeTrackingVersion?: DocxEditor.ChangeTrackingVersion) => DocxEditor.ClientResult<string>;
-type _check_Paragraph_getReviewedText_170 = IsExact<Ref_Paragraph_getReviewedText_170, Auth_Paragraph_getReviewedText_170>;
-type _assert_Paragraph_getReviewedText_170 = Expect<_check_Paragraph_getReviewedText_170>;
-
-type Ref_Paragraph_getReviewedText_171 = (changeTrackingVersion?: "Original" | "Current") => DocxEditor.ClientResult<string>;
-type Auth_Paragraph_getReviewedText_171 = (changeTrackingVersion?: "Original" | "Current") => DocxEditor.ClientResult<string>;
-type _check_Paragraph_getReviewedText_171 = IsExact<Ref_Paragraph_getReviewedText_171, Auth_Paragraph_getReviewedText_171>;
-type _assert_Paragraph_getReviewedText_171 = Expect<_check_Paragraph_getReviewedText_171>;
-
-type Ref_Paragraph_getTextRanges_172 = (endingMarks: string[], trimSpacing?: boolean) => DocxEditor.RangeCollection;
-type Auth_Paragraph_getTextRanges_172 = (endingMarks: string[], trimSpacing?: boolean) => DocxEditor.RangeCollection;
-type _check_Paragraph_getTextRanges_172 = IsExact<Ref_Paragraph_getTextRanges_172, Auth_Paragraph_getTextRanges_172>;
-type _assert_Paragraph_getTextRanges_172 = Expect<_check_Paragraph_getTextRanges_172>;
-
-type Ref_Paragraph_insertParagraph_173 = (paragraphText: string, insertLocation: "Before" | "After") => DocxEditor.Paragraph;
-type Auth_Paragraph_insertParagraph_173 = (paragraphText: string, insertLocation: "Before" | "After") => DocxEditor.Paragraph;
-type _check_Paragraph_insertParagraph_173 = IsExact<Ref_Paragraph_insertParagraph_173, Auth_Paragraph_insertParagraph_173>;
-type _assert_Paragraph_insertParagraph_173 = Expect<_check_Paragraph_insertParagraph_173>;
-
-type Ref_Paragraph_insertText_174 = (text: string, insertLocation: "Replace" | "Start" | "End") => DocxEditor.Range;
-type Auth_Paragraph_insertText_174 = (text: string, insertLocation: "Replace" | "Start" | "End") => DocxEditor.Range;
-type _check_Paragraph_insertText_174 = IsExact<Ref_Paragraph_insertText_174, Auth_Paragraph_insertText_174>;
-type _assert_Paragraph_insertText_174 = Expect<_check_Paragraph_insertText_174>;
-
-type Ref_Paragraph_leftIndent_175 = () => number;
-type Auth_Paragraph_leftIndent_175 = () => number;
-type _check_Paragraph_leftIndent_175 = IsExact<Ref_Paragraph_leftIndent_175, Auth_Paragraph_leftIndent_175>;
-type _assert_Paragraph_leftIndent_175 = Expect<_check_Paragraph_leftIndent_175>;
-
-type Ref_Paragraph_leftIndent_readonly_176 = { value: number };
-type Auth_Paragraph_leftIndent_readonly_176 = { value: number };
-type _check_Paragraph_leftIndent_readonly_176 = IsExact<Ref_Paragraph_leftIndent_readonly_176, Auth_Paragraph_leftIndent_readonly_176>;
-type _assert_Paragraph_leftIndent_readonly_176 = Expect<_check_Paragraph_leftIndent_readonly_176>;
-
-type Ref_Paragraph_lineSpacing_177 = () => number;
-type Auth_Paragraph_lineSpacing_177 = () => number;
-type _check_Paragraph_lineSpacing_177 = IsExact<Ref_Paragraph_lineSpacing_177, Auth_Paragraph_lineSpacing_177>;
-type _assert_Paragraph_lineSpacing_177 = Expect<_check_Paragraph_lineSpacing_177>;
-
-type Ref_Paragraph_lineSpacing_readonly_178 = { value: number };
-type Auth_Paragraph_lineSpacing_readonly_178 = { value: number };
-type _check_Paragraph_lineSpacing_readonly_178 = IsExact<Ref_Paragraph_lineSpacing_readonly_178, Auth_Paragraph_lineSpacing_readonly_178>;
-type _assert_Paragraph_lineSpacing_readonly_178 = Expect<_check_Paragraph_lineSpacing_readonly_178>;
-
-type Ref_Paragraph_list_179 = () => DocxEditor.List;
-type Auth_Paragraph_list_179 = () => DocxEditor.List;
-type _check_Paragraph_list_179 = IsExact<Ref_Paragraph_list_179, Auth_Paragraph_list_179>;
-type _assert_Paragraph_list_179 = Expect<_check_Paragraph_list_179>;
-
-type Ref_Paragraph_list_readonly_180 = { readonly value: DocxEditor.List };
-type Auth_Paragraph_list_readonly_180 = { readonly value: DocxEditor.List };
-type _check_Paragraph_list_readonly_180 = IsExact<Ref_Paragraph_list_readonly_180, Auth_Paragraph_list_readonly_180>;
-type _assert_Paragraph_list_readonly_180 = Expect<_check_Paragraph_list_readonly_180>;
-
-type Ref_Paragraph_listItem_181 = () => DocxEditor.ListItem;
-type Auth_Paragraph_listItem_181 = () => DocxEditor.ListItem;
-type _check_Paragraph_listItem_181 = IsExact<Ref_Paragraph_listItem_181, Auth_Paragraph_listItem_181>;
-type _assert_Paragraph_listItem_181 = Expect<_check_Paragraph_listItem_181>;
-
-type Ref_Paragraph_listItem_readonly_182 = { readonly value: DocxEditor.ListItem };
-type Auth_Paragraph_listItem_readonly_182 = { readonly value: DocxEditor.ListItem };
-type _check_Paragraph_listItem_readonly_182 = IsExact<Ref_Paragraph_listItem_readonly_182, Auth_Paragraph_listItem_readonly_182>;
-type _assert_Paragraph_listItem_readonly_182 = Expect<_check_Paragraph_listItem_readonly_182>;
-
-type Ref_Paragraph_rightIndent_183 = () => number;
-type Auth_Paragraph_rightIndent_183 = () => number;
-type _check_Paragraph_rightIndent_183 = IsExact<Ref_Paragraph_rightIndent_183, Auth_Paragraph_rightIndent_183>;
-type _assert_Paragraph_rightIndent_183 = Expect<_check_Paragraph_rightIndent_183>;
-
-type Ref_Paragraph_rightIndent_readonly_184 = { value: number };
-type Auth_Paragraph_rightIndent_readonly_184 = { value: number };
-type _check_Paragraph_rightIndent_readonly_184 = IsExact<Ref_Paragraph_rightIndent_readonly_184, Auth_Paragraph_rightIndent_readonly_184>;
-type _assert_Paragraph_rightIndent_readonly_184 = Expect<_check_Paragraph_rightIndent_readonly_184>;
-
-type Ref_Paragraph_search_185 = (searchText: string, searchOptions?: DocxEditor.SearchOptions) => DocxEditor.RangeCollection;
-type Auth_Paragraph_search_185 = (searchText: string, searchOptions?: DocxEditor.SearchOptions) => DocxEditor.RangeCollection;
-type _check_Paragraph_search_185 = IsExact<Ref_Paragraph_search_185, Auth_Paragraph_search_185>;
-type _assert_Paragraph_search_185 = Expect<_check_Paragraph_search_185>;
-
-type Ref_Paragraph_spaceAfter_186 = () => number;
-type Auth_Paragraph_spaceAfter_186 = () => number;
-type _check_Paragraph_spaceAfter_186 = IsExact<Ref_Paragraph_spaceAfter_186, Auth_Paragraph_spaceAfter_186>;
-type _assert_Paragraph_spaceAfter_186 = Expect<_check_Paragraph_spaceAfter_186>;
-
-type Ref_Paragraph_spaceAfter_readonly_187 = { value: number };
-type Auth_Paragraph_spaceAfter_readonly_187 = { value: number };
-type _check_Paragraph_spaceAfter_readonly_187 = IsExact<Ref_Paragraph_spaceAfter_readonly_187, Auth_Paragraph_spaceAfter_readonly_187>;
-type _assert_Paragraph_spaceAfter_readonly_187 = Expect<_check_Paragraph_spaceAfter_readonly_187>;
-
-type Ref_Paragraph_spaceBefore_188 = () => number;
-type Auth_Paragraph_spaceBefore_188 = () => number;
-type _check_Paragraph_spaceBefore_188 = IsExact<Ref_Paragraph_spaceBefore_188, Auth_Paragraph_spaceBefore_188>;
-type _assert_Paragraph_spaceBefore_188 = Expect<_check_Paragraph_spaceBefore_188>;
-
-type Ref_Paragraph_spaceBefore_readonly_189 = { value: number };
-type Auth_Paragraph_spaceBefore_readonly_189 = { value: number };
-type _check_Paragraph_spaceBefore_readonly_189 = IsExact<Ref_Paragraph_spaceBefore_readonly_189, Auth_Paragraph_spaceBefore_readonly_189>;
-type _assert_Paragraph_spaceBefore_readonly_189 = Expect<_check_Paragraph_spaceBefore_readonly_189>;
-
-type Ref_Paragraph_split_190 = (delimiters: string[], trimDelimiters?: boolean, trimSpacing?: boolean) => DocxEditor.RangeCollection;
-type Auth_Paragraph_split_190 = (delimiters: string[], trimDelimiters?: boolean, trimSpacing?: boolean) => DocxEditor.RangeCollection;
-type _check_Paragraph_split_190 = IsExact<Ref_Paragraph_split_190, Auth_Paragraph_split_190>;
-type _assert_Paragraph_split_190 = Expect<_check_Paragraph_split_190>;
-
-type Ref_Paragraph_style_191 = () => string;
-type Auth_Paragraph_style_191 = () => string;
-type _check_Paragraph_style_191 = IsExact<Ref_Paragraph_style_191, Auth_Paragraph_style_191>;
-type _assert_Paragraph_style_191 = Expect<_check_Paragraph_style_191>;
-
-type Ref_Paragraph_style_readonly_192 = { value: string };
-type Auth_Paragraph_style_readonly_192 = { value: string };
-type _check_Paragraph_style_readonly_192 = IsExact<Ref_Paragraph_style_readonly_192, Auth_Paragraph_style_readonly_192>;
-type _assert_Paragraph_style_readonly_192 = Expect<_check_Paragraph_style_readonly_192>;
-
-type Ref_Paragraph_text_193 = () => string;
-type Auth_Paragraph_text_193 = () => string;
-type _check_Paragraph_text_193 = IsExact<Ref_Paragraph_text_193, Auth_Paragraph_text_193>;
-type _assert_Paragraph_text_193 = Expect<_check_Paragraph_text_193>;
-
-type Ref_Paragraph_text_readonly_194 = { readonly value: string };
-type Auth_Paragraph_text_readonly_194 = { readonly value: string };
-type _check_Paragraph_text_readonly_194 = IsExact<Ref_Paragraph_text_readonly_194, Auth_Paragraph_text_readonly_194>;
-type _assert_Paragraph_text_readonly_194 = Expect<_check_Paragraph_text_readonly_194>;
-
-type Ref_ParagraphCollection_getFirst_195 = () => DocxEditor.Paragraph;
-type Auth_ParagraphCollection_getFirst_195 = () => DocxEditor.Paragraph;
-type _check_ParagraphCollection_getFirst_195 = IsExact<Ref_ParagraphCollection_getFirst_195, Auth_ParagraphCollection_getFirst_195>;
-type _assert_ParagraphCollection_getFirst_195 = Expect<_check_ParagraphCollection_getFirst_195>;
-
-type Ref_ParagraphCollection_getLast_196 = () => DocxEditor.Paragraph;
-type Auth_ParagraphCollection_getLast_196 = () => DocxEditor.Paragraph;
-type _check_ParagraphCollection_getLast_196 = IsExact<Ref_ParagraphCollection_getLast_196, Auth_ParagraphCollection_getLast_196>;
-type _assert_ParagraphCollection_getLast_196 = Expect<_check_ParagraphCollection_getLast_196>;
-
-type Ref_ParagraphCollection_items_197 = () => DocxEditor.Paragraph[];
-type Auth_ParagraphCollection_items_197 = () => DocxEditor.Paragraph[];
-type _check_ParagraphCollection_items_197 = IsExact<Ref_ParagraphCollection_items_197, Auth_ParagraphCollection_items_197>;
-type _assert_ParagraphCollection_items_197 = Expect<_check_ParagraphCollection_items_197>;
-
-type Ref_ParagraphCollection_items_readonly_198 = { readonly value: DocxEditor.Paragraph[] };
-type Auth_ParagraphCollection_items_readonly_198 = { readonly value: DocxEditor.Paragraph[] };
-type _check_ParagraphCollection_items_readonly_198 = IsExact<Ref_ParagraphCollection_items_readonly_198, Auth_ParagraphCollection_items_readonly_198>;
-type _assert_ParagraphCollection_items_readonly_198 = Expect<_check_ParagraphCollection_items_readonly_198>;
-
-type Ref_Range_bookmarks_199 = () => DocxEditor.BookmarkCollection;
-type Auth_Range_bookmarks_199 = () => DocxEditor.BookmarkCollection;
-type _check_Range_bookmarks_199 = IsExact<Ref_Range_bookmarks_199, Auth_Range_bookmarks_199>;
-type _assert_Range_bookmarks_199 = Expect<_check_Range_bookmarks_199>;
-
-type Ref_Range_bookmarks_readonly_200 = { readonly value: DocxEditor.BookmarkCollection };
-type Auth_Range_bookmarks_readonly_200 = { readonly value: DocxEditor.BookmarkCollection };
-type _check_Range_bookmarks_readonly_200 = IsExact<Ref_Range_bookmarks_readonly_200, Auth_Range_bookmarks_readonly_200>;
-type _assert_Range_bookmarks_readonly_200 = Expect<_check_Range_bookmarks_readonly_200>;
-
-type Ref_Range_clear_201 = () => void;
-type Auth_Range_clear_201 = () => void;
-type _check_Range_clear_201 = IsExact<Ref_Range_clear_201, Auth_Range_clear_201>;
-type _assert_Range_clear_201 = Expect<_check_Range_clear_201>;
-
-type Ref_Range_contentControls_202 = () => DocxEditor.ContentControlCollection;
-type Auth_Range_contentControls_202 = () => DocxEditor.ContentControlCollection;
-type _check_Range_contentControls_202 = IsExact<Ref_Range_contentControls_202, Auth_Range_contentControls_202>;
-type _assert_Range_contentControls_202 = Expect<_check_Range_contentControls_202>;
-
-type Ref_Range_contentControls_readonly_203 = { readonly value: DocxEditor.ContentControlCollection };
-type Auth_Range_contentControls_readonly_203 = { readonly value: DocxEditor.ContentControlCollection };
-type _check_Range_contentControls_readonly_203 = IsExact<Ref_Range_contentControls_readonly_203, Auth_Range_contentControls_readonly_203>;
-type _assert_Range_contentControls_readonly_203 = Expect<_check_Range_contentControls_readonly_203>;
-
-type Ref_Range_delete_204 = () => void;
-type Auth_Range_delete_204 = () => void;
-type _check_Range_delete_204 = IsExact<Ref_Range_delete_204, Auth_Range_delete_204>;
-type _assert_Range_delete_204 = Expect<_check_Range_delete_204>;
-
-type Ref_Range_expandTo_205 = (range: DocxEditor.Range) => DocxEditor.Range;
-type Auth_Range_expandTo_205 = (range: DocxEditor.Range) => DocxEditor.Range;
-type _check_Range_expandTo_205 = IsExact<Ref_Range_expandTo_205, Auth_Range_expandTo_205>;
-type _assert_Range_expandTo_205 = Expect<_check_Range_expandTo_205>;
-
-type Ref_Range_font_206 = () => DocxEditor.Font;
-type Auth_Range_font_206 = () => DocxEditor.Font;
-type _check_Range_font_206 = IsExact<Ref_Range_font_206, Auth_Range_font_206>;
-type _assert_Range_font_206 = Expect<_check_Range_font_206>;
-
-type Ref_Range_font_readonly_207 = { readonly value: DocxEditor.Font };
-type Auth_Range_font_readonly_207 = { readonly value: DocxEditor.Font };
-type _check_Range_font_readonly_207 = IsExact<Ref_Range_font_readonly_207, Auth_Range_font_readonly_207>;
-type _assert_Range_font_readonly_207 = Expect<_check_Range_font_readonly_207>;
-
-type Ref_Range_getBookmarks_208 = (includeHidden?: boolean, includeAdjacent?: boolean) => DocxEditor.ClientResult<string[]>;
-type Auth_Range_getBookmarks_208 = (includeHidden?: boolean, includeAdjacent?: boolean) => DocxEditor.ClientResult<string[]>;
-type _check_Range_getBookmarks_208 = IsExact<Ref_Range_getBookmarks_208, Auth_Range_getBookmarks_208>;
-type _assert_Range_getBookmarks_208 = Expect<_check_Range_getBookmarks_208>;
-
-type Ref_Range_getRange_209 = (rangeLocation?: "Whole" | "Start" | "End" | "After" | "Content") => DocxEditor.Range;
-type Auth_Range_getRange_209 = (rangeLocation?: "Whole" | "Start" | "End" | "After" | "Content") => DocxEditor.Range;
-type _check_Range_getRange_209 = IsExact<Ref_Range_getRange_209, Auth_Range_getRange_209>;
-type _assert_Range_getRange_209 = Expect<_check_Range_getRange_209>;
-
-type Ref_Range_getReviewedText_210 = (changeTrackingVersion?: DocxEditor.ChangeTrackingVersion) => DocxEditor.ClientResult<string>;
-type Auth_Range_getReviewedText_210 = (changeTrackingVersion?: DocxEditor.ChangeTrackingVersion) => DocxEditor.ClientResult<string>;
-type _check_Range_getReviewedText_210 = IsExact<Ref_Range_getReviewedText_210, Auth_Range_getReviewedText_210>;
-type _assert_Range_getReviewedText_210 = Expect<_check_Range_getReviewedText_210>;
-
-type Ref_Range_getReviewedText_211 = (changeTrackingVersion?: "Original" | "Current") => DocxEditor.ClientResult<string>;
-type Auth_Range_getReviewedText_211 = (changeTrackingVersion?: "Original" | "Current") => DocxEditor.ClientResult<string>;
-type _check_Range_getReviewedText_211 = IsExact<Ref_Range_getReviewedText_211, Auth_Range_getReviewedText_211>;
-type _assert_Range_getReviewedText_211 = Expect<_check_Range_getReviewedText_211>;
-
-type Ref_Range_getTextRanges_212 = (endingMarks: string[], trimSpacing?: boolean) => DocxEditor.RangeCollection;
-type Auth_Range_getTextRanges_212 = (endingMarks: string[], trimSpacing?: boolean) => DocxEditor.RangeCollection;
-type _check_Range_getTextRanges_212 = IsExact<Ref_Range_getTextRanges_212, Auth_Range_getTextRanges_212>;
-type _assert_Range_getTextRanges_212 = Expect<_check_Range_getTextRanges_212>;
-
-type Ref_Range_hyperlink_213 = () => string;
-type Auth_Range_hyperlink_213 = () => string;
-type _check_Range_hyperlink_213 = IsExact<Ref_Range_hyperlink_213, Auth_Range_hyperlink_213>;
-type _assert_Range_hyperlink_213 = Expect<_check_Range_hyperlink_213>;
-
-type Ref_Range_hyperlink_readonly_214 = { value: string };
-type Auth_Range_hyperlink_readonly_214 = { value: string };
-type _check_Range_hyperlink_readonly_214 = IsExact<Ref_Range_hyperlink_readonly_214, Auth_Range_hyperlink_readonly_214>;
-type _assert_Range_hyperlink_readonly_214 = Expect<_check_Range_hyperlink_readonly_214>;
-
-type Ref_Range_insertBookmark_215 = (name: string) => void;
-type Auth_Range_insertBookmark_215 = (name: string) => void;
-type _check_Range_insertBookmark_215 = IsExact<Ref_Range_insertBookmark_215, Auth_Range_insertBookmark_215>;
-type _assert_Range_insertBookmark_215 = Expect<_check_Range_insertBookmark_215>;
-
-type Ref_Range_insertComment_216 = (commentText: string) => DocxEditor.Comment;
-type Auth_Range_insertComment_216 = (commentText: string) => DocxEditor.Comment;
-type _check_Range_insertComment_216 = IsExact<Ref_Range_insertComment_216, Auth_Range_insertComment_216>;
-type _assert_Range_insertComment_216 = Expect<_check_Range_insertComment_216>;
-
-type Ref_Range_insertParagraph_217 = (paragraphText: string, insertLocation: "Before" | "After") => DocxEditor.Paragraph;
-type Auth_Range_insertParagraph_217 = (paragraphText: string, insertLocation: "Before" | "After") => DocxEditor.Paragraph;
-type _check_Range_insertParagraph_217 = IsExact<Ref_Range_insertParagraph_217, Auth_Range_insertParagraph_217>;
-type _assert_Range_insertParagraph_217 = Expect<_check_Range_insertParagraph_217>;
-
-type Ref_Range_insertText_218 = (text: string, insertLocation: "Replace" | "Start" | "End" | "Before" | "After") => DocxEditor.Range;
-type Auth_Range_insertText_218 = (text: string, insertLocation: "Replace" | "Start" | "End" | "Before" | "After") => DocxEditor.Range;
-type _check_Range_insertText_218 = IsExact<Ref_Range_insertText_218, Auth_Range_insertText_218>;
-type _assert_Range_insertText_218 = Expect<_check_Range_insertText_218>;
-
-type Ref_Range_paragraphs_219 = () => DocxEditor.ParagraphCollection;
-type Auth_Range_paragraphs_219 = () => DocxEditor.ParagraphCollection;
-type _check_Range_paragraphs_219 = IsExact<Ref_Range_paragraphs_219, Auth_Range_paragraphs_219>;
-type _assert_Range_paragraphs_219 = Expect<_check_Range_paragraphs_219>;
-
-type Ref_Range_paragraphs_readonly_220 = { readonly value: DocxEditor.ParagraphCollection };
-type Auth_Range_paragraphs_readonly_220 = { readonly value: DocxEditor.ParagraphCollection };
-type _check_Range_paragraphs_readonly_220 = IsExact<Ref_Range_paragraphs_readonly_220, Auth_Range_paragraphs_readonly_220>;
-type _assert_Range_paragraphs_readonly_220 = Expect<_check_Range_paragraphs_readonly_220>;
-
-type Ref_Range_revisions_221 = () => DocxEditor.RevisionCollection;
-type Auth_Range_revisions_221 = () => DocxEditor.RevisionCollection;
-type _check_Range_revisions_221 = IsExact<Ref_Range_revisions_221, Auth_Range_revisions_221>;
-type _assert_Range_revisions_221 = Expect<_check_Range_revisions_221>;
-
-type Ref_Range_revisions_readonly_222 = { readonly value: DocxEditor.RevisionCollection };
-type Auth_Range_revisions_readonly_222 = { readonly value: DocxEditor.RevisionCollection };
-type _check_Range_revisions_readonly_222 = IsExact<Ref_Range_revisions_readonly_222, Auth_Range_revisions_readonly_222>;
-type _assert_Range_revisions_readonly_222 = Expect<_check_Range_revisions_readonly_222>;
-
-type Ref_Range_search_223 = (searchText: string, searchOptions?: DocxEditor.SearchOptions) => DocxEditor.RangeCollection;
-type Auth_Range_search_223 = (searchText: string, searchOptions?: DocxEditor.SearchOptions) => DocxEditor.RangeCollection;
-type _check_Range_search_223 = IsExact<Ref_Range_search_223, Auth_Range_search_223>;
-type _assert_Range_search_223 = Expect<_check_Range_search_223>;
-
-type Ref_Range_select_224 = (selectionMode?: DocxEditor.SelectionMode) => void;
-type Auth_Range_select_224 = (selectionMode?: DocxEditor.SelectionMode) => void;
-type _check_Range_select_224 = IsExact<Ref_Range_select_224, Auth_Range_select_224>;
-type _assert_Range_select_224 = Expect<_check_Range_select_224>;
-
-type Ref_Range_select_225 = (selectionMode?: "Select" | "Start" | "End") => void;
-type Auth_Range_select_225 = (selectionMode?: "Select" | "Start" | "End") => void;
-type _check_Range_select_225 = IsExact<Ref_Range_select_225, Auth_Range_select_225>;
-type _assert_Range_select_225 = Expect<_check_Range_select_225>;
-
-type Ref_Range_style_226 = () => string;
-type Auth_Range_style_226 = () => string;
-type _check_Range_style_226 = IsExact<Ref_Range_style_226, Auth_Range_style_226>;
-type _assert_Range_style_226 = Expect<_check_Range_style_226>;
-
-type Ref_Range_style_readonly_227 = { value: string };
-type Auth_Range_style_readonly_227 = { value: string };
-type _check_Range_style_readonly_227 = IsExact<Ref_Range_style_readonly_227, Auth_Range_style_readonly_227>;
-type _assert_Range_style_readonly_227 = Expect<_check_Range_style_readonly_227>;
-
-type Ref_Range_text_228 = () => string;
-type Auth_Range_text_228 = () => string;
-type _check_Range_text_228 = IsExact<Ref_Range_text_228, Auth_Range_text_228>;
-type _assert_Range_text_228 = Expect<_check_Range_text_228>;
-
-type Ref_Range_text_readonly_229 = { readonly value: string };
-type Auth_Range_text_readonly_229 = { readonly value: string };
-type _check_Range_text_readonly_229 = IsExact<Ref_Range_text_readonly_229, Auth_Range_text_readonly_229>;
-type _assert_Range_text_readonly_229 = Expect<_check_Range_text_readonly_229>;
-
-type Ref_RangeCollection_getFirst_230 = () => DocxEditor.Range;
-type Auth_RangeCollection_getFirst_230 = () => DocxEditor.Range;
-type _check_RangeCollection_getFirst_230 = IsExact<Ref_RangeCollection_getFirst_230, Auth_RangeCollection_getFirst_230>;
-type _assert_RangeCollection_getFirst_230 = Expect<_check_RangeCollection_getFirst_230>;
-
-type Ref_RangeCollection_items_231 = () => DocxEditor.Range[];
-type Auth_RangeCollection_items_231 = () => DocxEditor.Range[];
-type _check_RangeCollection_items_231 = IsExact<Ref_RangeCollection_items_231, Auth_RangeCollection_items_231>;
-type _assert_RangeCollection_items_231 = Expect<_check_RangeCollection_items_231>;
-
-type Ref_RangeCollection_items_readonly_232 = { readonly value: DocxEditor.Range[] };
-type Auth_RangeCollection_items_readonly_232 = { readonly value: DocxEditor.Range[] };
-type _check_RangeCollection_items_readonly_232 = IsExact<Ref_RangeCollection_items_readonly_232, Auth_RangeCollection_items_readonly_232>;
-type _assert_RangeCollection_items_readonly_232 = Expect<_check_RangeCollection_items_readonly_232>;
-
-type Ref_RequestContext_document_233 = () => DocxEditor.Document;
-type Auth_RequestContext_document_233 = () => DocxEditor.Document;
-type _check_RequestContext_document_233 = IsExact<Ref_RequestContext_document_233, Auth_RequestContext_document_233>;
-type _assert_RequestContext_document_233 = Expect<_check_RequestContext_document_233>;
-
-type Ref_RequestContext_document_readonly_234 = { readonly value: DocxEditor.Document };
-type Auth_RequestContext_document_readonly_234 = { readonly value: DocxEditor.Document };
-type _check_RequestContext_document_readonly_234 = IsExact<Ref_RequestContext_document_readonly_234, Auth_RequestContext_document_readonly_234>;
-type _assert_RequestContext_document_readonly_234 = Expect<_check_RequestContext_document_readonly_234>;
-
-type Ref_Revision_accept_235 = () => void;
-type Auth_Revision_accept_235 = () => void;
-type _check_Revision_accept_235 = IsExact<Ref_Revision_accept_235, Auth_Revision_accept_235>;
-type _assert_Revision_accept_235 = Expect<_check_Revision_accept_235>;
-
-type Ref_Revision_author_236 = () => string;
-type Auth_Revision_author_236 = () => string;
-type _check_Revision_author_236 = IsExact<Ref_Revision_author_236, Auth_Revision_author_236>;
-type _assert_Revision_author_236 = Expect<_check_Revision_author_236>;
-
-type Ref_Revision_author_readonly_237 = { readonly value: string };
-type Auth_Revision_author_readonly_237 = { readonly value: string };
-type _check_Revision_author_readonly_237 = IsExact<Ref_Revision_author_readonly_237, Auth_Revision_author_readonly_237>;
-type _assert_Revision_author_readonly_237 = Expect<_check_Revision_author_readonly_237>;
-
-type Ref_Revision_date_238 = () => Date;
-type Auth_Revision_date_238 = () => Date;
-type _check_Revision_date_238 = IsExact<Ref_Revision_date_238, Auth_Revision_date_238>;
-type _assert_Revision_date_238 = Expect<_check_Revision_date_238>;
-
-type Ref_Revision_date_readonly_239 = { readonly value: Date };
-type Auth_Revision_date_readonly_239 = { readonly value: Date };
-type _check_Revision_date_readonly_239 = IsExact<Ref_Revision_date_readonly_239, Auth_Revision_date_readonly_239>;
-type _assert_Revision_date_readonly_239 = Expect<_check_Revision_date_readonly_239>;
-
-type Ref_Revision_range_240 = () => DocxEditor.Range;
-type Auth_Revision_range_240 = () => DocxEditor.Range;
-type _check_Revision_range_240 = IsExact<Ref_Revision_range_240, Auth_Revision_range_240>;
-type _assert_Revision_range_240 = Expect<_check_Revision_range_240>;
-
-type Ref_Revision_range_readonly_241 = { readonly value: DocxEditor.Range };
-type Auth_Revision_range_readonly_241 = { readonly value: DocxEditor.Range };
-type _check_Revision_range_readonly_241 = IsExact<Ref_Revision_range_readonly_241, Auth_Revision_range_readonly_241>;
-type _assert_Revision_range_readonly_241 = Expect<_check_Revision_range_readonly_241>;
-
-type Ref_Revision_reject_242 = () => void;
-type Auth_Revision_reject_242 = () => void;
-type _check_Revision_reject_242 = IsExact<Ref_Revision_reject_242, Auth_Revision_reject_242>;
-type _assert_Revision_reject_242 = Expect<_check_Revision_reject_242>;
-
-type Ref_Revision_type_243 = () => "None" | "Insert" | "Delete" | "Property" | "ParagraphNumber" | "DisplayField" | "Reconcile" | "Conflict" | "Style" | "Replace" | "ParagraphProperty" | "TableProperty" | "SectionProperty" | "StyleDefinition" | "MovedFrom" | "MovedTo" | "CellInsertion" | "CellDeletion" | "CellMerge" | "CellSplit" | "ConflictInsert" | "ConflictDelete";
-type Auth_Revision_type_243 = () => "None" | "Insert" | "Delete" | "Property" | "ParagraphNumber" | "DisplayField" | "Reconcile" | "Conflict" | "Style" | "Replace" | "ParagraphProperty" | "TableProperty" | "SectionProperty" | "StyleDefinition" | "MovedFrom" | "MovedTo" | "CellInsertion" | "CellDeletion" | "CellMerge" | "CellSplit" | "ConflictInsert" | "ConflictDelete";
-type _check_Revision_type_243 = IsExact<Ref_Revision_type_243, Auth_Revision_type_243>;
-type _assert_Revision_type_243 = Expect<_check_Revision_type_243>;
-
-type Ref_Revision_type_readonly_244 = { readonly value: "None" | "Insert" | "Delete" | "Property" | "ParagraphNumber" | "DisplayField" | "Reconcile" | "Conflict" | "Style" | "Replace" | "ParagraphProperty" | "TableProperty" | "SectionProperty" | "StyleDefinition" | "MovedFrom" | "MovedTo" | "CellInsertion" | "CellDeletion" | "CellMerge" | "CellSplit" | "ConflictInsert" | "ConflictDelete" };
-type Auth_Revision_type_readonly_244 = { readonly value: "None" | "Insert" | "Delete" | "Property" | "ParagraphNumber" | "DisplayField" | "Reconcile" | "Conflict" | "Style" | "Replace" | "ParagraphProperty" | "TableProperty" | "SectionProperty" | "StyleDefinition" | "MovedFrom" | "MovedTo" | "CellInsertion" | "CellDeletion" | "CellMerge" | "CellSplit" | "ConflictInsert" | "ConflictDelete" };
-type _check_Revision_type_readonly_244 = IsExact<Ref_Revision_type_readonly_244, Auth_Revision_type_readonly_244>;
-type _assert_Revision_type_readonly_244 = Expect<_check_Revision_type_readonly_244>;
-
-type Ref_RevisionCollection_acceptAll_245 = () => void;
-type Auth_RevisionCollection_acceptAll_245 = () => void;
-type _check_RevisionCollection_acceptAll_245 = IsExact<Ref_RevisionCollection_acceptAll_245, Auth_RevisionCollection_acceptAll_245>;
-type _assert_RevisionCollection_acceptAll_245 = Expect<_check_RevisionCollection_acceptAll_245>;
-
-type Ref_RevisionCollection_items_246 = () => DocxEditor.Revision[];
-type Auth_RevisionCollection_items_246 = () => DocxEditor.Revision[];
-type _check_RevisionCollection_items_246 = IsExact<Ref_RevisionCollection_items_246, Auth_RevisionCollection_items_246>;
-type _assert_RevisionCollection_items_246 = Expect<_check_RevisionCollection_items_246>;
-
-type Ref_RevisionCollection_items_readonly_247 = { readonly value: DocxEditor.Revision[] };
-type Auth_RevisionCollection_items_readonly_247 = { readonly value: DocxEditor.Revision[] };
-type _check_RevisionCollection_items_readonly_247 = IsExact<Ref_RevisionCollection_items_readonly_247, Auth_RevisionCollection_items_readonly_247>;
-type _assert_RevisionCollection_items_readonly_247 = Expect<_check_RevisionCollection_items_readonly_247>;
-
-type Ref_RevisionCollection_rejectAll_248 = () => void;
-type Auth_RevisionCollection_rejectAll_248 = () => void;
-type _check_RevisionCollection_rejectAll_248 = IsExact<Ref_RevisionCollection_rejectAll_248, Auth_RevisionCollection_rejectAll_248>;
-type _assert_RevisionCollection_rejectAll_248 = Expect<_check_RevisionCollection_rejectAll_248>;
-
-type Ref_SearchOptions_ignorePunct_249 = () => boolean;
-type Auth_SearchOptions_ignorePunct_249 = () => boolean;
-type _check_SearchOptions_ignorePunct_249 = IsExact<Ref_SearchOptions_ignorePunct_249, Auth_SearchOptions_ignorePunct_249>;
-type _assert_SearchOptions_ignorePunct_249 = Expect<_check_SearchOptions_ignorePunct_249>;
-
-type Ref_SearchOptions_ignorePunct_readonly_250 = { value: boolean };
-type Auth_SearchOptions_ignorePunct_readonly_250 = { value: boolean };
-type _check_SearchOptions_ignorePunct_readonly_250 = IsExact<Ref_SearchOptions_ignorePunct_readonly_250, Auth_SearchOptions_ignorePunct_readonly_250>;
-type _assert_SearchOptions_ignorePunct_readonly_250 = Expect<_check_SearchOptions_ignorePunct_readonly_250>;
-
-type Ref_SearchOptions_ignoreSpace_251 = () => boolean;
-type Auth_SearchOptions_ignoreSpace_251 = () => boolean;
-type _check_SearchOptions_ignoreSpace_251 = IsExact<Ref_SearchOptions_ignoreSpace_251, Auth_SearchOptions_ignoreSpace_251>;
-type _assert_SearchOptions_ignoreSpace_251 = Expect<_check_SearchOptions_ignoreSpace_251>;
-
-type Ref_SearchOptions_ignoreSpace_readonly_252 = { value: boolean };
-type Auth_SearchOptions_ignoreSpace_readonly_252 = { value: boolean };
-type _check_SearchOptions_ignoreSpace_readonly_252 = IsExact<Ref_SearchOptions_ignoreSpace_readonly_252, Auth_SearchOptions_ignoreSpace_readonly_252>;
-type _assert_SearchOptions_ignoreSpace_readonly_252 = Expect<_check_SearchOptions_ignoreSpace_readonly_252>;
-
-type Ref_SearchOptions_matchCase_253 = () => boolean;
-type Auth_SearchOptions_matchCase_253 = () => boolean;
-type _check_SearchOptions_matchCase_253 = IsExact<Ref_SearchOptions_matchCase_253, Auth_SearchOptions_matchCase_253>;
-type _assert_SearchOptions_matchCase_253 = Expect<_check_SearchOptions_matchCase_253>;
-
-type Ref_SearchOptions_matchCase_readonly_254 = { value: boolean };
-type Auth_SearchOptions_matchCase_readonly_254 = { value: boolean };
-type _check_SearchOptions_matchCase_readonly_254 = IsExact<Ref_SearchOptions_matchCase_readonly_254, Auth_SearchOptions_matchCase_readonly_254>;
-type _assert_SearchOptions_matchCase_readonly_254 = Expect<_check_SearchOptions_matchCase_readonly_254>;
-
-type Ref_SearchOptions_matchWholeWord_255 = () => boolean;
-type Auth_SearchOptions_matchWholeWord_255 = () => boolean;
-type _check_SearchOptions_matchWholeWord_255 = IsExact<Ref_SearchOptions_matchWholeWord_255, Auth_SearchOptions_matchWholeWord_255>;
-type _assert_SearchOptions_matchWholeWord_255 = Expect<_check_SearchOptions_matchWholeWord_255>;
-
-type Ref_SearchOptions_matchWholeWord_readonly_256 = { value: boolean };
-type Auth_SearchOptions_matchWholeWord_readonly_256 = { value: boolean };
-type _check_SearchOptions_matchWholeWord_readonly_256 = IsExact<Ref_SearchOptions_matchWholeWord_readonly_256, Auth_SearchOptions_matchWholeWord_readonly_256>;
-type _assert_SearchOptions_matchWholeWord_readonly_256 = Expect<_check_SearchOptions_matchWholeWord_readonly_256>;
-
-type Ref_SearchOptions_matchWildcards_257 = () => boolean;
-type Auth_SearchOptions_matchWildcards_257 = () => boolean;
-type _check_SearchOptions_matchWildcards_257 = IsExact<Ref_SearchOptions_matchWildcards_257, Auth_SearchOptions_matchWildcards_257>;
-type _assert_SearchOptions_matchWildcards_257 = Expect<_check_SearchOptions_matchWildcards_257>;
-
-type Ref_SearchOptions_matchWildcards_readonly_258 = { value: boolean };
-type Auth_SearchOptions_matchWildcards_readonly_258 = { value: boolean };
-type _check_SearchOptions_matchWildcards_readonly_258 = IsExact<Ref_SearchOptions_matchWildcards_readonly_258, Auth_SearchOptions_matchWildcards_readonly_258>;
-type _assert_SearchOptions_matchWildcards_readonly_258 = Expect<_check_SearchOptions_matchWildcards_readonly_258>;
-
-type Ref_Section_body_259 = () => DocxEditor.Body;
-type Auth_Section_body_259 = () => DocxEditor.Body;
-type _check_Section_body_259 = IsExact<Ref_Section_body_259, Auth_Section_body_259>;
-type _assert_Section_body_259 = Expect<_check_Section_body_259>;
-
-type Ref_Section_body_readonly_260 = { readonly value: DocxEditor.Body };
-type Auth_Section_body_readonly_260 = { readonly value: DocxEditor.Body };
-type _check_Section_body_readonly_260 = IsExact<Ref_Section_body_readonly_260, Auth_Section_body_readonly_260>;
-type _assert_Section_body_readonly_260 = Expect<_check_Section_body_readonly_260>;
-
-type Ref_Section_getFooter_261 = (type: DocxEditor.HeaderFooterType) => DocxEditor.Body;
-type Auth_Section_getFooter_261 = (type: DocxEditor.HeaderFooterType) => DocxEditor.Body;
-type _check_Section_getFooter_261 = IsExact<Ref_Section_getFooter_261, Auth_Section_getFooter_261>;
-type _assert_Section_getFooter_261 = Expect<_check_Section_getFooter_261>;
-
-type Ref_Section_getFooter_262 = (type: "Primary" | "FirstPage" | "EvenPages") => DocxEditor.Body;
-type Auth_Section_getFooter_262 = (type: "Primary" | "FirstPage" | "EvenPages") => DocxEditor.Body;
-type _check_Section_getFooter_262 = IsExact<Ref_Section_getFooter_262, Auth_Section_getFooter_262>;
-type _assert_Section_getFooter_262 = Expect<_check_Section_getFooter_262>;
-
-type Ref_Section_getHeader_263 = (type: DocxEditor.HeaderFooterType) => DocxEditor.Body;
-type Auth_Section_getHeader_263 = (type: DocxEditor.HeaderFooterType) => DocxEditor.Body;
-type _check_Section_getHeader_263 = IsExact<Ref_Section_getHeader_263, Auth_Section_getHeader_263>;
-type _assert_Section_getHeader_263 = Expect<_check_Section_getHeader_263>;
-
-type Ref_Section_getHeader_264 = (type: "Primary" | "FirstPage" | "EvenPages") => DocxEditor.Body;
-type Auth_Section_getHeader_264 = (type: "Primary" | "FirstPage" | "EvenPages") => DocxEditor.Body;
-type _check_Section_getHeader_264 = IsExact<Ref_Section_getHeader_264, Auth_Section_getHeader_264>;
-type _assert_Section_getHeader_264 = Expect<_check_Section_getHeader_264>;
-
-type Ref_Section_getNext_265 = () => DocxEditor.Section;
-type Auth_Section_getNext_265 = () => DocxEditor.Section;
-type _check_Section_getNext_265 = IsExact<Ref_Section_getNext_265, Auth_Section_getNext_265>;
-type _assert_Section_getNext_265 = Expect<_check_Section_getNext_265>;
-
-type Ref_Section_pageSetup_266 = () => DocxEditor.PageSetup;
-type Auth_Section_pageSetup_266 = () => DocxEditor.PageSetup;
-type _check_Section_pageSetup_266 = IsExact<Ref_Section_pageSetup_266, Auth_Section_pageSetup_266>;
-type _assert_Section_pageSetup_266 = Expect<_check_Section_pageSetup_266>;
-
-type Ref_Section_pageSetup_readonly_267 = { readonly value: DocxEditor.PageSetup };
-type Auth_Section_pageSetup_readonly_267 = { readonly value: DocxEditor.PageSetup };
-type _check_Section_pageSetup_readonly_267 = IsExact<Ref_Section_pageSetup_readonly_267, Auth_Section_pageSetup_readonly_267>;
-type _assert_Section_pageSetup_readonly_267 = Expect<_check_Section_pageSetup_readonly_267>;
-
-type Ref_SectionCollection_getFirst_268 = () => DocxEditor.Section;
-type Auth_SectionCollection_getFirst_268 = () => DocxEditor.Section;
-type _check_SectionCollection_getFirst_268 = IsExact<Ref_SectionCollection_getFirst_268, Auth_SectionCollection_getFirst_268>;
-type _assert_SectionCollection_getFirst_268 = Expect<_check_SectionCollection_getFirst_268>;
-
-type Ref_SectionCollection_items_269 = () => DocxEditor.Section[];
-type Auth_SectionCollection_items_269 = () => DocxEditor.Section[];
-type _check_SectionCollection_items_269 = IsExact<Ref_SectionCollection_items_269, Auth_SectionCollection_items_269>;
-type _assert_SectionCollection_items_269 = Expect<_check_SectionCollection_items_269>;
-
-type Ref_SectionCollection_items_readonly_270 = { readonly value: DocxEditor.Section[] };
-type Auth_SectionCollection_items_readonly_270 = { readonly value: DocxEditor.Section[] };
-type _check_SectionCollection_items_readonly_270 = IsExact<Ref_SectionCollection_items_readonly_270, Auth_SectionCollection_items_readonly_270>;
-type _assert_SectionCollection_items_readonly_270 = Expect<_check_SectionCollection_items_readonly_270>;
-
-type Ref_Style_baseStyle_271 = () => string;
-type Auth_Style_baseStyle_271 = () => string;
-type _check_Style_baseStyle_271 = IsExact<Ref_Style_baseStyle_271, Auth_Style_baseStyle_271>;
-type _assert_Style_baseStyle_271 = Expect<_check_Style_baseStyle_271>;
-
-type Ref_Style_baseStyle_readonly_272 = { value: string };
-type Auth_Style_baseStyle_readonly_272 = { value: string };
-type _check_Style_baseStyle_readonly_272 = IsExact<Ref_Style_baseStyle_readonly_272, Auth_Style_baseStyle_readonly_272>;
-type _assert_Style_baseStyle_readonly_272 = Expect<_check_Style_baseStyle_readonly_272>;
-
-type Ref_Style_builtIn_273 = () => boolean;
-type Auth_Style_builtIn_273 = () => boolean;
-type _check_Style_builtIn_273 = IsExact<Ref_Style_builtIn_273, Auth_Style_builtIn_273>;
-type _assert_Style_builtIn_273 = Expect<_check_Style_builtIn_273>;
-
-type Ref_Style_builtIn_readonly_274 = { readonly value: boolean };
-type Auth_Style_builtIn_readonly_274 = { readonly value: boolean };
-type _check_Style_builtIn_readonly_274 = IsExact<Ref_Style_builtIn_readonly_274, Auth_Style_builtIn_readonly_274>;
-type _assert_Style_builtIn_readonly_274 = Expect<_check_Style_builtIn_readonly_274>;
-
-type Ref_Style_linked_275 = () => boolean;
-type Auth_Style_linked_275 = () => boolean;
-type _check_Style_linked_275 = IsExact<Ref_Style_linked_275, Auth_Style_linked_275>;
-type _assert_Style_linked_275 = Expect<_check_Style_linked_275>;
-
-type Ref_Style_linked_readonly_276 = { readonly value: boolean };
-type Auth_Style_linked_readonly_276 = { readonly value: boolean };
-type _check_Style_linked_readonly_276 = IsExact<Ref_Style_linked_readonly_276, Auth_Style_linked_readonly_276>;
-type _assert_Style_linked_readonly_276 = Expect<_check_Style_linked_readonly_276>;
-
-type Ref_Style_nameLocal_277 = () => string;
-type Auth_Style_nameLocal_277 = () => string;
-type _check_Style_nameLocal_277 = IsExact<Ref_Style_nameLocal_277, Auth_Style_nameLocal_277>;
-type _assert_Style_nameLocal_277 = Expect<_check_Style_nameLocal_277>;
-
-type Ref_Style_nameLocal_readonly_278 = { readonly value: string };
-type Auth_Style_nameLocal_readonly_278 = { readonly value: string };
-type _check_Style_nameLocal_readonly_278 = IsExact<Ref_Style_nameLocal_readonly_278, Auth_Style_nameLocal_readonly_278>;
-type _assert_Style_nameLocal_readonly_278 = Expect<_check_Style_nameLocal_readonly_278>;
-
-type Ref_Style_nextParagraphStyle_279 = () => string;
-type Auth_Style_nextParagraphStyle_279 = () => string;
-type _check_Style_nextParagraphStyle_279 = IsExact<Ref_Style_nextParagraphStyle_279, Auth_Style_nextParagraphStyle_279>;
-type _assert_Style_nextParagraphStyle_279 = Expect<_check_Style_nextParagraphStyle_279>;
-
-type Ref_Style_nextParagraphStyle_readonly_280 = { value: string };
-type Auth_Style_nextParagraphStyle_readonly_280 = { value: string };
-type _check_Style_nextParagraphStyle_readonly_280 = IsExact<Ref_Style_nextParagraphStyle_readonly_280, Auth_Style_nextParagraphStyle_readonly_280>;
-type _assert_Style_nextParagraphStyle_readonly_280 = Expect<_check_Style_nextParagraphStyle_readonly_280>;
-
-type Ref_Style_priority_281 = () => number;
-type Auth_Style_priority_281 = () => number;
-type _check_Style_priority_281 = IsExact<Ref_Style_priority_281, Auth_Style_priority_281>;
-type _assert_Style_priority_281 = Expect<_check_Style_priority_281>;
-
-type Ref_Style_priority_readonly_282 = { value: number };
-type Auth_Style_priority_readonly_282 = { value: number };
-type _check_Style_priority_readonly_282 = IsExact<Ref_Style_priority_readonly_282, Auth_Style_priority_readonly_282>;
-type _assert_Style_priority_readonly_282 = Expect<_check_Style_priority_readonly_282>;
-
-type Ref_Style_quickStyle_283 = () => boolean;
-type Auth_Style_quickStyle_283 = () => boolean;
-type _check_Style_quickStyle_283 = IsExact<Ref_Style_quickStyle_283, Auth_Style_quickStyle_283>;
-type _assert_Style_quickStyle_283 = Expect<_check_Style_quickStyle_283>;
-
-type Ref_Style_quickStyle_readonly_284 = { value: boolean };
-type Auth_Style_quickStyle_readonly_284 = { value: boolean };
-type _check_Style_quickStyle_readonly_284 = IsExact<Ref_Style_quickStyle_readonly_284, Auth_Style_quickStyle_readonly_284>;
-type _assert_Style_quickStyle_readonly_284 = Expect<_check_Style_quickStyle_readonly_284>;
-
-type Ref_Style_type_285 = () => "Character" | "List" | "Paragraph" | "Table";
-type Auth_Style_type_285 = () => "Character" | "List" | "Paragraph" | "Table";
-type _check_Style_type_285 = IsExact<Ref_Style_type_285, Auth_Style_type_285>;
-type _assert_Style_type_285 = Expect<_check_Style_type_285>;
-
-type Ref_Style_type_readonly_286 = { readonly value: "Character" | "List" | "Paragraph" | "Table" };
-type Auth_Style_type_readonly_286 = { readonly value: "Character" | "List" | "Paragraph" | "Table" };
-type _check_Style_type_readonly_286 = IsExact<Ref_Style_type_readonly_286, Auth_Style_type_readonly_286>;
-type _assert_Style_type_readonly_286 = Expect<_check_Style_type_readonly_286>;
-
-type Ref_Style_unhideWhenUsed_287 = () => boolean;
-type Auth_Style_unhideWhenUsed_287 = () => boolean;
-type _check_Style_unhideWhenUsed_287 = IsExact<Ref_Style_unhideWhenUsed_287, Auth_Style_unhideWhenUsed_287>;
-type _assert_Style_unhideWhenUsed_287 = Expect<_check_Style_unhideWhenUsed_287>;
-
-type Ref_Style_unhideWhenUsed_readonly_288 = { value: boolean };
-type Auth_Style_unhideWhenUsed_readonly_288 = { value: boolean };
-type _check_Style_unhideWhenUsed_readonly_288 = IsExact<Ref_Style_unhideWhenUsed_readonly_288, Auth_Style_unhideWhenUsed_readonly_288>;
-type _assert_Style_unhideWhenUsed_readonly_288 = Expect<_check_Style_unhideWhenUsed_readonly_288>;
-
-type Ref_Style_visibility_289 = () => boolean;
-type Auth_Style_visibility_289 = () => boolean;
-type _check_Style_visibility_289 = IsExact<Ref_Style_visibility_289, Auth_Style_visibility_289>;
-type _assert_Style_visibility_289 = Expect<_check_Style_visibility_289>;
-
-type Ref_Style_visibility_readonly_290 = { value: boolean };
-type Auth_Style_visibility_readonly_290 = { value: boolean };
-type _check_Style_visibility_readonly_290 = IsExact<Ref_Style_visibility_readonly_290, Auth_Style_visibility_readonly_290>;
-type _assert_Style_visibility_readonly_290 = Expect<_check_Style_visibility_readonly_290>;
-
-type Ref_StyleCollection_getByNameOrNullObject_291 = (name: string) => DocxEditor.Style;
-type Auth_StyleCollection_getByNameOrNullObject_291 = (name: string) => DocxEditor.Style;
-type _check_StyleCollection_getByNameOrNullObject_291 = IsExact<Ref_StyleCollection_getByNameOrNullObject_291, Auth_StyleCollection_getByNameOrNullObject_291>;
-type _assert_StyleCollection_getByNameOrNullObject_291 = Expect<_check_StyleCollection_getByNameOrNullObject_291>;
-
-type Ref_StyleCollection_getCount_292 = () => DocxEditor.ClientResult<number>;
-type Auth_StyleCollection_getCount_292 = () => DocxEditor.ClientResult<number>;
-type _check_StyleCollection_getCount_292 = IsExact<Ref_StyleCollection_getCount_292, Auth_StyleCollection_getCount_292>;
-type _assert_StyleCollection_getCount_292 = Expect<_check_StyleCollection_getCount_292>;
-
-type Ref_StyleCollection_items_293 = () => DocxEditor.Style[];
-type Auth_StyleCollection_items_293 = () => DocxEditor.Style[];
-type _check_StyleCollection_items_293 = IsExact<Ref_StyleCollection_items_293, Auth_StyleCollection_items_293>;
-type _assert_StyleCollection_items_293 = Expect<_check_StyleCollection_items_293>;
-
-type Ref_StyleCollection_items_readonly_294 = { readonly value: DocxEditor.Style[] };
-type Auth_StyleCollection_items_readonly_294 = { readonly value: DocxEditor.Style[] };
-type _check_StyleCollection_items_readonly_294 = IsExact<Ref_StyleCollection_items_readonly_294, Auth_StyleCollection_items_readonly_294>;
-type _assert_StyleCollection_items_readonly_294 = Expect<_check_StyleCollection_items_readonly_294>;
-
-type Ref_run_295 = (objects: DocxEditor.ClientObject[], batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
-type Auth_run_295 = (objects: DocxEditor.ClientObject[], batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
-type _check_run_295 = IsExact<Ref_run_295, Auth_run_295>;
-type _assert_run_295 = Expect<_check_run_295>;
-
-type Ref_run_296 = (object: DocxEditor.ClientObject, batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
-type Auth_run_296 = (object: DocxEditor.ClientObject, batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
-type _check_run_296 = IsExact<Ref_run_296, Auth_run_296>;
-type _assert_run_296 = Expect<_check_run_296>;
-
-type Ref_run_297 = (batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
-type Auth_run_297 = (batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
+type Ref_Document_compare_85 = (filePath: string, documentCompareOptions?: DocxEditor.DocumentCompareOptions) => void;
+type Auth_Document_compare_85 = (filePath: string, documentCompareOptions?: DocxEditor.DocumentCompareOptions) => void;
+type _check_Document_compare_85 = IsExact<Ref_Document_compare_85, Auth_Document_compare_85>;
+type _assert_Document_compare_85 = Expect<_check_Document_compare_85>;
+
+type Ref_Document_compareFromBase64_86 = (base64File: string, documentCompareOptions?: DocxEditor.DocumentCompareOptions) => void;
+type Auth_Document_compareFromBase64_86 = (base64File: string, documentCompareOptions?: DocxEditor.DocumentCompareOptions) => void;
+type _check_Document_compareFromBase64_86 = IsExact<Ref_Document_compareFromBase64_86, Auth_Document_compareFromBase64_86>;
+type _assert_Document_compareFromBase64_86 = Expect<_check_Document_compareFromBase64_86>;
+
+type Ref_Document_contentControls_87 = () => DocxEditor.ContentControlCollection;
+type Auth_Document_contentControls_87 = () => DocxEditor.ContentControlCollection;
+type _check_Document_contentControls_87 = IsExact<Ref_Document_contentControls_87, Auth_Document_contentControls_87>;
+type _assert_Document_contentControls_87 = Expect<_check_Document_contentControls_87>;
+
+type Ref_Document_contentControls_readonly_88 = { readonly value: DocxEditor.ContentControlCollection };
+type Auth_Document_contentControls_readonly_88 = { readonly value: DocxEditor.ContentControlCollection };
+type _check_Document_contentControls_readonly_88 = IsExact<Ref_Document_contentControls_readonly_88, Auth_Document_contentControls_readonly_88>;
+type _assert_Document_contentControls_readonly_88 = Expect<_check_Document_contentControls_readonly_88>;
+
+type Ref_Document_deleteBookmark_89 = (name: string) => void;
+type Auth_Document_deleteBookmark_89 = (name: string) => void;
+type _check_Document_deleteBookmark_89 = IsExact<Ref_Document_deleteBookmark_89, Auth_Document_deleteBookmark_89>;
+type _assert_Document_deleteBookmark_89 = Expect<_check_Document_deleteBookmark_89>;
+
+type Ref_Document_getBookmarkRange_90 = (name: string) => DocxEditor.Range;
+type Auth_Document_getBookmarkRange_90 = (name: string) => DocxEditor.Range;
+type _check_Document_getBookmarkRange_90 = IsExact<Ref_Document_getBookmarkRange_90, Auth_Document_getBookmarkRange_90>;
+type _assert_Document_getBookmarkRange_90 = Expect<_check_Document_getBookmarkRange_90>;
+
+type Ref_Document_getBookmarkRangeOrNullObject_91 = (name: string) => DocxEditor.Range;
+type Auth_Document_getBookmarkRangeOrNullObject_91 = (name: string) => DocxEditor.Range;
+type _check_Document_getBookmarkRangeOrNullObject_91 = IsExact<Ref_Document_getBookmarkRangeOrNullObject_91, Auth_Document_getBookmarkRangeOrNullObject_91>;
+type _assert_Document_getBookmarkRangeOrNullObject_91 = Expect<_check_Document_getBookmarkRangeOrNullObject_91>;
+
+type Ref_Document_getStyles_92 = () => DocxEditor.StyleCollection;
+type Auth_Document_getStyles_92 = () => DocxEditor.StyleCollection;
+type _check_Document_getStyles_92 = IsExact<Ref_Document_getStyles_92, Auth_Document_getStyles_92>;
+type _assert_Document_getStyles_92 = Expect<_check_Document_getStyles_92>;
+
+type Ref_Document_paragraphs_93 = () => DocxEditor.ParagraphCollection;
+type Auth_Document_paragraphs_93 = () => DocxEditor.ParagraphCollection;
+type _check_Document_paragraphs_93 = IsExact<Ref_Document_paragraphs_93, Auth_Document_paragraphs_93>;
+type _assert_Document_paragraphs_93 = Expect<_check_Document_paragraphs_93>;
+
+type Ref_Document_paragraphs_readonly_94 = { readonly value: DocxEditor.ParagraphCollection };
+type Auth_Document_paragraphs_readonly_94 = { readonly value: DocxEditor.ParagraphCollection };
+type _check_Document_paragraphs_readonly_94 = IsExact<Ref_Document_paragraphs_readonly_94, Auth_Document_paragraphs_readonly_94>;
+type _assert_Document_paragraphs_readonly_94 = Expect<_check_Document_paragraphs_readonly_94>;
+
+type Ref_Document_properties_95 = () => DocxEditor.DocumentProperties;
+type Auth_Document_properties_95 = () => DocxEditor.DocumentProperties;
+type _check_Document_properties_95 = IsExact<Ref_Document_properties_95, Auth_Document_properties_95>;
+type _assert_Document_properties_95 = Expect<_check_Document_properties_95>;
+
+type Ref_Document_properties_readonly_96 = { readonly value: DocxEditor.DocumentProperties };
+type Auth_Document_properties_readonly_96 = { readonly value: DocxEditor.DocumentProperties };
+type _check_Document_properties_readonly_96 = IsExact<Ref_Document_properties_readonly_96, Auth_Document_properties_readonly_96>;
+type _assert_Document_properties_readonly_96 = Expect<_check_Document_properties_readonly_96>;
+
+type Ref_Document_removeDocumentInformation_97 = (removeDocInfoType: DocxEditor.RemoveDocInfoType) => void;
+type Auth_Document_removeDocumentInformation_97 = (removeDocInfoType: DocxEditor.RemoveDocInfoType) => void;
+type _check_Document_removeDocumentInformation_97 = IsExact<Ref_Document_removeDocumentInformation_97, Auth_Document_removeDocumentInformation_97>;
+type _assert_Document_removeDocumentInformation_97 = Expect<_check_Document_removeDocumentInformation_97>;
+
+type Ref_Document_removeDocumentInformation_98 = (removeDocInfoType: "Comments" | "Revisions" | "Versions" | "RemovePersonalInformation" | "EmailHeader" | "RoutingSlip" | "SendForReview" | "DocumentProperties" | "Template" | "DocumentWorkspace" | "InkAnnotations" | "DocumentServerProperties" | "DocumentManagementPolicy" | "ContentType" | "TaskpaneWebExtensions" | "AtMentions" | "DocumentTasks" | "DocumentIntelligence" | "CommentReactions" | "All") => void;
+type Auth_Document_removeDocumentInformation_98 = (removeDocInfoType: "Comments" | "Revisions" | "Versions" | "RemovePersonalInformation" | "EmailHeader" | "RoutingSlip" | "SendForReview" | "DocumentProperties" | "Template" | "DocumentWorkspace" | "InkAnnotations" | "DocumentServerProperties" | "DocumentManagementPolicy" | "ContentType" | "TaskpaneWebExtensions" | "AtMentions" | "DocumentTasks" | "DocumentIntelligence" | "CommentReactions" | "All") => void;
+type _check_Document_removeDocumentInformation_98 = IsExact<Ref_Document_removeDocumentInformation_98, Auth_Document_removeDocumentInformation_98>;
+type _assert_Document_removeDocumentInformation_98 = Expect<_check_Document_removeDocumentInformation_98>;
+
+type Ref_Document_revisions_99 = () => DocxEditor.RevisionCollection;
+type Auth_Document_revisions_99 = () => DocxEditor.RevisionCollection;
+type _check_Document_revisions_99 = IsExact<Ref_Document_revisions_99, Auth_Document_revisions_99>;
+type _assert_Document_revisions_99 = Expect<_check_Document_revisions_99>;
+
+type Ref_Document_revisions_readonly_100 = { readonly value: DocxEditor.RevisionCollection };
+type Auth_Document_revisions_readonly_100 = { readonly value: DocxEditor.RevisionCollection };
+type _check_Document_revisions_readonly_100 = IsExact<Ref_Document_revisions_readonly_100, Auth_Document_revisions_readonly_100>;
+type _assert_Document_revisions_readonly_100 = Expect<_check_Document_revisions_readonly_100>;
+
+type Ref_Document_sections_101 = () => DocxEditor.SectionCollection;
+type Auth_Document_sections_101 = () => DocxEditor.SectionCollection;
+type _check_Document_sections_101 = IsExact<Ref_Document_sections_101, Auth_Document_sections_101>;
+type _assert_Document_sections_101 = Expect<_check_Document_sections_101>;
+
+type Ref_Document_sections_readonly_102 = { readonly value: DocxEditor.SectionCollection };
+type Auth_Document_sections_readonly_102 = { readonly value: DocxEditor.SectionCollection };
+type _check_Document_sections_readonly_102 = IsExact<Ref_Document_sections_readonly_102, Auth_Document_sections_readonly_102>;
+type _assert_Document_sections_readonly_102 = Expect<_check_Document_sections_readonly_102>;
+
+type Ref_DocumentProperties_author_103 = () => string;
+type Auth_DocumentProperties_author_103 = () => string;
+type _check_DocumentProperties_author_103 = IsExact<Ref_DocumentProperties_author_103, Auth_DocumentProperties_author_103>;
+type _assert_DocumentProperties_author_103 = Expect<_check_DocumentProperties_author_103>;
+
+type Ref_DocumentProperties_author_readonly_104 = { value: string };
+type Auth_DocumentProperties_author_readonly_104 = { value: string };
+type _check_DocumentProperties_author_readonly_104 = IsExact<Ref_DocumentProperties_author_readonly_104, Auth_DocumentProperties_author_readonly_104>;
+type _assert_DocumentProperties_author_readonly_104 = Expect<_check_DocumentProperties_author_readonly_104>;
+
+type Ref_DocumentProperties_category_105 = () => string;
+type Auth_DocumentProperties_category_105 = () => string;
+type _check_DocumentProperties_category_105 = IsExact<Ref_DocumentProperties_category_105, Auth_DocumentProperties_category_105>;
+type _assert_DocumentProperties_category_105 = Expect<_check_DocumentProperties_category_105>;
+
+type Ref_DocumentProperties_category_readonly_106 = { value: string };
+type Auth_DocumentProperties_category_readonly_106 = { value: string };
+type _check_DocumentProperties_category_readonly_106 = IsExact<Ref_DocumentProperties_category_readonly_106, Auth_DocumentProperties_category_readonly_106>;
+type _assert_DocumentProperties_category_readonly_106 = Expect<_check_DocumentProperties_category_readonly_106>;
+
+type Ref_DocumentProperties_comments_107 = () => string;
+type Auth_DocumentProperties_comments_107 = () => string;
+type _check_DocumentProperties_comments_107 = IsExact<Ref_DocumentProperties_comments_107, Auth_DocumentProperties_comments_107>;
+type _assert_DocumentProperties_comments_107 = Expect<_check_DocumentProperties_comments_107>;
+
+type Ref_DocumentProperties_comments_readonly_108 = { value: string };
+type Auth_DocumentProperties_comments_readonly_108 = { value: string };
+type _check_DocumentProperties_comments_readonly_108 = IsExact<Ref_DocumentProperties_comments_readonly_108, Auth_DocumentProperties_comments_readonly_108>;
+type _assert_DocumentProperties_comments_readonly_108 = Expect<_check_DocumentProperties_comments_readonly_108>;
+
+type Ref_DocumentProperties_keywords_109 = () => string;
+type Auth_DocumentProperties_keywords_109 = () => string;
+type _check_DocumentProperties_keywords_109 = IsExact<Ref_DocumentProperties_keywords_109, Auth_DocumentProperties_keywords_109>;
+type _assert_DocumentProperties_keywords_109 = Expect<_check_DocumentProperties_keywords_109>;
+
+type Ref_DocumentProperties_keywords_readonly_110 = { value: string };
+type Auth_DocumentProperties_keywords_readonly_110 = { value: string };
+type _check_DocumentProperties_keywords_readonly_110 = IsExact<Ref_DocumentProperties_keywords_readonly_110, Auth_DocumentProperties_keywords_readonly_110>;
+type _assert_DocumentProperties_keywords_readonly_110 = Expect<_check_DocumentProperties_keywords_readonly_110>;
+
+type Ref_DocumentProperties_lastAuthor_111 = () => string;
+type Auth_DocumentProperties_lastAuthor_111 = () => string;
+type _check_DocumentProperties_lastAuthor_111 = IsExact<Ref_DocumentProperties_lastAuthor_111, Auth_DocumentProperties_lastAuthor_111>;
+type _assert_DocumentProperties_lastAuthor_111 = Expect<_check_DocumentProperties_lastAuthor_111>;
+
+type Ref_DocumentProperties_lastAuthor_readonly_112 = { readonly value: string };
+type Auth_DocumentProperties_lastAuthor_readonly_112 = { readonly value: string };
+type _check_DocumentProperties_lastAuthor_readonly_112 = IsExact<Ref_DocumentProperties_lastAuthor_readonly_112, Auth_DocumentProperties_lastAuthor_readonly_112>;
+type _assert_DocumentProperties_lastAuthor_readonly_112 = Expect<_check_DocumentProperties_lastAuthor_readonly_112>;
+
+type Ref_DocumentProperties_subject_113 = () => string;
+type Auth_DocumentProperties_subject_113 = () => string;
+type _check_DocumentProperties_subject_113 = IsExact<Ref_DocumentProperties_subject_113, Auth_DocumentProperties_subject_113>;
+type _assert_DocumentProperties_subject_113 = Expect<_check_DocumentProperties_subject_113>;
+
+type Ref_DocumentProperties_subject_readonly_114 = { value: string };
+type Auth_DocumentProperties_subject_readonly_114 = { value: string };
+type _check_DocumentProperties_subject_readonly_114 = IsExact<Ref_DocumentProperties_subject_readonly_114, Auth_DocumentProperties_subject_readonly_114>;
+type _assert_DocumentProperties_subject_readonly_114 = Expect<_check_DocumentProperties_subject_readonly_114>;
+
+type Ref_DocumentProperties_title_115 = () => string;
+type Auth_DocumentProperties_title_115 = () => string;
+type _check_DocumentProperties_title_115 = IsExact<Ref_DocumentProperties_title_115, Auth_DocumentProperties_title_115>;
+type _assert_DocumentProperties_title_115 = Expect<_check_DocumentProperties_title_115>;
+
+type Ref_DocumentProperties_title_readonly_116 = { value: string };
+type Auth_DocumentProperties_title_readonly_116 = { value: string };
+type _check_DocumentProperties_title_readonly_116 = IsExact<Ref_DocumentProperties_title_readonly_116, Auth_DocumentProperties_title_readonly_116>;
+type _assert_DocumentProperties_title_readonly_116 = Expect<_check_DocumentProperties_title_readonly_116>;
+
+type Ref_Font_bold_117 = () => boolean;
+type Auth_Font_bold_117 = () => boolean;
+type _check_Font_bold_117 = IsExact<Ref_Font_bold_117, Auth_Font_bold_117>;
+type _assert_Font_bold_117 = Expect<_check_Font_bold_117>;
+
+type Ref_Font_bold_readonly_118 = { value: boolean };
+type Auth_Font_bold_readonly_118 = { value: boolean };
+type _check_Font_bold_readonly_118 = IsExact<Ref_Font_bold_readonly_118, Auth_Font_bold_readonly_118>;
+type _assert_Font_bold_readonly_118 = Expect<_check_Font_bold_readonly_118>;
+
+type Ref_Font_color_119 = () => string;
+type Auth_Font_color_119 = () => string;
+type _check_Font_color_119 = IsExact<Ref_Font_color_119, Auth_Font_color_119>;
+type _assert_Font_color_119 = Expect<_check_Font_color_119>;
+
+type Ref_Font_color_readonly_120 = { value: string };
+type Auth_Font_color_readonly_120 = { value: string };
+type _check_Font_color_readonly_120 = IsExact<Ref_Font_color_readonly_120, Auth_Font_color_readonly_120>;
+type _assert_Font_color_readonly_120 = Expect<_check_Font_color_readonly_120>;
+
+type Ref_Font_italic_121 = () => boolean;
+type Auth_Font_italic_121 = () => boolean;
+type _check_Font_italic_121 = IsExact<Ref_Font_italic_121, Auth_Font_italic_121>;
+type _assert_Font_italic_121 = Expect<_check_Font_italic_121>;
+
+type Ref_Font_italic_readonly_122 = { value: boolean };
+type Auth_Font_italic_readonly_122 = { value: boolean };
+type _check_Font_italic_readonly_122 = IsExact<Ref_Font_italic_readonly_122, Auth_Font_italic_readonly_122>;
+type _assert_Font_italic_readonly_122 = Expect<_check_Font_italic_readonly_122>;
+
+type Ref_Font_name_123 = () => string;
+type Auth_Font_name_123 = () => string;
+type _check_Font_name_123 = IsExact<Ref_Font_name_123, Auth_Font_name_123>;
+type _assert_Font_name_123 = Expect<_check_Font_name_123>;
+
+type Ref_Font_name_readonly_124 = { value: string };
+type Auth_Font_name_readonly_124 = { value: string };
+type _check_Font_name_readonly_124 = IsExact<Ref_Font_name_readonly_124, Auth_Font_name_readonly_124>;
+type _assert_Font_name_readonly_124 = Expect<_check_Font_name_readonly_124>;
+
+type Ref_Font_size_125 = () => number;
+type Auth_Font_size_125 = () => number;
+type _check_Font_size_125 = IsExact<Ref_Font_size_125, Auth_Font_size_125>;
+type _assert_Font_size_125 = Expect<_check_Font_size_125>;
+
+type Ref_Font_size_readonly_126 = { value: number };
+type Auth_Font_size_readonly_126 = { value: number };
+type _check_Font_size_readonly_126 = IsExact<Ref_Font_size_readonly_126, Auth_Font_size_readonly_126>;
+type _assert_Font_size_readonly_126 = Expect<_check_Font_size_readonly_126>;
+
+type Ref_List_getLevelParagraphs_127 = (level: number) => DocxEditor.ParagraphCollection;
+type Auth_List_getLevelParagraphs_127 = (level: number) => DocxEditor.ParagraphCollection;
+type _check_List_getLevelParagraphs_127 = IsExact<Ref_List_getLevelParagraphs_127, Auth_List_getLevelParagraphs_127>;
+type _assert_List_getLevelParagraphs_127 = Expect<_check_List_getLevelParagraphs_127>;
+
+type Ref_List_id_128 = () => number;
+type Auth_List_id_128 = () => number;
+type _check_List_id_128 = IsExact<Ref_List_id_128, Auth_List_id_128>;
+type _assert_List_id_128 = Expect<_check_List_id_128>;
+
+type Ref_List_id_readonly_129 = { readonly value: number };
+type Auth_List_id_readonly_129 = { readonly value: number };
+type _check_List_id_readonly_129 = IsExact<Ref_List_id_readonly_129, Auth_List_id_readonly_129>;
+type _assert_List_id_readonly_129 = Expect<_check_List_id_readonly_129>;
+
+type Ref_List_insertParagraph_130 = (paragraphText: string, insertLocation: "Start" | "End" | "Before" | "After") => DocxEditor.Paragraph;
+type Auth_List_insertParagraph_130 = (paragraphText: string, insertLocation: "Start" | "End" | "Before" | "After") => DocxEditor.Paragraph;
+type _check_List_insertParagraph_130 = IsExact<Ref_List_insertParagraph_130, Auth_List_insertParagraph_130>;
+type _assert_List_insertParagraph_130 = Expect<_check_List_insertParagraph_130>;
+
+type Ref_List_paragraphs_131 = () => DocxEditor.ParagraphCollection;
+type Auth_List_paragraphs_131 = () => DocxEditor.ParagraphCollection;
+type _check_List_paragraphs_131 = IsExact<Ref_List_paragraphs_131, Auth_List_paragraphs_131>;
+type _assert_List_paragraphs_131 = Expect<_check_List_paragraphs_131>;
+
+type Ref_List_paragraphs_readonly_132 = { readonly value: DocxEditor.ParagraphCollection };
+type Auth_List_paragraphs_readonly_132 = { readonly value: DocxEditor.ParagraphCollection };
+type _check_List_paragraphs_readonly_132 = IsExact<Ref_List_paragraphs_readonly_132, Auth_List_paragraphs_readonly_132>;
+type _assert_List_paragraphs_readonly_132 = Expect<_check_List_paragraphs_readonly_132>;
+
+type Ref_ListCollection_getById_133 = (id: number) => DocxEditor.List;
+type Auth_ListCollection_getById_133 = (id: number) => DocxEditor.List;
+type _check_ListCollection_getById_133 = IsExact<Ref_ListCollection_getById_133, Auth_ListCollection_getById_133>;
+type _assert_ListCollection_getById_133 = Expect<_check_ListCollection_getById_133>;
+
+type Ref_ListCollection_getFirst_134 = () => DocxEditor.List;
+type Auth_ListCollection_getFirst_134 = () => DocxEditor.List;
+type _check_ListCollection_getFirst_134 = IsExact<Ref_ListCollection_getFirst_134, Auth_ListCollection_getFirst_134>;
+type _assert_ListCollection_getFirst_134 = Expect<_check_ListCollection_getFirst_134>;
+
+type Ref_ListCollection_items_135 = () => DocxEditor.List[];
+type Auth_ListCollection_items_135 = () => DocxEditor.List[];
+type _check_ListCollection_items_135 = IsExact<Ref_ListCollection_items_135, Auth_ListCollection_items_135>;
+type _assert_ListCollection_items_135 = Expect<_check_ListCollection_items_135>;
+
+type Ref_ListCollection_items_readonly_136 = { readonly value: DocxEditor.List[] };
+type Auth_ListCollection_items_readonly_136 = { readonly value: DocxEditor.List[] };
+type _check_ListCollection_items_readonly_136 = IsExact<Ref_ListCollection_items_readonly_136, Auth_ListCollection_items_readonly_136>;
+type _assert_ListCollection_items_readonly_136 = Expect<_check_ListCollection_items_readonly_136>;
+
+type Ref_ListItem_level_137 = () => number;
+type Auth_ListItem_level_137 = () => number;
+type _check_ListItem_level_137 = IsExact<Ref_ListItem_level_137, Auth_ListItem_level_137>;
+type _assert_ListItem_level_137 = Expect<_check_ListItem_level_137>;
+
+type Ref_ListItem_level_readonly_138 = { value: number };
+type Auth_ListItem_level_readonly_138 = { value: number };
+type _check_ListItem_level_readonly_138 = IsExact<Ref_ListItem_level_readonly_138, Auth_ListItem_level_readonly_138>;
+type _assert_ListItem_level_readonly_138 = Expect<_check_ListItem_level_readonly_138>;
+
+type Ref_NoteItem_body_139 = () => DocxEditor.Body;
+type Auth_NoteItem_body_139 = () => DocxEditor.Body;
+type _check_NoteItem_body_139 = IsExact<Ref_NoteItem_body_139, Auth_NoteItem_body_139>;
+type _assert_NoteItem_body_139 = Expect<_check_NoteItem_body_139>;
+
+type Ref_NoteItem_body_readonly_140 = { readonly value: DocxEditor.Body };
+type Auth_NoteItem_body_readonly_140 = { readonly value: DocxEditor.Body };
+type _check_NoteItem_body_readonly_140 = IsExact<Ref_NoteItem_body_readonly_140, Auth_NoteItem_body_readonly_140>;
+type _assert_NoteItem_body_readonly_140 = Expect<_check_NoteItem_body_readonly_140>;
+
+type Ref_NoteItem_delete_141 = () => void;
+type Auth_NoteItem_delete_141 = () => void;
+type _check_NoteItem_delete_141 = IsExact<Ref_NoteItem_delete_141, Auth_NoteItem_delete_141>;
+type _assert_NoteItem_delete_141 = Expect<_check_NoteItem_delete_141>;
+
+type Ref_NoteItem_getNext_142 = () => DocxEditor.NoteItem;
+type Auth_NoteItem_getNext_142 = () => DocxEditor.NoteItem;
+type _check_NoteItem_getNext_142 = IsExact<Ref_NoteItem_getNext_142, Auth_NoteItem_getNext_142>;
+type _assert_NoteItem_getNext_142 = Expect<_check_NoteItem_getNext_142>;
+
+type Ref_NoteItem_type_143 = () => "Footnote" | "Endnote";
+type Auth_NoteItem_type_143 = () => "Footnote" | "Endnote";
+type _check_NoteItem_type_143 = IsExact<Ref_NoteItem_type_143, Auth_NoteItem_type_143>;
+type _assert_NoteItem_type_143 = Expect<_check_NoteItem_type_143>;
+
+type Ref_NoteItem_type_readonly_144 = { readonly value: "Footnote" | "Endnote" };
+type Auth_NoteItem_type_readonly_144 = { readonly value: "Footnote" | "Endnote" };
+type _check_NoteItem_type_readonly_144 = IsExact<Ref_NoteItem_type_readonly_144, Auth_NoteItem_type_readonly_144>;
+type _assert_NoteItem_type_readonly_144 = Expect<_check_NoteItem_type_readonly_144>;
+
+type Ref_NoteItemCollection_getFirst_145 = () => DocxEditor.NoteItem;
+type Auth_NoteItemCollection_getFirst_145 = () => DocxEditor.NoteItem;
+type _check_NoteItemCollection_getFirst_145 = IsExact<Ref_NoteItemCollection_getFirst_145, Auth_NoteItemCollection_getFirst_145>;
+type _assert_NoteItemCollection_getFirst_145 = Expect<_check_NoteItemCollection_getFirst_145>;
+
+type Ref_NoteItemCollection_items_146 = () => DocxEditor.NoteItem[];
+type Auth_NoteItemCollection_items_146 = () => DocxEditor.NoteItem[];
+type _check_NoteItemCollection_items_146 = IsExact<Ref_NoteItemCollection_items_146, Auth_NoteItemCollection_items_146>;
+type _assert_NoteItemCollection_items_146 = Expect<_check_NoteItemCollection_items_146>;
+
+type Ref_NoteItemCollection_items_readonly_147 = { readonly value: DocxEditor.NoteItem[] };
+type Auth_NoteItemCollection_items_readonly_147 = { readonly value: DocxEditor.NoteItem[] };
+type _check_NoteItemCollection_items_readonly_147 = IsExact<Ref_NoteItemCollection_items_readonly_147, Auth_NoteItemCollection_items_readonly_147>;
+type _assert_NoteItemCollection_items_readonly_147 = Expect<_check_NoteItemCollection_items_readonly_147>;
+
+type Ref_PageSetup_bottomMargin_148 = () => number;
+type Auth_PageSetup_bottomMargin_148 = () => number;
+type _check_PageSetup_bottomMargin_148 = IsExact<Ref_PageSetup_bottomMargin_148, Auth_PageSetup_bottomMargin_148>;
+type _assert_PageSetup_bottomMargin_148 = Expect<_check_PageSetup_bottomMargin_148>;
+
+type Ref_PageSetup_bottomMargin_readonly_149 = { value: number };
+type Auth_PageSetup_bottomMargin_readonly_149 = { value: number };
+type _check_PageSetup_bottomMargin_readonly_149 = IsExact<Ref_PageSetup_bottomMargin_readonly_149, Auth_PageSetup_bottomMargin_readonly_149>;
+type _assert_PageSetup_bottomMargin_readonly_149 = Expect<_check_PageSetup_bottomMargin_readonly_149>;
+
+type Ref_PageSetup_leftMargin_150 = () => number;
+type Auth_PageSetup_leftMargin_150 = () => number;
+type _check_PageSetup_leftMargin_150 = IsExact<Ref_PageSetup_leftMargin_150, Auth_PageSetup_leftMargin_150>;
+type _assert_PageSetup_leftMargin_150 = Expect<_check_PageSetup_leftMargin_150>;
+
+type Ref_PageSetup_leftMargin_readonly_151 = { value: number };
+type Auth_PageSetup_leftMargin_readonly_151 = { value: number };
+type _check_PageSetup_leftMargin_readonly_151 = IsExact<Ref_PageSetup_leftMargin_readonly_151, Auth_PageSetup_leftMargin_readonly_151>;
+type _assert_PageSetup_leftMargin_readonly_151 = Expect<_check_PageSetup_leftMargin_readonly_151>;
+
+type Ref_PageSetup_orientation_152 = () => "Portrait" | "Landscape";
+type Auth_PageSetup_orientation_152 = () => "Portrait" | "Landscape";
+type _check_PageSetup_orientation_152 = IsExact<Ref_PageSetup_orientation_152, Auth_PageSetup_orientation_152>;
+type _assert_PageSetup_orientation_152 = Expect<_check_PageSetup_orientation_152>;
+
+type Ref_PageSetup_orientation_readonly_153 = { value: "Portrait" | "Landscape" };
+type Auth_PageSetup_orientation_readonly_153 = { value: "Portrait" | "Landscape" };
+type _check_PageSetup_orientation_readonly_153 = IsExact<Ref_PageSetup_orientation_readonly_153, Auth_PageSetup_orientation_readonly_153>;
+type _assert_PageSetup_orientation_readonly_153 = Expect<_check_PageSetup_orientation_readonly_153>;
+
+type Ref_PageSetup_pageHeight_154 = () => number;
+type Auth_PageSetup_pageHeight_154 = () => number;
+type _check_PageSetup_pageHeight_154 = IsExact<Ref_PageSetup_pageHeight_154, Auth_PageSetup_pageHeight_154>;
+type _assert_PageSetup_pageHeight_154 = Expect<_check_PageSetup_pageHeight_154>;
+
+type Ref_PageSetup_pageHeight_readonly_155 = { value: number };
+type Auth_PageSetup_pageHeight_readonly_155 = { value: number };
+type _check_PageSetup_pageHeight_readonly_155 = IsExact<Ref_PageSetup_pageHeight_readonly_155, Auth_PageSetup_pageHeight_readonly_155>;
+type _assert_PageSetup_pageHeight_readonly_155 = Expect<_check_PageSetup_pageHeight_readonly_155>;
+
+type Ref_PageSetup_pageWidth_156 = () => number;
+type Auth_PageSetup_pageWidth_156 = () => number;
+type _check_PageSetup_pageWidth_156 = IsExact<Ref_PageSetup_pageWidth_156, Auth_PageSetup_pageWidth_156>;
+type _assert_PageSetup_pageWidth_156 = Expect<_check_PageSetup_pageWidth_156>;
+
+type Ref_PageSetup_pageWidth_readonly_157 = { value: number };
+type Auth_PageSetup_pageWidth_readonly_157 = { value: number };
+type _check_PageSetup_pageWidth_readonly_157 = IsExact<Ref_PageSetup_pageWidth_readonly_157, Auth_PageSetup_pageWidth_readonly_157>;
+type _assert_PageSetup_pageWidth_readonly_157 = Expect<_check_PageSetup_pageWidth_readonly_157>;
+
+type Ref_PageSetup_rightMargin_158 = () => number;
+type Auth_PageSetup_rightMargin_158 = () => number;
+type _check_PageSetup_rightMargin_158 = IsExact<Ref_PageSetup_rightMargin_158, Auth_PageSetup_rightMargin_158>;
+type _assert_PageSetup_rightMargin_158 = Expect<_check_PageSetup_rightMargin_158>;
+
+type Ref_PageSetup_rightMargin_readonly_159 = { value: number };
+type Auth_PageSetup_rightMargin_readonly_159 = { value: number };
+type _check_PageSetup_rightMargin_readonly_159 = IsExact<Ref_PageSetup_rightMargin_readonly_159, Auth_PageSetup_rightMargin_readonly_159>;
+type _assert_PageSetup_rightMargin_readonly_159 = Expect<_check_PageSetup_rightMargin_readonly_159>;
+
+type Ref_PageSetup_topMargin_160 = () => number;
+type Auth_PageSetup_topMargin_160 = () => number;
+type _check_PageSetup_topMargin_160 = IsExact<Ref_PageSetup_topMargin_160, Auth_PageSetup_topMargin_160>;
+type _assert_PageSetup_topMargin_160 = Expect<_check_PageSetup_topMargin_160>;
+
+type Ref_PageSetup_topMargin_readonly_161 = { value: number };
+type Auth_PageSetup_topMargin_readonly_161 = { value: number };
+type _check_PageSetup_topMargin_readonly_161 = IsExact<Ref_PageSetup_topMargin_readonly_161, Auth_PageSetup_topMargin_readonly_161>;
+type _assert_PageSetup_topMargin_readonly_161 = Expect<_check_PageSetup_topMargin_readonly_161>;
+
+type Ref_Paragraph_alignment_162 = () => "Mixed" | "Unknown" | "Left" | "Centered" | "Right" | "Justified";
+type Auth_Paragraph_alignment_162 = () => "Mixed" | "Unknown" | "Left" | "Centered" | "Right" | "Justified";
+type _check_Paragraph_alignment_162 = IsExact<Ref_Paragraph_alignment_162, Auth_Paragraph_alignment_162>;
+type _assert_Paragraph_alignment_162 = Expect<_check_Paragraph_alignment_162>;
+
+type Ref_Paragraph_alignment_readonly_163 = { value: "Mixed" | "Unknown" | "Left" | "Centered" | "Right" | "Justified" };
+type Auth_Paragraph_alignment_readonly_163 = { value: "Mixed" | "Unknown" | "Left" | "Centered" | "Right" | "Justified" };
+type _check_Paragraph_alignment_readonly_163 = IsExact<Ref_Paragraph_alignment_readonly_163, Auth_Paragraph_alignment_readonly_163>;
+type _assert_Paragraph_alignment_readonly_163 = Expect<_check_Paragraph_alignment_readonly_163>;
+
+type Ref_Paragraph_clear_164 = () => void;
+type Auth_Paragraph_clear_164 = () => void;
+type _check_Paragraph_clear_164 = IsExact<Ref_Paragraph_clear_164, Auth_Paragraph_clear_164>;
+type _assert_Paragraph_clear_164 = Expect<_check_Paragraph_clear_164>;
+
+type Ref_Paragraph_contentControls_165 = () => DocxEditor.ContentControlCollection;
+type Auth_Paragraph_contentControls_165 = () => DocxEditor.ContentControlCollection;
+type _check_Paragraph_contentControls_165 = IsExact<Ref_Paragraph_contentControls_165, Auth_Paragraph_contentControls_165>;
+type _assert_Paragraph_contentControls_165 = Expect<_check_Paragraph_contentControls_165>;
+
+type Ref_Paragraph_contentControls_readonly_166 = { readonly value: DocxEditor.ContentControlCollection };
+type Auth_Paragraph_contentControls_readonly_166 = { readonly value: DocxEditor.ContentControlCollection };
+type _check_Paragraph_contentControls_readonly_166 = IsExact<Ref_Paragraph_contentControls_readonly_166, Auth_Paragraph_contentControls_readonly_166>;
+type _assert_Paragraph_contentControls_readonly_166 = Expect<_check_Paragraph_contentControls_readonly_166>;
+
+type Ref_Paragraph_delete_167 = () => void;
+type Auth_Paragraph_delete_167 = () => void;
+type _check_Paragraph_delete_167 = IsExact<Ref_Paragraph_delete_167, Auth_Paragraph_delete_167>;
+type _assert_Paragraph_delete_167 = Expect<_check_Paragraph_delete_167>;
+
+type Ref_Paragraph_firstLineIndent_168 = () => number;
+type Auth_Paragraph_firstLineIndent_168 = () => number;
+type _check_Paragraph_firstLineIndent_168 = IsExact<Ref_Paragraph_firstLineIndent_168, Auth_Paragraph_firstLineIndent_168>;
+type _assert_Paragraph_firstLineIndent_168 = Expect<_check_Paragraph_firstLineIndent_168>;
+
+type Ref_Paragraph_firstLineIndent_readonly_169 = { value: number };
+type Auth_Paragraph_firstLineIndent_readonly_169 = { value: number };
+type _check_Paragraph_firstLineIndent_readonly_169 = IsExact<Ref_Paragraph_firstLineIndent_readonly_169, Auth_Paragraph_firstLineIndent_readonly_169>;
+type _assert_Paragraph_firstLineIndent_readonly_169 = Expect<_check_Paragraph_firstLineIndent_readonly_169>;
+
+type Ref_Paragraph_font_170 = () => DocxEditor.Font;
+type Auth_Paragraph_font_170 = () => DocxEditor.Font;
+type _check_Paragraph_font_170 = IsExact<Ref_Paragraph_font_170, Auth_Paragraph_font_170>;
+type _assert_Paragraph_font_170 = Expect<_check_Paragraph_font_170>;
+
+type Ref_Paragraph_font_readonly_171 = { readonly value: DocxEditor.Font };
+type Auth_Paragraph_font_readonly_171 = { readonly value: DocxEditor.Font };
+type _check_Paragraph_font_readonly_171 = IsExact<Ref_Paragraph_font_readonly_171, Auth_Paragraph_font_readonly_171>;
+type _assert_Paragraph_font_readonly_171 = Expect<_check_Paragraph_font_readonly_171>;
+
+type Ref_Paragraph_getReviewedText_172 = (changeTrackingVersion?: DocxEditor.ChangeTrackingVersion) => DocxEditor.ClientResult<string>;
+type Auth_Paragraph_getReviewedText_172 = (changeTrackingVersion?: DocxEditor.ChangeTrackingVersion) => DocxEditor.ClientResult<string>;
+type _check_Paragraph_getReviewedText_172 = IsExact<Ref_Paragraph_getReviewedText_172, Auth_Paragraph_getReviewedText_172>;
+type _assert_Paragraph_getReviewedText_172 = Expect<_check_Paragraph_getReviewedText_172>;
+
+type Ref_Paragraph_getReviewedText_173 = (changeTrackingVersion?: "Original" | "Current") => DocxEditor.ClientResult<string>;
+type Auth_Paragraph_getReviewedText_173 = (changeTrackingVersion?: "Original" | "Current") => DocxEditor.ClientResult<string>;
+type _check_Paragraph_getReviewedText_173 = IsExact<Ref_Paragraph_getReviewedText_173, Auth_Paragraph_getReviewedText_173>;
+type _assert_Paragraph_getReviewedText_173 = Expect<_check_Paragraph_getReviewedText_173>;
+
+type Ref_Paragraph_getTextRanges_174 = (endingMarks: string[], trimSpacing?: boolean) => DocxEditor.RangeCollection;
+type Auth_Paragraph_getTextRanges_174 = (endingMarks: string[], trimSpacing?: boolean) => DocxEditor.RangeCollection;
+type _check_Paragraph_getTextRanges_174 = IsExact<Ref_Paragraph_getTextRanges_174, Auth_Paragraph_getTextRanges_174>;
+type _assert_Paragraph_getTextRanges_174 = Expect<_check_Paragraph_getTextRanges_174>;
+
+type Ref_Paragraph_insertParagraph_175 = (paragraphText: string, insertLocation: "Before" | "After") => DocxEditor.Paragraph;
+type Auth_Paragraph_insertParagraph_175 = (paragraphText: string, insertLocation: "Before" | "After") => DocxEditor.Paragraph;
+type _check_Paragraph_insertParagraph_175 = IsExact<Ref_Paragraph_insertParagraph_175, Auth_Paragraph_insertParagraph_175>;
+type _assert_Paragraph_insertParagraph_175 = Expect<_check_Paragraph_insertParagraph_175>;
+
+type Ref_Paragraph_insertText_176 = (text: string, insertLocation: "Replace" | "Start" | "End") => DocxEditor.Range;
+type Auth_Paragraph_insertText_176 = (text: string, insertLocation: "Replace" | "Start" | "End") => DocxEditor.Range;
+type _check_Paragraph_insertText_176 = IsExact<Ref_Paragraph_insertText_176, Auth_Paragraph_insertText_176>;
+type _assert_Paragraph_insertText_176 = Expect<_check_Paragraph_insertText_176>;
+
+type Ref_Paragraph_leftIndent_177 = () => number;
+type Auth_Paragraph_leftIndent_177 = () => number;
+type _check_Paragraph_leftIndent_177 = IsExact<Ref_Paragraph_leftIndent_177, Auth_Paragraph_leftIndent_177>;
+type _assert_Paragraph_leftIndent_177 = Expect<_check_Paragraph_leftIndent_177>;
+
+type Ref_Paragraph_leftIndent_readonly_178 = { value: number };
+type Auth_Paragraph_leftIndent_readonly_178 = { value: number };
+type _check_Paragraph_leftIndent_readonly_178 = IsExact<Ref_Paragraph_leftIndent_readonly_178, Auth_Paragraph_leftIndent_readonly_178>;
+type _assert_Paragraph_leftIndent_readonly_178 = Expect<_check_Paragraph_leftIndent_readonly_178>;
+
+type Ref_Paragraph_lineSpacing_179 = () => number;
+type Auth_Paragraph_lineSpacing_179 = () => number;
+type _check_Paragraph_lineSpacing_179 = IsExact<Ref_Paragraph_lineSpacing_179, Auth_Paragraph_lineSpacing_179>;
+type _assert_Paragraph_lineSpacing_179 = Expect<_check_Paragraph_lineSpacing_179>;
+
+type Ref_Paragraph_lineSpacing_readonly_180 = { value: number };
+type Auth_Paragraph_lineSpacing_readonly_180 = { value: number };
+type _check_Paragraph_lineSpacing_readonly_180 = IsExact<Ref_Paragraph_lineSpacing_readonly_180, Auth_Paragraph_lineSpacing_readonly_180>;
+type _assert_Paragraph_lineSpacing_readonly_180 = Expect<_check_Paragraph_lineSpacing_readonly_180>;
+
+type Ref_Paragraph_list_181 = () => DocxEditor.List;
+type Auth_Paragraph_list_181 = () => DocxEditor.List;
+type _check_Paragraph_list_181 = IsExact<Ref_Paragraph_list_181, Auth_Paragraph_list_181>;
+type _assert_Paragraph_list_181 = Expect<_check_Paragraph_list_181>;
+
+type Ref_Paragraph_list_readonly_182 = { readonly value: DocxEditor.List };
+type Auth_Paragraph_list_readonly_182 = { readonly value: DocxEditor.List };
+type _check_Paragraph_list_readonly_182 = IsExact<Ref_Paragraph_list_readonly_182, Auth_Paragraph_list_readonly_182>;
+type _assert_Paragraph_list_readonly_182 = Expect<_check_Paragraph_list_readonly_182>;
+
+type Ref_Paragraph_listItem_183 = () => DocxEditor.ListItem;
+type Auth_Paragraph_listItem_183 = () => DocxEditor.ListItem;
+type _check_Paragraph_listItem_183 = IsExact<Ref_Paragraph_listItem_183, Auth_Paragraph_listItem_183>;
+type _assert_Paragraph_listItem_183 = Expect<_check_Paragraph_listItem_183>;
+
+type Ref_Paragraph_listItem_readonly_184 = { readonly value: DocxEditor.ListItem };
+type Auth_Paragraph_listItem_readonly_184 = { readonly value: DocxEditor.ListItem };
+type _check_Paragraph_listItem_readonly_184 = IsExact<Ref_Paragraph_listItem_readonly_184, Auth_Paragraph_listItem_readonly_184>;
+type _assert_Paragraph_listItem_readonly_184 = Expect<_check_Paragraph_listItem_readonly_184>;
+
+type Ref_Paragraph_rightIndent_185 = () => number;
+type Auth_Paragraph_rightIndent_185 = () => number;
+type _check_Paragraph_rightIndent_185 = IsExact<Ref_Paragraph_rightIndent_185, Auth_Paragraph_rightIndent_185>;
+type _assert_Paragraph_rightIndent_185 = Expect<_check_Paragraph_rightIndent_185>;
+
+type Ref_Paragraph_rightIndent_readonly_186 = { value: number };
+type Auth_Paragraph_rightIndent_readonly_186 = { value: number };
+type _check_Paragraph_rightIndent_readonly_186 = IsExact<Ref_Paragraph_rightIndent_readonly_186, Auth_Paragraph_rightIndent_readonly_186>;
+type _assert_Paragraph_rightIndent_readonly_186 = Expect<_check_Paragraph_rightIndent_readonly_186>;
+
+type Ref_Paragraph_search_187 = (searchText: string, searchOptions?: DocxEditor.SearchOptions) => DocxEditor.RangeCollection;
+type Auth_Paragraph_search_187 = (searchText: string, searchOptions?: DocxEditor.SearchOptions) => DocxEditor.RangeCollection;
+type _check_Paragraph_search_187 = IsExact<Ref_Paragraph_search_187, Auth_Paragraph_search_187>;
+type _assert_Paragraph_search_187 = Expect<_check_Paragraph_search_187>;
+
+type Ref_Paragraph_spaceAfter_188 = () => number;
+type Auth_Paragraph_spaceAfter_188 = () => number;
+type _check_Paragraph_spaceAfter_188 = IsExact<Ref_Paragraph_spaceAfter_188, Auth_Paragraph_spaceAfter_188>;
+type _assert_Paragraph_spaceAfter_188 = Expect<_check_Paragraph_spaceAfter_188>;
+
+type Ref_Paragraph_spaceAfter_readonly_189 = { value: number };
+type Auth_Paragraph_spaceAfter_readonly_189 = { value: number };
+type _check_Paragraph_spaceAfter_readonly_189 = IsExact<Ref_Paragraph_spaceAfter_readonly_189, Auth_Paragraph_spaceAfter_readonly_189>;
+type _assert_Paragraph_spaceAfter_readonly_189 = Expect<_check_Paragraph_spaceAfter_readonly_189>;
+
+type Ref_Paragraph_spaceBefore_190 = () => number;
+type Auth_Paragraph_spaceBefore_190 = () => number;
+type _check_Paragraph_spaceBefore_190 = IsExact<Ref_Paragraph_spaceBefore_190, Auth_Paragraph_spaceBefore_190>;
+type _assert_Paragraph_spaceBefore_190 = Expect<_check_Paragraph_spaceBefore_190>;
+
+type Ref_Paragraph_spaceBefore_readonly_191 = { value: number };
+type Auth_Paragraph_spaceBefore_readonly_191 = { value: number };
+type _check_Paragraph_spaceBefore_readonly_191 = IsExact<Ref_Paragraph_spaceBefore_readonly_191, Auth_Paragraph_spaceBefore_readonly_191>;
+type _assert_Paragraph_spaceBefore_readonly_191 = Expect<_check_Paragraph_spaceBefore_readonly_191>;
+
+type Ref_Paragraph_split_192 = (delimiters: string[], trimDelimiters?: boolean, trimSpacing?: boolean) => DocxEditor.RangeCollection;
+type Auth_Paragraph_split_192 = (delimiters: string[], trimDelimiters?: boolean, trimSpacing?: boolean) => DocxEditor.RangeCollection;
+type _check_Paragraph_split_192 = IsExact<Ref_Paragraph_split_192, Auth_Paragraph_split_192>;
+type _assert_Paragraph_split_192 = Expect<_check_Paragraph_split_192>;
+
+type Ref_Paragraph_style_193 = () => string;
+type Auth_Paragraph_style_193 = () => string;
+type _check_Paragraph_style_193 = IsExact<Ref_Paragraph_style_193, Auth_Paragraph_style_193>;
+type _assert_Paragraph_style_193 = Expect<_check_Paragraph_style_193>;
+
+type Ref_Paragraph_style_readonly_194 = { value: string };
+type Auth_Paragraph_style_readonly_194 = { value: string };
+type _check_Paragraph_style_readonly_194 = IsExact<Ref_Paragraph_style_readonly_194, Auth_Paragraph_style_readonly_194>;
+type _assert_Paragraph_style_readonly_194 = Expect<_check_Paragraph_style_readonly_194>;
+
+type Ref_Paragraph_text_195 = () => string;
+type Auth_Paragraph_text_195 = () => string;
+type _check_Paragraph_text_195 = IsExact<Ref_Paragraph_text_195, Auth_Paragraph_text_195>;
+type _assert_Paragraph_text_195 = Expect<_check_Paragraph_text_195>;
+
+type Ref_Paragraph_text_readonly_196 = { readonly value: string };
+type Auth_Paragraph_text_readonly_196 = { readonly value: string };
+type _check_Paragraph_text_readonly_196 = IsExact<Ref_Paragraph_text_readonly_196, Auth_Paragraph_text_readonly_196>;
+type _assert_Paragraph_text_readonly_196 = Expect<_check_Paragraph_text_readonly_196>;
+
+type Ref_ParagraphCollection_getFirst_197 = () => DocxEditor.Paragraph;
+type Auth_ParagraphCollection_getFirst_197 = () => DocxEditor.Paragraph;
+type _check_ParagraphCollection_getFirst_197 = IsExact<Ref_ParagraphCollection_getFirst_197, Auth_ParagraphCollection_getFirst_197>;
+type _assert_ParagraphCollection_getFirst_197 = Expect<_check_ParagraphCollection_getFirst_197>;
+
+type Ref_ParagraphCollection_getLast_198 = () => DocxEditor.Paragraph;
+type Auth_ParagraphCollection_getLast_198 = () => DocxEditor.Paragraph;
+type _check_ParagraphCollection_getLast_198 = IsExact<Ref_ParagraphCollection_getLast_198, Auth_ParagraphCollection_getLast_198>;
+type _assert_ParagraphCollection_getLast_198 = Expect<_check_ParagraphCollection_getLast_198>;
+
+type Ref_ParagraphCollection_items_199 = () => DocxEditor.Paragraph[];
+type Auth_ParagraphCollection_items_199 = () => DocxEditor.Paragraph[];
+type _check_ParagraphCollection_items_199 = IsExact<Ref_ParagraphCollection_items_199, Auth_ParagraphCollection_items_199>;
+type _assert_ParagraphCollection_items_199 = Expect<_check_ParagraphCollection_items_199>;
+
+type Ref_ParagraphCollection_items_readonly_200 = { readonly value: DocxEditor.Paragraph[] };
+type Auth_ParagraphCollection_items_readonly_200 = { readonly value: DocxEditor.Paragraph[] };
+type _check_ParagraphCollection_items_readonly_200 = IsExact<Ref_ParagraphCollection_items_readonly_200, Auth_ParagraphCollection_items_readonly_200>;
+type _assert_ParagraphCollection_items_readonly_200 = Expect<_check_ParagraphCollection_items_readonly_200>;
+
+type Ref_Range_bookmarks_201 = () => DocxEditor.BookmarkCollection;
+type Auth_Range_bookmarks_201 = () => DocxEditor.BookmarkCollection;
+type _check_Range_bookmarks_201 = IsExact<Ref_Range_bookmarks_201, Auth_Range_bookmarks_201>;
+type _assert_Range_bookmarks_201 = Expect<_check_Range_bookmarks_201>;
+
+type Ref_Range_bookmarks_readonly_202 = { readonly value: DocxEditor.BookmarkCollection };
+type Auth_Range_bookmarks_readonly_202 = { readonly value: DocxEditor.BookmarkCollection };
+type _check_Range_bookmarks_readonly_202 = IsExact<Ref_Range_bookmarks_readonly_202, Auth_Range_bookmarks_readonly_202>;
+type _assert_Range_bookmarks_readonly_202 = Expect<_check_Range_bookmarks_readonly_202>;
+
+type Ref_Range_clear_203 = () => void;
+type Auth_Range_clear_203 = () => void;
+type _check_Range_clear_203 = IsExact<Ref_Range_clear_203, Auth_Range_clear_203>;
+type _assert_Range_clear_203 = Expect<_check_Range_clear_203>;
+
+type Ref_Range_contentControls_204 = () => DocxEditor.ContentControlCollection;
+type Auth_Range_contentControls_204 = () => DocxEditor.ContentControlCollection;
+type _check_Range_contentControls_204 = IsExact<Ref_Range_contentControls_204, Auth_Range_contentControls_204>;
+type _assert_Range_contentControls_204 = Expect<_check_Range_contentControls_204>;
+
+type Ref_Range_contentControls_readonly_205 = { readonly value: DocxEditor.ContentControlCollection };
+type Auth_Range_contentControls_readonly_205 = { readonly value: DocxEditor.ContentControlCollection };
+type _check_Range_contentControls_readonly_205 = IsExact<Ref_Range_contentControls_readonly_205, Auth_Range_contentControls_readonly_205>;
+type _assert_Range_contentControls_readonly_205 = Expect<_check_Range_contentControls_readonly_205>;
+
+type Ref_Range_delete_206 = () => void;
+type Auth_Range_delete_206 = () => void;
+type _check_Range_delete_206 = IsExact<Ref_Range_delete_206, Auth_Range_delete_206>;
+type _assert_Range_delete_206 = Expect<_check_Range_delete_206>;
+
+type Ref_Range_expandTo_207 = (range: DocxEditor.Range) => DocxEditor.Range;
+type Auth_Range_expandTo_207 = (range: DocxEditor.Range) => DocxEditor.Range;
+type _check_Range_expandTo_207 = IsExact<Ref_Range_expandTo_207, Auth_Range_expandTo_207>;
+type _assert_Range_expandTo_207 = Expect<_check_Range_expandTo_207>;
+
+type Ref_Range_font_208 = () => DocxEditor.Font;
+type Auth_Range_font_208 = () => DocxEditor.Font;
+type _check_Range_font_208 = IsExact<Ref_Range_font_208, Auth_Range_font_208>;
+type _assert_Range_font_208 = Expect<_check_Range_font_208>;
+
+type Ref_Range_font_readonly_209 = { readonly value: DocxEditor.Font };
+type Auth_Range_font_readonly_209 = { readonly value: DocxEditor.Font };
+type _check_Range_font_readonly_209 = IsExact<Ref_Range_font_readonly_209, Auth_Range_font_readonly_209>;
+type _assert_Range_font_readonly_209 = Expect<_check_Range_font_readonly_209>;
+
+type Ref_Range_getBookmarks_210 = (includeHidden?: boolean, includeAdjacent?: boolean) => DocxEditor.ClientResult<string[]>;
+type Auth_Range_getBookmarks_210 = (includeHidden?: boolean, includeAdjacent?: boolean) => DocxEditor.ClientResult<string[]>;
+type _check_Range_getBookmarks_210 = IsExact<Ref_Range_getBookmarks_210, Auth_Range_getBookmarks_210>;
+type _assert_Range_getBookmarks_210 = Expect<_check_Range_getBookmarks_210>;
+
+type Ref_Range_getRange_211 = (rangeLocation?: "Whole" | "Start" | "End" | "After" | "Content") => DocxEditor.Range;
+type Auth_Range_getRange_211 = (rangeLocation?: "Whole" | "Start" | "End" | "After" | "Content") => DocxEditor.Range;
+type _check_Range_getRange_211 = IsExact<Ref_Range_getRange_211, Auth_Range_getRange_211>;
+type _assert_Range_getRange_211 = Expect<_check_Range_getRange_211>;
+
+type Ref_Range_getReviewedText_212 = (changeTrackingVersion?: DocxEditor.ChangeTrackingVersion) => DocxEditor.ClientResult<string>;
+type Auth_Range_getReviewedText_212 = (changeTrackingVersion?: DocxEditor.ChangeTrackingVersion) => DocxEditor.ClientResult<string>;
+type _check_Range_getReviewedText_212 = IsExact<Ref_Range_getReviewedText_212, Auth_Range_getReviewedText_212>;
+type _assert_Range_getReviewedText_212 = Expect<_check_Range_getReviewedText_212>;
+
+type Ref_Range_getReviewedText_213 = (changeTrackingVersion?: "Original" | "Current") => DocxEditor.ClientResult<string>;
+type Auth_Range_getReviewedText_213 = (changeTrackingVersion?: "Original" | "Current") => DocxEditor.ClientResult<string>;
+type _check_Range_getReviewedText_213 = IsExact<Ref_Range_getReviewedText_213, Auth_Range_getReviewedText_213>;
+type _assert_Range_getReviewedText_213 = Expect<_check_Range_getReviewedText_213>;
+
+type Ref_Range_getTextRanges_214 = (endingMarks: string[], trimSpacing?: boolean) => DocxEditor.RangeCollection;
+type Auth_Range_getTextRanges_214 = (endingMarks: string[], trimSpacing?: boolean) => DocxEditor.RangeCollection;
+type _check_Range_getTextRanges_214 = IsExact<Ref_Range_getTextRanges_214, Auth_Range_getTextRanges_214>;
+type _assert_Range_getTextRanges_214 = Expect<_check_Range_getTextRanges_214>;
+
+type Ref_Range_hyperlink_215 = () => string;
+type Auth_Range_hyperlink_215 = () => string;
+type _check_Range_hyperlink_215 = IsExact<Ref_Range_hyperlink_215, Auth_Range_hyperlink_215>;
+type _assert_Range_hyperlink_215 = Expect<_check_Range_hyperlink_215>;
+
+type Ref_Range_hyperlink_readonly_216 = { value: string };
+type Auth_Range_hyperlink_readonly_216 = { value: string };
+type _check_Range_hyperlink_readonly_216 = IsExact<Ref_Range_hyperlink_readonly_216, Auth_Range_hyperlink_readonly_216>;
+type _assert_Range_hyperlink_readonly_216 = Expect<_check_Range_hyperlink_readonly_216>;
+
+type Ref_Range_insertBookmark_217 = (name: string) => void;
+type Auth_Range_insertBookmark_217 = (name: string) => void;
+type _check_Range_insertBookmark_217 = IsExact<Ref_Range_insertBookmark_217, Auth_Range_insertBookmark_217>;
+type _assert_Range_insertBookmark_217 = Expect<_check_Range_insertBookmark_217>;
+
+type Ref_Range_insertComment_218 = (commentText: string) => DocxEditor.Comment;
+type Auth_Range_insertComment_218 = (commentText: string) => DocxEditor.Comment;
+type _check_Range_insertComment_218 = IsExact<Ref_Range_insertComment_218, Auth_Range_insertComment_218>;
+type _assert_Range_insertComment_218 = Expect<_check_Range_insertComment_218>;
+
+type Ref_Range_insertParagraph_219 = (paragraphText: string, insertLocation: "Before" | "After") => DocxEditor.Paragraph;
+type Auth_Range_insertParagraph_219 = (paragraphText: string, insertLocation: "Before" | "After") => DocxEditor.Paragraph;
+type _check_Range_insertParagraph_219 = IsExact<Ref_Range_insertParagraph_219, Auth_Range_insertParagraph_219>;
+type _assert_Range_insertParagraph_219 = Expect<_check_Range_insertParagraph_219>;
+
+type Ref_Range_insertText_220 = (text: string, insertLocation: "Replace" | "Start" | "End" | "Before" | "After") => DocxEditor.Range;
+type Auth_Range_insertText_220 = (text: string, insertLocation: "Replace" | "Start" | "End" | "Before" | "After") => DocxEditor.Range;
+type _check_Range_insertText_220 = IsExact<Ref_Range_insertText_220, Auth_Range_insertText_220>;
+type _assert_Range_insertText_220 = Expect<_check_Range_insertText_220>;
+
+type Ref_Range_paragraphs_221 = () => DocxEditor.ParagraphCollection;
+type Auth_Range_paragraphs_221 = () => DocxEditor.ParagraphCollection;
+type _check_Range_paragraphs_221 = IsExact<Ref_Range_paragraphs_221, Auth_Range_paragraphs_221>;
+type _assert_Range_paragraphs_221 = Expect<_check_Range_paragraphs_221>;
+
+type Ref_Range_paragraphs_readonly_222 = { readonly value: DocxEditor.ParagraphCollection };
+type Auth_Range_paragraphs_readonly_222 = { readonly value: DocxEditor.ParagraphCollection };
+type _check_Range_paragraphs_readonly_222 = IsExact<Ref_Range_paragraphs_readonly_222, Auth_Range_paragraphs_readonly_222>;
+type _assert_Range_paragraphs_readonly_222 = Expect<_check_Range_paragraphs_readonly_222>;
+
+type Ref_Range_revisions_223 = () => DocxEditor.RevisionCollection;
+type Auth_Range_revisions_223 = () => DocxEditor.RevisionCollection;
+type _check_Range_revisions_223 = IsExact<Ref_Range_revisions_223, Auth_Range_revisions_223>;
+type _assert_Range_revisions_223 = Expect<_check_Range_revisions_223>;
+
+type Ref_Range_revisions_readonly_224 = { readonly value: DocxEditor.RevisionCollection };
+type Auth_Range_revisions_readonly_224 = { readonly value: DocxEditor.RevisionCollection };
+type _check_Range_revisions_readonly_224 = IsExact<Ref_Range_revisions_readonly_224, Auth_Range_revisions_readonly_224>;
+type _assert_Range_revisions_readonly_224 = Expect<_check_Range_revisions_readonly_224>;
+
+type Ref_Range_search_225 = (searchText: string, searchOptions?: DocxEditor.SearchOptions) => DocxEditor.RangeCollection;
+type Auth_Range_search_225 = (searchText: string, searchOptions?: DocxEditor.SearchOptions) => DocxEditor.RangeCollection;
+type _check_Range_search_225 = IsExact<Ref_Range_search_225, Auth_Range_search_225>;
+type _assert_Range_search_225 = Expect<_check_Range_search_225>;
+
+type Ref_Range_select_226 = (selectionMode?: DocxEditor.SelectionMode) => void;
+type Auth_Range_select_226 = (selectionMode?: DocxEditor.SelectionMode) => void;
+type _check_Range_select_226 = IsExact<Ref_Range_select_226, Auth_Range_select_226>;
+type _assert_Range_select_226 = Expect<_check_Range_select_226>;
+
+type Ref_Range_select_227 = (selectionMode?: "Select" | "Start" | "End") => void;
+type Auth_Range_select_227 = (selectionMode?: "Select" | "Start" | "End") => void;
+type _check_Range_select_227 = IsExact<Ref_Range_select_227, Auth_Range_select_227>;
+type _assert_Range_select_227 = Expect<_check_Range_select_227>;
+
+type Ref_Range_style_228 = () => string;
+type Auth_Range_style_228 = () => string;
+type _check_Range_style_228 = IsExact<Ref_Range_style_228, Auth_Range_style_228>;
+type _assert_Range_style_228 = Expect<_check_Range_style_228>;
+
+type Ref_Range_style_readonly_229 = { value: string };
+type Auth_Range_style_readonly_229 = { value: string };
+type _check_Range_style_readonly_229 = IsExact<Ref_Range_style_readonly_229, Auth_Range_style_readonly_229>;
+type _assert_Range_style_readonly_229 = Expect<_check_Range_style_readonly_229>;
+
+type Ref_Range_text_230 = () => string;
+type Auth_Range_text_230 = () => string;
+type _check_Range_text_230 = IsExact<Ref_Range_text_230, Auth_Range_text_230>;
+type _assert_Range_text_230 = Expect<_check_Range_text_230>;
+
+type Ref_Range_text_readonly_231 = { readonly value: string };
+type Auth_Range_text_readonly_231 = { readonly value: string };
+type _check_Range_text_readonly_231 = IsExact<Ref_Range_text_readonly_231, Auth_Range_text_readonly_231>;
+type _assert_Range_text_readonly_231 = Expect<_check_Range_text_readonly_231>;
+
+type Ref_RangeCollection_getFirst_232 = () => DocxEditor.Range;
+type Auth_RangeCollection_getFirst_232 = () => DocxEditor.Range;
+type _check_RangeCollection_getFirst_232 = IsExact<Ref_RangeCollection_getFirst_232, Auth_RangeCollection_getFirst_232>;
+type _assert_RangeCollection_getFirst_232 = Expect<_check_RangeCollection_getFirst_232>;
+
+type Ref_RangeCollection_items_233 = () => DocxEditor.Range[];
+type Auth_RangeCollection_items_233 = () => DocxEditor.Range[];
+type _check_RangeCollection_items_233 = IsExact<Ref_RangeCollection_items_233, Auth_RangeCollection_items_233>;
+type _assert_RangeCollection_items_233 = Expect<_check_RangeCollection_items_233>;
+
+type Ref_RangeCollection_items_readonly_234 = { readonly value: DocxEditor.Range[] };
+type Auth_RangeCollection_items_readonly_234 = { readonly value: DocxEditor.Range[] };
+type _check_RangeCollection_items_readonly_234 = IsExact<Ref_RangeCollection_items_readonly_234, Auth_RangeCollection_items_readonly_234>;
+type _assert_RangeCollection_items_readonly_234 = Expect<_check_RangeCollection_items_readonly_234>;
+
+type Ref_RequestContext_document_235 = () => DocxEditor.Document;
+type Auth_RequestContext_document_235 = () => DocxEditor.Document;
+type _check_RequestContext_document_235 = IsExact<Ref_RequestContext_document_235, Auth_RequestContext_document_235>;
+type _assert_RequestContext_document_235 = Expect<_check_RequestContext_document_235>;
+
+type Ref_RequestContext_document_readonly_236 = { readonly value: DocxEditor.Document };
+type Auth_RequestContext_document_readonly_236 = { readonly value: DocxEditor.Document };
+type _check_RequestContext_document_readonly_236 = IsExact<Ref_RequestContext_document_readonly_236, Auth_RequestContext_document_readonly_236>;
+type _assert_RequestContext_document_readonly_236 = Expect<_check_RequestContext_document_readonly_236>;
+
+type Ref_Revision_accept_237 = () => void;
+type Auth_Revision_accept_237 = () => void;
+type _check_Revision_accept_237 = IsExact<Ref_Revision_accept_237, Auth_Revision_accept_237>;
+type _assert_Revision_accept_237 = Expect<_check_Revision_accept_237>;
+
+type Ref_Revision_author_238 = () => string;
+type Auth_Revision_author_238 = () => string;
+type _check_Revision_author_238 = IsExact<Ref_Revision_author_238, Auth_Revision_author_238>;
+type _assert_Revision_author_238 = Expect<_check_Revision_author_238>;
+
+type Ref_Revision_author_readonly_239 = { readonly value: string };
+type Auth_Revision_author_readonly_239 = { readonly value: string };
+type _check_Revision_author_readonly_239 = IsExact<Ref_Revision_author_readonly_239, Auth_Revision_author_readonly_239>;
+type _assert_Revision_author_readonly_239 = Expect<_check_Revision_author_readonly_239>;
+
+type Ref_Revision_date_240 = () => Date;
+type Auth_Revision_date_240 = () => Date;
+type _check_Revision_date_240 = IsExact<Ref_Revision_date_240, Auth_Revision_date_240>;
+type _assert_Revision_date_240 = Expect<_check_Revision_date_240>;
+
+type Ref_Revision_date_readonly_241 = { readonly value: Date };
+type Auth_Revision_date_readonly_241 = { readonly value: Date };
+type _check_Revision_date_readonly_241 = IsExact<Ref_Revision_date_readonly_241, Auth_Revision_date_readonly_241>;
+type _assert_Revision_date_readonly_241 = Expect<_check_Revision_date_readonly_241>;
+
+type Ref_Revision_range_242 = () => DocxEditor.Range;
+type Auth_Revision_range_242 = () => DocxEditor.Range;
+type _check_Revision_range_242 = IsExact<Ref_Revision_range_242, Auth_Revision_range_242>;
+type _assert_Revision_range_242 = Expect<_check_Revision_range_242>;
+
+type Ref_Revision_range_readonly_243 = { readonly value: DocxEditor.Range };
+type Auth_Revision_range_readonly_243 = { readonly value: DocxEditor.Range };
+type _check_Revision_range_readonly_243 = IsExact<Ref_Revision_range_readonly_243, Auth_Revision_range_readonly_243>;
+type _assert_Revision_range_readonly_243 = Expect<_check_Revision_range_readonly_243>;
+
+type Ref_Revision_reject_244 = () => void;
+type Auth_Revision_reject_244 = () => void;
+type _check_Revision_reject_244 = IsExact<Ref_Revision_reject_244, Auth_Revision_reject_244>;
+type _assert_Revision_reject_244 = Expect<_check_Revision_reject_244>;
+
+type Ref_Revision_type_245 = () => "None" | "Insert" | "Delete" | "Property" | "ParagraphNumber" | "DisplayField" | "Reconcile" | "Conflict" | "Style" | "Replace" | "ParagraphProperty" | "TableProperty" | "SectionProperty" | "StyleDefinition" | "MovedFrom" | "MovedTo" | "CellInsertion" | "CellDeletion" | "CellMerge" | "CellSplit" | "ConflictInsert" | "ConflictDelete";
+type Auth_Revision_type_245 = () => "None" | "Insert" | "Delete" | "Property" | "ParagraphNumber" | "DisplayField" | "Reconcile" | "Conflict" | "Style" | "Replace" | "ParagraphProperty" | "TableProperty" | "SectionProperty" | "StyleDefinition" | "MovedFrom" | "MovedTo" | "CellInsertion" | "CellDeletion" | "CellMerge" | "CellSplit" | "ConflictInsert" | "ConflictDelete";
+type _check_Revision_type_245 = IsExact<Ref_Revision_type_245, Auth_Revision_type_245>;
+type _assert_Revision_type_245 = Expect<_check_Revision_type_245>;
+
+type Ref_Revision_type_readonly_246 = { readonly value: "None" | "Insert" | "Delete" | "Property" | "ParagraphNumber" | "DisplayField" | "Reconcile" | "Conflict" | "Style" | "Replace" | "ParagraphProperty" | "TableProperty" | "SectionProperty" | "StyleDefinition" | "MovedFrom" | "MovedTo" | "CellInsertion" | "CellDeletion" | "CellMerge" | "CellSplit" | "ConflictInsert" | "ConflictDelete" };
+type Auth_Revision_type_readonly_246 = { readonly value: "None" | "Insert" | "Delete" | "Property" | "ParagraphNumber" | "DisplayField" | "Reconcile" | "Conflict" | "Style" | "Replace" | "ParagraphProperty" | "TableProperty" | "SectionProperty" | "StyleDefinition" | "MovedFrom" | "MovedTo" | "CellInsertion" | "CellDeletion" | "CellMerge" | "CellSplit" | "ConflictInsert" | "ConflictDelete" };
+type _check_Revision_type_readonly_246 = IsExact<Ref_Revision_type_readonly_246, Auth_Revision_type_readonly_246>;
+type _assert_Revision_type_readonly_246 = Expect<_check_Revision_type_readonly_246>;
+
+type Ref_RevisionCollection_acceptAll_247 = () => void;
+type Auth_RevisionCollection_acceptAll_247 = () => void;
+type _check_RevisionCollection_acceptAll_247 = IsExact<Ref_RevisionCollection_acceptAll_247, Auth_RevisionCollection_acceptAll_247>;
+type _assert_RevisionCollection_acceptAll_247 = Expect<_check_RevisionCollection_acceptAll_247>;
+
+type Ref_RevisionCollection_items_248 = () => DocxEditor.Revision[];
+type Auth_RevisionCollection_items_248 = () => DocxEditor.Revision[];
+type _check_RevisionCollection_items_248 = IsExact<Ref_RevisionCollection_items_248, Auth_RevisionCollection_items_248>;
+type _assert_RevisionCollection_items_248 = Expect<_check_RevisionCollection_items_248>;
+
+type Ref_RevisionCollection_items_readonly_249 = { readonly value: DocxEditor.Revision[] };
+type Auth_RevisionCollection_items_readonly_249 = { readonly value: DocxEditor.Revision[] };
+type _check_RevisionCollection_items_readonly_249 = IsExact<Ref_RevisionCollection_items_readonly_249, Auth_RevisionCollection_items_readonly_249>;
+type _assert_RevisionCollection_items_readonly_249 = Expect<_check_RevisionCollection_items_readonly_249>;
+
+type Ref_RevisionCollection_rejectAll_250 = () => void;
+type Auth_RevisionCollection_rejectAll_250 = () => void;
+type _check_RevisionCollection_rejectAll_250 = IsExact<Ref_RevisionCollection_rejectAll_250, Auth_RevisionCollection_rejectAll_250>;
+type _assert_RevisionCollection_rejectAll_250 = Expect<_check_RevisionCollection_rejectAll_250>;
+
+type Ref_SearchOptions_ignorePunct_251 = () => boolean;
+type Auth_SearchOptions_ignorePunct_251 = () => boolean;
+type _check_SearchOptions_ignorePunct_251 = IsExact<Ref_SearchOptions_ignorePunct_251, Auth_SearchOptions_ignorePunct_251>;
+type _assert_SearchOptions_ignorePunct_251 = Expect<_check_SearchOptions_ignorePunct_251>;
+
+type Ref_SearchOptions_ignorePunct_readonly_252 = { value: boolean };
+type Auth_SearchOptions_ignorePunct_readonly_252 = { value: boolean };
+type _check_SearchOptions_ignorePunct_readonly_252 = IsExact<Ref_SearchOptions_ignorePunct_readonly_252, Auth_SearchOptions_ignorePunct_readonly_252>;
+type _assert_SearchOptions_ignorePunct_readonly_252 = Expect<_check_SearchOptions_ignorePunct_readonly_252>;
+
+type Ref_SearchOptions_ignoreSpace_253 = () => boolean;
+type Auth_SearchOptions_ignoreSpace_253 = () => boolean;
+type _check_SearchOptions_ignoreSpace_253 = IsExact<Ref_SearchOptions_ignoreSpace_253, Auth_SearchOptions_ignoreSpace_253>;
+type _assert_SearchOptions_ignoreSpace_253 = Expect<_check_SearchOptions_ignoreSpace_253>;
+
+type Ref_SearchOptions_ignoreSpace_readonly_254 = { value: boolean };
+type Auth_SearchOptions_ignoreSpace_readonly_254 = { value: boolean };
+type _check_SearchOptions_ignoreSpace_readonly_254 = IsExact<Ref_SearchOptions_ignoreSpace_readonly_254, Auth_SearchOptions_ignoreSpace_readonly_254>;
+type _assert_SearchOptions_ignoreSpace_readonly_254 = Expect<_check_SearchOptions_ignoreSpace_readonly_254>;
+
+type Ref_SearchOptions_matchCase_255 = () => boolean;
+type Auth_SearchOptions_matchCase_255 = () => boolean;
+type _check_SearchOptions_matchCase_255 = IsExact<Ref_SearchOptions_matchCase_255, Auth_SearchOptions_matchCase_255>;
+type _assert_SearchOptions_matchCase_255 = Expect<_check_SearchOptions_matchCase_255>;
+
+type Ref_SearchOptions_matchCase_readonly_256 = { value: boolean };
+type Auth_SearchOptions_matchCase_readonly_256 = { value: boolean };
+type _check_SearchOptions_matchCase_readonly_256 = IsExact<Ref_SearchOptions_matchCase_readonly_256, Auth_SearchOptions_matchCase_readonly_256>;
+type _assert_SearchOptions_matchCase_readonly_256 = Expect<_check_SearchOptions_matchCase_readonly_256>;
+
+type Ref_SearchOptions_matchWholeWord_257 = () => boolean;
+type Auth_SearchOptions_matchWholeWord_257 = () => boolean;
+type _check_SearchOptions_matchWholeWord_257 = IsExact<Ref_SearchOptions_matchWholeWord_257, Auth_SearchOptions_matchWholeWord_257>;
+type _assert_SearchOptions_matchWholeWord_257 = Expect<_check_SearchOptions_matchWholeWord_257>;
+
+type Ref_SearchOptions_matchWholeWord_readonly_258 = { value: boolean };
+type Auth_SearchOptions_matchWholeWord_readonly_258 = { value: boolean };
+type _check_SearchOptions_matchWholeWord_readonly_258 = IsExact<Ref_SearchOptions_matchWholeWord_readonly_258, Auth_SearchOptions_matchWholeWord_readonly_258>;
+type _assert_SearchOptions_matchWholeWord_readonly_258 = Expect<_check_SearchOptions_matchWholeWord_readonly_258>;
+
+type Ref_SearchOptions_matchWildcards_259 = () => boolean;
+type Auth_SearchOptions_matchWildcards_259 = () => boolean;
+type _check_SearchOptions_matchWildcards_259 = IsExact<Ref_SearchOptions_matchWildcards_259, Auth_SearchOptions_matchWildcards_259>;
+type _assert_SearchOptions_matchWildcards_259 = Expect<_check_SearchOptions_matchWildcards_259>;
+
+type Ref_SearchOptions_matchWildcards_readonly_260 = { value: boolean };
+type Auth_SearchOptions_matchWildcards_readonly_260 = { value: boolean };
+type _check_SearchOptions_matchWildcards_readonly_260 = IsExact<Ref_SearchOptions_matchWildcards_readonly_260, Auth_SearchOptions_matchWildcards_readonly_260>;
+type _assert_SearchOptions_matchWildcards_readonly_260 = Expect<_check_SearchOptions_matchWildcards_readonly_260>;
+
+type Ref_Section_body_261 = () => DocxEditor.Body;
+type Auth_Section_body_261 = () => DocxEditor.Body;
+type _check_Section_body_261 = IsExact<Ref_Section_body_261, Auth_Section_body_261>;
+type _assert_Section_body_261 = Expect<_check_Section_body_261>;
+
+type Ref_Section_body_readonly_262 = { readonly value: DocxEditor.Body };
+type Auth_Section_body_readonly_262 = { readonly value: DocxEditor.Body };
+type _check_Section_body_readonly_262 = IsExact<Ref_Section_body_readonly_262, Auth_Section_body_readonly_262>;
+type _assert_Section_body_readonly_262 = Expect<_check_Section_body_readonly_262>;
+
+type Ref_Section_getFooter_263 = (type: DocxEditor.HeaderFooterType) => DocxEditor.Body;
+type Auth_Section_getFooter_263 = (type: DocxEditor.HeaderFooterType) => DocxEditor.Body;
+type _check_Section_getFooter_263 = IsExact<Ref_Section_getFooter_263, Auth_Section_getFooter_263>;
+type _assert_Section_getFooter_263 = Expect<_check_Section_getFooter_263>;
+
+type Ref_Section_getFooter_264 = (type: "Primary" | "FirstPage" | "EvenPages") => DocxEditor.Body;
+type Auth_Section_getFooter_264 = (type: "Primary" | "FirstPage" | "EvenPages") => DocxEditor.Body;
+type _check_Section_getFooter_264 = IsExact<Ref_Section_getFooter_264, Auth_Section_getFooter_264>;
+type _assert_Section_getFooter_264 = Expect<_check_Section_getFooter_264>;
+
+type Ref_Section_getHeader_265 = (type: DocxEditor.HeaderFooterType) => DocxEditor.Body;
+type Auth_Section_getHeader_265 = (type: DocxEditor.HeaderFooterType) => DocxEditor.Body;
+type _check_Section_getHeader_265 = IsExact<Ref_Section_getHeader_265, Auth_Section_getHeader_265>;
+type _assert_Section_getHeader_265 = Expect<_check_Section_getHeader_265>;
+
+type Ref_Section_getHeader_266 = (type: "Primary" | "FirstPage" | "EvenPages") => DocxEditor.Body;
+type Auth_Section_getHeader_266 = (type: "Primary" | "FirstPage" | "EvenPages") => DocxEditor.Body;
+type _check_Section_getHeader_266 = IsExact<Ref_Section_getHeader_266, Auth_Section_getHeader_266>;
+type _assert_Section_getHeader_266 = Expect<_check_Section_getHeader_266>;
+
+type Ref_Section_getNext_267 = () => DocxEditor.Section;
+type Auth_Section_getNext_267 = () => DocxEditor.Section;
+type _check_Section_getNext_267 = IsExact<Ref_Section_getNext_267, Auth_Section_getNext_267>;
+type _assert_Section_getNext_267 = Expect<_check_Section_getNext_267>;
+
+type Ref_Section_pageSetup_268 = () => DocxEditor.PageSetup;
+type Auth_Section_pageSetup_268 = () => DocxEditor.PageSetup;
+type _check_Section_pageSetup_268 = IsExact<Ref_Section_pageSetup_268, Auth_Section_pageSetup_268>;
+type _assert_Section_pageSetup_268 = Expect<_check_Section_pageSetup_268>;
+
+type Ref_Section_pageSetup_readonly_269 = { readonly value: DocxEditor.PageSetup };
+type Auth_Section_pageSetup_readonly_269 = { readonly value: DocxEditor.PageSetup };
+type _check_Section_pageSetup_readonly_269 = IsExact<Ref_Section_pageSetup_readonly_269, Auth_Section_pageSetup_readonly_269>;
+type _assert_Section_pageSetup_readonly_269 = Expect<_check_Section_pageSetup_readonly_269>;
+
+type Ref_SectionCollection_getFirst_270 = () => DocxEditor.Section;
+type Auth_SectionCollection_getFirst_270 = () => DocxEditor.Section;
+type _check_SectionCollection_getFirst_270 = IsExact<Ref_SectionCollection_getFirst_270, Auth_SectionCollection_getFirst_270>;
+type _assert_SectionCollection_getFirst_270 = Expect<_check_SectionCollection_getFirst_270>;
+
+type Ref_SectionCollection_items_271 = () => DocxEditor.Section[];
+type Auth_SectionCollection_items_271 = () => DocxEditor.Section[];
+type _check_SectionCollection_items_271 = IsExact<Ref_SectionCollection_items_271, Auth_SectionCollection_items_271>;
+type _assert_SectionCollection_items_271 = Expect<_check_SectionCollection_items_271>;
+
+type Ref_SectionCollection_items_readonly_272 = { readonly value: DocxEditor.Section[] };
+type Auth_SectionCollection_items_readonly_272 = { readonly value: DocxEditor.Section[] };
+type _check_SectionCollection_items_readonly_272 = IsExact<Ref_SectionCollection_items_readonly_272, Auth_SectionCollection_items_readonly_272>;
+type _assert_SectionCollection_items_readonly_272 = Expect<_check_SectionCollection_items_readonly_272>;
+
+type Ref_Style_baseStyle_273 = () => string;
+type Auth_Style_baseStyle_273 = () => string;
+type _check_Style_baseStyle_273 = IsExact<Ref_Style_baseStyle_273, Auth_Style_baseStyle_273>;
+type _assert_Style_baseStyle_273 = Expect<_check_Style_baseStyle_273>;
+
+type Ref_Style_baseStyle_readonly_274 = { value: string };
+type Auth_Style_baseStyle_readonly_274 = { value: string };
+type _check_Style_baseStyle_readonly_274 = IsExact<Ref_Style_baseStyle_readonly_274, Auth_Style_baseStyle_readonly_274>;
+type _assert_Style_baseStyle_readonly_274 = Expect<_check_Style_baseStyle_readonly_274>;
+
+type Ref_Style_builtIn_275 = () => boolean;
+type Auth_Style_builtIn_275 = () => boolean;
+type _check_Style_builtIn_275 = IsExact<Ref_Style_builtIn_275, Auth_Style_builtIn_275>;
+type _assert_Style_builtIn_275 = Expect<_check_Style_builtIn_275>;
+
+type Ref_Style_builtIn_readonly_276 = { readonly value: boolean };
+type Auth_Style_builtIn_readonly_276 = { readonly value: boolean };
+type _check_Style_builtIn_readonly_276 = IsExact<Ref_Style_builtIn_readonly_276, Auth_Style_builtIn_readonly_276>;
+type _assert_Style_builtIn_readonly_276 = Expect<_check_Style_builtIn_readonly_276>;
+
+type Ref_Style_linked_277 = () => boolean;
+type Auth_Style_linked_277 = () => boolean;
+type _check_Style_linked_277 = IsExact<Ref_Style_linked_277, Auth_Style_linked_277>;
+type _assert_Style_linked_277 = Expect<_check_Style_linked_277>;
+
+type Ref_Style_linked_readonly_278 = { readonly value: boolean };
+type Auth_Style_linked_readonly_278 = { readonly value: boolean };
+type _check_Style_linked_readonly_278 = IsExact<Ref_Style_linked_readonly_278, Auth_Style_linked_readonly_278>;
+type _assert_Style_linked_readonly_278 = Expect<_check_Style_linked_readonly_278>;
+
+type Ref_Style_nameLocal_279 = () => string;
+type Auth_Style_nameLocal_279 = () => string;
+type _check_Style_nameLocal_279 = IsExact<Ref_Style_nameLocal_279, Auth_Style_nameLocal_279>;
+type _assert_Style_nameLocal_279 = Expect<_check_Style_nameLocal_279>;
+
+type Ref_Style_nameLocal_readonly_280 = { readonly value: string };
+type Auth_Style_nameLocal_readonly_280 = { readonly value: string };
+type _check_Style_nameLocal_readonly_280 = IsExact<Ref_Style_nameLocal_readonly_280, Auth_Style_nameLocal_readonly_280>;
+type _assert_Style_nameLocal_readonly_280 = Expect<_check_Style_nameLocal_readonly_280>;
+
+type Ref_Style_nextParagraphStyle_281 = () => string;
+type Auth_Style_nextParagraphStyle_281 = () => string;
+type _check_Style_nextParagraphStyle_281 = IsExact<Ref_Style_nextParagraphStyle_281, Auth_Style_nextParagraphStyle_281>;
+type _assert_Style_nextParagraphStyle_281 = Expect<_check_Style_nextParagraphStyle_281>;
+
+type Ref_Style_nextParagraphStyle_readonly_282 = { value: string };
+type Auth_Style_nextParagraphStyle_readonly_282 = { value: string };
+type _check_Style_nextParagraphStyle_readonly_282 = IsExact<Ref_Style_nextParagraphStyle_readonly_282, Auth_Style_nextParagraphStyle_readonly_282>;
+type _assert_Style_nextParagraphStyle_readonly_282 = Expect<_check_Style_nextParagraphStyle_readonly_282>;
+
+type Ref_Style_priority_283 = () => number;
+type Auth_Style_priority_283 = () => number;
+type _check_Style_priority_283 = IsExact<Ref_Style_priority_283, Auth_Style_priority_283>;
+type _assert_Style_priority_283 = Expect<_check_Style_priority_283>;
+
+type Ref_Style_priority_readonly_284 = { value: number };
+type Auth_Style_priority_readonly_284 = { value: number };
+type _check_Style_priority_readonly_284 = IsExact<Ref_Style_priority_readonly_284, Auth_Style_priority_readonly_284>;
+type _assert_Style_priority_readonly_284 = Expect<_check_Style_priority_readonly_284>;
+
+type Ref_Style_quickStyle_285 = () => boolean;
+type Auth_Style_quickStyle_285 = () => boolean;
+type _check_Style_quickStyle_285 = IsExact<Ref_Style_quickStyle_285, Auth_Style_quickStyle_285>;
+type _assert_Style_quickStyle_285 = Expect<_check_Style_quickStyle_285>;
+
+type Ref_Style_quickStyle_readonly_286 = { value: boolean };
+type Auth_Style_quickStyle_readonly_286 = { value: boolean };
+type _check_Style_quickStyle_readonly_286 = IsExact<Ref_Style_quickStyle_readonly_286, Auth_Style_quickStyle_readonly_286>;
+type _assert_Style_quickStyle_readonly_286 = Expect<_check_Style_quickStyle_readonly_286>;
+
+type Ref_Style_type_287 = () => "Character" | "List" | "Paragraph" | "Table";
+type Auth_Style_type_287 = () => "Character" | "List" | "Paragraph" | "Table";
+type _check_Style_type_287 = IsExact<Ref_Style_type_287, Auth_Style_type_287>;
+type _assert_Style_type_287 = Expect<_check_Style_type_287>;
+
+type Ref_Style_type_readonly_288 = { readonly value: "Character" | "List" | "Paragraph" | "Table" };
+type Auth_Style_type_readonly_288 = { readonly value: "Character" | "List" | "Paragraph" | "Table" };
+type _check_Style_type_readonly_288 = IsExact<Ref_Style_type_readonly_288, Auth_Style_type_readonly_288>;
+type _assert_Style_type_readonly_288 = Expect<_check_Style_type_readonly_288>;
+
+type Ref_Style_unhideWhenUsed_289 = () => boolean;
+type Auth_Style_unhideWhenUsed_289 = () => boolean;
+type _check_Style_unhideWhenUsed_289 = IsExact<Ref_Style_unhideWhenUsed_289, Auth_Style_unhideWhenUsed_289>;
+type _assert_Style_unhideWhenUsed_289 = Expect<_check_Style_unhideWhenUsed_289>;
+
+type Ref_Style_unhideWhenUsed_readonly_290 = { value: boolean };
+type Auth_Style_unhideWhenUsed_readonly_290 = { value: boolean };
+type _check_Style_unhideWhenUsed_readonly_290 = IsExact<Ref_Style_unhideWhenUsed_readonly_290, Auth_Style_unhideWhenUsed_readonly_290>;
+type _assert_Style_unhideWhenUsed_readonly_290 = Expect<_check_Style_unhideWhenUsed_readonly_290>;
+
+type Ref_Style_visibility_291 = () => boolean;
+type Auth_Style_visibility_291 = () => boolean;
+type _check_Style_visibility_291 = IsExact<Ref_Style_visibility_291, Auth_Style_visibility_291>;
+type _assert_Style_visibility_291 = Expect<_check_Style_visibility_291>;
+
+type Ref_Style_visibility_readonly_292 = { value: boolean };
+type Auth_Style_visibility_readonly_292 = { value: boolean };
+type _check_Style_visibility_readonly_292 = IsExact<Ref_Style_visibility_readonly_292, Auth_Style_visibility_readonly_292>;
+type _assert_Style_visibility_readonly_292 = Expect<_check_Style_visibility_readonly_292>;
+
+type Ref_StyleCollection_getByNameOrNullObject_293 = (name: string) => DocxEditor.Style;
+type Auth_StyleCollection_getByNameOrNullObject_293 = (name: string) => DocxEditor.Style;
+type _check_StyleCollection_getByNameOrNullObject_293 = IsExact<Ref_StyleCollection_getByNameOrNullObject_293, Auth_StyleCollection_getByNameOrNullObject_293>;
+type _assert_StyleCollection_getByNameOrNullObject_293 = Expect<_check_StyleCollection_getByNameOrNullObject_293>;
+
+type Ref_StyleCollection_getCount_294 = () => DocxEditor.ClientResult<number>;
+type Auth_StyleCollection_getCount_294 = () => DocxEditor.ClientResult<number>;
+type _check_StyleCollection_getCount_294 = IsExact<Ref_StyleCollection_getCount_294, Auth_StyleCollection_getCount_294>;
+type _assert_StyleCollection_getCount_294 = Expect<_check_StyleCollection_getCount_294>;
+
+type Ref_StyleCollection_items_295 = () => DocxEditor.Style[];
+type Auth_StyleCollection_items_295 = () => DocxEditor.Style[];
+type _check_StyleCollection_items_295 = IsExact<Ref_StyleCollection_items_295, Auth_StyleCollection_items_295>;
+type _assert_StyleCollection_items_295 = Expect<_check_StyleCollection_items_295>;
+
+type Ref_StyleCollection_items_readonly_296 = { readonly value: DocxEditor.Style[] };
+type Auth_StyleCollection_items_readonly_296 = { readonly value: DocxEditor.Style[] };
+type _check_StyleCollection_items_readonly_296 = IsExact<Ref_StyleCollection_items_readonly_296, Auth_StyleCollection_items_readonly_296>;
+type _assert_StyleCollection_items_readonly_296 = Expect<_check_StyleCollection_items_readonly_296>;
+
+type Ref_run_297 = (objects: DocxEditor.ClientObject[], batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
+type Auth_run_297 = (objects: DocxEditor.ClientObject[], batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
 type _check_run_297 = IsExact<Ref_run_297, Auth_run_297>;
 type _assert_run_297 = Expect<_check_run_297>;
+
+type Ref_run_298 = (object: DocxEditor.ClientObject, batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
+type Auth_run_298 = (object: DocxEditor.ClientObject, batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
+type _check_run_298 = IsExact<Ref_run_298, Auth_run_298>;
+type _assert_run_298 = Expect<_check_run_298>;
+
+type Ref_run_299 = (batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
+type Auth_run_299 = (batch: (context: DocxEditor.RequestContext) => Promise<unknown>) => Promise<unknown>;
+type _check_run_299 = IsExact<Ref_run_299, Auth_run_299>;
+type _assert_run_299 = Expect<_check_run_299>;
 

@@ -32,6 +32,8 @@ const ALLOWLISTED_SUPPORT_TYPES = new Set([
   'SelectionMode',
   'HeaderFooterType',
   'ChangeTrackingVersion',
+  'CompareTarget',
+  'DocumentCompareOptions',
 ]);
 
 function symbolLabel(symbolName) {

@@ -15,6 +15,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 import { createRevisionMarkupDialog } from './revision-markup-dialog';
+import { createCompareDocumentsDialog } from './compare-documents-dialog';
 import {
   resolveReviewPane,
   type EditorModule,
@@ -23,6 +24,9 @@ import {
 import { collectReviewItems, revisionItemsOfParagraph } from './review-model.ts';
 import type { ProLicenseOptions } from '../license.ts';
 import { installDrawing } from '../drawing/index.ts';
+import { compareDocumentsEngine } from '../compare/index.ts';
+import { createCompareWorkerEngine } from '../compare/worker-engine.ts';
+import { startDefaultCompareWorker } from '../compare-worker-default.ts';
 
 export type {
   CommentMarkerStyle,
@@ -48,6 +52,23 @@ export interface ReviewModuleOptions extends ProLicenseOptions {
    * value throws a `TypeError`.
    */
   readonly pane?: ReviewPaneOptions;
+  /**
+   * The worker that runs the Compare documents dialog's compares off the page's main thread,
+   * so the page stays responsive, the dialog shows progress, and Cancel stops a running
+   * compare. By default, the editor starts the packaged worker,
+   * `@docx-editor.dev/pro/compare-worker`, one for each compare.
+   *
+   * Pass `false` to compare on the main thread. Pass a function that starts the worker if your
+   * bundler cannot find the packaged one. If a worker fails to start, the dialog compares on
+   * the main thread instead, and that compare cannot be stopped.
+   *
+   * @example A Vite worker import
+   * ```ts
+   * import CompareWorker from '@docx-editor.dev/pro/compare-worker?worker';
+   * reviewModule({ compareWorker: () => new CompareWorker() });
+   * ```
+   */
+  readonly compareWorker?: (() => Worker) | false;
 }
 
 /**
@@ -59,9 +80,20 @@ export function reviewModule(options: ReviewModuleOptions = {}): EditorModule {
   // Validate now, so a misspelled setting fails where the host wrote it.
   const pane = options.pane === undefined ? undefined : { ...resolveReviewPane(options.pane) };
   installDrawing(options);
+  const worker = options.compareWorker;
+  if (worker !== undefined && worker !== false && typeof worker !== 'function')
+    throw new TypeError(
+      'reviewModule: compareWorker must be false or a function that returns a Worker'
+    );
+  // The packaged worker by default. Where it cannot start, compares run on the main thread.
+  const background =
+    worker === false ? undefined : createCompareWorkerEngine(worker ?? startDefaultCompareWorker);
   return {
     id: 'review',
     review: {
+      compareDocuments: compareDocumentsEngine,
+      ...(background ? { compareDocumentsInBackground: background } : {}),
+      createCompareDocumentsDialog,
       createRevisionMarkupDialog,
       displayModes: ['all-markup', 'simple-markup', 'proposed', 'original'],
       collectReviewItems,

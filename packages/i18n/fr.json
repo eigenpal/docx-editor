@@ -921,7 +921,8 @@
     "replyCount": "Réponses : {count}",
     "trackedChange": "Modification suivie",
     "changeAnnouncement": "{change} par {author} : {text}",
-    "replyTargetResolved": "La modification a été résolue, la réponse n'a donc pas été publiée."
+    "replyTargetResolved": "La modification a été résolue, la réponse n'a donc pas été publiée.",
+    "compareDocuments": "Comparer des documents"
   },
   "imageAltText": {
     "description": "Description",
@@ -1009,6 +1010,7 @@
     "trackedOnly": "Ce document autorise uniquement les modifications suivies",
     "unavailable": "Cette commande est indisponible",
     "viewing": "Ce document est ouvert en mode affichage",
+    "compareCollaboration": "La comparaison de documents n’est pas disponible dans une session de modification partagée.",
     "bodyOnlyNote": "Les notes de bas de page et de fin s’ajoutent depuis le corps du document.",
     "bodyOnlySectionBreak": "Les sauts de section s’insèrent dans le corps du document.",
     "bodyOnlyToc": "Une table des matières s’insère dans le corps du document.",
@@ -1169,5 +1171,52 @@
     "sectionBreakNextColumn": "Saut de section (nouvelle colonne)",
     "sectionBreakNextPage": "Saut de section (page suivante)",
     "sectionBreakOddPage": "Saut de section (page impaire)"
+  },
+  "compareDocuments": {
+    "author": "Auteur des modifications",
+    "cancel": "Annuler",
+    "compare": "Comparer",
+    "comparing": "Comparaison…",
+    "description": "Choisissez une autre version de ce document. Les différences apparaissent ici comme des modifications suivies.",
+    "trackedChangesAccepted": "Le document ouvert contient des modifications suivies. La comparaison les traite comme acceptées.",
+    "detectFormatting": "Inclure les modifications de mise en forme",
+    "fileRequired": "Choisissez d’abord un document à comparer.",
+    "readFailed": "Impossible de lire le fichier choisi.",
+    "revisedFile": "Comparer avec",
+    "title": "Comparer des documents",
+    "noDifferences": "Les documents ne présentent aucune différence.",
+    "recorded": "{count, plural, one {La comparaison a enregistré # modification.} many {La comparaison a enregistré # modifications.} other {La comparaison a enregistré # modifications.}}",
+    "recordedNoRevisions": "La comparaison a mis à jour le document sans modifications suivies.",
+    "phases": {
+      "reading": "Lecture des documents…",
+      "comparing": "Comparaison…",
+      "checking": "Vérification du résultat…",
+      "applying": "Application des modifications…"
+    },
+    "errors": {
+      "invalidOptions": "Les options de comparaison ne sont pas valides.",
+      "invalidOriginal": "Le document ouvert ne peut pas être lu pour une comparaison.",
+      "invalidRevised": "Le fichier choisi n'est pas un document comparable.",
+      "tooLarge": "Les documents sont trop volumineux pour être comparés.",
+      "unsupportedContent": "Les documents diffèrent par un contenu qui ne peut pas être affiché sous forme de modifications suivies.",
+      "unavailable": "Comparer des documents n'est pas disponible pour ce document.",
+      "protected": "Ce document est protégé contre les modifications.",
+      "collaboration": "La comparaison de documents n’est pas disponible dans une session de modification partagée.",
+      "viewing": "Le document est ouvert en lecture seule.",
+      "closed": "La comparaison a été annulée.",
+      "empty": "Le fichier choisi est vide.",
+      "busy": "Une autre comparaison, un aperçu ou une actualisation du document est en cours. Réessayez une fois l’opération terminée.",
+      "documentChanged": "Le document a changé pendant la comparaison. Comparez de nouveau.",
+      "failed": "Impossible de comparer les documents."
+    },
+    "reasons": {
+      "headerFooter": "Les documents diffèrent dans un en-tête ou un pied de page d’une section précédente, et cette section n’a pas de section correspondante dans l’autre document.",
+      "lockedContent": "Les documents diffèrent dans un contrôle de contenu verrouillé ou lié à des données : ces modifications ne peuvent pas être révisées. Supprimez le verrou ou le lien, puis comparez de nouveau.",
+      "packageStructure": "Le document ouvert ne peut pas contenir le résultat de cette comparaison.",
+      "unrecordedSettings": "L’autre version ajoute des paramètres de section ou de tableau que le refus des modifications ne peut pas annuler.",
+      "unresolvedRevisions": "Un document contient des modifications suivies qui ne peuvent pas être acceptées. Acceptez-les ou refusez-les dans ce document, puis comparez de nouveau.",
+      "untrackedContent": "Les documents diffèrent par un contenu qui ne peut pas être affiché sous forme de modifications suivies, comme un fichier incorporé.",
+      "unverified": "Le résultat de la comparaison ne reproduirait pas les deux documents. Il n'a donc pas été appliqué."
+    }
   }
 }

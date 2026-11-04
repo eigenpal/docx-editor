@@ -116,6 +116,11 @@ export interface ServerAutomationHostOptions {
    */
   readonly collaborationModel?: CollaborationModuleContribution;
   /**
+   * Document compare engine from the module registry (the review module's). Absent,
+   * `compareFromBase64` refuses.
+   */
+  readonly compareDocuments?: import('../contracts/document-compare.ts').CompareDocumentsEngine;
+  /**
    * Opt-in relaxation of `w:lock` for run-property writes (`setFont`): content-locked controls
    * can be restyled but not retyped. Absent, they refuse both.
    */
@@ -160,7 +165,10 @@ export function createServerAutomationHost(
   );
   const collaboration = options.collaborationModel?.session;
   let detachCollaboration = (): void => {};
-  const port = packageStorePort(store, collaboration, () => detachCollaboration());
+  const storePort = packageStorePort(store, collaboration, () => detachCollaboration());
+  const port: AutomationDocumentPort = options.compareDocuments
+    ? { ...storePort, compareDocuments: options.compareDocuments }
+    : storePort;
   if (options.pagination) {
     let snapshot: AutomationPaginationSnapshot | undefined;
     let atRevision = -1;

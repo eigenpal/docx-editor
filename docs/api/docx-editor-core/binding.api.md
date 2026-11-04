@@ -196,6 +196,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     renderedFontFamilies(): readonly string[];
     rendersText(): boolean;
     replaceImage(scope: StoryScope, drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, decodePort: ImageDecodePort, options: ReplaceImageOptions): Promise<ImageIntentResult>;
+    replacePackage(pkg: OoxmlPackage): PackageReplacementResult;
     replyToComment(parentCommentId: string | null, anchor: {
         end: number;
         endParagraphId?: string;

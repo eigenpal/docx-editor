@@ -921,7 +921,8 @@
     "replyCount": "回复：{count}",
     "trackedChange": "修订",
     "changeAnnouncement": "{author}的{change}：{text}",
-    "replyTargetResolved": "该修订已解决，因此未发布答复。"
+    "replyTargetResolved": "该修订已解决，因此未发布答复。",
+    "compareDocuments": "比较文档"
   },
   "imageAltText": {
     "description": "说明",
@@ -1009,6 +1010,7 @@
     "trackedOnly": "此文档仅允许以修订方式编辑",
     "unavailable": "此命令不可用",
     "viewing": "此文档已在查看模式下打开",
+    "compareCollaboration": "共享编辑会话中无法比较文档。",
     "bodyOnlyNote": "脚注和尾注需从文档正文中添加。",
     "bodyOnlySectionBreak": "分节符需插入文档正文。",
     "bodyOnlyToc": "目录需插入文档正文。",
@@ -1169,5 +1171,52 @@
     "sectionBreakNextColumn": "分节符(新栏)",
     "sectionBreakNextPage": "分节符(下一页)",
     "sectionBreakOddPage": "分节符(奇数页)"
+  },
+  "compareDocuments": {
+    "author": "更改作者",
+    "cancel": "取消",
+    "compare": "比较",
+    "comparing": "正在比较…",
+    "description": "选择此文档的另一个版本。差异将作为修订显示在此处。",
+    "trackedChangesAccepted": "打开的文档包含修订。比较会将其视为已接受。",
+    "detectFormatting": "包括格式更改",
+    "fileRequired": "请先选择要比较的文档。",
+    "readFailed": "无法读取所选文件。",
+    "revisedFile": "比较对象",
+    "title": "比较文档",
+    "noDifferences": "文档没有差异。",
+    "recorded": "{count, plural, other {比较记录了 # 处更改。}}",
+    "recordedNoRevisions": "比较更新了文档，但没有修订。",
+    "phases": {
+      "reading": "正在读取文档…",
+      "comparing": "正在比较…",
+      "checking": "正在检查结果…",
+      "applying": "正在应用更改…"
+    },
+    "errors": {
+      "invalidOptions": "比较选项无效。",
+      "invalidOriginal": "无法读取已打开的文档进行比较。",
+      "invalidRevised": "所选文件不是可以比较的文档。",
+      "tooLarge": "文档太大，无法比较。",
+      "unsupportedContent": "文档在无法显示为修订的内容上存在差异。",
+      "unavailable": "此文档无法使用比较文档。",
+      "protected": "此文档受保护，禁止编辑。",
+      "collaboration": "共享编辑会话中无法比较文档。",
+      "viewing": "文档以只读方式打开。",
+      "closed": "比较已取消。",
+      "empty": "所选文件为空。",
+      "busy": "另一个比较、预览或文档刷新正在运行。请在其结束后重试。",
+      "documentChanged": "比较期间文档发生了更改。请重新比较。",
+      "failed": "无法比较文档。"
+    },
+    "reasons": {
+      "headerFooter": "两个文档在前面某一节的页眉或页脚中存在差异，且该节在另一个文档中没有对应的节。",
+      "lockedContent": "文档在锁定或链接到数据的内容控件中存在差异，因此无法审阅这些更改。请解除锁定或链接，然后重新比较。",
+      "packageStructure": "打开的文档无法容纳此次比较的结果。",
+      "unrecordedSettings": "另一个版本添加了拒绝更改后无法撤消的节或表格设置。",
+      "unresolvedRevisions": "某个文档包含无法接受的修订。请在该文档中接受或拒绝这些修订，然后重新比较。",
+      "untrackedContent": "文档在无法显示为修订的内容中存在差异，例如嵌入的文件。",
+      "unverified": "比较结果无法重现两个文档，因此未应用。"
+    }
   }
 }

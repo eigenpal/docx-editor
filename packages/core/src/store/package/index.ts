@@ -123,6 +123,7 @@ export {
   ooxmlTreesEqual,
 } from './ooxml-tree.ts';
 export { readOnOffChild, isContentRevisionKind, isRangeMarkerKind } from './ooxml-shared.ts';
+export { sha256FontBytes as sha256Bytes } from './sha256.ts';
 export {
   relationshipsOf,
   relsPartNameFor,
@@ -312,6 +313,7 @@ export { resolveTocRowHeadings } from './toc-rows.ts';
 export {
   deriveOoxmlIndexes,
   indexStyles,
+  numberingRootOf,
   stylesPartOf,
   type OoxmlIndexes,
   type ParagraphIndexEntry,
@@ -482,6 +484,7 @@ export {
   hasAnyComment,
   type CommentDeletionOwner,
 } from './comment-lifecycle.ts';
+export { commentsPartNameForStory } from './comment-lifecycle-scan.ts';
 export {
   NO_TRACKING_SETTINGS,
   readTrackingSettings,

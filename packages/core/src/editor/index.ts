@@ -306,6 +306,16 @@ export type { ReviewDiagnosticCode, ReviewOperation } from '../automation/diagno
 export {
   resolveEditorModules,
   type CollectReviewItems,
+  type CompareDocumentsBackgroundEngine,
+  type CompareDocumentsBackgroundResult,
+  type CompareDocumentsEngine,
+  type CompareDocumentsEngineErrorCode,
+  type CompareDocumentsErrorCode,
+  type CompareDocumentsRefusalReason,
+  type CompareDocumentsEngineOptions,
+  type CompareDocumentsEngineResult,
+  type CompareDocumentsPhase,
+  type CompareDocumentsProgress,
   type EditorModule,
   type EditorModuleRegistry,
   type ReviewModelInput,
@@ -665,6 +675,21 @@ export type {
   RevisionMarkupTextStyle,
 } from '../contracts/revision-markup.ts';
 export type { RevisionMarkupDialog, RevisionMarkupDialogHost } from '../contracts/modules.ts';
+export type { CompareDocumentsDialog, CompareDocumentsDialogHost } from '../contracts/modules.ts';
+export type {
+  CompareDocumentsChromeHandlers,
+  CompareDocumentsDialogSession,
+  CompareDocumentsOutcome,
+  CompareDocumentsRequest,
+} from '../contracts/compare-documents.ts';
+export {
+  COMPARE_DOCUMENTS_ACCEPT,
+  compareDocumentsErrorKey,
+} from '../contracts/compare-documents.ts';
+export {
+  COMPARE_DOCUMENTS_PHASE_ATTRIBUTE,
+  focusCompareDocumentsControl,
+} from './compare-documents-focus.ts';
 
 /** The watermark shape box that `setWatermark` writes, for previews. */
 export {

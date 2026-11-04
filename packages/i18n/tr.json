@@ -921,7 +921,8 @@
     "replyCount": "Yanıtlar: {count}",
     "trackedChange": "İzlenen değişiklik",
     "changeAnnouncement": "{author} tarafından {change}: {text}",
-    "replyTargetResolved": "Değişiklik çözümlendiği için yanıt gönderilmedi."
+    "replyTargetResolved": "Değişiklik çözümlendiği için yanıt gönderilmedi.",
+    "compareDocuments": "Belgeleri karşılaştır"
   },
   "imageAltText": {
     "description": "Açıklama",
@@ -1009,6 +1010,7 @@
     "trackedOnly": "Bu belge yalnızca izlenen değişikliklere izin verir",
     "unavailable": "Bu komut kullanılamıyor",
     "viewing": "Bu belge görüntüleme için açık",
+    "compareCollaboration": "Belgeleri karşılaştırma, paylaşılan bir düzenleme oturumunda kullanılamaz.",
     "bodyOnlyNote": "Dipnotlar ve son notlar belgenin gövdesinden eklenir.",
     "bodyOnlySectionBreak": "Bölüm sonları belgenin gövdesine eklenir.",
     "bodyOnlyToc": "İçindekiler tablosu belgenin gövdesine eklenir.",
@@ -1169,5 +1171,52 @@
     "sectionBreakNextColumn": "Bölüm Sonu (Yeni Sütun)",
     "sectionBreakNextPage": "Bölüm Sonu (Sonraki Sayfa)",
     "sectionBreakOddPage": "Bölüm Sonu (Tek Sayfa)"
+  },
+  "compareDocuments": {
+    "author": "Değişikliklerin yazarı",
+    "cancel": "İptal",
+    "compare": "Karşılaştır",
+    "comparing": "Karşılaştırılıyor…",
+    "description": "Bu belgenin başka bir sürümünü seçin. Farklar burada izlenen değişiklikler olarak görünür.",
+    "trackedChangesAccepted": "Açık belgede izlenen değişiklikler var. Karşılaştırma bunları kabul edilmiş sayar.",
+    "detectFormatting": "Biçimlendirme değişikliklerini dahil et",
+    "fileRequired": "Önce karşılaştırılacak bir belge seçin.",
+    "readFailed": "Seçilen dosya okunamadı.",
+    "revisedFile": "Karşılaştırılacak belge",
+    "title": "Belgeleri karşılaştır",
+    "noDifferences": "Belgeler arasında fark yok.",
+    "recorded": "{count, plural, one {Karşılaştırma # değişiklik kaydetti.} other {Karşılaştırma # değişiklik kaydetti.}}",
+    "recordedNoRevisions": "Karşılaştırma belgeyi izlenen değişiklik olmadan güncelledi.",
+    "phases": {
+      "reading": "Belgeler okunuyor…",
+      "comparing": "Karşılaştırılıyor…",
+      "checking": "Sonuç denetleniyor…",
+      "applying": "Değişiklikler uygulanıyor…"
+    },
+    "errors": {
+      "invalidOptions": "Karşılaştırma seçenekleri geçerli değil.",
+      "invalidOriginal": "Açık belge karşılaştırma için okunamıyor.",
+      "invalidRevised": "Seçilen dosya karşılaştırılabilecek bir belge değil.",
+      "tooLarge": "Belgeler karşılaştırmak için çok büyük.",
+      "unsupportedContent": "Belgeler, izlenen değişiklikler olarak gösterilemeyen içerikte farklılık gösteriyor.",
+      "unavailable": "Belgeleri karşılaştırma bu belge için kullanılamıyor.",
+      "protected": "Bu belge düzenlemeye karşı korumalı.",
+      "collaboration": "Belgeleri karşılaştırma, paylaşılan bir düzenleme oturumunda kullanılamaz.",
+      "viewing": "Belge yalnızca görüntüleme için açık.",
+      "closed": "Karşılaştırma iptal edildi.",
+      "empty": "Seçilen dosya boş.",
+      "busy": "Başka bir karşılaştırma, önizleme veya belge yenilemesi çalışıyor. Bittiğinde yeniden deneyin.",
+      "documentChanged": "Belge karşılaştırılırken değişti. Yeniden karşılaştırın.",
+      "failed": "Belgeler karşılaştırılamadı."
+    },
+    "reasons": {
+      "headerFooter": "Belgeler, önceki bir bölümün üst veya alt bilgisinde farklılık gösteriyor ve bu bölümün diğer belgede eşleşen bir bölümü yok.",
+      "lockedContent": "Belgeler, kilitli veya veriye bağlı bir içerik denetiminin içinde farklılık gösteriyor; bu nedenle oradaki değişiklikler gözden geçirilemez. Kilidi veya bağlantıyı kaldırıp yeniden karşılaştırın.",
+      "packageStructure": "Açık belge bu karşılaştırmanın sonucunu tutamaz.",
+      "unrecordedSettings": "Diğer sürüm, değişiklikler reddedilerek geri alınamayan bölüm veya tablo ayarları ekliyor.",
+      "unresolvedRevisions": "Bir belge, kabul edilemeyen izlenen değişiklikler içeriyor. Bunları o belgede kabul edin veya reddedin, ardından yeniden karşılaştırın.",
+      "untrackedContent": "Belgeler, gömülü bir dosya gibi izlenen değişiklik olarak gösterilemeyen içerikte farklılık gösteriyor.",
+      "unverified": "Karşılaştırma sonucu iki belgeyi de yeniden üretmeyeceği için uygulanmadı."
+    }
   }
 }

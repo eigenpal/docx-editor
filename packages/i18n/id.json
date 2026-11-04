@@ -921,7 +921,8 @@
     "replyCount": "Balasan: {count}",
     "trackedChange": "Perubahan terlacak",
     "changeAnnouncement": "{change} oleh {author}: {text}",
-    "replyTargetResolved": "Perubahan sudah diselesaikan, jadi balasan tidak dikirim."
+    "replyTargetResolved": "Perubahan sudah diselesaikan, jadi balasan tidak dikirim.",
+    "compareDocuments": "Bandingkan dokumen"
   },
   "imageAltText": {
     "description": "Deskripsi",
@@ -1009,6 +1010,7 @@
     "trackedOnly": "Dokumen ini hanya mengizinkan pengeditan sebagai perubahan terlacak",
     "unavailable": "Perintah ini tidak tersedia",
     "viewing": "Dokumen ini terbuka untuk dilihat",
+    "compareCollaboration": "Bandingkan dokumen tidak tersedia dalam sesi pengeditan bersama.",
     "bodyOnlyNote": "Catatan kaki dan catatan akhir ditambahkan dari isi dokumen.",
     "bodyOnlySectionBreak": "Pemisah bagian ditempatkan di isi dokumen.",
     "bodyOnlyToc": "Daftar isi ditempatkan di isi dokumen.",
@@ -1169,5 +1171,52 @@
     "sectionBreakNextColumn": "Pemisah Bagian (Kolom Baru)",
     "sectionBreakNextPage": "Pemisah Bagian (Halaman Berikutnya)",
     "sectionBreakOddPage": "Pemisah Bagian (Halaman Ganjil)"
+  },
+  "compareDocuments": {
+    "author": "Penulis perubahan",
+    "cancel": "Batal",
+    "compare": "Bandingkan",
+    "comparing": "Membandingkan…",
+    "description": "Pilih versi lain dari dokumen ini. Perbedaannya muncul di sini sebagai perubahan terlacak.",
+    "trackedChangesAccepted": "Dokumen yang terbuka memiliki perubahan terlacak. Perbandingan menganggapnya sudah diterima.",
+    "detectFormatting": "Sertakan perubahan format",
+    "fileRequired": "Pilih dokumen untuk dibandingkan terlebih dahulu.",
+    "readFailed": "Tidak dapat membaca file yang dipilih.",
+    "revisedFile": "Bandingkan dengan",
+    "title": "Bandingkan dokumen",
+    "noDifferences": "Dokumen tidak memiliki perbedaan.",
+    "recorded": "{count, plural, other {Perbandingan mencatat # perubahan.}}",
+    "recordedNoRevisions": "Perbandingan memperbarui dokumen tanpa perubahan terlacak.",
+    "phases": {
+      "reading": "Membaca dokumen…",
+      "comparing": "Membandingkan…",
+      "checking": "Memeriksa hasil…",
+      "applying": "Menerapkan perubahan…"
+    },
+    "errors": {
+      "invalidOptions": "Opsi perbandingan tidak valid.",
+      "invalidOriginal": "Dokumen yang terbuka tidak dapat dibaca untuk dibandingkan.",
+      "invalidRevised": "File yang dipilih bukan dokumen yang dapat dibandingkan.",
+      "tooLarge": "Dokumen terlalu besar untuk dibandingkan.",
+      "unsupportedContent": "Dokumen berbeda dalam konten yang tidak dapat ditampilkan sebagai perubahan terlacak.",
+      "unavailable": "Bandingkan dokumen tidak tersedia untuk dokumen ini.",
+      "protected": "Dokumen ini dilindungi dari pengeditan.",
+      "collaboration": "Bandingkan dokumen tidak tersedia dalam sesi pengeditan bersama.",
+      "viewing": "Dokumen dibuka hanya untuk dilihat.",
+      "closed": "Perbandingan dibatalkan.",
+      "empty": "File yang dipilih kosong.",
+      "busy": "Perbandingan lain, pratinjau, atau penyegaran dokumen sedang berjalan. Coba lagi setelah selesai.",
+      "documentChanged": "Dokumen berubah saat dibandingkan. Bandingkan lagi.",
+      "failed": "Dokumen tidak dapat dibandingkan."
+    },
+    "reasons": {
+      "headerFooter": "Dokumen berbeda pada header atau footer dari bagian sebelumnya, dan bagian itu tidak memiliki bagian yang cocok di dokumen lain.",
+      "lockedContent": "Dokumen berbeda di dalam kontrol konten yang terkunci atau tertaut ke data, sehingga perubahan di sana tidak dapat ditinjau. Hapus kunci atau tautannya, lalu bandingkan lagi.",
+      "packageStructure": "Dokumen yang terbuka tidak dapat menampung hasil perbandingan ini.",
+      "unrecordedSettings": "Versi lain menambahkan pengaturan bagian atau tabel yang tidak dapat dibatalkan dengan menolak perubahan.",
+      "unresolvedRevisions": "Sebuah dokumen berisi perubahan terlacak yang tidak dapat diterima. Terima atau tolak perubahan itu di dokumen tersebut, lalu bandingkan lagi.",
+      "untrackedContent": "Dokumen berbeda dalam konten yang tidak dapat ditampilkan sebagai perubahan terlacak, seperti file tersemat.",
+      "unverified": "Hasil perbandingan tidak akan mereproduksi kedua dokumen, sehingga tidak diterapkan."
+    }
   }
 }

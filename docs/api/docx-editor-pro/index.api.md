@@ -33,6 +33,98 @@ export interface CollaborationModuleOptions extends ProLicenseOptions {
 export type CommentMarkerStyle = 'initials' | 'icon';
 
 // @public
+export function compareDocuments(original: Uint8Array, revised: Uint8Array, options?: CompareDocumentsOptions): CompareDocumentsResult;
+
+// @public
+export type CompareDocumentsEngineErrorCode =
+/**
+* An option has a value of the wrong type, such as a `detectFormatChanges` that is not a
+* boolean, or the revised document is not a `Uint8Array`.
+*/
+'invalidOptions'
+/** The original document is not a readable DOCX package. */
+| 'invalidOriginal'
+/** The revised document is not a readable DOCX package. */
+| 'invalidRevised'
+/** The documents exceed the compare's size limits. */
+| 'tooLarge'
+/**
+* The original document enforces protection that the compare would break: read-only,
+* comments, forms, or tracked-changes protection. A compare also writes differences that
+* have no tracked form, such as style definitions and content control properties, so
+* tracked-changes protection refuses too.
+*/
+| 'protected'
+/** The differences include content that no tracked change can record. */
+| 'unsupportedContent';
+
+// @public
+export type CompareDocumentsErrorCode = CompareDocumentsEngineErrorCode
+/** Editor only: no review module, no open document, or no mount. */
+| 'unavailable'
+/** Editor only: a collaboration session is attached. */
+| 'collaboration'
+/** Editor only: the document is open for viewing only. */
+| 'viewing'
+/** Editor only: the dialog closed, or the compare was canceled, before it finished. */
+| 'closed'
+/** Editor only: the revised file is a `Uint8Array` with no bytes. */
+| 'empty'
+/**
+* Editor only: another compare of the same dialog runs, or a preview or an external document
+* refresh blocks writes to the document. Try again when it ends.
+*/
+| 'busy'
+/**
+* Editor only: the open document changed while a background compare ran, so its result
+* no longer applies. The editor never retries by itself.
+*/
+| 'documentChanged'
+/** Editor only: any other failure. */
+| 'failed';
+
+// @public
+export interface CompareDocumentsOptions {
+    readonly authorName?: string;
+    readonly date?: Date;
+    readonly detectFormatChanges?: boolean;
+    readonly removeDateAndTime?: boolean;
+}
+
+// @public
+export type CompareDocumentsRefusalReason =
+/** The documents differ inside a content control that is locked or bound to data. */
+'lockedContent'
+/** A document holds tracked changes that cannot be accepted, so its final state is unknown. */
+| 'unresolvedRevisions'
+/** The documents differ in content with no tracked-change form, such as an embedded file. */
+| 'untrackedContent'
+/** The revised document adds section or table settings that a reject cannot restore. */
+| 'unrecordedSettings'
+/** A header or footer of an earlier section cannot be paired with one of the original. */
+| 'headerFooter'
+/** The result needs a part type that the original document does not declare. */
+| 'packageStructure'
+/**
+* The result fails the check: accepting all changes does not give the revised text, rejecting
+* them does not give the original text, or a tracked change cannot be accepted or rejected.
+*/
+| 'unverified';
+
+// @public
+export type CompareDocumentsResult = {
+    readonly bytes: Uint8Array;
+    readonly changed: boolean;
+    readonly ok: true;
+    readonly revisionCount: number;
+} | {
+    readonly code: CompareDocumentsEngineErrorCode;
+    readonly message: string;
+    readonly ok: false;
+    readonly reason?: CompareDocumentsRefusalReason;
+};
+
+// @public
 export const CUSTOM_NODE_STORE_ROOT = "docxEditor";
 
 // @public
@@ -318,6 +410,7 @@ export function reviewModule(options?: ReviewModuleOptions): EditorModule;
 
 // @public
 export interface ReviewModuleOptions extends ProLicenseOptions {
+    readonly compareWorker?: (() => Worker) | false;
     readonly pane?: ReviewPaneOptions;
 }
 

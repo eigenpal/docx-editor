@@ -537,4 +537,12 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     scope: StoryScope,
     input: import('../store/store/tree-package-fragment.ts').FragmentPasteInput
   ): import('../store/store/tree-package-fragment.ts').FragmentPasteResult;
+
+  /**
+   * Replace the whole package with one derived from {@link currentPackage}, as one package undo
+   * unit that publishes a `global` change. For writes that rebuild many parts, such as a compare.
+   */
+  replacePackage(
+    pkg: OoxmlPackage
+  ): import('../store/store/tree-package-replace.ts').PackageReplacementResult;
 }

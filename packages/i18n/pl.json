@@ -921,7 +921,8 @@
     "replyCount": "Odpowiedzi: {count}",
     "trackedChange": "Śledzona zmiana",
     "changeAnnouncement": "{change} – {author}: {text}",
-    "replyTargetResolved": "Zmiana została rozwiązana, więc odpowiedź nie została opublikowana."
+    "replyTargetResolved": "Zmiana została rozwiązana, więc odpowiedź nie została opublikowana.",
+    "compareDocuments": "Porównaj dokumenty"
   },
   "imageAltText": {
     "description": "Opis",
@@ -1009,6 +1010,7 @@
     "trackedOnly": "Ten dokument zezwala tylko na edycję ze śledzeniem zmian",
     "unavailable": "To polecenie jest niedostępne",
     "viewing": "Ten dokument jest otwarty do wyświetlania",
+    "compareCollaboration": "Porównywanie dokumentów jest niedostępne w sesji wspólnej edycji.",
     "bodyOnlyNote": "Przypisy dolne i końcowe dodaje się z treści głównej dokumentu.",
     "bodyOnlySectionBreak": "Podziały sekcji wstawia się w treści głównej dokumentu.",
     "bodyOnlyToc": "Spis treści wstawia się w treści głównej dokumentu.",
@@ -1169,5 +1171,52 @@
     "sectionBreakNextColumn": "Podział sekcji (nowa kolumna)",
     "sectionBreakNextPage": "Podział sekcji (na następnej stronie)",
     "sectionBreakOddPage": "Podział sekcji (na stronie nieparzystej)"
+  },
+  "compareDocuments": {
+    "author": "Autor zmian",
+    "cancel": "Anuluj",
+    "compare": "Porównaj",
+    "comparing": "Porównywanie…",
+    "description": "Wybierz inną wersję tego dokumentu. Różnice pojawią się tutaj jako śledzone zmiany.",
+    "trackedChangesAccepted": "Otwarty dokument zawiera śledzone zmiany. Porównanie traktuje je jako zaakceptowane.",
+    "detectFormatting": "Uwzględniaj zmiany formatowania",
+    "fileRequired": "Najpierw wybierz dokument do porównania.",
+    "readFailed": "Nie można odczytać wybranego pliku.",
+    "revisedFile": "Porównaj z",
+    "title": "Porównaj dokumenty",
+    "noDifferences": "Dokumenty nie różnią się.",
+    "recorded": "{count, plural, one {Porównanie zarejestrowało # zmianę.} few {Porównanie zarejestrowało # zmiany.} many {Porównanie zarejestrowało # zmian.} other {Porównanie zarejestrowało # zmiany.}}",
+    "recordedNoRevisions": "Porównanie zaktualizowało dokument bez śledzonych zmian.",
+    "phases": {
+      "reading": "Odczytywanie dokumentów…",
+      "comparing": "Porównywanie…",
+      "checking": "Sprawdzanie wyniku…",
+      "applying": "Stosowanie zmian…"
+    },
+    "errors": {
+      "invalidOptions": "Opcje porównania są nieprawidłowe.",
+      "invalidOriginal": "Nie można odczytać otwartego dokumentu do porównania.",
+      "invalidRevised": "Wybrany plik nie jest dokumentem, który można porównać.",
+      "tooLarge": "Dokumenty są zbyt duże, aby je porównać.",
+      "unsupportedContent": "Dokumenty różnią się treścią, której nie można pokazać jako śledzonych zmian.",
+      "unavailable": "Porównywanie dokumentów jest niedostępne dla tego dokumentu.",
+      "protected": "Ten dokument jest chroniony przed edycją.",
+      "collaboration": "Porównywanie dokumentów jest niedostępne w sesji wspólnej edycji.",
+      "viewing": "Dokument jest otwarty tylko do odczytu.",
+      "closed": "Porównanie zostało anulowane.",
+      "empty": "Wybrany plik jest pusty.",
+      "busy": "Trwa inne porównanie, podgląd lub odświeżanie dokumentu. Spróbuj ponownie, gdy się zakończy.",
+      "documentChanged": "Dokument zmienił się podczas porównywania. Porównaj ponownie.",
+      "failed": "Nie udało się porównać dokumentów."
+    },
+    "reasons": {
+      "headerFooter": "Dokumenty różnią się nagłówkiem lub stopką wcześniejszej sekcji, a ta sekcja nie ma odpowiadającej jej sekcji w drugim dokumencie.",
+      "lockedContent": "Dokumenty różnią się w kontrolce zawartości, która jest zablokowana lub powiązana z danymi, więc tych zmian nie można przejrzeć. Usuń blokadę lub powiązanie i porównaj ponownie.",
+      "packageStructure": "Otwarty dokument nie może pomieścić wyniku tego porównania.",
+      "unrecordedSettings": "Druga wersja dodaje ustawienia sekcji lub tabeli, których nie można cofnąć przez odrzucenie zmian.",
+      "unresolvedRevisions": "Dokument zawiera śledzone zmiany, których nie można zaakceptować. Zaakceptuj je lub odrzuć w tym dokumencie i porównaj ponownie.",
+      "untrackedContent": "Dokumenty różnią się zawartością, której nie można pokazać jako śledzonych zmian, na przykład osadzonym plikiem.",
+      "unverified": "Wynik porównania nie odtworzyłby obu dokumentów, więc nie został zastosowany."
+    }
   }
 }

@@ -196,6 +196,7 @@ describe('the operation vocabulary declares which operations write', () => {
     // drift from the union the host actually treats as a command.
     expect([...AUTOMATION_COMMAND_OPERATIONS]).toEqual([
       'removeDocumentInformation',
+      'compareFromBase64',
       'setDocumentProperties',
       'insertTableRows',
       'insertTable',
@@ -258,6 +259,7 @@ describe('the operation vocabulary declares which operations write', () => {
     // And the ones that commit as a PACKAGE transaction, which is why they travel alone.
     expect([...AUTOMATION_SOLITARY_OPERATIONS]).toEqual([
       'removeDocumentInformation',
+      'compareFromBase64',
       'insertTableRows',
       'resolveRevisionBatch',
       'setRevisionAuthorBatch',

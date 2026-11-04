@@ -126,3 +126,46 @@ export enum RemoveDocInfoType {
   template = 'Template',
   versions = 'Versions',
 }
+
+/**
+ * Where a document compare puts its result. Only `CompareTargetCurrent` is supported: the
+ * revisions go into the document the call is made on.
+ *
+ * @public
+ */
+export enum CompareTarget {
+  compareTargetCurrent = 'CompareTargetCurrent',
+  compareTargetNew = 'CompareTargetNew',
+  compareTargetSelected = 'CompareTargetSelected',
+}
+
+/**
+ * Options of `Document.compareFromBase64`.
+ *
+ * Supported: `authorName`, `compareTarget` (`CompareTargetCurrent` only), `detectFormatChanges`,
+ * and `removeDateAndTime`. `addToRecentFiles` and `ignoreAllComparisonWarnings` are accepted
+ * and have no effect: there is no recent-files list and no warning prompt. `true` for
+ * `removePersonalInformation` refuses with `NotSupported`.
+ *
+ * @public
+ */
+export interface DocumentCompareOptions {
+  /** Accepted; there is no recent-files list. Default `true`. */
+  addToRecentFiles?: boolean;
+  /** Author of the revisions. Default: the revised document's author, else `Comparison`. */
+  authorName?: string;
+  /** Where the result goes. Default and only supported value: `CompareTargetCurrent`. */
+  compareTarget?:
+    | CompareTarget
+    | 'CompareTargetCurrent'
+    | 'CompareTargetNew'
+    | 'CompareTargetSelected';
+  /** Record formatting differences as revisions. Default `true`. */
+  detectFormatChanges?: boolean;
+  /** Accepted; there is no warning prompt. Default `false`. */
+  ignoreAllComparisonWarnings?: boolean;
+  /** Write the revisions without dates. Default `false`. */
+  removeDateAndTime?: boolean;
+  /** `true` refuses with `NotSupported`. Default `false`. */
+  removePersonalInformation?: boolean;
+}

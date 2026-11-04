@@ -527,11 +527,20 @@ const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /**
  * Files allowed to move the package without arming capture, each with the reason.
  *
- * Empty, and it should stay that way. An entry here is a documented silent-divergence risk,
- * so it needs the same justification a refusal would: say why the write cannot replicate and
- * why refusing it is worse.
+ * Keep it short. An entry here is a documented silent-divergence risk, so it needs the same
+ * justification a refusal would: say why the write cannot replicate and why refusing it is
+ * worse.
  */
-const CAPTURE_EXEMPT_FILES: readonly { readonly file: string; readonly why: string }[] = [];
+const CAPTURE_EXEMPT_FILES: readonly { readonly file: string; readonly why: string }[] = [
+  {
+    file: 'store/store/tree-package-replace.ts',
+    why:
+      'A document compare rebuilds every part at once, which no journal intent replays. It ' +
+      'never reaches a peer: the editor command (`COMPARE_COLLABORATION_REASON` in ' +
+      '`editor/compare-documents-state.ts`) and the automation runtime both refuse compare ' +
+      'while a collaboration session is attached.',
+  },
+];
 
 function* laneSources(directory: string): Generator<string> {
   for (const entry of readdirSync(directory)) {

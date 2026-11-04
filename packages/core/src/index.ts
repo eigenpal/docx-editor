@@ -113,6 +113,14 @@ export type {
   DocumentProtectionEdit,
   DocumentProtectionState,
 } from './store/package/document-protection.ts';
+// What the compare engine takes and returns: the original document as a package.
+export type {
+  ContentTypeIndex,
+  OoxmlExternalTarget,
+  OoxmlPackage,
+  RelationshipRecord,
+  TargetMode,
+} from '@docx-editor.dev/core/store';
 
 // ─── Chrome registry: what a toolbar is built from ───────────────────────────
 export {
@@ -155,10 +163,31 @@ export type {
   ToolbarValueSlot,
 } from './editor/index.ts';
 export type { RevisionMarkupDialog, RevisionMarkupDialogHost } from './contracts/modules.ts';
+export type { CompareDocumentsDialog, CompareDocumentsDialogHost } from './contracts/modules.ts';
+export type {
+  CompareDocumentsChromeHandlers,
+  CompareDocumentsDialogSession,
+  CompareDocumentsOutcome,
+  CompareDocumentsRequest,
+} from './contracts/compare-documents.ts';
+export {
+  COMPARE_DOCUMENTS_ACCEPT,
+  compareDocumentsErrorKey,
+} from './contracts/compare-documents.ts';
 
 // ─── Capability modules (what `@docx-editor.dev/pro` implements) ─────────────
 export type {
   CollectReviewItems,
+  CompareDocumentsBackgroundEngine,
+  CompareDocumentsBackgroundResult,
+  CompareDocumentsEngine,
+  CompareDocumentsEngineErrorCode,
+  CompareDocumentsErrorCode,
+  CompareDocumentsRefusalReason,
+  CompareDocumentsEngineOptions,
+  CompareDocumentsEngineResult,
+  CompareDocumentsPhase,
+  CompareDocumentsProgress,
   EditorModule,
   ReviewModelInput,
   ReviewModuleContribution,

@@ -724,6 +724,48 @@
             }
           ]
         },
+        "compare": {
+          "uid": "Word.Document#compare",
+          "kind": "method",
+          "requirementSet": "WordApiDesktop 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "filePath",
+                  "type": "string"
+                },
+                {
+                  "name": "documentCompareOptions",
+                  "type": "DocumentCompareOptions",
+                  "optional": true
+                }
+              ],
+              "returns": "void"
+            }
+          ]
+        },
+        "compareFromBase64": {
+          "uid": "Word.Document#compareFromBase64",
+          "kind": "method",
+          "requirementSet": "WordApiDesktop 1.2",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "base64File",
+                  "type": "string"
+                },
+                {
+                  "name": "documentCompareOptions",
+                  "type": "DocumentCompareOptions",
+                  "optional": true
+                }
+              ],
+              "returns": "void"
+            }
+          ]
+        },
         "contentControls": {
           "uid": "Word.Document#contentControls",
           "kind": "property",

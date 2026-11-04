@@ -70,6 +70,7 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   // A VIEW toggle, wired here like any other button so its pressed state comes from
   // `isActive` rather than from a flag each host keeps for itself.
   'review.revisionMarkup': { type: 'openRevisionMarkupDialog' },
+  'review.compareDocuments': { type: 'openCompareDocumentsDialog' },
   'review.comments': { type: 'toggleReviewPane' },
   'review.paragraphMarks': { type: 'toggleParagraphMarks' },
   'review.bookmarks': { type: 'toggleBookmarks' },

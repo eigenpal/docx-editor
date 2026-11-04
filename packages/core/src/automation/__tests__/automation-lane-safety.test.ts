@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 const LANE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CORE_SRC = join(LANE, '..');
 /** Contract files this lane may name: DOM-free, types only. Paths are relative to `src`. */
-const NEUTRAL_CONTRACT_FILES = new Set(['contracts/editor-scope']);
+const NEUTRAL_CONTRACT_FILES = new Set(['contracts/editor-scope', 'contracts/document-compare']);
 
 /** Every source file of the lane itself, tests excluded — the lane as it ships. */
 function laneFiles(): string[] {

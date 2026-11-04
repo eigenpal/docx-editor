@@ -477,6 +477,15 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: 'command';
         };
     }, {
+        readonly defaultToolbar: false;
+        readonly id: 'compareDocuments';
+        readonly labelKey: 'review.compareDocuments';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
         readonly id: 'comments';
         readonly labelKey: 'formattingBar.commentsAndChanges';
         readonly paths: readonly string[];
@@ -930,7 +939,7 @@ export interface ChromePrintOptions {
 }
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'table.mergeCells' | 'table.splitCell' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.goToBookmark' | 'insert.watermark';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.compareDocuments' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'table.mergeCells' | 'table.splitCell' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.goToBookmark' | 'insert.watermark';
 
 // @public
 export interface ClearAnchorHighlightOptions {
@@ -1038,6 +1047,189 @@ export interface CommentRecord {
 }
 
 // @public
+export const COMPARE_DOCUMENTS_ACCEPT = ".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+// @public
+export type CompareDocumentsBackgroundEngine = (original: Uint8Array, revised: Uint8Array, options: CompareDocumentsEngineOptions, control: {
+    readonly onProgress: (progress: CompareDocumentsProgress) => void;
+    readonly signal: AbortSignal;
+}) => Promise<CompareDocumentsBackgroundResult>;
+
+// @public
+export type CompareDocumentsBackgroundResult = {
+    readonly bytes: Uint8Array | null;
+    readonly changed: boolean;
+    readonly ok: true;
+    readonly revisionCount: number;
+} | {
+    readonly code: CompareDocumentsEngineErrorCode;
+    readonly message: string;
+    readonly ok: false;
+    readonly reason?: CompareDocumentsRefusalReason;
+};
+
+// @public
+export interface CompareDocumentsChromeHandlers {
+    // (undocumented)
+    readonly onRequest?: (session: CompareDocumentsDialogSession) => void;
+}
+
+// @public
+export interface CompareDocumentsDialog {
+    // (undocumented)
+    destroy(): void;
+    // (undocumented)
+    open(): void;
+}
+
+// @public
+export interface CompareDocumentsDialogHost extends CompareDocumentsDialogSession {
+    // (undocumented)
+    readonly container: HTMLElement;
+    // (undocumented)
+    readonly translate?: (key: string) => string | undefined;
+}
+
+// @public
+export interface CompareDocumentsDialogSession {
+    apply(request: CompareDocumentsRequest, options?: {
+        readonly onProgress?: (progress: CompareDocumentsProgress) => void;
+    }): Promise<CompareDocumentsOutcome>;
+    canApply(): boolean;
+    cancel(): void;
+    readonly cancelable: boolean;
+    readonly defaultAuthor: string;
+    readonly originalHasTrackedChanges: boolean;
+    readonly signal: AbortSignal;
+}
+
+// @public
+export type CompareDocumentsEngine = (original: OoxmlPackage, revised: Uint8Array, options: CompareDocumentsEngineOptions) => CompareDocumentsEngineResult;
+
+// @public
+export type CompareDocumentsEngineErrorCode =
+/**
+* An option has a value of the wrong type, such as a `detectFormatChanges` that is not a
+* boolean, or the revised document is not a `Uint8Array`.
+*/
+'invalidOptions'
+/** The original document is not a readable DOCX package. */
+| 'invalidOriginal'
+/** The revised document is not a readable DOCX package. */
+| 'invalidRevised'
+/** The documents exceed the compare's size limits. */
+| 'tooLarge'
+/**
+* The original document enforces protection that the compare would break: read-only,
+* comments, forms, or tracked-changes protection. A compare also writes differences that
+* have no tracked form, such as style definitions and content control properties, so
+* tracked-changes protection refuses too.
+*/
+| 'protected'
+/** The differences include content that no tracked change can record. */
+| 'unsupportedContent';
+
+// @public
+export interface CompareDocumentsEngineOptions {
+    readonly authorName?: string;
+    readonly detectFormatChanges?: boolean;
+    readonly removeDateAndTime?: boolean;
+}
+
+// @public
+export type CompareDocumentsEngineResult = {
+    readonly changed: boolean;
+    readonly ok: true;
+    readonly package: OoxmlPackage;
+    readonly revisionCount: number;
+} | {
+    readonly code: CompareDocumentsEngineErrorCode;
+    readonly message: string;
+    readonly ok: false;
+    readonly reason?: CompareDocumentsRefusalReason;
+};
+
+// @public
+export type CompareDocumentsErrorCode = CompareDocumentsEngineErrorCode
+/** Editor only: no review module, no open document, or no mount. */
+| 'unavailable'
+/** Editor only: a collaboration session is attached. */
+| 'collaboration'
+/** Editor only: the document is open for viewing only. */
+| 'viewing'
+/** Editor only: the dialog closed, or the compare was canceled, before it finished. */
+| 'closed'
+/** Editor only: the revised file is a `Uint8Array` with no bytes. */
+| 'empty'
+/**
+* Editor only: another compare of the same dialog runs, or a preview or an external document
+* refresh blocks writes to the document. Try again when it ends.
+*/
+| 'busy'
+/**
+* Editor only: the open document changed while a background compare ran, so its result
+* no longer applies. The editor never retries by itself.
+*/
+| 'documentChanged'
+/** Editor only: any other failure. */
+| 'failed';
+
+// @public
+export function compareDocumentsErrorKey(refusal: {
+    readonly code: CompareDocumentsErrorCode;
+    readonly reason?: CompareDocumentsRefusalReason;
+}): `compareDocuments.errors.${CompareDocumentsErrorCode}` | `compareDocuments.reasons.${CompareDocumentsRefusalReason}`;
+
+// @public
+export type CompareDocumentsOutcome = {
+    readonly changed: boolean;
+    readonly ok: true;
+    readonly revisionCount: number;
+} | {
+    readonly code: CompareDocumentsErrorCode;
+    readonly message: string;
+    readonly ok: false;
+    readonly reason?: CompareDocumentsRefusalReason;
+};
+
+// @public
+export type CompareDocumentsPhase = 'reading' | 'comparing' | 'checking' | 'applying';
+
+// @public
+export interface CompareDocumentsProgress {
+    readonly fraction: number;
+    readonly phase: CompareDocumentsPhase;
+}
+
+// @public
+export type CompareDocumentsRefusalReason =
+/** The documents differ inside a content control that is locked or bound to data. */
+'lockedContent'
+/** A document holds tracked changes that cannot be accepted, so its final state is unknown. */
+| 'unresolvedRevisions'
+/** The documents differ in content with no tracked-change form, such as an embedded file. */
+| 'untrackedContent'
+/** The revised document adds section or table settings that a reject cannot restore. */
+| 'unrecordedSettings'
+/** A header or footer of an earlier section cannot be paired with one of the original. */
+| 'headerFooter'
+/** The result needs a part type that the original document does not declare. */
+| 'packageStructure'
+/**
+* The result fails the check: accepting all changes does not give the revised text, rejecting
+* them does not give the original text, or a tracked change cannot be accepted or rejected.
+*/
+| 'unverified';
+
+// @public
+export interface CompareDocumentsRequest {
+    readonly authorName?: string;
+    readonly detectFormatChanges?: boolean;
+    readonly removeDateAndTime?: boolean;
+    readonly revised: Uint8Array;
+}
+
+// @public
 export function composeFontConfiguration(base: FontConfigurationBase, ...fragments: readonly FontConfigurationFragment[]): FontConfiguration;
 
 // @public
@@ -1141,6 +1333,12 @@ export interface ContentControlWidgetSession {
 // @public
 export interface ContentLockPolicy {
     readonly allowFormattingInLockedContent?: boolean;
+}
+
+// @public
+export interface ContentTypeIndex {
+    readonly defaults: ReadonlyMap<string, string>;
+    readonly overrides: ReadonlyMap<string, string>;
 }
 
 // @public
@@ -1672,6 +1870,7 @@ export interface DocxEditorInstance extends Editor {
     setBookmarkChrome(handlers: BookmarkChromeHandlers): Unsubscribe;
     setBookmarkMarks(options: BookmarkMarkOptions): Unsubscribe;
     setCommentDraftChrome(handlers: CommentDraftChromeHandlers): Unsubscribe;
+    setCompareDocumentsChrome(handlers: CompareDocumentsChromeHandlers | null, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setFonts(fonts: DocxEditorConfig['fonts']): Promise<void>;
@@ -1948,6 +2147,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         tableWidthTwips: number;
         target: TableRightEdgeResizeTarget;
     };
+    compareDocuments: CompareDocumentsRequest;
     copy: Record<never, never>;
     cut: Record<never, never>;
     // (undocumented)
@@ -1993,6 +2193,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     navigateReviewChange: {
         direction: 'next' | 'previous';
     };
+    openCompareDocumentsDialog: Record<never, never>;
     openRevisionMarkupDialog: Record<never, never>;
     paste: {
         html?: string;
@@ -2535,12 +2736,14 @@ export type ExecErrorCode = 'notFound' | 'ambiguous' | 'locked' | 'bound' | 'typ
 // @public
 export type ExecResult = {
     changed: boolean;
+    compareDocuments?: CompareDocumentsOutcome;
     history?: HistoryGroupOutcome;
     ok: true;
     revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
 } | {
     code: ExecErrorCode;
+    compareDocuments?: CompareDocumentsOutcome;
     ok: false;
     reason: string;
     revisionAuthors?: RevisionAuthorResult;
@@ -3136,6 +3339,31 @@ export interface NumberingRef {
 }
 
 // @public
+export interface OoxmlExternalTarget {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly ownerPart: string;
+    // (undocumented)
+    readonly rawTarget: string;
+    readonly sinkSafe: boolean;
+    // (undocumented)
+    readonly type: string;
+}
+
+// @public
+export interface OoxmlPackage {
+    // (undocumented)
+    readonly contentTypes: ContentTypeIndex;
+    // (undocumented)
+    readonly externalTargets: readonly OoxmlExternalTarget[];
+    readonly mainDocumentPart: string;
+    readonly partBytes: ReadonlyMap<string, Uint8Array>;
+    readonly parts: ReadonlyMap<string, OoxmlPart>;
+    readonly relationships: ReadonlyMap<string, readonly RelationshipRecord[]>;
+}
+
+// @public
 export interface PageMargins {
     // (undocumented)
     readonly bottomTwips: number;
@@ -3300,6 +3528,22 @@ export interface Rect {
     readonly x: number;
     // (undocumented)
     readonly y: number;
+}
+
+// @public
+export interface RelationshipRecord {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly order: number;
+    // (undocumented)
+    readonly ownerPart: string;
+    // (undocumented)
+    readonly rawTarget: string;
+    // (undocumented)
+    readonly targetMode: TargetMode;
+    // (undocumented)
+    readonly type: string;
 }
 
 // @public
@@ -3540,6 +3784,9 @@ export interface ReviewModelInput {
 // @public
 export interface ReviewModuleContribution {
     readonly collectReviewItems: CollectReviewItems;
+    readonly compareDocuments?: CompareDocumentsEngine;
+    readonly compareDocumentsInBackground?: CompareDocumentsBackgroundEngine;
+    readonly createCompareDocumentsDialog?: (host: CompareDocumentsDialogHost) => CompareDocumentsDialog;
     readonly createRevisionMarkupDialog?: (host: RevisionMarkupDialogHost) => RevisionMarkupDialog;
     readonly displayModes: readonly ReviewDisplayMode[];
     readonly pane?: ReviewPaneOptions;
@@ -4235,6 +4482,9 @@ export interface TableRowOccurrenceTarget {
     // (undocumented)
     readonly tableId: string;
 }
+
+// @public
+export type TargetMode = 'Internal' | 'External';
 
 // @public
 export interface TextMatch {

@@ -117,3 +117,10 @@ test.each([
 ] as const)('the chrome refusal "%s" is translatable', (reason, key) => {
   expect(localizeDisabledReason(reason, createT(en))).toBe(en.disabledReason[key]);
 });
+
+test('the compare documents collaboration refusal is translatable', () => {
+  const reason = 'documents cannot be compared while a collaboration session is attached';
+  expect(localizeDisabledReason(reason, createT(en))).toBe(
+    'Compare documents is not available in a shared editing session.'
+  );
+});

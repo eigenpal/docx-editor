@@ -15,6 +15,7 @@ import {
   IconCheckCircle,
   IconClose,
   IconComment,
+  IconDifference,
   IconDoneAll,
   IconEditNote,
   IconLock,
@@ -920,6 +921,7 @@ const iconMap: Record<string, React.ComponentType<IconProps>> = {
   add_comment: IconAddComment,
   comment: IconComment,
   edit_note: IconEditNote,
+  difference: IconDifference,
   rate_review: IconRateReview,
   visibility: IconVisibility,
   // Text direction

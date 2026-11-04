@@ -89,6 +89,7 @@ export const AUTOMATION_QUERY_OPERATIONS = [
 /** Operations that write. Every one of these goes through the single transaction path. */
 export const AUTOMATION_COMMAND_OPERATIONS = [
   'removeDocumentInformation',
+  'compareFromBase64',
   'setDocumentProperties',
   'insertTableRows',
   'insertTable',
@@ -164,6 +165,7 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
  */
 export const AUTOMATION_SOLITARY_OPERATIONS = [
   'removeDocumentInformation',
+  'compareFromBase64',
   'insertTableRows',
   'resolveRevisionBatch',
   'setRevisionAuthorBatch',

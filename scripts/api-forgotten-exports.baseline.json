@@ -8,6 +8,7 @@
       "HeaderFooterVariant",
       "HeadlessDocumentView",
       "NoteKind",
+      "OoxmlPackage",
       "OoxmlPackageLimits",
       "OoxmlPackageRejection",
       "ReviewRevisionItem",
@@ -50,6 +51,7 @@
       "OoxmlPart",
       "OoxmlProperty",
       "OpenTreeSessionOptions",
+      "PackageReplacementResult",
       "ParagraphAnchorIndex",
       "ReplaceImageOptions",
       "ReviewItem",
@@ -167,6 +169,7 @@
       "OoxmlElement",
       "OoxmlPackage",
       "OoxmlPart",
+      "PackageReplacementResult",
       "PackageWatermarkWrite",
       "PackageWriteOptions",
       "PaginatedSurfacePerf",
@@ -464,6 +467,7 @@
   "@docx-editor.dev/react": {
     "index": [
       "BookmarkDialogRoot",
+      "CompareDocumentsDialogRoot",
       "ContentControlFields",
       "ContentControlHeader",
       "ContentControlRemove",

@@ -28,6 +28,14 @@ import { ClearAnchorHighlightOptions } from '@docx-editor.dev/core/contracts/edi
 import { ClearRefreshHighlightsOptions } from '@docx-editor.dev/core/editor';
 import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsChromeHandlers } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsDialogSession } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsEngineErrorCode } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsErrorCode } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsOutcome } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsProgress } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsRefusalReason } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsRequest } from '@docx-editor.dev/core/editor';
 import { ComponentType } from 'react';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
 import { composeFontOrigins } from '@docx-editor.dev/core/editor';
@@ -231,6 +239,30 @@ export { ClearAnchorHighlightOptions }
 export { ClearRefreshHighlightsOptions }
 
 export { commandForSlot }
+
+export { CompareDocumentsChromeHandlers }
+
+export { CompareDocumentsDialogSession }
+
+// @public
+export interface CompareDocumentsDialogValues {
+    // (undocumented)
+    readonly authorName: string;
+    // (undocumented)
+    readonly detectFormatChanges: boolean;
+    readonly removeDateAndTime: boolean;
+    readonly revised: File | null;
+}
+
+export { CompareDocumentsEngineErrorCode }
+
+export { CompareDocumentsErrorCode }
+
+export { CompareDocumentsOutcome }
+
+export { CompareDocumentsRefusalReason }
+
+export { CompareDocumentsRequest }
 
 export { composeFontConfiguration }
 
@@ -624,6 +656,42 @@ export type DocxEditorChildren = ReactNode;
 
 // @public
 export function DocxEditorColorByChangeType(): null;
+
+// @public
+export const DocxEditorCompareDocumentsDialog: typeof CompareDocumentsDialogRoot & {
+    Apply: (props: DialogPartProps & {
+        name?: keyof CompareDocumentsDialogValues | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Body: (props: DialogPartProps & {
+        name?: keyof CompareDocumentsDialogValues | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Cancel: (props: DialogPartProps & {
+        name?: keyof CompareDocumentsDialogValues | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Error: (props: DialogPartProps & {
+        name?: keyof CompareDocumentsDialogValues | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Field: (props: DialogPartProps & {
+        name: keyof CompareDocumentsDialogValues;
+    }) => react.ReactNode;
+    Footer: (props: DialogPartProps & {
+        name?: keyof CompareDocumentsDialogValues | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Header: (props: DialogPartProps & {
+        name?: keyof CompareDocumentsDialogValues | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Notice: (props: DialogPartProps) => react.ReactNode;
+    Progress: (props: DialogPartProps) => react.ReactNode;
+    Title: (props: DialogPartProps & {
+        name?: keyof CompareDocumentsDialogValues | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+};
+
+// @public
+export interface DocxEditorCompareDocumentsDialogProps extends DialogCustomizationProps {
+    // (undocumented)
+    session: CompareDocumentsDialogSession | null;
+}
 
 // @public
 export function DocxEditorContent(input: DocxEditorContentProps): react.JSX.Element;
@@ -1044,6 +1112,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     // (undocumented)
     readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
     // (undocumented)
+    readonly CompareDocumentsDialog: typeof DocxEditorCompareDocumentsDialog;
+    // (undocumented)
     readonly Content: typeof DocxEditorContent;
     // (undocumented)
     readonly ContentControl: typeof DocxEditorContentControl;
@@ -1346,6 +1416,7 @@ export type DocxEditorPopup<Props extends object> = false | ((props: Props) => D
 // @public
 export interface DocxEditorPopups {
     bookmark?: DocxEditorPopup<DocxEditorBookmarkDialogProps>;
+    compareDocuments?: DocxEditorPopup<DocxEditorCompareDocumentsDialogProps>;
     // (undocumented)
     contentControl?: DocxEditorPopup<ContentControlProps>;
     contentControlCheckbox?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
@@ -3260,6 +3331,18 @@ export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): Chr
 
 // @public
 export function useCommentDraftRequest(handler: (() => void) | null | undefined): void;
+
+// @public
+export function useCompareDocumentsDialog(): UseCompareDocumentsDialogReturn;
+
+// @public
+export interface UseCompareDocumentsDialogReturn extends UseDialogReturn<CompareDocumentsDialogValues> {
+    readonly busy: boolean;
+    readonly cancelable: boolean;
+    readonly notice: string | undefined;
+    readonly originalHasTrackedChanges: boolean;
+    readonly progress: CompareDocumentsProgress | null;
+}
 
 // @public
 export function useContentControl(): UseContentControlResult;

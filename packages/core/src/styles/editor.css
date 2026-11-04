@@ -477,7 +477,15 @@
    where it clamps to zero, landing on a dark olive that reads as a redaction bar. Word keeps
    a highlight its authored colour, so the run is inverted back — the same treatment media
    already gets, for the same reason. */
-.docx-editor.dark .docx-page-content [data-highlight] {
+.docx-editor.dark
+  :is(
+    .docx-page-content,
+    .docx-page > .docx-hf > :not([data-no-color-invert]),
+    .docx-page > .docx-hf-behind-layer,
+    .docx-page > .docx-notes,
+    .docx-page > .docx-drawing-layer
+  )
+  [data-highlight] {
   filter: invert(1) hue-rotate(180deg);
 }
 
@@ -485,21 +493,45 @@
    the filter receives, not what the user sees. A normal blue came out orange; this is the
    pre-image that inverts back to the accent blue. The comment further up claiming the
    selection overlay sits outside the inverted page is true of the legacy lane only. */
-.docx-editor.dark .docx-page-content ::selection {
+.docx-editor.dark
+  :is(
+    .docx-page-content,
+    .docx-page > .docx-hf > :not([data-no-color-invert]),
+    .docx-page > .docx-hf-behind-layer,
+    .docx-page > .docx-notes,
+    .docx-page > .docx-drawing-layer
+  )
+  ::selection {
   background-color: rgba(177, 98, 0, 0.32);
 }
-.docx-editor.dark .docx-page-content {
+/* Every layer of document ink is inverted, not only the body. The header and footer
+   bands, the notes area, and the floating drawing layers are siblings of
+   `.docx-page-content` on the sheet, so a rule naming the body alone painted header text
+   black on the dark page. A band's CHILDREN are inverted rather than the band, so its hover
+   tint and edit border stay chrome colours, and the engine caret is left out. */
+.docx-editor.dark
+  :is(
+    .docx-page-content,
+    .docx-page > .docx-hf > :not([data-no-color-invert]),
+    .docx-page > .docx-hf-behind-layer,
+    .docx-page > .docx-notes,
+    .docx-page > .docx-drawing-layer
+  ) {
   /* contrast(0.92) softens the pure black/white extremes a plain invert
     * produces, landing on Word's gentler off-white text / dark-grey fills
     * rather than #fff on #000. The page FRAME sits outside this filter, so
     * its own shadow needs no counter-treatment. */
   filter: invert(1) hue-rotate(180deg) contrast(0.92);
 }
-.docx-editor.dark .docx-page-content img,
-.docx-editor.dark .docx-page-content svg,
-.docx-editor.dark .docx-page-content canvas,
-.docx-editor.dark .docx-page-content video,
-.docx-editor.dark .docx-page-content [data-no-color-invert] {
+.docx-editor.dark
+  :is(
+    .docx-page-content,
+    .docx-page > .docx-hf > :not([data-no-color-invert]),
+    .docx-page > .docx-hf-behind-layer,
+    .docx-page > .docx-notes,
+    .docx-page > .docx-drawing-layer
+  )
+  :is(img, svg, canvas, video, [data-no-color-invert]) {
   filter: invert(1) hue-rotate(180deg);
 }
 
@@ -3231,12 +3263,23 @@ a.docx-hyperlink:focus-visible {
    inversion here, printing in dark mode left near-white text on paper the printer drops to
    white — blank pages. `print-color-adjust` stops the sheet colour being dropped too. */
 @media print {
-  .docx-editor.dark .docx-page-content,
-  .docx-editor.dark .docx-page-content img,
-  .docx-editor.dark .docx-page-content svg,
-  .docx-editor.dark .docx-page-content canvas,
-  .docx-editor.dark .docx-page-content video,
-  .docx-editor.dark .docx-page-content [data-no-color-invert] {
+  .docx-editor.dark
+    :is(
+      .docx-page-content,
+      .docx-page > .docx-hf > :not([data-no-color-invert]),
+      .docx-page > .docx-hf-behind-layer,
+      .docx-page > .docx-notes,
+      .docx-page > .docx-drawing-layer
+    ),
+  .docx-editor.dark
+    :is(
+      .docx-page-content,
+      .docx-page > .docx-hf > :not([data-no-color-invert]),
+      .docx-page > .docx-hf-behind-layer,
+      .docx-page > .docx-notes,
+      .docx-page > .docx-drawing-layer
+    )
+    :is(img, svg, canvas, video, [data-no-color-invert]) {
     filter: none !important;
   }
   :is(.docx-paginated-surface, .docx-preview-surface) .docx-page {
@@ -8863,6 +8906,228 @@ p.docx-review__refused {
   --doc-revision-color-lightPurple: #eadcf4;
   --doc-revision-color-lightGreen: #e2efd9;
   --doc-revision-color-gray: #d9d9d9;
+}
+
+/* Compare documents dialog. */
+.docx-editor .docx-compare-documents-dialog,
+.docx-editor.docx-compare-documents-dialog,
+.docx-compare-documents-dialog {
+  box-sizing: border-box;
+  width: min(28rem, calc(100vw - 2rem));
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  height: fit-content;
+  max-height: calc(100dvh - 3rem);
+  overflow-y: auto;
+  padding: var(--doc-dialog-padding, 1.25rem);
+  border: 1px solid var(--doc-border);
+  border-radius: var(--doc-dialog-radius, 0.75rem);
+  color: var(--doc-text);
+  background: var(--doc-bg);
+  font: var(--doc-dialog-font-size, 13px) / 1.5
+    var(--doc-dialog-font-family, var(--doc-font-ui, system-ui, sans-serif));
+}
+.docx-compare-documents-dialog h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+.docx-compare-documents-dialog p {
+  margin: 0 0 0.75rem;
+  color: var(--doc-text-muted);
+}
+.docx-compare-documents-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.docx-compare-documents-body label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.docx-compare-documents-body label.docx-compare-documents-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+.docx-compare-documents-body input[type='text'] {
+  padding: 0.3rem 0.375rem;
+  border: 1px solid var(--doc-border);
+  border-radius: 0.25rem;
+  color: var(--doc-text);
+  background: var(--doc-bg);
+}
+.docx-compare-documents-dialog .docx-compare-documents-error,
+.docx-compare-documents-dialog .docx-compare-documents-notice {
+  min-height: 1.25rem;
+  margin: 0.5rem 0 0;
+}
+.docx-compare-documents-dialog .docx-compare-documents-error {
+  color: var(--doc-error);
+}
+/* Said before a compare: the open document's tracked changes count as accepted. */
+.docx-compare-documents-dialog .docx-compare-documents-tracked {
+  margin: 0 0 0.75rem;
+  padding: 0.375rem 0.5rem;
+  border-left: 3px solid var(--doc-warning);
+  border-radius: 0.25rem;
+  color: var(--doc-warning-text);
+  background: var(--doc-warning-bg);
+}
+/* While a compare runs: a thin bar that fills with each reported step, a band that sweeps
+ * across it until the first step, and a spinner in the Compare button. */
+.docx-compare-documents-dialog .docx-compare-documents-progress {
+  appearance: none;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 0.375rem;
+  margin: 0.75rem 0 0;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  color: var(--doc-primary);
+  background-color: var(--doc-border);
+  animation: docx-compare-documents-appear 0.2s ease-out;
+}
+.docx-compare-documents-dialog .docx-compare-documents-progress::-webkit-progress-bar {
+  background: transparent;
+}
+.docx-compare-documents-dialog .docx-compare-documents-progress::-webkit-progress-value {
+  border-radius: inherit;
+  background: var(--doc-primary);
+  transition: inline-size 0.3s ease-out;
+}
+.docx-compare-documents-dialog .docx-compare-documents-progress::-moz-progress-bar {
+  border-radius: inherit;
+  background: var(--doc-primary);
+}
+.docx-compare-documents-dialog .docx-compare-documents-progress:indeterminate {
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    var(--doc-primary) 30%,
+    var(--doc-primary) 70%,
+    transparent
+  );
+  background-repeat: no-repeat;
+  background-size: 40% 100%;
+  animation:
+    docx-compare-documents-appear 0.2s ease-out,
+    docx-compare-documents-sweep 1.4s ease-in-out infinite;
+}
+.docx-compare-documents-dialog .docx-compare-documents-progress:indeterminate::-moz-progress-bar {
+  background: transparent;
+}
+.docx-compare-documents-dialog .docx-compare-documents-phase {
+  display: block;
+  margin: 0.25rem 0 0;
+  color: var(--doc-text-muted);
+  font-variant-numeric: tabular-nums;
+  animation: docx-compare-documents-appear 0.2s ease-out;
+}
+/* The Compare button stays legible while it works, with a spinner before its label. */
+.docx-compare-documents-dialog[data-docx-busy] .docx-compare-documents-actions button:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  opacity: 0.85;
+}
+.docx-compare-documents-dialog[data-docx-busy]
+  .docx-compare-documents-actions
+  button:last-child::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 0.875em;
+  height: 0.875em;
+  box-sizing: border-box;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: docx-compare-documents-spin 0.7s linear infinite;
+}
+@keyframes docx-compare-documents-sweep {
+  /* With a band of 40% width, -67% and 167% start and end it fully outside the bar. */
+  from {
+    background-position: -67% 0;
+  }
+  to {
+    background-position: 167% 0;
+  }
+}
+@keyframes docx-compare-documents-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes docx-compare-documents-appear {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docx-compare-documents-dialog .docx-compare-documents-progress,
+  .docx-compare-documents-dialog .docx-compare-documents-progress:indeterminate,
+  .docx-compare-documents-dialog .docx-compare-documents-phase,
+  .docx-compare-documents-dialog[data-docx-busy]
+    .docx-compare-documents-actions
+    button:last-child::before {
+    animation: none;
+  }
+  /* A still band in the middle still says that work is under way. */
+  .docx-compare-documents-dialog .docx-compare-documents-progress:indeterminate {
+    background-position: 50% 0;
+  }
+  .docx-compare-documents-dialog .docx-compare-documents-progress::-webkit-progress-value {
+    transition: none;
+  }
+}
+/* One message line: the notice takes the error's place, never a second line. An empty
+ * message region stays in the accessibility tree, so a later message is announced; it is
+ * only hidden from view (the `.docx-editor-sr-only` pattern). */
+.docx-compare-documents-dialog
+  .docx-compare-documents-error:empty:has(+ .docx-compare-documents-notice:not(:empty)),
+.docx-compare-documents-dialog .docx-compare-documents-notice:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.docx-compare-documents-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+}
+.docx-compare-documents-actions button {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--doc-border);
+  border-radius: 0.375rem;
+  background: var(--doc-bg);
+  color: var(--doc-text);
+  cursor: pointer;
+}
+.docx-compare-documents-actions button:last-child {
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  border-color: var(--doc-primary);
+}
+.docx-compare-documents-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.docx-compare-documents-dialog button:focus-visible,
+.docx-compare-documents-dialog input:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 2px;
 }
 
 /* Track changes options dialog. */

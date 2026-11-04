@@ -64,7 +64,12 @@
     // In these lanes only `__tests__` is exempt, so a `*.test.ts` beside the source keeps the
     // sink and keyframes checks too.
     {
-      "files": ["packages/core/src/store/**/*.ts", "packages/core/src/layout/**/*.ts"],
+      "files": [
+        "packages/core/src/store/**/*.ts",
+        "packages/core/src/layout/**/*.ts",
+        "packages/pro/src/compare/**/*.ts",
+        "packages/pro/src/compare-worker.ts"
+      ],
       "rules": {
         "docx/no-varargs-spread": "error",
         "docx/no-html-sinks": "error",
@@ -74,7 +79,8 @@
     {
       "files": [
         "packages/core/src/store/**/__tests__/**",
-        "packages/core/src/layout/**/__tests__/**"
+        "packages/core/src/layout/**/__tests__/**",
+        "packages/pro/src/compare/**/__tests__/**"
       ],
       "rules": {
         "docx/no-varargs-spread": "off",

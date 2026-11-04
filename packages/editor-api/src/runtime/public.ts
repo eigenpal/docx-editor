@@ -75,6 +75,8 @@ export {
   type ContentControlValue,
   type HeaderFooterType,
   RemoveDocInfoType,
+  CompareTarget,
+  type DocumentCompareOptions,
   InsertLocation,
   Alignment,
   VerticalAlignment,

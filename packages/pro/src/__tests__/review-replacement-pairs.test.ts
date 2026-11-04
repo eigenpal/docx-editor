@@ -141,8 +141,30 @@ describe('pairing replacements in the review queue', () => {
     ]);
   });
 
-  test('an insertion followed by a deletion does not pair', () => {
+  test('an insertion followed by a touching deletion pairs, as a document compare writes it', () => {
     const editor = mount(paragraph(run('The '), ins(2, 'Ada', 'new'), del(1, 'Ada', 'old')));
+    expect(summary(editor.getReviewItems(PAIRED))).toEqual([['replace', 'new', 'old']]);
+    // Accepting the pair keeps the inserted words; one undo restores both halves.
+    expect(editor.acceptReviewItem(pairOf(editor).key)).toEqual({ ok: true, changed: true });
+    expect(bodyText(editor)).toBe('The new');
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    expect(editor.rejectReviewItem(pairOf(editor).key)).toEqual({ ok: true, changed: true });
+    expect(bodyText(editor)).toBe('The old');
+  });
+
+  test('a deletion pairs with the insertion after it before the insertion before it', () => {
+    // A typed replacement right after an earlier insertion: the replacement stays as typed.
+    const editor = mount(
+      paragraph(run('The '), ins(1, 'Ada', 'early'), del(2, 'Ada', 'old'), ins(3, 'Ada', 'new'))
+    );
+    expect(summary(editor.getReviewItems(PAIRED))).toEqual([
+      ['insert', 'early', null],
+      ['replace', 'new', 'old'],
+    ]);
+  });
+
+  test('an insertion and a deletion from different authors stay apart in either order', () => {
+    const editor = mount(paragraph(run('The '), ins(2, 'Ada', 'new'), del(1, 'Bo', 'old')));
     expect(summary(editor.getReviewItems(PAIRED))).toEqual([
       ['insert', 'new', null],
       ['delete', 'old', null],

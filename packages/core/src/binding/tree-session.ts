@@ -1,4 +1,5 @@
 import { shareUndoHistoryPosition } from '../store/store/undo-history-position.ts';
+import { replaceWholePackage } from '../store/store/tree-package-replace.ts';
 import { createSessionPackageWriter } from './session-package-writer.ts';
 // Tree-backed editing session (cutover step 2b).
 //
@@ -1292,13 +1293,9 @@ export function openTreeSessionFromPackage(
         return packageStore.deleteImageTracked(scope, drawingNodeId, revision);
       },
 
-      applyImageProperties(scope, input) {
-        return packageStore.applyImageProperties(scope, input);
-      },
-
-      applyFragmentPaste(scope, input) {
-        return packageStore.applyFragmentPaste(scope, input);
-      },
+      applyImageProperties: (scope, input) => packageStore.applyImageProperties(scope, input),
+      applyFragmentPaste: (scope, input) => packageStore.applyFragmentPaste(scope, input),
+      replacePackage: (pkg) => replaceWholePackage(packageStore, pkg),
     },
   };
   shareUndoHistoryPosition(result.session, packageStore);

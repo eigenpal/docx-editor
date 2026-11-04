@@ -17,9 +17,8 @@ import type { ChromeMenu } from './chrome-menu-entries.ts';
 // previous round of this change grew 24 React-only exports precisely by ignoring
 // that, and no test caught it until a full-repo export-parity sweep.
 //
-// Icon paths are the Material Symbols set the legacy UI already bundled, lifted
-// verbatim (viewBox "0 -960 960 960"). They were extracted programmatically from
-// the reference commit rather than retyped, because a hand-copied path is a silent
+// Icon paths are the Material Symbols set (viewBox "0 -960 960 960"), extracted
+// programmatically rather than retyped, because a hand-copied path is a silent
 // visual regression that no assertion would catch.
 //
 // SLOT IDS ARE THE STABLE PUBLIC CONTRACT.
@@ -793,6 +792,7 @@ export type ChromeSlotId =
   | 'review.paragraphMarks'
   | 'review.bookmarks'
   | 'review.protectDocument'
+  | 'review.compareDocuments'
   | 'review.simpleMarkup'
   | 'review.allMarkup'
   | 'review.noMarkup'
@@ -1067,6 +1067,8 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
       { kind: 'item', slot: 'review.bookmarks' },
       { kind: 'separator' },
       { kind: 'item', slot: 'review.protectDocument' },
+      { kind: 'separator' },
+      { kind: 'item', slot: 'review.compareDocuments' },
     ],
   },
   {

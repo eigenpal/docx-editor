@@ -921,7 +921,8 @@
     "replyCount": "Antworten: {count}",
     "trackedChange": "Nachverfolgte Änderung",
     "changeAnnouncement": "{change} von {author}: {text}",
-    "replyTargetResolved": "Die Änderung wurde aufgelöst, daher wurde die Antwort nicht gesendet."
+    "replyTargetResolved": "Die Änderung wurde aufgelöst, daher wurde die Antwort nicht gesendet.",
+    "compareDocuments": "Dokumente vergleichen"
   },
   "imageAltText": {
     "description": "Beschreibung",
@@ -1009,6 +1010,7 @@
     "trackedOnly": "Dieses Dokument erlaubt Bearbeitungen nur mit Änderungsverfolgung",
     "unavailable": "Dieser Befehl ist nicht verfügbar",
     "viewing": "Dieses Dokument ist zur Ansicht geöffnet",
+    "compareCollaboration": "Dokumente vergleichen ist in einer gemeinsamen Bearbeitungssitzung nicht verfügbar.",
     "bodyOnlyNote": "Fußnoten und Endnoten werden im Haupttext des Dokuments hinzugefügt.",
     "bodyOnlySectionBreak": "Abschnittsumbrüche werden im Haupttext des Dokuments eingefügt.",
     "bodyOnlyToc": "Ein Inhaltsverzeichnis wird im Haupttext des Dokuments eingefügt.",
@@ -1169,5 +1171,52 @@
     "sectionBreakNextColumn": "Abschnittswechsel (Neue Spalte)",
     "sectionBreakNextPage": "Abschnittswechsel (Nächste Seite)",
     "sectionBreakOddPage": "Abschnittswechsel (Ungerade Seite)"
+  },
+  "compareDocuments": {
+    "author": "Autor der Änderungen",
+    "cancel": "Abbrechen",
+    "compare": "Vergleichen",
+    "comparing": "Wird verglichen…",
+    "description": "Wählen Sie eine andere Version dieses Dokuments. Die Unterschiede erscheinen hier als nachverfolgte Änderungen.",
+    "trackedChangesAccepted": "Das geöffnete Dokument enthält nachverfolgte Änderungen. Der Vergleich behandelt sie als angenommen.",
+    "detectFormatting": "Formatierungsänderungen einbeziehen",
+    "fileRequired": "Wählen Sie zuerst ein Dokument zum Vergleichen.",
+    "readFailed": "Die ausgewählte Datei konnte nicht gelesen werden.",
+    "revisedFile": "Vergleichen mit",
+    "title": "Dokumente vergleichen",
+    "noDifferences": "Die Dokumente unterscheiden sich nicht.",
+    "recorded": "{count, plural, one {Der Vergleich hat # Änderung aufgezeichnet.} other {Der Vergleich hat # Änderungen aufgezeichnet.}}",
+    "recordedNoRevisions": "Der Vergleich hat das Dokument ohne nachverfolgte Änderungen aktualisiert.",
+    "phases": {
+      "reading": "Die Dokumente werden gelesen…",
+      "comparing": "Wird verglichen…",
+      "checking": "Das Ergebnis wird geprüft…",
+      "applying": "Die Änderungen werden übernommen…"
+    },
+    "errors": {
+      "invalidOptions": "Die Vergleichsoptionen sind ungültig.",
+      "invalidOriginal": "Das geöffnete Dokument kann für einen Vergleich nicht gelesen werden.",
+      "invalidRevised": "Die ausgewählte Datei ist kein vergleichbares Dokument.",
+      "tooLarge": "Die Dokumente sind zu groß für einen Vergleich.",
+      "unsupportedContent": "Die Dokumente unterscheiden sich in Inhalten, die nicht als nachverfolgte Änderungen angezeigt werden können.",
+      "unavailable": "Dokumente vergleichen ist für dieses Dokument nicht verfügbar.",
+      "protected": "Dieses Dokument ist gegen Bearbeitung geschützt.",
+      "collaboration": "Dokumente vergleichen ist in einer gemeinsamen Bearbeitungssitzung nicht verfügbar.",
+      "viewing": "Das Dokument ist nur zum Lesen geöffnet.",
+      "closed": "Der Vergleich wurde abgebrochen.",
+      "empty": "Die ausgewählte Datei ist leer.",
+      "busy": "Ein anderer Vergleich, eine Vorschau oder eine Aktualisierung des Dokuments läuft. Versuchen Sie es erneut, wenn der Vorgang beendet ist.",
+      "documentChanged": "Das Dokument wurde während des Vergleichs geändert. Vergleichen Sie erneut.",
+      "failed": "Die Dokumente konnten nicht verglichen werden."
+    },
+    "reasons": {
+      "headerFooter": "Die Dokumente unterscheiden sich in einer Kopf- oder Fußzeile eines früheren Abschnitts, und dieser Abschnitt hat keinen passenden Abschnitt im anderen Dokument.",
+      "lockedContent": "Die Dokumente unterscheiden sich in einem Inhaltssteuerelement, das gesperrt oder mit Daten verknüpft ist. Die Änderungen dort können nicht überprüft werden. Entfernen Sie die Sperre oder die Verknüpfung und vergleichen Sie erneut.",
+      "packageStructure": "Das geöffnete Dokument kann das Ergebnis dieses Vergleichs nicht aufnehmen.",
+      "unrecordedSettings": "Die andere Version fügt Abschnitts- oder Tabelleneinstellungen hinzu, die sich durch Ablehnen der Änderungen nicht rückgängig machen lassen.",
+      "unresolvedRevisions": "Ein Dokument enthält nachverfolgte Änderungen, die nicht angenommen werden können. Nehmen Sie sie in diesem Dokument an oder lehnen Sie sie ab und vergleichen Sie erneut.",
+      "untrackedContent": "Die Dokumente unterscheiden sich in Inhalten, die nicht als nachverfolgte Änderungen angezeigt werden können, zum Beispiel einer eingebetteten Datei.",
+      "unverified": "Das Vergleichsergebnis würde nicht beide Dokumente wiedergeben und wurde daher nicht übernommen."
+    }
   }
 }

@@ -54,6 +54,7 @@ import {
   editorOwnsOpenHistoryGroup,
 } from './editor-history-group-registry.ts';
 import type { AutomationHistoryFrames } from './editor-history-groups.ts';
+import { editorCompareEngine } from './editor-compare-engine-registry.ts';
 import { editorPreviewActive, PREVIEW_WRITE_REFUSAL } from './editor-preview.ts';
 
 /**
@@ -283,6 +284,7 @@ function sessionPort(
         ? layoutProjectionOf(editor.surface.revisionDisplayMode())
         : DEFAULT_FORMATTING_DISPLAY_MODE,
     collaborative: () => !!editor.surface?.collaborationSession(),
+    ...compareEnginePort(editor),
     setupOutsideUndo: () => true,
     allocationActor: () => editor.surface?.collaborationSession()?.identity.actorId,
     trackedRangeReplacement: () => !editor.surface?.collaborationSession(),
@@ -477,4 +479,10 @@ function sessionPort(
       session = null;
     },
   };
+}
+
+/** The review module compare engine as a port member, or nothing without the module. */
+function compareEnginePort(editor: object): Pick<AutomationDocumentPort, 'compareDocuments'> {
+  const engine = editorCompareEngine(editor);
+  return engine ? { compareDocuments: engine } : {};
 }

@@ -21,6 +21,7 @@
     "editorNotReady": "エディターの準備ができていません",
     "notWired": "このコントロールには編集コマンドが設定されていません",
     "viewing": "この文書は閲覧モードで開かれています",
+    "compareCollaboration": "共同編集セッションでは文書の比較を使用できません。",
     "trackedOnly": "この文書は変更履歴を記録する場合のみ編集できます",
     "noDocument": "文書が読み込まれていません",
     "noReviewAuthors": "この文書には校閲者がいません",
@@ -1055,7 +1056,8 @@
     "replyCount": "返信: {count}",
     "trackedChange": "変更履歴",
     "changeAnnouncement": "{author} による{change}: {text}",
-    "replyTargetResolved": "変更は解決済みのため、返信は投稿されませんでした。"
+    "replyTargetResolved": "変更は解決済みのため、返信は投稿されませんでした。",
+    "compareDocuments": "文書の比較"
   },
   "textFormField": {
     "title": "テキスト フォーム フィールドのオプション",
@@ -1169,5 +1171,52 @@
     "sectionBreakNextColumn": "セクション区切り (次の段から新しいセクション)",
     "sectionBreakNextPage": "セクション区切り (次のページから新しいセクション)",
     "sectionBreakOddPage": "セクション区切り (奇数ページから新しいセクション)"
+  },
+  "compareDocuments": {
+    "author": "変更の作成者",
+    "cancel": "キャンセル",
+    "compare": "比較",
+    "comparing": "比較しています…",
+    "description": "この文書の別のバージョンを選択してください。相違点は変更履歴としてここに表示されます。",
+    "trackedChangesAccepted": "開いている文書には変更履歴があります。比較では、それらを承諾済みとして扱います。",
+    "detectFormatting": "書式の変更を含める",
+    "fileRequired": "先に比較する文書を選択してください。",
+    "readFailed": "選択したファイルを読み取れませんでした。",
+    "revisedFile": "比較対象",
+    "title": "文書の比較",
+    "noDifferences": "文書に違いはありません。",
+    "recorded": "{count, plural, other {比較で # 件の変更を記録しました。}}",
+    "recordedNoRevisions": "比較により、変更履歴なしで文書が更新されました。",
+    "phases": {
+      "reading": "文書を読み込んでいます…",
+      "comparing": "比較しています…",
+      "checking": "結果を確認しています…",
+      "applying": "変更を適用しています…"
+    },
+    "errors": {
+      "invalidOptions": "比較のオプションが無効です。",
+      "invalidOriginal": "開いている文書を比較のために読み取れません。",
+      "invalidRevised": "選択したファイルは比較できる文書ではありません。",
+      "tooLarge": "文書が大きすぎるため比較できません。",
+      "unsupportedContent": "変更履歴として表示できない内容に違いがあります。",
+      "unavailable": "この文書では文書の比較を使用できません。",
+      "protected": "この文書は編集から保護されています。",
+      "collaboration": "共同編集セッションでは文書の比較を使用できません。",
+      "viewing": "文書は閲覧専用で開かれています。",
+      "closed": "比較はキャンセルされました。",
+      "empty": "選択したファイルは空です。",
+      "busy": "別の比較、プレビュー、または文書の更新を実行中です。終了してからもう一度お試しください。",
+      "documentChanged": "比較中に文書が変更されました。もう一度比較してください。",
+      "failed": "文書を比較できませんでした。"
+    },
+    "reasons": {
+      "headerFooter": "前のセクションのヘッダーまたはフッターが異なり、そのセクションに対応するセクションがもう一方の文書にありません。",
+      "lockedContent": "ロックされているか、データにリンクされたコンテンツ コントロール内で文書が異なるため、その変更は確認できません。ロックまたはリンクを解除してから、もう一度比較してください。",
+      "packageStructure": "開いている文書には、この比較の結果を保持できません。",
+      "unrecordedSettings": "もう一方のバージョンでは、変更を元に戻しても取り消せないセクションまたは表の設定が追加されています。",
+      "unresolvedRevisions": "承諾できない変更履歴を含む文書があります。その文書で変更を承諾または元に戻してから、もう一度比較してください。",
+      "untrackedContent": "埋め込みファイルなど、変更履歴として表示できない内容で文書が異なります。",
+      "unverified": "比較の結果で両方の文書を再現できないため、適用しませんでした。"
+    }
   }
 }
