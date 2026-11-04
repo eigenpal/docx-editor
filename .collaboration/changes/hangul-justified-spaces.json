@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A justified line in a modern compatibility mode shrinks every inter-word space to keep the next word, also a space beside Hangul.",
+  "after": "A space with a Hangul character on either side keeps its advance, and only the line's other spaces shrink.",
+  "reason": "Only derived layout changes. Canonical OOXML, source offsets, operations, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/hangul-space-shrink.test.ts",
+    "packages/pro/src/collaboration/__tests__/korean-justified-spaces-editors.test.ts"
+  ],
+  "changeset": "hangul-justified-spaces",
+  "migration": null
+}

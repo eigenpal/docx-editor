@@ -108,6 +108,29 @@ function capacity(
   return space * limit;
 }
 
+const HANGUL = /\p{Script=Hangul}/u;
+
+/**
+ * Whether the space closing `spans[index]` stands beside Hangul: the character before it, or
+ * the one after it (the start of `following` when no span follows), is Hangul. Word keeps
+ * such a space at its natural advance while the line's other spaces shrink.
+ */
+function besideHangul(spans: readonly StyleSpanRecord[], index: number, following = ''): boolean {
+  const before = withoutSpaceSlot(spans[index]!.text) || (spans[index - 1]?.text ?? '');
+  const after = (spans[index + 1]?.text ?? following).replace(/^\u200b+/u, '');
+  return HANGUL.test(before.slice(-1)) || HANGUL.test(after.slice(0, 1));
+}
+
+/** What the space closing `spans[index]` can give up, and nothing beside Hangul. */
+function lendingCapacity(
+  spans: readonly StyleSpanRecord[],
+  index: number,
+  space: number,
+  following?: string
+): number {
+  return space > 0 && besideHangul(spans, index, following) ? 0 : space;
+}
+
 /** Space floors by face style and kind; one style serves every span and line that uses it. */
 const spaceFloors = new WeakMap<
   ResolvedRunStyle,
@@ -224,11 +247,11 @@ export interface ShrinkWord {
  * - `false`: the word does not join the line.
  *
  * Only an ordinary word followed by a space, or the paragraph's last word, can borrow
- * existing inter-word space. Each space gives up at most `rule.limit` of its advance, and the
- * shrink must pass the rule's cost test against the stretch of the line without the word. A
- * word whose final mark may hang (`hangingMarkAdvance` is its advance) joins when the spaces
- * reach their limit before the mark fits, as long as they fit the text before the mark and
- * the rule hangs marks. Its mark then hangs.
+ * existing inter-word space. Each space gives up at most `rule.limit` of its advance, a space
+ * beside Hangul nothing, and the shrink must pass the rule's cost test against the stretch of
+ * the line without the word. A word whose final mark may hang (`hangingMarkAdvance` is its
+ * advance) joins when the spaces reach their limit before the mark fits, as long as they fit
+ * the text before the mark and the rule hangs marks. Its mark then hangs.
  *
  * A word that straddles a source-run seam (a quoted bold term, a semicolon left in the next
  * run) overflows on a later piece than the one that opened it. The kept line still runs to
@@ -287,19 +310,28 @@ export function spaceShrinkFit(
   // of it carry its stretch, and the space in front of it is the one that hangs.
   // One capacity per span serves the budget, the hanging space and the spaces ahead of the
   // word, each summed in span order; reading every span again measured each word again.
+  // A space beside Hangul lends nothing, but still hangs at full width after the last word.
   const beforeEnd = Math.max(first, Math.min(wordStart, spans.length));
   const capacities: number[] = [];
+  const lending: number[] = [];
   let budget = 0;
   for (let index = first; index < spans.length; index += 1) {
-    const slot = capacity(spans[index]!, measurer, rule.limit, rule.floor);
-    capacities.push(slot);
+    const space = capacity(spans[index]!, measurer, rule.limit, rule.floor);
+    const slot = lendingCapacity(spans, index, space, candidate);
+    capacities.push(space);
+    lending.push(slot);
     budget += slot;
   }
   if (rule.everyAlignment)
     for (const space of clippedSpacesBefore(spans, beforeEnd, first, measurer)) {
       // Inside the line again, the space takes back its natural advance and lends as any other.
       needed += space.box.width - spans[space.index]!.box.width;
-      budget += capacity(space, measurer, rule.limit, rule.floor);
+      budget += lendingCapacity(
+        spans,
+        space.index,
+        capacity(space, measurer, rule.limit, rule.floor),
+        candidate
+      );
     }
   // The spaces shrink to at most their limit: past it, only a mark that hangs can make room.
   const markInside = needed <= budget + 0.001;
@@ -309,15 +341,17 @@ export function spaceShrinkFit(
   const spaceWidth = budget / rule.limit;
   // Every space after the last word hangs there: a run of spaces as well as the word's own.
   let terminalSpace = 0;
+  let terminalLending = 0;
   for (let index = beforeEnd - 1; index >= first; index -= 1) {
     terminalSpace += capacities[index - first]! / rule.limit;
+    terminalLending += lending[index - first]! / rule.limit;
     if (!/^ +$/.test(spans[index]!.text)) break;
   }
   let beforeSpaces = 0;
   for (let index = first; index < beforeEnd; index += 1) {
-    beforeSpaces += capacities[index - first]! / rule.limit;
+    beforeSpaces += lending[index - first]! / rule.limit;
   }
-  const existingSpaces = beforeSpaces - terminalSpace;
+  const existingSpaces = beforeSpaces - terminalLending;
   if (existingSpaces <= 0) return false;
   const expansion = 1 + Math.max(0, available - wordStartWidth + terminalSpace) / existingSpaces;
   // The word joins the line when each space loses at most 1/cost of what the shorter line
@@ -425,7 +459,9 @@ export function shrinkJustifiedSpans(
   const first = firstShrinkSlot(spans);
   // Admission kept `needed` within the paragraph's rule; equal shares never pass a quarter.
   const capacities = spans.map((span, index) =>
-    index >= first && index < slotEnd ? capacity(span, measurer, 0.25, floor) : 0
+    index >= first && index < slotEnd
+      ? lendingCapacity(spans, index, capacity(span, measurer, 0.25, floor))
+      : 0
   );
   if (needed <= 0 || needed > capacities.reduce((a, b) => a + b, 0) + 0.001) return spans;
   const amounts = capacities.map(() => 0);
