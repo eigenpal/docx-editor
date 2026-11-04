@@ -53,6 +53,8 @@ Choose fonts that cover the document's characters and regional glyph forms. Chin
 
 The font picker lists available choices. A listed family does not confirm that its font files loaded. If the font notice reports a missing family, supply its files or choose an appropriate substitute.
 
+If a serif Korean font lacks a character, the editor draws that character in a serif Hangul font. It uses Batang, AppleMyungjo on macOS, or Noto Serif CJK KR, whichever the browser has. The document's font table marks a serif Korean font with `w:family` set to `roman` and a Korean `w:charset`. Other fonts fall back to serif, monospace, or sans-serif faces, by the class of the font. The editor knows the class of common fonts, and it reads the class from words such as Serif or Mono in other font names. Fonts with no known class use the default sans-serif fallback.
+
 A run can name one font for East Asian characters and another for Latin letters and numbers. The font picker shows the font of the selected characters. If the selection contains both kinds of characters with different fonts, the picker is blank. If the selection contains East Asian text, spaces, punctuation, and numbers do not count. So a selection of Korean words, or a date such as 2024년 3월, reads the Korean font.
 
 If you choose an East Asian font, such as SimSun or MS Mincho, it applies to all selected characters, including Latin letters and numbers. If you choose a Latin font, such as Arial, it applies only to Latin letters and numbers, including numbers the picker does not show. East Asian characters keep their font, because a Latin font has no East Asian characters to draw them with.
