@@ -65,11 +65,13 @@ For a composed editor, pass `exporters` to `DocxEditor.Menu` or `DocxEditorMenu`
 Before conversion, the print dialog shows two settings:
 
 - **Markup** selects All Markup, Simple Markup, No Markup, or Original. It starts at the current view on the **Review** tab.
-- **Print comments** prints each comment in a pane beside its page. Comments print only with All Markup, so the setting is unavailable for the other choices.
+- **Print comments** is on by default. With All Markup, comments print in a pane beside each page. With the other choices, they print as notes on the commented text.
 
 Select **Print** to continue, or press the print shortcut again. Select **Cancel** to close the dialog without converting.
 
 Your PDF handler receives the choices as `view.displayMode` and `view.comments`. Changing them does not change the view in the editor.
+
+A handler that does not forward `comments` to `exportPdf` always prints comments, and a handler that ignores its `view` argument ignores both settings. Update the handler as shown in [Convert PDF on the server](/docs/2.x/guides/export#convert-pdf-on-the-server), or set `printSettings` to `false`.
 
 To print the current view without asking, set `printSettings` to `false` on the menu. For the packaged editor, pass `menu={{ exporters, printSettings: false }}`. The settings step also does not show when `popups.print` is `false` or when no PDF handler is configured.
 
@@ -157,7 +159,7 @@ Call `runChromePrint(editor, exporters, container, settings)` from `@docx-editor
 
 The optional `container` receives the hidden print frame. It accepts a `Document` or `Element` and defaults to `document`. For an editor inside a modal dialog, pass an element inside that dialog.
 
-The optional `settings` argument is a `ChromePrintSettings` object with `displayMode` and `comments`. Omitted settings keep the current view. For your own settings form, `initialChromePrintSettings(editor.snapshot())` returns the starting values, and `nextChromePrintSettings(current, change)` applies a change. It turns comments off for a mode other than All Markup.
+The optional `settings` argument is a `ChromePrintSettings` object with `displayMode` and `comments`. Omitted settings keep the current view. For your own settings form, `initialChromePrintSettings(editor.snapshot())` returns the starting values, and `CHROME_PRINT_DISPLAY_MODES` lists the modes with their label keys in Review menu order.
 
 This function returns the job after a browser print failure so your UI can offer an **Open PDF** link:
 

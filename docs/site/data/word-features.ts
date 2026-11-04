@@ -112,7 +112,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'none',
     tier: 'premium',
     notes:
-      'File > Print converts the document through menu.exporters.pdf and opens the browser print dialog. Press Ctrl+P, or Cmd+P on macOS. A dialog shows progress and errors, and closes when the browser print dialog opens. Customize it with popups.print. Missing handlers show a setup error. Browsers without a PDF viewer get an Open PDF link instead. Printing requires the EigenPal Pro License.',
+      'File > Print converts the document through menu.exporters.pdf and opens the browser print dialog. Press Ctrl+P, or Cmd+P on macOS. A dialog first asks which markup to print and whether comments print, then shows progress and errors, and closes when the browser print dialog opens. Customize it with popups.print. Missing handlers show a setup error. Browsers without a PDF viewer get an Open PDF link instead. Printing requires the EigenPal Pro License.',
     docsLink: '/docs/2.x/guides/print',
   },
   // --- Text & formatting -----------------------------------------------

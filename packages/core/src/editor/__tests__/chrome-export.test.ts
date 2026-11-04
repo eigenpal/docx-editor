@@ -148,3 +148,23 @@ test('PDF print settings override the display mode and carry the comments choice
     },
   ]);
 });
+
+test('PDF print settings reach the handler from an editor without a snapshot', async () => {
+  let received: unknown;
+  await runChromeExport(
+    { save: async () => new ArrayBuffer(0) },
+    'pdf',
+    {
+      pdf: async (_bytes, view) => {
+        received = view;
+        return { bytes: new TextEncoder().encode('%PDF-1.7') };
+      },
+    },
+    { displayMode: 'original', comments: false }
+  );
+  expect(received).toEqual({
+    displayMode: 'original',
+    comments: false,
+    revisionMarkup: DEFAULT_REVISION_MARKUP,
+  });
+});

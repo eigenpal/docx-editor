@@ -62,7 +62,7 @@
     "goToBookmarkShortcut": "Ctrl+G",
     "goToBookmarkShortcutApple": "Ctrl+Alt+G",
     "printComments": "打印批注",
-    "printCommentsNote": "批注仅在{mode}中打印。",
+    "printCommentsNote": "在{mode}以外的视图中，批注作为注释打印在被批注的文字上。",
     "printMarkup": "标记"
   },
   "formattingBar": {

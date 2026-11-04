@@ -405,16 +405,28 @@ for (const packaged of [false, true]) {
     const radio = (name: string) => view.getByRole('radio', { name }) as HTMLInputElement;
     const comments = () =>
       view.getByRole('checkbox', { name: 'Print comments' }) as HTMLInputElement;
-    // The form starts from the editor's current view.
+    // The form starts from the editor's current view, with comments shown.
     expect(radio('No Markup').checked).toBe(true);
-    expect(comments().disabled).toBe(true);
-    expect(view.getByText('Comments print only in All Markup.')).toBeTruthy();
+    expect(comments().disabled).toBe(false);
+    expect(comments().checked).toBe(true);
+    // Outside All Markup, comments print as notes on the text, not in a pane.
+    expect(
+      view.getByText('Outside All Markup, comments print as notes on the commented text.')
+    ).toBeTruthy();
+    // The modes follow the Review menu order.
+    expect(view.getAllByRole('radio').map((input) => input.parentElement?.textContent)).toEqual([
+      'Simple Markup',
+      'All Markup',
+      'No Markup',
+      'Original',
+    ]);
 
     act(() => {
       fireEvent.click(radio('All Markup'));
     });
-    expect(comments().disabled).toBe(false);
-    expect(comments().checked).toBe(true);
+    expect(
+      view.queryByText('Outside All Markup, comments print as notes on the commented text.')
+    ).toBeNull();
     act(() => {
       fireEvent.click(comments());
     });
@@ -501,9 +513,10 @@ test('a custom print popup gets the settings step only when it opts in', async (
   await openPrint(optedIn);
   expect(latest.choosing).toBe(true);
   expect(latest.pending).toBe(false);
-  expect(latest.settings).toEqual({ displayMode: 'proposed', comments: false });
+  expect(latest.settings).toEqual({ displayMode: 'proposed', comments: true });
   act(() => latest.onSettingsChange?.({ displayMode: 'all-markup' }));
-  expect(latest.settings).toEqual({ displayMode: 'all-markup', comments: true });
+  act(() => latest.onSettingsChange?.({ comments: false }));
+  expect(latest.settings).toEqual({ displayMode: 'all-markup', comments: false });
   await act(async () => latest.onPrint?.());
   expect(latest.choosing).toBe(false);
   expect(latest.pending).toBe(true);
@@ -535,4 +548,54 @@ test('the print shortcut on the settings step starts printing', async () => {
   expect(event.defaultPrevented).toBe(true);
   expect(conversions).toBe(1);
   expect(view.getByRole('dialog').getAttribute('aria-label')).toBe('Preparing to print…');
+});
+
+test('a double click on Print converts once', async () => {
+  let conversions = 0;
+  const view = mount(
+    false,
+    {},
+    {
+      pdf: () => {
+        conversions++;
+        return new Promise(() => {});
+      },
+    }
+  );
+  await openPrint(view);
+  const print = view.getByRole('button', { name: 'Print' });
+  await act(async () => {
+    fireEvent.click(print);
+    fireEvent.click(print);
+  });
+  expect(conversions).toBe(1);
+});
+
+test('an auto-repeated print shortcut does not confirm the settings', async () => {
+  let conversions = 0;
+  const view = mount(
+    false,
+    {},
+    {
+      pdf: () => {
+        conversions++;
+        return new Promise(() => {});
+      },
+    }
+  );
+  await openPrint(view);
+  const held = new KeyboardEvent('keydown', {
+    key: 'p',
+    code: 'KeyP',
+    ctrlKey: true,
+    repeat: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  await act(async () => {
+    view.getByRole('radio', { name: 'No Markup' }).dispatchEvent(held);
+  });
+  expect(held.defaultPrevented).toBe(true);
+  expect(conversions).toBe(0);
+  expect(view.getByRole('dialog').getAttribute('aria-label')).toBe('Print');
 });

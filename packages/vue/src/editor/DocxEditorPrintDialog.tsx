@@ -3,17 +3,18 @@ import {
   defineComponent,
   getCurrentInstance,
   nextTick,
+  watch,
   type CSSProperties,
   type PropType,
 } from 'vue';
 import { useTranslation } from '../i18n';
 import {
+  CHROME_PRINT_DISPLAY_MODES,
   isChromePrintShortcut,
   isHTMLElementNode,
   type ChromePrintSettings,
   type ResolvedChromePrintSettings,
 } from '@docx-editor.dev/core/editor';
-import type { ReviewDisplayMode } from '@docx-editor.dev/core';
 import { NativeDialog } from './dialog-parts';
 
 /** State and presentation for the File menu print dialog. @public */
@@ -39,7 +40,7 @@ export interface DocxEditorPrintDialogProps {
   choosing?: boolean;
   /** The settings the form shows. */
   settings?: ResolvedChromePrintSettings;
-  /** Changes a setting. Leaving All Markup turns comments off. */
+  /** Changes one or both settings. */
   onSettingsChange?: (change: ChromePrintSettings) => void;
   /** Starts conversion with `settings`. */
   onPrint?: () => void;
@@ -54,7 +55,7 @@ export interface DocxEditorPrintDialogProps {
 /**
  * Confirming the settings form removes its focused Print button, which leaves focus on the
  * page body behind the modal. The progress view's button takes it, so Escape and Enter
- * still reach the dialog. Called after the patch, when the Print button is gone.
+ * still reach the dialog.
  */
 function takeFocusFromForm(button: unknown): void {
   if (!isHTMLElementNode(button)) return;
@@ -63,20 +64,6 @@ function takeFocusFromForm(button: unknown): void {
     button.focus({ preventScroll: true });
   }
 }
-
-const PRINT_MODES: readonly {
-  readonly mode: ReviewDisplayMode;
-  readonly labelKey:
-    | 'review.allMarkup'
-    | 'review.simpleMarkup'
-    | 'review.noMarkup'
-    | 'review.original';
-}[] = [
-  { mode: 'all-markup', labelKey: 'review.allMarkup' },
-  { mode: 'simple-markup', labelKey: 'review.simpleMarkup' },
-  { mode: 'proposed', labelKey: 'review.noMarkup' },
-  { mode: 'original', labelKey: 'review.original' },
-];
 
 /**
  * Default progress and error dialog for `popups.print`. The editor closes it when the
@@ -106,13 +93,25 @@ export const DocxEditorPrintDialog = defineComponent({
   setup(props, { attrs, slots }) {
     const { t } = useTranslation();
     const id = `docx-print-${getCurrentInstance()?.uid ?? 0}`;
+    // One stable ref, so Vue does not rerun it on every patch. Focus moves only when the
+    // settings step ends, after the patch has removed its Print button.
+    let progressButton: unknown = null;
+    const setProgressButton = (button: unknown) => {
+      progressButton = button;
+    };
+    watch(
+      () => props.choosing,
+      (now, before) => {
+        if (before && !now) void nextTick(() => takeFocusFromForm(progressButton));
+      }
+    );
     const settingsForm = (
       title: string,
       settings: ResolvedChromePrintSettings,
       change: (change: ChromePrintSettings) => void,
       print: () => void
     ) => {
-      const commentsAvailable = settings.displayMode === 'all-markup';
+      const commentsInPane = settings.displayMode === 'all-markup';
       return (
         <>
           <header class="docx-dialog__header" data-docx-part="print-settings">
@@ -121,7 +120,7 @@ export const DocxEditorPrintDialog = defineComponent({
           <div class="docx-dialog__body">
             <fieldset class="docx-dialog__fieldset">
               <legend class="docx-dialog__section-label">{t('toolbar.printMarkup')}</legend>
-              {PRINT_MODES.map(({ mode, labelKey }) => (
+              {CHROME_PRINT_DISPLAY_MODES.map(({ mode, labelKey }) => (
                 <label
                   key={mode}
                   data-docx-part="field"
@@ -145,16 +144,15 @@ export const DocxEditorPrintDialog = defineComponent({
             >
               <input
                 type="checkbox"
-                disabled={!commentsAvailable}
                 checked={settings.comments}
-                aria-describedby={commentsAvailable ? undefined : `${id}-comments-note`}
+                aria-describedby={commentsInPane ? undefined : `${id}-comments-note`}
                 onChange={(event: Event) =>
                   change({ comments: (event.target as HTMLInputElement).checked })
                 }
               />
               {t('toolbar.printComments')}
             </label>
-            {!commentsAvailable && (
+            {!commentsInPane && (
               <p id={`${id}-comments-note`} class="docx-dialog__note">
                 {t('toolbar.printCommentsNote', { mode: t('review.allMarkup') })}
               </p>
@@ -206,9 +204,9 @@ export const DocxEditorPrintDialog = defineComponent({
           onKeydown={(event: KeyboardEvent) => {
             if (!isChromePrintShortcut(event)) return;
             event.preventDefault();
-            // On the settings step the shortcut confirms, as a second press does in a print
-            // dialog.
-            if (form) print();
+            // On the settings step a second press confirms. A held key's auto-repeat does not,
+            // or the press that opened the dialog would print before the user sees the settings.
+            if (form && !event.repeat) print();
           }}
           content={() =>
             slots.default?.() ??
@@ -246,7 +244,7 @@ export const DocxEditorPrintDialog = defineComponent({
                   <button
                     type="button"
                     class="docx-dialog__button"
-                    ref={(button: unknown) => void nextTick(() => takeFocusFromForm(button))}
+                    ref={setProgressButton}
                     onClick={props.onClose}
                   >
                     {t(props.error ? 'common.close' : 'common.cancel')}

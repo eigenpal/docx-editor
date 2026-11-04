@@ -931,6 +931,12 @@ export const CHROME_GROUPS: readonly [{
 export const CHROME_MENUS: readonly ChromeMenu[];
 
 // @public
+export const CHROME_PRINT_DISPLAY_MODES: readonly {
+    readonly labelKey: 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original';
+    readonly mode: ReviewDisplayMode;
+}[];
+
+// @public
 export const CHROME_UNAVAILABLE_KEY = "formattingBar.unavailableInPreview";
 
 // @public
@@ -2598,9 +2604,6 @@ export interface NavigateToChangeOptions extends ScrollToAnchorOptions {
 
 // @public
 export type NavigationCommand = 'left' | 'right' | 'up' | 'down' | 'wordLeft' | 'wordRight' | 'lineStart' | 'lineEnd' | 'documentStart' | 'documentEnd' | 'pageUp' | 'pageDown';
-
-// @public
-export function nextChromePrintSettings(current: ResolvedChromePrintSettings, change: ChromePrintSettings): ResolvedChromePrintSettings;
 
 // @public (undocumented)
 export const NO_MIXED_FIELDS: ParagraphDialogMixed;

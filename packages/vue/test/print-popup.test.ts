@@ -467,15 +467,20 @@ for (const packaged of [false, true]) {
     expect(views).toEqual([]);
     expect(container.querySelector('dialog')?.getAttribute('aria-label')).toBe('Print');
     expect(input(container, 'radio', 'No Markup')?.checked).toBe(true);
-    expect(input(container, 'checkbox', 'Print comments')?.disabled).toBe(true);
-    expect(container.textContent).toContain('Comments print only in All Markup.');
+    expect(input(container, 'checkbox', 'Print comments')?.disabled).toBe(false);
+    expect(input(container, 'checkbox', 'Print comments')?.checked).toBe(true);
+    const note = 'Outside All Markup, comments print as notes on the commented text.';
+    expect(container.textContent).toContain(note);
+    expect(
+      [...container.querySelectorAll('dialog input[type="radio"]')].map((radio) =>
+        radio.parentElement?.textContent?.trim()
+      )
+    ).toEqual(['Simple Markup', 'All Markup', 'No Markup', 'Original']);
 
     input(container, 'radio', 'All Markup')!.click();
     await flush();
-    const comments = input(container, 'checkbox', 'Print comments')!;
-    expect(comments.disabled).toBe(false);
-    expect(comments.checked).toBe(true);
-    comments.click();
+    expect(container.textContent).not.toContain(note);
+    input(container, 'checkbox', 'Print comments')!.click();
     await flush();
     expect(input(container, 'checkbox', 'Print comments')?.checked).toBe(false);
 
@@ -569,4 +574,52 @@ test('the print shortcut on the settings step starts printing', async () => {
   expect(event.defaultPrevented).toBe(true);
   expect(conversions).toBe(1);
   expect(container.querySelector('dialog')?.getAttribute('aria-label')).toBe('Preparing to print…');
+});
+
+test('a double click on Print converts once', async () => {
+  let conversions = 0;
+  const container = mount(
+    false,
+    {},
+    {
+      pdf: () => {
+        conversions++;
+        return new Promise(() => {});
+      },
+    }
+  );
+  await openPrint(container);
+  const print = button(container, 'Print')!;
+  print.click();
+  print.click();
+  await flush();
+  expect(conversions).toBe(1);
+});
+
+test('an auto-repeated print shortcut does not confirm the settings', async () => {
+  let conversions = 0;
+  const container = mount(
+    false,
+    {},
+    {
+      pdf: () => {
+        conversions++;
+        return new Promise(() => {});
+      },
+    }
+  );
+  await openPrint(container);
+  const held = new KeyboardEvent('keydown', {
+    key: 'p',
+    code: 'KeyP',
+    ctrlKey: true,
+    repeat: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  input(container, 'radio', 'No Markup')!.dispatchEvent(held);
+  await flush();
+  expect(held.defaultPrevented).toBe(true);
+  expect(conversions).toBe(0);
+  expect(container.querySelector('dialog')?.getAttribute('aria-label')).toBe('Print');
 });

@@ -126,7 +126,7 @@
     "printPdfMissing": "Printing uses PDF conversion. Install @docx-editor.dev/docx-to-pdf on your Node.js server and configure menu.exporters.pdf.",
     "printMarkup": "Markup",
     "printComments": "Print comments",
-    "printCommentsNote": "Comments print only in {mode}.",
+    "printCommentsNote": "Outside {mode}, comments print as notes on the commented text.",
     "insertTextBox": "Text Box",
     "bookmark": "Bookmark…",
     "bookmarkShortcut": "Ctrl+Shift+F5",

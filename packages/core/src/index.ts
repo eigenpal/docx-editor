@@ -236,7 +236,7 @@ export {
   ChromePrintError,
   isChromePrintShortcut,
   initialChromePrintSettings,
-  nextChromePrintSettings,
+  CHROME_PRINT_DISPLAY_MODES,
 } from './editor/chrome-print.ts';
 export type {
   ChromePrintErrorCode,

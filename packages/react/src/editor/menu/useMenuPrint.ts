@@ -10,14 +10,13 @@ import {
   type ChromePrintSettings,
   type ResolvedChromePrintSettings,
   initialChromePrintSettings,
-  nextChromePrintSettings,
 } from '@docx-editor.dev/core/editor';
 import type { Editor } from '@docx-editor.dev/core';
 import { useTranslation } from '../../i18n';
 
 /**
  * File > Print state: converts through the PDF handler, then opens the browser print
- * dialog. With `settings` on, the popup first shows the print settings form, and
+ * dialog. With `settingsStep` on, the popup first shows the print settings form, and
  * conversion starts when the user confirms. Otherwise the popup shows only while the PDF
  * is prepared and after a failure.
  *
@@ -59,6 +58,9 @@ export function useMenuPrint(
   );
   const settingsRef = useRef(settings);
   const container = useRef<Element | Document | undefined>(undefined);
+  // The session whose conversion has started. A double click on Print, or Print and the
+  // shortcut together, reach `confirm` twice before React re-renders; one session converts once.
+  const converting = useRef<object | null>(null);
 
   const failure = useCallback((cause: unknown) => {
     const { t } = inputs.current;
@@ -84,7 +86,8 @@ export function useMenuPrint(
   const convert = useCallback(
     async (token: object, chosen: ChromePrintSettings) => {
       const { editor, exporters } = inputs.current;
-      if (!editor || current.current !== token) return;
+      if (!editor || current.current !== token || converting.current === token) return;
+      converting.current = token;
       setChoosing(false);
       setPending(true);
       try {
@@ -155,7 +158,7 @@ export function useMenuPrint(
   );
 
   const changeSettings = useCallback((change: ChromePrintSettings) => {
-    const next = nextChromePrintSettings(settingsRef.current, change);
+    const next = { ...settingsRef.current, ...change };
     settingsRef.current = next;
     setSettings(next);
   }, []);

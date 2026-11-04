@@ -62,7 +62,7 @@
     "goToBookmarkShortcut": "Ctrl+G",
     "goToBookmarkShortcutApple": "Ctrl+Alt+G",
     "printComments": "Yorumları yazdır",
-    "printCommentsNote": "Yorumlar yalnızca {mode} görünümünde yazdırılır.",
+    "printCommentsNote": "{mode} dışında yorumlar, yorumlanan metnin üzerinde not olarak yazdırılır.",
     "printMarkup": "İşaretleme"
   },
   "formattingBar": {

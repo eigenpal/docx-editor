@@ -9,7 +9,6 @@ import {
   type ResolvedChromePrintSettings,
   hostDocumentOf,
   initialChromePrintSettings,
-  nextChromePrintSettings,
 } from '@docx-editor.dev/core/editor';
 import type { Editor } from '@docx-editor.dev/core';
 import { useTranslation } from '../../i18n';
@@ -154,11 +153,12 @@ export function useMenuPrint(
   };
 
   const changeSettings = (change: ChromePrintSettings) => {
-    settings.value = nextChromePrintSettings(settings.value, change);
+    settings.value = { ...settings.value, ...change };
   };
 
+  // A double click on Print, or Print and the shortcut together, must convert once.
   const confirm = () => {
-    if (current) void convert(current, settings.value);
+    if (current && choosing.value) void convert(current, settings.value);
   };
 
   // Unmounting the menu ends the session and the job, which removes its frame and revokes

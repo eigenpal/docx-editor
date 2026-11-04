@@ -131,7 +131,7 @@
     "goToBookmarkShortcut": "Ctrl+G",
     "goToBookmarkShortcutApple": "Ctrl+Alt+G",
     "printComments": "コメントを印刷",
-    "printCommentsNote": "コメントは {mode} でのみ印刷されます。",
+    "printCommentsNote": "{mode} 以外では、コメントはコメント対象のテキストに注釈として印刷されます。",
     "printMarkup": "変更履歴の表示"
   },
   "toc": {

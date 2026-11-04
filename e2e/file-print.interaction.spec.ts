@@ -92,7 +92,7 @@ for (const [adapter, port] of [
     await expect(settings).toBeVisible();
     expect(conversions).toBe(0);
     await settings.getByRole('radio', { name: 'Original' }).check();
-    await expect(settings.getByRole('checkbox', { name: 'Print comments' })).toBeDisabled();
+    await expect(settings).toContainText('comments print as notes on the commented text');
     await settings.getByRole('radio', { name: 'All Markup' }).check();
     const comments = settings.getByRole('checkbox', { name: 'Print comments' });
     await expect(comments).toBeChecked();

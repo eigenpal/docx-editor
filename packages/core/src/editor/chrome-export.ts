@@ -1,6 +1,9 @@
 import type { DocxEditorInstance } from './docx-editor-types.ts';
 import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
-import type { ResolvedRevisionMarkup } from '../contracts/revision-markup.ts';
+import {
+  DEFAULT_REVISION_MARKUP,
+  type ResolvedRevisionMarkup,
+} from '../contracts/revision-markup.ts';
 import type { Editor } from '../contracts/editor.ts';
 
 const PDF_HEADER = [0x25, 0x50, 0x44, 0x46, 0x2d] as const;
@@ -29,7 +32,10 @@ export interface ChromeExportView {
 export interface ChromePrintSettings {
   /** Which markup prints, as on the Review tab. */
   readonly displayMode?: ReviewDisplayMode;
-  /** Whether the PDF shows comments. Comment balloons print only with `all-markup`. */
+  /**
+   * Whether the PDF shows comments. All Markup prints them in a pane beside each page; the
+   * other modes print them as annotations on the commented text.
+   */
   readonly comments?: boolean;
 }
 
@@ -94,22 +100,25 @@ export async function runChromeExport(
   if (format !== 'pdf') throw new TypeError('Unsupported export format.');
   if (!handlers.pdf) throw new ChromeExportError(format);
   const snapshot = editor.snapshot?.();
-  const view = snapshot
-    ? {
-        displayMode: settings.displayMode ?? snapshot.reviewDisplayMode ?? 'proposed',
-        ...(settings.comments === undefined ? {} : { comments: settings.comments }),
-        revisionMarkup: snapshot.revisionMarkup,
-        ...(editor.getReviewAuthors
-          ? {
-              revisionAuthorSlots: Object.freeze(
-                Object.fromEntries(
-                  editor.getReviewAuthors().map(({ author, slot }) => [author, slot])
-                )
-              ),
-            }
-          : {}),
-      }
-    : undefined;
+  const chosen = settings.displayMode !== undefined || settings.comments !== undefined;
+  // Without a snapshot, explicit settings still reach the handler, with default markup.
+  const view =
+    snapshot || chosen
+      ? {
+          displayMode: settings.displayMode ?? snapshot?.reviewDisplayMode ?? 'proposed',
+          ...(settings.comments === undefined ? {} : { comments: settings.comments }),
+          revisionMarkup: snapshot?.revisionMarkup ?? DEFAULT_REVISION_MARKUP,
+          ...(editor.getReviewAuthors
+            ? {
+                revisionAuthorSlots: Object.freeze(
+                  Object.fromEntries(
+                    editor.getReviewAuthors().map(({ author, slot }) => [author, slot])
+                  )
+                ),
+              }
+            : {}),
+        }
+      : undefined;
   const result = await handlers.pdf(new Uint8Array(await editor.save()), view);
   if (!(result?.bytes instanceof Uint8Array) || result.bytes.length === 0) {
     throw new TypeError('The PDF converter returned no PDF bytes.');

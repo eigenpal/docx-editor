@@ -63,7 +63,7 @@
     "goToBookmarkShortcut": "Ctrl+G",
     "goToBookmarkShortcutApple": "Ctrl+Alt+G",
     "printComments": "הדפס הערות",
-    "printCommentsNote": "הערות מודפסות רק במצב {mode}.",
+    "printCommentsNote": "מחוץ למצב {mode}, ההערות מודפסות כהערות על הטקסט שהוערה.",
     "printMarkup": "סימון"
   },
   "formattingBar": {

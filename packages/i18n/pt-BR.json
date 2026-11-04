@@ -62,7 +62,7 @@
     "goToBookmarkShortcut": "Ctrl+G",
     "goToBookmarkShortcutApple": "Ctrl+Alt+G",
     "printComments": "Imprimir comentários",
-    "printCommentsNote": "Os comentários são impressos somente em {mode}.",
+    "printCommentsNote": "Fora de {mode}, os comentários são impressos como notas no texto comentado.",
     "printMarkup": "Marcação"
   },
   "formattingBar": {

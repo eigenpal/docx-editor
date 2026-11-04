@@ -131,7 +131,7 @@
     "goToBookmarkShortcut": "Ctrl+G",
     "goToBookmarkShortcutApple": "Ctrl+Alt+G",
     "printComments": "طباعة التعليقات",
-    "printCommentsNote": "تُطبع التعليقات فقط في {mode}.",
+    "printCommentsNote": "خارج {mode}، تُطبع التعليقات كملاحظات على النص المعلَّق عليه.",
     "printMarkup": "العلامات"
   },
   "toc": {

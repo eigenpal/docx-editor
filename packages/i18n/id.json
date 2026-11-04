@@ -62,7 +62,7 @@
     "goToBookmarkShortcut": "Ctrl+G",
     "goToBookmarkShortcutApple": "Ctrl+Alt+G",
     "printComments": "Cetak komentar",
-    "printCommentsNote": "Komentar hanya dicetak dalam {mode}.",
+    "printCommentsNote": "Di luar {mode}, komentar dicetak sebagai catatan pada teks yang dikomentari.",
     "printMarkup": "Markup"
   },
   "formattingBar": {

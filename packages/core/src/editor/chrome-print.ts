@@ -1,5 +1,6 @@
 import { isApplePlatform } from '@docx-editor.dev/i18n';
 import type { Editor, EditorSnapshot } from '../contracts/editor.ts';
+import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
 import {
   runChromeExport,
   type ChromeExportHandlers,
@@ -87,32 +88,33 @@ export interface ChromePrintJob {
 export type ResolvedChromePrintSettings = Required<ChromePrintSettings>;
 
 /**
+ * The display modes a print form offers, in Review menu order, with their label keys.
+ * @public
+ */
+export const CHROME_PRINT_DISPLAY_MODES: readonly {
+  readonly mode: ReviewDisplayMode;
+  readonly labelKey:
+    | 'review.simpleMarkup'
+    | 'review.allMarkup'
+    | 'review.noMarkup'
+    | 'review.original';
+}[] = Object.freeze([
+  { mode: 'simple-markup', labelKey: 'review.simpleMarkup' },
+  { mode: 'all-markup', labelKey: 'review.allMarkup' },
+  { mode: 'proposed', labelKey: 'review.noMarkup' },
+  { mode: 'original', labelKey: 'review.original' },
+] as const);
+
+/**
  * The settings a print form starts with: the editor's current display mode, with comments
- * shown in All Markup. Comment balloons print only with All Markup, so other modes start
- * without comments.
+ * shown, as the PDF converter does by default. All Markup prints comments in a pane beside
+ * each page. The other modes print them as PDF annotations on the commented text.
  * @public
  */
 export function initialChromePrintSettings(
   snapshot: Pick<EditorSnapshot, 'reviewDisplayMode'> | null | undefined
 ): ResolvedChromePrintSettings {
-  const displayMode = snapshot?.reviewDisplayMode ?? 'proposed';
-  return { displayMode, comments: displayMode === 'all-markup' };
-}
-
-/**
- * Applies a change to print settings. A mode other than All Markup turns comments off,
- * because they print only there. Returning to All Markup turns them on again.
- * @public
- */
-export function nextChromePrintSettings(
-  current: ResolvedChromePrintSettings,
-  change: ChromePrintSettings
-): ResolvedChromePrintSettings {
-  const displayMode = change.displayMode ?? current.displayMode;
-  if (displayMode !== 'all-markup') return { displayMode, comments: false };
-  const comments =
-    change.comments ?? (current.displayMode === 'all-markup' ? current.comments : true);
-  return { displayMode, comments };
+  return { displayMode: snapshot?.reviewDisplayMode ?? 'proposed', comments: true };
 }
 
 /**

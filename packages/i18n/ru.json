@@ -62,7 +62,7 @@
     "goToBookmarkShortcut": "Ctrl+G",
     "goToBookmarkShortcutApple": "Ctrl+Alt+G",
     "printComments": "Печатать примечания",
-    "printCommentsNote": "Примечания печатаются только в режиме {mode}.",
+    "printCommentsNote": "Вне режима {mode} примечания печатаются как заметки у комментируемого текста.",
     "printMarkup": "Разметка"
   },
   "toc": {

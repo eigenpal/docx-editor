@@ -829,6 +829,12 @@ export const CHROME_GROUPS: readonly [{
 export const CHROME_MENUS: readonly ChromeMenu[];
 
 // @public
+export const CHROME_PRINT_DISPLAY_MODES: readonly {
+    readonly labelKey: 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original';
+    readonly mode: ReviewDisplayMode;
+}[];
+
+// @public
 export class ChromeExportError extends Error {
     constructor(format: ChromeExportFormat);
     // (undocumented)
@@ -3319,9 +3325,6 @@ export type LockedControlNavigation = 'characters' | 'atomic';
 
 // @public
 export type MarkedFontResolver<T extends FontResolver = FontResolver> = T & FontResolverMark;
-
-// @public
-export function nextChromePrintSettings(current: ResolvedChromePrintSettings, change: ChromePrintSettings): ResolvedChromePrintSettings;
 
 // @public
 export type NoteKind = 'footnote' | 'endnote';

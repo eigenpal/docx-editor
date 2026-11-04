@@ -2,12 +2,12 @@ import { useId, type CSSProperties } from 'react';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useTranslation } from '../i18n';
 import {
+  CHROME_PRINT_DISPLAY_MODES,
   isChromePrintShortcut,
   isHTMLElementNode,
   type ChromePrintSettings,
   type ResolvedChromePrintSettings,
 } from '@docx-editor.dev/core/editor';
-import type { ReviewDisplayMode } from '@docx-editor.dev/core';
 import { DialogFrame } from './dialog-parts';
 
 /** State and presentation for the File menu print dialog. @public */
@@ -33,7 +33,7 @@ export interface DocxEditorPrintDialogProps {
   choosing?: boolean;
   /** The settings the form shows. */
   settings?: ResolvedChromePrintSettings;
-  /** Changes a setting. Leaving All Markup turns comments off. */
+  /** Changes one or both settings. */
   onSettingsChange?: (change: ChromePrintSettings) => void;
   /** Starts conversion with `settings`. */
   onPrint?: () => void;
@@ -86,8 +86,9 @@ export function DocxEditorPrintDialog({
       onKeyDown={(event) => {
         if (!isChromePrintShortcut(event.nativeEvent)) return;
         event.preventDefault();
-        // On the settings step the shortcut confirms, as a second press does in a print dialog.
-        if (form) onPrint();
+        // On the settings step a second press confirms. A held key's auto-repeat does not, or
+        // the press that opened the dialog would print before the user sees the settings.
+        if (form && !event.repeat) onPrint();
       }}
     >
       {children ??
@@ -155,20 +156,6 @@ function takeFocusFromForm(button: unknown): void {
   }
 }
 
-const PRINT_MODES: readonly {
-  readonly mode: ReviewDisplayMode;
-  readonly labelKey:
-    | 'review.allMarkup'
-    | 'review.simpleMarkup'
-    | 'review.noMarkup'
-    | 'review.original';
-}[] = [
-  { mode: 'all-markup', labelKey: 'review.allMarkup' },
-  { mode: 'simple-markup', labelKey: 'review.simpleMarkup' },
-  { mode: 'proposed', labelKey: 'review.noMarkup' },
-  { mode: 'original', labelKey: 'review.original' },
-];
-
 /** The settings step: which markup prints, and whether comments print beside the pages. */
 function PrintSettingsForm({
   title,
@@ -185,7 +172,7 @@ function PrintSettingsForm({
 }) {
   const { t } = useTranslation();
   const id = useId();
-  const commentsAvailable = settings.displayMode === 'all-markup';
+  const commentsInPane = settings.displayMode === 'all-markup';
   return (
     <>
       <header className="docx-dialog__header" data-docx-part="print-settings">
@@ -194,7 +181,7 @@ function PrintSettingsForm({
       <div className="docx-dialog__body">
         <fieldset className="docx-dialog__fieldset">
           <legend className="docx-dialog__section-label">{t('toolbar.printMarkup')}</legend>
-          {PRINT_MODES.map(({ mode, labelKey }) => (
+          {CHROME_PRINT_DISPLAY_MODES.map(({ mode, labelKey }) => (
             <label
               key={mode}
               data-docx-part="field"
@@ -218,14 +205,13 @@ function PrintSettingsForm({
         >
           <input
             type="checkbox"
-            disabled={!commentsAvailable}
             checked={settings.comments}
-            aria-describedby={commentsAvailable ? undefined : `${id}-comments-note`}
+            aria-describedby={commentsInPane ? undefined : `${id}-comments-note`}
             onChange={(event) => onSettingsChange({ comments: event.target.checked })}
           />
           {t('toolbar.printComments')}
         </label>
-        {!commentsAvailable && (
+        {!commentsInPane && (
           <p id={`${id}-comments-note`} className="docx-dialog__note">
             {t('toolbar.printCommentsNote', { mode: t('review.allMarkup') })}
           </p>

@@ -314,7 +314,7 @@ The editor supplies these properties to your component:
 | `onClose()` | Closes the popup and cancels pending printing. An ongoing conversion can finish, but its result is discarded. |
 | `choosing` | `true` while the popup shows print settings, before conversion starts. |
 | `settings` | The print settings: `displayMode` and `comments`. |
-| `onSettingsChange(change)` | Changes a setting. A mode other than All Markup turns comments off. |
+| `onSettingsChange(change)` | Changes one or both settings. |
 | `onPrint()` | Starts conversion with `settings`. |
 
 A custom component receives `choosing` as `true` only when the menu sets `printSettings` to `true`. Otherwise printing starts at once, as before. If you opt in and replace the dialog contents, render the settings while `choosing` is `true` and call `onPrint()` to continue.

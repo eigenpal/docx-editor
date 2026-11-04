@@ -4,7 +4,7 @@ import {
   ChromePrintError,
   initialChromePrintSettings,
   isChromePrintShortcut,
-  nextChromePrintSettings,
+  CHROME_PRINT_DISPLAY_MODES,
   runChromePrint,
 } from '../chrome-print.ts';
 
@@ -230,31 +230,22 @@ test('PDF bytes in shared memory still print', async () => {
   job.dispose();
 });
 
-test('print settings start from the current view and keep comments to All Markup', () => {
+test('print settings start from the current view with comments shown', () => {
   expect(initialChromePrintSettings({ reviewDisplayMode: 'all-markup' })).toEqual({
     displayMode: 'all-markup',
     comments: true,
   });
-  expect(initialChromePrintSettings({ reviewDisplayMode: 'simple-markup' })).toEqual({
-    displayMode: 'simple-markup',
-    comments: false,
-  });
-  expect(initialChromePrintSettings(null)).toEqual({ displayMode: 'proposed', comments: false });
-
-  const all = initialChromePrintSettings({ reviewDisplayMode: 'all-markup' });
-  const hidden = nextChromePrintSettings(all, { comments: false });
-  expect(hidden).toEqual({ displayMode: 'all-markup', comments: false });
-  // Comments cannot print outside All Markup, whatever the change asks.
-  expect(nextChromePrintSettings(all, { displayMode: 'original', comments: true })).toEqual({
+  // Comments print in every mode: as a pane in All Markup, as annotations elsewhere.
+  expect(initialChromePrintSettings({ reviewDisplayMode: 'original' })).toEqual({
     displayMode: 'original',
-    comments: false,
-  });
-  // Returning to All Markup shows comments again.
-  const original = nextChromePrintSettings(hidden, { displayMode: 'original' });
-  expect(nextChromePrintSettings(original, { displayMode: 'all-markup' })).toEqual({
-    displayMode: 'all-markup',
     comments: true,
   });
-  // A change of comments alone in All Markup keeps the mode.
-  expect(nextChromePrintSettings(hidden, { comments: true })).toEqual(all);
+  expect(initialChromePrintSettings(null)).toEqual({ displayMode: 'proposed', comments: true });
+  // The form lists the modes in Review menu order.
+  expect(CHROME_PRINT_DISPLAY_MODES.map(({ mode }) => mode)).toEqual([
+    'simple-markup',
+    'all-markup',
+    'proposed',
+    'original',
+  ]);
 });
