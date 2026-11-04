@@ -13,7 +13,7 @@ import {
 } from './semantic-table-layout.ts';
 import { vMergePlanFor } from './table-vmerge-plan.ts';
 import { publishDeferredRowAnchors, type DeferredRowAnchor } from './table-anchor-republish.ts';
-import { acceptVMergeSpansAt } from './table-vmerge-heights.ts';
+import { acceptVMergeSpansAt, admitVMergeSpansAt } from './table-vmerge-heights.ts';
 import { finalizeTableRows, splitHead } from './table-fragment-finalize.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import type { TableFragmentRecord, TableRowFragmentRecord } from './semantic-records.ts';
@@ -23,9 +23,10 @@ import { closingCellSpacingPt } from './table-cell-spacing.ts';
 
 /**
  * A nested table inside a cell. Ordinary rows continue at row boundaries, and a row that does
- * not fit the band splits inside its cells as a top-level row does. Repeated headers and
- * vertical merges keep the table whole while a page can hold it; on a fresh band that cannot,
- * the table splits like an ordinary one. Returns null for an empty table or past the nesting
+ * not fit the band splits inside its cells as a top-level row does. Rows with vertical merges
+ * continue the same way, also between the rows of one merge, as Word breaks them. Repeated
+ * headers keep the table whole while a page can hold it; on a fresh band that cannot, the
+ * table splits like an ordinary one. Returns null for an empty table or past the nesting
  * ceiling.
  *
  * `freshBand`: nothing precedes the table on this page, so moving it gains no room.
@@ -63,9 +64,7 @@ export function emitNestedTable(
   const fragmentIndex = continuation?.fragmentIndex ?? 0;
   const bounded = Number.isFinite(maxBottom);
   // A continuation exists only because the table already split, so it is never atomic.
-  const keepsWhole =
-    !continuation &&
-    structure.rows.some((row) => row.isHeader || row.cells.some((cell) => cell.vMergeContinue));
+  const keepsWhole = !continuation && structure.rows.some((row) => row.isHeader);
   let probeLineId = 0;
   const probeDeps: TableFlowDeps = {
     ...stripAnchorSinksForProbe(deps),
@@ -126,10 +125,20 @@ export function emitNestedTable(
       const rowProbeDeps =
         rowIndex === startRowIndex ? firstRowContentDeps(structure, row, probeDeps) : probeDeps;
       const continued = rowIndex === startRowIndex ? continuation?.rowCursors : undefined;
-      if (bounded && !atomic) {
+      const splits = bounded && !atomic;
+      // As in a top-level table, a merge is planned only when the band holds all of its rows
+      // from its head. Otherwise its head sizes its own row and the table can break between
+      // the rows of the merge. A continued row was not planned on its first page either.
+      const vMerge = !splits
+        ? acceptVMergeSpansAt(vMergePlan, rowIndex, y)
+        : continued
+          ? undefined
+          : admitVMergeSpansAt(vMergePlan, rowIndex, y, maxBottom);
+      if (splits) {
         const height = continued
           ? Number.POSITIVE_INFINITY
-          : measureRowHeight(
+          : (vMerge?.heightFloorPt ??
+            measureRowHeight(
               row,
               structure.columnWidthsPt,
               tableLeft,
@@ -138,7 +147,7 @@ export function emitNestedTable(
               structure.cellSpacingPt,
               undefined,
               y
-            );
+            ));
         if (y + height > maxBottom + 0.001) {
           // `w:cantSplit` moves the row once; a band that cannot gain room splits it anyway.
           if (row.cantSplit && !continued && (rawRows.length > 0 || !freshBand)) break;
@@ -154,7 +163,8 @@ export function emitNestedTable(
             depth,
             { ...rowDeps, rowAtPageStart: freshBand && rawRows.length === 0 },
             continued ?? initialCellCursors(row),
-            structure.cellSpacingPt
+            structure.cellSpacingPt,
+            vMerge
           );
           if (!placed.fitted || placed.bottom > maxBottom + 0.001) {
             nestedDeferred.length = deferredBefore;
@@ -187,7 +197,7 @@ export function emitNestedTable(
         depth,
         rowDeps,
         false,
-        acceptVMergeSpansAt(vMergePlan, rowIndex, y),
+        vMerge,
         () => {
           nestedDeferred.length = deferredBefore;
           vMergePlan?.withdrawAt(rowIndex);
