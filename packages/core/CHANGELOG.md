@@ -1,5 +1,36 @@
 # @docx-editor.dev/core
 
+## 2.35.0
+
+### Minor Changes
+
+- 6c10913: File > Print now asks which markup to print and whether comments print, and passes the choice to the PDF handler as `view.displayMode` and `view.comments`. Set `printSettings: false` on the menu to print the current view without asking.
+- 92097ea: Sections with vertical alignment place their text centered, at the bottom, or spread from top to bottom on each page, in the editor and in PDF export.
+
+### Patch Changes
+
+- 68ad495: In dark mode, headers, footers, footnotes, and floating drawings now use the same light colors as the body text.
+- 2da039e: A content control that you empty now shows the placeholder that its `w:placeholder` glossary block defines, instead of the default English prompt.
+- 2ad80e6: Opening or editing documents with many text-wrapped pictures is faster. Fixes #1795.
+- 88fa746: A text-anchored floating table that fits the rest of the page now stays on that page when the paragraph after it starts a new page with a page break before.
+- 43c2012: Pages with footnotes now lay out the same after an edit as when the document opens fresh, and editing long documents with footnotes is faster. Fixes #1761.
+- 8aec65b: Large documents with footnotes open faster, and edits that move many pages, such as accepting or rejecting every change, lay out fewer pages again.
+- cb318b3: An inline content control that you empty now shows the same glossary placeholder text that it shows when the document opens.
+- e4823be: Pictures and shapes in a header or footer now stack in their z-order, so a picture watermark covers a picture that ranks below it.
+- 1aa7918: When the toolbar collapses an image's controls into the "⋯" panel, Wrap text, Alt text, Image properties, and Insert image now show as full-width rows that open their menu, popover, or dialog on a click. Before, each showed a plain-text label beside a small icon, and only the icon took a click.
+- 1e1dc0b: Paragraphs that allow lines to break inside words keep Latin words whole only in Korean text, where both the paragraph mark and the text use the Korean language, and break them at any character elsewhere.
+- 7df7abb: Korean paragraphs that wrap by word no longer break a word at its parentheses, commas, digits, or Latin letters.
+- 1b9779a: Typing in long tables with vertically merged cells is faster. Part of #1797.
+- 80423a6: Deeply nested tables open and edit faster: each nested table's column needs are measured once per layout pass instead of once for every enclosing level. Fixes #1798
+- 9ddf7f6: A nested table with vertically merged cells now breaks across pages between its rows, also inside a merge whose text fits its first row, instead of moving whole to the next page.
+- 68ad495: A tracked insertion and a deletion from the same author that touch show as one replacement in either order.
+- 8e1dc7e: Characters that a serif Korean font lacks now draw in a serif Hangul font such as Batang, instead of a Gothic font.
+- 57a3ae1: In suggesting mode, typing in a text box and choosing a dropdown, combo box, date, or checkbox content control value now record tracked changes, as does `ContentControl.setValue` with change tracking on, Next and Previous Change now reach changes inside text boxes, and you can comment on text in a text box. Moving or resizing a picture or text box applies directly because it has no tracked form, and a legacy form checkbox or dropdown refuses the change with a reason instead of ignoring the press.
+- 74592f0: Text typed or pasted on one line at the end of an inline text content control now stays in the control, and forms protection accepts it there.
+- 049f4a2: Saved documents give each tracked change its own id across the body, headers, footers, and notes, keep one id for the pieces of one change, and replace ids outside the 32-bit range. Fixes #1429.
+- 80cf09a: Documents whose text wrap around pictures does not settle now open instead of failing to lay out. Part of #1803.
+- Updated dependencies: @docx-editor.dev/i18n@2.35.0
+
 ## 2.34.0
 
 ### Minor Changes

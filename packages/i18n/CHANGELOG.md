@@ -1,5 +1,11 @@
 # @docx-editor.dev/i18n
 
+## 2.35.0
+
+### Minor Changes
+
+- 6c10913: File > Print now asks which markup to print and whether comments print, and passes the choice to the PDF handler as `view.displayMode` and `view.comments`. Set `printSettings: false` on the menu to print the current view without asking.
+
 ## 2.34.0
 
 ### Patch Changes

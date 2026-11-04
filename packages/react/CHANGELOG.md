@@ -1,5 +1,16 @@
 # @eigenpal/docx-js-editor
 
+## 2.35.0
+
+### Minor Changes
+
+- 6c10913: File > Print now asks which markup to print and whether comments print, and passes the choice to the PDF handler as `view.displayMode` and `view.comments`. Set `printSettings: false` on the menu to print the current view without asking.
+
+### Patch Changes
+
+- 1aa7918: When the toolbar collapses an image's controls into the "⋯" panel, Wrap text, Alt text, Image properties, and Insert image now show as full-width rows that open their menu, popover, or dialog on a click. Before, each showed a plain-text label beside a small icon, and only the icon took a click.
+- Updated dependencies: @docx-editor.dev/core@2.35.0, @docx-editor.dev/i18n@2.35.0
+
 ## 2.34.0
 
 ### Minor Changes

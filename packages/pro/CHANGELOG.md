@@ -1,5 +1,19 @@
 # @docx-editor.dev/pro
 
+## 2.35.0
+
+### Minor Changes
+
+- 68ad495: Add Compare documents, which records the differences between two documents as tracked changes, in the editor, through `Document.compareFromBase64`, or with `compareDocuments`. The dialog compares in a worker by default, with progress and cancel.
+- 5ab8978: A new link in a collaboration session now adds the hyperlink style when the document has a styles part without one, as it does outside a session. Undo of that link keeps the style for links that other participants made, and participants who add the style while apart end with one copy.
+
+### Patch Changes
+
+- 5993bd2: Stop the browser from suggesting saved form entries in the comment and reply fields.
+- 29535a6: Correct the `customNodesOf` reference documentation, which now states that it reads every story, including headers, footers, and notes.
+- e61aaec: Formatting a paragraph that has many differently formatted runs, and opening such a paragraph, now takes time in proportion to its length. Fixes #1796.
+- Updated dependencies: @docx-editor.dev/core@2.35.0, @docx-editor.dev/react@2.35.0, @docx-editor.dev/vue@2.35.0
+
 ## 2.34.0
 
 ### Minor Changes
