@@ -1,5 +1,5 @@
 // A text control the user empties shows the placeholder its `w:placeholder/w:docPart` names,
-// as Word does, and not the type's default prompt.
+// and not the type's default prompt.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();

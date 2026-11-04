@@ -247,7 +247,7 @@ const promptTexts = new WeakMap<OoxmlPackage, ReadonlyMap<string, string>>();
 
 /**
  * The prompt text a control's `w:placeholder/w:docPart` names: the text of the block's first
- * paragraph, as Word shows it in a control the user empties. Read once per package.
+ * paragraph, which a control shows when the user empties it. Read once per package.
  */
 export function placeholderTextOf(pkg: OoxmlPackage, docPart: string): string | undefined {
   let texts = promptTexts.get(pkg);

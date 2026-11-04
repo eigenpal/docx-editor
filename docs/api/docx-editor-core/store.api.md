@@ -1543,6 +1543,8 @@ export interface EditOptions {
     // (undocumented)
     readonly deferValidation?: boolean;
     readonly fieldResults?: FieldResultsMode;
+    // @internal
+    readonly placeholderText?: (docPart: string) => string | undefined;
     readonly revisionIds?: () => string;
     readonly trackedRevisionIds?: TransactionRevisionIds;
 }
@@ -5846,6 +5848,8 @@ export class TreeDocumentStore {
 export interface TreeDocumentStoreOptions {
     readonly contentLockPolicy?: ContentLockPolicy;
     readonly historyLimit?: number;
+    // @internal
+    readonly placeholderText?: (docPart: string) => string | undefined;
     readonly settingsPart?: () => OoxmlPart | null | undefined;
 }
 

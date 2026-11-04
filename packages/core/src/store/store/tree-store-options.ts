@@ -72,9 +72,11 @@ export interface TreeDocumentStoreOptions {
    */
   readonly contentLockPolicy?: ContentLockPolicy;
   /**
-   * The glossary prompt a control's `w:placeholder/w:docPart` names, for a store built from a
-   * PART. Its synthetic package holds no glossary, so an emptied control in a header or a note
-   * would show the type's default prompt instead of the document's own.
+   * The glossary prompt a control's `w:placeholder/w:docPart` names, for a store built from
+   * a PART. Its synthetic package holds no glossary, so an emptied control in a header or a
+   * note would show the type's default prompt instead of the document's own.
+   *
+   * @internal
    */
   readonly placeholderText?: (docPart: string) => string | undefined;
 }

@@ -4,7 +4,7 @@
 // placeholder comes back under `w:showingPlcHdr`, ready for the next keystroke to replace
 // it whole. The text is the glossary block's that `w:placeholder/w:docPart` names, which the
 // store hands in through `EditOptions.placeholderText`; without one, the type's own prompt
-// stands in. The `w:placeholder` reference itself survives for Word and for the next open,
+// stands in. The `w:placeholder` reference itself survives for other readers and for the next open,
 // where `materializeGlossaryPlaceholders` resolves the whole block. Split from
 // `tree-op-content-controls.ts` to keep that file under its line cap.
 
