@@ -42,10 +42,7 @@ const source =
   `${rows}</w:tbl><w:p/>`;
 
 type Editor = Awaited<ReturnType<typeof openEditor>>;
-async function openEditor(
-  document: Uint8Array | object,
-  modules?: unknown[]
-) {
+async function openEditor(document: Uint8Array | object, modules?: unknown[]) {
   const { createDocxEditor } = await import('@docx-editor.dev/core/editor');
   const container = globalThis.document.createElement('div');
   globalThis.document.body.append(container);
