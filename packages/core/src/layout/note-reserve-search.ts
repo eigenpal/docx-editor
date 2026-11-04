@@ -684,6 +684,11 @@ export function* searchFootnoteReserves(
  * The blocks and sections a body run lays out: all of them, or the first
  * `noteRoundBlockLimit` for a round of the reserve search. A section the limit cuts keeps its
  * own properties; only its end moves.
+ *
+ * A document with more than one section lays every round out on the multi-section path, even
+ * a round cut inside its first section. The rounds of one search then share its section
+ * sessions, and a round that reaches the later sections resumes from them instead of laying
+ * out every page again.
  */
 export function noteRoundBlocks<Block extends OoxmlElement>(
   _part: OoxmlPart,
