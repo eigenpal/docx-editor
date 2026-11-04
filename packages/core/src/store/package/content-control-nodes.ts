@@ -673,6 +673,20 @@ export function carryEmptyContentControlsAcrossRunPropertyEdit(
  * keeps its content in the tree (the serializer never stops) while no walk recurses
  * further.
  */
+let controlScans: { count: number } | null = null;
+
+/** @internal Counts whole-subtree control scans while `run` executes, for scaling tests. */
+export function countContentControlScansForTest(run: () => void): number {
+  const observer = { count: 0 };
+  controlScans = observer;
+  try {
+    run();
+  } finally {
+    controlScans = null;
+  }
+  return observer.count;
+}
+
 export function contentControlsIn(
   root: OoxmlNode,
   options?: { readonly maxDepth?: number; readonly limit?: number }
@@ -680,6 +694,7 @@ export function contentControlsIn(
   if (options === undefined) {
     const cached = defaultContentControlsInCache.get(root);
     if (cached !== undefined) return cached;
+    if (controlScans) controlScans.count += 1;
     const entries = freezeContentControlEntries(
       collectContentControlsIn(
         root,

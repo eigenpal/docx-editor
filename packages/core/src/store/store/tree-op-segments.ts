@@ -102,19 +102,29 @@ export function isParagraph(node: OoxmlNode | null): node is OoxmlParagraphNode 
  * nothing.
  */
 export function segmentsOf(paragraph: OoxmlParagraphNode): readonly Segment[] {
+  // The offset index walks the same segments; one array per paragraph, not two.
+  const indexed = offsetIndexCache.get(paragraph);
+  if (indexed) return indexed.segments;
   const cached = segmentsCache.get(paragraph);
   if (cached) return cached;
-  const segments = walkParagraph(paragraph, null, null);
+  const segments = freezeSegments(walkParagraph(paragraph, null, null));
   segmentsCache.set(paragraph, segments);
   return segments;
 }
 
+/** Shared by every reader of a paragraph, so no reader can change another's segments. */
+function freezeSegments(segments: Segment[]): readonly Segment[] {
+  for (const segment of segments) Object.freeze(segment);
+  return Object.freeze(segments);
+}
+
 /**
- * A paragraph's segments as a caller-owned array: {@link segmentsOf} for the public entry
- * point, which returns the memoized array shared by every internal reader.
+ * A paragraph's segments as caller-owned objects: {@link segmentsOf} for the public entry
+ * point. Internal readers share one frozen array; a host gets its own copies, as it did when
+ * every call walked the paragraph again.
  */
 export function segmentsOfCopy(paragraph: OoxmlParagraphNode): Segment[] {
-  return [...segmentsOf(paragraph)];
+  return segmentsOf(paragraph).map((segment) => ({ ...segment }));
 }
 
 /**
@@ -134,10 +144,39 @@ const segmentsCache = new FieldResultsModeMemo<OoxmlParagraphNode, readonly Segm
  */
 export function carrySegmentsAcrossRunPropertyEdit(
   previous: OoxmlParagraphNode,
-  next: OoxmlParagraphNode
+  next: OoxmlParagraphNode,
+  /** Whether `node` is in the rebuilt tree, as the same object. */
+  holds: (node: OoxmlNode) => boolean
 ): void {
-  const segments = segmentsCache.get(previous);
-  if (segments && !segmentsCache.has(next)) segmentsCache.set(next, segments);
+  const segments = segmentsCache.get(previous) ?? offsetIndexCache.get(previous)?.segments;
+  if (!segments || segmentsCache.has(next) || offsetIndexCache.has(next)) return;
+  // A segment's node is a text value or an atom. Only an atom with children can hold an edited
+  // run, such as a simple field and its result runs, and the write rebuilt that atom.
+  for (const segment of containerSegmentsOf(segments)) if (!holds(segment.node)) return;
+  segmentsCache.set(next, segments);
+}
+
+/** The segments whose node holds other nodes, which a run-property write can rebuild. */
+const containerSegments = new WeakMap<readonly Segment[], readonly Segment[]>();
+function containerSegmentsOf(segments: readonly Segment[]): readonly Segment[] {
+  const known = containerSegments.get(segments);
+  if (known) return known;
+  const found = segments.filter((s) => s.node.kind !== 'textValue' && s.node.children.length > 0);
+  containerSegments.set(segments, found);
+  return found;
+}
+
+let paragraphWalks: { count: number } | null = null;
+/** @internal Counts whole-paragraph segment walks while `run` executes, for scaling tests. */
+export function countParagraphWalksForTest(run: () => void): number {
+  const observer = { count: 0 };
+  paragraphWalks = observer;
+  try {
+    run();
+  } finally {
+    paragraphWalks = null;
+  }
+  return observer.count;
 }
 
 /** Build segments with field spans already computed by the caller. @internal */
@@ -227,6 +266,8 @@ export function paragraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOf
   if (cached) return cached;
   const index = buildParagraphOffsetIndex(paragraph);
   offsetIndexCache.set(paragraph, index);
+  // `segmentsOf` reads the index's array from now on.
+  segmentsCache.delete(paragraph);
   return index;
 }
 
@@ -242,7 +283,7 @@ export function transientParagraphOffsetIndex(paragraph: OoxmlParagraphNode): Pa
 
 function buildParagraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOffsetIndex {
   const spans = new Map<string, OffsetSpan>();
-  const segments = walkParagraph(paragraph, spans, null);
+  const segments = freezeSegments(walkParagraph(paragraph, spans, null));
   const length = segments.length === 0 ? 0 : segments[segments.length - 1]!.end;
   const lookup = (node: OoxmlNode | string): OffsetSpan | null =>
     spans.get(typeof node === 'string' ? node : node.id) ?? null;
@@ -263,6 +304,7 @@ function walkParagraph(
   noteAncestors: Map<string, readonly OoxmlNode[]> | null,
   suppliedFieldSpans?: readonly AtomicFieldSpan[]
 ): Segment[] {
+  if (paragraphWalks) paragraphWalks.count += 1;
   const segments: Segment[] = [];
   let offset = 0;
   /** Record a node's span. No-op for `segmentsOf`, which asks for none. */

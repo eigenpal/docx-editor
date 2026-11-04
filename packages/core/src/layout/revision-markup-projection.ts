@@ -34,29 +34,17 @@ export function markupFormattingRevision(
   props: readonly OoxmlProperty[],
   paragraph: OoxmlNode
 ): RevisionAttribution | undefined {
-  return formatRevisionOf(props) ?? paragraphFormattingRevision(paragraph);
-}
-
-/**
- * Memoized on node identity: every piece of a paragraph asks, and a paragraph with no
- * `w:pPr` made each ask scan all of its children, so laying out a paragraph cost its run
- * count squared.
- */
-const paragraphFormattingRevisions = new WeakMap<OoxmlNode, RevisionAttribution | null>();
-
-function paragraphFormattingRevision(paragraph: OoxmlNode): RevisionAttribution | undefined {
-  const cached = paragraphFormattingRevisions.get(paragraph);
-  if (cached !== undefined) return cached ?? undefined;
-  const revision =
+  // A typed `w:pPr` is only ever a paragraph's first child (`validKnownKind`), so this reads
+  // one child. Every piece of a paragraph asks, and a scan made layout cost the run count
+  // squared in a paragraph with no `w:pPr`.
+  const first = 'children' in paragraph ? paragraph.children[0] : undefined;
+  return (
+    formatRevisionOf(props) ??
     formatRevisionOf(
-      propertiesOfRunContainer(
-        'children' in paragraph
-          ? paragraph.children.find((node) => node.kind === 'paragraphProperties')
-          : undefined
-      )
-    ) ?? null;
-  paragraphFormattingRevisions.set(paragraph, revision);
-  return revision ?? undefined;
+      propertiesOfRunContainer(first?.kind === 'paragraphProperties' ? first : undefined)
+    ) ??
+    undefined
+  );
 }
 
 export function markupRevisionOf(

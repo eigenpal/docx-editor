@@ -7,9 +7,15 @@ import { strToU8, zipSync } from 'fflate';
 import { readOoxmlPackage } from '../package/ooxml-package.ts';
 import { serializeOoxmlPart } from '../package/ooxml-tree.ts';
 import { findNode } from '../package/ooxml-edit.ts';
+import { countContentControlScansForTest } from '../package/content-control-nodes.ts';
 import { TreeDocumentStore } from '../store/tree-store.ts';
 import { runPropertyEdits } from '../store/direct-properties.ts';
-import { segmentsOf, transientParagraphOffsetIndex } from '../store/tree-op-segments.ts';
+import {
+  countParagraphWalksForTest,
+  segmentsOf,
+  segmentsOfCopy,
+  transientParagraphOffsetIndex,
+} from '../store/tree-op-segments.ts';
 import type { OoxmlParagraphNode } from '../package/ooxml-tree.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -124,21 +130,46 @@ describe('formatting a paragraph of many runs', () => {
     }
   });
 
-  test('cost grows linearly with the run count', () => {
-    const timeFor = (count: number): number => {
-      let best = Infinity;
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        const store = storeOf(manyRuns(count));
-        const started = performance.now();
-        italicize(store, 1, count * 4 - 1);
-        best = Math.min(best, performance.now() - started);
-      }
-      return best;
+  test('a press walks the paragraph a fixed number of times, whatever its run count', () => {
+    const walksFor = (count: number): number => {
+      const store = storeOf(manyRuns(count));
+      return countParagraphWalksForTest(() => italicize(store, 1, count * 4 - 1));
     };
-    timeFor(200); // warm the JIT
-    const small = timeFor(500);
-    const large = timeFor(2000);
-    // 4x the runs: linear is ~4x, the old per-op paragraph walks were 16x or worse.
-    expect(large / small).toBeLessThan(8);
+    // Each op used to walk the whole paragraph again: walks grew with the run count.
+    const small = walksFor(50);
+    expect(walksFor(500)).toBe(small);
+    expect(small).toBeLessThan(20);
+  });
+
+  test('a press scans the paragraph for controls a fixed number of times', () => {
+    const scansFor = (count: number): number => {
+      const store = storeOf(manyRuns(count));
+      return countContentControlScansForTest(() => italicize(store, 1, count * 4 - 1));
+    };
+    expect(scansFor(500)).toBe(scansFor(50));
+  });
+
+  test('a simple field keeps its own nodes when its result run is formatted', () => {
+    const store = storeOf(
+      '<w:p><w:r><w:t xml:space="preserve">Page </w:t></w:r>' +
+        '<w:fldSimple w:instr=" PAGE "><w:r><w:t>3</w:t></w:r></w:fldSimple>' +
+        '<w:r><w:t xml:space="preserve"> of many</w:t></w:r></w:p>'
+    );
+    const before = firstParagraph(store);
+    italicize(store, 0, segmentsOf(before).at(-1)!.end);
+    const after = findNode(store.part, before.id) as OoxmlParagraphNode;
+    expect(serializeOoxmlPart(store.part).match(/<w:i\/>/g)?.length).toBe(3);
+    // Every node a segment names is the node in the new tree, the field included.
+    for (const segment of segmentsOf(after)) {
+      expect(findNode(store.part, segment.node.id)).toBe(segment.node);
+    }
+  });
+
+  test('a host owns the segments the public entry point returns', () => {
+    const store = storeOf(manyRuns(3));
+    const paragraph = firstParagraph(store);
+    const copy = segmentsOfCopy(paragraph);
+    (copy[0] as { end: number }).end += 100;
+    expect(segmentsOf(paragraph)[0]!.end).toBe(4);
   });
 });

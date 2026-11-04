@@ -3391,7 +3391,8 @@ function applySetRunProperties(
   // Every write above replaced a `w:rPr` and kept the rest of each run by identity.
   const rebuilt = findNode(current, paragraph.id);
   if (rebuilt?.kind === 'paragraph' && rebuilt !== target) {
-    carrySegmentsAcrossRunPropertyEdit(target, rebuilt);
+    const tree = current;
+    carrySegmentsAcrossRunPropertyEdit(target, rebuilt, (node) => findNode(tree, node.id) === node);
     carryEmptyContentControlsAcrossRunPropertyEdit(target, rebuilt);
   }
   return ok(current, effect);

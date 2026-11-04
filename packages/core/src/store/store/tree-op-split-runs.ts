@@ -64,6 +64,9 @@ interface RunSpan {
   readonly runId: string;
   readonly start: number;
   end: number;
+  /** The run's first and last segment indexes. */
+  readonly first: number;
+  last: number;
 }
 
 interface RunSpans {
@@ -85,14 +88,24 @@ function runSpansOf(segments: readonly Segment[]): RunSpans {
   if (cached) return cached;
   // A run's span is its first segment's start to its last segment's end.
   const byRun = new Map<string, RunSpan>();
-  for (const segment of segments) {
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index]!;
     // Simple fields are paragraph children: their atom has no owning run. Grouping
     // their empty run IDs invents one run spanning every simple field, then attempts
     // to split that nonexistent run at an otherwise valid boundary between fields.
     if (!segment.runId) continue;
     const span = byRun.get(segment.runId);
-    if (span) span.end = segment.end;
-    else byRun.set(segment.runId, { runId: segment.runId, start: segment.start, end: segment.end });
+    if (span) {
+      span.end = segment.end;
+      span.last = index;
+    } else
+      byRun.set(segment.runId, {
+        runId: segment.runId,
+        start: segment.start,
+        end: segment.end,
+        first: index,
+        last: index,
+      });
   }
   const spans = [...byRun.values()];
   let ordered = true;
@@ -105,10 +118,10 @@ function runSpansOf(segments: readonly Segment[]): RunSpans {
 }
 
 /** The first run, in first-segment order, whose span holds `offset` strictly inside it. */
-function straddlingRunId(segments: readonly Segment[], offset: number): string | undefined {
+function straddlingRun(segments: readonly Segment[], offset: number): RunSpan | undefined {
   const { spans, ordered } = runSpansOf(segments);
   if (!ordered) {
-    for (const span of spans) if (span.start < offset && span.end > offset) return span.runId;
+    for (const span of spans) if (span.start < offset && span.end > offset) return span;
     return undefined;
   }
   // Disjoint and sorted: only the last span starting before `offset` can hold it.
@@ -123,7 +136,7 @@ function straddlingRunId(segments: readonly Segment[], offset: number): string |
     } else high = middle - 1;
   }
   const span = candidate >= 0 ? spans[candidate]! : undefined;
-  return span && span.end > offset ? span.runId : undefined;
+  return span && span.end > offset ? span : undefined;
 }
 
 /** Divide any run straddling `offset` so the offset falls on a run boundary. */
@@ -140,15 +153,18 @@ export function splitRunsAt(
   // has edges at 1 and 2 that no text value straddles — the run was left whole, the range
   // then matched it through the tab's segment, and formatting the tab alone bolded all
   // three characters.
-  const straddling = straddlingRunId(segments, offset);
+  const straddling = straddlingRun(segments, offset);
   if (straddling === undefined) return { ok: true, part };
-  const run = findNode(part, straddling);
+  const run = findNode(part, straddling.runId);
   if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
   const nextId = createNodeIdAllocator(part);
   const rPr = runPropertiesNodeOf(run);
   const headContent: OoxmlNode[] = [];
   const tailContent: OoxmlNode[] = [];
-  const ownSegments = segments.filter((segment) => segment.runId === run.id);
+  // Only the run's own index range: a split must not scan the whole paragraph.
+  const ownSegments = segments
+    .slice(straddling.first, straddling.last + 1)
+    .filter((segment) => segment.runId === run.id);
   for (const child of run.children) {
     if (isRunPropertiesNode(child)) continue;
     const segment = ownSegments.find((candidate) => contains(child, candidate.node.id));
