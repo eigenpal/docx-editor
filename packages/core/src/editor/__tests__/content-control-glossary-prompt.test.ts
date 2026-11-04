@@ -113,3 +113,19 @@ test('the first keystroke after the restored prompt replaces it whole', () => {
   editor.surface!.type('Z');
   expect(editor.surface!.session.bodyText()).toBe('A Z B');
 });
+
+test('an emptied control takes the first block of its name and its first paragraph', () => {
+  // Two blocks share the name; the open path reads only the first one.
+  const twoBlocks = docPart('Empty', 'First prompt') + docPart('Empty', 'Second prompt');
+  const first = mount(docx(paragraph(control('Empty', 'value')), twoBlocks));
+  emptyTheControl(first);
+  expect(first.surface!.session.bodyText()).toBe('A First prompt B');
+  // A first paragraph without text shows the type default, as on open.
+  const emptyFirstParagraph = docPart('Empty', 'Later text').replace(
+    '<w:docPartBody>',
+    '<w:docPartBody><w:p/>'
+  );
+  const second = mount(docx(paragraph(control('Empty', 'value')), emptyFirstParagraph));
+  emptyTheControl(second);
+  expect(second.surface!.session.bodyText()).toBe('A Click here to enter text. B');
+});

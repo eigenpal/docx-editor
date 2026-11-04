@@ -224,7 +224,11 @@ export function buildingBlocksForControl(
 /** Bounded walk for a block's text: a hostile glossary cannot make one lookup unbounded. */
 const MAX_PROMPT_NODES = 4096;
 
-/** The text of a block's first paragraph that holds any, or undefined when none does. */
+/**
+ * The text of a block's first paragraph, or undefined when it holds none. For an inline
+ * control, the same paragraph that `materializeGlossaryPlaceholders` shows when a document
+ * opens with the control empty; a block-level control shows every paragraph of the block there.
+ */
 function promptTextOf(block: BuildingBlock): string | undefined {
   let visited = 0;
   const textOf = (node: OoxmlNode, depth: number): string => {
@@ -235,12 +239,10 @@ function promptTextOf(block: BuildingBlock): string | undefined {
     }
     return node.children.map((child) => textOf(child, depth + 1)).join('');
   };
-  for (const node of block.blocks) {
-    if (node.kind === 'textValue' || !isWml(node, 'p')) continue;
-    const text = textOf(node, 0);
-    if (text.length > 0) return text;
-  }
-  return undefined;
+  const first = block.blocks.find((node) => node.kind === 'paragraph' || isWml(node, 'p'));
+  if (!first || first.kind === 'textValue') return undefined;
+  const text = textOf(first, 0);
+  return text.length > 0 ? text : undefined;
 }
 
 const promptTexts = new WeakMap<OoxmlPackage, ReadonlyMap<string, string>>();
@@ -253,8 +255,11 @@ export function placeholderTextOf(pkg: OoxmlPackage, docPart: string): string | 
   let texts = promptTexts.get(pkg);
   if (!texts) {
     const found = new Map<string, string>();
+    const named = new Set<string>();
     for (const block of buildingBlocksOf(pkg)) {
-      if (found.has(block.name)) continue;
+      // The first block with a name answers for it, as on open, even when it holds no text.
+      if (named.has(block.name)) continue;
+      named.add(block.name);
       const text = promptTextOf(block);
       if (text !== undefined) found.set(block.name, text);
     }
