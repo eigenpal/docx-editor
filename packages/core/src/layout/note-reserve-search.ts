@@ -423,6 +423,17 @@ function firstDifferentReserve(a: Reserves, b: Reserves): number {
   return first;
 }
 
+/**
+ * Whether a pass with body block limit `next` (-1 for none) can resume the walk of a pass with
+ * limit `previous`. A progressive open lays out growing prefixes of the body. The blocks a
+ * larger limit adds act as an edit after the previous cut, so the walk keeps the pages before
+ * it, as for any edit. Without this, each prefix decides every page again from the first.
+ */
+function extendsLimit(previous: number, next: number): boolean {
+  if (previous === next) return true;
+  return previous !== -1 && (next === -1 || next > previous);
+}
+
 /** Report only the pages the walk has decided, so a host shows no undecided page. */
 function* decidedProgress<T>(steps: LayoutSteps<T>, decided: () => number): LayoutSteps<T> {
   for (;;) {
@@ -458,7 +469,8 @@ export function* searchFootnoteReserves(
   let unchangedFrom = Number.POSITIVE_INFINITY;
   let probeLayout: SemanticLayout | null = null;
   let unchanged = false;
-  const reuse = state && previousLayout && state.limit === options.limit ? state : undefined;
+  const reuse =
+    state && previousLayout && extendsLimit(state.limit, options.limit) ? state : undefined;
   if (reuse && sameInputs(reuse.inputs, options.inputs)) {
     const given = reuse.record.reserves;
     let layout = yield* options.body(given, undefined, false);

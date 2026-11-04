@@ -316,6 +316,73 @@ describe('a warm footnote pass matches a fresh one after each edit', () => {
     expect(mismatches).toEqual([]);
   }, 60000);
 
+  test('after an open in growing prefixes', () => {
+    const mismatches: string[] = [];
+    for (const [shape, modes] of [
+      [{ minCount: 60 }, [15, 14]],
+      [{ minCount: 60, sections: true }, [15, 14]],
+      [{ minCount: 60, tables: 0.2 }, [15]],
+    ] as const) {
+      for (const mode of modes) {
+        for (let seed = 1; seed <= 6; seed += 1) {
+          const next = random(seed * 7919 + mode + 29);
+          const loaded = readOoxmlPackage(documentBytes(next, shape));
+          if (!loaded.ok) throw new Error(loaded.reason);
+          const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+          const footnotesPart = resolveNotesPart(loaded.package, 'footnote');
+          const session = createLayoutSession();
+          // A host lays out the first blocks, then more each pass, then the whole body.
+          let revision = 1;
+          for (let limit = 8; limit < 100; limit += 3 + (limit >> 2)) {
+            layoutSemanticDocument(part, revision, {
+              ...layoutOptions(footnotesPart, mode, session),
+              bodyBlockLimit: limit,
+            });
+            revision += 1;
+          }
+          const warm = lay(part, footnotesPart, mode, revision, session);
+          const fresh = lay(part, footnotesPart, mode, revision);
+          if (JSON.stringify(warm.pages) !== JSON.stringify(fresh.pages)) {
+            mismatches.push(`${JSON.stringify(shape)} mode ${mode} seed ${seed}`);
+          }
+        }
+      }
+    }
+    expect(mismatches).toEqual([]);
+  }, 120000);
+
+  test('an open in growing prefixes keeps the pages each prefix decided', () => {
+    // Each prefix pass resumes the walk of the pass before it, so the whole open does about
+    // the work of one fresh pass. Counted in progress reports, which follow placed blocks.
+    const reports = (steps: ReturnType<typeof layoutSemanticDocumentSteps>): number => {
+      let count = 0;
+      for (let step = steps.next(); !step.done; step = steps.next()) count += 1;
+      return count;
+    };
+    const next = random(4242);
+    const loaded = readOoxmlPackage(documentBytes(next, { minCount: 400 }));
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const footnotesPart = resolveNotesPart(loaded.package, 'footnote');
+    const fresh = reports(layoutSemanticDocumentSteps(part, 1, layoutOptions(footnotesPart, 15)));
+    const session = createLayoutSession();
+    let progressive = 0;
+    let revision = 1;
+    for (let limit = 16, growth = 16; limit < 400; growth *= 2, limit += growth) {
+      progressive += reports(
+        layoutSemanticDocumentSteps(part, revision, {
+          ...layoutOptions(footnotesPart, 15, session),
+          bodyBlockLimit: limit,
+        })
+      );
+      revision += 1;
+    }
+    progressive += reports(
+      layoutSemanticDocumentSteps(part, revision, layoutOptions(footnotesPart, 15, session))
+    );
+    expect(progressive).toBeLessThan(fresh * 1.5);
+  }, 60000);
+
   test('after an edit to a continuation separator with a positive id', () => {
     const mismatches: string[] = [];
     for (const mode of [15, 14]) {
