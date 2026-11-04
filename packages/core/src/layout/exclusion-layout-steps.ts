@@ -26,7 +26,11 @@ import { DEFAULT_REVISION_DISPLAY_MODE } from './revision-projection.ts';
 import type { PageRecord } from './semantic-records.ts';
 import type { ResolvedSectionColumns } from './section-columns.ts';
 import * as tableWrap from './table-float-exclusion.ts';
-import { markResultUnsettled } from './unsettled-exclusion-layout.ts';
+import {
+  markResultUnsettled,
+  markSessionUnsettled,
+  takeSessionUnsettled,
+} from './unsettled-exclusion-layout.ts';
 import type { BlockLayoutResult } from './column-balance-layout.ts';
 import type { BlockLayoutOptions } from './semantic-layout.ts';
 
@@ -196,6 +200,12 @@ function* settleExclusionLayout(
     return fallback;
   }
   const previousPages = seedFromPrevious ? options.session?.previous?.pages : undefined;
+  // Taken by every seeded settle, so a mark never outlives the layout it describes.
+  const previousUnsettled =
+    seedFromPrevious &&
+    options.session !== undefined &&
+    takeSessionUnsettled(options.session) &&
+    previousPages !== undefined;
   const settleFresh = (): LayoutSteps<BlockLayoutResult | null> =>
     settleExclusionLayout(bodies, revision, options, columns, contentWidthForReflow, layout, {
       seedFromPrevious: false,
@@ -214,7 +224,15 @@ function* settleExclusionLayout(
     // and re-collecting from the same page records under the same inputs reproduces the
     // same zones — the equality below is true by construction. Every no-change section of
     // a multi-section document takes this path on every keystroke.
-    if (result.pages === previousPages) return result;
+    if (result.pages === previousPages) {
+      if (previousUnsettled) {
+        markResultUnsettled(result, passCount);
+        markSessionUnsettled(options.session!);
+      }
+      return result;
+    }
+    // An unsettled layout is no fixed point to seed from (`unsettled-exclusion-layout.ts`).
+    if (previousUnsettled) return yield* settleFresh();
     const nextZones = collectZones(result.pages, true);
     if (exclusionMapsEqual(zonesByPage, nextZones)) return result;
     // A return to the seeded map is a cycle too.
@@ -350,7 +368,9 @@ function* settleExclusionLayout(
     // Otherwise the last pass publishes: the document opens, and only the wrap that never
     // settled may sit off by a pass. Laying out once more under its zones is no closer.
     markResultUnsettled(result!, passCount);
-    return publishCandidate(result!, lastCandidateSession);
+    const published = publishCandidate(result!, lastCandidateSession);
+    if (options.session) markSessionUnsettled(options.session);
+    return published;
   }
   return yield* publishConverged(zonesByPage);
 }

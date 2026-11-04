@@ -210,7 +210,8 @@ export function* layoutBlocksWithColumnBalanceSteps<HostOptions extends object>(
   // only to refuse: skip the search. Each reflow pass still balances its own candidate.
   if (!natural.pages.length || !natural.endsOpenPage || resultUnsettled(natural)) {
     if (session) session.balanceLimit = null;
-    return yield* layoutPass(bodies, revision, options);
+    // Without a session to fill, the natural layout is that pass already.
+    return session ? yield* layoutPass(bodies, revision, options) : natural;
   }
   balancePage = natural.pages.length - 1;
   regionTop = balancePage === 0 ? (options.flowStartY ?? 0) : 0;

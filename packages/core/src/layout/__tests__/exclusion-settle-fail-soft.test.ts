@@ -138,6 +138,25 @@ describe('a wrap reflow that runs out of passes', () => {
     expect(edit.pages).toEqual(withPassLimits(() => layout(edited, 2)).pages);
   }, 60_000);
 
+  test('settles an edit from scratch once, after one seeded pass', () => {
+    const session = createLayoutSession();
+    withPassLimits(() => layout(part, 1, session));
+    const edited = withLongerText(part, 20);
+    const edit = withPassLimits(() => countPasses(() => layout(edited, 2, session)));
+    const fresh = withPassLimits(() => countPasses(() => layout(edited, 2)));
+    // A seeded settle that ran to the ceiling before its fresh fallback would take 5 more.
+    expect(edit.passes).toBe(fresh.passes + 1);
+    expect(edit.result.pages).toEqual(fresh.result.pages);
+    // An unchanged layout keeps its pages, and the next edit still settles from scratch.
+    const again = withPassLimits(() => countPasses(() => layout(edited, 2, session)));
+    expect(again.passes).toBeLessThanOrEqual(1);
+    const next = withLongerText(edited, 21);
+    const nextEdit = withPassLimits(() => countPasses(() => layout(next, 3, session)));
+    expect(nextEdit.passes).toBe(
+      withPassLimits(() => countPasses(() => layout(next, 3))).passes + 1
+    );
+  }, 60_000);
+
   test('keeps a balanced section unbalanced instead of running every trial to the limits', () => {
     // A natural layout that never settled: each balance trial would run to the limits too.
     let calls = 0;
@@ -161,9 +180,15 @@ describe('a wrap reflow that runs out of passes', () => {
       sectionColumns: { count: 2, gapTwips: 720, equalWidth: true },
       balanceColumns: true,
     } as unknown as BlockLayoutOptions;
-    layoutBlocksWithColumnBalance([], 1, options, pass);
-    // The natural layout, then the final unbalanced one: no trials.
+    // Without a session the natural layout is the result: no trials, no second pass.
+    expect(layoutBlocksWithColumnBalance([], 1, options, pass).pages).toEqual([page]);
+    expect(calls).toBe(1);
+    // With a session, one more pass fills it: still no trials.
+    calls = 0;
+    const session = createLayoutSession();
+    layoutBlocksWithColumnBalance([], 1, { ...options, session }, pass);
     expect(calls).toBe(2);
+    expect(session.balanceLimit).toBeNull();
   });
 
   test('never asks for the hidden-furniture retry from inside that retry', () => {
