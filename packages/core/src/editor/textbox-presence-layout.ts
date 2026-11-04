@@ -77,9 +77,9 @@ export function textboxPresenceLayout(layout: SemanticLayout): SemanticLayout {
 }
 
 /**
- * {@link keyedRangeRects}, with ranges in text boxes measured too. Box text is laid out inside
- * its drawing, never in the page's own fragments, so a comment on it had no band. Only a range
- * that found no rect and starts in no page paragraph is measured again, against the layout
+ * {@link keyedRangeRects}, with comment ranges in text boxes measured too. Box text is laid out
+ * inside its drawing, never in the page's own fragments, so a comment on it had no band. Only a
+ * comment range that found no rect and starts in no page paragraph is measured again, against the layout
  * with box paragraphs added, so a document without such ranges pays nothing more.
  */
 export function keyedRangeRectsWithTextboxes(
@@ -91,7 +91,9 @@ export function keyedRangeRectsWithTextboxes(
   const found = keyedRangeRects(layout, ranges, pages, measurer);
   let order: ReadonlyMap<string, number> | null = null;
   const missing = ranges.filter((range) => {
-    if (found.has(range.key)) return false;
+    // Comments only. A tracked change in a box keeps its own marks and no band, as one in a
+    // header or a note does.
+    if (found.has(range.key) || !range.key.startsWith('comment-')) return false;
     order ??= documentOrderIndex(layout);
     return !order.has(range.from.paragraphId);
   });

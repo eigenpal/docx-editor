@@ -199,6 +199,29 @@ test('a caret in a word inside a text box comments on that word', () => {
   });
 });
 
+test('a comment card sits level with its line in the box, not at the box top', () => {
+  const lines = ['First', 'Second', 'Third', 'Fourth'].map(
+    (text) => `<w:p><w:r><w:t>${text} line</w:t></w:r></w:p>`
+  );
+  const tall = VML_BOX.replace(BOX_TEXT, lines.join('')).replace('height:48pt', 'height:200pt');
+  const editor = mount(docxOf(tall));
+  const [first] = editor.findMatches('First') as readonly TextMatch[];
+  const [fourth] = editor.findMatches('Fourth') as readonly TextMatch[];
+  expect(editor.surface!.setActiveScope(first!.scope!)).toBe(true);
+  const placementOf = (match: TextMatch) => {
+    editor.surface!.setSelection({
+      anchor: { paragraphId: match.blockId, offset: 0 },
+      head: { paragraphId: match.blockId, offset: 4 },
+    });
+    return editor.getSelectionPlacement()!.anchorY;
+  };
+  const top = placementOf(first!);
+  const low = placementOf(fourth!);
+  expect(low).toBeGreaterThan(top + 20);
+  expect(editor.addComment('Low line')).toEqual({ ok: true, changed: true });
+  expect(editor.getReviewItems()[0]?.anchorY).toBe(low);
+});
+
 test('a selection from a text box into the body offers no comment', () => {
   const editor = mount(docxOf(VML_BOX + BODY));
   const { blockId: paragraphId } = openBox(editor);
