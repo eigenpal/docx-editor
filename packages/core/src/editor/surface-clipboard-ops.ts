@@ -74,6 +74,8 @@ function markDeletedIn(part: OoxmlPart, paragraphId: string): boolean {
 export interface SurfaceClipboardDeps {
   session: TreeDocxSessionView;
   textFormFieldId?(): string | null;
+  /** The control that owns text inserted at the caret, as `type()` names it. */
+  insertOwner?(): string | undefined;
   richPasteAllowed?(): boolean;
   paragraphIds?(): readonly string[];
   layout(): SemanticLayout;
@@ -195,11 +197,15 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       joined.length
     );
     if (joined.length > 0) {
+      // The caret's own control owns the paste, as it owns a keystroke: at a text control's
+      // trailing edge the store's default lands the text beside the control.
+      const inside = plan.ops.length === 0 ? deps.insertOwner?.() : undefined;
       ops.push({
         op: 'insertText',
         paragraphId: target.paragraphId,
         offset: target.offset,
         text: joined,
+        ...(inside === undefined ? {} : { inside }),
       });
       ops.push(...pendingOps);
     }

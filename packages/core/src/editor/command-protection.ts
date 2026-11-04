@@ -13,6 +13,7 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
 import { contentLockPolicyOf } from '../store/store/content-lock-policy.ts';
 import { COMMENTS_PROTECTION_REASON, READ_ONLY_PROTECTION_REASON } from './opening-editing-mode.ts';
+import { insertOwnerOf } from './content-control-prompt-landing.ts';
 
 const formFieldIdentities = new WeakMap<PaginatedSurface, () => string | null>();
 
@@ -129,6 +130,15 @@ export function commandProtectionRefusal(
   const selection = surface.state().selection;
   const part = partOfNodeId(surface.session, selection.head.paragraphId);
   if (!part) return { ok: false, code: 'locked', reason: FORMS_WRITE_REASON };
+  const collapsed =
+    selection.anchor.paragraphId === selection.head.paragraphId &&
+    selection.anchor.offset === selection.head.offset;
+  // Typing and plain paste name the caret's control, so a text control's trailing edge is
+  // inside it. Admission asks about the same insert, or `can` refuses what the keyboard does.
+  const inside =
+    intent === 'text' && text !== undefined && collapsed
+      ? insertOwnerOf(surface.contentControls.atCaret())
+      : undefined;
   const cells = surface.state().cellSelection;
   const selections =
     cells && (intent === 'runFormat' || intent === 'paragraph')
@@ -144,6 +154,7 @@ export function commandProtectionRefusal(
       text,
       paste,
       fieldId: formFieldIdentities.get(surface)?.() ?? undefined,
+      ...(inside === undefined ? {} : { inside }),
       contentLockPolicy: contentLockPolicies.get(surface),
     })
   );

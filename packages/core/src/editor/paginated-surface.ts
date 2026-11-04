@@ -4338,6 +4338,7 @@ export function mountPaginatedSurface(
     createSurfaceClipboardOps({
       session,
       textFormFieldId: () => textFormInteraction?.fieldId() ?? null,
+      insertOwner: () => insertOwnerOf(contentControlAtCaret()),
       richPasteAllowed: () => !textboxEditing?.active(),
       paragraphIds: editingParagraphIds,
       layout: editingLayout,
