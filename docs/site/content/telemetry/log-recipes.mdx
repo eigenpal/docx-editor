@@ -6,11 +6,11 @@ category: 'Telemetry'
 
 <Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
 
-The Axiom and Datadog recipes replace the `forward` function of the route in [Send to a log service](/docs/2.x/telemetry/log-services). The browser setup on that page stays the same.
+Each recipe replaces only `forward` in the route from [Send to a log service](/docs/2.x/telemetry/log-services). Keep its other options, such as `allowedOrigins` and `onError`.
 
-## Axiom
+## Forward to Axiom
 
-Axiom reads the time from `_time`. Create a dataset and an API token with ingest access.
+Axiom reads the time from `_time`. Create a dataset and an API token with ingest access:
 
 ```ts
 // app/api/telemetry/route.ts
@@ -34,9 +34,9 @@ export const POST = telemetryRoute({
 });
 ```
 
-## Datadog Logs
+## Forward to Datadog Logs
 
-Use the logs intake for your Datadog site and an API key.
+Use the logs intake URL for your Datadog site and an API key:
 
 ```ts
 // app/api/telemetry/route.ts
@@ -61,9 +61,9 @@ export const POST = telemetryRoute({
 });
 ```
 
-## Another server framework
+## Validate without Fetch
 
-If your framework does not use Fetch `Request` objects, call `validateTelemetryEvents` on the parsed body yourself. It returns the events that pass, or an empty list:
+If your framework does not use Fetch `Request` objects, pass the parsed body to `validateTelemetryEvents`. It returns the events that pass, or an empty list:
 
 ```ts
 import { toLogRecord, validateTelemetryEvents } from '@docx-editor.dev/telemetry/ingest';
@@ -72,3 +72,12 @@ export function recordsFrom(body: unknown) {
   return validateTelemetryEvents(body).map(toLogRecord);
 }
 ```
+
+## Limits
+
+- Keep provider tokens on the server.
+- `validateTelemetryEvents` skips body size, origin, and rate checks. Enforce them yourself.
+
+## See also
+
+- [HTTP exporter and route reference](/docs/2.x/telemetry/http-reference)

@@ -1,76 +1,55 @@
 ---
 title: 'Examples'
-description: 'Runnable DOCX editor starters for React, Vue, and server-rendered frameworks, plus themed and headless examples.'
+description: 'Runnable DOCX editor starters for React, Vue, server-rendered frameworks, collaboration, agents, and export.'
 category: 'Getting started'
 order: 55
 ---
 
-Use a [runnable starter](#runnable-starters) for a complete app. Each starter covers one framework or feature, and has a page of its own. You can also use the [live demo](#live-demo) on this page.
+## Choose an example
 
-## Runnable starters
+Each starter lives in the repository's [`examples/` directory](https://github.com/eigenpal/docx-editor/tree/main/examples).
 
-You can find each starter in the repository's [`examples/` directory](https://github.com/eigenpal/docx-editor/tree/main/examples). The web starters use `workspace:*` dependencies for `@docx-editor.dev/*` packages. They do not use the published npm packages.
+| Task | Example |
+| --- | --- |
+| Mount the packaged editor | [Happy path](/examples/happy-path) |
+| Start from a framework | [Vite](/examples/vite), [Next.js](/examples/nextjs), [Remix](/examples/remix), [Astro](/examples/astro), [Vue](https://github.com/eigenpal/docx-editor/tree/main/examples/vue), [Nuxt](https://github.com/eigenpal/docx-editor/tree/main/examples/nuxt) |
+| Build custom chrome | [Igloo Editor](/examples/igloo) |
+| Embed custom nodes in content controls | [Custom nodes](/examples/custom-nodes) |
+| Replace a document at runtime | [Document refresh](/examples/document-refresh) |
+| Scroll to and highlight paragraph references | [Anchor navigation](https://github.com/eigenpal/docx-editor/tree/main/examples/anchor-navigation) |
+| Move the editor into another window | [Pop-out window](https://github.com/eigenpal/docx-editor/tree/main/examples/popout-window) |
+| Automate a document | [Document automation](/examples/automation) |
+| Connect an agent | [Roast My Doc](/examples/agent), [Writer agent](/examples/write-agent), [Server agent review](/examples/server-agent-review) |
+| Collaborate in real time | [Peer-to-peer](/examples/collaboration), [Server-backed](/examples/collaboration-hocuspocus) |
+| Export a document | [DOCX to Markdown](/examples/docx-to-markdown), [DOCX to PDF](https://github.com/eigenpal/docx-editor/tree/main/examples/docx-to-pdf) |
 
-Follow these steps to run a web starter:
+## Run a repository starter
 
-1. Clone the repository.
-2. Run this command from the repository root to install dependencies:
+Clone the repository, then install dependencies and build the packages from the root:
 
-   ```bash
-   bun install
-   ```
+```bash
+git clone https://github.com/eigenpal/docx-editor.git
+cd docx-editor
+bun install
+bun run build:packages
+```
 
-3. Build the packages if the starter README requires a build:
+Run the `bun run dev:*` command from the starter README. The Vite with React and Vite with Vue starters alias package source and do not need `build:packages`.
 
-   ```bash
-   bun run build:packages
-   ```
+## Use published packages
 
-   The Vite with React and Vite with Vue starters alias package source. These two starters do not need this build.
+- Web starters use `workspace:*` dependencies for `@docx-editor.dev/*` packages, not published npm versions.
+- To use published packages, replace the `workspace:*` versions in the starter's `package.json`.
+- The Vue adapter is published to npm. The Nuxt module is a private workspace package.
 
-4. Run the `bun run dev:*` command from the starter README.
+## Try the live demo
 
-To use published packages, replace the `workspace:*` versions in the starter's `package.json`.
-
-Each starter has its own page with the full README, the exact commands, and a live demo where one exists:
-
-- [Happy path: the packaged DOCX editor](/examples/happy-path)
-- [Vite DOCX editor example](/examples/vite)
-- [Next.js DOCX editor example](/examples/nextjs)
-- [Remix DOCX editor example](/examples/remix)
-- [Astro DOCX editor example](/examples/astro)
-- [Igloo Editor](/examples/igloo)
-- [Custom nodes in Word content controls](/examples/custom-nodes)
-- [DOCX document refresh example](/examples/document-refresh)
-- [Word document automation](/examples/automation)
-- [DOCX to Markdown example](/examples/docx-to-markdown)
-- [Peer-to-peer DOCX collaboration](/examples/collaboration)
-- [Server-backed DOCX collaboration](/examples/collaboration-hocuspocus)
-- [Agent example: Roast My Doc](/examples/agent)
-- [Writer agent example](/examples/write-agent)
-- [Server agent review](/examples/server-agent-review)
-
-The Vue adapter is published to npm. The Nuxt module remains a private workspace package. Read their setup instructions in the repository:
-
-- [Vue starter](https://github.com/eigenpal/docx-editor/tree/main/examples/vue)
-- [Nuxt starter](https://github.com/eigenpal/docx-editor/tree/main/examples/nuxt)
-
-These examples also include setup instructions in the repository:
-
-- [DOCX anchor navigation](https://github.com/eigenpal/docx-editor/tree/main/examples/anchor-navigation): Scroll to paragraph references and configure temporary highlights.
-- [Pop-out window](https://github.com/eigenpal/docx-editor/tree/main/examples/popout-window): Move the editor into its own browser window and back, with its undo history.
-- [DOCX to PDF example](https://github.com/eigenpal/docx-editor/tree/main/examples/docx-to-pdf): Export a document and configure PDF fonts.
-
-## Live demo
-
-The following demo runs `<DocxEditor>` on this page. You can open one of your `.docx` files in it.
+This demo runs `<DocxEditor>` on this page. Open one of your `.docx` files in it.
 
 <DemoPlayground />
 
 ## Next steps
 
-- Follow the [quickstart](/docs/2.x/quickstart) to build a load, edit, and save workflow.
-- Read [installation options](/docs/2.x/installation) for framework-specific setup.
-- Read [React composition](/docs/2.x/react/composition) for the primitives used by the Igloo starter.
-- Read the [editing API guide](/docs/2.x/editor-api) for the headless editing object model.
-- Follow [Connect an agent to a document](/docs/2.x/build-a-docx-agent) to choose how to apply and show agent updates.
+- [Quickstart](/docs/2.x/quickstart): Build a load, edit, and save flow.
+- [Installation](/docs/2.x/installation): Set up your framework.
+- [Build a DOCX agent](/docs/2.x/build-a-docx-agent): Apply and show agent updates.

@@ -43,16 +43,16 @@ For Node.js, use `^20.16.0 || >=22.3.0`. Browser applications can use the packag
 
 | Feature | Description |
 | --- | --- |
-| [Editor API](https://www.docx-editor.dev/docs/2.x/editor-api) | Automate documents in a browser or server with a supported subset of Word Office.js. |
+| [Editor API](https://www.docx-editor.dev/docs/2.x/editor-api) | Automate documents in a browser or server with a supported subset of the Office.js document API. |
 | [Review workflow](https://www.docx-editor.dev/docs/2.x/pro/tracked-changes) | Add comments and tracked changes with the review module. |
-| [Word fidelity](https://www.docx-editor.dev/docs/2.x/word-fidelity) | Check rendering and editing support for document features. |
+| [DOCX fidelity](https://www.docx-editor.dev/docs/2.x/docx-fidelity) | Check rendering and editing support for document features. |
 | [Save and reopen](https://www.docx-editor.dev/docs/2.x/guides/loading-and-saving) | Preserve document structure, unsupported OOXML, and embedded files. |
 | [Collaboration](https://www.docx-editor.dev/docs/2.x/pro/collaboration) | Edit together with remote cursors, shared changes, and personal undo. |
 | [Custom UI](https://www.docx-editor.dev/docs/2.x/guides/chrome-slots) | Build controls with shared commands, components, and styles. |
 | [React and Vue](https://www.docx-editor.dev/docs/2.x/installation) | Use either adapter with the same document engine. |
 | [Right-to-left support](https://www.docx-editor.dev/docs/2.x/guides/right-to-left) | Use a mirrored Arabic or Hebrew interface and edit mixed-direction documents. |
 | [Chinese, Japanese, and Korean text](https://www.docx-editor.dev/docs/2.x/guides/cjk) | Configure interface translations, document fonts, and PDF fonts. |
-| [DrawingML rendering](https://www.docx-editor.dev/docs/2.x/pro/drawing) | Configure charts, SmartArt, and drawing effects. Check rendering and interface limits. |
+| [DrawingML rendering](https://www.docx-editor.dev/docs/2.x/pro/drawing) | Configure charts, DrawingML diagrams, and drawing effects. Check rendering and interface limits. |
 | [Translations](https://www.docx-editor.dev/docs/2.x/i18n) | Translate editor controls in 14 languages with locale catalogs and custom strings. |
 | [PDF export](https://www.docx-editor.dev/docs/2.x/export/pdf) | Convert DOCX to PDF on a Node.js server. |
 | [Markdown export](https://www.docx-editor.dev/docs/2.x/export/markdown) | Convert DOCX to Markdown with page references and images. |
@@ -66,12 +66,12 @@ For Node.js, use `^20.16.0 || >=22.3.0`. Browser applications can use the packag
 | [`@docx-editor.dev/vue`](https://www.npmjs.com/package/@docx-editor.dev/vue) | Vue 3 editor components and composables. | [Vue adapter](https://www.docx-editor.dev/docs/2.x/vue) |
 | [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core) | DOCX parsing, editing, and rendering. | [Core engine](https://www.docx-editor.dev/docs/2.x/core) |
 | [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n) | Translations and locale types. | [Translations](https://www.docx-editor.dev/docs/2.x/i18n) |
-| [`@docx-editor.dev/fonts`](https://www.npmjs.com/package/@docx-editor.dev/fonts) | Open-licensed substitutes for Word fonts. | [Fonts and measurement](https://www.docx-editor.dev/docs/2.x/guides/fonts) |
+| [`@docx-editor.dev/fonts`](https://www.npmjs.com/package/@docx-editor.dev/fonts) | Open-licensed substitutes for common DOCX default fonts. | [Fonts and measurement](https://www.docx-editor.dev/docs/2.x/guides/fonts) |
 | [`@docx-editor.dev/docx-to-markdown`](https://www.npmjs.com/package/@docx-editor.dev/docx-to-markdown) | Convert DOCX to Markdown with page and image output. | [Markdown export](https://www.docx-editor.dev/docs/2.x/export/markdown) |
 | [`@docx-editor.dev/docx-to-pdf`](https://www.npmjs.com/package/@docx-editor.dev/docx-to-pdf) | Convert DOCX to PDF on Node.js. | [PDF export](https://www.docx-editor.dev/docs/2.x/export/pdf) |
 | [`@docx-editor.dev/fonts-cjk`](https://www.npmjs.com/package/@docx-editor.dev/fonts-cjk) | Optional Chinese, Japanese, and Korean font for the editor and PDF export. | [CJK font setup](https://www.docx-editor.dev/docs/2.x/guides/cjk#packaged-browser-fallback) |
 | [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro) | Tracked changes, comments, collaboration, custom nodes, and advanced drawing rendering. | [Pro modules](https://www.docx-editor.dev/docs/2.x/pro) |
-| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | A supported subset of Word Office.js for browser and server editing. | [Document automation](https://www.docx-editor.dev/docs/2.x/editor-api) |
+| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | A supported subset of the Office.js document API for browser and server editing. | [Document automation](https://www.docx-editor.dev/docs/2.x/editor-api) |
 | [`@docx-editor.dev/telemetry`](https://www.npmjs.com/package/@docx-editor.dev/telemetry) | Anonymous diagnostics, metrics, and error reporting for editors and collaboration servers. | [Telemetry](https://www.docx-editor.dev/docs/2.x/telemetry) |
 
 `@docx-editor.dev/editor-api`, `@docx-editor.dev/pro`, `@docx-editor.dev/docx-to-pdf`, and `@docx-editor.dev/telemetry` use the EigenPal Pro License. See the license terms for [editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md), [docx-to-pdf](packages/docx-to-pdf/LICENSE.md), and [telemetry](packages/telemetry/LICENSE.md). Compare license and support options on the [pricing page](https://www.docx-editor.dev/pricing).

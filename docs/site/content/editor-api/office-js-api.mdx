@@ -1,161 +1,129 @@
 ---
 title: 'Office.js compatibility'
-description: 'Compare the supported Word JavaScript API subset, known differences, and unavailable APIs.'
+description: 'Compare the supported Office.js API subset, known differences, and unavailable APIs.'
 category: 'Editing API'
 order: 65
 ---
 
-`@docx-editor.dev/editor-api` implements a subset of the Word JavaScript API object model. You can reuse code based on objects such as `Document`, `Body`, `Paragraph`, and `Range`.
+`@docx-editor.dev/editor-api` implements a subset of the Office.js object model. Code built on `Document`, `Body`, `Paragraph`, and `Range` carries over after you replace the host setup and adapt the differences on this page. Compatibility covers the listed subset, not complete Office.js behavior.
 
-Replace the Office host setup and account for the runtime differences on this page.
+## Replace the Office.js host
 
-For task examples and every public symbol, use the [API member directory](/docs/2.x/editor-api/reference). See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) for execution and recovery.
+Replace `Word.run()` with a runtime, and keep the `load()` and `sync()` pattern:
 
-## Compatibility matrix
+```ts
+import { DocxEditor } from '@docx-editor.dev/editor-api';
 
-A supported subset covers only the listed objects and operations. It does not mean that every Office.js member in that area works.
+const runtime = await DocxEditor.createServer(bytes, { author: 'Migration bot' });
+try {
+  await runtime.run(async (context) => {
+    const first = context.document.body.search('Total').getFirst();
+    first.insertText('TOTAL', 'Replace');
+    await context.sync();
+  });
+} finally {
+  runtime.dispose();
+}
+```
 
-| Area | Status | Implemented | Limits |
-| --- | --- | --- | --- |
-| Batches and object lifecycle | Supported subset | `load()`, `sync()`, tracked objects, null-object accessors, and prerequisite reads for supported proxies | A load on an inserted object can share the insertion's sync. Edits to an inserted object need a completed sync first. Navigation expansion is unavailable. |
-| Document and body | Supported subset | `Document.body`, paragraphs, comments, revisions, sections, content controls, body text, styles, search, clear, and insertion | The package does not provide `Office.onReady` or `Word.run`. |
-| Paragraphs and ranges | Supported subset | Read text, insert or replace text, insert paragraphs, clear, delete, split, search, style, hyperlinks, and selection | The API does not expose document-wide `start` or `end` offsets. |
-| Search | Partial | Plain-text search, `matchCase`, and `matchWholeWord` | Setting `ignorePunct`, `ignoreSpace`, or `matchWildcards` to `true` fails with `NotSupported`. |
-| Font formatting | Partial | Bold, italic, color, name, size, underline, strike-through, highlight, subscript, and superscript | Underline supports 18 styles. Highlight writes require the Word palette. Mixed, unspecified, or inherited values return `null`. |
-| Paragraph formatting | Supported subset | Style, alignment, first-line indent, left indent, right indent, line spacing, space before, and space after. The `readingOrder` addition sets paragraph direction. | The API exposes these values on `Paragraph`. It does not expose the full `ParagraphFormat` object. |
-| Styles | Partial | List defined styles with `Document.getStyles()`, read `nameLocal`, `type`, `builtIn`, `baseStyle`, `nextParagraphStyle`, `linked`, `visibility`, `priority`, `quickStyle`, and `unhideWhenUsed`, look up a style with `getByNameOrNullObject`, and count styles with `getCount` | The list includes every kind of style, but `style` setters accept paragraph style names only. Style definitions are read-only, so the properties that the reference declares writable have no setter. `getByName`, `getItem`, `Document.addStyle`, `Style.font`, `Style.paragraphFormat`, and `Style.delete` are unavailable. `nameLocal` is the name that `styles.xml` declares, not a localized display name. |
-| Lists | Partial | Create lists, attach/detach paragraphs, set bullets/numbering, nesting, indents, and restart | Picture bullets are unavailable. Different list levels can batch after list creation. |
-| Bookmarks | Partial | Discover, add, find by name, select, and delete bookmarks | The API does not support document-wide bookmark offsets. Adding a name that another story uses moves that bookmark. |
-| Sections and page setup | Partial | Section bodies, headers, footers, size, orientation, margins, page breaks, and next-page section breaks | Other break types fail. Missing header/footer stories are created on their first write. |
-| Footnotes and endnotes | Supported subset | Enumerate referenced notes through `Body.footnotes` and `Body.endnotes`, read their bodies, and delete notes | Note creation is unavailable. Legacy `Document.footnotes` and `Document.endnotes` enumerate note parts outside the Office.js model. |
-| Comments and replies | Partial | Read, create, reply, resolve, delete, and get the comment range | Writes need an explicit author. Browser writes also need the Pro review module and an editable document. Comment body replacement does not work. |
-| Tracked changes | Partial | Create supported text and formatting revisions, inspect revisions by story or range, and accept or reject individual revisions or batches | `TrackMineOnly` supports tracked range edits across adjacent sibling paragraphs. `Paragraph.delete()` records a tracked paragraph deletion. Tracked edits can nest in another author's pending text changes. Collaboration limits tracked replacements to one paragraph. Table and wrapper boundaries refuse. `TrackAll` fails. |
-| Content controls | Partial | Common properties, nested controls, lookup by ID, tag, or title, text insertion, deletion, ranges, and typed value writes | The API does not expose typed Office.js subtype objects. The runtime rejects writes to custom XML-bound controls. |
-| Hyperlinks | Partial | Read or write `Range.hyperlink` | Standalone `Hyperlink` and `HyperlinkCollection` objects do not exist. |
-| Tables | Partial | Create rectangular tables, edit values, add/delete rows and columns, and format supported tables and cells | Row deletion supports merged tables. Row insertion requires an ordinary source row and cannot cross vertical merges. Column insertion and deletion support merged cells; a spanning cell widens or narrows with the edited column. See [Tables](/docs/2.x/editor-api/tables) for grid and content restrictions. |
-| Inline pictures | Partial | Insert PNG/JPEG, enumerate, delete, resize, lock aspect ratio, and set alt descriptions | Floating picture writes and picture bullets are unavailable. The runtime rejects conflicting dimensions when aspect ratio is locked. |
-| Shapes and text boxes | Partial | Enumerate inline and floating shapes, read their identity and type, and edit supported text stories | Geometry writes, shape insertion/deletion, and text frames are unavailable. Text-box stories require separate access through `Shape.body`. |
-| Fields | Partial | Insert inert reference, sequence, date, page, and TOC fields; enumerate; read and write cached results through `Field.result`; change code, update results, and delete plain PAGE/NUMPAGES fields | Field types that fetch, embed, link, run, or prompt refuse. A result range supports only `text` and `insertText(text, 'Replace')`. Server evaluation requires explicit measured pagination. |
+The package does not provide `Office.onReady` or `Word.run`. In a browser, use `DocxEditor.createBrowser(editor)` from `@docx-editor.dev/editor-api/browser`. For host options, see [Runtime and setup](/docs/2.x/editor-api/runtime).
 
-For operation-specific tracking limits, see [Tracked changes](/docs/2.x/editor-api/revisions). `resolve()` skips unsupported groups; `acceptAll()` and `rejectAll()` fail if unsupported changes remain.
-
-## Differences that affect existing code
+## Adapt behavior that differs
 
 | Office.js behavior | DocxEditor behavior | Required change |
 | --- | --- | --- |
-| `Office.onReady` and `Word.run` open a batch. | Your application creates a server or browser runtime. | Use `DocxEditor.createServer(bytes)` or `DocxEditor.createBrowser(editor)`. |
-| An item accessor returns a usable proxy immediately. | Supported read-derived proxies resolve prerequisite reads during `sync()`. | Sync before inspecting loaded values. You can load an inserted object in the insertion's sync; edit it after that sync. |
-| A collection can load item properties with paths such as `items/text` or `items/font/bold`. | A collection loads `items/<property>` paths one level deep. Deeper paths and paths on objects that are not collections throw `InvalidArgument`. `items/<navigation property>` such as `items/font` also refuses; load `font` on each item. | Load navigation objects such as `font` on each item directly. |
-| `Paragraph.split()` returns ranges and leaves the document as it is. | `Paragraph.split()` splits the paragraph into one paragraph per piece and returns the pieces. Each delimiter stays at the end of its piece unless `trimDelimiters` is `true`. With `TrackMineOnly`, each new paragraph mark is a tracked insertion; a tracked split refuses `trimDelimiters` set to `true`. | To read pieces, use `getTextRanges()`. Sync before you load the returned pieces. |
-| `LoadQueryOptions.expand` loads navigation properties. | A nonempty `expand` value throws `InvalidArgument`. | Load each navigation object or collection directly. |
-| Assigning a property updates the proxy's value, and a load queued after the assignment in the same batch reads the new value. | The proxy keeps its loaded value. A load queued in the same sync as a write returns the value from before the write. | Load the property in a later sync to read a value that you wrote. |
+| The Office.js host supplies the comment author. | No host-provided account identity exists. | Pass `{ author }` when you create the runtime. |
+| An item accessor returns a usable proxy at once. | Read-derived proxies resolve prerequisite reads during `sync()`. A read-derived range can resolve and edit in one sync. | Sync before you inspect loaded values. |
+| A load queued after an assignment reads the new value. | A load in the same sync as a write returns the value from before the write. A load on an object that the write returns reports the inserted content. | Load a written property in a later sync. Sync before you edit an inserted object. |
+| Collections load paths such as `items/font/bold`. | Collections load `items/<property>` one level deep. Deeper paths, `items/font`, and paths on non-collections throw `InvalidArgument`. | Load navigation objects such as `font` on each item. |
+| `LoadQueryOptions.expand` loads navigation properties. | A nonempty `expand` throws `InvalidArgument`. | Load each navigation object directly. |
+| A range tracks later edits. | A `Range` keeps paragraph identities and UTF-16 offsets from when it was found. A text edit before its end makes it fail with `StaleDocument`. Tracking extends lifetime only. | Search again after an edit, or use the range an insertion returns. |
+| `Paragraph.split()` returns ranges and leaves the document unchanged. | `Paragraph.split()` splits the paragraph and returns the pieces. Each piece keeps its ending delimiter unless `trimDelimiters` is `true`. With `TrackMineOnly`, each new paragraph mark is a tracked insertion, and removing a found delimiter refuses. | Use `getTextRanges()` to read pieces. Sync before you load the returned pieces. |
 | `sync()` can return a pass-through value. | `sync()` returns `Promise<void>`. | Keep pass-through values in local state. |
-| The Office host supplies the signed-in comment author. | DocxEditor does not use an Office account identity. | Pass `{ author }` when you create the runtime. |
-| Comment and revision dates have the `Date` type. | Invalid or missing file dates return `null`. | Narrow the nullable `Date` before you use it. |
-| Font reads use concrete values. | Mixed, unspecified, or inherited style values return `null`. | Narrow the value before you reuse it in a write. |
-| `Range.select()` runs inside Word. | Selection needs an attached browser editor. | Check `runtime.capabilities.selection`. A server runtime returns `NotSupported`. |
-| Header and footer getters can address missing parts. | A getter returns a deferred body; its first write creates the missing story. | Sync after resolving the section and before using a newly created object. |
-| `ContentControl.id` is a number. | `ContentControl.id` is a string because DOCX IDs can be missing or repeated. | Do not use the file ID as a unique numeric key. |
-| `ContentControl.subtype` uses Word interface terms. | `ContentControl.subtype` uses DOCX control terms. | Handle values such as `plainText`, `dropDownList`, and `checkbox`. |
+| Comment and revision dates are `Date`. | Invalid or missing file dates return `null`. | Narrow the nullable `Date`. |
+| Font reads return concrete values. | Mixed, unspecified, or inherited values return `null`. | Narrow the value before you reuse it in a write. |
+| `ContentControl.id` is a number. | `ContentControl.id` is a string, because DOCX IDs can be missing or repeated. | Do not use it as a unique numeric key. |
+| `ContentControl.subtype` uses Office.js interface terms. | `subtype` uses DOCX terms such as `plainText`, `dropDownList`, and `checkbox`. | Handle the DOCX values. |
+| `Range.select()` runs in the Office.js host. | Selection needs an attached browser editor. A server returns `NotSupported`. | Check `runtime.capabilities.selection`. |
+| Header and footer getters address missing parts. | A getter returns a deferred empty body. Its first write creates the story. | Sync after you resolve the section. |
+| `Office.onReady` and `Word.run` set up the host. | Host creation, capabilities, previews, input budgets, and collaboration are DocxEditor infrastructure. | Treat these as separate from the Office.js-shaped model. |
 
-A read-derived range can resolve and edit in one sync:
+For proxy lifetime and error recovery, see [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
 
-```ts
-const first = context.document.body.search('Total').getFirst();
-first.insertText('TOTAL', 'Replace');
-await context.sync();
-```
+## Check supported APIs
 
-## Range snapshots differ from Word
+A supported subset covers only the listed operations, not every Office.js member in that area. Each guide owns its refusal rules.
 
-A `Range` retains paragraph identities and UTF-16 offsets from the moment it was found. It does not follow later edits inside those paragraphs. If a later batch changes text before the range's end, using the range fails with `StaleDocument` instead of addressing moved text. Tracking the proxy only extends its lifetime; it does not create a moving text region. After an edit, search again or use its returned insertion range after sync.
+| Area | Status | Key limits | Guide |
+| --- | --- | --- | --- |
+| Batches and lifecycle | Supported subset | No navigation expansion | [Batching](/docs/2.x/editor-api/batching-and-errors) |
+| Paragraphs and ranges | Supported subset | No document-wide `start` or `end` offsets | [Text and ranges](/docs/2.x/editor-api/text-and-ranges) |
+| Search | Partial | `ignorePunct`, `ignoreSpace`, and `matchWildcards` set to `true` fail with `NotSupported` | [Search](/docs/2.x/editor-api/search-and-navigation) |
+| Bookmarks | Partial | No document-wide offsets | [Search](/docs/2.x/editor-api/search-and-navigation) |
+| Font formatting | Partial | 18 underline styles; 16-color highlight palette | [Formatting](/docs/2.x/editor-api/formatting) |
+| Paragraph formatting | Supported subset | Values on `Paragraph`; no full `ParagraphFormat` object | [Formatting](/docs/2.x/editor-api/formatting) |
+| Styles | Partial | Read-only definitions; `Body`, `Paragraph`, and `Range` `style` setters take paragraph styles only; `Table.style` takes a table style; `nameLocal` is the `styles.xml` name | [Formatting](/docs/2.x/editor-api/formatting) |
+| Lists | Partial | No picture bullets | [Lists](/docs/2.x/editor-api/lists) |
+| Tables | Partial | Grid and merge restrictions | [Tables](/docs/2.x/editor-api/tables) |
+| Inline pictures | Partial | PNG and JPEG; no floating picture writes | [Pictures](/docs/2.x/editor-api/pictures) |
+| Fields | Partial | Inert field types only; server evaluation needs measured pagination | [Fields](/docs/2.x/editor-api/fields) |
+| Sections and page setup | Partial | `Line`, `Page`, and `SectionNext` breaks only | [Page layout](/docs/2.x/editor-api/page-layout-and-stories) |
+| Footnotes and endnotes | Supported subset | No note creation | [Page layout](/docs/2.x/editor-api/page-layout-and-stories) |
+| Shapes and text boxes | Partial | Text stories only; no geometry writes, insertion, or deletion | [Page layout](/docs/2.x/editor-api/page-layout-and-stories) |
+| Content controls | Partial | No typed subtype objects; bound controls refuse writes | [Content controls](/docs/2.x/editor-api/content-controls) |
+| Comments and replies | Partial | Explicit author; no comment body replacement | [Comments](/docs/2.x/editor-api/comments) |
+| Tracked changes | Partial | `TrackAll` fails; table and wrapper boundaries refuse | [Tracked changes](/docs/2.x/editor-api/revisions) |
+| Hyperlinks | Partial | `Range.hyperlink` only | [Formatting](/docs/2.x/editor-api/formatting) |
 
-Disjoint plain-text edits can batch in ordinary paragraphs with direct text runs. Their returned ranges account for all edits in that transaction. The runtime rejects overlapping edits and batches that mix text edits with formatting, hyperlinks, or structural writes in the same paragraph. Rich paragraphs and browser suggesting edits need one text edit per paragraph per sync. See [Text and ranges](/docs/2.x/editor-api/text-and-ranges) for examples and recovery.
+## Identify extensions
 
-## Editing batches and runtime limits
-
-Batch independent reads and writes. Writes commit atomically at `sync()`. Supported read-derived proxies can trigger prerequisite reads before that commit. These reads use one revision; a concurrent change causes `StaleDocument`.
-
-Sync after creating a table, picture, list, field, or text range before configuring that returned object. Structural edits sharing a paragraph can conflict; split them into separate syncs and reconsider their targets. Different list levels can batch after list creation. Competing proxies for one level still conflict. Page-field result updates can share a sync with queries and other result updates. They cannot share a sync with layout-changing writes, because evaluation uses the measured document before those writes.
-
-## Measured page fields on a server
-
-Server `PAGE` and `NUMPAGES` updates require `pagination.measurer` configured with font resources. Font substitution can change page breaks and counts. Browser runtimes use the attached editor's measured layout.
-
-See [Fields and pagination](/docs/2.x/editor-api/fields#configure-measured-server-pagination) for setup and the runnable report agent, including font loading and cleanup.
-
-## Common DocxEditor additions
-
-These common members extend the Office.js-compatible subset.
+These members extend the Office.js shape:
 
 | Member | Purpose |
 | --- | --- |
-| `Body.bookmarks` | Enumerates bookmarks in one body story. |
-| `Body.revisions` | Enumerates revisions in one body story. |
-| `RevisionCollection.resolve()` | Resolves a selected batch or supported changes in one story and reports skipped decisions. |
-| `RevisionCollection.setAuthor()` | Changes the author of selected changes in one story, keeping them pending. |
-| `Document.footnotes` and `Document.endnotes` | Enumerate document notes. |
-| `NoteItem.text` | Reads the same plain text as `note.body.text`. |
-| `ContentControlCollection.getByTag()` and `getByTitle()` | Finds controls without a file ID. |
-| `ContentControl.setValue()` | Writes values for text, checkbox, date, and list controls. |
-| `ContentControl.isBound` | Reports whether custom XML binding exists. |
-| `ContentControl.subtype` | Reports the control type with DOCX terms. |
-| `Comment.text` and `CommentReply.text` | Read comment text without replacing the comment body. |
-| `Paragraph.uniqueLocalId` | Reads the paragraph identity for the active runtime. |
-| `Paragraph.readingOrder` | Sets and reads the direction the paragraph reads in. Office.js has no paragraph direction member. |
-| `getReviewItemRevisions()`, `getReviewItemRange()`, and `getReviewItemRangeOrNullObject()` | Return the changes a review item `key` names, or the range it covers, so a review panel can act on the same item through the object model. Office.js has no review queue. |
-| `DocxEditorRuntime.preview()` | Shows the edits of a callback in the page without writing them, then commits them as one undo step or discards them. Browser runtime only. Office.js has no preview. |
+| `Body.bookmarks`, `Body.revisions` | Enumerate one body story only |
+| `RevisionCollection.resolve()`, `setAuthor()` | Resolve a batch, or change authors, in one story |
+| `Document.footnotes`, `Document.endnotes`, `NoteItem.text` | Enumerate note parts and read note text |
+| `ContentControlCollection.getByTag()`, `getByTitle()` | Find controls without a file ID |
+| `ContentControl.setValue()`, `isBound`, `subtype` | Write typed values, preflight bindings (sync checks again), and report DOCX control types |
+| `Comment.text`, `CommentReply.text` | Read comment text |
+| `Paragraph.uniqueLocalId`, `Paragraph.readingOrder` | Paragraph identity for the runtime, and paragraph direction |
+| `getReviewItemRevisions()`, `getReviewItemRange()`, `getReviewItemRangeOrNullObject()` | Act on a review item `key`; see [Work with review items](/docs/2.x/editor-api/revisions#work-with-review-items) |
+| `DocxEditorRuntime.preview()` | Show edits before you commit them; browser only |
 
-`Body.bookmarks` and `Body.revisions` only cover that body's story. They do not combine the main body, headers, footers, and notes.
+On `Range.revisions`, `acceptAll()` and `rejectAll()` resolve every overlapping change whole, while `resolve()` and `setAuthor()` refuse with `NotSupported`.
 
-`Range.revisions` lists the changes the range overlaps in its own story. On that collection, `acceptAll()` and `rejectAll()` resolve every overlapping change whole, including structural changes that `items` omits, and fail if one of them is read-only. `resolve()` and `setAuthor()` refuse with `NotSupported`.
+## Find unavailable APIs
 
-The review item functions are infrastructure, not members of the Office-shaped classes. They take the request context and a key from `editor.getReviewItems()` or `useReview().items`. For more information, see [Work with review items](/docs/2.x/editor-api/revisions#work-with-review-items).
+Code that uses these APIs fails TypeScript compilation.
 
-`ContentControl.isBound` is a preflight check. `sync()` checks the binding again before it applies a write.
-
-## APIs that do not exist
-
-Code that uses these APIs fails during TypeScript compilation.
-
-| API | Available alternative |
+| API | Alternative |
 | --- | --- |
-| Picture list levels | Use text bullets with an explicit font. |
-| Shape geometry writes, shape insertion/deletion, and canvas editing | Use `Shape.body` for supported text-story edits. Geometry editing has no API alternative. |
-| Repeating-section and picture content-control objects | Use common `ContentControl` members for other control kinds. |
-| `ContentControl.xmlMapping` | Use `ContentControl.isBound` to detect a binding. Writes to bound controls still fail. |
-| `Hyperlink`, `HyperlinkCollection` | Use `Range.hyperlink` for one range. |
-| `Body.getHtml()`, `Body.getOoxml()`, `Paragraph.getText()` | Load `Body.text` or `Paragraph.text`. No OOXML or HTML result exists. `Range.insertOoxml()` accepts only one equation. |
-| `BookmarkCollection.exists()` | Load the collection and inspect its items. |
-| `Range.start`, `Range.end`, `Bookmark.start`, `Bookmark.end` | Use ranges and paragraph text. |
+| Picture list levels | Text bullets with an explicit font |
+| Shape geometry writes, insertion, deletion, and canvas editing | `Shape.body` for supported text edits |
+| Repeating-section and picture content-control objects | Common `ContentControl` members |
+| `ContentControl.xmlMapping` | `ContentControl.isBound`; bound writes still fail |
+| `Hyperlink`, `HyperlinkCollection` | `Range.hyperlink` |
+| `Body.getHtml()`, `Body.getOoxml()`, `Paragraph.getText()` | `Body.text` or `Paragraph.text`; `Range.insertOoxml()` accepts one equation |
+| `Style.font`, `Style.paragraphFormat`, `Style.delete`, `Document.addStyle`, `getByName`, `getItem` | `StyleCollection.getByNameOrNullObject()` |
+| `BookmarkCollection.exists()` | Load the collection and inspect its items |
+| `Range.start`, `Range.end`, `Bookmark.start`, `Bookmark.end` | Ranges and paragraph text |
 
-## Migrate an add-in
+Handle typed errors such as `NotSupported`, `NotImplemented`, and `ItemNotFound` for operations outside the subset.
 
-1. Replace `Word.run()` with a runtime from `DocxEditor.createServer()` or `DocxEditor.createBrowser()`.
-2. Keep the existing `load()` and `sync()` pattern.
-3. Apply the sync boundaries listed in [Differences that affect existing code](#differences-that-affect-existing-code).
-4. Check the [compatibility matrix](#compatibility-matrix) for every object your add-in uses.
-5. Handle typed errors such as `NotSupported`, `NotImplemented`, and `ItemNotFound`.
+## Interpret compatibility reports
 
-## How compatibility is checked
+CI compares the published declarations with a pinned `@types/office-js` reference and compiles representative Office.js code against them. The package does not include or fetch the official declarations.
 
-The repository keeps a reviewed manifest of supported Word API symbols. CI compares the authored TypeScript declarations with a pinned `@types/office-js` reference. CI also compiles representative Word code against the DocxEditor declarations.
+- The broad report covers editing methods and property writes. It excludes reads, navigation, host setup, enums, and support types.
+- A separate profile measures 81 document-editing members.
+- Signature percentages do not prove runtime equivalence or success on arbitrary documents. Read the per-endpoint runtime notes.
+- The shape subset belongs to `WordApiDesktop 1.2` and does not extend the 81-member profile.
 
-For a document editing compatibility report, run this command from the repository root:
+For report scope and maintenance, see the [compatibility report guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/compat/README.md).
 
-```bash
-bun run --filter '@docx-editor.dev/editor-api' compat:report
-```
-
-The report compares editing methods and property writes with actual public source exports. The scope is defined in `packages/editor-api/compat/editing-scope.json`. Read-only APIs, navigation, host setup, enums, and support types are excluded. Property checks compare setter types without counting getter differences. It lists matching, differing, and missing signatures, with separate runtime notes from `packages/editor-api/compat/runtime-notes.json`. Read `packages/editor-api/compat/reports/report.md` for all endpoints, or `report.json` for expected and actual signatures. CI shows signature percentages and uploads the full report as an informational artifact. These percentages do not measure runtime equivalence or include other Office hosts.
-
-The same command reports an 81-member document-editing profile from `packages/editor-api/compat/agent-editing-scope.json`. Read `packages/editor-api/compat/reports/agent-editing-summary.md` for percentages by area, and `agent-editing-report.md` or `agent-editing-report.json` for endpoint details. Member presence counts exposed members; exact signature percentage counts matching signatures out of 81. Neither percentage proves Word-equivalent behavior or the success rate for arbitrary documents. Use endpoint runtime notes and the runnable consumer workflows to assess your required operations. Update `packages/editor-api/compat/runtime-notes.json` when a supported domain or runtime difference changes.
-
-The published shape subset belongs to `WordApiDesktop 1.2`, outside the selected conformance target. Its presence does not extend the measured 81-member profile. For supported operations, see [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories#read-and-edit-text-boxes).
-
-The package does not include Microsoft's declarations. Installation, tests, and builds do not fetch them.
-
-## Next steps
+## See also
 
 - [Editing API overview](/docs/2.x/editor-api)
+- [API member directory](/docs/2.x/editor-api/reference)
 - [Editing API reference](/docs/2.x/api/editor-api)

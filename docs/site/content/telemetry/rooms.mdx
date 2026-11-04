@@ -1,37 +1,56 @@
 ---
 title: 'Rooms, people, and memory'
-description: 'How collaboration server telemetry counts the people and memory in each room, how to find a large room without room names in metrics, and how to label metrics by room.'
+description: 'How collaboration server telemetry counts people and memory per room, finds large rooms without room names in metrics, and labels metrics by room.'
 category: 'Telemetry'
 ---
 
 <Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
 
-Use room metrics to build dashboards and find rooms that use too much memory. For setup instructions, see [Collaboration servers](/docs/2.x/telemetry/servers).
+For setup, see [Collaboration servers](/docs/2.x/telemetry/servers).
 
-## People and memory in each room
+## Configure room measurements
 
-Participant counts come from each room's awareness states. One person with two tabs counts twice. Connections count separately, with one connection per socket and room.
+Pass room options to `roomTelemetry` or `withCollaborationTelemetry`:
 
-With the Redis extension, each Hocuspocus instance sees participants across all instances that share a room. Do not add those counts together. With `perRoomSeries`, take the `max` for each room across instances, then add the room totals. Without per-room series, the `max` across instances is exact only when all instances hold the same rooms. Otherwise, it gives a lower bound.
+```ts
+import { prometheusRegistry } from '@docx-editor.dev/telemetry/prometheus';
+import { hmacRoomLabel, roomTelemetry } from '@docx-editor.dev/telemetry/server';
 
-JavaScript cannot measure one room's heap usage. Room metrics measure encoded Yjs state, stored images and other files, and updates that await storage. Compare these values with process memory metrics, such as `prom-client` default metrics, to check whether memory grows with rooms.
+const metrics = prometheusRegistry();
+const rooms = roomTelemetry({
+  exporters: [metrics],
+  roomLabel: hmacRoomLabel(process.env.ROOM_LABEL_SECRET),
+});
+```
 
-Each sample encodes state only for rooms that changed. Interval sampling processes one room at a time and lets other work run between rooms. To skip encoding, set `measureState: false`.
+| Option | Default | Description |
+| --- | --- | --- |
+| `sampleInterval` | `60000` ms | `false` stops the timer. Then call `rooms.sample()`, or pass `sampleBeforeScrape: rooms` to `serveMetrics`. |
+| `measureState` | `true` | Encodes changed rooms' Yjs state once per sample. |
+| `roomLabel` | Process-local index, such as `room-3` | `hmacRoomLabel(secret)` gives a stable hidden label and throws on an empty secret. `(name) => name` shows names. |
+| `perRoomSeries` | `false` | Adds `room`-labeled gauges. |
 
-The default sample interval is 60 seconds. To sample once per scrape, set `sampleInterval: false`. Then call `rooms.sample()` before rendering metrics, or pass `sampleBeforeScrape: rooms` to `serveMetrics`.
+## Interpret room counts and memory
 
-With the Redis extension, only the instance that holds a room's store lock stores the room. Other instances skip the store. Telemetry does not time or count skipped stores. Pending updates remain pending on each instance until that instance completes a store.
+- Participants come from awareness states, so they count tabs, not people.
+- Connections count separately, one per socket and room.
+- Memory is encoded Yjs state, stored files, and updates awaiting storage. It is not heap usage. Compare it with process memory metrics.
+- Histograms record one entry per room per sample. For queries, see [Dashboards](/docs/2.x/telemetry/dashboards).
 
-## Per-room detail
+## Inspect an individual room
 
-Metrics omit room names to keep names private and limit the number of series. Histograms record participant counts and memory per room, with one entry per room in each sample. Query them over a time window. For example, use `histogram_quantile(0.95, rate(docx_editor_collab_room_memory_bytes_bucket[5m]))` for the 95th percentile. For the mean, divide `rate(..._sum[5m])` by `rate(..._count[5m])`.
+Expose `rooms.list()` only to administrators. Each row has `room`, `participants`, `connections`, `stateBytes`, `blobBytes`, `pendingBytes`, `nodes`, `ageSeconds`, `idleSeconds`, and `limitRatio` (largest share of any room limit).
 
-To find a large room, expose `rooms.list()` through an endpoint that only administrators can access. Each row includes the room label, participant and connection counts, state bytes, file bytes, pending bytes, and node count. It also includes age, idle time, and the largest share of any room limit.
+With `perRoomSeries: true`, each room gets `docx_editor_collab_room_participants_current` and `docx_editor_collab_room_memory_current_bytes` gauges. Only the default label or `hmacRoomLabel` is accepted; any other `roomLabel` throws. Series end when the room closes.
 
-By default, the room label is an index that is valid only in the current process, such as `room-3`. To get a stable label that does not reveal the name, use `roomLabel: hmacRoomLabel(process.env.ROOM_LABEL_SECRET)`. It throws at startup when the secret is empty. To show real names, use `roomLabel: (name) => name`.
+## Limits
 
-## Label metrics by room
+- With Redis, instances report overlapping participants. Never add them.
+- With `perRoomSeries`, take the per-room `max`, then sum. Without it, the global `max` is a lower bound unless all instances hold the same rooms.
+- With Redis, only the store-lock holder stores. Skipped stores are not timed, and pending updates stay pending per instance.
+- Each room adds series. Disable `perRoomSeries` on servers with many rooms.
 
-To create separate series for each room, set `perRoomSeries: true`. Use the default label or `roomLabel: hmacRoomLabel(secret)`. Any other `roomLabel` throws, which prevents room names from becoming labels.
+## See also
 
-Each room gets `docx_editor_collab_room_participants_current` and `docx_editor_collab_room_memory_current_bytes` gauges with a `room` label. Telemetry removes these series when the room closes. Each room adds series, so leave this option disabled on servers with many rooms.
+- [Metrics](/docs/2.x/telemetry/metrics)
+- [Dashboards](/docs/2.x/telemetry/dashboards)

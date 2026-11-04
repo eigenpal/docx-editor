@@ -1,28 +1,21 @@
 ---
 title: 'Page layout and stories'
-description: 'Edit section page setup, address headers and footers, insert breaks, and traverse footnotes and endnotes.'
+description: 'Edit section page setup, address headers and footers, insert breaks, and traverse footnotes, endnotes, and text boxes.'
 category: 'Editing API'
 order: 60
 ---
 
-A story is a text container, such as the main body, a header, a footer, or a note. A section controls page layout for part of the main story.
+A story is a text container: the main body, a header, a footer, a note, or a text box. A section controls page layout for part of the main story. For runtime setup, see [Runtime and setup](/docs/2.x/editor-api/runtime).
 
-Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
+## Set page geometry
 
-## Inspect sections and page setup
-
-`Document.sections` returns `SectionCollection` with `items` and `getFirst()`. `Section.getNext()` returns the next section and fails with `ItemNotFound` at the end. `Section.body` returns the shared main body, not a section-limited text slice. `Section.pageSetup` addresses that section's page properties.
-
-Resolve a section before loading or changing its page setup:
+Resolve a section before you load or change its page setup:
 
 ```ts
 await runtime.run(async (context) => {
   const section = context.document.sections.getFirst();
   await context.sync();
   const setup = section.pageSetup;
-  setup.load(['pageWidth', 'pageHeight', 'orientation']);
-  await context.sync();
-  console.log(setup.pageWidth, setup.pageHeight);
   setup.orientation = 'Landscape';
   setup.leftMargin = 54;
   setup.rightMargin = 54;
@@ -32,17 +25,17 @@ await runtime.run(async (context) => {
 
 | `PageSetup` property | Unit or domain |
 | --- | --- |
-| `pageWidth`, `pageHeight` | Positive supported dimensions in points |
-| `topMargin`, `bottomMargin`, `leftMargin`, `rightMargin` | Supported finite margin values in points |
-| `orientation` | `Portrait` or `Landscape`, also available through `PageOrientation` |
+| `pageWidth`, `pageHeight` | Positive dimensions in points |
+| `topMargin`, `bottomMargin`, `leftMargin`, `rightMargin` | Finite margins in points |
+| `orientation` | `Portrait` or `Landscape` (`PageOrientation`) |
 
-Assignments on one page-setup proxy coalesce per sync. The engine validates dimensions, margins, and the resulting page geometry. The runtime rejects page-layout changes while tracking changes. After layout changes, update page fields separately using [Fields and pagination](/docs/2.x/editor-api/fields).
+The engine validates the resulting geometry. Page setup writes refuse while tracking changes. Update page fields afterward in a separate sync; see [Fields and pagination](/docs/2.x/editor-api/fields).
+
+`Section.body` returns the shared main body, not a section-limited slice. `Section.getNext()` fails with `ItemNotFound` after the last section.
 
 ## Address headers and footers
 
-`Section.getHeader(type)` and `getFooter(type)` return `Body` proxies. `HeaderFooterType` accepts `Primary`, `FirstPage`, or `EvenPages`. Each variant is its own story scope. A missing header or footer returns a deferred empty body. Every read on it answers as an empty story, so its collections and searches are empty. Reading does not create the story. Its first supported content insertion creates the missing story.
-
-This example writes a primary footer after resolving its body:
+The following example writes a primary footer:
 
 ```ts
 await runtime.run(async (context) => {
@@ -56,17 +49,11 @@ await runtime.run(async (context) => {
 });
 ```
 
-Use the returned body's paragraph, search, bookmark, field, and review accessors for that story. `Body.bookmarks` and `Body.revisions` do not combine separate stories. The public surface does not expose header/footer linkage or first-page layout toggles.
+`getHeader(type)` and `getFooter(type)` take `Primary`, `FirstPage`, or `EvenPages` and return a `Body` story. A missing story reads empty, and its first supported insertion creates it. Linkage and first-page toggles are unavailable.
 
-## Insert line, page, and section breaks
+## Insert a break
 
-`Range.insertBreak(breakType, insertLocation)` supports `Line`, `Page`, and `SectionNext`. The insertion location must be `Before` or `After`. The exported `BreakType` also names unsupported kinds. The runtime rejects `Next` and other section break kinds.
-
-A `Line` break is a manual line break inside the paragraph. It works in every story, including headers, footers, notes, table cells, and text boxes. It can share a sync with other edits, including text edits in the same paragraph. With `TrackMineOnly`, it becomes a tracked insertion.
-
-A next-page section break requires a main-body paragraph outside a table. With `TrackMineOnly`, `Page` and `SectionNext` become tracked insertions. A page break is an inserted run in its paragraph. A section break is an inserted paragraph mark that carries the new section. **Reject** removes the break; for a section break, it also joins the paragraphs and removes the section. If the section that the break starts does not start on a new page, a tracked `SectionNext` fails with `NotSupported`, because the break would change the section type.
-
-Queue a page or section break alone in its write transaction:
+The following example adds a page break after the first paragraph:
 
 ```ts
 await runtime.run(async (context) => {
@@ -80,13 +67,20 @@ await runtime.run(async (context) => {
 });
 ```
 
-Read affected sections again after a section break changes their structure. Do not reuse old indexes as permanent section identities.
+`Range.insertBreak(breakType, insertLocation)` takes `Before` or `After`:
+
+| `BreakType` | Where | Batching | With `TrackMineOnly` |
+| --- | --- | --- | --- |
+| `Line` | Any story, including cells and text boxes | Can share a sync with other edits | Tracked insertion |
+| `Page` | An inserted run in its paragraph | Alone in its write sync | Tracked insertion; reject removes it |
+| `SectionNext` | A main-body paragraph outside a table | Alone in its write sync | Tracked insertion; reject joins the paragraphs and removes the section. Refuses with `NotSupported` if the section does not start on a new page |
+| `Next` and other section kinds | None | Refused | Refused |
+
+Read sections again after a section break. Do not reuse old indexes as section identities.
 
 ## Read footnotes and endnotes
 
-`Body.footnotes` and `Body.endnotes` return distinct referenced notes in reference order. Each returns `NoteItemCollection`, which exposes `items` and `getFirst()`. A table-cell body includes only its own references. A `NoteItem` exposes loaded `type` and `text`, plus its own `body`. `NoteItemType` is `Footnote` or `Endnote`. `NoteItem.text` reads the same plain text as the note body's text.
-
-Read note text in two batches:
+The following example reads footnote text in two batches:
 
 ```ts
 const notes = await runtime.run(async (context) => {
@@ -99,62 +93,18 @@ const notes = await runtime.run(async (context) => {
 });
 ```
 
-`NoteItem.getNext()` advances within the same note kind. It fails with `ItemNotFound` after the last note. Use `note.body` for supported structured reading and editing within that note story. Separate writes to different notes with `context.sync()`.
+| Member | Behavior |
+| --- | --- |
+| `Body.footnotes`, `Body.endnotes` | Referenced notes in order; a cell body lists its own references only |
+| `NoteItem.type`, `text`, `body` | `Footnote` or `Endnote`, plain text, and the note story |
+| `NoteItem.getNext()` | Next note of the same kind; `ItemNotFound` after the last |
+| `NoteItem.delete()` | Removes the note and its references; sync pending work first and run it alone |
 
-`NoteItem.delete()` removes the note and its references. Run note deletion alone in its sync. Sync all pending reads or writes before queuing note deletion. Note creation and reference-number formatting are not exposed by this subset.
-
-The legacy `Document.footnotes` and `Document.endnotes` accessors enumerate note parts. They are DocxEditor extensions, outside the Office.js document model.
+Note creation is unavailable. `Document.footnotes` and `Document.endnotes` are DocxEditor extensions that enumerate note parts.
 
 ## Read and edit text boxes
 
-`Body.shapes` and `Paragraph.shapes` return supported floating and inline shapes in reading order. Each returns `ShapeCollection`, with `items`, `getFirst()`, `getFirstOrNullObject()`, and `getByTypes(types)`. An inline picture appears as a `Picture` shape and also remains in `inlinePictures`. A `Shape` exposes read-only `id`, `name`, and `type`. Load these properties before reading them.
-
-`ShapeType` provides these enum members:
-
-| Member                     | Value            |
-| -------------------------- | ---------------- |
-| `ShapeType.textBox`        | `TextBox`        |
-| `ShapeType.geometricShape` | `GeometricShape` |
-| `ShapeType.picture`        | `Picture`        |
-| `ShapeType.group`          | `Group`          |
-| `ShapeType.canvas`         | `Canvas`         |
-| `ShapeType.unsupported`    | `Unsupported`    |
-
-A text box's `body` is its own story. Read, search, and edit it with supported `Body` members. The main body's text, search, comments, and tracked changes exclude text-box content. Use the text-box body's tracked changes to review changes there. Text-box `insertComment` refuses with `InvalidArgument`.
-
-Text boxes and geometric shapes in the main body, headers, and footers expose their own `body`. If the file stores no text story for such a shape, its `body` reads as an empty story. Writes to that empty story refuse with `InvalidArgument`, and `debugInfo.innerError.code` is `edit.unsupported-story`. Pictures, groups, lines, connectors, and linked text boxes that continue another box refuse `body` with `InvalidArgument`. Shapes inside notes and text boxes are listed, but their `body` refuses with `InvalidArgument`.
-
-The following example replaces a client name when the main body contains exactly one text box:
-
-```ts
-import { ShapeType } from '@docx-editor.dev/editor-api';
-
-await runtime.run(async (context) => {
-  const boxes = context.document.body.shapes.getByTypes([ShapeType.textBox]);
-  boxes.load('items');
-  await context.sync();
-  if (boxes.items.length !== 1) throw new Error('Expected one text box.');
-
-  const body = boxes.items[0]!.body;
-  await context.sync(); // Resolve the text-box story before searching it.
-
-  const matches = body.search('Acme Holdings');
-  matches.load('items');
-  await context.sync();
-  if (matches.items.length !== 1) throw new Error('Expected one match.');
-
-  matches.items[0]!.insertText('Beta Logistics', 'Replace');
-  await context.sync();
-});
-```
-
-Sync after accessing `shape.body` and before searching it. Separate writes to different stories with `context.sync()`. Shape geometry, text frames, and shape insertion or deletion are not exposed.
-
-### Find text that lives in text boxes
-
-Some documents keep their visible text in floating text boxes. Converted web pages and forms often have this layout. The main body of such a document can hold only empty paragraphs that anchor the boxes. If `body.text` is empty or short, read the text boxes before you choose where to edit. Do not insert text into an empty anchor paragraph: its text appears behind or under the boxes.
-
-The following example reads every text box and geometric shape in one sync, then redlines one match:
+The following example reads every text box and shape story, then redlines one match:
 
 ```ts
 import { ShapeType } from '@docx-editor.dev/editor-api';
@@ -167,11 +117,8 @@ await runtime.run(async (context) => {
   shapes.load('items/id');
   await context.sync();
 
-  const bodies = shapes.items.map((shape) => {
-    shape.body.load('text');
-    return shape.body;
-  });
-  await context.sync();
+  const bodies = shapes.items.map((shape) => shape.body.load('text'));
+  await context.sync(); // Resolve each story before you search it.
 
   const target = bodies.find((body) => body.text.includes('Acme Holdings'));
   if (!target) throw new Error('No text box holds the phrase.');
@@ -185,14 +132,32 @@ await runtime.run(async (context) => {
 });
 ```
 
-Repeated `getByTypes()` calls keep only types allowed by every filter. Unknown type values refuse with `InvalidArgument`. Duplicate or missing DrawingML drawing IDs refuse shape enumeration.
+`Body.shapes` and `Paragraph.shapes` list shapes in reading order. A `Shape` has read-only `id`, `name`, and `type`, plus `body`. `ShapeType` is `TextBox`, `GeometricShape`, `Picture`, `Group`, `Canvas`, or `Unsupported`.
 
-The API reads alternate drawing content through the branch selected for layout. Shapes selected through a legacy VML fallback are not listed. For supported DrawingML text-box stories, saving also updates the retained VML copy.
+Main-body reads, search, comments, and revisions exclude text-box content. If `body.text` is empty or short, read the text boxes first. Do not insert into an empty anchor paragraph; its text appears behind the boxes.
 
-A standalone legacy VML shape (`w:pict`) is listed with the number in its shape ID. For example, `o:spid="_x0000_s1025"`, or `id="_x0000_s1025"` without `o:spid`, gives `id` 1025. Its `name` is the `id` attribute. A text box shape (`#_x0000_t202`) is a `TextBox`, another shape with text is a `GeometricShape`, and a VML picture is a `Picture`. WordArt, horizontal rules, and an embedded object preview inside `w:pict` are `Unsupported`. An embedded object in `w:object` is not listed. Tracked changes in a listed VML text box belong to its `body`, so the main body's `acceptAll()` and `rejectAll()` leave them pending, as they do for DrawingML text boxes.
+| Shape | `body` behavior |
+| --- | --- |
+| Text box or geometric shape in the body, a header, or a footer | Its own story |
+| Such a shape with no stored text story | Reads empty; writes refuse with `InvalidArgument`, `innerError.code` `edit.unsupported-story` |
+| Picture, group, line, connector, or linked continuation text box | Refuses with `InvalidArgument` |
+| Shape inside a note or text box | Listed; `body` refuses with `InvalidArgument` |
+| Inline picture | Listed as `Picture`; also in `inlinePictures` |
 
-A VML shape without a numbered shape ID is not listed. Inline and floating VML shapes number separately, so two shapes can share a number. A VML shape whose number another shape also uses is not listed either. The text of a VML text box that is not listed is not reachable through the API, and its tracked changes stay with the owner story.
+## Limits
 
-## Next steps
+- Separate writes to different stories into different syncs.
+- Text-box `insertComment()` refuses with `InvalidArgument`. Review text-box changes through that body's revisions.
+- Repeated `getByTypes()` calls keep only types that every filter allows. Unknown types refuse with `InvalidArgument`.
+- Duplicate or missing DrawingML drawing IDs refuse shape enumeration.
+- Shapes selected through a legacy VML fallback are not listed. Saving a DrawingML text box also updates its retained VML copy.
+- A standalone VML shape (`w:pict`) is listed only with a numbered shape ID that no other shape uses. Text in an unlisted VML text box is unreachable, and its tracked changes stay with the owner story.
+- A VML shape's `id` is the number in `o:spid`, or in `id` when `o:spid` is absent. Its `name` is the `id` attribute.
+- VML template `#_x0000_t202` returns `TextBox`, and other text-bearing VML shapes return `GeometricShape`. VML pictures return `Picture`. VML text paths, horizontal rules, and embedded object previews return `Unsupported`.
+- Shape geometry, text frames, and shape insertion or deletion are unavailable.
 
-See [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Comments](/docs/2.x/editor-api/comments), and [API member directory](/docs/2.x/editor-api/reference).
+## See also
+
+- [Text and ranges](/docs/2.x/editor-api/text-and-ranges)
+- [Fields and pagination](/docs/2.x/editor-api/fields)
+- [API member directory](/docs/2.x/editor-api/reference)

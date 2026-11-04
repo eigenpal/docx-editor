@@ -1,31 +1,15 @@
 ---
 title: 'Tables and cells'
-description: 'Create rectangular tables, edit values, add or delete rows and columns, and format cell bodies.'
+description: 'Create rectangular tables, edit values, add or delete rows and columns, merge cells, and format cell bodies.'
 category: 'Editing API'
 order: 57
 ---
 
-Use `Body.tables` or `Range.tables` to discover tables in the addressed scope. `Table`, `TableRow`, and `TableCell` are proxies with separate collections. You can edit rectangular tables, merge cells, and split them. Structural edits can fail on tables with an unsupported structure.
-
-Text in a vertical merge over three or more protected body rows can continue across pages. Each row retains its own fixed or minimum height. The text and cached field values retain the original head cell address on every page. Center and bottom alignment apply within each page fragment. This path supports nonoverlapping merges over the same rows, horizontal text, and supported paragraph and run formatting. Drawings, notes, nested tables, manual breaks, floating tables, and unknown content retain their existing layout. If the last row of the merge has a minimum height, it grows to hold the remaining text. If that row cannot split, it moves to the next page. If it is also taller than a page, it starts on a new page and then splits. Exact spans that cannot hold the complete text on their page fragments retain clipping.
-
-Imported rows with omitted leading or trailing grid cells retain borders on their exposed sides. Explicit cell borders take precedence over table borders. This rendering support does not expand the supported structural editing operations.
-
-Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
-
-Imported cell borders can include `w:tl2br` and `w:tr2bl` diagonals. Table styles can supply them. Direct `nil` or `none` clears an inherited diagonal. Diagonals use the cell rectangle, including a vertical merge, in the editor and PDF export. Each repeated header or page fragment uses its own rectangle. A continuous diagonal across page fragments is not supported. Diagonals do not change cell size or text placement. The border toolbar and HTML clipboard do not add or transfer diagonal borders.
+Use `Body.tables` or `Range.tables` to find tables. Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime), and use document proxies inside `runtime.run()`.
 
 ## Insert a table
 
-Insert a table with one of these members. Counts must be positive integers. Supplied values must form a matching rectangular string matrix.
-
-| Member | Location |
-| --- | --- |
-| `Body.insertTable(rowCount, columnCount, location, values?)` | `Start` or `End` of the body |
-| `Paragraph.insertTable(rowCount, columnCount, location, values?)` | `Before` or `After` the paragraph |
-| `Range.insertTable(rowCount, columnCount, location, values?)` | `Before` or `After` the range |
-
-A table at the end of the body is followed by an empty paragraph, because a body ends with a paragraph. A table inside a table cell refuses with `InvalidArgument`. If the body starts with a table, `Body.insertTable()` at `Start` refuses with `InvalidArgument`, because two tables need a paragraph between them. Create the table, then configure it after sync:
+Insert the table, sync, then configure it:
 
 ```ts
 await runtime.run(async (context) => {
@@ -40,120 +24,102 @@ await runtime.run(async (context) => {
 });
 ```
 
-You can load the returned `Table` in the same sync. Edits to it require a completed sync first.
+`Body.insertTable(rowCount, columnCount, location, values?)` takes `Start` or `End`. `Paragraph.insertTable()` and `Range.insertTable()` take `Before` or `After`. Counts must be positive integers, and `values` must be a matching rectangular string matrix.
+
+A new table inside a table cell refuses with `InvalidArgument`. So does `Body.insertTable()` at `Start` when the body already starts with a table. A table inserted at the body's end is followed by an empty paragraph.
 
 ## Read table values and cells
 
-Load scalar table properties explicitly:
+Load only the properties you read:
 
 ```ts
 await runtime.run(async (context) => {
   const table = context.document.body.tables.getFirstOrNullObject();
   table.load(['values', 'rowCount', 'columnCount']);
   await context.sync();
-  if (table.isNullObject) return;
-  console.log(table.values);
-
-  const cell = table.getCell(0, 0);
-  cell.load('value');
-  await context.sync();
-  console.log(cell.value);
+  if (table.isNullObject) return null;
+  return table.values;
 });
 ```
 
-`Table.getCell(rowIndex, cellIndex)` uses zero-based indexes. `Table.rows` returns `TableRowCollection`; `TableRow.cells` returns `TableCellCollection`. All three table collections expose `items`, `getFirst()`, and `getFirstOrNullObject()`. Load collection membership before reading item properties.
-
-`TableCell.body` exposes the cell's `Body` for text, paragraphs, search, and formatting. Resolve the cell and its body before dependent navigation. To preserve rich cell content, edit an exact range within that body. Whole-cell replacement supports ordinary single-paragraph text and preserves its existing font formatting. The runtime rejects multiline values, nested blocks, and complex cell content. Cell-body font reads remain scoped to that cell. You can navigate existing nested rectangular tables, but cannot create them.
-
-## Edit values and structure
-
 | Member | Behavior |
 | --- | --- |
-| `Table.values` | Read or replace the table's string matrix |
-| `TableCell.value` | Read or replace one cell's plain text |
-| `Table.rowCount`, `Table.columnCount` | Loaded, read-only dimensions |
-| `Table.addRows(location, rowCount, values?)` | Add rows at `Start` or `End`; return `TableRowCollection` |
-| `TableRow.insertRows(location, rowCount, values?)` | Add rows `Before` or `After` this row; return `TableRowCollection` |
-| `Table.addColumns(location, columnCount, values?)` | Add columns at `Start` or `End`; return `void` |
-| `Table.deleteRows(rowIndex, rowCount?)` | Delete rows from a zero-based index; default count is one |
-| `Table.deleteColumns(columnIndex, columnCount?)` | Delete columns from a zero-based index; default count is one |
-| `Table.delete()` | Delete the table and clean up its references |
+| `Table.values` | Read or replace the string matrix. Tables with merged cells allow reads but refuse a whole-table replacement. |
+| `TableCell.value` | Read or replace one cell's plain text. Keeps the font formatting. |
+| `Table.rowCount`, `Table.columnCount` | Read-only dimensions. |
+| `Table.getCell(rowIndex, cellIndex)` | A cell by row and in-row cell index. In merged tables, the cell index differs from the grid column. |
+| `Table.rows`, `TableRow.cells` | Collections with `items`, `getFirst()`, and `getFirstOrNullObject()`. |
+| `TableCell.body` | The cell's `Body`, for text, paragraphs, search, and formatting. |
 
-Value matrices must match the affected row and column dimensions. Do not assume ragged matrices or implicit resizing work. Deleting all rows or all columns removes the table. `Table.deleteRows()` works on merged tables. If a vertical merge starts in a deleted row, the next row starts the merge. If no later row continues the merge, the next row is no longer merged. If the row above the deleted row has a merged cell over the same grid columns, the next row joins that merge instead. Row deletion also works on tables whose rows have different cell counts. The deleted row's content is removed. In `TrackMineOnly` mode, merges change only when the deletion is accepted. If a cell or row cannot be placed in the table grid, the deletion refuses with `InvalidArgument`. `Table.delete()` can remove an existing merged table. Deletion can still fail if the table is protected or its surrounding structure is unsupported. Sync structural changes before addressing newly added cells or relying on changed indexes.
+Whole-cell replacement refuses multiline values, nested blocks, and complex content. To keep rich content, edit a range inside `TableCell.body`.
 
-Row insertion preserves unrelated merged headers when the source row has ordinary cells covering the table grid. Each new cell, in a row or a column, copies its source cell's paragraph formatting. Values written into it take the source paragraph mark's formatting. The source cell's text runs do not set it, so a bold label at the start of a source cell does not make new values bold. `addRows()` uses the first or last row as its source. `insertRows()` uses the addressed row. Merged source rows, row offsets, hidden source cells, and boundaries crossing vertical merges refuse with `InvalidArgument`. Tables with merges require an explicit grid. Other table mutations retain their documented restrictions.
+## Add or remove rows and columns
 
-For example, insert before the first ordinary row after a merged header:
-
-```ts
-const table = context.document.body.tables.getFirst();
-table.rows.load('items');
-await context.sync();
-const source = table.rows.items[1];
-if (!source) throw new Error('Expected an ordinary row after the header');
-source.insertRows('Before', 1, [['Item', 'Price']]);
-await context.sync();
-```
-
-## Merge and split cells
-
-| Member | Behavior |
-| --- | --- |
-| `Table.mergeCells(topRow, firstCell, bottomRow, lastCell)` | Merge a rectangle of cells into one; return the merged `TableCell` |
-| `TableCell.split(rowCount, columnCount)` | Split a cell into rows and columns of equal size; return `void` |
-
-`mergeCells()` takes two cells by zero-based row index and in-row cell index, the way `rows.items[r].cells` lists them, and merges the rectangle they span. A merged cell counts once in its row. `bottomRow` must not be above `topRow`, but either cell can lie further left. The rectangle grows to include whole merged cells. If a cell crosses the rectangle's edge, or the rectangle holds only one cell, the merge refuses with `InvalidArgument` and the diagnostic code `edit.table-merge-not-rectangle`. The merged cell keeps the content of every cell that had content, in reading order, one paragraph for each cell. In the same sync, you can set the returned cell's `value`, `shadingColor`, and `verticalAlignment`. Shading and vertical alignment apply to the whole merged cell. A text or formatting edit in the table refuses with `ConflictingChanges` until you sync, because the merge moves paragraphs between cells. A `value` write refuses with `InvalidArgument` and the diagnostic code `edit.unsupported-content` when the merged cell holds more than one paragraph. To replace its text, edit a range in `TableCell.body`.
-
-`split()` takes counts from 1 through 63. New columns get equal widths, and cells in other rows widen so they keep their width. A cell that is merged over several rows splits only into a number of rows that divides its row count. Splitting a one-row cell into rows adds rows to the table, and the other cells of that row stay merged across the new rows. The first new cell keeps the content. Counts the cell cannot take refuse with `InvalidArgument` and the diagnostic code `edit.table-split-unsupported`, for example columns narrower than the minimum column width.
-
-For example, build a table with a merged header row:
-
-```ts
-const table = context.document.body.getRange('End').insertTable(3, 3, 'After', [
-  ['Quarterly results', '', ''],
-  ['Region', 'Q1', 'Q2'],
-  ['North', '10', '12'],
-]);
-await context.sync();
-const header = table.mergeCells(0, 0, 0, 2);
-header.value = 'Quarterly results';
-header.verticalAlignment = 'Center';
-await context.sync();
-```
-
-Merge and split have no tracked form of their own. In `TrackMineOnly` mode, they work only inside a table that is your own pending insertion, with no pending edits from another author. The rows, cells, and paragraph marks that they add join that insertion. Accepting the insertion keeps the new shape, and rejecting it removes the whole table. In any other table, both refuse with `NotSupported` and the diagnostic code `edit.tracked-structure-unsupported`. With tracking off, cells with a pending row or cell revision refuse with `NotImplemented`.
-
-For example, propose a table with a merged header row:
+Each row or column addition or deletion runs alone in its sync, even across tables:
 
 ```ts
 await runtime.run(async (context) => {
-  context.document.changeTrackingMode = 'TrackMineOnly';
-  const table = context.document.body.insertTable(3, 3, 'End', [
+  const table = context.document.body.tables.getFirst();
+  table.rows.load('items');
+  await context.sync();
+  const source = table.rows.items[1];
+  if (!source) throw new Error('Expected an ordinary row after the header');
+  source.insertRows('Before', 1, [['Item', 'Price']]);
+  await context.sync();
+});
+```
+
+| Member | Behavior |
+| --- | --- |
+| `Table.addRows(location, rowCount, values?)` | Adds rows at `Start` or `End`, copying the first or last row. Returns `TableRowCollection`. |
+| `TableRow.insertRows(location, rowCount, values?)` | Adds rows `Before` or `After`, copying this row. |
+| `Table.addColumns(location, columnCount, values?)` | Adds columns at `Start` or `End`. Returns `void`. Requires a table grid. A merged table refuses `values`: add the columns, sync, then fill the cells. |
+| `Table.deleteRows(rowIndex, rowCount?)` | Deletes rows. The default count is one. Works on merged and ragged tables. |
+| `Table.deleteColumns(columnIndex, columnCount?)` | Deletes columns. The default count is one. Partial deletion requires a grid. |
+| `Table.delete()` | Deletes the table, including merged tables. |
+
+- Deleting every row or column removes the table.
+- New cells copy the source cell's paragraph formatting, and new values take its paragraph mark's formatting.
+- Row insertion into a table with merged cells requires a table grid.
+- Merged source rows, row offsets, hidden source cells, cells outside the grid, and boundaries across vertical merges refuse with `InvalidArgument`.
+- Do not combine structural changes with values or formatting. Sync before you use new cells or indexes.
+
+## Merge and split cells
+
+Merge a rectangle, then set the merged cell in the same sync:
+
+```ts
+await runtime.run(async (context) => {
+  const table = context.document.body.getRange('End').insertTable(3, 3, 'After', [
     ['Quarterly results', '', ''],
     ['Region', 'Q1', 'Q2'],
     ['North', '10', '12'],
   ]);
   await context.sync();
-  table.mergeCells(0, 0, 0, 2);
+  const header = table.mergeCells(0, 0, 0, 2);
+  header.value = 'Quarterly results';
+  header.verticalAlignment = 'Center';
   await context.sync();
 });
 ```
 
-In collaboration, merge and split synchronize, undo, and survive reconnect and reopen, also inside a proposed table. Text that a participant types into an empty cell while another participant merges it away is discarded. Concurrent merges, splits, and column edits of one table converge, but they can leave a row that ends before the last grid column. Column edits keep that row ending where it does. A merge or split that needs the missing part of that row refuses. Merged tables still accept `addRows()`, `insertRows()`, `addColumns()` without values, `deleteRows()`, and `deleteColumns()`. A deleted column narrows a merged cell that spans it.
+| Member | Behavior |
+| --- | --- |
+| `Table.mergeCells(topRow, firstCell, bottomRow, lastCell)` | Merges the rectangle two cells span, by row and in-row cell index. Returns the merged `TableCell`. `bottomRow` must be at or below `topRow`; either endpoint can lie further left. The rectangle includes complete endpoint merges. |
+| `TableCell.split(rowCount, columnCount)` | Splits a cell into equal rows and columns, 1 through 63 each. Returns `void`. The first new cell keeps the content; the others start empty. |
 
-## Format tables and cells
+The merged cell keeps each nonempty cell's content as one paragraph. In the merge sync, only `value`, `shadingColor`, and `verticalAlignment` writes on the merged cell work. Other edits in the table refuse with `ConflictingChanges` until you sync.
 
-`Table.style` uses an existing table style name. `Table.headerRowCount` sets the number of leading header rows, from zero through the row count. Zero removes the header flags. Cell formatting exposes these properties:
+| Refusal | `innerError.code` | Cause |
+| --- | --- | --- |
+| `InvalidArgument` | `edit.table-merge-not-rectangle` | A cell crosses the rectangle, or the rectangle holds one cell. |
+| `InvalidArgument` | `edit.table-split-unsupported` | Counts the cell cannot take, such as columns below the minimum width, or rows that do not divide a vertical merge. |
+| `InvalidArgument` | `edit.unsupported-content` | A `value` write to a merged cell with several paragraphs. |
+| `NotImplemented` | None | With tracking off, a cell has a pending row or cell revision. |
 
-| `TableCell` property | Domain                                                              |
-| -------------------- | ------------------------------------------------------------------- |
-| `columnWidth`        | Supported finite width in points                                    |
-| `shadingColor`       | Six-digit RGB hex, optional `#`; `auto` removes direct shading      |
-| `verticalAlignment`  | `Top`, `Center`, or `Bottom`; the runtime rejects `Mixed` on writes |
+## Format cells
 
-`VerticalAlignment` exports the corresponding enum values. For character or paragraph formatting, use `cell.body.font` or `cell.body.paragraphs`. A width write changes the entire grid column, matching cell widths, and total table width. It also sets fixed table layout. In a table with merged cells, a cell can span several grid columns. The write makes the cell the given width, and the last grid column that it spans takes the change. Other cells over that column change width too. A width that would make that column narrower than the minimum column width refuses with `InvalidArgument`. The runtime rejects width changes for tables without a grid and for legacy horizontal merges.
-
-For example, format a resolved header cell:
+Set cell properties on a resolved cell:
 
 ```ts
 cell.shadingColor = '#EEEEEE';
@@ -161,26 +127,55 @@ cell.verticalAlignment = 'Center';
 await context.sync();
 ```
 
-## Handle unsupported structures
+| Property | Values and effects |
+| --- | --- |
+| `Table.style` | The `nameLocal` of an existing table style. |
+| `Table.headerRowCount` | Zero through the row count. Zero removes the header flags. |
+| `TableCell.columnWidth` | Finite points. Changes the grid column, matching cells, and table width, and sets fixed layout. |
+| `TableCell.shadingColor` | Six-digit RGB hex with optional `#`. `auto` removes direct shading. |
+| `TableCell.verticalAlignment` | `Top`, `Center`, or `Bottom`. `Mixed` refuses on writes. `VerticalAlignment` exports the enum. |
 
-Structural edits can fail on legacy horizontal merges, protected content, nested preserved structures, and pending revisions. Value matrices refuse on tables with merged cells. Adding columns or deleting some columns requires an existing table grid. Deleting all columns can still remove a table without a grid. A matching TypeScript signature does not guarantee an edit works on every table. Table value replacement does not silently discard unsupported cell content. Inspect and edit a smaller cell-body range when that preserves the intended structure.
+In a merged table, a width write changes the last grid column the cell spans. Widths below the minimum, tables without a grid, and legacy horizontal merges refuse. For text formatting, use `cell.body.font` and `cell.body.paragraphs`.
 
-Complete table insertion, cell value replacement, row additions, and partial row deletions support native revisions. A tracked table insertion marks each row, each cell paragraph mark, and the initial values as inserted. At the end of a non-empty paragraph that has a next paragraph, with at most bookmark or comment range ends between them, the table goes in front of that next paragraph without a split, so no paragraph outside the table changes, and rejecting the table restores the document. A paragraph whose mark ends a section, or has a pending revision, is still split, so the table stays in that section and later decisions keep its text out of the table. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require permanent edits. Tracked table and cell value replacement refuse in collaboration. In collaboration, a tracked replacement must remain within one paragraph. Tracked text and font edits can operate inside eligible cell paragraphs. A pending tracked row insertion or deletion blocks tracked text edits throughout that row. See [Tracked changes](/docs/2.x/editor-api/revisions).
+## Suggest table changes
 
-Each row or column addition or deletion must run alone in its sync, even across separate tables. Do not combine it with cell values or formatting. Separate other dependent structural operations into distinct syncs. If a batch returns `ConflictingChanges`, read the table again before retrying a revised operation.
+| Operation | With `TrackMineOnly` |
+| --- | --- |
+| Insert a complete table | Tracks each row, cell paragraph mark, and initial value. Reject removes the table. |
+| Replace a cell or table value | Tracked. Refuses in collaboration. |
+| Add rows | Tracked as row insertions, with optional values. |
+| Delete rows | Tracked, if at least one row stays without a pending deletion. Deleting every row refuses. |
+| Merge or split | Only inside your own pending table with no other author's edits. Otherwise `NotSupported` and `edit.tracked-structure-unsupported`. |
+| Configure columns and table properties | Only on your own complete proposed table. Existing tables require permanent edits. |
 
-## Row suggestions
+In collaboration, merge and split synchronize, undo, and survive reconnect and reopen, also inside a proposed table.
 
-Set `document.changeTrackingMode = 'TrackMineOnly'` before `Table.addRows()`, `TableRow.insertRows()`, or `Table.deleteRows()`. Added rows can include initial cell values. The runtime saves native `w:trPr/w:ins` and `w:trPr/w:del` revisions.
+At a nonempty paragraph's end, a new table goes before the next paragraph when only bookmark or comment ends intervene. A section-ending or pending paragraph mark requires a split.
 
-Save and reopen preserve the suggestions. Formatting inside the author's own proposed row records no separate revision, because rejecting the row removes its formatting too. Use `body.revisions.acceptAll()` or `body.revisions.rejectAll()` to resolve complete tracked rows. The revision collection omits row revisions from `items`.
+### Row suggestions
 
-Delete fewer than all rows when you suggest a deletion. Deleting every row refuses in tracking mode. Changing columns and table properties requires an eligible complete proposed table. Row insertion retains the source-row and vertical-merge limits described earlier. The runtime never changes tracking mode to complete an unsupported edit.
+Set `TrackMineOnly` before `Table.addRows()`, `TableRow.insertRows()`, or `Table.deleteRows()`.
 
-Each deletion must leave a row without a pending deletion. Existing deletion suggestions do not count as surviving rows. Independent concurrent deletions can combine to mark every row. Bulk accept and reject resolve that combined result after save and reopen.
+| Aspect | Behavior |
+| --- | --- |
+| Revision types | Row revisions appear in `revisions.items` as `Insert` or `Delete` |
+| Persistence | Row revisions survive save and reopen |
+| Text edits | A pending row revision blocks tracked text edits in that row |
+| Deletion | Rows with pending row or cell structure revisions refuse tracked deletion with `NotImplemented` |
 
-Tracked deletion refuses rows with pending row or cell structure revisions with `NotImplemented`. Resolve those revisions before suggesting another deletion.
+To accept or reject row revisions, see [Tracked changes](/docs/2.x/editor-api/revisions).
 
-## Next steps
+## Limits
 
-See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) and [API member directory](/docs/2.x/editor-api/reference).
+- Legacy horizontal merges, protected content, preserved structures, and pending revisions can refuse structural edits.
+- In collaboration, text typed into an empty cell that another participant merges away is discarded.
+- Column edits beyond a shortened row's end leave that row short. They do not fill its missing cells.
+- Concurrent merges, splits, and column edits converge, but can leave a row that ends before the last grid column. A merge or split that needs that missing part refuses.
+- Independent concurrent row deletions can mark every row. Bulk decisions resolve that result after save and reopen.
+- For border and pagination rendering, see [DOCX fidelity](/docs/2.x/docx-fidelity).
+
+## See also
+
+- [Tracked changes](/docs/2.x/editor-api/revisions)
+- [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors)
+- [API member directory](/docs/2.x/editor-api/reference)

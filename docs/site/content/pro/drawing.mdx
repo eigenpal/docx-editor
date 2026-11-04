@@ -1,52 +1,15 @@
 ---
 title: 'Advanced drawing rendering'
-description: 'Render charts, SmartArt layout, drawing effects, WordArt, and EMF and WMF pictures with the drawing module.'
+description: 'Render charts, DrawingML diagram layout, drawing effects, VML text paths, and EMF and WMF pictures with the drawing module.'
 category: 'Pro'
 order: 68
 ---
 
-The drawing module adds advanced drawing rendering to the editor and to PDF export. It requires the EigenPal Pro License.
+The drawing module renders charts, DrawingML diagram layout, drawing effects, VML text paths, and EMF and WMF pictures in the editor and in PDF export. It requires the EigenPal Pro License. Import it from `@docx-editor.dev/pro/drawing`.
 
-For React or Vue, install `@docx-editor.dev/pro`. Import the module from `@docx-editor.dev/pro/drawing`:
+## Register the drawing module
 
-```bash
-npm install @docx-editor.dev/pro
-```
-
-## Core and Pro rendering
-
-Core renders supported DrawingML shapes, connectors, text boxes, groups, and canvases without this module. It also renders pictures, text watermarks, fills, gradients, patterns, outlines, and outer shadows.
-
-Core renders SmartArt from the drawing saved in the document. If that drawing is missing, the Pro module calculates it from the diagram's data and layout parts. Registering the module does not recalculate an existing saved SmartArt drawing.
-
-For individual rendering limits, see [Word feature support](/docs/2.x/word-fidelity).
-
-## What the module adds
-
-| Drawing | With the module | Without the module |
-| --- | --- | --- |
-| Charts | Render read-only from the values cached in the chart part. | A chart saved with a fallback picture or drawing shows that fallback. Any other chart shows a labeled placeholder. |
-| Waterfall, funnel, histogram, Pareto, and box and whisker charts | Render read-only from the values cached in the chart part, using its chart style and color parts. | A chart saved with a fallback picture or drawing shows that fallback. Any other chart shows a labeled placeholder. |
-| SmartArt saved without its drawing | Laid out from its data, layout, style, and color parts. | Labeled placeholder |
-| Glow, inner shadow, reflection, soft edge, and dark-edged bevel rim | Paint on shapes, lines, and pictures. | The shape or picture paints without these effects. |
-| WordArt (VML text paths) | Renders its text fitted to the shape, between two guides, or along an arch, with its fill, gradient, outline, shadow, rotation, and 3-D extrusion. | Inline WordArt keeps its extent with a placeholder. Floating WordArt does not render. |
-| EMF and WMF pictures | Drawn as vector paths, text, and bitmaps in PDF export, including header pictures and picture watermarks. Brightness and contrast, such as a watermark's washout, apply to the drawn colors. In the editor, a picture that sets its own drawing origin is placed correctly. | Rasterized in the editor. |
-
-Text watermarks are a page feature, so they render without the module.
-
-## Drawing controls in the interface
-
-The module renders charts and SmartArt as read-only content. It provides no chart or SmartArt authoring controls. You cannot edit chart values, change chart types, or rearrange SmartArt nodes through editor controls.
-
-Picture controls are separate. For insertion, wrapping, crop, alternative text, and selection capabilities, see [Images and drawings](/docs/2.x/guides/images). Individual pictures inside a group do not expose those picture commands.
-
-The React and Vue examples load a default document with two DrawingML pages. Find the “DrawingML diagrams and charts” section to inspect nested and grouped SmartArt, a combination chart, and a doughnut chart. Both examples register `drawingModule()` alongside `reviewModule()`.
-
-If a chart shows a placeholder, check module registration before the document opens. If it still shows a placeholder, check the supported subset and the document's cached chart data. The editor does not refresh chart values from an embedded workbook or external source.
-
-## Register the module
-
-Pass `drawingModule()` to the editor through `modules`. Build the module array once: outside render in React, and in `<script setup>` or a module file in Vue.
+Pass `drawingModule()` to the editor through `modules`:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -103,160 +66,45 @@ const modules = [drawingModule({ licenseKey })];
 </Framework>
 </FrameworkTabs>
 
-`reviewModule()` also installs the drawing renderers. If you register the review module, you don't need to register `drawingModule()` too. Registering both is harmless.
-
-The module serves every editor and export in the page or process. It stays installed when an editor unmounts or remounts with other modules. Register it before the first document opens.
-
-If you install the module after opening a document, existing drawing projections do not change. The console shows a warning once. Reopen the document or remount the editor to apply the renderers.
-
-The chart, SmartArt, effects, and WordArt renderers are part of the module's bundle, so they also load with `reviewModule()`. The EMF and WMF renderer and its `emf-converter` dependency load the first time a document holds a metafile picture.
-
-## Use the module without an editor
-
-For headless conversion, call `installDrawing()` once before you open documents:
-
-```ts
-import { installDrawing } from '@docx-editor.dev/pro/drawing';
-
-installDrawing({ licenseKey: process.env.DOCX_LICENSE });
-```
-
-`@docx-editor.dev/docx-to-pdf` installs the module when you call it. PDF export needs no separate module registration. If a drawing cannot render, export produces a diagnostic. The default strict fidelity policy rejects that export. For diagnostic codes and the best-effort policy, see [PDF diagnostics](/docs/2.x/export/pdf/api#diagnostics).
-
-Installation applies to the whole process. If you also open documents through other packages, install the renderers at startup. This includes `@docx-editor.dev/editor-api` and `@docx-editor.dev/docx-to-markdown`. Add `@docx-editor.dev/pro` as a direct dependency and call `installDrawing()` before opening any document.
-
-Sessions opened before installation retain their saved chart fallbacks or placeholders. Strict PDF export rejects an unrendered chart without a usable fallback.
-
-## Chart formats
-
-The module renders classic DrawingML charts in `http://schemas.openxmlformats.org/drawingml/2006/chart`. It also renders supported extended charts in `http://schemas.microsoft.com/office/drawing/2014/chartex`.
-
-The extended subset includes waterfall, funnel, histogram, Pareto, and box and whisker charts. Treemap, sunburst, and map charts use their saved fallback when it renders, or a labeled placeholder. The editor preserves chart parts on save.
-
-Both formats expose chart summaries when their chart parts can be read. For metadata and custom previews, see [Replace a placeholder](#replace-a-placeholder).
+- `reviewModule()` also installs the drawing renderers. Registering both is harmless.
+- Installation applies to the whole page or process and persists after editor disposal.
+- Register before the first document opens. Open documents keep their projections until you reopen them or remount the editor.
 
 ## What renders
 
-- Charts render read-only from the values cached in the chart part. The embedded workbook is never read, and external data is never loaded.
-- Waterfall charts render running totals as floating columns and subtotals from zero. They include increase, decrease, and total colors, connectors, labels, axes, gridlines, a title, and a legend.
-- Funnel charts render one centered bar per category, widest for the largest value, with category labels and data labels.
-- Histograms calculate bins from cached values. They support automatic width, fixed size or count, either closed side, and underflow and overflow bins. Bin labels include forms such as `[1, 3]` and `> 9`. Pareto charts sort columns from largest to smallest. They add a cumulative percentage line on a 0% to 100% axis.
-- Box and whisker charts calculate quartiles with the exclusive or inclusive method. Whiskers extend to 1.5 times the interquartile range. The charts include outliers, inner points, a mean marker, and a mean line. Value labels show quartiles, whisker ends, displayed points, and the mean at the right of their marks.
-- Extended charts take their text, lines, and colors from the chart style and color parts that the chart names.
-- Value axes pick the denser scale that fits the plot and leave out all value labels when they would sit closer than about one line.
-- SmartArt diagrams saved without their drawing are laid out from their data, layout, style, and color parts.
-- Glows paint as a soft halo of their color and radius. Inner shadows paint inside the shape. An upright picture fades out at soft edges and paints a reflection below itself.
-- WordArt fits text to a shape box, between shape guides, or along an arch. It supports vertical gradients, visible shadows, and parallel 3-D extrusion.
-- EMF and WMF text uses the named font when the document uses it, and the default font otherwise. The original metafile bytes stay unchanged through save.
+Core renders shapes, pictures, groups, text boxes, and saved DrawingML diagram drawings without this module. The module adds:
 
-### Extended chart limits
+| Drawing | With the module | Without the module |
+| --- | --- | --- |
+| Classic and extended charts (waterfall, funnel, histogram, Pareto, box and whisker) | Read-only, from the values cached in the chart part | Saved fallback picture or drawing, or a labeled placeholder |
+| DrawingML diagram saved without its drawing | Laid out from its data, layout, style, and color parts | Labeled placeholder |
+| Glow, inner shadow, reflection, soft edge, and dark-edged bevel rim | Painted on shapes, lines, and pictures | Shape or picture paints without the effect |
+| VML text paths | Text fitted to the shape, guides, or an arch | Inline: placeholder. Floating: not rendered |
+| EMF and WMF pictures | Vector paths, text, and bitmaps in PDF export | Rasterized |
 
-Extended charts have these layout limits:
+Charts use cached values only. The editor never refreshes them from an embedded workbook or external data. For per-chart support, see [DOCX feature support](/docs/2.x/docx-fidelity).
 
-- Box and whisker value labels render only at the right of their marks. Value labels that name the series or category do not render.
-- Charts with several categories can show additional inner-point labels.
-- Funnel plot height can differ when category labels no longer fit after the plot shrinks.
-- Narrow charts with staggered category labels can select a different value-axis scale near label-spacing thresholds.
-- Value-axis text smaller than 8 points can also select a different scale near those thresholds.
-- When long category labels exceed two rows, the plot can become up to 2 points narrower.
+## Use the module without an editor
 
-### Unsupported drawings
-
-These drawings do not render, even with the module:
-
-- Charts that combine a pie or radar plot with other plot types, and surface charts of more than 20,000 points.
-- Treemap, sunburst, and map charts.
-- Charts with invalid caches, exceeded cache limits, or numeric overflow.
-- SmartArt diagrams with picture fills, or with a text mode that cannot render.
-- WordArt with nonvertical gradients or perspective extrusion. Shape types other than plain text, triangle, and arch require their definitions in the drawing.
-
-A chart often comes with a fallback picture or drawing for older applications. Waterfall, funnel, histogram, Pareto, box and whisker, treemap, sunburst, and map charts usually have one. The editor and PDF export apply these rules to a chart, in order:
-
-1. If the module renders the chart, they show the chart.
-1. If the chart has a fallback picture or drawing that renders, they show the fallback. A fallback produces no PDF diagnostic, and it can differ from the chart's cached values.
-1. Otherwise, the editor shows a labeled placeholder, and PDF export leaves the chart out with a `drawing` diagnostic. This includes a fallback picture that does not load: a missing picture, a linked or external picture, or a picture that cannot be decoded. The placeholder keeps the fallback's size.
-
-A skipped `mc:Choice` can still supply bounds when its fallback is empty or has no usable bounds. The reader retains drawing geometry and available chart metadata for the placeholder. It does not paint the skipped content. Without usable drawing bounds, malformed or nonvisual alternatives can remain invisible.
-
-In the editor and in PDF export, a drawn chart never reads its fallback picture, so a slow or broken fallback picture does not delay or fail them. Markdown export reads the fallback picture of each chart that is not hidden, because it exports the chart as that picture. If the fallback picture does not load within the session's resource timeout, or does not load at all, Markdown export leaves the chart out with a warning.
-
-Saving preserves chart markup, related parts, and fallback content. XML serialization can normalize the markup. A hidden chart stays hidden, also when its fallback is visible.
-
-Unsupported SmartArt diagrams and inline WordArt keep a labeled placeholder in the editor. Floating WordArt that cannot render has no placeholder. PDF export omits unsupported drawings and reports a `drawing` diagnostic.
-
-### Edit a chart
-
-The editor treats a chart as one object, including its fallback. Picture controls cannot resize, crop, move, wrap, replace, rotate, flip, or change the alternative text of a chart.
-
-Deleting a chart removes the chart and its fallback in one undo step. With change tracking enabled, deletion records one change for the whole chart. In **All Markup**, the chart stays visible, dimmed, with a change bar. Accept the deletion to remove both parts, or reject it to keep both.
-
-Selection locks apply to the chart in every rendering state, including its fallback. If those locks forbid selection, the delete image command and direct document edits refuse deletion.
-
-In every state that `drawing.chart.shownAs` names, a click on the chart selects it as an object:
-
-- The chart shows a selection frame without resize, move, or crop handles.
-- Picture commands are refused with a reason, and the matching toolbar controls are disabled with the localized reason.
-- Press Delete or Backspace, or use the delete image command, to delete the selected chart. A text range that includes the chart also deletes it.
-- Copy and cut of a selection that includes a chart are refused, because the chart's parts cannot travel through the clipboard. A cut deletes nothing. The `copy` and `cut` commands report `unsupported` with the localized chart clipboard reason. A rich paste of content that holds a chart is refused in the same way.
-
-The refusal of a picture edit has a different code in each layer:
-
-| Layer | Code |
-| --- | --- |
-| Editor commands (`editor.can()` and `editor.exec()`) | `unsupported`, with the chart reason as `reason` |
-| Document store transactions | The rejection `chart-drawing` |
-| `@docx-editor.dev/editor-api` automation | The error code `edit.unsupported-content` |
-
-The rule reads only the document, so editors with and without the module make the same decision in a collaboration session. A picture edit of either branch of the chart's `mc:AlternateContent` is refused in the same way.
-
-Skewed or sideways reflections, lit bevel faces, and other 3-D materials do not paint; the shape paints without them. Floating WordArt that the module cannot render does not show, and it keeps its wrap area.
-
-For the chart types, labels, layouts, and effects that render, see [Word feature support](/docs/2.x/word-fidelity).
-
-## Replace a placeholder
-
-You can replace a chart or SmartArt placeholder with your own component, with or without the module. Register an `UnsupportedElement` declaration that matches the placeholder's `drawing.placeholderGraphicKind`. The value is `chart` for a chart and `diagram` for a SmartArt diagram. Declarations replace placeholders by default. Set `includePartial` to include partially rendered drawings and saved fallbacks. For more information, see [Replace a partially rendered drawing](/docs/2.x/guides/images#replace-a-partially-rendered-drawing). Your component fills the drawing's box. The custom preview does not replace the drawing in the saved document.
-
-Every drawing that holds a chart carries `drawing.chart` when the chart part can be read (it is absent when the part is missing or damaged). This includes a chart that renders, a chart that shows its fallback, and a placeholder. To tell the three apart, read `drawing.chart.shownAs`: `chart` when the module draws the chart, `fallback` when the page shows the chart's saved fallback, and `placeholder` when the page shows the labeled placeholder. The value follows the renderers installed when the document opened.
-
-By default, `UnsupportedElement` receives chart placeholders with `drawing.chart.shownAs` set to `placeholder`. With `includePartial`, it also receives eligible partially rendered drawings with their native chart state. To read every chart record, including drawn charts and charts shown by their fallback, open the document for export and walk its drawings. Install the module first, so that the records match what an editor with the module shows. If your host has no EigenPal Pro License, leave out the `installDrawing()` call; the records then show each chart as its fallback or as a placeholder. This example lists each chart with its page number, state, and title:
+For headless conversion, call `installDrawing()` once at startup, before you open any document:
 
 ```ts
-import { openDocumentForExport } from '@docx-editor.dev/core/export';
-import { forEachSemanticDrawing } from '@docx-editor.dev/core/layout';
 import { installDrawing } from '@docx-editor.dev/pro/drawing';
 
 installDrawing({ licenseKey: process.env.DOCX_LICENSE });
-const opened = openDocumentForExport(bytes);
-if (!opened.ok) throw new Error(opened.reason);
-try {
-  const layout = await opened.session.layout();
-  forEachSemanticDrawing(layout, ({ drawing, page }) => {
-    const chart = drawing.chart;
-    if (chart) console.log(page.index + 1, chart.shownAs, chart.title);
-  });
-} finally {
-  opened.session.dispose();
-}
 ```
 
-A chart in a header or footer is laid out on every page that shows that header or footer, so the walk reports it once for each of those pages.
-
-`drawing.chart` contains a summary from the chart part:
-
-| Property | Meaning |
+| Package | Drawing setup |
 | --- | --- |
-| `title` | Plain-text title, with whitespace collapsed and a limit of 200 UTF-16 code units. It is `null` when no readable title exists. |
-| `plotTypes` | Plot types in document order, limited to 8 entries. For example, a combination chart can report `['bar', 'line']`. |
-| `shownAs` | Rendering state: `chart`, `fallback`, or `placeholder`. |
+| `@docx-editor.dev/docx-to-pdf` | Installs the renderers automatically. No registration needed. |
+| `@docx-editor.dev/editor-api` | Add `@docx-editor.dev/pro` as a dependency and call `installDrawing()` first. |
+| `@docx-editor.dev/docx-to-markdown` | Add `@docx-editor.dev/pro` as a dependency and call `installDrawing()` first. |
 
-Classic charts can read a title from explicit text, cached cell text, or their only series name. A title without explicit text remains `null` when the chart has several series.
+PDF export reports a `drawing` diagnostic for a drawing that cannot render, and the default strict policy rejects that export. For the best-effort policy, see [PDF diagnostics](/docs/2.x/export/pdf/api#diagnostics).
 
-Classic plot types are `area`, `area3D`, `bar`, `bar3D`, `bubble`, `doughnut`, `line`, `line3D`, `ofPie`, `pie`, `pie3D`, `radar`, `scatter`, `stock`, `surface`, and `surface3D`. The `bar` type covers column and bar charts. The `ofPie` type covers pie-of-pie and bar-of-pie charts.
+## Replace a placeholder
 
-Extended plot types are `waterfall`, `funnel`, `histogram`, `pareto`, `boxWhisker`, `treemap`, `sunburst`, and `regionMap`. These charts report one plot type, such as `['pareto']`, or `[]` for an unknown type. They read explicit title text only. They report `null` for a default caption and never use a series name as an automatic title.
-
-This example displays the title or the alternative text from `drawing.accessibility.label`:
+Register a `DocxEditor.UnsupportedElement` declaration to replace a placeholder, with or without the module. This example shows the chart title or its alternative text:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -315,21 +163,101 @@ const chartLabel = ({ drawing }: UnsupportedElement) =>
 
 The title and alternative text come from the document. Render them as text, never as HTML.
 
-For component types, import `DrawingChartSummary`, `DrawingChartShownAs`, `DrawingChartPlotType`, and `DrawingPlaceholderKind` from `@docx-editor.dev/core/layout`.
+- Declarations receive placeholders by default. Set `includePartial` to also receive partially rendered drawings and saved fallbacks. For more information, see [Replace a partially rendered drawing](/docs/2.x/guides/images#replace-a-partially-rendered-drawing).
+- Your component fills the drawing's box. It changes the editor display only, not the saved drawing or PDF output.
 
-Use `placeholderGraphicKind` to distinguish placeholders:
+Match on `drawing.placeholderGraphicKind`:
 
 | Value | Content |
 | --- | --- |
 | `chart` | Chart |
-| `diagram` | SmartArt |
+| `diagram` | DrawingML diagram |
 | `textbox` | DrawingML shape, with or without text |
 | `group` | Shape group |
 | `canvas` | Drawing canvas |
-| `shape` | Legacy VML drawing, such as WordArt |
+| `shape` | Legacy VML drawing, such as a VML text path |
 | `graphic` | Other graphic |
 | `null` | Picture that cannot render, such as an EMF, WMF, or TIFF picture that fails conversion |
 
-Floating WordArt without the module has no placeholder, so no declaration applies to it. Declarations apply only in the editor. PDF export leaves an unrendered drawing out. For more information, see [Custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components).
+For more options, see [Custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components).
 
-For drawings stored in `mc:AlternateContent`, branch selection prefers supported modern markup, then supported fallback markup. Unsupported visible drawings keep one placeholder with their original bounds. A selected picture that later fails decoding also shows a placeholder without another branch selection. The same component API can show an image from your rendering service. For source and resource handling, see [Preview with your rendering service](/docs/2.x/guides/images#preview-with-your-rendering-service).
+## Inspect chart metadata
+
+A drawing that holds a readable chart part carries `drawing.chart`. This example lists every chart with its page number, state, and title:
+
+```ts
+import { openDocumentForExport } from '@docx-editor.dev/core/export';
+import { forEachSemanticDrawing } from '@docx-editor.dev/core/layout';
+import { installDrawing } from '@docx-editor.dev/pro/drawing';
+
+installDrawing({ licenseKey: process.env.DOCX_LICENSE });
+const opened = openDocumentForExport(bytes);
+if (!opened.ok) throw new Error(opened.reason);
+try {
+  const layout = await opened.session.layout();
+  forEachSemanticDrawing(layout, ({ drawing, page }) => {
+    const chart = drawing.chart;
+    if (chart) console.log(page.index + 1, chart.shownAs, chart.title);
+  });
+} finally {
+  opened.session.dispose();
+}
+```
+
+Without an EigenPal Pro License, leave out `installDrawing()`; charts then report `fallback` or `placeholder`. A header or footer chart appears once per page.
+
+| Property | Meaning |
+| --- | --- |
+| `title` | Plain-text title, whitespace collapsed, at most 200 UTF-16 code units. `null` when no readable title exists. |
+| `plotTypes` | Plot types in document order, at most 8 entries, such as `['bar', 'line']`. |
+| `shownAs` | `chart` (module draws it), `fallback` (saved fallback shows), or `placeholder`. |
+
+- `drawing.chart` is absent when the chart part is missing or damaged. `shownAs` follows the renderers installed at open.
+- Classic plot types: `area`, `area3D`, `bar`, `bar3D`, `bubble`, `doughnut`, `line`, `line3D`, `ofPie`, `pie`, `pie3D`, `radar`, `scatter`, `stock`, `surface`, `surface3D`.
+- Extended plot types: `waterfall`, `funnel`, `histogram`, `pareto`, `boxWhisker`, `treemap`, `sunburst`, `regionMap`, or `[]` for an unknown type.
+- Extended charts read explicit title text only. Classic charts can also use cached cell text or a single series name.
+
+Import `DrawingChartSummary`, `DrawingChartShownAs`, `DrawingChartPlotType`, and `DrawingPlaceholderKind` from `@docx-editor.dev/core/layout`.
+
+## Handle chart edits
+
+The editor treats a chart and its fallback as one read-only object with no authoring controls.
+
+- Delete, Backspace, the delete image command, or a range that includes the chart removes both in one undo step, or one tracked deletion.
+- Picture commands, such as resize, crop, wrap, and alternative text, are refused with a localized reason.
+- Copy, cut, and rich paste of content that holds a chart are refused. A refused cut deletes nothing.
+- Selection locks block deletion in every rendering state.
+
+The refused picture edit has a different code in each layer:
+
+| Layer | Code |
+| --- | --- |
+| Editor commands (`editor.can()` and `editor.exec()`) | `unsupported`, with the chart reason as `reason` |
+| Document store transactions | The rejection `chart-drawing` |
+| `@docx-editor.dev/editor-api` automation | The diagnostic `edit.unsupported-content` in `error.debugInfo.innerError.code`, not `error.code` |
+
+The rule reads only the document, so collaborating editors decide the same way with or without the module.
+
+## Check export limits
+
+The editor and PDF export pick what to show for a chart in this order:
+
+1. If the module renders the chart, they show the chart.
+1. If a saved fallback picture or drawing renders, they show it. A fallback produces no PDF diagnostic and can differ from the cached values.
+1. Otherwise, the editor shows a labeled placeholder at the fallback's size. PDF export leaves the chart out with a `drawing` diagnostic.
+
+- A drawn chart never reads its fallback picture, so a slow or broken fallback cannot delay the editor or PDF export.
+- Markdown export uses each visible chart's fallback picture. If it does not load within the resource timeout, the export leaves the chart out with a warning.
+- Saving preserves chart markup, related parts, and fallback content. A hidden chart stays hidden.
+
+## Limits
+
+- Pie or radar combination charts, surface charts over 20,000 points, and invalid chart caches do not render.
+- DrawingML diagrams with picture fills, and VML text paths with nonvertical gradients or perspective extrusion, do not render.
+- Registering the module does not recalculate a saved DrawingML diagram drawing.
+
+## See also
+
+- [DOCX feature support](/docs/2.x/docx-fidelity)
+- [Images and drawings](/docs/2.x/guides/images)
+- [PDF diagnostics](/docs/2.x/export/pdf/api#diagnostics)

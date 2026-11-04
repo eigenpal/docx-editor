@@ -5,224 +5,41 @@ category: 'Guides'
 seoTitle: 'Loading and saving DOCX documents'
 ---
 
-Pass DOCX bytes to load a document. Call `save()` to serialize edits as DOCX bytes. Loading and saving run in the browser; your application owns storage and network requests.
+Pass DOCX bytes to the `document` prop to load a document. Call `save()` to get the edited DOCX bytes. Your application owns storage and network requests.
 
-## Input formats
+## Load and save a document
 
-Pass `Uint8Array` DOCX bytes through the `document` prop:
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-<DocxEditor document={bytes} />
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<DocxEditor :document="bytes" />
-```
-
-</Framework>
-</FrameworkTabs>
-
-### Start with an empty document
-
-Pass `'blank'` to start with an empty page using Calibri at 11 points. It includes Word's built-in styles: Heading 1–9, Title, Subtitle, Quote, No Spacing, and List Paragraph.
+This example loads a URL and downloads the saved file:
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
-<DocxEditor document="blank" />
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<DocxEditor document="blank" />
-```
-
-</Framework>
-</FrameworkTabs>
-
-Omitting `document` shows the loading screen and disables every control. Use `undefined` while fetching bytes, or `'blank'` for an empty document.
-
-### Show your own loading indicator
-
-The loading screen shows a spinner on a blank page. A large document then opens in two stages:
-
-1. The spinner shows on the blank page while the editor reads the file.
-1. The first pages show and take input while the editor lays out the remaining pages. The spinner shows below the last laid-out page and moves down as more pages appear.
-
-You can type, select, and review in the first pages during the second stage. If you move to a page that the editor has not laid out yet, the editor shows that page as soon as it is laid out.
-
-To replace the spinner in both stages, pass your own indicator. The editor places your indicator on the blank page, and then below the laid-out pages. Include text for screen readers, as the packaged spinner does.
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-<DocxEditor
-  document={bytes}
-  loadingIndicator={
-    <div role="status">
-      <MyLogoSpinner />
-      <span className="sr-only">Opening document</span>
-    </div>
-  }
-/>
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<DocxEditor :document="bytes">
-  <template #loadingIndicator>
-    <div role="status">
-      <MyLogoSpinner />
-      <span class="sr-only">Opening document</span>
-    </div>
-  </template>
-</DocxEditor>
-```
-
-</Framework>
-</FrameworkTabs>
-
-The indicator needs the packaged chrome. With `chrome` set to `false`, compose the loading part yourself. For more information, see [Custom loading screen](/docs/2.x/react/composition#custom-loading-screen).
-
-Use `blankDocumentBytes()` for a repeatable **File > New** command. Repeating `'blank'` keeps the existing document because its value does not change. Fresh bytes replace it:
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
-
-<button onClick={() => ref.current?.load(blankDocumentBytes())}>New</button>;
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<script setup lang="ts">
-import { ref } from 'vue';
-import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
-import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
-
-const editorRef = ref<DocxEditorRef | null>(null);
-</script>
-
-<template>
-  <button type="button" @click="editorRef?.load(blankDocumentBytes())">New</button>
-  <DocxEditor ref="editorRef" document="blank" />
-</template>
-```
-
-</Framework>
-</FrameworkTabs>
-
-To start a right-to-left document, pass `{ direction: 'rtl' }` to `blankDocumentBytes()`. For more information, see [New right-to-left documents](/docs/2.x/guides/right-to-left#new-right-to-left-documents).
-
-Call `blankDocumentBytes()` in an event handler or store its result in state. Each call returns a new array. Calling it inline in `document` rebuilds the editor on every render.
-
-### From a URL
-
-Fetch the document bytes and handle loading failures before mounting the editor:
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-import { useEffect, useState } from 'react';
-import { DocxEditor } from '@docx-editor.dev/react';
+import { useRef } from 'react';
+import { DocxEditor, useDocxSource, type DocxEditorRef } from '@docx-editor.dev/react';
 
 export function Editor({ url }: { url: string }) {
-  const [doc, setDoc] = useState<Uint8Array>();
-  const [error, setError] = useState<string>();
+  const ref = useRef<DocxEditorRef>(null);
+  const { document, error } = useDocxSource(url);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    setDoc(undefined);
-    setError(undefined);
+  async function download() {
+    const buf = await ref.current?.save();
+    if (!buf) return;
+    const blob = new Blob([buf], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    const link = window.document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'document.docx';
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
 
-    async function load() {
-      try {
-        const response = await fetch(url, { signal: controller.signal });
-        if (!response.ok) throw new Error(`Load failed: ${response.status}`);
-        const buffer = await response.arrayBuffer();
-        if (!controller.signal.aborted) setDoc(new Uint8Array(buffer));
-      } catch (cause) {
-        if (!controller.signal.aborted) setError(String(cause));
-      }
-    }
-
-    void load();
-    return () => controller.abort();
-  }, [url]);
-
-  if (error) return <p role="alert">{error}</p>;
-  return <DocxEditor document={doc} />;
-}
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<script setup lang="ts">
-import { DocxEditor, useDocxSource } from '@docx-editor.dev/vue';
-
-const props = defineProps<{ url: string }>();
-const { document, isLoading, error } = useDocxSource(() => props.url);
-</script>
-
-<template>
-  <p v-if="error">The document failed to load.</p>
-  <p v-else-if="isLoading">Loading…</p>
-  <DocxEditor v-else :document="document" />
-</template>
-```
-
-`useDocxSource()` fetches bytes and ignores stale responses when the URL changes.
-
-</Framework>
-</FrameworkTabs>
-
-These examples handle a failed download. If the bytes arrive but the editor cannot open them, `<DocxEditor>` shows a dialog. For more information, see [Handle files that do not open](/docs/2.x/guides/open-failures).
-
-### From a file input
-
-Read the selected file into bytes, then pass those bytes through `document`:
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-import { useState } from 'react';
-import { DocxEditor } from '@docx-editor.dev/react';
-
-export function FileEditor() {
-  const [doc, setDoc] = useState<Uint8Array>();
-
+  if (error) return <p role="alert">The document failed to load.</p>;
   return (
     <>
-      <input
-        type="file"
-        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          setDoc(new Uint8Array(await file.arrayBuffer()));
-        }}
-      />
-      {doc && <DocxEditor document={doc} />}
+      <button onClick={download}>Download</button>
+      <DocxEditor ref={ref} document={document} />
     </>
   );
 }
@@ -233,260 +50,151 @@ export function FileEditor() {
 
 ```vue
 <script setup lang="ts">
-import { shallowRef } from 'vue';
-import { DocxEditor } from '@docx-editor.dev/vue';
+import { ref } from 'vue';
+import { DocxEditor, useDocxSource, type DocxEditorRef } from '@docx-editor.dev/vue';
 
-const doc = shallowRef<Uint8Array>();
-
-async function pick(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-  doc.value = new Uint8Array(await file.arrayBuffer());
-}
-</script>
-
-<template>
-  <input
-    type="file"
-    accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    @change="pick"
-  />
-  <DocxEditor v-if="doc" :document="doc" />
-</template>
-```
-
-`useDocxSource()` accepts a URL string, `URL`, `Uint8Array`, or `ArrayBuffer`. Read a selected file into bytes first.
-
-</Framework>
-</FrameworkTabs>
-
-### Replace a document at runtime
-
-To replace the document without remounting the component, use the ref:
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-const ref = useRef<DocxEditorRef>(null);
-
-ref.current?.load(nextBytes);
-```
-
-</Framework>
-<Framework value="vue">
-
-```ts
+const props = defineProps<{ url: string }>();
 const editorRef = ref<DocxEditorRef | null>(null);
+const { document, error } = useDocxSource(() => props.url);
 
-editorRef.value?.load(nextBytes);
-```
-
-</Framework>
-</FrameworkTabs>
-
-## Save a document
-
-Use one of these save paths:
-
-- `save()` on the ref returns `Promise<ArrayBuffer | null>`
-- The packaged **File > Save** action, which you override with `onSave` in React and the `@save` emit in Vue
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-<DocxEditor ref={ref} document={bytes} onSave={() => void persist()} />
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<DocxEditor ref="editorRef" :document="bytes" @save="persist" />
-```
-
-</Framework>
-</FrameworkTabs>
-
-`save()` on the ref resolves `null` when no editor is mounted, so guard the result. `Editor.save()` returns an `ArrayBuffer` on success and rejects when saving fails.
-
-### What a save includes
-
-A save describes the document at the moment you call `save()`. The editor captures the document first and then writes the file in short steps. Typing, scrolling, and other scripts on the page run between those steps. Edits made while a save runs go into the next save. The promise still resolves with the captured document if you load another document before it finishes.
-
-The editor reuses the written form of paragraphs and table rows that have not changed since an earlier save. A save after a small edit to a long document therefore does much less work than the first save of that document.
-
-### Field result refresh
-
-Save validates pending protected form input. It applies the field format using the locale active when you entered the value. Invalid input rejects with code `invalidArgs`. The editor keeps the input without opening an alert. Collaborative sessions reject saves that require form-field formatting.
-
-Save updates stale, calibrated `REF` and `NOTEREF` results in the body, footnotes, and endnotes. The editor commits all updated parts as one undo step.
-
-Locked fields and unsafe result structures keep their saved values. View mode, read-only sessions, and collaborative sessions do not rewrite field results.
-
-See [Fields and cross-references](/docs/2.x/guides/fields) for supported switches and other limits.
-
-## Download helper
-
-Create a download from the saved buffer. This helper works with either adapter's `DocxEditorRef`:
-
-```ts
-async function downloadDocx(ref: DocxEditorRef, fileName: string) {
-  const buf = await ref.save();
+async function download() {
+  const buf = await editorRef.value?.save();
   if (!buf) return;
   const blob = new Blob([buf], {
     type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName.endsWith('.docx') ? fileName : `${fileName}.docx`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const link = window.document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'document.docx';
+  link.click();
+  URL.revokeObjectURL(link.href);
 }
-```
+</script>
 
-## Autosave
-
-Debounce the save call when the document reports a change. Run one save at a time: if the document changes while a save runs, save once more when it finishes. These examples use your application's document endpoint.
-
-Render each autosave component with a key based on `docId`. This keeps its timers and pending saves associated with one document.
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-import { useEffect, useRef } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
-
-export function AutosaveEditor({ docId, bytes }: { docId: string; bytes: Uint8Array }) {
-  const ref = useRef<DocxEditorRef>(null);
-  const timer = useRef<number | null>(null);
-  const saving = useRef(false);
-  const changedWhileSaving = useRef(false);
-
-  useEffect(
-    () => () => {
-      if (timer.current !== null) window.clearTimeout(timer.current);
-    },
-    []
-  );
-
-  const persist = async () => {
-    if (saving.current) {
-      changedWhileSaving.current = true;
-      return;
-    }
-    saving.current = true;
-    try {
-      const buf = await ref.current?.save();
-      if (!buf) return;
-      const response = await fetch(`/api/documents/${encodeURIComponent(docId)}`, {
-        method: 'PUT',
-        body: buf,
-      });
-      if (!response.ok) throw new Error(`Save failed: ${response.status}`);
-    } catch (error) {
-      console.error('Autosave failed', error);
-    } finally {
-      saving.current = false;
-      if (changedWhileSaving.current) {
-        changedWhileSaving.current = false;
-        void persist();
-      }
-    }
-  };
-
-  const onChange = () => {
-    if (timer.current !== null) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => void persist(), 1500);
-  };
-
-  return <DocxEditor ref={ref} document={bytes} onChange={onChange} />;
-}
+<template>
+  <p v-if="error" role="alert">The document failed to load.</p>
+  <template v-else>
+    <button type="button" @click="download">Download</button>
+    <DocxEditor ref="editorRef" :document="document" />
+  </template>
+</template>
 ```
 
 </Framework>
-<Framework value="vue">
+</FrameworkTabs>
 
-```vue
-<script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue';
-import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
+`useDocxSource()` fetches the bytes and ignores stale responses when the URL changes. If the bytes arrive but the editor cannot open them, see [Handle files that do not open](/docs/2.x/guides/open-failures).
 
-const props = defineProps<{ docId: string; bytes: Uint8Array }>();
-const editorRef = ref<DocxEditorRef | null>(null);
-let timer: number | null = null;
-let saving = false;
-let changedWhileSaving = false;
+| Save path | Returns |
+| --- | --- |
+| Ref `save()` | `Promise<ArrayBuffer \| null>`. Resolves `null` when no editor is mounted. |
+| Core `Editor.save()` | `Promise<ArrayBuffer>`. Rejects when saving fails. |
+| **File > Save** | Calls `onSave` in React or emits `save` in Vue. |
+
+## Choose a document source
+
+| `document` value | Result |
+| --- | --- |
+| `Uint8Array` | Opens the DOCX bytes. |
+| `undefined` | Shows the loading screen and disables every control. Use it while you fetch bytes. |
+| `'blank'` | Opens an editable empty page in Calibri 11 pt with the standard built-in styles. |
+
+`useDocxSource()` accepts a URL string, `URL`, `Uint8Array`, or `ArrayBuffer`. For a file input, read the file into bytes first:
+
+```ts
+const file = input.files?.[0];
+if (file) setDoc(new Uint8Array(await file.arrayBuffer()));
+```
+
+### Show your own loading indicator
+
+Pass `loadingIndicator` in React, or fill the `#loadingIndicator` slot in Vue. The editor shows it on the blank page while it reads the file, then below the laid-out pages while it lays out the rest.
+
+- Include screen reader text, such as a `role="status"` element.
+- The indicator needs the packaged chrome. With `chrome={false}`, see [Custom loading screen](/docs/2.x/react/composition#custom-loading-screen).
+
+## Replace the open document
+
+Call `load()` on the ref to replace the document without remounting:
+
+```tsx
+import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
+
+ref.current?.load(nextBytes);
+// A repeatable File > New command:
+ref.current?.load(blankDocumentBytes());
+```
+
+- Repeating `'blank'` in `document` does not create another document, because the value does not change.
+- `blankDocumentBytes()` returns new bytes on each call, so call it in an event handler or store the result.
+- An inline `blankDocumentBytes()` call in `document` creates a new document identity and rebuilds the editor on every render.
+
+Pass `{ direction: 'rtl' }` for a [right-to-left document](/docs/2.x/guides/right-to-left#new-right-to-left-documents).
+
+To accept a complete updated file from a server, use the [Document refresh API](/docs/2.x/guides/document-refresh).
+
+## Save a document
+
+<a id="what-a-save-includes" />
+
+A save captures the document when you call `save()`, then writes the file in short steps while the page stays responsive. Edits made during a save belong to the next save. Later saves reuse unchanged paragraphs and table rows, so they cost less than the first save.
+
+Save also validates and updates fields:
+
+- Pending protected form input is validated and formatted. Invalid input rejects the save with `invalidArgs`.
+- Collaborative sessions reject saves that require form-field formatting.
+- Stale `REF` and `NOTEREF` results refresh as one undo step, so a save can change undo history.
+
+For field rules, see [Fields and cross-references](/docs/2.x/guides/fields).
+
+## Autosave safely
+
+Debounce saves on change, run one save at a time, and save again if the document changed meanwhile:
+
+```tsx
+const saving = useRef(false);
+const again = useRef(false);
 
 async function persist() {
-  if (saving) {
-    changedWhileSaving = true;
+  if (saving.current) {
+    again.current = true;
     return;
   }
-  saving = true;
+  saving.current = true;
   try {
-    const buf = await editorRef.value?.save();
+    const buf = await ref.current?.save();
     if (!buf) return;
-    const response = await fetch(`/api/documents/${encodeURIComponent(props.docId)}`, {
+    const response = await fetch(`/api/documents/${encodeURIComponent(docId)}`, {
       method: 'PUT',
       body: buf,
     });
     if (!response.ok) throw new Error(`Save failed: ${response.status}`);
   } catch (error) {
-    console.error('Autosave failed', error);
+    showSaveError(error);
   } finally {
-    saving = false;
-    if (changedWhileSaving) {
-      changedWhileSaving = false;
+    saving.current = false;
+    if (again.current) {
+      again.current = false;
       void persist();
     }
   }
 }
-
-function onChange() {
-  if (timer !== null) window.clearTimeout(timer);
-  timer = window.setTimeout(() => void persist(), 1500);
-}
-
-onBeforeUnmount(() => {
-  if (timer !== null) window.clearTimeout(timer);
-});
-</script>
-
-<template>
-  <DocxEditor ref="editorRef" :document="bytes" @change="onChange" />
-</template>
+// Call persist() from a debounced onChange handler (Vue: @change).
 ```
 
-</Framework>
-</FrameworkTabs>
+- Render the autosave component with a key based on `docId`, so timers and pending saves stay with one document.
+- Use server-side revision checks to reject stale writes.
+- Show save failures so users can retry.
+- Upload the `ArrayBuffer` as is; it is already compressed.
 
-Choose a debounce interval that matches your API's write limits. For overlapping requests, use server-side revision checks to reject stale writes. Show save failures in your application so users can retry.
+## Limits
 
-### Autosave long documents
-
-You don't need a web worker or your own scheduling to keep the editor responsive during autosave. `save()` already writes the file in short steps, so the page keeps handling input while a save runs. For more information, see [What a save includes](#what-a-save-includes).
-
-The first save of a long document does the most work, because no paragraph has been written yet. Later saves rewrite only the paragraphs and table rows that changed. Keep these points in mind for long documents:
-
-- Save when the document reports a change, not on a fixed timer. A save of an unchanged document repeats the last result, but a timer still sends the same file to your server each time.
-- Keep one save in flight, as the examples do. A second save that starts during the first one repeats work that the next save does anyway.
-- Upload the saved `ArrayBuffer` as it is. The file is already compressed, so compressing it again on the main thread adds work for no gain.
-
-## Accept server updates
-
-Use `createDocumentRefresh(editor)` when a server returns an updated DOCX file. The controller preserves the editor instance and scroll position. Each accepted file resets selection and undo history. The controller refuses results after local edits and during collaborative sessions.
-
-For integration steps and change presentation, see [Document refresh API](/docs/2.x/guides/document-refresh).
+- `save()` captures the document when it starts. The bytes describe that document even if you load another one before they are ready.
+- If `save()` waits for a pending edit and another document loads first, it rejects with `invalidState` ([`save.document-changed`](/docs/2.x/guides/diagnostics#save-document-changed)).
+- `load()` invalidates pending [document refresh](/docs/2.x/guides/document-refresh) submissions.
 
 ## Next steps
 
-- [React props](/docs/2.x/react/props) and [Vue props](/docs/2.x/vue/props) for `document`, the save action, and the shared ref
-- [Document refresh API](/docs/2.x/guides/document-refresh) for complete files returned by a server
-- [Handle files that do not open](/docs/2.x/guides/open-failures) for the dialog that explains a refused file, and your own support actions
-- [Export Markdown and PDF](/docs/2.x/guides/export) for document conversion
-- [Editing API](/docs/2.x/editor-api) to read and write a document without mounting an editor
-- [React examples](/docs/2.x/react/examples) and [Vue examples](/docs/2.x/vue/examples) for more loading, saving, and editor state patterns
+- [React props](/docs/2.x/react/props) and [Vue props](/docs/2.x/vue/props)
+- [Document refresh API](/docs/2.x/guides/document-refresh)
+- [Export Markdown and PDF](/docs/2.x/guides/export)

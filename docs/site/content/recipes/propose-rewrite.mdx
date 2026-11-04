@@ -1,63 +1,22 @@
 ---
 title: 'Propose an AI rewrite as tracked changes'
-description: 'Read a paragraph for your model, and propose the model text as the fewest tracked changes, with fields, equations, and locked controls kept whole.'
+description: 'Read a paragraph for your model, and propose the model text as the fewest tracked changes.'
 category: 'Task recipes'
 seoTitle: 'Propose an AI rewrite as tracked changes'
 ---
 
-An agent that rewrites a paragraph should propose the smallest set of tracked changes, not one replacement of the whole paragraph. The `@docx-editor.dev/editor-api/agent` entry handles the document side of this task. `prepareRewrite` reads a paragraph into text for a model. `draft.apply()` compares the model text with the original words and writes each difference as a tracked change.
+`prepareRewrite()` from `@docx-editor.dev/editor-api/agent` reads a paragraph for a model, and `draft.apply()` proposes the model text as tracked changes. Your application owns the prompt, model calls, retries, timeouts, and concurrency.
 
-Your application owns the model side: the prompt, the instruction, the model client, retries, timeouts, and concurrency. The helper never calls a model.
+## Propose a paragraph rewrite
 
-## Rewrite a paragraph
-
-Prepare the paragraph, send `draft.text` and `draft.legend` to your model with your instruction, and pass the model text to `draft.apply()`. The following example finds a paragraph by a phrase in it and rewrites that paragraph on a server:
+The following example rewrites the paragraph that contains a phrase, on a server:
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api';
 import { prepareRewrite } from '@docx-editor.dev/editor-api/agent';
-
-const author = 'Rewrite agent';
-const runtime = await DocxEditor.createServer(bytes, { author });
-try {
-  const result = await runtime.run(async (context) => {
-    const hit = context.document.body.search('The buyer pays').getFirst();
-    const paragraph = hit.paragraphs.getFirst();
-    const options = { keepPlaceholders: true };
-    const draft = await prepareRewrite(context, paragraph, options);
-    const instruction = 'Make this clause shorter. Keep its meaning.';
-    const prompt = [instruction, draft.legend, draft.text].join('\n\n');
-    return draft.apply(await callModel(prompt));
-  });
-  // `changes` counts word edits. A replacement counts once.
-  console.log(`${result.changes} word edits: ${result.proposed}`);
-  console.log(`Saved ${(await runtime.save()).byteLength} bytes`);
-} finally {
-  runtime.dispose();
-}
-```
-
-`keepPlaceholders: true` makes a model answer that leaves out a placeholder refuse with `placeholder-missing`. Without it, a left-out placeholder proposes deleting what it stands for, such as a field or a locked content control. You don't need to sync before you pass `hit.paragraphs.getFirst()`: `prepareRewrite()` reads the paragraph itself. To get the document with the proposal, call `runtime.save()`.
-
-The changes use the runtime's `author`. `prepareRewrite()` takes the `context` of either runtime. In a page, create the runtime with `DocxEditor.createBrowser()` from `@docx-editor.dev/editor-api/browser`, and give the editor the review module. Both entries share one `RequestContext` class.
-
-Call `draft.apply()` in the same `run()` as `prepareRewrite()`. Your model call can run between them, but it must not use `context` or its proxies. Pass it plain data from the draft.
-
-`result.proposed` and `result.original` read as `getReviewedText()` does. An equation, a picture, or a note reference reads as U+FFFC, and a line break reads as U+000B. After the rewrite, `paragraph.text` reads both the deleted and the inserted words. To read the proposed text later, call `paragraph.getReviewedText('Current')`.
-
-## Build the prompt
-
-A draft gives you two strings for the prompt:
-
-- `draft.text` is the paragraph text, with a numbered placeholder for each field, picture, equation, note reference, line break, and locked content control.
-- `draft.legend` states the placeholder rules and lists what each placeholder stands for. It is an empty string when the paragraph has no placeholders.
-
-Neither string holds an instruction. Put your own instruction first. Both strings come from the document, and a document can hold text that reads like an instruction. Treat them as data: wrap them in tags that the document text cannot close, and tell the model never to follow instructions inside the tags. A random tag name reduces delimiter collisions. These prompt instructions do not guarantee that a model ignores instructions inside document text. The following function builds such a prompt:
-
-```ts
 import type { RewriteDraft } from '@docx-editor.dev/editor-api/agent';
 
-export function buildPrompt(instruction: string, draft: RewriteDraft): string {
+function buildPrompt(instruction: string, draft: RewriteDraft): string {
   const tag = `document-${crypto.randomUUID().slice(0, 8)}`;
   return [
     instruction,
@@ -68,37 +27,61 @@ export function buildPrompt(instruction: string, draft: RewriteDraft): string {
     `<${tag}>\n${draft.legend}\n\n${draft.text}\n</${tag}>`,
   ].join('\n\n');
 }
+
+const runtime = await DocxEditor.createServer(bytes, { author: 'Rewrite agent' });
+try {
+  const result = await runtime.run(async (context) => {
+    const hit = context.document.body.search('The buyer pays').getFirst();
+    const paragraph = hit.paragraphs.getFirst();
+    const draft = await prepareRewrite(context, paragraph, { keepPlaceholders: true });
+    const prompt = buildPrompt('Make this clause shorter. Keep its meaning.', draft);
+    return draft.apply(await callModel(prompt));
+  });
+  console.log(`${result.changes} word edits: ${result.proposed}`);
+  const saved = await runtime.save();
+} finally {
+  runtime.dispose();
+}
 ```
 
-## What the model sees
+Call `draft.apply()` in the same `run()` as `prepareRewrite()`, and pass only plain strings to the model. Document text and the legend are untrusted: the tags reduce prompt injection but do not prevent it. In a page, use `DocxEditor.createBrowser()` from `@docx-editor.dev/editor-api/browser`, and give the editor the review module.
 
-Each field, picture, equation, note reference, line break, and content-locked control reaches the model as its own numbered placeholder, also when several sit in one word or two read the same. A placeholder stands for the content only, so the text beside it stays ordinary text that the model can change. For a paragraph with a field and a footnote reference, `draft.text` reads as follows:
+## Configure the draft
+
+`prepareRewrite(context, paragraph, options)` takes one option:
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `keepPlaceholders` | `false` | `true` refuses model text that leaves out a placeholder, with `placeholder-missing`. Without it, a left-out placeholder proposes deleting what it stands for. |
+
+The draft and the result are plain data:
+
+| Member | Description |
+| --- | --- |
+| `draft.text` | The paragraph text, with a placeholder such as `⟦1⟧` for each field, picture, equation, note reference, line break, and locked content control. |
+| `draft.legend` | The placeholder rules and one line per placeholder, or an empty string. |
+| `draft.placeholders` | Each placeholder in order. A paragraph that contains `⟦` or `⟧` gets another bracket pair, such as `⟪1⟫`. |
+| `draft.paragraphId` | The paragraph's `uniqueLocalId`. |
+| `draft.check(text)` | Returns the `RewriteError` that `apply()` would throw before it writes, or `null`. |
+| `draft.apply(text)` | Writes the difference as tracked changes and returns a result. |
+| `result.changes` | The number of word edits. A replacement counts once. |
+| `result.proposed`, `result.original` | The text after and before the rewrite, read as `getReviewedText()` does. |
+
+For a paragraph with a field and a footnote reference, the model receives this text and legend:
 
 ```text
 Subject to ⟦1⟧, the Supplier shall deliver the goods herein⟦2⟧.
-```
 
-The legend states the placeholder rules, and then lists the placeholders:
-
-```text
 Placeholders:
 ⟦1⟧ = field with code "REF _Ref1 \\h", reads "Section 4.2"
 ⟦2⟧ = footnote or endnote reference mark
 ```
 
-The legend describes each placeholder: a field by its code and result, a locked content control by its tag and text, a picture by its alternative text, and an equation, a note reference, or a line break by its kind. A field that shows no text, such as an index entry, also gets a placeholder, so that deleting it is the model's explicit choice. A note reference is told apart from an equation by its superscript formatting.
+A kept placeholder never changes. A left-out placeholder deletes its whole content as one tracked deletion. Fields that show no text at one place, such as adjacent index entries, are kept or left out together.
 
-Every value from the file in the legend is a quoted string on one line. A field code or a control text therefore cannot add a line to the legend. Inside the quotes, a backslash shows doubled: the field code `REF _Ref1 \h` reads as `"REF _Ref1 \\h"`. Tell the model to copy each placeholder, such as `⟦1⟧`, and never a field code. If the paragraph already contains `⟦` or `⟧`, the placeholders use another bracket pair, such as `⟪1⟫`, and the legend names that pair. Read the exact placeholders from `draft.placeholders`.
+## Retry a model answer
 
-Fields that show no text at one place, such as several index entries side by side, share one range. Each gets its own placeholder, but the model can keep them or leave them out only together. Model text that keeps some of them fails with `placeholder-grouped`.
-
-The result of a field that spans paragraphs, such as a table of contents, reads as ordinary text in each paragraph, and the helper edits it as text. Updating that field later replaces the edits. Rewrite the headings that the table of contents lists instead.
-
-A placeholder that the model keeps never changes. A placeholder that the model leaves out deletes what it stands for as one tracked deletion. A deletion of a whole equation strikes the whole equation, and a deletion of a whole content-locked control proposes removing the control. To refuse a left-out placeholder instead, pass `{ keepPlaceholders: true }` to `prepareRewrite()`. The legend then tells the model to keep every placeholder.
-
-## Retry after a refused answer
-
-`draft.check(modelText)` checks model text without writing. It returns the `RewriteError` that `draft.apply()` would throw before it writes, or `null` when `apply()` may go ahead. When `error.isModelError` is `true`, `error.message` explains the broken rule in words that you can send back to the model. A draft stays usable after a refused answer, so ask again with the same draft. The following function gives the model three attempts:
+`draft.check()` tests model text without writing. When `error.isModelError` is `true`, send `error.message` to the model and reuse the draft:
 
 ```ts
 import type { Paragraph, RequestContext } from '@docx-editor.dev/editor-api';
@@ -109,10 +92,7 @@ export async function rewriteParagraph(
   paragraph: Paragraph,
   instruction: string
 ) {
-  // With keepPlaceholders, a left-out placeholder refuses,
-  // so the loop asks the model again instead of deleting what it stands for.
-  const options = { keepPlaceholders: true };
-  const draft = await prepareRewrite(context, paragraph, options);
+  const draft = await prepareRewrite(context, paragraph, { keepPlaceholders: true });
   let prompt = [instruction, draft.legend, draft.text].join('\n\n');
   for (let attempt = 1; ; attempt += 1) {
     const modelText = await callModel(prompt);
@@ -126,17 +106,14 @@ export async function rewriteParagraph(
 }
 ```
 
-`draft.apply()` runs the same checks, so you can skip `check()` and catch the error instead. Even unchanged model text triggers a fresh read before `apply()` returns. If the paragraph text changed, `apply()` refuses with `stale`. If another participant deleted the paragraph while the model answered, `apply()` throws `write-failed`. If another edit deletes the paragraph, or joins it into another paragraph, while `apply()` writes, `apply()` throws `rollback-failed`. After a `stale` or a `verification-failed` error, another edit changed the paragraph. Prepare it again, and ask the model again with the new draft.
+A `null` result from `check()` does not guarantee that `apply()` succeeds, because the document can change after the check. `apply()` rereads the paragraph even for unchanged model text, so it can still fail with `stale`.
 
 ## Rewrite several paragraphs
 
-To rewrite several paragraphs, prepare every paragraph first. Then call the model for all of the drafts at once, with plain data only. Last, apply the model text one paragraph after another. Each `prepareRewrite()` and `apply()` call syncs the request context, so only one runs at a time. A second call that overlaps the first fails with `busy`, so never pass two `apply()` calls to `Promise.all()`.
-
-`context.document.body.paragraphs` lists every paragraph, including empty paragraphs and the paragraphs in table cells. Load the properties that you filter on, and prepare only the paragraphs to rewrite. The following example skips empty paragraphs and headings:
+Prepare paragraphs in turn, call the model in parallel, then apply drafts one at a time:
 
 ```ts
-import { prepareRewrite } from '@docx-editor.dev/editor-api/agent';
-import { RewriteError } from '@docx-editor.dev/editor-api/agent';
+import { prepareRewrite, RewriteError } from '@docx-editor.dev/editor-api/agent';
 import type { RewriteDraft } from '@docx-editor.dev/editor-api/agent';
 
 await runtime.run(async (context) => {
@@ -144,15 +121,9 @@ await runtime.run(async (context) => {
   paragraphs.load('items/text,items/style');
   await context.sync();
 
-  const body = paragraphs.items.filter((paragraph) => {
-    const heading = paragraph.style.startsWith('Heading');
-    return paragraph.text.trim() !== '' && !heading;
-  });
-
-  // Prepare one paragraph after another.
-  // A paragraph with tracked changes is refused.
   const drafts: RewriteDraft[] = [];
-  for (const paragraph of body) {
+  for (const paragraph of paragraphs.items) {
+    if (paragraph.text.trim() === '' || paragraph.style.startsWith('Heading')) continue;
     try {
       drafts.push(await prepareRewrite(context, paragraph));
     } catch (error) {
@@ -161,13 +132,12 @@ await runtime.run(async (context) => {
     }
   }
 
-  // Call the model for every draft at once. The calls use only plain strings.
+  // The model calls use only plain strings, so they can run in parallel.
   const prompts = drafts.map((draft) =>
     ['Use plain language.', draft.legend, draft.text].join('\n\n')
   );
   const answers = await Promise.all(prompts.map((prompt) => callModel(prompt)));
 
-  // Apply one draft at a time.
   for (const [index, draft] of drafts.entries()) {
     try {
       await draft.apply(answers[index]!);
@@ -179,72 +149,51 @@ await runtime.run(async (context) => {
 });
 ```
 
-Each paragraph gets its own guarantee: all of its changes, or none. A paragraph that fails does not affect the others. To limit how many model calls run at once, wrap `callModel` in your own limiter.
+`body.paragraphs` includes empty paragraphs and paragraphs in table cells. Filter them before you prepare drafts.
 
-## Propose structural edits
-
-A rewrite stays inside one paragraph. Use `keepPlaceholders: true` to require that it keeps fields, equations, and other placeholders. To propose a structural edit, set `document.changeTrackingMode` to `TrackMineOnly` and call the Office.js member for it:
-
-- To split a paragraph, replace the gap between two sentences with `'\n'` through `insertText()`. For more information, see [Propose a paragraph split](/docs/2.x/editor-api/revisions#propose-a-paragraph-split).
-- To add a field, call `insertField()`, and write its result with `field.result.insertText()`. For more information, see [Propose a field](/docs/2.x/editor-api/revisions#propose-a-field).
-- To add an equation, call `insertOoxml()`. For more information, see [Propose an equation](/docs/2.x/editor-api/revisions#propose-an-equation).
-
-## Guarantees
-
-- Either every change lands and the paragraph reads as the model text, or the paragraph stays as it was.
-- A failed write rejects only the changes that this rewrite made, also in a collaboration session. The helper records each change it makes by its type, author, date, and text. Changes by other participants stay, including changes by a worker or a person who uses the same author name.
-- `draft.apply()` checks the model text before it writes anything. Text that breaks a placeholder rule writes nothing.
-- You do not need to set `document.changeTrackingMode` first. If you do, an assignment of `TrackMineOnly` or `Off` that is not synced yet goes with the helper's first sync and does not count as a queued edit. Other queued commands fail with `context-used`.
-- In a browser, each writing sync is one undo step, so one rewrite can take several. To undo it as one step, call `runtime.run({ historyGroup: editor.beginHistoryGroup() }, callback)`.
-- If tracking is off, `draft.apply()` turns on `TrackMineOnly` for its writes and turns it off again. It keeps tracking on throughout the edits. If restoring the previous mode fails, the proposal stands and `document.changeTrackingMode` reads `TrackMineOnly`.
+Each `prepareRewrite()` and `apply()` call syncs the context, so run them in sequence; an overlapping call fails with `busy`. To bound parallel model calls, wrap `callModel` in a limiter.
 
 ## Handle errors
 
-`prepareRewrite()` and `draft.apply()` throw a `RewriteError`, and `draft.check()` returns one. Every code except `rollback-failed` leaves the paragraph as it was, unless another edit removed it. When `error.isModelError` is `true`, the model text broke a placeholder rule, nothing was written, and you can send `error.message` back to the model.
-
-`check()` tests only the model text. `apply()` can still throw `stale`, `locked`, or `write-failed` after `check()` returns `null`, because the document can change, and the writes can refuse, after the check. Some codes come from a `DocxEditorError` that the helper caught. `error.cause` holds that error:
-
-| `RewriteError` code | Comes from |
-| --- | --- |
-| `stale` | `StaleDocument` from a write |
-| `locked` | Any `DocxEditorError` whose `debugInfo.innerError.code` is `edit.protected-content` |
-| `write-failed` | Any other `DocxEditorError` from a write, or from the read of a deleted paragraph |
-| `tracking-unavailable` | A refused `changeTrackingMode = 'TrackMineOnly'`, such as `NotSupported` without the review module |
-| `read-failed` | Any error from the read in `prepareRewrite()` |
-
-The following table lists every code:
+`prepareRewrite()` and `draft.apply()` throw a `RewriteError`, and `draft.check()` returns one. Every code except `rollback-failed` leaves the paragraph as it was, unless another edit removed it.
 
 | `code` | Meaning | What to do |
 | --- | --- | --- |
-| `invalid-output` | The model text is empty or has a line break. | Ask the model again. |
-| `placeholder-unknown` | The model text has a placeholder that the paragraph does not have. | Ask the model again. |
-| `placeholder-moved` | The model text changes the order of the placeholders. | Ask the model again. |
-| `placeholder-repeated` | The model text has a placeholder more than once. | Ask the model again. |
-| `placeholder-missing` | With `keepPlaceholders: true`, the model text leaves out a placeholder. | Ask the model again. |
-| `placeholder-grouped` | The model text keeps some, but not all, of the placeholders at one place. | Ask the model again. |
-| `context-used` | Edits were queued on `context` and not synced when you called the helper. The helper never sends them with its tracked writes. | Call `await context.sync()` first. |
-| `busy` | Another helper call runs on the same request context, such as two `apply()` calls in `Promise.all()`, or your code called `context.sync()` while a helper call was in progress. | Await the helper call first. Apply drafts one after another. |
+| `invalid-output` | The model text is empty or has a line break. | Ask again. |
+| `placeholder-unknown` | The model text has an unknown placeholder. | Ask again. |
+| `placeholder-moved` | The model text changes the placeholder order. | Ask again. |
+| `placeholder-repeated` | The model text repeats a placeholder. | Ask again. |
+| `placeholder-missing` | With `keepPlaceholders: true`, the model text leaves out a placeholder. | Ask again. |
+| `placeholder-grouped` | The model text keeps only some placeholders at one place. | Ask again. |
+| `context-used` | Unsynced edits were queued on `context`. | Call `await context.sync()` first. |
+| `busy` | Another helper call or `context.sync()` runs on the same context. | Apply drafts one after another. |
 | `pending-changes` | The paragraph has tracked changes. | Accept or reject them first. |
-| `tracking-unavailable` | The runtime cannot record tracked changes. | Create the runtime with an `author`. In a page, give the editor the review module. |
+| `tracking-unavailable` | The runtime cannot record tracked changes. | Set the runtime `author`. In a page, add the review module. |
 | `draft-used` | The draft already wrote to the paragraph. | Prepare the paragraph again. |
-| `too-long` | The paragraph or the model text has more than 20,000 words and placeholders, or the model text makes more than 2,000 word edits. `prepareRewrite()` checks the paragraph length; `check()` and `apply()` check the model text. | Ask the model for fewer changes, or split the paragraph. |
-| `unsupported-text` | The paragraph contains every bracket pair that placeholders can use. | Rewrite the paragraph another way. |
-| `read-failed` | The document refused a read of the paragraph. `error.cause` holds the reason. | Read `error.cause`. |
-| `stale` | The paragraph changed after `prepareRewrite()`, through another participant or your own code. The rewrite was rolled back. | Prepare the paragraph again, and ask the model again. |
-| `locked` | An edit touched protected content. The rewrite was rolled back. | Keep the content whole. |
-| `write-failed` | The document refused an edit, or the paragraph no longer exists. The rewrite was rolled back. `error.cause` holds the reason. | If `error.cause.code` is `InvalidObjectPath`, the paragraph no longer exists: skip it. Otherwise, read `error.cause`. |
-| `verification-failed` | The paragraph would not read as the model text. The rewrite was rolled back. | Prepare the paragraph again, and ask the model again. |
-| `rollback-failed` | A write failed, and the rollback failed too, could not find the paragraph, or left the paragraph different from before. | Do not retry automatically. The changes stay as tracked changes by your `author`, also when another edit moved them into another paragraph. Review them. `error.cause` is an `AggregateError`, and `errors[0]` is the first `RewriteError`. |
+| `too-long` | The paragraph or model text has more than 20,000 words and placeholders, or the model text makes more than 2,000 word edits. | Ask the model for fewer changes, or split the paragraph. |
+| `unsupported-text` | The paragraph contains every placeholder bracket pair. | Rewrite it another way. |
+| `read-failed` | The document refused a read of the paragraph. | Read `error.cause`. |
+| `stale` | The paragraph changed after `prepareRewrite()`, or a write failed with `StaleDocument`. Rolled back. | Prepare and ask again. Never replay the earlier answer. |
+| `locked` | An edit touched protected content: `debugInfo.innerError.code` is `edit.protected-content`. Rolled back. | Keep the content whole. |
+| `write-failed` | The document refused an edit, or the paragraph is gone. Rolled back. | If `error.cause.code` is `InvalidObjectPath`, skip the paragraph. Otherwise, read `error.cause`. |
+| `verification-failed` | The paragraph would not read as the model text. Rolled back. | Prepare and ask again. |
+| `rollback-failed` | A write failed, and the rollback failed too. A concurrent deletion or join of the paragraph also causes it, and the remaining changes can be in another paragraph. | Do not retry automatically. Review the remaining tracked changes by your `author`. `error.cause` is an `AggregateError`; `errors[0]` is the first `RewriteError`. |
 
-A failed model call is your own error, not a `RewriteError`. If a cleanup step fails after an error, such as turning tracking off again, `error.suppressed` holds that second error. It never replaces the first one.
+`error.cause` holds the `DocxEditorError` behind `stale`, `locked`, `write-failed`, and `tracking-unavailable`. For `read-failed`, `error.cause` can be any error, so check its type before you read `code`. A failed cleanup step goes to `error.suppressed` and never replaces the first error. A failed model call is your own error.
 
-## How it works
+## Limits
 
-1. The helper splits the paragraph into word ranges with `getTextRanges([' ', '\t'])`, and reads the `fields`, `inlinePictures`, and `contentControls` of every range.
-1. In a word that holds an atom, it finds each atom by its own range. A content control answers its range. A search finds each U+FFFC and U+000B. A word that holds a field is split with every one of its characters as an ending mark, because a field never splits. A field that shows no text sits in the range between two words or two of these pieces. The helper addresses the text between atoms with `getRange('Start')`, `getRange('End')`, and `expandTo()`, and reads each part back to check it. A word whose parts do not read back as expected becomes one placeholder, with its trailing space outside it.
-1. When you call `apply()`, it compares the model text with the original words by longest common subsequence. Each run of differences becomes one call: `insertText(text, 'Replace')`, `delete()`, or `insertText(text, 'Before')` or `'After'`.
-1. It writes the calls from the last one to the first, one sync each, so the earlier ranges stay valid. After each write, it reads the paragraph's revisions and records the new ones.
-1. It reads the result with `getReviewedText('Current')` and compares it with the model text.
-1. If a step fails, it finds the paragraph again by its `uniqueLocalId`, rejects the revisions that it recorded, and checks that the paragraph reads as it did.
+- A rewrite stays inside one paragraph. For splits, fields, and equations, see [Tracked changes](/docs/2.x/editor-api/revisions).
+- Either every change lands or the paragraph stays as it was, except after `rollback-failed`.
+- A rollback rejects only this rewrite's changes, never other participants' changes under the same author.
+- If tracking is off, `apply()` turns on `TrackMineOnly` for its writes and then restores the mode. If restoring fails, the mode stays `TrackMineOnly`.
+- An unsynced `changeTrackingMode` assignment of `TrackMineOnly` or `Off` goes with the helper's first sync.
+- In a browser, each writing sync is one undo step. To undo a rewrite as one step, call `runtime.run({ historyGroup: editor.beginHistoryGroup() }, callback)`.
+- After a rewrite, `paragraph.text` reads deleted and inserted words. Call `paragraph.getReviewedText('Current')` for the proposed text.
+- A field result that spans paragraphs, such as a table of contents, is edited as text. A field update replaces the edits.
 
-For the word-range rules, see [Text and ranges](/docs/2.x/editor-api/text-and-ranges#split-text-into-word-ranges). For tracked edit limits, see [Tracked changes](/docs/2.x/editor-api/revisions).
+## See also
+
+- [Tracked changes](/docs/2.x/editor-api/revisions)
+- [Text and ranges](/docs/2.x/editor-api/text-and-ranges#split-text-into-word-ranges)
+- [Replace as a tracked change](/docs/2.x/recipes/tracked-replacement)

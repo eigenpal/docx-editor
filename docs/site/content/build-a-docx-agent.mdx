@@ -5,60 +5,74 @@ category: 'Getting started'
 seoTitle: 'Connect an agent to a DOCX and stream document updates'
 ---
 
-You can show agent updates in three ways. Choose based on where document edits execute and what your agent returns. Your model can run on a backend with any approach.
+Your model can run on any backend. Choose where document edits execute and how readers see them.
 
-```mermaid
-flowchart TD
-  accTitle: Three ways to show agent edits
-  A[Agent output] --> B[Browser document API]
-  A --> C[Shared server document API]
-  A --> D[Complete DOCX refresh]
+## Edit through a browser tool
+
+The following tool edits the open editor with complete, validated arguments:
+
+```ts
+import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
+
+const runtime = DocxEditor.createBrowser(editor, { author: 'Assistant' });
+
+async function replaceText(args: { find: string; replace: string }) {
+  return runtime.run(async (context) => {
+    const matches = context.document.body.search(args.find, { matchCase: true });
+    matches.load('items');
+    await context.sync();
+    if (matches.items.length !== 1) return { applied: false, matches: matches.items.length };
+    matches.items[0]!.insertText(args.replace, 'Replace');
+    await context.sync(); // The edit is now visible.
+    return { applied: true };
+  });
+}
 ```
 
-## 1. Edit the open document in the browser
+- Return plain data to the model.
+- The API does not consume raw token streams or partial tool arguments.
+- Show partial output as progress, then call the tool when the arguments are complete.
 
-Use `DocxEditor.createBrowser(editor)` from `@docx-editor.dev/editor-api/browser`. Connect the runtime to your existing editor, then execute validated agent tools through `runtime.run()`.
+For setup, see [Drive an open browser editor](/docs/2.x/editor-api/runtime#drive-an-open-browser-editor).
 
-Tools use supported Office.js methods such as `search()`, `range.insertText()`, and `range.delete()`. Each completed `context.sync()` makes the edits visible. You do not need collaboration for this approach.
+## Choose an integration
 
-Your application receives the model stream and chooses when to commit. For a progressive draft, insert completed paragraphs. For existing content, apply targeted edits. The API does not consume raw token streams or incomplete tool arguments. Display partial output as progress until an operation is ready.
+| Approach | Use when | Entry point | Guide |
+| --- | --- | --- | --- |
+| Browser tools | The agent edits the document a user has open | `DocxEditor.createBrowser(editor)` | [Runtime and setup](/docs/2.x/editor-api/runtime) |
+| Shared server edits | An agent and readers share a collaboration room | `DocxEditor.createCollaborative(room.document, room.session)` | [Let a server agent propose redlines](/docs/2.x/pro/collaboration#let-a-server-agent-propose-redlines) |
+| Complete file refresh | The agent or a processor returns a whole DOCX | `createDocumentRefresh(editor)` | [Document refresh API](/docs/2.x/guides/document-refresh#api-overview) |
 
-See [Runtime and setup](/docs/2.x/editor-api/runtime#drive-an-open-browser-editor) for the browser integration.
+For refresh, call `capture()` before processing, then pass the result to `refresh.applyUpdate()`. Refresh does not compare arbitrary files or create tracked changes. See the [interactive effects preview](/docs/2.x/guides/document-refresh#try-the-effects).
 
-## 2. Edit a shared document from the server
+## Publish progress safely
 
-Use `DocxEditor.createCollaborative(room.document, room.session)` when an agent and readers share a collaboration room. The worker joins the room and executes document API operations. The collaboration session distributes committed changes to connected clients.
+- A completed `context.sync()` confirms a local commit, not remote acknowledgment or persistence.
+- Before a server worker disconnects, wait for the provider to acknowledge outgoing updates. Persistence needs its own storage policy.
+- Keep job status, room authorization, and job lifetime in your backend. Never replace an active room with an exported DOCX snapshot.
+- Serialize agent operations. Use tool-call IDs to prevent duplicate execution, including calls still running.
 
-Commit each completed operation to show progress in the document. Send job status through your application's transport. Keep room authorization, persistence, and job lifetime in your backend. Exported DOCX files are snapshots of the shared document; do not use them to replace an active room.
+## Show review suggestions
 
-A completed `context.sync()` confirms the local commit. Before you close a worker connection, wait for the provider to acknowledge outgoing updates. Server persistence requires a separate storage policy.
+Set `context.document.changeTrackingMode = 'TrackMineOnly'` and use ordinary range edits. Commit each completed suggestion in its own sync so readers can review it while the agent continues.
 
-See [Collaboration](/docs/2.x/pro/collaboration#let-a-server-agent-propose-redlines) for setup and worker lifecycle.
+Tracking has these requirements:
 
-## 3. Receive complete DOCX files
+- Tracked edits require an explicit `author`.
+- Browser tracking also requires the Pro review module and an editable editor.
+- Tracking records the edits you submit. It does not split a paragraph rewrite into smaller suggestions.
 
-Use `createDocumentRefresh(editor)` when your agent or external processor returns a complete updated file. Call `capture()` before processing, then pass the returned DOCX bytes, submission, and sequence number to `refresh.applyUpdate()`.
+To propose a rewrite word by word, see [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite). For supported operations, see [Supported tracked edits](/docs/2.x/editor-api/revisions#supported-tracked-edits).
 
-The editor keeps its instance and preserves scroll by default. You can call `highlightChanges()` for temporary highlights or `navigateToChange()` to show a changed passage. Highlights require valid change locations or supported tracked revisions. They do not compare arbitrary files or create tracked changes.
+## Limits
 
-Your application must receive or fetch each result; the editor does not watch a file URL. Each accepted replacement resets selection and undo history. Refresh refuses collaborative sessions. It also refuses a result if the document changed after `capture()`.
+- If the document changes after the agent reads it, handle `StaleDocument` by reading again and reconsidering. Never replay the old edit automatically.
+- Each accepted refresh resets selection and undo history. Refresh refuses collaborative sessions and results captured before a later edit.
+- The editor does not watch a file URL. Your application receives or fetches each result.
+- The editing API and Pro review module require the EigenPal Pro License.
 
-See [Document refresh API](/docs/2.x/guides/document-refresh#api-overview) for methods, options, and failure handling. Try its [interactive effects preview](/docs/2.x/guides/document-refresh#try-the-effects) to see scroll preservation, navigation, and fading highlights.
+## See also
 
-For a complete integration, see [Edit DOCX files with Vespper MCP](https://www.docx-editor.dev/blog/vespper-docx-agent). The example uses document refresh to show agent edits and tracked changes.
-
-## Show edits as review suggestions
-
-For API-driven text review, set `document.changeTrackingMode = 'TrackMineOnly'` and use ordinary range edits. Commit each completed suggestion separately so readers can review it while the agent continues.
-
-Tracked edits require an author. Browser tracking also requires the Pro review module and an editable editor. Collaborative tracked replacements stay within one paragraph, including table cells. Tracked deletions can span adjacent paragraphs or remove whole paragraphs.
-
-The API also supports tracked formatting and selected structural edits. Some edits can continue the same author’s pending suggestions; edits that touch another author’s pending suggestions refuse. Check [Supported tracked edits](/docs/2.x/editor-api/revisions#supported-tracked-edits) before choosing operations. Tracking records the edits you submit; it does not divide a paragraph rewrite into smaller suggestions.
-
-If a document changes after the agent reads it, handle `StaleDocument` by reading again and reconsidering the proposal. Do not replay the old edit automatically. Serialize agent operations. Use tool-call IDs to prevent duplicate execution, including calls that are still running.
-
-The editing API and Pro review module require the EigenPal Pro License. See [Tracked changes](/docs/2.x/editor-api/revisions) for supported operations.
-
-## Run the example
-
-The [DOCX document refresh example](/examples/document-refresh) shows a mock server response, scroll preservation, change navigation, and temporary highlights. See its [source on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/document-refresh). The example uses approach 3; it does not require a model API key.
+- [DOCX document refresh example](/examples/document-refresh), with [source on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/document-refresh); no model API key needed
+- [Edit DOCX files with Vespper MCP](https://www.docx-editor.dev/blog/vespper-docx-agent)
+- [Editing API overview](/docs/2.x/editor-api)

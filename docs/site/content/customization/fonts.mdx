@@ -1,339 +1,16 @@
 ---
 title: 'Fonts'
-description: 'Configure DOCX editor fonts with validated font bytes, substitutions, on-demand loading, and React and Vue font pickers.'
+description: 'Load font bytes for DOCX editor layout, replace fonts in place, customize the font picker, and set loading limits.'
 category: 'Customization'
 ---
 
-Pass a font configuration through `fonts`. Use `loadFonts()` for application font files. Include each weight and style that your document uses.
-
-CSS `@font-face` rules supply browser rendering only. The editor also needs font bytes to measure text.
-
-The preview starts with **Default fonts**. Select **Default + Google Fonts** to add Lato, Arvo, and PT Serif to the toolbar font picker. Select document text, then choose a font. Changing the font source resets the preview.
-
-Embedded DOCX fonts load automatically. Font names from the document do not authorize remote font requests.
+Pass a font configuration through `fonts`. The editor measures text with font bytes, so CSS `@font-face` rules do not affect layout.
 
 <CustomizationDemo topic="fonts" />
 
-## Font configuration reference
+## Load application fonts
 
-The DOCX editor needs font bytes for text shaping and page layout. Choose the supplied font sources, selectable families, substitutions, and loading behavior.
-
-| Input to `Root.fonts` | Use |
-| --- | --- |
-| `FontConfigurationFragment` | Supplies font sources, substitutions, or selectable families. |
-| `FontConfiguration` | Supplies a complete configuration with defaults and limits. |
-| `FontResolver` | Loads application-approved faces after document font requests become known. |
-
-### Replace fonts in an existing editor
-
-To replace fonts in React or Vue, pass a new value to the `fonts` prop. The editor replaces the fonts in place: the document, selection, undo history, protection, and collaboration session stay intact. Keep the value stable across renders, because each new value resolves the fonts again.
-
-On a `createDocxEditor` instance, call `editor.setFonts(fonts)`. This changes local layout and paint without changing document content.
-
-```ts
-await editor.setFonts(nextFonts);
-// Remove host-supplied faces when their permission expires.
-await editor.setFonts(undefined);
-```
-
-Replacement cancels the previous resolver. The current faces keep measuring and painting the document until the new faces are ready, so the pages lay out once. If the new fonts supply nothing usable, or the resolver fails, the editor still removes the previous host faces. Removal with `undefined` takes effect at once. Pass the resolver request's `signal` to your fetch operation to cancel network work. Old results cannot restore removed fonts. Without host faces, the editor uses bounded fallback measurement unless the document supplies embedded faces. Current failures report through `onFontError` and retain their original cause.
-
-### Configuration fields
-
-| Field | What you can customize |
-| --- | --- |
-| `sources` | Validated font bytes and their exact family, weight, and style descriptors. |
-| `supportedFamilies` | Selectable provider families. Listing a family performs no fetch. |
-| `substitutions` | Maps a requested face to a supplied substitute face. |
-| `defaultFont` | Family and `sizeHalfPoints` for text with no font declaration. Default: Calibri, `22` half-points. |
-| `language` | BCP-47 language tag for language-sensitive text shaping. |
-| `epoch` | Identifies the configured font byte set. |
-| `maxFontBytes` | Per-face admission limit. Lower it to restrict accepted font resources. |
-
-Use `composeFontConfiguration` to combine font origins. Earlier sources take priority for the same family, weight, and style. A directly supplied face takes priority over a substitution for that face. The composition freezes its configuration and arrays.
-
-### URL loading options
-
-`loadFonts` returns admitted `sources` and typed `failures`. A failed source does not discard the other loaded faces. Cancellation rejects the loading operation through `signal.reason`.
-
-| Option                | Use                                                                     |
-| --------------------- | ----------------------------------------------------------------------- |
-| `sources[].url`       | An explicit application-selected font URL.                              |
-| `sources[].family`    | The font family supplied by those bytes.                                |
-| `sources[].weight`    | Integer from `1` through `1000`.                                        |
-| `sources[].style`     | `normal` or `italic`.                                                   |
-| `sources[].hash`      | Optional expected `sha256:` content hash. Mismatched bytes are refused. |
-| `sources[].faceIndex` | Font collection face index. Defaults to `0`.                            |
-| `cacheName`           | Cache API bucket. Defaults to `docx-editor-fonts`.                      |
-| `fetcher`             | Application fetch implementation. Defaults to global `fetch`.           |
-| `maxFontBytes`        | Per-source byte limit. Defaults to the engine's hard limit.             |
-| `signal`              | Cancels the request and its network operations.                         |
-
-The failure reasons are `networkError`, `httpError`, `hashMismatch`, `overLimit`, `emptyResponse`, `invalidRequest`, and `malformed`. Display useful feedback from the failure list before the application starts editing. A cache entry undergoes content validation before use.
-
-### Local bytes and on-demand loading
-
-Use `createFontSource` when you already hold bytes from a file input, bundle, or application storage. It accepts a face descriptor and returns either a source or a typed failure. It also accepts `faceIndex`, an application `id`, and `maxFontBytes` where specified by its types.
-
-Browser painting uses the selected collection `faceIndex`, like text shaping. The first face uses the complete admitted collection, including its signature. Other faces use a standalone copy that preserves every selected table, including `DSIG`. Collection-header signatures do not block selecting a face. Each selected face has a separate private browser alias. Registration does not verify signatures or establish their validity after extraction. Invalid faces receive no alias. Font admission and shaping execution limits still apply.
-
-A `FontResolver` receives requested `families`, `defaultFamily`, an optional cancellation `signal`, and optional `resolvedFaces`. Use `resolvedFaces` to avoid loading faces supplied by an earlier origin. Return a configuration, fragment, or `undefined` when the resolver covers none of the requested fonts. The editor calls the resolver after loading a document and when editing requests another family.
-
-Use an application-owned family lookup to select remote assets. Do not turn document font names directly into network URLs. A network-backed resolver makes document opening fetch the assets your application approves.
-
-### Font picker customization
-
-Use `Toolbar.FontFamily` for the default picker. It lists these families:
-
-- The families the document uses.
-- The families your font sources serve, such as the packaged fonts and the Google catalog.
-- The standard choices: Arial, Calibri, Cambria, Consolas, Courier New, Garamond, Georgia, Helvetica, Open Sans, Roboto, Times New Roman, and Verdana.
-
-A standard choice that no font source serves appears only if the computer has the font installed. The editor tests this by measuring sample text in the browser. Browser privacy settings can hide installed fonts from that test. To offer a family on every computer, serve it from a font source, such as `customFonts()` or `googleFonts()`. For example, `googleFonts()` serves Open Sans and Roboto. The picker then lists them on every computer, and the editor downloads them only when a document or a pick uses them.
-
-Use the `Trigger`, `Content`, and `Item` parts to change the picker layout. Each item uses its family name as `value`. Use `useFontFamily()` for a complete application picker.
-
-| Hook member        | Meaning                                                           |
-| ------------------ | ----------------------------------------------------------------- |
-| `value`            | Current family, or `null` for mixed values or no document.        |
-| `options`          | Validated, deduplicated, sorted configured and document families. |
-| `isEnabled`        | Whether the engine allows the font operation.                     |
-| `setValue(family)` | Applies a permitted font family change.                           |
-
-A selectable family does not prove that its bytes are loaded. The font catalog includes standard and document-declared choices. Use your loading configuration to provide those faces and their regular, bold, italic, and bold italic variants.
-
-### Layout and loading limits
-
-Embedded document fonts enter the font pipeline automatically when usable. Opening a document does not automatically fetch remote font declarations. A CSS `@font-face` rule changes browser rendering but does not supply the shaping pipeline with bytes. Missing font coverage can change line breaks and page layout. Use `onFontError` for initialization failures and the loader's failure list for individual URL failures.
-
-Font loading and text shaping use separate size limits. A loaded face can exceed the shaping limit. The editor then keeps fallback measurement for that face.
-
-`onFontError` reports that refusal as `overLimit`, the same code as a face that exceeds a loading limit. Its cause retains the original `HarfBuzzShapingError` with code `fontOverLimit`. The error also retains the face request.
-
-The editor reports each oversized face once per font resolution. Opening another document or resolving more fonts can report it again. Throwing from this callback does not interrupt fallback.
-
-Font errors belong to the active document load. Replacing the document or destroying the editor discards delayed errors from older loads. If `onFontError` replaces the document or destroys the editor, the editor does not forward that old error event. If an `error` event listener replaces the document or destroys the editor, later listeners do not receive that error. A throwing callback does not suppress the current error event.
-
-Keep the font configuration's identity stable after editing starts. Changing `Root.fonts` creates another editor instance and resets selection and undo history. Use a stable on-demand resolver when users must choose fonts during editing.
-
-Font loading and text layout have separate limits. `fonts.maxFontBytes` limits which font files your configuration accepts. Text layout uses up to 16 MiB per face by default. For larger admitted files, set `fontShaping: { maxFontBytes }` when creating the editor. The maximum is 64 MiB. Other font-count, total-byte, and text-work limits remain unchanged.
-
-React and Vue keep the editor instance when a new `fontShaping` object has the same `maxFontBytes` value. Changing that value creates another editor instance and resets selection and undo history. The editor reads the limit before opening the document. A face cached by another editor with a larger limit still must meet your editor's limit.
-
-`createDocxEditor` throws a `RangeError` before opening when `maxFontBytes` is not a positive safe integer or exceeds 64 MiB. Omit it to use the default limit. The `FontShapingOptions` type is exported from `@docx-editor.dev/core` and `@docx-editor.dev/core/editor`.
-
-DOM-free `createLayoutShaping` accepts `fontShaping` as its third argument, after instrumentation. Font-backed Core, Markdown, and PDF exports also accept it. It does not affect a custom measurer; Markdown rejects that combination. Peers need the same font bytes and limit for matching layout. Document font names and collaboration data stay unchanged.
-
-## Load Google Fonts on demand
-
-Combine packaged fonts with the Google Fonts provider. The `allow` list limits which Google families the editor can download.
-
-Use the provider's `onFailure` callback to report failed downloads. A font formatting command can succeed before its font bytes arrive.
-
-The provider fetches font files from a pinned Google Fonts catalog. It supplies bytes for text layout and browser rendering. A font change can change line breaks and pagination.
-
-Create the configuration once. Pass it to `DocxEditor.Root` through `fonts`.
-
-<FrameworkTabs variant="block">
-<Framework value="react">
-
-```tsx
-import { useFonts } from '@docx-editor.dev/react';
-import { packagedFonts } from '@docx-editor.dev/fonts';
-import { googleFonts } from '@docx-editor.dev/fonts/google';
-
-const local = packagedFonts();
-const remote = googleFonts({ allow: ['Lato', 'Arvo', 'PT Serif'] });
-
-export function useContractFonts() {
-  return useFonts(local, remote);
-}
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<script setup lang="ts">
-import { DocxEditor, useFonts } from '@docx-editor.dev/vue';
-import { packagedFonts } from '@docx-editor.dev/fonts';
-import { googleFonts } from '@docx-editor.dev/fonts/google';
-
-defineProps<{ bytes: Uint8Array }>();
-const fonts = useFonts(packagedFonts(), googleFonts({ allow: ['Lato', 'Arvo', 'PT Serif'] }));
-</script>
-
-<template>
-  <DocxEditor.Root :document="bytes" :fonts="fonts">
-    <DocxEditor.Toolbar />
-    <DocxEditor.Viewport :style="{ height: '520px' }">
-      <DocxEditor.Content />
-    </DocxEditor.Viewport>
-  </DocxEditor.Root>
-</template>
-```
-
-</Framework>
-</FrameworkTabs>
-
-The toolbar font picker applies the selected family to selected text. Google Fonts download when the editor needs their font bytes.
-
-## Render Chinese, Japanese, and Korean text
-
-Documents often name East Asian fonts such as SimSun, MS Mincho, or Malgun Gothic, which most hosts do not have. Choose one of these sources for them:
-
-- `googleFonts({ cjk: true })` loads one regional Noto Sans face from a pinned Google Fonts revision: JP, SC, TC, or KR. Each face is 4.6 to 8.5 MB, and a document loads only the regions it names.
-- `cjkFonts()` from `@docx-editor.dev/fonts-cjk` loads one pan-CJK face, Noto Sans CJK JP, from where your bundler emits it. The file is about 16 MB. No request goes to a third party.
-
-Both sources recognize English and localized family names, and download nothing for a document that names no East Asian family. Use one of them. If you list both, both fonts download and the source listed first paints the text.
-
-```tsx
-import { useFonts } from '@docx-editor.dev/react';
-import { packagedFonts } from '@docx-editor.dev/fonts';
-import { googleFonts } from '@docx-editor.dev/fonts/google';
-
-export function useDocumentFonts() {
-  return useFonts(packagedFonts(), googleFonts({ cjk: true }));
-}
-```
-
-To keep CJK font downloads on your own origin, use `cjkFonts()` instead. Keep `googleFonts()` without the `cjk` option for the other families:
-
-```tsx
-import { useFonts } from '@docx-editor.dev/react';
-import { packagedFonts } from '@docx-editor.dev/fonts';
-import { googleFonts } from '@docx-editor.dev/fonts/google';
-import { cjkFonts } from '@docx-editor.dev/fonts-cjk/browser';
-
-export function useDocumentFonts() {
-  return useFonts(packagedFonts(), googleFonts(), cjkFonts());
-}
-```
-
-Each face has one weight and one style. Substituting it can change glyph forms, line breaks, and page counts. The `CJK_SUBSTITUTED_FAMILIES` and `LOCALIZED_CJK_FAMILIES` exports list the families `cjkFonts()` covers. Use the `onFailure` option to report a failed download; the document then keeps its other fonts.
-
-Both sources load CJK faces in the background by default. For more information, see [Choose when large fonts load](#choose-when-large-fonts-load).
-
-## Choose when large fonts load
-
-Each font origin either waits or loads in the background:
-
-- _Wait_: the origin's faces install in the same step as the other waiting faces. A large document, over about 512 KB of uncompressed content, waits up to 2 seconds for them before its first paint. If they arrive later, the document lays out again then. A small document paints at once and lays out again when its fonts arrive.
-- _Background_: the first paint never waits for the origin's faces. They install in a separate step when they arrive, and the document lays out again. Text in those faces can move at that point.
-
-| Source                       | Default    | To wait                                     |
-| ---------------------------- | ---------- | ------------------------------------------- |
-| `googleFonts({ cjk: true })` | Background | `googleFonts({ cjk: { loading: 'wait' } })` |
-| `cjkFonts()`                 | Background | `cjkFonts({ loading: 'wait' })`             |
-| Any other origin             | Wait       | Leave it unwrapped                          |
-
-While background faces are on their way, `editor.fontMeasurement().resolving` is `true`. It changes to `false` after their layout, or after 10 seconds if a download stalls. Faces that arrive later still install.
-
-To load any other origin in the background, wrap it in `deferFonts()`:
-
-```tsx
-import { deferFonts, useFonts, type FontOrigin } from '@docx-editor.dev/react';
-import { packagedFonts } from '@docx-editor.dev/fonts';
-
-export function useDocumentFonts(brandFonts: FontOrigin) {
-  return useFonts(packagedFonts(), deferFonts(brandFonts));
-}
-```
-
-`deferFonts()` is exported from `@docx-editor.dev/react`, `@docx-editor.dev/vue`, and `@docx-editor.dev/core`. A custom resolver can also return its large faces on the `deferred` field of its answer. A late answer adds faces only: return settings such as `defaultFont`, `maxFontBytes`, and `language` in the immediate answer. A document export that receives these resolvers, such as a PDF conversion, waits for every face.
-
-## React and Vue reference
-
-Pass your DOCX bytes and loaded fonts to this component. The preview uses a fictional contract.
-
-<FrameworkTabs variant="block">
-<Framework value="react">
-
-```tsx
-import { DocxEditor, type DocxEditorRootProps } from '@docx-editor.dev/react';
-import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
-import '@docx-editor.dev/core/styles/editor.css';
-
-const modules = [reviewModule()];
-
-export function ContractEditor({
-  bytes,
-  fonts,
-}: {
-  bytes: Uint8Array;
-  fonts: DocxEditorRootProps['fonts'];
-}) {
-  return (
-    <div className="docx-editor contract-workspace">
-      <DocxEditor.Root
-        document={bytes}
-        fonts={fonts}
-        modules={modules}
-        author="Demo reviewer"
-        mode="suggesting"
-        reviewDisplayMode="all-markup"
-      >
-        <DocxEditor.Toolbar preset={false}>
-          <DocxEditor.Toolbar.FontFamily />
-          <DocxEditor.Toolbar.FontSize />
-        </DocxEditor.Toolbar>
-        <DocxEditor.Viewport style={{ height: 520 }}>
-          <DocxEditor.Content />
-          <DocxEditor.HyperLink />
-          <DocxEditor.ContextMenu />
-          <DocxEditorReview />
-        </DocxEditor.Viewport>
-      </DocxEditor.Root>
-    </div>
-  );
-}
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<script setup lang="ts">
-import { DocxEditor } from '@docx-editor.dev/vue';
-import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/vue';
-import type { FontConfigurationFragment } from '@docx-editor.dev/vue';
-import '@docx-editor.dev/core/styles/editor.css';
-
-defineProps<{ bytes: Uint8Array; fonts: FontConfigurationFragment }>();
-const modules = [reviewModule()];
-</script>
-
-<template>
-  <div class="docx-editor contract-workspace">
-    <DocxEditor.Root
-      :document="bytes"
-      :fonts="fonts"
-      :modules="modules"
-      author="Demo reviewer"
-      mode="suggesting"
-      review-display-mode="all-markup"
-    >
-      <DocxEditor.Toolbar :preset="false">
-        <DocxEditor.Toolbar.FontFamily />
-        <DocxEditor.Toolbar.FontSize />
-      </DocxEditor.Toolbar>
-      <DocxEditor.Viewport :style="{ height: '520px' }">
-        <DocxEditor.Content />
-        <DocxEditor.HyperLink />
-        <DocxEditor.ContextMenu />
-        <DocxEditorReview />
-      </DocxEditor.Viewport>
-    </DocxEditor.Root>
-  </div>
-</template>
-```
-
-</Framework>
-</FrameworkTabs>
-
-## Load your font files
-
-Host font files in your application. Load them before you mount the editor. This helper supplies bytes for measurement and rendering.
+Host your font files and load them with `loadFonts()`. Include each weight and style the document uses.
 
 ```ts
 // contract-fonts.ts
@@ -359,7 +36,7 @@ export function loadContractFonts() {
 }
 ```
 
-Call the helper after mount. Keep loading failures visible.
+`loadFonts()` returns admitted `sources` and typed `failures`. One failure does not discard other faces.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -379,15 +56,10 @@ export function FontEditor({ bytes }: { bytes: Uint8Array }) {
     loadContractFonts().then(
       (value) => {
         if (disposed) return;
-        if (value.failures.length > 0) {
-          setFailed(true);
-          return;
-        }
-        setFonts(value);
+        if (value.failures.length > 0) setFailed(true);
+        else setFonts(value);
       },
-      () => {
-        if (!disposed) setFailed(true);
-      }
+      () => !disposed && setFailed(true)
     );
     return () => {
       disposed = true;
@@ -416,11 +88,8 @@ onMounted(() => {
   loadContractFonts().then(
     (value) => {
       if (disposed) return;
-      if (value.failures.length > 0) {
-        failed.value = true;
-        return;
-      }
-      fonts.value = value;
+      if (value.failures.length > 0) failed.value = true;
+      else fonts.value = value;
     },
     () => {
       if (!disposed) failed.value = true;
@@ -442,11 +111,108 @@ onUnmounted(() => {
 </Framework>
 </FrameworkTabs>
 
-Use `useFonts()` with `packagedFonts()` to load the packaged families. A new `fonts` value replaces the fonts in place, so keep the configuration stable across renders.
+| `loadFonts()` option  | Use                                                              |
+| --------------------- | ---------------------------------------------------------------- |
+| `sources[].url`       | Application-selected font URL.                                   |
+| `sources[].family`    | Family the bytes supply.                                         |
+| `sources[].weight`    | Integer from `1` through `1000`.                                 |
+| `sources[].style`     | `normal` or `italic`.                                            |
+| `sources[].hash`      | Optional `sha256:` hash. Mismatched bytes are refused.           |
+| `sources[].faceIndex` | Collection face index. Default `0`.                              |
+| `cacheName`           | Cache API bucket. Default `docx-editor-fonts`.                   |
+| `fetcher`             | Fetch implementation. Default global `fetch`.                    |
+| `maxFontBytes`        | Per-source byte limit. Default is the engine hard limit.         |
+| `signal`              | Cancels the request. The operation rejects with `signal.reason`. |
 
-## Build an application picker
+Failure reasons are `networkError`, `httpError`, `hashMismatch`, `overLimit`, `emptyResponse`, `invalidRequest`, and `malformed`. Cached entries are validated before use. For bytes you hold, `createFontSource` returns a source or a typed failure.
 
-Mount this picker inside `DocxEditor.Root` with the document surface. The hook reads the loaded document and checks whether the selection supports a change. A native select retains its normal keyboard and focus behavior.
+## Choose a font source
+
+`fonts` accepts a `FontConfigurationFragment`, a complete `FontConfiguration`, or a `FontResolver`. Combine origins with `useFonts()` or `composeFontConfiguration`.
+
+```tsx
+import { useFonts } from '@docx-editor.dev/react';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+
+const local = packagedFonts();
+const remote = googleFonts({ allow: ['Lato', 'Arvo', 'PT Serif'] });
+
+export function useContractFonts() {
+  return useFonts(local, remote);
+}
+```
+
+In Vue, call `useFonts()` the same way in `<script setup>` and bind the result to `:fonts`.
+
+| Source | Use |
+| --- | --- |
+| `packagedFonts()` | Metric-compatible substitutes for common defaults. |
+| `customFonts()` | Your own hosted families. |
+| `googleFonts({ allow })` | Pinned Google Fonts catalog. `allow` limits downloads. `onFailure` reports failed downloads. |
+| `FontResolver` | Loads approved faces after the document requests families. |
+| Embedded DOCX fonts | Load automatically when usable. |
+
+Earlier sources win for the same family, weight, and style. A supplied face wins over a substitution. For more, see [Fonts and measurement](/docs/2.x/guides/fonts).
+
+| Configuration field | Use                                                                     |
+| ------------------- | ----------------------------------------------------------------------- |
+| `sources`           | Validated bytes with family, weight, and style.                         |
+| `supportedFamilies` | Selectable families. Listing performs no fetch.                         |
+| `substitutions`     | Maps a requested face to a supplied face.                               |
+| `defaultFont`       | Family and `sizeHalfPoints` for undeclared text. Default Calibri, `22`. |
+| `language`          | BCP-47 tag for language-sensitive shaping.                              |
+| `epoch`             | Identifies the font byte set.                                           |
+| `maxFontBytes`      | Per-face admission limit.                                               |
+
+A `FontResolver` receives `families`, `defaultFamily`, and optional `signal` and `resolvedFaces`. It returns a configuration, a fragment, or `undefined`. Map family names to URLs through your own lookup, and pass `signal` to your fetch calls so cancellation stops network work.
+
+### Render Chinese, Japanese, and Korean text
+
+Choose one East Asian source. If you list both, both download and the first one paints.
+
+```tsx
+import { useFonts } from '@docx-editor.dev/react';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+import { cjkFonts } from '@docx-editor.dev/fonts-cjk/browser';
+
+// Option 1: regional Noto Sans faces from Google Fonts, 4.6 to 8.5 MB each.
+export function useGoogleCjkFonts() {
+  return useFonts(packagedFonts(), googleFonts({ cjk: true }));
+}
+
+// Option 2: one pan-CJK face, about 16 MB, from your origin.
+export function useSelfHostedCjkFonts() {
+  return useFonts(packagedFonts(), googleFonts(), cjkFonts());
+}
+```
+
+Call one of these hooks in your editor component and pass the result to `fonts`.
+
+Neither downloads anything for documents without East Asian families. For setup details, see [Chinese, Japanese, and Korean text](/docs/2.x/guides/cjk).
+
+## Replace fonts
+
+A new `fonts` prop value calls `setFonts()`. The instance, document, selection, undo history, protection, and collaboration session stay. On a `createDocxEditor` instance, call it directly.
+
+```ts
+await editor.setFonts(nextFonts);
+// Remove host-supplied faces when their permission expires.
+await editor.setFonts(undefined);
+```
+
+| Change | Result |
+| --- | --- |
+| New fonts | Cancels the previous resolver. Current faces paint until the new ones are ready. |
+| New fonts that fail or supply nothing usable | Removes the previous host faces anyway. Text uses fallback measurement unless the document embeds faces. `onFontError` reports the failure. |
+| `undefined` | Removes host faces at once. |
+
+Keep `fonts` stable across renders, because each new value resolves fonts again.
+
+## Customize the font picker
+
+Rearrange `Toolbar.FontFamily` with its `Trigger`, `Content`, and `Item` parts, or build a picker with `useFontFamily()`.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -457,24 +223,21 @@ import { useFontFamily } from '@docx-editor.dev/react';
 export function ContractFontPicker() {
   const { value, options, isEnabled, setValue } = useFontFamily();
   return (
-    <label>
-      Font family
-      <select
-        aria-label="Font family"
-        disabled={!isEnabled}
-        value={value ?? ''}
-        onChange={(event) => setValue(event.currentTarget.value)}
-      >
-        <option value="" disabled>
-          Mixed or default
+    <select
+      aria-label="Font family"
+      disabled={!isEnabled}
+      value={value ?? ''}
+      onChange={(event) => setValue(event.currentTarget.value)}
+    >
+      <option value="" disabled>
+        Mixed or default
+      </option>
+      {options.map((option) => (
+        <option key={option} value={option}>
+          {option}
         </option>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    </label>
+      ))}
+    </select>
   );
 }
 ```
@@ -493,21 +256,80 @@ function onChange(event: Event) {
 </script>
 
 <template>
-  <label>
-    Font family
-    <select aria-label="Font family" :disabled="!isEnabled" :value="value ?? ''" @change="onChange">
-      <option value="" disabled>Mixed or default</option>
-      <option v-for="option in options" :key="option" :value="option">
-        {{ option }}
-      </option>
-    </select>
-  </label>
+  <select aria-label="Font family" :disabled="!isEnabled" :value="value ?? ''" @change="onChange">
+    <option value="" disabled>Mixed or default</option>
+    <option v-for="option in options" :key="option" :value="option">
+      {{ option }}
+    </option>
+  </select>
 </template>
 ```
 
 </Framework>
 </FrameworkTabs>
 
-## More control
+| `useFontFamily()` member | Meaning                                                 |
+| ------------------------ | ------------------------------------------------------- |
+| `value`                  | Current family. `null` for mixed values or no document. |
+| `options`                | Sorted, deduplicated configured and document families.  |
+| `isEnabled`              | Whether the engine allows the change.                   |
+| `setValue(family)`       | Applies a permitted family change.                      |
 
-See [Fonts and measurement](/docs/2.x/guides/fonts) for supported parts, types, and additional examples.
+The picker lists document, served, and standard families. An unserved standard family appears only if the browser detects it. A listed family may have no loaded bytes.
+
+## Configure loading and limits
+
+### Choose when large fonts load
+
+A waiting origin delays the first paint of a large document (over about 512 KB of uncompressed content, so a smaller DOCX file can still wait) by up to 2 seconds. A background origin never delays it, so text can move later.
+
+| Source                       | Default    | To wait                                     |
+| ---------------------------- | ---------- | ------------------------------------------- |
+| `googleFonts({ cjk: true })` | Background | `googleFonts({ cjk: { loading: 'wait' } })` |
+| `cjkFonts()`                 | Background | `cjkFonts({ loading: 'wait' })`             |
+| Any other origin             | Wait       | Leave it unwrapped.                         |
+
+To load any other origin in the background, wrap it in `deferFonts()`:
+
+```tsx
+import { deferFonts, useFonts, type FontOrigin } from '@docx-editor.dev/react';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+
+export function useDocumentFonts(brandFonts: FontOrigin) {
+  return useFonts(packagedFonts(), deferFonts(brandFonts));
+}
+```
+
+- `deferFonts()` is also exported from `@docx-editor.dev/vue` and `@docx-editor.dev/core`.
+- While background faces load, `editor.fontMeasurement().resolving` is `true`, for up to 10 seconds. Faces that arrive later still install.
+- A resolver can return large faces on its `deferred` field. It returns `defaultFont`, `maxFontBytes`, and `language` immediately.
+- Exports wait for every face.
+
+### Shaping limits
+
+Text shaping uses up to 16 MiB per face by default. For larger admitted faces, set `fontShaping: { maxFontBytes }` on the editor, up to 64 MiB.
+
+| Behavior | Detail |
+| --- | --- |
+| Changed `maxFontBytes` value | React and Vue create another instance. Selection and undo history reset. |
+| Same value in a new object | Keeps the instance. |
+| Not a positive safe integer, or over 64 MiB | `createDocxEditor` throws `RangeError`. |
+| Face over the shaping limit | Uses fallback measurement. `onFontError` reports `overLimit` with a `HarfBuzzShapingError` cause, code `fontOverLimit`, and a `request` with the face's family, weight, and style. |
+
+The type is `FontShapingOptions`, from `@docx-editor.dev/core` and `@docx-editor.dev/core/editor`. `createLayoutShaping` takes it as its third argument, and font-backed Core, Markdown, and PDF exports accept it. Collaboration peers need the same bytes and limit.
+
+## Limits
+
+- Document font names never authorize remote requests.
+- `onFontError` reports initialization failures with the original cause. Each oversized face reports once per resolution.
+- Replacing the document or destroying the editor discards errors from older loads.
+- A throwing `onFontError` does not interrupt fallback or suppress the error event.
+- Missing coverage can change line breaks and pagination. A font command can succeed before its bytes arrive.
+- `fontShaping` does not affect a custom measurer. Markdown rejects that combination.
+- For font collection rendering details, see [DOCX feature support](/docs/2.x/docx-fidelity).
+
+## See also
+
+- [Fonts and measurement](/docs/2.x/guides/fonts)
+- [Chinese, Japanese, and Korean text](/docs/2.x/guides/cjk)
+- [Document styles](/docs/2.x/customization/document-styles)
