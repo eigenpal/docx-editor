@@ -542,7 +542,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The innermost table owns the resize controls, the structural edits, and the cell borders and fill. Outer tables stay unchanged through save and reopen. A nested table continues across pages between its rows, and a nested row taller than the space left splits inside its cells. A nested table with header rows or vertical merges moves whole to the next page, and splits there when a page cannot hold it.',
+      'The innermost table owns the resize controls, the structural edits, and the cell borders and fill. Outer tables stay unchanged through save and reopen. A nested table continues across pages between its rows, and a nested row taller than the space left splits inside its cells. A nested table with vertical merges also breaks between the rows of a merge. A nested table with header rows moves whole to the next page, and splits there when a page cannot hold it.',
   },
   {
     id: 'tables.conditional-formatting',
