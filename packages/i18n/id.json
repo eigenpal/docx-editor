@@ -60,7 +60,10 @@
     "bookmarkShortcut": "Ctrl+Shift+F5",
     "goToBookmark": "Buka penanda…",
     "goToBookmarkShortcut": "Ctrl+G",
-    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G",
+    "printComments": "Cetak komentar",
+    "printCommentsNote": "Komentar hanya dicetak dalam {mode}.",
+    "printMarkup": "Markup"
   },
   "formattingBar": {
     "groups": {

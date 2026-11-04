@@ -635,12 +635,24 @@ export type {
 export { runChromeExport, ChromeExportError } from './chrome-export.ts';
 export type {
   ChromeExportView,
+  ChromePrintSettings,
   ChromeExportFormat,
   ChromeExportHandlers,
   ChromeExportResult,
 } from './chrome-export.ts';
-export { runChromePrint, ChromePrintError, isChromePrintShortcut } from './chrome-print.ts';
-export type { ChromePrintErrorCode, ChromePrintJob, ChromePrintOptions } from './chrome-print.ts';
+export {
+  runChromePrint,
+  ChromePrintError,
+  isChromePrintShortcut,
+  initialChromePrintSettings,
+  nextChromePrintSettings,
+} from './chrome-print.ts';
+export type {
+  ChromePrintErrorCode,
+  ChromePrintJob,
+  ChromePrintOptions,
+  ResolvedChromePrintSettings,
+} from './chrome-print.ts';
 
 export {
   DEFAULT_REVIEW_PANE,

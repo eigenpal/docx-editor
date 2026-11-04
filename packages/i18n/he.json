@@ -61,7 +61,10 @@
     "bookmarkShortcut": "Ctrl+Shift+F5",
     "goToBookmark": "מעבר לסימניה…",
     "goToBookmarkShortcut": "Ctrl+G",
-    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G",
+    "printComments": "הדפס הערות",
+    "printCommentsNote": "הערות מודפסות רק במצב {mode}.",
+    "printMarkup": "סימון"
   },
   "formattingBar": {
     "groups": {

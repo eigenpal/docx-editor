@@ -106,3 +106,45 @@ test('PDF receives the viewer settings captured before an asynchronous save', as
     }
   );
 });
+
+test('PDF print settings override the display mode and carry the comments choice', async () => {
+  const snapshot = {
+    ...LOADING_SNAPSHOT,
+    reviewDisplayMode: 'all-markup' as const,
+    revisionMarkup: DEFAULT_REVISION_MARKUP,
+  };
+  const views: unknown[] = [];
+  const editor = {
+    snapshot: () => snapshot,
+    getReviewAuthors: () => [{ author: 'Author', slot: 2, color: 'blue' }],
+    save: async () => new ArrayBuffer(0),
+  };
+  const handlers = {
+    pdf: async (_bytes: Uint8Array, view?: unknown) => {
+      views.push(view);
+      return { bytes: new TextEncoder().encode('%PDF-1.7') };
+    },
+  };
+  await runChromeExport(editor, 'pdf', handlers);
+  await runChromeExport(editor, 'pdf', handlers, { displayMode: 'original', comments: false });
+  await runChromeExport(editor, 'pdf', handlers, { comments: true });
+  expect(views).toEqual([
+    {
+      displayMode: 'all-markup',
+      revisionMarkup: DEFAULT_REVISION_MARKUP,
+      revisionAuthorSlots: { Author: 2 },
+    },
+    {
+      displayMode: 'original',
+      comments: false,
+      revisionMarkup: DEFAULT_REVISION_MARKUP,
+      revisionAuthorSlots: { Author: 2 },
+    },
+    {
+      displayMode: 'all-markup',
+      comments: true,
+      revisionMarkup: DEFAULT_REVISION_MARKUP,
+      revisionAuthorSlots: { Author: 2 },
+    },
+  ]);
+});

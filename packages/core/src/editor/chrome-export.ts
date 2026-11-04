@@ -14,6 +14,23 @@ export interface ChromeExportView {
   readonly revisionMarkup: ResolvedRevisionMarkup;
   /** Stable session slots, including gaps left by removed authors. */
   readonly revisionAuthorSlots?: Readonly<Record<string, number>>;
+  /**
+   * Whether the PDF shows comments. Set from the print settings the user chose. Pass it to
+   * `exportPdf` as `comments`. Absent means the converter default, which shows comments.
+   */
+  readonly comments?: boolean;
+}
+
+/**
+ * Settings the user picks before printing. Each omitted setting keeps the editor's current
+ * view: the review display mode, and comments shown.
+ * @public
+ */
+export interface ChromePrintSettings {
+  /** Which markup prints, as on the Review tab. */
+  readonly displayMode?: ReviewDisplayMode;
+  /** Whether the PDF shows comments. Comment balloons print only with `all-markup`. */
+  readonly comments?: boolean;
 }
 
 /**
@@ -54,12 +71,14 @@ export class ChromeExportError extends Error {
 /**
  * Saves the current document and converts those bytes through the configured handler.
  * Missing handlers fail before saving. Conversion never changes the editor document.
+ * `settings` overrides the captured view for PDF conversion, such as print settings.
  * @public
  */
 export async function runChromeExport(
   editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>,
   format: ChromeExportFormat,
-  handlers: ChromeExportHandlers = {}
+  handlers: ChromeExportHandlers = {},
+  settings: ChromePrintSettings = {}
 ): Promise<ChromeExportResult> {
   if (format === 'markdown') {
     if (!handlers.markdown) throw new ChromeExportError(format);
@@ -77,7 +96,8 @@ export async function runChromeExport(
   const snapshot = editor.snapshot?.();
   const view = snapshot
     ? {
-        displayMode: snapshot.reviewDisplayMode ?? 'proposed',
+        displayMode: settings.displayMode ?? snapshot.reviewDisplayMode ?? 'proposed',
+        ...(settings.comments === undefined ? {} : { comments: settings.comments }),
         revisionMarkup: snapshot.revisionMarkup,
         ...(editor.getReviewAuthors
           ? {

@@ -60,7 +60,10 @@
     "bookmarkShortcut": "Strg+Umschalt+F5",
     "goToBookmark": "Gehe zu Textmarke…",
     "goToBookmarkShortcut": "Strg+G",
-    "goToBookmarkShortcutApple": "Strg+Alt+G"
+    "goToBookmarkShortcutApple": "Strg+Alt+G",
+    "printComments": "Kommentare drucken",
+    "printCommentsNote": "Kommentare werden nur in {mode} gedruckt.",
+    "printMarkup": "Markup"
   },
   "formattingBar": {
     "groups": {

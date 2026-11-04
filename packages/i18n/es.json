@@ -129,7 +129,10 @@
     "bookmarkShortcut": "Ctrl+Shift+F5",
     "goToBookmark": "Ir a marcador…",
     "goToBookmarkShortcut": "Ctrl+G",
-    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G",
+    "printComments": "Imprimir comentarios",
+    "printCommentsNote": "Los comentarios solo se imprimen en {mode}.",
+    "printMarkup": "Marcas de revisión"
   },
   "toc": {
     "refresh": "Actualizar tabla de contenido",

@@ -1,7 +1,19 @@
 import type { DocxEditorChildren } from '../docx-editor-children';
-import { defineComponent, type CSSProperties, type PropType } from 'vue';
+import {
+  defineComponent,
+  getCurrentInstance,
+  nextTick,
+  type CSSProperties,
+  type PropType,
+} from 'vue';
 import { useTranslation } from '../i18n';
-import { isChromePrintShortcut } from '@docx-editor.dev/core/editor';
+import {
+  isChromePrintShortcut,
+  isHTMLElementNode,
+  type ChromePrintSettings,
+  type ResolvedChromePrintSettings,
+} from '@docx-editor.dev/core/editor';
+import type { ReviewDisplayMode } from '@docx-editor.dev/core';
 import { NativeDialog } from './dialog-parts';
 
 /** State and presentation for the File menu print dialog. @public */
@@ -20,6 +32,17 @@ export interface DocxEditorPrintDialogProps {
   url: string;
   /** Closes the dialog. While `pending` is true, closing also cancels printing. */
   onClose(): void;
+  /**
+   * True while the dialog shows print settings, before conversion starts. Present only when
+   * the menu's `printSettings` step is on.
+   */
+  choosing?: boolean;
+  /** The settings the form shows. */
+  settings?: ResolvedChromePrintSettings;
+  /** Changes a setting. Leaving All Markup turns comments off. */
+  onSettingsChange?: (change: ChromePrintSettings) => void;
+  /** Starts conversion with `settings`. */
+  onPrint?: () => void;
   /** Additional class on the dialog element. */
   className?: string;
   /** Inline styles on the dialog element. */
@@ -27,6 +50,33 @@ export interface DocxEditorPrintDialogProps {
   /** Replaces the default contents while retaining the modal and focus behavior. */
   children?: DocxEditorChildren;
 }
+
+/**
+ * Confirming the settings form removes its focused Print button, which leaves focus on the
+ * page body behind the modal. The progress view's button takes it, so Escape and Enter
+ * still reach the dialog. Called after the patch, when the Print button is gone.
+ */
+function takeFocusFromForm(button: unknown): void {
+  if (!isHTMLElementNode(button)) return;
+  const active = button.ownerDocument.activeElement;
+  if (!active || !button.closest('dialog')?.contains(active)) {
+    button.focus({ preventScroll: true });
+  }
+}
+
+const PRINT_MODES: readonly {
+  readonly mode: ReviewDisplayMode;
+  readonly labelKey:
+    | 'review.allMarkup'
+    | 'review.simpleMarkup'
+    | 'review.noMarkup'
+    | 'review.original';
+}[] = [
+  { mode: 'all-markup', labelKey: 'review.allMarkup' },
+  { mode: 'simple-markup', labelKey: 'review.simpleMarkup' },
+  { mode: 'proposed', labelKey: 'review.noMarkup' },
+  { mode: 'original', labelKey: 'review.original' },
+];
 
 /**
  * Default progress and error dialog for `popups.print`. The editor closes it when the
@@ -45,12 +95,95 @@ export const DocxEditorPrintDialog = defineComponent({
     error: { type: String, required: true },
     url: { type: String, required: true },
     onClose: { type: Function as PropType<() => void>, required: true },
+    choosing: { type: Boolean, default: false },
+    settings: { type: Object as PropType<ResolvedChromePrintSettings>, default: undefined },
+    onSettingsChange: {
+      type: Function as PropType<(change: ChromePrintSettings) => void>,
+      default: undefined,
+    },
+    onPrint: { type: Function as PropType<() => void>, default: undefined },
   },
   setup(props, { attrs, slots }) {
     const { t } = useTranslation();
+    const id = `docx-print-${getCurrentInstance()?.uid ?? 0}`;
+    const settingsForm = (
+      title: string,
+      settings: ResolvedChromePrintSettings,
+      change: (change: ChromePrintSettings) => void,
+      print: () => void
+    ) => {
+      const commentsAvailable = settings.displayMode === 'all-markup';
+      return (
+        <>
+          <header class="docx-dialog__header" data-docx-part="print-settings">
+            <h2 class="docx-dialog__title">{title}</h2>
+          </header>
+          <div class="docx-dialog__body">
+            <fieldset class="docx-dialog__fieldset">
+              <legend class="docx-dialog__section-label">{t('toolbar.printMarkup')}</legend>
+              {PRINT_MODES.map(({ mode, labelKey }) => (
+                <label
+                  key={mode}
+                  data-docx-part="field"
+                  data-docx-field={mode}
+                  class="docx-dialog__checkbox-row"
+                >
+                  <input
+                    type="radio"
+                    name={`${id}-mode`}
+                    checked={settings.displayMode === mode}
+                    onChange={() => change({ displayMode: mode })}
+                  />
+                  {t(labelKey)}
+                </label>
+              ))}
+            </fieldset>
+            <label
+              data-docx-part="field"
+              data-docx-field="comments"
+              class="docx-dialog__checkbox-row"
+            >
+              <input
+                type="checkbox"
+                disabled={!commentsAvailable}
+                checked={settings.comments}
+                aria-describedby={commentsAvailable ? undefined : `${id}-comments-note`}
+                onChange={(event: Event) =>
+                  change({ comments: (event.target as HTMLInputElement).checked })
+                }
+              />
+              {t('toolbar.printComments')}
+            </label>
+            {!commentsAvailable && (
+              <p id={`${id}-comments-note`} class="docx-dialog__note">
+                {t('toolbar.printCommentsNote', { mode: t('review.allMarkup') })}
+              </p>
+            )}
+          </div>
+          <footer class="docx-dialog__footer">
+            <button type="button" class="docx-dialog__button" onClick={props.onClose}>
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              class="docx-dialog__button docx-dialog__button--primary"
+              onClick={print}
+            >
+              {t('toolbar.print')}
+            </button>
+          </footer>
+        </>
+      );
+    };
     return () => {
       if (!props.open) return null;
-      const title = t(props.error ? 'toolbar.printFailed' : 'toolbar.printPreparing');
+      const settings = props.settings;
+      const change = props.onSettingsChange;
+      const print = props.onPrint;
+      const form = props.choosing && settings && change && print;
+      const title = t(
+        props.error ? 'toolbar.printFailed' : form ? 'toolbar.print' : 'toolbar.printPreparing'
+      );
       // Only the editor's own object URL becomes a link.
       const openUrl = props.url.startsWith('blob:') ? props.url : '';
       return (
@@ -71,11 +204,18 @@ export const DocxEditorPrintDialog = defineComponent({
           // The dialog stops key events, so it claims the print shortcut itself. Otherwise
           // the browser prints the editor page while the PDF is prepared.
           onKeydown={(event: KeyboardEvent) => {
-            if (isChromePrintShortcut(event)) event.preventDefault();
+            if (!isChromePrintShortcut(event)) return;
+            event.preventDefault();
+            // On the settings step the shortcut confirms, as a second press does in a print
+            // dialog.
+            if (form) print();
           }}
           content={() =>
             slots.default?.() ??
-            props.children ?? (
+            props.children ??
+            (form ? (
+              settingsForm(title, settings, change, print)
+            ) : (
               <>
                 <header class="docx-dialog__header">
                   {props.pending && (
@@ -103,12 +243,17 @@ export const DocxEditorPrintDialog = defineComponent({
                       {t('toolbar.printOpenPdf')}
                     </a>
                   )}
-                  <button type="button" class="docx-dialog__button" onClick={props.onClose}>
+                  <button
+                    type="button"
+                    class="docx-dialog__button"
+                    ref={(button: unknown) => void nextTick(() => takeFocusFromForm(button))}
+                    onClick={props.onClose}
+                  >
                     {t(props.error ? 'common.close' : 'common.cancel')}
                   </button>
                 </footer>
               </>
-            )
+            ))
           }
         />
       );

@@ -1,6 +1,12 @@
 import { afterEach, expect, test } from 'bun:test';
 import { ChromeExportError } from '../chrome-export.ts';
-import { ChromePrintError, isChromePrintShortcut, runChromePrint } from '../chrome-print.ts';
+import {
+  ChromePrintError,
+  initialChromePrintSettings,
+  isChromePrintShortcut,
+  nextChromePrintSettings,
+  runChromePrint,
+} from '../chrome-print.ts';
 
 const PDF = new TextEncoder().encode('%PDF-1.7\n');
 const editor = { save: async () => new ArrayBuffer(1) };
@@ -222,4 +228,33 @@ test('PDF bytes in shared memory still print', async () => {
   const job = await runChromePrint(editor, { pdf: async () => ({ bytes: shared }) });
   expect(job.url).toStartWith('blob:');
   job.dispose();
+});
+
+test('print settings start from the current view and keep comments to All Markup', () => {
+  expect(initialChromePrintSettings({ reviewDisplayMode: 'all-markup' })).toEqual({
+    displayMode: 'all-markup',
+    comments: true,
+  });
+  expect(initialChromePrintSettings({ reviewDisplayMode: 'simple-markup' })).toEqual({
+    displayMode: 'simple-markup',
+    comments: false,
+  });
+  expect(initialChromePrintSettings(null)).toEqual({ displayMode: 'proposed', comments: false });
+
+  const all = initialChromePrintSettings({ reviewDisplayMode: 'all-markup' });
+  const hidden = nextChromePrintSettings(all, { comments: false });
+  expect(hidden).toEqual({ displayMode: 'all-markup', comments: false });
+  // Comments cannot print outside All Markup, whatever the change asks.
+  expect(nextChromePrintSettings(all, { displayMode: 'original', comments: true })).toEqual({
+    displayMode: 'original',
+    comments: false,
+  });
+  // Returning to All Markup shows comments again.
+  const original = nextChromePrintSettings(hidden, { displayMode: 'original' });
+  expect(nextChromePrintSettings(original, { displayMode: 'all-markup' })).toEqual({
+    displayMode: 'all-markup',
+    comments: true,
+  });
+  // A change of comments alone in All Markup keeps the mode.
+  expect(nextChromePrintSettings(hidden, { comments: true })).toEqual(all);
 });

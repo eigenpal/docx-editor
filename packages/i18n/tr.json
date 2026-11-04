@@ -60,7 +60,10 @@
     "bookmarkShortcut": "Ctrl+Shift+F5",
     "goToBookmark": "Yer işaretine git…",
     "goToBookmarkShortcut": "Ctrl+G",
-    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G",
+    "printComments": "Yorumları yazdır",
+    "printCommentsNote": "Yorumlar yalnızca {mode} görünümünde yazdırılır.",
+    "printMarkup": "İşaretleme"
   },
   "formattingBar": {
     "groups": {

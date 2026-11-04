@@ -60,7 +60,10 @@
     "bookmarkShortcut": "Ctrl+Shift+F5",
     "goToBookmark": "定位到书签…",
     "goToBookmarkShortcut": "Ctrl+G",
-    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G",
+    "printComments": "打印批注",
+    "printCommentsNote": "批注仅在{mode}中打印。",
+    "printMarkup": "标记"
   },
   "formattingBar": {
     "groups": {

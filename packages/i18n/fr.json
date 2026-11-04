@@ -60,7 +60,10 @@
     "bookmarkShortcut": "Ctrl+Shift+F5",
     "goToBookmark": "Atteindre le signet…",
     "goToBookmarkShortcut": "Ctrl+G",
-    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G",
+    "printComments": "Imprimer les commentaires",
+    "printCommentsNote": "Les commentaires s’impriment uniquement en mode {mode}.",
+    "printMarkup": "Marques de révision"
   },
   "formattingBar": {
     "groups": {

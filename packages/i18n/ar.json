@@ -129,7 +129,10 @@
     "bookmarkShortcut": "Ctrl+Shift+F5",
     "goToBookmark": "الانتقال إلى إشارة مرجعية…",
     "goToBookmarkShortcut": "Ctrl+G",
-    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G",
+    "printComments": "طباعة التعليقات",
+    "printCommentsNote": "تُطبع التعليقات فقط في {mode}.",
+    "printMarkup": "العلامات"
   },
   "toc": {
     "refresh": "تحديث جدول المحتويات",
