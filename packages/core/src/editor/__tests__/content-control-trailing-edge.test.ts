@@ -1,7 +1,7 @@
 // Typing at the trailing edge of an inline text control, beside an automatic
 // inter-script gap.
 //
-// Word adds a gap between Latin letters or digits and East Asian text
+// An automatic gap separates Latin letters or digits from East Asian text
 // (`w:autoSpaceDE`, `w:autoSpaceDN`). The caret at the control's end sits after
 // that gap, so the end of the control is not one hair to the caret's left.
 
@@ -9,7 +9,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, expect, test } from 'bun:test';
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { caretAt, createFixedMeasurer } from '@docx-editor.dev/core/layout';
 import { withAuthoredCjkGapMetric } from '../../layout/cjk-auto-spacing-metric-port.ts';
@@ -20,7 +20,7 @@ const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
-function docx(paragraph: string): Uint8Array {
+function docx(paragraph: string, protect = true): Uint8Array {
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
@@ -34,7 +34,7 @@ function docx(paragraph: string): Uint8Array {
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/settings" Target="settings.xml"/></Relationships>`
     ),
     'word/settings.xml': strToU8(
-      `<w:settings xmlns:w="${W}"><w:documentProtection w:edit="forms" w:enforcement="1"/></w:settings>`
+      `<w:settings xmlns:w="${W}">${protect ? '<w:documentProtection w:edit="forms" w:enforcement="1"/>' : ''}</w:settings>`
     ),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body><w:p>${paragraph}</w:p></w:body></w:document>`
@@ -133,6 +133,48 @@ test('a caret past the trailing edge stays outside the form field', () => {
     ok: false,
     code: 'locked',
   });
+  // A form feed is a paragraph break in a paste, so admission refuses it the same way.
+  const feed = { type: 'pasteWithoutFormatting', text: 'abc\fdef' } as const;
+  expect(editor.can(feed)).toMatchObject({ ok: false, code: 'locked' });
+  expect(surface.layout().contentControls).toHaveLength(1);
   expect(surface.session.bodyText()).toBe('A value B');
   editor.destroy();
+});
+
+test('a multi-line paste at the trailing edge never splits the control', () => {
+  const { editor, surface } = mountEditor(run('A ') + control('value') + run(' B'));
+  // Beside the control, a multi-line paste is outside the form field, so protection refuses it.
+  const command = { type: 'pasteWithoutFormatting', text: 'abc\ndef' } as const;
+  expect(editor.can(command)).toMatchObject({ ok: false, code: 'locked' });
+  expect(editor.exec(command)).toMatchObject({ ok: false, code: 'locked' });
+  expect(surface.session.bodyText()).toBe('A value B');
+  expect(surface.layout().contentControls).toHaveLength(1);
+  expect(surface.layout().contentControls![0]!.range).toMatchObject({ start: 2, end: 7 });
+  editor.destroy();
+});
+
+test('a suggested paste at the trailing edge is a tracked insertion inside the control', async () => {
+  for (const [text, inside] of [
+    ['X', true],
+    ['one\ntwo', false],
+  ] as const) {
+    const container = document.createElement('div');
+    document.body.append(container);
+    mounted.push(container);
+    const editor = createDocxEditor({
+      container,
+      document: docx(run('A ') + control('value') + run(' B'), false),
+    });
+    const surface = editor.surface!;
+    surface.setAuthor('Reviewer');
+    surface.setEditingMode('suggest');
+    caretAtControlEnd(surface);
+    expect(editor.exec({ type: 'pasteWithoutFormatting', text }).ok).toBe(true);
+    const xml = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+    const sdt = xml.slice(xml.indexOf('<w:sdt>'), xml.indexOf('</w:sdt>'));
+    // One line joins the control as a proposal; more lines stay beside it, in one control.
+    expect(sdt.includes('<w:ins ')).toBe(inside);
+    expect(xml.split('<w:sdt>')).toHaveLength(2);
+    editor.destroy();
+  }
 });

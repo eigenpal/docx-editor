@@ -14,6 +14,7 @@ import type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
 import { contentLockPolicyOf } from '../store/store/content-lock-policy.ts';
 import { COMMENTS_PROTECTION_REASON, READ_ONLY_PROTECTION_REASON } from './opening-editing-mode.ts';
 import { insertOwnerOf } from './content-control-prompt-landing.ts';
+import { insertableText } from './clipboard-plain-text.ts';
 
 const formFieldIdentities = new WeakMap<PaginatedSurface, () => string | null>();
 
@@ -133,10 +134,11 @@ export function commandProtectionRefusal(
   const collapsed =
     selection.anchor.paragraphId === selection.head.paragraphId &&
     selection.anchor.offset === selection.head.offset;
-  // Typing and plain paste name the caret's control, so a text control's trailing edge is
-  // inside it. Admission asks about the same insert, or `can` refuses what the keyboard does.
+  // Typing and a one-line plain paste name the caret's control, so a text control's trailing
+  // edge is inside it. Admission asks about the same insert, or `can` refuses what the keyboard
+  // does. A multi-line paste lands beside the control, as the paste itself does.
   const inside =
-    intent === 'text' && text !== undefined && collapsed
+    intent === 'text' && text !== undefined && !insertableText(text).includes('\n') && collapsed
       ? insertOwnerOf(surface.contentControls.atCaret())
       : undefined;
   const cells = surface.state().cellSelection;

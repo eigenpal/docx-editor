@@ -197,9 +197,10 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       joined.length
     );
     if (joined.length > 0) {
-      // The caret's own control owns the paste, as it owns a keystroke: at a text control's
-      // trailing edge the store's default lands the text beside the control.
-      const inside = plan.ops.length === 0 ? deps.insertOwner?.() : undefined;
+      // The caret's own control owns a one-line paste, as it owns a keystroke: at a text
+      // control's trailing edge the store's default lands the text beside the control. A
+      // multi-line paste stays beside it: the paragraph split would cut the control in two.
+      const inside = plan.ops.length === 0 && lines.length === 1 ? deps.insertOwner?.() : undefined;
       ops.push({
         op: 'insertText',
         paragraphId: target.paragraphId,
