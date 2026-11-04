@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Delete or Backspace inside a control that showed its prompt removed prompt characters one at a time and kept w:showingPlcHdr, so part of the prompt stayed on the page as the placeholder.",
+  "after": "A deleteText op that removes only part of a control's prompt leaves the part unchanged, so the prompt stays whole until the first keystroke replaces it. A deletion that covers the whole prompt, such as Select All, works as before.",
+  "reason": "The kept deletion produces no tree change and no primitive, so there is nothing to replicate. Peers on a released version can still write partial prompt deletions, which this version applies as ordinary primitives. Stored fields, operation encoding, identities, and repair rules do not change.",
+  "tests": ["packages/core/src/editor/__tests__/content-control-prompt-delete.test.ts"],
+  "changeset": "prompt-delete-whole",
+  "migration": null
+}

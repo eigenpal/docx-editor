@@ -4,7 +4,12 @@
 // module without importing it back — the two would otherwise form a cycle, and this is the
 // half both of them need.
 
-import { findNode, parentNodeOf, type OoxmlEditResult } from '../package/ooxml-edit.ts';
+import {
+  findNode,
+  parentNodeOf,
+  type EditOptions,
+  type OoxmlEditResult,
+} from '../package/ooxml-edit.ts';
 import {
   isInlineRunContainer,
   MAX_INLINE_CONTAINER_DEPTH,
@@ -251,6 +256,17 @@ export function isShowingPlaceholder(control: OoxmlNode): boolean {
 export function isTemporaryControl(control: OoxmlNode): boolean {
   const properties = contentControlPropertiesOf(control);
   return properties ? readOnOffChild(properties, 'temporary') : false;
+}
+
+/** Defer validation when a temporary unwrap still has to run in this op. */
+export function deferOptions(
+  options: EditOptions | undefined,
+  control: OoxmlNode | null
+): EditOptions | undefined {
+  if (control && isTemporaryControl(control)) {
+    return { ...options, deferValidation: true };
+  }
+  return options;
 }
 
 /**

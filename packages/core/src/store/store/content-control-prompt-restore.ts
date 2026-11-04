@@ -11,6 +11,7 @@ import type { ContentControlKind } from '../package/content-control-nodes.ts';
 import {
   contentControlPropertiesContainerOf,
   contentControlPropertiesOf,
+  contentControlsIn,
 } from '../package/content-control-nodes.ts';
 import {
   createNodeIdAllocator,
@@ -19,15 +20,27 @@ import {
   type EditOptions,
 } from '../package/ooxml-edit.ts';
 import { MAX_INLINE_CONTAINER_DEPTH } from '../package/ooxml-shared.ts';
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import type {
+  OoxmlElement,
+  OoxmlNode,
+  OoxmlParagraphNode,
+  OoxmlPart,
+} from '../package/ooxml-tree.ts';
 import { isInlineControl, isWml } from './content-control-checkbox.ts';
-import { contentWithText, editedProperties, promptFor } from './tree-op-content-controls.ts';
+import {
+  contentWithText,
+  editedProperties,
+  enclosingContentControls,
+  promptFor,
+} from './tree-op-content-controls.ts';
 import {
   contentControlContentOf,
   findContentControl,
   isRunPropertiesNode,
+  ok,
+  TEXT_DEPS,
 } from './tree-op-nodes.ts';
-import { paragraphLength } from './tree-op-segments.ts';
+import { paragraphLength, paragraphOffsetIndex } from './tree-op-segments.ts';
 import type { TreeOpEffect, TreeOpResult } from './tree-op-types.ts';
 
 /** The kinds whose empty content shows a prompt. A checkbox or a picture has none. */
@@ -206,4 +219,43 @@ export function promptInsertionOffset(
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return planned;
   return Math.min(planned, paragraphLength(paragraph));
+}
+
+/**
+ * A deletion of PART of a prompt leaves the prompt whole, as Word does. The prompt is one unit
+ * that the first keystroke replaces, not text to edit a character at a time: Delete and
+ * Backspace inside it left the rest of "Click here to enter text." on the page, still flagged
+ * as the prompt. A deletion that covers the whole prompt, such as Select All, is left to the
+ * ordinary path. Returns the part unchanged for a partial deletion, and null otherwise.
+ */
+export function promptKeptByDeletion(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  start: number,
+  end: number
+): TreeOpResult | null {
+  if (start >= end) return null;
+  const unchanged = () =>
+    ok(part, {
+      dirty: [],
+      created: [],
+      deleted: [],
+      dependencyKeys: TEXT_DEPS,
+      impact: 'text-local',
+    });
+  // A block control showing its prompt holds the whole paragraph.
+  if (
+    enclosingContentControls(part, paragraph.id).some(
+      (control) => contentControlPropertiesOf(control).showingPlaceholder
+    )
+  )
+    return start === 0 && end >= paragraphLength(paragraph) ? null : unchanged();
+  const offsets = paragraphOffsetIndex(paragraph);
+  for (const entry of contentControlsIn(paragraph)) {
+    if (!contentControlPropertiesOf(entry.node).showingPlaceholder) continue;
+    const span = offsets.spanOf(entry.node);
+    if (!span || start < span.start || end > span.end) continue;
+    return start === span.start && end === span.end ? null : unchanged();
+  }
+  return null;
 }
