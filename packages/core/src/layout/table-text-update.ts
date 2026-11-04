@@ -66,24 +66,7 @@ export function updateTableText(
       }
     return update;
   }
-  // Only inline content changed (`tableTextStructureUnchanged`). A row in a vertical merge is
-  // read again with the merge it joins, so it can be a new object with the same content. Any
-  // other new row object still counts as changed: a table read wholly anew (autofit) keeps
-  // the full layout.
-  type Row = (typeof structure.rows)[number];
-  const inMerge = (row: Row) =>
-    row.cells.some((cell) => cell.vMergeContinue || cell.headsVerticalMerge === true);
-  const sameContent = (row: Row, old: Row) =>
-    inMerge(row) &&
-    inMerge(old) &&
-    row.cells.length === old.cells.length &&
-    row.cells.every((cell, i) => {
-      const blocks = old.cells[i]!.blocks;
-      return cell.blocks.length === blocks.length && cell.blocks.every((b, j) => b === blocks[j]);
-    });
-  const changed = structure.rows.filter(
-    (row, i) => row !== oldStructure.rows[i] && !sameContent(row, oldStructure.rows[i]!)
-  );
+  const changed = structure.rows.filter((row, i) => row !== oldStructure.rows[i]);
   if (changed.length !== 1) return null;
   const source = changed[0]!;
   const oldSource = oldStructure.rows[structure.rows.indexOf(source)]!;
@@ -100,10 +83,11 @@ export function updateTableText(
     if (cell.vMergeContinue) continued.add(index);
     else if (cell.headsVerticalMerge) heads.add(index);
   });
+  // Cell counts match (checked below), so every index has an old cell.
   const edited = (index: number) => {
-    const before = oldSource.cells[index]?.blocks;
-    const after = source.cells[index]!.blocks;
-    return !before || before.length !== after.length || after.some((b, i) => b !== before[i]);
+    const oldBlocks = oldSource.cells[index]!.blocks;
+    const newBlocks = source.cells[index]!.blocks;
+    return newBlocks.length !== oldBlocks.length || newBlocks.some((b, i) => b !== oldBlocks[i]);
   };
   if (
     source.isHeader ||

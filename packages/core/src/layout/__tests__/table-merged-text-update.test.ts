@@ -79,27 +79,11 @@ describe('typing in a table with merged cells', () => {
         lay(part, 15, { session, cache });
         const edited = edit(part, row, column, text);
         expect(lay(edited, 15, { session, cache }).pages).toEqual(lay(edited).pages);
+        // Text that wraps changes the row height. Beside a head, the row is as tall as its
+        // head only when the head has one line; beside a continuation, the head is elsewhere.
+        const expectFastPath = text === 'X' && (row === 9 || headLines === 1);
         const update = fastPath(part, edited);
+        expect(update !== null).toBe(expectFastPath);
         if (update) expect(update.pages).toEqual(lay(edited).pages);
       });
-
-  test('takes the one-row path beside a merge and in a head within its row', () => {
-    const short = load(mergedTable(40, 1));
-    for (const [row, column] of [
-      [8, 1],
-      [9, 1],
-      [8, 0],
-    ] as const)
-      expect(fastPath(short, edit(short, row, column, 'X'))).not.toBeNull();
-    const tall = load(mergedTable(40, 2));
-    expect(fastPath(tall, edit(tall, 9, 1, 'X'))).not.toBeNull();
-  });
-
-  test('takes the full layout in a row whose head is taller than the row', () => {
-    for (const headLines of [2, SPAN, SPAN + 2]) {
-      const part = load(mergedTable(40, headLines));
-      expect(fastPath(part, edit(part, 8, 0, 'X'))).toBeNull();
-      expect(fastPath(part, edit(part, 8, 1, 'X'))).toBeNull();
-    }
-  });
 });
