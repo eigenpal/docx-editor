@@ -21,6 +21,7 @@ import { useChromeDark } from '../color-mode-context';
 import { useEditorState } from '../useEditorState';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { Slot } from '../toolbar/Slot';
+import { PanelRowContent, triggerClassName, usePanelRow } from '../toolbar/panel-row';
 import { emuToPoints, pointsToEmu } from './normalizeImageFile';
 
 const selectImage = (snapshot: EditorSnapshot) => snapshot.image;
@@ -882,19 +883,21 @@ export function ImagePropertiesTrigger({
   const allowed = editor && image ? editor.can(probe) : null;
   const isEnabled = allowed?.ok === true;
   const disabledReason = allowed && !allowed.ok ? allowed.reason : null;
+  const panelRow = usePanelRow(asChild, children);
 
   if (hidden) return null;
 
   const control = chromeControlForSlot('image.properties');
+  const text = t('formattingBar.imagePropertiesShortcut');
   const shared = {
     type: 'button' as const,
     ref: triggerRef,
-    className: `docx-toolbar__button${className ? ` ${className}` : ''}`,
+    className: `${triggerClassName(panelRow)}${className ? ` ${className}` : ''}`,
     'data-slot': 'image.properties',
     disabled: !isEnabled,
     ...(!isEnabled ? { 'data-disabled': '' } : {}),
-    'aria-label': t('formattingBar.imagePropertiesShortcut'),
-    title: disabledReason ?? t('formattingBar.imagePropertiesShortcut'),
+    'aria-label': text,
+    title: disabledReason ?? text,
     onMouseDown: guardToolbarMousedown,
     onClick: () => setOpen(true),
   };
@@ -904,7 +907,13 @@ export function ImagePropertiesTrigger({
       {asChild ? (
         <Slot {...shared}>{children}</Slot>
       ) : (
-        <button {...shared}>{children ?? chromeIcon(control?.paths)}</button>
+        <button {...shared}>
+          {panelRow ? (
+            <PanelRowContent icon={chromeIcon(control?.paths)} label={text} />
+          ) : (
+            (children ?? chromeIcon(control?.paths))
+          )}
+        </button>
       )}
       {open && popups?.imageProperties !== false ? (
         popups?.imageProperties ? (
