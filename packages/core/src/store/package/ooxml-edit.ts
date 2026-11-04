@@ -72,6 +72,14 @@ export interface ContentLockPolicy {
 export interface EditOptions {
   readonly deferValidation?: boolean;
   /**
+   * The text of the glossary block a control's `w:placeholder/w:docPart` names, so a control
+   * an edit empties shows the document's own prompt. Absent, or `undefined` for a name, means
+   * the type's default prompt.
+   *
+   * @internal
+   */
+  readonly placeholderText?: (docPart: string) => string | undefined;
+  /**
    * How a content control's `w:lock` is read for ops that only restyle text. Absent means
    * the default: `contentLocked` / `sdtContentLocked` refuse every write, formatting included.
    */
