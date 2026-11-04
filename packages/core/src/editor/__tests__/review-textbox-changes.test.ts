@@ -22,18 +22,31 @@ const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
 
-function docxOf(body: string): Uint8Array {
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const NAMESPACES = `xmlns:w="${W}" xmlns:wps="${WPS}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:v="${V}"`;
+const MIME = (name: string) =>
+  `application/vnd.openxmlformats-officedocument.wordprocessingml.${name}+xml`;
+
+/** A document with `body`, and with `header` as its default header when given. */
+function docxOf(body: string, header?: string): Uint8Array {
+  const sectPr = header
+    ? `<w:sectPr><w:headerReference w:type="default" r:id="rIdH"/></w:sectPr>`
+    : '';
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+        `<Override PartName="/word/document.xml" ContentType="${MIME('document.main')}"/>` +
+        `<Override PartName="/word/header1.xml" ContentType="${MIME('header')}"/></Types>`
     ),
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdH" Type="${R}/header" Target="header1.xml"/></Relationships>`
+    ),
+    'word/header1.xml': strToU8(`<w:hdr ${NAMESPACES}>${header ?? '<w:p/>'}</w:hdr>`),
     'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}" xmlns:wps="${WPS}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:v="${V}">` +
-        `<w:body>${body}</w:body></w:document>`
+      `<w:document ${NAMESPACES} xmlns:r="${R}"><w:body>${body}${sectPr}</w:body></w:document>`
     ),
   });
 }
@@ -73,21 +86,22 @@ const DRAWING_BOX =
   '<wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r><w:r><w:t>Host</w:t></w:r></w:p>';
 
 const VML_BOX =
-  '<w:p><w:r><w:pict><v:shape style="width:100pt;height:40pt"><v:textbox><w:txbxContent>' +
-  INSERTION +
-  '</w:txbxContent></v:textbox></v:shape></w:pict></w:r><w:r><w:t>Host</w:t></w:r></w:p>';
+  '<w:p><w:r><w:pict><v:rect style="position:absolute;margin-left:200pt;margin-top:0;' +
+  'width:144pt;height:48pt;z-index:1;mso-position-horizontal-relative:page">' +
+  `<v:textbox><w:txbxContent>${INSERTION}</w:txbxContent></v:textbox></v:rect></w:pict></w:r>` +
+  '<w:r><w:t>Host</w:t></w:r></w:p>';
 
 const editors: DocxEditorInstance[] = [];
 afterEach(() => {
   for (const editor of editors.splice(0)) editor.destroy();
 });
 
-function mount(body: string): DocxEditorInstance {
+function mount(body: string, header?: string): DocxEditorInstance {
   const container = document.createElement('div');
   document.body.append(container);
   const editor = createDocxEditor({
     container,
-    document: docxOf(body),
+    document: docxOf(body, header),
     author: 'Grace',
     modules: [reviewModule()],
   });
@@ -96,20 +110,25 @@ function mount(body: string): DocxEditorInstance {
   return editor;
 }
 
-for (const [name, body] of [
-  ['DrawingML', DRAWING_BOX],
-  ['VML', VML_BOX],
+for (const [name, body, header] of [
+  ['DrawingML', DRAWING_BOX, undefined],
+  ['VML', VML_BOX, undefined],
+  // In a header, the header opens and then the box in it, with the caret at the change.
+  ['header', '<w:p><w:r><w:t>Body</w:t></w:r></w:p>', VML_BOX],
 ] as const) {
   test(`a change in a ${name} text box has a range in the box and Next Change opens it`, () => {
-    const editor = mount(body);
+    const editor = mount(body, header);
     const [placement] = editor.getReviewItems();
     expect(placement?.activatable).toBe(true);
     const range = placement!.item.ranges[0]!;
     // The box's paragraph, not the host paragraph the box rides in.
-    expect(range.start.paragraphId).not.toBe(editor.surface!.session.paragraphIds()[0]);
+    expect(range.start.paragraphId).not.toMatch(/#0\.0\.0$/);
     expect([range.start.offset, range.end.offset]).toEqual([7, 12]);
     expect(editor.can({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
     expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
     expect(editor.getReviewItems()[0]?.isActive).toBe(true);
+    // The card opens the box, so the caret, the frame and the toolbar are the box's.
+    expect(editor.surface!.activeScope().kind).toBe('frame');
+    expect(editor.surface!.state().selection.head).toEqual(range.start);
   });
 }
