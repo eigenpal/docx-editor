@@ -48,8 +48,7 @@ export interface CustomNodesOfOptions {
  * }
  * ```
  *
- * Reads the body story. A node in a header or footer is not answered here — the same limit
- * `recognizeCustomNodes` has, since it takes one part.
+ * Reads every story: the body first, then headers, footers, footnotes, and endnotes.
  *
  * Derived fresh on every call from the canonical package: there is no cache to go stale, and no
  * change event either, so re-read after an edit rather than holding the array.

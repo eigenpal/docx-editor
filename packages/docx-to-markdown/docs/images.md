@@ -20,7 +20,7 @@ Each occurrence records its page, story, source position, displayed dimensions, 
 
 ## Preserve displayed image sizes
 
-An image file's `pixelWidth` and `pixelHeight` describe its intrinsic pixels. Word can display the same file at different sizes. Use each occurrence's `displayWidthPx` and `displayHeightPx` for the document's displayed size, in CSS pixels at 96 pixels per inch. These values retain fractional pixels. `kind` distinguishes inline and anchored drawings.
+An image file's `pixelWidth` and `pixelHeight` describe its intrinsic pixels. A document can display the same file at different sizes. Use each occurrence's `displayWidthPx` and `displayHeightPx` for the document's displayed size, in CSS pixels at 96 pixels per inch. These values retain fractional pixels. `kind` distinguishes inline and anchored drawings.
 
 Standard Markdown image syntax has no width or height attributes. To carry each occurrence's size into your Markdown renderer, replace the conversion call in the first example with:
 
@@ -66,7 +66,7 @@ function ImagePreview({
 }
 ```
 
-The explicit aspect ratio preserves Word's displayed proportions when the image shrinks, even if they differ from its intrinsic proportions. Use the same styles in a custom Markdown image component, with `width` and `height` from the generated HTML. Resolve `src` through your known asset URLs, as shown in the browser example.
+The explicit aspect ratio preserves the document's displayed proportions when the image shrinks, even if they differ from its intrinsic proportions. Use the same styles in a custom Markdown image component, with `width` and `height` from the generated HTML. Resolve `src` through your known asset URLs, as shown in the browser example.
 
 Do not use an asset's first occurrence to size every image with the same URL. Occurrences describe physical layout and include repeated headers; their order is not a Markdown image index. Use HTML syntax to attach the correct dimensions directly to each rendered image. For a preview built from occurrence metadata, identify the occurrence by its page, story, part, and drawing node.
 

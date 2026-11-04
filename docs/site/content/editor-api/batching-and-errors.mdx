@@ -5,36 +5,13 @@ category: 'Editing API'
 order: 52
 ---
 
-Document objects are proxies: they queue operations against the runtime's document. Obtain them through `context.document`. A `RunCallback<T>` receives a `RequestContext` and returns `Promise<T>`. `runtime.run()` returns that callback's result. Returning from `run()` does not flush pending commands. Use an explicit final `await context.sync()`.
+Document objects are proxies that queue operations. Get them through `context.document` inside `runtime.run()`. A `RunCallback<T>` receives a `RequestContext`, and `run()` returns the callback's result.
 
-Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
+For runtime setup, see [Runtime and setup](/docs/2.x/editor-api/runtime).
 
-## Load collections, then item properties
+## Load properties in batches
 
-`ClientObject.load(option?)` queues reads and returns the same proxy. Its `context` property identifies the owning request context. A navigation getter returns another proxy; it does not load that proxy's scalar properties.
-
-Load collection membership before loading each item's properties:
-
-```ts
-const headings = await runtime.run(async (context) => {
-  const paragraphs = context.document.paragraphs;
-  paragraphs.load({ select: 'items', top: 100, skip: 0 });
-  await context.sync();
-
-  for (const paragraph of paragraphs.items) {
-    paragraph.load(['text', 'style']);
-  }
-  await context.sync();
-  return paragraphs.items.map((paragraph) => ({
-    text: paragraph.text,
-    style: paragraph.style,
-  }));
-});
-```
-
-Each loop queues item loads, then syncs once. The result contains plain data you can use outside the run. Collections expose read-only `items` arrays. Item objects remain editable proxies. Reload values after writes when your next decision needs the changed document.
-
-To load the items and their properties in one sync, name each property with an `items/` path:
+The following example loads paragraphs and two properties in one sync:
 
 ```ts
 const headings = await runtime.run(async (context) => {
@@ -48,32 +25,34 @@ const headings = await runtime.run(async (context) => {
 });
 ```
 
-On a collection, a property name without the `items/` prefix means the same thing: `paragraphs.load('text')` loads `text` on each paragraph.
+Return plain data from the run. `ClientObject.load(option?)` queues reads and returns the same proxy. A navigation getter returns another proxy without loading its properties.
 
-`LoadOption` accepts a property string, a string array, or `LoadQueryOptions`:
-
-| Form or option | Meaning |
+| `LoadOption` form | Meaning |
 | --- | --- |
-| `load('text')` | Load one scalar property |
-| `load('text,style')` or `load(['text', 'style'])` | Load named scalar properties |
-| `{ select: 'items', top: 20, skip: 40 }` | Load a collection window |
-| `load('items/text')` or `load('text')` on a collection | Load the items and `text` on each item in the same sync |
-| `load()` | Load the object's default selection; prefer explicit names |
-| `expand` | Reserved; nonempty values fail with `InvalidArgument` |
+| `load('text')`, `load('text,style')`, `load(['text', 'style'])` | Load named scalar properties |
+| `load('items')` | Load collection membership; load item properties in a later sync |
+| `load('items/text')`, or `load('text')` on a collection | Load the items and `text` on each item in one sync |
+| `{ select: 'items', top: 20, skip: 40 }` | Load a collection window; `top` and `skip` take nonnegative integers |
+| `load()` | Load the default selection; prefer explicit names |
+| `expand` | Reserved; a nonempty value fails with `InvalidArgument` |
 
-`top` and `skip` require nonnegative integers and apply to collections. Unknown properties and options fail explicitly. Only one level of navigation works. Deeper paths such as `items/font/bold`, and paths on objects that are not collections such as `font/bold`, fail with `InvalidArgument` and name the path in `target`. `items/<navigation property>` such as `items/font` also fails; load `font` on each item. Load `paragraph.font` or another navigation object directly.
+Load paths have these limits:
 
-Item properties follow the same rule as other loads: in a sync that also writes, they report the document from before the writes. The range collection that `Paragraph.split()` returns accepts `items/` paths, `top`, and `skip` after the split's sync. Before that sync, such a load fails with `NotImplemented`.
+- Only one level of navigation works. `items/font/bold`, `items/font`, and `font/bold` fail with `InvalidArgument` and name the path in `target`.
+- To read font properties, load `font` on each item instead.
+- Unknown properties and options also fail.
 
-## Separate dependent work
+## Separate dependent writes
 
-Each `sync(): Promise<void>` commits its writes atomically. It captures queued operations when you call it. Await each sync before starting another on the same context.
+Each `sync(): Promise<void>` commits its writes atomically. Await each sync before the next; setters called while a sync waits join the next one. Returning from `run()` does not flush commands, so end with `await context.sync()`.
 
-A load in the same batch as a write reads the previous value of an object that already exists, even when the load comes after the write in your code. A load on an object that a write in the batch returns reads the value after all the writes in the batch. To read the written value of such an object, load it in a later sync. Setters called while a sync waits belong to the next sync.
+| Read | Value it reports |
+| --- | --- |
+| Load on an existing object, in the same sync as a write | The value from before the write, even if the load comes later in your code |
+| Load on an object that a write in the sync returns | The value after all writes in the sync |
+| Load in a later sync | The written value |
 
-Some dependent reads require extra transport batches. Those batches share one document revision. A concurrent edit produces `StaleDocument`; the runtime does not replay the write.
-
-An object that an insertion returns has no previous value. A load on it, or on its `font` or `paragraphs`, can share the insertion's sync and reports the inserted content. The runtime answers it after the writes commit. If that load fails, the writes stay applied and `sync()` rejects with the load's error code. Its `debugInfo.innerError.code` is `edit.read-after-commit`, so you can tell that the writes are applied:
+The following example loads an inserted range in the insertion sync:
 
 ```ts
 await runtime.run(async (context) => {
@@ -81,76 +60,22 @@ await runtime.run(async (context) => {
   inserted.load('text');
   inserted.font.load('italic');
   await context.sync();
-  return inserted.font.italic;
 });
 ```
 
-Edits to an object that an insertion returns, and navigation reads on it such as `getFirst()`, `getRange()`, `search()`, and `getCell()`, need a completed sync first. Before that sync they fail with `InvalidObjectPath`, and nothing commits:
+That load runs after the writes commit. If it fails, the writes stay applied, with `innerError.code` `edit.read-after-commit`.
 
-```ts
-await runtime.run(async (context) => {
-  const paragraph = context.document.body.insertParagraph('Summary', 'End');
-  await context.sync();
-  paragraph.font.bold = true;
-  paragraph.spaceAfter = 12;
-  await context.sync();
-});
-```
+| Operation on an object a pending sync inserts | Result |
+| --- | --- |
+| Load its properties in the same sync | Reads the value after the writes |
+| Edit it, or navigate from it with `getFirst()`, `search()`, or `getCell()` | Fails with `InvalidObjectPath`, and nothing commits. Complete the sync first |
+| Read the range that a separate plain-text edit returns | Offsets account for all edits in the same sync |
 
-The two syncs are separate transactions. A later failure does not undo an earlier successful sync. Batch independent writes when they should succeed or fail together. Use separate syncs for conflicting structural edits. Run each row or column addition or deletion, and each `insertBreak()` call other than a line break, in its own sync. Paragraph breaks in `insertText()`, fields, and equations follow the paragraph rules in [Propose several structural edits in one run](/docs/2.x/editor-api/revisions#propose-several-structural-edits-in-one-run). Different levels of an existing list can share a sync; competing aliases for one level can conflict. Keep field result updates separate from layout-changing writes. See each topic's supported batching limits.
+Atomicity applies per sync, not per run: a later failure does not undo an earlier sync. Prerequisite reads share one revision, and a concurrent edit produces `StaleDocument` without a replay.
 
-You can batch separate plain-text edits in a paragraph with direct text runs. Returned ranges account for those edits. Mixing text edits with formatting, hyperlinks, or structural writes in the same paragraph refuses.
+## Keep proxies valid
 
-An existing range stays valid after formatting changes or text edits beyond its end. A text edit before its end produces `StaleDocument`, including edits from an earlier sync in the same run. Untouched paragraphs keep valid ranges.
-
-A range across paragraphs also becomes stale if an intervening paragraph changes, appears, or disappears. After editing a target paragraph, search again before a dependent edit. See [Text and ranges](/docs/2.x/editor-api/text-and-ranges).
-
-## Keep writes within one story
-
-A story is the main body, a header, a footer, or another document text container. Text and formatting writes in one `context.sync()` must target one story. Writes to multiple stories fail with `ConflictingChanges`. Reads from different stories can share a sync.
-
-Bookmark removal is an exception: `Document.deleteBookmark()` and `Bookmark.delete()` can share a sync with writes to another story. Inserting a bookmark can also move an existing name from another story in the same transaction.
-
-If the document has a primary header and footer, resolve both objects before formatting them. Then commit each story's writes separately:
-
-```ts
-await runtime.run(async (context) => {
-  const section = context.document.sections.getFirst();
-  await context.sync();
-  const stories = [section.getHeader('Primary'), section.getFooter('Primary')];
-  await context.sync();
-
-  for (const story of stories) {
-    story.font.name = 'Calibri';
-    story.font.size = 10;
-    await context.sync();
-  }
-});
-```
-
-Each write sync creates a separate transaction. Earlier successful transactions remain if a later transaction fails. Linked headers or footers can share content. Re-read that content before making a dependent edit through another section.
-
-## Handle an absent item
-
-Use the collection's null-object accessor when absence is expected:
-
-```ts
-await runtime.run(async (context) => {
-  const first = context.document.body.search('Optional clause').getFirstOrNullObject();
-  first.load('text');
-  await context.sync();
-  if (first.isNullObject) return;
-  console.log(first.text);
-});
-```
-
-Check `isNullObject` after sync. Do not read other properties on a null object. A non-null accessor such as `getFirst()` fails with `ItemNotFound` when its collection is empty. Collections expose different accessors; check the [API member directory](/docs/2.x/editor-api/reference).
-
-## Keep proxies within their lifetime
-
-A proxy remains usable across syncs within its run. An untracked proxy becomes invalid when the run finishes. Keep plain data in model prompts and job queues.
-
-For intentional proxy reuse, track the object and explicitly adopt it in a later run:
+The following example tracks a proxy and adopts it in a later run:
 
 ```ts
 const paragraph = await runtime.run(async (context) => {
@@ -164,73 +89,58 @@ const paragraph = await runtime.run(async (context) => {
 await runtime.run(paragraph, async (context) => {
   paragraph.load('text');
   await context.sync();
-  console.log(paragraph.text);
   context.trackedObjects.remove(paragraph);
 });
 ```
 
-`TrackedObjects.add()` and `remove()` accept one `ClientObject` or an array. `runtime.run(objectOrArray, callback)` adopts tracked objects from completed runs of that runtime. Await the first run before adoption. Tracking does not prevent document edits or deletion of the target. No proxy survives runtime disposal.
+| Rule | Detail |
+| --- | --- |
+| Lifetime | A proxy works across syncs in its run. An untracked proxy becomes invalid when the run ends. |
+| Tracking | `TrackedObjects.add()` and `remove()` take one `ClientObject` or an array. Tracking extends lifetime; it does not keep a range stable or prevent deletion. |
+| Adoption | `runtime.run(objectOrArray, callback)` adopts tracked objects from completed runs. Adopting before the first run finishes fails with `ObjectInUse`. |
+| Removed target | If a run, collaborator, or undo removes the target, the next sync fails with `InvalidObjectPath` and `innerError.code` `edit.stale-target`. Read again. |
+| Absent item | Use a null-object accessor such as `getFirstOrNullObject()`, then check `isNullObject` after sync. `getFirst()` on an empty collection fails with `ItemNotFound`. |
+| Results | `ClientResult<T>` exposes `isLoaded` and `value`. Reading `value` before its sync throws `ValueNotLoaded`. |
+| Disposal | No proxy survives runtime disposal. |
 
-If another run, a collaborator, or an undo removes or merges the target, the next sync that uses the proxy fails with `InvalidObjectPath`. The error's `debugInfo.innerError.code` is `edit.stale-target`. Read the document again to get a fresh proxy.
+A range keeps the offsets it had when found. A text edit before its end makes it fail with `StaleDocument`. A range across paragraphs also fails when text changes in an intervening paragraph, or a paragraph appears or disappears. For details, see [Refresh ranges after edits](/docs/2.x/editor-api/text-and-ranges#refresh-ranges-after-edits).
 
-`ClientResult<T>` exposes `isLoaded` and `value`. Read `value` after the operation's `context.sync()` completes; reading it earlier throws `ValueNotLoaded`. For example, `RevisionCollection.resolve()` returns a `ClientResult<RevisionBatchResult>` with resolved and skipped decisions and a remaining count. `RevisionCollection.setAuthor()` returns a `ClientResult<RevisionAuthorResult>` with updated and skipped changes. See [Resolve a batch of changes](/docs/2.x/editor-api/revisions#resolve-a-batch-of-changes).
+## Handle failed batches
 
-## Recover by error code
-
-Catch both synchronous call failures and rejected syncs. Use `isDocxEditorError(error)` or `DocxEditorError`, then inspect `code`. Do not match message text.
-
-```ts
-import { isDocxEditorError } from '@docx-editor.dev/editor-api';
-
-try {
-  await runtime.run(async (context) => {
-    const target = context.document.body.search('Approved').getFirst();
-    target.insertText('Reviewed', 'Replace');
-    await context.sync();
-  });
-} catch (error) {
-  if (!isDocxEditorError(error)) throw error;
-  if (error.code === 'StaleDocument') {
-    // Start a fresh read and reconsider the target before proposing an edit.
-  } else {
-    throw error;
-  }
-}
-```
+Catch both synchronous call failures and rejected syncs. Check `isDocxEditorError(error)`, then branch on `code`, never on message text.
 
 | `DocxEditorErrorCode` | Recovery |
 | --- | --- |
-| `PropertyNotLoaded` | Load the named property and sync before reading |
-| `ValueNotLoaded` | Complete the result-producing sync |
-| `InvalidObjectPath` | Sync a pending object, or obtain a fresh proxy after expiration or deletion. If `debugInfo.innerError.code` is `edit.stale-target`, the document no longer holds the object |
+| `PropertyNotLoaded` | Load the property and sync before reading |
+| `ValueNotLoaded` | Complete the sync that produces the result |
+| `InvalidObjectPath` | Sync a pending object, or get a fresh proxy. `edit.stale-target` means the document no longer holds the object |
 | `ObjectInUse` | Await the owning run before adopting its tracked objects |
-| `InvalidArgument` | Correct the input, property name, location, or document target |
-| `ResourceLimitExceeded` | Inspect `limit`; reject the file or deliberately adjust supported input budgets |
-| `ItemNotFound` | Handle absence or choose a null-object accessor |
-| `NotSupported`, `NotImplemented` | The call is outside the supported subset for this host, mode, content, or target, and nothing changed. Don't retry the same call. Read `debugInfo.innerError.code` for the rule, then choose another call, mode, target, or content. |
-| `ConflictingChanges` | Read again and separate dependent edits into different syncs |
+| `InvalidArgument` | Correct the input, property name, location, or target |
+| `ResourceLimitExceeded` | Inspect `limit`; reject the file or adjust input budgets |
+| `ItemNotFound` | Handle absence, or use a null-object accessor |
+| `NotSupported`, `NotImplemented` | Outside the supported subset. Do not retry the same call. Read `innerError.code`, then change the call, mode, target, or content. Nothing changed, except when the editor cannot place a selection: other writes in that sync can already be committed, so read again before you retry |
+| `ConflictingChanges` | Read again and split dependent edits into separate syncs |
 | `InvalidRequestContext` | Start a new run |
 | `RuntimeDisposed` | Create a new runtime |
-| `StaleDocument` | Start a fresh run, read again, and reconsider the proposed change. If `debugInfo.innerError.code` is `edit.read-after-commit`, the writes are applied: don't apply them again |
-| `DocumentUnavailable` | Wait for the owning editor to attach a document, then start a new run |
-| `PreviewActive` | Commit or discard the open preview, then write or preview again |
-| `PreviewEnded` | Start a new preview; a committed, discarded, or replaced preview cannot commit |
-| `GeneralException` | Act on `error.debugInfo.innerError.code` (see [Diagnostics](/docs/2.x/guides/diagnostics#edit-internal-invariant)); for `edit.internal-invariant`, or when `innerError` is absent, report the failure with the engine version and do not retry the write unchanged |
+| `StaleDocument` | Read again and reconsider. With `edit.read-after-commit`, the writes are applied: do not apply them again |
+| `DocumentUnavailable` | Wait for the editor to attach a document, then start a new run |
+| `PreviewActive` | Commit or discard the open preview |
+| `PreviewEnded` | Start a new preview |
+| `GeneralException` | Act on `innerError.code`. For `edit.internal-invariant`, or no `innerError`, report the failure with the engine version and do not retry unchanged. See [Diagnostics](/docs/2.x/guides/diagnostics#edit-internal-invariant) |
 
-`DocxEditorError` exposes `code`, optional `target`, and optional resource or revision metadata. `DocxEditorErrorInit` accepts the same fields.
+`DocxEditorError` and `DocxEditorErrorInit` carry `code` and optional `target`, `limit`, `expectedRevision`, and `actualRevision`. On `StaleDocument`, compare the revisions:
 
-For stale writes, compare `expectedRevision` and `actualRevision`:
+| Revisions             | Meaning                                                         |
+| --------------------- | --------------------------------------------------------------- |
+| Different             | Another writer changed the document                             |
+| Equal                 | A range moved in an earlier sync, or its history record expired |
+| No `expectedRevision` | The batch was read-only                                         |
 
-- Different values indicate another writer changed the document after your read.
-- Equal values can indicate a range moved during an earlier sync, or its history record expired.
+Never disable change tracking to bypass a refusal. For a per-suggestion recovery loop, see the [server agent guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md).
 
-Read-only batches omit `expectedRevision`. For resource failures, `limit` identifies the exceeded ZIP, XML, part, or relationship budget.
+### Detect committed writes after an error
 
-After `StaleDocument`, obtain fresh ranges and reconsider the edit. Never disable change tracking to bypass a refusal.
-
-## Read why the engine refused
-
-`error.debugInfo` has the shape of Office.js `OfficeExtension.DebugInfo`: `code`, `message`, and `errorLocation`, the path of the refused call. The path joins the proxies and members you called, starting at `document`. For example, `document.body.search.getFirst().insertOoxml` names an `insertOoxml()` call on the first search hit, and `document.body.paragraphs.items[2].insertText` names an `insertText()` call on the third loaded paragraph. When two calls in one sync conflict, the path names the later call. When the engine knows a specific reason, `debugInfo.innerError` holds a stable diagnostic code and a fixed hint. Branch on `error.code`, and give `innerError.message` to the person or model that chose the edit. The hint never contains document content.
+`error.debugInfo` has the Office.js `OfficeExtension.DebugInfo` shape. `errorLocation` names the refused call, or the later call of two that conflict. `innerError` holds a stable code and a hint with no document content:
 
 ```ts
 import { isDocxEditorError } from '@docx-editor.dev/editor-api';
@@ -240,58 +150,30 @@ try {
 } catch (error) {
   if (!isDocxEditorError(error)) throw error;
   const reason = error.debugInfo.innerError;
-  // For example: { code: 'edit.tracked-operation-unsupported', message: 'This editing API ...' }
-  if (reason) feedback.push(`${reason.code}: ${reason.message}`);
+  if (reason?.code === 'edit.read-after-commit') {
+    // The writes are applied. Read again, and do not apply them a second time.
+  } else if (reason) {
+    feedback.push(`${reason.code}: ${reason.message}`);
+  }
 }
 ```
 
-For all codes, see [Diagnostics](/docs/2.x/guides/diagnostics). To record anonymous refusal events, add a telemetry module to `createServer({ modules })`. For more information, see [Server agents](/docs/2.x/telemetry/agents).
+For every code, see [Diagnostics](/docs/2.x/guides/diagnostics). To record anonymous refusal events, see [Server agents](/docs/2.x/telemetry/agents).
 
-## Recover from a stale range
+## Limits
 
-The following example recovers from a stale range in a loop that writes one suggestion per sync. A `StaleDocument` usually means that nothing was applied. If `debugInfo.innerError.code` is `edit.read-after-commit`, the writes in that sync are applied, and only a load on an object that they created failed. Read again, and don't apply the edit a second time:
+- Text and formatting writes in one sync must target one story: the main body, a header, a footer, a note, or a text box. Otherwise they fail with `ConflictingChanges`. Reads can mix stories.
+- Bookmark removal is the exception: `Document.deleteBookmark()` and `Bookmark.delete()` can share a sync with writes to another story. Inserting a bookmark can move a same-name bookmark from another story.
+- Linked headers or footers can share content. Read again before a dependent edit through another section.
+- Run each row or column addition or deletion, and each `insertBreak()` other than `Line`, in its own sync.
+- Plain-text edits in one paragraph can batch. Mixing them with formatting, hyperlinks, or structural writes in that paragraph refuses.
+- Different levels of one list can share a sync; competing aliases for one level conflict.
+- Keep field result updates apart from layout-changing writes.
+- The ranges that `Paragraph.split()` returns accept `items/` paths, `top`, and `skip` after the split's sync. Before it, such a load fails with `NotImplemented`.
+- For tracked structural edits, see [Propose several structural edits in one run](/docs/2.x/editor-api/revisions#propose-several-structural-edits-in-one-run).
 
-```ts
-import { isDocxEditorError } from '@docx-editor.dev/editor-api';
+## See also
 
-// `proposals` holds { find, replace } pairs from your model.
-// `stillApplies` is your own check of a proposal against the current text.
-await runtime.run(async (context) => {
-  context.document.changeTrackingMode = 'TrackMineOnly';
-  // Read every target in one sync.
-  const searches = proposals.map((proposal) => {
-    const matches = context.document.body.search(proposal.find, { matchCase: true });
-    matches.load('items');
-    return matches;
-  });
-  await context.sync();
-
-  for (const [index, proposal] of proposals.entries()) {
-    const range = searches[index]!.items[0];
-    if (!range) continue;
-    range.insertText(proposal.replace, 'Replace');
-    try {
-      // One reviewable suggestion per sync, so peers see each one as it lands.
-      await context.sync();
-    } catch (error) {
-      if (!isDocxEditorError(error) || error.code !== 'StaleDocument') throw error;
-      // The write is applied, and only a load that followed it failed: never apply it again.
-      if (error.debugInfo.innerError?.code === 'edit.read-after-commit') continue;
-      // Equal revisions: the range moved, often through an earlier sync of this run.
-      // Different revisions: another writer changed the document.
-      // Either way, search again and reconsider before you write.
-      const fresh = context.document.body.search(proposal.find, { matchCase: true });
-      fresh.load('items');
-      await context.sync();
-      const current = fresh.items[0];
-      if (!current || !stillApplies(proposal)) continue;
-      current.insertText(proposal.replace, 'Replace');
-      await context.sync();
-    }
-  }
-});
-```
-
-## Next steps
-
-See [Runtime and setup](/docs/2.x/editor-api/runtime) and [Office.js compatibility](/docs/2.x/editor-api/office-js-api).
+- [Runtime and setup](/docs/2.x/editor-api/runtime)
+- [Text and ranges](/docs/2.x/editor-api/text-and-ranges)
+- [Office.js compatibility](/docs/2.x/editor-api/office-js-api)
