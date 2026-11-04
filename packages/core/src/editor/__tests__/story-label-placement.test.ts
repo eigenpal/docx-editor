@@ -25,7 +25,11 @@ test('a text box frame names why it takes no caret, or why it has no handles, wh
   expect(textboxFrameReason({ ...box, canMove: false, canResize: false }, 'edit')).toBe(
     'imageOverlay.locked'
   );
-  // Viewing and suggesting refuse edits themselves, and a picture is not a text box.
+  // Suggesting edits a box too, so a locked box says why.
+  expect(textboxFrameReason({ ...box, canMove: false, canResize: false }, 'suggest')).toBe(
+    'imageOverlay.locked'
+  );
+  // Viewing refuses edits itself, and a picture is not a text box.
   expect(textboxFrameReason({ ...box, canMove: false, canResize: false }, 'view')).toBeNull();
   expect(
     textboxFrameReason({ ...box, textbox: false, canMove: false, canResize: false }, 'edit')

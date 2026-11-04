@@ -45,6 +45,7 @@ import {
   hostGroupText,
   ToolbarHostGroup,
   ToolbarPanelPlacement,
+  ToolbarPanelRow,
   ToolbarSlot,
   type DocxEditorToolbarGroupProps,
 } from './ToolbarGroup';
@@ -156,6 +157,16 @@ interface DefaultGroup {
 }
 
 type PartLike = Component;
+
+/**
+ * Shaped parts that render as a "⋯" panel row themselves. See `usePanelRow`. Image
+ * properties is a plain command button here, so the panel's command row already serves it.
+ */
+const PANEL_ROW_SLOTS: ReadonlySet<ArrangementKey> = new Set<ChromeSlotId>([
+  'image.insert',
+  'image.wrap',
+  'image.altText',
+]);
 
 const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   'zoom.level': ToolbarZoom,
@@ -474,8 +485,12 @@ const DocxEditorToolbarRoot = defineComponent({
                 override?.type === ToolbarSlot
                   ? (override.props?.overflowContent ?? override.props?.['overflow-content'])
                   : undefined;
+              // Parts that open a dialog, menu, or popover draw their own full-width row,
+              // so the whole row presses the control. Their popups stay inside the part.
               const row =
-                override || isValueSlot(entry.slot) ? (
+                !override && PANEL_ROW_SLOTS.has(entry.slot) ? (
+                  <ToolbarPanelRow>{{ default: () => render(entry) }}</ToolbarPanelRow>
+                ) : override || isValueSlot(entry.slot) ? (
                   <ToolbarOverflowControl label={labelOf(label, entry, group.labelKey)}>
                     {{
                       default: () =>

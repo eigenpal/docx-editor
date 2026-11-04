@@ -23,6 +23,7 @@ import { ChromeMenuItemEntry } from '@docx-editor.dev/core/editor';
 import { ChromeMenuSeparatorEntry } from '@docx-editor.dev/core/editor';
 import { chromeMenuSlots } from '@docx-editor.dev/core/editor';
 import { ChromeMenuSubmenuEntry } from '@docx-editor.dev/core/editor';
+import { ChromePrintSettings } from '@docx-editor.dev/core/editor';
 import { ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { ClearAnchorHighlightOptions } from '@docx-editor.dev/core/contracts/editor';
 import { ClearRefreshHighlightsOptions } from '@docx-editor.dev/core/editor';
@@ -148,6 +149,7 @@ import { RefreshLocation } from '@docx-editor.dev/core/editor';
 import { RefreshResult } from '@docx-editor.dev/core/editor';
 import { RefreshSubmission } from '@docx-editor.dev/core/editor';
 import { RefreshUpdate } from '@docx-editor.dev/core/editor';
+import { ResolvedChromePrintSettings } from '@docx-editor.dev/core/editor';
 import { ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
 import { ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
 import { ReviewDisplayMode } from '@docx-editor.dev/core/editor';
@@ -3740,6 +3742,7 @@ export interface DocxEditorMenuProps {
     overflow?: boolean;
     // (undocumented)
     preset?: boolean;
+    printSettings?: boolean;
     // (undocumented)
     reportIssue?: boolean;
     // (undocumented)
@@ -4471,6 +4474,10 @@ export interface DocxEditorPopups {
 // @public
 export const DocxEditorPrintDialog: vue.DefineComponent<vue.ExtractPropTypes<{
     children: PropType<DocxEditorChildren>;
+    choosing: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
     className: StringConstructor;
     error: {
         required: true;
@@ -4480,6 +4487,14 @@ export const DocxEditorPrintDialog: vue.DefineComponent<vue.ExtractPropTypes<{
         required: true;
         type: PropType<() => void>;
     };
+    onPrint: {
+        default: undefined;
+        type: PropType<() => void>;
+    };
+    onSettingsChange: {
+        default: undefined;
+        type: PropType<(change: ChromePrintSettings) => void>;
+    };
     open: {
         required: true;
         type: BooleanConstructor;
@@ -4487,6 +4502,10 @@ export const DocxEditorPrintDialog: vue.DefineComponent<vue.ExtractPropTypes<{
     pending: {
         required: true;
         type: BooleanConstructor;
+    };
+    settings: {
+        default: undefined;
+        type: PropType<ResolvedChromePrintSettings>;
     };
     style: PropType<CSSProperties>;
     url: {
@@ -4495,6 +4514,10 @@ export const DocxEditorPrintDialog: vue.DefineComponent<vue.ExtractPropTypes<{
     };
 }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     children: PropType<DocxEditorChildren>;
+    choosing: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
     className: StringConstructor;
     error: {
         required: true;
@@ -4504,6 +4527,14 @@ export const DocxEditorPrintDialog: vue.DefineComponent<vue.ExtractPropTypes<{
         required: true;
         type: PropType<() => void>;
     };
+    onPrint: {
+        default: undefined;
+        type: PropType<() => void>;
+    };
+    onSettingsChange: {
+        default: undefined;
+        type: PropType<(change: ChromePrintSettings) => void>;
+    };
     open: {
         required: true;
         type: BooleanConstructor;
@@ -4512,21 +4543,34 @@ export const DocxEditorPrintDialog: vue.DefineComponent<vue.ExtractPropTypes<{
         required: true;
         type: BooleanConstructor;
     };
+    settings: {
+        default: undefined;
+        type: PropType<ResolvedChromePrintSettings>;
+    };
     style: PropType<CSSProperties>;
     url: {
         required: true;
         type: StringConstructor;
     };
-}>> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+}>> & Readonly<{}>, {
+    choosing: boolean;
+    onPrint: () => void;
+    onSettingsChange: (change: ChromePrintSettings) => void;
+    settings: Required<ChromePrintSettings>;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public
 export interface DocxEditorPrintDialogProps {
     children?: DocxEditorChildren;
+    choosing?: boolean;
     className?: string;
     error: string;
     onClose(): void;
+    onPrint?: () => void;
+    onSettingsChange?: (change: ChromePrintSettings) => void;
     open: boolean;
     pending: boolean;
+    settings?: ResolvedChromePrintSettings;
     style?: CSSProperties;
     url: string;
 }

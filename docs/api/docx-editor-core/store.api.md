@@ -5676,6 +5676,7 @@ export type TreeDocOp = SetFieldCodeOp | {
 } | {
     readonly controlId: string;
     readonly op: 'setContentControlValue';
+    readonly revision?: RevisionAttributionInput;
     readonly value: string | ContentControlValueInput;
 } | {
     readonly alias?: string | null;

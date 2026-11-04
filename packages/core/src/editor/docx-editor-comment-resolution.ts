@@ -8,6 +8,7 @@ import type { ExecResult } from '../contracts/types.ts';
 import type { ReviewCommentItem, ReviewItem } from '../layout/index.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { reviewWriteRefusal } from './review-write-refusal.ts';
+import { openTextboxParagraphOrder } from './review-story-entry.ts';
 
 interface CommentResolutionDeps {
   readonly reviewEnabled: boolean;
@@ -66,6 +67,13 @@ export function commentTargetRangeOf(
     const scoped = deps.openStoryOrder();
     anchorIndex = scoped.get(anchor.paragraphId) ?? -1;
     headIndex = scoped.get(head.paragraphId) ?? -1;
+  }
+  if (anchorIndex === -1 || headIndex === -1) {
+    // Text in an open text box is in no story's paragraph list either, so the box's own
+    // paragraphs rule a selection inside it, in the body or in a header.
+    const box = openTextboxParagraphOrder(surface);
+    anchorIndex = box.get(anchor.paragraphId) ?? -1;
+    headIndex = box.get(head.paragraphId) ?? -1;
   }
   if (anchorIndex === -1 || headIndex === -1) return null;
   const forwards =
