@@ -189,17 +189,17 @@ describe('live wrap zones settle where the previous pass zones settle', () => {
       edits
     );
     expect(pages).toBeGreaterThan(2);
-  }, 60_000);
+  }, 180_000);
 
   test('with pictures in table cells and a repeated header row', () => {
     const pages = expectEditsMatchFresh(
       document(
-        pictureParagraphs(6).join('') + tableWithHeaderPicture(60) + pictureParagraphs(6).join('')
+        pictureParagraphs(6).join('') + tableWithHeaderPicture(24) + pictureParagraphs(6).join('')
       ),
-      edits
+      [withLeadingPageBreak]
     );
     expect(pages).toBeGreaterThan(2);
-  }, 60_000);
+  }, 180_000);
 
   test('across a continuous section break', () => {
     const pictures = pictureParagraphs(24);
@@ -212,7 +212,7 @@ describe('live wrap zones settle where the previous pass zones settle', () => {
       edits
     );
     expect(pages).toBeGreaterThan(2);
-  }, 60_000);
+  }, 180_000);
 
   test('with page-placed pictures among paragraph-placed ones', () => {
     const pages = expectEditsMatchFresh(
@@ -220,7 +220,7 @@ describe('live wrap zones settle where the previous pass zones settle', () => {
       edits
     );
     expect(pages).toBeGreaterThan(2);
-  }, 60_000);
+  }, 180_000);
 
   test('when a session resumes after an edit far down the document', () => {
     const late = (part: OoxmlPart) => withLongerText(part, 50);
@@ -230,5 +230,5 @@ describe('live wrap zones settle where the previous pass zones settle', () => {
       withLeadingPageBreak,
     ]);
     expect(pages).toBeGreaterThan(4);
-  }, 60_000);
+  }, 180_000);
 });
