@@ -55,7 +55,8 @@ const DOCUMENT =
   run(' B') +
   '</w:p>';
 
-test('a paste at the trailing edge lands in the control and converges, undoes, and redoes', async () => {
+/** Two editors on one collaboration room, with journal flush and convergence checks. */
+async function connectedPair() {
   const pair = await harness.pair(zipDocument(DOCUMENT));
   const [alice, bob] = [pair.alice, pair.bob].map((peer) => {
     peer.detach();
@@ -74,6 +75,11 @@ test('a paste at the trailing edge lands in the control and converges, undoes, a
       packageFingerprint(bob.surface!.session.currentPackage())
     );
   };
+  return { pair, alice, bob, flush, converge };
+}
+
+test('a paste at the trailing edge lands in the control and converges, undoes, and redoes', async () => {
+  const { pair, alice, bob, flush, converge } = await connectedPair();
 
   pair.pause();
   caret(alice, 7);
@@ -95,4 +101,57 @@ test('a paste at the trailing edge lands in the control and converges, undoes, a
   expect(alice.exec({ type: 'redo' }).ok).toBe(true);
   converge();
   expect(controlText(bob)).toBe('vaYlueX');
+});
+
+test('a trailing-edge paste converges while the other peer deletes across the control', async () => {
+  const { pair, alice, bob, flush, converge } = await connectedPair();
+  const controls = (editor: Editor) =>
+    serializeOoxmlPart(mainPart(editor.surface!.session.currentPackage())).split('<w:sdt>').length -
+    1;
+
+  pair.pause();
+  caret(alice, 7);
+  expect(alice.exec({ type: 'pasteWithoutFormatting', text: 'X' }).ok).toBe(true);
+  // Bob selects from inside "A " to inside " B", across the whole control, and deletes.
+  const paragraphId = bob.surface!.session.paragraphIds()[0]!;
+  bob.surface!.setSelection({
+    anchor: { paragraphId, offset: 1 },
+    head: { paragraphId, offset: 8 },
+  });
+  bob.surface!.deleteBackward();
+  // The delete takes the control's whole value; the empty control element stays.
+  expect(bob.surface!.session.bodyText()).toBe('AB');
+  flush();
+  pair.resume();
+  converge();
+  expect(controls(alice)).toBe(1);
+  expect(alice.surface!.session.bodyText()).toBe(bob.surface!.session.bodyText());
+  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+  converge();
+  expect(controls(bob)).toBe(1);
+  expect(alice.surface!.session.bodyText()).toBe(bob.surface!.session.bodyText());
+  expect(alice.exec({ type: 'redo' }).ok).toBe(true);
+  converge();
+  expect(controls(bob)).toBe(1);
+  expect(alice.surface!.session.bodyText()).toBe(bob.surface!.session.bodyText());
+});
+
+test('a multi-line paste at the trailing edge keeps one control on both peers', async () => {
+  const { pair, alice, bob, flush, converge } = await connectedPair();
+  const controls = (editor: Editor) =>
+    serializeOoxmlPart(mainPart(editor.surface!.session.currentPackage())).split('<w:sdt>').length -
+    1;
+  pair.pause();
+  caret(alice, 7);
+  expect(alice.exec({ type: 'pasteWithoutFormatting', text: 'one\ntwo' }).ok).toBe(true);
+  caret(bob, 4);
+  bob.surface!.type('Y');
+  flush();
+  pair.resume();
+  converge();
+  expect(controls(bob)).toBe(1);
+  expect(controlText(bob)).toBe('vaYlue');
+  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+  converge();
+  expect(controls(bob)).toBe(1);
 });
