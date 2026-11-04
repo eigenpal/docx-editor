@@ -50,10 +50,24 @@ function printRow(view: ReturnType<typeof render>) {
   return view.container.querySelector<HTMLButtonElement>('[data-slot="file.print"]')!;
 }
 
+/** Selects File > Print and leaves any settings step open. */
+async function openPrint(view: ReturnType<typeof render>) {
+  const row = printRow(view);
+  await act(async () => {
+    fireEvent.click(row);
+  });
+}
+
+/** Selects File > Print and confirms the settings step when it shows. */
 async function selectPrint(view: ReturnType<typeof render>) {
   const row = printRow(view);
   await act(async () => {
     fireEvent.click(row);
+  });
+  const settings = view.container.querySelector('[data-docx-part="print-settings"]');
+  if (!settings) return;
+  await act(async () => {
+    fireEvent.click(view.getByRole('button', { name: 'Print' }));
   });
 }
 
@@ -341,7 +355,7 @@ test('Ctrl+P prints from the editor only when a PDF handler is configured', asyn
     surface.dispatchEvent(event);
   });
   expect(event.defaultPrevented).toBe(true);
-  expect(configured.getByRole('dialog').getAttribute('aria-label')).toBe('Preparing to print…');
+  expect(configured.getByRole('dialog').getAttribute('aria-label')).toBe('Print');
   cleanup();
 
   const unconfigured = mount(false, {});
@@ -368,4 +382,220 @@ test('the public print dialog respects controlled visibility', () => {
   expect(view.container.querySelector('dialog')).toBeNull();
   expect(DocxEditor.PrintDialog).toBe(DocxEditorPrintDialog);
   expect(DocxEditorMenu.Print.docxSlot).toBe('file.print');
+});
+
+for (const packaged of [false, true]) {
+  test(`File > Print asks which markup and comments to print (packaged=${packaged})`, async () => {
+    const views: unknown[] = [];
+    const view = mount(
+      packaged,
+      {},
+      {
+        pdf: async (_bytes, printed) => {
+          views.push(printed);
+          return { bytes: PDF };
+        },
+      }
+    );
+    await openPrint(view);
+    // Nothing converts until the user confirms.
+    expect(views).toEqual([]);
+    const dialog = view.getByRole('dialog');
+    expect(dialog.getAttribute('aria-label')).toBe('Print');
+    const radio = (name: string) => view.getByRole('radio', { name }) as HTMLInputElement;
+    const comments = () =>
+      view.getByRole('checkbox', { name: 'Print comments' }) as HTMLInputElement;
+    // The form starts from the editor's current view, with comments shown.
+    expect(radio('No Markup').checked).toBe(true);
+    expect(comments().disabled).toBe(false);
+    expect(comments().checked).toBe(true);
+    // Outside All Markup, comments print as notes on the text, not in a pane.
+    expect(
+      view.getByText('Outside All Markup, comments print as notes on the commented text.')
+    ).toBeTruthy();
+    // The modes follow the Review menu order.
+    expect(view.getAllByRole('radio').map((input) => input.parentElement?.textContent)).toEqual([
+      'Simple Markup',
+      'All Markup',
+      'No Markup',
+      'Original',
+    ]);
+
+    act(() => {
+      fireEvent.click(radio('All Markup'));
+    });
+    expect(
+      view.queryByText('Outside All Markup, comments print as notes on the commented text.')
+    ).toBeNull();
+    act(() => {
+      fireEvent.click(comments());
+    });
+    expect(comments().checked).toBe(false);
+
+    await act(async () => {
+      fireEvent.click(view.getByRole('button', { name: 'Print' }));
+    });
+    expect(views).toHaveLength(1);
+    expect(views[0]).toMatchObject({ displayMode: 'all-markup', comments: false });
+    // The progress view takes focus from the removed Print button.
+    expect(document.activeElement?.textContent).toBe('Cancel');
+  });
+
+  test(`Cancel on the settings step prints nothing (packaged=${packaged})`, async () => {
+    let conversions = 0;
+    const view = mount(
+      packaged,
+      {},
+      {
+        pdf: async () => {
+          conversions++;
+          return { bytes: PDF };
+        },
+      }
+    );
+    await openPrint(view);
+    act(() => {
+      fireEvent.click(view.getByRole('button', { name: 'Cancel' }));
+    });
+    expect(view.queryByRole('dialog')).toBeNull();
+    expect(conversions).toBe(0);
+    expect(printRow(view).disabled).toBe(false);
+  });
+}
+
+test('printSettings={false} prints the current view without asking', async () => {
+  const views: unknown[] = [];
+  const view = render(
+    <DocxEditorRoot document="blank">
+      <DocxEditorMenu
+        printSettings={false}
+        exporters={{
+          pdf: async (_bytes, printed) => {
+            views.push(printed);
+            return { bytes: PDF };
+          },
+        }}
+      />
+      <DocxEditorViewport>
+        <DocxEditorContent />
+      </DocxEditorViewport>
+    </DocxEditorRoot>
+  );
+  await openPrint(view);
+  expect(view.queryByRole('radio')).toBeNull();
+  expect(views).toHaveLength(1);
+  expect(views[0]).not.toHaveProperty('comments');
+});
+
+test('a custom print popup gets the settings step only when it opts in', async () => {
+  let latest!: DocxEditorPrintDialogProps;
+  const popups: DocxEditorPopups = {
+    print: definePopup((props: DocxEditorPrintDialogProps) => {
+      latest = props;
+      return <DocxEditorPrintDialog {...props} />;
+    }),
+  };
+  const pdf = () => new Promise<{ bytes: Uint8Array }>(() => {});
+  const view = mount(false, popups, { pdf });
+  await openPrint(view);
+  expect(latest.choosing).toBe(false);
+  expect(latest.pending).toBe(true);
+  cleanup();
+
+  const optedIn = render(
+    <DocxEditorRoot document="blank" popups={popups}>
+      <DocxEditorMenu printSettings exporters={{ pdf }} />
+      <DocxEditorViewport>
+        <DocxEditorContent />
+      </DocxEditorViewport>
+    </DocxEditorRoot>
+  );
+  await openPrint(optedIn);
+  expect(latest.choosing).toBe(true);
+  expect(latest.pending).toBe(false);
+  expect(latest.settings).toEqual({ displayMode: 'proposed', comments: true });
+  act(() => latest.onSettingsChange?.({ displayMode: 'all-markup' }));
+  act(() => latest.onSettingsChange?.({ comments: false }));
+  expect(latest.settings).toEqual({ displayMode: 'all-markup', comments: false });
+  await act(async () => latest.onPrint?.());
+  expect(latest.choosing).toBe(false);
+  expect(latest.pending).toBe(true);
+});
+
+test('the print shortcut on the settings step starts printing', async () => {
+  let conversions = 0;
+  const view = mount(
+    false,
+    {},
+    {
+      pdf: () => {
+        conversions++;
+        return new Promise(() => {});
+      },
+    }
+  );
+  await openPrint(view);
+  const event = new KeyboardEvent('keydown', {
+    key: 'p',
+    code: 'KeyP',
+    ctrlKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  await act(async () => {
+    view.getByRole('radio', { name: 'No Markup' }).dispatchEvent(event);
+  });
+  expect(event.defaultPrevented).toBe(true);
+  expect(conversions).toBe(1);
+  expect(view.getByRole('dialog').getAttribute('aria-label')).toBe('Preparing to print…');
+});
+
+test('a double click on Print converts once', async () => {
+  let conversions = 0;
+  const view = mount(
+    false,
+    {},
+    {
+      pdf: () => {
+        conversions++;
+        return new Promise(() => {});
+      },
+    }
+  );
+  await openPrint(view);
+  const print = view.getByRole('button', { name: 'Print' });
+  await act(async () => {
+    fireEvent.click(print);
+    fireEvent.click(print);
+  });
+  expect(conversions).toBe(1);
+});
+
+test('an auto-repeated print shortcut does not confirm the settings', async () => {
+  let conversions = 0;
+  const view = mount(
+    false,
+    {},
+    {
+      pdf: () => {
+        conversions++;
+        return new Promise(() => {});
+      },
+    }
+  );
+  await openPrint(view);
+  const held = new KeyboardEvent('keydown', {
+    key: 'p',
+    code: 'KeyP',
+    ctrlKey: true,
+    repeat: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  await act(async () => {
+    view.getByRole('radio', { name: 'No Markup' }).dispatchEvent(held);
+  });
+  expect(held.defaultPrevented).toBe(true);
+  expect(conversions).toBe(0);
+  expect(view.getByRole('dialog').getAttribute('aria-label')).toBe('Print');
 });

@@ -19,7 +19,7 @@ Customize the DOCX editor menu bar and context menu independently. Both use the 
 | Surface | Options |
 | --- | --- |
 | `DocxEditor.Menu` | `className`, `t`, `preset`, `overflow`, and child menus. |
-| File operations | `fileName`, `onOpen`, `onOpenFile`, `onSave`, and `exporters`. |
+| File operations | `fileName`, `onOpen`, `onOpenFile`, `onSave`, `exporters`, and `printSettings`. |
 | Page setup | `onPageSetup` opens application UI when `popups.pageSetup` is absent. |
 | Application support | `onReportIssue` replaces the support action; `reportIssue={false}` removes it. |
 | `DocxEditor.ContextMenu` | `className`, `t`, `preset`, `disabled`, and `onOpenChange`. |
@@ -38,6 +38,7 @@ The context menu opens on the document pages and on the canvas around them. Text
 | `onSave` | Saves and downloads the DOCX file when omitted from the menu bar. |
 | `fileName` | Sets the default download name without the file extension. |
 | `exporters` | Supplies Markdown and PDF conversion handlers. Print uses the PDF handler. |
+| `printSettings` | Asks which markup and comments to print before conversion. Defaults to `true` with the packaged print dialog. Set `false` to print the current view at once. |
 | `onReportIssue` | Supply your application's support action when you embed the editor. |
 
 Changing menu labels does not change converter behavior. A missing export handler produces an error when the user requests that conversion. Hiding export progress through `popups.export` does not cancel conversion.
