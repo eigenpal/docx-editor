@@ -62,6 +62,11 @@ export type BlockLayoutOptions<HostOptions extends object = object> = HostOption
   readonly columnRegionBottom?: number;
   /** Section-local page selected for column balancing; defaults to the first page. */
   readonly columnRegionPage?: number;
+  /**
+   * Set on a balance search trial, which reads any layout refusal as a band that does not fit,
+   * so a wrap reflow that does not settle refuses there instead of publishing.
+   */
+  readonly columnBalanceTrial?: boolean;
   /** Section page-number format used to measure body page-field placeholders. */
   readonly bodyPageNumberFormat?: string;
   /** Story REF inputs built by the document composition root. */
@@ -230,6 +235,7 @@ export function* layoutBlocksWithColumnBalanceSteps<HostOptions extends object>(
     try {
       const trial = yield* layoutPass(bodies, revision, {
         ...trialOptions,
+        columnBalanceTrial: true,
         columnRegionBottom: limit,
         columnRegionPage: balancePage,
       });

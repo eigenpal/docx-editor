@@ -43,13 +43,13 @@ import type { AnchoredDrawingRecord } from './drawing-layout.ts';
 import type { DrawingAnchorFrameContext } from './drawing-layout.ts';
 import { inlinePictureRoomOf, storyPageClip } from './drawing-page-clip.ts';
 import {
-  DrawingExclusionConvergenceError,
   MAX_DRAWING_EXCLUSION_REFLOW_PASSES,
   collectExclusionZonesFromDrawings,
   exclusionLayoutToken,
   type ExclusionZone,
 } from './drawing-exclusion.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
+import { noteUnsettledExclusionReflow } from './unsettled-exclusion-layout.ts';
 import {
   forEachStoryDrawing,
   forEachStoryParagraphFragment,
@@ -564,11 +564,8 @@ export function layoutHeaderFooterStory(
           }
           exclusionZones = nextZones;
         }
-        if (!converged) {
-          throw new DrawingExclusionConvergenceError(
-            `header/footer exclusion reflow did not converge within ${MAX_DRAWING_EXCLUSION_REFLOW_PASSES} passes`
-          );
-        }
+        // A story that does not settle keeps its last flow, so the page still opens.
+        if (!converged) noteUnsettledExclusionReflow(MAX_DRAWING_EXCLUSION_REFLOW_PASSES);
       } else {
         lineCounter = firstLine;
         flow = flowBlocksInBox(source, 0, width, 0, 0, plainDeps(storyEnd));
