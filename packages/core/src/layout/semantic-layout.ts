@@ -1684,24 +1684,17 @@ function* layoutBlocksPass(
 
   const tableVerticalFrames = (anchorY: number) =>
     tableFloat.bodyTableVerticalAnchorFrames(anchorFrameBase(), anchorY, geometry.margin.top);
-  /** Room below `anchorY` that the tables waiting for `anchorId` need on this page. */
-  const anchorTableBand = (anchorId: string, anchorY: number, anchorExtent: number): number =>
-    tableWrap.requiredAnchorBand(
-      positionedTables,
-      pendingFloatIds,
-      anchorId,
-      columnWidth(),
-      tableDeps,
-      {
-        anchorY,
-        anchorExtent,
-        frames: anchorFrames(),
-        verticalFrames: tableVerticalFrames(anchorY),
-        earlier: pageFragments,
-        signals: floatSignals,
-        pushOf: stacks.push,
-      }
-    );
+  const anchorTableBand = tableWrap.anchorTableBandOf({
+    anchors: positionedTables,
+    pending: pendingFloatIds,
+    width: columnWidth,
+    deps: tableDeps,
+    frames: anchorFrames,
+    verticalFrames: tableVerticalFrames,
+    earlier: () => pageFragments,
+    signals: floatSignals,
+    pushOf: stacks.push,
+  });
 
   const layoutTableInFlow = (
     table: OoxmlElement,
