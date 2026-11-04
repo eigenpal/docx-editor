@@ -255,7 +255,7 @@ describe('header and footer content paints under the body', () => {
   });
 });
 
-/** The picture watermark Word writes in a header: VML, behind text, centered on the margins. */
+/** A picture watermark in a header: VML, behind text, centered on the margins. */
 function vmlPictureWatermark(widthPt: number, zIndex: number): string {
   return (
     '<w:r><w:pict><v:shape id="WordPictureWatermark1" o:spid="_x0000_s2049" ' +
@@ -318,7 +318,7 @@ function watermarkDocx(): Uint8Array {
 
 describe('drawings inside the header layer', () => {
   test('a picture watermark paints over a behind-text picture of a lower rank', async () => {
-    // The watermark ranks above the picture, so Word paints it last, whatever the document order.
+    // The watermark ranks above the picture, so it paints last, whatever the document order.
     const { surface, container } = await mountWithImages(watermarkDocx());
     const layer = container.querySelector('[data-docx-hf-behind="header"]');
     expect(layer === null).toBe(false);

@@ -1,8 +1,8 @@
-// Word stacks the anchored drawings of a header or footer by `wp:anchor/@relativeHeight`
-// within each layer, as it does in the body. Document order decides only between equal
-// ranks. A Word picture watermark (`v:shape` with a negative `z-index`) and a behind-text
-// DrawingML picture in one header are the common case: Word paints the higher rank last, so
-// an opaque watermark hides the picture under it.
+// The anchored drawings of a header or footer stack by `wp:anchor/@relativeHeight` within each
+// layer, as they do in the body. Document order decides only between equal ranks. A picture
+// watermark (`v:shape` with a negative `z-index`) and a behind-text DrawingML picture in one
+// header are the common case: the higher rank paints last, so an opaque watermark hides the
+// picture under it.
 
 import { describe, expect, test } from 'bun:test';
 import { WML_NAMESPACE_URI } from '../../store/package/ooxml-tree.ts';
@@ -47,7 +47,7 @@ function marginCenteredPicture(options: {
   );
 }
 
-/** The VML picture watermark Word writes for Design > Watermark > Picture, washout on. */
+/** A VML picture watermark with washout on, as a header stores it. */
 function vmlPictureWatermark(options: { readonly widthPt: number; readonly zIndex: number }) {
   return (
     '<w:r><w:pict>' +
@@ -127,8 +127,8 @@ describe('header and footer drawings stack by relativeHeight', () => {
   });
 
   test('a picture watermark paints over a behind-text picture of a lower rank', () => {
-    // Word writes a behind-text VML `z-index` as `relativeHeight - 503316480`, so -251610112
-    // is rank 251706368, above 251703296. Word paints the watermark last.
+    // The behind-text VML `z-index` -251610112 ranks above relativeHeight 251703296, so the
+    // watermark paints last.
     const runs =
       vmlPictureWatermark({ widthPt: 360, zIndex: -251610112 }) +
       marginCenteredPicture({ id: 2, widthPt: 280, relativeHeight: 251703296, behind: true });

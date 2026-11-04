@@ -45,10 +45,10 @@ import { inlinePictureRoomOf, storyPageClip } from './drawing-page-clip.ts';
 import {
   MAX_DRAWING_EXCLUSION_REFLOW_PASSES,
   collectExclusionZonesFromDrawings,
-  compareDrawingStackOrder,
   exclusionLayoutToken,
   type ExclusionZone,
 } from './drawing-exclusion.ts';
+import { sortStoryDrawingsForPaint } from './drawing-overlap.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
 import { noteUnsettledExclusionReflow } from './unsettled-exclusion-layout.ts';
 import {
@@ -733,8 +733,6 @@ export function layoutHeaderFooterStory(
       );
       if (!effectiveCtx) storyFramesAdmitted = placed ?? false;
     }
-    // Paint order, as on a body page. The sort is stable: equal ranks keep document order.
-    pendingAnchoredDrawings.sort(compareDrawingStackOrder);
     const story: HeaderFooterStoryLayout = {
       partName: part.name,
       part,
@@ -744,7 +742,7 @@ export function layoutHeaderFooterStory(
       flowHeight: flow.bottom,
       pageFieldNeeds: needs,
       ...(pendingAnchoredDrawings.length > 0
-        ? { anchoredDrawings: Object.freeze([...pendingAnchoredDrawings]) }
+        ? { anchoredDrawings: sortStoryDrawingsForPaint(pendingAnchoredDrawings) }
         : {}),
       withPageContext: (next) => {
         if (
