@@ -309,17 +309,22 @@ export function exclusionZoneFromAnchoredDrawing(options: {
   });
 }
 
-export function compareDrawingPaintOrder(
+/** Word's stacking: the behind-text layer first, then `relativeHeight`. 0 keeps document order. */
+export function compareDrawingStackOrder(
   left: AnchoredDrawingRecord,
   right: AnchoredDrawingRecord
 ): number {
   const leftLayer = paintLayerOf(left);
   const rightLayer = paintLayerOf(right);
   if (leftLayer !== rightLayer) return leftLayer === 'behind' ? -1 : 1;
-  if (left.relativeHeight !== right.relativeHeight) {
-    return left.relativeHeight - right.relativeHeight;
-  }
-  return compareDrawingCollisionOrder(left, right);
+  return left.relativeHeight - right.relativeHeight;
+}
+
+export function compareDrawingPaintOrder(
+  left: AnchoredDrawingRecord,
+  right: AnchoredDrawingRecord
+): number {
+  return compareDrawingStackOrder(left, right) || compareDrawingCollisionOrder(left, right);
 }
 
 export function sortDrawingsForPaint(
