@@ -36,8 +36,10 @@ export function contentControlAtSelection(
     selection.anchor.offset === selection.head.offset;
   // A caret on a control's trailing edge is still IN the control, as Word's is: typing there
   // continues the field, and ArrowRight is what leaves it. The edge itself hit-tests outside,
-  // so the caret is probed a hair to its left before it counts as beside the control.
-  if (collapsed) return probe(selection.head, -INSIDE);
+  // and a hair to its left is not always the control: an automatic inter-script gap
+  // (`w:autoSpaceDE`/`w:autoSpaceDN`) before the next text puts the caret past that gap. An
+  // inline control's model range answers the edge without geometry.
+  if (collapsed) return endingAt(layout, selection.head) ?? probe(selection.head, -INSIDE);
   const headFirst =
     selection.head.paragraphId === selection.anchor.paragraphId &&
     selection.head.offset < selection.anchor.offset;
@@ -46,4 +48,19 @@ export function contentControlAtSelection(
     probe(selection.head, headFirst ? INSIDE : -INSIDE) ??
     probe(selection.anchor, headFirst ? -INSIDE : INSIDE)
   );
+}
+
+/** The innermost non-empty inline control whose content ends at `position`. */
+function endingAt(
+  layout: SemanticLayout,
+  position: SemanticPosition
+): ContentControlBoundaryRecord | null {
+  let best: ContentControlBoundaryRecord | null = null;
+  for (const control of layout.contentControls ?? []) {
+    const range = control.range;
+    if (!range || range.paragraphId !== position.paragraphId) continue;
+    if (range.end !== position.offset || range.start === range.end) continue;
+    if (!best || control.nestingDepth > best.nestingDepth) best = control;
+  }
+  return best;
 }

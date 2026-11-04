@@ -649,6 +649,57 @@ export function requiredAnchorBand(
   return height;
 }
 
+/** The page state an anchor's band reads, as getters: the layout pass mutates it in place. */
+export interface AnchorTableBandState {
+  readonly anchors: readonly PositionedTableAnchor[];
+  readonly pending: ReadonlySet<string>;
+  readonly width: () => number;
+  readonly deps: TableFlowDeps;
+  readonly frames: () => TableAnchorFrames;
+  readonly verticalFrames: (anchorY: number) => TableVerticalAnchorFrames;
+  readonly earlier: () => readonly BlockFragmentRecord[];
+  readonly signals: readonly PositionedTableAnchorSignal[];
+  readonly pushOf: (tableId: string) => number;
+}
+
+/** Room below `anchorY` that the tables waiting for `anchorId` need on the current page. */
+export function anchorTableBandOf(
+  state: AnchorTableBandState
+): (anchorId: string, anchorY: number, anchorExtent: number) => number {
+  return (anchorId, anchorY, anchorExtent) =>
+    requiredAnchorBand(state.anchors, state.pending, anchorId, state.width(), state.deps, {
+      anchorY,
+      anchorExtent,
+      frames: state.frames(),
+      verticalFrames: state.verticalFrames(anchorY),
+      earlier: state.earlier(),
+      signals: state.signals,
+      pushOf: state.pushOf,
+    });
+}
+
+/**
+ * Whether the tables that wait for `paragraphId` stay on the page that its `w:pageBreakBefore`
+ * closes. A text-anchored table goes where the body flow reaches it, and the break moves only
+ * the anchor paragraph. A table that does not fit is not split here: it follows its anchor.
+ *
+ * The tables stay only when each one is text-anchored and `fits` finds room for them below the
+ * flow on that page (`requiredAnchorBand`). Otherwise they follow their anchor.
+ */
+export function staysBeforeAnchorBreak(
+  anchors: readonly PositionedTableAnchor[],
+  pending: ReadonlySet<string>,
+  paragraphId: string,
+  fits: () => boolean
+): boolean {
+  const waiting = (positionedTablesByAnchor(anchors).get(paragraphId) ?? []).filter((anchor) =>
+    pending.has(anchor.table.id)
+  );
+  return (
+    waiting.length > 0 && waiting.every((anchor) => anchor.float.vertAnchor === 'text') && fits()
+  );
+}
+
 /**
  * Where a text-anchored table placed at its anchor starts: below the earlier text it would
  * cover, then off the floating tables already on the page. `dx` moves it sideways.

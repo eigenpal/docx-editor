@@ -26,6 +26,7 @@ import { retainedFurnitureWrap } from './furniture-drawing-exclusion.ts';
 import { tocLinkRanges, tocLinkStyleToken } from './toc-link-formatting.ts';
 import { tocCodeRanges } from './field-code-toc.ts';
 import { tocIdsToken, type TocIdSets } from './toc-id-sets.ts';
+import { createLiveExclusionZones } from './live-exclusion-zones.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 import * as sectionPrep from './section-preparation.ts';
 import { resolveListAutoSpacing } from './list-auto-spacing.ts';
@@ -324,7 +325,7 @@ function* layoutInModeSteps(
 
   function* runBodySteps(opts: SemanticLayoutOptions): LayoutSteps<SemanticLayout> {
     const [roundBlocks, roundSections] = noteRoundBlocks(part, blocks, sections, opts);
-    if (roundSections.length > 1) {
+    if (sections.length > 1) {
       // Reports document pages as each section completes them, labelled as a single section's.
       return yield* withRelabeledProgress(
         layoutMultiSectionDocumentSteps(
@@ -629,7 +630,10 @@ function* layoutBlocksPass(
   );
   let exclusionPageIndex = -1;
   let currentPageZones: readonly ExclusionZone[] = Object.freeze([]);
-  const pageExclusionZones = (): readonly ExclusionZone[] => {
+  const liveZones = createLiveExclusionZones(options, columns, contentWidthForReflow, bodies);
+  const pageExclusionZones = (): readonly ExclusionZone[] =>
+    liveZones.zones(pages, pendingAnchoredDrawings, previousPassZones());
+  const previousPassZones = (): readonly ExclusionZone[] => {
     const index = pages.length;
     if (exclusionPageIndex === index) return currentPageZones;
     const bodyZones = options.drawingExclusionZonesByPage?.get(index) ?? Object.freeze([]);
@@ -1425,6 +1429,7 @@ function* layoutBlocksPass(
       resumable &&
       reserveResume.moved === undefined &&
       !furnitureHasWrap &&
+      // Live zones too: a pass that finds any collects them, and the next pass is not eligible.
       !options.drawingExclusionZonesByPage?.size,
     firstChanged,
     commonSuffix,
@@ -1679,6 +1684,17 @@ function* layoutBlocksPass(
 
   const tableVerticalFrames = (anchorY: number) =>
     tableFloat.bodyTableVerticalAnchorFrames(anchorFrameBase(), anchorY, geometry.margin.top);
+  const anchorTableBand = tableWrap.anchorTableBandOf({
+    anchors: positionedTables,
+    pending: pendingFloatIds,
+    width: columnWidth,
+    deps: tableDeps,
+    frames: anchorFrames,
+    verticalFrames: tableVerticalFrames,
+    earlier: () => pageFragments,
+    signals: floatSignals,
+    pushOf: stacks.push,
+  });
 
   const layoutTableInFlow = (
     table: OoxmlElement,
@@ -1887,7 +1903,8 @@ function* layoutBlocksPass(
             options.sectionPageBorders !== undefined &&
             options.sectionPageBorders.display !== 'allPages',
           hasNoteReserves: pageBottomReserves !== undefined && !shiftedTail,
-          hasExclusionZones: (options.drawingExclusionZonesByPage?.size ?? 0) > 0,
+          hasExclusionZones:
+            (options.drawingExclusionZonesByPage?.size ?? 0) > 0 || liveZones.sawLiveZones,
         });
         if (shiftable && flowCheckpointsMatch(mark, checkpoints[index]!)) {
           if (shiftedTail) reserveResume.adoptShiftedTail(shiftedTail);
@@ -1963,7 +1980,9 @@ function* layoutBlocksPass(
         !furnitureHoldsTables &&
         tableWrap.admitsAtAnchor(entry.table, tableDeps, {
           allowBreak: columns.count === 1,
-          zones: admission(options.drawingExclusionZonesByPage),
+          zones: admission(
+            liveZones.byPage(pages, pendingAnchoredDrawings, options.drawingExclusionZonesByPage)
+          ),
           page: pages.length,
           width: Math.min(...columns.widths),
           frames: anchorFrames(),
@@ -2054,6 +2073,9 @@ function* layoutBlocksPass(
       (pageFragments.length > 0 || cursorY > 0) &&
       index !== markOnBreakSheet
     ) {
+      const fits = () => cursorY + anchorTableBand(paragraphId, cursorY, 0) <= contentHeight();
+      if (tableWrap.staysBeforeAnchorBreak(positionedTables, pendingFloatIds, paragraphId, fits))
+        noteAnchor(paragraphId, cursorY);
       flushPage();
       previousSpaceAfter = 0;
     }
@@ -2158,22 +2180,7 @@ function* layoutBlocksPass(
         Math.max(
           firstExtent,
           paragraphFrames.requiredAnchorBand(lines),
-          tableWrap.requiredAnchorBand(
-            positionedTables,
-            pendingFloatIds,
-            paragraphId,
-            columnWidth(),
-            tableDeps,
-            {
-              anchorY: prospectiveFirstTop,
-              anchorExtent: firstExtent,
-              frames: anchorFrames(),
-              verticalFrames: tableVerticalFrames(prospectiveFirstTop),
-              earlier: pageFragments,
-              signals: floatSignals,
-              pushOf: stacks.push,
-            }
-          )
+          anchorTableBand(paragraphId, prospectiveFirstTop, firstExtent)
         );
       // `w:keepNext` (§17.3.1.15): priced ONCE per chain, at its head (`keepNextGroupNeed`).
       if (keeps.keepNext && !keepsNext[index - 1]) {

@@ -576,14 +576,76 @@ describe('a breaking text-relative table and its anchor paragraph', () => {
   });
 });
 
+describe('a table that fits the page that its anchor closes with a page break before', () => {
+  const anchor = p('Anchor', '<w:pageBreakBefore/>');
+
+  for (const [label, shape] of [
+    ['spans the column', {}],
+    [
+      'centered on the margin',
+      { width: 160, anchor: 'w:horzAnchor="margin" w:tblpXSpec="center"' },
+    ],
+    ['narrower than the column', { width: 80 }],
+  ] as const) {
+    test(`stays where the body reaches it, and the anchor opens the next page (${label})`, () => {
+      const layout = render(lead(20) + table({ rows: 2, ...shape }) + anchor + p('Tail'));
+      expect(layout.pages).toHaveLength(2);
+      const [floating] = tablesOn(layout, 0);
+      expect(isOutOfFlowTableFragment(floating!)).toBe(true);
+      expect(floating!.box.y).toBe(20);
+      expect(rowText(floating!)).toEqual(['Row 0', 'Row 1']);
+      expect(tablesOn(layout, 1)).toHaveLength(0);
+      expect(lineAt(layout, 1, 'Anchor').box.y).toBe(0);
+      expect(lineAt(layout, 1, 'Tail').box.y).toBe(12);
+    });
+  }
+
+  test('keeps its offset below the body', () => {
+    const layout = render(lead(20) + table({ rows: 2, offset: 10 }) + anchor);
+    expect(tablesOn(layout, 0)[0]!.box.y).toBe(30);
+  });
+
+  test('stays when its last row ends at the page bottom', () => {
+    const layout = render(lead(120) + table({ rows: 2 }) + anchor);
+    expect(tablesOn(layout, 0)[0]!.box.y).toBe(120);
+    expect(lineAt(layout, 1, 'Anchor').box.y).toBe(0);
+  });
+
+  test('tables that share the anchor stay together', () => {
+    const pair = table({ width: 80, rows: 1 }) + table({ width: 80, rows: 1 });
+    const layout = render(lead(20) + pair + anchor);
+    expect(tablesOn(layout, 0).map((fragment) => fragment.box.y)).toEqual([20, 60]);
+    expect(tablesOn(layout, 1)).toHaveLength(0);
+  });
+
+  test('a table whose first row does not fit moves with its anchor', () => {
+    const layout = render(lead(170) + table({ rows: 2 }) + anchor);
+    expect(tablesOn(layout, 0)).toHaveLength(0);
+    expect(tablesOn(layout, 1)[0]!.box.y).toBe(0);
+    expect(lineAt(layout, 1, 'Anchor').box.y).toBe(80);
+  });
+
+  test('a margin-positioned table moves with its anchor', () => {
+    const margin = table({ rows: 2 }).replace('w:vertAnchor="text"', 'w:vertAnchor="margin"');
+    const layout = render(lead(20) + margin + anchor);
+    expect(tablesOn(layout, 0)).toHaveLength(0);
+    expect(tablesOn(layout, 1)).toHaveLength(1);
+  });
+});
+
 describe('retained floating-table anchor policy', () => {
   const frame = p(
     'Frame',
     '<w:framePr w:w="400" w:h="200" w:wrap="around" w:vAnchor="text" w:hAnchor="text"/>'
   );
-  for (const width of [200, 80]) {
-    const prefix = lead(100) + table({ width });
-    const keepPrefix = lead(100).replace('<w:pPr>', '<w:pPr><w:keepNext/>') + table({ width });
+  // A 100 pt lead leaves too little room for the table; a 20 pt lead leaves enough.
+  for (const [width, height] of [
+    [200, 100],
+    [80, 100],
+    [200, 20],
+  ] as const) {
+    const prefix = lead(height) + table({ width });
+    const keepPrefix = lead(height).replace('<w:pPr>', '<w:pPr><w:keepNext/>') + table({ width });
     const anchor = p('Anchor');
     const pageAnchor = p('Anchor', '<w:pageBreakBefore/>');
     for (const [label, before, after, changed] of [
@@ -605,7 +667,7 @@ describe('retained floating-table anchor policy', () => {
       ['anchor after frame', prefix + frame + anchor, prefix + frame + pageAnchor, 3],
       ['frame becomes anchor', prefix + frame + pageAnchor, prefix + p('Frame') + pageAnchor, 2],
     ] as const) {
-      test(`recomputes earlier table admission when ${label} changes (${width} pt table)`, () => {
+      test(`recomputes earlier table admission when ${label} changes (${width} x ${height} pt)`, () => {
         const initial = part(before + p('Tail'));
         const body = bodyOf(initial);
         const replacement = bodyOf(part(after + p('Tail'))).children[changed]!;

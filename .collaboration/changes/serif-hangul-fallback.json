@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Characters that a serif Korean font lacks paint and measure through the sans-serif fallback stack.",
+  "after": "Characters that a serif Korean font lacks paint and measure through a serif Hangul fallback stack. The document's font table identifies the serif Korean fonts.",
+  "reason": "Only the CSS font stack of painted runs and of canvas measurement changes. The editor reads the font table and writes nothing, so no shared field, operation, node identity, snapshot, or protocol message changes.",
+  "tests": ["packages/core/src/editor/__tests__/serif-hangul-fallback.test.ts"],
+  "changeset": "serif-hangul-fallback",
+  "migration": null
+}

@@ -17,7 +17,7 @@ import {
 } from './drawing-layout.ts';
 import { anchoredOutOfCell, type CellAnchorScope } from './cell-anchor-layout.ts';
 import { drawingGeometryFromProjection } from './drawing-geometry.ts';
-import { compareDrawingCollisionOrder } from './drawing-overlap.ts';
+import { paintLayerOf, sortDrawingsForPaint, type DrawingPaintLayer } from './drawing-overlap.ts';
 import { paragraphBandTop, topAndBottomBandAnchorY } from './top-and-bottom-clearance.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
@@ -39,8 +39,8 @@ import type { TextboxStoryLayouter } from './inline-textbox-flow.ts';
 import { textboxPlacementProjection } from './textbox-placement.ts';
 import { turnedWrapBox } from './textbox-wrap-box.ts';
 
-/** Paint layer relative to body text — not the OOXML wrap element. */
-export type DrawingPaintLayer = 'behind' | 'inFront';
+export { compareDrawingPaintOrder, paintLayerOf, sortDrawingsForPaint } from './drawing-overlap.ts';
+export type { DrawingPaintLayer } from './drawing-overlap.ts';
 
 /** Maximum page-to-page deferrals before publishing with {@link AnchoredDrawingLayoutFallback}. */
 export const MAX_ANCHOR_PAGE_DEFERRALS = 8;
@@ -64,7 +64,13 @@ export const MAX_DRAWING_EXCLUSION_REFLOW_PASSES = 16;
 /** Passages of a quarter inch or less beside a floating table hold no text. */
 export const TABLE_WRAP_MIN_PASSAGE_PT = 18;
 
-/** Raised when wrap-exclusion reflow does not converge within {@link MAX_DRAWING_EXCLUSION_REFLOW_PASSES}. */
+/**
+ * A layout refusal. A body wrap reflow that does not settle raises it only inside a
+ * column-balance trial (the band does not fit) or before the hidden-furniture retry; otherwise
+ * it publishes its last pass, as a header or footer reflow does
+ * (`unsettled-exclusion-layout.ts`). Wrapping page furniture that leaves body text no room
+ * raises it too; only the hidden-furniture retry handles that case.
+ */
 export class DrawingExclusionConvergenceError extends Error {
   readonly name = 'DrawingExclusionConvergenceError';
   constructor(message = 'drawing exclusion reflow did not converge') {
@@ -173,10 +179,6 @@ export function columnIndexForDrawing(
     if (centerX >= left - 0.001 && centerX < right + 0.001) return index;
   }
   return count - 1;
-}
-
-export function paintLayerOf(drawing: AnchoredDrawingRecord): DrawingPaintLayer {
-  return drawing.behindDocument ? 'behind' : 'inFront';
 }
 
 export function wrapProducesExclusion(wrap: ImageWrapTarget): boolean {
@@ -307,25 +309,6 @@ export function exclusionZoneFromAnchoredDrawing(options: {
     verticalBand: verticalBandOfExclusion(input),
     input,
   });
-}
-
-export function compareDrawingPaintOrder(
-  left: AnchoredDrawingRecord,
-  right: AnchoredDrawingRecord
-): number {
-  const leftLayer = paintLayerOf(left);
-  const rightLayer = paintLayerOf(right);
-  if (leftLayer !== rightLayer) return leftLayer === 'behind' ? -1 : 1;
-  if (left.relativeHeight !== right.relativeHeight) {
-    return left.relativeHeight - right.relativeHeight;
-  }
-  return compareDrawingCollisionOrder(left, right);
-}
-
-export function sortDrawingsForPaint(
-  drawings: readonly AnchoredDrawingRecord[]
-): readonly AnchoredDrawingRecord[] {
-  return Object.freeze([...drawings].sort(compareDrawingPaintOrder));
 }
 
 export function mergeAvailableIntervalsAtY(

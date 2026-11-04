@@ -52,6 +52,8 @@ If a range covers exactly a checkbox's glyph, `insertText()` with `Replace` and 
 
 `insertText(text, location)` accepts `Replace`, `Start`, or `End` and returns a `Range`. Replacement uses the control's value path, including placeholder and temporary-wrapper handling. Sync before using that returned range. `text`, `placeholderShown`, and `temporary` are loaded read-only properties.
 
+When `document.changeTrackingMode` tracks changes, `setValue()` and `insertText()` propose the change inside the control. The shown text, prompt included, becomes a tracked deletion, and the new text becomes a tracked insertion. The control's recorded state, such as the checked state, the chosen list item, or the date, moves to the new value at once, because control properties have no tracked form. Accepting or rejecting the change sets that state again from the text the decision leaves. A rejected date drops its stored day. A rejected prompt shows as the prompt again when its runs use the `PlaceholderText` style or a list item with an empty value names it. Setting the value the control showed before your own pending change withdraws that change. Temporary controls and block controls with more than one paragraph refuse with `NotSupported`.
+
 For an existing placeholder, prefer replacing the control value. For untracked range edits, a range covering the complete prompt can also replace it. The runtime returns `NotSupported` if a replacement would consume prompt text outside its target or an insertion starts away from the prompt start. The first insertion at the prompt start consumes the placeholder text.
 
 ## Edit metadata and locks

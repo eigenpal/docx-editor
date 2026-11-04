@@ -43,13 +43,14 @@ import type { AnchoredDrawingRecord } from './drawing-layout.ts';
 import type { DrawingAnchorFrameContext } from './drawing-layout.ts';
 import { inlinePictureRoomOf, storyPageClip } from './drawing-page-clip.ts';
 import {
-  DrawingExclusionConvergenceError,
   MAX_DRAWING_EXCLUSION_REFLOW_PASSES,
   collectExclusionZonesFromDrawings,
   exclusionLayoutToken,
   type ExclusionZone,
 } from './drawing-exclusion.ts';
+import { sortStoryDrawingsForPaint } from './drawing-overlap.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
+import { noteUnsettledExclusionReflow } from './unsettled-exclusion-layout.ts';
 import {
   forEachStoryDrawing,
   forEachStoryParagraphFragment,
@@ -538,7 +539,9 @@ export function layoutHeaderFooterStory(
       exclusionZones = tableZones;
       if (inlineDrawingLayout) {
         let converged = false;
+        let laidUnder = exclusionZones;
         for (let pass = 0; pass < MAX_DRAWING_EXCLUSION_REFLOW_PASSES; pass += 1) {
+          laidUnder = exclusionZones;
           pendingAnchoredDrawings.splice(0, pendingAnchoredDrawings.length);
           lineCounter = firstLine;
           flow = flowBlocksInBox(source, 0, width, 0, 0, drawingDeps(collect, storyEnd));
@@ -564,10 +567,11 @@ export function layoutHeaderFooterStory(
           }
           exclusionZones = nextZones;
         }
+        // A story that does not settle keeps its last flow, so the page still opens, and the
+        // zones that flow was laid under.
         if (!converged) {
-          throw new DrawingExclusionConvergenceError(
-            `header/footer exclusion reflow did not converge within ${MAX_DRAWING_EXCLUSION_REFLOW_PASSES} passes`
-          );
+          exclusionZones = laidUnder;
+          noteUnsettledExclusionReflow(MAX_DRAWING_EXCLUSION_REFLOW_PASSES);
         }
       } else {
         lineCounter = firstLine;
@@ -738,7 +742,7 @@ export function layoutHeaderFooterStory(
       flowHeight: flow.bottom,
       pageFieldNeeds: needs,
       ...(pendingAnchoredDrawings.length > 0
-        ? { anchoredDrawings: Object.freeze([...pendingAnchoredDrawings]) }
+        ? { anchoredDrawings: sortStoryDrawingsForPaint(pendingAnchoredDrawings) }
         : {}),
       withPageContext: (next) => {
         if (

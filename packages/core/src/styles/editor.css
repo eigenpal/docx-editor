@@ -8011,6 +8011,13 @@ p.docx-review__refused {
   display: inline-flex;
 }
 
+/* In the "⋯" panel these parts draw a full-width row, so their wrapper spans the row too. */
+.docx-toolbar__more-section > .docx-toolbar__image-wrap,
+.docx-toolbar__more-section > .docx-toolbar__alt-text {
+  display: flex;
+  width: 100%;
+}
+
 .docx-editor .docx-toolbar__alt-text-panel,
 .docx-toolbar__alt-text-panel {
   position: absolute;
