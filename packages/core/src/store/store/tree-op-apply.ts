@@ -155,11 +155,14 @@ import { applySetFieldResult } from './tree-op-field-result-write.ts';
 import { withoutOriginalMark } from './tree-op-split-mark.ts';
 import { applyInsertEquation } from './tree-op-equation-insert.ts';
 import { applyTrackedContentControl } from './tracked-content-control-insert.ts';
+import {
+  applyContentControlValueOp,
+  trackedTextAtControlEdge,
+} from './tracked-content-control-value.ts';
 import { applyInsertContentControl as applyAutomationInsertContentControl } from './tree-op-content-control-insert.ts';
 import {
   applyRemoveContentControl as applyAutomationRemoveContentControl,
   applySetContentControlProperties as applyAutomationSetContentControlProperties,
-  applySetContentControlValue as applyAutomationSetContentControlValue,
   clearPlaceholder,
   placeholderControlForInsertion,
 } from './tree-op-content-controls.ts';
@@ -250,9 +253,8 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
   if (op.op === 'replaceStoryBlocks') {
     return applyReplaceStoryBlocks(part, op.storyRootId, op.paragraphs, options);
   }
-  if (op.op === 'setContentControlValue' && typeof op.value !== 'string') {
-    return applyAutomationSetContentControlValue(part, op, options);
-  }
+  if (op.op === 'setContentControlValue')
+    return applyContentControlValueOp(part, op, options, applySetContentControlValue);
   if (op.op === 'setContentControlProperties') {
     return applyAutomationSetContentControlProperties(part, op, options);
   }
@@ -400,10 +402,6 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
   if (op.op === 'setRevisionAttribution') return applySetRevisionAttribution(part, op, options);
   if (op.op === 'removeContentControl')
     return applyRemoveContentControl(part, op.controlId, options);
-  if (op.op === 'setContentControlValue') {
-    if (typeof op.value !== 'string') return { ok: false, reason: 'typeMismatch' };
-    return applySetContentControlValue(part, op.controlId, op.value, options);
-  }
   if (op.op === 'setSectionProperties') return applySetSectionProperties(part, op, options);
   if (op.op === 'setSectionMark') return applySetSectionMark(part, op, options);
   // Package-lifecycle / note-part ops are refused by validateTreeOp; this arm narrows the
@@ -434,15 +432,9 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
   switch (op.op) {
     case 'insertText':
       if (op.revision) {
-        return applyInsertTracked(
-          part,
-          paragraph,
-          op.offset,
-          op.text,
-          op.revision,
-          options,
-          op.bias
-        );
+        const { offset, text, revision, bias } = op;
+        const edge = op.inside && trackedTextAtControlEdge(part, paragraph, op, options);
+        return edge || applyInsertTracked(part, paragraph, offset, text, revision, options, bias);
       }
       return applyInsertContent(
         part,
