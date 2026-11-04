@@ -208,6 +208,8 @@ export interface CanvasMeasurerOptions {
     readonly maxMetricsEntries?: number;
     readonly maxWidthEntries?: number;
     readonly scale?: number;
+    // @internal
+    readonly serifHangulFace?: (family: string) => boolean;
 }
 
 // @public

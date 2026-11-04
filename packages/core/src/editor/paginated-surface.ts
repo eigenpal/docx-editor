@@ -346,6 +346,7 @@ import {
 } from './history-group-scope.ts';
 import { TypingHistory } from './typing-history.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
+import { fontTableSerifHangulFace } from '../store/package/font-table-alternates.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { contentLockedOrBound, removalLocked, treeLockRefusal } from './content-control-locks.ts';
@@ -421,6 +422,8 @@ export function mountPaginatedSurface(
   let formattingOutsideToc = false;
   /** Separates a decision's key from its per-range index. A NUL cannot occur in either. */
   const RANGE_SUFFIX = '\u0000range\u0000';
+  // The glyphs a serif Korean face lacks fall back to serif faces, in paint and measurement.
+  const serifHangulFace = fontTableSerifHangulFace(session.currentPackage());
   // Editor seam creates the canvas; layout only consumes the injected context.
   let defaults = options.measurer
     ? null
@@ -428,6 +431,7 @@ export function mountPaginatedSurface(
         context: tryCreateBrowserCanvasContext(container.ownerDocument),
         // Measure with the same face paint draws with.
         ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+        serifHangulFace,
       });
   let measurer = options.measurer ?? defaults!.measurer;
   // Incremental layout machinery — without these every keystroke re-lays out the document.
@@ -2755,6 +2759,7 @@ export function mountPaginatedSurface(
         readOnlyParagraphIds: fullyProtectedTocParagraphs(session.part()),
         ...(emptyTocIds.size > 0 ? { emptyTocPlaceholderIds: emptyTocIds } : {}),
         ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+        serifHangulFace,
         ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
         materialize: materializedSet,
         ariaHidden: false,
@@ -4429,6 +4434,7 @@ export function mountPaginatedSurface(
           defaults = resolveDefaultSurfaceMeasurer(scale, {
             context: tryCreateBrowserCanvasContext(container.ownerDocument),
             ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+            serifHangulFace,
           });
           measurer = defaults.measurer;
         }

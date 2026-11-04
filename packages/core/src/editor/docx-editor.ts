@@ -11,7 +11,7 @@ import { endEditorPreview, registerEditorPreviewHost } from './editor-preview.ts
 import { registerRefreshHost, type RefreshHost } from './document-refresh-host.ts';
 import { reviewChangesLocked } from './command-protection.ts';
 import { createPlacementKeeper, createReviewRanker } from './review-ranking.ts';
-import { resolvedFontMeasurement } from './resolved-font-measurement.ts';
+import { browserFallbackMeasurer, resolvedFontMeasurement } from './resolved-font-measurement.ts';
 import { updateSurfaceMeasurement } from './surface-measurement.ts';
 import { createLiveFontResolution, liveFontFamilies } from './live-font-resolution.ts';
 import { createFontResolutionLifetime } from './font-resolution-lifetime.ts';
@@ -96,7 +96,6 @@ import {
   FontResolutionError,
   HARD_MAX_FONT_BYTES,
   fontRequestKey,
-  resolveDefaultSurfaceMeasurer,
   type TextMeasurer,
 } from '@docx-editor.dev/core/layout';
 import { createAnchorIndex, warmAnchorsWhenIdle } from './docx-editor-anchors.ts';
@@ -945,9 +944,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   function fallBackToDefaultFonts(): void {
     forgetFonts();
     if (surface) {
-      const fallback = resolveDefaultSurfaceMeasurer(scaleOf(), {
-        context: container ? tryCreateBrowserCanvasContext(container.ownerDocument) : null,
-      });
+      const fallback = browserFallbackMeasurer(container, scaleOf(), surface.session);
       const producer = `${fallback.producer}+fonts:${++fontMeasurementEpoch}`;
       const defaultFontFamily = configuredDefaultFontFamily(fontConfiguration());
       const measurement = { measurer: fallback.measurer, producer, defaultFontFamily };
@@ -1227,15 +1224,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           shaping.fonts,
           explicit?.substitutions
         );
-        // HarfBuzz can only shape faces whose bytes reached its resource snapshot. A run may
-        // still name a locally installed browser face (Helvetica is the common macOS case):
-        // paint resolves that face through CSS, so falling back to the deterministic monospace
-        // grid here makes caret geometry drift. Use the same browser canvas and alias stack;
-        // headless environments still receive the fixed measurer from this resolver.
-        const fallbackResolution = resolveDefaultSurfaceMeasurer(scaleOf(), {
-          context: container ? tryCreateBrowserCanvasContext(container.ownerDocument) : null,
-          ...(embeddedFaces ? { fontAlias: embeddedFaces.alias } : {}),
-        });
+        const fallbackResolution = browserFallbackMeasurer(
+          container,
+          scaleOf(),
+          mounted.session,
+          embeddedFaces?.alias
+        );
         const measurement = resolvedFontMeasurement(
           shaping,
           fonts,
