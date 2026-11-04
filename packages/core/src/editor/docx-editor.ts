@@ -221,7 +221,7 @@ import {
   type RemoteCaretLabelHost,
 } from './paginated-surface.ts';
 import { scrollToDocumentStart } from './surface-pages.ts';
-import { openBodyStoryOf } from './review-story-entry.ts';
+import { openBodyStoryOf, textboxHostParagraphOf } from './review-story-entry.ts';
 import { createZoomLane, zoomFacadeMembers } from './docx-editor-zoom.ts';
 import {
   type CommandRefusal,
@@ -1482,7 +1482,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         reviewActivationFormattingKinds.includes(item.formattingKind ?? ''))
     );
   }
-  const anchorIndexOf = createAnchorIndex();
+  const anchorIndexOf = createAnchorIndex((id) => textboxHostParagraphOf(surface, id));
 
   // Which header, footer, or notes part a card lives in, from the part name its range carries.
   const furnitureHomeOf = (item: ReviewItem) => furnitureHomeOfItem(surface?.session, item);

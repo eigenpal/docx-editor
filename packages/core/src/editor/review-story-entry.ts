@@ -6,7 +6,7 @@
 // caret to its own first paragraph instead. The box opens first, as a press on its text does.
 
 import { findNode, parentNodeOf } from '../store/package/ooxml-edit.ts';
-import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
+import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { textboxStoriesInPart } from '../store/package/textbox-stories.ts';
 import type { ViewScope } from '../contracts/editor.ts';
 import type { SemanticPosition } from '../layout/semantic-interaction.ts';
@@ -38,6 +38,29 @@ export function textboxScopeOfParagraph(part: OoxmlPart, paragraphId: string): F
   return null;
 }
 
+/** Per part revision: text box paragraph id to the paragraph its drawing rides in. */
+const hostsByRoot = new WeakMap<OoxmlNode, Map<string, string | null>>();
+
+/**
+ * The paragraph that anchors the text box holding `paragraphId`, or null when the paragraph
+ * is in no text box. A box's text has no place of its own in the story's flow, so a card or
+ * a comment affordance on it sits beside the paragraph the box rides in.
+ */
+export function textboxHostParagraphOf(
+  surface: PaginatedSurface | null,
+  paragraphId: string
+): string | null {
+  const part = surface && partOfNodeId(surface.session, paragraphId);
+  if (!part) return null;
+  let hosts = hostsByRoot.get(part.root);
+  if (!hosts) hostsByRoot.set(part.root, (hosts = new Map()));
+  const known = hosts.get(paragraphId);
+  if (known !== undefined) return known;
+  const host = textboxScopeOfParagraph(part, paragraphId)?.hostParagraphId ?? null;
+  hosts.set(paragraphId, host);
+  return host;
+}
+
 /**
  * Open the text box holding `position`, if any, and put the caret at `position` in it. `rId`
  * names the header or footer the box sits in. A box that cannot take a caret, or a document
@@ -54,6 +77,30 @@ export function openTextboxAt(
   if (!surface.setActiveScope(rId ? { ...scope, owner: { kind: 'headerFooter', rId } } : scope))
     return;
   surface.setSelection({ anchor: position, head: position });
+}
+
+/**
+ * Document order of the paragraphs in the open text box, nested boxes included, or empty
+ * when no box is open. A selection inside a box is in no story's paragraph list, so this is
+ * the order a comment on box text is ruled by.
+ */
+export function openTextboxParagraphOrder(surface: PaginatedSurface): ReadonlyMap<string, number> {
+  const order = new Map<string, number>();
+  const scope = surface.activeScope();
+  if (scope.kind !== 'frame') return order;
+  const part = partOfNodeId(surface.session, scope.id);
+  const root = part && findNode(part, scope.id);
+  if (!root) return order;
+  // Depth-first, children pushed in reverse so they pop in document order.
+  const stack: OoxmlNode[] = [root];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    if (node.kind === 'paragraph') order.set(node.id, order.size);
+    const children = 'children' in node ? node.children : undefined;
+    if (!children) continue;
+    for (let index = children.length - 1; index >= 0; index -= 1) stack.push(children[index]!);
+  }
+  return order;
 }
 
 /**

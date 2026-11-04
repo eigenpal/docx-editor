@@ -120,6 +120,9 @@ for (const [name, body, header] of [
     const editor = mount(body, header);
     const [placement] = editor.getReviewItems();
     expect(placement?.activatable).toBe(true);
+    // Beside the paragraph the box rides in, so the rail can place the card.
+    expect(placement?.pageIndex).toBe(0);
+    expect(placement?.anchorY).not.toBeNull();
     const range = placement!.item.ranges[0]!;
     // The box's paragraph, not the host paragraph the box rides in.
     expect(range.start.paragraphId).not.toMatch(/#0\.0\.0$/);
