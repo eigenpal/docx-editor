@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Large documents with footnotes open faster, because each part of the document that loads keeps the footnote pages already laid out.
+Large documents with footnotes open faster, and edits that move many pages, such as accepting or rejecting every change, lay out fewer pages again.

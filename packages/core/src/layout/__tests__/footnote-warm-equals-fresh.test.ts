@@ -383,6 +383,81 @@ describe('a warm footnote pass matches a fresh one after each edit', () => {
     expect(progressive).toBeLessThan(fresh * 1.5);
   }, 60000);
 
+  test('an edit that moves every later page reuses the rounds of a sectioned document', () => {
+    // One long section and a short last one, with a note every few pages. An edit at the top
+    // moves every later page, so the walk decides each note page again. Its rounds cut inside
+    // the long section and the last round reaches the short one: they share one set of section
+    // sessions, so the last round resumes instead of laying out every page again.
+    const reports = (steps: ReturnType<typeof layoutSemanticDocumentSteps>): number => {
+      let count = 0;
+      for (let step = steps.next(); !step.done; step = steps.next()) count += 1;
+      return count;
+    };
+    const paragraph = (i: number, cite: string, section = '') =>
+      `<w:p><w:pPr>${EXACT} w:after="0"/>${section}</w:pPr>` +
+      `<w:r><w:t xml:space="preserve">paragraph ${i} with words that fill a line here</w:t></w:r>${cite}</w:p>`;
+    const count = 600;
+    let notes = 0;
+    const body = Array.from({ length: count }, (_, i) => {
+      const cite = i % 60 === 30 ? `<w:r><w:footnoteReference w:id="${(notes += 1)}"/></w:r>` : '';
+      return paragraph(i, cite, i === count - 6 ? `<w:sectPr>${PAGE}</w:sectPr>` : '');
+    }).join('');
+    const note = (k: number) =>
+      `<w:footnote w:id="${k + 1}"><w:p><w:pPr>${EXACT} w:after="0"/></w:pPr>` +
+      `<w:r><w:t>${'n'.repeat(60)}</w:t></w:r></w:p></w:footnote>`;
+    const separator = (type: string, id: number) =>
+      `<w:footnote w:type="${type}" w:id="${id}"><w:p><w:pPr>${EXACT} w:after="0"/></w:pPr>` +
+      `<w:r><w:${type}/></w:r></w:p></w:footnote>`;
+    const loaded = readOoxmlPackage(
+      zipSync({
+        '[Content_Types].xml': strToU8(
+          `<Types xmlns="${CT}">` +
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+            '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+            '</Types>'
+        ),
+        '_rels/.rels': strToU8(
+          `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+        ),
+        'word/_rels/document.xml.rels': strToU8(
+          `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+        ),
+        'word/document.xml': strToU8(
+          `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}` +
+            `<w:sectPr>${PAGE}</w:sectPr></w:body></w:document>`
+        ),
+        'word/footnotes.xml': strToU8(
+          `<w:footnotes xmlns:w="${W}">${separator('separator', -1)}` +
+            `${separator('continuationSeparator', 0)}` +
+            `${Array.from({ length: notes }, (_, k) => note(k)).join('')}</w:footnotes>`
+        ),
+      })
+    );
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const footnotesPart = resolveNotesPart(loaded.package, 'footnote');
+    const store = new TreeDocumentStore(part);
+    const session = createLayoutSession();
+    lay(store.part, footnotesPart, 15, 1, session);
+    const first = paragraphIds(store.part)[1]!;
+    const result = store.transact((tx) =>
+      tx.apply({ op: 'insertText', paragraphId: first, offset: 0, text: 'a phrase. '.repeat(8) })
+    );
+    expect(result.ok).toBe(true);
+    const warm = reports(
+      layoutSemanticDocumentSteps(store.part, 2, layoutOptions(footnotesPart, 15, session))
+    );
+    const fresh = reports(
+      layoutSemanticDocumentSteps(store.part, 2, layoutOptions(footnotesPart, 15))
+    );
+    expect(JSON.stringify(lay(store.part, footnotesPart, 15, 3, session).pages)).toBe(
+      JSON.stringify(lay(store.part, footnotesPart, 15, 3).pages)
+    );
+    // Without the shared section sessions the last round lays out every page again.
+    expect(warm).toBeLessThan(fresh * 1.1);
+  }, 60000);
+
   test('after an edit to a continuation separator with a positive id', () => {
     const mismatches: string[] = [];
     for (const mode of [15, 14]) {
