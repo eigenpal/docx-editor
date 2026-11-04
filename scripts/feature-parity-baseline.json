@@ -275,12 +275,6 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "editor/DocxEditorPrintDialog": {
-      "propsAddedInReact": [],
-      "propsAddedInVue": ["inheritAttrs", "name", "onClose", "props"],
-      "emitsAddedInReact": [],
-      "emitsAddedInVue": ["close"]
-    },
     "editor/DocxEditorRevisionMarkup": {
       "propsAddedInReact": [],
       "propsAddedInVue": [

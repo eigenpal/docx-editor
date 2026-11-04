@@ -10,7 +10,6 @@ export {
   inlineControlStartingAt,
   paragraphOffsetIndex,
   paragraphTextOf,
-  segmentsOf,
   validateTreeOp,
   TREE_DOC_OP_KINDS,
   type ImpactClass,
@@ -27,6 +26,7 @@ export {
   type TreeOpRejection,
   type TreeOpResult,
 } from './tree-ops.ts';
+export { segmentsOfCopy as segmentsOf } from './tree-op-segments.ts';
 export {
   extractFragmentPackage,
   type FragmentCoverage,

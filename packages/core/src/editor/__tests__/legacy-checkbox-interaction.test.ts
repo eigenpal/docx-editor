@@ -170,4 +170,15 @@ describe('legacy checkbox interaction', () => {
     press(box(viewing.container)!);
     expect(box(viewing.container)!.dataset.checked).toBe('false');
   });
+
+  test('suggesting refuses the toggle with a reason instead of writing it untracked', () => {
+    const { surface, container } = mount(BODY);
+    surface.setAuthor('Reviewer');
+    surface.setEditingMode('suggest');
+    const event = press(box(container)!);
+    // The press is the control's: it does not fall through to a caret press.
+    expect(event.defaultPrevented).toBe(true);
+    expect(box(container)!.dataset.checked).toBe('false');
+    expect(surface.state().lastRejection).toContain('suggesting cannot change');
+  });
 });

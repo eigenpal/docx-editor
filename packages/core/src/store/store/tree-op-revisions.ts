@@ -9,6 +9,7 @@ import { unboundTableHistories } from './revision-table-unbound-history.ts';
 import { keepAlignmentRows } from './revision-table-alignment-rows.ts';
 import { trimDecidedExceptions } from './revision-row-exceptions.ts';
 import { restoreDecisionEmptiedControls } from './content-control-prompt-restore.ts';
+import { syncDecidedControlStates } from './content-control-decision-state.ts';
 import { implicitTableRowProperties } from './revision-table-implicit-height.ts';
 import { ordinaryMoveRanges, planOrdinaryMoves } from './revision-move-ranges.ts';
 import {
@@ -967,7 +968,12 @@ export function resolveRevisions(
   }
   return {
     ok: true,
-    part: restoreDecisionEmptiedControls(part, decided, settled, options),
+    part: syncDecidedControlStates(
+      part,
+      decided,
+      restoreDecisionEmptiedControls(part, decided, settled, options),
+      options
+    ),
     effect: {
       dirty: [],
       created: [],

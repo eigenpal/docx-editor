@@ -23,6 +23,7 @@ import { ChromeMenuItemEntry } from '@docx-editor.dev/core/editor';
 import { ChromeMenuSeparatorEntry } from '@docx-editor.dev/core/editor';
 import { chromeMenuSlots } from '@docx-editor.dev/core/editor';
 import { ChromeMenuSubmenuEntry } from '@docx-editor.dev/core/editor';
+import { ChromePrintSettings } from '@docx-editor.dev/core/editor';
 import { ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { ClearAnchorHighlightOptions } from '@docx-editor.dev/core/contracts/editor';
 import { ClearRefreshHighlightsOptions } from '@docx-editor.dev/core/editor';
@@ -145,6 +146,7 @@ import { RefreshLocation } from '@docx-editor.dev/core/editor';
 import { RefreshResult } from '@docx-editor.dev/core/editor';
 import { RefreshSubmission } from '@docx-editor.dev/core/editor';
 import { RefreshUpdate } from '@docx-editor.dev/core/editor';
+import { ResolvedChromePrintSettings } from '@docx-editor.dev/core/editor';
 import { ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
 import { ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
 import { ReviewDisplayMode } from '@docx-editor.dev/core/editor';
@@ -1100,6 +1102,7 @@ export interface DocxEditorMenuProps {
     onSave?: () => void;
     overflow?: boolean;
     preset?: boolean;
+    printSettings?: boolean;
     reportIssue?: boolean;
     t?: ToolbarTranslate;
 }
@@ -1462,11 +1465,15 @@ export function DocxEditorPrintDialog(input: DocxEditorPrintDialogProps): react.
 // @public
 export interface DocxEditorPrintDialogProps {
     children?: DocxEditorChildren;
+    choosing?: boolean;
     className?: string;
     error: string;
     onClose(): void;
+    onPrint?: () => void;
+    onSettingsChange?: (change: ChromePrintSettings) => void;
     open: boolean;
     pending: boolean;
+    settings?: ResolvedChromePrintSettings;
     style?: CSSProperties;
     url: string;
 }

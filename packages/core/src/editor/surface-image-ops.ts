@@ -77,19 +77,11 @@ export function createImageOps(deps: {
     };
   }
 
-  function refuseSuggestingPropertyEdit(): TreeApplyResult {
-    return {
-      committed: false,
-      rejected: true,
-      opCount: 0,
-      reason: SUGGESTING_IMAGE_REFUSAL,
-    };
-  }
-
   return {
     applyDrawingOps(ops) {
       if (deps.editingMode() === 'view') return refuseViewing();
-      if (deps.editingMode() === 'suggest') return refuseSuggestingPropertyEdit();
+      // Suggesting applies drawing geometry (size, position, wrap, crop, alt text) directly:
+      // OOXML has no tracked form for a drawing's properties, so they are never proposals.
       const mark = deps.selectionMark();
       // Through `commit`, not `applyOps` alone: the commit tail is what publishes layout and
       // paint synchronously. Applied bare, the resize reached the screen through the
@@ -107,9 +99,7 @@ export function createImageOps(deps: {
       if (deps.editingMode() === 'view') {
         return { ok: false, reason: 'invalidArgs', detail: VIEWING_REFUSAL };
       }
-      if (deps.editingMode() === 'suggest') {
-        return { ok: false, reason: 'invalidArgs', detail: SUGGESTING_IMAGE_REFUSAL };
-      }
+      // Direct in suggesting too, for the same reason as `applyDrawingOps`.
       let result: ImageIntentResult = { ok: false, reason: 'invalidArgs' };
       deps.commit(() => {
         result = deps.session.applyImageProperties(deps.storyScope(), input);

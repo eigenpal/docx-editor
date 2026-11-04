@@ -23,6 +23,7 @@ import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { Slot } from '../toolbar/Slot';
+import { panelRowContent, triggerClassName, usePanelRow } from '../toolbar/panel-row';
 import { emuToPoints, pointsToEmu } from './normalizeImageFile';
 
 const selectImage = (snapshot: EditorSnapshot) => snapshot.image;
@@ -914,6 +915,7 @@ export const ImagePropertiesTrigger = defineComponent({
     );
     const triggerRef = ref<HTMLButtonElement | null>(null);
     const probe = { type: 'setImageProperties' as const, description: 'probe' };
+    const isPanelRow = usePanelRow();
 
     return () => {
       if (props.hidden) return null;
@@ -921,15 +923,17 @@ export const ImagePropertiesTrigger = defineComponent({
       const isEnabled = allowed?.ok === true;
       const disabledReason = allowed && !allowed.ok ? allowed.reason : null;
       const control = chromeControlForSlot('image.properties');
+      const text = t('formattingBar.imagePropertiesShortcut');
+      const panelRow = isPanelRow(props.asChild, !!slots.default);
       const shared = {
         type: 'button' as const,
         ref: triggerRef,
-        class: `docx-toolbar__button${props.className ? ` ${props.className}` : ''}`,
+        class: `${triggerClassName(panelRow)}${props.className ? ` ${props.className}` : ''}`,
         'data-slot': 'image.properties',
         disabled: !isEnabled,
         ...(!isEnabled ? { 'data-disabled': '' } : {}),
-        'aria-label': t('formattingBar.imagePropertiesShortcut'),
-        title: disabledReason ?? t('formattingBar.imagePropertiesShortcut'),
+        'aria-label': text,
+        title: disabledReason ?? text,
         onMousedown: guardToolbarMousedown,
         onClick: () => {
           if (popups.value?.imageProperties !== false) open.value = true;
@@ -941,7 +945,11 @@ export const ImagePropertiesTrigger = defineComponent({
           {props.asChild ? (
             <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>
           ) : (
-            <button {...shared}>{slots.default?.() ?? chromeIcon(control?.paths)}</button>
+            <button {...shared}>
+              {panelRow
+                ? panelRowContent(chromeIcon(control?.paths), text)
+                : (slots.default?.() ?? chromeIcon(control?.paths))}
+            </button>
           )}
           {popups.value?.imageProperties === false ? null : popups.value?.imageProperties ? (
             renderPopup(popups.value.imageProperties, {
