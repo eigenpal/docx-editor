@@ -1,8 +1,8 @@
-// The glyphs that a serif Korean face lacks fall back to a serif Hangul face, as in Word, and
-// measurement falls back to the same face as paint.
+// The glyphs that a serif Korean face lacks fall back to a serif Hangul face, and measurement
+// falls back to the same face as paint.
 //
-// Word draws the glyphs missing from a font table entry with `w:family` roman and `w:charset`
-// 81 in Batang. The browser fell back to the sans-serif end of the Latin stack instead, which
+// The glyphs missing from a font table entry with `w:family` roman and `w:charset` 81 draw in
+// Batang. The browser fell back to the sans-serif end of the Latin stack instead, which
 // drew a Gothic glyph inside serif text.
 
 import { afterEach, expect, test } from 'bun:test';

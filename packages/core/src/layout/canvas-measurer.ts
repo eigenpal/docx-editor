@@ -66,8 +66,8 @@ export const DEFAULT_CANVAS_FONT_STACK = 'Calibri, Carlito, Helvetica, Arial, sa
 const SERIF_FALLBACK_STACK = '"Times New Roman", "Liberation Serif", Tinos, serif';
 const MONO_FALLBACK_STACK = '"Courier New", "Liberation Mono", Cousine, monospace';
 /**
- * Serif Hangul faces: Word's Batang, then the faces macOS and Linux install. Word draws the
- * glyphs that a serif Korean face lacks in Batang, not in a Gothic face.
+ * Serif Hangul faces: Batang, then the faces macOS and Linux install. The glyphs that a serif
+ * Korean face lacks draw in Batang, not in a Gothic face.
  */
 const SERIF_HANGUL_FALLBACK_STACK = 'Batang, AppleMyungjo, "Noto Serif CJK KR", serif';
 
