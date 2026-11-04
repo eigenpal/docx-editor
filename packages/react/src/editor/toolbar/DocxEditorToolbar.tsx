@@ -226,6 +226,14 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   'image.altText': ToolbarImageAltText,
 };
 
+/** Shaped parts that render as a "⋯" panel row themselves. See `usePanelRow`. */
+const PANEL_ROW_SLOTS: ReadonlySet<ArrangementKey> = new Set<ChromeSlotId>([
+  'image.insert',
+  'image.properties',
+  'image.wrap',
+  'image.altText',
+]);
+
 const TABLE_CONTEXTUAL_GROUP: DefaultGroup = {
   id: TABLE_CONTEXTUAL_GROUP_ID,
   labelKey: 'formattingBar.groups.table',
@@ -755,6 +763,15 @@ function overflowRow(
     override?.type === ToolbarSlot
       ? (override.props as { overflowContent?: () => DocxEditorChildren }).overflowContent
       : undefined;
+  // Parts that open a dialog, menu, or popover draw their own full-width row, so the whole
+  // row presses the control. Their popups stay inside the part, as in the bar.
+  if (!override && PANEL_ROW_SLOTS.has(entry.slot)) {
+    return (
+      <ToolbarPlacementContext.Provider value="panel">
+        {render(entry)}
+      </ToolbarPlacementContext.Provider>
+    );
+  }
   if (override || isValueSlot(entry.slot)) {
     return (
       <ToolbarOverflowControl label={labelOf(label, entry, groupLabelKey)}>

@@ -8011,6 +8011,13 @@ p.docx-review__refused {
   display: inline-flex;
 }
 
+/* In the "⋯" panel these parts draw a full-width row, so their wrapper spans the row too. */
+.docx-toolbar__more-section > .docx-toolbar__image-wrap,
+.docx-toolbar__more-section > .docx-toolbar__alt-text {
+  display: flex;
+  width: 100%;
+}
+
 .docx-editor .docx-toolbar__alt-text-panel,
 .docx-toolbar__alt-text-panel {
   position: absolute;
@@ -8832,6 +8839,12 @@ p.docx-review__refused {
 .docx-editor .docx-print-dialog .docx-dialog__footer,
 .docx-editor.docx-print-dialog .docx-dialog__footer {
   flex-wrap: wrap;
+}
+.docx-editor .docx-print-dialog .docx-dialog__fieldset,
+.docx-editor.docx-print-dialog .docx-dialog__fieldset {
+  /* The settings body is one column: the column basis would become a fixed height. */
+  flex: none;
+  gap: 8px;
 }
 .docx-editor .docx-print-dialog__open {
   margin-inline-end: auto;

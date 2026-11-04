@@ -119,6 +119,7 @@ export async function POST(request: Request): Promise<Response> {
     displayMode: view.displayMode ?? 'proposed',
     revisionMarkup: view.revisionMarkup,
     revisionAuthorSlots: view.revisionAuthorSlots,
+    comments: view.comments,
     fidelityPolicy: 'strict',
     useSystemFonts: false,
   });
@@ -137,7 +138,9 @@ Configure authentication, upload limits, and conversion error responses for your
 
 ## Forward viewer settings
 
-The PDF handler receives a second argument of type `ChromeExportView`. It contains `displayMode` and the resolved `revisionMarkup` preferences captured before conversion. Forward both fields to the PDF server, as shown in the example. An existing one-argument handler still works, but uses its own export defaults. Printing uses the same handler and settings.
+The PDF handler receives a second argument of type `ChromeExportView`. It contains `displayMode` and the resolved `revisionMarkup` preferences captured before conversion. Forward both fields to the PDF server, as shown in the example. An existing one-argument handler still works, but uses its own export defaults.
+
+Printing uses the same handler. For printing, `displayMode` is the markup the user chose in the print settings, and `comments` records whether comments print. Forward `comments` to `exportPdf`. When `comments` is absent, the converter shows comments.
 
 ## Compose export controls
 
