@@ -8,6 +8,9 @@ import { SUGGESTING_CELL_STRUCTURE_REFUSAL } from './table-cell-structure-plan.t
 export const SUGGESTING_TABLE_MOVE_REFUSAL =
   'suggesting cannot move a table; stop suggesting to move it';
 
+export const SUGGESTING_FORM_FIELD_VALUE_REFUSAL =
+  'suggesting cannot change a form field checkbox or dropdown; stop suggesting to change it';
+
 export const SUGGESTING_TABLE_DELETE_REFUSAL =
   'suggesting cannot delete a whole table; stop suggesting to delete it, or delete its rows one at a time';
 
@@ -79,5 +82,10 @@ export function suggestingStructureRefusal(
     return SUGGESTING_TABLE_DELETE_REFUSAL;
   }
   if (ops.some((op) => op.op === 'moveTable')) return SUGGESTING_TABLE_MOVE_REFUSAL;
+  // A legacy checkbox or dropdown keeps its state in the field's `w:ffData`, which has no
+  // tracked form. Refused rather than written untracked.
+  if (ops.some((op) => op.op === 'setLegacyCheckbox' || op.op === 'setLegacyDropdown')) {
+    return SUGGESTING_FORM_FIELD_VALUE_REFUSAL;
+  }
   return null;
 }

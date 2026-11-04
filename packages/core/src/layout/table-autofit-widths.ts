@@ -1,4 +1,5 @@
 import { returnUncoveredHintedText } from './east-asia-hint-coverage.ts';
+import { memoizedNestedNeed, type NestedTableNeed } from './nested-table-need-memo.ts';
 import { cachedAutofitCellWidths, widenedCellInsets } from './table-autofit-cell-cache.ts';
 import { rowForWidenedMeasurement } from './legacy-table-side-rules.ts';
 import { autofitReuseScope } from './autofit-context-reuse.ts';
@@ -505,19 +506,23 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
   return widths;
 }
 
-/** The width a nested table needs from the column that holds it. */
-/** What a nested table needs from its column, plainly and once the column has to widen. */
-interface NestedTableNeed {
-  readonly plain: number;
-  readonly widened: number;
-}
-
 function nestedTableMinimumPt(
   table: OoxmlElement,
   context: TableAutofitContext,
   view: AutofitView
 ): NestedTableNeed {
   const depth = (view.depth ?? 0) + 1;
+  return memoizedNestedNeed(context, table, view, depth, () =>
+    measureNestedTableNeed(table, context, view, depth)
+  );
+}
+
+function measureNestedTableNeed(
+  table: OoxmlElement,
+  context: TableAutofitContext,
+  view: AutofitView,
+  depth: number
+): NestedTableNeed {
   const nested = view.readNested(table, depth);
   // Past the nesting limit layout paints nothing, so nothing needs room.
   if (!nested) return { plain: 0, widened: 0 };

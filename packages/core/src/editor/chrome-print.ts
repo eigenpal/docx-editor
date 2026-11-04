@@ -1,6 +1,12 @@
 import { isApplePlatform } from '@docx-editor.dev/i18n';
-import type { Editor } from '../contracts/editor.ts';
-import { runChromeExport, type ChromeExportHandlers } from './chrome-export.ts';
+import type { Editor, EditorSnapshot } from '../contracts/editor.ts';
+import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
+import {
+  runChromeExport,
+  type ChromeExportHandlers,
+  type ChromePrintSettings,
+} from './chrome-export.ts';
+import type { DocxEditorInstance } from './docx-editor-types.ts';
 
 /** How long the hidden frame may take to load the PDF before printing fails. */
 const PRINT_FRAME_TIMEOUT_MS = 15_000;
@@ -78,21 +84,56 @@ export interface ChromePrintJob {
   dispose(): void;
 }
 
+/** Print settings with every choice made. @public */
+export type ResolvedChromePrintSettings = Required<ChromePrintSettings>;
+
+/**
+ * The display modes a print form offers, in Review menu order, with their label keys.
+ * @public
+ */
+export const CHROME_PRINT_DISPLAY_MODES: readonly {
+  readonly mode: ReviewDisplayMode;
+  readonly labelKey:
+    | 'review.simpleMarkup'
+    | 'review.allMarkup'
+    | 'review.noMarkup'
+    | 'review.original';
+}[] = Object.freeze([
+  { mode: 'simple-markup', labelKey: 'review.simpleMarkup' },
+  { mode: 'all-markup', labelKey: 'review.allMarkup' },
+  { mode: 'proposed', labelKey: 'review.noMarkup' },
+  { mode: 'original', labelKey: 'review.original' },
+] as const);
+
+/**
+ * The settings a print form starts with: the editor's current display mode, with comments
+ * shown, as the PDF converter does by default. All Markup prints comments in a pane beside
+ * each page. The other modes print them as PDF annotations on the commented text.
+ * @public
+ */
+export function initialChromePrintSettings(
+  snapshot: Pick<EditorSnapshot, 'reviewDisplayMode'> | null | undefined
+): ResolvedChromePrintSettings {
+  return { displayMode: snapshot?.reviewDisplayMode ?? 'proposed', comments: true };
+}
+
 /**
  * Saves the current document, converts it with the configured PDF handler, and prepares
  * the result for printing. Uses the same handler and checks as File > Export > PDF, so a
  * missing handler rejects with `ChromeExportError` before the document is saved.
  * Saving commits pending form input and can refresh field results with an undo step.
  * `container` receives the hidden print frame. For an editor inside a modal dialog,
- * pass an element inside that dialog.
+ * pass an element inside that dialog. `settings` carries the user's print settings, such
+ * as the display mode and whether comments print. Omitted settings keep the current view.
  * @public
  */
 export async function runChromePrint(
-  editor: Pick<Editor, 'save'> & Partial<Pick<Editor, 'snapshot'>>,
+  editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>,
   handlers: ChromeExportHandlers = {},
-  container: Document | Element = globalThis.document
+  container: Document | Element = globalThis.document,
+  settings: ChromePrintSettings = {}
 ): Promise<ChromePrintJob> {
-  const { bytes, mimeType } = await runChromeExport(editor, 'pdf', handlers);
+  const { bytes, mimeType } = await runChromeExport(editor, 'pdf', handlers, settings);
   return createPrintJob(bytes, mimeType, container);
 }
 

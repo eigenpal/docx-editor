@@ -357,7 +357,7 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | Standalone VML (`w:pict`) | Render the subset described in [Legacy VML previews](#legacy-vml-previews) |
 | `w:object` and `w:altChunk` | Preserve as generic content with diagnostics |
 | Tracked image insertion and deletion | Record the change in suggesting mode |
-| Tracked image property edits | Stay unavailable in suggesting mode |
+| Image property edits in suggesting mode | Apply directly without a tracked change. Size, position, wrap, crop, alt text, and links have no tracked form in a document. Replacing a picture is refused |
 | Picture artistic effects (`a14:imgEffect`) | Do not render; authored markup round-trips. Glow, inner shadow, reflection, and soft edge in `a:effectLst` render with the drawing module. |
 
 ## Pictures in shape groups
