@@ -3,6 +3,7 @@
 // blocks are laid out until the zones settle. Steps, so a long pass may pause; see
 // `layout-steps.ts`.
 
+import { exclusionColumnLayoutOf, exclusionSourceOrderOf } from './exclusion-collection-inputs.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import {
   createDrawingExclusionPasses,
@@ -101,19 +102,8 @@ function* settleExclusionLayout(
     )
   )
     return null;
-  const sourceOrderOf = (drawingNodeId: string): number | undefined => {
-    const projectedId =
-      options.inlineDrawingLayout?.projectionForAtom?.(drawingNodeId)?.drawingNodeId ??
-      drawingNodeId;
-    return options.drawingSourceOrder?.get(projectedId);
-  };
-  const exclusionColumnLayout = Object.freeze({
-    columnCount: columns.count,
-    columnGapPt: columns.gaps[0] ?? 0,
-    contentWidth: contentWidthForReflow,
-    columnLefts: columns.lefts,
-    columnWidths: columns.widths,
-  });
+  const sourceOrderOf = exclusionSourceOrderOf(options);
+  const exclusionColumnLayout = exclusionColumnLayoutOf(columns, contentWidthForReflow);
   const collectZones = (pages: readonly PageRecord[], memoized = false) => {
     const drawingZones = !options.inlineDrawingLayout
       ? new Map<number, readonly ExclusionZone[]>()
