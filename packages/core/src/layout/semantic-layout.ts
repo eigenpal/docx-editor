@@ -325,13 +325,7 @@ function* layoutInModeSteps(
 
   function* runBodySteps(opts: SemanticLayoutOptions): LayoutSteps<SemanticLayout> {
     const [roundBlocks, roundSections] = noteRoundBlocks(part, blocks, sections, opts);
-    // A note round cut inside the first section of a document with more takes the multi-section
-    // path all the same: the rounds of one search then share its section sessions, and a round
-    // that reaches the later sections resumes from them instead of laying out every page again.
-    if (
-      roundSections.length > 1 ||
-      (sections.length > 1 && opts.noteRoundBlockLimit !== undefined)
-    ) {
+    if (sections.length > 1) {
       // Reports document pages as each section completes them, labelled as a single section's.
       return yield* withRelabeledProgress(
         layoutMultiSectionDocumentSteps(
