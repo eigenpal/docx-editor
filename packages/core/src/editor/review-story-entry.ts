@@ -7,7 +7,7 @@
 
 import { findNode, parentNodeOf } from '../store/package/ooxml-edit.ts';
 import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
-import { textboxStoriesInPart } from '../store/package/textbox-stories.ts';
+import { textboxStoriesInPart, type TextboxStoryRoot } from '../store/package/textbox-stories.ts';
 import type { ViewScope } from '../contracts/editor.ts';
 import type { SemanticPosition } from '../layout/semantic-interaction.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
@@ -18,14 +18,27 @@ type FrameScope = Extract<ViewScope, { kind: 'frame' }>;
 /** Nested boxes and the containers between them stay well within this. */
 const MAX_ANCESTORS = 256;
 
+const storyIndexes = new WeakMap<readonly TextboxStoryRoot[], Map<string, TextboxStoryRoot>>();
+
+/** The part's text box stories by root id; a scan per ancestor was quadratic in boxes. */
+function storiesByRootId(part: OoxmlPart): ReadonlyMap<string, TextboxStoryRoot> {
+  const stories = textboxStoriesInPart(part);
+  let index = storyIndexes.get(stories);
+  if (!index) {
+    index = new Map(stories.map((story) => [story.root.id, story]));
+    storyIndexes.set(stories, index);
+  }
+  return index;
+}
+
 /** The frame scope of the innermost text box in `part` holding `paragraphId`, or null. */
 export function textboxScopeOfParagraph(part: OoxmlPart, paragraphId: string): FrameScope | null {
-  const stories = textboxStoriesInPart(part);
-  if (stories.length === 0 || !findNode(part, paragraphId)) return null;
+  const stories = storiesByRootId(part);
+  if (stories.size === 0 || !findNode(part, paragraphId)) return null;
   let ancestor = parentNodeOf(part, paragraphId);
   for (let depth = 0; ancestor && depth < MAX_ANCESTORS; depth += 1) {
     const id = ancestor.id;
-    const story = stories.find((candidate) => candidate.root.id === id);
+    const story = stories.get(id);
     if (story)
       return {
         kind: 'frame',

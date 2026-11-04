@@ -18,7 +18,7 @@ import {
   type SemanticLayout,
 } from '@docx-editor.dev/core/layout';
 import { bodyReviewAnchors } from '../layout/body-review-anchors.ts';
-import { textboxPresenceLayout } from './textbox-presence-layout.ts';
+import { textboxOnlyLayout } from './textbox-presence-layout.ts';
 import { fragmentParagraphs } from '../layout/line-segments.ts';
 import { weakRefOf, type WeakRefOf } from '../store/package/weak-ref.ts';
 
@@ -40,7 +40,7 @@ export function createAnchorIndex(
     const stories = index(layout);
     let view = views.get(stories);
     if (!view) {
-      const boxes = () => boxIndex(textboxPresenceLayout(layout));
+      const boxes = () => boxIndex(textboxOnlyLayout(layout));
       views.set(stories, (view = new TextboxHostAnchors(stories, boxes, hostOf)));
     }
     return view;
@@ -51,7 +51,7 @@ export function createAnchorIndex(
  * The story anchors, answering for a text box paragraph too. Box text is laid out inside its
  * drawing, never in a story's fragments, so a card on it and the comment affordance over it
  * had no geometry and the rail could not place them. A box paragraph answers with its own
- * lines, from the layout with box paragraphs added, so its card sits level with its text; a
+ * lines, from the box paragraphs laid out on each page, so its card sits level with its text; a
  * box with no such lines answers with the top of the paragraph it rides in. Only a miss
  * builds either, so ordinary paragraphs cost what they always did.
  */
@@ -70,12 +70,13 @@ class TextboxHostAnchors implements ReadonlyMap<string, ReviewParagraphAnchor> {
     if (own) return own;
     let hosted = this.hosted.get(paragraphId);
     if (hosted === undefined) {
-      const hostId = this.hostOf(paragraphId);
-      const boxed = hostId === null ? undefined : this.boxes().get(paragraphId);
+      // The box's own lines first: a box paragraph laid out on a page needs no tree walk.
+      const boxed = this.boxes().get(paragraphId);
       if (boxed) {
         this.hosted.set(paragraphId, boxed);
         return boxed;
       }
+      const hostId = this.hostOf(paragraphId);
       const host = hostId === null ? undefined : this.stories.get(hostId);
       // Without lines: the host's lines count offsets in the host, not in the box.
       hosted = host
