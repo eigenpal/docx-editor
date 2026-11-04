@@ -173,8 +173,8 @@ const mergedTable = (rows: string) => `<w:tbl><w:tblPr><w:tblW w:w="1800" w:type
 const merged = () => mergedTable(mergedPair('m', 'a0', 'a1') + mergedPair('n', 'a2', 'a3'));
 
 test('a nested table with vertical merges breaks between the rows of a merge', () => {
-  // Word breaks the nested table where the band ends, here between the head row of the
-  // second merge and the row that continues it. It does not move the table whole.
+  // The nested table breaks where the band ends, here between the head row of the second
+  // merge and the row that continues it. It does not move the table whole.
   const part = source(merged());
   const layout = layoutSemanticDocument(part, 0, options);
   expect(layout.pages).toHaveLength(2);
@@ -260,3 +260,37 @@ test('edits move the break inside a nested merge as a fresh layout does', () => 
     [[0, 1, 2], [3]],
   ]);
 });
+
+/** A plain row, then a merge whose head holds three lines over two one-line rows. */
+const tallMerge = (rule: string) => {
+  const tr = (cells: string) => `<w:tr><w:trPr>${rule}</w:trPr>${cells}</w:tr>`;
+  return mergedTable(
+    tr(mergeCell(p('r0')) + mergeCell(p('s0'))) +
+      tr(
+        mergeCell(p('m1') + p('m2') + p('m3'), '<w:vMerge w:val="restart"/>') + mergeCell(p('s1'))
+      ) +
+      tr(mergeCell('<w:p/>', '<w:vMerge/>') + mergeCell(p('s2')))
+  );
+};
+
+for (const [name, rule] of [
+  ['auto', ''],
+  ['exact', '<w:trHeight w:val="240" w:hRule="exact"/>'],
+] as const) {
+  test(`a merge whose text outgrows its head row moves whole (${name} rows)`, () => {
+    const part = source(tallMerge(rule));
+    const layout = layoutSemanticDocument(part, 0, options);
+    const nested = nestedFragments(layout);
+    // The merge starts the next page; none of its text is lost or split from its rows.
+    expect(nested.map((t) => t.rows.map((row) => row.rowIndex))).toEqual([[0], [1, 2]]);
+    expect(texts(layout)).toEqual(
+      expect.arrayContaining(['r0', 's0', 'm1', 'm2', 'm3', 's1', 's2'])
+    );
+    expect(nested[1]!.rows[0]!.cells[0]!.rowSpan).toBe(2);
+    const session = createLayoutSession();
+    for (let revision = 0; revision < 2; revision++)
+      expect(layoutSemanticDocument(part, revision, { ...options, session }).pages).toEqual(
+        layout.pages
+      );
+  });
+}
