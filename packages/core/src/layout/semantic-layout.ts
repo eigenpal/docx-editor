@@ -630,9 +630,9 @@ function* layoutBlocksPass(
   );
   let exclusionPageIndex = -1;
   let currentPageZones: readonly ExclusionZone[] = Object.freeze([]);
-  const liveZones = createLiveExclusionZones(options, columns, contentWidthForReflow);
+  const liveZones = createLiveExclusionZones(options, columns, contentWidthForReflow, bodies);
   const pageExclusionZones = (): readonly ExclusionZone[] =>
-    liveZones(pages, pendingAnchoredDrawings, previousPassZones());
+    liveZones.zones(pages, pendingAnchoredDrawings, previousPassZones());
   const previousPassZones = (): readonly ExclusionZone[] => {
     const index = pages.length;
     if (exclusionPageIndex === index) return currentPageZones;
@@ -1429,6 +1429,7 @@ function* layoutBlocksPass(
       resumable &&
       reserveResume.moved === undefined &&
       !furnitureHasWrap &&
+      // Live zones too: a pass that finds any collects them, and the next pass is not eligible.
       !options.drawingExclusionZonesByPage?.size,
     firstChanged,
     commonSuffix,
@@ -1891,7 +1892,8 @@ function* layoutBlocksPass(
             options.sectionPageBorders !== undefined &&
             options.sectionPageBorders.display !== 'allPages',
           hasNoteReserves: pageBottomReserves !== undefined && !shiftedTail,
-          hasExclusionZones: (options.drawingExclusionZonesByPage?.size ?? 0) > 0,
+          hasExclusionZones:
+            (options.drawingExclusionZonesByPage?.size ?? 0) > 0 || liveZones.sawLiveZones,
         });
         if (shiftable && flowCheckpointsMatch(mark, checkpoints[index]!)) {
           if (shiftedTail) reserveResume.adoptShiftedTail(shiftedTail);
@@ -1967,7 +1969,9 @@ function* layoutBlocksPass(
         !furnitureHoldsTables &&
         tableWrap.admitsAtAnchor(entry.table, tableDeps, {
           allowBreak: columns.count === 1,
-          zones: admission(options.drawingExclusionZonesByPage),
+          zones: admission(
+            liveZones.byPage(pages, pendingAnchoredDrawings, options.drawingExclusionZonesByPage)
+          ),
           page: pages.length,
           width: Math.min(...columns.widths),
           frames: anchorFrames(),
