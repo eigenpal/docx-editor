@@ -665,14 +665,6 @@ export function carryEmptyContentControlsAcrossRunPropertyEdit(
   }
 }
 
-/**
- * Every control under a node, in document order, bounded in depth and in count.
- *
- * ONE walk, shared. The nesting bound is the same one layout flattens with, so a control
- * a lane can address is a control every lane can address — and a file that nests past it
- * keeps its content in the tree (the serializer never stops) while no walk recurses
- * further.
- */
 let controlScans: { count: number } | null = null;
 
 /** @internal Counts whole-subtree control scans while `run` executes, for scaling tests. */
@@ -687,6 +679,14 @@ export function countContentControlScansForTest(run: () => void): number {
   return observer.count;
 }
 
+/**
+ * Every control under a node, in document order, bounded in depth and in count.
+ *
+ * ONE walk, shared. The nesting bound is the same one layout flattens with, so a control
+ * a lane can address is a control every lane can address — and a file that nests past it
+ * keeps its content in the tree (the serializer never stops) while no walk recurses
+ * further.
+ */
 export function contentControlsIn(
   root: OoxmlNode,
   options?: { readonly maxDepth?: number; readonly limit?: number }
