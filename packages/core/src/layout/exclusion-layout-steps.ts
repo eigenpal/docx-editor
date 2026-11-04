@@ -100,7 +100,14 @@ function* settleExclusionLayout(
   columns: ResolvedSectionColumns,
   contentWidthForReflow: number,
   layout: OnePass,
-  { seedFromPrevious }: { readonly seedFromPrevious: boolean }
+  {
+    seedFromPrevious,
+    // Read once per layout, so a fresh settle after a seeded one uses the same limits.
+    limits = { reflow: reflowPassLimit, settling: settlingPassLimit },
+  }: {
+    readonly seedFromPrevious: boolean;
+    readonly limits?: { readonly reflow: number; readonly settling: number };
+  }
 ): LayoutSteps<BlockLayoutResult | null> {
   if (
     !(
@@ -149,12 +156,10 @@ function* settleExclusionLayout(
   let zonesByPage: ReadonlyMap<number, readonly ExclusionZone[]> = new Map();
   let result: BlockLayoutResult | null = null;
   let converged = false;
-  // Read once: a stepped layout may pause while a test restores them.
-  const settlingLimit = settlingPassLimit;
   const exclusionPasses = createDrawingExclusionPasses(
     bodies,
     options.inlineDrawingLayout,
-    reflowPassLimit,
+    limits.reflow,
     options.compatibilityMode
   );
   let passCount = 0;
@@ -194,6 +199,7 @@ function* settleExclusionLayout(
   const settleFresh = (): LayoutSteps<BlockLayoutResult | null> =>
     settleExclusionLayout(bodies, revision, options, columns, contentWidthForReflow, layout, {
       seedFromPrevious: false,
+      limits,
     });
   if (previousPages) {
     zonesByPage = collectZones(previousPages, true);
@@ -311,7 +317,7 @@ function* settleExclusionLayout(
       let stab = 0;
       !converged &&
       (stab < MAX_DRAWING_EXCLUSION_STABILIZATION_PASSES ||
-        (settling && exclusionPasses.maxPasses + stab < settlingLimit));
+        (settling && exclusionPasses.maxPasses + stab < limits.settling));
       stab += 1
     ) {
       const candidateSession = options.session ? createLayoutSession() : undefined;

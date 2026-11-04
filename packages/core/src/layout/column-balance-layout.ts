@@ -207,7 +207,7 @@ export function* layoutBlocksWithColumnBalanceSteps<HostOptions extends object>(
 
   const natural = yield* layoutPass(bodies, revision, trialOptions);
   // A natural layout whose wrap never settled makes every trial run to the pass ceiling too,
-  // only to refuse: the section keeps its unbalanced layout.
+  // only to refuse: skip the search. Each reflow pass still balances its own candidate.
   if (!natural.pages.length || !natural.endsOpenPage || resultUnsettled(natural)) {
     if (session) session.balanceLimit = null;
     return yield* layoutPass(bodies, revision, options);
