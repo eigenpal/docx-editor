@@ -335,6 +335,65 @@ describe('custom geometry', () => {
     expect(quarterPast.at(-1)!.y).toBeCloseTo(1000000, 3);
   });
 
+  test('arcTo of exactly one turn keeps one chord budget at every start angle', () => {
+    // At 112.5° the ellipse parameter span rounds to just above one turn; the chord count
+    // still follows the visual sweep, so the circle has the same points as one from 0°.
+    const circle = (stAng: number) =>
+      points(
+        evaluateGeometry(
+          customGeometryDefinition(
+            custGeom(
+              '<a:pathLst><a:path><a:moveTo><a:pt x="1000000" y="500000"/></a:moveTo>' +
+                `<a:arcTo wR="500000" hR="500000" stAng="${stAng}" swAng="21600000"/>` +
+                '</a:path></a:pathLst>'
+            )
+          )!,
+          1000000,
+          1000000
+        )!
+      );
+    const fromZero = circle(0).length;
+    for (const stAng of [6750000, 17550000, -21600000]) {
+      expect(circle(stAng).length).toBe(fromZero);
+    }
+  });
+
+  test('arcTo sweeps beyond one turn keep the parity of their turns', () => {
+    // An even-odd fill paints a region that the loops wind an odd number of times, so the
+    // bounded sweep drops turns only in pairs and keeps at least one full turn.
+    const turns = (swAng: number) => {
+      const outline = points(
+        evaluateGeometry(
+          customGeometryDefinition(
+            custGeom(
+              '<a:pathLst><a:path><a:moveTo><a:pt x="1000000" y="500000"/></a:moveTo>' +
+                `<a:arcTo wR="500000" hR="500000" stAng="0" swAng="${swAng}"/>` +
+                '</a:path></a:pathLst>'
+            )
+          )!,
+          1000000,
+          1000000
+        )!
+      );
+      // Count crossings of the ray from the centre along +y (x = 500 000, y > 500 000).
+      let crossings = 0;
+      for (let index = 1; index < outline.length; index += 1) {
+        const a = outline[index - 1]!;
+        const b = outline[index]!;
+        if (a.y > 500000 && b.y > 500000 && a.x < 500000 !== b.x < 500000) crossings += 1;
+      }
+      return crossings;
+    };
+    const turn = 21600000;
+    expect(turns(turn)).toBe(1);
+    expect(turns(2 * turn)).toBe(2);
+    expect(turns(3 * turn) % 2).toBe(1);
+    expect(turns(12 * turn) % 2).toBe(0);
+    expect(turns(13 * turn) % 2).toBe(1);
+    expect(turns(-12 * turn) % 2).toBe(0);
+    expect(turns(12 * turn)).toBeGreaterThan(0);
+  });
+
   test('unknown verbs, operators and oversized command lists refuse', () => {
     expect(
       customGeometryDefinition(custGeom('<a:pathLst><a:path><a:spline/></a:path></a:pathLst>'))

@@ -359,13 +359,16 @@ const FULL_TURN = 2 * Math.PI;
 
 /**
  * An `arcTo` sweep (ECMA-376 Part 1, 20.1.9.3) beyond one turn redraws the same ellipse, so it
- * reduces to one turn plus the remainder. The drawing and the end point stay the same, and a
- * sweep that a guide makes very large cannot spread its chords over many turns.
+ * drops whole pairs of turns and keeps between one and three turns. The end point stays the
+ * same, the outline keeps at least one full turn, and the number of turns keeps its parity, so
+ * an even-odd fill of the loops does not change. A sweep that a guide makes very large cannot
+ * spread its chords over many turns.
  */
 function boundedSweep(sweep: number): number {
   if (!Number.isFinite(sweep)) return 0;
   const size = Math.abs(sweep);
-  return size <= FULL_TURN ? sweep : Math.sign(sweep) * (FULL_TURN + (size % FULL_TURN));
+  if (size <= FULL_TURN) return sweep;
+  return Math.sign(sweep) * (FULL_TURN + ((size - FULL_TURN) % (2 * FULL_TURN)));
 }
 
 /**
@@ -450,10 +453,11 @@ export function evaluateGeometry(
               ? 2 * Math.acos(1 - FLATTEN_TOLERANCE_EMU / radius)
               : Math.PI / 2;
           // Each turn of the bounded sweep gets its own chord budget, so the part past one turn
-          // is as fine as a single turn. The parameter grows with the visual angle and gains
-          // one turn per turn, so a sweep of at most one turn stays one piece, and a bounded
-          // sweep is at most two.
-          const pieces = Math.max(1, Math.ceil(Math.abs(t1 - t0) / FULL_TURN));
+          // is as fine as a single turn. The count comes from the visual sweep, not from the
+          // parameter span, so rounding in the parameter cannot split a sweep of exactly one
+          // turn; a sweep of at most one turn stays one piece, and a bounded sweep is at most
+          // three.
+          const pieces = Math.max(1, Math.ceil(Math.abs(sweep) / FULL_TURN));
           const span = (t1 - t0) / pieces;
           const quarterMinimum = Math.ceil(Math.abs(span) / (Math.PI / 4));
           const count = Math.min(

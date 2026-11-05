@@ -92,6 +92,23 @@ describe('custom geometry polygon reader', () => {
     expect(polygons.closed).toEqual([true, false]);
   });
 
+  test('both readers draw the same subpaths for line paths', () => {
+    // The geometry engine takes paths with arcs, so a line path must read the same in both.
+    const bodies = [
+      `${line(1, 1)}<a:close/>${move(2, 2)}${line(3, 3)}`,
+      `<a:close/>${move(2, 2)}${line(3, 3)}<a:close/><a:close/>${line(4, 4)}`,
+      `${move(0, 0)}${line(5, 0)}<a:close/>${move(7, 7)}${line(8, 8)}<a:close/>${line(9, 9)}`,
+      `${move(0, 0)}<a:close/>${line(1, 0)}${line(1, 1)}<a:close/>`,
+    ];
+    for (const body of bodies) {
+      const polygons = read(body);
+      expect(polygons.ok).toBe(true);
+      expect(engine(body)).toEqual(
+        polygons.subpaths.map((points, index) => ({ points, closed: polygons.closed[index] }))
+      );
+    }
+  });
+
   test('a malformed verb before the first moveTo still refuses', () => {
     expect(read('<a:lnTo/>').ok).toBe(false);
     expect(read('<a:cubicBezTo><a:pt x="1" y="1"/></a:cubicBezTo>').ok).toBe(false);

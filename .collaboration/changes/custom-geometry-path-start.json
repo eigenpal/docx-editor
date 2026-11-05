@@ -2,7 +2,7 @@
   "impact": "no-impact",
   "fields": [],
   "before": "A custom geometry path drew its commands before the first moveTo, a line or curve after close did not start at the subpath start, and an arc of many turns spread one chord budget over every turn.",
-  "after": "Commands before the first moveTo draw nothing, a line or curve after close starts at the subpath start, and an arc sweep beyond one turn reduces to one turn plus the remainder before flattening.",
+  "after": "Commands before the first moveTo draw nothing, a line or curve after close starts at the subpath start, and an arc sweep beyond one turn drops whole pairs of turns before flattening.",
   "reason": "Only derived drawing geometry changes. Canonical OOXML, source offsets, operations, and collaboration formats remain unchanged.",
   "tests": [
     "packages/core/src/store/__tests__/drawing-geometry-engine.test.ts",
