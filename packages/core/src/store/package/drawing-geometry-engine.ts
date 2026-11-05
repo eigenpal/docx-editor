@@ -323,6 +323,12 @@ export function customGeometryDefinition(custGeom: OoxmlElement): GeometryDefini
 interface PathState {
   readonly subpaths: { points: GeometryPoint[]; closed: boolean }[];
   current: { points: GeometryPoint[]; closed: boolean } | null;
+  /**
+   * False until the first `a:moveTo`. ECMA-376 Part 1, 20.1.9 (`CT_Path2D`): only `moveTo`
+   * sets the current point, and `lnTo`, `arcTo`, `quadBezTo` and `cubicBezTo` draw from it,
+   * so a drawing command before the first `moveTo` draws nothing and moves nothing.
+   */
+  hasPoint: boolean;
   /** Current point in path space; arcs need it unscaled to place their ellipse. */
   x: number;
   y: number;
@@ -347,6 +353,19 @@ function ellipseParameter(angle: number, rx: number, ry: number): number {
 
 function segmentsFor(length: number, tolerance: number): number {
   return Math.max(1, Math.min(MAX_CURVE_SEGMENTS, Math.ceil(length / tolerance)));
+}
+
+const FULL_TURN = 2 * Math.PI;
+
+/**
+ * An `arcTo` sweep (ECMA-376 Part 1, 20.1.9.3) beyond one turn redraws the same ellipse, so it
+ * reduces to one turn plus the remainder. The drawing and the end point stay the same, and a
+ * sweep that a guide makes very large cannot spread its chords over many turns.
+ */
+function boundedSweep(sweep: number): number {
+  if (!Number.isFinite(sweep)) return 0;
+  const size = Math.abs(sweep);
+  return size <= FULL_TURN ? sweep : Math.sign(sweep) * (FULL_TURN + (size % FULL_TURN));
 }
 
 /**
@@ -380,7 +399,15 @@ export function evaluateGeometry(
   for (const path of definition.paths) {
     const sx = path.width > 0 ? width / path.width : 1;
     const sy = path.height > 0 ? height / path.height : 1;
-    const state: PathState = { subpaths: [], current: null, x: 0, y: 0, startX: 0, startY: 0 };
+    const state: PathState = {
+      subpaths: [],
+      current: null,
+      hasPoint: false,
+      x: 0,
+      y: 0,
+      startX: 0,
+      startY: 0,
+    };
     const emit = (x: number, y: number): boolean => {
       if (++total > MAX_GEOMETRY_POINTS) return false;
       state.x = x;
@@ -396,10 +423,12 @@ export function evaluateGeometry(
     };
     const ensureStart = () => (state.current === null ? emit(state.x, state.y) : true);
     for (const step of path.commands) {
+      if (!state.hasPoint && step.op !== 'M') continue;
       let ok = true;
       switch (step.op) {
         case 'M':
           state.current = null;
+          state.hasPoint = true;
           ok = emit(value(step.args[0]), value(step.args[1]));
           break;
         case 'L':
@@ -410,7 +439,7 @@ export function evaluateGeometry(
           const rx = value(step.args[0]);
           const ry = value(step.args[1]);
           const start = angleRadians(value(step.args[2]));
-          const sweep = angleRadians(value(step.args[3]));
+          const sweep = boundedSweep(angleRadians(value(step.args[3])));
           const t0 = ellipseParameter(start, rx, ry);
           const t1 = ellipseParameter(start + sweep, rx, ry);
           const cx = state.x - rx * Math.cos(t0);
@@ -420,13 +449,19 @@ export function evaluateGeometry(
             radius > FLATTEN_TOLERANCE_EMU
               ? 2 * Math.acos(1 - FLATTEN_TOLERANCE_EMU / radius)
               : Math.PI / 2;
-          const quarterMinimum = Math.ceil(Math.abs(t1 - t0) / (Math.PI / 4));
+          // Each turn of the bounded sweep gets its own chord budget, so the part past one turn
+          // is as fine as a single turn. The parameter grows with the visual angle and gains
+          // one turn per turn, so a sweep of at most one turn stays one piece, and a bounded
+          // sweep is at most two.
+          const pieces = Math.max(1, Math.ceil(Math.abs(t1 - t0) / FULL_TURN));
+          const span = (t1 - t0) / pieces;
+          const quarterMinimum = Math.ceil(Math.abs(span) / (Math.PI / 4));
           const count = Math.min(
             MAX_CURVE_SEGMENTS,
-            Math.max(quarterMinimum, Math.ceil(Math.abs(t1 - t0) / angleStep), 1)
+            Math.max(quarterMinimum, Math.ceil(Math.abs(span) / angleStep), 1)
           );
-          for (let index = 1; ok && index <= count; index += 1) {
-            const t = t0 + ((t1 - t0) * index) / count;
+          for (let index = 1; ok && index <= count * pieces; index += 1) {
+            const t = t0 + (span * index) / count;
             ok = emit(cx + rx * Math.cos(t), cy + ry * Math.sin(t));
           }
           break;

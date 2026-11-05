@@ -8,6 +8,7 @@ import { PRESET_SHAPE_SOURCE } from '../package/drawing-preset-table.ts';
 import {
   customGeometryDefinition,
   evaluateGeometry,
+  FLATTEN_TOLERANCE_EMU,
   MAX_GEOMETRY_COMMANDS,
   presetGeometryDefinition,
   type EvaluatedGeometry,
@@ -268,6 +269,70 @@ describe('custom geometry', () => {
       [200, 200],
     ]);
     expect(geometry.textRect).toEqual({ left: 0, top: 0, right: 200000, bottom: 400000 });
+  });
+
+  test('drawing commands before the first moveTo draw nothing', () => {
+    // ECMA-376 Part 1, 20.1.9: only moveTo sets the current point.
+    const evaluate = (body: string) =>
+      evaluateGeometry(
+        customGeometryDefinition(custGeom(`<a:pathLst><a:path>${body}</a:path></a:pathLst>`))!,
+        1000,
+        1000
+      )!;
+    const triangle = evaluate(
+      '<a:lnTo><a:pt x="100" y="0"/></a:lnTo><a:lnTo><a:pt x="100" y="100"/></a:lnTo><a:close/>'
+    );
+    expect(triangle.paths[0]!.subpaths).toEqual([]);
+    const leading = evaluate(
+      '<a:arcTo wR="100" hR="100" stAng="0" swAng="5400000"/>' +
+        '<a:quadBezTo><a:pt x="10" y="10"/><a:pt x="20" y="0"/></a:quadBezTo>' +
+        '<a:cubicBezTo><a:pt x="1" y="1"/><a:pt x="2" y="2"/><a:pt x="3" y="3"/></a:cubicBezTo>' +
+        '<a:close/><a:moveTo><a:pt x="5" y="5"/></a:moveTo><a:lnTo><a:pt x="6" y="6"/></a:lnTo>'
+    );
+    expect(leading.paths[0]!.subpaths.length).toBe(1);
+    expectPoints(points(leading), [
+      [5, 5],
+      [6, 6],
+    ]);
+  });
+
+  test('arcTo sweeps beyond one turn keep the one-turn chord sag and the end point', () => {
+    // Circle of radius 500 000 EMU centred in a 1 000 000 EMU square, from 0°. Before the
+    // sweep was bounded, its worst chord sag was 622 EMU at 1 turn, 59 039 EMU at 10 turns
+    // and 402 455 EMU at 100 turns.
+    const arc = (swAng: number) => {
+      const definition = customGeometryDefinition(
+        custGeom(
+          '<a:pathLst><a:path><a:moveTo><a:pt x="1000000" y="500000"/></a:moveTo>' +
+            `<a:arcTo wR="500000" hR="500000" stAng="0" swAng="${swAng}"/></a:path></a:pathLst>`
+        )
+      )!;
+      return points(evaluateGeometry(definition, 1000000, 1000000)!);
+    };
+    const worstSag = (outline: readonly GeometryPoint[]) => {
+      let sag = 0;
+      for (let index = 1; index < outline.length; index += 1) {
+        const midX = (outline[index - 1]!.x + outline[index]!.x) / 2;
+        const midY = (outline[index - 1]!.y + outline[index]!.y) / 2;
+        sag = Math.max(sag, 500000 - Math.hypot(midX - 500000, midY - 500000));
+      }
+      return sag;
+    };
+    const turn = 21600000;
+    const oneTurn = worstSag(arc(turn));
+    expect(Math.round(oneTurn)).toBe(622);
+    for (const swAng of [10 * turn, 100 * turn, -10 * turn]) {
+      const outline = arc(swAng);
+      expect(worstSag(outline)).toBeCloseTo(oneTurn, 3);
+      expect(outline.length).toBeLessThanOrEqual(129);
+      expect(outline.at(-1)!.x).toBeCloseTo(1000000, 3);
+      expect(outline.at(-1)!.y).toBeCloseTo(500000, 3);
+    }
+    // 10.25 turns end a quarter turn on, at the bottom of the circle.
+    const quarterPast = arc(10 * turn + turn / 4);
+    expect(worstSag(quarterPast)).toBeLessThan(FLATTEN_TOLERANCE_EMU);
+    expect(quarterPast.at(-1)!.x).toBeCloseTo(500000, 3);
+    expect(quarterPast.at(-1)!.y).toBeCloseTo(1000000, 3);
   });
 
   test('unknown verbs, operators and oversized command lists refuse', () => {

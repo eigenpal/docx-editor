@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A custom geometry path drew its commands before the first moveTo from (0,0), and an arc of many turns spread one chord budget over every turn.",
+  "after": "Commands before the first moveTo draw nothing, and an arc sweep beyond one turn reduces to one turn plus the remainder before flattening.",
+  "reason": "Only derived drawing geometry changes. Canonical OOXML, source offsets, operations, and collaboration formats remain unchanged.",
+  "tests": ["packages/core/src/store/__tests__/drawing-geometry-engine.test.ts"],
+  "changeset": "custom-geometry-path-start",
+  "migration": null
+}
