@@ -101,8 +101,82 @@ export function isParagraph(node: OoxmlNode | null): node is OoxmlParagraphNode 
  * appliers resolve it with `findNode` and rebuild that run's children, so nesting costs them
  * nothing.
  */
-export function segmentsOf(paragraph: OoxmlParagraphNode): Segment[] {
-  return walkParagraph(paragraph, null, null);
+export function segmentsOf(paragraph: OoxmlParagraphNode): readonly Segment[] {
+  // The offset index walks the same segments; one array per paragraph, not two.
+  const indexed = offsetIndexCache.get(paragraph);
+  if (indexed) return indexed.segments;
+  const cached = segmentsCache.get(paragraph);
+  if (cached) return cached;
+  const segments = freezeSegments(walkParagraph(paragraph, null, null));
+  segmentsCache.set(paragraph, segments);
+  return segments;
+}
+
+/** Shared by every reader of a paragraph, so no reader can change another's segments. */
+function freezeSegments(segments: Segment[]): readonly Segment[] {
+  for (const segment of segments) Object.freeze(segment);
+  return Object.freeze(segments);
+}
+
+/**
+ * A paragraph's segments as caller-owned objects: {@link segmentsOf} for the public entry
+ * point. Internal readers share one frozen array; a host gets its own copies, as it did when
+ * every call walked the paragraph again.
+ */
+export function segmentsOfCopy(paragraph: OoxmlParagraphNode): Segment[] {
+  return segmentsOf(paragraph).map((segment) => ({ ...segment }));
+}
+
+/**
+ * MEMOIZED ON NODE IDENTITY, like {@link paragraphOffsetIndex}. One op asks for the same
+ * paragraph's segments several times (validation, the split at each range edge, the apply),
+ * and each walk costs the whole paragraph.
+ */
+const segmentsCache = new FieldResultsModeMemo<OoxmlParagraphNode, readonly Segment[]>();
+
+/**
+ * Hand `previous`'s segments to `next`, a rebuild of it that changed ONLY run properties.
+ *
+ * A `w:rPr` contributes no offsets and every other child is kept by identity, so the
+ * segments are the same values. A formatting press emits one op per run it covers, and
+ * without this each op walked the whole paragraph again: quadratic in its run count.
+ * @internal
+ */
+export function carrySegmentsAcrossRunPropertyEdit(
+  previous: OoxmlParagraphNode,
+  next: OoxmlParagraphNode,
+  /** Whether `node` is in the rebuilt tree, as the same object. */
+  holds: (node: OoxmlNode) => boolean
+): void {
+  const segments = segmentsCache.get(previous) ?? offsetIndexCache.get(previous)?.segments;
+  if (!segments || segmentsCache.has(next) || offsetIndexCache.has(next)) return;
+  // A segment's node is a text value or an atom. Only an atom with children can hold an edited
+  // run, such as a simple field and its result runs, and the write rebuilt that atom.
+  for (const segment of containerSegmentsOf(segments)) if (!holds(segment.node)) return;
+  segmentsCache.set(next, segments);
+}
+
+/** The segments whose node holds other nodes, which a run-property write can rebuild. */
+const containerSegments = new WeakMap<readonly Segment[], readonly Segment[]>();
+function containerSegmentsOf(segments: readonly Segment[]): readonly Segment[] {
+  const known = containerSegments.get(segments);
+  if (known) return known;
+  const found = segments.filter((s) => s.node.kind !== 'textValue' && s.node.children.length > 0);
+  containerSegments.set(segments, found);
+  return found;
+}
+
+let paragraphWalks: { count: number } | null = null;
+/** @internal Counts whole-paragraph segment walks while `run` executes, for scaling tests. */
+export function countParagraphWalksForTest(run: () => void): number {
+  const observer = { count: 0 };
+  paragraphWalks = observer;
+  try {
+    run();
+  } finally {
+    paragraphWalks = null;
+  }
+  return observer.count;
 }
 
 /** Build segments with field spans already computed by the caller. @internal */
@@ -192,6 +266,8 @@ export function paragraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOf
   if (cached) return cached;
   const index = buildParagraphOffsetIndex(paragraph);
   offsetIndexCache.set(paragraph, index);
+  // `segmentsOf` reads the index's array from now on.
+  segmentsCache.delete(paragraph);
   return index;
 }
 
@@ -207,7 +283,7 @@ export function transientParagraphOffsetIndex(paragraph: OoxmlParagraphNode): Pa
 
 function buildParagraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOffsetIndex {
   const spans = new Map<string, OffsetSpan>();
-  const segments = walkParagraph(paragraph, spans, null);
+  const segments = freezeSegments(walkParagraph(paragraph, spans, null));
   const length = segments.length === 0 ? 0 : segments[segments.length - 1]!.end;
   const lookup = (node: OoxmlNode | string): OffsetSpan | null =>
     spans.get(typeof node === 'string' ? node : node.id) ?? null;
@@ -228,6 +304,7 @@ function walkParagraph(
   noteAncestors: Map<string, readonly OoxmlNode[]> | null,
   suppliedFieldSpans?: readonly AtomicFieldSpan[]
 ): Segment[] {
+  if (paragraphWalks) paragraphWalks.count += 1;
   const segments: Segment[] = [];
   let offset = 0;
   /** Record a node's span. No-op for `segmentsOf`, which asks for none. */
@@ -865,70 +942,11 @@ export function paragraphLength(paragraph: OoxmlParagraphNode): number {
   return segments.length === 0 ? 0 : segments[segments.length - 1]!.end;
 }
 
-/** One inline content control's identity and the UTF-16 span its content covers. */
-export interface InlineControlSpan {
-  readonly controlId: string;
-  readonly start: number;
-  readonly end: number;
-}
-
-function idsUnder(node: OoxmlNode, out: Set<string>): void {
-  out.add(node.id);
-  if (node.kind === 'textValue') return;
-  for (const child of node.children) idsUnder(child, out);
-}
-
-function spanOfControl(
-  paragraph: OoxmlParagraphNode,
-  segments: readonly Segment[],
-  segment: Segment
-): InlineControlSpan | null {
-  const container = inlineContainersOf(paragraph, segmentAncestryNodeId(segment)).find(
-    (ancestor) => ancestor.kind === 'contentControl'
-  );
-  if (!container) return null;
-  const ids = new Set<string>();
-  idsUnder(container, ids);
-  let start = Number.MAX_SAFE_INTEGER;
-  let end = -1;
-  for (const candidate of segments) {
-    if (!ids.has(segmentAncestryNodeId(candidate))) continue;
-    if (candidate.start < start) start = candidate.start;
-    if (candidate.end > end) end = candidate.end;
-  }
-  if (end < 0) return null;
-  return { controlId: container.id, start, end };
-}
-
-/**
- * The innermost inline content control whose content ends exactly at `offset` — the caret
- * at its right outer edge. What Backspace consults to delete the node as ONE unit
- * (pro-review-and-custom-nodes 4.6): deleting its last character from outside would either
- * strip one letter from a content-locked label (refused, so the key looks dead) or leave a
- * half-deleted chip whose tag still claims the full payload.
- */
-export function inlineControlEndingAt(
-  paragraph: OoxmlParagraphNode,
-  offset: number
-): InlineControlSpan | null {
-  const segments = segmentsOf(paragraph);
-  const before = [...segments].reverse().find((s) => s.end === offset && s.end > s.start);
-  if (!before) return null;
-  const span = spanOfControl(paragraph, segments, before);
-  return span && span.end === offset ? span : null;
-}
-
-/** The forward-delete mirror: the control whose content STARTS exactly at `offset`. */
-export function inlineControlStartingAt(
-  paragraph: OoxmlParagraphNode,
-  offset: number
-): InlineControlSpan | null {
-  const segments = segmentsOf(paragraph);
-  const after = segments.find((s) => s.start === offset && s.end > s.start);
-  if (!after) return null;
-  const span = spanOfControl(paragraph, segments, after);
-  return span && span.start === offset ? span : null;
-}
+export {
+  inlineControlEndingAt,
+  inlineControlStartingAt,
+  type InlineControlSpan,
+} from './tree-op-inline-control-spans.ts';
 
 /**
  * Whether `offset` falls strictly inside content that NO split can divide.

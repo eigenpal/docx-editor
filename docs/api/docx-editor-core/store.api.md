@@ -1543,6 +1543,8 @@ export interface EditOptions {
     // (undocumented)
     readonly deferValidation?: boolean;
     readonly fieldResults?: FieldResultsMode;
+    // @internal
+    readonly placeholderText?: (docPart: string) => string | undefined;
     readonly revisionIds?: () => string;
     readonly trackedRevisionIds?: TransactionRevisionIds;
 }
@@ -5676,6 +5678,7 @@ export type TreeDocOp = SetFieldCodeOp | {
 } | {
     readonly controlId: string;
     readonly op: 'setContentControlValue';
+    readonly revision?: RevisionAttributionInput;
     readonly value: string | ContentControlValueInput;
 } | {
     readonly alias?: string | null;
@@ -5845,6 +5848,8 @@ export class TreeDocumentStore {
 export interface TreeDocumentStoreOptions {
     readonly contentLockPolicy?: ContentLockPolicy;
     readonly historyLimit?: number;
+    // @internal
+    readonly placeholderText?: (docPart: string) => string | undefined;
     readonly settingsPart?: () => OoxmlPart | null | undefined;
 }
 

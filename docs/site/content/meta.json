@@ -24,7 +24,7 @@
     "frameworks/nuxt",
     "frameworks/remix",
     "frameworks/astro",
-    "word-fidelity",
+    "docx-fidelity",
     "guides/right-to-left",
     "guides/cjk",
     "examples",

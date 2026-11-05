@@ -1,16 +1,12 @@
 ---
 title: 'Contributing a translation'
-description: 'Add a new editor language to @docx-editor.dev/i18n: scaffold the locale JSON, fill the strings, validate, and open a PR. Partial translations are accepted.'
+description: 'Add or fix an editor language in @docx-editor.dev/i18n. Partial translations are accepted.'
 category: 'Reference'
 ---
 
-The editor UI ships in 14 languages. To add another language, add one JSON file in the [monorepo](https://github.com/eigenpal/docx-editor).
-
-## How locales work
-
-`packages/i18n/en.json` is the source of truth. Every other locale mirrors its shape, and a missing key fails CI. A `null` value keeps the inherited translation. Without an outer provider, it falls back to English. Locales publish as named exports and per-locale subpaths of `@docx-editor.dev/i18n`.
-
 ## Add a language
+
+Scaffold the locale file in the [monorepo](https://github.com/eigenpal/docx-editor), fill in the strings, and validate:
 
 ```bash
 git clone https://github.com/eigenpal/docx-editor && cd docx-editor
@@ -22,14 +18,25 @@ bun run i18n:status       # shows remaining nulls per locale
 bun run i18n:validate     # CI runs this; missing keys fail
 ```
 
-Use a BCP 47 code (`pl`, `pt-BR`, `zh-CN`). Open a PR with the filled JSON. Partial translations are valid. Entries left `null` use the inherited catalog, or English without an outer provider.
+Open a pull request with the filled JSON file.
 
-## Fix an existing locale
+## Follow catalog requirements
 
-Edit the string in `packages/i18n/<code>.json`, run `bun run i18n:validate`, and open a PR. You do not need to change application code.
+| Rule | Detail |
+| --- | --- |
+| Shape | `packages/i18n/en.json` defines the shape. Every locale mirrors it. |
+| Missing keys | Fail validation and CI. |
+| `null` values | Valid. They inherit at runtime. See [fallback behavior](/docs/2.x/i18n#limits). |
+| Locale code | Use a BCP 47 code, such as `pl`, `pt-BR`, or `zh-CN`. |
+| Placeholders | Keep placeholder names from `en.json` unchanged. |
+| Partial translations | Accepted. |
 
-## Next steps
+## Fix a translation
 
-- [i18n package](/docs/2.x/i18n): wiring locales into the editor
-- [i18n API reference](/docs/2.x/api/i18n): every locale export
-- [Open a PR](https://github.com/eigenpal/docx-editor/pulls)
+Edit the string in `packages/i18n/<code>.json`, run `bun run i18n:validate`, and open a pull request. You do not need to change application code.
+
+## See also
+
+- [i18n package](/docs/2.x/i18n): Wire locales into the editor.
+- [i18n API reference](/docs/2.x/api/i18n): Every locale export.
+- [Open a pull request](https://github.com/eigenpal/docx-editor/pulls)

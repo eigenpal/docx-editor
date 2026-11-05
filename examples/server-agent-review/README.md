@@ -1,6 +1,6 @@
 # Server agent review
 
-Run a Node.js worker that joins a Hocuspocus room as **Review agent** and proposes Word tracked changes. Open the room in two browsers, then accept or reject suggestions from either browser.
+Run a Node.js worker that joins a Hocuspocus room as **Review agent** and proposes tracked changes. Open the room in two browsers, then accept or reject suggestions from either browser.
 
 The browser renders the editor and requests jobs. All model calls and proposal execution happen on the worker. The job continues if its initiating browser closes.
 
@@ -99,7 +99,7 @@ try {
 }
 ```
 
-For insertions, use `range.insertText(text, 'Before')` or `range.insertText(text, 'After')`. For deletions use `range.delete()`. These methods follow the supported Office.js subset. Supply an `author` and enable `TrackMineOnly` before editing. The mode persists for the runtime session. `Off` makes ordinary edits. `TrackAll` is unsupported. The API also supports tracked formatting and selected structural edits. For the supported operations and boundaries, see [Tracked changes](https://www.docx-editor.dev/docs/2.x/editor-api/revisions#supported-tracked-edits). Other peers keep their own editing mode. The saved redlines are Word revisions; the local tracking setting is not a document-wide saved policy.
+For insertions, use `range.insertText(text, 'Before')` or `range.insertText(text, 'After')`. For deletions use `range.delete()`. These methods follow the supported Office.js subset. Supply an `author` and enable `TrackMineOnly` before editing. The mode persists for the runtime session. `Off` makes ordinary edits. `TrackAll` is unsupported. The API also supports tracked formatting and selected structural edits. For the supported operations and boundaries, see [Tracked changes](https://www.docx-editor.dev/docs/2.x/editor-api/revisions#supported-tracked-edits). Other peers keep their own editing mode. The saved redlines are standard DOCX revisions; the local tracking setting is not a document-wide saved policy.
 
 ## Office.js developer patterns
 

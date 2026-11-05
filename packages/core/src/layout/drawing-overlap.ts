@@ -174,3 +174,44 @@ export function resolveOverlapDisplacement(
     deferredNodeIds: Object.freeze(deferredNodeIds),
   });
 }
+
+/** Paint layer relative to body text — not the OOXML wrap element. */
+export type DrawingPaintLayer = 'behind' | 'inFront';
+
+export function paintLayerOf(drawing: AnchoredDrawingRecord): DrawingPaintLayer {
+  return drawing.behindDocument ? 'behind' : 'inFront';
+}
+
+/** Stacking order: the behind-text layer first, then `relativeHeight`. 0 keeps document order. */
+export function compareDrawingStackOrder(
+  left: AnchoredDrawingRecord,
+  right: AnchoredDrawingRecord
+): number {
+  const leftLayer = paintLayerOf(left);
+  const rightLayer = paintLayerOf(right);
+  if (leftLayer !== rightLayer) return leftLayer === 'behind' ? -1 : 1;
+  return left.relativeHeight - right.relativeHeight;
+}
+
+export function compareDrawingPaintOrder(
+  left: AnchoredDrawingRecord,
+  right: AnchoredDrawingRecord
+): number {
+  return compareDrawingStackOrder(left, right) || compareDrawingCollisionOrder(left, right);
+}
+
+export function sortDrawingsForPaint(
+  drawings: readonly AnchoredDrawingRecord[]
+): readonly AnchoredDrawingRecord[] {
+  return Object.freeze([...drawings].sort(compareDrawingPaintOrder));
+}
+
+/**
+ * A header or footer story's drawings in stack order. The sort is stable, so equal ranks keep
+ * the order in which layout placed them.
+ */
+export function sortStoryDrawingsForPaint(
+  drawings: readonly AnchoredDrawingRecord[]
+): readonly AnchoredDrawingRecord[] {
+  return Object.freeze([...drawings].sort(compareDrawingStackOrder));
+}

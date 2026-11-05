@@ -161,6 +161,8 @@ export interface PaintContext {
    * `undefined` when that family has no aliased face. Engine-minted values only.
    */
   readonly fontAlias?: (family: string) => string | undefined;
+  /** See {@link PaintOptions.serifHangulFace}. */
+  readonly serifHangulFace?: (family: string) => boolean;
   /**
    * The family painted for a run whose cascade authors no font — the SAME face the
    * measurer falls back to. Without it such a run inherits the page's CSS font, and the
@@ -215,12 +217,12 @@ export interface PaintContext {
 }
 
 /**
- * A stable per-function token so the paint-reuse key can tell one alias lookup from
+ * A stable per-function token so the paint-reuse key can tell one font lookup from
  * another. Identity is what matters (a new lookup means new fonts); the value is opaque.
  */
 const aliasTokens = new WeakMap<object, string>();
 let nextAliasToken = 0;
-function aliasIdentity(alias: (family: string) => string | undefined): string {
+function aliasIdentity(alias: (family: string) => unknown): string {
   let token = aliasTokens.get(alias);
   if (!token) {
     nextAliasToken += 1;
@@ -265,6 +267,13 @@ export interface PaintOptions {
    * family, so a file can never shadow a family name the host page uses.
    */
   readonly fontAlias?: (family: string) => string | undefined;
+  /**
+   * Whether the document's font table records a family as a serif Korean face. The glyphs
+   * that such a face lacks then paint in a serif Hangul face. Give the canvas measurer the
+   * same lookup.
+   * @internal
+   */
+  readonly serifHangulFace?: (family: string) => boolean;
   /** See {@link PaintContext.defaultFontFamily}. */
   readonly defaultFontFamily?: string;
   /** See {@link PaintContext.fieldShading}. */
@@ -693,7 +702,7 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
     const alias = ctx.fontAlias?.(family);
     // The measurer's fallback stack trails the family so an unresolvable name falls
     // back to the SAME face measurement fell back to — not to the inherited font.
-    const stack = fallbackStackForFamily(family);
+    const stack = fallbackStackForFamily(family, undefined, ctx.serifHangulFace);
     css.fontFamily = alias ? `"${alias}", "${family}", ${stack}` : `"${family}", ${stack}`;
   }
   if (style.color && HEX.test(style.color)) css.color = `#${style.color}`;
@@ -2278,6 +2287,7 @@ export function paintSemanticLayoutWithAuthorSlots(
     ...(options.unsupportedSource ? { unsupportedSource: options.unsupportedSource } : {}),
     urlRegistry,
     ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+    ...(options.serifHangulFace ? { serifHangulFace: options.serifHangulFace } : {}),
     ...(options.readOnlyParagraphIds ? { readOnlyParagraphIds: options.readOnlyParagraphIds } : {}),
     ...(options.emptyTocPlaceholderIds
       ? { emptyTocPlaceholderIds: options.emptyTocPlaceholderIds }
@@ -2318,6 +2328,7 @@ export function paintSemanticLayoutWithAuthorSlots(
   const parameters =
     `${resolved.scale}|${resolved.ariaHidden}|${options.includePartial ?? false}|` +
     `${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|` +
+    `${resolved.serifHangulFace ? aliasIdentity(resolved.serifHangulFace) : ''}|` +
     `${resolved.defaultFontFamily ?? ''}|` +
     `cc:${chromeKey}:${additionalKey}|toc:${tocKey}|` +
     `ro:${readOnlyKey}|tocEmpty:${emptyTocKey}|` +

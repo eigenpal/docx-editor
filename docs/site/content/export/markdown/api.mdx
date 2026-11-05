@@ -1,10 +1,14 @@
 ---
 title: Markdown API reference
-description: Configure DOCX Markdown exports and read the response model, including physical pages, headers, footers, images, comments, tracked changes, and warnings.
+description: Configure DOCX Markdown exports and read pages, headers, footers, images, comments, tracked changes, and warnings.
 category: Export formats
 ---
 
-Call `exportMarkdown(source, options?)` with DOCX bytes (`Uint8Array`, including Node.js `Buffer`) or a `HeadlessDocumentView`. It returns `Promise<MarkdownExportResult>` and manages its own export session cleanup.
+Import functions, error classes, and types from `@docx-editor.dev/docx-to-markdown`. For installation, see [DOCX to Markdown](/docs/2.x/export/markdown#install-the-converter).
+
+## Convert a document
+
+`exportMarkdown(source, options?)` returns `Promise<MarkdownExportResult>` and cleans up its own export session. Pass DOCX bytes (`Uint8Array` or Node.js `Buffer`) or a `HeadlessDocumentView`.
 
 ```ts
 import { readFile } from 'node:fs/promises';
@@ -16,77 +20,47 @@ const result = await exportMarkdown(await readFile('contract.docx'), {
 });
 ```
 
-See [getting started](/docs/2.x/export/markdown#get-started) for installation instructions.
+## Set options
 
-## Options
+| Option | Default | Behavior |
+| --- | --- | --- |
+| `displayMode` | `'all-markup'` | `'proposed'` hides deletions. `'original'` hides insertions. Never modifies the DOCX. |
+| `images` | `false` | `true` for image links and bytes, or an object with `syntax`, `resolveUrl`, and `maxTotalBytes`. See [Images in Markdown exports](/docs/2.x/export/markdown/images). |
+| `signal` | None | Cancels resource waits and later work at cancellation checks. |
+| `resourceTimeoutMs` | `60000` | Positive finite timeout, in milliseconds, for each resource wait, including fonts. Not a total deadline. |
+| `fonts` | None | Caller font sources or resolvers, before bundled substitutes. Requires DOCX bytes. |
+| `fallbackFonts` | None | Font sources or resolvers after bundled substitutes. Requires DOCX bytes. |
+| `fontPolicy` | `'best-effort'` | `'strict'` refuses font origin failures and missing static faces among candidate families. |
+| `onFontResolution` | None | Receives the font report. The exporter does not await callback promises. |
 
-| Option | Behavior |
-| --- | --- |
-| `displayMode` | `'all-markup'` (default) shows pending insertions and deletions. `'proposed'` hides deletions; `'original'` hides insertions. Applies to layout and output without modifying the DOCX. |
-| `images` | `false` by default. Use `true` for image links and bytes, or an object with `syntax`, `resolveUrl`, and `maxTotalBytes`. |
-| `signal` | Cancels resource waits and later work at cancellation checks. Cannot interrupt synchronous parsing or layout. |
-| `resourceTimeoutMs` | Positive finite timeout applied separately to resource-wait phases, including font provisioning. Not a deadline for the whole conversion. |
-| `fonts` / `fallbackFonts` | Caller font sources or resolvers. `fonts` precedes bundled substitutes; `fallbackFonts` follows them. Requires immutable DOCX bytes. |
-| `fontPolicy` | `'best-effort'` (default) or `'strict'`. Strict mode refuses font origin failures and missing static faces among the candidate families. |
-| `onFontResolution` | Receives the font report. Callback promises do not delay export. |
+`fontPolicy` and `onFontResolution` need byte input with default font resolution. With a live view or a custom measurer, they throw `TypeError`. For custom measurement, image decoders, and session controls, see the [complete option reference](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-markdown/docs/api.md#options).
 
-`fontPolicy` and `onFontResolution` require byte input with the default document-aware font resolution. Combining either with a live view or custom measurer throws `TypeError`.
-
-For custom measurement, image decoders, and session controls, see the [complete option reference](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-markdown/docs/api.md#options).
-
-## Response model
+## Read the result
 
 | Field | Meaning |
 | --- | --- |
 | `markdown` | Continuous document Markdown. Joins split records and excludes repeated headers and footers. |
-| `pages` | Physical pages in document order. Each includes `id`, `number`, `markdown`, `headerMarkdown`, `footerMarkdown`, `comments`, and `trackedChanges`. |
-| `pagination` | Layout source, export scope, Core layout revision, and revision display mode. |
-| `media` | Unique extracted images with bytes and occurrence metadata. Empty when images are disabled. |
-| `reviewArtifacts` | All normalized comments and tracked changes, including artifacts without a page occurrence. |
-| `reviewBindings` | Ranges linking review occurrences to generated Markdown strings. |
-| `fontResolution` | Resolved and substituted fonts, coverage, and origin failures. `null` when font-origin evidence is unavailable. |
+| `pages` | Physical pages in document order. Each has `id`, `number`, `markdown`, `headerMarkdown`, `footerMarkdown`, `comments`, and `trackedChanges`. |
+| `pagination` | `source`, `scope`, Core `layoutRevision`, and `displayMode`. |
+| `media` | Unique extracted images with bytes and occurrences. Empty when images are off. |
+| `reviewArtifacts` | All comments and tracked changes, including artifacts without a page occurrence. |
+| `reviewBindings` | Ranges that link review occurrences to generated Markdown strings. |
+| `fontResolution` | Resolved and substituted fonts, coverage, and origin failures. `null` when evidence is unavailable. |
 | `warnings` | Content omissions, image placement fallback, and font problems. |
 
-The following response excerpt shows a one-page agreement. IDs and the layout revision are example values; the response fields table describes the remaining fields.
+### Pages
 
-```json
-{
-  "markdown": "# Agreement\n\nThe supplier shall provide the services.",
-  "pages": [
-    {
-      "id": "example-page-id",
-      "number": 1,
-      "markdown": "# Agreement\n\nThe supplier shall provide the services.",
-      "headerMarkdown": "Example Ltd",
-      "footerMarkdown": "Confidential",
-      "comments": [],
-      "trackedChanges": []
-    }
-  ],
-  "pagination": {
-    "source": "layout-engine",
-    "scope": "export-snapshot",
-    "layoutRevision": 0,
-    "displayMode": "proposed"
-  }
-}
-```
-
-### Pages and citations
-
-DOCX stores content and formatting; physical page boundaries depend on layout. Saved `w:lastRenderedPageBreak` markers describe a previous application's pagination, rather than calculating it for the current document view. See Microsoft's [page-break definition](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.lastrenderedpagebreak?view=openxml-3.0.1).
-
-The exporter calculates pages with its layout engine. `page.number` is a one-based physical position, not a printed page label, which can restart in a section or use Roman numerals. An empty sheet that gives a section its odd or even page parity is a page with empty Markdown. `page.id` is valid within this result. Page Markdown includes local note definitions or labeled continuations; use `result.markdown` when you need split paragraphs and tables joined into continuous content.
-
-Store your source identifier, document version or hash, and an application-owned export ID with page citations. Retain the result, package versions, font configuration, and `displayMode` under that export ID. `pagination.layoutRevision` is a Core revision, not your file or package version.
-
-Fonts and revision visibility affect page breaks. Use the [font setup and troubleshooting guide](/docs/2.x/export/markdown/fonts) to configure font sources, inspect `fontResolution`, and validate page references against Word.
+- `page.number` is a one-based physical position, not a printed page label.
+- `page.id` is valid only within this result.
+- A blank sheet that sets section parity is a page with empty Markdown.
+- Page Markdown includes local note definitions and labeled continuations. Use `result.markdown` for joined content.
+- `pagination.layoutRevision` is a Core revision, not your file or package version.
 
 ### Comments and tracked changes
 
-A page's `comments` and `trackedChanges` contain complete artifacts with at least one occurrence on that page. Their `occurrences` can also reference other pages. Filter by `occurrence.physicalPageNumber === page.number` for page-local occurrences; use `reviewArtifacts` to count document-wide artifacts without duplicates.
+A page's `comments` and `trackedChanges` hold complete artifacts with at least one occurrence on that page. To count artifacts once, use `reviewArtifacts`. For page-local occurrences, filter on `occurrence.physicalPageNumber === page.number`.
 
-Each entry in `reviewBindings` identifies a comment or tracked-change occurrence and the Markdown string and ranges associated with it. Using the export `result`, extract the associated text:
+The following loop prints the Markdown text that each review binding covers:
 
 ```ts
 for (const binding of result.reviewBindings) {
@@ -102,42 +76,52 @@ for (const binding of result.reviewBindings) {
 }
 ```
 
-Ranges use UTF-16 offsets with an inclusive start and exclusive end, matching JavaScript `slice()`. Check `coverage` (`complete`, `partial`, or `none`) and range `precision` (`exact` or `containing-construct`) before treating a mapping as exact. IDs and offsets belong to this immutable result; editing or splitting the strings invalidates their offsets. Artifacts without occurrences have no bindings. See the [review binding reference](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-markdown/docs/api.md#comments-and-tracked-changes).
+| Binding field     | Values                                                                 |
+| ----------------- | ---------------------------------------------------------------------- |
+| `ranges`          | UTF-16 offsets, inclusive `start` and exclusive `end`, as in `slice()` |
+| `coverage`        | `complete`, `partial`, or `none`                                       |
+| range `precision` | `exact` or `containing-construct`                                      |
 
-### Images and serialization
+Check `coverage` and `precision` before you treat a mapping as exact. Editing or splitting the strings invalidates offsets. Artifacts without occurrences have no bindings.
 
-Set `images: true` for relative image links and `media` assets. Each asset includes `id`, `path`, `url`, `mimeType`, `bytes`, intrinsic pixel dimensions, and `occurrences`. Occurrences record the page, story, source location, and displayed dimensions. The default extraction limit is 64 MiB of unique image bytes, not total conversion memory.
+### Warnings
 
-Use `images: { syntax: 'html' }` to emit `img` tags with displayed `width` and `height` rounded to CSS pixels. Your renderer must support sanitized HTML and retain those attributes. For custom previews, use each occurrence's exact `displayWidthPx` and `displayHeightPx`; these can differ from the asset's intrinsic dimensions.
+Each warning has `code`, `message`, and optional `pageNumber` or `partName`. Store warnings with exported results.
 
-| Delivery | API |
+| Code | Meaning |
 | --- | --- |
-| JSON response | `toMarkdownJSON(result)` omits image bytes and converts font failure causes to strings. It preserves metadata and URLs but does not serve the assets. |
-| Portable ZIP | `await createMarkdownZip(result)` returns bytes containing `document.md`, `document.json`, and `media/` assets. |
-| Local folder | `await writeMarkdownBundle(result, { directory })` from the `/node` entry point. |
-| Object storage | Set `images.resolveUrl` to upload each unique image and return a relative or HTTP(S) URL. Your application owns uploads, cleanup, and URL expiry. |
+| `omitted-drawing` | A drawing is not in the output. A chart without an exported image gets one, with at most five chart warnings per page plus one count. |
+| `omitted-textbox` | Anchored text-box text is not in the output. |
+| `font-origin-failed` | A font source failed. |
+| `incomplete-font` | A family is missing static faces. |
+| `content-scan-limit` | Content scanning stopped at a limit. |
+| `image-placement-fallback` | An anchored image has no exact source position. |
 
-For example, save the export with its images as a portable ZIP:
+An empty warning array does not certify visual parity with the source.
 
-```ts
-import { writeFile } from 'node:fs/promises';
-import { createMarkdownZip } from '@docx-editor.dev/docx-to-markdown';
+## Handle errors
 
-await writeFile('contract.zip', await createMarkdownZip(result));
-```
+| Error | When | Fields |
+| --- | --- | --- |
+| `DocumentOpenError` | The document is rejected. | `reason`, `detail` |
+| `ExportResourceError` | Resource or layout failure. | `code`: `aborted`, `timedOut`, `nonConvergent`, `disposed`, `layoutInvariant`, or `layoutFailed` |
+| `MarkdownMediaError` | Image extraction fails. | `code`; see [image errors](/docs/2.x/export/markdown/images#handle-failures-and-limits) |
+| `MarkdownBundleError` | ZIP or folder output fails. | `code`; see [image errors](/docs/2.x/export/markdown/images#handle-failures-and-limits) |
+| `TypeError` | Font policy or callback used with a live view or custom measurer. | None |
 
-JSON and ZIP helpers come from the main package. Portable bundles require generated relative image URLs. See [image delivery examples](/docs/2.x/export/markdown/images) for storage callbacks and renderer setup.
+## Reuse a session
 
-## Errors and output limits
+`exportMarkdownFrom(session, options?)` exports from an open session and leaves the session open. To export PDF and Markdown from one layout, see [Compare PDF and Markdown conversion](/docs/2.x/export/pdf/markdown-contract). For Markdown-only sessions, see [Reuse an export session](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-markdown/docs/api.md#reuse-an-export-session).
 
-`exportMarkdown` throws `DocumentOpenError` for rejected documents; inspect `reason` and `detail`. `ExportResourceError.code` identifies resource and layout failures: `aborted`, `timedOut`, `nonConvergent`, `disposed`, `layoutInvariant`, or `layoutFailed`. Image and bundle operations can throw `MarkdownMediaError` and `MarkdownBundleError`. These errors are exported from the main package.
+## Limits
 
-Successful exports can include warnings with `code`, `message`, and optional `pageNumber` or `partName`. Codes include `omitted-drawing`, `omitted-textbox`, `font-origin-failed`, `incomplete-font`, `content-scan-limit`, and `image-placement-fallback`. A chart that exports no image gets its own `omitted-drawing` warning. The message names the chart title when the chart has one and says why the chart is omitted, and each page gets at most five chart warnings and one that counts the rest. A chart with a fallback picture exports that picture when images are enabled; for more information, see [Charts](/docs/2.x/export/markdown/images#charts). Retain warnings with stored exports.
-
-Markdown does not reproduce every Word feature: merged table cells are flattened, nested tables use inline HTML, anchored text-box text is omitted, and images do not retain crop, rotation, or floating text wrapping. Images affect pagination even when image extraction is disabled. An empty warning array does not certify visual parity with Word.
+- `signal` cannot interrupt synchronous parsing or layout.
+- Merged table cells are flattened. Nested tables use inline HTML.
+- Images do not keep crop, rotation, or floating text wrapping. Images affect pagination even when extraction is off.
+- For feature coverage, see [DOCX fidelity](/docs/2.x/docx-fidelity).
 
 ## Next steps
 
-- [Connect conversion to your application](/docs/2.x/export/markdown/integrations).
-- [Reuse a layout with an export session](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-markdown/docs/api.md#reuse-an-export-session).
-- [Review the quickstart](/docs/2.x/export/markdown).
+- [Images in Markdown exports](/docs/2.x/export/markdown/images)
+- [Fonts and Markdown layout](/docs/2.x/export/markdown/fonts)
+- [Markdown integrations](/docs/2.x/export/markdown/integrations)

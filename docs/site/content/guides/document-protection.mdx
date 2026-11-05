@@ -1,51 +1,14 @@
 ---
 title: 'Document protection'
-description: 'Restrict editing with document protection in React and Vue. Enable form filling, inspect protection state, and handle refused commands in custom controls.'
+description: 'Toggle forms protection, read protection state, and handle refused commands in the DOCX editor.'
 category: 'Guides'
 ---
 
-Use **Review > Protect Document for Forms** to restrict editing to form fields and other permitted content. React and Vue share this command through the core editor. It does not require a Pro module.
+DOCX document protection restricts which edits a document permits. The editor enforces recorded restrictions and toggles forms protection. The toggle does not require an EigenPal Pro License.
 
-## Turn protection on or off
+## Toggle forms protection
 
-1. Open a document with [legacy form fields](/docs/2.x/guides/fields#legacy-text-form-fields) or [content controls](/docs/2.x/guides/content-controls).
-2. Select **Review > Protect Document for Forms** to enable forms protection.
-3. Select the same item again to stop protection.
-
-Each toggle changes the document and creates one undo step. Saving preserves the setting. Stopping protection keeps the recorded restriction with enforcement turned off.
-
-The command can stop other enforced restrictions when they have no password. It cannot set read-only, comments-only, or tracked-changes protection. If the document records one of those restrictions with enforcement off, change it in Word before enabling forms protection here.
-
-The editor cannot set or verify protection passwords. To stop password-protected restrictions, open the document in Word.
-
-## Edit a protected document
-
-The editor applies a restriction only when the document enforces it.
-
-| Restriction | Editing behavior |
-| --- | --- |
-| Forms | Fill supported text form fields, toggle legacy checkboxes, select legacy dropdown entries, and edit permitted content inside unlocked controls or unprotected sections. Suggesting mode is unavailable. |
-| Read-only | Open in viewing mode. Content edits and comment writes are unavailable. |
-| Comments-only | Add, reply to, resolve, reopen, and delete comments in editing mode. Content edits and suggesting mode are unavailable. |
-| Tracked changes | Edit in suggesting mode with a review module and an author. Switching to untracked editing is unavailable. |
-
-Comments and tracked changes need their usual [Pro setup](/docs/2.x/pro). Tracked-changes protection does not supply a missing review module or author. See [Suggesting needs an author](/docs/2.x/pro/tracked-changes#suggesting-needs-an-author).
-
-Forms protection keeps legacy field definitions intact. Tab and Shift+Tab move between enabled text fields. The caret can move outside a field, but commands that would change protected content return `locked` with a reason. Packaged controls disable those commands. Formatting a protected legacy text field is also unavailable.
-
-Legacy checkboxes and dropdowns use their own keyboard-focusable controls. Disabled fields refuse changes.
-
-Turning on forms protection while suggesting switches the editor to editing mode. `snapshot().lastRejection` explains the mode change.
-
-If you open the editor with `mode="view"`, the session remains read-only. Comment writes and the protection toggle are unavailable, even when the document's restriction would otherwise permit them.
-
-Permission exception ranges (`w:permStart`) do not grant editing access. Document protection also does not authorize collaboration clients: remote updates bypass local protection checks. Enforce room access in your application.
-
-## Build a custom protection control
-
-Use the `review.protectDocument` [chrome slot](/docs/2.x/guides/chrome-slots#review-and-content-controls) with `useEditorCommand()` or a generic toolbar button. Neither adapter provides a named protection toolbar part.
-
-For an existing core `Editor`, check the command before executing it:
+Check the `toggleDocumentProtection` command before you run it:
 
 ```ts
 import type { Editor } from '@docx-editor.dev/core';
@@ -57,18 +20,55 @@ function toggleProtection(editor: Editor) {
 }
 ```
 
-When the result has `ok: false`, show its `reason`. Do not infer permission from the current editing mode: a document that opens in viewing mode because of read-only protection can still allow you to stop protection.
+When the result has `ok: false`, show its `reason`. Do not infer permission from the editing mode. Each toggle is one undo step, and save preserves the setting.
 
-Read `editor.snapshot().documentProtection` for the document's settings. The core editor returns `null` before a document loads.
+- The command enables forms protection only. It cannot set read-only, comments-only, or tracked-changes protection.
+- If the document records one of those restrictions with enforcement off, the command refuses with `locked`. Change that restriction in another tool first.
+- Stopping protection keeps the recorded restriction with enforcement off.
+- The command can stop other enforced restrictions that have no password.
+
+In custom chrome, bind the `review.protectDocument` [chrome slot](/docs/2.x/guides/chrome-slots#review-and-content-controls) with `useEditorCommand()`. The packaged menu item is **Review > Protect Document for Forms**.
+
+## Read protection state
+
+Read `editor.snapshot().documentProtection`. It is `null` before a document loads.
 
 | Field      | Meaning                                                                             |
 | ---------- | ----------------------------------------------------------------------------------- |
 | `edit`     | Recorded restriction: `none`, `forms`, `readOnly`, `comments`, or `trackedChanges`. |
-| `enforced` | Whether the restriction is active. Check this before treating `edit` as a lock.     |
+| `enforced` | Whether the restriction is active. Check this before you treat `edit` as a lock.    |
 | `password` | Whether the document carries protection password metadata.                          |
 
-## Next steps
+## Check permitted operations
 
-- [Fields](/docs/2.x/guides/fields): Configure text fields, toggle checkboxes, and choose dropdown entries.
-- [Content controls](/docs/2.x/guides/content-controls): Work with control values and locks.
-- [Comments](/docs/2.x/pro/comments): Add discussions to a protected document.
+The editor applies a restriction only when `enforced` is `true`:
+
+| Restriction | Permitted operations |
+| --- | --- |
+| Forms | Fill text form fields, toggle checkboxes, select dropdown entries, and edit inside unlocked controls or unprotected sections. Suggesting mode is unavailable. |
+| Read-only | Viewing mode. Content edits and comment writes are unavailable. |
+| Comments-only | Comment writes in editing mode. Content edits and suggesting mode are unavailable. |
+| Tracked changes | Suggesting mode with a review module and an author. Untracked editing is unavailable. |
+
+Commands that would change protected content return `locked` with a reason. For filling behavior, see [Fields and cross-references](/docs/2.x/guides/fields#legacy-text-form-fields) and [Content controls](/docs/2.x/guides/content-controls).
+
+## Limits
+
+- The editor cannot set or verify protection passwords.
+- With `mode="view"`, the session stays read-only. Comment writes and the protection toggle are unavailable.
+- Turning on forms protection while suggesting switches to editing mode. `snapshot().lastRejection` explains the change.
+- Tracked-changes protection does not supply a missing review module or author. See [Suggesting needs an author](/docs/2.x/pro/tracked-changes#suggesting-needs-an-author).
+- Comments and review keep their own [Pro setup](/docs/2.x/pro) requirements.
+- Permission exception ranges (`w:permStart`) do not grant editing access.
+- Forms protection permits filling supported legacy text fields, but refuses direct formatting of them.
+
+<Callout type="warn">
+  Document protection does not authorize collaboration clients. Remote updates bypass local
+  protection checks. Enforce room access in your application.
+</Callout>
+
+## See also
+
+- [Fields and cross-references](/docs/2.x/guides/fields)
+- [Content controls](/docs/2.x/guides/content-controls)
+- [Comments](/docs/2.x/pro/comments)

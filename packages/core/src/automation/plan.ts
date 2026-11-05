@@ -125,6 +125,11 @@ import { projectedSearchSpans } from './search.ts';
 import type { NoteKind } from '../store/package/note-nodes.ts';
 import { paragraphStyleName, styleIdFor } from './styles.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
+import {
+  controlValueOp,
+  controlValueRevision,
+  trackedValueStart,
+} from './tracked-control-value.ts';
 import { planProposal, trackedParagraphInsertError, trackedProposalOf } from './plan-proposal.ts';
 import { planRevisionDecision } from './revision-operations.ts';
 import type { ReviewCommentItem } from '../store/store/review-items.ts';
@@ -2601,9 +2606,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           ok: true,
           kind: 'command',
           story: found.reads.story,
-          ops: [
-            { op: 'setContentControlValue', controlId: found.control.nodeId, value: value.value },
-          ],
+          ops: [controlValueOp(found.control.nodeId, value.value, trackingAuthor)],
           answer: () => APPLIED,
         };
       }
@@ -2707,7 +2710,13 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         // beside it: reads are planned against the document as it is now, so a read enqueued after
         // this write would answer the span the control had BEFORE it. `replace` puts the whole
         // value in the content's first paragraph, which keeps its identity across the write.
-        const at = operation.at === 'end' ? span.end : span.start;
+        // A tracked replacement keeps the struck words first, so its text starts after them.
+        const at =
+          operation.at === 'end'
+            ? span.end
+            : operation.at === 'replace' && tracked
+              ? trackedValueStart(found.reads.part, span, trackingAuthor!)
+              : span.start;
         const written = (): AutomationValue => ({
           kind: 'span',
           span: spanOf({
@@ -2734,11 +2743,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             kind: 'command',
             story: found.reads.story,
             ops: [
-              {
-                op: 'setContentControlValue',
-                controlId: found.control.nodeId,
-                value: { kind: 'text', text: operation.text },
-              },
+              controlValueOp(
+                found.control.nodeId,
+                { kind: 'text', text: operation.text },
+                trackingAuthor
+              ),
             ],
             answer: written,
           };
@@ -2761,6 +2770,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
                     // trailing edge is the text AFTER the control and the command would have
                     // written beside the field it was handed.
                     inside: found.node.id,
+                    ...controlValueRevision(trackingAuthor),
                   },
                 ],
           answer: written,

@@ -1,43 +1,15 @@
 ---
 title: 'Comments'
-description: 'Read, create, reply to, and resolve DOCX comment threads. Use the packaged review rail or build an interface with useReview.'
+description: 'Read, create, reply to, and resolve DOCX comment threads with the packaged review rail or useReview.'
 category: 'Pro'
 order: 62
 ---
 
-Comments attach a discussion to a text range.
+Comments attach a discussion thread to a text range. They share the review rail, the `useReview()` hook, and the card layout with [tracked changes](/docs/2.x/pro/tracked-changes). Comments require `reviewModule()` from [`@docx-editor.dev/pro`](/docs/2.x/pro), which uses the EigenPal Pro License.
 
-The editor reads existing OOXML comments during load. It shows them beside the page and writes them during save.
+## Add a comment
 
-You can continue threads created in Microsoft Word. Word can also continue threads created in this editor.
-
-Comments share one sidebar, hook, and card layout with [tracked changes](/docs/2.x/pro/tracked-changes).
-
-Comments require the review module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
-
-## Prerequisites
-
-| Task | Requirement |
-| --- | --- |
-| Read comments | A loaded document |
-| Show the review rail | `reviewModule()` and `DocxEditorReview` |
-| Create or reply in a browser | A non-empty `author`, `reviewModule()`, an editable mode, and an attached editor |
-| Resolve, reopen, or delete in browser | `reviewModule()`, an editable mode, and an attached editor |
-| Create or reply on a server | A non-empty `author` and a server runtime |
-
-OOXML requires `w:author` for each comment and reply. The engine refuses a write without an author.
-
-Comments-only document protection permits these comment actions while keeping document content locked. Read-only protection and `mode="view"` refuse comment writes. See [Document protection](/docs/2.x/guides/document-protection) for the rules for each restriction.
-
-For module registration and licensing, see the [Pro package documentation](/docs/2.x/pro).
-
-## Write a comment
-
-The review hook's `comment(text, author?)` comments on the current selection.
-
-It returns whether the editor applied the write. Keep the draft text when the method returns `false`.
-
-This example keeps the draft after a refused write:
+`comment(text, author?)` comments on the current selection. This example keeps the draft when the editor refuses the write:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -100,123 +72,33 @@ Mount this component inside `DocxEditorRoot`.
 </Framework>
 </FrameworkTabs>
 
-`selectionAnchorY` is the proposed comment's document-space Y coordinate.
+A refused write returns `false` and does not throw. `selectionAnchorY` is the selection's document-space Y coordinate.
 
-The engine calculates it without the DOM, as it does for card anchors. Use it to position a custom compose box beside the selection.
+The packaged `DocxEditorReview.AddComment` and `DocxEditorReview.Draft` parts provide this workflow. For placement in custom cards, see [Custom cards in the review rail](/docs/2.x/recipes/custom-review-cards).
 
-The packaged `DocxEditorReview.AddComment` and `DocxEditorReview.Draft` parts provide this workflow in Vue and React.
+## Read and update threads
 
-Put `DocxEditorReview.AddComment` as a direct child of `DocxEditorReview`, so the rail positions it. `DocxEditorReview.Draft` renders only while a draft is open. It can be a direct child, or part of your own card content. Without `top`, the draft sits where the packaged card stack puts it, so pass `top` when you render your own cards. For an example, see [Custom cards in the review rail](/docs/2.x/recipes/custom-review-cards).
-
-### Create a comment with editor-api
-
-The document API uses the EigenPal Pro License. It creates comments from an explicit range.
-
-This example comments on the first search result:
-
-```ts
-const matches = context.document.body.search('payment terms');
-matches.load('items');
-await context.sync();
-
-const comment = matches.items[0].insertComment('Confirm this with Legal.');
-await context.sync();
-```
-
-Create the runtime with `{ author: 'Jess Lin' }`.
-
-The write uses one package transaction and one browser **Undo** unit. Collapsed ranges create insertion-point comments.
-
-The editor refuses cross-cell anchors and empty comment text. It does not change them to approximate values.
-
-## Reply to a thread
-
-`reply(item, text, author?)` adds a reply to a comment.
-
-You can also reply to a revision. The editor creates a comment over the revision range because OOXML gives `w:ins` and `w:del` no body.
-
-Tracked changes inside comment text are review items too, and every editor decision resolves them. For more information, see [Tracked changes](/docs/2.x/editor-api/revisions).
-
-This example adds a fixed reply to any review item:
+`useReview().items` holds comments and revisions. This example lists comments with a reply button:
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
-function Thread() {
+import { useReview } from '@docx-editor.dev/pro/react';
+
+function Threads() {
   const { items, reply } = useReview();
-
   return (
     <ul>
-      {items.map((item) => (
-        <li key={item.key}>
-          <p>{item.text}</p>
-          <span>
-            {item.author}
-            {item.date ? ` · ${item.date}` : ''}
-          </span>
-          <span>{item.replyIds.length} replies</span>
-          <button onClick={() => reply(item, 'Agreed, rephrased.')}>Reply</button>
-        </li>
-      ))}
-    </ul>
-  );
-}
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<script setup lang="ts">
-import { useReview } from '@docx-editor.dev/pro/vue';
-
-const review = useReview();
-</script>
-
-<template>
-  <ul>
-    <li v-for="item in review.items.value" :key="item.key">
-      <p>{{ item.text }}</p>
-      <span>{{ item.author }}</span>
-      <span>{{ item.replyIds.length }} replies</span>
-      <button type="button" @click="review.reply(item, 'Agreed, rephrased.')">Reply</button>
-    </li>
-  </ul>
-</template>
-```
-
-</Framework>
-</FrameworkTabs>
-
-Like `comment`, `reply` returns whether the editor applied the write. It does not throw for a refused write.
-
-## Read threads
-
-`useReview().items` contains comments and revisions. Filter by `kind` when you need one item type.
-
-This example narrows the item type to comments:
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-import type { ReviewItemView } from '@docx-editor.dev/pro/react';
-
-function CommentsOnly() {
-  const { items } = useReview();
-  const comments = items.filter(
-    (item): item is Extract<ReviewItemView, { kind: 'comment' }> => item.kind === 'comment'
-  );
-
-  return (
-    <ul>
-      {comments.map((c) => (
-        <li key={c.key} data-resolved={c.resolved || undefined}>
-          {/* File-derived. Render as text, never as markup. */}
-          {c.text}: {c.author}
-        </li>
-      ))}
+      {items
+        .filter((item) => item.kind === 'comment')
+        .map((item) => (
+          <li key={item.key}>
+            {/* File-derived. Render as text, never as markup. */}
+            {item.text}: {item.author}
+            <button onClick={() => reply(item, 'Agreed.')}>Reply</button>
+          </li>
+        ))}
     </ul>
   );
 }
@@ -236,15 +118,26 @@ const comments = computed(() => review.items.value.filter((item) => item.kind ==
 
 <template>
   <ul>
-    <li v-for="comment in comments" :key="comment.key">{{ comment.text }}: {{ comment.author }}</li>
+    <li v-for="item in comments" :key="item.key">
+      {{ item.text }}: {{ item.author }}
+      <button type="button" @click="review.reply(item, 'Agreed.')">Reply</button>
+    </li>
   </ul>
 </template>
 ```
 
-Render comment text with interpolation. The text comes from the file.
-
 </Framework>
 </FrameworkTabs>
+
+Each action returns whether the editor applied it. `commentResolutionDisabledReason` explains why `resolve` and `reopen` are unavailable, such as in viewing mode:
+
+| Action | Result | Refusal behavior |
+| --- | --- | --- |
+| `comment(text, author?)` | Adds a thread to the selection | Returns `false`; the caller keeps its draft |
+| `reply(item, text, author?)` | Adds a reply, or comments on a revision range | Returns `false` |
+| `resolve(item)` | Marks an open thread complete | Repeating it succeeds without a write. Returns `false` for a stale or non-comment item. |
+| `reopen(item)` | Reopens a complete thread | Repeating it succeeds without a write. Returns `false` for a stale or non-comment item. |
+| `remove(item)` | Deletes a comment thread or rejects a tracked change | Returns `false` when refused; a refused tracked change sets `lastRefusal.action` to `reject` |
 
 Comment items include these fields:
 
@@ -259,114 +152,11 @@ Comment items include these fields:
 | `anchorY`, `pageIndex`       | Document placement                                 |
 | `isActive`                   | Whether the caret is in the item                   |
 
-The editor reads `initials` from `w:initials` when available. Otherwise, it derives initials from the author name.
+`editor.getComments()` on the core editor returns an empty array. For comment records, use `getReviewItems()` with the review module.
 
-For a document-level read without the review module, `editor.getComments()` returns `{ id, text, resolved }` for each thread.
+## Show refused actions
 
-## Resolve and reopen threads
-
-The packaged card renders `<DocxEditorReview.Resolve />` on an open comment and `<DocxEditorReview.Reopen />` on a resolved one. Custom cards use the matching hook actions:
-
-| Action | Result | Refusal behavior |
-| --- | --- | --- |
-| `comment(text, author?)` | Adds a thread to the selection | Returns `false`; the caller keeps its draft |
-| `reply(item, text, author?)` | Adds a reply, or comments on a revision range | Returns `false` |
-| `resolve(item)` | Marks an open thread complete | Repeating it succeeds without a write |
-| `reopen(item)` | Reopens a complete thread | Repeating it succeeds without a write |
-| `remove(item)` | Deletes a comment thread or rejects a tracked change | Returns `false` when refused; a refused tracked change sets `lastRefusal.action` to `reject` |
-
-The hook does not own the caller's draft state.
-
-`commentResolutionDisabledReason` explains why Resolve and Reopen are unavailable.
-
-This example selects the correct action for the comment state:
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-function CommentDecision({ item }: { item: ReviewItemView }) {
-  const { resolve, reopen, commentResolutionDisabledReason } = useReview();
-  if (item.kind !== 'comment') return null;
-
-  return (
-    <button
-      disabled={commentResolutionDisabledReason !== null}
-      title={commentResolutionDisabledReason ?? undefined}
-      onClick={() => (item.resolved ? reopen(item) : resolve(item))}
-    >
-      {item.resolved ? 'Reopen' : 'Resolve'}
-    </button>
-  );
-}
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<script setup lang="ts">
-import { useReview, type ReviewItemView } from '@docx-editor.dev/pro/vue';
-
-defineProps<{ item: ReviewItemView }>();
-
-const review = useReview();
-</script>
-
-<template>
-  <button
-    v-if="item.kind === 'comment'"
-    type="button"
-    :disabled="review.commentResolutionDisabledReason.value !== null"
-    :title="review.commentResolutionDisabledReason.value ?? undefined"
-    @click="item.resolved ? review.reopen(item) : review.resolve(item)"
-  >
-    {{ item.resolved ? 'Reopen' : 'Resolve' }}
-  </button>
-</template>
-```
-
-</Framework>
-</FrameworkTabs>
-
-Both actions return whether the editor accepted the request. A stale item or non-comment item returns `false`.
-
-Resolve on a resolved thread succeeds without changing the document. Reopen on an open thread behaves the same way.
-
-These no-op actions do not create an **Undo** entry. Resolving writes the complete thread in one transaction.
-
-One **Undo** action restores the prior state. Saving and reopening preserves the resolved state.
-
-Viewing mode disables both actions. `commentResolutionDisabledReason` contains the engine refusal `the document is open for viewing`.
-
-Use this value to explain why a custom control is disabled.
-
-Editing and suggesting modes allow thread-state changes. Resolution changes metadata, not tracked document content.
-
-## Show why an action was refused
-
-An action can be refused after the reader clicks it. For example, an external document refresh can be in progress, or a collaboration session can still be connecting. The packaged card then shows the cause under its summary with `<DocxEditorReview.Refusal />`. The reply line and the comment box show the cause of their own refused writes.
-
-In a custom card, read `lastRefusal` from `useReview()`. Every `useReview()` over the same editor shares it, so a custom card also sees a refusal that the packaged rail recorded. It names the refused `action`, the card `key` (`null` for a new comment), and the public diagnostic `code`. The next action that lands clears it. A change to the document, the editing mode, editability, the collaboration status, or the author filter also clears it. A caret move does not.
-
-While `DocxEditorReview` is mounted, it announces every refused review action in one polite live region, including actions from your own controls that use `useReview()`. A repeated refusal is announced again. Do not add a second live region for the same refusal. If your interface does not mount `DocxEditorReview`, announce `lastRefusal` yourself and key the announcement on `lastRefusal.sequence`.
-
-| `code`                         | Cause                                               |
-| ------------------------------ | --------------------------------------------------- |
-| `edit.refresh-in-progress`     | An external document refresh is in progress         |
-| `edit.read-only`               | The document is open for viewing                    |
-| `edit.protected-content`       | Document protection does not allow the change       |
-| `edit.collaboration-not-ready` | The collaboration session is not ready yet          |
-| `review.incomplete-group`      | The change resolves only with another change        |
-| `review.retained-structure`    | The row stays to keep a nested table                |
-| `review.revision-unsupported`  | The editor cannot make this decision on this change |
-| `review.stale-revision`        | The change was already decided or changed           |
-| `review.locked-content`        | A content control locks the change                  |
-| `review.bound-content`         | The change is in a data-bound control               |
-
-When the collaboration session has ended, `lastRefusal.final` is `true`. Retrying cannot help then, and the packaged notice asks the reader to reload the document. For every code and its next step, see [Diagnostics](/docs/2.x/guides/diagnostics#codes).
-
-This example shows the cause under a custom card:
+`lastRefusal` from `useReview()` records the latest refused review action. This example shows the cause under a custom card:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -409,28 +199,38 @@ const refusalMessage = useReviewRefusalMessage();
 </Framework>
 </FrameworkTabs>
 
-## Listen for comment changes
+`lastRefusal` names the refused `action`, the card `key` (`null` for a new comment), and the diagnostic `code`. `final` is `true` when the collaboration session ended, so a retry cannot help. `sequence` rises with each refusal, including repeats.
 
-Writing a comment or reply emits the editor's `change` event.
+- Every `useReview()` over one editor shares `lastRefusal`. The packaged card shows it with `DocxEditorReview.Refusal`.
+- The next applied action, or a change to the document, mode, editability, collaboration status, or author filter, clears it. A caret move does not.
+- A mounted `DocxEditorReview` announces every refusal in one polite live region. Do not add a second one.
+- Without `DocxEditorReview`, announce `lastRefusal` yourself, keyed on `lastRefusal.sequence`.
 
-Use this event for autosave and dirty tracking:
+For every code and its remedy, see [Diagnostics](/docs/2.x/guides/diagnostics#codes).
+
+## Save comment changes
+
+Each comment or reply write emits the editor's `change` event. Use it for autosave and dirty tracking:
 
 ```ts
 useEditorEvent('change', (change) => void autosave(change.revision));
 ```
 
-## Work with Word
+The editor saves author, initials, date, reply threading, and resolved state in the comments part. Other DOCX applications can continue these threads.
 
-The editor reads and writes author, initials, date, reply threading, and resolved state in the document's comments part.
+## Limits
 
-A document annotated in this editor opens in Word with the same threads. Resolved threads remain resolved.
+- **Author:** `comment` and `reply` require a non-empty `author`, because OOXML requires `w:author`.
+- **Browser writes:** All writes need `reviewModule()`, an attached editor, and an editable mode.
+- **Protection:** Comments-only protection permits comment actions. Read-only protection and `mode="view"` refuse writes. See [Document protection](/docs/2.x/guides/document-protection).
+- **Ranges:** Empty comment text and cross-cell anchors are refused, never approximated.
+- **Revisions:** A reply to a revision becomes a comment over the revision range, because `w:ins` and `w:del` have no body.
+- **Undo:** Resolve and reopen write one transaction and one **Undo** entry. A repeated call creates none.
+- **Suggesting mode:** Resolve and reopen work in suggesting mode and create no tracked change.
+- **Security:** Render file-derived comment text as text, never as HTML.
 
-The editor reads and writes comments in headers, footers, footnotes, and endnotes within their own scopes.
+## See also
 
-## Next steps
-
-- [Tracked changes](/docs/2.x/pro/tracked-changes): Use the full `useReview` API, sidebar parts, and filters.
-- [Review colors and styling](/docs/2.x/pro/review-styling): Color comment authors and restyle the cards.
-- [Vue composition](/docs/2.x/vue/composition): Arrange Vue editor and review parts.
-- [React composition](/docs/2.x/react/composition): Arrange React editor and review parts.
-- [Custom nodes](/docs/2.x/pro/custom-nodes): Add custom-node chrome.
+- [Tracked changes](/docs/2.x/pro/tracked-changes)
+- [Comment on found text](/docs/2.x/recipes/comment-on-found-text)
+- [Review cards customization](/docs/2.x/customization/review-cards)

@@ -52,6 +52,13 @@ async function recordPrints(page: Page) {
   });
 }
 
+/** The print settings step: confirms the shown settings with the Print button. */
+async function confirmPrint(page: Page) {
+  const settings = page.getByRole('dialog', { name: 'Print' });
+  await expect(settings).toBeVisible();
+  await settings.getByRole('button', { name: 'Print' }).click();
+}
+
 async function prints(page: Page) {
   return page.evaluate(() => (window as unknown as { __prints: number }).__prints);
 }
@@ -63,8 +70,10 @@ for (const [adapter, port] of [
   test(`${adapter} prints the current document through the PDF handler`, async ({ page }) => {
     await recordPrints(page);
     let conversions = 0;
+    const queries: URLSearchParams[] = [];
     await page.route('**/api/convert?**', async (route) => {
       conversions += 1;
+      queries.push(new URL(route.request().url()).searchParams);
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -78,12 +87,25 @@ for (const [adapter, port] of [
     const row = page.locator('[data-slot="file.print"]');
     await expect(row).toBeEnabled();
     await row.click();
+    // The settings step comes first. Nothing converts until the user confirms.
+    const settings = page.getByRole('dialog', { name: 'Print' });
+    await expect(settings).toBeVisible();
+    expect(conversions).toBe(0);
+    await settings.getByRole('radio', { name: 'Original' }).check();
+    await expect(settings).toContainText('comments print as notes on the commented text');
+    await settings.getByRole('radio', { name: 'All Markup' }).check();
+    const comments = settings.getByRole('checkbox', { name: 'Print comments' });
+    await expect(comments).toBeChecked();
+    await comments.uncheck();
+    await settings.getByRole('button', { name: 'Print' }).click();
 
     // The editor popup closes once the browser print dialog opens.
     await expect.poll(() => prints(page), { timeout: 30_000 }).toBe(1);
     await expect(page.locator('dialog[data-docx-dialog="print"]')).toHaveCount(0);
     await expect(file).toBeFocused();
     expect(conversions).toBe(1);
+    expect(queries[0]?.get('displayMode')).toBe('all-markup');
+    expect(queries[0]?.get('comments')).toBe('false');
     // The frame keeps the converted PDF while the browser prints from it.
     await expect(page.locator('[data-docx-print-frame]')).toHaveCount(1);
     expect(
@@ -98,7 +120,11 @@ for (const [adapter, port] of [
       const agent = navigator as Navigator & { userAgentData?: { platform?: string } };
       return /mac|iphone|ipad/i.test(agent.userAgentData?.platform || navigator.platform);
     });
-    await page.keyboard.press(apple ? 'Meta+p' : 'Control+p');
+    const chord = apple ? 'Meta+p' : 'Control+p';
+    await page.keyboard.press(chord);
+    // On the settings step, the shortcut confirms.
+    await expect(page.getByRole('dialog', { name: 'Print' })).toBeVisible();
+    await page.keyboard.press(chord);
     await expect.poll(() => prints(page), { timeout: 30_000 }).toBe(2);
     expect(conversions).toBe(2);
     await expect(page.locator('[data-docx-print-frame]')).toHaveCount(1);
@@ -122,6 +148,7 @@ for (const [adapter, port] of [
     const file = page.locator('[data-menu="file"] > [role="menuitem"]');
     await file.click();
     await page.locator('[data-slot="file.print"]').click();
+    await confirmPrint(page);
     const preparing = page.getByRole('dialog', { name: 'Preparing to print…' });
     await expect(preparing).toBeVisible();
     const cancel = preparing.getByRole('button', { name: 'Cancel' });
@@ -134,6 +161,7 @@ for (const [adapter, port] of [
 
     await file.click();
     await page.locator('[data-slot="file.print"]').click();
+    await confirmPrint(page);
     const failed = page.getByRole('alertdialog', { name: 'Print failed' });
     await expect(failed).toBeVisible();
     await expect(failed.getByRole('alert')).toContainText('Conversion failed');
@@ -157,6 +185,7 @@ for (const [adapter, port] of [
     expect(await page.evaluate(() => navigator.pdfViewerEnabled)).toBe(false);
     await page.locator('[data-menu="file"] > [role="menuitem"]').click();
     await page.locator('[data-slot="file.print"]').click();
+    await confirmPrint(page);
     const failed = page.getByRole('alertdialog', { name: 'Print failed' });
     await expect(failed).toBeVisible({ timeout: 30_000 });
     await expect(failed.getByRole('alert')).toContainText('cannot print PDF files');

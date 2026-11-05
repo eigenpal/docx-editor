@@ -76,6 +76,7 @@ import {
   type TreeStoryRef,
   type TransactionContext,
 } from './tree-store.ts';
+import { storyStoreOptionsFor } from './tree-store-options.ts';
 import {
   applyImagePropertiesIntent,
   deleteImage as deleteImageIntent,
@@ -228,19 +229,9 @@ export class TreePackageStore {
     readonly result: OoxmlPackage;
   } | null = null;
 
-  /**
-   * What the body and every story store open with. `settingsPart` is the SAME live getter for
-   * all of them: a story store is built from a PART, whose synthetic package holds no
-   * `settings.xml`, and a store keeps its own working copy, so a replaced `settings.xml` left one
-   * story reading stale protection. Protection that holds in a header but not the body is worse
-   * than none: it looks enforced. The lock policy reaches every story for the same reason.
-   */
+  /** What the body and every story store open with; see {@link storyStoreOptionsFor}. */
   private storyStoreOptions(): TreeDocumentStoreOptions {
-    return {
-      historyLimit: this.historyLimit,
-      settingsPart: () => settingsPartOf(this.pkg),
-      ...(this.contentLockPolicy ? { contentLockPolicy: this.contentLockPolicy } : {}),
-    };
+    return storyStoreOptionsFor(() => this.pkg, this.historyLimit, this.contentLockPolicy);
   }
 
   constructor(pkg: OoxmlPackage, main: OoxmlPart, options: TreePackageStoreOptions = {}) {

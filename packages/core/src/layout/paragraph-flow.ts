@@ -440,6 +440,7 @@ export function breakParagraph(
           })
         : Object.freeze([]);
     const synthesized = anchorsWrap ? ownTopAndBottomZones() : emptyExclusionZones;
+    if (!synthesizedWrap.length && !synthesized.length) return breakSpace.zones(pageZones);
     return breakSpace.zones(Object.freeze([...pageZones, ...synthesizedWrap, ...synthesized]));
   };
 

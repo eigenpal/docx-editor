@@ -80,7 +80,8 @@ describe('word-features — images lane honesty', () => {
     expect(row.rendering).toBe('full');
     expect(row.roundTrip).toBe('full');
     expect(row.notes).toMatch(/insertion and deletion/);
-    expect(row.notes).toMatch(/property edits are unavailable/);
+    expect(row.notes).toMatch(/property edits .* apply directly without a tracked change/);
+    expect(row.notes).toMatch(/replacing a picture is refused/);
   });
 
   test('crop renders fully; React-only properties editing is partial', () => {

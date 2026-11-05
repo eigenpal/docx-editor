@@ -791,6 +791,7 @@ When a justified paragraph enables hanging punctuation, the punctuation run's la
 - **WHEN** its next punctuation mark does not fit inside the measure
 - **THEN** the mark starts the next line without moving the preceding character
 - **AND** a paragraph-final `！` hangs instead, while a paragraph-final `。` starts the next line
+- **AND** with word wrapping, an ASCII mark in a word of Hangul syllables moves to the next line with its word
 
 #### Scenario: Traditional Chinese hangs a full-width full stop
 

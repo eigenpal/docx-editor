@@ -1,25 +1,15 @@
 ---
 title: 'Composables'
-description: 'Use Vue composables to read editor state, run commands, and build your own controls.'
+description: 'Connect Vue controls to DOCX editor state and commands with composables.'
 category: 'Vue'
 order: 38
 ---
 
-Call composables during `setup()` in components inside `DocxEditor.Root`. The packaged `<DocxEditor>` provides this root for its children.
+Call these composables during `setup()` in components inside `DocxEditorRoot`. The packaged `<DocxEditor>` provides that root for its children.
 
-Composables return refs or plain objects that contain refs. Templates unwrap top-level refs. Read refs inside returned objects with `.value`, in templates and script code.
+## Connect a command button
 
-## Connect controls to reactive state
-
-Build buttons with your own Vue components. Use `useEditorCommand` for actions and `useEditorState` for selected state.
-
-Choose visible buttons, icons, and CSS in this example. Hiding a button does not change command availability. The preview displays the command state returned by Vue composables.
-
-<VueComposablesDemo />
-
-## `useEditorCommand`
-
-Pass a chrome slot ID to get its action and reactive command state. The [chrome slot reference](/docs/2.x/guides/chrome-slots) lists every available ID and its named toolbar part:
+This button runs a toolbar command and shows why the command cannot run:
 
 ```vue
 <script setup lang="ts">
@@ -41,636 +31,206 @@ const bold = useEditorCommand('text.bold');
 </template>
 ```
 
-`execute()` returns `true` when the editor applies the command. `isActive`, `isEnabled`, and `disabledReason` are computed refs on a plain object. The template does not unwrap them, so read each one with `.value`.
+`useEditorCommand(target: MaybeRefOrGetter<ChromeSlotId | EditorCommand>): EditorCommandState` takes a slot ID from the [chrome slot reference](/docs/2.x/guides/chrome-slots), a raw `EditorCommand`, or a ref or getter that returns either.
 
-Use `isEnabled.value` to enable each control. Show `disabledReason.value` when the command cannot run.
+| Member | Type | Description |
+| --- | --- | --- |
+| `execute(options?)` | `boolean` | Runs the command. Returns `true` when it applied. |
+| `isActive` | `ComputedRef<boolean>` | Command state at the caret. |
+| `isEnabled` | `ComputedRef<boolean>` | Whether the command can run. |
+| `disabledReason` | `ComputedRef<string \| null>` | Why the command cannot run. |
+| `value` | `ComputedRef<string \| null>` | Current value for value slots. |
 
-You can also pass a reactive slot ID or an `EditorCommand`:
+<VueComposablesDemo />
 
-```ts
-import { computed } from 'vue';
-import { useEditorCommand } from '@docx-editor.dev/vue';
+## Read state and events
 
-const mode = computed(() => ({
-  type: 'setEditingMode' as const,
-  mode: 'suggesting' as const,
-}));
-const suggest = useEditorCommand(mode);
-```
-
-## `useEditorState`
-
-Subscribe to one slice of the editor snapshot. The composable returns a read-only shallow ref.
+`useEditorState` returns a read-only shallow ref for one slice of the snapshot. The ref changes only when that slice changes:
 
 ```vue
 <script setup lang="ts">
 import { useEditorState } from '@docx-editor.dev/vue';
 
 const page = useEditorState((s) => s.page);
-const dirty = useEditorState((s) => s.canUndo ?? false);
 </script>
 
 <template>
   <span>{{ page.current }} / {{ page.total }}</span>
-  <button :disabled="!dirty">Save</button>
 </template>
 ```
 
-The selector runs after editor updates. The ref changes only when the selected value changes.
+Pass a comparator for an object slice. Common fields include `page`, `selection`, `formatting`, `editable`, `isLoading`, `editingMode`, `canUndo`, `pageSetup`, and `lastRejection`.
 
-Pass a comparator when you select an object:
+Templates unwrap only top-level refs:
 
-```ts
-import { useEditorState } from '@docx-editor.dev/vue';
+| Value                                         | In a template          | In script              |
+| --------------------------------------------- | ---------------------- | ---------------------- |
+| Top-level or destructured ref, such as `page` | `page`                 | `page.value`           |
+| Ref inside a returned object                  | `bold.isEnabled.value` | `bold.isEnabled.value` |
 
-const formatting = useEditorState(
-  (snapshot) => snapshot.formatting,
-  (left, right) => left?.bold === right?.bold && left?.italic === right?.italic
-);
-```
+| Composable | Returns | Notes |
+| --- | --- | --- |
+| `useEditorState(selector, isEqual?, options?)` | `Readonly<ShallowRef<T>>` | Selected snapshot value. |
+| `useDocxEditor()` | `ShallowRef<DocxEditorInstance \| null>` | `null` before creation and outside a root. |
+| `useEditorEvent(event, handler)` | `void` | Subscribes for the component lifetime. |
+| `useEditorSnapshot(editor)` | `Ref<number>` | Revision counter for an external store. |
+| `useEditorCaret()` | `ShallowRef<{ paragraphId, offset } \| null>` | Caret for `at` parameters. |
+| `useEditorHostDocument()` | `Readonly<ShallowRef<Document \| null>>` | Document that holds the pages, also in a pop-out window. `null` on the server. |
+| `useEditorColorMode()` | `{ colorMode: ComputedRef }` | `'light'` or `'dark'`. `'light'` outside a root. |
 
-Select the smallest useful value. A page selector then stays stable when the user changes bold formatting.
+`selectionChange` also fires when other state moves without a document change, such as the page count. Compare `snapshot.selection` with the previous value before you react.
 
-Useful snapshot fields include `page`, `selection`, `selectionCollapsed`, `formatting`, `table`, `image`, `editable`, `isLoading`, `isOpening`, `parseError`, `editingMode`, `canUndo`, `canRedo`, `pageSetup`, `fontSubstitutions`, `hasReviewContent`, and `lastRejection`.
+### `useDocxEditor`
 
-## `useDocxEditor`
-
-This composable returns a shallow ref to the editor instance. Its value is `null` before `DocxEditor.Root` creates the instance. Its value is also `null` outside `DocxEditor.Root`.
+Use the instance for actions and one-time reads:
 
 ```vue
 <script setup lang="ts">
 import { useDocxEditor } from '@docx-editor.dev/vue';
 
+const props = defineProps<{ upload: (bytes: ArrayBuffer) => Promise<void> }>();
 const editor = useDocxEditor();
 
 async function save() {
   const bytes = await editor.value?.save();
-  if (bytes) void upload(bytes);
+  if (bytes) void props.upload(bytes);
 }
 </script>
 ```
 
-For an external paragraph reference, call `scrollToAnchor` on the ref's value:
+A direct `snapshot()` call does not create a Vue subscription. For `scrollToAnchor` and `highlightAnchor`, see [Navigation](/docs/2.x/guides/navigation#scroll-to-a-paragraph-reference).
 
-```vue
-<script setup lang="ts">
-import { useDocxEditor } from '@docx-editor.dev/vue';
+## Choose a composable
 
-const props = defineProps<{ paraId: string }>();
-const editor = useDocxEditor();
+State members are refs; function members are plain functions.
 
-function showReference() {
-  const anchor = { paraId: props.paraId };
-  if (!editor.value?.scrollToAnchor(anchor)) {
-    // Show an unavailable-reference state in your application.
-    return;
-  }
-  editor.value.highlightAnchor(anchor, { timeoutMs: 1500 });
-}
-</script>
+### Formatting and page setup
 
-<template>
-  <button :disabled="!editor" @click="showReference">Show reference</button>
-</template>
-```
+| Composable | Returns |
+| --- | --- |
+| `useFontFamily()` | `{ value, options, setValue, isEnabled }` |
+| `useParagraphStyle()` | `{ value, options, setValue, isEnabled }` for paragraph styles |
+| `useParagraphFormat()` | `{ format, apply, isEnabled }` |
+| `useParagraphIndent()` | `{ indent, apply, isEnabled }` |
+| `usePageSetup()` | `{ pageSetup, apply, isEnabled }` |
+| `useEditorValueCommand(slotId)` | `{ value, options, execute, isEnabled, disabledReason }`. See [Apply a value](#apply-a-value). |
+| `useZoom()` | `{ zoom, mode, levels, isFit, canZoomIn, canZoomOut, setZoom, setMode, zoomIn, zoomOut, reset, fitToWidth, auto }` |
 
-Place this component inside `DocxEditor.Root`. Scrolling and highlighting preserve selection and focus. For more information, see [Scroll to a paragraph reference](/docs/2.x/guides/navigation#scroll-to-a-paragraph-reference) and [Highlight a paragraph reference](/docs/2.x/guides/navigation#highlight-a-paragraph-reference).
+`apply` sends one command and returns `true` when it applied.
 
-Use the instance for actions and one-time reads. A direct `snapshot()` call does not create a Vue subscription. Use `useEditorState` for reactive state.
+| `apply` input               | Result                  |
+| --------------------------- | ----------------------- |
+| Omitted field               | Stays unchanged.        |
+| `null` on spacing or indent | Clears the local value. |
+| `0`                         | Sets an explicit zero.  |
 
-## `useEditorEvent`
+In `useParagraphFormat().format`, a field is `null` when the selected paragraphs differ. `usePageSetup` uses twips for sizes and margins, and `scope` takes `'section'` or `'document'`.
 
-Subscribe to an editor event for the component lifetime:
+For `const font = useFontFamily()`, read the current family as `font.value.value`.
 
-```ts
-import { useEditorEvent } from '@docx-editor.dev/vue';
+#### `useZoom`
 
-// `selectionChange` also fires for other state that moves without a document change, such
-// as the collaboration status or the page count, so compare the selection itself.
-let lastSelection: unknown = null;
-useEditorEvent('selectionChange', (snapshot) => {
-  if (snapshot.selection !== lastSelection) panelOpen.value = false;
-  lastSelection = snapshot.selection;
-});
-useEditorEvent('change', (change) => {
-  void autosave(change.revision);
-});
-```
+For a complete zoom control, see [Zoom](/docs/2.x/guides/zoom).
 
-## `useEditorHostDocument`
+### Document content
 
-Use `useEditorHostDocument` in custom chrome that adds document listeners, reads focus, or injects a `<style>` element. It returns a read-only ref to the document that the editor's pages are mounted in. If you render the editor in a pop-out window or an iframe, that is the other window's document, not the global `document`. The ref changes when the editor moves, so watchers that depend on it bind again:
+| Composable | Returns |
+| --- | --- |
+| `useWatermark()` | `{ watermark, apply, read, isEnabled }` |
+| `useBookmarks()` | `{ bookmarks, insert, remove, goTo, keepFirst, isWritable }` |
+| `useGoToBookmark(options?)` | `{ query, setQuery, rows, bookmarks, activeIndex, setActiveIndex, move, go, problem, problemName, sortBy, setSortBy, showHidden, setShowHidden }` |
+| `useCommentDraftRequest(handler)` | `void` |
 
-```ts
-import { watch } from 'vue';
-import { useEditorHostDocument } from '@docx-editor.dev/vue';
+#### `useWatermark`
 
-const hostDocument = useEditorHostDocument();
-watch(
-  hostDocument,
-  (doc, _previous, onCleanup) => {
-    if (!doc) return;
-    doc.addEventListener('keydown', onShortcut);
-    onCleanup(() => doc.removeEventListener('keydown', onShortcut));
-  },
-  { immediate: true }
-);
-```
+`apply` sends one `setWatermark` command, so each call is one undo step. Pass `null` to remove the watermark. `read()` returns the current watermark as a `setWatermark` value, including picture bytes.
 
-The ref is `null` during server rendering. For more information, see [Pop-out windows and iframes](/docs/2.x/guides/pop-out-windows).
+#### `useBookmarks`
 
-## `useEditorCaret`
+Each action sends one command and returns `ExecResult`. `goTo` works in a read-only document; `isWritable` reports whether edits are accepted.
 
-Returns the caret as `{ paragraphId, offset }`. Write APIs accept this shape as their `at` value.
+Each name has one entry; `duplicates` counts copies, and `keepFirst(name)` removes them without moving the selection.
 
-## `useEditorSnapshot`
+`useGoToBookmark(() => ({ enabled: isOpen.value }))` reads bookmarks only while your UI is open. For details, see [Bookmarks](/docs/2.x/guides/bookmarks).
 
-Returns a revision ref for an editor. Use it for a custom external-store subscription.
+`go(name?)` targets `name`, then the highlighted row. For a nonempty query, it then tries an exact name match, ignoring case, then the first result. It returns `ExecResult`.
 
-## `useZoom`
+#### `useCommentDraftRequest`
 
-Returns the current zoom and controls that change it.
+Register this handler for your own comment UI. `review.addComment` stays disabled until a handler is registered, and the latest registration wins. To stop serving requests, unmount the component, for example with `v-if`.
 
-## `useFontFamily`
+The handler takes no arguments. Read the selection with `editor.getSelectionPlacement()`, and pin it with `editor.retainSelection()` while the draft is open.
 
-Returns the current family, available families, setter, and enabled state:
+### Navigation and search
 
-```vue
-<script setup lang="ts">
-import { useFontFamily } from '@docx-editor.dev/vue';
+| Composable | Returns |
+| --- | --- |
+| `useDocumentOutline()` | `{ items, headings, selectedBlockId, goTo, isEmpty }` |
+| `useDocumentSearch(options?)` | `{ query, setQuery, find, matches, activeIndex, activeMatch, next, previous, goTo, clear, isPending, truncated, matchCase, setMatchCase, wholeWord, setWholeWord }` |
+| `useHighlights(name, source, options?)` | `ComputedRef<{ applied, unavailable }>` |
+| `useHighlightAt(name?)` | `Readonly<ShallowRef>` with the highlight under the pointer, or `null` |
+| `useNavigationPane(options?)` | `{ open, setOpen, toggle, tab, setTab, paneWidth, shift, overlay }` |
+| `useNavigationShift()` | `ShallowRef<number>`, the page offset for an open pane |
 
-const font = useFontFamily();
-</script>
+Each outline item is `{ heading, depth }`, and `depth` counts from the shallowest heading. Search options accept a value, ref, or getter.
 
-<template>
-  <select
-    :value="font.value.value ?? ''"
-    :disabled="!font.isEnabled.value"
-    @change="font.setValue(($event.target as HTMLSelectElement).value)"
-  >
-    <option v-for="family in font.options.value" :key="family" :value="family">
-      {{ family }}
-    </option>
-  </select>
-</template>
-```
+`setQuery` waits 150 milliseconds; `find` searches at once. `truncated` means the search stopped at 2,000 matches. For examples, see [Navigation](/docs/2.x/guides/navigation#search-from-code).
 
-The current family is on the `value` member, and that member is a computed ref. Read it as `font.value.value`.
+#### `useHighlights`
 
-`useParagraphStyle` provides the same pattern for paragraph styles.
+A function `source` reruns after document changes and when the refs it reads change. For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-text-ranges).
 
-## `usePageSetup`
+### Loading, fonts, and locale
 
-Read and change page size, margins, orientation, and scope:
+| Composable | Returns |
+| --- | --- |
+| `useDocxSource(source, options?)` | `{ document, fonts, error, isLoading }` |
+| `useFonts(source, ...fragments)` or `useFonts(...origins)` | `MarkedFontResolver` |
+| `useOpenFailure(options?)` | `{ failure, message, dismiss }` |
+| `useTranslation()` | `{ t, catalogue, lang }` |
+| `useChromeTranslate(overrides?)` | `ComputedRef<ChromeTranslate>` that checks the override `Map` first |
+| `useChromeDir()` | `Readonly<ShallowRef<'ltr' \| 'rtl' \| undefined>>` |
 
-```vue
-<script setup lang="ts">
-import { computed } from 'vue';
-import { usePageSetup } from '@docx-editor.dev/vue';
+#### `useDocxSource`
 
-const page = usePageSetup();
-const landscape = computed(() => page.pageSetup.value?.orientation === 'landscape');
+`useDocxSource` fetches the document and its fonts. It accepts a URL string, `URL`, `Uint8Array`, or `ArrayBuffer`, as a value, ref, or getter.
 
-function toggleOrientation() {
-  page.apply({
-    orientation: landscape.value ? 'portrait' : 'landscape',
-    scope: 'section',
-  });
-}
-</script>
+For font origins, see [Fonts](/docs/2.x/guides/fonts). For refused opens, see [Open failures](/docs/2.x/guides/open-failures).
 
-<template>
-  <button :disabled="!page.isEnabled.value" @click="toggleOrientation">
-    {{ landscape ? 'Use portrait' : 'Use landscape' }}
-  </button>
-</template>
-```
+### Review
 
-`apply()` returns `true` when the editor applies the update. Sizes and margins use twips. Set `scope` to `'section'` or `'document'`.
-
-## `useEditorColorMode`
-
-Match parts that you build yourself to the editor theme. `colorMode` is a computed ref holding the theme that `DocxEditorRoot` resolved from its `colorMode` prop: `'light'` or `'dark'`. With `color-mode="system"`, it follows the operating system setting. Outside a root, or without `colorMode`, it is `'light'`:
-
-```vue
-<script setup lang="ts">
-import { useEditorColorMode } from '@docx-editor.dev/vue';
-
-const { colorMode } = useEditorColorMode();
-</script>
-
-<template>
-  <aside :class="colorMode === 'dark' ? 'notes notes--dark' : 'notes'" />
-</template>
-```
-
-## `useWatermark`
-
-Read and change the document watermark. `apply()` sends one `setWatermark` command, so one call creates one undo step. Pass `null` to remove the watermark:
-
-```vue
-<script setup lang="ts">
-import { computed } from 'vue';
-import { useWatermark } from '@docx-editor.dev/vue';
-
-const mark = useWatermark();
-const isDraft = computed(() => mark.watermark.value?.text === 'DRAFT');
-</script>
-
-<template>
-  <button :disabled="!mark.isEnabled.value" @click="mark.apply(isDraft ? null : { text: 'DRAFT' })">
-    {{ isDraft ? 'Remove draft mark' : 'Mark as draft' }}
-  </button>
-</template>
-```
-
-`read()` returns the current watermark as a `setWatermark` value. For a picture watermark it includes the picture bytes.
-
-## `useBookmarks`
-
-List the document's bookmarks and change them. `insert()` bookmarks the selection, `remove()` deletes a bookmark, and `goTo()` selects one. Each call sends one command:
-
-```vue
-<script setup lang="ts">
-import { useBookmarks } from '@docx-editor.dev/vue';
-
-const { bookmarks, goTo } = useBookmarks();
-</script>
-
-<template>
-  <ul>
-    <li v-for="bookmark in bookmarks.filter((item) => !item.hidden)" :key="bookmark.name">
-      <button @mousedown.prevent @click="goTo(bookmark.name)">{{ bookmark.name }}</button>
-    </li>
-  </ul>
-</template>
-```
-
-`isWritable` says whether the document accepts bookmark edits at the selection. Go To works in a read-only document too.
-
-The list has one entry per name. If collaborators left copies of a name, `duplicates` on its entry counts them. To keep the first and remove the copies, call `keepFirst(name)`. The selection does not move.
-
-## `useGoToBookmark`
-
-Build a Go To UI of your own, as the **Bookmarks** tab of the navigation pane does. The composable filters the document's bookmarks by the typed name, keeps a highlighted row, and jumps with the `goToBookmark` command. Read the returned refs with `.value`:
-
-```vue
-<script setup lang="ts">
-import { useGoToBookmark } from '@docx-editor.dev/vue';
-
-const goTo = useGoToBookmark();
-</script>
-
-<template>
-  <input
-    :value="goTo.query.value"
-    @input="goTo.setQuery(($event.target as HTMLInputElement).value)"
-    @keydown.down="goTo.move(1)"
-    @keydown.up="goTo.move(-1)"
-    @keydown.enter="goTo.go()"
-  />
-  <p v-if="goTo.problem.value === 'notFound'">No bookmark has that name.</p>
-  <ul>
-    <li v-for="row in goTo.rows.value" :key="row.name">{{ row.name }}</li>
-  </ul>
-</template>
-```
-
-`go(name?)` jumps to `name`, or else to the highlighted row, the bookmark named exactly as typed, or the first row. It returns the command result. Call `setSortBy()` and `setShowHidden()` to choose the order and whether hidden bookmarks are offered. Pass `() => ({ enabled: isOpen.value })` to read the document only while your UI is shown. Each row's `place` says whether the bookmark is in the body, a header, a footer, a footnote, or an endnote.
-
-## `useParagraphFormat`
-
-Use `useParagraphFormat` to read and change the paragraph at the selection. `apply` sends the supplied fields as one command, so one call creates one undo step. Read the returned refs with `.value`:
-
-```vue
-<script setup lang="ts">
-import { computed } from 'vue';
-import { useParagraphFormat } from '@docx-editor.dev/vue';
-
-const { format, apply, isEnabled } = useParagraphFormat();
-const isDouble = computed(() => format.value?.lineSpacing?.value === 2);
-
-function toggle() {
-  apply({ lineSpacing: { rule: 'multiple', value: isDouble.value ? 1 : 2 } });
-}
-</script>
-
-<template>
-  <button :disabled="!isEnabled" @click="toggle">
-    {{ isDouble ? 'Single space' : 'Double space' }}
-  </button>
-</template>
-```
-
-A field is `null` when selected paragraphs have different values. A checkbox shows an indeterminate state. A number field has no indeterminate state. It shows a default until you change it. Omitted fields are not written, so existing values stay. Spacing, line-spacing, and indent fields also accept `null`. That value clears the local setting so the style supplies it. Writing `0` sets an explicit value instead.
-
-For the whole form, `DocxEditorParagraphDialog` is the Paragraph dialog over this composable.
-
-## `useParagraphIndent`
-
-Returns current paragraph indents and an `apply()` action for ruler controls.
-
-## `useDocumentOutline`
-
-Read headings in document order and move the selection to a heading:
-
-```vue
-<script setup lang="ts">
-import { useDocumentOutline } from '@docx-editor.dev/vue';
-
-const outline = useDocumentOutline();
-</script>
-
-<template>
-  <p v-if="outline.isEmpty.value">No headings</p>
-  <ul v-else>
-    <li
-      v-for="{ heading, depth } in outline.items.value"
-      :key="heading.blockId"
-      :style="{ paddingInlineStart: `${depth * 12}px` }"
-    >
-      <button
-        :aria-current="heading.blockId === outline.selectedBlockId.value ? 'location' : undefined"
-        @click="outline.goTo(heading.blockId)"
-      >
-        {{ heading.text }}
-      </button>
-    </li>
-  </ul>
-</template>
-```
-
-Each item has `{ heading, depth }`. A heading has `text`, `level`, and `blockId`. `depth` starts at zero for the shallowest heading in the document. Use `headings` when you do not need the calculated depth.
-
-## `useDocumentSearch`
-
-`useDocumentSearch` returns the editor's search session, which the **Find** pane also uses. This toolbar searches as you type, and Enter moves to the next match:
-
-```vue
-<script setup lang="ts">
-import { useDocumentSearch } from '@docx-editor.dev/vue';
-
-const search = useDocumentSearch();
-
-function onEnter(event: KeyboardEvent) {
-  if (search.isPending.value) search.find(search.query.value);
-  if (event.shiftKey) search.previous();
-  else search.next();
-}
-</script>
-
-<template>
-  <input
-    :value="search.query.value"
-    @input="search.setQuery(($event.target as HTMLInputElement).value)"
-    @keydown.enter="onEnter"
-  />
-  <span>
-    {{ search.activeIndex.value + 1 }} / {{ search.matches.value.length
-    }}{{ search.truncated.value ? '+' : '' }}
-  </span>
-  <button @click="search.previous">Previous</button>
-  <button @click="search.next">Next</button>
-</template>
-```
-
-`find(query, { selectFirst: true })` searches and selects the first match. `activeMatch` reports the selected match. The `highlight` option accepts `'all'`, `'active'`, or `'none'`. It defaults to `'all'`. Pass a value, ref, or getter. Use `'none'` for a component that only reads results. Another component can still request shared search highlights.
-
-`setQuery()` waits 150 milliseconds without query changes. `find()` searches immediately. `truncated` means the count is a minimum. The example displays `+` when the search reaches 2,000 matches.
-
-`DocxEditor.Navigation` opens **Find** on Cmd+F on macOS, or Ctrl+F elsewhere, while focus is in the editor. For details, see [Open Find with Ctrl+F](/docs/2.x/guides/navigation#open-find-with-ctrlf). For shared requests and result updates, see [Search from code](/docs/2.x/guides/navigation#search-from-code).
-
-## `useHighlights`
-
-`useHighlights(name, source, options)` highlights ranges while the component is mounted and returns a computed `{ applied, unavailable }`. If `source` is a function, it runs again after the document changes and when the refs it reads change:
-
-```vue
-<script setup lang="ts">
-import { ref } from 'vue';
-import { useHighlights } from '@docx-editor.dev/vue';
-
-const terms = ref(['Supplier', 'Effective Date']);
-useHighlights('glossary', (editor) => editor.findMatches(terms.value, { wholeWord: true }).flat());
-</script>
-```
-
-For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-text-ranges).
-
-## `useHighlightAt`
-
-`useHighlightAt(name)` returns a ref with the highlight under the pointer, or `null`. For an example, see [Show details on hover](/docs/2.x/guides/navigation#show-details-on-hover).
-
-## `useOpenFailure`
-
-`useOpenFailure()` returns the refused open as `failure`, the packaged `message`, and `dismiss`. Use it for your own toast or banner. For more information, see [Handle files that do not open](/docs/2.x/guides/open-failures).
-
-## `useNavigationPane`
-
-Returns the navigation pane state, width, active tab, and setters. `overlay` is `true` when the open pane covers the page on a narrow viewport.
-
-## `useNavigationShift`
-
-Returns the horizontal page offset caused by the open navigation pane.
-
-## `useReviewGutter`
-
-Returns the inline reservations for the active review rail. The full card column changes to compact marker strips on narrow viewports.
-
-## `useCommentDraftRequest`
-
-Use `useCommentDraftRequest` when you render your own comment UI instead of the packaged review rail. The `review.addComment` control does not add a comment by itself, because the comment text comes from a draft. The engine enables the control only while something can open that draft. The packaged review rail registers itself when it mounts. Without a registration, the control is disabled with a reason.
-
-Register your handler, and press the control with `useEditorCommand`:
-
-```vue
-<script setup lang="ts">
-import { ref } from 'vue';
-import { useCommentDraftRequest, useEditorCommand } from '@docx-editor.dev/vue';
-
-const drafting = ref(false);
-useCommentDraftRequest(() => {
-  drafting.value = true;
-});
-const addComment = useEditorCommand('review.addComment');
-</script>
-
-<template>
-  <button
-    type="button"
-    :disabled="!addComment.isEnabled.value"
-    :title="addComment.disabledReason.value ?? 'Add comment'"
-    @click="addComment.execute()"
-  >
-    Add comment
-  </button>
-  <MyCommentDraft v-if="drafting" @close="drafting = false" />
-</template>
-```
-
-The handler takes no arguments. Read the selection with `editor.getSelectionPlacement()`, and pin it with `editor.retainSelection()` while the draft is open. The most recent registration receives each press. The registration lasts while the calling component is mounted. To stop serving requests while your UI cannot open a draft, unmount that component, for example with `v-if`. When the component unmounts, the registration ends, and the control is disabled again if nothing else is registered.
-
-## `useDocxSource`
-
-Fetch bytes and fonts from a URL string, a `URL`, a `Uint8Array`, or an `ArrayBuffer`:
-
-```ts
-const { document, fonts, error, isLoading } = useDocxSource('/sample.docx', {
-  fonts: packagedFonts(),
-});
-```
-
-`fonts` takes one origin or a list of them in precedence order, such as `[packagedFonts(), googleFonts()]`. With an on-demand resolver, `document` is released as soon as the bytes arrive. With an eager loader such as `defaultFonts`, it waits for the fonts first.
-
-## `useFonts`
-
-Builds one `FontResolver` from any number of font origins, first-wins in argument order. See the [font guide](/docs/2.x/guides/fonts).
-
-## `useHyperlinkPopup` and `useHyperlinkPopupInstance`
-
-Returns the link popover state and actions. Use `useHyperlinkPopupInstance` outside the component that owns the popover context.
-
-## `useContentControlWidget`
-
-Call `useContentControlWidget()` in a child of `DocxEditorContentControlWidget` to read its draft and commit values. Reactive members are refs; templates unwrap them automatically. `listId` and `listNavigation` are stable values.
-
-| Members                                         | Purpose                                  |
-| ----------------------------------------------- | ---------------------------------------- |
-| `session`, `kind`, `items`, `value`, `setValue` | Session and draft value                  |
-| `isEnabled`, `refused`, `apply`, `cancel`       | Validated writes and dismissal           |
-| `calendar`, `focusIso`, `focusDay`              | Month grid and keyboard focus            |
-| `previousMonth`, `nextMonth`, `showMonth`       | Month navigation                         |
-| `selectDay`, `selectToday`                      | Immediate date selection                 |
-| `dateText`, `setDateText`, `applyDateText`      | Regional numeric date entry              |
-| `listId`, `listNavigation`                      | List relationships and keyboard behavior |
-| `accept`, `replaceImage`                        | Picture file types and replacement       |
-
-`showMonth(year, month)` takes a zero-based month and a year from 100 through 9999. For date sessions, `apply()` commits an ISO date; `applyDateText()` parses the regional draft first. See [Compose control popups](/docs/2.x/guides/customize-dialogs#compose-the-value-popup) for registration, parts, and custom actions.
-
-## `useContentControl` and `useContentControlInstance`
-
-Returns content-control locks, value actions, and form-fill state. Use `useContentControlInstance` outside the component that owns this context.
-
-## `useHeaderFooterState`
-
-Returns the active header or footer scope, or `null`.
-
-## `useNoteScopeState` and `useNotePropertiesState`
-
-Return the active note scope and its numbering properties.
-
-## `useContextMenuTarget`
-
-Returns the element that received the last context-menu action.
-
-## `useHistoryGroup`
-
-`useHistoryGroup({ kind })` returns an element callback `ref` and `options()`. Place the control inside `DocxEditor.Root`. Each input updates the document immediately, and one undo action restores the state before the gesture. The composable retains the handle across component updates. It disposes the handle on unmount or editor replacement. Use `range`, `repeat`, `keyboard`, or `native-color` to select the event policy.
-
-The following native color control reads the selected color and reports rejected commands. `null` means mixed or unavailable. Undo and redo update `value` automatically. Colors use six hexadecimal digits without `#`.
-
-```vue
-<script setup lang="ts">
-import { ref } from 'vue';
-import { useEditorValueCommand, useHistoryGroup } from '@docx-editor.dev/vue';
-
-const { execute, value, isEnabled, disabledReason } = useEditorValueCommand('text.color');
-const gesture = useHistoryGroup({ kind: 'native-color' });
-const input = (node: unknown) => gesture.ref(node as HTMLInputElement | null);
-const error = ref<string | null>(null);
-function apply(event: Event) {
-  const color = (event.target as HTMLInputElement).value.slice(1);
-  const result = execute(color, gesture.options());
-  error.value = result.ok ? null : result.reason;
-}
-</script>
-
-<template>
-  <label :title="disabledReason ?? undefined">
-    Text color
-    <input
-      :ref="input"
-      type="color"
-      :disabled="!isEnabled"
-      :value="`#${value ?? '000000'}`"
-      @input="apply"
-    />
-    <span>{{ value === null ? 'Mixed or unavailable' : value }}</span>
-    <output aria-live="polite">{{ error }}</output>
-  </label>
-</template>
-```
-
-The native `change` event ends the gesture. The `input` handler applies values. `useEditorCommand().execute(options)` accepts group options and keeps its boolean result. You can also use `execute` as an event handler without passing options. Use `useEditorEvent('historyDiagnostic', handler)` for optional diagnostics. See [history grouping and boundaries](/docs/2.x/core#group-one-gesture-into-one-undo-step) for browser differences and a complete range control example.
-
-A review decision can also be one undo step. Read the editor from `useDocxEditor().value`, create a handle with `editor.beginHistoryGroup()`, and pass it to each write: `editor.exec`, `editor.addComment(text, { historyGroup })`, `editor.acceptReviewItem(key, { historyGroup })`, and `runtime.run({ historyGroup }, callback)`. End the handle when the decision is complete. See [Group a review decision](/docs/2.x/core#group-a-review-decision).
-
-For a font-size slider, use `useEditorValueCommand('font.size')` and `useHistoryGroup({ kind: 'range' })`. Set `type="range"` and pass `Number((event.target as HTMLInputElement).value)` to `execute`. Values use half-points: `24` means 12 pt. Pointer release and keyup end each gesture, including release outside the control. Keep your displayed value bound to the returned `value` ref.
-
-`execute(value, options?)` returns `ExecResult`. If `ok` is `false`, use `code` in application logic and display `reason`. If `ok` is `true`, `changed` tells you whether the document changed. Formatting at a caret at the edge of a word can set the format for subsequent typing without changing the document. The change still creates a local undo entry. Inside a word, formatting applies to the whole word, and clear formatting clears it. A highlight still sets the format for subsequent typing. In an empty paragraph, formatting applies to the paragraph mark. When the word or the mark changes, `changed` is `true` and the change is a document undo step. `result.history?.kind` reports `started`, `extended`, `split`, or `none`. An intervening edit can split a gesture while still applying the formatting.
-
-For native color inputs, `change` signals a committed value. It does not guarantee that the color picker closed. If the browser sends no `change` event, the next activation, Escape, blur, or unmount ends the gesture. If you need consistent drag boundaries across browsers, use a range control. A `repeat` binding groups writes from your held-button timer; your app must start and stop that timer itself.
-
-## `useEditorValueCommand`
-
-Returns typed state and actions for `text.color`, `font.size`, `font.family`, `text.highlight`, `styles.style`, `list.lineSpacing`, and image value slots. `execute(value, options?)` returns `ExecResult`. Font size uses half-points. `value` stays synchronized with undo and selection changes. A `null` value means mixed or unavailable. Image commands reject the `historyGroup` option.
-
-## `useTableBorderTargetLabel`
-
-Returns the label for the active table border target.
-
-## `useTranslation`, `useChromeTranslate`, and `useChromeDir`
-
-`useTranslation` returns `{ t, catalogue, lang }` for the active locale. `useChromeTranslate` resolves labels for chrome `t` props. Pass a `Map` to override selected labels.
-
-`useChromeDir` returns a read-only ref with the direction the editor chrome renders in: `'ltr'`, `'rtl'`, or `undefined` when the chrome inherits the host page direction. For more information, see [Right-to-left support](/docs/2.x/guides/right-to-left#choose-the-interface-direction).
-
-## Toolbar helpers
-
-`useToolbarContext` returns the toolbar compound context. `useToolbarLabel` returns the active scope label. `useToolbarLabelFor` resolves a label for one slot ID. `useScopeClassName` returns the chrome class prefix. `useScopedChromeAnchor` returns anchor data for overlay chrome.
-
-## Review author styles
-
-`useReviewAuthors` returns a shallow ref with each review author's `author`, `slot`, `color`, and resolved `style`. Tracked-change authors come first. Comment-only authors follow them.
-
-Declare styles inside `DocxEditor.Root`:
-
-```vue
-<script setup lang="ts">
-import { DocxEditor, useReviewAuthors } from '@docx-editor.dev/vue';
-
-const authors = useReviewAuthors();
-</script>
-
-<template>
-  <DocxEditor.AuthorStyle
-    author="Ada"
-    color="var(--doc-review-author-1)"
-    avatar-url="/avatars/ada.png"
-  />
-  <p>{{ authors.length }} review authors</p>
-</template>
-```
-
-Use `DocxEditor.ColorByChangeType` to color insertions and deletions by change type. These components change presentation only. They do not change the DOCX author data.
-
-## Pro Vue composables
-
-Install `@docx-editor.dev/pro` and import these APIs from `@docx-editor.dev/pro/vue`:
-
-- `useReview()` returns items, active state, review actions, pane state, and readiness.
-- `useReviewOf(editorRef, query?)` binds the same state to an explicit editor ref.
-- `useReviewItem()` returns the item for the active review card context.
-- `useReviewAuthor(author)` returns the resolved author style, inside or outside the review rail.
-- `useStackedReviewPositions(items, heights, options?)` calculates card positions without overlap. An item with `isActive: true` stays at its own anchor. It returns each card's top in layout points. Multiply by `scale` and add the rail's top offset to position a card in CSS pixels.
-- `useReviewRailMetrics(railRef?, options?)` returns `{ metrics }`. Use `metrics.value.scale` and `metrics.value.top` to convert anchors and stacked positions to CSS pixels, and `metrics.value.compact` to choose the narrow layout. Omit `railRef` inside `DocxEditorReview` to read the packaged rail's values. For placement rules and a complete column, see [Place custom cards](/docs/2.x/pro/tracked-changes#place-custom-cards).
-
-The package also exports `DocxEditorReview`. Mount it inside `DocxEditor.Viewport`, beside `DocxEditor.Content`.
-
-## Dialog draft contexts
-
-Call the composable in a child component of the matching dialog. Each returns `values`, `setValue(name, value)`, `errors`, `isEnabled`, `apply()`, and `cancel()`.
-
-| Hook | Draft type | Draft keys |
+| Composable | Returns |
+| --- | --- |
+| `useReviewAuthors()` | `Readonly<ShallowRef<readonly ReviewAuthorInfo[]>>`, tracked-change authors first |
+| `useReviewGutter()` | `ShallowRef<{ inlineStart, inlineEnd }>` reserved by the review rail |
+
+`@docx-editor.dev/pro/vue` adds `useReview`, `useReviewOf`, `useReviewItem`, `useReviewAuthor`, `useStackedReviewPositions`, and `useReviewRailMetrics`. See [Tracked changes](/docs/2.x/pro/tracked-changes).
+
+### Popovers, scopes, and toolbar helpers
+
+| Composable | Returns |
+| --- | --- |
+| `useHyperlinkPopup()` | `{ state, open, openAtCaret, close, beginEdit, commitEdit, setUrl, setText, copy, unlink, openTarget }` |
+| `useHyperlinkPopupInstance(active?)` | Same, outside the owning part |
+| `useContentControl()` | `{ control, controls, setValue, remove, formFill, ... }` |
+| `useContentControlInstance()` | Same, outside the owning part |
+| `useContentControlWidget()` | Value popup draft, calendar, and actions. `selectDay(iso)` and `selectToday()` apply the date at once. `listId` and `listNavigation` are plain values, not refs. See [Compose the value popup](/docs/2.x/guides/customize-dialogs#compose-the-value-popup). |
+| `useHeaderFooterState()` | `ShallowRef` with the active header or footer scope, or `null` |
+| `useNoteScopeState()` | Active footnote or endnote scope |
+| `useNotePropertiesState()` | `ShallowRef` with note numbering properties, or `null` |
+| `useContextMenuTarget()` | `HTMLElement \| null` that received the last context-menu action |
+| `useTableBorderTargetLabel()` | `ComputedRef<string>` label of the table-border target |
+| `useToolbarContext()` | `ComputedRef<{ t, onSave }>` |
+| `useToolbarLabel()` | `(key) => string` for the active scope |
+| `useToolbarLabelFor(t)` | `(key) => string` for a given translator |
+| `useScopeClassName()` | `''`, `'docx-editor '`, or `'docx-editor dark '` |
+| `useScopedChromeAnchor(findAnchor, placement)` | `{ ref, style }` for overlay chrome |
+
+### Dialog draft contexts
+
+Call these composables in a child of the matching dialog. Each returns `values`, `setValue(name, value)`, `errors`, `isEnabled`, `apply()`, and `cancel()`. State members are refs:
+
+| Composable | Draft type | Draft keys |
 | --- | --- | --- |
 | `usePageSetupDialog()` | `PageSetupDialogFields` | `pageWidth`, `pageHeight`, `orientation`, `marginTop`, `marginBottom`, `marginLeft`, `marginRight`, `scope` |
 | `useParagraphDialog()` | `UseParagraphDialogReturn['values']['value']` | `alignment`, `indentLeft`, `indentRight`, `special`, `specialBy`, `spaceBefore`, `spaceAfter`, `lineRule`, `lineValue`, `contextualSpacing`, `keepNext`, `keepLines`, `widowControl`, `pageBreakBefore`, `tabStops`, `clearedAllTabStops` |
@@ -679,34 +239,100 @@ Call the composable in a child component of the matching dialog. Each returns `v
 | `useCompareDocumentsDialog()` | `CompareDocumentsDialogValues` | `revised`, `authorName`, `detectFormatChanges`, `removeDateAndTime` |
 | `useWatermarkDialog()` | `WatermarkDialogFields` | `kind`, `imageData`, `imageName`, `scale`, `washout`, `text`, `fontFamily`, `fontSizePt`, `bold`, `italic`, `transparency`, `color`, `layout` |
 | `useBookmarkDialog()` | `BookmarkDialogFields` | `name`, `sortBy`, `showHidden` |
-| `useSplitCellDialog()` | `SplitCellDialogFields` | `columns`, `rows` |
+| `useSplitCellDialog()` | `SplitCellDialogFields` | `columns`, `rows` (strings) |
 
-Vue exposes state as refs. Use `.value` in JavaScript; templates unwrap these refs.
+Most custom `Field` names match draft keys, with two exceptions:
 
-Page dimensions, margins, and paragraph indents use twips: 1,440 per inch. Paragraph spacing uses points. `lineValue` is a multiple for `lineRule: 'multiple'`, and points for `'exact'` or `'atLeast'`. Paragraph also exposes `mixed` selection state.
+| Dialog     | `Field` name | Draft keys                                                       |
+| ---------- | ------------ | ---------------------------------------------------------------- |
+| Page Setup | `pageSize`   | Updates `pageWidth` and `pageHeight`. Neither is a `Field` name. |
+| Paragraph  | None         | `clearedAllTabStops` is draft state only.                        |
 
-`useRevisionMarkupDialog()` also provides `reset()`, which restores the draft defaults without applying them.
+| Composable | Extra member |
+| --- | --- |
+| `useParagraphDialog()` | `mixed` |
+| `useRevisionMarkupDialog()` | `reset()` restores default draft values. Call `apply()` to apply them. |
+| `useSplitCellDialog()` | `limits`: the selected cell's maximum row and column counts, or `null` |
 
-`useCompareDocumentsDialog()` also provides the following members. Each member is a ref:
+Page sizes, margins, and indents use twips (1,440 per inch). Paragraph spacing uses points, except `lineValue` with `lineRule: 'multiple'`, which is a line multiple. For the compare dialog's progress and cancel state, see [Compare documents](/docs/2.x/pro/compare-documents).
 
-- `busy`: `true` while the chosen file is read and compared. While it is `true`, `apply()` does nothing, so a second press never starts a second compare.
-- `progress`: in the compare worker, the running step (`phase`) and its `fraction` from 0 to 1. It is `null` until the worker reports its first step, and when no compare runs. The `compareDocuments.phases.<phase>` keys of `@docx-editor.dev/i18n` describe each step.
-- `cancelable`: `true` when compares run in the compare worker, the default. Then `cancel()` stops a running compare. It is `false` with `compareWorker: false`.
-- `notice`: a message that is not an error, such as that the documents have no differences.
-- `originalHasTrackedChanges`: `true` when the open document had tracked changes as the dialog opened. The compare accepts them first. The default arrangement shows a notice before you compare.
+For a custom input, see [Connect a custom input](/docs/2.x/guides/customize-dialogs#connect-a-custom-input).
 
-The `removeDateAndTime` draft key writes the revisions without dates. It defaults to `false`, and the default arrangement has no control for it. Set it from a custom control with `setValue('removeDateAndTime', true)`.
+## Apply a value
 
-`apply()` compares the open document with the chosen file and records the differences as tracked changes in one undoable step. The dialog also exposes the `Progress` and `Notice` parts: the progress bar with the running step in words, and the region that shows the notice. For more information, see [Compare documents](/docs/2.x/pro/compare-documents).
+`useEditorValueCommand` reads the selected value and applies a new one. This slider sets the font size:
 
-`useSplitCellDialog()` also provides `limits`, the most rows and columns the cell at the selection splits into. The draft keeps each count as typed text.
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import { useEditorValueCommand, useHistoryGroup } from '@docx-editor.dev/vue';
 
-Most `Field` names match draft keys. Page Setup uses `pageSize` for the size selector, which updates `pageWidth` and `pageHeight`. Paragraph's `clearedAllTabStops` is draft state, not a separate `Field`.
+const size = useEditorValueCommand('font.size');
+const gesture = useHistoryGroup({ kind: 'range' });
+const input = (node: unknown) => gesture.ref(node as HTMLInputElement | null);
+const error = ref<string | null>(null);
 
-See [Connect a custom input](/docs/2.x/guides/customize-dialogs#connect-a-custom-input) for a complete control and its placement inside the dialog.
+function apply(event: Event) {
+  const result = size.execute(Number((event.target as HTMLInputElement).value), gesture.options());
+  error.value = result.ok ? null : result.reason;
+}
+</script>
 
-## Next steps
+<template>
+  <label :title="size.disabledReason.value ?? undefined">
+    {{ size.value.value === null ? 'Mixed' : `${size.value.value / 2} pt` }}
+    <input
+      :ref="input"
+      type="range"
+      min="16"
+      max="144"
+      :value="size.value.value ?? 22"
+      :disabled="!size.isEnabled.value"
+      @input="apply"
+    />
+    <output aria-live="polite">{{ error }}</output>
+  </label>
+</template>
+```
 
-- [Vue composition](/docs/2.x/vue/composition): place custom controls.
-- [Chrome slot reference](/docs/2.x/guides/chrome-slots): find every slot ID and toolbar part.
-- [Vue API reference](/docs/2.x/api/vue): inspect all composable types.
+Font size uses half-points: `24` means 12 pt. `null` means mixed or unavailable, and `value` follows undo and redo. Other value slots include `text.color` (six hex digits without `#`), `font.family`, `text.highlight`, `styles.style`, `list.lineSpacing`, and image slots.
+
+`execute(value, options?)` returns `ExecResult`:
+
+| Field | Meaning |
+| --- | --- |
+| `ok` | `false` when the editor refused the command. |
+| `code`, `reason` | Present when `ok` is `false`. Use `code` in logic and show `reason`. |
+| `changed` | `true` when the document changed. Formatting at a caret can change only the typing format. |
+| `history?.kind` | `started`, `extended`, `split`, or `none` for grouped writes. `split` does not mean failure. |
+
+`useEditorCommand().execute(options)` takes the same options but returns a boolean. For the full result of a raw command, call `editor.value.exec(command, options)`.
+
+## Group an input gesture
+
+`useHistoryGroup({ kind }): { ref, options }` makes a continuous gesture one undo step. Bind `ref` to the control through a callback ref, and pass `options()` to each command from that gesture:
+
+| `kind` | Use it for | What ends the gesture |
+| --- | --- | --- |
+| `range`, `repeat` | A slider, or a button that repeats while held | Pointer release or cancel, lost capture, keyup, or blur |
+| `keyboard` | Repeated keydown events | Keyup, Escape, or blur |
+| `native-color` | An HTML color input | Native `change`, next activation, Escape, or blur |
+
+The binding disposes the group on unmount or editor replacement. For `repeat`, your app owns the timer. For a color input, apply values in `@input`; a native `change` does not guarantee that the picker closed.
+
+`useEditorEvent('historyDiagnostic', handler)` reports interrupted groups. To group a review decision, see [Group a review decision](/docs/2.x/core#group-a-review-decision).
+
+## Limits
+
+- Call composables during `setup()` inside `DocxEditorRoot`. Outside it, `useDocxEditor().value` is `null`.
+- `canUndo` reports undo availability, not unsaved changes. Track save completion yourself.
+- `selectionChange` also fires for state unrelated to the selection.
+- Dialog draft composables read a draft; they do not open the dialog.
+- Image value commands reject the `historyGroup` option.
+- `useContentControlWidget().showMonth(year, month)` accepts integer years 100 through 9999 and zero-based months 0 through 11.
+
+## See also
+
+- [Vue composition](/docs/2.x/vue/composition)
+- [Chrome slot reference](/docs/2.x/guides/chrome-slots)
+- [Vue API reference](/docs/2.x/api/vue)
