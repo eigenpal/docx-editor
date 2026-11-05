@@ -118,7 +118,6 @@ import {
   isRunPropertiesNode,
   isShowingPlaceholder,
   isTemporaryControl,
-  deferOptions,
   listItemsOf,
   leavesInlineContainer,
   namedChild,
@@ -218,7 +217,6 @@ import { applyBookmarkOp, isBookmarkTreeOp, withBookmarkEditRules } from './tree
 import { closesAnOpenRange, opensARange, zeroLengthGoesToHead } from './tree-op-split-markers.ts';
 import {
   promptInsertionOffset,
-  promptKeptByDeletion,
   restoreEmptiedPlaceholder,
 } from './content-control-prompt-restore.ts';
 
@@ -512,10 +510,7 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
       if (op.revision) {
         return applyDeleteTracked(part, paragraph, op.start, op.end, op.revision, options);
       }
-      return (
-        promptKeptByDeletion(part, paragraph, op.start, op.end) ??
-        applyDeleteText(part, paragraph, op.start, op.end, options)
-      );
+      return applyDeleteText(part, paragraph, op.start, op.end, options);
     case 'insertHyperlink':
       return applyInsertHyperlink(part, paragraph, op, options);
     case 'insertInlineContentControl':
@@ -1114,6 +1109,17 @@ function insertBesideDeletion(
     context.effect
   );
   return finishContentEdit(inserted, context.control, context.options);
+}
+
+/** Defer validation when a temporary unwrap still has to run in this op. */
+function deferOptions(
+  options: EditOptions | undefined,
+  control: OoxmlNode | null
+): EditOptions | undefined {
+  if (control && isTemporaryControl(control)) {
+    return { ...options, deferValidation: true };
+  }
+  return options;
 }
 
 /** After a content edit: a temporary control unwraps (a locked wrapper was refused by

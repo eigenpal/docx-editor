@@ -62,6 +62,8 @@ import {
   type AtomicControlDeletion,
   type InlineControlBesideCaret,
 } from './surface-locked-control-delete.ts';
+import { absorbAtomicControls } from './surface-atomic-controls.ts';
+import { keepPromptsWhole, type PlannedDeletion } from './surface-prompt-deletion.ts';
 
 /** What this lane borrows from the mount closure. Mutable state arrives as a getter. */
 export interface SurfaceRangeEditDeps {
@@ -106,10 +108,15 @@ export interface SurfaceRangeEditOps {
     position: { readonly paragraphId: string; readonly offset: number },
     side: 'before' | 'after'
   ): InlineControlBesideCaret | null;
-  /** Backspace / Delete beside or over an atomic inline control; see `atomicControlDeletion`. */
+  /**
+   * Backspace / Delete beside or over an atomic inline control (see `atomicControlDeletion`),
+   * or into a prompt. `reach` is where a word deletion from a caret ends; it asks only about
+   * prompts.
+   */
   atomicControlDeletion(
     direction: 'backward' | 'forward',
-    shown: (position: SemanticPosition) => SemanticPosition
+    shown: (position: SemanticPosition) => SemanticPosition,
+    reach?: number
   ): AtomicControlDeletion | null;
   splitEndsTheParagraph(position: SemanticPosition): boolean;
   deleteSelectionPlan(trackedAuthor?: string): RangeDeletionPlan;
@@ -208,11 +215,14 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
 
   function atomicControlDeletion(
     direction: 'backward' | 'forward',
-    shown: (position: SemanticPosition) => SemanticPosition
+    shown: (position: SemanticPosition) => SemanticPosition,
+    reach?: number
   ): AtomicControlDeletion | null {
     // Queued typing lands first, so the caret and the layout are the ones the reader sees.
     deps.flushPendingInputAndLayout();
     if (deps.cellSelection()) return null;
+    const prompt = promptDeletion(direction, shown, reach);
+    if (prompt || reach !== undefined) return prompt;
     return planAtomicControlDeletion({
       layout: deps.layout(),
       selection: deps.selection(),
@@ -221,6 +231,44 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
       controlBeside: inlineControlBeside,
       tracked: deps.trackedAuthorOrNone() !== undefined,
     });
+  }
+
+  /** The press with every prompt left whole (`surface-prompt-deletion.ts`), or null. */
+  function promptDeletion(
+    direction: 'backward' | 'forward',
+    shown: (position: SemanticPosition) => SemanticPosition,
+    reach: number | undefined
+  ): AtomicControlDeletion | null {
+    const layout = deps.layout();
+    if (!layout.contentControls?.some((control) => control.placeholder)) return null;
+    const selection = deps.selection();
+    let reached = selection;
+    let plan: PlannedDeletion;
+    if (
+      selection.anchor.paragraphId !== selection.head.paragraphId ||
+      selection.anchor.offset !== selection.head.offset
+    ) {
+      plan = deleteSelectionPlan();
+    } else {
+      // One character, or a word when `reach` names where the word ends.
+      const caret = reach === undefined ? shown(selection.head) : selection.head;
+      const far = reach ?? caret.offset + (direction === 'backward' ? -1 : 1);
+      if (far < 0 || far === caret.offset || far > textOf(caret.paragraphId).length) return null;
+      const [start, end] = far < caret.offset ? [far, caret.offset] : [caret.offset, far];
+      const { paragraphId } = caret;
+      reached = { anchor: caret, head: { paragraphId, offset: far } };
+      plan = {
+        ops: [{ op: 'deleteText', paragraphId, start, end }],
+        collapseTo: { paragraphId, offset: start },
+      };
+    }
+    // A pure read: `partOfNodeId`, never `partFor`, which would retain a story store.
+    const part = partOfNodeId(session, selection.head.paragraphId) ?? session.part();
+    const kept = keepPromptsWhole(part, plan);
+    if (!kept) return null;
+    return kept.ops.length > 0
+      ? { kind: 'remove', ...kept }
+      : { kind: 'select', selection: absorbAtomicControls(layout, reached) };
   }
 
   /**

@@ -1,10 +1,13 @@
 {
   "impact": "compatible",
   "fields": [],
-  "before": "Delete or Backspace inside a control that showed its prompt removed prompt characters one at a time and kept w:showingPlcHdr, so part of the prompt stayed on the page as the placeholder.",
-  "after": "A deleteText op that removes only part of a control's prompt leaves the part unchanged, so the prompt stays whole until the first keystroke replaces it. A deletion that covers the whole prompt, such as Select All, works as before.",
-  "reason": "The kept deletion produces no tree change and no primitive, so there is nothing to replicate. Peers on a released version can still write partial prompt deletions, which this version applies as ordinary primitives. Stored fields, operation encoding, identities, and repair rules do not change.",
-  "tests": ["packages/core/src/editor/__tests__/content-control-prompt-delete.test.ts"],
+  "before": "Delete or Backspace inside a control that showed its prompt removed or struck prompt characters one at a time and kept w:showingPlcHdr, so part of the prompt stayed on the page as the placeholder. A range that ended inside the prompt removed part of it too.",
+  "after": "Delete and Backspace never remove or strike prompt characters, in edit mode or in suggesting mode. A press that reaches only a prompt selects the whole prompt and writes no operation. A press over a range writes ordinary deleteText operations for the text around the prompt only. A deleteText operation from automation or from a peer applies as before.",
+  "reason": "The rule is in the editor surface. It changes only which ordinary deleteText operations a key press writes. Operation encoding, stored fields, identities, and repair rules do not change. Released peers apply these operations as any other text deletion, and this version applies their prompt deletions as before.",
+  "tests": [
+    "packages/core/src/editor/__tests__/content-control-prompt-delete.test.ts",
+    "packages/pro/src/collaboration/__tests__/content-control-prompt-delete-editors.test.ts"
+  ],
   "changeset": "prompt-delete-whole",
   "migration": null
 }
