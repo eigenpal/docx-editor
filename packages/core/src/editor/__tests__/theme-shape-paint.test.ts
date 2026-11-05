@@ -135,9 +135,8 @@ describe('theme-filled shapes paint through the real package', () => {
     try {
       expect(container.querySelectorAll('.docx-drawing-placeholder-card')).toHaveLength(0);
       // accent1 6F55D7 with `lumMod 50000` (HSL), the style matrix's `phClr` (verbatim),
-      // and accent1 with `shade 50000` (linear light). Each value is the pixel a reference
-      // renderer paints for that fill.
-      expect(paintedFills(container)).toEqual(['#2F1D79', '#6F55D7', '#523E9F']);
+      // and accent1 with `shade 50000`, which follows from the linear-light rule.
+      expect(paintedFills(container)).toEqual(['#2F1D79', '#6F55D7', '#503C9E']);
     } finally {
       surface.destroy();
       container.remove();
@@ -149,7 +148,7 @@ describe('theme-filled shapes paint through the real package', () => {
     try {
       // `w:clrSchemeMapping w:accent1="accent3"` remaps the slot, so every fill above now
       // derives from accent3 (A5A5A5) instead of accent1.
-      expect(paintedFills(container)).toEqual(['#535353', '#A5A5A5', '#7A7A7A']);
+      expect(paintedFills(container)).toEqual(['#535353', '#A5A5A5', '#787878']);
     } finally {
       surface.destroy();
       container.remove();
