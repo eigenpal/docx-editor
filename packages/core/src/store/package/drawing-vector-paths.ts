@@ -57,7 +57,7 @@ export function readShapePathPolygons(
       });
       if (parsed.some((point) => point === null)) return false;
       if (start === null) continue;
-      current ??= open(start);
+      current ??= open({ ...start });
       if (current === null || pointBudget.remaining < CUBIC_BEZIER_SEGMENTS) return false;
       const points = current;
       const from = points[points.length - 1]!;
@@ -101,7 +101,7 @@ export function readShapePathPolygons(
       continue;
     }
     if (start === null) continue;
-    current ??= open(start);
+    current ??= open({ ...start });
     if (current === null || pointBudget.remaining <= 0) return false;
     pointBudget.remaining -= 1;
     current.push(scaled);
