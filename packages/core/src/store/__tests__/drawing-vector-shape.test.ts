@@ -381,8 +381,9 @@ describe('wps vector shape projection', () => {
   //   336699  shade 40000      1E4164        —                         14293D
   //   ED7D31  shade 50000      AE5A21        —                         773F19
   //
-  // `ED7D31` + `shade 50000` is a measured value. Mid-gray at 50% is where the white-fraction
-  // reading and the input-fraction reading agree, so it cannot be the only tint case.
+  // Only the `ED7D31` row is a measured value; the other rows follow from the rule. Mid-gray
+  // at 50% is where the white-fraction reading and the input-fraction reading agree, so it
+  // cannot be the only tint case.
   test('theme colours apply tint, shade, and luminance offset transforms', () => {
     const cases = [
       ['0000FF', 'tint', '20000', 'E7E7FF'],
@@ -777,7 +778,7 @@ describe('wps vector shape projection', () => {
     const drawing = doubleRuleShapeDrawing().replace(
       '<a:solidFill><a:srgbClr val="000000"/></a:solidFill>',
       '<a:solidFill><a:schemeClr val="accent1">' +
-        '<a:lumMod val="10000001"/>' +
+        '<a:alphaOff val="150000"/>' +
         '</a:schemeClr></a:solidFill>'
     );
     const part = parsePart(`<w:p><w:r>${mcWrapped(drawing)}</w:r></w:p>`);

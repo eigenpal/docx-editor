@@ -71,7 +71,7 @@ describe('signed colour transforms', () => {
       9
     );
     expect(srgb('000000', '<a:alphaMod val="50000"/>')?.alpha).toBeCloseTo(0.5, 9);
-    expect(srgb('000000', '<a:alphaOff val="-200000"/>')?.alpha).toBe(0);
+    expect(srgb('000000', '<a:alphaOff val="-100000"/>')?.alpha).toBe(0);
   });
 
   test('identity offsets leave the colour exactly as authored', () => {
@@ -89,19 +89,66 @@ describe('signed colour transforms', () => {
     expect(srgb('FF0000', '<a:satMod val="50%"/>')?.hex).toBe('BF4040');
   });
 
-  test('malformed or out-of-range values refuse the colour', () => {
+  test('malformed values, or values outside their schema type, refuse the colour', () => {
+    // Not an `xsd:int`.
     expect(srgb('FF0000', '<a:hueOff val="99999999999"/>')).toBeNull();
-    expect(srgb('FF0000', '<a:hueOff val="21600001"/>')).toBeNull();
-    expect(srgb('FF0000', '<a:lumOff val="20000000"/>')).toBeNull();
+    expect(srgb('FF0000', '<a:lumOff val="2147483648"/>')).toBeNull();
     expect(srgb('FF0000', '<a:satOff val="abc"/>')).toBeNull();
     expect(srgb('FF0000', '<a:satOff/>')).toBeNull();
     expect(srgb('FF0000', '<a:lumOff val="1e5"/>')).toBeNull();
+    expect(srgb('FF0000', '<a:red val="1e5"/>')).toBeNull();
+    // `ST_Angle` and `ST_PositiveFixedAngle` have no percentage literal.
+    expect(srgb('FF0000', '<a:hueOff val="10%"/>')).toBeNull();
+    expect(srgb('FF0000', '<a:hue val="10%"/>')).toBeNull();
+    // `ST_PositiveFixedAngle` is 0 up to but not including 21600000.
     expect(srgb('FF0000', '<a:hue val="21600000"/>')).toBeNull();
     expect(srgb('FF0000', '<a:hue val="-60000"/>')).toBeNull();
-    expect(srgb('FF0000', '<a:lum val="20000000"/>')).toBeNull();
-    expect(srgb('FF0000', '<a:red val="1e5"/>')).toBeNull();
+    // `ST_PositivePercentage` has no negative value.
+    expect(srgb('000000', '<a:alphaMod val="-50000"/>')).toBeNull();
+    expect(srgb('FF0000', '<a:hueMod val="-50%"/>')).toBeNull();
+    // `ST_FixedPercentage` is -100% to 100%.
+    expect(srgb('000000', '<a:alphaOff val="-150000"/>')).toBeNull();
+    expect(srgb('000000', '<a:alphaOff val="100.5%"/>')).toBeNull();
+    // The percentage pattern has no `+`.
+    expect(srgb('FF0000', '<a:satMod val="+50%"/>')).toBeNull();
     expect(srgb('FF0000', '<a:shade val="-50000"/>')).toBeNull();
     expect(srgb('FF0000', '<a:notATransform/>')).toBeNull();
+  });
+
+  test('legal values at the edge of their type resolve', () => {
+    // An `ST_Angle` can exceed one turn, and the hue wraps.
+    expect(srgb('FF0000', '<a:hueOff val="43200000"/>')?.hex).toBe('FF0000');
+    expect(srgb('FF0000', '<a:hueOff val="-14400000"/>')?.hex).toBe('00FF00');
+    // An `ST_Percentage` has no upper bound; the component clamps.
+    expect(srgb('FF0000', '<a:lumOff val="20000000"/>')?.hex).toBe('FFFFFF');
+    expect(srgb('FF0000', '<a:lum val="20000000"/>')?.hex).toBe('FFFFFF');
+    // Leading zeros and a leading `+` are legal on an `xsd:int`.
+    expect(srgb('FF0000', '<a:satMod val="0050000"/>')?.hex).toBe('BF4040');
+    expect(srgb('FF0000', '<a:satMod val="+50000"/>')?.hex).toBe('BF4040');
+    // The percentage pattern allows any number of fraction digits.
+    expect(srgb('FF0000', '<a:satMod val="50.0000%"/>')?.hex).toBe('BF4040');
+  });
+});
+
+describe('placeholder and scRGB bases', () => {
+  test('phClr keeps the placeholder alpha, and transforms apply after it', () => {
+    const placeholder = { hex: 'ED7D31', alpha: 0.5 };
+    expect(
+      resolveColorNode(
+        color(
+          '<a:schemeClr val="phClr"><a:shade val="50000"/><a:alphaMod val="50000"/></a:schemeClr>'
+        ),
+        undefined,
+        placeholder
+      )
+    ).toEqual({ hex: 'AE5A21', alpha: 0.25 });
+  });
+
+  test('an scrgbClr base stays unrounded until the end of the chain', () => {
+    // `r="1000"` is sRGB 25.46. Rounding the base to 25 first would give `0F0000`.
+    expect(
+      resolve('<a:scrgbClr r="1000" g="0" b="0"><a:shade val="50000"/></a:scrgbClr>')?.hex
+    ).toBe('100000');
   });
 });
 

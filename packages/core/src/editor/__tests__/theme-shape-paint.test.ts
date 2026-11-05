@@ -135,7 +135,7 @@ describe('theme-filled shapes paint through the real package', () => {
     try {
       expect(container.querySelectorAll('.docx-drawing-placeholder-card')).toHaveLength(0);
       // accent1 6F55D7 with `lumMod 50000` (HSL), the style matrix's `phClr` (verbatim),
-      // and accent1 with `shade 50000` (linear light, through the sRGB transfer curve).
+      // and accent1 with `shade 50000`, which follows from the linear-light rule.
       expect(paintedFills(container)).toEqual(['#2F1D79', '#6F55D7', '#503C9E']);
     } finally {
       surface.destroy();
