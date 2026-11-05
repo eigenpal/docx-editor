@@ -6,7 +6,11 @@ import {
   rememberHangingPunctuation,
   spaceShrinkMarkAdvance,
 } from './paragraph-hanging-punctuation.ts';
-import { appendColumnBreak, appendUnsupportedContent } from './unsupported-content-flow.ts';
+import {
+  appendColumnBreak,
+  appendEquation,
+  appendUnsupportedContent,
+} from './unsupported-content-flow.ts';
 import { besideFloatWidth } from './legacy-inline-beside-float.ts';
 import { continuationPiecesWithRules } from './paragraph-continuation-pieces.ts';
 import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
@@ -993,30 +997,7 @@ export function breakParagraph(
       );
       applyInlineObjectSkipIfNeeded(atomWidth, equation.geometry.box.height);
       if (!ensurePlacementWidth(atomWidth)) continue;
-      const priorDescent = Math.max(0, line.height - line.baseline);
-      const equationDescent = Math.max(
-        0,
-        equation.geometry.box.height - equation.geometry.baseline
-      );
-      line.baseline = Math.max(line.baseline, equation.geometry.baseline);
-      line.height = line.baseline + Math.max(priorDescent, equationDescent);
-      line.spans.push({
-        range: { paragraphId, start: piece.start, end: piece.end },
-        text: '\uFFFC',
-        props: piece.props,
-        style: piece.style,
-        box: {
-          x: lineOrigin() + line.width,
-          y: 0,
-          width: atomWidth,
-          height: equation.geometry.box.height,
-        },
-        projected: true,
-        equation,
-        ...paragraphSpanMetadata(piece),
-      });
-      line.width += atomWidth;
-      line.end = piece.end;
+      appendEquation(line, piece, equation, paragraphId, lineOrigin() + line.width);
       wordStartSpan = -1;
       lastEmitted = '';
       continue;

@@ -204,8 +204,10 @@ export interface StyleSpanRecord {
   readonly fontSlot?: FontSlot;
   /**
    * Set when the text is bold and its face is not, so the bold is synthesized. Layout gave each
-   * inked glyph `SYNTHETIC_BOLD_ADVANCE_EM` of extra advance, as Word does. A browser draws a
-   * synthesized bold at the face's own advances, so screen paint adds the extra itself.
+   * inked character `SYNTHETIC_BOLD_ADVANCE_EM` of extra advance, as Word does, including text
+   * that draws in a fallback face. A browser draws a synthesized bold at the face's own
+   * advances, so screen paint adds the extra itself. The only blanks in such a span are U+0020
+   * and U+00A0, whose extra paint takes back (`markSyntheticBoldSpans`).
    * @internal
    */
   readonly syntheticBold?: true;

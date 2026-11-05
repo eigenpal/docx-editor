@@ -69,20 +69,81 @@ export function syntheticBoldGlyphCount(run: ShapedRun): number {
   return count;
 }
 
+/** The UTF-16 offsets where the clusters of the glyphs that synthesized bold widens start. */
+export function syntheticBoldGlyphStarts(run: ShapedRun): number[] {
+  const starts: number[] = [];
+  for (const glyph of run.glyphs) if (inked(glyph)) starts.push(glyph.cluster);
+  return starts;
+}
+
+/**
+ * A character that synthesized bold widens in text that layout measures without the face's
+ * glyphs: a character that draws ink and opens a cluster. Spaces, format characters, and
+ * combining marks do not. In a span that `markSyntheticBoldSpans` marks, paint widens the same
+ * characters.
+ */
+const WIDENED_CHARACTER = /[^\p{White_Space}\p{Default_Ignorable_Code_Point}\p{M}]/gu;
+
+/**
+ * The UTF-16 offsets where the characters of `text` that synthesized bold widens start.
+ *
+ * Text that the face cannot shape, because the face lacks a glyph or small capitals, measures
+ * on the fallback, so layout has no glyphs to count. Word widens a glyph that a substitute face
+ * draws in such a run as it widens the face's own glyphs, and paint spaces the span by
+ * character, so layout widens that text by character.
+ */
+export function syntheticBoldCharacterStarts(text: string): number[] {
+  const starts: number[] = [];
+  for (const match of text.matchAll(WIDENED_CHARACTER)) starts.push(match.index);
+  return starts;
+}
+
+/**
+ * Blanks that paint cannot keep at their own advance in a span whose bold is synthesized.
+ * Synthesized bold leaves the advance of a blank alone. Paint adds the extra advance after
+ * each character as `letter-spacing`, but `word-spacing` takes it back only from U+0020 and
+ * U+00A0, never from U+3000 and the other spaces here.
+ */
+const UNSPACED_BLANKS = /[\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/gu;
+
+/**
+ * The parts of a synthesized-bold span's text, cut around the blanks of
+ * {@link UNSPACED_BLANKS}, and whether synthesized bold widens each part. A blank part lays out
+ * as a span of its own that paint does not widen. Text without such blanks is one part.
+ */
+export function syntheticBoldParts(
+  text: string
+): { readonly from: number; readonly to: number; readonly widened: boolean }[] {
+  const parts: { from: number; to: number; widened: boolean }[] = [];
+  let from = 0;
+  const cut = (to: number): void => {
+    // `search` ignores the global flag and leaves `lastIndex` alone.
+    if (to > from)
+      parts.push({ from, to, widened: text.slice(from, to).search(WIDENED_CHARACTER) >= 0 });
+    from = to;
+  };
+  for (const match of text.matchAll(UNSPACED_BLANKS)) {
+    cut(match.index);
+    cut(match.index + match[0].length);
+  }
+  cut(text.length);
+  return parts;
+}
+
 /**
  * Caret advances with the synthesized bold extra added: the advance at each UTF-16 offset
- * grows by `extraPt` for every widened glyph whose cluster starts before that offset.
+ * grows by `extraPt` for every widened cluster that starts before that offset. `starts` holds
+ * the UTF-16 offsets where the widened clusters start.
  */
 export function withSyntheticBoldCaretAdvances(
   advances: readonly number[],
-  run: ShapedRun,
+  starts: readonly number[],
   extraPt: number
 ): readonly number[] {
-  if (extraPt <= 0) return advances;
+  if (extraPt <= 0 || starts.length === 0) return advances;
   const perOffset = new Array<number>(advances.length).fill(0);
-  for (const glyph of run.glyphs) {
-    if (!inked(glyph)) continue;
-    const at = Math.min(Math.max(glyph.cluster + 1, 1), advances.length - 1);
+  for (const start of starts) {
+    const at = Math.min(Math.max(start + 1, 1), advances.length - 1);
     perOffset[at]! += extraPt;
   }
   let added = 0;

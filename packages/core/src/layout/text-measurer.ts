@@ -56,7 +56,8 @@ export interface TextMeasurer {
   faceCovers?(text: string, style: ResolvedRunStyle): boolean | undefined;
   /**
    * Optional: whether `style` is bold and its resolved face is not, so the bold is synthesized
-   * and each inked glyph advances `SYNTHETIC_BOLD_ADVANCE_EM` further. Absent means no.
+   * and each inked character advances `SYNTHETIC_BOLD_ADVANCE_EM` further, also where the face
+   * cannot shape the text. Absent means no.
    * @internal
    */
   syntheticBold?(style: ResolvedRunStyle): boolean;

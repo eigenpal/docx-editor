@@ -26,6 +26,7 @@ import {
   sha256FontBytes,
   type FontRequest,
   type ResolvedRunStyle,
+  type StyleSpanRecord,
 } from '../index.ts';
 
 await initializeHarfBuzz();
@@ -129,22 +130,72 @@ describe('a bold slot that holds a regular face', () => {
     expect(measurer.syntheticBold?.(style('Single Weight', false))).toBe(false);
   });
 
-  test('layout marks the spans whose bold is synthesized, and no blank span', () => {
+  test('text the face cannot shape takes the extra advance too, as Word gives it', () => {
+    // DejaVu Sans has no Hangul, so text with Hangul measures on the fallback. Word draws such
+    // text in a substitute face and widens each character as it widens the face's own glyphs.
+    const extra = 11 * SYNTHETIC_BOLD_ADVANCE_EM;
+    const widened = (text: string, smallCaps = false) =>
+      (measurer.measure(text, { ...style('Single Weight', true), smallCaps }) -
+        measurer.measure(text, { ...style('Single Weight', false), smallCaps })) /
+      extra;
+    expect(widened('가나다')).toBeCloseTo(3, 6);
+    expect(widened('Bold가')).toBeCloseTo(5, 6);
+    // A space, U+3000, and a combining mark keep their advance.
+    expect(widened('가 나\u3000e\u0301')).toBeCloseTo(3, 6);
+    // DejaVu Sans has no small capitals, so small caps measure on the fallback too.
+    expect(widened('Small caps', true)).toBeCloseTo(9, 6);
+    const bold = style('Single Weight', true);
+    expect(measurer.caretAdvances?.('Bold가', bold)?.at(-1)).toBeCloseTo(
+      measurer.measure('Bold가', bold),
+      6
+    );
+  });
+
+  const spansOf = (runs: string) => {
     const read = readOoxmlPart(
-      `<w:document xmlns:w="${W}"><w:body><w:p>` +
-        `<w:r><w:rPr><w:rFonts w:ascii="Single Weight" w:hAnsi="Single Weight"/><w:b/></w:rPr><w:t xml:space="preserve">Single </w:t></w:r>` +
-        `<w:r><w:rPr><w:rFonts w:ascii="Two Weights" w:hAnsi="Two Weights"/><w:b/></w:rPr><w:t xml:space="preserve">Two </w:t></w:r>` +
-        `<w:r><w:rPr><w:rFonts w:ascii="Single Weight" w:hAnsi="Single Weight"/><w:b/></w:rPr><w:t xml:space="preserve">  </w:t></w:r>` +
-        `<w:r><w:rPr><w:rFonts w:ascii="Single Weight" w:hAnsi="Single Weight"/></w:rPr><w:t>plain</w:t></w:r>` +
-        `</w:p></w:body></w:document>`,
+      `<w:document xmlns:w="${W}"><w:body><w:p>${runs}</w:p></w:body></w:document>`,
       { name: '/word/document.xml', contentType: 'application/xml' }
     );
     if (!read.ok) throw new Error(read.reason);
-    const spans = linesOf(layoutSemanticDocument(read.part, 0, { measurer }))[0]!.spans;
+    return linesOf(layoutSemanticDocument(read.part, 0, { measurer }))[0]!.spans;
+  };
+  const run = (family: string, text: string, bold = true) =>
+    `<w:r><w:rPr><w:rFonts w:ascii="${family}" w:hAnsi="${family}"/>${bold ? '<w:b/>' : ''}<w:sz w:val="22"/></w:rPr>` +
+    `<w:t xml:space="preserve">${text}</w:t></w:r>`;
+
+  test('layout marks the spans whose bold is synthesized, and no blank span', () => {
+    const spans = spansOf(
+      run('Single Weight', 'Single ') +
+        run('Two Weights', 'Two ') +
+        run('Single Weight', '  ') +
+        run('Single Weight', 'plain', false)
+    );
     const marked = (text: string) => spans.find((span) => span.text === text)?.syntheticBold;
     expect(marked('Single ')).toBe(true);
     expect(marked('Two ')).toBeUndefined();
     expect(marked('  ')).toBeUndefined();
     expect(marked('plain')).toBeUndefined();
+  });
+
+  test('a blank that word spacing cannot take back splits off unmarked, at its own advance', () => {
+    // Synthesized bold leaves U+3000 and U+2003 at their advance. Paint widens every character of
+    // a marked span and takes the extra back only from U+0020 and U+00A0.
+    const marks = (spans: readonly StyleSpanRecord[]) =>
+      spans.map((span) => [span.text, span.syntheticBold === true]);
+    expect(marks(spansOf(run('Single Weight', 'Bold\u3000text')))).toEqual([
+      ['Bold', true],
+      ['\u3000', false],
+      ['text', true],
+    ]);
+    const spans = spansOf(run('Single Weight', 'Bold\u2003text'));
+    expect(marks(spans)).toEqual([
+      ['Bold', true],
+      ['\u2003', false],
+      ['text', true],
+    ]);
+    const bold = style('Single Weight', true);
+    expect(spans[0]!.box.width).toBeCloseTo(measurer.measure('Bold', bold), 6);
+    expect(spans[1]!.box.width).toBeCloseTo(measurer.measure('\u2003', bold), 6);
+    expect(spans[1]!.box.x).toBeCloseTo(spans[0]!.box.x + spans[0]!.box.width, 6);
   });
 });
