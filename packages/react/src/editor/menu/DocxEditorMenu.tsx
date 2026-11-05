@@ -119,6 +119,13 @@ export interface DocxEditorMenuProps {
    * File > Print also uses the PDF handler. Missing handlers show an error.
    */
   exporters?: ChromeExportHandlers;
+  /**
+   * Whether File > Print first asks which markup to print and whether comments print.
+   * Defaults to `true` with the packaged print dialog. A custom `popups.print` component
+   * opts in with `true` and renders the `choosing` state, or `DocxEditor.PrintDialog`
+   * without children. `popups.print: false` prints the current view without asking.
+   */
+  printSettings?: boolean;
   /** Appended after the base `docx-menubar` class. */
   className?: string;
   /** i18n resolver for row labels; without it the raw keys show (never English). */
@@ -249,6 +256,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     t,
     fileName,
     exporters,
+    printSettings,
     onOpen,
     onOpenFile,
     onSave,
@@ -274,7 +282,12 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
   // moves it, and opening a menu takes it so Escape returns focus somewhere sensible.
   const exportState = useMenuExport(editor, exporters, fileName ?? openedName ?? undefined);
   const { pending: exportPending, execute: executeExport } = exportState;
-  const printState = useMenuPrint(editor, exporters, popups?.print !== false);
+  const printState = useMenuPrint(
+    editor,
+    exporters,
+    popups?.print !== false,
+    printSettings ?? popups?.print === undefined
+  );
   const { active: printActive, execute: executePrint } = printState;
   const printPopupShown = printState.visible && popups?.print !== false;
   const [activeMenu, setActiveMenu] = useState<MenuId | null>(null);
@@ -672,6 +685,10 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
                 error: printState.error,
                 url: printState.url,
                 onClose: printState.close,
+                choosing: printState.choosing,
+                settings: printState.settings,
+                onSettingsChange: printState.changeSettings,
+                onPrint: printState.confirm,
               },
               printState.session
             )
@@ -682,6 +699,10 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
               error={printState.error}
               url={printState.url}
               onClose={printState.close}
+              choosing={printState.choosing}
+              settings={printState.settings}
+              onSettingsChange={printState.changeSettings}
+              onPrint={printState.confirm}
             />
           )
         ) : null}

@@ -4,37 +4,27 @@ description: Connect conversion packages to the File menu in React and Vue.
 category: Guides
 ---
 
-Connect conversion handlers to **File > Export** for Markdown and PDF downloads. Each export uses saved DOCX bytes without changing the document or undo history.
+Connect conversion handlers to **File > Export** for Markdown and PDF downloads. Each export converts the bytes that `save()` returns.
 
-## Try document export
+## Install converters
 
-The example converts the edited document to Markdown in the browser. Its PDF example shows server integration code.
+Editor packages do not include converters. Install the converter for each format that you enable:
 
-<ExportGuideDemo />
-
-## Install the converters
-
-Install the converter for each format your application enables. Editor packages do not include converters. Opening the editor or menu does not load them.
-
-For Markdown export, install the converter in your browser application:
+| Format   | Package                             | Runs in             | License              |
+| -------- | ----------------------------------- | ------------------- | -------------------- |
+| Markdown | `@docx-editor.dev/docx-to-markdown` | Browser or Node.js  | Apache-2.0           |
+| PDF      | `@docx-editor.dev/docx-to-pdf`      | Node.js server only | EigenPal Pro License |
 
 ```sh
+# Browser application
 npm install @docx-editor.dev/docx-to-markdown @docx-editor.dev/core
-```
-
-For PDF export, install the converter on your Node.js server:
-
-```sh
+# Node.js server
 npm install @docx-editor.dev/docx-to-pdf @docx-editor.dev/core
 ```
 
-PDF conversion requires the EigenPal Pro License. The PDF package does not run in browsers. Keep its import in server code.
+Keep PDF imports in server code, out of browser bundles. Opening the editor or menu does not load a converter.
 
-## Configure the menu
-
-Pass conversion handlers through `menu.exporters` on the packaged editor. For a composed editor, pass `exporters` to `DocxEditor.Menu` or `DocxEditorMenu`.
-
-The menu downloads `result.markdown` as continuous text without page separators, page headers, or page footers. It does not join `result.pages`.
+## Connect export handlers
 
 Create `exporters.ts` with browser Markdown conversion and a PDF endpoint:
 
@@ -66,7 +56,10 @@ export const exporters: ChromeExportHandlers = {
 };
 ```
 
-Pass the handlers to the React editor:
+Pass the handlers through `menu.exporters`:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -78,7 +71,8 @@ export function Editor({ source }: { source: Uint8Array }) {
 }
 ```
 
-Use the same handlers in Vue:
+</Framework>
+<Framework value="vue">
 
 ```vue
 <script setup lang="ts">
@@ -94,17 +88,16 @@ defineProps<{ source: Uint8Array }>();
 </template>
 ```
 
-While conversion runs, a dialog shows the export format. Select **Continue editing** to dismiss the dialog without stopping the export. Export actions remain disabled until conversion finishes. The dialog closes when the download starts.
+</Framework>
+</FrameworkTabs>
 
-The editor checks the PDF header before downloading. If conversion fails or returns another file type, the dialog shows an error. Close the dialog, then select the format again to retry.
+For a composed editor, pass `exporters` to `DocxEditor.Menu` or `DocxEditorMenu`. The menu downloads `result.markdown` as continuous text; it does not join `result.pages`. **File > Print** uses the same PDF handler; see [Print documents](/docs/2.x/guides/print).
 
-If a converter handler is missing, the error names the required package and configuration. A missing converter never falls back to another format.
-
-Use `popups.export` to replace progress and error feedback. See [Customize export feedback](/docs/2.x/guides/customize-dialogs#customize-export-feedback).
+<ExportGuideDemo />
 
 ## Convert PDF on the server
 
-Your PDF endpoint calls `exportPdf` and returns `result.bytes` with the `application/pdf` content type. This Fetch API handler runs on Node.js:
+Your endpoint calls `exportPdf` and returns `result.bytes` as `application/pdf`. This Fetch API handler runs on Node.js:
 
 ```ts
 import { exportPdf } from '@docx-editor.dev/docx-to-pdf';
@@ -119,6 +112,7 @@ export async function POST(request: Request): Promise<Response> {
     displayMode: view.displayMode ?? 'proposed',
     revisionMarkup: view.revisionMarkup,
     revisionAuthorSlots: view.revisionAuthorSlots,
+    comments: view.comments,
     fidelityPolicy: 'strict',
     useSystemFonts: false,
   });
@@ -131,21 +125,27 @@ export async function POST(request: Request): Promise<Response> {
 }
 ```
 
-The converter validates the supplied display mode and markup preferences. Return an error for invalid JSON or invalid preferences.
+The handler's second argument is a `ChromeExportView`. Forward all four fields to `exportPdf`:
 
-Configure authentication, upload limits, and conversion error responses for your application. For complete server examples, see [Integrate PDF conversion](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-pdf/docs/integrations.md).
+| Field                 | Holds                                                              |
+| --------------------- | ------------------------------------------------------------------ |
+| `displayMode`         | The review view, or the markup chosen in print settings.           |
+| `revisionMarkup`      | The resolved markup preferences captured before conversion.        |
+| `revisionAuthorSlots` | Stable author color slots from the editor session.                 |
+| `comments`            | Whether comments print. When absent, the converter shows comments. |
 
-## Forward viewer settings
+A one-argument handler still works but uses its own export defaults. The converter validates the display mode and markup preferences.
 
-The PDF handler receives a second argument of type `ChromeExportView`. It contains `displayMode` and the resolved `revisionMarkup` preferences captured before conversion. Forward both fields to the PDF server, as shown in the example. An existing one-argument handler still works, but uses its own export defaults. Printing uses the same handler and settings.
+Your server must also:
 
-## Compose export controls
+- Return an error for invalid JSON or invalid preferences.
+- Add authentication, upload limits, and error responses for your application.
 
-The shared slots are `file.exportMarkdown` and `file.exportPdf`. React and Vue expose `DocxEditor.Menu.ExportMarkdown` and `DocxEditor.Menu.ExportPdf`.
+For complete servers, see [Integrate PDF conversion](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-pdf/docs/integrations.md).
 
-Slot overrides also apply inside the **Export** submenu. Use `className` to style a row or `hidden` to remove it.
+## Build custom export controls
 
-Inside `DocxEditor.Root`, hide PDF export while you configure its server:
+The shared slots are `file.exportMarkdown` and `file.exportPdf`, exposed as `DocxEditor.Menu.ExportMarkdown` and `DocxEditor.Menu.ExportPdf`. This example hides PDF export inside `DocxEditor.Root`:
 
 ```tsx
 <DocxEditor.Menu exporters={exporters}>
@@ -155,22 +155,21 @@ Inside `DocxEditor.Root`, hide PDF export while you configure its server:
 </DocxEditor.Menu>
 ```
 
-For Vue, use `DocxEditorMenu` with the same `File` and `ExportPdf` parts.
+In Vue, use `DocxEditorMenu` with the same parts. If you replace the **File** menu with `preset={false}` (Vue: `:preset="false"`), put these parts inside a `DocxEditor.Menu.Submenu` with `labelKey="toolbar.export"`. Generic `Menu.Item` dispatches editing commands and does not call converters.
 
-Use the named export parts to connect menu handlers. `Menu.Item` dispatches editing commands and does not call converters.
+For your own download UI, call `runChromeExport(editor, format, exporters)` from `@docx-editor.dev/core/editor`. It returns the bytes, a filename extension, and a media type.
 
-If you replace the **File** menu with `preset={false}`, include these parts inside `DocxEditor.Menu.Submenu`. In Vue, use `:preset="false"`. Set the submenu's `labelKey` to `toolbar.export`. Export controls use menu handlers rather than document editing commands.
+## Limits
 
-For a custom download interface, call `runChromeExport(editor, format, exporters)` from `@docx-editor.dev/core/editor`. It returns bytes, a filename extension, and a media type. It rejects missing handlers with `ChromeExportError`, whose `code` is `missing-exporter`.
+- Export calls `save()`, which can validate form input and refresh field results with an undo step. See [Save a document](/docs/2.x/guides/loading-and-saving#save-a-document).
+- A missing handler never falls back to another format. The menu shows the required package and configuration.
+- `runChromeExport()` rejects a missing handler with `ChromeExportError`, whose `code` is `missing-exporter`.
+- The editor checks the PDF header before download. A failed conversion or another file type shows an error.
+- **Continue editing** dismisses the progress dialog without stopping the export. Export actions stay disabled until conversion finishes.
+- To replace progress and error feedback, use `popups.export`. See [Customize export feedback](/docs/2.x/guides/customize-dialogs#customize-export-feedback).
 
-## Demo behavior
+## See also
 
-The React and Vue examples forward the review view and markup preferences for PDF conversion. Markdown export uses `displayMode: 'proposed'` and includes insertions while omitting deletions.
-
-Their frontend packages install Markdown for browser conversion. Their shared server installs PDF. Selecting PDF sends the document to the same-origin `/api/convert` endpoint. The server returns the PDF without retaining the input or output.
-
-For local PDF export, run `bun run build:pdf` before `bun run dev`. The development server uses the same conversion handler as the deployed demo.
-
-**File > Print** uses the same PDF handler. For more information, see [Print documents](/docs/2.x/guides/print).
-
-For conversion options and limits, see [DOCX to Markdown](/docs/2.x/export/markdown) and [DOCX to PDF](/docs/2.x/export/pdf). For DOCX downloads, see [Loading and saving](/docs/2.x/guides/loading-and-saving#save-a-document).
+- [DOCX to Markdown](/docs/2.x/export/markdown)
+- [DOCX to PDF](/docs/2.x/export/pdf)
+- [Print documents](/docs/2.x/guides/print)

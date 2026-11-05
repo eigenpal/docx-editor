@@ -2,9 +2,11 @@
 
 # Replace as a tracked change
 
-In a browser host, find the text with `editor.findMatches` and replace one match with the `replaceMatch` command. In suggesting mode, the replacement is a tracked change as the editor's `author`. The selection and the scroll position do not move.
+Find text with `editor.findMatches` and replace a match with the `replaceMatch` command in suggesting mode. On a server, set `document.changeTrackingMode` and call `insertText(text, 'Replace')`.
 
-`findMatches` also returns matches in headers, footers, notes, and text boxes. Those matches have a `scope`. `replaceMatch` replaces text only in the story that the reader has open, and refuses the others, so the example keeps body matches: the ones without a `scope`.
+## Replace text in the editor
+
+The following button proposes a replacement for the first body match, so the body must be the open story. `replaceMatch` also accepts a match in the open header, footer, or note, and refuses text-box matches. The editor needs an `author` and `reviewModule()` in its modules, or `setEditingMode('suggesting')` refuses.
 
 ```vue
 <script setup lang="ts">
@@ -15,36 +17,48 @@ const editor = useDocxEditor();
 function run() {
   const current = editor.value;
   if (!current || !current.setEditingMode('suggesting').ok) return;
+  // Body matches have no `scope`. replaceMatch needs the match's story open.
   const match = current.findMatches(props.from, { matchCase: true }).find((found) => !found.scope);
-  if (match) current.exec({ type: 'replaceMatch', match, text: props.to });
+  if (!match) return;
+  const result = current.exec({ type: 'replaceMatch', match, text: props.to });
+  if (!result.ok) console.warn(result.code, result.reason);
 }
 </script>
 
 <template>
-  <button @click="run">Propose {{ to }}</button>
+  <button @mousedown.prevent @click="run">Propose {{ to }}</button>
 </template>
 ```
 
-Suggesting mode needs an editor `author`. Without one, `setEditingMode('suggesting')` refuses. To replace every match in one undo step, run the `replaceAllMatches` command, `{ type: 'replaceAllMatches', query, text }`, through the editor's `exec`.
+The replacement is a tracked change by the editor's `author`. The button prevents its `mousedown` default, so the selection and scroll position do not move. To replace every match in one undo step, run `{ type: 'replaceAllMatches', query, text }` through `exec`.
 
-## Replace in a headless pipeline
+## Replace text on a server
 
-In the editing API, set `document.changeTrackingMode` to `'TrackMineOnly'`, and then replace the found range with `insertText(text, 'Replace')`.
+The following example records a tracked replacement and saves the result:
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api';
 
 const runtime = await DocxEditor.createServer(bytes, { author: 'Review bot' });
-await runtime.run(async (context) => {
-  context.document.changeTrackingMode = 'TrackMineOnly';
-  const found = context.document.body.search(from, { matchCase: true });
-  found.load('items');
-  await context.sync();
-  found.items[0]?.insertText(to, 'Replace');
-  await context.sync();
-});
-const saved = await runtime.save();
-runtime.dispose();
+try {
+  await runtime.run(async (context) => {
+    context.document.changeTrackingMode = 'TrackMineOnly';
+    const found = context.document.body.search(from, { matchCase: true });
+    found.load('items');
+    await context.sync();
+    found.items[0]?.insertText(to, 'Replace');
+    await context.sync();
+  });
+  const saved = await runtime.save();
+} finally {
+  runtime.dispose();
+}
 ```
 
-Both paths save the same `w:del` and `w:ins` structure, with the same author and date format. Never turn tracking off to make a refused tracked edit succeed.
+End with `await context.sync()` to send the queued replacement. Never turn tracking off to make a refused tracked edit succeed.
+
+## See also
+
+- [Tracked changes in the editing API](https://www.docx-editor.dev/docs/2.x/editor-api/revisions)
+- [Propose an AI rewrite as tracked changes](./propose-rewrite.md)
+- [Comment on found text](./comment-on-found-text.md)

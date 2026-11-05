@@ -1,11 +1,9 @@
 ---
 title: 'Remix'
-description: 'Add a Remix DOCX editor with a mount check and React.lazy. Keeps server rendering and hydration intact while the editor loads in the browser only.'
+description: 'Add a Remix DOCX editor with a mount check and React.lazy, keeping server rendering and hydration intact.'
 category: 'Frameworks'
 seoTitle: 'Remix DOCX editor setup'
 ---
-
-This guide shows a Remix route that loads a `.docx`, keeps SSR and hydration intact, and downloads the edited file.
 
 ## Install
 
@@ -13,9 +11,9 @@ This guide shows a Remix route that loads a `.docx`, keeps SSR and hydration int
 npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
-## Mount the editor
+## Load the editor after browser mount
 
-Remix renders routes on the server by default and the editor is browser-only, so the route gates it behind a mount check plus a `lazy()` import. This is the pattern from [`examples/remix/app/routes/_index.tsx`](https://github.com/eigenpal/docx-editor/tree/main/examples/remix):
+Gate the editor behind a mount check and a `lazy()` import:
 
 ```tsx
 // app/routes/_index.tsx
@@ -37,73 +35,42 @@ export default function Index() {
 }
 ```
 
-The editor component is plain React, no framework-specific code:
+## Mount the editor
+
+The editor component imports the stylesheet and fills a container with a height:
 
 ```tsx
 // app/components/Editor.tsx
-import { useRef, useState } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
+import { DocxEditor } from '@docx-editor.dev/react';
 import '@docx-editor.dev/core/styles/editor.css';
 
 export function Editor() {
-  const editorRef = useRef<DocxEditorRef>(null);
-  const [buffer, setBuffer] = useState<ArrayBuffer | null>(null);
-
-  async function onFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) setBuffer(await file.arrayBuffer());
-  }
-
-  async function onSave() {
-    const out = await editorRef.current?.save();
-    if (!out) return;
-    const blob = new Blob([out], {
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'document.docx';
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: 8, display: 'flex', gap: 8 }}>
-        <input type="file" accept=".docx" onChange={onFileSelect} />
-        <button onClick={onSave}>Save .docx</button>
-      </div>
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <DocxEditor ref={editorRef} document={buffer ?? 'blank'} />
-      </div>
+    <div style={{ height: '100vh' }}>
+      <DocxEditor document="blank" />
     </div>
   );
 }
 ```
 
-## Why this pattern
+To open and download files, use the component from the [quickstart](/docs/2.x/quickstart).
 
-The pattern solves two problems, one for SSR hydration and one for bundling:
+## Limits
 
-- The `mounted` guard renders the same loading markup on the server and on the first client paint, so hydration never mismatches. Without it, SSR would evaluate the editor and throw when `window` is undefined.
-- `lazy()` defers the editor import until the component renders in the browser. It also separates the editor from the initial route chunk.
+- The mount guard and the lazy import solve different problems. Keep both.
+- The `mounted` guard renders the same loading markup on the server and on the first client paint, so hydration matches.
+- `lazy()` keeps the editor import behind the client boundary and out of the initial route chunk.
 
 ## Run the example
 
-The example resolves `@docx-editor.dev/*` from built output, so build the workspace packages once first:
+The [`examples/remix`](https://github.com/eigenpal/docx-editor/tree/main/examples/remix) starter needs built packages. After the [shared setup](/docs/2.x/examples#run-a-repository-starter), run:
 
 ```bash
-git clone https://github.com/eigenpal/docx-editor.git
-cd docx-editor
-bun install
-bun run build:packages
 bun run dev:remix   # http://localhost:3001
 ```
 
 ## Next steps
 
-- [Quickstart](/docs/2.x/quickstart): the load, edit, save flow in detail
-- [Loading and saving](/docs/2.x/guides/loading-and-saving): URLs, autosave, upload to your API
-- [Remix DOCX editor guide](/blog/remix-docx-editor): the detailed walkthrough
-- [Remix example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/remix)
+- [Quickstart](/docs/2.x/quickstart): Load, edit, and save a document.
+- [Loading and saving](/docs/2.x/guides/loading-and-saving): URLs, autosave, and uploads.
+- [Remix DOCX editor guide](/blog/remix-docx-editor): Detailed walkthrough.

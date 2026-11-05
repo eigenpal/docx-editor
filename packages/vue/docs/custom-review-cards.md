@@ -2,9 +2,11 @@
 
 # Custom cards in the review rail
 
-To draw your own cards, render `DocxEditorReview` with `preset` set to `false` and put your card component inside it. Your component reads the items from `useReview()`, measures each card, stacks the cards with `useStackedReviewPositions`, and converts positions to pixels with `useReviewRailMetrics()`.
+Render `DocxEditorReview` with `preset` set to `false` and put your card component inside it. The component reads items from `useReview()`, stacks measured cards with `useStackedReviewPositions`, and converts positions to pixels with `useReviewRailMetrics()`.
 
-Measure every card with a `ResizeObserver` and pass the heights in CSS pixels. Without measured heights, each card reserves only `defaultHeight`, and a taller card overlaps the next one.
+## Render custom cards
+
+The following example measures each card with a `ResizeObserver`, stacks the cards, and shows a refused decision:
 
 ```vue
 <!-- MyCards.vue -->
@@ -17,7 +19,7 @@ import {
   useStackedReviewPositions,
 } from '@docx-editor.dev/pro/vue';
 
-const { items, selectionAnchorY, accept } = useReview();
+const { items, selectionAnchorY, accept, lastRefusal } = useReview();
 const { metrics } = useReviewRailMetrics();
 // Reactive, so a new measurement restacks the cards.
 const heights = shallowReactive(new Map<string, number>());
@@ -27,19 +29,20 @@ const positions = useStackedReviewPositions(items, heights, () => ({
 }));
 const top = (y: number) => `${metrics.value.top + y * metrics.value.scale}px`;
 
-const observed = new Map<string, { el: Element; observer: ResizeObserver }>();
+const observed = new Map<string, { el: HTMLElement; observer: ResizeObserver }>();
 function measure(key: string, el: unknown) {
+  const node = el as HTMLElement | null;
   const current = observed.get(key);
-  if (current?.el === el) return;
+  if (current?.el === node) return;
   current?.observer.disconnect();
   observed.delete(key);
-  if (!(el instanceof HTMLElement)) {
+  if (!node) {
     heights.delete(key);
     return;
   }
-  const observer = new ResizeObserver(() => heights.set(key, el.offsetHeight));
-  observer.observe(el);
-  observed.set(key, { el, observer });
+  const observer = new ResizeObserver(() => heights.set(key, node.offsetHeight));
+  observer.observe(node);
+  observed.set(key, { el: node, observer });
 }
 onBeforeUnmount(() => observed.forEach(({ observer }) => observer.disconnect()));
 </script>
@@ -53,6 +56,7 @@ onBeforeUnmount(() => observed.forEach(({ observer }) => observer.disconnect()))
   >
     {{ item.text }}
     <button v-if="item.kind === 'revision'" @click="accept(item)">Accept</button>
+    <p v-if="lastRefusal?.key === item.key">{{ lastRefusal.code }}</p>
   </div>
   <DocxEditorReview.Draft :top="metrics.top + (selectionAnchorY ?? 0) * metrics.scale" />
 </template>
@@ -73,22 +77,43 @@ import MyCards from './MyCards.vue';
 </template>
 ```
 
-A plain `Map` is not reactive, so writes to it would not restack the cards. Use `shallowReactive(new Map())`, or a ref that you replace on each change.
+A plain `Map` is not reactive. Use `shallowReactive(new Map())`, or a ref that you replace on each change.
 
-## Root parts and card parts
+`accept` returns `false` when the editor refuses, and `lastRefusal` names the item and the diagnostic code. `DocxEditorReview` already announces each refusal in a live region, so show it in the card as plain text. For a translated sentence, call `useReviewRefusalMessage()`.
 
-`DocxEditorReview` finds its parts among its own children by element type.
+## Position cards and drafts
 
-- **Root parts** are `List`, `Markers`, `AddComment`, `Draft`, and `Balloon`. Put them as direct children of `DocxEditorReview`. Fragments are transparent in React and in Vue. The rail gives these parts geometry that only it can compute, such as the comment button's `top`. A root part inside your own wrapper component is not a part. It renders as ordinary content, without that wiring.
-- **Card parts** are `Card`, `Empty`, and the parts inside a card, such as `Author`, `Summary`, `Accept`, and `Reply`. Put them inside `DocxEditorReview.List`.
+Convert a layout position to CSS pixels with `metrics.top + position * metrics.scale`.
 
-With `preset` set to `false`, the rail adds no defaults. Root parts that you pass keep their wiring. Every other child renders as is inside the rail element, where `useReviewRailMetrics()` reads the rail's own measurement.
+| Input to `useStackedReviewPositions` | Description |
+| --- | --- |
+| `heights` | Measured card heights in CSS pixels, by item key. A card without a height reserves `defaultHeight`, and a taller card overlaps the next one. |
+| `scale` | `metrics.scale`, CSS pixels per layout point. |
+| `defaultHeight` | The height to reserve before a card is measured. |
 
-## Position the compose box
+`DocxEditorReview.Draft` renders only while a comment draft is open. Without `top`, it takes the packaged stack's position, so pass `top` from your own stack. To keep the box clear of your cards, add an entry at `selectionAnchorY` to the list that you stack, in document order.
 
-`DocxEditorReview.Draft` renders only while a comment draft is open. A draft opens from `DocxEditorReview.AddComment` or from the `review.addComment` toolbar control. You can place `Draft` in either of these places:
+## Place review parts
 
-- As a direct child of `DocxEditorReview`.
-- Inside your own card component, as in the example. It still renders only while the draft is open.
+`DocxEditorReview` finds its parts among its own children by element type. Fragments are transparent in React and Vue.
 
-Without `top`, the box sits where the packaged card stack puts it. That position comes from the packaged cards, not yours, so when you render your own cards, pass `top` from your own stack. In the narrow compact rail, the box takes the compact card's `left` in both cases, so it does not overflow the marker strip. The example places the box at the selection's anchor. To keep it clear of your cards, add an entry with the key of your choice and the anchor `selectionAnchorY` to the list that you pass to `useStackedReviewPositions`, in document order.
+| Part | Placement |
+| --- | --- |
+| `List`, `Markers`, `AddComment`, `Balloon` | Direct children of `DocxEditorReview`. Inside your own wrapper, a part renders as plain content without its geometry. |
+| `Draft` | A direct child, or inside your own card component. Inside a custom stack, pass `top` explicitly. |
+| `Card`, `Empty`, and card parts such as `Author`, `Summary`, `Accept`, and `Reply` | Inside `DocxEditorReview.List`. |
+
+With `preset` set to `false`, the rail adds no defaults, but recognized parts keep their wiring. Other children render inside the rail element.
+
+## Limits
+
+- Disconnect each observer when its card unmounts or its item changes.
+- In React, keep the heights map reference-stable. In Vue, keep it reactive.
+- In the compact rail, `metrics.compact` is `true`. Place cards at `metrics.compactCardLeft`; `Draft` does this itself.
+- Keep the column hidden while `metrics.left` is `null`.
+
+## See also
+
+- [Review cards](https://www.docx-editor.dev/docs/2.x/customization/review-cards)
+- [Tracked changes](https://www.docx-editor.dev/docs/2.x/pro/tracked-changes)
+- [Accept or reject without scrolling](./accept-reject-without-scrolling.md)

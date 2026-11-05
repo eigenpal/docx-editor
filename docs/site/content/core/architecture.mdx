@@ -1,85 +1,68 @@
 ---
 title: 'Architecture'
-description: 'How the editor renders DOCX with Word fidelity: one canonical OOXML tree, a DOM-free layout pass, and painted pages that are themselves the editable surface.'
+description: 'How the editor renders DOCX: one canonical OOXML tree, a DOM-free layout pass, and painted pages that are the editable surface.'
 category: 'Reference'
 ---
 
-There is one document model and one pipeline:
+The engine has one document model and one pipeline. The canonical OOXML tree owns document state; everything else is a projection of it.
 
-```text
-bytes → bounded OPC/XML read → canonical OOXML tree → layout → painted pages → serialize
+## Choose an engine entry point
+
+| Goal                             | Import                                                |
+| -------------------------------- | ----------------------------------------------------- |
+| Create and mount an editor       | `createDocxEditor` from `@docx-editor.dev/core`       |
+| Build an adapter                 | `@docx-editor.dev/core/editor`                        |
+| Read or write the canonical tree | `@docx-editor.dev/core/store`                         |
+| Lay out pages without a DOM      | `@docx-editor.dev/core/layout`                        |
+| Automate documents on a server   | [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) |
+
+For the full subpath table, see [Core package overview](/docs/2.x/core#choose-an-import).
+
+## Follow the document pipeline
+
+Each document moves through one direction:
+
+```mermaid
+flowchart LR
+  A[DOCX bytes] --> B[Bounded OPC/XML read]
+  B --> C[Canonical OOXML tree]
+  C --> D[DOM-free layout]
+  D --> E[Painted pages]
+  C --> F[Serialize to DOCX]
 ```
 
-What you see painted and what an edit mutates are the same tree, so there is no separate view model to synchronize.
+Edits go back into the tree as transactions. Layout and paint then run again for the changed blocks.
 
-## Architecture boundaries
+## Respect package boundaries
 
 | Boundary | Owns | Must not own |
 | --- | --- | --- |
 | `contracts` | Public engine types and interfaces | Runtime implementation or state |
 | `store` | Canonical trees, package reads and writes, indexes, and transactions | DOM or ProseMirror state |
-| `layout` | DOM-free pagination and interaction geometry | Browser layout or authored state |
+| `layout` | DOM-free pagination and interaction geometry, in points | Browser layout or authored state |
 | `output` | Painted pages from layout records | Document mutation |
-| `binding` | The ProseMirror projection and conversion of edits into tree operations | Canonical document authority |
-| `automation` | Transport-neutral host operations for browser and server automation | DOM or editor chrome |
-| `editor` | The public editor facade, surface input, caret, and chrome registry | A second document model |
+| `binding` | The ProseMirror projection and conversion of edits into tree operations | Document state |
+| `automation` | Transport-neutral operations for browser and server automation | DOM or editor chrome |
+| `editor` | The editor facade, surface input, caret, and chrome registry | A second document model |
 | `react` and `vue` | Providers, hooks or composables, and framework chrome | Editing state |
 
-The package boundary keeps one copy of `@docx-editor.dev/core` in an application. Both adapters use it as a peer dependency.
+## Understand editing and saving
 
-## The canonical tree
+- **One source of truth.** The canonical tree owns document state. The painted DOM and the ProseMirror projection do not.
+- **Painted pages are the surface.** The pages are `contenteditable`, but the engine prevents browser mutations and re-expresses them as tree operations.
+- **One write path.** Every edit is a transaction addressed by node id and character offset. Package operations, such as creating a header, address a section index. Undo, commands, and the editing API share this path.
+- **Typed and generic nodes.** Paragraphs, runs, and tables are typed. Other elements stay as lossless generic nodes. A known element in an invalid position becomes generic.
+- **Unknown content never blocks editing.** A document with unrecognized extensions opens, accepts edits, and saves.
+- **Incremental layout.** Per-block cache keys and flow checkpoints limit work to changed content. A pass with no change returns the previous pages by identity.
+- **Structural preservation.** Saving re-emits each parsed XML part from the tree, including custom XML and unknown extensions. Modeled XML re-emits normalized; only non-XML parts, such as media and embedded fonts, keep byte identity.
 
-Reading a `.docx` produces one tree per XML part, up to a bounded part count. Non-XML parts stay as bytes and are never parsed. Nodes are **typed** where layout needs them (the paragraph, run, and table vocabulary) and **generic** everywhere else, preserving the element verbatim.
+## Limits
 
-Two consequences:
+- Applications must resolve one copy of `@docx-editor.dev/core`. Both adapters take it as a peer dependency.
+- Preservation of generic content does not mean the engine renders it. For rendering support, see [DOCX fidelity](/docs/2.x/docx-fidelity).
 
-- Content the engine does not model is carried, not dropped. A known element in an invalid position demotes to generic rather than erroring.
-- Unknown content never blocks editing. A document full of extensions the engine does not recognize opens, accepts edits, and saves.
+## See also
 
-Every write is a transaction over the tree. Content edits are addressed by node id and character offset; package-level operations such as creating a header or setting section properties are addressed by section index. That is the only write path. There is no second way to mutate a document, so undo, the editing API, and every command use the same write path.
-
-## Layout
-
-The layout pass is DOM-free. It takes the tree and a text measurer and returns positioned pages, working in the document's own units (twips, half-points, EMUs) rather than approximating from browser layout.
-
-Because it is not constrained by what `contenteditable` can express, it lays text out according to Word layout rules:
-
-- Pagination is computed, not approximated: lines are measured, blocks split where Word splits them, and tables fragment across page boundaries with Word-compatible border treatment at the split.
-- Paragraph fidelity resolves through the real style cascade: `w:spacing` line rules, first-line and hanging indents, `w:contextualSpacing`, paragraph borders, tab stops and leaders, list markers from `numbering.xml`, and table styles through their `basedOn` chain gated by `w:tblLook`.
-- Headers and footers lay out once per variant and attach per page. Editing one uses the same edit path as body content.
-
-The pass is incremental: per-block cache keys and flow checkpoints mean a keystroke re-lays out what changed, and a pass with no changes returns the previous pages by identity.
-
-## Paint and interaction
-
-The painted pages are `contenteditable`, but the DOM is a non-authoritative rendering. Browser mutations are prevented and re-expressed as tree operations, so the browser cannot insert markup inside your document.
-
-HTML copy preserves right-to-left table columns without changing cell text direction. Nested tables keep their own direction. HTML paste reads explicit table direction and maps physical borders and margins back to the document grid.
-
-The editor also paints its own caret, from layout geometry rather than from the DOM, which is why an empty paragraph gets a caret. On failure it falls back: range selection, IME composition, or a position it cannot place all restore the native caret instead of showing no caret.
-
-Selection maps through paragraph identity and offsets. It does not use DOM traversal.
-
-| Page furniture | Layout behavior | Interaction behavior |
-| --- | --- | --- |
-| Headers and footers | Lay out by section and page variant | Use scoped editing controls |
-| Page numbers and other furniture | Attach to each painted page | Stay non-editable and outside selection |
-| Body content | Flows around reserved furniture bands | Uses the normal caret and selection model |
-
-## Saving
-
-Every parsed XML part is re-emitted from the canonical tree with structural fidelity, including custom XML and unknown extensions. Package payloads such as embedded fonts, media, and VBA binaries pass through untouched.
-
-That is what "structural fidelity" means here: unsupported XML and package payloads survive editing and save without loss. Two oracles gate it in CI: a canonical fingerprint over the tree, and a save-and-reopen semantic digest.
-
-## Adapters
-
-`@docx-editor.dev/core` contains the engine and no framework code. An adapter mounts the engine and provides framework-specific state access and chrome. `@docx-editor.dev/react` and `@docx-editor.dev/vue` hold no editing state.
-
-Packaged and custom controls consume the same public engine contract.
-
-## Next steps
-
-- [Core package overview](/docs/2.x/core): entry points and the `Editor` contract
-- [Word fidelity](/docs/2.x/word-fidelity): what the fidelity claim covers, and its limits
-- [Composition](/docs/2.x/react/composition): building on the adapter
+- [Core package overview](/docs/2.x/core)
+- [DOCX fidelity](/docs/2.x/docx-fidelity)
+- [Editor mount modes](/docs/2.x/core/mount-modes)

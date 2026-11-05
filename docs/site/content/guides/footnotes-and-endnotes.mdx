@@ -1,118 +1,72 @@
 ---
 title: 'Footnotes and endnotes'
-description: 'Insert, edit, convert, and delete DOCX notes while preserving Word numbering and page placement.'
+description: 'Insert, read, convert, and delete DOCX footnotes and endnotes.'
 category: 'Guides'
 seoTitle: 'DOCX footnotes and endnotes'
 ---
 
-The editor renders Word footnotes and endnotes in their document locations. You can edit note text through the same document surface.
+The editor renders DOCX footnotes and endnotes in their document locations and edits note text on the same surface.
 
 ## Insert a note
 
-Open the **Insert** menu. Select **Footnote** or **Endnote**.
+Run `insertNote` to add a reference at the caret and open the new note body:
 
-The editor adds a reference at the caret and creates the matching note body. It then opens that note body for editing.
+```ts
+editor.exec({ type: 'insertNote', noteKind: 'footnote' });
+```
 
-React and Vue use the same `insert.footnote` and `insert.endnote` chrome slots. Custom chrome can run these shared commands.
+| `noteKind` | Chrome slot       |
+| ---------- | ----------------- |
+| `footnote` | `insert.footnote` |
+| `endnote`  | `insert.endnote`  |
 
-## Edit a note
+React and Vue share these slots. The **Insert** menu offers the same commands. In suggesting mode, the inserted reference is tracked.
 
-Select a note reference to enter its note scope. Text, lists, tables, content controls, pictures, fonts, comments, and bookmarks work inside that scope.
+## Read and edit notes
 
-Text typed after a body reference takes the formatting of the text before the reference, including deleted text in a suggestion and a run that holds only a tab. If no text comes before the reference, the typed text takes the formatting of the text after it. If the paragraph has no other text, it takes the paragraph mark's formatting. If the reference ends a hyperlink, the typed text goes after the link with no direct formatting. Typed text never inherits the reference style or superscript, and the toolbar shows the formatting that typing applies. The text stays outside the reference run, so deleting the note keeps that text. Explicit caret formatting still applies. This rule also applies in suggesting mode and through `Paragraph.insertText` in the Editing API.
+Use the Office.js-shaped `Body.footnotes` and `Body.endnotes` collections in automation. Read note text in two batches:
 
-Comments need the review module and an EigenPal Pro License.
+```ts
+const notes = await runtime.run(async (context) => {
+  const collection = context.document.body.footnotes;
+  collection.load('items');
+  await context.sync();
+  for (const note of collection.items) note.load(['type', 'text']);
+  await context.sync();
+  return collection.items.map((note) => ({ type: note.type, text: note.text }));
+});
+```
 
-Use `useNoteScopeState()` in React or Vue to read the active note scope.
+Use `note.body` to edit a note. Separate writes to different notes with `context.sync()`. `Document.footnotes` and `Document.endnotes` are DocxEditor extensions, outside the Office.js document model.
 
-`DocxEditor.NotesChrome` and `DocxEditorNotesChrome` provide packaged note controls for React and Vue.
+In the browser, these APIs expose the active note:
+
+| API                      | Purpose                                      |
+| ------------------------ | -------------------------------------------- |
+| `useNoteScopeState()`    | Reads the active note scope in React or Vue. |
+| `DocxEditor.NotesChrome` | Packaged note controls for React.            |
+| `DocxEditorNotesChrome`  | Packaged note controls for Vue.              |
+
+Text, lists, tables, pictures, and bookmarks work inside a note. Comments need the review module and an EigenPal Pro License.
 
 ## Convert or delete a note
 
-The note controls can convert a footnote to an endnote. They can also convert an endnote to a footnote.
+The packaged note controls convert a footnote to an endnote, or an endnote to a footnote. In edit mode, deleting a note removes its reference and body, then renumbers later notes.
 
-In edit mode, deleting a note removes its reference and note body together. The editor updates later note numbers after the operation.
+In automation, `NoteItem.delete()` removes the note and its references. Run note deletion alone in its own sync, after all pending reads and writes.
 
-Suggesting mode refuses direct note deletion. Delete the reference to propose the deletion.
-
-The Editing API can enumerate, read, navigate, and delete notes. Use `document.footnotes` and `document.endnotes`.
-
-## Placement and pagination
-
-The editor supports Word note positions such as page bottom, beneath text, section end, and document end.
-
-### Numbering and position
-
-Each section numbers its notes from its own note properties: the number format, start value, restart rule, and footnote position. If a section leaves a value unset, it uses the default. Footnotes use decimal numbers and endnotes use lowercase Roman numerals, both start at 1 and number continuously, and footnotes go at the page bottom. The document-wide note properties in `settings.xml` do not change numbering.
-
-The endnote position applies to the whole document. If you change it for one section, the change applies to every section.
-
-If you apply note properties to the whole document, the editor writes them to every section and to `settings.xml`. Values that you do not change keep their current values in each section.
-
-A note number is the start value of its section plus the position of the note in its numbering sequence. With continuous numbering, the sequence covers the whole document, so a section that starts at 10 after two earlier notes numbers its notes 12 and 13.
-
-### References in body paragraphs
-
-A footnote starts with its reference line when enough note text fits below it. The note can continue on the next page even when it fits whole on a fresh page. Note paragraphs respect keep-lines (`w:keepLines`) and widow-control (`w:widowControl`) settings. Without widow control, one note line can start below the reference.
-
-This behavior applies to full-width body paragraphs in single-column sections, in every compatibility mode. Notes containing tables or keep-with-next groups require room for the whole note before it starts.
-
-The note area can use trailing space from the last body line's `auto` or `atLeast` line spacing. Each line whose footnote starts on the same page keeps its full height above the note area. This rule applies in every column.
-
-### References in tables
-
-A reference inside a table keeps its footnote with the row that holds it. Later rows move to the next page to make room.
-
-If the whole note fits below its row, both stay on that page. A longer note can start there when at least two note lines fit. The row stays, and the remaining note text continues on the next page. Otherwise, the row moves with the note.
-
-A row can split below the reference if every cell has a suitable break. The note starts below that break, and the remaining row content continues on the next page.
-
-These settings restrict row splitting:
-
-- A row with `w:cantSplit` or an exact height stays whole when it fits on a page.
-- In compatibility mode 15 and later, cell paragraphs also respect `w:keepLines` and widow control.
-- A row taller than a full page still splits. Its note starts below the reference line.
-
-Some table references reserve note space below the whole table:
-
-- References in header rows.
-- References in vertically merged cells.
-- References in positioned tables.
-- References in rows that keep with the next row.
-
-### Space before a reference
-
-When a reference moves to the next page, preceding paragraphs can return to the current page if they fit. Paragraphs that keep with the reference paragraph move with it. Multi-column sections retain the reserved space instead.
-
-Widow control can also retain this space when the reference occupies the paragraph's second line. This applies when the note cannot start on the current page. If both opening lines already fit, they can remain while the whole note starts on the next page.
-
-Lines before a held reference can return to the previous page when widow and orphan rules allow. The final line also needs room for paragraph spacing after it above the note area.
-
-When a split paragraph returns to the previous page, its earlier fragment counts toward the space above each reference. If the reference leaves no note space, the editor keeps the previous split.
-
-A reference paragraph that keeps with the next paragraph also reserves notes from that paragraph's required opening. Later references outside that opening do not block its return. An opening without a reference adds no note reserve. In supported single-column modes, a continuation can return when its required opening and complete attached notes fit. Paragraph keep settings still apply.
-
-### Continued notes
-
-A note that exceeds a full note column continues across pages. You can select and edit its text on each page.
-
-Footnotes that continue onto another page reserve the document's continuation notice below their text. Empty notice paragraphs reserve their measured height. These notices are read-only.
-
-A notice that exceeds the available page height reports `note-continuation-notice-height-cap`. The note text still continues. Section-end and document-end notice placement remains unsupported.
-
-When a live header changes the body area, the editor recalculates footnote placement using the available space.
+Suggesting mode refuses direct note deletion. Delete the reference to propose note removal.
 
 ## Limits
 
-Note editing has these limits:
-
+- Automation does not create notes or format reference numbers.
 - Notes inside headers and footers are not supported.
-- Suggesting mode tracks the inserted note reference.
-- Suggesting mode requires reference deletion to propose note removal.
-- Imported note revisions remain part of the round-trip document.
+- Imported note revisions stay in the round-trip document.
+- A continuation notice taller than the page reports `note-continuation-notice-height-cap`. The note text still continues.
+- Numbering, placement, table rows, and continuation notices follow [DOCX fidelity](/docs/2.x/docx-fidelity#note-numbering).
 
-## Next steps
+## See also
 
-- [Fields and cross-references](/docs/2.x/guides/fields): Review `NOTEREF` behavior.
-- [Tracked changes](/docs/2.x/pro/tracked-changes): Review revision support in other stories.
-- [Editing API compatibility](/docs/2.x/editor-api/office-js-api): Use note collections in code.
+- [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories#read-footnotes-and-endnotes)
+- [Fields and cross-references](/docs/2.x/guides/fields)
+- [Tracked changes](/docs/2.x/pro/tracked-changes)

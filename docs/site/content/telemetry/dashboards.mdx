@@ -6,18 +6,11 @@ category: 'Telemetry'
 
 <Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
 
-Two Grafana dashboards report editor performance and collaboration server activity. They include measurements without predefined targets. Use a few weeks of your traffic to set targets and alert thresholds.
+Two Grafana dashboards report editor performance and collaboration server activity. They have no predefined targets. Use a few weeks of your traffic to set targets and alert thresholds.
 
-![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, metric sources reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](./images/editor-experience.png)
+## Download the dashboards
 
-## Download
-
-| File | What it is | Download |
-| --- | --- | --- |
-| `editor-experience.json` | Grafana dashboard: input delay, engine work, opens, sessions, edits, saves, and refused edits and tracked changes. | [editor-experience.json](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/editor-experience.json) |
-| `collaboration.json` | Grafana dashboard: server state, rooms and people, memory, server work, client status, and refusals. | [collaboration.json](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/collaboration.json) |
-
-To download both files from a terminal, run:
+The following commands download both dashboards:
 
 ```bash
 BASE=https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability
@@ -25,26 +18,18 @@ curl -LO "$BASE/grafana/editor-experience.json"
 curl -LO "$BASE/grafana/collaboration.json"
 ```
 
-The [observability assets](https://github.com/eigenpal/docx-editor/tree/main/assets/observability) directory contains these files and their generation script.
-
-## Before you import
-
-The dashboards read Prometheus metrics. For every name, see [Metrics](/docs/2.x/telemetry/metrics).
-
-- Editor metrics come through your OpenTelemetry SDK and an OpenTelemetry Protocol (OTLP) collector or Prometheus OTLP receiver. Follow [Send to OpenTelemetry](/docs/2.x/telemetry/opentelemetry) and enable the areas in the following example.
-- Server metrics come from your collaboration server's `/metrics` endpoint. For setup instructions, see [Collaboration servers](/docs/2.x/telemetry/servers).
-
-The dashboard filters use these labels:
-
-| Label | Comes from |
+| File | Panels |
 | --- | --- |
-| `job` | `service.name` on your OpenTelemetry SDK, or the scrape job of your server. |
-| `deployment_environment` | `deployment.environment`, which you add with `attributes` and `metricLabels`. |
-| `app_version` | `app.version`, which you add with `attributes` and `metricLabels`. |
-| `docx_editor_version` | Added by the telemetry package to every editor metric. |
-| `docx_editor` | The scrape target label that marks a collaboration server. |
+| [`editor-experience.json`](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/editor-experience.json) | Input delay, engine work, opens, sessions, edits, saves, and refused edits and tracked changes. |
+| [`collaboration.json`](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/collaboration.json) | Server state, rooms and people, memory, server work, client status, and refusals. |
 
-Add the environment and the app version to the editor metrics, and record the areas that the panels read:
+The [observability assets directory](https://github.com/eigenpal/docx-editor/tree/main/assets/observability) also holds the generation script.
+
+## Supply required metrics and labels
+
+The dashboards read Prometheus-compatible metrics. Editor metrics reach Prometheus through your OpenTelemetry SDK and an OpenTelemetry Protocol (OTLP) collector or receiver. Server metrics come from the `/metrics` endpoint described in [Collaboration servers](/docs/2.x/telemetry/servers).
+
+The following client records every area the panels read and adds the filter labels:
 
 ```ts
 import { createTelemetry } from '@docx-editor.dev/telemetry';
@@ -68,7 +53,15 @@ export const telemetry = createTelemetry({
 });
 ```
 
-Add the `docx_editor` target label to each collaboration server. The **Collaboration** server panels show only targets with this label, including servers that fail every scrape. Client panels use editor metrics and respond only to the **Client app** filter:
+| Label | Comes from |
+| --- | --- |
+| `job` | `service.name` on your OpenTelemetry SDK, or your server's scrape job. |
+| `deployment_environment` | `deployment.environment` in `attributes` and `metricLabels`. |
+| `app_version` | `app.version` in `attributes` and `metricLabels`. |
+| `docx_editor_version` | Added by the telemetry package to every editor metric. |
+| `docx_editor` | The scrape target label that marks a collaboration server. |
+
+Add the `docx_editor` target label to each collaboration server. Server panels show only labeled targets, including servers that fail every scrape:
 
 ```yaml
 scrape_configs:
@@ -79,43 +72,73 @@ scrape_configs:
           docx_editor: collaboration
 ```
 
-## Import the dashboards
+Client panels use editor metrics and respond only to the **Client app** filter.
 
-1. In Grafana, go to **Dashboards** > **New** > **Import**, and upload `editor-experience.json`.
+## Import into Grafana
+
+1. Go to **Dashboards** > **New** > **Import**, and upload `editor-experience.json`.
 2. Repeat for `collaboration.json`.
-3. Open each dashboard, and select your Prometheus data source in **Data source**.
-4. Select the **App** and **Environment** values. On **Collaboration**, select the **Server** job and its instances.
+3. In each dashboard, select your Prometheus source in **Data source**.
+4. Select **App** and **Environment**. On **Collaboration**, select the **Server** job and its instances.
 
-## Editor experience
+![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, metric sources reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](./images/editor-experience.png)
 
-The first row summarizes input delay, presses over 200 ms, open success rate, and median open time. It also shows reporting metric sources, unexpected refusals per 1,000 presses, and dropped telemetry events.
+Every code in a dashboard table links to its hint in [Diagnostics](/docs/2.x/guides/diagnostics).
 
-The remaining rows show:
+## Interpret missing or capped values
 
-- **Interaction:** input delay over time and presses by delay band. Compare delay by document size, app version, editor version, or the same time a week earlier.
-- **Engine work:** engine layout and paint passes by duration band, and layout time by document size.
-- **Documents:** opens per minute, open time, and refused files by reason.
-- **Tracked changes:** edits refused while suggesting, by reason and source. Skipped accept, reject, and reassign requests appear by reason, operation, and change kind.
-- **All refused edits:** refusal codes by source, font substitutions, and dropped telemetry.
+| Panel shows | Meaning |
+| --- | --- |
+| No input delay or layout value | Fewer than 20 samples in the window. |
+| No open-time value | Fewer than 5 opens in the window. |
+| A percentile of 1 second | The value falls in the overflow band above 1 second, the highest finite boundary. Use **Presses by delay band**. |
 
-Every code in a table links to its hint in [Diagnostics](/docs/2.x/guides/diagnostics).
+Percentiles are estimates from timing bands. A value from few samples follows one slow press or one large file.
 
-![The tracked changes and refused edits rows of the Editor experience dashboard: refusals while suggesting, the share of refusals while suggesting, refused tracked changes by reason and by source, and all refused edits by reason and by source.](./images/editor-tracked-changes.png)
+## Query the metrics
 
-Input delay percentiles are estimates from timing bands. The highest finite boundary is 1 second. A percentile shown as 1 second falls in the band above 1 second. In that case, use **Presses by delay band**.
+The following Prometheus queries give sessions per day, active editing hours per day, edit failure rate, and save success rate:
 
-A percentile or share from a few samples follows one slow press or one large file. Input delay and layout values appear only after 20 samples in the window, and open time values after 5 opens. Until then, the panel shows no value.
+```text
+sum(increase(docx_editor_editor_sessions_total{phase="start"}[1d]))
 
-## Collaboration
+sum(increase(docx_editor_editor_active_time_seconds_total[1d])) / 3600
 
-The first row summarizes server availability, successful room stores, refused connections, client errors, and room limit usage. Other rows show room activity, participants, connections, memory, resource usage, room age, and idle time. They also show load and store times, updates, client status changes, and refusal reasons.
+sum(increase(docx_editor_edit_rejections_total[1d]))
+  / (sum(increase(docx_editor_edits_total[1d])) + sum(increase(docx_editor_edit_rejections_total[1d])))
 
-![The Collaboration dashboard: server up, stores succeeding, refused connections, client errors, room limit usage, rooms and people now, and charts of rooms, people, connections, room memory, room limit usage, and room age and idle time.](./images/collaboration.png)
+sum(increase(docx_editor_document_saves_total{outcome="saved"}[1d]))
+  / sum(increase(docx_editor_document_saves_total[1d]))
+```
 
-Participant totals include all selected server instances. If instances share rooms through Redis, select one instance to avoid counting the same people more than once.
+`sum(rate(docx_editor_editor_active_time_seconds_total[5m]))` approximates the number of people editing at once.
 
-## Try the dashboards locally
+The following queries estimate the 95th percentile input delay per page bucket, and the share of presses over 200 ms:
 
-The [telemetry stack example](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-stack) runs an OpenTelemetry collector, Prometheus, Jaeger, and Grafana with these dashboards. Its simulation script generates editing activity to populate the dashboards. Use it with the [single-user example](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-single-user) and the [collaboration example](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-collaboration).
+```text
+histogram_quantile(0.95, sum by (le, pages) (rate(docx_editor_editor_interaction_duration_seconds_bucket[10m])))
 
-To report a problem with the dashboards, [open an issue](https://github.com/eigenpal/docx-editor/issues/new/choose).
+1 - sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{le="0.2"}[10m]))
+  / sum(rate(docx_editor_editor_interaction_duration_seconds_count[10m]))
+```
+
+Per-room histograms record one entry per room in each sample. The following queries give the 95th percentile and the mean room memory:
+
+```text
+histogram_quantile(0.95, rate(docx_editor_collab_room_memory_bytes_bucket[5m]))
+
+rate(docx_editor_collab_room_memory_bytes_sum[5m])
+  / rate(docx_editor_collab_room_memory_bytes_count[5m])
+```
+
+## Limits
+
+- With the Redis extension, instances that share rooms report overlapping participants. Never sum participants across them.
+- Selecting one instance is exact only when every instance holds the same rooms. Otherwise it gives a lower bound. For per-room aggregation, see [Rooms, people, and memory](/docs/2.x/telemetry/rooms).
+- The [telemetry stack example](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-stack) runs a collector, Prometheus, Jaeger, and Grafana with these dashboards and simulated activity.
+
+## See also
+
+- [Metrics](/docs/2.x/telemetry/metrics)
+- [Send to OpenTelemetry](/docs/2.x/telemetry/opentelemetry)
+- [Collaboration servers](/docs/2.x/telemetry/servers)

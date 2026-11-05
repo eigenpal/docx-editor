@@ -1,130 +1,15 @@
 ---
 title: 'Images and drawings'
-description: 'Inline and floating DrawingML pictures in DOCX: supported formats, wrap modes, authoring them from React or Vue, accessibility, and the security boundaries.'
+description: 'Insert, read, and edit DOCX pictures and text boxes from React or Vue, and replace unsupported drawing previews.'
 category: 'Guides'
 seoTitle: 'Images and floating pictures'
 ---
 
-The editor displays inline and floating DrawingML pictures (`w:drawing` with `pic:pic`). React and Vue provide controls to insert pictures, change wrapping, resize pictures, and edit alternative text. Saving preserves the picture markup and media.
+The editor displays inline and floating DrawingML pictures (`w:drawing` with `pic:pic`). React and Vue ship controls to insert pictures, change wrapping, resize, and edit alternative text. Saving preserves the picture markup and media.
 
-The editor releases image elements and object URLs when their pages leave the painted viewport. Pages kept visible for the selection retain their images. Returning to a page recreates its images from the original package resources. Saving preserves the original media.
+## Insert an image
 
-Pass an `ImageDecodePort` through `imageDecodePort` on `DocxEditor` to use a custom image decoder in React or Vue. You can also set this option on each adapter's root component.
-
-## Supported formats
-
-| Format | Insert | Layout & paint | Round-trip |
-| --- | --- | --- | --- |
-| PNG, JPEG, GIF | Yes, `normalizeImageBytes` preflight | Full decode at authored `wp:extent` | Original media preserved unless replaced |
-| BMP, WebP | No insert | Full decode at authored `wp:extent` | Original media preserved |
-| SVG | No insert | Painted at authored `wp:extent` | Original media preserved |
-| TIFF, EMF, WMF | No insert | Rasterized when conversion succeeds; labeled placeholder otherwise. EMF and WMF in PDF export need the drawing module. | Preserved; no zero-click fetch |
-| External `r:link` / `TargetMode="External"` | No auto-load | Placeholder + preserved rel | Preserved; explicit user gesture to embed |
-
-Insert accepts PNG/JPEG/GIF only. Other payloads stay in the package and affect pagination through their authored extent.
-
-The editor refuses picture insertion while another picture is selected. Place the caret in text before inserting another picture. The toolbar explains this restriction when it disables picture insertion.
-
-The editor identifies PNG, JPEG, GIF, BMP, and WebP images from their bytes. These images can render even when the document declares another format from this list. For example, JPEG bytes declared as PNG still display. Image validation and size limits still apply. Saving preserves the original bytes and content-type declaration.
-
-This recovery does not cover declarations that confuse these formats with SVG, TIFF, EMF, or WMF. Those mismatches show a placeholder.
-
-JPEG validation accepts large EXIF and ICC metadata segments before the frame header. Intrinsic dimensions account for EXIF orientation, matching the browser's decoded image. The original photo bytes and the authored drawing extent remain unchanged.
-
-BMP and WebP decode in the browser and paint like PNG or JPEG. BMP support includes top-down bitmaps and the 12-byte `BITMAPCOREHEADER`. WebP support includes lossy, lossless, and extended containers.
-
-TIFF, EMF, and WMF paint when conversion to a validated raster succeeds. The editor and PDF export convert TIFF without extra setup. The editor rasterizes EMF and WMF without extra setup. PDF export of EMF and WMF requires the drawing module from `@docx-editor.dev/pro/drawing`, which `@docx-editor.dev/docx-to-pdf` includes. For more information, see [Advanced drawing rendering](/docs/2.x/pro/drawing). The original media stays unchanged in the package through save. When conversion is unavailable, declined, or fails, the image keeps its extent and shows a labeled placeholder.
-
-SVG is painted through an `<img>`, which puts the browser in secure static mode: scripts in the file never run and external references in it are never fetched. Its intrinsic size is read from `width`/`height`/`viewBox` for reset-to-natural-size; layout always uses the authored `wp:extent`. An SVG whose root element cannot be read renders as a placeholder rather than inferring missing dimensions.
-
-An inline picture in the main document text, a header, or a footer that is wider than the text area extends into the left and right page margins. The paper edge crops it. In a multi-column section, a picture extends only to the middle of the gap to a neighboring column. A picture in a table cell extends over the left and right cell margins, and the cell edge crops it. This also applies to a nested table cell. Pictures in framed paragraphs, footnotes, endnotes, and text boxes stay cropped to their text area. Layout keeps the authored size and the original image.
-
-Inline pictures rotated by 90 or 270 degrees reserve their rotated width and height before effect margins. Text wrapping, pagination, and caret positions use these dimensions. Saving preserves the authored extent and rotation.
-
-Header drawings positioned relative to the top margin use the physical sheet top as their origin. For these drawings outside table cells, top-and-bottom wrapping clears header text from the same origin.
-
-## Reading selection state
-
-Use the canonical read model shared by snapshot and imperative API:
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-import { useEditorState } from '@docx-editor.dev/react';
-
-const image = useEditorState((s) => s.image);
-// SelectedImageState | null: widthEmu/heightEmu, crop, wrap, position, locks, resourceStatus
-```
-
-</Framework>
-<Framework value="vue">
-
-```ts
-import { useEditorState } from '@docx-editor.dev/vue';
-
-const image = useEditorState((s) => s.image);
-// ShallowRef<SelectedImageState | null>: widthEmu/heightEmu, crop, wrap, position,
-// locks, resourceStatus
-```
-
-</Framework>
-</FrameworkTabs>
-
-```ts
-editor.getSelectedImage(); // same SelectedImageState shape
-editor.snapshot().image; // reference-stable until selection or image fields move
-```
-
-`SelectedImageState.wrap` reports one of these Word menu targets:
-
-| Value          | Text behavior                                   | OOXML mapping                |
-| -------------- | ----------------------------------------------- | ---------------------------- |
-| `inline`       | Places the picture in the text line             | `wp:inline`                  |
-| `square`       | Wraps on both sides of a square boundary        | `wrapSquare`, `bothSides`    |
-| `squareLeft`   | Wraps on the left                               | `wrapSquare`, `left`         |
-| `squareRight`  | Wraps on the right                              | `wrapSquare`, `right`        |
-| `tight`        | Wraps around the authored polygon               | `wrapTight`                  |
-| `through`      | Wraps through the authored polygon              | `wrapThrough`                |
-| `topAndBottom` | Keeps text above and below                      | `wrapTopAndBottom`           |
-| `behind`       | Places the picture behind document content      | `wrapNone`, `@behindDoc="1"` |
-| `inFront`      | Places the picture in front of document content | `wrapNone`, `@behindDoc="0"` |
-
-The wrap element controls text flow. The `@behindDoc` attribute controls paint order. A picture with `@behindDoc="1"` paints behind text. If its wrap element differs from `wrapNone`, text still wraps around it. `SelectedImageState.wrap` reports that wrap mode.
-
-Check `canResize` and `canMove` before you offer a resize or a move. They are false for a locked or hidden drawing, a rotated legacy VML text box, and in viewing mode. `canMove` is also false for an inline drawing, which flows with its line. An inline text box still resizes. `canChangeWrap` and `canCrop` apply to pictures only.
-
-Images in front of or behind text can paint beyond their anchor cells. Their cell-relative position is preserved, but the cell does not crop these overlays. Page-relative images are clipped to the physical sheet, including its margins.
-
-The `resourceStatus` field reports image availability:
-
-| Status         | Meaning                                                                     |
-| -------------- | --------------------------------------------------------------------------- |
-| `pending`      | Validation or decoding is in progress                                       |
-| `ready`        | Validated image bytes are ready to paint                                    |
-| `unrenderable` | Validation, decoding, conversion, or format support failed                  |
-| `external`     | The relationship points outside the package and is not loaded automatically |
-| `missing`      | The relationship target is missing                                          |
-
-## Authoring surface
-
-Both adapters export the same parts under the same names. Default toolbar slots (contextual `image` group when a picture is selected):
-
-| Slot | Component / hook | Engine command |
-| --- | --- | --- |
-| `image.insert` | `ImageInsertProvider`, `ImageInsertTrigger` | `executeImageCommand({ type: 'insertImage', … })` |
-| `image.wrap` | `ImageWrap`, `useEditorValueCommand('image.wrap')` | `setImageWrapType` via `runToolbarCommand` |
-| `image.altText` | `ImageAltText` | `setImageAltText` |
-| `image.properties` | `ImagePropertiesTrigger`, `DocxEditorImagePropertiesDialog` | `setImageProperties` |
-
-The packaged Insert menu carries an **Image** row that opens the same file picker as `ImageInsertTrigger`. Hide it or place it elsewhere through `DocxEditor.Menu.ImageInsert`.
-
-`widthPoints` and `heightPoints` are the extent to insert at most. An image that fits where the caret flows keeps its natural size; a wider or taller one scales down proportionally to its cell, column, or page content box. Read the committed extent back from `snapshot().image`.
-
-Insert preflight:
-
-<FrameworkTabs>
-<Framework value="react">
+Check the bytes with `normalizeImageBytes`, then run `insertImage`. Import from `@docx-editor.dev/vue` in Vue.
 
 ```ts
 import { normalizeImageBytes } from '@docx-editor.dev/react';
@@ -141,67 +26,106 @@ if (result.ok) {
 }
 ```
 
-</Framework>
-<Framework value="vue">
+`widthPoints` and `heightPoints` are maximums. An image that does not fit its cell, column, or page scales down proportionally. Read the committed size from `snapshot().image`.
+
+| Format | Insert | Display |
+| --- | --- | --- |
+| PNG, JPEG, GIF | Yes | Yes |
+| BMP, WebP, SVG | No | Yes, at the authored `wp:extent` |
+| TIFF, EMF, WMF | No | Rasterized when conversion succeeds, otherwise a labeled placeholder |
+| External `r:link` or `TargetMode="External"` | No | Placeholder; never loaded automatically |
+
+- The editor refuses insertion while another picture is selected. Place the caret in text first. The toolbar shows this reason when it disables insertion.
+- PDF export of EMF and WMF needs the drawing module. For more information, see [Advanced drawing rendering](/docs/2.x/pro/drawing).
+- To use your own image decoder, pass an `ImageDecodePort` through the `imageDecodePort` prop on `DocxEditor` or the adapter's root component.
+
+## Read and change an image
+
+Read the selected image from the editor state. In Vue, `useEditorState` returns a `ShallowRef`.
+
+```tsx
+import { useEditorState } from '@docx-editor.dev/react';
+
+const image = useEditorState((s) => s.image); // SelectedImageState | null
+```
+
+Outside a component, call `editor.getSelectedImage()` or read `editor.snapshot().image`. Both return the same `SelectedImageState`.
+
+| Field | Meaning |
+| --- | --- |
+| `widthEmu`, `heightEmu` | Extent in EMUs |
+| `crop` | Crop inset per edge, in percent (0 to 100) |
+| `wrap` | Wrap target (see the next table) |
+| `position`, `rotationDegrees`, `locks`, `hidden` | Placement and lock state |
+| `title`, `description`, `hyperlink` | Alternative text and link |
+| `resourceStatus` | `pending`, `ready`, `unrenderable`, `external`, or `missing` |
+| `canResize`, `canMove` | False for locked or hidden drawings, rotated legacy VML text boxes, and viewing mode. `canMove` is also false for inline drawings. |
+| `canChangeWrap`, `canCrop` | True for pictures only, never text boxes |
+
+Check `canResize`, `canMove`, `canChangeWrap`, and `canCrop` before you offer the matching control.
+
+| `wrap` value                          | OOXML                                             |
+| ------------------------------------- | ------------------------------------------------- |
+| `inline`                              | `wp:inline`                                       |
+| `square`, `squareLeft`, `squareRight` | `wrapSquare` with `bothSides`, `left`, or `right` |
+| `tight`, `through`                    | `wrapTight`, `wrapThrough`                        |
+| `topAndBottom`                        | `wrapTopAndBottom`                                |
+| `behind`, `inFront`                   | `wrapNone` with `@behindDoc` `1` or `0`           |
+
+This example wraps text around the selected picture:
 
 ```ts
-import { normalizeImageBytes } from '@docx-editor.dev/vue';
-
-const result = normalizeImageBytes(bytes);
-if (result.ok) {
-  await editor.executeImageCommand({
-    type: 'insertImage',
-    data: result.bytes,
-    mime: result.mime,
-    widthPoints: result.widthPoints,
-    heightPoints: result.heightPoints,
-  });
+if (editor.can({ type: 'setImageWrapType', target: 'square' }).ok) {
+  editor.exec({ type: 'setImageWrapType', target: 'square' });
 }
 ```
 
-</Framework>
-</FrameworkTabs>
+| Command              | Effect                                                      |
+| -------------------- | ----------------------------------------------------------- |
+| `setImageWrapType`   | Changes the wrap target                                     |
+| `setImagePosition`   | Moves a floating drawing, in EMUs                           |
+| `setImageProperties` | Changes size, crop, alternative text, hyperlink, and border |
+| `transformImage`     | Rotates or flips: `rotateCW`, `rotateCCW`, `flipH`, `flipV` |
+| `replaceImage`       | Replaces the picture bytes through `executeImageCommand`    |
+| `deleteImage`        | Deletes the picture                                         |
 
-Floating pictures: select in the canvas, drag to move (`setImagePosition`), eight handles or Alt+Arrow to resize (`setImageProperties`), wrap menu for all nine choices. One undo step per completed gesture. While a picture is selected, Ctrl+Z (Cmd+Z on macOS) undoes the gesture, and Ctrl+Y or Ctrl+Shift+Z (Cmd+Shift+Z on macOS) redoes it.
+Each completed drag or resize gesture is one undo step. Alternative text reads `@descr`, then `@title`. A picture with neither is decorative.
 
-Inline pictures use the same wrap menu. If you choose a floating wrap for an inline picture, the picture stays where it is on the page. Its position is measured from the left margin and from the top of its paragraph, so it moves with the text. In a table cell, header, footer, or paragraph frame, the picture starts at the top-left corner of its column and paragraph. A picture with a move lock keeps its wrap.
+## Configure image controls
 
-## Wrap modes and text reflow
+Both adapters export the same parts. The `image` toolbar group appears when a picture is selected.
 
-Wrap changes are **layout-structural**: exclusion zones feed line breaking before paint. Square/tight/through use authored polygons (with distances and `effectExtent`); top-and-bottom and square variants reflow body text accordingly. Header/footer rule: page-relative anchored letterheads do **not** inflate the header box. Body flow height still sizes the furniture band.
+| Slot               | Component or hook                                           |
+| ------------------ | ----------------------------------------------------------- |
+| `image.insert`     | `ImageInsertProvider`, `ImageInsertTrigger`                 |
+| `image.wrap`       | `ImageWrap`, `useEditorValueCommand('image.wrap')`          |
+| `image.altText`    | `ImageAltText`                                              |
+| `image.properties` | `ImagePropertiesTrigger`, `DocxEditorImagePropertiesDialog` |
 
-Text distances inherit each missing side from `wp:anchor`; an explicit wrap-child value, including zero, overrides that side. When square or rectangular tight wrapping leaves no passage wide enough for the next glyph, text clears the image before continuing. The clearance participates in pagination without repeating the gap on subsequent lines. Nonrectangular contours keep their existing scanline behavior.
+The packaged **Insert** menu has an **Image** row. Hide or move it through `DocxEditor.Menu.ImageInsert`. For layout and overrides, see [Toolbar customization](/docs/2.x/guides/toolbar) and [Customize popups](/docs/2.x/guides/customize-dialogs).
 
-In compatibility mode 15 and later, a leading paragraph-relative picture resolves its wrapping again when its paragraph changes pages. This applies to nonnegative vertical offsets and keeps the paragraph text clear of the picture. Paragraph-relative pictures measure their vertical position from above the applied paragraph spacing. Line-relative pictures keep their line origin.
+## Edit text boxes
 
-When a floating picture splits a line into passages, each part of the line aligns inside its own passage. Centered text is centered on each side of the picture, right-aligned text ends at the right edge of each passage, and justified text fills each passage. This applies in the body, table cells, headers, footers, and text boxes. A right-to-left line fills the passage to the right of the picture first and continues to the left of it. Each part then aligns inside its own passage from the right edge, and bidirectional text is ordered inside each passage. A square wrap with `wrapText="largest"` keeps text on the wider side of the picture only.
+Run `insertTextBox` with the caret in a body paragraph. The editor adds an empty rectangular box and places the caret in it.
 
-A line break (`w:br`) with `w:clear` restarts the text after it on the next line that the floating objects on one side do not interrupt. The picture keeps its position; only the restart line moves.
+```ts
+if (editor.can({ type: 'insertTextBox' }).ok) {
+  editor.exec({ type: 'insertTextBox' });
+}
+```
 
-- `left` clears the objects that block the start of the line that holds the break.
-- `right` clears the objects that come after the break on that line.
-- `all` clears every object that wraps text, including objects from earlier paragraphs and objects in the same table cell.
+The toolbar slot is `insert.textBox`. Insertion in tables, headers, and footers is unavailable.
 
-Objects with no text wrapping, in front of text or behind it, are not cleared. If the restart line does not fit above the bottom margin, it starts on the next page or column. The value `none` lays out as an ordinary line break, and the attribute is kept when you save.
-
-A positioned table keeps its text wrap region when nearby pictures require immediate placement. Body text clears that region.
-
-An inline picture flows like a word. If it does not fit before a floating picture, it continues past the floating picture on the same line. Text after an inline picture starts at the picture's edge, and a click past the picture places the caret after it. A click in the space that a floating picture leaves between two pieces of content places the caret between them.
-
-## Accessibility
-
-Alt text uses `@descr`, then `@title`; `@name` is never announced. A picture with neither description nor title is exposed as decorative. Hidden drawings (`@hidden`) suppress paint, hit-testing, and handles while remaining preserved on save.
-
-## Security and external images
-
-- No network fetch on open, layout, paint, or save for external relationships.
-- Embedded bytes are signature-checked and dimension-capped before decode.
-- Hyperlinks on drawings (`a:hlinkClick`) require an explicit gesture and pass through `sanitizeHref`.
-- Optional explicit download-and-embed path for external targets is user-initiated only (bounded size/content-type).
+- Click a body text box to edit it. Drag the frame to move an anchored box, or drag its handles to resize. An inline box resizes but moves only with its line.
+- Double-click a header or footer text box to open the header or footer with the caret in the box. Press **Escape** once to select the box and twice to close the header or footer.
+- Pasting into a text box inserts plain text. Table insertion is unavailable inside a text box.
+- Rotated or vertical text, and boxes that hold a table, take no caret. Clicking selects the box and its frame states the reason.
+- Rotated legacy VML boxes, and boxes sized as a percentage of the page or margin, cannot move or resize.
+- **Find** and `useDocumentSearch` search text boxes in the body, headers, and footers, not in notes.
 
 ## Custom unsupported-content components
 
-Register a component for unsupported inline or block content, or for the built-in placeholder of a drawing or equation. Match the original OOXML namespace and element name without a fixed list of element kinds. Custom rendering preserves the canonical source and saved DOCX content.
+Register a component to replace the placeholder for unsupported content, a drawing, or an equation. Match on the OOXML namespace and element name.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -216,8 +140,6 @@ Register a component for unsupported inline or block content, or for the built-i
   </DocxEditor.UnsupportedElement>
 </DocxEditor>
 ```
-
-Return `null`, `false`, an empty fragment or array, or whitespace to keep the built-in placeholder. The check reads only the value that your function returns. A child component that renders `null` replaces the placeholder with an empty box. The same declaration works inside `DocxEditor.Root` beside `DocxEditor.Content`.
 
 </Framework>
 <Framework value="vue">
@@ -235,50 +157,38 @@ Return `null`, `false`, an empty fragment or array, or whitespace to keep the bu
 </DocxEditor>
 ```
 
-A default slot that renders nothing, such as a slot whose `v-if` is false, keeps the built-in placeholder. The same declaration works inside `DocxEditor.Root` beside `DocxEditor.Content`.
-
 </Framework>
 </FrameworkTabs>
 
-Both packages export `UnsupportedElement` with these fields:
+| Prop | Description |
+| --- | --- |
+| `match` | Selects elements. Omit it for a catch-all. The first mounted matching declaration wins. Prop updates keep its priority; a remounted declaration moves last. |
+| `layout` | Width and height in points for opaque content: finite, positive, and at most 100,000. Defaults: 120 × 24 inline, 240 × 96 block. Drawing and equation placeholders keep their own size. |
+| `includePartial` | Also matches partially rendered drawings. Default `false`. |
 
-- `nodeId` identifies the projected element. `ownerPartName` identifies its document part.
-- `namespaceUri` and `localName` identify the OOXML element.
-- `source` exposes the read-only canonical source, not an XML string. Treat document values as untrusted data.
-- `placement` is `inline` or `block`, as determined by the source position.
-- `label` contains the text of the built-in placeholder.
-- Optional `drawing` and `equation` records provide engine metadata.
-- For drawings, `support` is `partial` or `unrendered`. `drawingIssues` lists detected rendering limitations.
-- `graphicKind` identifies the drawing type. `drawing.placeholderGraphicKind` identifies it only for placeholders. For its values, see [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder).
-- `drawing.accessibility.label` contains the drawing's alternative text.
-- `drawing.chart` provides `title`, `plotTypes`, and `shownAs` when the chart part can be read. Inside a chart placeholder declaration, `shownAs` is `placeholder`.
-- Optional `bounds` describes the box after layout. Use source metadata for matching before pagination.
+The `UnsupportedElement` record has these fields:
 
-To inspect charts rendered directly or through saved fallbacks, read the layout records. For an example, see [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder).
+| Field | Description |
+| --- | --- |
+| `nodeId`, `ownerPartName` | Element identity and its document part. For `mc:AlternateContent`, `nodeId` is the drawing. |
+| `namespaceUri`, `localName` | OOXML element name. For `mc:AlternateContent`, the wrapper, which is also `source`. |
+| `source` | Read-only canonical source, not an XML string. Treat its values as untrusted. `null` when a standalone painter has no source lookup. |
+| `placement` | `inline` or `block` |
+| `label` | Text of the built-in placeholder |
+| `drawing`, `equation` | Optional engine metadata, such as `support`, `drawingIssues`, `graphicKind`, and `drawing.chart` |
+| `bounds` | Optional box after layout |
 
-Omit `match` for a catch-all. The first mounted matching declaration wins. Prop updates retain priority. Removing and remounting a declaration gives it a later priority. Use matchers that do not overlap, or keep declarations mounted and change their matchers to disable them temporarily. An empty result preserves the drawing or placeholder. The editor does not try the next declaration.
-
-`layout` reserves width and height in document points before pagination for opaque content. Defaults are 120 × 24 points for inline content and 240 × 96 points for blocks. Dimensions must be finite, positive, and at most 100,000 points. Drawing and equation placeholders retain their engine layout boxes. Unmatched opaque content retains its invisible behavior.
-
-Components retain declaration-local framework context and local state across same-page repaints. They can unmount when an occurrence leaves its page, is virtualized, or the document or registration changes. Keep durable annotations in application state. Controls own their keyboard, clipboard, context-menu, and drop events. Fit controls within the reserved box, or use scrolling or an external panel.
-
-Properties, metadata, and private payloads inside owning drawing, equation, and field projections are not independent content occurrences. Declarations replace placeholders by default. They do not render charts, SmartArt, or other DrawingML themselves. To show a chart's title in place of its placeholder, see [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder); the recipe works without the EigenPal Pro License. Standalone low-level painters without a source lookup can expose `source: null`.
-
-### Alternative drawing content
-
-A document can store a modern drawing and a legacy copy inside `mc:AlternateContent`. Branch selection uses supported markup. The editor prefers a supported modern drawing, then a supported fallback. If neither has supported markup, a visible drawing produces one labeled placeholder.
-
-The placeholder keeps the drawing's authored bounds and wrapping, subject to the header and footer exception described in this section. Hidden drawings and nonvisual metadata do not produce extra placeholders. A selected picture that later fails decoding also shows a placeholder. Missing or corrupt picture resources do not trigger another branch selection.
-
-The same `DocxEditor.UnsupportedElement` declaration receives this placeholder. Its `source` contains the enclosing `mc:AlternateContent`, including its choice and fallback branches. Its `namespaceUri` and `localName` describe that wrapper. Its `nodeId` remains the projected drawing's identity; `source.id` identifies the wrapper. Use `element.drawing` to match drawing placeholders across direct and alternative content. Both branches remain in the saved document.
-
-If a header or footer placeholder blocks the entire body, layout retries without that placeholder's wrap exclusion. The placeholder stays visible at its authored position. Smaller placeholders and supported drawings keep their wrapping.
+- To keep the built-in placeholder, return empty content from the render function or slot itself: `null`, `false`, an empty fragment, or whitespace. The editor does not try the next declaration.
+- A returned component that later renders `null` still replaces the placeholder, with an empty box.
+- Components can unmount when their page leaves the viewport. Keep durable state in your application.
+- Custom components do not change the saved DOCX or PDF export.
+- The component slot stops keyboard, clipboard, context-menu, and drop events from reaching the editor.
+- Properties, metadata, and the internal content of a drawing, equation, or field are never separate replacement targets.
+- To match chart and DrawingML diagram placeholders, see [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder). That recipe works without the EigenPal Pro License.
 
 ### Replace a partially rendered drawing
 
-Set `includePartial` to provide custom previews for drawings that render without some features. The default is `false`. Fully supported drawings, hidden drawings, and drawings without a layout position remain excluded. Shapes with editable text remain excluded. Partially rendered shapes without text can receive previews.
-
-This React example uses an application component named `DrawingPreview`:
+Set `includePartial` to show your own preview for drawings that render without some features. Shapes with editable text, fully supported drawings, hidden drawings, and drawings without a layout position stay excluded.
 
 ```tsx
 <DocxEditor document={bytes}>
@@ -288,152 +198,52 @@ This React example uses an application component named `DrawingPreview`:
 </DocxEditor>
 ```
 
-In Vue, set `:include-partial="true"` and pass `element` from the default slot to your preview component. Place React hooks or Vue composables inside the child component. Return empty content while the preview loads to preserve the drawing or placeholder. Size the preview to 100% of the width and height of `element.bounds`. Clicking the preview selects the underlying drawing. Links, buttons, and form fields retain their normal behavior.
-
-Custom previews do not change the saved DOCX or PDF export.
-
-### Inspect drawing support
-
-Use `inspectDrawingSupport()` from `@docx-editor.dev/core/store` to inspect a parsed DOCX package without a browser. The report includes drawings in the body, headers, footers, footnotes, and endnotes. Check `report.complete` before treating the report as a complete inventory.
-
-Each entry includes `support`, `issues`, `graphicKind`, `ownerPartName`, and `nodeId`. The `support` values are `native`, `partial`, and `unrendered`. The check reads explicit effects, fallbacks, and 3-D properties in each drawing's XML. It does not inspect chart data, diagram data, inherited theme effects, or image bytes. An empty issue list does not guarantee complete rendering support.
+In Vue, set `:include-partial="true"`. Size the preview to `element.bounds`. A click on the preview selects the drawing.
 
 ### Preview with your rendering service
 
-Use `drawingPreviewDocx()` to create a DOCX containing one drawing, including unsaved edits. The editor does not upload documents or call a rendering service. Your application controls requests, authentication, caching, and errors.
-
-Call `createPreview()` from your preview component's effect or event handler. Obtain `editor` from `useDocxEditor()` and `element` from the component's props:
+Call `drawingPreviewDocx()` to create a DOCX that holds one drawing, including unsaved edits. Send it to your own renderer.
 
 ```ts
 import { drawingPreviewDocx } from '@docx-editor.dev/core/editor';
 
-function createPreview() {
-  if (!editor) return;
-  const result = drawingPreviewDocx(editor, element);
-  if (!result.ok) {
-    // Show an application error for result.reason.
-    return;
-  }
+const result = drawingPreviewDocx(editor, element);
+if (result.ok) {
   // Send result.docx, result.pageFitsDrawing, and element.bounds to your renderer.
 }
 ```
 
-On the server, use `createDrawingPreviewPackage()` from `@docx-editor.dev/core/store`. Pass an `inspectDrawingSupport()` entry and the same package that you inspected. Node identifiers belong to that package and do not persist in saved XML.
+The editor never uploads documents or calls a rendering service. On a server, use `inspectDrawingSupport()` and `createDrawingPreviewPackage()` from `@docx-editor.dev/core/store`.
 
-Both functions return `ok: false` when preview creation fails. The reason is `drawing-not-found`, `too-many-parts`, or `too-large`. The default limits are 64 copied parts and 64 MiB. Use the `limits` argument to change them. The preview includes the drawing's required document parts and excludes external relationships, embedded objects, macros, and templates.
+| Failure `reason`    | Cause                                 |
+| ------------------- | ------------------------------------- |
+| `drawing-not-found` | The drawing is not in the package     |
+| `too-many-parts`    | More than 64 copied parts, by default |
+| `too-large`         | More than 64 MiB, by default          |
 
-When `pageFitsDrawing` is `true`, render the first page as the preview image. The page includes the drawing's effect extent and has no margins. Otherwise, crop from `(0, 0)` using `bounds.width * dpi / 72` and `bounds.height * dpi / 72`. Do not use `bounds.x` or `bounds.y` as crop offsets. Without bounds, trim the white space around the drawing.
+- Use the `limits` argument to change the defaults. The preview excludes external relationships, embedded objects, macros, and templates.
+- If `pageFitsDrawing` is `true`, use the first page. Otherwise crop from `(0, 0)` to `bounds.width * dpi / 72` by `bounds.height * dpi / 72`. Without `bounds`, trim the white space around the drawing.
+- Run the renderer without network access and with time and memory limits. Treat the DOCX and returned images as untrusted.
+- Show returned images through an image element. Never insert returned SVG or HTML strings into the page.
+- Cache previews outside the component, for example in a `WeakMap` keyed by `element.source`. Cancel stale requests. Invalidate previews when your application changes related chart data, diagram data, or themes.
+- `drawingPreviewDocx()` is synchronous. Call it in an effect or event handler, and queue large batches.
+- `inspectDrawingSupport()` covers body, header, footer, footnote, and endnote drawings. If `report.complete` is `false`, the inventory is incomplete. It skips chart data, diagram data, inherited theme effects, and image bytes, so an empty issue list does not prove full support.
+- Pass an inspection entry with the same package object to `createDrawingPreviewPackage()`. Node IDs do not persist in saved XML.
 
-Use an external renderer that supports the drawing features you need. Run it without network access and with time and memory limits. Treat DOCX bytes and returned images as untrusted data. Render returned images with an image element. Do not insert returned SVG or HTML strings into the document.
+## Limits
 
-For asynchronous previews:
+- External images never load automatically. Open, layout, paint, and save make no network request. Only an explicit user action embeds an external target.
+- Embedded image bytes pass signature checks and size limits before decoding. SVG paints in a static image mode: its scripts never run and its external references never load.
+- Drawing hyperlinks (`a:hlinkClick`) need an explicit gesture and pass through `sanitizeHref`.
+- With tracking on, image insertion and deletion record tracked changes. Property edits (size, position, wrap, crop, alt text, and links) apply directly, because they have no tracked form. Replacing a picture is refused.
+- PDF export does not apply brightness, contrast, grayscale, or black-and-white adjustments.
+- Picture commands do not address members of a shape group.
+- Copy and cut refuse selections that contain a chart or an embedded object.
+- Charts, DrawingML diagrams without a saved drawing, and drawing effects need the drawing module. Core renders saved diagram drawings. For the module, see [Advanced drawing rendering](/docs/2.x/pro/drawing).
+- Wrap geometry, VML previews, shape groups, and alternative content follow the rules in [DOCX feature support](/docs/2.x/docx-fidelity).
 
-- Cache image bytes or `Blob` values outside the component, for example in a `WeakMap` keyed by `element.source`.
-- Start preview work when `element.source` changes. Its identity stays unchanged when unrelated content changes.
-- Queue preview creation when a document contains many drawings. The DOCX creation call is synchronous.
-- Cancel obsolete requests and ignore stale responses.
-- Create image object URLs in the component effect. Revoke them and clear the image during cleanup.
-- Preserve the drawing or placeholder on failure. Provide a retry control in your application.
+## See also
 
-The editor does not edit chart data, diagram data, or themes. If your application changes those dependencies separately, invalidate the corresponding previews. Pagination can unmount preview components. An external cache lets a remounted component reuse its preview.
-
-## Drawing limits
-
-The editor renders brightness, contrast, grayscale, and bilevel black-and-white picture adjustments. It preserves image alpha and adjustment markup when you save. PDF export does not apply these adjustments.
-
-| Drawing content | Status |
-| --- | --- |
-| Solid shapes and bounded shape groups | Render geometry with sRGB or theme colors |
-| Pictures in a shape group, below the group's shapes | Render in their own frames, as described in [Pictures in shape groups](#pictures-in-shape-groups) |
-| Charts | Render read-only when you register `drawingModule()` from `@docx-editor.dev/pro/drawing`. A chart that does not render shows its saved fallback picture or drawing when it has one. Its fallback produces no PDF diagnostic and can differ from the chart's cached values. Otherwise, the editor preserves the extent and shows a labeled placeholder, and PDF export leaves the chart out with a `drawing` diagnostic, which fails the default strict export. If a skipped `mc:Choice` contains a visible drawing with usable bounds, the editor retains a placeholder. Copy and cut of a selection that includes a chart are refused. With change tracking on, deleting a chart records one tracked deletion of the whole chart. Treemap, sunburst, and map charts, and charts that combine a pie or radar plot with other plot types, do not render. For the list, see [What renders](/docs/2.x/pro/drawing#what-renders). |
-| SmartArt | Render the saved diagram drawing read-only. A diagram saved without its drawing renders when you register `drawingModule()`. Without the module, it shows a labeled placeholder |
-| Glow, inner shadow, reflection, soft edge, and dark-edged bevel rim | Render when you register `drawingModule()`. Without the module, the shape or picture paints without these effects |
-| Drawing canvases | Render shapes, connectors, and text read-only |
-| Unsupported groups and drawings | Preserve the extent and show a labeled placeholder. Alternative content (`mc:AlternateContent`) selects supported modern markup, then supported fallback markup. Unsupported visible drawings show one labeled placeholder. A later picture decoding failure also shows a placeholder without another branch selection. It retains its authored extent and wrap area, subject to the [header and footer exception](#alternative-drawing-content) |
-| Anchored text boxes | Render clipped stories in the body, headers, and footers. Edit supported boxes, and drag or resize their borders |
-| Page fields in anchored header or footer text boxes | Evaluate per page |
-| Inline text boxes | Render clipped stories on the line in the body, headers, and footers. Edit and resize supported boxes. They move only with their line |
-| Text boxes inside text boxes, linked chains, autofit, and rotation | Show a placeholder or clip |
-| Standalone VML (`w:pict`) | Render the subset described in [Legacy VML previews](#legacy-vml-previews) |
-| `w:object` and `w:altChunk` | Preserve as generic content with diagnostics |
-| Tracked image insertion and deletion | Record the change in suggesting mode |
-| Tracked image property edits | Stay unavailable in suggesting mode |
-| Picture artistic effects (`a14:imgEffect`) | Do not render; authored markup round-trips. Glow, inner shadow, reflection, and soft edge in `a:effectLst` render with the drawing module. |
-
-## Pictures in shape groups
-
-A DrawingML shape group (`wpg:wgp`) can contain several embedded pictures and supported shapes. Each picture keeps its own frame and crop. Pictures paint in document order below the group's shapes. Supported text-box members also show their text read-only.
-
-Each picture must meet these conditions:
-
-- It comes before every shape member that paints a fill or outline.
-- It is visible, unrotated, unflipped, and rectangular, with a fill that is not tiled.
-- It has no image effects, shape effects, or 3-D properties. Solid outlines are supported.
-- Its fill rectangle has no offsets. An omitted fill rectangle uses the full picture frame.
-- Its frame overlaps the group and extends no more than one group width or height past it.
-
-A text-box member without a fill or outline does not restrict picture order. Other members must meet the supported shape subset. For the full drawing subset, see [Word feature support](/docs/2.x/word-fidelity).
-
-If a picture or another member cannot render, the group is unsupported. Alternative content (`mc:AlternateContent`) can supply supported fallback markup during branch selection. Otherwise, a visible unsupported group keeps one labeled placeholder. Missing or corrupt pictures also produce that placeholder without another branch selection.
-
-A floating placeholder reserves its authored wrap area for square, tight, through, or top-and-bottom wrapping. A group with no wrapping (`wp:wrapNone`) reserves no wrap space. A drawing explicitly hidden in the document does not show a placeholder.
-
-The editor never fetches linked pictures. Missing, damaged, or oversized pictures can prevent the whole group from rendering. PDF export reports drawings that it cannot render through its [diagnostics](/docs/2.x/export/pdf/api#diagnostics).
-
-Each picture clips to the group's area. Shapes can extend into the effect extent (`wp:effectExtent`). Picture commands, such as resize and replace, do not address individual group members. Markdown export omits the group and reports an `omitted-drawing` warning. Saving preserves the group, its alternative content, and its media.
-
-## Insert and edit text boxes
-
-Choose **Insert → Text Box** from a body paragraph to add an empty rectangular box and start typing. The new box has a white fill, a black border, and a fixed starting size. Drag its border to move it, or drag its handles to resize it. Clicking its text shows the frame and places the caret. Insertion in tables, headers, and footers is unavailable.
-
-## Edit text boxes
-
-Click inside an unrotated text box in the body to edit its paragraphs. A frame outlines the box being edited. Drag the frame's border to move an anchored box, or drag its handles to resize the box. An inline text box resizes but moves only with its line.
-
-To edit a text box in a header or footer, follow these steps:
-
-1. Double-click the box. Its header or footer opens with the caret in the box.
-2. Type, format, or paste. Pasting into a text box inserts plain text.
-3. Press **Escape** to leave the box. The box stays selected, so you can press **Delete** to delete it, drag it, or press **Enter** to go back into its text.
-4. Press **Escape** again to close the header or footer.
-
-While a header or footer is open, a single click enters any of its boxes. **Undo** reverses each step, and the edits synchronize during collaboration.
-
-These text boxes keep their geometry or their text as authored:
-
-- A box whose text is rotated or vertical, or a box that holds a table, takes no caret. Clicking it selects the box instead, and its frame says why the text cannot be edited.
-- A rotated legacy VML text box, and one sized as a percentage of the page or margin, cannot be moved or resized. Its frame has no handles.
-- To edit a box that sits behind the text of a header or footer, open the header or footer first, and then click the box.
-- Table insertion is unavailable inside a text box.
-
-Legacy VML text boxes take the same controls as modern ones. Moving or resizing one rewrites only its position and size.
-
-## Find text in text boxes
-
-**Find** searches anchored and inline text boxes in the body, headers, and footers. Selecting a match selects its text box. Text boxes in footnotes or endnotes are not searched.
-
-Use `useDocumentSearch` to add Find navigation to a custom [React](/docs/2.x/react/hooks#usedocumentsearch) or [Vue](/docs/2.x/vue/composables#usedocumentsearch) interface.
-
-## Legacy VML previews
-
-Standalone `w:pict` can render unrotated embedded photos and bounded groups of photos, solid rectangles, rounded rectangles, and ellipses, straight line segments with arrows, and, with the drawing module, WordArt on a text path (`_x0000_t136` to `_x0000_t175`). A floating `v:line` spans its `from` and `to` points and also renders in PDF export. Group-local coordinates, picture crops, supported text wrapping, aligned positions, and source order are retained. A shape without `position:absolute` in its style is inline. Without the drawing module, inline WordArt keeps its extent with a placeholder, and floating WordArt does not render. WordArt uses the authored font when available on the host. Curved WordArt renders when the drawing includes its shape definition, or for the arch shape.
-
-Floating `v:shape` paths with two explicit points can have one zero extent. They paint as native vector lines. A zero coordinate axis requires both corresponding coordinates to match its origin. Curves, multiple subpaths, and invalid coordinate axes remain opaque.
-
-A text box (`v:textbox`) on a rectangle, rounded rectangle, or text box shape lays out its story inside the shape with the `inset` margins, floating or inline, in the body, headers, and footers. It paints the solid fill and outline of the shape. **Find** reaches its text, and a box in the body, a header, or a footer takes the same editing as other text boxes. For more information, see [Edit text boxes](#edit-text-boxes).
-
-Other previews are read-only. Saving preserves the original VML, media, and relationships without adding generated SVG parts or converting the source to DrawingML. Deleting another picture preserves shared photo relationships.
-
-The editor does not partially render unsupported, oversized, or clipped groups. Custom templates, text boxes, curves, image effects, rotation, and unsupported group members prevent a group preview. Only recognized standard shape templates are supported. When a document supplies DrawingML and VML alternatives, the editor displays only the selected alternative.
-
-An inline standalone photo can have a picture border (`w10:border*`) when all four sides use one `single` line with the same width and color. The photo keeps its authored size and crop, and the border line surrounds it. The drawing grows by the line width on each side. Other border combinations, and borders on floating, color-keyed, or grouped photos, prevent the preview.
-
-An inline embedded object (`w:object`) shows its cached preview picture when the preview is one standard picture shape (`_x0000_t75`) with an embedded image. The object takes one position in the text, and layout reserves the preview size. The editor never runs, loads, or resolves the embedded object, and never fetches a linked preview. Picture commands, such as resize and replace, do not apply to the preview. You can delete the object with the text around it; the embedded binary stays in the package. Copy and cut refuse selections that contain an object. Rich paste refuses fragments that contain an object and preserves the target selection. A WMF or EMF preview keeps its size and shows a labeled placeholder when conversion is unavailable. Objects inside paragraph frames show no preview or reserved preview size. Direct frames and frames inherited from paragraph styles have this limit. The object keeps its text position, and the surrounding text stays unchanged. Floating objects, linked objects, and objects with other content show no preview.
-
-Standalone photos reuse validated image resources and retain their authored crop. Groups, WordArt, and color-key previews use bounded static SVG resources. Embedded members still pass the normal image validation and decode limits; an external or missing member never triggers a fetch or a misleading partial group preview.
-
-## Next steps
-
-- [Toolbar customization](/docs/2.x/guides/toolbar): override the toolbar's `ImageWrap` part and its siblings
-- [Word fidelity matrix](/docs/2.x/word-fidelity): live support claims
-- [Headers and footers](/docs/2.x/guides/headers-footers): letterhead anchors in page bands
+- [Toolbar customization](/docs/2.x/guides/toolbar)
+- [Advanced drawing rendering](/docs/2.x/pro/drawing)
+- [DOCX feature support](/docs/2.x/docx-fidelity)

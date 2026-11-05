@@ -19,6 +19,7 @@ import { normalizeImageBytes } from './normalizeImageFile';
 import { useToolbarLabel } from '../toolbar/toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { Slot } from '../toolbar/Slot';
+import { PanelRowContent, triggerClassName, usePanelRow } from '../toolbar/panel-row';
 import { usePopupConfig } from '../popup-config-context';
 import { renderPopup } from '../popup-renderer';
 import { DocxEditorImageInsertErrorDialog } from './ImageInsertErrorDialog';
@@ -242,12 +243,13 @@ export function ImageInsertTrigger({
 }: ImageInsertTriggerProps) {
   const { openFilePicker, isEnabled, disabledReason } = useImageInsert();
   const label = useToolbarLabel();
+  const panelRow = usePanelRow(asChild, children);
   if (hidden) return null;
   const control = chromeControlForSlot('image.insert');
   const text = label(control?.labelKey ?? 'toolbar.image');
   const shared = {
     type: 'button' as const,
-    className: `docx-toolbar__button${className ? ` ${className}` : ''}`,
+    className: `${triggerClassName(panelRow)}${className ? ` ${className}` : ''}`,
     'data-slot': 'image.insert',
     disabled: !isEnabled,
     ...(!isEnabled ? { 'data-disabled': '' } : {}),
@@ -257,7 +259,12 @@ export function ImageInsertTrigger({
     onClick: openFilePicker,
   };
   if (asChild) return <Slot {...shared}>{children}</Slot>;
-  return <button {...shared}>{children ?? chromeIcon(control?.paths)}</button>;
+  const icon = chromeIcon(control?.paths);
+  return (
+    <button {...shared}>
+      {panelRow ? <PanelRowContent icon={icon} label={text} /> : (children ?? icon)}
+    </button>
+  );
 }
 
 ImageInsertTrigger.docxSlot = 'image.insert' as const;

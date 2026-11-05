@@ -6,13 +6,9 @@ category: 'Telemetry'
 
 <Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
 
-The OpenTelemetry exporter records metrics and spans through the OpenTelemetry SDK that your app already runs.
+## Register the exporter
 
-The exporter reads the global meter and tracer providers at each use, unless you pass your own. You can create it before your OpenTelemetry SDK starts. Measurements reach the SDK after it registers.
-
-Each histogram provides bucket bounds that the OpenTelemetry JavaScript SDK uses. These bounds match the bands in [Metrics](/docs/2.x/telemetry/metrics). A collector or Prometheus 3 OpenTelemetry Protocol (OTLP) receiver adds unit suffixes by default. The resulting Prometheus names also match that reference.
-
-The `resource` option adds attributes to events, not metrics. Set `service.name` on your SDK to populate the Prometheus `job` label.
+Add `otelExporter()` to the client, then register `telemetry.module` as [Set up an editor](/docs/2.x/telemetry/editors) shows:
 
 ```ts
 import { createTelemetry } from '@docx-editor.dev/telemetry';
@@ -21,6 +17,33 @@ import { otelExporter } from '@docx-editor.dev/telemetry/otel';
 export const telemetry = createTelemetry({ exporters: [otelExporter()] });
 ```
 
-Each document open becomes a `docx_editor.document.open` span. The span has an error status when the open is refused. Other events are added to the active span. If no span is active, the exporter creates a short span for each failure. In development, the exporter warns once if no SDK is registered.
+## Connect your SDK
 
-To see these metrics in Grafana, download the **Editor experience** dashboard from [Dashboards](/docs/2.x/telemetry/dashboards).
+Your app supplies the OpenTelemetry SDK. You can create the exporter before the SDK starts. Measurements reach the SDK after it registers.
+
+| Option           | Default                                  |
+| ---------------- | ---------------------------------------- |
+| `meterProvider`  | The global provider, read at each use    |
+| `tracerProvider` | The global provider, read at each use    |
+| `parentContext`  | None: each span it starts is a root span |
+| `scope`          | `@docx-editor.dev/telemetry`             |
+
+The telemetry `resource` option adds attributes to events, not metrics. Set `service.name` on your SDK to populate the Prometheus `job` label.
+
+## Interpret spans and metrics
+
+| Signal | Behavior |
+| --- | --- |
+| Document open and save | A `docx_editor.document.open` or `docx_editor.document.save` span, with error status when the operation is rejected. |
+| Other events | Added to the active span. With no active span, each failure creates a short span. |
+| Histograms | Bucket bounds match the bands in [Metrics](/docs/2.x/telemetry/metrics). OTLP receivers add unit suffixes, so Prometheus names match that reference. |
+
+## Limits
+
+- In development, the exporter warns once if no SDK is registered.
+- Some SDK instrumentations add the user agent or page URL. See [Privacy review checklist](/docs/2.x/telemetry/privacy-review).
+
+## See also
+
+- [Metrics](/docs/2.x/telemetry/metrics)
+- [Dashboards](/docs/2.x/telemetry/dashboards)

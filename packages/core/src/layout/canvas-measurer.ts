@@ -65,21 +65,31 @@ export const DEFAULT_CANVAS_FONT_STACK = 'Calibri, Carlito, Helvetica, Arial, sa
 
 const SERIF_FALLBACK_STACK = '"Times New Roman", "Liberation Serif", Tinos, serif';
 const MONO_FALLBACK_STACK = '"Courier New", "Liberation Mono", Cousine, monospace';
+/**
+ * Serif Hangul faces: Batang, then the faces macOS and Linux install. The glyphs that a serif
+ * Korean face lacks draw in Batang, not in a Gothic face.
+ */
+const SERIF_HANGUL_FALLBACK_STACK = 'Batang, AppleMyungjo, "Noto Serif CJK KR", serif';
 
 /**
- * The stack a declared family falls through to when no face for it is installed: one of the
- * family's own class when its name states one ("… Serif", "… Mono"), else `base`. A missing
- * serif family set in the sans-serif default changed the look of every line it drew. Paint
- * and the canvas measurer both build their stack here, so they keep falling back to the same
- * face. The class decides alone, not `base`: paint never sees a host's own base, so a
- * classed family taking that base in one path and the class stack in the other would draw
- * with a face the layout did not measure.
+ * The stack a declared family falls through to when no face for it is installed, or when its
+ * face lacks a glyph: one of the family's own class when its name states one ("… Serif",
+ * "… Mono"), else `base`. A missing serif family set in the sans-serif default changed the
+ * look of every line it drew. Paint and the canvas measurer both build their stack here, so
+ * they keep falling back to the same face. The class decides alone, not `base`: paint never
+ * sees a host's own base, so a classed family taking that base in one path and the class
+ * stack in the other would draw with a face the layout did not measure.
+ *
+ * `serifHangulFace` tells the families that the document's font table records as serif faces
+ * of a Korean character set. Those fall back to serif Hangul faces.
  */
 export function fallbackStackForFamily(
   family: string | null,
-  base: string = DEFAULT_CANVAS_FONT_STACK
+  base: string = DEFAULT_CANVAS_FONT_STACK,
+  serifHangulFace?: (family: string) => boolean
 ): string {
   if (!family) return base;
+  if (serifHangulFace?.(family)) return SERIF_HANGUL_FALLBACK_STACK;
   const kind = fontFamilyClassFromName(family);
   return kind === 'serif' ? SERIF_FALLBACK_STACK : kind === 'mono' ? MONO_FALLBACK_STACK : base;
 }
@@ -268,6 +278,12 @@ export interface CanvasMeasurerOptions {
    */
   readonly fontAlias?: (family: string) => string | undefined;
   /**
+   * Whether the document's font table records a family as a serif Korean face. Paint takes
+   * the same lookup, so the glyphs that such a face lacks measure in the face they paint in.
+   * @internal
+   */
+  readonly serifHangulFace?: (family: string) => boolean;
+  /**
    * Injected 2d text context from the editor/browser seam.
    *
    * `undefined` or `null` makes {@link tryCreateCanvasMeasurer} return null so the surface
@@ -370,7 +386,7 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
     const declared = style.fontFamily && FONT_NAME.test(style.fontFamily) ? style.fontFamily : null;
     const aliased = declared ? fontAlias?.(declared) : undefined;
     const alias = aliased && FONT_NAME.test(aliased) ? aliased : null;
-    const stack = fallbackStackForFamily(declared, fallbackFamily);
+    const stack = fallbackStackForFamily(declared, fallbackFamily, options.serifHangulFace);
     const family = declared
       ? alias
         ? `"${alias}", "${declared}", ${stack}`

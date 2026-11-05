@@ -64,6 +64,42 @@ export function fontTableClasses(pkg: OoxmlPackage): ReadonlyMap<string, FontFam
   return classes;
 }
 
+/** `w:charset` values of the Korean character sets: Hangul (0x81) and Johab (0x82). */
+const KOREAN_CHARSETS: ReadonlySet<string> = new Set(['81', '82']);
+
+const serifHangulFaceLookups = new WeakMap<OoxmlElement, (family: string) => boolean>();
+const NO_SERIF_HANGUL_FACES = (): boolean => false;
+
+/**
+ * Whether the font table records a family as a serif face (`w:family` roman) of a Korean
+ * character set (`w:charset`). One lookup per font table, so a lookup's identity changes
+ * only with the table.
+ */
+export function fontTableSerifHangulFace(pkg: OoxmlPackage): (family: string) => boolean {
+  const root = fontTableRoot(pkg);
+  if (!root) return NO_SERIF_HANGUL_FACES;
+  const known = serifHangulFaceLookups.get(root);
+  if (known) return known;
+  const faces = new Set<string>();
+  let inspected = 0;
+  for (const font of root.children) {
+    if (!wordElement(font, 'font')) continue;
+    if (++inspected > MAX_FONT_TABLE_NAMES) break;
+    const family = listedFontFamilyName(wordAttribute(font, 'name'));
+    const charset = entryValue(font, 'charset')?.toLowerCase();
+    if (!family || !charset || !KOREAN_CHARSETS.has(charset)) continue;
+    if (fontTableFamilyClass(entryValue(font, 'family'), entryValue(font, 'pitch')) !== 'serif')
+      continue;
+    faces.add(family.trim().toLowerCase());
+  }
+  const lookup =
+    faces.size === 0
+      ? NO_SERIF_HANGUL_FACES
+      : (family: string) => faces.has(family.trim().toLowerCase());
+  serifHangulFaceLookups.set(root, lookup);
+  return lookup;
+}
+
 /** Read whole alternate names without changing the canonical font table. */
 export function fontTableAlternates(pkg: OoxmlPackage): ReadonlyMap<string, string> {
   const root = fontTableRoot(pkg);

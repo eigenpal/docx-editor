@@ -1,0 +1,12 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The customNodesOf JSDoc said it read only the body story.",
+  "after": "The customNodesOf JSDoc says it reads every story: the body, headers, footers, footnotes, and endnotes.",
+  "reason": "Only a documentation comment changes. The function body, the shared schema, operation encoding, and synchronized state do not change.",
+  "tests": [
+    "packages/pro/src/__tests__/review-custom-node-stories.test.ts"
+  ],
+  "changeset": "custom-nodes-of-every-story-doc",
+  "migration": null
+}
