@@ -290,6 +290,7 @@ export function customGeometryDefinition(custGeom: OoxmlElement): GeometryDefini
   const pathList = drawingChildren(drawingChild(custGeom, 'pathLst'));
   if (pathList.length === 0 || pathList.length > MAX_GEOMETRY_PATHS) return null;
   const paths: GeometryPath[] = [];
+  let blank = false;
   let commandBudget = MAX_GEOMETRY_COMMANDS;
   for (const element of pathList) {
     if (element.localName !== 'path') return null;
@@ -307,6 +308,7 @@ export function customGeometryDefinition(custGeom: OoxmlElement): GeometryDefini
       if (parsed === null) return null;
       commands.push(parsed);
     }
+    if (!everyCommandHasCurrentPoint(commands)) blank = true;
     paths.push({
       width,
       height,
@@ -315,7 +317,29 @@ export function customGeometryDefinition(custGeom: OoxmlElement): GeometryDefini
       commands,
     });
   }
-  return { avLst, gdLst, textRect, paths };
+  // The whole shape paints nothing, but its text rectangle stays (see
+  // `everyCommandHasCurrentPoint`).
+  return { avLst, gdLst, textRect, paths: blank ? [] : paths };
+}
+
+/**
+ * ECMA-376 Part 1, 20.1.9 (`CT_Path2D`): only `a:moveTo` sets the current point, and every
+ * other command needs one. A custom path has no current point before its first `a:moveTo`,
+ * and after `a:close` until the next `a:moveTo`. When any path of a custom geometry has a
+ * command without one, the whole shape paints no fill and no outline, in every path. Its
+ * text still lays out. The rule depends only on the order of the commands.
+ *
+ * Preset definitions do not take this check. Some presets in the ECMA-376 annex draw a line
+ * after `close` (the accent callouts), and they draw it from the closed subpath's start.
+ */
+function everyCommandHasCurrentPoint(commands: readonly GeometryCommand[]): boolean {
+  let hasPoint = false;
+  for (const command of commands) {
+    if (command.op === 'M') hasPoint = true;
+    else if (!hasPoint) return false;
+    else if (command.op === 'Z') hasPoint = false;
+  }
+  return true;
 }
 
 // ---- Evaluation ------------------------------------------------------------------------
@@ -323,12 +347,6 @@ export function customGeometryDefinition(custGeom: OoxmlElement): GeometryDefini
 interface PathState {
   readonly subpaths: { points: GeometryPoint[]; closed: boolean }[];
   current: { points: GeometryPoint[]; closed: boolean } | null;
-  /**
-   * False until the first `a:moveTo`. ECMA-376 Part 1, 20.1.9 (`CT_Path2D`): only `moveTo`
-   * sets the current point, and `lnTo`, `arcTo`, `quadBezTo` and `cubicBezTo` draw from it,
-   * so a drawing command before the first `moveTo` draws nothing and moves nothing.
-   */
-  hasPoint: boolean;
   /** Current point in path space; arcs need it unscaled to place their ellipse. */
   x: number;
   y: number;
@@ -402,15 +420,7 @@ export function evaluateGeometry(
   for (const path of definition.paths) {
     const sx = path.width > 0 ? width / path.width : 1;
     const sy = path.height > 0 ? height / path.height : 1;
-    const state: PathState = {
-      subpaths: [],
-      current: null,
-      hasPoint: false,
-      x: 0,
-      y: 0,
-      startX: 0,
-      startY: 0,
-    };
+    const state: PathState = { subpaths: [], current: null, x: 0, y: 0, startX: 0, startY: 0 };
     const emit = (x: number, y: number): boolean => {
       if (++total > MAX_GEOMETRY_POINTS) return false;
       state.x = x;
@@ -426,12 +436,10 @@ export function evaluateGeometry(
     };
     const ensureStart = () => (state.current === null ? emit(state.x, state.y) : true);
     for (const step of path.commands) {
-      if (!state.hasPoint && step.op !== 'M') continue;
       let ok = true;
       switch (step.op) {
         case 'M':
           state.current = null;
-          state.hasPoint = true;
           ok = emit(value(step.args[0]), value(step.args[1]));
           break;
         case 'L':

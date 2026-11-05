@@ -251,7 +251,6 @@ describe('custom geometry', () => {
           '<a:quadBezTo><a:pt x="100000" y="200000"/><a:pt x="200000" y="0"/></a:quadBezTo>' +
           '<a:cubicBezTo><a:pt x="200000" y="100000"/><a:pt x="0" y="100000"/>' +
           '<a:pt x="0" y="0"/></a:cubicBezTo><a:close/>' +
-          '<a:lnTo><a:pt x="100" y="100"/></a:lnTo>' +
           '</a:path></a:pathLst>'
       )
     )!;
@@ -263,37 +262,34 @@ describe('custom geometry', () => {
     expect(peak).toBeLessThanOrEqual(200000 + 1e-6);
     expect(curve.at(-1)).toEqual({ x: 0, y: 0 });
     expect(geometry.paths[0]!.subpaths[0]!.closed).toBe(true);
-    // A command after close continues from the closed subpath's start.
-    expectPoints(points(geometry, 0, 1), [
-      [0, 0],
-      [200, 200],
-    ]);
     expect(geometry.textRect).toEqual({ left: 0, top: 0, right: 200000, bottom: 400000 });
   });
 
-  test('drawing commands before the first moveTo draw nothing', () => {
-    // ECMA-376 Part 1, 20.1.9: only moveTo sets the current point.
-    const evaluate = (body: string) =>
-      evaluateGeometry(
-        customGeometryDefinition(custGeom(`<a:pathLst><a:path>${body}</a:path></a:pathLst>`))!,
-        1000,
-        1000
-      )!;
-    const triangle = evaluate(
-      '<a:lnTo><a:pt x="100" y="0"/></a:lnTo><a:lnTo><a:pt x="100" y="100"/></a:lnTo><a:close/>'
-    );
-    expect(triangle.paths[0]!.subpaths).toEqual([]);
-    const leading = evaluate(
-      '<a:arcTo wR="100" hR="100" stAng="0" swAng="5400000"/>' +
-        '<a:quadBezTo><a:pt x="10" y="10"/><a:pt x="20" y="0"/></a:quadBezTo>' +
-        '<a:cubicBezTo><a:pt x="1" y="1"/><a:pt x="2" y="2"/><a:pt x="3" y="3"/></a:cubicBezTo>' +
-        '<a:close/><a:moveTo><a:pt x="5" y="5"/></a:moveTo><a:lnTo><a:pt x="6" y="6"/></a:lnTo>'
-    );
-    expect(leading.paths[0]!.subpaths.length).toBe(1);
-    expectPoints(points(leading), [
-      [5, 5],
-      [6, 6],
-    ]);
+  test('a custom command without a current point leaves the shape with no paths', () => {
+    // ECMA-376 Part 1, 20.1.9: only moveTo sets the current point. The other cases are in
+    // drawing-vector-paths.test.ts.
+    const geometry = evaluateGeometry(
+      customGeometryDefinition(
+        custGeom(
+          '<a:rect l="l" t="t" r="r" b="b"/><a:pathLst><a:path>' +
+            '<a:lnTo><a:pt x="100" y="0"/></a:lnTo><a:lnTo><a:pt x="100" y="100"/></a:lnTo>' +
+            '<a:close/></a:path></a:pathLst>'
+        )
+      )!,
+      1000,
+      1000
+    )!;
+    expect(geometry.paths).toEqual([]);
+    expect(geometry.textRect).toEqual({ left: 0, top: 0, right: 1000, bottom: 1000 });
+  });
+
+  test('presets that draw after close continue from the closed subpath start', () => {
+    // The ECMA-376 annex writes the accent callout bar as `M x1 t Z L x1 b`.
+    const callout = preset('accentCallout1');
+    const bar = callout.paths[1]!;
+    expect(bar.subpaths.length).toBe(2);
+    expect(bar.subpaths[1]!.points[0]).toEqual(bar.subpaths[0]!.points[0]);
+    expect(bar.subpaths[1]!.points.at(-1)!.y).toBeCloseTo(H, 3);
   });
 
   test('arcTo sweeps beyond one turn keep the one-turn chord sag and the end point', () => {
