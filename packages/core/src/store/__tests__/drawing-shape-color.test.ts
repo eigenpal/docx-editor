@@ -180,6 +180,8 @@ describe('linear-light transforms', () => {
   test('shade and tint blend in linear light through the sRGB curve, rounding once', () => {
     expect(srgb('ED7D31', '<a:shade val="50000"/>')?.hex).toBe('AE5A21');
     expect(srgb('4F81BD', '<a:shade val="50000"/>')?.hex).toBe('385D8A');
+    expect(srgb('4472C4', '<a:shade val="50000"/>')?.hex).toBe('2F528F');
+    expect(srgb('5B9BD5', '<a:shade val="50000"/>')?.hex).toBe('41719C');
     expect(srgb('00FF00', '<a:shade val="50%"/>')?.hex).toBe('00BC00');
     expect(srgb('0000FF', '<a:tint val="20000"/>')?.hex).toBe('E7E7FF');
   });
