@@ -23,7 +23,7 @@ Add advanced drawing rendering, review, collaboration, and custom content to the
 - [Comments](https://www.docx-editor.dev/docs/2.x/pro/comments): Threads anchored to a range, with replies.
 - [Collaboration](https://www.docx-editor.dev/docs/2.x/pro/collaboration): Provider-neutral sessions with WebRTC and Hocuspocus helpers.
 - [Custom nodes](https://www.docx-editor.dev/docs/2.x/pro/custom-nodes): Inline node types stored as content controls.
-- [Advanced drawing rendering](https://www.docx-editor.dev/docs/2.x/pro/drawing): Charts, SmartArt layout, shape effects, WordArt, and EMF and WMF pictures.
+- [Advanced drawing rendering](https://www.docx-editor.dev/docs/2.x/pro/drawing): Charts, DrawingML diagram layout, shape effects, VML text paths, and EMF and WMF pictures.
 
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/core @docx-editor.dev/pro
@@ -133,31 +133,26 @@ Every value reaching `fromDocx` came out of a `.docx`, so treat `attrs` and `tex
 
 ## Which API for which job
 
-| Job | Use |
-| --- | --- |
-| Build a review UI in the browser | The React or Vue adapter hooks, plus the review hooks and `DocxEditorReview` from `@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue`. |
-| Edit in a headless, server, or agent pipeline | The editing API in `@docx-editor.dev/editor-api`, which follows the Office.js object model. |
+Use the React or Vue adapter hooks, the review hooks, and `DocxEditorReview` from `@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue` to build browser review controls. Use the editing API in `@docx-editor.dev/editor-api` for document automation. It follows the Office.js object model and runs in browser and server hosts.
 
-| Task | Browser host (React or Vue) | Headless, server, or agent |
+| Task | Browser controls (React or Vue) | Document automation |
 | --- | --- | --- |
 | [Comment on found text](https://www.docx-editor.dev/docs/2.x/recipes/comment-on-found-text) | `editor.findMatches`, `editor.selectMatch`, then `useReview().comment` | `body.search`, then `Range.insertComment` |
-| Reply to a thread | `useReview().reply(item, text)` | `Comment.reply(text)` |
+| [Reply to a thread](https://www.docx-editor.dev/docs/2.x/pro/comments) | `useReview().reply(item, text)` | `Comment.reply(text)` |
 | [Record a tracked replacement](https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement) | Suggesting mode, then `editor.exec({ type: 'replaceMatch', match, text })` | `document.changeTrackingMode = 'TrackMineOnly'`, then `Range.insertText(text, 'Replace')` |
-| [Propose an AI rewrite as tracked changes](https://www.docx-editor.dev/docs/2.x/recipes/propose-rewrite) | The same code through `DocxEditor.createBrowser` from `@docx-editor.dev/editor-api/browser` | `prepareRewrite` from `@docx-editor.dev/editor-api/agent` |
+| [Propose an AI rewrite as tracked changes](https://www.docx-editor.dev/docs/2.x/recipes/propose-rewrite) | `prepareRewrite` through `DocxEditor.createBrowser` | `prepareRewrite` from `@docx-editor.dev/editor-api/agent` |
 | [Accept or reject a change](https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().accept(item)` or `useReview().reject(item)` | `Revision.accept()` or `Revision.reject()` |
-| [Open or reveal a change without scrolling](https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().setActive(key, { reveal: false })` | Not applicable: no viewport |
+| [Open a change without scrolling](https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().setActive(key, { reveal: false })` | Not applicable: no viewport |
 | [Highlight ranges](https://www.docx-editor.dev/docs/2.x/recipes/highlight-ranges) | `useHighlights(name, source, options)` | Not applicable |
-| [Custom review rail cards](https://www.docx-editor.dev/docs/2.x/recipes/custom-review-cards) | `DocxEditorReview` with `preset` set to `false`, `useReview().items`, `useStackedReviewPositions`, and `useReviewRailMetrics` | Not applicable |
+| [Custom review rail cards](https://www.docx-editor.dev/docs/2.x/recipes/custom-review-cards) | `DocxEditorReview` with `preset` set to `false`, `useStackedReviewPositions`, and `useReviewRailMetrics` | Not applicable |
 | Comment-on-selection button | `DocxEditorReview.AddComment` as a direct child of `DocxEditorReview`, or `useEditorCommand('review.addComment')` | Not applicable |
-| Page setup and paragraph dialogs from a custom toolbar | `DocxEditor.PageSetupDialog` or `DocxEditor.ParagraphDialog` with `open` and a close handler (`onClose` in React, `@close` in Vue); enable the button from `usePageSetup().isEnabled` or `useParagraphFormat().isEnabled` | `Section.pageSetup`, and `Paragraph` properties such as `alignment` |
-
-The review hooks need `reviewModule()` from `@docx-editor.dev/pro` in the editor's modules, and an editor `author` for comments and tracked changes. The editing API takes its author from the `author` option of `DocxEditor.createServer`, imported from `@docx-editor.dev/editor-api`, or of `DocxEditor.createBrowser`, imported from `@docx-editor.dev/editor-api/browser`.
+| [Page setup and paragraph dialogs](https://www.docx-editor.dev/docs/2.x/customization/dialogs) | `DocxEditor.PageSetupDialog` or `DocxEditor.ParagraphDialog` | `Section.pageSetup`, and `Paragraph` properties such as `alignment` |
 
 This package ships the task recipes in [`docs/index.md`](./docs/index.md). They are also on the site: [Task recipes](https://www.docx-editor.dev/docs/2.x/recipes).
 
 ## Render charts and advanced drawings
 
-Register `drawingModule()` to render charts, SmartArt saved without its drawing, shape effects, WordArt, and EMF and WMF pictures. If you already register `reviewModule()`, you don't need it.
+Register `drawingModule()` to render charts, DrawingML diagrams saved without their drawing, shape effects, VML text paths, and EMF and WMF pictures. If you already register `reviewModule()`, you don't need it.
 
 ```ts
 import { drawingModule } from '@docx-editor.dev/pro/drawing';

@@ -96,6 +96,10 @@ export function supportsTrackedAutomationOperation(operation: AutomationOperatio
   return [
     'insertContentControl',
     'setContentControlProperties',
+    // A control's value is struck and the new value inserted inside it; text at an edge of
+    // its content is an ordinary tracked insertion there.
+    'setContentControlValue',
+    'insertContentControlText',
     'startNewList',
     'setListLevelFormat',
     'attachToList',

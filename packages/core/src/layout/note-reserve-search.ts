@@ -423,6 +423,17 @@ function firstDifferentReserve(a: Reserves, b: Reserves): number {
   return first;
 }
 
+/**
+ * Whether a pass with body block limit `next` (-1 for none) can resume the walk of a pass with
+ * limit `previous`. A progressive open lays out growing prefixes of the body. The blocks a
+ * larger limit adds act as an edit after the previous cut, so the walk keeps the pages before
+ * it, as for any edit. Without this, each prefix decides every page again from the first.
+ */
+function extendsLimit(previous: number, next: number): boolean {
+  if (previous === next) return true;
+  return previous !== -1 && (next === -1 || next > previous);
+}
+
 /** Report only the pages the walk has decided, so a host shows no undecided page. */
 function* decidedProgress<T>(steps: LayoutSteps<T>, decided: () => number): LayoutSteps<T> {
   for (;;) {
@@ -458,7 +469,9 @@ export function* searchFootnoteReserves(
   let unchangedFrom = Number.POSITIVE_INFINITY;
   let probeLayout: SemanticLayout | null = null;
   let unchanged = false;
-  const reuse = state && previousLayout && state.limit === options.limit ? state : undefined;
+  let followed = false;
+  const reuse =
+    state && previousLayout && extendsLimit(state.limit, options.limit) ? state : undefined;
   if (reuse && sameInputs(reuse.inputs, options.inputs)) {
     const given = reuse.record.reserves;
     let layout = yield* options.body(given, undefined, false);
@@ -466,8 +479,10 @@ export function* searchFootnoteReserves(
     let range = changedRange(layout, previousLayout!);
     if (!Number.isFinite(range[1]) && layout.pages.length !== previousLayout!.pages.length) {
       layout = yield* options.body(given, undefined, true);
-      options.followedReserves(given);
-      probe = null;
+      // Each page read one reserve, so this probe is the body under the reserves it read, and
+      // serves the walk's rounds as the first probe does. It is not the previous answer.
+      probe = { layout, used: options.followedReserves(given) };
+      followed = true;
       range = changedRange(layout, previousLayout!);
     }
     probeLayout = layout;
@@ -476,6 +491,7 @@ export function* searchFootnoteReserves(
       let [first, from] = range;
       unchanged =
         probe !== null &&
+        !followed &&
         notes.length === 0 &&
         first >= previousLayout!.pages.length &&
         layout.pages.length === previousLayout!.pages.length;
@@ -499,6 +515,12 @@ export function* searchFootnoteReserves(
   // The session as the probe left it, saved before the first round the walk lays out: a walk
   // whose rounds the probe answers changes nothing in it.
   const saved: { restore?: () => void } = {};
+  // The reserves the session's checkpoints were last laid out under. A round resumes at the
+  // first page whose reserve differs from them. The probe covers the whole body, so a round
+  // whose reserves agree with the probe's further than with the last round's starts from the
+  // probe instead: it then lays out from the page being decided, not from the note page the
+  // last real round decided. A followed probe keeps its seed's record, so it is not used here.
+  let sessionUsed: Reserves | null = probe && !followed ? probe.used : null;
 
   // The latest round's layout, and the latest layout that reached the end of the body.
   let reference: SemanticLayout | null = probeLayout ?? previousLayout;
@@ -571,6 +593,17 @@ export function* searchFootnoteReserves(
       }
     }
     if (session && !saved.restore) saved.restore = snapshotLayoutSession(session);
+    else if (
+      saved.restore &&
+      probe &&
+      !followed &&
+      sessionUsed !== probe.used &&
+      firstDifferentReserve(probe.used, reserves) >
+        (sessionUsed ? firstDifferentReserve(sessionUsed, reserves) : -1)
+    ) {
+      saved.restore();
+      sessionUsed = probe.used;
+    }
     let limit = atSectionEnd(onLimitGrid(blockLimitThrough(throughPage + 1), blocks.length));
     for (;;) {
       const whole = limit >= blocks.length;
@@ -579,6 +612,7 @@ export function* searchFootnoteReserves(
         () => decided
       );
       reference = layout;
+      sessionUsed = reserves;
       if (whole) wholeReference = layout;
       // A round short of its target still serves when the walk can decide a page from it.
       if (whole || layout.pages.length >= neededPage + 2) return { layout, whole };
@@ -650,6 +684,11 @@ export function* searchFootnoteReserves(
  * The blocks and sections a body run lays out: all of them, or the first
  * `noteRoundBlockLimit` for a round of the reserve search. A section the limit cuts keeps its
  * own properties; only its end moves.
+ *
+ * A document with more than one section lays every round out on the multi-section path, even
+ * a round cut inside its first section. The rounds of one search then share its section
+ * sessions, and a round that reaches the later sections resumes from them instead of laying
+ * out every page again.
  */
 export function noteRoundBlocks<Block extends OoxmlElement>(
   _part: OoxmlPart,

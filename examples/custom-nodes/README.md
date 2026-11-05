@@ -1,6 +1,6 @@
-# Custom nodes in Word content controls
+# Custom nodes in DOCX content controls
 
-This example stores a custom legal citation as a Word content control. You can insert, edit, and save the citation.
+This example stores a custom legal citation as a DOCX content control. You can insert, edit, and save the citation.
 
 ## Run the example
 
@@ -24,9 +24,9 @@ Open any `.docx`, put the caret somewhere, and click **Insert citation**.
 
 ## The round trip
 
-Save the document and open it in Word. The citation is an ordinary content control there, so Word shows its text and gives it back untouched. Reopen the file here and `fromDocx` recognizes it from the same `w:tag`.
+Save the document and open it in another DOCX application. The citation is an ordinary content control there, so the application shows its text and gives it back untouched. Reopen the file here and `fromDocx` recognizes it from the same `w:tag`.
 
-A reader without your definition registered sees the control's content rendered literally, which is also what Word does. Nothing is lost either way.
+A reader without your definition registered sees the control's content rendered literally. Nothing is lost either way.
 
 ## Two things the API makes you handle
 

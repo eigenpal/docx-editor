@@ -1,0 +1,360 @@
+---
+title: 'DOCX fidelity'
+description: 'Check which DOCX features you can edit, display, and preserve on save, and the layout limits of each.'
+category: 'Getting started'
+seoTitle: 'DOCX feature support and fidelity'
+---
+
+<PackageStats name="@docx-editor.dev/react" />
+
+Use this page to check which DOCX features you can edit, display, and preserve when you save. The feature matrix gives the status and limits of each feature. The tables after it list layout rules that depend on document settings.
+
+| Topic | Guide |
+| --- | --- |
+| Font bytes, measurement, and page breaks | [Fonts and measurement](/docs/2.x/guides/fonts) |
+| Mirrored controls and mixed-direction text | [Right-to-left support](/docs/2.x/guides/right-to-left) |
+| East Asian fonts and input | [Chinese, Japanese, and Korean text](/docs/2.x/guides/cjk) |
+| Picture formats and text wrapping | [Images](/docs/2.x/guides/images) |
+| Section variants | [Headers and footers](/docs/2.x/guides/headers-footers) |
+| Note placement and continuation | [Footnotes and endnotes](/docs/2.x/guides/footnotes-and-endnotes) |
+| Fallback fonts, joined Arabic text, and effects in PDF | [PDF export](/docs/2.x/export/pdf) |
+
+## Language support
+
+Right-to-left scripts and Chinese, Japanese, and Korean text work in the editing surface, the automation API, collaboration, and PDF export. The interface mirrors for Arabic and Hebrew.
+
+| Language group | Support | Details |
+| --- | --- | --- |
+| Arabic, Hebrew, Persian, and Urdu | <FeatureBadge id="text.rtl" /> | Shaping and joining, mixed-direction order, right-to-left paragraphs, lists, tables, and columns. See [Right-to-left text](/docs/2.x/guides/right-to-left). |
+| Chinese, Japanese, and Korean | <FeatureBadge id="text.cjk" /> | Input-method typing, East Asian font selection, line-breaking rules, and fallback fonts. See [Chinese, Japanese, and Korean text](/docs/2.x/guides/cjk). |
+| East Asian typography | <FeatureBadge id="paragraphs.east-asian-typography" /> | Inter-script spacing, punctuation compression, and punctuation overflow. See [East Asian text](#east-asian-text). |
+| Thai, Lao, Khmer, and Myanmar | <FeatureBadge id="paragraphs.complex-script-line-breaks" /> | Line breaks at character clusters. See [Complex-script line breaks](#complex-script-line-breaks). |
+| Interface languages | <FeatureBadge id="collab.i18n" /> | Translated controls. See [@docx-editor.dev/i18n](/docs/2.x/i18n). |
+
+Before you deploy, test your target browsers and input methods. Start composition in an empty paragraph, in a table cell, and beside an inline picture.
+
+## Feature matrix
+
+The matrix reports editing, rendering, and round-trip support separately. A feature can display without editing controls, or survive save without displaying.
+
+| Axis       | Question                                                                          |
+| ---------- | --------------------------------------------------------------------------------- |
+| Editing    | Can a user or the API change the feature?                                         |
+| Rendering  | Does the feature display as the OOXML specification and document settings define? |
+| Round-trip | Does it survive open, edit, save, and reopen?                                     |
+
+| Status      | Meaning                                            |
+| ----------- | -------------------------------------------------- |
+| Full        | Supports the feature within the scope of its note. |
+| Partial     | Works with the limits in its note.                 |
+| Render only | Displays correctly but is not editable.            |
+| Preserved   | Remains as inert content through editing and save. |
+| No          | Is not supported.                                  |
+
+<FeatureSummary />
+
+### Text and formatting
+
+<FeatureMatrix category="text" />
+
+- Raised and lowered text, including inherited `w:position` with subscript or superscript, adds to automatic and minimum line heights. Exact line spacing keeps its height.
+- For equation limits, see [Equations](#equations).
+
+### Paragraphs and styles
+
+<FeatureMatrix category="paragraphs" />
+
+- `w:keepNext` paragraphs form one group, of any length. Explicit page breaks and section boundaries end the group.
+- With widow control, a following three-line paragraph stays whole. `w:keepLines` keeps the whole following paragraph with the group when the group fits.
+- In left-to-right text, an opening word wraps within the space after leading left tabs, without a blank line.
+- Distributed paragraphs (`w:jc="distribute"`) stretch their last line, also in cells and beside floating objects.
+- For text frames, see [Text frames](#text-frames). For East Asian spacing, see [East Asian text](#east-asian-text).
+
+### Lists and numbering
+
+<FeatureMatrix category="lists" />
+
+- Lists that share one `w:abstractNum` count on one number per level.
+- A `w:startOverride` restarts that number once, at the first item of its list, on the overridden level only. Other lists continue from the restarted number. When the same `w:lvlOverride` replaces the level, its `w:start` takes precedence.
+- Header and footer lists share one count that the body and notes do not join. The count runs over each section's referenced parts, in order. Hidden parts still count, and each explicit reference counts again. An inherited part reuses the earlier section's numbers.
+
+### Tables
+
+<FeatureMatrix category="tables" />
+
+- For table placement, row splits, and merged cells, see [Table layout](#table-layout) and [Floating tables](#floating-tables).
+- Press **Tab** or **Shift+Tab** to select the next or previous cell. In the last cell, **Tab** adds a row when the document permits it.
+- To insert a tab character in a cell, press **Option+Tab** or **Ctrl+Tab**. Browsers can reserve **Ctrl+Tab**.
+
+### Text columns
+
+- A multi-column section balances its final page before a continuous section. Earlier pages keep their distribution.
+- The following continuous section starts below the tallest column.
+- For `w:noColumnBalance`, see [Compatibility mode differences](#compatibility-mode-differences).
+
+### Images and drawings
+
+<FeatureMatrix category="images" />
+
+| Feature | Rendering and editing | Round-trip |
+| --- | --- | --- |
+| Anchored text boxes | Insert, type, format, paste plain text, drag, resize, and delete in the body, headers, and footers. Edits synchronize in collaboration. Boxes with tables are read-only. Linked chains, autofit, and rotation can clip or show a placeholder. | Preserved |
+| Drawing shapes | Preset shapes and bounded custom geometry with fills, outlines, line ends, and outer shadows. Glow, inner shadow, reflection, soft edge, and dark-edged bevel rims need the [drawing module](/docs/2.x/pro/drawing). Other shapes show a placeholder that keeps its wrap area. Not editable. | Preserved |
+| WMF and EMF | Rasterized in the editor. With the drawing module, PDF export draws them as vectors. Files that do not convert show a placeholder; PDF export omits them and reports a diagnostic. Not editable. | Full |
+| Charts | Read-only with the [drawing module](/docs/2.x/pro/drawing), also in PDF. If a chart fails, the editor and PDF export use its saved fallback. If the fallback also fails, the editor shows a labeled placeholder, and PDF export omits the chart with a `drawing` diagnostic, which fails strict export. See [What renders](/docs/2.x/pro/drawing#what-renders). | Preserved |
+| DrawingML diagrams | Renders the saved diagram drawing. A diagram without its drawing needs the drawing module. Not editable. | Full |
+| VML text paths | Renders with the drawing module. Without it, an inline text path shows a placeholder and a floating text path does not show. | Full |
+
+- Groups with unsupported effects or 3D properties keep their unsupported behavior as a whole. The editor does not render only their supported members.
+- `w14:textOutline` renders when it is an opaque solid RGB outline. PDF export does not paint text outlines.
+- Picture commands refuse charts. Deleting a chart removes its fallback too.
+- A right-to-left line beside a floating object fills the passage to the right of the object first. Text never reorders across the object.
+
+### Page layout, headers, and footers
+
+<FeatureMatrix category="layout" />
+
+See [Pages and sections](#pages-and-sections) for page break and section rules.
+
+### Tracked changes, comments, and notes
+
+<FeatureMatrix category="review" />
+
+### Fields, links, and table of contents
+
+<FeatureMatrix category="fields" />
+
+- `LISTNUM` fields count on the counters of their list's numbered paragraphs. The number replaces any saved result.
+- Saved results of fields nested in another field's instruction add no text, breaks, or links.
+- `STYLEREF` headers resolve supported display-name references. See [Fields and cross-references](/docs/2.x/guides/fields).
+
+### Document structure and content controls
+
+<FeatureMatrix category="structure" />
+
+### Collaboration, languages, and editing
+
+<FeatureMatrix category="collaboration" />
+
+## Compatibility mode differences
+
+The compatibility mode in `w:compat` changes clipping, page counts, table placement, and visible content. A valid mode directly under the settings element applies when `w:compat` has no valid mode. In this table, "Legacy" means mode 14 or earlier, or no declared mode.
+
+| Behavior | Mode 15 and later | Legacy |
+| --- | --- | --- |
+| `w:noColumnBalance` | No effect. Sections balance. | Each column fills before the next. |
+| **Layout in table cell** turned off | No effect. The object stays in its cell. | The object is placed against the page, unless it is positioned against its character or line. Wrapped rows move below it. |
+| Square wrap on the largest side, equal sides | Text keeps the left side. | Text keeps the right side. |
+| Header or footer text beside a floating table or wrapping object in the same part | Wraps beside it or moves below it. The part grows with that text. | Ignores the object. |
+| Page- or margin-anchored floating table past the bottom | The first part ends at the bottom margin. | Breaks only past the page edge, and can reach that edge. |
+| No-overlap floating table | Can move left or right of an earlier table. | Moves right only, then below. |
+| Right-aligned floating table in the body | Keeps its position. | Moves right by its right cell margin. |
+| Percentage-width tables | A percentage excludes the outer side rules. | Top-level tables measure against the text column plus outer cell margins, and align content with the text edge. |
+| Right-to-left table | Moves left by half the mean width of its outer side rules. | No shift. |
+| First-line indent in AutoFit minimum | Included. | Excluded. A word too wide for the indented first line breaks there. |
+| Fixed tables, left-aligned, top-level | Keep their geometry. | First-cell content aligns with the table indent. |
+| Last page of a table that leaves out its repeated header rows | Following content starts on the next page, even when it fits. | No forced page break. |
+| First body row below a repeated header | Reserves the border it shares with the row above. | Reserves the wider of its top border and the header's bottom border. |
+| Row that does not fit below repeated headers | The repeat is omitted. The row starts the page. | Headers stay. The row stays whole below them and runs past the bottom margin. |
+| Unsplittable row taller than a page | Splits on a fresh page. Header rows repeat on the page after it. | Stays whole on a fresh page, past the bottom margin. Lines past the page edge do not show. Header rows repeat above it. |
+| Line-end punctuation overflow | Hangs in justified and distributed paragraphs. | Hangs at every alignment, whatever the kinsoku switch. |
+| Korean paragraph-final mark with punctuation compression | Marks other than `。` and `、` can hang. | Starts the next line. |
+| Space shrink before a hanging mark | Justified and distributed lines shrink spaces first. | With punctuation compression and an East Asian default face, lines at any alignment shrink spaces to keep one more word. |
+| Kana fitting in Traditional Chinese runs | Off. | On. |
+| Distributed text with pair kerning | Kerned runs keep their letters together. | Kerned runs spread too. |
+| Left-to-right justified text beside floating objects | Each passage compresses its own spaces. | No per-passage rule. |
+
+## Layout limits
+
+The editor calculates layout from document fonts, themes, section geometry, and OOXML units. The layout result controls line and page breaks. Font bytes change measurement, wrapping, and pagination.
+
+### Equations
+
+| Area | Behavior |
+| --- | --- |
+| Letters | Latin and Greek letters use mathematical italic from the math font, unless `m:sty` sets plain, bold, or bold italic. Run bold and italic do not change them. |
+| Digits | ASCII digits in an authored text font use that font with the math style and run bold or italic. Bold math styles keep mathematical bold digits. |
+| Mixed fonts | `w:rFonts` slots select faces by script, as in ordinary text. A run that needs two faces shows a text fallback. |
+| Sizes | Each run uses its `w:sz`, from 1 through 9999 half-points. `w:szCs` alone does not set the size. Conflicting sizes show a text fallback. |
+| Script and fraction text | 73 percent of the run size, rounded down to a half point. Nested scripts use 60 percent. |
+| Display equations | `m:oMathPara`, or an `m:oMath` alone in its paragraph. No display style: they use inline fraction rules and part sizes. |
+| N-ary operators | Inline: limits sit to the right, whatever `m:limLoc` says. Display: the operator enlarges and limits follow `m:limLoc`. |
+| Operators | Take math spacing by class. A hyphen-minus draws as a minus sign. |
+| Line height | Later runs add only their glyph height and math leading. Multiple and exact line spacing apply as for text. |
+| Math settings | Document-wide limit defaults in `m:mathPr` are not read. |
+| Save | Equations keep their OMML source. Unsupported properties keep the text fallback and stay unchanged. |
+
+Compact equation replacement is disabled when it cannot keep the source. The equation popover shows the reason. This applies to:
+
+- Integrals, because replacement writes only sums.
+- Limit location `subSup`.
+- Mixed source sizes.
+- Run formatting, bars, or control properties (`m:ctrlPr`) other than one shared default: Cambria Math, italic, one size, and a language.
+
+### Text frames
+
+- Body frames support numeric and relative positions, fixed or column width, and `auto`, `atLeast`, and `exact` heights. Exact heights clip content.
+- Adjacent paragraphs with identical resolved `w:framePr` share one frame.
+- All `ST_Wrap` values use a rectangular contour. `none`, `notBeside`, and vertical `inline` move text below the frame.
+- Single-line left-to-right dropped caps are supported. Multiline and right-to-left dropped caps keep ordinary flow.
+- Support covers single-column sections only. Frames with unsupported drawings, notes, or revisions keep ordinary flow.
+- Header frames support page-anchored numeric positions. Headers with fields or revisions, and frames with exact heights or negative positions, keep ordinary flow.
+- You cannot create, move, or resize frames. Save keeps every frame property.
+
+### Table layout
+
+| Area | Behavior |
+| --- | --- |
+| Width over 100% | A percentage up to 655.34% extends the table past the text column. Larger fiftieths values wrap at 65536. |
+| AutoFit minimum | A column widens for its widest unbroken word, with indents and cell margins. East Asian text breaks at legal line breaks. |
+| `w:noWrap` | Keeps the column at least as wide as the cell's preferred width. Text still wraps. |
+| Wide minimums | Columns shrink in proportion to their minimums. A top-level AutoFit table with an absolute width wider than the column can pass the page edge. |
+| Fixed tables without a width | Positive one-column cell widths can replace a wider grid. Hidden revision rows prevent this. |
+| Nested fixed tables | Paint no wider than their cell. |
+| Cell spacing | Applies on each side of each cell, out of the table width. |
+| Revisions | AutoFit keeps the minimum width of each revision view. |
+| Manual page breaks in cells | Add no line or page. They stay in the document. |
+| Bottom-to-top text | Does not make the row taller. The cell width clips overflow. |
+| Fixed-height rows | Show lines that start in the content box. Text below it does not continue. |
+| Exact height taller than a page | Starts a fresh page, does not split, and stops at the bottom margin. |
+| Fixed-height row at a page end | The bottom rule sits outside the authored height. Applies to collapsed, equal single rules up to 12pt. Eighth-point widths, including 0.625pt, keep their size. |
+| Row minimum height | A row starts only where its minimum height and closing rule fit. A split row keeps its minimum on the next page. |
+| Keep-with-next tables | Measure at most 256 kept rows and the next row. |
+| Vertical merges | Shared rows count once. Content that does not fit is clipped at the last row. |
+| Merges clipped at the first row | Nested or overlapping merges, a shorter merge starting in the same row, and a two-row span across a page. |
+| Legacy unsplittable row taller than a page, with a nested table | Splits, although it should stay whole. This is a known difference. |
+| Legacy unsplittable row taller than a page, with footnotes | The page keeps the first line of the first footnote. The rest continues on the next page. |
+
+### Floating tables
+
+- Only WordprocessingML properties control placement. Foreign XML extensions stay saved.
+- Text does not wrap into gaps of 0.25 inches or less beside a table.
+- Text-anchored tables with numeric vertical offsets follow their next paragraph onto its page and column.
+- A table that pushes its own anchor past the page bottom stays. Only the anchor moves.
+- When the anchor has a page break before it, a text-anchored table that fits the space left stays on the current page. Only the anchor starts the next page.
+- Two tables with identical positions and no paragraph between them stack into one table.
+- A text-anchored table breaks across pages when the space left holds its opening: the header rows and the first line of each cell in the first body row.
+- A text-anchored table stays whole when it has a text distance above, a negative offset, more than one section column, or `w:doNotBreakWrappedTables`. A table taller than a page still breaks.
+- A header or footer table wraps body text on every page that shows that part.
+- You cannot edit floating-table properties. Save keeps them.
+
+### Pages and sections
+
+| Area | Behavior |
+| --- | --- |
+| Page break at paragraph start | Moves the following text to the next page, with its space before, number, and top border. |
+| Page break exceptions | A paragraph with only one break, or with hidden content after it, keeps the ordinary rule. So does a paragraph that anchors a floating object. |
+| Page break and line break | A page break directly followed by a line break starts no page. |
+| Column break at paragraph start | The following content starts in the next column, or on the next page after the last column. |
+| Continuous section | Shares the previous page when page size and orientation match. Its header and footer start on the next page. |
+| Odd-page and even-page sections | Can insert an empty sheet. `NUMPAGES` counts it; `SECTIONPAGES` does not. |
+| Empty paragraph that ends a section | Ignores its own page break before and adds no blank page. Text, a tab, hidden text, or a field turns this off. |
+| Line grids | Automatic body lines snap to whole grid steps. Table cells snap only with `w:adjustLineHeightInTable`. Headers, footers, and text boxes do not snap. |
+| Paragraph spacing | Adjacent spacing uses the larger value. `w:doNotUseHTMLParagraphAutoSpacing` adds the values and turns off automatic spacing. |
+| Empty paragraph marks | A named character style sets their font. Direct mark properties override it. |
+
+### Note numbering
+
+- Each section numbers its notes from its own `w:footnotePr` and `w:endnotePr`: format, start value, restart rule, and footnote position.
+- Unset values default to decimal footnotes, lowercase Roman endnotes, start 1, continuous numbering, and footnotes at the page bottom.
+- Note properties in `settings.xml` do not apply. The endnote position is the exception: it comes from `settings.xml` only, for the whole document.
+- A note number is the section start value plus the note's index in its domain: the document, section, or page. For example, a section that starts at 10 after two earlier notes numbers its notes 12 and 13.
+- For placement and continuation, see [Footnotes and endnotes](/docs/2.x/guides/footnotes-and-endnotes).
+
+### Fonts and text direction
+
+- Supply font bytes for accurate measurement. See [Fonts and measurement](/docs/2.x/guides/fonts).
+- The font resolver also receives faces of SYMBOL fields and numbering markers.
+- Symbol and Wingdings bullets use a Unicode fallback when the font is missing. Layout keeps the symbol font metrics.
+- No-break spaces and word joiners keep their break behavior across runs.
+- Paragraph `w:bidi` controls alignment and group order. Run `w:rtl` controls direction within a group.
+- `w:themeFontLang` selects theme fonts for Latin, East Asian, and complex-script tokens.
+
+### Complex-script line breaks
+
+- Thai, Lao, Khmer, and Myanmar text wraps at any character cluster that fits, not at dictionary words.
+- Insert a zero-width space (U+200B) to mark a word boundary.
+- Line breaks never split a cluster. A Khmer coeng or Myanmar virama keeps its stacked consonant.
+- Table AutoFit keeps an unspaced run of these scripts whole.
+- In every script, a dash between letters is a break position across runs.
+
+### East Asian text
+
+East Asian spacing and punctuation rules depend on `w:rPrDefault` in the styles part:
+
+| `w:rPrDefault` | East Asian rules |
+| --- | --- |
+| Omitted | Apply |
+| Names an East Asian font | Apply |
+| Names a known Latin font, such as Arial | Off for justified East Asian spacing and automatic spacing |
+| Any other value, including an empty element | Off for justified East Asian spacing and automatic spacing |
+
+| Setting | Behavior |
+| --- | --- |
+| `w:autoSpaceDE`, `w:autoSpaceDN` | Add space between East Asian text and Latin letters or digits. An authored false turns it off. |
+| `w:kinsoku`, `w:noLineBreaksBefore` | Keep prohibited characters off line starts. Kept units move to the next line together. |
+| `w:overflowPunct` | Lets a line-end mark hang past the margin. See [Compatibility mode differences](#compatibility-mode-differences). |
+| `w:characterSpacingControl` | `compressPunctuationAndJapaneseKana` lets kana compress by up to 1/16 em to fit a prohibited character on a full line. |
+| `w:kern` | At the font size in both runs, adjacent full-width punctuation shares a half-cell bearing. Kana and ideographs keep their advances. |
+| `w:noPunctuationKerning` | Turns off punctuation pair compression. |
+| Font hints (`w:hint="eastAsia"`) | Select the East Asian face for punctuation, symbols, Greek, and Cyrillic. Missing glyphs keep the Latin face. |
+
+- Kana otherwise keep their natural advances and authored spacing. Korean runs never fit kana.
+- Without East Asian defaults, only distributed paragraphs hang marks.
+- A single-spaced line in a CJK face is 1.3 times the face's ascent plus descent.
+- Localized family names, such as `メイリオ`, resolve to the face of the English name.
+- Table AutoFit uses compressed punctuation pairs for the minimum width.
+- Vertical Japanese layout is not supported.
+
+## Round-trip contract
+
+A DOCX file is a ZIP package with XML parts and binary payloads. The editor preserves structure, not bytes.
+
+| Content | Save behavior |
+| --- | --- |
+| Modeled OOXML | Serializes from typed document nodes. |
+| Unmodeled XML elements and attributes | Re-emits generic nodes in place. |
+| Legacy VML, custom XML, and add-in markup | Preserves structural content. |
+| Media, VBA projects, embedded fonts, and OLE binaries | Copies package payloads unchanged. |
+| Relationship IDs, bookmark names, style IDs, and numbering definitions | Keeps references intact. |
+| Tracked changes | Writes `w:ins` and `w:del` revisions. |
+| Theme colors | Keeps theme references. |
+
+- Rewritten XML parts have no byte-identity guarantee.
+- Unsupported content can survive save without displaying or staying editable.
+- `w:br` and `w:cr` outside runs keep their position and start no line or page.
+- A `w:tab` or `w:t` outside a run makes its paragraph unknown content. The paragraph is saved but does not render and is not editable.
+- Continuous integration checks real documents with a canonical tree fingerprint and a save-and-reopen semantic digest.
+
+If untouched content is lost or changed, report a [round-trip issue](https://github.com/eigenpal/docx-editor/issues/new/choose) with the source document. For other support, contact [docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com).
+
+## Security and data flow
+
+| Concern | Behavior |
+| --- | --- |
+| Browser uploads | The editor does not upload documents or call a conversion service. |
+| Macros | VBA payloads are preserved and never run. |
+| OLE | OLE payloads are preserved and never run. Supported inline objects show their cached preview. |
+| Calculated fields | Supported fields update display text only. Macros, DDE, and external includes stay inert. |
+| Hyperlinks | Allowlisted targets open only after a user gesture. |
+| Server editing | Your host controls where DOCX data runs. |
+| External models | `@docx-editor.dev/editor-api` includes no model integration or transport. |
+
+Your application controls any data sent to another service or model.
+
+## Package licenses
+
+| Package | License |
+| --- | --- |
+| `@docx-editor.dev/core`, `react`, `vue`, and `i18n` | Apache 2.0 |
+| `@docx-editor.dev/fonts` | Apache-2.0 AND OFL-1.1 AND LicenseRef-GUST-Font-License |
+| `@docx-editor.dev/fonts-cjk` | Apache-2.0 AND OFL-1.1 |
+| `@docx-editor.dev/docx-to-pdf`, `editor-api`, and `pro` | EigenPal Pro License |
+
+Packages use Semantic Versioning in one fixed version group. Contributions require a [Contributor License Agreement](https://github.com/eigenpal/docx-editor/blob/main/CLA.md). For Pro terms, see the [pricing page](https://www.docx-editor.dev/pricing).
+
+## See also
+
+- [Quickstart](/docs/2.x/quickstart): Load, edit, and save a DOCX file.
+- [Architecture](/docs/2.x/core/architecture): Review the engine pipeline.
+- [Fonts and measurement](/docs/2.x/guides/fonts): Supply fonts for accurate layout.

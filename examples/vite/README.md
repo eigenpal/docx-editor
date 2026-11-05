@@ -46,7 +46,7 @@ function Editor({ file }: { file: ArrayBuffer }) {
 
 `document` takes an `ArrayBuffer`, a `Uint8Array`, or an existing `DocumentHandle`. The editor loads embedded fonts without a resolver.
 
-Pass usable font bytes for Word-accurate measurement. Without them, fallback measurement does not guarantee Word-compatible layout. Use `packagedFonts()` for local substitutes. `googleFonts()` opts your application into CDN requests.
+Pass usable font bytes for accurate measurement. Without them, fallback measurement does not guarantee faithful DOCX layout. Use `packagedFonts()` for local substitutes. `googleFonts()` opts your application into CDN requests.
 
 ## Build custom chrome
 

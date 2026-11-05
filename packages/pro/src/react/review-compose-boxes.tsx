@@ -177,6 +177,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
               ref={fieldRef}
               data-testid="review-draft-input"
               className="docx-review__input"
+              autoComplete="off"
               value={text}
               placeholder={t('comments.addComment')}
               readOnly={readOnly}
@@ -311,6 +312,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
           id={fieldId}
           data-testid="review-reply-input"
           className="docx-review__input"
+          autoComplete="off"
           value={draft}
           placeholder={t('comments.replyPlaceholder')}
           readOnly={readOnly}

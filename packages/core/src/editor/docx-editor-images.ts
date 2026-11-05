@@ -631,16 +631,9 @@ export function gateImageCommand(
     preserveWrapExtent(surface, wrapTarget, resizing);
     if (resizing.length) return { ok: false, code: 'locked', reason: 'the drawing size is locked' };
   }
-  // Suggesting supports exactly one image command: proposing the deletion. Every other
-  // image edit (resize, wrap, position, replace) still refuses — a tracked form of those
-  // does not exist yet, and a silent untracked commit is the one thing the mode forbids.
-  if (surface.editingMode() === 'suggest' && command.type !== 'deleteImage') {
-    return {
-      ok: false,
-      code: 'invalidArgs',
-      reason: SUGGESTING_IMAGE_REPLACE_REASON,
-    };
-  }
+  // Suggesting proposes a deletion and applies property edits (size, position, wrap, crop,
+  // alt text) directly: OOXML records no tracked form for a drawing's properties, so they
+  // are never proposals. Replacing the picture is refused by `asyncImageExecutionGate`.
   switch (command.type) {
     case 'deleteImage':
       if (image.locks.select) {
@@ -1224,7 +1217,7 @@ export function selectedDrawingOverlayTargetOf(
   // eight resize handles, a `move` cursor and a live drag preview that auto-scrolled the
   // document — then snapped back when the write was refused. The selection ring stays: the
   // image is still selectable, copyable and describable in a document open for viewing.
-  const writable = surface.editingMode() === 'edit' && surface.session.editable;
+  const writable = surface.editingMode() !== 'view' && surface.session.editable;
   const gated = writable ? caps : { ...caps, canResize: false, canMove: false };
   // The frame origins are in the record's own coordinates, which for a header or footer
   // drawing on a story-relative axis are the story's. The overlay frame is in page-content

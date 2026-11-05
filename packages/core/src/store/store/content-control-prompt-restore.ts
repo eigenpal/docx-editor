@@ -2,9 +2,10 @@
 //
 // Word's rule: delete the last character of a text, date or list control and the
 // placeholder comes back under `w:showingPlcHdr`, ready for the next keystroke to replace
-// it whole. The store lane cannot read the glossary, so the type's own prompt stands in
-// for the block's text; the `w:placeholder` reference itself survives for Word and for the
-// next open, where `materializeGlossaryPlaceholders` resolves it. Split from
+// it whole. The text is the glossary block's that `w:placeholder/w:docPart` names, which the
+// store hands in through `EditOptions.placeholderText`; without one, the type's own prompt
+// stands in. The `w:placeholder` reference itself survives for other readers and for the next open,
+// where `materializeGlossaryPlaceholders` resolves the whole block. Split from
 // `tree-op-content-controls.ts` to keep that file under its line cap.
 
 import type { ContentControlKind } from '../package/content-control-nodes.ts';
@@ -75,7 +76,16 @@ export function restoreEmptiedPlaceholder(
   if (!content || holdsContent(content, 0)) return result;
   const nextId = createNodeIdAllocator(result.part);
   const inline = isInlineControl(result.part, control.id);
-  const children = contentWithText(content, prompt ?? promptFor(summary.type), nextId, inline);
+  const authored =
+    summary.placeholderDocPart === undefined
+      ? undefined
+      : options?.placeholderText?.(summary.placeholderDocPart);
+  const children = contentWithText(
+    content,
+    prompt ?? authored ?? promptFor(summary.type),
+    nextId,
+    inline
+  );
   if (!children) return result;
   const sdtPr = contentControlPropertiesContainerOf(control);
   const properties = editedProperties(sdtPr, { showingPlaceholder: true }, nextId);

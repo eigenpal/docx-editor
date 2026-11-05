@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "With word wrapping, a Korean word breaks at its ASCII punctuation, digits, and Latin letters.",
+  "after": "With word wrapping, a Korean word keeps its ASCII punctuation, digits, and Latin letters, and lines break between words.",
+  "reason": "Only derived layout changes. Canonical OOXML, source offsets, operations, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/korean-word-wrap.test.ts",
+    "packages/pro/src/collaboration/__tests__/korean-word-wrap-editors.test.ts"
+  ],
+  "changeset": "korean-word-wrap-punctuation",
+  "migration": null
+}

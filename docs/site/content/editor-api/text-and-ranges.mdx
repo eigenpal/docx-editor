@@ -5,19 +5,13 @@ category: 'Editing API'
 order: 53
 ---
 
-Use `Body` for a story, `Paragraph` for a paragraph, and `Range` for an addressed span. `context.document.body` is the main story. `document.paragraphs` and `document.body.paragraphs` cover its paragraphs, including table cells and nested controls. They do not aggregate headers, footers, or notes. See [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) for those bodies.
+Use `Body` for a story, `Paragraph` for a paragraph, and `Range` for an addressed span. `context.document.body` is the main story, including table cells but not headers, footers, or notes. For those, see [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories).
 
-Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
-
-## Refresh ranges after edits
-
-A `Range` stores paragraph identities and UTF-16 offsets from the moment it was found. It does not follow later edits inside those paragraphs. For example, a range over `alpha` still names offsets zero through five after text is inserted before it. Using that range, to read or to edit, then fails with `StaleDocument` instead of addressing different text. Edits after the range and formatting changes keep it valid. Deleting an endpoint paragraph invalidates the range.
-
-After a successful edit, search again before acting on another target in that paragraph. For the inserted text itself, use the `Range` returned by `insertText()` after sync. Tracking a proxy across runs preserves its lifetime; it does not turn its range into a live text region. This differs from Word's moving range behavior.
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
 
 ## Read text without exporting proxies
 
-Load text before reading it:
+Load `text`, sync, and return plain data:
 
 ```ts
 const text = await runtime.run(async (context) => {
@@ -28,188 +22,11 @@ const text = await runtime.run(async (context) => {
 });
 ```
 
-`Body.text` joins paragraphs with carriage returns (`\r`). `Paragraph.text` reads paragraph text; `Range.text` reads the addressed content. Text reads follow the runtime's `revisionTextView` option.
-
-Some document elements use a single character in API text, regardless of their displayed glyph:
-
-| Document element    | API text | Range length    | `insertText()` behavior                     |
-| ------------------- | -------- | --------------- | ------------------------------------------- |
-| Non-breaking hyphen | U+001E   | One UTF-16 unit | Restores the non-breaking hyphen element    |
-| Optional hyphen     | U+001F   | One UTF-16 unit | Restores the optional hyphen element        |
-| Symbol (`w:sym`)    | `(`      | One UTF-16 unit | Inserts a literal parenthesis, not a symbol |
-| Manual line break   | `\v`     | One UTF-16 unit | Inserts a manual line break                 |
-| Paragraph mark      | `\r`     | One UTF-16 unit | Starts a new paragraph                      |
-| Column break        | U+000E   | One UTF-16 unit | Refused                                     |
-
-Hyphen elements can survive a text read and write through these characters. This does not preserve arbitrary document structure, such as symbols or fields. Convert the hyphen characters before passing text to readers that require ordinary text.
-
-Search never matches a symbol. A search for `(` does not find it, and search does not join the text on either side. For hyphen matching rules, see [Search and navigation](/docs/2.x/editor-api/search-and-navigation).
-
-The API does not expose HTML or document-wide `start` and `end` offsets, and it reads no OOXML strings. It accepts OOXML only for one equation through `Range.insertOoxml()`; see [Insert an equation](#insert-an-equation). `Paragraph.uniqueLocalId` identifies a paragraph within the runtime; load it before reading. Do not use it as a permanent identifier across separately opened files.
-
-## Upgrade text processing
-
-Automation reads in 2.26.0 and earlier report manual line breaks and column breaks as `\n`. Later versions report them as `\v` and U+000E, respectively. Paragraph separators remain `\r`. Each break still occupies one UTF-16 unit.
-
-Update comparisons, line splitting, stored expectations, and text display code to handle these characters. For plain-text display, you can convert `\v` to `\n` in a separate string. Keep the original API text when writing manual line breaks back to the document. Text writes refuse U+000E. Do not replace column breaks with manual line breaks.
-
-Search and `Paragraph.split()` accept `\n` as an alias for a manual line break. This alias does not change text read results. In `insertText()`, `\n` is a paragraph break, not a manual line break. Text reads do not preserve arbitrary document structure when you write them back.
-
-## Choose an insertion location
-
-The location types describe the supported call shapes:
-
-| Receiver    | `insertText(text, location)`                 | `insertParagraph(text, location)` |
-| ----------- | -------------------------------------------- | --------------------------------- |
-| `Body`      | `Replace`, `Start`, `End`                    | `Start`, `End`                    |
-| `Paragraph` | `Replace`, `Start`, `End`                    | `Before`, `After`                 |
-| `Range`     | `Replace`, `Start`, `End`, `Before`, `After` | `Before`, `After`                 |
-
-The exported aliases are `BodyInsertTextLocation`, `BodyInsertParagraphLocation`, `ParagraphInsertTextLocation`, `RangeInsertTextLocation`, and `BesideLocation`. `InsertLocation` provides matching enum values, such as `InsertLocation.replace`. A method only accepts the locations shown in its signature.
-
-`insertText()` returns the inserted `Range`. `insertParagraph()` returns the created `Paragraph`. You can load the returned object in the same sync; the load reports the inserted content. Sync before configuring the returned object. `insertParagraph()` and `ContentControl.insertText()` refuse paragraph separators such as `\r` and `\n`.
-
-If a table opens a body, `Body.insertParagraph(text, 'Start')` inserts the paragraph before the table. If a table closes a body, `'End'` inserts it after the table. This also applies to the body of a table cell. A second edit at the same edge in one sync refuses with `ConflictingChanges`, so sync between them.
-
-To keep lines in one paragraph, write a manual line break as `\v` (U+000B). `insertText()` and `insertParagraph()` write each `\v` as a line break. Text reads report that break as `\v`. A single-line content control refuses a line break. You can also insert one break with `Range.insertBreak('Line', location)`.
-
-Text inserted into an empty paragraph takes the character style that the paragraph mark names. It does not take the mark's direct run properties, such as a direct font size. To apply those, set `font` on the returned range after sync.
-
-This example appends a paragraph and configures it after creation:
-
-```ts
-await runtime.run(async (context) => {
-  const paragraph = context.document.body.insertParagraph('Review complete.', 'End');
-  await context.sync();
-  paragraph.spaceAfter = 12;
-  const range = paragraph.getRange('Content');
-  range.load('text');
-  await context.sync();
-  console.log(range.text);
-});
-```
-
-## Split a paragraph
-
-`Body.insertText()`, `Paragraph.insertText()`, and `Range.insertText()` treat `\n`, `\r`, and `\r\n` as paragraph breaks. The text after each break starts a new paragraph. The new paragraph keeps the properties of the paragraph that you wrote into, so a list item stays in its list. Two breaks in a row make an empty paragraph. A trailing break moves the rest of the paragraph to a new paragraph.
-
-The returned range starts at the first inserted character and ends after the last inserted segment, in the last new paragraph. Its text reads each break as `\r`.
-
-A break in a hyperlink splits the hyperlink into two links with the same target.
-
-To split between two sentences, replace only the gap between them. The following example replaces the space after the first sentence with a paragraph break:
-
-```ts
-await runtime.run(async (context) => {
-  const body = context.document.body;
-  const first = body.search('the goods.').getFirst();
-  const second = body.search('The buyer').getFirst();
-  const gap = first.getRange('End').expandTo(second.getRange('Start'));
-  gap.insertText('\n', 'Replace');
-  await context.sync();
-});
-```
-
-The first paragraph then ends with `the goods.` and keeps no trailing space. To propose the split as a tracked change, set `TrackMineOnly` first. For an example, see [Propose a paragraph split](/docs/2.x/editor-api/revisions#propose-a-paragraph-split).
-
-A write with breaks refuses in these cases, and the document does not change:
-
-| Error | `innerError.code` | Cause | What to do |
-| --- | --- | --- | --- |
-| `NotSupported` | `edit.indivisible-content` | The break would land inside an inline content control. | Split outside the control, or edit the control's text without a break. |
-| `ConflictingChanges` | None | Another edit in the same sync changes the same paragraph. | Sync after the first edit, then read the range again. For the rules, see [Propose several structural edits in one run](/docs/2.x/editor-api/revisions#propose-several-structural-edits-in-one-run). |
-| `InvalidArgument` | None | The text holds a form feed, U+2028, or U+2029. | Use `\n` for a paragraph break and `\v` for a line break. |
-| `InvalidArgument`, or `GeneralException` with `TrackMineOnly` | `edit.protected-content` | The range is in content-locked or data-bound content. | Edit outside the protected content. |
-| `NotImplemented` | `edit.tracked-own-pending-change` | With `TrackMineOnly`, the range covers or borders your own pending change. | Read the proposed text with `getReviewedText('Current')`, then edit a range outside your pending change. To change your proposal itself, reject it and propose again. |
-| `NotImplemented` | `edit.tracked-foreign-revision-unsupported` | With `TrackMineOnly`, the range touches another author's structural change. | Ask the reviewer to decide that change first. |
-| `StaleDocument` | None | The range's text moved after you read it. | Read the range again, and reconsider the edit. |
-
-## Insert next to existing words
-
-An insertion lands exactly at the range end that you name, so you choose the spacing:
-
-- `search()` matches a trailing space. Search for `'see Section '`, with its space, and insert a field or an equation `'After'` that range. The new content then follows the space.
-- If the words have no space after them, insert `' '` first. In a later sync, insert the field or equation after the range that the write returns.
-- With `TrackMineOnly`, content that you insert right after your own pending text joins that insertion. For example, a field after your own pending space becomes part of that proposal. One **Reject** then removes both. Text after a field that ends its paragraph starts a new insertion after the field.
-- A range that a write returns has no address until that write syncs. You can load it in the same sync. Sync before you insert next to it. Otherwise the call fails with `InvalidObjectPath`.
-
-This example proposes a field after an existing space:
-
-```ts
-await runtime.run(async (context) => {
-  context.document.changeTrackingMode = 'TrackMineOnly';
-  const hit = context.document.body.search('see Section ').getFirst();
-  hit.insertField('After', 'Ref', '_Ref123456 \\h');
-  await context.sync();
-});
-```
-
-For equations, see the spacing tip in [Insert an equation](#insert-an-equation).
-
-## Insert an equation
-
-`Range.insertOoxml(ooxml, location)` inserts one equation and returns the range it occupies. It accepts `Before`, `After`, `Start`, `End`, and `Replace`, with the same endpoints as `insertText()`. `Replace` requires a range in one paragraph. The equation lands where a typed character would, also inside a link, a content control, or your own pending insertion. It reads as U+FFFC, as other equations do. The editor paints it as math. Content-locked and data-bound content refuses with `InvalidArgument` and `edit.protected-content`.
-
-The runtime accepts only this OOXML shape:
-
-- A Flat OPC package, `pkg:package`.
-- An optional `/_rels/.rels` part with exactly one internal `officeDocument` relationship to `word/document.xml`.
-- A `/word/document.xml` part whose body holds exactly one paragraph.
-- In that paragraph, exactly one inline `m:oMath` element, and optional plain runs before or after it. A plain run holds only `w:rPr`, `w:t`, and `w:tab`.
-- Inside the equation, OMML structure and property elements. A math run can carry character formatting in `w:rPr`.
-
-A plain run's `w:t` can carry `xml:space="preserve"`, so a run keeps a leading or trailing space. Use such a run for the space between the equation and the words after it. The following example inserts E = mc² after the words `the relation `, followed by a plain run ` holds.` that keeps its space:
-
-```ts
-const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
-const PKG = 'http://schemas.microsoft.com/office/2006/xmlPackage';
-const TYPE =
-  'application/vnd.openxmlformats-officedocument.' + 'wordprocessingml.document.main+xml';
-const equation =
-  '<m:oMath><m:r><m:t>E=m</m:t></m:r><m:sSup><m:e><m:r><m:t>c</m:t></m:r>' +
-  '</m:e><m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup></m:oMath>';
-const after = '<w:r><w:t xml:space="preserve"> holds.</w:t></w:r>';
-const ooxml =
-  `<pkg:package xmlns:pkg="${PKG}">` +
-  `<pkg:part pkg:name="/word/document.xml" pkg:contentType="${TYPE}">` +
-  `<pkg:xmlData><w:document xmlns:w="${W}" xmlns:m="${M}">` +
-  `<w:body><w:p>${equation}${after}</w:p></w:body></w:document>` +
-  '</pkg:xmlData></pkg:part></pkg:package>';
-
-await runtime.run(async (context) => {
-  const hit = context.document.body.search('the relation ').getFirst();
-  const inserted = hit.insertOoxml(ooxml, 'After');
-  await context.sync();
-  inserted.load('text');
-  await context.sync();
-  console.log(inserted.text); // U+FFFC, then ' holds.'
-});
-```
-
-The runtime ignores `w:rsid*` attributes and paragraph identities. The plain runs keep the formatting the package gives them. With `TrackMineOnly`, the equation and its runs are one tracked insertion. For an example, see [Propose an equation](/docs/2.x/editor-api/revisions#propose-an-equation).
-
-The runtime reads the OOXML with a bounded parser and never fetches or evaluates anything in it. Other input refuses, and the document does not change:
-
-| Error | `innerError.code` | Cause | What to do |
-| --- | --- | --- | --- |
-| `NotSupported` | `edit.ooxml-unsupported` | The package holds other parts, relationships, external targets, or binary data such as images. | Send a package with only the document part and, optionally, the `/_rels/.rels` part. |
-| `NotSupported` | `edit.ooxml-unsupported` | The body holds two paragraphs, two equations, no equation, a display equation (`m:oMathPara`), paragraph properties, or a section break. | Send one paragraph with one inline `m:oMath`. |
-| `NotSupported` | `edit.ooxml-unsupported` | An element or attribute is outside the allowlist, such as a field, a picture, a hyperlink, or a revision. A bare `w:document` without a package refuses the same way. | Remove it, or insert it with its own member, such as `insertField()`. |
-| `InvalidArgument` | `edit.invalid-argument` | The string is not well-formed XML, or it holds a DTD or an entity. | Send well-formed XML with no DTD and no entities. |
-| `InvalidArgument` | `edit.resource-limit` | The package is over 256 KiB or 8,192 elements, a text or attribute value is over 4,096 characters, or math nests more than 64 levels deep. | Send a smaller equation. |
-| `InvalidArgument` | `edit.protected-content` | The insertion point is in content-locked or data-bound content. | Insert outside the protected content. |
-| `InvalidArgument` | `edit.invalid-argument` | `Replace` spans more than one paragraph. | Replace a range in one paragraph. |
-| `NotImplemented` | `edit.tracked-foreign-revision-unsupported` | With `TrackMineOnly`, the equation would land in another author's pending structural change. | Ask the reviewer to decide that change first. |
-| `ConflictingChanges` | None | Another edit in the same sync changes the same paragraph. | Sync between the two edits. |
+`Body.text` joins paragraphs with `\r`. Text reads follow the runtime's `revisionTextView` option. `Paragraph.uniqueLocalId` is valid within one runtime only.
 
 ## Address existing content
 
-`Body.getRange(location?)` and `Paragraph.getRange(location?)` accept `Whole`, `Content`, `Start`, `End`, `Before`, and `After`. The default is `Whole`. Use `Content` when you want the owner's text, and an endpoint for an insertion point. `Range.paragraphs` enumerates paragraphs intersecting the span.
-
-Supported read-derived ranges accept text writes within one sync. For example, queue `paragraph.getRange('End').insertText(' suffix', 'Before')`, then call `await context.sync()`. Sync before inspecting loaded properties or reusing an object returned by a write. Other dependent operations can require a separate sync.
-
-For an exact replacement, use search and verify the match count:
+For an exact replacement, search and check the match count:
 
 ```ts
 await runtime.run(async (context) => {
@@ -219,118 +36,238 @@ await runtime.run(async (context) => {
   matches.load('items');
   await context.sync();
   if (matches.items.length !== 1) throw new Error('Choose one clause');
+
   const replacement = matches.items[0]!.insertText('within 30 days', 'Replace');
-  await context.sync();
   replacement.load('text');
   await context.sync();
-  console.log(replacement.text);
+  return replacement.text;
 });
 ```
 
-See [Search and navigation](/docs/2.x/editor-api/search-and-navigation) for search options and bookmarks.
+Ranges read from the document accept text writes in the same sync. For search options, see [Search and navigation](/docs/2.x/editor-api/search-and-navigation).
 
-`Range.getRange(location?)` accepts `Whole`, `Content`, `Start`, and `End`. `Whole` and `Content` return the same span. `Start` and `End` return an insertion point. `After` fails with `NotSupported`, because a range never owns the position after its end. `RangeLocation` provides matching enum values, such as `RangeLocation.start`.
+| Member | Locations | Notes |
+| --- | --- | --- |
+| `Body.getRange(location?)`, `Paragraph.getRange(location?)` | `Whole` (default), `Content`, `Start`, `End`, `Before`, `After` | Endpoints are insertion points. |
+| `Range.getRange(location?)` | `Whole`, `Content`, `Start`, `End` | `Whole` and `Content` match. `After` fails with `NotSupported`. |
+| `Range.expandTo(other)` | None | Spans from the earlier start to the later end. Both ranges must share a story, or the sync fails with `InvalidArgument`. |
 
-## Split text into word ranges
+`RangeLocation` provides matching enum values. The API exposes no HTML and no document-wide offsets.
 
-`Paragraph.getTextRanges(endingMarks, trimSpacing?)` and `Range.getTextRanges(endingMarks, trimSpacing?)` split text into ranges. Each range ends after one of the ending marks, such as `' '` for words or `'. '` for sentences. A mark can be several characters long. Prefer `'. '` to `'.'` for sentences. `'.'` also ends a range inside a number such as `4.2` and after an abbreviation. With `'.'`, the next range starts with the space. A paragraph end always ends a range, and no range contains a paragraph mark. If `trimSpacing` is `false`, the default, each range keeps the spacing after it, so a deleted word takes its space with it. If `trimSpacing` is `true`, each range loses the spaces, tabs, and column breaks at its start and end, and a range that contains only spacing is left out. Use `true` to read words, and the default to plan edits.
+## Choose an insertion location
 
-Each range is an exact span of the document. You can replace, delete, or insert next to it in a later sync, also with change tracking on. To address a run of words, call `first.expandTo(last)`. It returns the span from the earlier start to the later end. Both ranges must be in the same story; otherwise, the sync fails with `InvalidArgument`.
+Each receiver accepts these locations:
 
-Some document elements behave differently inside a word range:
+| Receiver    | `insertText(text, location)`                 | `insertParagraph(text, location)` |
+| ----------- | -------------------------------------------- | --------------------------------- |
+| `Body`      | `Replace`, `Start`, `End`                    | `Start`, `End`                    |
+| `Paragraph` | `Replace`, `Start`, `End`                    | `Before`, `After`                 |
+| `Range`     | `Replace`, `Start`, `End`, `Before`, `After` | `Before`, `After`                 |
 
-| Element | Behavior |
-| --- | --- |
-| Field | Reads as one unit that never splits. It joins the word that it touches. Range text shows the field result, which can contain spaces, such as `Section 4.2`. |
-| Equation, picture, or note reference | Reads as one unit that never splits, shown as U+FFFC. It joins the word that it touches. A tracked deletion or replacement that covers an equation strikes the whole equation; accept removes it, and reject restores it. |
-| Tab | Ends a range only if you list `'\t'` as a mark. `trimSpacing` removes it from range edges. |
-| Inline content control | Adds no boundary. Its words join the ranges around it. |
-| Content-locked control | A replacement or deletion of part of it fails, and `error.debugInfo.innerError.code` is `edit.protected-content`. The outer code is `GeneralException` with `TrackMineOnly` and `InvalidArgument` without it, so branch on the inner code. With tracking on, a deletion or replacement that covers the whole control proposes removing the control as one deletion. |
-| Tracked deletion | Shows in the ranges, like in `text`, unless the runtime's `revisionTextView` is `original`. |
-| Text that `revisionTextView` hides | Holds no ending mark. A range starts and ends at shown characters. Hidden text between two shown characters stays inside the range, so an edit through the range also changes it. |
+The type aliases are `BodyInsertTextLocation`, `BodyInsertParagraphLocation`, `ParagraphInsertTextLocation`, `RangeInsertTextLocation`, and `BesideLocation`. `InsertLocation` provides enum values.
 
-You can pass at most 32 marks. Each mark can have at most 32 UTF-16 code units and no unpaired surrogate. Other values fail with `InvalidArgument`.
-
-`Paragraph.contentControls` and `Range.contentControls` list the content controls that the paragraph or range overlaps, including a control that holds the whole range. Before you plan edits, load `contentControls` with `cannotEdit`, `tag`, and `text` for the paragraph, or for each word range in one sync. Keep each locked control as one unit in the plan.
-
-## Rewrite a paragraph and read the result
-
-To propose a model's rewrite as the fewest tracked changes, use `prepareRewrite` from `@docx-editor.dev/editor-api/agent`. It reads the paragraph for your model, and `draft.apply()` makes the calls in this section for you and rolls back its own changes if a write fails. For more information, see [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite).
-
-A word range is a snapshot. An edit before the range in its paragraph makes the range fail with `StaleDocument`. An edit after the range keeps it valid. Read the ranges once, before you edit. Plan the edits by range index, because a paragraph can repeat a word. Then apply them from the last index to the first, and sync after each edit.
-
-Do not split a paragraph again after tracked edits to plan more edits. A range over pending revisions can join deleted and inserted text, such as `two2` after you replace `two` with `2`. An edit that touches your own pending change fails with `NotImplemented`, and `error.debugInfo.innerError.code` is `edit.tracked-own-pending-change`. Read the proposed text with `getReviewedText('Current')`, then edit a range outside your pending change. To change your proposal itself, reject it and propose again.
-
-After tracked edits, `Paragraph.text` contains both the deleted and the inserted words. Call `getReviewedText('Current')` to read the text as if every pending change were accepted. Call `getReviewedText('Original')` to read it as if every change were rejected. `Range.getReviewedText()` and `Paragraph.getReviewedText()` default to `Current`. The method does not change the document. `ChangeTrackingVersion` provides matching enum values.
-
-Each range keeps the space or tab after it, except the last range of the paragraph. Map each difference between the old and the new words to one call:
-
-| Difference | Call |
-| --- | --- |
-| Replace one or more words | `first.expandTo(last).insertText(text, 'Replace')` |
-| Delete one or more words | `first.expandTo(last).delete()` |
-| Insert before the first word | `words[0].insertText(text, 'Before')` |
-| Insert after a word | `word.insertText(text, 'After')` |
-| Insert after the last word | `last.insertText(' ' + text, 'After')`, because the last word has no space after it |
-
-The following example deletes a word, writes after a word, and replaces two words as tracked changes. Each range keeps its trailing space, so the replacement ends with a space too. Then it reads the proposed paragraph:
+This sample appends a paragraph and configures it after the creation sync:
 
 ```ts
 await runtime.run(async (context) => {
-  context.document.changeTrackingMode = 'TrackMineOnly';
-  const paragraph = context.document.body.paragraphs.getFirst();
-  const words = paragraph.getTextRanges([' ']);
-  words.load('items/text');
+  const paragraph = context.document.body.insertParagraph('Review complete.', 'End');
   await context.sync();
-
-  // ['The ', 'fee ', 'is ', 'due ', 'per ', 'unit ', 'and ', 'the ', 'buyer ', ...]
-  const texts = words.items.map((range) => range.text);
-
-  // Edits by index, applied from the last index to the first.
-  words.items[7]!.delete();
+  paragraph.spaceAfter = 12;
   await context.sync();
-  words.items[4]!.insertText('net ', 'After');
-  await context.sync();
-  words.items[0]!.expandTo(words.items[1]!).insertText('Each charge ', 'Replace');
-  await context.sync();
-
-  const proposed = paragraph.getReviewedText('Current');
-  const original = paragraph.getReviewedText('Original');
-  await context.sync();
-  console.log(texts.length, original.value, proposed.value);
 });
 ```
 
-For tracked edit limits, see [Tracked changes](/docs/2.x/editor-api/revisions).
-
-## Batch plain-text replacements
-
-Disjoint text replacements and insertions can share one sync in ordinary paragraphs with direct text runs. The batch interprets their targets using its initial snapshot coordinates. Returned inserted ranges account for all supported text edits in that batch. Multiple insertions at one explicit snapshot point keep their call order. `Paragraph.insertText(..., 'Start')` and `Body.insertText(..., 'Start')` prepend on each call; `'End'` appends on each call. This behavior does not make old ranges follow later batches.
-
-The runtime rejects overlapping edits and batches that combine text edits with formatting, hyperlinks, or structural changes in the same paragraph. Use separate syncs, then obtain fresh ranges before the dependent operation. Rich paragraphs and browser suggesting edits support one text edit per paragraph per sync. On `ConflictingChanges`, read again and revise the batch before retrying.
+| Behavior | Detail |
+| --- | --- |
+| Return values | `insertText()` returns a `Range`, and `insertParagraph()` a `Paragraph`. Load them in the same sync; edit them after it. |
+| Paragraph separators | `insertParagraph()` and `ContentControl.insertText()` refuse `\r` and `\n`. |
+| Manual line break | Write `\v`, or call `Range.insertBreak('Line', location)`. A single-line content control refuses it. |
+| Body edges | Next to a table at a body edge, `insertParagraph()` lands outside the table. A second edit there in one sync refuses with `ConflictingChanges`. |
+| Empty paragraph | Text takes the mark's character style, not its direct run properties. |
+| Spacing | An insertion lands exactly at the endpoint, so include a trailing space in your search. |
+| Tracked insertion | Content right after your own pending text joins that insertion. Text after a paragraph-ending field starts a separate insertion. |
 
 ## Clear or delete content
 
 | Member | Effect |
 | --- | --- |
-| `Body.clear()` | Clears supported story content and leaves one empty paragraph |
-| `Paragraph.clear()` | Clears paragraph content while retaining the paragraph |
-| `Paragraph.delete()` | Deletes the addressed paragraph, or proposes its deletion while tracking |
-| `Range.clear()` or `Range.delete()` | Deletes the addressed range content |
+| `Body.clear()` | Clears supported content and leaves one empty paragraph. Fails with `InvalidArgument` on a body with no paragraphs. |
+| `Paragraph.clear()` | Clears content and keeps the paragraph. |
+| `Paragraph.delete()` | Deletes the paragraph, or proposes deleting it while tracking. |
+| `Range.clear()`, `Range.delete()` | Deletes the range content. |
 
-If a body has no paragraphs, `clear()` fails with `InvalidArgument`. These methods do not flatten protected or unsupported structures to force an edit. Cross-cell boundaries, pending revisions, and preserved structures can cause atomic refusal. Read the target again before choosing another edit.
+Cross-cell boundaries, pending revisions, and protected or preserved structures refuse atomically. With `TrackMineOnly`, whole-body replacement with `Body.insertText(text, 'Replace')` fails with `NotSupported` and `edit.tracked-operation-unsupported`; replace a range inside the body instead. In browser suggesting mode, `Body.clear()` and `Body.insertText(text, 'Replace')` on a body with a table fail with `NotSupported` and `edit.tracked-structure-unsupported`, even with runtime tracking off.
 
-A deletion of a whole table has no tracked form. If a browser editor is in suggesting mode and the body holds a table, `Body.clear()` and `Body.insertText(text, 'Replace')` fail with `NotSupported` and the diagnostic code `edit.tracked-structure-unsupported`. Nothing changes. Edit the text inside the table instead, or ask a person to delete the table with suggesting off.
+For tracked deletion, see [Propose removing paragraphs](/docs/2.x/editor-api/revisions#propose-removing-paragraphs).
 
-Structural edits sharing a paragraph can conflict within one sync. Separate dependent edits and reconsider their targets after each successful transaction. For tracked replacements or deletions, use [Tracked changes](/docs/2.x/editor-api/revisions). Tracked range edits support adjacent sibling paragraphs, including paragraphs within one cell. Table and wrapper boundaries refuse. In collaboration, tracked replacements must remain within one paragraph. Whole-body replacement remains unsupported while tracking. For tracked paragraph deletion, see [Propose removing paragraphs](/docs/2.x/editor-api/revisions#propose-removing-paragraphs).
+## Split a paragraph
 
-## Reach other document objects
+`insertText()` treats `\n`, `\r`, and `\r\n` as paragraph breaks. Replace only the gap between two sentences:
 
-`Body` exposes `font`, `style`, `lists`, `tables`, `inlinePictures`, `shapes`, `fields`, `contentControls`, `bookmarks`, and `revisions`. `Body.getComments()` returns story comments. `Range` exposes `font`, `style`, `hyperlink`, `tables`, `inlinePictures`, `fields`, `contentControls`, and `bookmarks`. A range can create a table, picture, field, content control, comment, or break through its insertion methods. `Paragraph` exposes `font`, `style`, `list`, `listItem`, `contentControls`, and `shapes`. Use the [API member directory](/docs/2.x/editor-api/reference) to find each dedicated guide and exact signatures.
+```ts
+await runtime.run(async (context) => {
+  const body = context.document.body;
+  const first = body.search('the goods.').getFirst();
+  const second = body.search('The buyer').getFirst();
+  first.getRange('End').expandTo(second.getRange('Start')).insertText('\n', 'Replace');
+  await context.sync();
+});
+```
 
-For shape enumeration and text-box editing, see [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories#read-and-edit-text-boxes). `Range.shapes` is not available.
+New paragraphs keep the properties of the one you wrote into, so list items stay in their list. The returned range reads each break as `\r`. A break in a hyperlink makes two links with the same target.
 
-## Next steps
+To propose the split, see [Propose a paragraph split](/docs/2.x/editor-api/revisions#propose-a-paragraph-split).
 
-- [Editing API overview](/docs/2.x/editor-api)
-- [API member directory](/docs/2.x/editor-api/reference)
+| Member | Changes the document | Use |
+| --- | --- | --- |
+| `Paragraph.split(delimiters, trimDelimiters?, trimSpacing?)` | Yes, unlike Office.js | Split at every delimiter. Returns one range per new paragraph. Sync before you load them. With `TrackMineOnly`, `trimDelimiters: true` fails only when the split removes a found delimiter. |
+| `getTextRanges(endingMarks, trimSpacing?)` | No | Read words or sentences. See [Split text into word ranges](#split-text-into-word-ranges). |
+
+A write with breaks refuses in these cases, and nothing changes:
+
+| Error | `innerError.code` | Cause |
+| --- | --- | --- |
+| `NotSupported` | `edit.indivisible-content` | The break lands inside an inline content control. |
+| `ConflictingChanges` | None | Another edit in the sync changes the same paragraph. |
+| `InvalidArgument` | None | The text holds a form feed, U+2028, or U+2029. |
+| `InvalidArgument`, or `GeneralException` with tracking | `edit.protected-content` | The range is in content-locked or data-bound content. |
+| `StaleDocument` | None | The range's text moved after you read it. |
+
+With `TrackMineOnly`, the tracked refusals in [Supported tracked edits](/docs/2.x/editor-api/revisions#supported-tracked-edits) also apply.
+
+## Split text into word ranges
+
+`Paragraph.getTextRanges(endingMarks, trimSpacing?)` and `Range.getTextRanges()` return exact spans that you can edit in a later sync.
+
+| Argument | Behavior |
+| --- | --- |
+| `endingMarks` | Each range ends after one mark, such as `' '` or `'. '`. At most 32 marks of at most 32 UTF-16 units each, with no unpaired surrogate. |
+| `trimSpacing: false` | Default. Ranges keep trailing spacing, so a deleted word takes its space. Use it to plan edits. |
+| `trimSpacing: true` | Trims edge spacing and drops spacing-only ranges. Use it to read words. |
+
+Prefer `'. '` to `'.'`, which also matches inside `4.2`. A paragraph end always ends a range, and no range includes a paragraph mark.
+
+| Element | Behavior in a word range |
+| --- | --- |
+| Field | One unit that joins the word it touches. Reads as its result, which can contain spaces. |
+| Equation, picture, or note reference | One U+FFFC unit that joins the word it touches. |
+| Tab | Ends a range only if you list `'\t'`. |
+| Inline content control | Adds no boundary. |
+| Content-locked control | A partial replacement fails with `edit.protected-content`. Branch on this inner code; the outer code varies with tracking. |
+| Tracked deletion | Shows in the ranges in both text views. |
+| Text that `revisionTextView` hides | Holds no mark. An edit through a range that spans it also changes it. |
+
+Before you plan edits, load `contentControls` with `cannotEdit`, and keep each locked control as one unit.
+
+## Rewrite a paragraph and read the result
+
+To propose a model's rewrite, use `prepareRewrite` from `@docx-editor.dev/editor-api/agent`. See [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite).
+
+To apply edits yourself, read the ranges once, plan by index, and apply from the last index with a sync after each:
+
+| Difference | Call |
+| --- | --- |
+| Replace words | `first.expandTo(last).insertText(text, 'Replace')` |
+| Delete words | `first.expandTo(last).delete()` |
+| Insert before the first word | `words[0].insertText(text, 'Before')` |
+| Insert after a word | `word.insertText(text, 'After')` |
+| Insert after the last word | `last.insertText(' ' + text, 'After')`; the last word has no trailing space |
+
+After tracked edits, `Paragraph.text` holds deleted and inserted words. Read the proposed text instead:
+
+```ts
+const proposed = paragraph.getReviewedText('Current');
+await context.sync();
+console.log(proposed.value);
+```
+
+`'Current'`, the default, reads as if all changes were accepted, and `'Original'` as if all were rejected. `ChangeTrackingVersion` provides the enum values. Do not split the paragraph again to plan more edits, because ranges can join deleted and inserted text.
+
+## Handle text characters
+
+Some elements read as one character, whatever their glyph:
+
+| Element             | API text | `insertText()` behavior          |
+| ------------------- | -------- | -------------------------------- |
+| Non-breaking hyphen | U+001E   | Restores the non-breaking hyphen |
+| Optional hyphen     | U+001F   | Restores the optional hyphen     |
+| Symbol (`w:sym`)    | `(`      | Inserts a literal parenthesis    |
+| Manual line break   | `\v`     | Inserts a manual line break      |
+| Paragraph mark      | `\r`     | Starts a new paragraph           |
+| Column break        | U+000E   | Refused                          |
+
+Each occupies one UTF-16 unit. Search never matches a symbol. A round trip keeps hyphens but not symbols or fields.
+
+### Upgrade text processing
+
+Reads in 2.26.0 and earlier report manual line breaks and column breaks as `\n`. Later versions report `\v` and U+000E. Update code that compares or splits lines.
+
+For display, convert `\v` to `\n` in a copy, and keep the original text for writes. Search and `Paragraph.split()` accept `\n` as a line break alias, but in `insertText()` it is a paragraph break.
+
+## Insert an equation
+
+`Range.insertOoxml(ooxml, location)` inserts one inline equation from a Flat OPC package and returns its range:
+
+```ts
+const ooxml =
+  '<pkg:package xmlns:pkg="http://schemas.microsoft.com/office/2006/xmlPackage">' +
+  '<pkg:part pkg:name="/word/document.xml" pkg:contentType="application/' +
+  'vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml">' +
+  '<pkg:xmlData><w:document xmlns:w="http://schemas.openxmlformats.org/' +
+  'wordprocessingml/2006/main" xmlns:m="http://schemas.openxmlformats.org/' +
+  'officeDocument/2006/math"><w:body><w:p><m:oMath><m:r><m:t>E=m</m:t></m:r>' +
+  '<m:sSup><m:e><m:r><m:t>c</m:t></m:r></m:e><m:sup><m:r><m:t>2</m:t></m:r>' +
+  '</m:sup></m:sSup></m:oMath><w:r><w:t xml:space="preserve"> holds.</w:t>' +
+  '</w:r></w:p></w:body></w:document></pkg:xmlData></pkg:part></pkg:package>';
+
+await runtime.run(async (context) => {
+  const hit = context.document.body.search('the relation ').getFirst();
+  const inserted = hit.insertOoxml(ooxml, 'After');
+  inserted.load('text');
+  await context.sync();
+  return inserted.text; // U+FFFC, then ' holds.'
+});
+```
+
+It accepts `Before`, `After`, `Start`, `End`, and `Replace` within one paragraph. The equation reads as U+FFFC and can land inside an eligible hyperlink, content control, or your own pending insertion. With `TrackMineOnly`, it is one tracked insertion.
+
+The package holds a `/word/document.xml` part and an optional `/_rels/.rels` part with one internal `officeDocument` relationship. The body holds one paragraph with one inline `m:oMath` of OMML elements. Plain runs of `w:rPr`, `w:t`, and `w:tab` can surround it.
+
+The runtime uses a bounded parser and never fetches or evaluates anything. Other input refuses, and nothing changes:
+
+| Error | `innerError.code` | Cause |
+| --- | --- | --- |
+| `NotSupported` | `edit.ooxml-unsupported` | Other parts, relationships, external targets, or binary data. Also two paragraphs or equations, no equation, `m:oMathPara`, paragraph properties, a section break, a bare `w:document`, or an element outside the allowlist, such as a field or picture. |
+| `InvalidArgument` | `edit.invalid-argument` | Malformed XML, a DTD, an entity, or `Replace` across paragraphs |
+| `InvalidArgument` | `edit.resource-limit` | Over 256 KiB or 8,192 elements, a value over 4,096 characters, or math deeper than 64 levels |
+| `InvalidArgument` | `edit.protected-content` | The insertion point is in content-locked or data-bound content |
+| `NotImplemented` | `edit.tracked-foreign-revision-unsupported` | With `TrackMineOnly`, the point is in another author's structural change |
+| `ConflictingChanges` | None | Another edit in the sync changes the same paragraph |
+
+## Refresh ranges after edits
+
+A `Range` keeps the paragraph identities and UTF-16 offsets from when you found it:
+
+| Change                           | Result                               |
+| -------------------------------- | ------------------------------------ |
+| An earlier edit in its paragraph | The range fails with `StaleDocument` |
+| A later edit, or formatting      | The range stays valid                |
+| Deleting an endpoint paragraph   | The range becomes invalid            |
+
+Search again after an edit. Tracking a proxy keeps it alive but does not make its range follow edits, unlike Office.js. For recovery, see [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
+
+## Limits
+
+- Disjoint plain-text edits in ordinary paragraphs can share a sync, using the batch's initial coordinates.
+- Insertions at one range position keep their call order. Repeated paragraph or body `Start` insertions prepend, and `End` insertions append.
+- Overlapping edits refuse. So do text edits mixed with formatting, hyperlink, or structural changes in one paragraph.
+- Rich paragraphs and browser suggesting edits allow one text edit per paragraph per sync.
+- Text extraction and reinsertion do not preserve arbitrary document structure.
+- The API reads no OOXML strings. `Range.shapes` is not available.
+- For other members, see the [API member directory](/docs/2.x/editor-api/reference).
+
+## See also
+
+- [Search and navigation](/docs/2.x/editor-api/search-and-navigation)
+- [Tracked changes](/docs/2.x/editor-api/revisions)
+- [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors)

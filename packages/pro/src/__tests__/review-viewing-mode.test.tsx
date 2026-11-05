@@ -116,6 +116,7 @@ describe('review viewing mode', () => {
     });
     const draftInput = view.getByTestId('review-draft-input') as HTMLInputElement;
     expect(document.activeElement).toBe(draftInput);
+    expect(draftInput.getAttribute('autocomplete')).toBe('off');
     await act(async () => {
       fireEvent.change(draftInput, { target: { value: 'Hold this draft' } });
     });
@@ -123,6 +124,7 @@ describe('review viewing mode', () => {
       fireEvent.click(view.getAllByTestId('review-card')[0]!);
     });
     const replyInput = view.getByTestId('review-reply-input') as HTMLInputElement;
+    expect(replyInput.getAttribute('autocomplete')).toBe('off');
     await act(async () => {
       fireEvent.change(replyInput, { target: { value: 'Hold this reply' } });
       replyInput.focus();

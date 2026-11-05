@@ -10,10 +10,13 @@
 
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import type { SemanticPosition } from '@docx-editor.dev/core/layout';
-import { caretWordSelection } from '../layout/caret-word.ts';
+import { caretWordRange, caretWordSelection } from '../layout/caret-word.ts';
+import { paragraphTextOf } from '../store/store/paragraph-model-text.ts';
 import type { CommentDraftChromeHandlers } from './docx-editor-types.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { createRequestChrome, type BookmarkChromeHost } from './bookmark-chrome.ts';
+import { textboxHostParagraphOf } from './review-story-entry.ts';
+import { partOfNodeId } from './surface-scope.ts';
 
 /** What the toolbar asks of the registered comment draft chrome. */
 export interface CommentDraftRequests {
@@ -61,5 +64,29 @@ export function commentWordAtCaret(
 ): { readonly from: SemanticPosition; readonly to: SemanticPosition } | null {
   const surface = (editor as Editor & { readonly surface?: PaginatedSurface | null }).surface;
   if (!surface || surface.activatedReviewKey() !== null) return null;
-  return caretWordSelection(surface.publishedLayout(), surface.state().selection);
+  const selection = surface.state().selection;
+  return (
+    caretWordSelection(surface.publishedLayout(), selection) ?? textboxCaretWord(surface, selection)
+  );
+}
+
+/**
+ * The word at a collapsed caret in a text box, read from the paragraph's text. Box text is
+ * laid out inside its drawing, never in the page lines the layout word reads, so the caret
+ * there found no word and the control refused.
+ */
+function textboxCaretWord(
+  surface: PaginatedSurface,
+  { anchor, head }: { readonly anchor: SemanticPosition; readonly head: SemanticPosition }
+): { readonly from: SemanticPosition; readonly to: SemanticPosition } | null {
+  if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return null;
+  if (textboxHostParagraphOf(surface, head.paragraphId) === null) return null;
+  const part = partOfNodeId(surface.session, head.paragraphId);
+  const text = part && paragraphTextOf(part, head.paragraphId);
+  const word = text ? caretWordRange(text, head.offset, new Set()) : null;
+  if (!word) return null;
+  return {
+    from: { paragraphId: head.paragraphId, offset: word.start },
+    to: { paragraphId: head.paragraphId, offset: word.end },
+  };
 }
