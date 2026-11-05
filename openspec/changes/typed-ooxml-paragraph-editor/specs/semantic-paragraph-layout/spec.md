@@ -700,16 +700,22 @@ In compatibility mode 15 and later, a distributed line SHALL keep the word that 
 - **WHEN** keeping the next word costs each space more than a third, but at most half, of the stretch the line without it would take
 - **THEN** the justified line keeps the word and the distributed line moves it to the next line
 
-### Requirement: Spaces beside Hangul keep their advance
+### Requirement: Spaces beside Hangul keep their advance with balanced widths
 
-When a line shrinks its inter-word spaces to keep the word that overflows it, a space with a Hangul character on either side SHALL keep its natural advance. Only the line's other spaces SHALL lend their shrink.
+When the document sets `w:balanceSingleByteDoubleByteWidth` and a justified or distributed line in compatibility mode 15 or later shrinks its inter-word spaces to keep the word that overflows it, a space with a Hangul character on either side SHALL keep its natural advance. Only the line's other spaces SHALL lend their shrink. The cost test SHALL still count the stretch of every space on the line without the word. Without the setting, a space beside Hangul SHALL shrink as the line's other spaces do. Legacy space-shrink rules SHALL NOT change.
 
 #### Scenario: A line of Korean words wraps its next word
 
-- **GIVEN** a justified mode 15 paragraph of Korean words separated by spaces
+- **GIVEN** a justified mode 15 paragraph of Korean words separated by spaces, in a document that sets `w:balanceSingleByteDoubleByteWidth`
 - **WHEN** the next word fits only when the spaces shrink
 - **THEN** the word moves to the next line
 - **AND** on a line of Korean and English words, the spaces between English words shrink and the spaces beside Hangul keep their advance
+
+#### Scenario: Without balanced widths, spaces beside Hangul shrink
+
+- **GIVEN** the same paragraph in a document without `w:balanceSingleByteDoubleByteWidth`
+- **WHEN** the next word fits only when the spaces shrink
+- **THEN** the word stays on the line, and every space shrinks by the same amount
 
 ### Requirement: Legacy space shrinking with punctuation compression
 

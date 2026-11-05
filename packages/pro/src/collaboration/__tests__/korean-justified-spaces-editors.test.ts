@@ -3,9 +3,9 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// A justified line of Korean words keeps its spaces at their natural advance and moves the
-// next word to the next line. The lines stay derived layout: two peers converge through
-// concurrent edits, history, and save.
+// With balanced single-byte and double-byte widths, a justified line of Korean words keeps its
+// spaces at their natural advance and moves the next word to the next line. The lines stay
+// derived layout: two peers converge through concurrent edits, history, and save.
 import { afterEach, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
@@ -41,7 +41,8 @@ const SOURCE = {
   extraXml: {
     'word/settings.xml':
       `<w:settings xmlns:w="${W}">` +
-      '<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>',
+      '<w:compat><w:balanceSingleByteDoubleByteWidth/>' +
+      '<w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>',
   },
 };
 type Line = { spans: readonly { text: string; box: { x: number; width: number } }[] };
