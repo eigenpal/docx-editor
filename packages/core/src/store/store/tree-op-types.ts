@@ -906,6 +906,12 @@ export type TreeDocOp =
       readonly controlId: string;
       /** String is the editor-facing v2 form; structured input is the automation form. */
       readonly value: string | ContentControlValueInput;
+      /**
+       * Propose the value instead of writing it: the shown value is struck (`w:del`) and the
+       * new one inserted (`w:ins`) inside the control. The control's recorded state moves to
+       * the new value, and accepting or rejecting brings it back in line with what is shown.
+       */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /**

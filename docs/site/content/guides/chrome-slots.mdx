@@ -4,15 +4,11 @@ description: 'Reference every editor chrome slot and its React and Vue toolbar p
 category: 'Guides'
 ---
 
-Chrome slots are stable control identifiers. Use fixed-command slots with `useEditorCommand()`, `ContextMenu.Slot`, or the generic toolbar button. Use named parts for controls that collect a value or open host UI.
+Chrome slots are stable control identifiers, such as `text.bold`. Use named parts, such as `FontColor` or `ImageProperties`, for controls that collect a value or open UI.
 
-## Read the tables
+## Use a slot
 
-The **Toolbar part** column gives the shared suffix. For example, `Bold` means `DocxEditor.Toolbar.Bold` in React and `DocxEditorToolbar.Bold` in Vue. An em dash means that neither adapter provides a named part.
-
-The **Packaged surface** column shows where the standard editor places the control. **Explicit composition** means that you must add its named part to a custom toolbar.
-
-Use the named part for controls that collect a value or open UI, such as `FontColor`, `TableBorderWidth`, or `ImageProperties`. Use `Toolbar.Button` in React or `DocxEditorToolbar.Button` in Vue for a fixed-command slot without a named part:
+Render a fixed-command slot that has no named part with the generic toolbar button.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -31,11 +27,18 @@ Use the named part for controls that collect a value or open UI, such as `FontCo
 </Framework>
 </FrameworkTabs>
 
-`Toolbar.Button`, `Menu.Item`, and `ContextMenu.Slot` take the slot ID as `slotId` (`slot-id` in Vue templates). The `slot` prop is deprecated. It still works and logs a development warning.
+`Toolbar.Button`, `Menu.Item`, and `ContextMenu.Slot` take the ID as `slotId` (`slot-id` in Vue templates). The `slot` prop is deprecated and logs a development warning.
 
-Use `Action` for a host-owned action without a registry slot. Use `Separator` only for layout. Use `Group` to add controls to the preset toolbar as a group that collapses into the **More** panel, and `Slot` to replace one slot with your own content. The `Button`, `Action`, `Separator`, `Group`, and `Slot` helpers don't add slot IDs.
+| Column | Meaning |
+| --- | --- |
+| **Packaged surface** | Where the standard editor places the control. **Explicit composition** means you add the named part yourself. |
+| **Toolbar part** | The shared suffix. `Bold` means `DocxEditor.Toolbar.Bold` in React and `DocxEditorToolbar.Bold` in Vue. An em dash means no named part. |
 
-## History, zoom, styles, and font
+For `Action`, `Group`, `Slot`, and `Separator`, see [Customize the toolbar](/docs/2.x/guides/toolbar).
+
+## Find a slot
+
+### History, zoom, styles, and font
 
 | Slot           | Packaged surface | Toolbar part  | Purpose                       |
 | -------------- | ---------------- | ------------- | ----------------------------- |
@@ -46,7 +49,7 @@ Use `Action` for a host-owned action without a registry slot. Use `Separator` on
 | `font.family`  | Default toolbar  | `FontFamily`  | Choose a font family          |
 | `font.size`    | Default toolbar  | `FontSize`    | Choose a font size            |
 
-## Text and script
+### Text and script
 
 | Slot             | Packaged surface | Toolbar part  | Purpose                     |
 | ---------------- | ---------------- | ------------- | --------------------------- |
@@ -60,30 +63,32 @@ Use `Action` for a host-owned action without a registry slot. Use `Separator` on
 | `script.super`   | Default toolbar  | `Superscript` | Toggle superscript          |
 | `script.sub`     | Default toolbar  | `Subscript`   | Toggle subscript            |
 
-## Alignment, direction, lists, and formatting
+### Alignment, direction, lists, and formatting
 
 The default toolbar combines the four alignment slots into `Alignment`. Use the four `Align*` parts when you want separate controls.
 
-Alignment slots name a physical edge. In a right-to-left paragraph, `alignment.right` writes the leading edge, which Word spells `w:jc="left"`. The direction slots set the base direction of each selected paragraph and show a mixed selection as neither pressed.
+Alignment slots name a physical edge, not a reading direction. In a right-to-left paragraph, `alignment.right` writes the leading edge, which OOXML spells `w:jc="left"`. For more information, see [Right-to-left support](/docs/2.x/guides/right-to-left).
 
-| Slot                | Packaged surface | Toolbar part             | Purpose                   |
-| ------------------- | ---------------- | ------------------------ | ------------------------- |
-| `alignment.left`    | Default toolbar  | `Alignment`, `AlignLeft` | Align left                |
-| `alignment.center`  | Default toolbar  | `AlignCenter`            | Align center              |
-| `alignment.right`   | Default toolbar  | `AlignRight`             | Align right               |
-| `alignment.justify` | Default toolbar  | `AlignJustify`           | Justify                   |
-| `direction.ltr`     | Default toolbar  | `LeftToRight`            | Left-to-right paragraph   |
-| `direction.rtl`     | Default toolbar  | `RightToLeft`            | Right-to-left paragraph   |
-| `list.bullet`       | Default toolbar  | `BulletList`             | Toggle a bulleted list    |
-| `list.numbered`     | Default toolbar  | `NumberedList`           | Toggle a numbered list    |
-| `list.outdent`      | Default toolbar  | `Outdent`                | Decrease list indent      |
-| `list.indent`       | Default toolbar  | `Indent`                 | Increase list indent      |
-| `list.lineSpacing`  | Default toolbar  | `LineSpacing`            | Set line spacing          |
-| `format.painter`    | Default toolbar  | —                        | Copy and apply formatting |
-| `format.clear`      | Default toolbar  | `ClearFormatting`        | Clear direct formatting   |
-| `paragraph.dialog`  | Format menu      | —                        | Open paragraph settings   |
+The direction slots set the base direction of each selected paragraph and show a mixed selection as neither pressed. The default toolbar shows them only when the interface direction is `'rtl'`.
 
-## Review and content controls
+| Slot | Packaged surface | Toolbar part | Purpose |
+| --- | --- | --- | --- |
+| `alignment.left` | Default toolbar | `Alignment`, `AlignLeft` | Align left |
+| `alignment.center` | Default toolbar | `AlignCenter` | Align center |
+| `alignment.right` | Default toolbar | `AlignRight` | Align right |
+| `alignment.justify` | Default toolbar | `AlignJustify` | Justify |
+| `direction.ltr` | Default toolbar (RTL interface) | `LeftToRight` | Left-to-right paragraph |
+| `direction.rtl` | Default toolbar (RTL interface) | `RightToLeft` | Right-to-left paragraph |
+| `list.bullet` | Default toolbar | `BulletList` | Toggle a bulleted list |
+| `list.numbered` | Default toolbar | `NumberedList` | Toggle a numbered list |
+| `list.outdent` | Default toolbar | `Outdent` | Decrease list indent |
+| `list.indent` | Default toolbar | `Indent` | Increase list indent |
+| `list.lineSpacing` | Default toolbar | `LineSpacing` | Set line spacing |
+| `format.painter` | Default toolbar | — | Copy and apply formatting |
+| `format.clear` | Default toolbar | `ClearFormatting` | Clear direct formatting |
+| `paragraph.dialog` | Format menu | — | Open paragraph settings |
+
+### Review and content controls
 
 For protection settings, password limits, and command examples, see [Document protection](/docs/2.x/guides/document-protection).
 
@@ -113,7 +118,7 @@ Comments and reviewer filtering require the Pro review module. Content-control s
 | `contentControl.inspector` | Explicit composition | `ContentControlInspector` | Open content-control properties |
 | `contentControl.remove` | Explicit composition | `ContentControlRemove` | Remove the selected control |
 
-## Images and tables
+### Images and tables
 
 The toolbar shows image controls when you select an image. It shows table border, fill, merge, and split controls when you place the caret or a cell selection in a table. The Insert menu also provides image and table insertion.
 
@@ -132,7 +137,7 @@ The toolbar shows image controls when you select an image. It shows table border
 | `table.mergeCells` | Table context, context menu | `TableMergeCells` | Merge the selected cells into one |
 | `table.splitCell` | Table context, context menu | `TableSplitCell` | Open the Split cells dialog |
 
-## File and insert
+### File and insert
 
 The packaged menus provide file, break, note, and table-of-contents slots. Header/footer options provide page-field slots.
 
@@ -159,13 +164,19 @@ The packaged menus provide file, break, note, and table-of-contents slots. Heade
 | `insert.goToBookmark` | Insert menu | — | Open the Bookmarks tab of the navigation pane |
 | `insert.watermark` | Insert menu | — | Open the Watermark dialog |
 
-## Use a slot directly
+## Check command requirements
 
-For a fixed-command slot, `useEditorCommand(slot)` supplies enabled state, active state, the engine's disabled reason, and `execute()`. Value and dialog controls also need input from your UI. Pass their complete `EditorCommand` to `useEditorCommand()`, or use the packaged part or menu. Handle `file.open` and `file.save` with the document loading and saving APIs.
+A slot's existence does not guarantee that its command is available.
+
+| Slot kind | How to run it |
+| --- | --- |
+| Fixed command | `useEditorCommand(slotId)` returns `execute()`, active state, enabled state, and the engine's disabled reason. |
+| Value or dialog control | Pass a complete `EditorCommand` to `useEditorCommand()`, or use the packaged part or menu. |
+| File action | `file.open` and `file.save` need the loading and saving APIs. Export and print slots need `menu.exporters` handlers. |
 
 For complete signatures, see the [core API reference](/docs/2.x/api/core), [React API reference](/docs/2.x/api/react), or [Vue API reference](/docs/2.x/api/vue).
 
-## Next steps
+## See also
 
 - [Customize the toolbar](/docs/2.x/guides/toolbar)
 - [Compose a React editor](/docs/2.x/react/composition)

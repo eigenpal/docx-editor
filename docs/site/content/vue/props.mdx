@@ -1,277 +1,139 @@
 ---
 title: 'Props'
-description: 'Reference for Vue document props, chrome, emits, slots, and the seven ref methods.'
+description: 'Reference for Vue document props, chrome, events, slots, and the seven ref methods.'
 category: 'Vue'
 order: 36
 ---
 
-`<DocxEditor>` supplies the packaged host. This page groups its public props by use. See the [Vue API reference](/docs/2.x/api/vue) for generated signatures.
+## Configure the editor
 
-## Document and mount state
-
-Use `document` for the document source.
-
-| Prop | Type | Description |
-| --- | --- | --- |
-| `fieldResults` | `'atomic' \| 'editable'` | Saved field result editing. Defaults to `'atomic'`; fixed when the editor starts. |
-| `document` | `DocumentSource` | DOCX bytes, `'blank'`, or a `DocumentHandle`. |
-| `author` | `string` | Author for later comments, replies, and tracked changes. |
-| `locale` | `string` | BCP-47 locale for regional date input and generated labels. Defaults to `en-US`; updates without a remount. |
-| `mode` | `'edit' \| 'view' \| 'suggesting'` | Editing mode. The packaged `<DocxEditor>` defaults to `'edit'`. |
-| `zoom` | `number` | Numeric display scale. |
-| `zoomMode` | `ZoomMode \| 'auto'` | Zoom source. `'auto'` fits the page width. |
-| `contentLockPolicy` | `ContentLockPolicy` | Set `{ allowFormattingInLockedContent: true }` to let users format content-locked controls. Their text stays protected. The editor reads this prop once, at creation. For details, see [Formatting content-locked controls](/docs/2.x/guides/content-controls#formatting-content-locked-controls). |
-| `lockedControlNavigation` | `'characters' \| 'atomic'` | How the caret moves through an inline content control with locked content. `'characters'` (the default) steps through each character. `'atomic'` steps over the control as one unit. The editor reads this value once, at creation. For details, see [Caret movement in content-locked controls](/docs/2.x/guides/content-controls#caret-movement-in-content-locked-controls). |
-
-`DocumentSource` accepts `Uint8Array`, `ArrayBuffer`, `'blank'`, or an existing `DocumentHandle`. Resolve URLs and paths with [`useDocxSource()`](/docs/2.x/vue/composables#usedocxsource).
-
-```vue
-<script setup lang="ts">
-import { DocxEditor } from '@docx-editor.dev/vue';
-</script>
-
-<template>
-  <DocxEditor document="blank" mode="edit" zoom-mode="auto" />
-</template>
-```
-
-`<DocxEditor>` rebuilds when the `document` identity changes. It applies later `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, and catalog changes without a rebuild. Existing revisions keep their authors.
-
-For regional date input, pass `locale="en-GB"` for day/month input or `locale="pl-PL"` for Polish dates such as `01.02.2030`. The same prop works on `DocxEditor.Root`. It preserves dates already in the document. Use `i18n` separately to customize UI strings; see [date input behavior](/docs/2.x/guides/fields) for details.
-
-## Saved field result editing
-
-Set `fieldResults` to `'editable'` to let users edit supported saved field results, such as `MERGEFIELD` or `HYPERLINK` text. The same prop works on `DocxEditor.Root`. Later prop changes have no effect. Remount the editor to change this setting.
-
-Computed fields remain one unit. Collaboration refuses `'editable'` with a `TypeError`. For supported fields and editing rules, see [Edit saved field results](/docs/2.x/guides/fields#edit-saved-field-results).
-
-## Viewing mode
-
-Set `mode="view"` to display the document without content edits. Clicks, drags, repeated clicks, and caret keys preserve the selection. The editor hides the caret and uses the arrow pointer over text. Toolbar values remain tied to the preserved selection.
-
-Links, equation previews, and **Show/Hide** remain available. Search and programmatic selection can still move the selection. Search highlights remain visible without a caret.
-
-## Modules
-
-`modules` registers capability modules when the editor is created.
-
-| Prop      | Type                      | Description                         |
-| --------- | ------------------------- | ----------------------------------- |
-| `modules` | `readonly EditorModule[]` | Modules registered at construction. |
-
-The editor ignores later `modules` array changes. Change the Vue `:key` to remount the editor with another module set. The drawing renderers from `drawingModule()` and `reviewModule()` are different: they serve every editor in the page, and a remount does not remove them. For more information, see [Advanced drawing rendering](/docs/2.x/pro/drawing).
-
-```vue
-<script setup lang="ts">
-import { DocxEditor } from '@docx-editor.dev/vue';
-import { reviewModule } from '@docx-editor.dev/pro/vue';
-
-const modules = [reviewModule()];
-</script>
-
-<template>
-  <DocxEditor :key="moduleSet" :document="bytes" :modules="modules" author="Jess Lin" />
-</template>
-```
-
-The review module lets you show and manage tracked changes and comments. The Vue Pro entry also exports custom-node chip and context-menu chrome.
-
-## Chrome and layout
-
-These props control the packaged frame:
-
-| Prop | Type | Description |
-| --- | --- | --- |
-| `chrome` | `boolean` | Toggles the packaged frame. |
-| `menu` | `boolean \| DocxEditorMenuProps` | Toggles or configures the menu bar. |
-| `navigation` | `boolean \| DocxEditorNavigationProps` | Toggles or configures the navigation pane. |
-| `openFailure` | `boolean \| DocxEditorOpenFailureProps` | Shows, hides, or configures the dialog for a file that does not open. For more information, see [Handle files that do not open](/docs/2.x/guides/open-failures). |
-| `rulers` | `boolean` | Toggles both packaged rulers. |
-| `hyperlinkPopup` | `boolean` | Toggles the hyperlink popover. If you hide it, mount a panel that calls `useHyperlinkPopup()`, or the Insert link controls are disabled. |
-| `contextMenu` | `boolean \| DocxEditorContextMenuProps` | Toggles or configures the context menu. |
-| `t` | `(key, params?) => string` | Resolves live chrome and drawing labels. |
-| `i18n` | `Translations` | Supplies a live catalog to this editor. |
-
-Set `chrome` to `false` for the document surface without packaged chrome. You can then build the frame from the [composition primitives](/docs/2.x/vue/composition).
-
-## Appearance
-
-The appearance prop name is `colorMode`.
-
-| Prop | Type | Default | Description |
-| --- | --- | --- | --- |
-| `colorMode` | `'light' \| 'dark' \| 'system'` | `'light'` | Sets the chrome and document color mode. |
-
-`colorMode` applies a display transform to the document canvas. The setting does not change authored document colors or saved output. Printing ignores `colorMode` and preserves authored document colors.
-
-```vue
-<script setup lang="ts">
-import { ref } from 'vue';
-import { DocxEditor } from '@docx-editor.dev/vue';
-
-const colorMode = ref<'light' | 'dark'>('light');
-</script>
-
-<template>
-  <button type="button" @click="colorMode = colorMode === 'dark' ? 'light' : 'dark'">
-    Toggle theme
-  </button>
-  <DocxEditor :document="bytes" :color-mode="colorMode" />
-</template>
-```
-
-See [Dark mode](/docs/2.x/guides/dark-mode) for canvas behavior.
-
-## Fonts
-
-`fonts` supplies bytes for text shaping, line wrapping, and pagination.
-
-| Prop | Type | Description |
-| --- | --- | --- |
-| `fonts` | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes or an on-demand resolver. |
-
-Embedded fonts load from the document. Configured fonts extend that set.
-
-Use `packagedFonts()` for the Word default substitutes. It resolves per document, loading a family when that document names it, or when that family is the document's default face. It loads only requested families and the default font. It makes no third-party requests.
-
-The resolver also requests the configured default font. With the default Calibri configuration, it loads Carlito for text without an explicit font.
-
-`useFonts()` keeps one resolver identity, which the `fonts` prop needs.
-
-```vue
-<script setup lang="ts">
-import { DocxEditor, useFonts } from '@docx-editor.dev/vue';
-import { packagedFonts } from '@docx-editor.dev/fonts';
-
-const fonts = useFonts(packagedFonts());
-
-function reportFontError(error: { code: string }) {
-  report(error.code);
-}
-</script>
-
-<template>
-  <DocxEditor :document="bytes" :fonts="fonts" @font-error="reportFontError" />
-</template>
-```
-
-Add an origin by adding an argument. Arguments compose first-wins:
-
-```ts
-import { googleFonts } from '@docx-editor.dev/fonts/google';
-
-const fonts = useFonts(packagedFonts(), googleFonts());
-```
-
-`packagedFonts()` resolves after the document is parsed, so the first layout can use fallback measurement. The editor updates pagination when the fonts arrive. Font arrivals preserve edits, selection, and undo history. For a document that must paginate correctly on the first pass, use `defaultFonts()` instead. For more information, see [Fonts and measurement](/docs/2.x/guides/fonts#choose-between-lazy-and-eager-loading).
-
-See [Fonts and measurement](/docs/2.x/guides/fonts) for font sources and on-demand loading.
-
-## Title bar customization
-
-Use `title` and the two named slots to customize the title bar.
-
-| API              | Type                      | Description                         |
-| ---------------- | ------------------------- | ----------------------------------- |
-| `title`          | `string`                  | Shows the document name.            |
-| `@title-change`  | `(title: string) => void` | Enables and receives title editing. |
-| `#titleBarLeft`  | slot                      | Adds host content before the title. |
-| `#titleBarRight` | slot                      | Adds host content after the title.  |
-
-```vue
-<DocxEditor :document="bytes" :title="title" @title-change="title = $event">
-  <template #titleBarLeft>
-    <MyLogo />
-  </template>
-  <template #titleBarRight>
-    <SaveIndicator :dirty="dirty" />
-  </template>
-</DocxEditor>
-```
-
-The title becomes editable when you listen for `@title-change`.
-
-Use the `#openFailureActions` slot to add your own buttons to the dialog for a file that does not open. The slot receives `{ failure, message, dismiss }`. For more information, see [Handle files that do not open](/docs/2.x/guides/open-failures).
-
-Use the `#loadingIndicator` slot to replace the packaged loading spinner. It shows on the loading page and on the first page while a large document opens. For more information, see [Show your own loading indicator](/docs/2.x/guides/loading-and-saving#show-your-own-loading-indicator).
-
-## Emits
-
-`<DocxEditor>` emits these six events:
-
-| Emit            | Payload                  | Description                             |
-| --------------- | ------------------------ | --------------------------------------- |
-| `@ready`        | `editor: Editor`         | The editor and content mount are ready. |
-| `@change`       | `change: DocumentChange` | A document mutation completed.          |
-| `@save`         | none                     | The packaged Save action ran.           |
-| `@open`         | none                     | The packaged Open action ran.           |
-| `@title-change` | `title: string`          | The editable title changed.             |
-| `@font-error`   | `error: EditorFontError` | Font resolution failed.                 |
-
-`DocumentChange` contains revision and identity changes. It does not contain saved bytes.
-
-```vue
-<DocxEditor
-  :document="bytes"
-  title="Proposal.docx"
-  @ready="onReady"
-  @change="reportChange"
-  @save="save"
-  @open="open"
-  @title-change="title = $event"
-  @font-error="reportFontError"
-/>
-```
-
-`DocxEditorRoot` emits `ready`, `change`, and `font-error`. File and title events belong to `<DocxEditor>`.
-
-## Ref methods
-
-Capture a `DocxEditorRef` for imperative document operations.
+This example loads DOCX bytes, sets an author, and handles the save event:
 
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
 
+const props = defineProps<{
+  bytes: Uint8Array;
+  upload: (buffer: ArrayBuffer) => Promise<void>;
+}>();
 const editorRef = ref<DocxEditorRef | null>(null);
 
-async function save() {
+async function onSave() {
   const buffer = await editorRef.value?.save();
-  if (buffer) await upload(buffer);
+  if (buffer) await props.upload(buffer);
 }
 </script>
 
 <template>
-  <DocxEditor ref="editorRef" :document="bytes" />
+  <DocxEditor ref="editorRef" :document="bytes" mode="edit" author="Jess Lin" @save="onSave" />
 </template>
 ```
 
-The ref exposes seven methods:
+For generated signatures, see the [Vue API reference](/docs/2.x/api/vue).
+
+## Set props
+
+### Document
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `document` | `DocumentSource` | `Uint8Array`, `ArrayBuffer`, `'blank'`, or a `DocumentHandle`. A new identity rebuilds the editor. Resolve URLs with [`useDocxSource()`](/docs/2.x/vue/composables#usedocxsource). |
+| `mode` | `'edit' \| 'view' \| 'suggesting'` | Editing mode. Defaults to `'edit'`. Updates without a rebuild. |
+| `author` | `string` | Author for later comments, replies, and tracked changes. Updates without a rebuild; existing revisions keep their authors. |
+| `locale` | `string` | BCP 47 locale for regional date input and generated labels, Defaults to `en-US`. Updates without a rebuild. |
+| `zoom` | `number` | Numeric display scale. Updates without a rebuild. |
+| `zoomMode` | `ZoomMode \| 'auto'` | Zoom source. `'auto'` fits the page width. |
+| `fieldResults` | `'atomic' \| 'editable'` | `'editable'` allows editing saved field results. Defaults to `'atomic'`. See [Edit saved field results](/docs/2.x/guides/fields#edit-saved-field-results). |
+| `contentLockPolicy` | `ContentLockPolicy` | `{ allowFormattingInLockedContent: true }` allows formatting in content-locked controls. See [Formatting content-locked controls](/docs/2.x/guides/content-controls#formatting-content-locked-controls). |
+| `lockedControlNavigation` | `'characters' \| 'atomic'` | Caret movement through a locked inline control: per character (default) or as one unit. See [Caret movement](/docs/2.x/guides/content-controls#caret-movement-in-content-locked-controls). |
+| `modules` | `readonly EditorModule[]` | Capability modules from [`@docx-editor.dev/pro/vue`](/docs/2.x/pro), such as `reviewModule()`. |
+
+### Fonts
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `fonts` | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes or an on-demand resolver for text shaping and pagination. |
+
+Wrap resolvers such as `packagedFonts()` in `useFonts()` to keep one identity. For loading choices, see [Fonts and measurement](/docs/2.x/guides/fonts#choose-between-lazy-and-eager-loading).
+
+### Dark mode
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `colorMode` | `'light' \| 'dark' \| 'system'` | Sets the chrome theme and a display transform on the canvas. Defaults to `'light'`. |
+
+`colorMode` does not change authored colors, saved output, or printing. See [Dark mode](/docs/2.x/guides/dark-mode).
+
+### Chrome and layout
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `chrome` | `boolean` | Shows the packaged frame. Set `false` for the document surface only. |
+| `title` | `string` | Title-bar document name. |
+| `menu` | `boolean \| DocxEditorMenuProps` | Toggles or configures the menu bar. |
+| `navigation` | `boolean \| DocxEditorNavigationProps` | Toggles or configures the navigation pane. |
+| `rulers` | `boolean` | Shows or hides both rulers. |
+| `hyperlinkPopup` | `boolean` | Shows or hides the hyperlink popover. |
+| `contextMenu` | `boolean \| DocxEditorContextMenuProps` | Toggles or configures the context menu. |
+| `popups` | `DocxEditorPopups` | Replaces automatic popups with `definePopup(MyPopup)` or render callbacks. See [Customize popups](/docs/2.x/guides/customize-dialogs). |
+| `openFailure` | `boolean \| DocxEditorOpenFailureProps` | Configures the dialog for a file that does not open. See [open failures](/docs/2.x/guides/open-failures). |
+| `t` | `(key, params?) => string` | Resolves live chrome and drawing labels. |
+| `i18n` | `Translations` | Live chrome and drawing labels for this editor. See [i18n](/docs/2.x/i18n). |
+
+## Handle events and slots
+
+`<DocxEditor>` emits seven events:
+
+| Event | Payload | Description |
+| --- | --- | --- |
+| `@ready` | `editor: Editor` | The editor and content mount are ready. |
+| `@change` | `change: DocumentChange` | A mutation completed. The payload has revision and identity changes, not bytes. |
+| `@save` | none | The packaged Save action ran. Read bytes through the ref. |
+| `@open` | none | The packaged Open action ran. |
+| `@title-change` | `title: string` | The title changed. Listening enables title editing. |
+| `@font-error` | `error: EditorFontError` | Font resolution failed. |
+| `@revision-markup-change` | `settings: ResolvedRevisionMarkup` | The API or the markup dialog proposed new revision markup settings. Store them in `revisionMarkup` to accept them. |
+
+| Slot | Props | Description |
+| --- | --- | --- |
+| `#titleBarLeft` | none | Host content before the title. |
+| `#titleBarRight` | none | Host content after the title. |
+| `#loadingIndicator` | none | Replaces the loading spinner. See [loading indicator](/docs/2.x/guides/loading-and-saving#show-your-own-loading-indicator). |
+| `#openFailureActions` | `{ failure, message, dismiss }` | Adds buttons to the dialog for a file that does not open. See [open failures](/docs/2.x/guides/open-failures). |
+
+## Use the ref
+
+Capture `DocxEditorRef` with a template ref:
+
+```ts
+const buffer = await editorRef.value?.save();
+const editor = editorRef.value?.getEditor();
+editorRef.value?.focus();
+```
 
 | Method | Returns | Description |
 | --- | --- | --- |
-| `load(document)` | `void` | Loads bytes, `'blank'`, or a `DocumentHandle`. |
-| `save()` | `Promise<ArrayBuffer \| null>` | Serializes the current document. |
-| `getDocumentHandle()` | `DocumentHandle \| null` | Returns the current handle and revision. |
+| `save()` | `Promise<ArrayBuffer \| null>` | Serializes the document to `.docx`. Returns `null` when no document is loaded. |
+| `load(document)` | `void` | Loads DOCX bytes, `'blank'`, or a `DocumentHandle`. |
+| `getDocumentHandle()` | `DocumentHandle \| null` | Returns the current document identity and revision. |
 | `getEditor()` | `Editor \| null` | Returns the full editor facade. |
-| `focus()` | `void` | Focuses the mounted document surface. |
-| `exec(command, options?)` | `ExecResult` | Runs a typed command; see `EditorExecOptions`. |
-| `snapshot(options?)` | `EditorSnapshot` | Reads state from an optional scope. |
+| `exec(command, options?)` | `ExecResult` | Runs a typed command with packaged-chrome validation; see `EditorExecOptions`. |
+| `snapshot(options?)` | `EditorSnapshot` | Reads state synchronously from an optional scope. |
+| `focus()` | `void` | Focuses the document surface. |
 
-Use `exec()` for commands that must use the same validation as packaged chrome. Use `snapshot()` for a synchronous state read.
+## Limits
 
-## `popups`
-
-Use `definePopup(MyPopup)` to customize an automatic popup with your component. Forward its typed props to the default component to retain editor behavior. Render callbacks also work. Set an entry to `false` to manage its trigger and visibility yourself. For supported popups and defaults, see [Customize popups](/docs/2.x/guides/customize-dialogs).
+- `fieldResults`, `contentLockPolicy`, `lockedControlNavigation`, and `modules` apply at creation. To change them, remount with a different `:key`.
+- Collaboration refuses `fieldResults="editable"` with a `TypeError`.
+- The drawing renderers from `drawingModule()` and `reviewModule()` serve every editor in the page. A remount does not remove them. See [Advanced drawing rendering](/docs/2.x/pro/drawing).
+- `DocxEditorRoot` emits only `ready`, `change`, `font-error`, and `revision-markup-change`. File and title events belong to `<DocxEditor>`.
+- If you hide `hyperlinkPopup`, mount a panel that calls `useHyperlinkPopup()`, or the Insert link controls stay disabled.
+- To customize unsupported content, register `DocxEditor.UnsupportedElement` components. See [custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components).
 
 ## Next steps
 
-- [Vue quickstart](/docs/2.x/vue)
-- [Vue examples](/docs/2.x/vue/examples)
-- [Vue composition](/docs/2.x/vue/composition)
-- [Vue API reference](/docs/2.x/api/vue)
-
-## Unsupported-content placeholders
-
-Register `DocxEditor.UnsupportedElement` components inside `DocxEditor` or `DocxEditor.Root`. Customize opaque inline and block content and existing drawing or equation fallbacks. See [custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components) for framework examples, typed metadata, fallback behavior, and lifecycle details.
+- [Vue examples](/docs/2.x/vue/examples): Automate an open editor.
+- [Vue composition](/docs/2.x/vue/composition): Build your own chrome.
+- [Vue API reference](/docs/2.x/api/vue): Generated signatures.

@@ -1,102 +1,17 @@
 ---
 title: 'Tracked changes'
-description: 'Use suggesting mode to record Word revisions. Render, accept, or reject them with the review sidebar or your own interface.'
+description: 'Record DOCX revisions in suggesting mode, then accept, reject, filter, and navigate them from code.'
 category: 'Pro'
 order: 61
 ---
 
-Suggesting mode records edits as Word revisions. The default markup underlines insertions and strikes through deletions.
+Suggesting mode records edits as standard `w:ins` and `w:del` revisions with author and date. You read, resolve, and navigate them through `useReview()` and editor commands.
 
-Each revision keeps available author and timestamp metadata. OOXML timestamps are optional. Saved files use Word `w:ins` and `w:del` markup.
+This feature requires the review module from [`@docx-editor.dev/pro`](/docs/2.x/pro) and an EigenPal Pro License.
 
-This feature requires the review module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
+## Record tracked changes
 
-For user preferences and programmatic styling, see [Customize revision markup](/docs/2.x/pro/revision-markup).
-
-## Review changes
-
-Use **Review > Next Change** or **Previous Change** to move between visible changes. Navigation skips comments and hidden authors, and wraps at the end. A replacement is one stop, and its deleted and inserted text highlight together. A replacement is a deletion and the insertion from the same author that took its place. When a reviewer or tracked-changes filter hides one half, the other half is a stop of its own. A continuous insertion stays in one card when it crosses field markers or tracked paragraph breaks. Accepting or rejecting that card resolves its field instructions, results, and surrounding text together. Accepting or rejecting a card preserves the caret. Use **Next Change** to continue review.
-
-In the review pane, tracked text replacements appear as separate deletion and addition cards. You can accept or reject either half independently, even when their author, ID, and editing time match. Tracked change balloons and `getReviewItems()` show a replacement as one item. Unchanged text separates inline cards even when their source revision attributes match. The editor preserves all source revision dates when you save. Adjacent additions, deletions, and equal formatting changes can each form one card across different editing times. An addition or deletion that continues across a tracked paragraph mark is one card, whatever its editing times. When one author changes consecutive paragraphs to the same paragraph formatting, the change is one card. A formatting change that leaves the resolved formatting unchanged, after styles and list levels apply, has no card and no change bar. **Accept All** and **Reject All** remove it together with the listed changes. If a tracked change filter narrows the decision, or the record's author is hidden, the record stays.
-
-Use **Review > Accept all changes shown** or **Reject all changes shown** to resolve changes selected by your active filters. These controls include offscreen changes in supported stories and leave hidden or unsupported changes pending. A successful operation preserves comments and creates one undo step. To resolve all authors or require every selected change to resolve, configure the [bulk review command](/docs/2.x/editor-api/revisions#resolve-changes-shown-in-the-editor).
-
-Formatting cards describe changed language, bold, italic, underline, strike, font, size, color, alignment, indentation, and paragraph spacing values. Separate formatting decisions remain independently reviewable even when their OOXML revision IDs match.
-
-**Review > Display for Review** offers **Simple Markup**, **All Markup**, **No Markup**, and **Original**. These views preserve the document and its pending changes. Simple Markup shows the proposed text with a red change bar beside each changed line. Original restores prior run and paragraph formatting. Prior table, row, cell, and section formatting remains unsupported.
-
-To offer a view from your own chrome, drive the `review.simpleMarkup`, `review.allMarkup`, `review.noMarkup`, or `review.original` slot with `useEditorCommand`, and read the current view with `useEditorState`:
-
-```tsx
-import { useEditorCommand, useEditorState } from '@docx-editor.dev/react';
-
-function SimpleMarkupButton() {
-  const view = useEditorState((state) => state.reviewDisplayMode);
-  const simple = useEditorCommand('review.simpleMarkup');
-  return (
-    <button
-      type="button"
-      onClick={simple.execute}
-      disabled={!simple.isEnabled}
-      aria-pressed={view === 'simple-markup'}
-    >
-      Simple Markup
-    </button>
-  );
-}
-```
-
-`reviewDisplayMode` takes one of four values. Word models the same views as a markup setting and a view setting:
-
-| Word menu item | `reviewDisplayMode` | Word `RevisionsMarkup` | Word `RevisionsView` |
-| -------------- | ------------------- | ---------------------- | -------------------- |
-| Simple Markup  | `'simple-markup'`   | `Simple`               | `Final`              |
-| All Markup     | `'all-markup'`      | `All`                  | `Final`              |
-| No Markup      | `'proposed'`        | `None`                 | `Final`              |
-| Original       | `'original'`        | `None`                 | `Original`           |
-
-A click on a change bar changes the value too. Vue offers the same pair of composables.
-
-## Customize revision markup
-
-Use **Review > Track changes options** to change revision marks, colors, change bars, and cell shading. The dialog and `setRevisionMarkup` update the same viewer preferences. The host can save those preferences through `revisionMarkupChange`. For configuration examples, see [Review colors and styling](/docs/2.x/pro/review-styling#set-revision-markup-preferences).
-
-Clear **Track formatting** to stop recording future formatting changes. Text edits remain tracked. Clear **Track moves** to display imported moves with insertion and deletion marks. Creating move revisions remains unsupported.
-
-## Choose an editing mode
-
-| Root `mode` value | Engine state   | Behavior                              |
-| ----------------- | -------------- | ------------------------------------- |
-| `'edit'`          | `'editing'`    | Applies edits without revisions.      |
-| `'suggesting'`    | `'suggesting'` | Records supported edits as revisions. |
-| `'view'`          | `'viewing'`    | Keeps the document read-only.         |
-
-In viewing mode, readers can select text with drags, double and triple clicks, Shift with the arrow keys, and Ctrl+A or Cmd+A. Ctrl+C or Cmd+C copies the selection. Read the selection with `snapshot().selection`, the `selectedText` query, and `getSelectionPlacement()`, for example to place a button next to it. All edits stay refused, including Cut. Viewing mode shows no caret, selects no pictures, and opens no headers, footers, or notes. Links still work: an external link shows its popover, and an internal link jumps to its target.
-
-Use the `setEditingMode` command to change the mode after mount. The packaged toolbar exposes the same command in `review.editingMode`.
-
-If you omit `mode`, the root honors `w:trackRevisions` when a review module and an `author` are present. An explicit `mode` overrides this document setting.
-
-The `<DocxEditor>` convenience component defaults to `mode="edit"`.
-
-Tracked-changes protection requires suggesting mode for edits. The review module and author are still required. Forms and comments-only protection refuse suggesting mode; read-only protection opens in viewing mode.
-
-Turning on **Review > Protect Document for Forms** while suggesting switches to editing mode. `snapshot().lastRejection` explains the change. For allowed edits, password limits, and custom controls, see [Document protection](/docs/2.x/guides/document-protection).
-
-### Suggesting needs an author
-
-A revision records who proposed it, so suggesting mode needs an `author`. If you enable suggesting without one, the editor refuses the request instead of accepting focus and ignoring keystrokes:
-
-- `setEditingMode('suggesting')` returns `{ ok: false, code: 'invalidArgs' }` with the reason. `can` reports the same reason. The toolbar disables the **Suggesting** item and shows the reason. Other permitted modes stay available.
-- A `mode="suggesting"` prop without an `author` opens in editing mode.
-- Each case publishes the reason as `lastRejection` in the editor state.
-- The editor raises the configuration error once per instance through the `error` event, with the code `suggestingNeedsAuthor`, and logs the same message to the console once.
-
-Set the author at mount, or later with `setAuthor` or the `author` prop. When the author arrives, the pending request enters suggesting mode, unless the reader has already chosen a mode. Calls to `setEditingMode` count as reader choices, including calls from `onReady`.
-
-If you remove the author while `mode="suggesting"` is active, the editor returns to editing mode and publishes the reason, unless document protection forbids editing. Suggesting adopted from a document or chosen through `setEditingMode` stays active, refuses edits, and publishes the reason until the author returns.
-
-This example switches between editing and suggesting:
+The following example mounts the review module with an author and adds a button that switches between editing and suggesting:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -185,717 +100,281 @@ const modules = [reviewModule()];
 </Framework>
 </FrameworkTabs>
 
-## Tracked content
+`<DocxEditorReview />` renders one card per pending decision. Place it inside the viewport so it scrolls with the document. For its props and parts, see [Comments and review cards](/docs/2.x/customization/review-cards).
 
-| Change | Support and display |
+| Root `mode`    | Engine state   | Behavior                              |
+| -------------- | -------------- | ------------------------------------- |
+| `'edit'`       | `'editing'`    | Applies edits without revisions.      |
+| `'suggesting'` | `'suggesting'` | Records supported edits as revisions. |
+| `'view'`       | `'viewing'`    | Keeps the document read-only.         |
+
+If you omit `mode`, the root honors the document's `w:trackRevisions` setting when a review module and an `author` are present. An explicit `mode` overrides it. The `<DocxEditor>` convenience component defaults to `mode="edit"`.
+
+### Suggesting needs an author
+
+A revision records who proposed it, so suggesting mode needs an `author`. Without one, the editor refuses the request:
+
+| Case | Result |
 | --- | --- |
-| Text | Tracks insertions, deletions, and replacements. The review pane shows a replacement as separate deletion and addition cards. |
-| Paragraph structure | Tracks inserted and deleted paragraph marks. |
-| Paragraph properties | Tracks alignment, indents, spacing, and style in a separate card. |
-| Tables | Tracks row and cell insertion, deletion, and property changes. |
-| Run formatting | Tracks formatting changes in a separate card. |
-| Images | Tracks insertion and deletion. Property edits are unavailable. |
+| `setEditingMode('suggesting')` | Returns `{ ok: false, code: 'invalidArgs' }`. `can` reports the same reason, and the toolbar disables **Suggesting**. |
+| `mode="suggesting"` prop | Opens in editing mode. |
+| Every case | Publishes the reason as `snapshot().lastRejection`. |
+| First refusal per instance | Emits the `error` event with code `suggestingNeedsAuthor` and logs once to the console. |
 
-In suggesting mode, a formatting change keeps the new properties and records the old ones, so a reviewer can put them back. A run records `w:rPrChange`, a paragraph mark records `w:pPr/w:rPr/w:rPrChange`, and paragraph properties record `w:pPrChange`. Accept drops the record; reject restores what it holds.
+Set the author at mount, with `setAuthor`, or through the `author` prop. When it arrives, a pending request enters suggesting mode unless the reader already chose a mode. A `setEditingMode` call, including one from `onReady`, counts as a reader choice.
 
-One press is one card, however many runs the selection covers. The record holds the properties each run started with, so a second press on the same run adds no second card. Setting a property back to the value your own record holds removes that record.
+If you remove the author while `mode="suggesting"` is active, the editor returns to editing mode and publishes the reason, unless protection forbids editing. Suggesting adopted from the document or set through `setEditingMode` stays active, refuses edits, and publishes the reason until the author returns.
 
-A toggle pressed twice is not that case. Turning bold off writes an explicit off value rather than removing the property, because the property might come from a style. The run's properties therefore differ from the ones it started with, and the change is recorded.
+## Accept or reject a change
 
-Formatting text inside your own pending insertion records nothing: the whole run is already your proposal, so rejecting the insertion takes the words and the formatting together. Formatting text inside another author's pending insertion does record a change, and that record is yours. Their insertion is untouched.
-
-If your change lands on the properties another author's record holds, their record stays. Resolving their proposal is a review decision, so take it in the review pane rather than through a formatting press.
-
-Lists, indent level, and tab stops are not recorded. Changing them in suggesting mode applies the change with no card. Table property changes made in the editor are not recorded either; a `w:tblPrChange` a file already carries still renders.
-
-A document that sets `w:doNotTrackFormatting` in `settings.xml` gets no formatting records. Its text edits stay tracked.
-
-Paragraph marks stay hidden until **Review → Show paragraph breaks** is enabled, even when a review card is selected. Use the Review menu, **Cmd+8** on Mac, or **Ctrl+Shift+8** on Windows. This changes the view only, including ordinary paragraph ends (¶) and manual line breaks (↵, Shift+Enter). Tracked line-break marks use their revision color and decoration. Automatic line wraps, page breaks, and column breaks do not receive a line-break arrow. Showing these symbols does not change copied text or saved documents. Adjacent inserted text and breaks by the same author form one review decision. A decision containing only breaks shows their count.
-
-## Change bars
-
-The editor draws Word's change bar: a rule in the left margin beside every line that carries a tracked change. The bar sits halfway into the margin, whatever the paragraph indent, and one bar covers adjacent changed lines and paragraphs, including their paragraph spacing. Body text, tables, headers, footers, footnotes, endnotes, and text boxes all get the bar, and so do formatting-only changes and tracked table rows.
-
-In **All Markup** the bar is a neutral gray hairline, as in Word. In **Simple Markup** the text reads as the proposed result, with no underlines, strikes, or author colors, and the bar is red and heavier beside every line a change touched, including a deleted word that is no longer shown. A click on the bar switches between Simple Markup and All Markup, as in Word. The resolved views, **No Markup** and **Original**, draw no bar. To change the bar's color or width, or to color it by change kind, see [Review colors and styling](/docs/2.x/pro/review-styling#style-the-change-bar).
-
-Use `revisionMarkup.changedLines.mark` to choose the change bar position.
-
-One paragraph mark can contain two decisions. For example, one author can insert a break before another author suggests its removal.
-
-Attribution appears only in **All Markup**. Resolved views omit review colors and change bars. The same setting controls ordinary paragraph marks. **No Markup** merges paragraphs when a revision deletes their paragraph mark.
-
-For author colors and avatars, see [Review colors and styling](/docs/2.x/pro/review-styling).
-
-## Add the review sidebar
-
-`<DocxEditorReview />` renders one card for each included pending decision. Place it inside the viewport so the rail scrolls with the document.
-
-The default sidebar shows content changes and comments. Formatting and structural changes remain available in tracked change balloons: click the changed text or paragraph to inspect them. Set `formatting` or `structural` to include those cards in the sidebar as well.
-
-| Prop         | Default | Behavior                                                        |
-| ------------ | ------- | --------------------------------------------------------------- |
-| `filter`     | None    | Returns a subset of items.                                      |
-| `structural` | `true`  | Shows cards for structural revisions.                           |
-| `formatting` | `false` | Shows cards for formatting revisions.                           |
-| `stack`      | `true`  | Moves overlapping cards to prevent collisions.                  |
-| `gap`        | `8`     | Sets the CSS-pixel gap between stacked cards.                   |
-| `furniture`  | None    | Adds host content before cards.                                 |
-| `preset`     | `true`  | Set `false` to keep context and anchors without packaged cards. |
-
-Structural and formatting revisions remain marked when their cards are hidden. Selecting one opens its tracked change balloon.
-
-### Review parts
-
-All listed parts accept `className` and `hidden`. The other supported props vary by part.
-
-| Parts | Purpose | `asChild` | `icon` |
-| --- | --- | --- | --- |
-| `List` | Builds the card collection. | No | No |
-| `Card` | Wraps one review item. | Yes | No |
-| `Empty` | Shows the empty state. | No | No |
-| `Avatar`, `Author`, `Time`, `Summary` | Display item metadata. | Yes | No |
-| `Accept`, `Reject` | Resolve a revision. | Yes | Yes |
-| `Resolve`, `Reopen` | Change comment thread state. | Yes | Yes |
-| `Delete` | Deletes a thread or discards a suggestion. | Yes | Yes |
-| `Replies` | Displays existing replies. | No | No |
-| `Reply` | Adds a reply. | No | No |
-| `Markers` | Shows markers while the pane is closed. | No | Function or node |
-| `Balloon` | Shows formatting or structural decisions. | No | No |
-| `AddComment` | Starts a comment draft. | No | No |
-| `Draft` | Authors a new comment. | No | No |
-
-`Markers` accepts an icon function because one component draws all markers. The packaged icon identifies the item kind.
-
-On a comment card, `Delete` removes the thread. On a tracked-change card, it discards the suggestion. Reply delete controls remove only their reply.
-
-The stylesheet shows delete controls on hover or keyboard focus. Cards without a deletable target omit the control.
-
-## Build a custom review interface
-
-`useReview()` returns the same data and actions as the packaged rail.
-
-React returns plain values from `useReview()`. Vue returns computed refs for `items`, `activeKey`, `ready`, `paneOpen`, `selectionAnchorY`, `commentResolutionDisabledReason`, and `lastRefusal`. Vue templates unwrap these refs.
-
-| Member                            | Behavior                                 |
-| --------------------------------- | ---------------------------------------- |
-| `items`                           | Pending decisions in reading order       |
-| `activeKey`, `setActive`          | Read or open an item                     |
-| `accept`, `reject`                | Resolve a revision                       |
-| `adopt`                           | Make revisions the reviewer's own        |
-| `resolve`, `reopen`               | Change comment thread state              |
-| `reply`                           | Add a reply                              |
-| `remove`                          | Delete a thread or discard a suggestion  |
-| `comment`                         | Comment on the current selection         |
-| `selectionAnchorY`                | Proposed comment position, or `null`     |
-| `paneOpen`, `setPaneOpen`         | Read or change pane state                |
-| `ready`                           | `false` before a document loads          |
-| `commentResolutionDisabledReason` | Engine refusal for comment state actions |
-| `lastRefusal`                     | Why the last review action was refused   |
-
-Render `item.text` as text. The document controls this value. Do not render it as markup.
-
-| Item field group | Fields                                            |
-| ---------------- | ------------------------------------------------- |
-| Identity         | `key`, `id`, `kind`, `author`, `initials`, `date` |
-| Content          | `text`, `replyIds`                                |
-| Position         | `anchorY`, `pageIndex`                            |
-| State            | `readOnly`, `activatable`, `isActive`             |
-| Revision only    | `revisionKind`, `replacedText`                    |
-
-The nested `item` field holds engine review data. For an `entry`, revision ranges are in `entry.item.ranges`. Comment ranges are in `entry.item.range`.
-
-A reply to a revision creates a comment over its range. Its `parentRevisionId` links it to the revision. Omit comments with `parentId` or `parentRevisionId` from top-level lists.
-
-`readOnly` means the engine cannot resolve that item. Hide **Accept** and **Reject** in custom cards. Packaged actions remain visible but disabled in viewing mode.
-
-### Place custom cards
-
-`anchorY` and stacked positions are layout points from the top of the first page. `useReviewRailMetrics()` returns the values that convert them to CSS pixels:
-
-| Value | Meaning |
-| --- | --- |
-| `scale` | CSS pixels per layout point, including zoom. |
-| `top` | CSS pixels from the scroll container's top padding edge to the first page. Content above the pages is included. |
-| `left` | CSS pixels from the scroll container's left padding edge to the column, 16 pixels right of the page. In a right-to-left interface, the column ends 16 pixels left of the page. `null` before layout. |
-| `side` | `'right'`, or `'left'` in a right-to-left interface. The page side that the column stands on. |
-| `compact` | `true` when the pane is open but the viewport is too narrow for a full column. |
-| `compactCardLeft` | The `left` of a 300-pixel card, relative to the column, that keeps the card inside a narrow viewport. `null` before layout. |
-
-A card's CSS `top` is `metrics.top + position * metrics.scale`. To stack cards without overlap, pass their measured heights in CSS pixels to `useStackedReviewPositions(items, heights, { gap, scale: metrics.scale })`. An item with `isActive: true` stays at its own anchor, and the cards before it move up to make room.
-
-Inside `<DocxEditorReview preset={false}>`, call `useReviewRailMetrics()` without arguments. Your children render inside the rail element, which already sits at `left`.
-
-Root parts such as `DocxEditorReview.AddComment` keep their wiring only as direct children of `DocxEditorReview`. For a complete example with the compose box, see [Custom cards in the review rail](/docs/2.x/recipes/custom-review-cards).
-
-For a column of your own, pass a ref to the column element. The column must meet these conditions:
-
-- The component that calls the hook renders the element.
-- The element has `position: absolute`.
-- The element is a child of `DocxEditor.Viewport`, with no positioned element in between. Its offset parent must be the scroll container that holds the pages.
-- While `left` is `null`, the element uses `visibility: hidden`, not `display: none`.
-- The element has its width, such as `300px`. When `side` is `'left'`, `left` places the column's right edge beside the page, so a column without a width overlaps the page.
-
-Development builds print one warning when a condition fails.
-
-While the column element is mounted, it reserves the review gutter beside the page, as `DocxEditorReview` does. The page moves away from the column while the pane is open. If a mounted `DocxEditorReview` already reserves the gutter, or your column covers the page, pass `{ reserveGutter: false }`.
-
-While the pane is closed, the viewport reserves only a narrow marker strip. Read `paneOpen` from `useReview()`, and render no cards, or small markers, while it is `false`.
-
-The reserved gutter does not show the **Add comment** controls in the toolbar and the context menu. Those controls open a comment draft in a review column. To serve them from your own column, read `ReviewRailContext` from the adapter package. Call its `register()` to show the controls, and its `registerCommentDraft(handler)` to receive each request. Both return a cleanup function. `register()` also reserves the gutter, so pass `{ reserveGutter: false }` in that case.
-
-The handler takes no arguments. It reads the selection's position with `getSelectionPlacement()`, pins the selection with `retainSelection()`, and opens the pane. When the draft closes or is cancelled, call `editor.releaseSelection(pin)`, or the highlight stays pinned. A request counts as served as soon as a handler runs, even if the handler opens nothing. So register the handler only while your column can open a draft, and not in viewing mode.
-
-In React, register in an effect. Keep `openDraft` stable with `useCallback`: a new function on each render registers the handler again each time.
+`useReview()` returns `accept` and `reject`. Each takes one review item and returns a Boolean:
 
 ```tsx
-import { useContext, useEffect } from 'react';
-import type { SelectionPin } from '@docx-editor.dev/core/contracts/editor';
-import { ReviewRailContext, useDocxEditor, useEditorState } from '@docx-editor.dev/react';
-import { useReview } from '@docx-editor.dev/pro/react';
-
-function useCommentDrafts(openDraft: (anchorY: number, pin: SelectionPin) => void) {
-  const registry = useContext(ReviewRailContext);
-  const editor = useDocxEditor();
-  const viewing = useEditorState((state) => state.editingMode === 'viewing');
-  const { setPaneOpen } = useReview();
-  useEffect(() => {
-    if (!registry || !editor || viewing) return undefined;
-    const unregister = registry.register();
-    const release = registry.registerCommentDraft(() => {
-      const anchorY = editor.getSelectionPlacement()?.anchorY;
-      if (anchorY === undefined) return;
-      const pin = editor.retainSelection();
-      if (!pin) return;
-      setPaneOpen(true);
-      openDraft(anchorY, pin);
-    });
-    return () => {
-      release();
-      unregister();
-    };
-  }, [registry, editor, viewing, setPaneOpen, openDraft]);
-}
+const { items, accept, reject } = useReview();
+const first = items.find((item) => item.kind === 'revision' && !item.readOnly);
+if (first && !accept(first)) console.warn('The editor refused the decision.');
 ```
 
-In Vue, inject the registry and read its `.value`. Watch the editor and viewing mode to update the registration:
+Without an adapter, call `editor.acceptReviewItem(key)` or `editor.rejectReviewItem(key)`. They return an `ExecResult`.
+
+| Result | Meaning |
+| --- | --- |
+| `true` or `{ ok: true }` | Every location of the item resolved in one transaction and one undo step. Insertions and deletions match on `(id, author, date)`; formatting changes match on their own key. |
+| `false` or `{ ok: false }` | The item is `readOnly`, the editor is in viewing mode, or the engine refused. Read `useReview().lastRefusal`. |
+
+Formatting decisions can share an OOXML revision ID. Each has its own key and resolves independently.
+
+`useReviewRefusalMessage()` turns `lastRefusal` into a translated sentence. For each code, see [Diagnostics](/docs/2.x/guides/diagnostics).
+
+## Resolve a batch
+
+Run the `resolveAllReviewChanges` command to accept or reject many changes in one undo step:
 
 ```ts
-import { inject, watchEffect } from 'vue';
-import type { SelectionPin } from '@docx-editor.dev/core/contracts/editor';
-import { ReviewRailContext, useDocxEditor, useEditorState } from '@docx-editor.dev/vue';
-import { useReview } from '@docx-editor.dev/pro/vue';
-
-export function useCommentDrafts(openDraft: (anchorY: number, pin: SelectionPin) => void) {
-  const registry = inject(ReviewRailContext, null);
-  const editorRef = useDocxEditor();
-  const { setPaneOpen } = useReview();
-  const viewing = useEditorState((state) => state.editingMode === 'viewing');
-  watchEffect((onCleanup) => {
-    const rail = registry?.value;
-    const editor = editorRef.value;
-    if (!rail || !editor || viewing.value) return;
-    const unregister = rail.register();
-    const release = rail.registerCommentDraft(() => {
-      const anchorY = editor.getSelectionPlacement()?.anchorY;
-      if (anchorY === undefined) return;
-      const pin = editor.retainSelection();
-      if (!pin) return;
-      setPaneOpen(true);
-      openDraft(anchorY, pin);
-    });
-    onCleanup(() => {
-      release();
-      unregister();
-    });
-  });
-}
-```
-
-The values update when the zoom, the window size, the page count, the document load, content above the pages, or the reserved gutter changes. They also work when the editor is in a pop-out window or an iframe.
-
-The following React example renders a complete column. It measures each card with a `ResizeObserver`, stacks the cards, shows only the active card in compact mode, and renders nothing while the pane is closed:
-
-```tsx
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { DocxEditor } from '@docx-editor.dev/react';
-import {
-  reviewModule,
-  useReview,
-  useReviewRailMetrics,
-  useStackedReviewPositions,
-  type ReviewItemView,
-} from '@docx-editor.dev/pro/react';
-
-const MODULES = [reviewModule()];
-
-function MeasuredCard(props: {
-  item: ReviewItemView;
-  top: number;
-  left?: number;
-  onHeight: (key: string, height: number) => void;
-}) {
-  const { item, top, left = 0, onHeight } = props;
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const node = ref.current;
-    if (!node) return undefined;
-    const observer = new ResizeObserver(() => onHeight(item.key, node.offsetHeight));
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [item.key, onHeight]);
-  return (
-    <div
-      ref={ref}
-      className="my-review-card"
-      style={{ position: 'absolute', top, left, width: 300 }}
-    >
-      <strong>{item.author}</strong>
-      <p>{item.text}</p>
-    </div>
-  );
-}
-
-function MyReviewColumn() {
-  const railRef = useRef<HTMLDivElement>(null);
-  const metrics = useReviewRailMetrics(railRef);
-  const { items, paneOpen } = useReview();
-  const [heights, setHeights] = useState<ReadonlyMap<string, number>>(new Map());
-  // Store a height only when it changed, so a measurement cannot loop.
-  const onHeight = useRef((key: string, height: number) =>
-    setHeights((previous) =>
-      previous.get(key) === height ? previous : new Map(previous).set(key, height)
-    )
-  ).current;
-  const positions = useStackedReviewPositions(items, heights, {
-    gap: 8,
-    scale: metrics.scale,
-  });
-  const topOf = (item: ReviewItemView) =>
-    metrics.top + (positions.get(item.key) ?? item.anchorY ?? 0) * metrics.scale;
-
-  let cards: ReactNode = null;
-  if (paneOpen && metrics.compact) {
-    // Too narrow for a column: float only the active card inside the viewport.
-    const active = items.find((item) => item.isActive);
-    cards = active ? (
-      <MeasuredCard
-        item={active}
-        top={metrics.top + (active.anchorY ?? 0) * metrics.scale}
-        left={metrics.compactCardLeft ?? 0}
-        onHeight={onHeight}
-      />
-    ) : null;
-  } else if (paneOpen) {
-    cards = items.map((item) => (
-      <MeasuredCard key={item.key} item={item} top={topOf(item)} onHeight={onHeight} />
-    ));
-  }
-
-  return (
-    <div
-      ref={railRef}
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: metrics.left ?? 0,
-        width: 300,
-        visibility: metrics.left === null ? 'hidden' : 'visible',
-      }}
-    >
-      {cards}
-    </div>
-  );
-}
-
-export function Reviewer({ bytes }: { bytes: Uint8Array }) {
-  return (
-    <DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
-      <DocxEditor.Viewport>
-        <DocxEditor.Content />
-        <MyReviewColumn />
-      </DocxEditor.Viewport>
-    </DocxEditor.Root>
-  );
-}
-```
-
-In Vue, `useReviewRailMetrics(railRef)` returns `{ metrics }`, where `metrics` is a ref. The following component is the Vue version of the column. Mount it inside `DocxEditor.Viewport`, after `DocxEditor.Content`:
-
-```vue
-<script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
-import {
-  useReview,
-  useReviewRailMetrics,
-  useStackedReviewPositions,
-  type ReviewItemView,
-} from '@docx-editor.dev/pro/vue';
-
-const railRef = ref<HTMLElement | null>(null);
-const { metrics } = useReviewRailMetrics(railRef);
-const { items, paneOpen } = useReview();
-const heights = ref<ReadonlyMap<string, number>>(new Map());
-const positions = useStackedReviewPositions(items, heights, () => ({
-  gap: 8,
-  scale: metrics.value.scale,
-}));
-
-// Observe each card once. Store a height only when it changed, so a measurement
-// cannot loop. The observer is created on mount, so server rendering skips it.
-let observer: ResizeObserver | null = null;
-const cards = new Map<string, HTMLElement>();
-onMounted(() => {
-  observer = new ResizeObserver((entries) => {
-    let next: Map<string, number> | null = null;
-    for (const entry of entries) {
-      const node = entry.target as HTMLElement;
-      const key = node.dataset.key;
-      if (!key || heights.value.get(key) === node.offsetHeight) continue;
-      next ??= new Map(heights.value);
-      next.set(key, node.offsetHeight);
-    }
-    if (next) heights.value = next;
-  });
-  for (const node of cards.values()) observer.observe(node);
+const result = editor.exec({
+  type: 'resolveAllReviewChanges',
+  action: 'accept', // or 'reject'
+  scope: 'visible', // or 'document' for all authors
+  unsupported: 'skip', // or 'fail' to require every change to resolve
 });
-onUnmounted(() => observer?.disconnect());
-
-// One stable function ref per card. Vue calls it with the element, and with null when
-// the card leaves. A nodeType check works in a pop-out window, where instanceof fails.
-const cardRefs = new Map<string, (node: unknown) => void>();
-function cardRef(key: string) {
-  let bind = cardRefs.get(key);
-  if (!bind) {
-    bind = (node) => {
-      const element = (node as Node | null)?.nodeType === 1 ? (node as HTMLElement) : null;
-      const previous = cards.get(key);
-      if (previous === element) return;
-      if (previous) observer?.unobserve(previous);
-      if (element) {
-        cards.set(key, element);
-        observer?.observe(element);
-      } else {
-        cards.delete(key);
-        cardRefs.delete(key);
-      }
-    };
-    cardRefs.set(key, bind);
-  }
-  return bind;
-}
-
-const activeItem = computed(() => items.value.find((item) => item.isActive));
-const topOf = (item: ReviewItemView) =>
-  metrics.value.top + (positions.value.get(item.key) ?? item.anchorY ?? 0) * metrics.value.scale;
-</script>
-
-<template>
-  <div
-    ref="railRef"
-    :style="{
-      position: 'absolute',
-      top: '0px',
-      left: `${metrics.left ?? 0}px`,
-      width: '300px',
-      visibility: metrics.left === null ? 'hidden' : 'visible',
-    }"
-  >
-    <template v-if="paneOpen && metrics.compact">
-      <!-- Too narrow for a column: float only the active card inside the viewport. -->
-      <div
-        v-if="activeItem"
-        :ref="cardRef(activeItem.key)"
-        :data-key="activeItem.key"
-        class="my-review-card"
-        :style="{
-          position: 'absolute',
-          top: `${metrics.top + (activeItem.anchorY ?? 0) * metrics.scale}px`,
-          left: `${metrics.compactCardLeft ?? 0}px`,
-          width: '300px',
-        }"
-      >
-        <strong>{{ activeItem.author }}</strong>
-        <p>{{ activeItem.text }}</p>
-      </div>
-    </template>
-    <template v-else-if="paneOpen">
-      <div
-        v-for="item in items"
-        :key="item.key"
-        :ref="cardRef(item.key)"
-        :data-key="item.key"
-        class="my-review-card"
-        :style="{ position: 'absolute', top: `${topOf(item)}px`, width: '300px' }"
-      >
-        <strong>{{ item.author }}</strong>
-        <p>{{ item.text }}</p>
-      </div>
-    </template>
-  </div>
-</template>
 ```
 
-### Activate and reveal items
+| Option | Default | Effect |
+| --- | --- | --- |
+| `action` | Required | `'accept'` or `'reject'`. |
+| `scope` | `'visible'` | `'visible'` honors reviewer visibility and the predicate filter. `'document'` includes all authors. |
+| `keys` | None | Exact keys from `getReviewItems()`. Overrides `scope`. |
+| `unsupported` | `'skip'` | `'fail'` refuses the whole batch if one change cannot resolve. |
 
-`setActive` moves the caret to the item start and opens its story. It does not select content. The item renders its own highlight.
+**Review > Accept all changes shown** and **Reject all changes shown** run the same command. Skipped changes stay pending and appear in the `reviewChangesResolved` event's `skipped` list. For result codes, see [Resolve changes shown in the editor](/docs/2.x/editor-api/revisions#resolve-changes-shown-in-the-editor).
 
-| `reveal` value | Scroll behavior                                  |
-| -------------- | ------------------------------------------------ |
-| Omitted        | Centers an item only when scrolling is required. |
-| `'start'`      | Places the item near the viewport start.         |
-| `'nearest'`    | Uses the minimum scroll distance.                |
-| `false`        | Opens the item without scrolling.                |
+A loop over `useReview().items` differs from the command:
 
-`setActive` returns `false` when activation is excluded, no range exists, or the story cannot open.
+- Each `accept` call is its own undo step.
+- It reaches only listed items, so filtered and hidden changes stay pending.
+- It never reaches formatting changes that leave the resolved formatting unchanged. These have no card. Run the command with `scope: 'document'` and no `keys` when the file must end up without them. With `scope: 'visible'`, the command keeps those of hidden authors, and all of them while a tracked change predicate is set.
 
-Pass `{ announce: true }` to activate an item and emit `reviewItemReveal`. The packaged UI opens its tracked change balloon or card. A closed sidebar opens only with `opening: 'auto'`. Without `announce`, activation emits no reveal event.
+## Read and reveal changes
 
-Use `useReviewOf(editor, query)` with an existing editor. React accepts `Editor | null`. Vue requires `Ref<Editor | null>` and accepts a reactive query.
+`useReview()` returns the same data and actions as the packaged rail. React returns plain values. Vue returns computed refs for the state fields.
 
-| Query or exclusion              | Effect                                                         |
-| ------------------------------- | -------------------------------------------------------------- |
-| `excludeRevisionKinds`          | Removes those kinds from returned `items`.                     |
-| `placement: false`              | Keeps metadata and sets placement fields to `null`.            |
-| `pairReplacements: false`       | Lists both halves of each replacement as separate items.       |
-| `setReviewActivationExclusions` | Prevents caret-driven activation for hidden kinds.             |
-| `DocxEditorReview`              | Sets activation exclusions from `structural` and `formatting`. |
+| Member | Behavior |
+| --- | --- |
+| `items` | Pending decisions in reading order. |
+| `activeKey`, `setActive` | Read or open an item. `activeKey` includes caret-only activation. |
+| `activatedKey` | The explicitly activated item, or `null` for caret-only activation. |
+| `accept`, `reject` | Resolve a revision. |
+| `adopt` | Make revisions the reviewer's own. |
+| `resolve`, `reopen`, `reply`, `remove`, `comment` | Comment actions. `remove` also discards a suggestion. |
+| `selectionAnchorY` | Proposed comment position, or `null`. |
+| `paneOpen`, `setPaneOpen` | Read or change pane state. |
+| `ready` | `false` before a document loads. |
+| `commentResolutionDisabledReason` | Engine refusal for comment state actions. |
+| `lastRefusal` | Why the last review action was refused. |
 
-A query filters returned data. It does not limit caret-driven activation.
+| Item field group | Fields                                                         |
+| ---------------- | -------------------------------------------------------------- |
+| Identity         | `key`, `id`, `kind`, `author`, `initials`, `date`              |
+| Content          | `text`, `replyIds`                                             |
+| Position         | `anchorY`, `pageIndex`                                         |
+| State            | `readOnly`, `activatable`, `isActive`                          |
+| Revision only    | `revisionKind`, `replacedText`                                 |
+| Engine data      | `item`: `item.ranges` for revisions, `item.range` for comments |
+
+Render `item.text` and `replacedText` as text, never as markup. The document controls these values. Hide **Accept** and **Reject** when `readOnly` is `true`.
+
+- Adjacent insertions, deletions, or matching formatting changes from one author form one decision, even across editing times.
+- Unchanged text separates decisions, even when their ID, author, and date match.
+
+A reply to a revision is a comment with `parentRevisionId`. Omit comments with `parentId` or `parentRevisionId` from top-level lists.
+
+To open an item, call `setActive(key, options)`. It moves the caret to the item start and opens its story. It returns `false` when activation is excluded, the item has no range, or its story cannot open.
+
+| `reveal` option | Scroll behavior                                   |
+| --------------- | ------------------------------------------------- |
+| Omitted         | Centers the item only when scrolling is required. |
+| `'start'`       | Places the item near the viewport start.          |
+| `'nearest'`     | Uses the minimum scroll distance.                 |
+| `false`         | Does not scroll.                                  |
+
+Pass `{ announce: true }` to also emit `reviewItemReveal`, which opens the packaged card or balloon.
+
+### Query items
+
+Pass a query to `useReview(query)`, `useReviewOf(editor, query)`, or `editor.getReviewItems(query)`:
+
+| Query field | Default | Effect |
+| --- | --- | --- |
+| `excludeRevisionKinds` | None | Removes those kinds from `items`. Excluded insertions and deletions never pair. Excluding `replace` removes pairs. |
+| `placement` | `true` | `false` skips layout and sets anchors to `null`. |
+| `pairReplacements` | `true` | `false` lists both halves of a replacement. |
+
+`useReviewOf` takes `Editor | null` in React. In Vue, it takes `Ref<Editor | null>` and accepts a reactive query.
+
+A query filters returned data only. To stop the caret from activating hidden kinds, call `setReviewActivationExclusions`. `DocxEditorReview` sets those exclusions from its `structural` and `formatting` props.
 
 ### Show a replacement as one item
 
-When an author selects words and types over them, the document records a deletion and an insertion. The review queue lists them as one `'replace'` item by default. To list the deletion and the insertion as two items, pass `pairReplacements: false` in the query.
+Typing over a selection records a deletion and an insertion. The default query lists them as one `'replace'` item:
 
 ```ts
-const { items, accept } = useReview();
-
-for (const entry of items) {
+for (const entry of editor.getReviewItems()) {
   if (entry.kind === 'revision' && entry.revisionKind === 'replace') {
-    // entry.replacedText holds the deleted words; entry.text holds the inserted words.
     console.log(`"${entry.replacedText}" -> "${entry.text}"`);
   }
 }
 ```
 
-A deletion and an insertion pair when all of these are true:
+Two revisions pair when they are adjacent in the queue, in either order, share author, nesting level, and `readOnly`, and touch at the same paragraph offset. Accept, reject, activation, replies, and `getReviewItemRects` act on both halves. A reply anchors its comment over the inserted text. The pair key stays stable while both halves are pending.
 
-- The insertion is the next revision in the queue after the deletion.
-- Both have the same author, nesting level, and `readOnly` value.
-- The deletion ends at the same paragraph and offset where the insertion starts.
+The packaged `DocxEditorReview` rail reads with `pairReplacements: false`, so the pane lists the halves as separate cards.
 
-A pair acts as one item:
+### Step through changes
 
-- `acceptReviewItem(key)` and `rejectReviewItem(key)` resolve both halves in one transaction. One undo restores both.
-- `setActiveReviewItem(key)` places the caret at the deletion and highlights both halves. The pair reports `isActive` while the caret is in either half.
-- `replyToReviewItem(key, text)` writes a comment over the inserted words. Replies to either half list under the pair.
-- `getReviewItemRects(key)` returns the bands of both halves.
-
-The pair's `key` stays the same while both halves are pending. Key-based methods accept it with any query. The query removes kinds in `excludeRevisionKinds` before it pairs, so an excluded deletion or insertion never pairs. Add `'replace'` to `excludeRevisionKinds` to remove the pairs. The packaged `DocxEditorReview` rail reads with `pairReplacements: false`, so the review pane lists the halves separately.
-
-### Step through changes from your code
-
-A replacement is one change. Next and previous controls in your app stop on it once, in either of these ways.
-
-To use the editor's own order, run the `navigateReviewChange` command. It stops once on each replacement, highlights both halves, and wraps at the end. It steps through the same items as `getReviewItems()`, so a reviewer filter or a `setTrackedChangesFilter` predicate applies. When a filter hides one half of a replacement, the other half is a stop of its own.
+Run `navigateReviewChange` to move in the editor's own order:
 
 ```ts
-// Show only the changes that Ada made, then move to the next one.
-editor.setTrackedChangesFilter((change) => change.author === 'Ada');
-
 const result = editor.exec({ type: 'navigateReviewChange', direction: 'next' });
-if (!result.ok) showMessage(result.reason); // For example, no changes are visible.
+if (!result.ok) showMessage(result.reason);
 ```
 
-Each step fires `reviewItemReveal` with `source: 'navigate'`. Open your card for `pairKey ?? key`.
+It stops once per replacement, wraps at the end, and honors reviewer and predicate filters. Each step emits `reviewItemReveal` with `source: 'navigate'`.
 
-To step through a list that your app builds, read it with `getReviewItems()` and activate each item by its key. The default list pairs replacements, so your controls stop on each replacement once. With `pairReplacements: false`, a replacement is two items, and your controls stop on it twice.
+### Handle reveal events
 
-```ts
-// Read once per step, so a change that another reviewer resolved drops out.
-const changes = editor
-  .getReviewItems({ placement: false })
-  .filter((item) => item.kind === 'revision' && item.activatable);
-
-const current = changes.findIndex((item) => item.isActive);
-const next = changes[(current + 1) % changes.length];
-if (next) editor.setActiveReviewItem(next.key, { announce: true });
-```
-
-`setActiveReviewItem` with a replacement's key highlights both halves and fires `reviewItemReveal` with that key.
-
-### Find the item under a pointer
-
-If you draw your own tracked change balloons or margin markers, use `editor.getReviewItemsAt(clientX, clientY, query?)` to find the review items under a pointer. Each hit holds the `placement` that `getReviewItems()` returns and a `rect` in client coordinates. The `rect` is the item's band on the line under the pointer.
-
-The following example opens a card for the item under a click:
-
-```ts
-pages.addEventListener('click', (event) => {
-  const hits = editor.getReviewItemsAt(event.clientX, event.clientY);
-  const hit = hits.find(
-    ({ placement }) =>
-      placement.kind !== 'comment' ||
-      (placement.parentId === undefined && placement.parentRevisionId === undefined)
-  );
-  if (hit) openCard(hit.placement.key, hit.rect);
-});
-```
-
-An item hits when the character under the pointer is inside its range. The right half of the last character still hits. Hits list the narrowest range first. Replies share their thread's range, so they hit too. Pointer hits cover the body, tables, headers, footers, footnotes, and endnotes on painted pages. Ranges that cover no characters never hit.
-
-To anchor a tracked change balloon to an item without a pointer, call `editor.getReviewItemRects(key)`. It returns the item's bands on painted pages in client coordinates, or an empty array.
-
-Use `reviewItemReveal` to open your component after **Next Change**, **Previous Change**, or `setActiveReviewItem(key, { announce: true })`. It fires again for an already active item, so a closed component can reopen.
-
-Caret movement, page clicks, dismissal, refused activation, and remote edits do not emit this event.
-
-The event's `key` is the item's key in `getReviewItems({ pairReplacements: false })`, so for a replacement it names one half. **Next Change** and **Previous Change** stop once on each replacement, and the key names its deletion. When you call `setActiveReviewItem` with the pair's key, both halves highlight. When the item is a paired replacement or one half of one, the event also carries `pairKey`, the key that the default `getReviewItems()` list gives the pair. Open `pairKey ?? key`.
-
-The following example opens a host tracked change balloon in React. In Vue, use `useEditorEvent` from `@docx-editor.dev/vue` with the same handler:
+Listen for `reviewItemReveal` to open your own card or balloon:
 
 ```tsx
 import { useEditorEvent } from '@docx-editor.dev/react';
 
 useEditorEvent('reviewItemReveal', ({ key, pairKey, source }) => {
-  // source is 'navigate' for Next Change and Previous Change,
-  // or 'host' for setActiveReviewItem() with announce: true.
   openBalloon(pairKey ?? key);
 });
 ```
 
-The packaged tracked change balloons and review pane use the same event. With the `revisionsIn: 'balloons'` pane setting, the tracked change balloon opens. With `revisionsIn: 'pane'`, a closed pane opens at the item's card, unless the `opening` pane setting is `'manual'`.
-
-`editor.getActivatedReviewItemKey(query)` identifies an explicitly activated item while the caret remains inside it. It returns `null` for caret-only activation. `useReview().activatedKey` exposes the same value.
-
-`activeKey` and placement `isActive` also include caret-only activation. Use the same query for activation and item reads, including `pairReplacements`. Read again after `selectionChange`.
+The event `key` names one half of a replacement. `pairKey` names the pair in the default list, so open `pairKey ?? key`. Caret movement, page clicks, and remote edits do not emit this event.
 
 | Host API | Returns |
 | --- | --- |
-| `getReviewItemsAt(clientX, clientY, query?)` | The review items under a point, narrowest first. |
-| `getReviewItemRects(key)` | The item's bands on painted pages, in client coordinates. |
-| `getActivatedReviewItemKey(query?)` | The activated item's key under `query`, or `null`. |
+| `getReviewItemsAt(clientX, clientY, query?)` | Items under a point, narrowest range first, each with `placement` and `rect`. Ranges without characters, such as paragraph marks and comments on empty ranges, never match. |
+| `getReviewItemRects(key)` | The item's painted bands in client coordinates, or an empty array. |
+| `getActivatedReviewItemKey(query?)` | The explicitly activated item's key, or `null`. |
 | `on('reviewItemReveal', handler)` | Each explicit reveal, as `{ key, pairKey, source }`. |
 
-Use `reviewPaneListsItem(revisionsIn, item)` to select items for a custom sidebar. Import it from `@docx-editor.dev/core/editor`. Apply it to an unfiltered `getReviewItems()` result before your application filters.
+Use the same query for activation and item reads. To pick the items a custom sidebar lists, apply `reviewPaneListsItem(revisionsIn, item)` from `@docx-editor.dev/core/editor` to an unfiltered `getReviewItems()` result.
 
-The packaged review rail can draw these tracked change balloons for you. See [Control the review pane](/docs/2.x/pro#control-the-review-pane).
+## Place custom cards
 
-## Adopt suggestions as your own
+`anchorY` is in layout points from the top of the first page. `useReviewRailMetrics()` converts it to CSS pixels: a card's `top` is `metrics.top + position * metrics.scale`.
 
-A reviewer can take over changes that someone else proposed, such as an agent's suggestions. The changes stay pending, but they record the reviewer as their author. Call `adopt(items)` from `useReview()`. It accepts one item or a list, ignores comment items, and changes every revision in one undo step. It records the editor's `author`.
+| Value | Meaning |
+| --- | --- |
+| `scale` | CSS pixels per layout point, including zoom. |
+| `top` | CSS pixels from the scroll container's top padding edge to the first page. |
+| `left` | CSS pixels from the scroll container's left padding edge to the column. `null` before layout. |
+| `side` | `'right'`, or `'left'` in a right-to-left interface. |
+| `compact` | `true` when the viewport is too narrow for a full column. |
+| `compactCardLeft` | The `left` of a 300-pixel card that stays inside a narrow viewport. |
 
-In React:
+To stack cards, pass measured heights to `useStackedReviewPositions(items, heights, { gap, scale })`. The active card stays at its anchor, and the cards before it move up. Inside `<DocxEditorReview preset={false}>`, call `useReviewRailMetrics()` without arguments. For a complete example, see [Custom cards in the review rail](/docs/2.x/recipes/custom-review-cards).
+
+For a column of your own, pass a ref to `useReviewRailMetrics(ref)`. The column element must meet these conditions:
+
+- The calling component renders it with `position: absolute` and a fixed width.
+- It is a child of `DocxEditor.Viewport`, with no positioned element in between.
+- It uses `visibility: hidden`, not `display: none`, while `left` is `null`.
+
+The mounted column reserves the review gutter. Pass `{ reserveGutter: false }` when `DocxEditorReview` already reserves it.
+
+To serve **Add comment** requests from your column, read `ReviewRailContext` from the adapter. Call `register()` to show the controls and `registerCommentDraft(handler)` to receive requests. `register()` also reserves the gutter, so pass `{ reserveGutter: false }` to `useReviewRailMetrics`:
 
 ```tsx
-import { useEditorState } from '@docx-editor.dev/react';
-import { useReview } from '@docx-editor.dev/pro/react';
+useEffect(() => {
+  if (!registry || !editor || viewing) return undefined;
+  const unregister = registry.register();
+  const release = registry.registerCommentDraft(() => {
+    const anchorY = editor.getSelectionPlacement()?.anchorY;
+    const pin = editor.retainSelection();
+    if (anchorY === undefined || !pin) return;
+    setPaneOpen(true);
+    openDraft(anchorY, pin); // Call editor.releaseSelection(pin) when the draft closes.
+  });
+  return () => {
+    release();
+    unregister();
+  };
+}, [registry, editor, viewing, setPaneOpen, openDraft]);
+```
 
-function AdoptSuggestions({ from }: { from: string }) {
-  const { items, adopt } = useReview();
-  const viewing = useEditorState((state) => state.editingMode === 'viewing');
-  const suggested = items.filter((item) => item.kind === 'revision' && item.author === from);
+In Vue, `inject(ReviewRailContext, null)` returns a ref. Register inside `watchEffect` and clean up with `onCleanup`. Register only while your column can open a draft, because a request counts as served once a handler runs.
 
+## Switch the review display
+
+Drive the `review.simpleMarkup`, `review.allMarkup`, `review.noMarkup`, or `review.original` slot with `useEditorCommand`:
+
+```tsx
+import { useEditorCommand, useEditorState } from '@docx-editor.dev/react';
+
+function SimpleMarkupButton() {
+  const view = useEditorState((state) => state.reviewDisplayMode);
+  const simple = useEditorCommand('review.simpleMarkup');
   return (
-    <button
-      disabled={viewing || suggested.length === 0}
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={() => adopt(suggested)}
-    >
-      Adopt {suggested.length} suggestions
+    <button onClick={simple.execute} aria-pressed={view === 'simple-markup'}>
+      Simple Markup
     </button>
   );
 }
 ```
 
-In Vue:
+| View          | `reviewDisplayMode` | Office.js `RevisionsMarkup` | Office.js `RevisionsView` |
+| ------------- | ------------------- | --------------------------- | ------------------------- |
+| Simple Markup | `'simple-markup'`   | `Simple`                    | `Final`                   |
+| All Markup    | `'all-markup'`      | `All`                       | `Final`                   |
+| No Markup     | `'proposed'`        | `None`                      | `Final`                   |
+| Original      | `'original'`        | `None`                      | `Original`                |
 
-```vue
-<script setup lang="ts">
-import { computed } from 'vue';
-import { useEditorState } from '@docx-editor.dev/vue';
-import { useReview } from '@docx-editor.dev/pro/vue';
+Display modes change the view only. They never accept, reject, or remove saved revisions. For marks, colors, and change bars, see [Customize revision markup](/docs/2.x/pro/revision-markup).
 
-const props = defineProps<{ from: string }>();
-const { items, adopt } = useReview();
-const viewing = useEditorState((state) => state.editingMode === 'viewing');
-const suggested = computed(() =>
-  items.value.filter((item) => item.kind === 'revision' && item.author === props.from)
-);
-</script>
+## Filter changes
 
-<template>
-  <button
-    :disabled="viewing || suggested.length === 0"
-    @mousedown.prevent
-    @click="adopt(suggested)"
-  >
-    Adopt {{ suggested.length }} suggestions
-  </button>
-</template>
-```
+Filters are view-only. They hide markup and cards, but saving writes the same revision markup as with no filter.
 
-To adopt one change from a card, pass the item: `adopt(item)`. Pass options to record someone else or a new date:
+### Filter by reviewer
+
+Hide or show authors from code:
 
 ```ts
-adopt(item, { author: 'Ada Lovelace', date: new Date() });
+const authors = editor.getReviewAuthors();
+editor.setReviewAuthorVisible('Ada', false);
+editor.isReviewAuthorVisible('Ada'); // false
+editor.showAllReviewAuthors();
 ```
 
-`adopt` returns `false` and changes nothing when the list holds no revision, when no author is known, or when the editor refuses the write. Viewing mode and document protection refuse it. Review keys include the author, so each change gets a new `key`, and `items` updates on its own. For an author filter or the full result, run the `setReviewChangesAuthor` editor command. See [Change authors in the editor](/docs/2.x/editor-api/revisions#change-authors-in-the-editor).
+A hidden author's revisions render as accepted, and their comments hide. `setAllReviewAuthorsVisible(visible)` changes every author. The packaged menu exposes the same list in **Review > Markup Options > Reviewers**.
 
-## Filter by reviewer
+### Filter with a predicate
 
-The packaged menu exposes **Review → Markup Options → Reviewers**. The default toolbar omits the shortcut to keep the chrome compact. A host that wants one can compose `DocxEditor.Toolbar.Reviewers` and provide a custom `icon` (or the Vue default slot). Each checked author keeps their tracked markup and review cards visible. Clearing an author shows that author’s revisions as accepted: insertions remain as ordinary text, deletions leave the layout, and formatting stays applied without markup. Comments by that author are hidden.
-
-Reviewer visibility is view-only. It does not accept changes or alter saved DOCX content, and showing the author again restores their markup. Bulk actions over `useReview().items` affect only the items returned by the filtered review list.
-
-Use `editor.getReviewAuthors()` to build custom chrome. Read visibility with `editor.isReviewAuthorVisible(author)`, change one author with `editor.setReviewAuthorVisible(author, visible)`, or call `editor.setAllReviewAuthorsVisible(visible)` and `editor.showAllReviewAuthors()`.
-
-## Filter tracked changes with a predicate
-
-Use a tracked-changes predicate when reviewer names are not enough—for example, to show only recent changes, only deletions, or a combination of author, date, kind, and document location. The API is view-only:
-
-```ts
-import type { TrackedChangeFilterMode, TrackedChangePredicate } from '@docx-editor.dev/core/editor';
-
-const predicate: TrackedChangePredicate = (revision) => true;
-
-editor.setTrackedChangesFilter(predicate); // install or re-evaluate a filter
-editor.setTrackedChangesFilter(predicate, 'reject'); // show excluded revisions as rejected
-editor.setTrackedChangesFilter(null); // clear it
-```
-
-The predicate receives one complete `ReviewRevisionItem` for each revision decision. Return `true` to keep the revision as tracked markup and in the review list. Return `false` to remove its revision card and render it with the selected mode. The default mode is `accept`, matching Word's **Show Markup → Specific People** behavior.
-
-| Revision kind | `accept` mode | `reject` mode |
-| --- | --- | --- |
-| `insert`, `moveTo` | Proposed content remains as ordinary content. | Proposed content is omitted. |
-| `delete`, `moveFrom` | Deleted content is omitted. | Deleted content returns as ordinary content. |
-| `paragraphMark`, inserted/deleted row | Accepted structure is rendered. | Original structure is rendered. |
-| `format`, other structural/property | Current values remain without tracked-change markup. | Current values remain without tracked-change markup. |
-
-The `replace` kind remains in the public type for compatibility with custom review providers. The built-in reader does not infer this kind from adjacent deletion and addition revisions.
-
-### Predicate data
-
-The predicate can use the following revision data:
-
-| Field | Description |
-| --- | --- |
-| `author` | Reviewer name stored in the DOCX revision. |
-| `date` | Optional raw OOXML timestamp. Validate it before date comparisons. |
-| `revisionKind` | Insert, delete, replace, move, format, paragraph-mark, or structural change. |
-| `text`, `replacedText` | Proposed text and, for replacements, the text being replaced. |
-| `ranges` | All document ranges covered by the decision, including part names. |
-| `address`, `addresses` | The OOXML revision address or addresses resolved together. |
-| `nesting`, `pairedWith`, `markDirection` | Nesting, move/replacement pairing, and paragraph-mark metadata. |
-| `readOnly` | Whether the engine can accept or reject this revision. |
-| `id`, `replacedRangeCount`, `replyIds` | Stable decision identity and additional review-card metadata. |
-
-Dates are document data and can be absent or invalid. Use `Date.parse` together with `Number.isFinite` before comparing them.
-
-### Install a filter
-
-This example keeps only insertions from Jess on or after February 1, 2026:
+Pass a `TrackedChangePredicate` to `setTrackedChangesFilter`. Clear it when the owning component unmounts:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -961,135 +440,70 @@ watch(
 </Framework>
 </FrameworkTabs>
 
-### Common recipes
+The predicate receives one `ReviewRevisionItem` per decision, with `author`, `date`, `revisionKind`, `text`, `replacedText`, `ranges`, and `readOnly`. `date` is optional raw OOXML, so validate it with `Number.isFinite`. Return `true` to keep the revision tracked.
 
-Predicates are ordinary functions, so compose small rules with boolean logic:
+Pass a `TrackedChangeFilterMode` as the second argument to choose how excluded revisions render:
 
-```ts
-import type { TrackedChangePredicate } from '@docx-editor.dev/core/editor';
+| Revision kind | `'accept'` (default) | `'reject'` |
+| --- | --- | --- |
+| `insert`, `moveTo` | Content stays as ordinary text. | Content is omitted. |
+| `delete`, `moveFrom` | Content is omitted. | Content returns as ordinary text. |
+| `paragraphMark`, inserted or deleted row | Accepted structure. | Original structure. |
+| `format`, other property changes | Current values without markup. | Current values without markup. |
 
-const byJess: TrackedChangePredicate = (revision) => revision.author === 'Jess';
-const deletionsOnly: TrackedChangePredicate = (revision) =>
-  revision.revisionKind === 'delete' || revision.revisionKind === 'moveFrom';
-const inMainDocument: TrackedChangePredicate = (revision) =>
-  revision.ranges.some((range) => range.partName === '/word/document.xml');
+- Keep the predicate synchronous, deterministic, and free of side effects. The editor caches its decisions.
+- Call `setTrackedChangesFilter` again after captured state changes, even with the same function.
+- If the predicate throws, the editor keeps the last complete projection and surfaces the error.
+- A revision stays tracked only when its author is visible and the predicate returns `true`.
+- Hidden authors always use the accepted projection, even in `'reject'` mode.
+- The predicate runs for revisions, not comments.
 
-editor.setTrackedChangesFilter(
-  (revision) => byJess(revision) && deletionsOnly(revision) && inMainDocument(revision)
-);
-```
+## Adopt suggestions as your own
 
-### Choose how excluded revisions render
-
-Pass `accept` to temporarily apply revisions that return `false`. Pass `reject` to render the rejected result for content revisions, moves, paragraph marks, and inserted or deleted table rows. Both modes are projections only: changing the mode restores the other view immediately, and saving preserves the canonical revision markup.
-
-```ts
-const mode: TrackedChangeFilterMode = 'reject';
-
-editor.setTrackedChangesFilter((revision) => revision.author === 'Jess', mode);
-```
-
-The mode applies only to revisions excluded by the predicate. Authors unchecked in **Review → Markup Options → Reviewers** continue to use Word's accepted projection, even when the predicate uses `reject`. Formatting revisions and structural property-change records do not carry a separate layout projection; in either mode their card and markup hide while their current values remain painted. Use the normal reject action to restore supported formatting revisions. Read-only structural property records cannot be restored by the engine.
-
-The predicate filter and the reviewer menu compose. A revision stays tracked only when its author is checked under **Review → Markup Options → Reviewers** and the predicate returns `true`. The predicate runs for revisions, not comments. Comments remain visible unless the reviewer menu hides their author.
-
-### Update and clear a filter
-
-The editor evaluates the predicate once per revision item when the filter or document changes and caches the decisions for pagination. Keep it synchronous, deterministic, and free of side effects. If the function closes over mutable state, call `setTrackedChangesFilter` again after that state changes—even when you reuse the same function reference:
-
-```ts
-let visibleKinds = new Set(['insert', 'replace']);
-const predicate: TrackedChangePredicate = (revision) => visibleKinds.has(revision.revisionKind);
-
-editor.setTrackedChangesFilter(predicate);
-
-visibleKinds = new Set(['delete']);
-editor.setTrackedChangesFilter(predicate); // re-evaluate the captured state
-
-editor.setTrackedChangesFilter(null); // restore all tracked markup
-```
-
-If evaluation throws, the editor preserves the last complete projection and surfaces the error. Clear the predicate during component cleanup so a filter does not outlive the UI that owns it.
-
-### Saving and review actions
-
-Filtering changes layout, painted markup, review cards, and bulk actions over the visible review list. The `accept` and `reject` modes do not accept or reject revisions, mutate the document, or change saved OOXML. Saving while a filter is active writes the same canonical revision markup as saving with no filter. To change the document, call the normal accept or reject actions explicitly.
-
-## Accept or reject in bulk
-
-The review hook has no accept-all command. Call the per-item action for each actionable revision.
+`adopt(items, options?)` from `useReview()` makes pending revisions record the reviewer as their author. The changes stay pending:
 
 ```tsx
-import { DocxEditor, useEditorState } from '@docx-editor.dev/react';
-import { DocxEditorReview, reviewModule, useReview } from '@docx-editor.dev/pro/react';
-
-const MODULES = [reviewModule()];
-
-function AcceptAll() {
-  const { items, accept } = useReview();
-  const viewing = useEditorState((state) => state.editingMode === 'viewing');
-  const actionable = items.filter((item) => item.kind === 'revision' && !item.readOnly);
-
-  return (
-    <button
-      disabled={viewing || actionable.length === 0}
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={() => actionable.forEach(accept)}
-    >
-      Accept all ({actionable.length})
-    </button>
-  );
-}
-
-export function BulkReviewer({ bytes }: { bytes: Uint8Array }) {
-  return (
-    <DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
-      <AcceptAll />
-      <DocxEditor.Viewport>
-        <DocxEditor.Content />
-        <DocxEditorReview />
-      </DocxEditor.Viewport>
-    </DocxEditor.Root>
-  );
-}
+const { items, adopt } = useReview();
+const suggested = items.filter((item) => item.kind === 'revision' && item.author === 'Agent');
+adopt(suggested); // or adopt(item, { author: 'Ada Lovelace', date: new Date() })
 ```
 
-Each call resolves every location with the revision's `(id, author, date)` tuple. The call uses one transaction and one undo step. A tracked row insertion cannot become partly resolved.
+`adopt` ignores comment items and changes every revision in one undo step. It returns `false` and changes nothing when no revision is passed, no author is known, or the editor refuses the write. Viewing mode and document protection refuse it.
 
-The automation object model also provides revision collection bulk actions. See the [editor API](/docs/2.x/editor-api).
-
-### Formatting changes with no card
-
-A tracked formatting change can leave the formatting unchanged. For example, it can set an indent that the paragraph style already sets. After styles and list levels apply, such a change has no effect, so the editor shows no card, no change bar, and no format mark for it. The change stays in the file until a bulk decision removes it.
-
-- The `resolveAllReviewChanges` command with no `keys` removes these changes together with the listed changes.
-- With `scope: 'visible'`, the command keeps the changes of hidden authors. It also keeps every such change while a tracked change predicate is set, because the predicate decides over listed changes only.
-- If the command names a change by its key, it resolves that change, listed or not.
-- A loop over `useReview().items`, like the `AcceptAll` sample, never reaches these changes. Run the command when the file must end up without them.
-- A tracked edit that touches another author's change of this kind refuses with `edit.tracked-foreign-revision-unsupported`, and the diagnostic message names this case.
+Review keys include the author, so each adopted change gets a new `key`. For author filters, run the `setReviewChangesAuthor` command. See [Change authors in the editor](/docs/2.x/editor-api/revisions#change-authors-in-the-editor).
 
 ## Detect review content without Pro
 
-The snapshot field `hasReviewContent` detects revisions or comment anchors without a registered review module.
+The `hasReviewContent` snapshot field detects revisions and comment anchors without the review module:
 
 ```ts
 const hasReview = useEditorState((state) => state.hasReviewContent ?? false);
 ```
 
-Without the module, the editor renders revisions in their final state. It keeps the original revision markup during save.
+Without the module, the editor renders revisions in their final state and keeps the revision markup on save.
 
-## Word compatibility
+## Behavior notes
 
-| Workflow                 | Behavior                                                          |
-| ------------------------ | ----------------------------------------------------------------- |
-| Save                     | Writes standard `w:ins` and `w:del` with author and date.         |
-| Open                     | Keeps Word revisions and shows them in the page and sidebar.      |
-| Accept or reject in Word | Resolves revisions saved by the editor.                           |
-| Other stories            | Tracks headers, footers, footnotes, and endnotes in their scopes. |
+- Tracked: text insertions, deletions, and replacements; paragraph marks; paragraph properties; run formatting; table rows and cells; image insertion and deletion.
+- Not tracked: list changes, indent level, tab stops, and table property edits. These apply with no card. An existing `w:tblPrChange` still renders.
+- A formatting change records the old properties in `w:rPrChange` or `w:pPrChange`. Repeated edits on one run keep one record of its original properties. Rejecting restores them.
+- Restoring the properties in your own record removes it. Restoring the properties in another author's record keeps it, so accept or reject it instead.
+- Turning bold off writes an explicit off value. Toggling bold twice can therefore leave a formatting change.
+- Formatting inside your own pending insertion records nothing. Formatting inside another author's insertion records your own change.
+- `w:doNotTrackFormatting` in `settings.xml` stops formatting records. Text edits stay tracked.
+- A formatting change that leaves the resolved formatting unchanged has no card and no change bar.
+- A tracked edit over another author's change of that kind refuses with `edit.tracked-foreign-revision-unsupported`.
+- On a comment card, `Delete` removes the thread. On a tracked-change card, it discards the suggestion.
+- In viewing mode, readers can select and copy text, and links work. Every edit is refused.
+- Tracked-changes protection requires suggesting mode. Forms and comments-only protection refuse it, and read-only protection opens in viewing mode.
+- Turning on forms protection while suggesting switches to editing mode and sets `lastRejection`. See [Document protection](/docs/2.x/guides/document-protection).
+- Change bars mark changed lines in body, tables, headers, footers, notes, and text boxes. A click on a bar toggles Simple Markup and All Markup.
+- Headers, footers, footnotes, and endnotes track changes in their own scopes. Files saved here resolve in other OOXML editors.
 
-## Next steps
+For format-level detail, see [DOCX fidelity](/docs/2.x/docx-fidelity).
 
-- [Review colors and styling](/docs/2.x/pro/review-styling): Style review content.
-- [Comments](/docs/2.x/pro/comments): Add discussion threads.
-- [React composition](/docs/2.x/react/composition): Arrange React review parts.
-- [Vue composition](/docs/2.x/vue/composition): Arrange Vue review parts.
+## See also
+
+- [Customize the review pane](/docs/2.x/customization/tracked-changes)
+- [Review colors and styling](/docs/2.x/pro/review-styling)
+- [Comments](/docs/2.x/pro/comments)

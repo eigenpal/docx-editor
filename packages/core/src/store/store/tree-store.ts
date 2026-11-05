@@ -24,9 +24,10 @@ import { applyProtectedTextFormEdit } from './tree-op-field-results.ts';
 
 import { runWithTransactionActor } from '../package/actor-scoped-ids.ts';
 import { validateOoxmlPartDelta, type OoxmlPart } from '../package/ooxml-tree.ts';
-import { withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
+import { singlePartPackage, withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { validatePackageInvariants } from '../package/package-edit.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
+import { placeholderTextOf } from '../package/building-blocks.ts';
 import { documentProtectionRefusal, lifecycleProtectionRefusal } from './forms-protection.ts';
 import { isCommentPackageEdit } from './comment-package-edit.ts';
 import { isPackageEditRefusal } from './package-edit-refusal.ts';
@@ -181,21 +182,6 @@ const IMPACT_RANK: Record<ImpactClass, number> = {
   global: 3,
 };
 
-/** A package holding exactly one part, for callers that never open a real one. */
-function singlePartPackage(part: OoxmlPart): OoxmlPackage {
-  return Object.freeze({
-    parts: new Map([[part.name, part]]),
-    partBytes: new Map(),
-    relationships: new Map(),
-    externalTargets: [],
-    contentTypes: {
-      defaults: new Map(),
-      overrides: new Map([[part.name.toLowerCase(), part.contentType]]),
-    },
-    mainDocumentPart: part.name,
-  }) as OoxmlPackage;
-}
-
 /**
  * Opaque document+history checkpoint for package-coordinator rollback.
  * Used when a story mutation may promote to a package undo unit (note-ref cascade).
@@ -245,6 +231,7 @@ export class TreeDocumentStore {
   private readonly historyLimit: number;
   /** See {@link TreeDocumentStoreOptions.settingsPart}. */
   private readonly settingsPartOverride: (() => OoxmlPart | null | undefined) | undefined;
+  private readonly placeholderTextOverride: ((docPart: string) => string | undefined) | undefined;
   /** See {@link TreeDocumentStoreOptions.contentLockPolicy}. */
   private readonly contentLockPolicy: ContentLockPolicy | undefined;
   /** Package-aware story tag applied to publishes (including undo/redo). */
@@ -282,6 +269,7 @@ export class TreeDocumentStore {
     this.storyPartName = storyPartName ?? (isPart ? source.name : source.mainDocumentPart);
     this.historyLimit = options.historyLimit ?? 200;
     this.settingsPartOverride = options.settingsPart;
+    this.placeholderTextOverride = options.placeholderText;
     this.contentLockPolicy = contentLockPolicyOf(options.contentLockPolicy);
   }
 
@@ -612,6 +600,9 @@ export class TreeDocumentStore {
           : null;
       const editOptions = {
         deferValidation: true,
+        placeholderText:
+          this.placeholderTextOverride ??
+          ((docPart: string) => placeholderTextOf(working, docPart)),
         ...(this.contentLockPolicy ? { contentLockPolicy: this.contentLockPolicy } : {}),
         ...(revisionIds ? { revisionIds } : {}),
         ...(trackedRevisionIds ? { trackedRevisionIds } : {}),

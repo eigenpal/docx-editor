@@ -1,105 +1,53 @@
 ---
 title: 'Headers and footers'
-description: 'Edit DOCX headers and footers in place, insert page fields, and use per-section first-page and even-page variants.'
+description: 'Edit DOCX headers and footers, insert page fields, and set watermarks from code.'
 category: 'Guides'
 seoTitle: 'Headers, footers, and watermarks'
 ---
 
-The editor renders headers and footers at their authored page positions. Double-click the header or footer area to edit it in place.
+The editor renders headers and footers at their authored positions and edits them in place. Users double-click the header or footer area to open it. Undo, redo, and save cover these edits.
 
-## Editing
+## Edit a header or footer from code
 
-Double-click inside the header or footer area to enter edit mode. Place the caret, select text, and use formatting commands as you do in the document body. You can also follow hyperlinks, select pictures, and resize tables. Undo and redo cover header and footer edits.
+The automation API returns each header or footer variant as a `Body` proxy:
 
-While editing, a separator bar labels the region (**Header** or **Footer**) and shows an **Options** menu:
+```ts
+await runtime.run(async (context) => {
+  const section = context.document.sections.getFirst();
+  await context.sync();
+  const footer = section.getFooter('Primary');
+  footer.load('text');
+  await context.sync();
+  footer.insertText('Internal document', 'End');
+  await context.sync();
+});
+```
 
-- **Insert current page number** inserts a `PAGE` field.
-- **Insert total page count** inserts a `NUMPAGES` field.
-- **Insert section page count** inserts a `SECTIONPAGES` field.
-- **Remove header/footer** clears the region.
+`getHeader(type)` and `getFooter(type)` accept `Primary`, `FirstPage`, or `EvenPages`. For story rules, see [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories#address-headers-and-footers).
 
-Press **Escape** or click the close action to leave header/footer editing. Save the document to write edits to a DOCX file.
+## Insert page fields
 
-To edit a supported text box, double-click it. The editor opens its header or footer and places the caret inside. Press **Escape** to leave the box, then press it again to close the header or footer. For editing limits, see [Edit text boxes](/docs/2.x/guides/images#edit-text-boxes).
+Run `insertPageField` while a header or footer is open:
 
-## Page-number fields
+```ts
+const result = editor.exec({ type: 'insertPageField', field: 'PAGE' });
+if (!result.ok) console.warn(result.reason);
+```
 
-`PAGE`, `NUMPAGES`, and `SECTIONPAGES` stay as Word fields. The page view updates their values when the document reflows.
+Outside a header or footer scope, the command returns `ok: false` with code `unsupported`.
 
-`PAGE` shows the displayed page number. It honors the section start and format in `w:pgNumType`. `NUMPAGES` shows the document page count. `SECTIONPAGES` shows the page count for the current section.
+| `field` | Shows | Chrome slot |
+| --- | --- | --- |
+| `PAGE` | The displayed page number. Honors `w:pgNumType` start and format. | `insert.pageNumber` |
+| `NUMPAGES` | The document page count. | `insert.totalPages` |
+| `SECTIONPAGES` | The page count of the current section. | `insert.sectionPages` |
+| `PAGE_X_OF_Y` | `PAGE` and `NUMPAGES` together. | `insert.pageXofY` |
 
-To create a "Page X of Y" footer:
+Page fields stay DOCX fields and update when the document reflows. The header **Options** menu offers the same insertions. For switch support, see [Fields and cross-references](/docs/2.x/guides/fields).
 
-1. Type `Page `, including the trailing space.
-2. Select **Insert current page number**.
-3. Type `of`, including both spaces.
-4. Select **Insert total page count**.
+## Set a watermark
 
-A page-number field can carry a numeric picture switch. For example, `PAGE \# 0#` pads page 2 to `02`.
-
-The editor applies the picture to the computed header or footer value. A saved result does not replace that computed value. Pictures support digit placeholders, a grouping comma, and literal text.
-
-A page-number field can also carry a number-format switch. For example, `PAGE \* roman` shows page 4 as `iv`, and `PAGE \* Arabic \* MERGEFORMAT` shows `4`. The editor supports `\* Arabic`, `\* roman`, `\* alphabetic`, and `\* ArabicDash`. The case of the first letter of `roman` or `alphabetic` selects uppercase or lowercase. A number-format switch outranks the section format in `w:pgNumType` and a picture that comes before it. If a field has another switch, such as `\* Ordinal`, the editor shows the saved result.
-
-Other fields use separate evaluation rules. See [Fields and cross-references](/docs/2.x/guides/fields).
-
-### Page numbers in legacy frames
-
-Legacy footers can store a centered `PAGE` field in an auto-sized `w:framePr`. Supported anchors include an empty paragraph of the same style or a centered middle-dot decoration. Both paragraphs render in one footer band. Centered frames support `w:wrap="around"` and `w:wrap="auto"`. Both paragraphs can use direct formatting without a named style. Unused tab stops and line spacing do not add another footer band. A nonnegative first-line indent contributes to the frame width and offsets the centered page value. Left, right, and hanging indents keep ordinary flow. Paragraph borders, shading, and before or after spacing also keep ordinary flow. The editor updates each page's value and preserves the source structure when you save.
-
-A supported fixed-width frame uses a page-relative X position and text-relative vertical centering over an empty anchor or a second `PAGE` paragraph. A leading tab can place its value outside the frame. The editor clips that value but retains all fields, paragraphs, and source ranges. Selections and pointer hits use the same clip rectangle.
-
-A fixed-width `PAGE` frame over an empty anchor also supports an authored numeric page-relative X position. This subset requires a text-relative vertical anchor and supported frame attributes. An exact-height frame honors its numeric Y offset, including negative offsets, and clips content to its authored rectangle. The empty anchor keeps its flow height. Nonexact frames keep their natural vertical metrics. Unsupported content, leading-tab forms outside the existing centered subset, and unsupported attributes keep ordinary flow.
-
-A right-aligned `PAGE` frame can also sit over the footer text line. The frame uses `w:wrap="none"`, `w:hAnchor="margin"`, and `w:xAlign="right"`, and the next paragraph holds plain text in the same style. The page value ends at the right margin, one line band with the text. The frame adds no footer height unless its own line is taller. The text paragraph keeps its indents and its style's spacing. If the text reaches under the page value, the footer keeps the ordinary flow behavior.
-
-A right-aligned `PAGE` frame with `w:wrap="around"` can sit over an empty paragraph of the same style. The frame can contain plain text around a simple or complex `PAGE` field. The empty paragraph sets the footer flow height. The frame keeps its own spacing, including direct spacing. With `w:doNotUseHTMLParagraphAutoSpacing`, the frame text aligns with the anchor text without adding its before spacing again. Both paragraphs keep their source positions for editing and save.
-
-This support covers a simple, single-line `PAGE` frame and a single-line empty, `PAGE`, or text anchor. Values must fit completely inside the frame or lie completely beyond it. Partial wrapping and additional content keep ordinary flow. Positions outside the described subsets also keep ordinary flow. Direct paragraph spacing remains limited to the supported empty-anchor cases.
-
-### Empty header frames
-
-A supported empty frame at the start of a header does not add a separate line. It uses a margin-aligned horizontal anchor and a text-relative vertical anchor. Its paragraph stays available for editing and save. Frames with explicit widths, unsupported positions, or additional content keep ordinary flow.
-
-Whitespace-only header frames keep ordinary flow because spaces can have visible run decoration.
-
-### Table flow below header pictures
-
-A wrapping header picture reduces the space for table header rows. Table pagination uses this space when it keeps the header with the first body row.
-
-## Per-section headers and footers
-
-Each section can use its own headers and footers:
-
-- A section can reference `default`, `first`, and `even` parts through `w:headerReference` and `w:footerReference`.
-- **Different first page** (`w:titlePg`) selects the `first` variant on a section's first page.
-- **Different odd and even pages** (`w:evenAndOddHeaders`) alternates `default` and `even` variants across the document.
-- Sections without their own references inherit references from earlier sections.
-- A page without a reference for its selected variant shows no header or footer. Its body starts at the page margin.
-
-Editing a header or footer changes the part that the page displays. Other pages that use that part also show the change.
-
-### Section breaks and blank pages
-
-A continuous section can start on the same page even when its header height, footer height, or first-page setting differs. The shared page keeps the preceding section's header, footer, and body area. Text from the continued section wraps around pictures in that page's header or footer. Later pages use the continued section's headers and footers. If no remaining column fits the first line, the continued section starts on a fresh page. A page-size change still starts a separate page.
-
-A continuous section starts below the lowest in-flow content across all columns on the preceding section’s final page. Multi-column sections balance their final page before a continuous section follows.
-
-In compatibility modes before 15, enabled `w:noColumnBalance` preserves natural column flow instead. Compatibility mode 15 and later modes ignore this setting.
-
-Earlier pages keep their existing column distribution. A paragraph that moves into a later column stays below the content preceding that section. Columns that continue below earlier content retain authored paragraph space before, including later columns. Fresh-page starts keep their existing spacing rules.
-
-Odd-page and even-page section breaks can add a blank page to reach the required page position. Page-number restarts can also require a blank page when odd and even headers are enabled. The editor compares the restarted number with the continued page number, including when the first section starts at zero. A restart on a shared continuous page does not reset the sheet sequence used for this comparison. An explicit odd-page or even-page break with a restart selects physical page parity before applying the displayed number. These blank pages have no header or footer.
-
-## Watermarks
-
-A watermark is text or a picture that paints behind the text of every page. The document stores it as a shape in each header part. The editor paints text watermarks as glyph outlines fitted to the shape, diagonal or horizontal, with their color and transparency. Picture watermarks paint behind the text, washed out when the document asks for it. PDF export paints both the same way.
-
-To add, change, or remove a watermark, open **Insert** > **Watermark**. The dialog reads the current watermark and shows a live preview, so you can change one option and keep the rest.
-
-### Set a watermark from code
-
-Run the `setWatermark` command. This example adds a diagonal text watermark at half transparency:
+Run `setWatermark` to add or change a watermark. This example adds a diagonal text watermark:
 
 ```ts
 const result = editor.exec({
@@ -109,9 +57,9 @@ const result = editor.exec({
 if (!result.ok) console.warn(result.reason);
 ```
 
-Each call is one undo step. A refused call writes nothing and returns `ok: false` with a `reason` that names the option, for example `color must be RRGGBB`.
+Each call is one undo step. A refused call writes nothing and returns a `reason` that names the option, for example `color must be RRGGBB`. Pass `watermark: null` to remove the watermark.
 
-The `Watermark` value takes these options. Omitted options use the defaults:
+A watermark stacks with the other pictures behind the header text in the order the document sets.
 
 | Option | Applies to | Default | Values |
 | --- | --- | --- | --- |
@@ -126,7 +74,7 @@ The `Watermark` value takes these options. Omitted options use the defaults:
 | `scale` | Picture | Auto (`null`) | 0.01 to 10 times the natural size. Auto fits the page. |
 | `washout` | Picture | `true` | Boolean. |
 
-Set either `text` or `imageData`, never both. This example adds a picture watermark from a file the user chose:
+Set either `text` or `imageData`, never both. This example sets a picture watermark from a user file:
 
 ```ts
 async function setPictureWatermark(file: File) {
@@ -135,17 +83,17 @@ async function setPictureWatermark(file: File) {
 }
 ```
 
-Pass `watermark: null` to remove the watermark.
-
 ### Read the watermark
 
-`editor.getWatermark()` returns the watermark that the document shows, or `null` when it has none. For a picture watermark, `editor.query({ type: 'watermark' })` also returns the picture bytes, so you can write the same picture back with other options.
+| API | Returns |
+| --- | --- |
+| `editor.getWatermark()` | The current watermark, or `null`. |
+| `editor.query({ type: 'watermark' })` | The watermark, including picture bytes. |
+| `useWatermark()` | The current watermark and an `apply` function. See [React hooks](/docs/2.x/react/hooks#usewatermark) and [Vue composables](/docs/2.x/vue/composables#usewatermark). |
 
-In React and Vue, `useWatermark()` returns the current watermark and an `apply` function. For examples, see [React hooks](/docs/2.x/react/hooks#usewatermark) and [Vue composables](/docs/2.x/vue/composables#usewatermark).
+## Customize header controls
 
-### Customize the dialog
-
-The Watermark dialog uses the same parts as the other editor dialogs. This example replaces the text presets:
+Replace the **Watermark** popup through `popups.watermark`. This example changes the text presets:
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -159,9 +107,7 @@ import { DocxEditor } from '@docx-editor.dev/react';
 />;
 ```
 
-To build your own layout, pass `preset={false}` and compose the parts. For more information, see [Customize dialogs](/docs/2.x/guides/customize-dialogs).
-
-The `DocxEditor.WatermarkDialog.Preview` part draws the page of the section that contains the caret. It uses the same shape size that `setWatermark` writes. To draw your own preview, call `watermarkShapeBox` from `@docx-editor.dev/core/editor`. It returns the shape width and height in points for a text area size:
+Pass `preset={false}` to compose the parts yourself. `DocxEditor.WatermarkDialog.Preview` draws the caret's section page. For a custom preview, `watermarkShapeBox` returns the shape size in points:
 
 ```ts
 import { watermarkShapeBox } from '@docx-editor.dev/core/editor';
@@ -170,18 +116,23 @@ import { watermarkShapeBox } from '@docx-editor.dev/core/editor';
 const box = watermarkShapeBox({ text: 'DRAFT' }, { width: 468, height: 648 });
 ```
 
-The shape is centered on the text area. A diagonal text shape turns 45 degrees counterclockwise about its center.
+The shape is centered on the text area. A diagonal shape turns 45 degrees counterclockwise. For popup composition, see [Customize popups](/docs/2.x/guides/customize-dialogs).
 
-### Limits
+## Limits
 
-- One watermark applies to the whole document. The command writes it into every header that a section shows and creates a default header when a section has none.
-- A document protected for filling in forms refuses the command with `locked`.
-- Other WordArt uses a separate rendering subset. For details, see [Advanced drawing rendering](/docs/2.x/pro/drawing).
+- Editing a shared header or footer changes every page that uses that part.
+- `w:titlePg` selects the `first` variant. `w:evenAndOddHeaders` alternates `default` and `even` variants.
+- Sections without their own references inherit them from earlier sections.
+- A page with no reference for its selected variant shows no header or footer.
+- Blank pages added by odd-page or even-page section breaks have no header or footer.
+- The automation API does not expose header and footer linkage or first-page layout toggles.
+- One watermark applies document-wide. The command creates a default header when a section has none.
+- Forms protection refuses `setWatermark` with `locked`.
+- Text boxes in headers open on double-click. See [Edit text boxes](/docs/2.x/guides/images#edit-text-boxes).
+- Legacy frames, continuous sections, and page-number switches follow [DOCX fidelity](/docs/2.x/docx-fidelity#page-layout-headers-and-footers).
 
-## Next steps
+## See also
 
-- [Architecture](/docs/2.x/core/architecture) for how header/footer editing shares the body's editing model
-- [Loading and saving](/docs/2.x/guides/loading-and-saving) for the save pipeline that round-trips these parts
-- [Editing API](/docs/2.x/editor-api) for editing a document from a server
-
-Alternating headers and footers follow displayed page numbers, including section numbering restarts.
+- [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories)
+- [Fields and cross-references](/docs/2.x/guides/fields)
+- [Advanced drawing rendering](/docs/2.x/pro/drawing)

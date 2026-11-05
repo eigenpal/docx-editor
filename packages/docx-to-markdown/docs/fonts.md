@@ -8,7 +8,7 @@ Before you begin, [install the converter](../README.md#install-the-package). The
 
 | Your task                                          | Configuration                                                                              |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Convert documents that use common Word fonts       | Start with the bundled defaults; no font option is required.                               |
+| Convert documents that use common DOCX default fonts       | Start with the bundled defaults; no font option is required.                               |
 | Load missing faces from Google Fonts               | Set `fallbackFonts: googleFonts()`. Network access is required.                            |
 | Use your own fonts or replace a bundled substitute | Supply font bytes through `fonts`.                                                         |
 | Convert without network access                     | Use bundled fonts, document-embedded fonts, and local custom fonts. Omit remote resolvers. |
@@ -24,9 +24,9 @@ A fallback supplies missing faces. It does not replace a face that an earlier so
 
 ## Start with bundled fonts
 
-The converter includes substitutes for common Word fonts:
+The converter includes substitutes for common DOCX default fonts:
 
-| Word font       | Bundled substitute |
+| Original font   | Bundled substitute |
 | --------------- | ------------------ |
 | Calibri         | Carlito            |
 | Cambria         | Caladea            |
@@ -34,7 +34,7 @@ The converter includes substitutes for common Word fonts:
 | Arial           | Liberation Sans    |
 | Courier New     | Liberation Mono    |
 
-These substitutes target matching character widths for the glyphs they cover. Differences in glyphs and kerning can still change line and page breaks. For matching page references, compare representative exports with Word using the same revision visibility.
+These substitutes target matching character widths for the glyphs they cover. Differences in glyphs and kerning can still change line and page breaks. For matching page references, compare representative exports with a reference rendering that uses the same revision visibility.
 
 If a font remains unresolved, the default `fontPolicy: 'best-effort'` allows approximate measurement. Check the resolution report before relying on page citations.
 
@@ -63,7 +63,7 @@ console.dir(result.fontResolution, { depth: null });
 console.log(result.warnings);
 ```
 
-The resolver fetches matching faces from a pinned catalog with verified content hashes. Requests disclose requested font families to the CDN. It cannot supply fonts outside the catalog or guarantee the same pagination as Word.
+The resolver fetches matching faces from a pinned catalog with verified content hashes. Requests disclose requested font families to the CDN. It cannot supply fonts outside the catalog or guarantee the same pagination as the authoring application.
 
 For offline conversion, omit `fallbackFonts` and ensure that any custom resolvers use local data.
 
@@ -124,7 +124,7 @@ Repeat registration for other document families. You can combine `fonts` with `f
 
 This entry means that the bold, italic, and bold-italic faces are missing. Supply those files through `fonts`, or use a fallback that provides them.
 
-- `coverage: 'complete'` means all four static faces resolved. It does not certify glyph coverage for every script or that the original Word fonts were used.
+- `coverage: 'complete'` means all four static faces resolved. It does not certify glyph coverage for every script or that the original fonts were used.
 - `coverage: 'partial'` means some faces resolved. `coverage: 'none'` means no faces resolved.
 - `via: 'substitution'` identifies a substituted face. Inspect `sourceFamily` and the face's `substitution` details to understand the choice.
 - `originFailures` records font-source failures, even when another source supplies the missing faces.
@@ -147,7 +147,7 @@ Document-aware byte exports return a report. Detached layouts and custom measure
 
 Add `fontPolicy: 'strict'` to the options in either conversion example to reject font-source failures or missing regular, bold, italic, or bold-italic faces among the checked families. Strict mode can reject an export even if the document only uses regular text or another source recovered from a font-source failure.
 
-Strict mode checks font resolution. It does not guarantee the same page breaks as Word, and complete coverage can include substitutes. The resolver checks at most 64 candidate families, prioritizing the body, then headers and footers, then notes. Additional families do not cause strict mode to fail.
+Strict mode checks font resolution. It does not guarantee the same page breaks as the authoring application, and complete coverage can include substitutes. The resolver checks at most 64 candidate families, prioritizing the body, then headers and footers, then notes. Additional families do not cause strict mode to fail.
 
 Save `result.fontResolution`, your package versions, font configuration, document version, and revision mode with exports that require reproducible page citations. Use `toMarkdownJSON(result)` when storing the result as JSON so font failure causes become diagnostic strings.
 
@@ -155,7 +155,7 @@ Save `result.fontResolution`, your package versions, font configuration, documen
 
 | Symptom                                        | What to check                                         | What to do                                                                                                                                                |
 | ---------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Page breaks differ from Word                   | Substituted or incomplete families, and `displayMode` | Supply the source document's fonts through `fonts`, match revision visibility, and compare representative documents. Other layout differences can remain. |
+| Page breaks differ from the source document    | Substituted or incomplete families, and `displayMode` | Supply the source document's fonts through `fonts`, match revision visibility, and compare representative documents. Other layout differences can remain. |
 | `incomplete-font` warning                      | The family's `coverage` and `faces`                   | Supply the missing regular, bold, italic, or bold-italic files. Use Google Fonts fallback only if it contains that family and those faces.                |
 | `font-origin-failed` warning                   | `fontResolution.originFailures`                       | Correct the failing resolver or file path. For remote sources, check network access and the reported failure.                                             |
 | Google Fonts does not change the selected font | Whether an earlier source already resolved the face   | Put your replacement font in `fonts`; `fallbackFonts` does not override bundled substitutes.                                                              |

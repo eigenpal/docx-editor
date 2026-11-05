@@ -163,6 +163,7 @@ describe('Vue review layout preferences', () => {
       expect(line.querySelector('[data-testid="review-reply-avatar"]')?.textContent).toBe('GH');
       expect(line.querySelector('[data-testid="review-reply-cancel"]')).toBeNull();
       const input = line.querySelector('[data-testid="review-reply-input"]')!;
+      expect(input.getAttribute('autocomplete')).toBe('off');
       await change(() =>
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
       );

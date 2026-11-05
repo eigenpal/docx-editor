@@ -5,250 +5,136 @@ category: 'React'
 order: 31
 ---
 
-`<DocxEditor>` provides a packaged host for the provider primitives. This page groups its props by task. For all signatures, see the [React API reference](/docs/2.x/api/react).
+## Configure the editor
 
-## Document and mount state
-
-Use `document` for the document source. Use `fonts` to supply font metrics for measurement.
-
-| Prop | Type | Description |
-| --- | --- | --- |
-| `fieldResults` | `'atomic' \| 'editable'` | Saved field result editing. Defaults to `'atomic'`; fixed when the editor starts. |
-| `document` | `DocumentSource` | DOCX bytes, `'blank'`, or an existing `DocumentHandle`. |
-| `fonts` | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes or a resolver for text shaping and pagination. Changes apply without a remount. |
-| `author` | `string` | Author for later comments, replies, and tracked changes. Changes apply without a remount. |
-| `locale` | `string` | BCP-47 locale for regional date input and generated labels. Defaults to `en-US`; updates without a remount. |
-| `mode` | `'edit' \| 'view' \| 'suggesting'` | Editing mode. Changes apply without a remount. |
-| `zoom` | `number` | Fixed display scale. Changes apply without a remount. |
-| `zoomMode` | `ZoomMode \| 'auto'` | Scale source. The default `'auto'` fits the page width. |
-| `contentLockPolicy` | `ContentLockPolicy` | Set `{ allowFormattingInLockedContent: true }` to let users format content-locked controls. Their text stays protected. The editor reads this prop once, at creation. For details, see [Formatting content-locked controls](/docs/2.x/guides/content-controls#formatting-content-locked-controls). |
-| `lockedControlNavigation` | `'characters' \| 'atomic'` | How the caret moves through an inline content control with locked content. `'characters'` (the default) steps through each character. `'atomic'` steps over the control as one unit. The editor reads this value once, at creation. For details, see [Caret movement in content-locked controls](/docs/2.x/guides/content-controls#caret-movement-in-content-locked-controls). |
-
-The editor colors tracked changes by author. Changing `author` preserves the editor instance and all existing revisions. Mount `<DocxEditor.AuthorStyle />` to override one author's style. Mount `<DocxEditor.ColorByChangeType />` to color changes by type. These settings do not have equivalent props. For details, see [Tracked changes](/docs/2.x/pro/tracked-changes).
-
-This example loads DOCX bytes in editing mode:
-
-```tsx
-const response = await fetch('/template.docx');
-const bytes = new Uint8Array(await response.arrayBuffer());
-
-<DocxEditor document={bytes} mode="edit" />;
-```
-
-For regional date input, pass `locale="en-GB"` for day/month input or `locale="pl-PL"` for Polish dates such as `01.02.2030`. The same prop works on `DocxEditor.Root`. It preserves dates already in the document. Use `i18n` separately to customize UI strings; see [date input behavior](/docs/2.x/guides/fields) for details.
-
-## Saved field result editing
-
-Set `fieldResults` to `'editable'` to let users edit supported saved field results, such as `MERGEFIELD` or `HYPERLINK` text. The same prop works on `DocxEditor.Root`. Later prop changes have no effect. Remount the editor to change this setting.
-
-Computed fields remain one unit. Collaboration refuses `'editable'` with a `TypeError`. For supported fields and editing rules, see [Edit saved field results](/docs/2.x/guides/fields#edit-saved-field-results).
-
-## Viewing mode
-
-Set `mode="view"` to display the document without content edits. Clicks, drags, repeated clicks, and caret keys preserve the selection. The editor hides the caret and uses the arrow pointer over text. Toolbar values remain tied to the preserved selection.
-
-Links, equation previews, and **Show/Hide** remain available. Search and programmatic selection can still move the selection. Search highlights remain visible without a caret.
-
-## Modules
-
-The `modules` prop registers capability modules during construction. [`@docx-editor.dev/pro`](/docs/2.x/pro) uses modules for tracked changes, comments, custom nodes, collaboration, and drawing rendering.
-
-| Prop | Type | Description |
-| --- | --- | --- |
-| `modules` | `readonly EditorModule[]` | Capability modules that the editor loads during construction. |
-
-The editor reads `modules` only during construction. A later array change has no effect. To change modules, remount the editor with a different React `key`. The drawing renderers from `drawingModule()` and `reviewModule()` are different: they serve every editor in the page, and a remount does not remove them. For more information, see [Advanced drawing rendering](/docs/2.x/pro/drawing).
-
-This example remounts the editor when the module set changes:
-
-```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
-import { reviewModule } from '@docx-editor.dev/pro/react';
-
-const MODULES = [reviewModule()];
-
-<DocxEditor key={moduleSet} document={bytes} modules={MODULES} author="Jess Lin" />;
-```
-
-Without a module, the editor preserves revisions and comments during save. It renders their final document state. Register the review module to show and manage them. For details, see the [Pro package documentation](/docs/2.x/pro).
-
-## Chrome and layout
-
-These props control the packaged frame around the document.
-
-| Prop | Type | Description |
-| --- | --- | --- |
-| `chrome` | `boolean` | Shows the packaged title bar and toolbar. Set `false` for the document surface. |
-| `title` | `string` | Sets the title-bar document name. |
-| `onTitleChange` | `(title) => void` | Enables title editing and receives each new title. |
-| `renderTitleBarLeft` / `renderTitleBarRight` | `() => ReactNode` | Renders host content in title-bar slots. |
-| `loadingIndicator` | `ReactNode` | Replaces the packaged loading spinner. It shows on the loading page and on the first page while a large document opens. For more information, see [Show your own loading indicator](/docs/2.x/guides/loading-and-saving#show-your-own-loading-indicator). |
-| `colorMode` | `'light' \| 'dark' \| 'system'` | Sets the chrome theme. `'system'` follows the operating system. |
-| `menu` | `boolean \| DocxEditorMenuProps` | Shows, hides, or configures the packaged menu bar. |
-| `navigation` | `boolean \| DocxEditorNavigationProps` | Shows, hides, or configures the packaged navigation pane. |
-| `rulers` | `boolean` | Shows or hides the horizontal and vertical rulers. |
-| `renderOpenFailureActions` | `(context) => ReactNode` | Adds your own buttons to the dialog for a file that does not open. Build them from `DocxEditor.OpenFailure.Action`. |
-| `openFailure` | `boolean \| DocxEditorOpenFailureProps` | Shows, hides, or configures the dialog for a file that does not open. For more information, see [Handle files that do not open](/docs/2.x/guides/open-failures). |
-| `hyperlinkPopup` | `boolean` | Shows or hides the packaged hyperlink popover. If you hide it, mount a panel that calls `useHyperlinkPopup()`, or the Insert link controls are disabled. |
-| `contextMenu` | `boolean \| DocxEditorContextMenuProps` | Shows, hides, or configures the packaged context menu. |
-| `children` | `DocxEditorChildren` | Renders extra chrome inside the viewport after the document pages. |
-| `t` | `(key, params?) => string` | Resolves live chrome and drawing labels. |
-| `i18n` | `Translations` | Sets live chrome and drawing labels for this editor. |
-
-## Dark mode
-
-`colorMode` changes the editor chrome and applies a display transform to the document canvas. The setting does not change authored document colors or saved output. Printing ignores `colorMode` and preserves authored document colors.
-
-This example controls the editor color mode:
-
-```tsx
-import { useState } from 'react';
-import { DocxEditor } from '@docx-editor.dev/react';
-
-export function ThemedEditor({ bytes }: { bytes: Uint8Array }) {
-  const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setColorMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
-      >
-        Toggle theme
-      </button>
-      <DocxEditor document={bytes} colorMode={colorMode} />
-    </>
-  );
-}
-```
-
-For theme behavior, see the [Dark mode guide](/docs/2.x/guides/dark-mode).
-
-## Fonts
-
-`fonts` supplies font bytes for text measurement. Matching metrics produce line wraps and page breaks that match Word more closely. The editor loads supported embedded fonts without extra configuration. The font picker combines declared document fonts with configured fonts. Use `useFontFamily()` to read that list.
-
-| Prop | Type | Default | Description |
-| --- | --- | --- | --- |
-| `fonts` | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | None | Font bytes or a resolver called for each load. |
-| `onFontError` | `(error: EditorFontError) => void` | None | Reports failures such as corrupt data, HTTP errors, or hash mismatches. |
-
-Use `packagedFonts()` for the Word default substitutes. The editor calls it after parsing and when edits introduce another font family. It loads only requested families and the default font. Nothing is fetched from a third party.
-
-The resolver also requests the configured default font. With the default Calibri configuration, it loads Carlito for text without an explicit font.
-
-Wrap it in `useFonts` to keep one resolver identity:
-
-```tsx
-import { DocxEditor, useFonts } from '@docx-editor.dev/react';
-import { packagedFonts } from '@docx-editor.dev/fonts';
-
-function Editor({ bytes }: { bytes: Uint8Array }) {
-  const fonts = useFonts(packagedFonts());
-  return <DocxEditor document={bytes} fonts={fonts} onFontError={(error) => report(error.code)} />;
-}
-```
-
-Add an origin by adding an argument. Arguments compose first-wins:
-
-```tsx
-import { googleFonts } from '@docx-editor.dev/fonts/google';
-
-const fonts = useFonts(packagedFonts(), googleFonts());
-```
-
-Each new `fonts` value replaces the fonts and resolves them again, without a remount. An inline resolver is a new value on every render, which is why it needs `useFonts`.
-
-`packagedFonts()` resolves after the document is parsed, so the first layout can use fallback measurement. The editor updates pagination when the fonts arrive. Font arrivals preserve edits, selection, and undo history. For a document that must paginate correctly on the first pass, use `defaultFonts()` instead. For more information, see [Fonts and measurement](/docs/2.x/guides/fonts#choose-between-lazy-and-eager-loading).
-
-A resolver can make network requests while the editor opens a document. The editor does not fetch external fonts without a configured resolver.
-
-For font sources and `loadFonts`, see the [Fonts and measurement guide](/docs/2.x/guides/fonts).
-
-## Title bar customization
-
-Use these props to customize the title bar.
-
-| Prop                  | Type              | Description                     |
-| --------------------- | ----------------- | ------------------------------- |
-| `title`               | `string`          | Display name in the title bar.  |
-| `onTitleChange`       | `(name) => void`  | Enables in-place title editing. |
-| `renderTitleBarLeft`  | `() => ReactNode` | Left-side title bar slot.       |
-| `renderTitleBarRight` | `() => ReactNode` | Right-side title bar slot.      |
-
-```tsx
-<DocxEditor
-  document={bytes}
-  title={file.name}
-  onTitleChange={(name) => updateMetadata({ name })}
-  renderTitleBarRight={() => <SaveIndicator dirty={dirty} />}
-/>
-```
-
-## Callbacks
-
-Use callbacks to connect the editor to your application.
-
-| Prop | Type | Description |
-| --- | --- | --- |
-| `onReady` | `(editor: Editor) => void` | Runs after the editor and document surface mount. |
-| `onChange` | `(change: DocumentChange) => void` | Runs after mutations with revision and identity changes. It does not receive bytes. |
-| `onSave` | `() => void` | Overrides the packaged **File > Save** action. |
-| `onOpen` | `() => void` | Overrides the packaged **File > Open** action. |
-| `onFontError` | `(error: EditorFontError) => void` | Reports typed font-resolution failures. |
-
-```tsx
-<DocxEditor
-  document={bytes}
-  onReady={(editor) => console.log(editor.snapshot())}
-  onChange={(change) => reportRevision(change.revision)}
-  onSave={() => void persist()}
-  onOpen={() => void openPicker()}
-  onFontError={(err) => reportError(err)}
-/>
-```
-
-## Ref methods
-
-Use `DocxEditorRef` to load, save, focus, or access the `Editor` facade. `<DocxEditor>` exposes this handle through `forwardRef`.
-
-This example saves and accesses the editor:
+This example loads DOCX bytes, sets an author, and handles the save action:
 
 ```tsx
 import { useRef } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
 
-const editorRef = useRef<DocxEditorRef>(null);
+interface ContractEditorProps {
+  bytes: Uint8Array;
+  upload: (buffer: ArrayBuffer) => Promise<void>;
+}
 
+export function ContractEditor({ bytes, upload }: ContractEditorProps) {
+  const editorRef = useRef<DocxEditorRef>(null);
+  return (
+    <DocxEditor
+      ref={editorRef}
+      document={bytes}
+      mode="edit"
+      author="Jess Lin"
+      onSave={async () => {
+        const buffer = await editorRef.current?.save();
+        if (buffer) await upload(buffer);
+      }}
+    />
+  );
+}
+```
+
+For generated signatures, see the [React API reference](/docs/2.x/api/react).
+
+## Set props
+
+### Document
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `document` | `DocumentSource` | DOCX bytes, `'blank'`, or an existing `DocumentHandle`. |
+| `mode` | `'edit' \| 'view' \| 'suggesting'` | Editing mode. Updates without a remount. |
+| `author` | `string` | Author for later comments, replies, and tracked changes. Updates without a remount; existing revisions keep their authors. |
+| `locale` | `string` | BCP 47 locale for regional date input and generated labels, Defaults to `en-US`. Updates without a remount. |
+| `zoom` | `number` | Fixed display scale. Updates without a remount. |
+| `zoomMode` | `ZoomMode \| 'auto'` | Scale source. The default `'auto'` fits the page width. |
+| `fieldResults` | `'atomic' \| 'editable'` | `'editable'` allows editing saved field results. Defaults to `'atomic'`. See [Edit saved field results](/docs/2.x/guides/fields#edit-saved-field-results). |
+| `contentLockPolicy` | `ContentLockPolicy` | `{ allowFormattingInLockedContent: true }` allows formatting in content-locked controls. See [Formatting content-locked controls](/docs/2.x/guides/content-controls#formatting-content-locked-controls). |
+| `lockedControlNavigation` | `'characters' \| 'atomic'` | Caret movement through a locked inline control: per character (default) or as one unit. See [Caret movement](/docs/2.x/guides/content-controls#caret-movement-in-content-locked-controls). |
+| `modules` | `readonly EditorModule[]` | Capability modules from [`@docx-editor.dev/pro`](/docs/2.x/pro), such as `reviewModule()`. |
+
+### Fonts
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `fonts` | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes or a resolver for text shaping and pagination. Each new value replaces the fonts without a remount. |
+| `onFontError` | `(error: EditorFontError) => void` | Reports corrupt data, HTTP errors, or hash mismatches. |
+
+Wrap resolvers such as `packagedFonts()` in `useFonts` to keep one identity. For loading choices, see [Fonts and measurement](/docs/2.x/guides/fonts#choose-between-lazy-and-eager-loading).
+
+### Dark mode
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `colorMode` | `'light' \| 'dark' \| 'system'` | Sets the chrome theme and a display transform on the canvas. `'system'` follows the operating system. |
+
+`colorMode` does not change authored colors, saved output, or printing. See [Dark mode](/docs/2.x/guides/dark-mode).
+
+### Chrome and layout
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `chrome` | `boolean` | Shows the packaged title bar and toolbar. Set `false` for the document surface only. |
+| `title` | `string` | Title-bar document name. |
+| `renderTitleBarLeft` / `renderTitleBarRight` | `() => ReactNode` | Host content in title-bar slots. |
+| `menu` | `boolean \| DocxEditorMenuProps` | Toggles or configures the menu bar. |
+| `navigation` | `boolean \| DocxEditorNavigationProps` | Toggles or configures the navigation pane. |
+| `rulers` | `boolean` | Shows or hides both rulers. |
+| `hyperlinkPopup` | `boolean` | Shows or hides the hyperlink popover. |
+| `contextMenu` | `boolean \| DocxEditorContextMenuProps` | Toggles or configures the context menu. |
+| `popups` | `DocxEditorPopups` | Replaces automatic popups with `definePopup(MyPopup)` or render callbacks. See [Customize popups](/docs/2.x/guides/customize-dialogs). |
+| `loadingIndicator` | `ReactNode` | Replaces the loading spinner. See [loading indicator](/docs/2.x/guides/loading-and-saving#show-your-own-loading-indicator). |
+| `openFailure` | `boolean \| DocxEditorOpenFailureProps` | Configures the dialog for a file that does not open. See [open failures](/docs/2.x/guides/open-failures). |
+| `renderOpenFailureActions` | `(context) => ReactNode` | Adds buttons to that dialog, built from `DocxEditor.OpenFailure.Action`. |
+| `children` | `DocxEditorChildren` | Extra chrome inside the viewport after the pages, such as `DocxEditor.UnsupportedElement` components. |
+| `t` | `(key, params?) => string` | Resolves live chrome and drawing labels. |
+| `i18n` | `Translations` | Live chrome and drawing labels for this editor. See [i18n](/docs/2.x/i18n). |
+
+## Handle callbacks
+
+| Prop | Payload | Description |
+| --- | --- | --- |
+| `onReady` | `editor: Editor` | Runs after the editor and document surface mount. |
+| `onChange` | `change: DocumentChange` | Runs after mutations with revision and identity changes. It does not receive bytes. |
+| `onSave` | none | Replaces the packaged **File > Save** action. Read bytes through the ref. |
+| `onOpen` | none | Replaces the packaged **File > Open** action. |
+| `onTitleChange` | `title: string` | Enables title editing and receives each new title. |
+| `onFontError` | `error: EditorFontError` | Reports typed font-resolution failures. |
+| `onRevisionMarkupChange` | `settings: ResolvedRevisionMarkup` | Receives revision markup settings proposed by the API or the markup dialog. Store them in `revisionMarkup` to accept them. |
+
+## Use the ref
+
+`<DocxEditor>` exposes `DocxEditorRef` through `forwardRef`:
+
+```tsx
 const buffer = await editorRef.current?.save();
 const editor = editorRef.current?.getEditor();
 editorRef.current?.focus();
 ```
 
-The ref has seven methods:
-
-| Method | Returns | What it does |
+| Method | Returns | Description |
 | --- | --- | --- |
-| `save()` | `Promise<ArrayBuffer \| null>` | Serialize the current document to a `.docx` buffer. `null` if there is no document. |
-| `load(document)` | `void` | Load DOCX bytes, `'blank'`, or an existing `DocumentHandle`. |
-| `getDocumentHandle()` | `DocumentHandle \| null` | Gets the current document identity and revision. |
-| `getEditor()` | `Editor \| null` | Gets the full editor facade. |
-| `exec(command, options?)` | `ExecResult` | Run a typed command. Options name a scope and a `historyGroup` for the gesture. |
-| `snapshot(options?)` | `EditorSnapshot` | Read the current facade snapshot. |
-| `focus()` | `void` | Focus the mounted editor surface. |
+| `save()` | `Promise<ArrayBuffer \| null>` | Serializes the document to `.docx`. Returns `null` when no document is loaded. |
+| `load(document)` | `void` | Loads DOCX bytes, `'blank'`, or a `DocumentHandle`. |
+| `getDocumentHandle()` | `DocumentHandle \| null` | Returns the current document identity and revision. |
+| `getEditor()` | `Editor \| null` | Returns the full editor facade. |
+| `exec(command, options?)` | `ExecResult` | Runs a typed command. Options name a scope and a `historyGroup`. |
+| `snapshot(options?)` | `EditorSnapshot` | Reads the current facade snapshot. |
+| `focus()` | `void` | Focuses the document surface. |
 
-For exact signatures, see the [React API reference](/docs/2.x/api/react).
+## Limits
 
-## `popups`
-
-Use `definePopup(MyPopup)` to customize an automatic popup with your component. Forward its typed props to the default component to retain editor behavior. Render callbacks also work. Set an entry to `false` to manage its trigger and visibility yourself. For supported popups and defaults, see [Customize popups](/docs/2.x/guides/customize-dialogs).
+- `fieldResults`, `contentLockPolicy`, `lockedControlNavigation`, and `modules` apply at creation. To change them, remount with a different React `key`.
+- Collaboration refuses `fieldResults="editable"` with a `TypeError`.
+- The drawing renderers from `drawingModule()` and `reviewModule()` serve every editor in the page. A remount does not remove them. See [Advanced drawing rendering](/docs/2.x/pro/drawing).
+- Without the review module, the editor preserves revisions and comments on save but renders only the final state.
+- If you hide `hyperlinkPopup`, mount a panel that calls `useHyperlinkPopup()`, or the Insert link controls stay disabled.
+- Author colors have no prop. Mount `<DocxEditor.AuthorStyle />` or `<DocxEditor.ColorByChangeType />`. See [Tracked changes](/docs/2.x/pro/tracked-changes).
+- To customize unsupported content, see [custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components).
 
 ## Next steps
 
-- [React package overview](/docs/2.x/react)
-- [React examples](/docs/2.x/react/examples)
-- [React API reference](/docs/2.x/api/react)
-
-## Unsupported-content placeholders
-
-Register `DocxEditor.UnsupportedElement` components inside `DocxEditor` or `DocxEditor.Root`. Customize opaque inline and block content and existing drawing or equation fallbacks. See [custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components) for framework examples, typed metadata, fallback behavior, and lifecycle details.
+- [React examples](/docs/2.x/react/examples): Automate an open editor.
+- [React composition](/docs/2.x/react/composition): Build your own chrome.
+- [React API reference](/docs/2.x/api/react): Generated signatures.

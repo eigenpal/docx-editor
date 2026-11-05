@@ -5,13 +5,11 @@ category: 'Editing API'
 order: 55
 ---
 
-Set character formatting through `Body.font`, `Paragraph.font`, or `Range.font`. Set paragraph formatting directly on `Paragraph`. The API does not provide a `ParagraphFormat` object or a style-creation API.
+Set character formatting through `Body.font`, `Paragraph.font`, or `Range.font`, and paragraph formatting on `Paragraph`. The API has no `ParagraphFormat` object and no style-creation API. Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
 
-Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
+## Format a phrase
 
-## Format an exact phrase
-
-Find the target, then batch related assignments on the same proxy:
+Batch assignments on one proxy, then sync once:
 
 ```ts
 await runtime.run(async (context) => {
@@ -31,42 +29,36 @@ await runtime.run(async (context) => {
 });
 ```
 
-Assignments on one `Font` proxy coalesce within a sync. Different proxies that address overlapping content can still conflict. The runtime tracks font, paragraph-format, and paragraph-style writes as property revisions. Accept retains the changes; reject restores previous properties. Never switch tracking off automatically to bypass that refusal.
+Assignments on one `Font` proxy coalesce within a sync, but overlapping proxies can conflict. Bold, italic, size, and name writes also update complex-script properties that control the text.
 
-Font writes use effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. Bold, italic, size, and font-name writes update the complex-script properties when those properties control the text. Direct false values override inherited direction.
+## Choose font properties
 
-## Read authored font values
-
-Load only the properties you need:
+Font getters return `null` for mixed, unset, or inherited values. Reads report authored values, not the rendered result, so never turn `null` into a write:
 
 ```ts
 await runtime.run(async (context) => {
   const font = context.document.body.font;
-  font.load(['bold', 'name', 'size']);
+  font.load(['bold', 'size']);
   await context.sync();
   if (font.size !== null) console.log(`Authored size: ${font.size} pt`);
 });
 ```
 
-Every font getter can return `null`. That means mixed values, no authored value, or formatting supplied through inheritance. These reads do not calculate the rendered style cascade. Do not convert `null` into a formatting write.
-
-| `Font` property | Write domain |
+| `Font` property | Write values |
 | --- | --- |
 | `bold`, `italic`, `strikeThrough` | Boolean |
-| `name` | Font family name; your rendering host supplies its font resources |
-| `size` | Positive finite point size within the supported OOXML range |
-| `color` | Concrete `#RRGGBB` color |
-| `underline` | Supported `UnderlineType` value or matching string |
-| `highlightColor` | Exact Word palette name or its hexadecimal color; `null` clears highlighting |
-| `subscript`, `superscript` | Boolean; both cannot be `true` in the same write |
+| `name` | Font family name. Your host supplies the font resources. |
+| `size` | Positive finite points within the OOXML range |
+| `color` | `#RRGGBB` |
+| `underline` | `None`, `Single`, `Word`, `Double`, `Thick`, `Dotted`, `DottedHeavy`, `DashLine`, `DashLineHeavy`, `DashLineLong`, `DashLineLongHeavy`, `DotDashLine`, `DotDashLineHeavy`, `TwoDotDashLine`, `TwoDotDashLineHeavy`, `Wave`, `WaveHeavy`, `WaveDouble`. `Mixed`, `Hidden`, and `DotLine` refuse. |
+| `highlightColor` | `Yellow`, `Lime`, `Turquoise`, `Pink`, `Blue`, `Red`, `DarkBlue`, `Teal`, `Green`, `Purple`, `DarkRed`, `Olive`, `Gray`, `LightGray`, `Black`, `White`, or their hex colors. Reads return `#RRGGBB` or `null`. |
+| `subscript`, `superscript` | Boolean. Both cannot be `true` in one write. |
 
-Underline writes support `None`, `Single`, `Word`, `Double`, `Thick`, `Dotted`, `DottedHeavy`, `DashLine`, `DashLineHeavy`, `DashLineLong`, `DashLineLongHeavy`, `DotDashLine`, `DotDashLineHeavy`, `TwoDotDashLine`, `TwoDotDashLineHeavy`, `Wave`, `WaveHeavy`, and `WaveDouble`. The exported enum also includes `Mixed`, `Hidden`, and `DotLine`, which the runtime rejects on writes. For example, `UnderlineType.single` has the value `Single`.
-
-Highlight names are `Yellow`, `Lime`, `Turquoise`, `Pink`, `Blue`, `Red`, `DarkBlue`, `Teal`, `Green`, `Purple`, `DarkRed`, `Olive`, `Gray`, `LightGray`, `Black`, and `White`. Reads return `#RRGGBB` or `null`. The runtime rejects colors outside that palette. The getter returns `string | null`; the setter keeps the Office.js `string` declaration.
+`UnderlineType` provides the enum values.
 
 ### Clear highlighting
 
-Microsoft documents `null` for clearing highlights, despite the `string` declaration. See [Word.Font.highlightColor](https://learn.microsoft.com/en-us/javascript/api/word/word.font#word-word-font-highlightcolor-member). The runtime supports that documented value. Use an explicit compiler annotation for the assignment:
+The Office.js reference documents `null` for clearing highlights, but the setter declares `string`. Use an explicit annotation:
 
 ```ts
 await runtime.run(async (context) => {
@@ -77,7 +69,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-The compiler reports an unused annotation if the declaration later accepts `null`.
+See the [`Font.highlightColor` reference](https://learn.microsoft.com/en-us/javascript/api/word/word.font#word-word-font-highlightcolor-member).
 
 ## Format paragraphs
 
@@ -86,65 +78,55 @@ Paragraph measurements use points:
 ```ts
 await runtime.run(async (context) => {
   const paragraph = context.document.paragraphs.getFirst();
-  paragraph.load('text');
-  await context.sync();
   paragraph.alignment = 'Left';
   paragraph.leftIndent = 18;
   paragraph.firstLineIndent = -9;
-  paragraph.lineSpacing = 14;
   paragraph.spaceAfter = 6;
   await context.sync();
 });
 ```
 
-`leftIndent`, `rightIndent`, `firstLineIndent`, `lineSpacing`, `spaceBefore`, and `spaceAfter` accept finite values within their supported bounds. A negative first-line indent creates a hanging indent. `ParagraphAlignment` and `Alignment` provide `Left`, `Centered`, `Right`, and `Justified` writes. `Mixed` and `Unknown` are read values; the runtime rejects them on writes. Assignments on one paragraph proxy coalesce per sync.
+| Property | Values |
+| --- | --- |
+| `leftIndent`, `rightIndent`, `spaceBefore`, `spaceAfter`, `lineSpacing` | Finite points within supported bounds |
+| `firstLineIndent` | Finite points. A negative value makes a hanging indent. |
+| `alignment` | `Left`, `Centered`, `Right`, `Justified`. `Mixed` and `Unknown` are read-only values. |
 
-These paragraph writes and `style` also apply inside a data-bound content control (`w:dataBinding`) that has no content lock, tracked or not. The bound text stays unchanged.
-
-Justified paragraphs in compatibility mode 15 or later can compress ordinary spaces to fit a word. Latin words retain their complete-word fit across formatting runs, including separate terminal punctuation.
+Assignments on one proxy coalesce per sync. Paragraph properties and `style` also apply in an unlocked data-bound control. With `TrackMineOnly`, these writes record property revisions.
 
 ### Right-to-left paragraphs
 
-`Paragraph.readingOrder` sets and reads the base direction of a paragraph. Office.js has no paragraph direction member, so `readingOrder` is a DocxEditor addition. Its values follow `Word.SectionDirection`: `LeftToRight` and `RightToLeft`.
-
-The following example makes the first paragraph right to left, then reads the direction back:
+Office.js has no paragraph direction member, so `Paragraph.readingOrder` is a DocxEditor addition. Its values follow `Word.SectionDirection`:
 
 ```ts
 await runtime.run(async (context) => {
   const paragraph = context.document.body.paragraphs.getFirst();
   paragraph.readingOrder = 'RightToLeft';
   await context.sync();
-
-  paragraph.load('readingOrder');
-  await context.sync();
-  console.log(paragraph.readingOrder); // 'RightToLeft'
 });
 ```
 
-A read returns the direction that the paragraph reads in. The paragraph's own `w:bidi` wins. Otherwise the read resolves the paragraph style and its `basedOn` styles, the paragraph's list level, the table style of an enclosing cell, and the document defaults, as the page shows them. A write that also sets `style` in the same sync resolves the direction against the new style. Other values fail on writes with `InvalidArgument`.
+- A read returns the displayed direction after styles. Writing back a value you read changes nothing.
+- Other values fail with `InvalidArgument`.
+- In a right-to-left paragraph, `alignment` `Left` aligns to the right margin. A `readingOrder` write keeps `alignment` and adds no `w:rtl` to runs.
+- When `style` and `readingOrder` share a sync, direction resolves against the new style.
 
-A write changes nothing when the paragraph already reads in the requested direction. Otherwise, the write removes the paragraph's own `w:bidi` when that value alone set the other direction. In other cases, it adds `<w:bidi/>`, or `<w:bidi w:val="0"/>` when a style makes the paragraph right to left. So you can write back a direction that you read without changing the document. The direction shares one paragraph-property write with `alignment`, the indents, and the spacing in the same sync.
-
-With `document.changeTrackingMode` set to `TrackMineOnly`, a write that changes the direction records a paragraph property revision. Accepting it keeps the new direction; rejecting it restores the previous paragraph properties.
-
-`Paragraph.alignment` reads and writes the stored `w:jc` value. In a right-to-left paragraph, `Left` selects the leading edge at the right margin. `Right` selects the trailing edge at the left margin. Alignment does not change paragraph direction, and a `readingOrder` write keeps `w:jc` as authored.
-
-Text direction inside a paragraph is a run property. A `readingOrder` write does not add `w:rtl` to the runs. For browser editor commands, see [Right-to-left text](/docs/2.x/guides/right-to-left).
+For editor commands, see [Right-to-left text](/docs/2.x/guides/right-to-left).
 
 ## Apply an existing style
 
-`Body.style`, `Paragraph.style`, and `Range.style` address paragraph styles by display name. The name must already exist in the document's styles part. The runtime rejects unknown style names. Assigning a name does not create a style. A body assignment applies to its paragraphs. A range assignment applies to its addressed paragraphs. Load `style` before reading it; mixed or unspecified authored styles can return `null` at runtime. A read also returns `null` when the paragraph's style has the same name as an earlier paragraph style, because assigning that name applies the earlier style.
-
-Use a template with known styles, then assign its exact style name:
+Assign the display name of a paragraph style the document defines:
 
 ```ts
-paragraph.style = 'Heading 1'; // The template must define this display name.
+paragraph.style = 'Heading 1'; // The document must define this name.
 await context.sync();
 ```
 
+`Body.style`, `Paragraph.style`, and `Range.style` accept paragraph style names only. Character, table, and list style names refuse, and assigning a name never creates a style. A read can return `null` for mixed styles, for a style that shares its name with an earlier paragraph style, or when no explicit or default paragraph style resolves.
+
 ### List the defined styles
 
-To find out which styles a document defines, call `Document.getStyles()`. Call `load()` with no arguments to read every property, or name the properties you need with `items/` paths. Then filter the paragraph styles that a reader would see. Keep styles that are hidden until used, such as `heading 2`, because they appear once they are applied:
+Call `Document.getStyles()` and filter the visible paragraph styles:
 
 ```ts
 const styles = context.document.getStyles();
@@ -157,46 +139,50 @@ const names = styles.items
   .map((style) => style.nameLocal);
 ```
 
-Many styles share priority 99, so the example sorts by `nameLocal` next for a stable order.
+`styles.getByNameOrNullObject(name)` finds one style, ignoring case and surrounding spaces, and prefers the paragraph style. `styles.getCount()` returns the count. `Style` properties are read-only:
 
-The list includes paragraph, character, table, and list styles. `Body.style`, `Paragraph.style`, and `Range.style` accept paragraph style names only. They refuse character, table, and list style names, so check `type` before you assign a `nameLocal`. Every listed paragraph style applies through those setters, including linked styles such as headings. A built-in name is accepted as listed, such as `heading 1`.
+| Property | Value |
+| --- | --- |
+| `nameLocal` | The declared `w:name`, such as `heading 1` |
+| `type` | `Paragraph`, `Character`, `Table`, or `List` |
+| `builtIn` | `false` when the style states `w:customStyle` |
+| `baseStyle` | The `w:basedOn` style of the same type, or an empty string |
+| `nextParagraphStyle` | The `w:next` paragraph style, or the style itself. An empty string for other style types, or when `w:next` names no listed paragraph style |
+| `linked` | `true` when `w:link` pairs a paragraph style with a listed character style, or the reverse. Other links return `false` |
+| `visibility` | `false` for `w:semiHidden` or `w:hidden` |
+| `priority` | `w:uiPriority`, or 99 |
+| `quickStyle` | `true` for `w:qFormat` |
+| `unhideWhenUsed` | `true` for `w:unhideWhenUsed` |
 
-To check for one name, call `styles.getByNameOrNullObject(name)`, sync, and read `isNullObject`. Reading `isNullObject` needs no property load. Load the properties you want on the same object before that sync, and the lookup answers them too. The lookup compares names without case and surrounding spaces, the same way the style setters do. If one name belongs to styles of several kinds, the lookup returns the paragraph style. `styles.getCount()` returns the number of listed styles.
+Styles follow source order. The last duplicate ID wins, and later duplicate names of the same type are omitted.
 
-A `Style` exposes these read-only properties:
+`Table.style` takes the `nameLocal` of a `Table` style. See [Tables and cells](/docs/2.x/editor-api/tables).
 
-- `nameLocal`: the `w:name` value that `styles.xml` declares, as written. Built-in names can read in lower case, such as `heading 1`.
-- `type`: `Paragraph`, `Character`, `Table`, or `List`. A numbering style reads as `List`.
-- `builtIn`: `false` when the style states `w:customStyle`.
-- `baseStyle`: the name of the `w:basedOn` style when it is a listed style of the same type. Otherwise it is an empty string.
-- `nextParagraphStyle`: the name of the `w:next` style when it is a listed paragraph style. A paragraph style that states no `w:next` names itself. It is an empty string for other types, and if `w:next` names anything but a listed paragraph style.
-- `linked`: `true` when `w:link` pairs a paragraph style with a listed character style, or a character style with a listed paragraph style.
-- `visibility`: `false` when the style states `w:semiHidden` or `w:hidden`. Otherwise `true`.
-- `priority`: the `w:uiPriority` value, or 99 if the style states none. Lower values come first in the gallery.
-- `quickStyle`: `true` when the style states `w:qFormat`.
-- `unhideWhenUsed`: `true` when the style states `w:unhideWhenUsed`.
+## Set or remove a hyperlink
 
-The list follows the order of `styles.xml` and reads each style the way the page does. If two definitions share a `w:styleId`, the last one counts. Only the first 4096 `w:style` definitions count, and names longer than 255 characters are not read. It leaves out styles that have no `w:name`, an empty or invalid name, a later duplicate name of the same kind, or no recognized `w:type`. A document with no styles part lists no styles, and a `style` write there refuses with the `edit.no-styles-defined` diagnostic. A write with a name the document does not define refuses with `edit.style-not-defined`. Style definitions are read-only: the API does not add, delete, or change styles, and `Style` has no `font` or `paragraphFormat`.
-
-`Table.style` is separate. It accepts the `nameLocal` of a listed style whose `type` is `Table`. See [Tables and cells](/docs/2.x/editor-api/tables).
-
-## Set a hyperlink
-
-`Range.hyperlink` reads or writes a hyperlink for supported text spans. Load `hyperlink` before reading it. For a write, assign a permitted URL and sync:
+Assign a permitted URL to `Range.hyperlink`, or an empty string to remove it:
 
 ```ts
 range.hyperlink = 'https://example.com/terms';
 await context.sync();
 ```
 
-Assign an empty string to remove a hyperlink from an eligible text span. Ordinary partial spans inside an existing hyperlink support retargeting and unlinking. The unaffected linked text keeps its metadata and formatting. The runtime rejects collapsed ranges and complex or nested hyperlink wrappers. The runtime validates the URL and content boundaries. Failed edits leave unsupported or protected targets unchanged. There is no standalone `Hyperlink` or `HyperlinkCollection` object.
+- The runtime validates the URL.
+- A partial span inside a link can be retargeted or unlinked.
+- Collapsed ranges and complex or nested link wrappers refuse.
+- There is no `Hyperlink` object.
 
-## Hidden paragraph marks
+## Limits
 
-The layout supports a bounded subset of style separators in the document body. Each joined mark must enable `w:vanish` after style resolution. The paragraph must contain ordinary visible text unless its mark also enables `w:specVanish`. Adjacent members must share continuation indents, alignment, line spacing, ordinary tabs, borders, shading, and keep constraints. Paragraph direction and paragraph line-breaking settings must also agree. The first member supplies numbering, first-line geometry, and before-spacing. The last member supplies after-spacing and final paragraph-mark formatting. Each member keeps its inherited text formatting and source offsets. Paragraph formatting edits still address the original source paragraph.
+- Only the first 4096 `w:style` definitions count, and names over 255 characters are not read. Styles without a valid name or type are left out.
+- A `style` write with no styles part refuses with `edit.no-styles-defined`. An undefined name refuses with `edit.style-not-defined`.
+- The API cannot add, delete, or change styles. `Style` has no `font` or `paragraphFormat`.
+- Never switch tracking off to bypass a refused tracked write.
+- Hidden paragraph marks (`w:vanish` on the mark) join paragraphs on screen only in a bounded subset of body paragraphs. When hidden marks with visible content cannot join, the export layout's `contentWarnings` report `unsupported-style-separator`. Saving still preserves the source content.
+- For style cascade and justification rendering, see [DOCX fidelity](/docs/2.x/docx-fidelity).
 
-Mixed geometry, contextual spacing, tracked content, section boundaries, cross-paragraph fields, and chains above 64 members remain separate. Table cells, notes, headers, footers, and text boxes do not use this display join. Export reports `unsupported-style-separator` when visible-content hidden marks cannot use this join. The source content stays preserved on save.
+## See also
 
-## Next steps
-
-See [Text and ranges](/docs/2.x/editor-api/text-and-ranges) for selecting the text target.
+- [Text and ranges](/docs/2.x/editor-api/text-and-ranges)
+- [Lists and numbering](/docs/2.x/editor-api/lists)
+- [Tables and cells](/docs/2.x/editor-api/tables)

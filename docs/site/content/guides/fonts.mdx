@@ -1,42 +1,17 @@
 ---
 title: 'Fonts and measurement'
-description: 'Resolve fonts for Word-accurate line wrapping and pagination with embedded fonts, open-licensed substitutes, or app-supplied files.'
+description: 'Supply font bytes for accurate DOCX line wrapping and pagination with embedded fonts, packaged substitutes, or your own files.'
 category: 'Guides'
 seoTitle: 'Fonts and text measurement'
 ---
 
-The editor uses HarfBuzz when it has usable font bytes. Without them, a browser uses canvas measurement when available. Other environments use fixed measurement.
+The editor shapes text with HarfBuzz when it has usable font bytes. Without them, it uses fallback measurement: canvas in a browser when available, fixed measurement elsewhere. The document still opens, but line and page breaks can differ from the original.
 
-The document still opens with fallback measurement. Neither fallback guarantees Word-compatible line wraps or page breaks.
+CSS fonts and font picker entries do not supply font bytes. Only a configured font source makes measurement accurate.
 
-## Font slots in mixed text
+## Configure document fonts
 
-Some punctuation uses the authored `hAnsi` face without an East Asian font hint: curly quotes (‘, ’, “, ”), low quotes (‚, „), en and em dashes (–, —), the ellipsis (…), and the middle dot (·). Adjacent Han characters do not change that choice. An explicit `w:hint="eastAsia"` keeps its existing East Asian font behavior. Combining marks retain the face of their base character. Existing complex-script overrides still apply. Font selection does not change document text or font attributes.
-
-This follows [Word's run font selection rules](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/aef3c9a6-5d6c-434b-90b7-85e761fd8e62).
-
-## Font picker choices
-
-The toolbar always offers the standard font choices, including Arial, Calibri, Georgia, Times New Roman, and Courier New. Configured and document-specific families extend this list. Configured providers also contribute their supported families, even before those fonts load. The default dropdown includes a search field. Empty documents offer the same provider catalog as populated documents.
-
-`packagedFonts()` lists its supported Word families. `googleFonts()` lists the families in its pinned static-font catalog. Each provider applies its `allow` option; Google also applies custom `substitute` mappings.
-
-Custom resolvers can return `supportedFamilies: ['Brand Sans', 'Brand Serif']` alongside their `sources` and `substitutions`. A catalog-only result is valid. Listing a family does not require its bytes.
-
-A picker choice does not mean the font is installed or loaded. Opening the picker does not load font bytes. Your font configuration still controls measurement and font resolution.
-
-## Configure font sources
-
-Pass a font resolver to `useDocxSource`. For packaged substitutes, use `packagedFonts()`. The examples use the React hook; Vue provides the same API. Call the hook inside a component.
-
-```ts
-import { useDocxSource } from '@docx-editor.dev/react';
-import { packagedFonts } from '@docx-editor.dev/fonts';
-
-const { document, fonts } = useDocxSource(url, { fonts: packagedFonts() });
-```
-
-To add Google Fonts, pass the resolvers in an array:
+Pass resolvers to `useDocxSource`. Vue provides the same API.
 
 ```ts
 import { useDocxSource } from '@docx-editor.dev/react';
@@ -48,248 +23,9 @@ const { document, fonts } = useDocxSource(url, {
 });
 ```
 
-The list is a precedence order: the first origin that supplies a face wins, and later origins receive the resolved faces so they can skip duplicate downloads. Put preferred sources first.
+The list is a precedence order. The first source that supplies a face wins. No optional font source is enabled by default.
 
-`googleFonts()` fetches from a content delivery network. `packagedFonts()` and `defaultFonts()` load assets shipped with the package, typically from your own origin in a browser. No optional font source is enabled by default.
-
-## Choose a font source
-
-| Source | Third-party requests | Loads | Measurement |
-| --- | --- | --- | --- |
-| Fonts embedded in the DOCX | No | The faces in the file | Uses the embedded bytes |
-| `packagedFonts()` | No | The packaged families in use, plus the default face | Uses metric-compatible substitutes |
-| `defaultFonts()` | No | All 20 faces of the five defaults, every time | Uses metric-compatible substitutes |
-| `googleFonts()` | Yes, for cataloged families | The catalog families in use, plus the default face | Uses the fetched faces |
-| `customFonts()` | Depends on your URLs | All configured faces when the editor resolves fonts | Uses validated files |
-| `loadFonts` with your URLs | Depends on your URLs | The URLs you list | Uses validated files |
-| No usable source | No | Nothing | Canvas or fixed fallback |
-
-Embedded fonts load automatically. The editor registers them under internal aliases. A document cannot replace a page-wide font family used by your application.
-
-### Understand the font notice
-
-The packaged font notice lists rendered document families without an available compatible face. It excludes metric-compatible substitutions.
-
-The notice also excludes font declarations that rendered text does not use. The font picker can still list those declared families.
-
-Symbol faces (`w:sym`), such as MS Gothic in a checkbox, join the notice only when a symbol needs its own face. The editor maps symbols to Unicode where a mapping exists, and any face can render a mapped symbol. A private-use symbol with no mapping renders only in its authored face. If that face is not available, the notice lists it, because the symbol shows as a missing-glyph box. Hidden text (`w:vanish` set on the run) does not render, so its faces and symbols do not join the notice.
-
-The font picker is a separate list. It offers the families your configuration supplies and the families the document declares in `w:rFonts`, so a symbol face appears there when the file declares it as a run font, which Word's checkbox markup does.
-
-### Default family names
-
-Use these names for the package's family lists and type:
-
-| Preferred name              | Deprecated alias                 |
-| --------------------------- | -------------------------------- |
-| `DefaultFontFamily`         | `WordDefaultFamily`              |
-| `DEFAULT_FONT_FAMILIES`     | `WORD_DOCUMENT_DEFAULT_FAMILIES` |
-| `ALL_DEFAULT_FONT_FAMILIES` | `ALL_WORD_DEFAULT_FAMILIES`      |
-
-The deprecated names remain available. Both constant aliases reference the same arrays as their preferred names. The family lists and loaded font bytes do not change.
-
-## Load default substitute families
-
-The optional `@docx-editor.dev/fonts` package provides open-licensed substitutes.
-
-| Word font       | Substitute        | License           | Included by `defaultFonts()` |
-| --------------- | ----------------- | ----------------- | ---------------------------- |
-| Calibri         | Carlito           | SIL OFL           | Yes                          |
-| Cambria         | Caladea           | SIL OFL           | Yes                          |
-| Times New Roman | Liberation Serif  | SIL OFL           | Yes                          |
-| Arial           | Liberation Sans   | SIL OFL           | Yes                          |
-| Courier New     | Liberation Mono   | SIL OFL           | Yes                          |
-| Century Gothic  | TeX Gyre Adventor | GUST Font License | No                           |
-| Segoe UI        | Selawik           | SIL OFL           | No                           |
-
-The first five match advance widths for the glyphs they cover. Kerning differences can still change line breaks.
-
-Helvetica has the same advance widths as Arial. `packagedFonts()` serves a document's Helvetica text with the Liberation Sans faces it already loads for Arial. Helvetica text then draws with Arial-shaped glyphs, and the editor shows no font notice for it. `defaultFonts()` does not map Helvetica.
-
-TeX Gyre Adventor has slightly narrower advance widths than Century Gothic. The measured difference stays within 1% in `bun run check:font-width-fidelity`, but can still change line breaks.
-
-Selawik has the same advance widths as Segoe UI, and Segoe UI text keeps the Segoe UI line height. Selawik has no italic faces, so italic Segoe UI text draws in the upright faces with a synthesized slant.
-
-Packaged faces do not cover every script. Liberation Sans has no Arabic glyphs. The editor preserves native family fallback for missing glyphs. Exact metrics still depend on the available font for that script.
-
-Supply licensed font bytes when pixels must match the original face.
-
-`defaultFonts()` loads five package defaults: Calibri, Cambria, Times New Roman, Arial, and Courier New. Century Gothic and Segoe UI require an explicit choice. Their substitutes add about 709 KB and 88 KB:
-
-```ts
-import { ALL_DEFAULT_FONT_FAMILIES, defaultFonts } from '@docx-editor.dev/fonts';
-
-const fonts = await defaultFonts({ families: ALL_DEFAULT_FONT_FAMILIES });
-```
-
-`googleFonts()` covers them on demand instead. It serves Century Gothic and Segoe UI from the same packaged bytes, and only when a document names the family, so it makes no third-party request for them.
-
-`packagedFonts()` loads a family only when a document names it, or when it is that document's default face. Narrow it further with `allow`:
-
-```ts
-const fonts = packagedFonts({ allow: ['Calibri'] });
-```
-
-Font binaries load as separate assets. Importing the package fetches nothing.
-
-### Relocate packaged fonts in Node or Bun
-
-For a single-file executable, copy the contents of the fonts package's `assets/` directory into a dedicated directory. Set `DOCX_EDITOR_FONT_ASSET_ROOT` before starting the process:
-
-```bash
-DOCX_EDITOR_FONT_ASSET_ROOT=/opt/my-app/fonts ./my-app
-```
-
-The directory must contain the packaged `.ttf` and `.otf` files with their original names. Use an absolute filesystem path or a `file:` URL. Relative paths, filesystem roots, and non-file URLs are ignored.
-
-The package reads this setting when its module loads. Setting it after importing the package does not relocate the fonts. The setting changes packaged asset locations; it does not register custom fonts or enable a font source. Configure `packagedFonts()` or `defaultFonts()` as usual. Browser builds use their bundled asset URLs.
-
-### Choose between lazy and eager loading
-
-`packagedFonts()` and `defaultFonts()` measure identically for the families they share. They differ in when they run, what they cover, and what that costs.
-
-| Behavior | `packagedFonts()` | `defaultFonts()` |
-| --- | --- | --- |
-| Runs | After the document is parsed | Before the document opens |
-| Covers | All six substituted families | The five Word applies by default |
-| Loads | The families in the document, plus the default face | All 20 faces, 7.4 MB |
-| First layout | Fixed measurement, then re-paginates | Correct on the first pass |
-| Undo history across the swap | Kept when the faces arrive | Kept |
-
-Use `defaultFonts()` when a visible re-pagination is worse than the extra bytes. Use `packagedFonts()` otherwise.
-
-```ts
-import { defaultFonts } from '@docx-editor.dev/fonts';
-
-const { document, fonts } = useDocxSource(url, { fonts: defaultFonts });
-```
-
-With `defaultFonts`, `useDocxSource` waits for fonts before returning the document. On-demand resolvers need the parsed document to identify fonts, so the first layout can use fallback measurement.
-
-## Editor-scoped fonts
-
-`defaultFonts()` and `packagedFonts()` supply font bytes for the editor. Core registers these bytes under private font names. Your app's header and sidebar keep their existing fonts. Native fonts remain available for glyphs missing from the substitutes.
-
-### Upgrade from page-wide registration
-
-Before 2.18.0, loaders could register substitutes under public names such as `Arial`. From 2.18.0, font loaders supply bytes for private editor registration only. If you already pass `packagedFonts()` or `defaultFonts()` through the editor's `fonts` option, keep that configuration.
-
-The `packagedFonts` option `install` is deprecated and ignored, including `true`. Remove it while keeping your other loader options:
-
-```diff
-- fonts: packagedFonts({ install: true, onFailure })
-+ fonts: packagedFonts({ onFailure })
-```
-
-`installDefaultFontFaces()` is deprecated. It does nothing and resolves to `0`, without fetching or registering fonts. Remove its calls and supply `packagedFonts()` or `defaultFonts()` through the editor's `fonts` option instead. `defaultFonts()` has no `install` option. `loadDefaultFonts()` remains bytes-only.
-
-If surrounding app text relied on these public fonts, configure those fonts separately with your app's CSS or font loader. Check the fonts in your app's headers, sidebars, and other text after upgrading.
-
-## Load your own fonts
-
-Use `customFonts()` to supply brand fonts or licensed Word fonts to the editor. Put it first so your supplied faces take precedence.
-
-```tsx
-import { customFonts } from '@docx-editor.dev/core/editor';
-import { packagedFonts } from '@docx-editor.dev/fonts';
-import { googleFonts } from '@docx-editor.dev/fonts/google';
-import { DocxEditor, useFonts } from '@docx-editor.dev/react';
-
-function Editor({ bytes }: { bytes: Uint8Array }) {
-  const fonts = useFonts(
-    customFonts({
-      sources: [
-        {
-          url: '/fonts/AcmeSans-Regular.ttf',
-          family: 'Acme Sans',
-          weight: 400,
-          style: 'normal',
-        },
-        {
-          url: '/fonts/AcmeSans-Bold.ttf',
-          family: 'Acme Sans',
-          weight: 700,
-          style: 'normal',
-        },
-      ],
-      onFailure: (failure) => console.warn(failure.request.family, failure.reason),
-    }),
-    packagedFonts(),
-    googleFonts()
-  );
-  return <DocxEditor document={bytes} fonts={fonts} />;
-}
-```
-
-`customFonts()` loads all configured faces when the editor resolves its fonts. Creating the resolver does not fetch files. It skips faces supplied by earlier sources, matching the family name without case sensitivity and matching weight and style.
-
-Loaded fonts appear in the picker, including in blank documents. Select a font to apply it to document text.
-
-The helper uses `loadFonts` for validation and caching. `onFailure` receives each failed face and defaults to `console.warn`. Cancellation does not trigger `onFailure`. Core registers the supplied bytes under private names, without changing fonts elsewhere in your app.
-
-### Load font bytes eagerly
-
-`loadFonts()` remains the lower-level eager loader. It starts loading every listed source when called and returns validated bytes with a typed `failures` list. Use it when you need font bytes before opening a document.
-
-```ts
-import { createDocxEditor, loadFonts, type FontUrlSource } from '@docx-editor.dev/core/editor';
-
-const sources: FontUrlSource[] = [
-  { url: '/fonts/AcmeSans-Regular.ttf', family: 'Acme Sans', weight: 400, style: 'normal' },
-];
-
-async function mountEditor(container: HTMLElement, bytes: Uint8Array) {
-  const editor = createDocxEditor({
-    document: bytes,
-    fonts: await loadFonts({ sources }),
-  });
-  editor.attach(container);
-  return editor;
-}
-```
-
-| `loadFonts` behavior | Result                                                                 |
-| -------------------- | ---------------------------------------------------------------------- |
-| One source fails     | Returns validated sources and a typed `failures` list.                 |
-| Hash matches         | Accepts the source.                                                    |
-| Hash differs         | Rejects that source with `hashMismatch`.                               |
-| Hash omitted         | Computes one for the returned source.                                  |
-| Same request repeats | Uses the Cache API when available. Otherwise, each call fetches again. |
-
-Pin every URL that you do not control. To create pins, load once without a hash and store the returned source hashes.
-
-```ts
-const result = await loadFonts({ sources });
-console.log(result.sources.map((source) => `${source.id}: ${source.hash}`));
-```
-
-Use `createFontSource` when you already have bytes from a file input, IndexedDB, or a bundler.
-
-```ts
-import { composeFontConfiguration, createFontSource } from '@docx-editor.dev/core/editor';
-
-const made = createFontSource(bytes, {
-  family: 'Acme Sans',
-  weight: 400,
-  style: 'normal',
-});
-
-if ('source' in made) {
-  const fonts = composeFontConfiguration({ sources: [made.source] });
-} else {
-  report(made.failure.reason);
-}
-```
-
-This function returns a typed failure instead of throwing for invalid descriptors or bytes.
-
-## Load fonts on demand
-
-`customFonts()`, `packagedFonts()`, and `googleFonts()` return resolvers. Creating them fetches nothing. When the editor resolves fonts, `customFonts()` loads all configured faces. `packagedFonts()` and `googleFonts()` load families requested by the document or its default font. The editor calls resolvers again when typing, formatting, or another edit introduces a new family. Selecting a font for an empty paragraph also requests it.
-
-Font arrivals update the current editing session. Selection, pending typing formatting, and undo history survive the reflow. Previously supplied faces are passed as `resolvedFaces`, so providers can skip redundant downloads. The editor requests each document family once per load. Reload the document to retry a failed request.
-
-`useDocxSource` handles the identity of a resolver for you. When you pass one directly to the `fonts` prop, use `useFonts` instead: an inline resolver is a new function on each render, and that identity change rebuilds the editor.
+To pass fonts to the `fonts` prop directly, wrap them in `useFonts`. An inline resolver is a different function on each render. Each identity change calls `setFonts()` and resolves the fonts again. The editor keeps the document, selection, and undo history.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -312,193 +48,245 @@ function Editor({ bytes }: { bytes: Uint8Array }) {
 <script setup lang="ts">
 import { packagedFonts } from '@docx-editor.dev/fonts';
 import { googleFonts } from '@docx-editor.dev/fonts/google';
-import { DocxEditorRoot, useFonts } from '@docx-editor.dev/vue';
+import {
+  DocxEditorContent,
+  DocxEditorRoot,
+  DocxEditorViewport,
+  useFonts,
+} from '@docx-editor.dev/vue';
 
 defineProps<{ bytes: Uint8Array }>();
 const fonts = useFonts(packagedFonts(), googleFonts());
 </script>
 
 <template>
-  <DocxEditorRoot :document="bytes" :fonts="fonts" />
+  <DocxEditorRoot :document="bytes" :fonts="fonts">
+    <DocxEditorViewport>
+      <DocxEditorContent />
+    </DocxEditorViewport>
+  </DocxEditorRoot>
 </template>
 ```
 
 </Framework>
 </FrameworkTabs>
 
-Every argument to `useFonts` takes the same union: a resolver, a fragment, a configuration, or a promise for one. Arguments compose first-wins, in order.
+Each `useFonts` argument is a resolver, a fragment, a configuration, or a promise for one. Arguments compose in order, and the first wins.
 
-`googleFonts()` uses a generated catalog. Each face is pinned to an immutable `google/fonts` commit and includes a checked `sha256:` value. Most faces share one commit. A family whose current upstream version ships variable-only files, such as Montserrat, Open Sans, or Roboto, is pinned to the last commit that carried static instances. The catalog therefore records more than one revision.
+In Vue, a function argument is always the value, never a getter. Use `computed(() => packagedFonts())` to build one lazily.
+
+## Choose a font source
+
+| Source | Third-party requests | Loads |
+| --- | --- | --- |
+| Fonts embedded in the DOCX | No | The faces in the file, automatically |
+| `packagedFonts()` | No | The packaged families the document uses, plus its default face |
+| `defaultFonts()` | No | All 20 faces of the five defaults, before the document opens |
+| `googleFonts()` | Yes, for cataloged families | The catalog families the document uses, plus its default face |
+| `customFonts()` | Depends on your URLs | All configured faces when the editor resolves fonts |
+| `loadFonts()` | Depends on your URLs | The URLs you list, immediately |
+| No usable source | No | Nothing; fallback measurement |
+
+`@docx-editor.dev/fonts` ships these open-licensed, metric-compatible substitutes:
+
+| Original font   | Substitute        | License           | In `defaultFonts()` |
+| --------------- | ----------------- | ----------------- | ------------------- |
+| Calibri         | Carlito           | SIL OFL           | Yes                 |
+| Cambria         | Caladea           | SIL OFL           | Yes                 |
+| Times New Roman | Liberation Serif  | SIL OFL           | Yes                 |
+| Arial           | Liberation Sans   | SIL OFL           | Yes                 |
+| Courier New     | Liberation Mono   | SIL OFL           | Yes                 |
+| Century Gothic  | TeX Gyre Adventor | GUST Font License | No                  |
+| Segoe UI        | Selawik           | SIL OFL           | No                  |
+
+- `packagedFonts()` covers all seven families. It also serves Helvetica with the Liberation Sans faces.
+- To load all seven eagerly, call `defaultFonts({ families: ALL_DEFAULT_FONT_FAMILIES })`. The two extra families add about 797 KB.
+- Narrow `packagedFonts()` and `googleFonts()` with `allow`, for example `packagedFonts({ allow: ['Calibri'] })`.
+- Substitutes match advance widths, but kerning can still change line breaks. Supply licensed bytes when pixels must match.
+- Importing the package fetches nothing. Font binaries load as separate assets.
+
+The preferred names `DefaultFontFamily`, `DEFAULT_FONT_FAMILIES`, and `ALL_DEFAULT_FONT_FAMILIES` replace the deprecated `WordDefaultFamily`, `WORD_DOCUMENT_DEFAULT_FAMILIES`, and `ALL_WORD_DEFAULT_FAMILIES`. The deprecated aliases still work.
+
+### Choose between lazy and eager loading
+
+`packagedFonts()` and `defaultFonts()` measure the same for the families they share.
+
+| Behavior | `packagedFonts()` | `defaultFonts()` |
+| --- | --- | --- |
+| Runs | After the document is parsed | Before the document opens |
+| Covers | All seven packaged families | The five common DOCX default fonts |
+| Loads | The families in the document, plus the default face | All 20 faces, 7.4 MB |
+| First layout | Fallback measurement, then re-paginates | Correct on the first pass |
+| Undo history across the swap | Kept | Kept |
+
+Pass `defaultFonts` when a visible re-pagination is worse than the extra bytes. `useDocxSource` then waits for fonts before it returns the document.
+
+```ts
+import { defaultFonts } from '@docx-editor.dev/fonts';
+
+const { document, fonts } = useDocxSource(url, { fonts: defaultFonts });
+```
+
+## Load your own fonts
+
+Use `customFonts()` for brand or licensed fonts. Put it first so its faces take precedence.
+
+```tsx
+import { customFonts } from '@docx-editor.dev/core/editor';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+import { DocxEditor, useFonts } from '@docx-editor.dev/react';
+
+function Editor({ bytes }: { bytes: Uint8Array }) {
+  const fonts = useFonts(
+    customFonts({
+      sources: [
+        { url: '/fonts/AcmeSans-Regular.ttf', family: 'Acme Sans', weight: 400, style: 'normal' },
+        { url: '/fonts/AcmeSans-Bold.ttf', family: 'Acme Sans', weight: 700, style: 'normal' },
+      ],
+      onFailure: (failure) => console.warn(failure.request.family, failure.reason),
+    }),
+    packagedFonts()
+  );
+  return <DocxEditor document={bytes} fonts={fonts} />;
+}
+```
+
+Creating the resolver fetches nothing. `onFailure` defaults to `console.warn`, and cancellation does not call it. Loaded fonts appear in the font picker.
+
+### Load font bytes eagerly
+
+Call `loadFonts()` when you need validated bytes before you open a document.
+
+```ts
+import { createDocxEditor, loadFonts, type FontUrlSource } from '@docx-editor.dev/core/editor';
+
+const sources: FontUrlSource[] = [
+  { url: '/fonts/AcmeSans-Regular.ttf', family: 'Acme Sans', weight: 400, style: 'normal' },
+];
+
+const editor = createDocxEditor({ document: bytes, fonts: await loadFonts({ sources }) });
+editor.attach(container);
+```
+
+| `loadFonts` case     | Result                                                                  |
+| -------------------- | ----------------------------------------------------------------------- |
+| One source fails     | Returns the valid sources and a typed `failures` list                   |
+| Hash matches         | Accepts the source                                                      |
+| Hash differs         | Rejects the source with `hashMismatch`                                  |
+| Hash omitted         | Computes a hash for the returned source                                 |
+| Same request repeats | Uses the Cache API when available. Without it, each call fetches again. |
+
+Pin every URL that you do not control. Load once without a hash, then store each returned `source.hash`.
+
+If you already have bytes, call `createFontSource`. It returns a typed failure instead of throwing.
+
+```ts
+import { composeFontConfiguration, createFontSource } from '@docx-editor.dev/core/editor';
+
+const made = createFontSource(bytes, { family: 'Acme Sans', weight: 400, style: 'normal' });
+const fonts = 'source' in made ? composeFontConfiguration({ sources: [made.source] }) : undefined;
+```
+
+### Write your own resolver
+
+Wrap a resolver in `defineFontResolver`. `useDocxSource` uses the marker to tell a resolver from a loader such as `defaultFonts`. `useFonts` accepts an unmarked resolver only as its first argument.
+
+```ts
+import { defineFontResolver } from '@docx-editor.dev/core/editor';
+
+const brandFonts = defineFontResolver(async ({ families, defaultFamily, resolvedFaces }) => {
+  // Match names against a closed set. Skip faces in resolvedFaces.
+  const wanted = [defaultFamily, ...families].filter((family) => BRAND.has(family));
+  return { sources: await loadBrandFaces(wanted) };
+});
+```
+
+| Request field | Contents |
+| --- | --- |
+| `families` | Families the document declares, including `w:sym`, `SYMBOL` field, and numbering marker faces |
+| `defaultFamily` | The face for runs that name no font |
+| `resolvedFaces` | Faces that earlier sources already supplied |
+
+A resolver can also return `supportedFamilies` to add catalog entries to the font picker without bytes.
+
+## Control loading and caching
+
+Resolvers run when the editor resolves fonts and again when an edit adds a family that is not loaded. Font arrivals keep the selection, pending formatting, and undo history.
+
+| Rule | Behavior |
+| --- | --- |
+| Precedence | An explicit source beats an embedded face. An embedded face beats a substitution. The first fragment wins between equal sources. |
+| Duplicates | Composition removes duplicate faces. |
+| Retry | The editor requests each family once per load. Reload the document to retry a failed request. |
+| Updates | Later family requests read current arguments. Reload to replace loaded faces. |
+| Family list | The editor caps the family list passed to a resolver. |
+
+`composeFontConfiguration(base, ...fragments)` builds one immutable configuration with the same precedence.
+
+### Configure Google Fonts
+
+`googleFonts()` uses a catalog pinned to immutable `google/fonts` commits with checked `sha256:` hashes. Pass `substitute` to redirect families.
 
 ```ts
 googleFonts({
   allow: ['Tinos', 'Carlito'],
   substitute: { Georgia: 'Tinos' },
-});
-```
-
-An arbitrary substitute can change line breaks and pagination. Use a metric-compatible substitute when layout must remain stable.
-
-If no face is available for Garamond, the editor and PDF export keep Garamond's own line height on the fallback font. Fallback character widths can still change line breaks and pagination. A face that you supply for the family uses its own line height.
-
-| Resolver constraint | Required behavior |
-| --- | --- |
-| File-supplied family names | Match them against a closed `Map` or catalog. |
-| URL construction | Never build a URL from a document family name. |
-| Privacy | A remote font host can learn which families the document uses. |
-| Updates | New-family requests read current arguments. Reload to replace existing faces. |
-| Composition | `useFonts(packagedFonts(), googleFonts())` combines sources. |
-
-The editor caps the family list passed to a resolver.
-
-`googleFonts()` resolves a family against closed sets, in this order:
-
-1. A redirect from the substitution map: your `substitute` entries merged over the built-in metric map, such as Calibri to Carlito. Your entries win, and they win over the other two steps as well, so you can redirect any family.
-2. A packaged face for a family the catalog cannot match: Century Gothic or Segoe UI. It reads the package's own assets, so it makes no third-party request.
-3. A direct catalog match on the name the document wrote.
-
-Step 1 comes first, so `substitute: { Lato: 'Tinos' }` redirects Lato even though Lato is cataloged under its own name.
-
-If no source matches, the host keeps its fallback measurement. The resolver does not choose substitutes from PANOSE, the font classification in `word/fontTable.xml`. That classification does not describe glyph widths, so it cannot predict compatible line breaks.
-
-### Serve the catalog from your own origin
-
-`googleFonts()` fetches from a content delivery network. To send those requests somewhere else, pass `fetcher`. It replaces the `fetch` that resolver uses, so your function decides where each cataloged face comes from:
-
-```ts
-googleFonts({
   fetcher: (input) => fetch(rewriteToYourMirror(String(input))),
-});
-```
-
-Each face is pinned to an immutable commit and a `sha256:` hash. The engine checks the downloaded bytes against that hash and rejects mismatches.
-
-`packagedFonts()` and `defaultFonts()` accept `fetcher` too, and their assets ship inside the package, so they read your own origin with or without it.
-
-Core reuses the loaded bytes for private registration without another request.
-
-Use `fetcher` to add persistent or shared caching. `googleFonts()` caches catalog requests in memory, keyed by fetcher. Packaged loaders read their assets on each call. This cache does not persist to disk or share data between workers:
-
-```ts
-googleFonts({
-  fetcher: async (input) => {
-    const url = String(input);
-    const hit = await yourCache.get(url);
-    if (hit) return new Response(hit);
-    const response = await fetch(url);
-    const bytes = new Uint8Array(await response.clone().arrayBuffer());
-    await yourCache.set(url, bytes);
-    return response;
-  },
-});
-```
-
-### Run without access to the network
-
-A face that cannot be fetched is dropped, and the family it belonged to measures on the engine's fixed fallback instead.
-
-Treat that as a layout problem, not a cosmetic one. Substitute bytes are what keep wrapping and pagination close to Word. A blocked request therefore changes where your pages break, not only how the text looks.
-
-The document still opens. Each dropped face goes to the resolver's own `onFailure` option, which writes a console warning when you pass no handler:
-
-```ts
-googleFonts({
   onFailure: ({ family, url, diagnostic }) => report(family, url, diagnostic),
 });
 ```
 
-Two options work when your deployment cannot reach a content delivery network. Point `fetcher` at a mirror you control. Or leave `googleFonts()` out and use `packagedFonts()` alone, which reads only the bytes inside the package.
+| Option | Description |
+| --- | --- |
+| `allow` | Limits the families the resolver serves |
+| `substitute` | Redirects a family. Your entries win over the built-in metric map. |
+| `fetcher` | Replaces `fetch`, for a mirror or a persistent cache. `packagedFonts()` and `defaultFonts()` accept it too. |
+| `onFailure` | Receives each dropped face. Defaults to a console warning. |
 
-### Write your own resolver
+- The engine rejects downloaded bytes that do not match their hash.
+- `googleFonts()` caches requests in memory per fetcher. The cache does not persist to disk or cross worker boundaries.
+- Packaged loaders read the requested assets on each call. Supply `fetcher` for a persistent or shared cache.
+- Century Gothic and Segoe UI come from packaged bytes, with no third-party request.
+- An arbitrary substitute can change pagination. Prefer a metric-compatible one.
+- Without network access, a dropped face falls back and page breaks move. Use a mirror through `fetcher`, or use `packagedFonts()` alone.
 
-Wrap your resolver in `defineFontResolver`. This lets `useDocxSource` distinguish a resolver that receives a font request from a loader such as `defaultFonts` that takes no arguments.
+## Handle font failures
 
-`useFonts` accepts an unmarked resolver as its first argument. Wrap resolvers passed as later arguments in `defineFontResolver`.
+Fonts never block a document from opening. Each failed face falls back on its own.
 
-In Vue, a function origin is always the value, never a getter to call. To build an origin lazily, use a `computed`:
-
-```ts
-const fonts = useFonts(computed(() => packagedFonts()));
-```
-
-`useFonts(() => packagedFonts())` cannot work: nothing distinguishes it from a resolver that ignores its request. The editor reports it rather than composing an empty result.
-
-```ts
-import { defineFontResolver } from '@docx-editor.dev/core/editor';
-
-const faceKey = (family: string, weight: number, style: string) =>
-  // Case-folded: Word matches font names that way, and so do both shipped resolvers.
-  `${family.trim().toLowerCase()} ${weight} ${style}`;
-
-const brandFonts = defineFontResolver(async ({ families, defaultFamily, resolvedFaces }) => {
-  const already = new Set(
-    (resolvedFaces ?? []).map((face) => faceKey(face.family, face.weight, face.style))
-  );
-  // `defaultFamily` alongside `families`: a run that authors no font is measured in the
-  // default face, so a resolver that ignores it never serves that run.
-  const wanted = [defaultFamily, ...families].filter(
-    (family) =>
-      BRAND.has(family) &&
-      // Load a family unless EVERY face of it is already covered. Skipping a partly
-      // covered family leaves its other faces with no bytes at all.
-      !BRAND_FACES.every((face) => already.has(faceKey(family, face.weight, face.style)))
-  );
-  return { sources: await loadBrandFaces(wanted) };
-});
-```
-
-The request carries `families`, the names that document declares, and `defaultFamily`, the face a run naming no font resolves to. Both count as declared.
-
-`families` also includes faces used by `w:sym`, `SYMBOL` fields, and numbering markers. Unused numbering definitions do not add requests. Supply usable bytes for these faces to render their authored glyphs. The editor maps private-use symbols to Unicode where a mapping exists and preserves the character otherwise. Supplied faces are also available in the font picker.
-
-`resolvedFaces` lists faces already loaded by earlier sources, including weight and style. Use it to skip duplicate downloads. Composition removes duplicate faces even if your resolver ignores this list.
-
-Sources resolve sequentially so each receives the faces supplied by earlier sources. Put preferred sources first; when either source is suitable, put the faster one first.
-
-## Source precedence
-
-`composeFontConfiguration(base, ...fragments)` creates one immutable configuration.
-
-| Priority | Rule                                                                               |
-| -------- | ---------------------------------------------------------------------------------- |
-| 1        | An explicit source beats an embedded face with the same family, weight, and style. |
-| 2        | An embedded face beats a substitution.                                             |
-| 3        | The first fragment wins between equal sources.                                     |
-| 4        | Duplicate faces are removed.                                                       |
-
-## Handle failures
-
-Fonts never block a document from opening. Each failed face falls back independently.
-
-| Failure path       | Notification         |
+| Host               | Notification         |
 | ------------------ | -------------------- |
 | React root         | `onFontError`        |
 | Vue root           | `@font-error`        |
 | `createDocxEditor` | `onFontError` option |
 
-Each `EditorFontError` has a typed `code`. Known codes include `missing`, `malformed`, `overLimit`, `hashMismatch`, and `wasmUnavailable`.
+| `EditorFontError` code | Cause                                  |
+| ---------------------- | -------------------------------------- |
+| `missing`              | No bytes are available for the font    |
+| `malformed`            | The bytes are not a valid font         |
+| `overLimit`            | The font exceeds the font byte budget  |
+| `hashMismatch`         | The bytes do not match the pinned hash |
+| `wasmUnavailable`      | The HarfBuzz WASM asset did not load   |
 
-Read `editor.fontMeasurement()` to inspect measurement:
+These are the common codes. For the full list, see the `EditorFontErrorCode` type.
 
-| Field       | Meaning                                     |
-| ----------- | ------------------------------------------- |
-| `measurer`  | `'shaped'` or `'fixed'`                     |
-| `resolving` | `true` while font resolution is in progress |
-| `producer`  | Optional source identifier                  |
+Read `editor.fontMeasurement()` to inspect measurement.
+
+| Field       | Meaning                           |
+| ----------- | --------------------------------- |
+| `measurer`  | `'shaped'` or `'fixed'`           |
+| `resolving` | `true` while font resolution runs |
+| `producer`  | Optional source identifier        |
 
 `{ measurer: 'fixed', resolving: false }` means no usable font source remains.
 
-## Serve the HarfBuzz WASM asset
+## Deploy font assets
 
-Webpack, Turbopack, and Vite emit the bundled WebAssembly asset automatically. Some esbuild, Bun, and library builds do not emit `new URL(..., import.meta.url)` assets.
+### Serve the HarfBuzz WASM asset
 
-Without `harfbuzz.wasm`, the editor reports `wasmUnavailable` and uses fixed measurement. Rendering continues, but line and page breaks can differ from Word.
+Webpack, Turbopack, and Vite emit `harfbuzz.wasm` automatically. Some esbuild, Bun, and library builds do not. Without it, the editor reports `wasmUnavailable` and uses fixed measurement.
 
-For affected builds:
-
-1. Copy `harfbuzz.wasm` from the installed core package into your served assets.
-2. Call `setHarfBuzzWasmUrl` before you create the first editor.
-3. Repeat the copy after each package upgrade.
+Copy the file from the installed core package after each upgrade:
 
 ```js
 import { copyFile } from 'node:fs/promises';
@@ -510,91 +298,55 @@ await copyFile(
 );
 ```
 
+Call `setHarfBuzzWasmUrl` before you create the first editor:
+
 ```ts
 import { setHarfBuzzWasmUrl } from '@docx-editor.dev/core/layout';
 
 setHarfBuzzWasmUrl('/static/harfbuzz.wasm');
 ```
 
-The shaper reads this URL once per module instance. A later call warns and does nothing. A Web Worker has a separate module instance and needs its own call.
+- The shaper reads the URL once per module instance. A later call warns and does nothing.
+- A Web Worker has its own module instance and needs its own call.
+- Use a URL that your application controls. Never build it from user input or remote configuration.
+- Cross-origin hosting needs the origin in `connect-src`. WebAssembly needs `wasm-unsafe-eval` in `script-src`.
+- The shaper rejects a stale or mismatched binary. An `overrides` entry for `harfbuzzjs` has no effect; upgrade `@docx-editor.dev/core`.
 
-Use a URL that your application controls. Do not build it from user input or remote configuration.
+### Relocate packaged fonts in Node or Bun
 
-Cross-origin hosting needs that origin in `connect-src`. WebAssembly needs `wasm-unsafe-eval` in `script-src`.
+For a single-file executable, copy the fonts package's `assets/` files into one directory. Set `DOCX_EDITOR_FONT_ASSET_ROOT` before the package is imported:
 
-The shaper rejects a missing, stale, or version-mismatched binary. An npm `overrides` entry for `harfbuzzjs` does not change bundled shaper code. Upgrade `@docx-editor.dev/core` instead.
+```bash
+DOCX_EDITOR_FONT_ASSET_ROOT=/opt/my-app/fonts ./my-app
+```
 
-For engine implementation details, see [Architecture](/docs/2.x/core/architecture).
+Use an absolute path or a `file:` URL, and keep the original file names. The package ignores relative paths, filesystem roots, and other URL schemes, and it reads the setting when its module loads. The setting only moves assets; it does not enable a font source.
 
-## Custom text measurement
+### Upgrade from page-wide registration
 
-If you supply a custom `TextMeasurer`, you can implement the optional `inkBounds(text, style)` method for more accurate CJK punctuation fitting. The built-in canvas and HarfBuzz measurers provide this information when available.
+Since 2.18.0, font loaders supply bytes for private editor registration only. Your app's own text keeps its fonts.
 
-Return `{ left, right }` as conservative horizontal ink coordinates for one grapheme, in points from its origin. Include font size and horizontal scale, but exclude trailing character spacing. These coordinates describe the visible ink, not the glyph's advance width. Return `undefined` when you cannot provide reliable bounds; the editor keeps its advance-based layout behavior.
+- The `packagedFonts` option `install` is ignored, including `true`. Remove it.
+- `installDefaultFontFaces()` does nothing and resolves to `0`. Pass `packagedFonts()` or `defaultFonts()` through the `fonts` option instead.
+- If app text relied on page-wide fonts, load them with your own CSS.
 
-For canvas metrics, measure left-aligned text and negate `actualBoundingBoxLeft`. Convert both coordinates from pixels to points before applying the horizontal scale. Supplying bounds enables supported optical CJK fits, so line breaks can change.
+```diff
+- fonts: packagedFonts({ install: true, onFailure })
++ fonts: packagedFonts({ onFailure })
+```
 
-## Independent ascii and hAnsi faces
+## Limits
 
-A Word run can name separate `ascii`, `hAnsi`, and `eastAsia` fonts. For example, `Aé文` can use Times New Roman, Arial, and SimSun within one source run. The editor selects the eligible `hAnsi` face before measurement and painting. It preserves font attributes, source offsets, font size, bold, and italic on save.
-
-Font selection follows Microsoft's [Word run-font rules](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/aef3c9a6-5d6c-434b-90b7-85e761fd8e62):
-
-- Basic Latin uses `ascii`; eligible non-ASCII text and the no-break space use `hAnsi`.
-- East Asian characters use `eastAsia`. Explicit `cs` and `rtl` runs keep their complex-script face.
-- Symbol fonts and layout controls keep their own selection. Combining marks keep the base character's face across source runs.
-
-PDF export and the font substitution notice use the same selected faces.
-
-Full-width letters, digits, and punctuation use the `eastAsia` face. Fixed-width spaces such as the en space and the thin space advance in `hAnsi`. Cached field results use the `hAnsi` face like other text and keep their single model range.
-
-With `w:hint="eastAsia"`, these 12 letters use the `eastAsia` face when the run's East Asian language is Chinese or absent: `à` `á` `è` `é` `ê` `ì` `í` `ò` `ó` `ù` `ú` `ü` (U+00E0, U+00E1, U+00E8 to U+00EA, U+00EC, U+00ED, U+00F2, U+00F3, U+00F9, U+00FA, U+00FC). Latin Extended Additional letters follow the same rule. Latin Extended-A, Latin Extended-B, and IPA letters (U+0100 to U+02AF) use the `eastAsia` face when the language is Chinese or absent, or when the `eastAsia` face is a Chinese font. Otherwise these letters use `hAnsi`.
-
-A _Chinese font_ has the GB2312 or Big5 character set. Known faces, such as SimSun, Microsoft YaHei, and STKaiti, use their own character set. For other faces, `w:charset` values `86` and `88` identify those character sets.
-
-Vertical-writing names such as `@SimSun` do not qualify. Surrounding spaces do not affect the name.
-
-### Faces that no style names
-
-With `w:rPrDefault`, an unnamed font slot uses its format default: Times New Roman for `ascii` and `hAnsi`, or SimSun for `eastAsia`. Without `w:rPrDefault`, unnamed slots use the theme's body faces. Naming an `ascii` face does not supply an unnamed `hAnsi` face.
-
-An East Asian theme reference uses `a:ea`. If that face is empty, `w:themeFontLang` selects a supplemental face. An absent East Asian theme language selects Simplified Chinese. The run's language does not select the theme face. If the theme lacks a matching face, these defaults apply:
-
-| Script              | Body face | Heading face | Without a theme part (body, heading) |
-| ------------------- | --------- | ------------ | ------------------------------------ |
-| Simplified Chinese  | SimSun    | SimHei       | DengXian, DengXian Light             |
-| Traditional Chinese | PMingLiU  | MingLiU      | PMingLiU, PMingLiU                   |
-| Japanese            | MS Mincho | MS Gothic    | Yu Mincho, Yu Gothic Light           |
-| Korean              | Batang    | Dotum        | Malgun Gothic, Malgun Gothic         |
-
-A Latin theme reference in a package without a theme part uses the configured default font.
-
-## Arabic and bidirectional paragraphs
-
-Text paragraphs use the inherited `w:bidi` setting for default alignment and visual order. Arabic and Latin text keep their logical document offsets when the editor places words from right to left. List markers and suffix spacing follow the paragraph direction in body text and table cells. Logical list indents resolve after inherited and direct paragraph direction.
-
-The shaper uses the resolved script and direction. Adjacent source runs with identical formatting and metadata shape together, preserving Arabic joining. When a font lacks a glyph, browser layout uses host fallback measurement instead of the missing-glyph box. Supply an Arabic-capable font for consistent browser and server metrics. Caret movement uses whole-run cluster advances when font bytes are available. Without cluster data, caret placement uses a bounded approximation within the text band. Comment, search, and remote selection highlights follow separate visual bands in mixed-direction text. Arrow keys collapse selections to available caret positions. At mixed-direction boundaries, a selected glyph edge can lack a distinct insertion position. Partial ligature highlights can extend beyond their caret position.
-
-Bidirectional paragraphs with tabs or inline atoms retain the existing placement path. Complex-script font selection and joining across formatting boundaries remain partial.
-
-## Font names with punctuation
-
-The editor uses the first item in a comma-separated run font name. For example, `Georgia,Verdana` requests Georgia. If Georgia is unavailable, the editor uses its normal fallback rules; it does not try Verdana. The editor preserves the complete authored name when it saves the document.
-
-A semicolon does not separate font names. For example, `Georgia;Verdana` requests one family with that complete name.
-
-A quoted first item, such as `"Open Sans"` in `"Open Sans", sans-serif`, requests Cambria. Invalid characters or an excessive name length also select Cambria.
-
-An available primary face wins over its font-table `w:altName`. Otherwise, Core requests the complete alternate name as one family and uses its admitted face. Core ignores a `w:altName` value that is longer than 31 characters.
-
-The browser and font-backed exports use the same substitute face for geometry. The browser registers that face under its private alias before painting. The font notice retains the unavailable original name. Export evidence identifies the admitted substitute and its bytes.
-
-When the alternate is unavailable, supplied script defaults can provide a substitute. Core applies a default only when the whole name has one unambiguous script target. A shared unknown name needing different script defaults remains unresolved. The existing fallback path remains active for those unresolved cases. The host must supply the selected face and each required weight and style.
+- Never build a font URL from a document family name. Match file-supplied names against a closed `Map` or catalog.
+- A remote font host can learn which families a document uses.
+- Embedded fonts register under private aliases. A document cannot replace a page-wide font family in your app.
+- Packaged faces do not cover every script. For example, Liberation Sans has no Arabic glyphs. Native fallback renders missing glyphs.
+- The font notice lists rendered families with no compatible face. It excludes metric-compatible substitutions.
+- A custom `TextMeasurer` can implement `inkBounds(text, style)` for CJK punctuation fitting. Return `{ left, right }`: conservative horizontal ink bounds for one grapheme, in points from its origin. Include font size and horizontal scale, not trailing character spacing. Return `undefined` when bounds are unknown. To measure, use left-aligned text, negate `actualBoundingBoxLeft`, and convert pixels to points before you apply horizontal scale.
+- Font slot selection, font name parsing, and theme font defaults follow [DOCX feature support](/docs/2.x/docx-fidelity).
 
 ## Next steps
 
-- [Chinese, Japanese, and Korean text](/docs/2.x/guides/cjk): Configure interface catalogs, browser fonts, and PDF fonts.
-- [CJK fonts for PDF export](/docs/2.x/export/pdf/fonts#add-chinese-japanese-and-korean-text): Install the optional Node.js package and review its font limits.
-- [React font props](/docs/2.x/react/props#fonts): Configure React roots.
-- [Vue font props](/docs/2.x/vue/props#fonts): Configure Vue roots.
-- [Word fidelity](/docs/2.x/word-fidelity): Review pagination support.
+- [Chinese, Japanese, and Korean text](/docs/2.x/guides/cjk)
+- [CJK fonts for PDF export](/docs/2.x/export/pdf/fonts#add-chinese-japanese-and-korean-text)
+- [React font props](/docs/2.x/react/props#fonts)

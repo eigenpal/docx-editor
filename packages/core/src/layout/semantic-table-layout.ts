@@ -29,8 +29,9 @@ import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
 //     not fit moves to the next page; a row taller than a fresh page fragments at
 //     paragraph/line boundaries (a w:cantSplit row first moves to a fresh page), or fails
 //     closed under hRule=exact / unsupported nested cuts;
-//   - nested tables retain their own geometry and may continue at ordinary row boundaries;
-//     cuts through nested rows, vertical merges and repeated headers remain atomic.
+//   - nested tables retain their own geometry and continue at row boundaries, also inside a
+//     vertical merge, or inside a row; a nested table with repeated headers stays whole while
+//     a page can hold it.
 //
 // All coordinates are points, relative to the page content box — exactly the space body
 // paragraph fragments already live in. Cell paragraph breaks go through the shared

@@ -5,11 +5,9 @@ category: 'Frameworks'
 seoTitle: 'Nuxt DOCX editor setup'
 ---
 
-The editor measures text in the browser. Keep its package import and render work in a client-only component.
-
 ## Install
 
-Install the published Vue adapter and its engine peer.
+Install the published Vue adapter and its engine peer:
 
 ```bash
 npm install @docx-editor.dev/vue @docx-editor.dev/core
@@ -17,7 +15,7 @@ npm install @docx-editor.dev/vue @docx-editor.dev/core
 
 ## Configure Nuxt
 
-Load the editor stylesheet once. Prebundle the adapter and engine for the Vite development server.
+Load the stylesheet once and prebundle the adapter and engine for the Vite dev server:
 
 ```ts
 // nuxt.config.ts
@@ -31,9 +29,9 @@ export default defineNuxtConfig({
 });
 ```
 
-## Add a client-only component
+## Mount a client-only component
 
-Use the `.client.vue` suffix. Nuxt excludes this component from server-side rendering (SSR).
+Use the `.client.vue` suffix so Nuxt skips the component during server rendering:
 
 ```vue
 <!-- components/DocumentEditor.client.vue -->
@@ -42,19 +40,13 @@ import { DocxEditor } from '@docx-editor.dev/vue';
 </script>
 
 <template>
-  <div class="editor-host">
+  <div style="height: 100vh">
     <DocxEditor document="blank" />
   </div>
 </template>
-
-<style scoped>
-.editor-host {
-  height: 100vh;
-}
-</style>
 ```
 
-Use the component from a page or layout. Nuxt auto-imports components from the `components` directory.
+Use the component from a page. Nuxt auto-imports components from the `components` directory.
 
 ```vue
 <!-- pages/index.vue -->
@@ -63,37 +55,28 @@ Use the component from a page or layout. Nuxt auto-imports components from the `
 </template>
 ```
 
-The server output contains a placeholder for `DocumentEditor`. Nuxt mounts the editor in the browser. The editor fills its parent, so the parent needs a measured height.
+To open and download files, use the Vue component from the [quickstart](/docs/2.x/quickstart).
 
-## Nuxt module status
+## Limits
 
-The repository contains `@docx-editor.dev/nuxt` source and a Nuxt example. The package has `"private": true`, so the repository does not publish it to npm. Use the Vue adapter setup on this page in an external application.
+- Keep the editor import and markup inside the `.client.vue` component. The server output contains a placeholder.
+- The editor fills its parent, so the parent needs a measured height.
+- `@docx-editor.dev/nuxt` has `"private": true` and is not published to npm. External apps use the Vue adapter setup on this page.
 
-The workspace module provides these behaviors:
+## Run the example
 
-- It registers `<DocxEditor>` as a client-only component.
-- It injects the core editor stylesheet by default.
-- It auto-imports the Vue composables.
-- It supports a component prefix and optional stylesheet injection.
-
-For applications outside this workspace, install the published Vue adapter directly.
-
-## Run the repository example
-
-The Nuxt example uses the private module through the monorepo workspace. It runs against the Nuxt version in the workspace.
+The [`examples/nuxt`](https://github.com/eigenpal/docx-editor/tree/main/examples/nuxt) starter uses the private workspace module and the workspace Nuxt version. It needs the Vue package build:
 
 ```bash
-git clone https://github.com/eigenpal/docx-editor.git
-cd docx-editor
 bun install
 bun run build:packages:vue
-bun run dev:nuxt
+bun run dev:nuxt   # http://localhost:3002
 ```
 
-Open `http://localhost:3002`.
+For clone steps, see [Run a repository starter](/docs/2.x/examples#run-a-repository-starter).
 
 ## Next steps
 
-- [Vue adapter](/docs/2.x/vue)
-- [Vue props](/docs/2.x/vue/props)
-- [Nuxt example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/nuxt)
+- [Vue adapter](/docs/2.x/vue): Install and mount options.
+- [Vue props](/docs/2.x/vue/props): Configure `<DocxEditor>`.
+- [Quickstart](/docs/2.x/quickstart): Load, edit, and save a document.

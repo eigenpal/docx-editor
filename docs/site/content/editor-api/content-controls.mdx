@@ -5,25 +5,19 @@ category: 'Editing API'
 order: 61
 ---
 
-Content controls mark template content for structured reading and editing. Use `Document.contentControls` for the main-story collection, or `Body.contentControls` for a body scope. `ContentControl.contentControls` provides nested controls; `paragraphs` provides the control's paragraphs. `Paragraph.contentControls` and `Range.contentControls` list every control that the paragraph or range overlaps, at any depth, including a control that holds the whole range.
+Content controls mark template content. For runtime setup, see [Runtime and setup](/docs/2.x/editor-api/runtime).
 
-Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
+## Fill a control by tag
 
-## Find a control and inspect its metadata
-
-`ContentControlCollection` exposes `items`, `getFirst()`, `getFirstOrNullObject()`, `getById(id)`, `getByTag(tag)`, and `getByTitle(title)`. Tag and title lookup return collections because matches need not be unique. `getById()` takes a number and returns the first match in document order. The loaded `ContentControl.id` is string metadata; DOCX IDs can be absent or repeated. Do not treat that value as a globally unique object identity.
-
-This example fills one eligible text control:
+The following example fills one eligible text control:
 
 ```ts
 await runtime.run(async (context) => {
   const matches = context.document.contentControls.getByTag('customer');
-  matches.load('items');
+  matches.load('items/subtype,items/isBound,items/cannotEdit');
   await context.sync();
   if (matches.items.length !== 1) throw new Error('Expected one customer control');
   const control = matches.items[0]!;
-  control.load(['subtype', 'isBound', 'cannotEdit']);
-  await context.sync();
   if (control.isBound || control.cannotEdit) return;
   if (control.subtype !== 'plainText' && control.subtype !== 'richText') return;
   control.setValue({ kind: 'text', text: 'Ada' });
@@ -31,47 +25,53 @@ await runtime.run(async (context) => {
 });
 ```
 
-`isBound` is advisory metadata. Every write checks binding and protection again at sync. A stale read or changed lock can cause the batch to fail. The runtime rejects writes to custom XML-bound controls and does not expose `xmlMapping`.
+| Member | Behavior |
+| --- | --- |
+| `contentControls` | On `Document`, `Body`, `Paragraph`, `Range`, and `ContentControl`. Paragraph and range lists include every overlapping control. |
+| `getByTag()`, `getByTitle()` | Return collections, because matches need not be unique. |
+| `getById(id: number)` | Returns the first match, or fails with `ItemNotFound`. A noninteger `id` fails with `InvalidArgument`. |
+| `ContentControl.id` | Loads as a string, because DOCX IDs can be missing or repeated. Convert it to an integer before you pass it to `getById()`. |
 
-## Choose the value for the control type
+## Choose a control value
 
-`ContentControl.setValue(value)` is a DocxEditor extension with a discriminated `ContentControlValue` union:
+`ContentControl.setValue(value)` is a DocxEditor extension that takes a `ContentControlValue`:
 
-| Value                                     | Use                                              |
-| ----------------------------------------- | ------------------------------------------------ |
-| `{ kind: 'text', text: 'Ada' }`           | Eligible text control                            |
-| `{ kind: 'listItem', value: 'approved' }` | A declared list item accepted by the control     |
-| `{ kind: 'checkbox', checked: true }`     | Checkbox state and its displayed glyph           |
-| `{ kind: 'date', iso: '2026-09-13' }`     | Date value; also accepts a full ISO-8601 instant |
+| Value                                     | Use                              |
+| ----------------------------------------- | -------------------------------- |
+| `{ kind: 'text', text: 'Ada' }`           | Eligible text control            |
+| `{ kind: 'listItem', value: 'approved' }` | A declared list item             |
+| `{ kind: 'checkbox', checked: true }`     | Checkbox state and its glyph     |
+| `{ kind: 'date', iso: '2026-09-13' }`     | Date, or a full ISO-8601 instant |
 
-Use the loaded `subtype` to choose an operation. It uses DOCX terms such as `plainText`, `dropDownList`, and `checkbox`. A control's text is not always its semantic value. Writing the text `true` does not set a checkbox's state. The runtime rejects unsupported values or control structures.
+Choose the value from the loaded `subtype`, such as `plainText`, `dropDownList`, or `checkbox`. `insertText(text, location)` takes `Replace`, `Start`, or `End` on text-like controls. Typed controls refuse it with `NotSupported`.
 
-`ContentControl.insertText()` supports text-like controls. Date, checkbox, and other typed controls refuse with `NotSupported`. Use the editor's calendar or the documented `setValue()` extension to set a date.
+### Propose a value as a tracked change
 
-If a range covers exactly a checkbox's glyph, `insertText()` with `Replace` and the checked or unchecked glyph sets the checkbox state, as `setValue()` does. Other text over that glyph refuses with `NotSupported`.
+When `document.changeTrackingMode` tracks changes, `setValue()` and `insertText()` propose the change inside the control:
 
-`insertText(text, location)` accepts `Replace`, `Start`, or `End` and returns a `Range`. Replacement uses the control's value path, including placeholder and temporary-wrapper handling. Sync before using that returned range. `text`, `placeholderShown`, and `temporary` are loaded read-only properties.
+- `setValue()` and `insertText(text, 'Replace')` make the shown text, prompt included, a tracked deletion and the new text a tracked insertion.
+- `insertText(text, 'Start')` and `'End'` add a tracked insertion and delete nothing.
+- The recorded state (checked state, list item, or date) moves to the new value at once, because control properties have no tracked form.
+- Accept or reject sets that state again from the remaining text. A rejected date drops its stored day.
+- Setting the value shown before your own pending change withdraws that change.
+- Temporary controls and block controls with more than one paragraph refuse with `NotSupported`.
 
-For an existing placeholder, prefer replacing the control value. For untracked range edits, a range covering the complete prompt can also replace it. The runtime returns `NotSupported` if a replacement would consume prompt text outside its target or an insertion starts away from the prompt start. The first insertion at the prompt start consumes the placeholder text.
+## Read or change metadata
 
-## Edit metadata and locks
+| Property                                | Access                  |
+| --------------------------------------- | ----------------------- |
+| `id`, `subtype`, `isBound`              | Read-only               |
+| `tag`, `title`                          | Read and write strings  |
+| `cannotDelete`, `cannotEdit`            | Read and write booleans |
+| `text`, `placeholderShown`, `temporary` | Read-only               |
 
-| Property                                | Access                          |
-| --------------------------------------- | ------------------------------- |
-| `id`, `subtype`, `isBound`              | Loaded read-only metadata       |
-| `tag`, `title`                          | Loaded reads and string writes  |
-| `cannotDelete`, `cannotEdit`            | Loaded reads and boolean writes |
-| `text`, `placeholderShown`, `temporary` | Loaded reads                    |
+Changing one lock keeps the other. Lock setters do not bypass ancestor locks or bindings. `ContentControlLockState` is vocabulary only; no combined `lock` property exists.
 
-The runtime combines lock assignments on the same proxy. Changing one lock preserves the other without loading it first. Effective ancestor locks and binding checks still apply; lock setters do not bypass protection. `ContentControlLockState` exports `unlocked`, `sdtLocked`, `contentLocked`, and `sdtContentLocked` as vocabulary. There is no public combined `lock` property taking that alias.
+`isBound` is advisory, because sync checks binding and protection again. Writes to custom XML-bound controls refuse, and `xmlMapping` does not exist.
 
-If you create the browser runtime over an editor that sets `contentLockPolicy.allowFormattingInLockedContent`, untracked font writes pass a content lock. Text writes, and font writes while `document.changeTrackingMode` tracks changes, still refuse. The server runtime does not take this option. For more information, see [Content controls](/docs/2.x/guides/content-controls#formatting-content-locked-controls).
+## Create or remove a control
 
-You can set `Paragraph.alignment`, `leftIndent`, `rightIndent`, `firstLineIndent`, `spaceBefore`, `spaceAfter`, and `lineSpacing` inside a content-locked control without changing its text. When `document.changeTrackingMode` tracks changes, these writes create one paragraph property revision that you can accept or reject. Paragraph style writes stay refused. Binding and document protection checks still apply.
-
-## Create a text or date control
-
-`Range.insertContentControl(type?)` supports `RichText`, `PlainText`, and `DatePicker`; the default is `RichText`. The range must be an eligible single-paragraph span. Sync creation before setting metadata:
+The following example wraps a placeholder in a plain-text control:
 
 ```ts
 await runtime.run(async (context) => {
@@ -82,29 +82,31 @@ await runtime.run(async (context) => {
   const control = matches.items[0]!.insertContentControl('PlainText');
   await context.sync();
   control.tag = 'customer';
-  control.title = 'Customer name';
   await context.sync();
 });
 ```
 
-Use `DatePicker` for calendar dates such as an effective date. Creation preserves the selected text. The editor opens a calendar for this control. Typed date-format configuration remains unsupported.
+`Range.insertContentControl(type?)` creates `RichText` (default), `PlainText`, or `DatePicker` over an eligible single-paragraph span, and keeps the text. Other `ContentControlType` values refuse. Sync creation before you set metadata.
 
-`ContentControlType` includes other Word values, but the runtime rejects those creation modes. The exported `ContentControlSubtype` vocabulary does not expand `insertContentControl()` support. Picture controls, repeating-section editing, and typed Office.js subtype objects are unavailable. Use a prepared template for existing eligible list and checkbox controls.
+| Method | Effect |
+| --- | --- |
+| `getRange(location?)` | `Whole`, `Content`, `Start`, `End`, `Before`, or `After`; resolve before use |
+| `delete(true)` | Removes the wrapper and keeps its content |
+| `delete(false)` | Removes the wrapper and its content |
 
-## Suggest a control
+## Limits
 
-`TrackMineOnly` can wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration. Accept keeps the control. Reject restores the original formatted text. The author can set the pending control's `tag` and `title`. Empty ranges, existing review markup, and other control structure changes refuse.
+- Picture controls, repeating sections, typed subtype objects, and date formats are unavailable.
+- Prefer `setValue()` for a placeholder. A range edit that consumes prompt text outside its target, or starts away from the prompt start, fails with `NotSupported`.
+- A range over exactly a checkbox glyph accepts the checked or unchecked glyph. Other text there fails with `NotSupported`.
+- In a browser, `contentLockPolicy.allowFormattingInLockedContent` lets untracked font writes pass a content lock. Server runtimes ignore it. See [Formatting content-locked controls](/docs/2.x/guides/content-controls#formatting-content-locked-controls).
+- Paragraph alignment, indents, and spacing can change in a content-locked control. Style writes refuse.
+- `TrackMineOnly` can wrap nonempty ordinary text in a new control, outside collaboration only. Reject restores the text.
+- Inserting a control or paragraph into a control and deleting it with `delete(false)` in one batch fails with `ConflictingChanges`. Text writes can share that batch.
+- Do not delete a binding or wrapper to force a write. Report the control to the template author.
 
-Set `context.document.changeTrackingMode = 'TrackMineOnly'` before `insertContentControl()` in the creation sample. Keep the same `insertContentControl()` call and sync boundaries. Creation saves a native deletion and insertion pair. One review decision resolves both halves.
+## See also
 
-## Address or remove control content
-
-`getRange(location?)` accepts `Whole`, `Content`, `Start`, `End`, `Before`, and `After`. Resolve the returned range before dependent use. `delete(true)` removes the wrapper and preserves its content. `delete(false)` removes both wrapper and content. Deletion and value changes can fail because of protection, XML binding, unsupported structure, or tracking mode.
-
-A batch that inserts a control or paragraph inside a control and deletes that control with `delete(false)` refuses with `ConflictingChanges` before it writes. Use separate sync calls for these edits. Text writes and nested control deletions in one batch succeed.
-
-Do not delete a binding or wrapper to force a failed template write. Read again and report an ineligible control to the application or template author.
-
-## Next steps
-
-See [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors), and [Office.js compatibility](/docs/2.x/editor-api/office-js-api).
+- [Content controls in the editor](/docs/2.x/guides/content-controls)
+- [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors)
+- [Office.js compatibility](/docs/2.x/editor-api/office-js-api)

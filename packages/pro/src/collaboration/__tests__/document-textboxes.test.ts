@@ -5,6 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { afterEach, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { strFromU8, unzipSync } from 'fflate';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { collaborationModule } from '../collaboration-module.ts';
 import { createPeerHarness, zipDocument } from './document-peer-support.ts';
@@ -189,4 +190,81 @@ test('a late participant can edit a saved textbox story', async () => {
   expect(saveReopenDigest(late.surface!.session.currentPackage())).toEqual(
     saveReopenDigest(alice.surface!.session.currentPackage())
   );
+});
+
+test('suggested textbox typing converges with peer typing, undoes, and resolves everywhere', async () => {
+  const { alice, bob, sync, converged, pause, resume } = await pair();
+  /** The tracked insertions saved inside the text box story. */
+  const boxInsertions = async (editor: Editor) => {
+    const xml = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+    const story = xml.slice(xml.indexOf('<w:txbxContent>'), xml.indexOf('</w:txbxContent>'));
+    return { inBox: story.split('<w:ins ').length - 1, total: xml.split('<w:ins ').length - 1 };
+  };
+  alice.exec({ type: 'insertTextBox' });
+  alice.exec({ type: 'insertText', text: 'Boxed words' });
+  converged();
+  bob.surface!.setEditingMode('suggest');
+  bob.surface!.setAuthor('Bob');
+  expect(bob.surface!.setActiveScope(bob.findMatches('Boxed words')[0]!.scope!)).toBe(true);
+  const start = bob.surface!.state().selection.head;
+  bob.surface!.setSelection({ anchor: { ...start, offset: 0 }, head: { ...start, offset: 0 } });
+  pause();
+  expect(bob.exec({ type: 'insertText', text: 'Proposed ' }).ok).toBe(true);
+  expect(alice.exec({ type: 'insertText', text: ' direct' }).ok).toBe(true);
+  sync();
+  resume();
+  converged();
+  for (const editor of [alice, bob]) {
+    expect(editor.findMatches('Proposed Boxed words direct')[0]?.scope?.kind).toBe('frame');
+    expect(await boxInsertions(editor)).toEqual({ inBox: 1, total: 1 });
+  }
+  expect(bob.exec({ type: 'undo' }).ok).toBe(true);
+  converged();
+  expect(alice.findMatches('Proposed')).toHaveLength(0);
+  expect(bob.exec({ type: 'redo' }).ok).toBe(true);
+  converged();
+  expect(alice.findMatches('Proposed')).toHaveLength(1);
+  expect(alice.surface!.session.applyTreeOps([{ op: 'acceptAllRevisions' }]).committed).toBe(true);
+  converged();
+  expect(await boxInsertions(bob)).toEqual({ inBox: 0, total: 0 });
+  expect(bob.findMatches('Proposed Boxed words direct')).toHaveLength(1);
+});
+
+test('a suggesting participant moves and resizes a box directly while a peer types in it', async () => {
+  const { alice, bob, sync, converged, pause, resume } = await pair();
+  alice.exec({ type: 'insertTextBox' });
+  alice.exec({ type: 'insertText', text: 'Moved box' });
+  converged();
+  bob.surface!.setEditingMode('suggest');
+  bob.surface!.setAuthor('Bob');
+  const scope = bob.findMatches('Moved box')[0]!.scope!;
+  if (scope.kind !== 'frame') throw new Error('Missing textbox scope');
+  expect(bob.surface!.selectDrawing(scope.drawingNodeId, scope.hostParagraphId)).toBe(true);
+  pause();
+  expect(
+    bob.exec({
+      type: 'setImagePosition',
+      horizontalEmu: 914400,
+      verticalEmu: 914400,
+      relativeToH: 'page',
+      relativeToV: 'page',
+    }).ok
+  ).toBe(true);
+  expect(bob.exec({ type: 'setImageProperties', widthEmu: 1828800, heightEmu: 914400 }).ok).toBe(
+    true
+  );
+  expect(alice.exec({ type: 'insertText', text: ' typed' }).ok).toBe(true);
+  sync();
+  resume();
+  converged();
+  const xml = strFromU8(unzipSync(new Uint8Array(await alice.save()))['word/document.xml']!);
+  expect(xml).toContain('cx="1828800"');
+  expect(xml).not.toContain('<w:ins ');
+  expect(bob.findMatches('Moved box typed')[0]?.scope?.kind).toBe('frame');
+  expect(bob.exec({ type: 'undo' }).ok).toBe(true);
+  converged();
+  expect(
+    strFromU8(unzipSync(new Uint8Array(await alice.save()))['word/document.xml']!)
+  ).not.toContain('cx="1828800"');
+  expect(alice.findMatches('Moved box typed')).toHaveLength(1);
 });

@@ -6,7 +6,9 @@ category: 'Telemetry'
 
 <Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
 
-Use `callbackExporter` to forward events to any function:
+## Forward events to a callback
+
+Use `callbackExporter` to forward events to any function, then register `telemetry.module` as [Set up an editor](/docs/2.x/telemetry/editors) shows:
 
 ```ts
 import { callbackExporter, createTelemetry, isFailure } from '@docx-editor.dev/telemetry';
@@ -23,15 +25,28 @@ export const telemetry = createTelemetry({
 });
 ```
 
-## Write your own exporter
+## Implement an exporter
 
-To write your own exporter, implement `TelemetryExporter` with an `event` method, a `metric` method, or both. Add `flush` and `shutdown` if your exporter buffers events.
+Implement `TelemetryExporter` with `event`, `metric`, or both.
 
-Telemetry catches rejected callback promises and reports each exporter failure once through `onExporterError`. Exporters own pending delivery. Implement `flush()` and `shutdown()` to send buffered events and wait for delivery.
+| Member | Required | Purpose |
+| --- | --- | --- |
+| `name` | Yes | Shown in `onExporterError` reports. |
+| `event(event)` | One of `event` or `metric` | Receives each event. |
+| `metric(record)` | One of `event` or `metric` | Receives each metric record. |
+| `flush()` | If buffered | Sends buffered events and waits for delivery. |
+| `shutdown()` | If buffered | Flushes and releases resources. |
+| `attach(context)` | No | Called once with a context. |
+| `context.consented()` | n/a | Whether the user allows telemetry. Check it before sending buffered events. |
+| `context.pageClosing()` | n/a | Whether the page is hidden or closing. Use a transport that completes in that state. |
 
-An exporter can also implement `attach`. The client calls it once with a context that provides two checks:
+## Limits
 
-- `consented()` reports whether the user allows telemetry. Check it before sending buffered events.
-- `pageClosing()` reports whether the page is hidden or closing. Use a transport that can complete the send in that state.
+- Exporters own pending delivery.
+- Telemetry catches rejected callback promises and reports each exporter failure once through `onExporterError`.
+- Every event that reaches an exporter has passed the privacy checks. For payloads, see [Privacy](/docs/2.x/telemetry/privacy).
 
-Every event that reaches an exporter has passed the privacy checks. For what each event contains, see [Privacy](/docs/2.x/telemetry/privacy).
+## See also
+
+- [Send to a log service](/docs/2.x/telemetry/log-services)
+- [Privacy](/docs/2.x/telemetry/privacy)
