@@ -290,6 +290,7 @@ export function customGeometryDefinition(custGeom: OoxmlElement): GeometryDefini
   const pathList = drawingChildren(drawingChild(custGeom, 'pathLst'));
   if (pathList.length === 0 || pathList.length > MAX_GEOMETRY_PATHS) return null;
   const paths: GeometryPath[] = [];
+  let blank = false;
   let commandBudget = MAX_GEOMETRY_COMMANDS;
   for (const element of pathList) {
     if (element.localName !== 'path') return null;
@@ -307,6 +308,7 @@ export function customGeometryDefinition(custGeom: OoxmlElement): GeometryDefini
       if (parsed === null) return null;
       commands.push(parsed);
     }
+    if (!everyCommandHasCurrentPoint(commands)) blank = true;
     paths.push({
       width,
       height,
@@ -315,7 +317,29 @@ export function customGeometryDefinition(custGeom: OoxmlElement): GeometryDefini
       commands,
     });
   }
-  return { avLst, gdLst, textRect, paths };
+  // The whole shape paints nothing, but its text rectangle stays (see
+  // `everyCommandHasCurrentPoint`).
+  return { avLst, gdLst, textRect, paths: blank ? [] : paths };
+}
+
+/**
+ * ECMA-376 Part 1, 20.1.9 (`CT_Path2D`): only `a:moveTo` sets the current point, and every
+ * other command needs one. A custom path has no current point before its first `a:moveTo`,
+ * and after `a:close` until the next `a:moveTo`. When any path of a custom geometry has a
+ * command without one, the whole shape paints no fill and no outline, in every path. Its
+ * text still lays out. The rule depends only on the order of the commands.
+ *
+ * Preset definitions do not take this check. Some presets in the ECMA-376 annex draw a line
+ * after `close` (the accent callouts), and they draw it from the closed subpath's start.
+ */
+function everyCommandHasCurrentPoint(commands: readonly GeometryCommand[]): boolean {
+  let hasPoint = false;
+  for (const command of commands) {
+    if (command.op === 'M') hasPoint = true;
+    else if (!hasPoint) return false;
+    else if (command.op === 'Z') hasPoint = false;
+  }
+  return true;
 }
 
 // ---- Evaluation ------------------------------------------------------------------------
@@ -347,6 +371,22 @@ function ellipseParameter(angle: number, rx: number, ry: number): number {
 
 function segmentsFor(length: number, tolerance: number): number {
   return Math.max(1, Math.min(MAX_CURVE_SEGMENTS, Math.ceil(length / tolerance)));
+}
+
+const FULL_TURN = 2 * Math.PI;
+
+/**
+ * An `arcTo` sweep (ECMA-376 Part 1, 20.1.9.3) beyond one turn redraws the same ellipse, so it
+ * drops whole pairs of turns and keeps between one and three turns. The end point stays the
+ * same, the outline keeps at least one full turn, and the number of turns keeps its parity, so
+ * an even-odd fill of the loops does not change. A sweep that a guide makes very large cannot
+ * spread its chords over many turns.
+ */
+function boundedSweep(sweep: number): number {
+  if (!Number.isFinite(sweep)) return 0;
+  const size = Math.abs(sweep);
+  if (size <= FULL_TURN) return sweep;
+  return Math.sign(sweep) * (FULL_TURN + ((size - FULL_TURN) % (2 * FULL_TURN)));
 }
 
 /**
@@ -410,7 +450,7 @@ export function evaluateGeometry(
           const rx = value(step.args[0]);
           const ry = value(step.args[1]);
           const start = angleRadians(value(step.args[2]));
-          const sweep = angleRadians(value(step.args[3]));
+          const sweep = boundedSweep(angleRadians(value(step.args[3])));
           const t0 = ellipseParameter(start, rx, ry);
           const t1 = ellipseParameter(start + sweep, rx, ry);
           const cx = state.x - rx * Math.cos(t0);
@@ -420,13 +460,20 @@ export function evaluateGeometry(
             radius > FLATTEN_TOLERANCE_EMU
               ? 2 * Math.acos(1 - FLATTEN_TOLERANCE_EMU / radius)
               : Math.PI / 2;
-          const quarterMinimum = Math.ceil(Math.abs(t1 - t0) / (Math.PI / 4));
+          // Each turn of the bounded sweep gets its own chord budget, so the part past one turn
+          // is as fine as a single turn. The count comes from the visual sweep, not from the
+          // parameter span, so rounding in the parameter cannot split a sweep of exactly one
+          // turn; a sweep of at most one turn stays one piece, and a bounded sweep is at most
+          // three.
+          const pieces = Math.max(1, Math.ceil(Math.abs(sweep) / FULL_TURN));
+          const span = (t1 - t0) / pieces;
+          const quarterMinimum = Math.ceil(Math.abs(span) / (Math.PI / 4));
           const count = Math.min(
             MAX_CURVE_SEGMENTS,
-            Math.max(quarterMinimum, Math.ceil(Math.abs(t1 - t0) / angleStep), 1)
+            Math.max(quarterMinimum, Math.ceil(Math.abs(span) / angleStep), 1)
           );
-          for (let index = 1; ok && index <= count; index += 1) {
-            const t = t0 + ((t1 - t0) * index) / count;
+          for (let index = 1; ok && index <= count * pieces; index += 1) {
+            const t = t0 + (span * index) / count;
             ok = emit(cx + rx * Math.cos(t), cy + ry * Math.sin(t));
           }
           break;

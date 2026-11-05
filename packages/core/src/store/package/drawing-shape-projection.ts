@@ -25,8 +25,12 @@ import {
   patternMeanColor,
   type VectorPattern,
 } from './drawing-pattern-fill.ts';
-import { readShapePathPolygons } from './drawing-vector-paths.ts';
-import type { GeometryFill } from './drawing-geometry-engine.ts';
+import {
+  hasPathlessCustomGeometry,
+  needsGeometryEngine,
+  readCustomPolygons,
+  type ShapePath,
+} from './drawing-vector-paths.ts';
 import { readShapeShadow, shapeEffectList, type ShapeShadow } from './drawing-shape-effects.ts';
 import { drawingRenderers } from './drawing-renderers.ts';
 import {
@@ -555,15 +559,6 @@ export function projectShapeComponents(
   });
 }
 
-interface ShapePath {
-  readonly subpaths: readonly {
-    readonly points: readonly Readonly<{ x: number; y: number }>[];
-    readonly closed: boolean;
-  }[];
-  readonly fill: GeometryFill;
-  readonly stroke: boolean;
-}
-
 /**
  * The shape's geometry paths in its own extent, charged against the point budget. A straight
  * line keeps its endpoints exactly, so a zero-extent axis stays a line. A custom geometry
@@ -611,65 +606,6 @@ function shapePaths(
   return geometry.paths;
 }
 
-/** Whether a custom geometry uses arcs, quadratic curves, guides, or per-path paint modes. */
-function needsGeometryEngine(custGeom: OoxmlElement): boolean {
-  for (const list of custGeom.children) {
-    if (!isElement(list) || list.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI) continue;
-    if (list.localName === 'gdLst' && list.children.some(isElement)) return true;
-    if (list.localName !== 'pathLst') continue;
-    for (const path of list.children) {
-      if (!isElement(path)) continue;
-      const fillMode = schemaAttributeValue(path.attributes, 'fill');
-      if (fillMode !== undefined && fillMode !== 'norm') return true;
-      if (schemaFlagIsUnset(schemaAttributeValue(path.attributes, 'stroke') ?? '1')) return true;
-      for (const command of path.children) {
-        if (isElement(command) && ['arcTo', 'quadBezTo'].includes(command.localName)) return true;
-      }
-    }
-  }
-  return false;
-}
-
-/** The polygon reader's view of an `a:custGeom`: one filled and stroked path set. */
-function readCustomPolygons(
-  custGeom: OoxmlElement,
-  extent: Readonly<{ cx: number; cy: number }>,
-  pointBudget: { remaining: number }
-): ShapePath | null {
-  const pathLst = findDirectChild(custGeom.children, {
-    namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-    localName: 'pathLst',
-  });
-  if (!pathLst) return null;
-  const subpaths: { x: number; y: number }[][] = [];
-  const closed: boolean[] = [];
-  const budget = { remaining: pointBudget.remaining };
-  for (const child of pathLst.children) {
-    if (!isElement(child)) continue;
-    if (child.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI || child.localName !== 'path') {
-      return null;
-    }
-    // Paths that opt out of fill or stroke need the engine's per-path modes.
-    const fillMode = schemaAttributeValue(child.attributes, 'fill');
-    const strokeMode = schemaAttributeValue(child.attributes, 'stroke');
-    if ((fillMode !== undefined && fillMode !== 'norm') || schemaFlagIsUnset(strokeMode ?? '1'))
-      return null;
-    const pathW = readSize(schemaAttributeValue(child.attributes, 'w'), extent.cx);
-    const pathH = readSize(schemaAttributeValue(child.attributes, 'h'), extent.cy);
-    if (pathW === null || pathH === null) return null;
-    const scaleX = pathScale(extent.cx, pathW);
-    const scaleY = pathScale(extent.cy, pathH);
-    if (scaleX === null || scaleY === null) return null;
-    if (!readShapePathPolygons(child, scaleX, scaleY, subpaths, budget, closed)) return null;
-  }
-  pointBudget.remaining = budget.remaining;
-  return {
-    subpaths: subpaths.map((points, index) => ({ points, closed: closed[index]! })),
-    fill: 'norm',
-    stroke: true,
-  };
-}
-
 /** Whether a closed path encloses any area (shoelace), so that clipping to it leaves ink. */
 function enclosesArea(points: readonly Readonly<{ x: number; y: number }>[]): boolean {
   let twiceArea = 0;
@@ -692,12 +628,6 @@ function enclosesArea(points: readonly Readonly<{ x: number; y: number }>[]): bo
   }
   const box = (maxX - minX) * (maxY - minY);
   return box > 0 && Math.abs(twiceArea) > box * 1e-9;
-}
-
-/** How a path coordinate space maps onto a shape axis; a zero space fits only a zero axis. */
-function pathScale(size: number, space: number): number | null {
-  if (space > 0) return size / space;
-  return size === 0 ? 0 : null;
 }
 
 /**
@@ -768,7 +698,12 @@ export function projectVectorShape(
       resolveSchemeColor,
       resolveStyleMatrixReference
     );
-    if (!shapeComponents?.length) return null;
+    if (!shapeComponents) return null;
+    // A custom geometry with no paths paints nothing, and it keeps its box with no components
+    // and no placeholder. Any other empty list keeps the placeholder.
+    if (shapeComponents.length === 0 && !hasPathlessCustomGeometry(shapeProperties(wsp))) {
+      return null;
+    }
     components = [...shapeComponents];
   } else {
     const frame = readDrawingGroupFrame(anchor);
