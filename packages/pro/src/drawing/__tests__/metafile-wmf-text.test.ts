@@ -7,7 +7,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { expect, test } from 'bun:test';
 import { replayMetafile } from '../metafile-replay.ts';
-import { wmf, type WmfRecord } from './metafile-fixture.ts';
+import { replayWithoutDom, wmf, type WmfRecord } from './metafile-fixture.ts';
+
+replayWithoutDom();
 
 const META_CREATEFONTINDIRECT = 0x02fb;
 const META_SELECTOBJECT = 0x012d;
