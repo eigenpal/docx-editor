@@ -26,7 +26,9 @@ function commentLines(text, width = 96) {
 /** A `/*!` comment: `preamble`, then the full Ecma notice from `reference/ecma-376/NOTICE`. */
 export function ecmaLegalComment(preamble) {
   const notice = readFileSync(resolve(root, 'reference/ecma-376/NOTICE'), 'utf8');
-  const text = notice.slice(notice.indexOf('COPYRIGHT NOTICE')).trim();
+  const start = notice.indexOf('COPYRIGHT NOTICE');
+  if (start < 0) throw new Error('reference/ecma-376/NOTICE has no COPYRIGHT NOTICE heading.');
+  const text = notice.slice(start).trim();
   if (text.includes('*/')) throw new Error('The notice cannot hold a comment terminator.');
   return `/*!\n${commentLines(preamble)}\n *\n${commentLines(text)}\n */\n`;
 }
