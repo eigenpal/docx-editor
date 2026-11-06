@@ -331,7 +331,6 @@ export function renderHtmlTable(
         lastGridColumn,
         placement.startColumn
       );
-      const wholeTable = conditionalFormats.byType.get('wholeTable') ?? null;
       const css = wordTableCellCss(
         tcPr,
         tblBorders,
@@ -340,7 +339,9 @@ export function renderHtmlTable(
         rowSpan,
         placement.startColumn === 0,
         lastGridColumn,
-        conditional?.fill ?? wholeTable?.fill ?? null,
+        // A condition's stated `auto` fill hides the style's own; a `wholeTable` condition's
+        // fill paints nothing in reference renderings, so it never reaches the cell.
+        conditional?.fill !== undefined ? conditional.fill : conditionalFormats.styleFill,
         rtl,
         tableMargins
       );

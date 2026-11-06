@@ -4162,7 +4162,7 @@ export function setHarfBuzzWasmUrl(url: string | URL): void;
 export const sha256FontBytes: (bytes: Uint8Array) => string;
 
 // @public
-export function shadingFillFromElement(shd: OoxmlElement | undefined): string | undefined;
+export function shadingFillFromElement(shd: OoxmlElement | null | undefined): string | undefined;
 
 // @public
 export interface ShapeColor {

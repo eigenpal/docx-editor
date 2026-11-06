@@ -36,7 +36,6 @@ import {
   readGridSkip,
   readGridSpan,
   readRowHeight,
-  readShading,
   readVMerge,
 } from './table-row-properties.ts';
 import { readTableFloatPosition, type TableFloatPosition } from './table-float-properties.ts';
@@ -108,6 +107,7 @@ import { modernSharedPercentWidth, resolveTableWidthPlacement } from './table-wi
 import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
 import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
 import { conditionalTypesFor, readTableLook } from './table-conditional-formats.ts';
+import { cellShading } from './table-cell-shading.ts';
 import {
   autofitColumnWidthsPt,
   narrowNestedReader,
@@ -722,7 +722,6 @@ function readTableStructureUncached(
         cellProperties,
       });
       cellIndex += 1;
-      let conditionalShading: string | undefined;
       let conditionalBorders = EMPTY_CELL_BORDER_BOX;
       // Whole-table tcPr and basedOn layers contribute diagonals before conditions.
       for (const node of tableStyle.tableCellPropertyNodes ?? []) {
@@ -732,7 +731,6 @@ function readTableStructureUncached(
         const format = tableStyle.conditional.get(conditionType);
         if (!format) continue;
         const conditionTcPr = childNamed(format, 'tcPr');
-        conditionalShading = readShading(conditionTcPr) ?? conditionalShading;
         conditionalBorders = mergeCellBorders(
           conditionalBorders,
           readConditionalCellBorders(
@@ -741,7 +739,7 @@ function readTableStructureUncached(
           )
         );
       }
-      const shading = readShading(cellProperties) ?? conditionalShading;
+      const shading = cellShading(tableStyle, conditions, cellProperties);
       const cellMargins = mergeMargins(
         defaultMargins,
         readMarginSides(cellProperties && childNamed(cellProperties, 'tcMar'))
