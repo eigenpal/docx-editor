@@ -19,6 +19,8 @@ const BORDERS =
     .map((edge) => `<w:${edge} w:val="single" w:sz="24" w:space="0" w:color="FF0000"/>`)
     .join('') +
   '</w:tblBorders>';
+// The style's own cell shading is authored too, but layout paints no table-style `w:tcPr`
+// shading yet (#1844), so no test can tell it apart.
 const AUTHORED =
   '<w:pPr><w:spacing w:before="400"/></w:pPr><w:rPr><w:b/></w:rPr>' +
   `<w:tblPr><w:tblInd w:w="720" w:type="dxa"/><w:jc w:val="center"/>${BORDERS}${MARGINS}</w:tblPr>` +

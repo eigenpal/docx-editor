@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-A list space suffix now has the same width in any marker font, and the built-in Normal Table style applies its built-in cell margins and indent whatever the document states.
+A list space suffix now has the same width in any marker font, and a table style named Normal Table applies only its built-in properties, whatever the document states.
