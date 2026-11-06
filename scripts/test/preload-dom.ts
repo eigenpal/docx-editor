@@ -13,6 +13,25 @@ if (!GlobalRegistrator.isRegistered) {
   GlobalRegistrator.register({ settings: { enableIframePageLoading: true } });
 }
 
+// happy-dom makes each animation's `finished` promise at play and rejects it on `cancel()`.
+// Browsers mark that rejection as handled; happy-dom does not, so a cancelled animation that
+// nobody awaited failed its test with an unhandled AbortError. Mark it handled here.
+{
+  let owner: object | null =
+    (globalThis as { Animation?: { prototype: object } }).Animation?.prototype ?? null;
+  while (owner && !Object.prototype.hasOwnProperty.call(owner, 'cancel')) {
+    owner = Object.getPrototypeOf(owner);
+  }
+  const target = owner as { cancel(this: { finished?: Promise<unknown> }): void } | null;
+  const cancel = target?.cancel;
+  if (target && cancel) {
+    target.cancel = function (this: { finished?: Promise<unknown> }) {
+      this.finished?.catch(() => undefined);
+      return cancel.call(this);
+    };
+  }
+}
+
 // Pin one CJS Vue runtime for every `vue` import. TSX under packages/vue is re-transpiled
 // to classic `h`/`Fragment` by packages/vue/test/bun-plugin-jsx.ts (see bunfig.toml).
 import { mock } from 'bun:test';
