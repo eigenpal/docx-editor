@@ -1,9 +1,10 @@
-import { listSuffixSpaceWidth } from '../list-marker-geometry.ts';
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '../../store/index.ts';
 import { layoutSemanticDocument, createFixedMeasurer } from '../semantic-layout.ts';
 import { buildNumberingIndex } from '../numbering-index.ts';
 import { paragraphFragmentsOf } from '../semantic-records.ts';
+import { listSuffixSpaceWidth } from '../list-marker-geometry.ts';
+
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 function part(xml: string) {
   const parsed = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'app/xml' });

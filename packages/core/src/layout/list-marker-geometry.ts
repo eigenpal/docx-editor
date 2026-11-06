@@ -18,7 +18,11 @@ export function listMarkerDisplayText(item: ResolvedListItem): string {
   return displayText(item.markerText, item.markerStyle);
 }
 
-/** The space suffix in ems of the marker's size, whatever the marker's face. */
+/**
+ * The space suffix in ems of the marker's size, whatever the marker's face: the advance of the
+ * Arial space (569 of 2048 units). Reference renderings give the same gap after markers in
+ * Times New Roman, Courier New, Arial, and Wingdings, at every size, superscript included.
+ */
 const SUFFIX_SPACE_EM = 569 / 2048;
 
 /**

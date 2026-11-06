@@ -159,10 +159,14 @@ const BUILT_IN_NORMAL_TABLE_XML =
 
 let builtInNormalTable: OoxmlElement | undefined;
 
+/**
+ * The built-in properties, parsed once under a part name of their own, so their node ids
+ * never collide with the nodes of a document's `styles.xml`.
+ */
 function builtInNormalTableProperties(): OoxmlElement | undefined {
   if (!builtInNormalTable) {
     const read = readOoxmlPart(BUILT_IN_NORMAL_TABLE_XML, {
-      name: '/word/styles.xml',
+      name: '/built-in/normal-table.xml',
       contentType: 'application/xml',
     });
     builtInNormalTable = read.ok ? read.part.root : undefined;
@@ -171,8 +175,10 @@ function builtInNormalTableProperties(): OoxmlElement | undefined {
 }
 
 /**
- * Whether a style is the built-in "Normal Table". Its authored definition never applies: the
- * style keeps its built-in properties, whatever the file states, matched by name and not id.
+ * Whether a style is the built-in "Normal Table", matched by name and not id. Its authored
+ * definition never applies in any compatibility mode: reference renderings drop its indent,
+ * alignment, cell margins, borders, shading, and paragraph and run properties, and keep only
+ * the built-in properties.
  */
 function isBuiltInNormalTable(type: string, name: string | undefined): boolean {
   return type === 'table' && name?.toLowerCase() === 'normal table';

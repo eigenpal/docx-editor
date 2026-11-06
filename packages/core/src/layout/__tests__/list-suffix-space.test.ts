@@ -2,7 +2,8 @@
 // marker is. The marker face's own space never sets it, so a monospaced or symbol bullet gets
 // the same gap as any other. Measured on reference renderings: 3.33pt after a 12pt marker in
 // Times New Roman, Courier New, Arial, or Wingdings, 6.67pt after a 24pt marker, and
-// 6.67pt + 2pt for a 12pt marker scaled to 200% with 2pt character spacing.
+// 6.67pt + 2pt for a 12pt marker scaled to 200% with 2pt character spacing, and the full
+// 3.33pt after a superscript marker.
 
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
@@ -29,6 +30,14 @@ test('the suffix space takes the marker scaling and character spacing', () => {
     characterSpacingPt: 2,
   };
   expect(listSuffixSpaceWidth(style)).toBeCloseTo(6.668 + 2, 3);
+});
+
+test('a superscript or subscript marker keeps the full-size suffix space', () => {
+  // Reference renderings: 3.37pt after a 12pt superscript marker, not the reduced glyph size.
+  const style = { ...DEFAULT_RUN_STYLE, fontSizePt: 12 };
+  for (const verticalAlign of ['superscript', 'subscript'] as const) {
+    expect(listSuffixSpaceWidth({ ...style, verticalAlign })).toBeCloseTo(3.334, 3);
+  }
 });
 
 test('the marker face does not set the suffix space', () => {
