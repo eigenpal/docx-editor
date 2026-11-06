@@ -10,7 +10,19 @@ import {
   type TabStop,
 } from './paragraph-tabs.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
+import { displayText } from './run-style.ts';
 import type { TextMeasurer } from './semantic-records.ts';
+
+/** The marker as it paints: `w:caps` draws it in capitals, so it measures in capitals too. */
+export function listMarkerDisplayText(item: ResolvedListItem): string {
+  return displayText(item.markerText, item.markerStyle);
+}
+
+/** The ascent of the marker glyphs as they paint, or 0 for an empty or hidden marker. */
+export function listMarkerAscent(item: ResolvedListItem, measurer: TextMeasurer): number {
+  if (item.markerText.length === 0 || item.markerStyle.hidden) return 0;
+  return measurer.lineMetrics(item.markerStyle, listMarkerDisplayText(item)).baseline;
+}
 
 /**
  * The marker's own width: a picture bullet's authored extent, or the measured glyphs.
@@ -20,7 +32,7 @@ import type { TextMeasurer } from './semantic-records.ts';
  */
 export function listMarkerWidth(item: ResolvedListItem, measurer: TextMeasurer): number {
   if (item.picBullet) return item.picBullet.width;
-  return measurer.measure(item.markerText, item.markerStyle);
+  return measurer.measure(listMarkerDisplayText(item), item.markerStyle);
 }
 
 /** Whether this item paints anything in its marker slot at all. */

@@ -1,7 +1,7 @@
 // The visual pieces of a list marker in a right-to-left paragraph.
 
 import { bidiAlgorithm } from './bidi.ts';
-import type { ResolvedRunStyle } from './run-style.ts';
+import { displayText, type ResolvedRunStyle } from './run-style.ts';
 import { visualOrderOfLevels } from './rtl-paragraph.ts';
 import { itemizeScriptFontSlots } from './script-itemization.ts';
 import type { LayoutBox, ListMarkerRecord, TextMeasurer } from './semantic-records.ts';
@@ -45,7 +45,7 @@ export function rtlListMarkerPieces(
         baseLevel: 1,
       },
     };
-    const width = measurer.measure(pieceText, pieceStyle);
+    const width = measurer.measure(displayText(pieceText, pieceStyle), pieceStyle);
     pieces.push({ text: pieceText, style: pieceStyle, box: { ...box, width } });
   }
   // Shaped runs need not sum to the whole marker's width; the leading (right) edge holds.
