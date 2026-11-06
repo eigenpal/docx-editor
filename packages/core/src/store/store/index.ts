@@ -126,6 +126,7 @@ export {
 } from './formattable-runs.ts';
 export { collectRevisionSites, type RevisionAddress } from './tree-op-revisions.ts';
 export { LEVEL_INDENT_ATTRIBUTES } from './tree-op-list-level-indent.ts';
+export { healedTableView } from './tree-op-table-heal.ts';
 export type { RevisionSiteRefusal } from './revision-site-refusal.ts';
 export {
   commentAnchorsOfStory,

@@ -14,6 +14,7 @@ import {
 } from '../package/ooxml-tree.ts';
 import { applyTreeOp, validateTreeOp } from '../store/tree-ops.ts';
 import { validateTableCellPropertyOp } from '../store/tree-op-tables.ts';
+import { withRepeated } from './repeated-node-support.ts';
 import {
   resetTestPhysicalGridSlotScanCount,
   resetTestVisualOwnerCounters,
@@ -903,8 +904,12 @@ describe('table cell property ownership and lossless patching', () => {
     expect(shdFill(result.part, id)).toBeUndefined();
   });
 
-  test('rejects duplicate tcBorders containers', () => {
-    const part = load(TABLE(ROW(CELL('a1', `<w:tcBorders/><w:tcBorders/>`), CELL('a2'))));
+  test('reads repeated tcBorders as the edit that heals them leaves them', () => {
+    // A file with two opens with one; a tree a merge left with two is judged healed.
+    const part = withRepeated(
+      load(TABLE(ROW(CELL('a1', `<w:tcBorders/>`), CELL('a2')))),
+      'tcBorders'
+    );
     const table = collectByKind(part.root, 'table')[0]!;
     const id = cellAt(part, 0, 0).id;
     expect(
@@ -914,7 +919,7 @@ describe('table cell property ownership and lossless patching', () => {
         cellIds: [id],
         color: { kind: 'hex', value: 'AABBCC' },
       })
-    ).toBe('duplicate-property-container');
+    ).toBeNull();
   });
 
   test('rejects restart selected without full vertical merge chain', () => {
@@ -1221,9 +1226,10 @@ describe('table cell property fix round 2', () => {
     expect(shdFill(fill.part, outerWrap.id)).toBeUndefined();
   });
 
-  test('rejects duplicate shd and duplicate side leaves', () => {
-    const duplicateShd = load(
-      TABLE(ROW(CELL('a1', `<w:shd w:fill="111111"/><w:shd w:fill="222222"/>`), CELL('a2')))
+  test('reads a repeated shd as healed, and rejects duplicate side leaves', () => {
+    const duplicateShd = withRepeated(
+      load(TABLE(ROW(CELL('a1', `<w:shd w:fill="111111"/>`), CELL('a2')))),
+      'shd'
     );
     const duplicateSide = load(
       TABLE(
@@ -1247,7 +1253,7 @@ describe('table cell property fix round 2', () => {
         cellIds: [shdId],
         color: { kind: 'hex', value: 'AABBCC' },
       })
-    ).toBe('duplicate-property-container');
+    ).toBeNull();
     expect(
       validateTableCellPropertyOp(duplicateSide, {
         op: 'setTableCellBorders',

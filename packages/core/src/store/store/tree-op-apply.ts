@@ -214,6 +214,7 @@ import { applyInsertFragment } from './tree-op-fragment.ts';
 import { applyDrawingContentEdit } from './drawing-content-edit.ts';
 import { applyInsertBuildingBlock } from './building-block-insert.ts';
 import { applyBookmarkOp, isBookmarkTreeOp, withBookmarkEditRules } from './tree-op-bookmarks.ts';
+import { healedTableProperties, tableIdOf } from './tree-op-table-heal.ts';
 import { closesAnOpenRange, opensARange, zeroLengthGoesToHead } from './tree-op-split-markers.ts';
 import {
   promptInsertionOffset,
@@ -241,6 +242,13 @@ const RUN_ELEMENT_INSERTS: Readonly<
  * quadratic in document size.
  */
 export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOptions): TreeOpResult {
+  // A table edit first merges the property containers a concurrent merge repeated.
+  const tableId = tableIdOf(op);
+  if (tableId !== null) {
+    const healed = healedTableProperties(part, tableId, options);
+    if (healed === null) return { ok: false, reason: 'tree-invariant' };
+    part = healed;
+  }
   const run = () =>
     withBookmarkEditRules(part, op, options, () => applyValidatedTreeOp(part, op, options));
   return op.op === 'insertText' ? withInsertionHints(part, op.paragraphId, op.offset, run) : run();

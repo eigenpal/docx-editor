@@ -2154,6 +2154,9 @@ export interface HeadlessThemeFonts {
 // @public
 export function headlessViewOfStore(store: TreePackageStore): HeadlessDocumentView;
 
+// @internal
+export function healedTableView<Table extends OoxmlElement>(table: Table): Table;
+
 // @public (undocumented)
 export type HistoryCaptureKind = 'started' | 'extended' | 'split';
 
