@@ -50,7 +50,7 @@ async function baselinesWith(body: string, extras: Record<string, string>): Prom
     }
     return [...seen].sort((a, b) => a - b);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 }
 

@@ -57,6 +57,6 @@ test('the ascent snaps to a device unit before the line advance accumulates', as
     expect(expected).toEqual([82.56, 97.92, 113.52, 128.88]);
     expect(tops).toEqual(expected);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

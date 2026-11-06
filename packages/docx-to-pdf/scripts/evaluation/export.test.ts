@@ -66,7 +66,7 @@ async function pdfText(bytes: Uint8Array) {
     const content = await (await pdf.getPage(1)).getTextContent();
     return content.items.map((item) => ('str' in item ? item.str : '')).join('');
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 }
 

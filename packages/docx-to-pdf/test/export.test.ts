@@ -26,7 +26,7 @@ describe('exact PDF export', () => {
           .join('')
       ).toBe('Hello office café!');
     } finally {
-      await pdf.destroy();
+      await pdf.loadingTask.destroy();
     }
     const parsed = await PDFDocument.load(result.bytes);
     expect(parsed.getPageCount()).toBe(1);
@@ -71,7 +71,7 @@ describe('exact PDF export', () => {
       expect(content).toContain('Item 0');
       expect(content).toContain('Item 1');
     } finally {
-      await pdf.destroy();
+      await pdf.loadingTask.destroy();
     }
   });
   test('abort and output limit', async () => {

@@ -102,6 +102,6 @@ test('an equation with spaced operators writes one text object per face and base
     // Seven atoms in two faces at most: the letters and the operators.
     expect(shows).toBeLessThanOrEqual(2);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

@@ -24,6 +24,6 @@ test('authored nonbreaking hyphens survive strict PDF export and hidden runs sta
     expect(text).toContain('No\u2011Break');
     expect(text).not.toContain('Hidden');
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

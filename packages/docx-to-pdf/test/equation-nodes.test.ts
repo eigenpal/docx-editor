@@ -42,7 +42,7 @@ test('an overline equation paints its body and its bar', async () => {
     });
     expect(fills.length).toBe(1);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 
@@ -62,7 +62,7 @@ test('equation digits paint in the authored text face that layout measured', asy
       'fontName' in letter! && letter.fontName
     );
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 
@@ -89,6 +89,6 @@ test('a border box paints its edges, its strikes, and a stroked diagonal', async
     expect(painted([OPS.fill, OPS.eoFill])).toBe(4);
     expect(painted([OPS.stroke])).toBe(1);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

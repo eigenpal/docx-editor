@@ -30,7 +30,7 @@ async function textItems(bytes: Uint8Array) {
     const items = (await page.getTextContent()).items.flatMap((i) => ('str' in i ? [i] : []));
     return { items, annotations: await page.getAnnotations() };
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 }
 

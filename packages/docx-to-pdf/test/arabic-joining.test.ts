@@ -57,7 +57,7 @@ test('joined Arabic extracts as logical words without control characters', async
     const text = content.items.map((item) => ('str' in item ? item.str : '')).join('');
     expect(text).toBe(`${word} ${WORD}`);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 

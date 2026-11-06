@@ -37,7 +37,7 @@ function composites(bytes: Uint8Array) {
     if (contours > 0 && simple < 0) simple = gid;
     if (contours >= 0) continue;
     const ids: number[] = [];
-    for (let at = start + 10; ; ) {
+    for (let at = start + 10; ;) {
       const flags = view.getUint16(at);
       ids.push(at + 2);
       at += 4 + (flags & 1 ? 4 : 2) + (flags & 8 ? 2 : flags & 0x40 ? 4 : flags & 0x80 ? 8 : 0);
