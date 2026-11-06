@@ -118,8 +118,10 @@ describe('the suffix after an empty list marker', () => {
   });
 
   test('a space after an empty marker starts the text one space past the slot', () => {
-    expect(firstX('w:left="720" w:hanging="360"', 'space')).toBe(24);
-    expect(firstX('w:left="0" w:firstLine="720"', 'space')).toBe(42);
+    // The space suffix is 569/2048 em of the 11pt marker size.
+    const space = (569 / 2048) * 11;
+    expect(firstX('w:left="720" w:hanging="360"', 'space')).toBeCloseTo(18 + space, 6);
+    expect(firstX('w:left="0" w:firstLine="720"', 'space')).toBeCloseTo(36 + space, 6);
   });
 
   test('a tab after an empty right-to-left marker mirrors the left-to-right placement', () => {

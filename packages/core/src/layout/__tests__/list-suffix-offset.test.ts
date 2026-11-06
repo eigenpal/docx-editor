@@ -51,6 +51,9 @@ const listParagraph = (text: string, numId: string, ilvl = '0') =>
 // `DEFAULT_RUN_STYLE`) would make the `1.` marker 10.9pt wide instead of 12.
 const LEVEL_SZ = '<w:rPr><w:sz w:val="22"/></w:rPr>';
 
+/** A space suffix is 569/2048 em of the marker's 11pt size, whatever its face. */
+const SPACE = (569 / 2048) * 11;
+
 test('a legacy list tab positions the first line without becoming an ordinary text tab', () => {
   const body = listParagraph(Array(10).fill('aaaa').join(' '), '1').replace(
     '</w:pPr>',
@@ -133,8 +136,8 @@ describe('w:suff decides where the first line starts', () => {
   test('space puts the text one space after the marker', () => {
     const { item } = itemOf(listParagraph('Compact', '1'), flat('space'));
     expect(item.suffix).toBe('space');
-    // Marker ends at 36 + 12 = 48, plus one 6pt space = 54, i.e. 18pt past the indent.
-    expect(listFirstLineOffset(item, measurer)).toBe(18);
+    // Marker ends at 36 + 12 = 48, plus the space suffix, past the 36pt indent.
+    expect(listFirstLineOffset(item, measurer)).toBeCloseTo(12 + SPACE, 6);
   });
 
   test('nothing puts the text immediately after the marker', () => {
@@ -155,8 +158,8 @@ describe('w:suff decides where the first line starts', () => {
         <w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>
       `
     );
-    // Marker starts at 18, is 6pt wide, plus a 6pt space = 30 — 6pt LEFT of the 36pt indent.
-    expect(listFirstLineOffset(item, measurer)).toBe(-6);
+    // Marker starts at 18 and is 6pt wide, plus the space suffix: LEFT of the 36pt indent.
+    expect(listFirstLineOffset(item, measurer)).toBeCloseTo(-12 + SPACE, 6);
   });
 });
 
