@@ -37,9 +37,7 @@
     "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/docx-to-pdf --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/docx-to-pdf",
     "notices:generate": "bun ../../scripts/generate-third-party-notices.mjs --package=@docx-editor.dev/docx-to-pdf",
-    "notices:check": "bun ../../scripts/generate-third-party-notices.mjs --package=@docx-editor.dev/docx-to-pdf --check",
-    "compare:libreoffice": "bun scripts/compare-libreoffice.ts",
-    "validation": "bun scripts/validator/launch.mjs"
+    "notices:check": "bun ../../scripts/generate-third-party-notices.mjs --package=@docx-editor.dev/docx-to-pdf --check"
   },
   "peerDependencies": {
     "@docx-editor.dev/core": "~2.35.0",

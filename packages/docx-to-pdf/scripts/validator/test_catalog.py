@@ -2,15 +2,75 @@
 # Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 # Production use requires a commercial agreement: licensing@eigenpal.com
 import copy
-import io
-import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
-from catalog import run_summary
-from server import main
+from catalog import catalog, check_disk_budget, run_summary, score, triage, write_json
+from evidence import comparison, set_pdf
+
+
+class ScoringTests(unittest.TestCase):
+    def test_replacing_reference_invalidates_only_affected_scores(self):
+        doc = dict(pdfs={'reference-b': {'sha256': 'old'}}, comparisons={
+            'a-native': dict(left='reference-a', right='ours'),
+            'b-native': dict(left='reference-b', right='ours'),
+            'a-b': dict(left='reference-a', right='reference-b')})
+        set_pdf(doc, 'reference-b', dict(sha256='new'))
+        self.assertEqual(list(doc['comparisons']), ['a-native'])
+
+    def test_inbox_counts_toward_disk_budget(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            write_json(root / 'settings.json', dict(maxDataMiB=1))
+            (root / 'inbox').mkdir()
+            (root / 'inbox/large.docx').write_bytes(bytes(1024 * 1024))
+            with self.assertRaises(RuntimeError):
+                check_disk_budget(root, extra_bytes=1)
+
+    def test_blank_missing_page_never_passes(self):
+        self.assertEqual(score(dict(errorPercent=0, pageCountMismatch=True))['verdict'], 'fail')
+
+    def test_local_failure_cannot_hide_in_document_average(self):
+        self.assertEqual(score(dict(errorPercent=.02, pages=[dict(errorPercent=5)]))['verdict'], 'fail')
+
+    def test_strict_boundary_and_invalid_measurements(self):
+        for error in (None, float('nan'), float('inf'), -1, 101, True):
+            self.assertEqual(score(dict(errorPercent=error))['verdict'], 'unscored')
+        self.assertEqual(score(dict(errorPercent=1))['verdict'], 'fail')
+        self.assertEqual(score(dict(errorPercent=.999))['verdict'], 'pass')
+        self.assertEqual(score(dict(errorPercent=0, invalidEvidence=True))['verdict'], 'fail')
+
+    def test_first_divergence_precedes_largest_error_and_regions_are_preserved(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            image = root / 'image.png'; image.write_bytes(b'fixture')
+            pages = []
+            for error, top in [(0.0001, 12), (0.002, 30), (0.2, 600)]:
+                pages.append(dict(changedFractionByThreshold={'28': error}, referencePresent=True,
+                                  candidatePresent=True, sizeMismatch=False, strongDifferenceBoundsPt=[10, top, 500, 700],
+                                  strongDifferenceBandsPt=[[top, top + 4]],
+                                  artifacts={key: str(image) for key in ('reference', 'candidate', 'amplified', 'strongOverlay')}))
+            report = root / 'report.json'
+            write_json(report, dict(strongThreshold=28, dpi=96, referencePages=3, candidatePages=3,
+                                    pageCountMismatch=False, changedFractionByThreshold={'28': .05}, pages=pages))
+            result = comparison(report, 'reference-a', 'ours', root / 'images', root)
+            self.assertEqual(result['firstDivergence'], dict(page=2, topPt=30))
+            self.assertEqual(result['pages'][1]['bands'], [[30, 34]])
+
+    def test_catalog_refresh_and_agent_order(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for name, page in [('a', 20), ('b', 1)]:
+                identity = name * 64
+                write_json(root / 'documents' / identity / 'document.json',
+                           dict(id=identity, name=name, status='exported', comparisons={
+                               'reference-a--ours': dict(errorPercent=5, firstDivergence=dict(page=page, topPt=30))}))
+            self.assertEqual(triage(root)['issues'][0]['name'], 'b')
+            path = root / 'documents' / ('a' * 64) / 'document.json'
+            path.write_text('{')
+            self.assertEqual(len(catalog(root)['warnings']), 1)
+            self.assertEqual(len(catalog(root)['documents']), 1)
 
 
 class RunSummaryTests(unittest.TestCase):
@@ -63,36 +123,6 @@ class RunSummaryTests(unittest.TestCase):
         self.assertEqual(failed['status'], 'error')
         self.assertEqual(failed['message'], 'No valid saved reference')
         self.assertEqual(failed['comparisons'], {})
-
-    def test_cli_summary_runs_pipeline_once_and_preserves_failure_exit(self):
-        for status in ('exported', 'error'):
-            with self.subTest(status=status), tempfile.TemporaryDirectory() as temp:
-                root = Path(temp).resolve(); source = root / 'source.docx'; source.write_bytes(b'fixture')
-                document = self.document(); document['status'] = status
-                output = io.StringIO()
-                with patch('sys.argv', ['validator', '--data', temp, '--once', str(source), '--reuse-references', '--summary']), \
-                     patch('pipeline.Worker') as worker, patch('sys.stdout', output), \
-                     patch('tempfile.gettempdir', return_value=temp):
-                    worker.return_value.process.return_value = document
-                    if status == 'error':
-                        with self.assertRaises(SystemExit) as raised:
-                            main()
-                        self.assertEqual(raised.exception.code, 1)
-                    else:
-                        main()
-                    worker.return_value.process.assert_called_once_with(source, {}, reuse_references=True)
-                result = json.loads(output.getvalue())
-                self.assertEqual(result['status'], status)
-                self.assertEqual(result['evidence'], str(root / 'documents' / document['id'] / 'document.json'))
-                self.assertNotIn('pages', result['comparisons']['reference-a--ours'])
-                if status == 'error':
-                    self.assertEqual(result['comparisons']['reference-a--ours']['verdict'], 'unscored')
-
-    def test_summary_requires_a_single_run(self):
-        with patch('sys.argv', ['validator', '--report', '--summary']), patch('sys.stderr', io.StringIO()):
-            with self.assertRaises(SystemExit) as raised:
-                main()
-            self.assertEqual(raised.exception.code, 2)
 
 
 if __name__ == '__main__':
