@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Text shapes with HarfBuzz 14.4.0, and the library group pins the earlier patch and minor versions.",
+  "after": "Text shapes with HarfBuzz 15.0.0, and the library group takes the current patch and minor versions. Prettier reformats source without changing behavior.",
+  "reason": "Shaping output for the parity fixtures is unchanged, and no shared node, text offset, operation, or serialization format changes. The ProseMirror and Yjs updates are patch releases.",
+  "tests": [
+    "packages/core/src/layout/__tests__/harfbuzz-runtime-smoke.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-compatibility.test.ts"
+  ],
+  "changeset": "library-dependency-refresh-2026-11",
+  "migration": null
+}
