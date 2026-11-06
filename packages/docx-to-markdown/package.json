@@ -55,7 +55,7 @@
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.8.3",
     "@docx-editor.dev/core": "workspace:*",
-    "micromark": "^4.0.2",
+    "micromark": "^4.0.3",
     "micromark-extension-gfm": "^3.0.0",
     "typescript7": "npm:typescript@^7.0.2"
   },

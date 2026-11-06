@@ -59,8 +59,8 @@
     "@docx-editor.dev/core": "~2.35.0",
     "@docx-editor.dev/pro": "~2.35.0",
     "@opentelemetry/api": "^1.9.0",
-    "yjs": "^13.6.32",
-    "@hocuspocus/server": "^4.6.0"
+    "yjs": "^13.6.33",
+    "@hocuspocus/server": "^4.8.0"
   },
   "peerDependenciesMeta": {
     "@docx-editor.dev/pro": {
@@ -80,14 +80,14 @@
     "@docx-editor.dev/core": "workspace:*",
     "@docx-editor.dev/pro": "workspace:*",
     "@happy-dom/global-registrator": "^20.8.3",
-    "@hocuspocus/server": "^4.6.0",
-    "@opentelemetry/api": "1.9.0",
+    "@hocuspocus/server": "^4.8.0",
+    "@opentelemetry/api": "1.10.0",
     "@sentry/core": "9.47.2",
     "fflate": "^0.8.2",
     "license-check-and-add": "^4.0.5",
     "typescript7": "npm:typescript@^7.0.2",
     "y-protocols": "^1.0.7",
-    "yjs": "^13.6.32"
+    "yjs": "^13.6.33"
   },
   "keywords": [
     "docx",

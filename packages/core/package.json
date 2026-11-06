@@ -91,9 +91,9 @@
     "typecheck": "bun check"
   },
   "devDependencies": {
-    "autoprefixer": "^10.4.17",
-    "cssnano": "^9.0.1",
-    "postcss": "^8.5.13",
+    "autoprefixer": "^10.6.2",
+    "cssnano": "^9.9.0",
+    "postcss": "^8.5.32",
     "tailwindcss": "^3.4.1",
     "tailwindcss-animate": "^1.0.7",
     "typescript7": "npm:typescript@^7.0.2"
@@ -108,14 +108,14 @@
     "@docx-editor.dev/i18n": "^2.35.0",
     "bidi-js": "1.1.0",
     "emf-converter": "2.0.2",
-    "fast-xml-parser": "^5.10.1",
+    "fast-xml-parser": "^5.11.2",
     "fflate": "^0.8.2",
-    "harfbuzzjs": "1.6.1",
-    "prosemirror-commands": "^1.7.1",
+    "harfbuzzjs": "1.6.4",
+    "prosemirror-commands": "^1.7.2",
     "prosemirror-keymap": "^1.2.3",
-    "prosemirror-model": "^1.25.4",
+    "prosemirror-model": "^1.25.12",
     "prosemirror-state": "^1.4.4",
-    "prosemirror-view": "^1.42.3",
+    "prosemirror-view": "^1.42.8",
     "utif2": "4.1.0"
   },
   "peerDependencies": {
