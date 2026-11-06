@@ -8,8 +8,7 @@ By copying, modifying, or using the Software, you agree to these terms.
 
 “Software” means all source code, object code, documentation, assets, and other
 materials contained in the “packages/telemetry/” directory of the EigenPal DOCX
-Editor repository, and in every copy of the `@docx-editor.dev/telemetry` package published
-from it, except for any material that expressly states that it is
+Editor repository, except for any material that expressly states that it is
 subject to a different license.
 
 ## 2. Evaluation Permission; Modifications
@@ -25,7 +24,7 @@ non-transferable, non-sublicensable, royalty-free license to:
 
 For any such modification, the following applies:
 
-You may keep any modification to yourself. If you do not disclose it to Eigenpal, Inc. or to anyone else, it remains yours.
+You may keep any modification to yourself. If you do not disclose it to Eigenpal, Inc. or to anyone else, it remains yours
 If you disclose a modification to Eigenpal, Inc. or to any third party, in any form, you assign all right, title, and interest in it to Eigenpal, Inc. at the moment of disclosure. The same applies to any feedback you give Eigenpal, Inc. You will promptly send Eigenpal, Inc. the source code of any modification you disclose, and will sign any document needed to record the assignment.
 Disclosing a modification to a third party grants that third party no rights in it or in the Software. You will not license or purport to license any modification to anyone.
 You may continue using an assigned modification for the internal, non-production evaluation permitted by Section 2 for as long as this license is in effect. Eigenpal, Inc. is not obliged to use or support any modification or feedback, and owes you nothing for it.

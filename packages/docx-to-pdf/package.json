@@ -75,7 +75,7 @@
     "email": "licensing@eigenpal.com",
     "url": "https://eigenpal.com"
   },
-  "license": "LicenseRef-EigenPal-Pro-Evaluation-1.0 AND OFL-1.1 AND Apache-2.0 AND CC-BY-4.0",
+  "license": "LicenseRef-EigenPal-Pro-Evaluation-1.0",
   "homepage": "https://docx-editor.dev/",
   "repository": {
     "type": "git",
