@@ -13,6 +13,8 @@ import { buildStyleCascadeTable } from '../style-cascade.ts';
 import { paragraphFragmentsOf, type TextMeasurer } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+/** The space suffix: 569/2048 em of the 11pt marker. */
+const SPACE = (569 / 2048) * 11;
 
 // Capital letters are 9pt wide and everything else 6pt, so a marker measured in its
 // original case comes out narrower than the capitals it paints.
@@ -65,8 +67,8 @@ test('a marker in capitals measures as the capitals it paints', () => {
   const { item } = itemOf('<w:caps/>');
   // "Article 1 –" has 11 characters, all 6pt, plus 3pt more for each of its 7 capitals.
   expect(listMarkerWidth(item, measurer)).toBe(11 * 6 + 7 * 3);
-  // The space suffix starts the text one 6pt space after that.
-  expect(listFirstLineOffset(item, measurer)).toBe(11 * 6 + 7 * 3 + 6);
+  // The space suffix starts the text after that.
+  expect(listFirstLineOffset(item, measurer)).toBeCloseTo(11 * 6 + 7 * 3 + SPACE, 6);
   // Without caps only the authored capital counts.
   expect(listMarkerWidth(itemOf('').item, measurer)).toBe(11 * 6 + 3);
 });
@@ -85,7 +87,7 @@ test('the laid-out text starts after a marker in capitals, not inside it', () =>
   expect(marker.text).toBe('Article 1 –');
   expect(marker.style.caps).toBe(true);
   const firstSpan = fragment.lines[0]!.spans[0]!;
-  expect(firstSpan.box.x).toBeGreaterThanOrEqual(marker.box.x + marker.box.width + 6 - 1e-6);
+  expect(firstSpan.box.x).toBeGreaterThanOrEqual(marker.box.x + marker.box.width + SPACE - 1e-6);
 });
 
 test('a marker never takes small capitals', () => {
@@ -124,7 +126,7 @@ test('caps from the paragraph style reach the marker and move the text after it'
   expect(marker.style.caps).toBe(true);
   expect(marker.box.width).toBe(11 * 6 + 7 * 3);
   const text = fragment.lines[0]!.spans[0]!;
-  expect(text.box.x).toBeGreaterThanOrEqual(marker.box.x + marker.box.width + 6 - 1e-6);
+  expect(text.box.x).toBeGreaterThanOrEqual(marker.box.x + marker.box.width + SPACE - 1e-6);
 });
 
 test('small caps from the paragraph style leave the marker in its own letters', () => {

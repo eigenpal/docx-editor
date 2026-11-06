@@ -1,3 +1,4 @@
+import { listSuffixSpaceWidth } from '../list-marker-geometry.ts';
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '../../store/index.ts';
 import { layoutSemanticDocument, createFixedMeasurer } from '../semantic-layout.ts';
@@ -57,7 +58,7 @@ for (const table of [false, true])
       expect(gap).toBeGreaterThanOrEqual(-0.001);
       expect(gap).toBeCloseTo(leftText - left.box.x - left.box.width, 5);
       if (suffix === 'nothing') expect(gap).toBeCloseTo(0, 5);
-      if (suffix === 'space') expect(gap).toBeCloseTo(measurer.measure(' ', right.style), 5);
+      if (suffix === 'space') expect(gap).toBeCloseTo(listSuffixSpaceWidth(right.style), 5);
       expect(rtl.lines.length).toBeGreaterThan(1);
     });
     test(`RTL overflowing marker retains suffix spacing (table=${table}, suffix=${suffix})`, () => {
