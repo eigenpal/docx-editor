@@ -64,7 +64,7 @@ const BODY =
   paragraph('Scope', 'Heading2') +
   paragraph('After');
 
-function docx(body = BODY, styles = STYLES): Uint8Array {
+function docx(body = BODY, styles = STYLES, numbering = NUMBERING): Uint8Array {
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
@@ -81,7 +81,7 @@ function docx(body = BODY, styles = STYLES): Uint8Array {
         `<Relationship Id="rId2" Type="${DOC_REL}/numbering" Target="numbering.xml"/></Relationships>`
     ),
     'word/styles.xml': strToU8(styles),
-    'word/numbering.xml': strToU8(NUMBERING),
+    'word/numbering.xml': strToU8(numbering),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
     ),
@@ -284,22 +284,47 @@ describe('a list button next to the heading numbering', () => {
     expect(paragraphsOf(saved!)[1]).toContain('<w:numId w:val="1"/>');
   });
 
-  test('a mixed selection held by a heading follows the linked level as well', () => {
+  test('a plain paragraph and a heading below it start a new list together', () => {
     let saved: Uint8Array | null = null;
     withSurface(docx(), (surface) => {
-      // Second and the Heading 2 below it: the heading's list holds the selection.
+      // Second and the Heading 2 below it. The heading numbering does not hold the selection:
+      // both go on a new plain list, the heading at its own level and in its own style.
       caretIn(surface, 4, 5);
       expect(surface.toggleList('ordered')).toBe(true);
       expect(
         markers(surface)
           .slice(4, 6)
           .map((marker) => marker?.text)
-      ).toEqual(['02', '02.1']);
+      ).toEqual(['1.', 'a.']);
       saved = surface.save();
     });
     const [second, scope] = paragraphsOf(saved!).slice(4, 6);
-    expect(second).toContain('<w:pStyle w:val="Heading1"/>');
+    const numId = /<w:numId w:val="(\d+)"\/>/.exec(second!)?.[1];
+    expect(second).toContain('<w:pStyle w:val="ListParagraph"/>');
+    expect(numId).not.toBe('1');
     expect(scope).toContain('<w:pStyle w:val="Heading2"/>');
+    expect(scope).toContain(`<w:ilvl w:val="1"/><w:numId w:val="${numId}"/>`);
+  });
+
+  test('a heading on its own instance of the heading numbering still lends its style', () => {
+    // Introduction names numId 4 itself, over the same definition its style numbers on.
+    const numbering = NUMBERING.replace(
+      '</w:numbering>',
+      '<w:num w:numId="4"><w:abstractNumId w:val="0"/></w:num></w:numbering>'
+    );
+    const heading =
+      '<w:p><w:pPr><w:pStyle w:val="Heading1"/><w:numPr><w:ilvl w:val="0"/>' +
+      '<w:numId w:val="4"/></w:numPr></w:pPr><w:r><w:t>Introduction</w:t></w:r></w:p>';
+    const body = BODY.replace(paragraph('Introduction', 'Heading1'), heading);
+    let saved: Uint8Array | null = null;
+    withSurface(docx(body, STYLES, numbering), (surface) => {
+      caretIn(surface, 1);
+      expect(surface.toggleList('ordered')).toBe(true);
+      saved = surface.save();
+    });
+    const intro = paragraphsOf(saved!)[1]!;
+    expect(intro).toContain('<w:pStyle w:val="Heading1"/>');
+    expect(intro).not.toContain('<w:numPr>');
   });
 
   test('in suggesting mode the joined heading is a reviewable property change', () => {

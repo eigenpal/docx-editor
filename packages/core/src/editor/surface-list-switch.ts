@@ -22,6 +22,8 @@ export interface ListSwitchReads {
   listLevelKindOf(numId: string, level: number): ListKind | null;
   /** The paragraph style `numId` links at `level` through `w:pStyle`, or null. */
   listLevelStyleOf(numId: string, level: number): string | null;
+  /** The abstract definition `numId` counts on, or null when it does not resolve. */
+  listAbstractOf(numId: string): string | null;
 }
 
 export interface ListSwitchDeps extends ListSwitchReads {
@@ -149,7 +151,13 @@ export function switchedListNumIds(
   touched: readonly string[],
   kind: ListKind
 ): Map<string, string> | null {
-  const markers = touched.map((paragraphId) => deps.markerOf(paragraphId));
+  // A heading of a heading numbering (a level linked to a paragraph style) is not a list the
+  // selection is in: reference renderings put a plain paragraph and such a heading on a new
+  // list together, the heading keeping its style and level.
+  const markers = touched.map((paragraphId) => {
+    const marker = deps.markerOf(paragraphId);
+    return marker && deps.listLevelStyleOf(marker.numId, marker.level) === null ? marker : null;
+  });
   const everyItem = (numId: string | null) =>
     numId === null ? null : new Map(touched.map((paragraphId) => [paragraphId, numId]));
   const fits = (numId: string | null | undefined): numId is string =>
@@ -243,7 +251,10 @@ function mostUsedNumId(markers: readonly (ListMarkerRecord | null)[]): string | 
 }
 
 /** What {@link linkedStyleOps} reads. */
-export interface LinkedStyleReads extends Pick<ListSwitchReads, 'listLevelStyleOf'> {
+export interface LinkedStyleReads extends Pick<
+  ListSwitchReads,
+  'listLevelStyleOf' | 'listAbstractOf'
+> {
   /** The paragraph's own list level, or null when it is no list item. */
   levelOf(paragraphId: string): number | null;
   /** The list and level a paragraph style numbers its paragraphs on, or null. */
@@ -257,9 +268,9 @@ export interface LinkedStyleReads extends Pick<ListSwitchReads, 'listLevelStyleO
  *
  * Joining a heading numbering puts the paragraph in the heading style the level names, the way
  * reference renderings do, and the style then numbers it. That holds only when the style
- * really numbers on the same list and level: a style that numbers elsewhere, or not at all,
- * would leave the paragraph on another counter or with no number, so those paragraphs keep
- * their own `w:numPr`. A plain paragraph joins at level 0, so below a Heading 2 it becomes a
+ * numbers on the same definition and level, whichever `w:num` instance names it: a style that
+ * numbers elsewhere, or not at all, would leave the paragraph on another list or with no
+ * number, so those paragraphs keep their own `w:numPr`. A plain paragraph joins at level 0, so below a Heading 2 it becomes a
  * Heading 1, as the reference does.
  */
 export function linkedStyleOps(
@@ -271,7 +282,9 @@ export function linkedStyleOps(
     const level = reads.levelOf(paragraphId) ?? 0;
     const styleId = reads.listLevelStyleOf(numId, level);
     const numbering = styleId ? reads.styleNumberingOf(styleId) : null;
-    if (!styleId || numbering?.numId !== numId || numbering.ilvl !== level) continue;
+    if (!styleId || !numbering || numbering.ilvl !== level) continue;
+    const abstract = reads.listAbstractOf(numId);
+    if (abstract === null || reads.listAbstractOf(numbering.numId) !== abstract) continue;
     const op = reads.linkedStyleOp(paragraphId, styleId);
     if (op) ops.set(paragraphId, op);
   }

@@ -123,6 +123,7 @@ export function listDefinitionReads(index: () => NumberingIndex) {
     listLevelKindOf: (numId: string, level: number) => listLevelKind(index(), numId, level),
     listLevelStyleOf: (numId: string, level: number) =>
       resolveNumberingLevel(index(), numId, level)?.level.pStyle ?? null,
+    listAbstractOf: (numId: string) => index().nums.get(numId)?.abstractNumId ?? null,
   };
 }
 

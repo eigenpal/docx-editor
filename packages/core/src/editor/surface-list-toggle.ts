@@ -42,6 +42,7 @@ export function listToggleOps(
   if (numIds === null) return null;
   const linked = linkedStyleOps(numIds, {
     listLevelStyleOf: deps.listSwitch.listLevelStyleOf,
+    listAbstractOf: deps.listSwitch.listAbstractOf,
     levelOf: deps.levelOf,
     styleNumberingOf: (styleId) => styleNumberingOf(deps.styleCascade(), styleId),
     linkedStyleOp: deps.listStyle.linkedStyleOp,

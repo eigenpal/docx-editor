@@ -403,6 +403,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     listGeometryOf: deps.listGeometryOf,
     listLevelKindOf: deps.listLevelKindOf,
     listLevelStyleOf: deps.listLevelStyleOf,
+    listAbstractOf: deps.listAbstractOf,
     order: orderOf,
     markerOf,
     ensureListDefinition: (kind, geometry) => session.ensureListDefinition(kind, geometry),
