@@ -125,7 +125,7 @@
     "@docx-editor.dev/i18n": "workspace:*",
     "@docx-editor.dev/react": "workspace:*",
     "@docx-editor.dev/vue": "workspace:*",
-    "@happy-dom/global-registrator": "^20.8.3",
+    "@happy-dom/global-registrator": "^21.0.4",
     "@hocuspocus/provider": "^4.8.0",
     "@testing-library/react": "^16.3.3",
     "@types/react": "^19.3.0",
