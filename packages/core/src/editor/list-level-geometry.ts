@@ -101,11 +101,23 @@ export function styleNumberedIndentSides(
   return indentSidesOf(chain.slice(rank).flatMap((style) => style.paragraphProperties));
 }
 
-/** Whether a paragraph style is a heading: its `basedOn` chain states an outline level. */
+/**
+ * Whether a paragraph style is a heading. The nearest style in its `basedOn` chain that states
+ * `w:outlineLvl` decides, so a style based on Heading 1 that sets body text (level 9) is none;
+ * a chain that states no level falls back to the heading names.
+ */
 export function isOutlineStyle(table: StyleCascadeTable | undefined, styleId: string): boolean {
-  return table
-    ? styleChain(table, styleId, 'paragraph').some((style) => style.outlineLevel !== null)
-    : false;
+  if (!table) return false;
+  const chain = styleChain(table, styleId, 'paragraph');
+  for (let index = chain.length - 1; index >= 0; index -= 1) {
+    const style = chain[index]!;
+    const stated = style.paragraphPropertiesNode?.children.find(
+      (node) => node.kind !== 'textValue' && node.localName === 'outlineLvl'
+    );
+    if (stated) return style.outlineLevel !== null;
+    if (style.outlineLevel !== null) return true;
+  }
+  return false;
 }
 
 /** The list and level a paragraph style numbers its paragraphs on, through its `basedOn` chain. */
