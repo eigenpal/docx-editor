@@ -41,6 +41,6 @@ def reviewed_document() -> Path:
 
 
 @pytest.fixture(scope="session")
-def demo_document() -> Path:
-    """A real-world document whose theme lacks optional font schemes."""
-    return REPO / "e2e" / "fixtures" / "demo.docx"
+def sparse_theme_document() -> Path:
+    """A document whose theme lacks optional font schemes."""
+    return REPO / "e2e" / "fixtures" / "harfbuzz-text-fidelity.docx"

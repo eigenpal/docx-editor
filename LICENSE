@@ -3,6 +3,13 @@ LICENSE SCOPE NOTICE
 Except where a file or directory expressly states different license terms, this
 repository is licensed under the Apache License, Version 2.0, reproduced below.
 
+The files under reference/ecma-376/ are unmodified copies of ECMA-376 material
+published by Ecma International. They are not licensed under the Apache
+License; reference/ecma-376/NOTICE names their source and terms. The tables
+in packages/core that are derived from ECMA-376, listed in
+packages/core/licenses/ECMA-376.md, are also used under the Ecma copyright
+notice, not under the Apache License.
+
 The contents of packages/editor-api/, packages/pro/, packages/docx-to-pdf/,
 and packages/telemetry/ are not licensed under the Apache License. They are
 governed by the EigenPal Pro Evaluation License 1.0 in
@@ -198,7 +205,7 @@ respectively.
       same "printed page" as the copyright notice for easier
       identification within third-party archives.
 
-   Copyright 2026 EigenPal Inc.
+   Copyright 2026 Eigenpal, Inc.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.

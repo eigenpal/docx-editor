@@ -217,7 +217,7 @@
     "react",
     "prosemirror"
   ],
-  "author": "EigenPal",
+  "author": "Eigenpal, Inc.",
   "license": "Apache-2.0",
   "homepage": "https://docx-editor.dev/",
   "repository": {

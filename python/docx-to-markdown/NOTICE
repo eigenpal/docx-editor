@@ -1,7 +1,8 @@
 docx-to-markdown
-Copyright 2024-2026 EigenPal
+Copyright 2024-2026 Eigenpal, Inc.
 
-Licensed under the Apache License, Version 2.0. See LICENSE.
+The Python code of this package is licensed under the
+Apache License, Version 2.0. See LICENSE.
 
 This distribution contains a compiled executable that bundles the
 @docx-editor.dev/core, @docx-editor.dev/fonts, and
@@ -11,3 +12,13 @@ metric-compatible font files. Each of those components keeps its own
 license. The full texts are reproduced in
 docx_to_markdown/_vendor/licenses/, starting from
 THIRD_PARTY_NOTICES.md in that directory.
+
+The Bun runtime in the executable statically links JavaScriptCore and WebKit
+(GNU Library General Public License, version 2 or later) and TinyCC (GNU Lesser
+General Public License, version 2.1 or later). Bun's license file in
+docx_to_markdown/_vendor/licenses/ explains how to relink Bun with a modified
+copy of these libraries. For three years after the release of each version of
+this package, Eigenpal, Inc. will give anyone who asks a complete copy of the
+corresponding source code of those libraries, for the Bun version named in
+THIRD_PARTY_NOTICES.md, for no more than the cost of making the copy. Write to
+licensing@eigenpal.com.

@@ -5,9 +5,9 @@ build-backend = "hatchling.build"
 [project]
 name = "docx-to-markdown"
 dynamic = ["version"]
-description = "Convert DOCX to Markdown with Word-faithful pages, headers, footers, comments, and tracked changes."
+description = "Convert DOCX to Markdown with faithful pages, headers, footers, comments, and tracked changes."
 readme = "README.md"
-license = "Apache-2.0"
+license = "Apache-2.0 AND MIT AND BSD-2-Clause AND BSD-3-Clause AND ISC AND 0BSD AND Zlib AND MIT-Modern-Variant AND LGPL-2.0-or-later AND LGPL-2.1-or-later AND OFL-1.1 AND LicenseRef-GUST-Font-License"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.11"
 keywords = ["docx", "markdown", "converter", "word", "pagination"]

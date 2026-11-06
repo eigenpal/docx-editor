@@ -141,4 +141,4 @@ This package ships the task recipes in [`docs/index.md`](./docs/index.md). They 
 
 ## License
 
-Apache-2.0
+Apache-2.0. See [LICENSE](LICENSE). The tables derived from ECMA-376 are used under the Ecma copyright notice, not Apache-2.0. Other third-party material keeps its own terms. See [`licenses/`](licenses) and `THIRD_PARTY_NOTICES.md`.
