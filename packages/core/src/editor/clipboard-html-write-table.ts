@@ -340,7 +340,7 @@ export function renderHtmlTable(
         rowSpan,
         placement.startColumn === 0,
         lastGridColumn,
-        conditional?.fill ?? wholeTable?.fill ?? null,
+        conditional?.fill ?? wholeTable?.fill ?? conditionalFormats.styleFill,
         rtl,
         tableMargins
       );

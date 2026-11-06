@@ -16,6 +16,13 @@ function colorAttribute(element: OoxmlElement | null, name: string): string | nu
   return raw !== undefined && /^[0-9A-Fa-f]{6}$/.test(raw) ? `#${raw.toLowerCase()}` : null;
 }
 
+/** A `w:tcPr`'s stated fill (null for no colour), or undefined when it states no shading. */
+function statedShading(tcPr: OoxmlElement | null): string | null | undefined {
+  const shd = wmlChild(tcPr, 'shd');
+  if (shd === null || attributeValueOf(shd, 'val', WML_NAMESPACE_URI) === 'nil') return undefined;
+  return colorAttribute(shd, 'fill');
+}
+
 function pointsFromTwips(value: number): string {
   return `${Math.round((value / 20) * 100) / 100}pt`;
 }
@@ -48,6 +55,8 @@ type ConditionType = (typeof CONDITION_TYPES)[number];
 
 export interface TableConditionalFormats {
   readonly byType: ReadonlyMap<ConditionType, TableConditionalFormat>;
+  /** The style's own whole-table `w:tcPr` fill, the derived style's over its base's. */
+  readonly styleFill: string | null;
   readonly firstRowEnabled: boolean;
   readonly lastRowEnabled: boolean;
   readonly firstColumnEnabled: boolean;
@@ -80,7 +89,10 @@ export function tableConditionalFormats(
 ): TableConditionalFormats {
   const byType = new Map<ConditionType, TableConditionalFormat>();
   const known = new Set<string>(CONDITION_TYPES);
+  let styleFill: string | null = null;
   for (const style of chain) {
+    const ownShading = statedShading(wmlChild(style, 'tcPr'));
+    if (ownShading !== undefined) styleFill = ownShading;
     for (const child of style.children) {
       if (
         child.kind === 'textValue' ||
@@ -101,6 +113,7 @@ export function tableConditionalFormats(
   }
   return {
     byType,
+    styleFill,
     firstRowEnabled: tblLookFlag(tblLook, 'firstRow', 0x0020) ?? false,
     lastRowEnabled: tblLookFlag(tblLook, 'lastRow', 0x0040) ?? false,
     firstColumnEnabled: tblLookFlag(tblLook, 'firstColumn', 0x0080) ?? false,
@@ -188,7 +201,9 @@ export function wordTableCellCss(
         : wordBorderCss(wmlChild(tblBorders, tableEdge) ?? wmlChild(tblBorders, tableRelative));
     if (border) rules.push(`border-${tableSide(edge, rtl)}:${border}`);
   }
-  const fill = colorAttribute(wmlChild(tcPr, 'shd'), 'fill') ?? conditionalFill;
+  // A cell's own `w:shd` wins even with an `auto` fill, which paints no colour; `nil` states none.
+  const own = statedShading(tcPr);
+  const fill = own !== undefined ? own : conditionalFill;
   if (fill) rules.push(`background-color:${fill}`);
   const vAlignNode = wmlChild(tcPr, 'vAlign');
   const vAlign =

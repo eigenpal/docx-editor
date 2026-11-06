@@ -554,7 +554,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Table styles resolve through their basedOn chain, and a table that names no style resolves the document default. Borders, cell margins, shading, and conditional paragraph and run formatting come from styles.xml, so a header row comes out bold and centered. Cell text in the default paragraph style keeps the font size of that style when the table style states no size. w:tblLook gates which conditional formats apply, and an explicit w:cnfStyle wins. A table style named Normal Table applies only its built-in properties, no indent and 0.075 in of left and right cell margin, whatever styles.xml states for it. Conditional cell margins and a table-style picker are not built yet.',
+      'Table styles resolve through their basedOn chain, and a table that names no style resolves the document default. Borders, cell margins, shading, and conditional paragraph and run formatting come from styles.xml, so a header row comes out bold and centered. Cell text in the default paragraph style keeps the font size of that style when the table style states no size. w:tblLook gates which conditional formats apply, and an explicit w:cnfStyle wins. Cell shading that a table style states for the whole table fills every cell, under its conditional formats and the shading of each cell. A cell with an automatic fill paints no color. A table style named Normal Table applies only its built-in properties, no indent and 0.075 in of left and right cell margin, whatever styles.xml states for it. Conditional cell margins and a table-style picker are not built yet.',
   },
   {
     id: 'tables.floating',

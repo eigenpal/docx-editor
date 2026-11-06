@@ -775,6 +775,31 @@ describe('interopHtmlFromFragment', () => {
     expect(html).not.toContain('mso-footnote-id:ftn2');
   });
 
+  test('a table style fills its cells from its own tcPr, under the first row and the cell', () => {
+    const cell = (text: string, shd = '') =>
+      `<w:tc><w:tcPr>${shd}</w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+    const html = interopHtmlFromFragment(
+      fragment({
+        styles:
+          '<w:style w:type="table" w:styleId="Shaded"><w:tcPr>' +
+          '<w:shd w:val="clear" w:color="auto" w:fill="FFFF00"/></w:tcPr>' +
+          '<w:tblStylePr w:type="firstRow"><w:tcPr>' +
+          '<w:shd w:val="clear" w:color="auto" w:fill="0000FF"/></w:tcPr></w:tblStylePr>' +
+          '</w:style>',
+        body:
+          '<w:tbl><w:tblPr><w:tblStyle w:val="Shaded"/><w:tblLook w:firstRow="1"/></w:tblPr>' +
+          `<w:tr>${cell('head')}</w:tr><w:tr>${cell('body')}</w:tr>` +
+          `<w:tr>${cell('cleared', '<w:shd w:val="clear" w:color="auto" w:fill="auto"/>')}</w:tr>` +
+          '</w:tbl>',
+      })
+    );
+    const cells = html.match(/<td[^>]*>/g) ?? [];
+    expect(cells[0]).toContain('background-color:#0000ff');
+    expect(cells[1]).toContain('background-color:#ffff00');
+    // The cell's own auto fill paints no colour over the style's.
+    expect(cells[2]).not.toContain('background-color');
+  });
+
   test('every text value is escaped, never markup', () => {
     const html = interopHtmlFromFragment(
       fragment({
