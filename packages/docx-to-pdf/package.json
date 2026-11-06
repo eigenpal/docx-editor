@@ -61,7 +61,7 @@
     "dejavu-fonts-ttf": "^2.37.3",
     "fflate": "^0.8.2",
     "license-check-and-add": "^4.0.5",
-    "pdfjs-dist": "5.4.624",
+    "pdfjs-dist": "6.4.299",
     "typescript7": "npm:typescript@^7.0.2"
   },
   "keywords": [
