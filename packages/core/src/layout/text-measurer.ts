@@ -55,6 +55,13 @@ export interface TextMeasurer {
    */
   faceCovers?(text: string, style: ResolvedRunStyle): boolean | undefined;
   /**
+   * Optional: whether `style` is bold and its resolved face is not, so the bold is synthesized
+   * and each inked character advances `SYNTHETIC_BOLD_ADVANCE_EM` further, also where the face
+   * cannot shape the text. Absent means no.
+   * @internal
+   */
+  syntheticBold?(style: ResolvedRunStyle): boolean;
+  /**
    * Optional `OS/2` strikeout stroke for the resolved face, at the drawn size. Word paints
    * `w:separator` as a strikeout, so the note rule reads its thickness and offset here rather
    * than assuming one face's numbers. Undefined keeps the caller's own default.

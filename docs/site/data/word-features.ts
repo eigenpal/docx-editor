@@ -183,7 +183,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The editor de-obfuscates the fonts in word/fonts on load and measures text with them. No configuration and no network request are necessary. The binaries round-trip on save. The editor does not add new embedded fonts.',
+      'The editor de-obfuscates the fonts in word/fonts on load and measures text with them. No configuration and no network request are necessary. The binaries round-trip on save. The editor does not add new embedded fonts. Bold text draws with a synthesized bold when the embedded bold slot holds a regular face, as in Word.',
   },
   {
     id: 'text.color',

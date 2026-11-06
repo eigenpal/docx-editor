@@ -304,6 +304,7 @@ const SPAN_DECORATIONS: Record<Exclude<keyof StyleSpanRecord, 'range' | 'text' |
   props: true,
   style: true,
   fontSlot: true,
+  syntheticBold: true,
   glyphOffsetPt: true,
   borderBaselinePt: true,
   caretEdges: true,

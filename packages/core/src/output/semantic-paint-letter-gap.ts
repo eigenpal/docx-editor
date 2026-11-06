@@ -8,6 +8,7 @@
 // same gaps, so both outputs read one rule, {@link followingGapPaint}.
 import { segmentGraphemes } from '../layout/grapheme.ts';
 import type { StyleSpanRecord } from '../layout/semantic-records.ts';
+import { syntheticBoldAdvancePt } from '../layout/synthetic-bold.ts';
 import { withoutTrailingZeroWidthSpaces } from '../layout/trailing-spaces.ts';
 
 /**
@@ -67,7 +68,36 @@ export function absorbsLetterGap(span: GapSpan, next: GapSpan): boolean {
 
 /** The `letter-spacing` that paints `gap` after the character: its own spacing plus the gap. */
 export function letterGapSpacing(span: StyleSpanRecord, gap: number, scale: number): string {
-  return `${(span.style.characterSpacingPt + gap) * scale}px`;
+  return `${(span.style.characterSpacingPt + syntheticBoldSpacingPt(span) + gap) * scale}px`;
+}
+
+/**
+ * The advance screen paint adds after each character of a span whose bold is synthesized, in
+ * points.
+ *
+ * Layout gives each inked glyph of such a span extra advance, as Word does, but a browser draws
+ * a synthesized bold at the face's own advances. Paint adds the extra as letter spacing and takes
+ * it back from spaces with word spacing, so each glyph stays where layout put it. A shaped span
+ * keeps only the box that layout gave it: letter spacing would pull a joining script apart.
+ *
+ * @internal
+ */
+export function syntheticBoldSpacingPt(span: StyleSpanRecord): number {
+  return span.syntheticBold && span.style.shaping === undefined
+    ? syntheticBoldAdvancePt(span.style)
+    : 0;
+}
+
+/** Apply {@link syntheticBoldSpacingPt} to a painted span. @internal */
+export function applySyntheticBoldSpacing(
+  element: HTMLElement,
+  span: StyleSpanRecord,
+  scale: number
+): void {
+  const spacing = syntheticBoldSpacingPt(span);
+  if (spacing === 0) return;
+  element.style.letterSpacing = `${(span.style.characterSpacingPt + spacing) * scale}px`;
+  element.style.wordSpacing = `${-spacing * scale}px`;
 }
 
 /**
