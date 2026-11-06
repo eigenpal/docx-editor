@@ -7,7 +7,11 @@
 // A preload removes the ordering question entirely.
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 
-if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+// Pop-out window tests use an `about:blank` iframe as the second window, and happy-dom
+// loads iframe pages only when asked. CSS file loading stays off.
+if (!GlobalRegistrator.isRegistered) {
+  GlobalRegistrator.register({ settings: { enableIframePageLoading: true } });
+}
 
 // Pin one CJS Vue runtime for every `vue` import. TSX under packages/vue is re-transpiled
 // to classic `h`/`Fragment` by packages/vue/test/bun-plugin-jsx.ts (see bunfig.toml).

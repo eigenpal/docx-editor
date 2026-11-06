@@ -236,7 +236,7 @@
     "prosemirror-model": "1.25.4",
     "prosemirror-transform": "1.12.0",
     "@happy-dom/global-registrator": "21.0.4",
-    "happy-dom": "20.11.2",
+    "happy-dom": "21.0.4",
     "vue": "3.5.44"
   },
   "resolutions": {
@@ -245,7 +245,7 @@
     "prosemirror-model": "1.25.4",
     "prosemirror-transform": "1.12.0",
     "@happy-dom/global-registrator": "21.0.4",
-    "happy-dom": "20.11.2",
+    "happy-dom": "21.0.4",
     "vue": "3.5.44"
   },
   "dependencies": {
