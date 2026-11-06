@@ -85,9 +85,9 @@
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0",
     "vue": "^3.3.0",
-    "yjs": "^13.6.33",
+    "yjs": "^13.6.32",
     "y-webrtc": "^10.3.0",
-    "@hocuspocus/provider": "^4.8.0"
+    "@hocuspocus/provider": "^4.6.0"
   },
   "peerDependenciesMeta": {
     "@docx-editor.dev/react": {
