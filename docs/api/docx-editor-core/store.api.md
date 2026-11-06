@@ -2703,6 +2703,9 @@ export interface LegacyTextArtProjection {
     readonly trim?: true;
 }
 
+// @internal
+export const LEVEL_INDENT_ATTRIBUTES: ReadonlySet<string>;
+
 // @public
 export const LIMIT_KEYS: (keyof ResourceLimits)[];
 

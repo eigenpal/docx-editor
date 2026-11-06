@@ -12,6 +12,7 @@ import { joinedLevel } from './surface-list-join.ts';
 import {
   adjacentListMarker,
   linkedStyleOps,
+  mixedListSelection,
   switchedListNumIds,
   type ListKind,
   type ListSwitchDeps,
@@ -57,7 +58,8 @@ export function listToggleOps(
     }
     return level;
   };
-  const numIds = switchedListNumIds(deps.listSwitch, touched, kind, joinLevel);
+  const mixed = mixedListSelection(deps.listSwitch, touched);
+  const numIds = switchedListNumIds(deps.listSwitch, touched, kind, joinLevel, mixed);
   if (numIds === null) return null;
   const joined = new Map<string, number>();
   if (above) {
@@ -69,14 +71,32 @@ export function listToggleOps(
       joined.set(paragraphId, level);
     }
   }
+  // A mix that starts with a plain paragraph and joins the list above takes its items along,
+  // to that paragraph's level. The level change drops their own indent, as Tab does.
+  const lead = joined.get(touched[0] ?? '');
+  const moved = new Map<string, number>();
+  if (lead !== undefined && mixed === 'plain-first') {
+    for (const paragraphId of touched) {
+      // A heading of a heading numbering keeps its style and level whatever the selection does.
+      const marker = deps.listSwitch.markerOf(paragraphId);
+      if (!marker || deps.listSwitch.headingLevel(marker.numId, marker.level)) continue;
+      if (marker.level !== lead) moved.set(paragraphId, lead);
+    }
+  }
   const levelOf = (paragraphId: string) => joined.get(paragraphId) ?? deps.levelOf(paragraphId);
+  // A level linked to a style moves an item by its style, so that write takes the new level.
   const linked = linkedStyleOps(numIds, {
     listLevelStyleOf: deps.listSwitch.listLevelStyleOf,
     listAbstractOf: deps.listSwitch.listAbstractOf,
-    levelOf,
+    levelOf: (paragraphId) => moved.get(paragraphId) ?? levelOf(paragraphId),
     styleNumberingOf: (styleId) => styleNumberingOf(deps.styleCascade(), styleId),
+    // A joined paragraph loses its whole indent; a moved item, as a level change, keeps its end.
     linkedStyleOp: (paragraphId, styleId) =>
-      deps.listStyle.linkedStyleOp(paragraphId, styleId, joined.has(paragraphId)),
+      deps.listStyle.linkedStyleOp(
+        paragraphId,
+        styleId,
+        joined.has(paragraphId) ? 'all' : moved.has(paragraphId) ? 'level' : false
+      ),
   });
   const ops: TreeDocOp[] = [
     ...deps.listStyle.applyOps(
@@ -97,6 +117,8 @@ export function listToggleOps(
       numId: numIds.get(paragraphId) ?? null,
       ...(level !== null ? { level } : {}),
     });
+    const to = moved.get(paragraphId);
+    if (to !== undefined) ops.push({ op: 'setListLevel', paragraphId, level: to });
   }
   return ops;
 }

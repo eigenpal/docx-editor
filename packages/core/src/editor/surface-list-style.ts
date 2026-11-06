@@ -10,7 +10,12 @@
 // selection.
 
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import type { OoxmlElement, OoxmlPart, TreeDocOp } from '@docx-editor.dev/core/store';
+import {
+  LEVEL_INDENT_ATTRIBUTES,
+  type OoxmlElement,
+  type OoxmlPart,
+  type TreeDocOp,
+} from '@docx-editor.dev/core/store';
 import { buildStyleCascadeTable } from '@docx-editor.dev/core/layout';
 import { directParagraphProperties, mergedProperties } from './surface-formatting.ts';
 
@@ -28,6 +33,24 @@ const LIST_PARAGRAPH_STYLE_ID = 'ListParagraph';
 
 const isIndent = (property: { readonly localName: string }): boolean =>
   property.localName === 'ind';
+
+/**
+ * How a style write treats the paragraph's own `w:ind`: kept, dropped whole (a paragraph that
+ * joins a list), or dropped on the sides a level states (an item that changes level).
+ */
+export type IndentDrop = false | 'all' | 'level';
+
+type DirectProperty = ReturnType<typeof directParagraphProperties>[number];
+
+/** `property` after `drop`, or null when nothing of it is left. */
+function droppedIndent(property: DirectProperty, drop: IndentDrop): DirectProperty | null {
+  if (!drop || !isIndent(property)) return property;
+  if (drop === 'all') return null;
+  const kept = Object.entries(property.attributes ?? {}).filter(
+    ([name]) => !LEVEL_INDENT_ATTRIBUTES.has(name)
+  );
+  return kept.length > 0 ? { ...property, attributes: Object.fromEntries(kept) } : null;
+}
 
 /** The `w:pStyle` a paragraph itself authors, or undefined. */
 function authoredStyleId(
@@ -85,9 +108,10 @@ export interface ListStyleWrites {
    * A level linked through `w:pStyle`, as in a heading numbering, numbers the paragraphs of
    * that style. A list gesture that joins such a list puts the paragraph in the style and
    * drops its own `w:numPr`, so the paragraph becomes one of the list's headings rather than a
-   * plain paragraph with a heading's number. `dropIndent` also removes its own `w:ind`.
+   * plain paragraph with a heading's number. `dropIndent` also removes its own `w:ind`, whole
+   * or on the sides a level states.
    */
-  linkedStyleOp(paragraphId: string, styleId: string, dropIndent?: boolean): TreeDocOp | null;
+  linkedStyleOp(paragraphId: string, styleId: string, dropIndent?: IndentDrop): TreeDocOp | null;
 }
 
 export function createListStyleWrites(deps: ListStyleDeps): ListStyleWrites {
@@ -145,8 +169,12 @@ export function createListStyleWrites(deps: ListStyleDeps): ListStyleWrites {
         .documentStyles()
         .some((style) => style.type === 'paragraph' && style.styleId === styleId);
       if (!exists) return null;
-      const properties = directParagraphProperties(deps.storyPart(), paragraphId).filter(
-        (property) => property.localName !== 'numPr' && !(dropIndent && isIndent(property))
+      const properties = directParagraphProperties(deps.storyPart(), paragraphId).flatMap(
+        (property) => {
+          if (property.localName === 'numPr') return [];
+          const kept = droppedIndent(property, dropIndent);
+          return kept ? [kept] : [];
+        }
       );
       return {
         op: 'setParagraphProperties',

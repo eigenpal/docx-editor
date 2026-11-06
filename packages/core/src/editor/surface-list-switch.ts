@@ -74,6 +74,30 @@ export function adjacentListMarker(
   return marker && kindOf(marker) === kind ? marker : null;
 }
 
+/**
+ * How a selection mixes list items and paragraphs that are no list item: `'plain-first'` when
+ * its first paragraph is no list item, `'item-first'` for any other mix, or null when it holds
+ * only one of the two.
+ *
+ * A heading of a heading numbering counts as neither when the selection is weighed, since it
+ * keeps its style and level whatever the selection does; as the first paragraph it is no
+ * plain paragraph, so the mix starts a list of its own.
+ */
+export function mixedListSelection(
+  deps: Pick<ListSwitchDeps, 'markerOf' | 'headingLevel'>,
+  touched: readonly string[]
+): 'plain-first' | 'item-first' | null {
+  let plain = false;
+  let item = false;
+  for (const paragraphId of touched) {
+    const marker = deps.markerOf(paragraphId);
+    if (marker === null) plain = true;
+    else if (!deps.headingLevel(marker.numId, marker.level)) item = true;
+  }
+  if (!plain || !item) return null;
+  return deps.markerOf(touched[0] ?? '') === null ? 'plain-first' : 'item-first';
+}
+
 /** Where an item its style numbers sits on sides `level` states otherwise, or null. */
 function styleIndentOver(
   deps: ListSwitchDeps,
@@ -152,7 +176,9 @@ export function switchedListNumIds(
   touched: readonly string[],
   kind: ListKind,
   /** The level a paragraph that is no list item takes when it joins the list above. */
-  joinLevel: (paragraphId: string) => number = () => 0
+  joinLevel: (paragraphId: string) => number = () => 0,
+  /** How the selection mixes items and plain paragraphs: {@link mixedListSelection}. */
+  mixed: ReturnType<typeof mixedListSelection> = mixedListSelection(deps, touched)
 ): Map<string, string> | null {
   // A heading of a heading numbering is not a list the selection is in: reference renderings
   // put a plain paragraph and such a heading on a new list together, the heading keeping its
@@ -167,17 +193,33 @@ export function switchedListNumIds(
   const fits = (numId: string | null | undefined): numId is string =>
     typeof numId === 'string' &&
     markers.every((marker) => deps.listLevelKindOf(numId, marker?.level ?? 0) === kind);
+  // A selection of items and plain paragraphs joins the list above only when it starts with a
+  // plain paragraph, and its items then join at that paragraph's level. Any other mix starts a
+  // stock list of its own: never the list above, nor one an item is on.
+  // Only a plain list above takes items along: a heading numbering would turn them into
+  // headings, which no reference rendering showed.
+  const above = adjacentListMarker(deps, touched, kind);
+  if (mixed === 'item-first' || (mixed && above && deps.headingLevel(above.numId, above.level))) {
+    return everyItem(deps.ensureListDefinition(kind));
+  }
   // The list above must draw `kind` where each paragraph lands on it: an item at its own
-  // level, any other paragraph at the level it joins at.
-  const adjacent = adjacentListMarker(deps, touched, kind)?.numId;
+  // level, or at the first paragraph's level in a mix, and any other paragraph at the level
+  // it joins at.
+  const adjacent = above?.numId;
+  const lead = mixed === 'plain-first' ? joinLevel(touched[0]!) : null;
   const joinable =
     typeof adjacent === 'string' &&
     touched.every((paragraphId, index) => {
       const marker = markers[index];
-      const level = marker ? marker.level : deps.markerOf(paragraphId) ? 0 : joinLevel(paragraphId);
+      const level = marker
+        ? (lead ?? marker.level)
+        : deps.markerOf(paragraphId)
+          ? 0
+          : joinLevel(paragraphId);
       return deps.listLevelKindOf(adjacent, level) === kind;
     });
   if (joinable) return everyItem(adjacent);
+  if (mixed !== null) return everyItem(deps.ensureListDefinition(kind));
   const held = markers.find((marker) => fits(marker?.numId))?.numId;
   if (held) return everyItem(held);
   const leaving = mostUsedNumId(markers);
