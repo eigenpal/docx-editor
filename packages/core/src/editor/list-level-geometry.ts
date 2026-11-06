@@ -108,6 +108,8 @@ export function listDefinitionReads(index: () => NumberingIndex) {
   return {
     listGeometryOf: (numId: string) => listDefinitionGeometry(index(), numId),
     listLevelKindOf: (numId: string, level: number) => listLevelKind(index(), numId, level),
+    listLevelStyleOf: (numId: string, level: number) =>
+      resolveNumberingLevel(index(), numId, level)?.level.pStyle ?? null,
   };
 }
 

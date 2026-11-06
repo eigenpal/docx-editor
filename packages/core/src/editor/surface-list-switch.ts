@@ -16,6 +16,8 @@ export interface ListSwitchReads {
   listGeometryOf(numId: string): ListDefinitionGeometry;
   /** Which kind of marker `numId` draws at `level`, or null when it does not resolve. */
   listLevelKindOf(numId: string, level: number): ListKind | null;
+  /** The paragraph style `numId` links at `level` through `w:pStyle`, or null. */
+  listLevelStyleOf(numId: string, level: number): string | null;
 }
 
 export interface ListSwitchDeps extends ListSwitchReads {
@@ -45,11 +47,13 @@ const kindOf = (marker: ListMarkerRecord): ListKind =>
 const twips = (points: number): number => Math.round(points * 20);
 
 /**
- * The `w:numId` an adjacent paragraph of the same kind already uses, if any.
+ * The `w:numId` the paragraph just BEFORE the selection uses for a list of the same kind, if
+ * any.
  *
- * Turning a list back on rejoins the list around it rather than minting a second
- * definition — otherwise re-bulleting one item in the middle of a list gave it a
- * different glyph from its neighbours.
+ * Turning a list back on continues the list above it rather than minting a second definition,
+ * so re-bulleting one item in the middle of a list keeps its neighbours' glyph. The list
+ * below never counts: reference renderings start a new list for a paragraph above a list
+ * item, and above a heading of a heading numbering.
  */
 function adjacentListNumId(
   deps: ListSwitchDeps,
@@ -58,16 +62,9 @@ function adjacentListNumId(
 ): string | null {
   const order = deps.order();
   const first = order.indexOf(touched[0] ?? '');
-  const last = order.indexOf(touched[touched.length - 1] ?? '');
-  if (first === -1 || last === -1) return null;
-  // The paragraph BEFORE the selection, then the one after.
-  for (const index of [first - 1, last + 1]) {
-    const neighbour = order[index];
-    if (!neighbour) continue;
-    const marker = deps.markerOf(neighbour);
-    if (marker && kindOf(marker) === kind) return marker.numId;
-  }
-  return null;
+  const previous = first > 0 ? order[first - 1] : undefined;
+  const marker = previous ? deps.markerOf(previous) : null;
+  return marker && kindOf(marker) === kind ? marker.numId : null;
 }
 
 /** Where an item its style numbers sits on sides `level` states otherwise, or null. */

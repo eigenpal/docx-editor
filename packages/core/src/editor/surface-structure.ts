@@ -405,6 +405,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
   const listSwitch: ListSwitchDeps = {
     listGeometryOf: deps.listGeometryOf,
     listLevelKindOf: deps.listLevelKindOf,
+    listLevelStyleOf: deps.listLevelStyleOf,
     order: orderOf,
     markerOf,
     ensureListDefinition: (kind, geometry) => session.ensureListDefinition(kind, geometry),
@@ -624,14 +625,24 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       const turningOff = touched.every((paragraphId) => listKindOf(paragraphId) === kind);
       const numIds = turningOff ? null : switchedListNumIds(listSwitch, touched, kind);
       if (!turningOff && numIds === null) return false;
+      // A list whose level is linked to a paragraph style takes the paragraph into that style.
+      const linked = new Map<string, TreeDocOp>();
+      for (const [paragraphId, numId] of numIds ?? []) {
+        const styleId = listSwitch.listLevelStyleOf(numId, listLevelOf(paragraphId) ?? 0);
+        const op = styleId ? listStyle.linkedStyleOp(paragraphId, styleId) : null;
+        if (op) linked.set(paragraphId, op);
+      }
       // Turning a list OFF leaves the style alone, as Word does: an outdented item stays
       // in List Paragraph until the user picks another style.
-      const ops: TreeDocOp[] = turningOff ? [] : listStyle.applyOps(touched);
+      const ops: TreeDocOp[] = turningOff
+        ? []
+        : [...listStyle.applyOps(touched.filter((id) => !linked.has(id))), ...linked.values()];
       for (const paragraphId of touched) {
         if (turningOff) {
           ops.push(listNumbering.leaveOp(paragraphId));
           continue;
         }
+        if (linked.has(paragraphId)) continue;
         // `w:numPr` carries the level AND the definition, and the op mints a fresh one, so
         // a call that names no level silently resets `w:ilvl` to 0. Word converts a bullet
         // to a number IN PLACE: pressing Numbered on a level-2 item left it at level 2,
