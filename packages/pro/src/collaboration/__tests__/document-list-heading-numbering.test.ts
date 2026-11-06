@@ -126,8 +126,6 @@ const caret = (editor: Editor, index: number, offset = 1) => {
   });
 };
 
-/** Scope after the join and the concurrent delete: the joined paragraph is gone, so 01.1. */
-const SETTLED_SCOPE = '01.1';
 const ORIGINAL = ['01', null, null, null, null, '01.1'];
 
 test('concurrent presses: a plain list and a joined heading converge', async () => {
@@ -191,8 +189,9 @@ test('a join converges while the peer deletes the joined paragraph', async () =>
   bob.surface!.deleteSelection();
   resume();
   const settled = converged();
-  expect(settled[0]).toBe('01');
-  expect(settled.at(-1)).toBe(SETTLED_SCOPE);
+  // Intro is gone and Gap's text joined the heading: First, Second, and Scope remain.
+  expect(settled).toEqual(['01', null, null, '01.1']);
+  // The joined paragraph is gone, so undoing the join leaves the document as it settled.
   alice.surface!.undo();
-  expect(converged().at(-1)).toBe('01.1');
+  expect(converged()).toEqual(settled);
 });
