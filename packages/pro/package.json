@@ -116,7 +116,7 @@
     }
   },
   "dependencies": {
-    "emf-converter": "2.0.2",
+    "emf-converter": "4.24.0",
     "y-protocols": "^1.0.7"
   },
   "devDependencies": {

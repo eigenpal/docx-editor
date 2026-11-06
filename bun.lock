@@ -576,7 +576,7 @@
       "dependencies": {
         "@docx-editor.dev/i18n": "^2.35.0",
         "bidi-js": "1.1.0",
-        "emf-converter": "2.0.2",
+        "emf-converter": "4.24.0",
         "fast-xml-parser": "^5.10.1",
         "fflate": "^0.8.2",
         "harfbuzzjs": "1.6.4",
@@ -720,7 +720,7 @@
       "name": "@docx-editor.dev/pro",
       "version": "2.35.0",
       "dependencies": {
-        "emf-converter": "2.0.2",
+        "emf-converter": "4.24.0",
         "y-protocols": "^1.0.7",
       },
       "devDependencies": {
@@ -2395,7 +2395,7 @@
 
     "electron-to-chromium": ["electron-to-chromium@1.5.439", "", {}, "sha512-qu6QIPXhsb+CRcAiTMNjR4A1y/7tCYKkKjr5CZXRVih6qkDf79peZ2BpEU3qoDBNCRrcy3Mra3X9nG5oruuA7Q=="],
 
-    "emf-converter": ["emf-converter@2.0.2", "", {}, "sha512-QLUufb45P3LlOudCoizBtJpO8cBw8LayH0mkvkRvIjvMlb6junwP0EXgUkdDyZUEF2QSEZUPV8rO8DS5rsJmkA=="],
+    "emf-converter": ["emf-converter@4.24.0", "", { "peerDependencies": { "@napi-rs/canvas": "^1.0.9" }, "optionalPeers": ["@napi-rs/canvas"], "bin": { "emf-converter": "dist/cli.mjs" } }, "sha512-U5WloUx6B9+RysfsOxftPNwfqzm4YhP7E7YCd/4iDf+W425E3QO49MFD/9aDu2aJljSp4Z22GbTHbPp+VywXlQ=="],
 
     "emoji-regex": ["emoji-regex@8.0.0", "", {}, "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A=="],
 
