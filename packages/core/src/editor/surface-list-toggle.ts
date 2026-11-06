@@ -7,10 +7,13 @@
 import type { StyleCascadeTable } from '@docx-editor.dev/core/layout';
 import type { TreeDocOp } from '@docx-editor.dev/core/store';
 import { styleNumberingOf } from './list-level-geometry.ts';
-import { linkedStyleOps, switchedListNumIds, type ListSwitchDeps } from './surface-list-switch.ts';
+import {
+  linkedStyleOps,
+  switchedListNumIds,
+  type ListKind,
+  type ListSwitchDeps,
+} from './surface-list-switch.ts';
 import type { ListStyleWrites } from './surface-list-style.ts';
-
-type ListKind = 'bullet' | 'ordered';
 
 export interface ListToggleDeps {
   readonly listSwitch: ListSwitchDeps;

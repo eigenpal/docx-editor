@@ -316,6 +316,26 @@ describe('a list button next to the heading numbering', () => {
     expect(intro).toContain('<w:pPrChange');
   });
 
+  for (const [decision, marker] of [
+    ['rejectAllRevisions', null],
+    ['acceptAllRevisions', '02'],
+  ] as const) {
+    test(`a suggested join resolves on ${decision}`, () => {
+      withSurface(docx(), (surface) => {
+        surface.setAuthor('Reviewer');
+        surface.setEditingMode('suggest');
+        caretIn(surface, 1);
+        expect(surface.toggleList('ordered')).toBe(true);
+        surface.setEditingMode('edit');
+        expect(surface.applyAutomationOps(() => [{ op: decision }]).rejected).toBe(false);
+        expect(markers(surface)[1]?.text ?? null).toBe(marker);
+        const intro = paragraphsOf(surface.save())[1]!;
+        expect(intro.includes('Heading1')).toBe(marker !== null);
+        expect(intro).not.toContain('<w:pPrChange');
+      });
+    });
+  }
+
   test('undo restores the plain paragraph', () => {
     withSurface(docx(), (surface) => {
       caretIn(surface, 1);

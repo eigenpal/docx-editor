@@ -12,7 +12,7 @@ import type {
 import type { ListMarkerRecord, ParagraphIndent } from '@docx-editor.dev/core/layout';
 import type { IndentSides } from './list-level-geometry.ts';
 
-type ListKind = 'bullet' | 'ordered';
+export type ListKind = 'bullet' | 'ordered';
 
 /** The numbering reads a toggle needs, resolved the way layout paints markers. */
 export interface ListSwitchReads {
