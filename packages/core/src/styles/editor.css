@@ -164,9 +164,7 @@
      does not select the text, so this band is the only thing on the page saying which
      change the card is about. */
   --doc-revision-insertion-active-bg: rgba(46, 125, 50, 0.24);
-  --doc-revision-insertion-active-border: var(--doc-revision-insertion);
   --doc-revision-deletion-active-bg: rgba(198, 40, 40, 0.24);
-  --doc-revision-deletion-active-border: var(--doc-revision-deletion);
   /* A format or structural change decorates no characters, so it takes a neutral fill
      rather than one claiming text was added or removed. */
   --doc-revision-other-active-bg: color-mix(
@@ -7014,14 +7012,17 @@ p.docx-review__refused {
   background: transparent;
 }
 
+/* The open change deepens its fill and draws NO line of its own. The run already carries one:
+   an underline under inserted text, a strike through deleted text, in the ink the painter
+   chose, which is the author's under the author scheme. A 1px rule at the band's foot sat
+   just under that underline, in the kind colour, so an open insertion read as a double
+   underline in two colours, and the reader could not tell which line meant what. */
 .docx-revision-band--insert.docx-revision-band--active {
   background: var(--doc-revision-insertion-active-bg);
-  box-shadow: inset 0 -1px 0 var(--doc-revision-insertion-active-border);
 }
 
 .docx-revision-band--delete.docx-revision-band--active {
   background: var(--doc-revision-deletion-active-bg);
-  box-shadow: inset 0 -1px 0 var(--doc-revision-deletion-active-border);
 }
 
 /* A formatting or structural change decorates no characters of its own, so it gets the
