@@ -2,7 +2,8 @@
 // reference renderings: a first-row condition's fill wins over the whole table's, a cell's own
 // fill wins over both, a derived style's fill wins over its base's (and a derived style with
 // none inherits it), the whole-table fill applies whatever `w:tblLook` says, and a cell's own
-// `auto` fill clears the style's colour while `w:val="nil"` leaves it showing.
+// `auto` fill clears the style's colour while `w:val="nil"` leaves it showing. A first-row
+// condition follows the same rule over the whole-table fill.
 
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
@@ -97,5 +98,18 @@ test('a cell of its own with an auto fill clears the colour, and nil leaves it',
   expect(fills(plain, 'Shaded', '', { '00': shd('auto'), '11': shd('auto', 'nil') })).toEqual([
     [undefined, 'FFFF00'],
     ['FFFF00', 'FFFF00'],
+  ]);
+});
+
+test('a condition with an auto fill clears the whole-table colour, and nil leaves it', () => {
+  const condition = (fill: string) =>
+    style(
+      'Shaded',
+      tcPr(shd('FFFF00')) + `<w:tblStylePr w:type="firstRow">${tcPr(fill)}</w:tblStylePr>`
+    );
+  expect(fills(condition(shd('auto')), 'Shaded', FIRST_ROW_ON)[0]).toEqual([undefined, undefined]);
+  expect(fills(condition(shd('auto', 'nil')), 'Shaded', FIRST_ROW_ON)[0]).toEqual([
+    'FFFF00',
+    'FFFF00',
   ]);
 });
