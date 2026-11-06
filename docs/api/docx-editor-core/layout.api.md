@@ -2462,6 +2462,7 @@ export interface NumberingLevel {
     // (undocumented)
     readonly numFmt: string;
     readonly picBulletId?: string;
+    readonly pStyle?: string;
     readonly runProperties: readonly OoxmlProperty[];
     // (undocumented)
     readonly start: number;

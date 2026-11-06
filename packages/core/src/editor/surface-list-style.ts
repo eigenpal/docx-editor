@@ -72,6 +72,16 @@ export interface ListStyleWrites {
    * leaves the paragraph styled, and indented.
    */
   clearOp(paragraphId: string): TreeDocOp | null;
+  /**
+   * The write that puts a paragraph in the paragraph style a list level is linked to, or null
+   * when no paragraph style of that id exists.
+   *
+   * A level linked through `w:pStyle`, as in a heading numbering, numbers the paragraphs of
+   * that style. A list gesture that joins such a list puts the paragraph in the style and
+   * drops its own `w:numPr`, so the paragraph becomes one of the list's headings rather than a
+   * plain paragraph with a heading's number.
+   */
+  linkedStyleOp(paragraphId: string, styleId: string): TreeDocOp | null;
 }
 
 export function createListStyleWrites(deps: ListStyleDeps): ListStyleWrites {
@@ -119,6 +129,24 @@ export function createListStyleWrites(deps: ListStyleDeps): ListStyleWrites {
         });
       }
       return ops;
+    },
+
+    linkedStyleOp(paragraphId, styleId) {
+      const exists = session
+        .documentStyles()
+        .some((style) => style.type === 'paragraph' && style.styleId === styleId);
+      if (!exists) return null;
+      const properties = directParagraphProperties(deps.storyPart(), paragraphId).filter(
+        (property) => property.localName !== 'numPr'
+      );
+      return {
+        op: 'setParagraphProperties',
+        paragraphId,
+        properties: mergedProperties(properties, {
+          localName: 'pStyle',
+          attributes: { val: styleId },
+        }),
+      };
     },
 
     clearOp(paragraphId) {
