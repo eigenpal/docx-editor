@@ -118,6 +118,8 @@ export interface SurfaceStructureDeps extends ListSwitchReads {
   numberingLevelExists(numId: string, level: number): boolean;
   /** For telling whether a paragraph's style numbers it, its own `w:numPr` aside. */
   styleCascade(): StyleCascadeTable | undefined;
+  /** `w:defaultTabStop` in points: one list level per stop when a paragraph joins a list. */
+  defaultTabStopPt(): number;
   /** Paragraph ids in reading order for the active scope. */
   paragraphOrder(): readonly string[];
   /**
@@ -630,6 +632,8 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           levelOf: listLevelOf,
           kindOf: listKindOf,
           styleCascade: deps.styleCascade,
+          indentOf: listSwitch.indentOf,
+          defaultTabStopPt: deps.defaultTabStopPt,
         },
         touched,
         kind
