@@ -38,7 +38,7 @@
   },
   "devDependencies": {
     "@docx-editor.dev/core": "workspace:*",
-    "@happy-dom/global-registrator": "^20.8.3",
+    "@happy-dom/global-registrator": "^21.0.4",
     "fflate": "^0.8.2",
     "typescript7": "npm:typescript@^7.0.2"
   },
