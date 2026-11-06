@@ -29,7 +29,7 @@ async function items(input: Uint8Array) {
         : []
     );
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 }
 

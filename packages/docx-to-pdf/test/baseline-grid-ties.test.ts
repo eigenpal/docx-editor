@@ -56,7 +56,7 @@ test('an exact half-unit baseline rounds toward the page top', async () => {
     );
     expect(ties).toHaveLength(6);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 
@@ -131,6 +131,6 @@ test('ties reached by accumulation resolve like exact ones', async () => {
     );
     expect(ties.length).toBeGreaterThanOrEqual(5);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

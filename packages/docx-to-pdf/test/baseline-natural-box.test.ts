@@ -45,7 +45,7 @@ async function firstBaselineFromTop(body: string): Promise<number> {
     const item = content.items.find((i): i is Extract<typeof i, { str: string }> => 'str' in i)!;
     return Number((height - item.transform[5]!).toFixed(4));
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 }
 

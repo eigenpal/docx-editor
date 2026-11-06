@@ -25,26 +25,34 @@ function run(command, args, cwd = consumer) {
 try {
   mkdirSync(packs);
   mkdirSync(consumer);
-  const tarballs = ['i18n', 'core', 'fonts', 'docx-to-markdown', 'pro', 'docx-to-pdf'].map((name) => {
-    const [packed] = JSON.parse(
-      run('npm', ['pack', path.join(root, 'packages', name), '--json', '--pack-destination', packs])
-    );
-    assert.ok(packed.filename);
-    if (name === 'docx-to-pdf') {
-      for (const guide of ['api', 'fonts', 'integrations', 'markdown-contract']) {
+  const tarballs = ['i18n', 'core', 'fonts', 'docx-to-markdown', 'pro', 'docx-to-pdf'].map(
+    (name) => {
+      const [packed] = JSON.parse(
+        run('npm', [
+          'pack',
+          path.join(root, 'packages', name),
+          '--json',
+          '--pack-destination',
+          packs,
+        ])
+      );
+      assert.ok(packed.filename);
+      if (name === 'docx-to-pdf') {
+        for (const guide of ['api', 'fonts', 'integrations', 'markdown-contract']) {
+          assert.ok(
+            packed.files.some((file) => file.path === `docs/${guide}.md`),
+            `Packed PDF package omits docs/${guide}.md`
+          );
+        }
+        // The CJK face ships in its own package, not in this one.
         assert.ok(
-          packed.files.some((file) => file.path === `docs/${guide}.md`),
-          `Packed PDF package omits docs/${guide}.md`
+          !packed.files.some((file) => /cjk/i.test(file.path)),
+          'Packed PDF package carries a CJK asset'
         );
       }
-      // The CJK face ships in its own package, not in this one.
-      assert.ok(
-        !packed.files.some((file) => /cjk/i.test(file.path)),
-        'Packed PDF package carries a CJK asset'
-      );
+      return path.join(packs, packed.filename);
     }
-    return path.join(packs, packed.filename);
-  });
+  );
   // Packed now, installed only after the conversions without it.
   const [cjkPacked] = JSON.parse(
     run('npm', [

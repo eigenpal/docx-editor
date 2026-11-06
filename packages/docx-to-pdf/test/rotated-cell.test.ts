@@ -76,7 +76,7 @@ test('a btLr cell paints its text turned a quarter turn, reading up the page', a
     expect(up.transform[5]).toBeGreaterThanOrEqual(576);
     expect(up.transform[5]).toBeLessThan(600);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 
@@ -124,6 +124,6 @@ test.each([
     const text = content.items.map((item) => ('str' in item ? item.str : '')).join(' ');
     for (const label of labels) expect(text).toContain(label);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

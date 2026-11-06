@@ -20,6 +20,6 @@ test('strict export loads and paints a distinct hAnsi face', async () => {
     expect(text).toContain('é');
     expect(text).toContain('ü');
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

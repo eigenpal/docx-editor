@@ -38,7 +38,7 @@ for (const [size, wordSize] of [
           0.24
         );
       } finally {
-        await pdf.destroy();
+        await pdf.loadingTask.destroy();
       }
     });
   }

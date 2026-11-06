@@ -60,7 +60,7 @@ test('PDF retains both colored rules and surrounding text in a mixed separator s
     expect(strings).toContain('Note content');
     expect(strings).not.toContain('\uFFFC');
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 

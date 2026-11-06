@@ -71,7 +71,7 @@ async function exported(body: string) {
       text: content.items.map((item) => ('str' in item ? item.str : '')).join(''),
     };
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 }
 

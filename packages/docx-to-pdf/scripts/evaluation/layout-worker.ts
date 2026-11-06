@@ -19,6 +19,8 @@ for await (const line of requests) {
     await writeFile(output, JSON.stringify(result));
     process.stdout.write(JSON.stringify({ status: 'laid-out', pages: result.pageCount }) + '\n');
   } catch (error) {
-    process.stdout.write(JSON.stringify({ status: 'error', error: String(error).slice(0, 1000) }) + '\n');
+    process.stdout.write(
+      JSON.stringify({ status: 'error', error: String(error).slice(0, 1000) }) + '\n'
+    );
   }
 }

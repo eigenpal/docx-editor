@@ -36,7 +36,7 @@ async function pageLines(bytes: Uint8Array): Promise<string[]> {
     }
     return [...lines.values()];
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 }
 

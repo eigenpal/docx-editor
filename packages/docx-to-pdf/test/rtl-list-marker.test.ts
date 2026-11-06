@@ -32,6 +32,6 @@ test('a right-to-left list marker draws its period left of the number', async ()
     const body = items.find((item) => item.text === 'مرحبا');
     expect(marker!.x).toBeGreaterThan(body!.x);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

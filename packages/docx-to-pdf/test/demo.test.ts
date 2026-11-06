@@ -60,7 +60,7 @@ test('the editor demo exports with only packaged fonts and multilingual drawings
         .length
     ).toBeGreaterThan(0);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 
@@ -80,6 +80,6 @@ test('synthetic small caps retain source Unicode and fit their layout width', as
     const sizes = content.items.flatMap((item) => ('transform' in item ? [item.transform[3]] : []));
     expect(Math.min(...sizes)).toBeLessThan(Math.max(...sizes));
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

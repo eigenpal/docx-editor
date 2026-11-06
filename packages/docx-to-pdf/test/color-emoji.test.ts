@@ -38,6 +38,6 @@ test('an emoji paints its palette layers in color and stays extractable as text'
     expect(text).toContain('✅');
     expect(text).toContain('❤');
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

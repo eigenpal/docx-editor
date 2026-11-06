@@ -25,7 +25,7 @@ test('a run of text emits one text matrix and one TJ array, not one per glyph', 
     expect(shows).toBeLessThan(text.length / 4);
     expect(shows).toBeGreaterThan(0);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 
@@ -61,6 +61,6 @@ test('an adjustment past the writer range breaks the batch instead of failing th
     const matrices = list.fnArray.filter((fn: number) => fn === OPS.setTextMatrix).length;
     expect(matrices).toBeGreaterThanOrEqual(2);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

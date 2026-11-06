@@ -53,7 +53,7 @@ test('PDF paint includes an authored continuation notice on the split page only'
     expect(pages[0]).toContain('Continued');
     expect(pages.slice(1).join(' ')).not.toContain('Continued');
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 
@@ -77,6 +77,6 @@ test('PDF export reports an oversized notice without dropping note text', async 
     expect(text.replace(/\s+/g, ' ')).toContain('Note line 6');
     expect(text).not.toContain('Continued');
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

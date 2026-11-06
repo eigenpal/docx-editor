@@ -67,7 +67,7 @@ for (const displayMode of ['proposed', 'original'] as const) {
       expect(text).toContain(visible);
       expect(text).not.toContain(hidden);
     } finally {
-      await document.destroy();
+      await document.loadingTask.destroy();
     }
   });
 }

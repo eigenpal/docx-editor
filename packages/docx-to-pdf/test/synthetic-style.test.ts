@@ -29,7 +29,7 @@ async function extracted(bytes: Uint8Array): Promise<string> {
     const content = await (await pdf.getPage(1)).getTextContent();
     return content.items.map((item) => ('str' in item ? item.str : '')).join('');
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 }
 
