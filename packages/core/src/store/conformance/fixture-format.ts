@@ -10,12 +10,7 @@ import { CANONICAL_MUTATION_ORIGINS, NON_CANONICAL_ORIGINS } from '../registry/f
 
 /** Whether a recorded conformance step was expected to commit or be refused. */
 export type FixtureOutcome =
-  | 'applied'
-  | 'aborted'
-  | 'validation'
-  | 'conflict'
-  | 'resource'
-  | 'authorization';
+  'applied' | 'aborted' | 'validation' | 'conflict' | 'resource' | 'authorization';
 
 /** The change one step produced, summarized to what a fixture can compare across runtimes. */
 export interface ModelChangeSummary {

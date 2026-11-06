@@ -25,7 +25,7 @@ function room(ids: readonly string[]) {
 
 const items = (children: Y.Array<LogicalId>): Y.Item[] => {
   const out: Y.Item[] = [];
-  for (let item = (children as unknown as { _start: Y.Item | null })._start; item; ) {
+  for (let item = (children as unknown as { _start: Y.Item | null })._start; item;) {
     if (!item.deleted) out.push(item);
     item = item.right;
   }

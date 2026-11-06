@@ -15,9 +15,7 @@ import type { ZoomMode } from './editor-zoom.ts';
 
 /** Keys for the table furniture's accessible names, resolved by `tableInteractionLabel`. */
 export type TableInteractionLabelKey =
-  | 'table.insertRowBelow'
-  | 'table.insertColumnRight'
-  | 'table.selectTable';
+  'table.insertRowBelow' | 'table.insertColumnRight' | 'table.selectTable';
 
 export type { ZoomFitTarget, ZoomMode } from './editor-zoom.ts';
 import type { TextMatch } from './editor-text-match.ts';

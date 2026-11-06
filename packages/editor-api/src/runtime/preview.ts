@@ -227,11 +227,7 @@ export interface DocumentPreview<T = void> {
 
 /** Why the editor would not open a fork. @internal */
 export type PreviewForkRefusal =
-  | 'no-document'
-  | 'viewing'
-  | 'blocked'
-  | 'composing'
-  | 'preview-active';
+  'no-document' | 'viewing' | 'blocked' | 'composing' | 'preview-active';
 
 /** The fork the browser editor lends a preview. @internal */
 export interface PreviewFork {
@@ -318,18 +314,17 @@ function recordingHost(fork: AutomationHost, log: PreviewEntry[]): AutomationHos
       if (refused >= 0) {
         return {
           ok: false,
-          results: operations.map(
-            (_, index): AutomationOperationResult =>
-              index === refused
-                ? {
-                    status: 'error',
-                    error: {
-                      code: 'unsupported-capability',
-                      message: 'a preview cannot show this operation',
-                      detail: 'preview-operation-unsupported',
-                    },
-                  }
-                : { status: 'skipped' }
+          results: operations.map((_, index): AutomationOperationResult =>
+            index === refused
+              ? {
+                  status: 'error',
+                  error: {
+                    code: 'unsupported-capability',
+                    message: 'a preview cannot show this operation',
+                    detail: 'preview-operation-unsupported',
+                  },
+                }
+              : { status: 'skipped' }
           ),
           revision: fork.revision(),
           changed: false,

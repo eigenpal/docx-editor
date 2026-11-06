@@ -95,17 +95,15 @@ const LAYOUT_FONT_CONFIGURATION_ROLES = {
 void LAYOUT_FONT_CONFIGURATION_ROLES;
 
 type LayoutFontConfigurationKeysWithRole<Role extends LayoutFontConfigurationRole> = {
-  [Key in keyof typeof LAYOUT_FONT_CONFIGURATION_ROLES]: (typeof LAYOUT_FONT_CONFIGURATION_ROLES)[Key] extends Role
-    ? Key
-    : never;
+  [
+    Key in keyof typeof LAYOUT_FONT_CONFIGURATION_ROLES
+  ]: (typeof LAYOUT_FONT_CONFIGURATION_ROLES)[Key] extends Role ? Key : never;
 }[keyof typeof LAYOUT_FONT_CONFIGURATION_ROLES];
 
 type SharedShapingConfigurationKey = LayoutFontConfigurationKeysWithRole<'shaping-content'>;
 
 type FontSourceConfigurationRole =
-  | 'shared-shaping-content'
-  | 'operation-context'
-  | 'verified-byte-content';
+  'shared-shaping-content' | 'operation-context' | 'verified-byte-content';
 
 /** Nested evolution gate for source metadata and its owned-byte representation. @internal */
 const FONT_SOURCE_CONFIGURATION_ROLES = {
@@ -140,9 +138,9 @@ const DEFAULT_FONT_CONFIGURATION_ROLES = {
 void DEFAULT_FONT_CONFIGURATION_ROLES;
 
 type DefaultFontKeysWithRole<Role extends DefaultFontConfigurationRole> = {
-  [Key in keyof typeof DEFAULT_FONT_CONFIGURATION_ROLES]: (typeof DEFAULT_FONT_CONFIGURATION_ROLES)[Key] extends Role
-    ? Key
-    : never;
+  [
+    Key in keyof typeof DEFAULT_FONT_CONFIGURATION_ROLES
+  ]: (typeof DEFAULT_FONT_CONFIGURATION_ROLES)[Key] extends Role ? Key : never;
 }[keyof typeof DEFAULT_FONT_CONFIGURATION_ROLES];
 
 /** Optional measurements for resource-budget tests and host diagnostics. @public */

@@ -71,7 +71,7 @@ export function emfWithCanvasMapping(bytes: Uint8Array, options: EmfCanvasOption
   const height = view.getInt32(20, true) - top;
   if (!(width > 0 && height > 0)) return bytes;
   const seen = new Set<number>();
-  for (let at = headerSize; at + 8 <= bytes.length; ) {
+  for (let at = headerSize; at + 8 <= bytes.length;) {
     const size = view.getUint32(at + 4, true);
     if (size < 8 || at + size > bytes.length) break;
     seen.add(view.getUint32(at, true));
@@ -93,7 +93,7 @@ export function emfWithCanvasMapping(bytes: Uint8Array, options: EmfCanvasOption
   const written = new DataView(out.buffer);
   written.setUint32(48, out.length, true);
   written.setUint32(52, view.getUint32(52, true) + 2, true);
-  for (let at = headerSize + 32; at + 8 <= out.length; ) {
+  for (let at = headerSize + 32; at + 8 <= out.length;) {
     const type = written.getUint32(at, true);
     const size = written.getUint32(at + 4, true);
     if (size < 8 || at + size > out.length) break;

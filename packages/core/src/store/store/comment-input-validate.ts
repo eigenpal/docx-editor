@@ -17,10 +17,7 @@ export const MAX_COMMENT_TEXT_UTF16 = 65_535;
 export const MAX_COMMENT_DATE_UTF16 = 64;
 
 export type CommentInputRejection =
-  | 'invalid-author'
-  | 'invalid-text'
-  | 'invalid-date'
-  | 'resource-limit';
+  'invalid-author' | 'invalid-text' | 'invalid-date' | 'resource-limit';
 
 export type CommentDateNormalization =
   | { readonly ok: true; readonly value: string }

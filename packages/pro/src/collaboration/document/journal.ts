@@ -56,10 +56,7 @@ import {
 } from './split-points.ts';
 
 export type JournalRefusalCode =
-  | LimitCode
-  | 'unknown-logical-id'
-  | 'invalid-bound'
-  | 'partial-apply-forbidden';
+  LimitCode | 'unknown-logical-id' | 'invalid-bound' | 'partial-apply-forbidden';
 
 export type ApplyJournalResult =
   | { readonly ok: true }

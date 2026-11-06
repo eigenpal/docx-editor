@@ -181,14 +181,7 @@ export class List extends ModelObject implements PromisedItem {
   setLevelBullet(
     level: number,
     listBullet:
-      | ListBullet
-      | 'Custom'
-      | 'Solid'
-      | 'Hollow'
-      | 'Square'
-      | 'Diamonds'
-      | 'Arrow'
-      | 'Checkmark',
+      ListBullet | 'Custom' | 'Solid' | 'Hollow' | 'Square' | 'Diamonds' | 'Arrow' | 'Checkmark',
     charCode?: number,
     fontName?: string
   ): void {

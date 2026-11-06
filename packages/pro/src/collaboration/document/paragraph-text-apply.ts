@@ -337,7 +337,7 @@ function writeParagraphText(
       position += value.length;
     }
     const shift = position - (deleted.length > 0 ? deleted[0]! : block.after);
-    for (let at = deleted.length - 1; at >= 0; ) {
+    for (let at = deleted.length - 1; at >= 0;) {
       let start = at;
       while (start > 0 && deleted[start - 1]! + 1 === deleted[start]!) start -= 1;
       deleteContent(text, deleted[start]! + shift, at - start + 1);

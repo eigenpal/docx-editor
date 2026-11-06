@@ -111,17 +111,14 @@ function assertInlineXsdShape(inline: OoxmlElement): void {
   expect(inline.children.some((child) => child.kind === 'drawingDocPr')).toBe(true);
   expect(inline.children.some((child) => child.kind === 'drawingGraphicFramePr')).toBe(true);
   const graphic = inline.children.find((child) => child.kind === 'drawingGraphic') as
-    | OoxmlElement
-    | undefined;
+    OoxmlElement | undefined;
   expect(graphic).toBeDefined();
   const graphicData = graphic!.children.find((child) => child.kind === 'drawingGraphicData') as
-    | OoxmlElement
-    | undefined;
+    OoxmlElement | undefined;
   expect(graphicData).toBeDefined();
   expect(schemaAttributeValue(graphicData!.attributes, 'uri')).toBe(PIC_URI);
   const picture = graphicData!.children.find((child) => child.kind === 'picture') as
-    | OoxmlElement
-    | undefined;
+    OoxmlElement | undefined;
   if (picture) assertPictureXsdShape(picture);
 }
 
@@ -157,17 +154,14 @@ function assertAnchorXsdShape(anchor: OoxmlElement): void {
   expect(anchor.children.some((child) => child.kind === 'drawingDocPr')).toBe(true);
   expect(anchor.children.some((child) => child.kind === 'drawingGraphicFramePr')).toBe(true);
   const graphic = anchor.children.find((child) => child.kind === 'drawingGraphic') as
-    | OoxmlElement
-    | undefined;
+    OoxmlElement | undefined;
   expect(graphic).toBeDefined();
   const graphicData = graphic!.children.find((child) => child.kind === 'drawingGraphicData') as
-    | OoxmlElement
-    | undefined;
+    OoxmlElement | undefined;
   expect(graphicData).toBeDefined();
   expect(schemaAttributeValue(graphicData!.attributes, 'uri')).toBe(PIC_URI);
   const picture = graphicData!.children.find((child) => child.kind === 'picture') as
-    | OoxmlElement
-    | undefined;
+    OoxmlElement | undefined;
   if (picture) assertPictureXsdShape(picture);
 }
 

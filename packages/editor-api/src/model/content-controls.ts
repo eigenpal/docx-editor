@@ -64,10 +64,7 @@ export type ContentControlValue =
 
 /** The lock a control carries. `ST_Lock`, spelled as the schema spells it. */
 export type ContentControlLockState =
-  | 'unlocked'
-  | 'sdtLocked'
-  | 'contentLocked'
-  | 'sdtContentLocked';
+  'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
 
 /** The control types this API can create. Picture and repeating section are deferred. */
 export type ContentControlSubtype = 'richText' | 'plainText' | 'dropDownList' | 'comboBox' | 'date';

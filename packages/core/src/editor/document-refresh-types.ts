@@ -110,13 +110,7 @@ export type RefreshResult =
 /** Observable controller state. Document editing stays available during processing. @public */
 export interface DocumentRefreshState {
   readonly phase:
-    | 'idle'
-    | 'capturing'
-    | 'processing'
-    | 'refreshing'
-    | 'recovering'
-    | 'complete'
-    | 'failed';
+    'idle' | 'capturing' | 'processing' | 'refreshing' | 'recovering' | 'complete' | 'failed';
   readonly result: RefreshResult | null;
   readonly changes: readonly RefreshChange[];
   /** Whether highlights are requested for available locations. False when the whole set starts dismissal. */

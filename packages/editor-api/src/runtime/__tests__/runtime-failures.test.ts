@@ -32,11 +32,10 @@ function refusingHost(code: AutomationErrorCode, detail = 'paragraph:deadbeef:1 
   return stubHost({
     execute: (request: AutomationBatchRequest): AutomationBatchResponse => ({
       ok: false,
-      results: request.operations.map(
-        (_, index): AutomationOperationResult =>
-          index === 0
-            ? { status: 'error', error: { code, message: `host says ${code}`, detail } }
-            : { status: 'skipped' }
+      results: request.operations.map((_, index): AutomationOperationResult =>
+        index === 0
+          ? { status: 'error', error: { code, message: `host says ${code}`, detail } }
+          : { status: 'skipped' }
       ),
       revision: 7,
       changed: false,

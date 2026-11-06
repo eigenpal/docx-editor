@@ -26,10 +26,7 @@ export type TablePropertyPatchResult =
   | { readonly ok: false; readonly reason: TablePropertyPatchRejection };
 
 export type TblGridColumnPatchRejection =
-  | 'unknown-grid-column'
-  | 'duplicate-grid-column'
-  | 'wrong-expanded-name'
-  | 'extension-collision';
+  'unknown-grid-column' | 'duplicate-grid-column' | 'wrong-expanded-name' | 'extension-collision';
 
 export type TblGridColumnPatchResult =
   | { readonly ok: true; readonly grid: OoxmlElement }

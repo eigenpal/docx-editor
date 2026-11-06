@@ -289,7 +289,7 @@ export function structAt(doc: Y.Doc, id: ItemId): Y.Item | null {
 export function* itemsWrittenSince(doc: Y.Doc, from: number): Generator<Y.Item> {
   const client = doc.clientID;
   const to = Y.getState(doc.store, client);
-  for (let clock = from; clock < to; ) {
+  for (let clock = from; clock < to;) {
     const struct: Y.AbstractStruct = Y.getItem(doc.store, Y.createID(client, clock));
     clock = struct.id.clock + struct.length;
     if (struct instanceof Y.Item) yield struct;

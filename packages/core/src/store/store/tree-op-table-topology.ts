@@ -41,10 +41,7 @@ export interface EditableTableTopology {
 }
 
 export type TableTopologyRejection =
-  | 'unknown-table'
-  | 'duplicate-property-container'
-  | 'duplicate-node-id'
-  | 'resource-limit';
+  'unknown-table' | 'duplicate-property-container' | 'duplicate-node-id' | 'resource-limit';
 
 export type EditableTableTopologyResult =
   | { readonly ok: true; readonly topology: EditableTableTopology }

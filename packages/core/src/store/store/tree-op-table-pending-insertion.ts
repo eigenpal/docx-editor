@@ -103,8 +103,7 @@ export function cellJoiningInsertion(
 function markInsertionOf(paragraph: OoxmlNode): OoxmlElement | undefined {
   if (paragraph.kind !== 'paragraph') return undefined;
   const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties') as
-    | OoxmlElement
-    | undefined;
+    OoxmlElement | undefined;
   const rPr = pPr && wmlChildNamed(pPr, 'rPr');
   return rPr && wmlChildNamed(rPr, 'ins');
 }
@@ -131,8 +130,7 @@ export function paragraphJoiningInsertion(
   const marker = cellMarkInsertion(source);
   if (!marker || markInsertionOf(paragraph)) return paragraph;
   const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties') as
-    | OoxmlElement
-    | undefined;
+    OoxmlElement | undefined;
   const rPr = pPr && wmlChildNamed(pPr, 'rPr');
   const runProperties: OoxmlElement = {
     ...(rPr ?? { ...freshWmlElement('rPr', nextId, wml, []), kind: 'runProperties' }),

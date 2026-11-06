@@ -119,7 +119,7 @@ export class CopyHolderOrder {
     const doc = this.textOf(paragraphId)?.doc;
     const pieces: { start: number; end: number; source: Y.Text | null }[] = [];
     const end = from + length;
-    for (let clock = from; clock < end; ) {
+    for (let clock = from; clock < end;) {
       let struct: Y.AbstractStruct | null = null;
       try {
         struct =

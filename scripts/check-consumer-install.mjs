@@ -84,12 +84,20 @@ function pendingPackageVersions() {
 const pendingVersions = pendingPackageVersions();
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
-    cwd: options.cwd ?? ROOT,
-    encoding: 'utf8',
-    stdio: options.capture ? 'pipe' : 'inherit',
-    env: { ...process.env, ...options.env },
-  });
+  const spawn = (spawnArgs) =>
+    spawnSync(command, spawnArgs, {
+      cwd: options.cwd ?? ROOT,
+      encoding: 'utf8',
+      stdio: options.capture ? 'pipe' : 'inherit',
+      env: { ...process.env, ...options.env },
+    });
+  let result = spawn(args);
+  // CI installs with `prefer-offline` from a restored cache. A cached packument older than a
+  // dependency's newest release fails with ETARGET, so one retry asks the registry.
+  if (result.status !== 0 && command === 'npm' && args[0] === 'install') {
+    console.warn('npm install failed; retrying once with --prefer-online.');
+    result = spawn([...args, '--prefer-online']);
+  }
   if (result.status !== 0) {
     if (options.capture) {
       process.stderr.write(result.stdout ?? '');

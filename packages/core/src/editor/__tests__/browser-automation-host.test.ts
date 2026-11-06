@@ -67,8 +67,7 @@ function handleAt(
   index: number
 ): AutomationHandle {
   const result = response.results[index] as
-    | { status: 'ok'; value: { kind: string; handle: AutomationHandle } }
-    | undefined;
+    { status: 'ok'; value: { kind: string; handle: AutomationHandle } } | undefined;
   if (result?.status !== 'ok' || result.value.kind !== 'handle') {
     throw new Error(`expected a handle at ${index}`);
   }
@@ -87,8 +86,7 @@ function errorCodeAt(
   index: number
 ): string {
   const result = response.results[index] as
-    | { status: 'error'; error: { code: string } }
-    | undefined;
+    { status: 'error'; error: { code: string } } | undefined;
   if (result?.status !== 'error') throw new Error(`expected an error at ${index}`);
   return result.error.code;
 }

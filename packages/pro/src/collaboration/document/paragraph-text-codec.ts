@@ -22,12 +22,7 @@ import { type AttributeFields, attributeListFrom, elementFrom, textNode } from '
 import { rejectDangerousKey, type DocumentLimits, type LimitCode } from './limits.ts';
 
 export type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+  string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 /** What an element in one position is when its data does not say. */
 export interface Slot {

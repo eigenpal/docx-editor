@@ -459,8 +459,7 @@ const INSERTED: ReadonlySet<string> = new Set(['ins', 'moveTo']);
 const DELETED: ReadonlySet<string> = new Set(['del', 'moveFrom']);
 
 type HunkOp =
-  | DiffOp
-  | { readonly op: 'pair'; readonly base: BlockUnit; readonly revised: BlockUnit };
+  DiffOp | { readonly op: 'pair'; readonly base: BlockUnit; readonly revised: BlockUnit };
 
 /**
  * In a run of changes, a deleted and an inserted block of the same kind compare as a pair, in

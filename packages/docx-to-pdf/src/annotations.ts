@@ -19,13 +19,7 @@ import type { SemanticSpanVisit } from '@docx-editor.dev/core/layout';
 import { pageHeight, pdfLiteralUri, Work } from './context.ts';
 
 type Literal =
-  | string
-  | number
-  | boolean
-  | null
-  | PDFObject
-  | Literal[]
-  | { [key: string]: Literal | undefined };
+  string | number | boolean | null | PDFObject | Literal[] | { [key: string]: Literal | undefined };
 function add(
   doc: PDFDocument,
   page: PDFPage,

@@ -110,7 +110,7 @@ export function redoRefusedDeletes(
     if (record instanceof Y.Map && !ownValueStands(record, doc.clientID)) records.add(record);
   }
   for (const run of deleteSetRuns(redone.deletions)) {
-    for (let clock = run.clock; clock < run.clock + run.length; ) {
+    for (let clock = run.clock; clock < run.clock + run.length;) {
       const item = structAt(doc, { client: run.client, clock });
       if (!item) break;
       clock = item.id.clock + item.length;
@@ -167,7 +167,7 @@ export function ownDeletedRecords(
   const ids = new Set<string>();
   for (const run of deleteSetRuns(step?.insertions)) {
     if (run.client !== doc.clientID) continue;
-    for (let clock = run.clock; clock < run.clock + run.length; ) {
+    for (let clock = run.clock; clock < run.clock + run.length;) {
       const item = structAt(doc, { client: run.client, clock });
       if (!item) break;
       clock = item.id.clock + item.length;

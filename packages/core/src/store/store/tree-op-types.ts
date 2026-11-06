@@ -55,14 +55,7 @@ export type TreeDocColorValue =
 
 /** Which edges a border op addresses — the four sides, the interiors, all, or clear. */
 export type TableBorderTarget =
-  | 'all'
-  | 'outside'
-  | 'inside'
-  | 'none'
-  | 'top'
-  | 'bottom'
-  | 'left'
-  | 'right';
+  'all' | 'outside' | 'inside' | 'none' | 'top' | 'bottom' | 'left' | 'right';
 
 /** A {@link TableBorderTarget} that draws something — everything except clear. */
 export type TableBorderEdgeTarget = Exclude<TableBorderTarget, 'none'>;

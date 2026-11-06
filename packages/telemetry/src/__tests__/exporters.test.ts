@@ -300,8 +300,7 @@ describe('otelExporter', () => {
 describe('otelExporter gauges', () => {
   test('a forgotten series is no longer observed', () => {
     let callback:
-      | ((result: { observe: (value: number, attributes: unknown) => void }) => void)
-      | undefined;
+      ((result: { observe: (value: number, attributes: unknown) => void }) => void) | undefined;
     const meter = {
       createObservableGauge: () => ({ addCallback: (fn: typeof callback) => void (callback = fn) }),
     };

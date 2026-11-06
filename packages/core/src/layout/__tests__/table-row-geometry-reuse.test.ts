@@ -832,8 +832,8 @@ test('deferred body groups preserve wrapped numeric cells through typing and und
         fragment.kind === 'table' && !!Object.getOwnPropertyDescriptor(fragment, 'rows')?.get
     );
   expect(deferred.length).toBeGreaterThan(0);
-  const descriptors = deferred.map(
-    (fragment) => Object.getOwnPropertyDescriptor(fragment, 'rows')!
+  const descriptors = deferred.map((fragment) =>
+    Object.getOwnPropertyDescriptor(fragment, 'rows')!
   );
   try {
     for (const fragment of deferred)

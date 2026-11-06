@@ -156,10 +156,7 @@ export interface DocumentCompareOptions {
   authorName?: string;
   /** Where the result goes. Default and only supported value: `CompareTargetCurrent`. */
   compareTarget?:
-    | CompareTarget
-    | 'CompareTargetCurrent'
-    | 'CompareTargetNew'
-    | 'CompareTargetSelected';
+    CompareTarget | 'CompareTargetCurrent' | 'CompareTargetNew' | 'CompareTargetSelected';
   /** Record formatting differences as revisions. Default `true`. */
   detectFormatChanges?: boolean;
   /** Accepted; there is no warning prompt. Default `false`. */

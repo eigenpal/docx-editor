@@ -125,8 +125,7 @@ export function createListStyleWrites(deps: ListStyleDeps): ListStyleWrites {
    * are last-wins. The styles part is immutable for the session, so this builds once.
    */
   let defaultStyleMemo:
-    | { readonly root: OoxmlElement | null; readonly styleId: string | null }
-    | undefined;
+    { readonly root: OoxmlElement | null; readonly styleId: string | null } | undefined;
   function defaultParagraphStyleId(): string | null {
     const root = session.stylesRoot();
     if (defaultStyleMemo === undefined || defaultStyleMemo.root !== root) {

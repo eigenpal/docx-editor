@@ -85,7 +85,7 @@ class Holders extends Set<LogicalId> {
   private push(id: LogicalId): void {
     const heap = this.heap;
     heap.push(id);
-    for (let at = heap.length - 1; at > 0; ) {
+    for (let at = heap.length - 1; at > 0;) {
       const parent = (at - 1) >> 1;
       if (heap[parent]! <= heap[at]!) break;
       [heap[parent], heap[at]] = [heap[at]!, heap[parent]!];
@@ -98,7 +98,7 @@ class Holders extends Set<LogicalId> {
     const last = heap.pop()!;
     if (heap.length === 0) return;
     heap[0] = last;
-    for (let at = 0; ; ) {
+    for (let at = 0; ;) {
       const left = 2 * at + 1;
       const right = left + 1;
       let least = at;

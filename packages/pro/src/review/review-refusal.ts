@@ -38,13 +38,7 @@ function skipLead(skip: { readonly reason: string; readonly detail?: string }): 
  * @public
  */
 export type ReviewWriteAction =
-  | 'accept'
-  | 'reject'
-  | 'resolve'
-  | 'reopen'
-  | 'remove'
-  | 'reply'
-  | 'comment';
+  'accept' | 'reject' | 'resolve' | 'reopen' | 'remove' | 'reply' | 'comment';
 
 /**
  * A review write the editor refused.

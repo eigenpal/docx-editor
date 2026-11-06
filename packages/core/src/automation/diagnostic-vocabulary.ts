@@ -33,9 +33,7 @@ export type DocumentOpenDiagnosticCode =
  * @public
  */
 export type DocumentSaveDiagnosticCode =
-  | 'save.no-document'
-  | 'save.document-changed'
-  | 'save.failed';
+  'save.no-document' | 'save.document-changed' | 'save.failed';
 
 /** Why an edit, a command or a tracked change was refused. @public */
 export type EditDiagnosticCode =
@@ -114,9 +112,7 @@ export type FontDiagnosticCode =
  * @public
  */
 export type HistoryDiagnosticCode =
-  | 'history.split'
-  | 'history.possible-ungrouped-gesture'
-  | 'history.possible-fragmented-gesture';
+  'history.split' | 'history.possible-ungrouped-gesture' | 'history.possible-fragmented-gesture';
 
 /**
  * Why a performance summary needs attention. Informational: nothing was refused.
@@ -127,8 +123,7 @@ export type PerformanceDiagnosticCode = 'performance.slow-interaction';
 
 /** Why a custom node's stored payload could not be read. The node name is never reported. @public */
 export type CustomNodeDiagnosticCode =
-  | 'custom-node.payload-invalid'
-  | 'custom-node.payload-missing';
+  'custom-node.payload-invalid' | 'custom-node.payload-missing';
 
 /**
  * Why a collaboration session failed or refused work: `collab.` and the session's own public
@@ -213,12 +208,7 @@ export type DocumentPartKind =
  * @public
  */
 export type DiagnosticErrorName =
-  | 'Error'
-  | 'TypeError'
-  | 'RangeError'
-  | 'ReferenceError'
-  | 'SyntaxError'
-  | 'other';
+  'Error' | 'TypeError' | 'RangeError' | 'ReferenceError' | 'SyntaxError' | 'other';
 
 /** What a tracked-change request was asked to do. @public */
 export type ReviewOperation = 'accept' | 'reject' | 'reassign';
@@ -259,9 +249,4 @@ export type FormattingChangeKind =
  * @public
  */
 export type FailureStage =
-  | 'open-mount'
-  | 'open-layout'
-  | 'command'
-  | 'review-item'
-  | 'automation'
-  | 'save';
+  'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation' | 'save';

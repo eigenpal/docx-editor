@@ -6,13 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type { ConversionTimings } from './conversion-response';
 
 export type PdfStatus =
-  | 'idle'
-  | 'preparing'
-  | 'starting'
-  | 'converting'
-  | 'ready'
-  | 'stale'
-  | 'error';
+  'idle' | 'preparing' | 'starting' | 'converting' | 'ready' | 'stale' | 'error';
 
 export function isPdfBusy(status: PdfStatus): boolean {
   return status === 'preparing' || status === 'starting' || status === 'converting';

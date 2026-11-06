@@ -33,7 +33,7 @@ function readPlainPng(bytes: Uint8Array): PlainPng | null {
   if (!(width > 0 && height > 0)) return null;
   const parts: Uint8Array[] = [];
   let total = 0;
-  for (let at = 8; at + 12 <= bytes.length; ) {
+  for (let at = 8; at + 12 <= bytes.length;) {
     const length = view.getUint32(at);
     const type = String.fromCharCode(
       bytes[at + 4]!,

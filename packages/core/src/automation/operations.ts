@@ -62,10 +62,7 @@ export type AutomationContentControlValue =
 
 /** The `ST_Lock` values an author may write. */
 export type AutomationContentControlLock =
-  | 'unlocked'
-  | 'sdtLocked'
-  | 'contentLocked'
-  | 'sdtContentLocked';
+  'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
 
 /**
  * Which part of a control a range read answers.
@@ -75,20 +72,11 @@ export type AutomationContentControlLock =
  * position between a mark and the first character to answer with.
  */
 export type AutomationContentControlRangeLocation =
-  | 'whole'
-  | 'content'
-  | 'start'
-  | 'end'
-  | 'before'
-  | 'after';
+  'whole' | 'content' | 'start' | 'end' | 'before' | 'after';
 
 /** The control types an insertion may author. Picture and repeating section are deferred. */
 export type AutomationContentControlSubtype =
-  | 'richText'
-  | 'plainText'
-  | 'dropDownList'
-  | 'comboBox'
-  | 'date';
+  'richText' | 'plainText' | 'dropDownList' | 'comboBox' | 'date';
 
 /**
  * Which paragraph a structural command is anchored at.

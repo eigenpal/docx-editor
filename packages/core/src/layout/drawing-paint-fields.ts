@@ -35,13 +35,7 @@ export interface DrawingGroupPictureRecord {
  * @public
  */
 export type DrawingPlaceholderKind =
-  | 'chart'
-  | 'diagram'
-  | 'shape'
-  | 'group'
-  | 'textbox'
-  | 'canvas'
-  | 'graphic';
+  'chart' | 'diagram' | 'shape' | 'group' | 'textbox' | 'canvas' | 'graphic';
 
 /** The kind named by an `unsupported-graphic` diagnostic; `legacy-vml` marks a VML drawing. */
 function placeholderKindOfUri(uri: string): DrawingPlaceholderKind {

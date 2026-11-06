@@ -3,10 +3,7 @@ export class MarkdownMediaError extends Error {
   readonly name = 'MarkdownMediaError';
   constructor(
     readonly code:
-      | 'media-limit'
-      | 'url-resolution-failed'
-      | 'invalid-image-url'
-      | 'image-bytes-unavailable',
+      'media-limit' | 'url-resolution-failed' | 'invalid-image-url' | 'image-bytes-unavailable',
     message: string,
     details: {
       readonly assetId?: string;

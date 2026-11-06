@@ -59,13 +59,7 @@ const MAX_DELIMITERS = 16;
 
 /** Paragraph alignment values readable and writable through this object model. */
 export type ParagraphAlignment =
-  | Alignment
-  | 'Mixed'
-  | 'Unknown'
-  | 'Left'
-  | 'Centered'
-  | 'Right'
-  | 'Justified';
+  Alignment | 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
 
 /**
  * A paragraph's base direction, as {@link Paragraph.readingOrder} reads and writes it.

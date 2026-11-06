@@ -451,10 +451,7 @@ export function readChartexModel(chartSpace: OoxmlElement): ChartexModel | null 
       ? {
           element: legendElement,
           position: (LEGEND_POSITIONS.has(legendPosition) ? legendPosition : 'r') as
-            | 't'
-            | 'b'
-            | 'l'
-            | 'r',
+            't' | 'b' | 'l' | 'r',
           overlay: cxFlag(legendElement, 'overlay', false),
           spPr: cxChild(legendElement, 'spPr'),
           txPr: cxChild(legendElement, 'txPr'),
