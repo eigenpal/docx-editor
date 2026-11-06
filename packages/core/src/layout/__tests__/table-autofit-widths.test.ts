@@ -20,38 +20,42 @@ describe('widenAutofitColumns', () => {
 
   test('returns columns that already hold their content unchanged', () => {
     const widths = [250, 125, 75];
-    expect(widenAutofitColumns(widths, [20, 100, 30], 450, 451.3)).toBe(widths);
+    expect(widenAutofitColumns(widths, [20, 100, 30], 450, 451.3, { insets: [] })).toBe(widths);
   });
 
   test('takes the extra width from the other columns in proportion to their slack', () => {
-    expect(round(widenAutofitColumns([250, 125, 75], minimums, 450, 451.3))).toEqual([
-      102, 301.4, 46.6,
-    ]);
+    expect(
+      round(widenAutofitColumns([250, 125, 75], minimums, 450, 451.3, { insets: [] }))
+    ).toEqual([102, 301.4, 46.6]);
     // A shorter unbroken word takes proportionally less.
-    expect(round(widenAutofitColumns([250, 125, 75], [25.7, 158.6, 31.9], 450, 451.3))).toEqual([
-      221.8, 158.6, 69.6,
-    ]);
+    expect(
+      round(widenAutofitColumns([250, 125, 75], [25.7, 158.6, 31.9], 450, 451.3, { insets: [] }))
+    ).toEqual([221.8, 158.6, 69.6]);
   });
 
   test('a table without an absolute width settles at the room it has', () => {
-    const widths = widenAutofitColumns([250, 125, 75], minimums, 462.1, 462.1);
+    const widths = widenAutofitColumns([250, 125, 75], minimums, 462.1, 462.1, { insets: [] });
     expect(round(widths)).toEqual([112.2, 301.4, 48.5]);
     expect(widths.reduce((sum, width) => sum + width, 0)).toBeCloseTo(462.1, 6);
   });
 
   test('an automatic width also shrinks to the room an indent leaves', () => {
     // 72 pt of indent leaves 379.3 pt: the authored 450 pt grid gives back the rest too.
-    expect(round(widenAutofitColumns([250, 125, 75], minimums, 379.3, 379.3))).toEqual([
-      42.7, 301.4, 35.2,
-    ]);
+    expect(
+      round(widenAutofitColumns([250, 125, 75], minimums, 379.3, 379.3, { insets: [] }))
+    ).toEqual([42.7, 301.4, 35.2]);
   });
 
   test('grows past the stated table width once the other columns reach their minimums', () => {
-    expect(round(widenAutofitColumns([100, 50, 50], minimums, 200, 451.3))).toEqual(minimums);
+    expect(round(widenAutofitColumns([100, 50, 50], minimums, 200, 451.3, { insets: [] }))).toEqual(
+      minimums
+    );
   });
 
   test('scales every minimum down when together they exceed the text column', () => {
-    const widths = widenAutofitColumns([150, 150, 150], [301.4, 301.4, 34], 450, 451.3);
+    const widths = widenAutofitColumns([150, 150, 150], [301.4, 301.4, 34], 450, 451.3, {
+      insets: [],
+    });
     expect(round(widths)).toEqual([213.5, 213.5, 24.3]);
     expect(widths.reduce((sum, width) => sum + width, 0)).toBeCloseTo(451.3, 6);
   });
