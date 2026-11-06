@@ -1313,6 +1313,7 @@ export function mountPaginatedSurface(
       ) !== null,
     ...listDefinitionReads(() => withNumberingStyleLinks(numberingIndex(), styleCascade())),
     styleCascade,
+    defaultTabStopPt,
   });
   /** The contract's `replacementLanding`; the hyperlink lane reads the same rule. */
   function replacementLanding(paragraphId: string, start: number, end: number): number | null {

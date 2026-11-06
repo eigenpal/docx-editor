@@ -6,8 +6,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // A list button starts a list on a definition of its own, never on the document's heading
 // numbering, and a paragraph just below a heading joins the heading list by taking the
 // heading style. Both writes replicate: concurrent presses, an edit and a deletion of the
-// pressed paragraph, undo and redo, and a cold reopen all converge.
+// pressed paragraph, undo and redo, and a cold reopen all converge. An indented paragraph
+// joins at the level its first line reaches, one level per default tab stop.
 import { afterEach, expect, test } from 'bun:test';
+import { strFromU8, unzipSync } from 'fflate';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { collaborationModule } from '../collaboration-module.ts';
@@ -81,9 +83,9 @@ function coldMarkersOf(editor: Editor): (string | null)[] {
   }
 }
 
-async function pairedEditors() {
+async function pairedEditors(body = BODY) {
   const peers = await harness.pair(
-    zipDocument(BODY, {
+    zipDocument(body, {
       overrides:
         `<Override PartName="/word/numbering.xml" ContentType="${MAIN}.numbering+xml"/>` +
         `<Override PartName="/word/styles.xml" ContentType="${MAIN}.styles+xml"/>`,
@@ -194,4 +196,47 @@ test('a join converges while the peer deletes the joined paragraph', async () =>
   // The joined paragraph is gone, so undoing the join leaves the document as it settled.
   alice.surface!.undo();
   expect(converged()).toEqual(settled);
+});
+
+/** Intro indented 0.6 in: it joins at level 1, as a Heading 2. */
+const INDENTED = BODY.replace(
+  paragraph('Intro'),
+  '<w:p><w:pPr><w:ind w:left="864"/></w:pPr><w:r><w:t>Intro</w:t></w:r></w:p>'
+);
+
+test('an indented paragraph joins as a Heading 2 beside typing, undo, and redo', async () => {
+  const { alice, bob, converged, pause, resume } = await pairedEditors(INDENTED);
+  expect(converged()).toEqual(ORIGINAL);
+  pause();
+  caret(alice, 1);
+  expect(alice.surface!.toggleList('ordered')).toBe(true);
+  caret(bob, 1, 0);
+  bob.surface!.insertPlainText('x');
+  resume();
+  const joined = ['01', '01.1', null, null, null, '01.2'];
+  expect(converged()).toEqual(joined);
+  const saved = strFromU8(unzipSync(alice.surface!.session.save())['word/document.xml']!);
+  expect(saved).not.toContain('w:left="864"');
+  alice.surface!.undo();
+  expect(converged()).toEqual(ORIGINAL);
+  alice.surface!.redo();
+  expect(converged()).toEqual(joined);
+});
+
+test('an indented join converges while the peer indents the same paragraph', async () => {
+  const { alice, bob, converged, pause, resume } = await pairedEditors(INDENTED);
+  pause();
+  caret(alice, 1);
+  expect(alice.surface!.toggleList('ordered')).toBe(true);
+  caret(bob, 1);
+  expect(bob.surface!.adjustIndent('increase')).toBe(true);
+  resume();
+  const settled = converged();
+  // Both writes stand: the join's Heading 2, and the indent the peer stepped in from 0.6 in.
+  expect(settled).toEqual(['01', '01.1', null, null, null, '01.2']);
+  const intro = strFromU8(unzipSync(alice.surface!.session.save())['word/document.xml']!).match(
+    /<w:p[ >].*?<\/w:p>/g
+  )![1]!;
+  expect(intro).toContain('<w:pStyle w:val="Heading2"/>');
+  expect(intro).toContain('w:left="1584"');
 });

@@ -55,24 +55,23 @@ const kindOf = (marker: ListMarkerRecord): ListKind =>
 const twips = (points: number): number => Math.round(points * 20);
 
 /**
- * The `w:numId` the paragraph just before the selection uses for a list of the same kind, if
- * any.
+ * The list item just before the selection, when it draws a list of the same kind, or null.
  *
  * Turning a list back on continues the list above it rather than minting a second definition,
  * so re-bulleting one item in the middle of a list keeps its neighbours' glyph. The list
  * below never counts: reference renderings start a new list for a paragraph above a list
  * item, and above a heading of a heading numbering.
  */
-function adjacentListNumId(
-  deps: ListSwitchDeps,
+export function adjacentListMarker(
+  deps: Pick<ListSwitchDeps, 'order' | 'markerOf'>,
   touched: readonly string[],
   kind: ListKind
-): string | null {
+): ListMarkerRecord | null {
   const order = deps.order();
   const first = order.indexOf(touched[0] ?? '');
   const previous = first > 0 ? order[first - 1] : undefined;
   const marker = previous ? deps.markerOf(previous) : null;
-  return marker && kindOf(marker) === kind ? marker.numId : null;
+  return marker && kindOf(marker) === kind ? marker : null;
 }
 
 /** Where an item its style numbers sits on sides `level` states otherwise, or null. */
@@ -151,7 +150,9 @@ function withStyleIndent(level: ListLevelGeometry, shown: StyleIndent): ListLeve
 export function switchedListNumIds(
   deps: ListSwitchDeps,
   touched: readonly string[],
-  kind: ListKind
+  kind: ListKind,
+  /** The level a paragraph that is no list item takes when it joins the list above. */
+  joinLevel: (paragraphId: string) => number = () => 0
 ): Map<string, string> | null {
   // A heading of a heading numbering is not a list the selection is in: reference renderings
   // put a plain paragraph and such a heading on a new list together, the heading keeping its
@@ -166,8 +167,17 @@ export function switchedListNumIds(
   const fits = (numId: string | null | undefined): numId is string =>
     typeof numId === 'string' &&
     markers.every((marker) => deps.listLevelKindOf(numId, marker?.level ?? 0) === kind);
-  const adjacent = adjacentListNumId(deps, touched, kind);
-  if (fits(adjacent)) return everyItem(adjacent);
+  // The list above must draw `kind` where each paragraph lands on it: an item at its own
+  // level, any other paragraph at the level it joins at.
+  const adjacent = adjacentListMarker(deps, touched, kind)?.numId;
+  const joinable =
+    typeof adjacent === 'string' &&
+    touched.every((paragraphId, index) => {
+      const marker = markers[index];
+      const level = marker ? marker.level : deps.markerOf(paragraphId) ? 0 : joinLevel(paragraphId);
+      return deps.listLevelKindOf(adjacent, level) === kind;
+    });
+  if (joinable) return everyItem(adjacent);
   const held = markers.find((marker) => fits(marker?.numId))?.numId;
   if (held) return everyItem(held);
   const leaving = mostUsedNumId(markers);
@@ -273,8 +283,8 @@ export interface LinkedStyleReads extends Pick<
  * reference renderings do, and the style then numbers it. That holds only when the style
  * numbers on the same definition and level, whichever `w:num` instance names it: a style that
  * numbers elsewhere, or not at all, would leave the paragraph on another list or with no
- * number, so those paragraphs keep their own `w:numPr`. A plain paragraph joins at level 0,
- * so below a Heading 2 it becomes a Heading 1, as the reference does.
+ * number, so those paragraphs keep their own `w:numPr`. A plain paragraph joins at the level
+ * `joinedLevel` gives it: with no indent, level 0, so below a Heading 2 it becomes a Heading 1.
  */
 export function linkedStyleOps(
   numIds: ReadonlyMap<string, string>,

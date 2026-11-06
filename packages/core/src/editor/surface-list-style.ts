@@ -26,6 +26,9 @@ const LIST_PARAGRAPH_NAME = 'list paragraph';
 /** The styleId Word gives the built-in. */
 const LIST_PARAGRAPH_STYLE_ID = 'ListParagraph';
 
+const isIndent = (property: { readonly localName: string }): boolean =>
+  property.localName === 'ind';
+
 /** The `w:pStyle` a paragraph itself authors, or undefined. */
 function authoredStyleId(
   properties: ReturnType<typeof directParagraphProperties>
@@ -60,8 +63,11 @@ export interface ListStyleWrites {
    * These ops must go BEFORE the numbering ops, because `setParagraphProperties` replaces
    * the authorable set it is handed and `setListNumbering` is surgical on `w:numPr` — the
    * other order would drop the numbering the same transaction had just written.
+   *
+   * A paragraph for which `dropsIndent` holds also loses its own `w:ind`, as a paragraph that
+   * joins the list above does in reference renderings, whether or not its style changes.
    */
-  applyOps(touched: readonly string[]): TreeDocOp[];
+  applyOps(touched: readonly string[], dropsIndent?: (paragraphId: string) => boolean): TreeDocOp[];
   /**
    * The write that takes a paragraph OUT of List Paragraph, or null when it is not in it.
    *
@@ -79,9 +85,9 @@ export interface ListStyleWrites {
    * A level linked through `w:pStyle`, as in a heading numbering, numbers the paragraphs of
    * that style. A list gesture that joins such a list puts the paragraph in the style and
    * drops its own `w:numPr`, so the paragraph becomes one of the list's headings rather than a
-   * plain paragraph with a heading's number.
+   * plain paragraph with a heading's number. `dropIndent` also removes its own `w:ind`.
    */
-  linkedStyleOp(paragraphId: string, styleId: string): TreeDocOp | null;
+  linkedStyleOp(paragraphId: string, styleId: string, dropIndent?: boolean): TreeDocOp | null;
 }
 
 export function createListStyleWrites(deps: ListStyleDeps): ListStyleWrites {
@@ -109,35 +115,38 @@ export function createListStyleWrites(deps: ListStyleDeps): ListStyleWrites {
   }
 
   return {
-    applyOps(touched) {
+    applyOps(touched, dropsIndent) {
       const styleId = listParagraphStyleId(session.documentStyles());
-      if (styleId === null) return [];
       const defaultStyleId = defaultParagraphStyleId();
       const part = deps.storyPart();
       const ops: TreeDocOp[] = [];
       for (const paragraphId of touched) {
-        const properties = directParagraphProperties(part, paragraphId);
-        const authored = authoredStyleId(properties);
-        if (authored !== undefined && authored !== defaultStyleId) continue;
+        const own = directParagraphProperties(part, paragraphId);
+        const dropping = dropsIndent?.(paragraphId) === true && own.some(isIndent);
+        const properties = dropping ? own.filter((property) => !isIndent(property)) : own;
+        const authored = authoredStyleId(own);
+        const restyles =
+          styleId !== null && (authored === undefined || authored === defaultStyleId);
+        if (!restyles && !dropping) continue;
         ops.push({
           op: 'setParagraphProperties',
           paragraphId,
-          properties: mergedProperties(properties, {
-            localName: 'pStyle',
-            attributes: { val: styleId },
-          }),
+          properties:
+            restyles && styleId !== null
+              ? mergedProperties(properties, { localName: 'pStyle', attributes: { val: styleId } })
+              : properties,
         });
       }
       return ops;
     },
 
-    linkedStyleOp(paragraphId, styleId) {
+    linkedStyleOp(paragraphId, styleId, dropIndent = false) {
       const exists = session
         .documentStyles()
         .some((style) => style.type === 'paragraph' && style.styleId === styleId);
       if (!exists) return null;
       const properties = directParagraphProperties(deps.storyPart(), paragraphId).filter(
-        (property) => property.localName !== 'numPr'
+        (property) => property.localName !== 'numPr' && !(dropIndent && isIndent(property))
       );
       return {
         op: 'setParagraphProperties',

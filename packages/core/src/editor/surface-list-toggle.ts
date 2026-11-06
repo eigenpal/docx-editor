@@ -2,12 +2,15 @@
 //
 // Turning a list off drops each paragraph's numbering. Turning one on picks the list
 // (`switchedListNumIds`), then writes either the List Paragraph style and `w:numPr`, or, for a
-// level linked to a paragraph style, that style alone (`linkedStyleOps`).
+// level linked to a paragraph style, that style alone (`linkedStyleOps`). A paragraph that
+// joins the list above takes the level `joinedLevel` gives it and loses its own indent.
 
-import type { StyleCascadeTable } from '@docx-editor.dev/core/layout';
+import type { ParagraphIndent, StyleCascadeTable } from '@docx-editor.dev/core/layout';
 import type { TreeDocOp } from '@docx-editor.dev/core/store';
 import { styleNumberingOf } from './list-level-geometry.ts';
+import { joinedLevel } from './surface-list-join.ts';
 import {
+  adjacentListMarker,
   linkedStyleOps,
   switchedListNumIds,
   type ListKind,
@@ -24,6 +27,10 @@ export interface ListToggleDeps {
   levelOf(paragraphId: string): number | null;
   kindOf(paragraphId: string): ListKind | null;
   styleCascade(): StyleCascadeTable | undefined;
+  /** The paragraph's effective indent, in points, or null when it is not laid out. */
+  indentOf(paragraphId: string): ParagraphIndent | null;
+  /** `w:defaultTabStop` in points. */
+  defaultTabStopPt(): number;
 }
 
 /** The ops that toggle `kind` over `touched`, or null when no list can be found or made. */
@@ -38,17 +45,44 @@ export function listToggleOps(
   if (touched.every((paragraphId) => deps.kindOf(paragraphId) === kind)) {
     return touched.map((paragraphId) => deps.leaveOp(paragraphId));
   }
-  const numIds = switchedListNumIds(deps.listSwitch, touched, kind);
+  // The paragraphs that are no list item yet and go on the list just above the selection.
+  const above = adjacentListMarker(deps.listSwitch, touched, kind);
+  const reads = { ...deps, listLevelStyleOf: deps.listSwitch.listLevelStyleOf };
+  const levels = new Map<string, number>();
+  const joinLevel = (paragraphId: string): number => {
+    let level = levels.get(paragraphId);
+    if (level === undefined) {
+      level = above ? joinedLevel(reads, paragraphId, above) : 0;
+      levels.set(paragraphId, level);
+    }
+    return level;
+  };
+  const numIds = switchedListNumIds(deps.listSwitch, touched, kind, joinLevel);
   if (numIds === null) return null;
+  const joined = new Map<string, number>();
+  if (above) {
+    for (const paragraphId of touched) {
+      if (deps.levelOf(paragraphId) !== null || numIds.get(paragraphId) !== above.numId) continue;
+      // Another path can pick the same list; a level that draws another kind does not join.
+      const level = joinLevel(paragraphId);
+      if (deps.listSwitch.listLevelKindOf(above.numId, level) !== kind) continue;
+      joined.set(paragraphId, level);
+    }
+  }
+  const levelOf = (paragraphId: string) => joined.get(paragraphId) ?? deps.levelOf(paragraphId);
   const linked = linkedStyleOps(numIds, {
     listLevelStyleOf: deps.listSwitch.listLevelStyleOf,
     listAbstractOf: deps.listSwitch.listAbstractOf,
-    levelOf: deps.levelOf,
+    levelOf,
     styleNumberingOf: (styleId) => styleNumberingOf(deps.styleCascade(), styleId),
-    linkedStyleOp: deps.listStyle.linkedStyleOp,
+    linkedStyleOp: (paragraphId, styleId) =>
+      deps.listStyle.linkedStyleOp(paragraphId, styleId, joined.has(paragraphId)),
   });
   const ops: TreeDocOp[] = [
-    ...deps.listStyle.applyOps(touched.filter((paragraphId) => !linked.has(paragraphId))),
+    ...deps.listStyle.applyOps(
+      touched.filter((paragraphId) => !linked.has(paragraphId)),
+      (paragraphId) => joined.has(paragraphId)
+    ),
     ...linked.values(),
   ];
   for (const paragraphId of touched) {
@@ -56,7 +90,7 @@ export function listToggleOps(
     // `w:numPr` carries the level AND the definition, and the op mints a fresh one, so a call
     // that names no level silently resets `w:ilvl` to 0. A bullet converts to a number IN
     // PLACE: pressing Numbered on a level-2 item leaves it at level 2.
-    const level = deps.levelOf(paragraphId);
+    const level = levelOf(paragraphId);
     ops.push({
       op: 'setListNumbering',
       paragraphId,
