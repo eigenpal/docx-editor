@@ -3075,9 +3075,12 @@ export function mountPaginatedSurface(
     return true;
   }
 
-  /** Backspace / Delete at a chip takes it whole, or first selects a content-locked one. */
-  function deleteAtomicControl(direction: 'backward' | 'forward'): boolean {
-    const step = atomicControlDeletion(direction, (position) => hiddenMarks.shown(position));
+  /**
+   * Backspace / Delete at a chip takes it whole, or first selects a content-locked one or a
+   * prompt. `reach` is where a word deletion ends; it asks only about prompts.
+   */
+  function deleteAtomicControl(direction: 'backward' | 'forward', reach?: number): boolean {
+    const step = atomicControlDeletion(direction, (at) => hiddenMarks.shown(at), reach);
     if (step?.kind === 'select') setSelection(step.selection);
     else if (step) {
       const armed = armedAtCaret() ?? undefined;
@@ -4902,6 +4905,7 @@ export function mountPaginatedSurface(
         surface.deleteBackward();
         return;
       }
+      if (deleteAtomicControl('backward', target)) return;
       commit(
         () =>
           applyOps(
@@ -4926,6 +4930,7 @@ export function mountPaginatedSurface(
         surface.deleteForward();
         return;
       }
+      if (deleteAtomicControl('forward', target)) return;
       commit(
         () =>
           applyOps(
