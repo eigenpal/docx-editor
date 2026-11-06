@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Layout and copied HTML ignored the cell shading a table style states in its own w:tcPr.",
+  "after": "Layout and copied HTML fill each cell with that shading, under conditional formats and the cell's own shading.",
+  "reason": "Only layout and the HTML that a local copy writes change. Shared nodes, text offsets, operations, and package serialization stay the same.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-style-cell-shading.test.ts",
+    "packages/core/src/editor/__tests__/clipboard-html-write.test.ts"
+  ],
+  "changeset": "table-style-cell-shading",
+  "migration": null
+}
