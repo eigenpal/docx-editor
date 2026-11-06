@@ -456,7 +456,9 @@ function sameElement(left: OoxmlElement, right: OoxmlElement): boolean {
  * Pressing a list button again, or switching an item back and forth, then reuses one
  * definition per kind and geometry instead of adding definitions on every press. Any other
  * definition the document holds is never borrowed: a heading numbering such as "01" with its
- * own marker formatting is decimal too, and a new list must not take its look.
+ * own marker formatting is decimal too, and a new list must not take its look. A document
+ * whose lists another program authored gains one definition of this module's own on the first
+ * press; later presses reuse it.
  */
 function sameLevelsAbstract(
   abstractNums: readonly OoxmlElement[],

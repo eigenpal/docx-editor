@@ -4,7 +4,11 @@
 // toggle rejoins a list of the wanted kind when one fits, and otherwise mints a definition
 // with the geometry of the list the items are leaving.
 
-import type { ListDefinitionGeometry, ListLevelGeometry } from '@docx-editor.dev/core/store';
+import type {
+  ListDefinitionGeometry,
+  ListLevelGeometry,
+  TreeDocOp,
+} from '@docx-editor.dev/core/store';
 import type { ListMarkerRecord, ParagraphIndent } from '@docx-editor.dev/core/layout';
 import type { IndentSides } from './list-level-geometry.ts';
 
@@ -47,7 +51,7 @@ const kindOf = (marker: ListMarkerRecord): ListKind =>
 const twips = (points: number): number => Math.round(points * 20);
 
 /**
- * The `w:numId` the paragraph just BEFORE the selection uses for a list of the same kind, if
+ * The `w:numId` the paragraph just before the selection uses for a list of the same kind, if
  * any.
  *
  * Turning a list back on continues the list above it rather than minting a second definition,
@@ -236,4 +240,40 @@ function mostUsedNumId(markers: readonly (ListMarkerRecord | null)[]): string | 
     if (best === null || count > counts.get(best)!) best = marker.numId;
   }
   return best;
+}
+
+/** What {@link linkedStyleOps} reads. */
+export interface LinkedStyleReads extends Pick<ListSwitchReads, 'listLevelStyleOf'> {
+  /** The paragraph's own list level, or null when it is no list item. */
+  levelOf(paragraphId: string): number | null;
+  /** The list and level a paragraph style numbers its paragraphs on, or null. */
+  styleNumberingOf(styleId: string): { readonly numId: string; readonly ilvl: number } | null;
+  /** The write that puts a paragraph in a style, or null when no such paragraph style exists. */
+  linkedStyleOp(paragraphId: string, styleId: string): TreeDocOp | null;
+}
+
+/**
+ * The style writes for the paragraphs a toggle puts on a level linked to a paragraph style.
+ *
+ * Joining a heading numbering puts the paragraph in the heading style the level names, the way
+ * reference renderings do, and the style then numbers it. That holds only when the style
+ * really numbers on the same list and level: a style that numbers elsewhere, or not at all,
+ * would leave the paragraph on another counter or with no number, so those paragraphs keep
+ * their own `w:numPr`. A plain paragraph joins at level 0, so below a Heading 2 it becomes a
+ * Heading 1, as the reference does.
+ */
+export function linkedStyleOps(
+  numIds: ReadonlyMap<string, string>,
+  reads: LinkedStyleReads
+): Map<string, TreeDocOp> {
+  const ops = new Map<string, TreeDocOp>();
+  for (const [paragraphId, numId] of numIds) {
+    const level = reads.levelOf(paragraphId) ?? 0;
+    const styleId = reads.listLevelStyleOf(numId, level);
+    const numbering = styleId ? reads.styleNumberingOf(styleId) : null;
+    if (!styleId || numbering?.numId !== numId || numbering.ilvl !== level) continue;
+    const op = reads.linkedStyleOp(paragraphId, styleId);
+    if (op) ops.set(paragraphId, op);
+  }
+  return ops;
 }

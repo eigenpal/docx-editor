@@ -164,7 +164,7 @@ test('both peers start separate plain lists at once', async () => {
   expect(markers[5]).toBe('01.1');
 });
 
-test('a joined heading converges while the peer edits and then deletes it', async () => {
+test('a join converges while the peer types in the joined paragraph', async () => {
   const { alice, bob, converged, pause, resume } = await pairedEditors();
   pause();
   caret(alice, 1);
@@ -173,10 +173,14 @@ test('a joined heading converges while the peer edits and then deletes it', asyn
   bob.surface!.insertPlainText('x');
   resume();
   expect(converged()).toEqual(['01', '02', null, null, null, '02.1']);
+});
 
+test('a join converges while the peer deletes the joined paragraph', async () => {
+  const { alice, bob, converged, pause, resume } = await pairedEditors();
   pause();
-  caret(alice, 3);
+  caret(alice, 1);
   expect(alice.surface!.toggleList('ordered')).toBe(true);
+  // Bob deletes from the end of the heading through the start of Gap, taking Intro with it.
   const ids = bob.surface!.session.paragraphIds();
   bob.surface!.setSelection({
     anchor: { paragraphId: ids[0]!, offset: 12 },
@@ -186,5 +190,7 @@ test('a joined heading converges while the peer edits and then deletes it', asyn
   resume();
   const settled = converged();
   expect(settled[0]).toBe('01');
-  expect(settled).toContain('1.');
+  expect(settled.at(-1)).toMatch(/^0[12]\.1$/);
+  alice.surface!.undo();
+  converged();
 });

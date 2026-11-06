@@ -13,6 +13,7 @@ import { numberingLevelRank } from '../layout/numbering-level-tier.ts';
 import { numberingParagraphProperties } from '../layout/numbering-paragraph-properties.ts';
 import { cascadeParagraphFormatting, type StyleCascadeTable } from '../layout/style-cascade.ts';
 import { styleChain } from '../layout/style-chain.ts';
+import { readNumPr } from '../layout/list-paragraph-prelude.ts';
 
 const LEVEL_COUNT = 9;
 
@@ -98,6 +99,18 @@ export function styleNumberedIndentSides(
   const rank = numberingLevelRank(chain, pPr);
   if (rank >= chain.length) return null;
   return indentSidesOf(chain.slice(rank).flatMap((style) => style.paragraphProperties));
+}
+
+/** The list and level a paragraph style numbers its paragraphs on, through its `basedOn` chain. */
+export function styleNumberingOf(
+  table: StyleCascadeTable | undefined,
+  styleId: string
+): { readonly numId: string; readonly ilvl: number } | null {
+  if (!table) return null;
+  const tiers = styleChain(table, styleId, 'paragraph').flatMap((style) =>
+    style.paragraphPropertiesNode ? [style.paragraphPropertiesNode] : []
+  );
+  return readNumPr(tiers);
 }
 
 /**
