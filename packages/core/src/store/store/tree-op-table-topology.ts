@@ -26,6 +26,7 @@ import {
   wmlChildNamed,
 } from './tree-op-table-shared.ts';
 import { cachedUniqueNode } from '../package/ooxml-edit.ts';
+import { healedTableView } from './tree-op-table-heal.ts';
 
 export interface EditableTableTopology {
   readonly table: OoxmlTableNode;
@@ -213,7 +214,8 @@ function readTableTopology(
   const target = lookup.node;
   if (target.kind !== 'table') return reject('unknown-table', tableId);
 
-  const table = target;
+  // The table a table edit acts on: one that heals its repeated containers first.
+  const table = healedTableView(target);
   if (hasDuplicateWmlProperty(table, 'tblPr')) {
     return reject('duplicate-property-container', 'tblPr');
   }

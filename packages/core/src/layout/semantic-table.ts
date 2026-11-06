@@ -27,6 +27,7 @@ import { withRowMinimumContentInsets } from './table-row-minimum-insets.ts';
 // covering it across every row, not any one node visited here.
 import {
   flattenContentControls,
+  healedTableView,
   WML_NAMESPACE_URI,
   type OoxmlElement,
   type OoxmlNode,
@@ -475,7 +476,7 @@ export function readTableStructure(
 }
 
 function readTableStructureUncached(
-  table: OoxmlNode,
+  source: OoxmlNode,
   contentWidthPt: number,
   depth: number,
   styleCascade: StyleCascadeTable | undefined,
@@ -485,7 +486,8 @@ function readTableStructureUncached(
   textBox = false
 ): SemanticTableStructure | null {
   if (depth >= MAX_TABLE_NESTING) return null;
-  if (table.kind !== 'table') return null;
+  if (source.kind !== 'table') return null;
+  const table = healedTableView(source); // Repeated row/cell containers show as a save merges them.
 
   const tblPr = childNamed(table, 'tblPr');
   // A table's appearance mostly lives in its STYLE. Word writes
