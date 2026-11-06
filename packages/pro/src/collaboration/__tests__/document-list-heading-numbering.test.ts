@@ -12,6 +12,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { strFromU8, unzipSync } from 'fflate';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import { findNode } from '@docx-editor.dev/core/store';
 import { collaborationModule } from '../collaboration-module.ts';
 import { createPeerHarness, zipDocument } from './document-peer-support.ts';
 import { packageFingerprint, saveReopenDigest } from './document-support.ts';
@@ -239,4 +240,55 @@ test('an indented join converges while the peer indents the same paragraph', asy
   )![1]!;
   expect(intro).toContain('<w:pStyle w:val="Heading2"/>');
   expect(intro).toContain('w:left="1584"');
+  // The merged properties save in schema order, whatever order the shared list holds them in.
+  expect(intro.indexOf('<w:pStyle')).toBeLessThan(intro.indexOf('<w:ind'));
+});
+
+/** The children of paragraph `index`'s `w:pPr` as the peer holds them, by name. */
+function livePropertyNames(editor: Editor, index: number): string[] {
+  const session = editor.surface!.session;
+  const pkg = session.currentPackage();
+  const paragraph = findNode(pkg.parts.get(pkg.mainDocumentPart)!, session.paragraphIds()[index]!);
+  if (!paragraph || paragraph.kind === 'textValue') throw new Error('no paragraph');
+  const properties = paragraph.children.find(
+    (child) => child.kind !== 'textValue' && child.localName === 'pPr'
+  );
+  if (!properties || properties.kind === 'textValue') return [];
+  return properties.children.flatMap((child) =>
+    child.kind === 'textValue' ? [] : [child.localName]
+  );
+}
+
+test('a formatting edit over the merged property order converges in schema order', async () => {
+  const { alice, bob, converged, pause, resume } = await pairedEditors(INDENTED);
+  pause();
+  caret(alice, 1);
+  expect(alice.surface!.toggleList('ordered')).toBe(true);
+  caret(bob, 1);
+  expect(bob.surface!.adjustIndent('increase')).toBe(true);
+  resume();
+  const joined = converged();
+  // The merge holds the indent before the style on both peers: the case the save reorders.
+  const merged = livePropertyNames(alice, 1);
+  expect(merged.indexOf('ind')).toBeLessThan(merged.indexOf('pStyle'));
+  expect(livePropertyNames(bob, 1)).toEqual(merged);
+
+  caret(bob, 1);
+  bob.surface!.setParagraphProperty('jc', { val: 'center' });
+  expect(converged()).toEqual(joined);
+  expect(livePropertyNames(alice, 1)).toEqual(livePropertyNames(bob, 1));
+  const intro = () =>
+    strFromU8(unzipSync(alice.surface!.session.save())['word/document.xml']!).match(
+      /<w:p[ >].*?<\/w:p>/g
+    )![1]!;
+  const saved = intro();
+  expect(saved.indexOf('<w:pStyle')).toBeLessThan(saved.indexOf('<w:ind'));
+  expect(saved.indexOf('<w:ind')).toBeLessThan(saved.indexOf('<w:jc'));
+
+  bob.surface!.undo();
+  expect(converged()).toEqual(joined);
+  expect(intro()).not.toContain('<w:jc');
+  bob.surface!.redo();
+  expect(converged()).toEqual(joined);
+  expect(intro()).toContain('<w:jc w:val="center"/>');
 });
