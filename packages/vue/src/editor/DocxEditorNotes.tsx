@@ -208,8 +208,7 @@ export const DocxEditorNotePropertiesDialog = defineComponent({
                   value={scope.value}
                   onChange={(event) => {
                     scope.value = (event.target as HTMLSelectElement).value as
-                      | 'document'
-                      | 'section';
+                      'document' | 'section';
                   }}
                 >
                   <option value="document">{t('notes.scopeDocument')}</option>

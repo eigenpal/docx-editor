@@ -290,7 +290,7 @@ export function readShared(text: Y.Text): { ops: DeltaOp[]; leftOut: boolean } {
         pushString(str, attributesNow());
         continue;
       }
-      for (let at = 0; at < str.length; ) {
+      for (let at = 0; at < str.length;) {
         const unseen = hasStrikesSeen ? unseenStrikes(attributesNow(), client, clock + at) : null;
         const decided = deciding
           ? decidedRevisions(deciding, decidableNow(), client, clock + at)

@@ -104,8 +104,7 @@ export function linearizeParagraph(paragraph: OoxmlElement): LinearParagraph {
   };
   const visitRun = (run: OoxmlElement, wrap: readonly ElementShell[]): void => {
     const rPr = run.children.find((child) => child.kind === 'runProperties') as
-      | OoxmlElement
-      | undefined;
+      OoxmlElement | undefined;
     const base: LinearAttributes = {
       ...none,
       run: shellOf(run),

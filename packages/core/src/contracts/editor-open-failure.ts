@@ -21,11 +21,7 @@ import type { DocumentOpenDiagnosticCode } from './diagnostics.ts';
  * @public
  */
 export type DocumentOpenFailureReason =
-  | 'damaged'
-  | 'not-docx'
-  | 'too-large'
-  | 'blocked'
-  | 'unknown';
+  'damaged' | 'not-docx' | 'too-large' | 'blocked' | 'unknown';
 
 /**
  * A document the editor refused to open. It carries a stable code only, never the file's

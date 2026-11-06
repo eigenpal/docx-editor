@@ -1001,11 +1001,7 @@ function updateLocks(
 export function wrapTargetToAnchorSpec(target: ImageWrapTarget): {
   readonly behindDocument: boolean;
   readonly wrapLocalName:
-    | 'wrapNone'
-    | 'wrapSquare'
-    | 'wrapTight'
-    | 'wrapThrough'
-    | 'wrapTopAndBottom';
+    'wrapNone' | 'wrapSquare' | 'wrapTight' | 'wrapThrough' | 'wrapTopAndBottom';
   readonly wrapText?: 'bothSides' | 'left' | 'right' | 'largest';
 } {
   switch (target) {

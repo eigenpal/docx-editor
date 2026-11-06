@@ -350,10 +350,7 @@ export function expandThread(
 
 /** Why {@link indexCommentThread} refused to name a thread. */
 export type CommentThreadIndexReason =
-  | 'scan-truncated'
-  | 'duplicate-comment'
-  | 'malformed-metadata'
-  | 'unknown-comment';
+  'scan-truncated' | 'duplicate-comment' | 'malformed-metadata' | 'unknown-comment';
 
 /** Bounded thread index for a story-owned comments part. Fail closed: no partial set. */
 export type CommentThreadIndexResult =

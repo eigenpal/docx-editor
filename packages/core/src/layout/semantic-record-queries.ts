@@ -105,12 +105,7 @@ export interface StoryDrawingHost {
 
 /** Root story kinds published directly from one page record. @public */
 export type SemanticRootStoryKind =
-  | 'body'
-  | 'header'
-  | 'footer'
-  | 'footnote'
-  | 'endnote'
-  | 'note-separator';
+  'body' | 'header' | 'footer' | 'footnote' | 'endnote' | 'note-separator';
 
 /** Story containing a visited semantic record. @public */
 export type SemanticStoryKind = SemanticRootStoryKind | 'textbox';
@@ -199,9 +194,9 @@ const PAGE_RECORD_FIELD_ROLES = {
 } as const satisfies Record<keyof PageRecord, StoryFieldRole>;
 
 type PageStoryField = {
-  [Key in keyof typeof PAGE_RECORD_FIELD_ROLES]: (typeof PAGE_RECORD_FIELD_ROLES)[Key] extends 'story'
-    ? Key
-    : never;
+  [
+    Key in keyof typeof PAGE_RECORD_FIELD_ROLES
+  ]: (typeof PAGE_RECORD_FIELD_ROLES)[Key] extends 'story' ? Key : never;
 }[keyof typeof PAGE_RECORD_FIELD_ROLES];
 
 const TRAVERSED_PAGE_STORY_FIELDS = {

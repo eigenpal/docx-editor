@@ -44,9 +44,7 @@ export interface CjkTypographySettings {
   readonly word97LineBreaks?: true;
   /** Whitespace compression selected by `w:characterSpacingControl`. */
   readonly compression:
-    | 'doNotCompress'
-    | 'compressPunctuation'
-    | 'compressPunctuationAndJapaneseKana';
+    'doNotCompress' | 'compressPunctuation' | 'compressPunctuationAndJapaneseKana';
   /** Custom no-line-start characters, keyed by normalized language tag. */
   readonly before: Readonly<Record<string, string>>;
   /** Custom no-line-end characters, keyed by normalized language tag. */

@@ -185,18 +185,17 @@ describe('every other InvalidObjectPath keeps the neutral message', () => {
       const { host } = stubHost({
         execute: (request: AutomationBatchRequest): AutomationBatchResponse => ({
           ok: false,
-          results: request.operations.map(
-            (_, index): AutomationOperationResult =>
-              index === 0
-                ? {
-                    status: 'error',
-                    error: {
-                      code: 'invalid-handle',
-                      message: 'refused',
-                      ...(detail === undefined ? {} : { detail }),
-                    },
-                  }
-                : { status: 'skipped' }
+          results: request.operations.map((_, index): AutomationOperationResult =>
+            index === 0
+              ? {
+                  status: 'error',
+                  error: {
+                    code: 'invalid-handle',
+                    message: 'refused',
+                    ...(detail === undefined ? {} : { detail }),
+                  },
+                }
+              : { status: 'skipped' }
           ),
           revision: 3,
           changed: false,

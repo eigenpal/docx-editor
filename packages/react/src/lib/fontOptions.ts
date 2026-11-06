@@ -24,8 +24,8 @@ export function normalizeFontFamilies(
   fontFamilies: ReadonlyArray<string | FontOption> | undefined
 ): FontOption[] | undefined {
   if (fontFamilies === undefined) return undefined;
-  const normalized = fontFamilies.map(
-    (f): FontOption => (typeof f === 'string' ? { name: f, fontFamily: f, category: 'other' } : f)
+  const normalized = fontFamilies.map((f): FontOption =>
+    typeof f === 'string' ? { name: f, fontFamily: f, category: 'other' } : f
   );
   if (isDevelopment()) {
     const warned = new Set<string>();

@@ -85,12 +85,7 @@ export interface ReviewRevisionItem {
   readonly formattingKind?: string;
   /** Distinct structural operations covered by this decision, in document order. */
   readonly structuralChanges?: readonly (
-    | 'rowInsert'
-    | 'rowDelete'
-    | 'cellInsert'
-    | 'cellDelete'
-    | 'cellMerge'
-    | 'numberingInsert'
+    'rowInsert' | 'rowDelete' | 'cellInsert' | 'cellDelete' | 'cellMerge' | 'numberingInsert'
   )[];
   /** Changed direct formatting values, ready for localized review summaries. */
   readonly formattingChanges?: readonly {

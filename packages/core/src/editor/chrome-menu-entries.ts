@@ -55,9 +55,7 @@ export interface ChromeMenuSeparatorEntry {
 
 /** One row of a chrome menu. @public */
 export type ChromeMenuEntry =
-  | ChromeMenuItemEntry
-  | ChromeMenuSubmenuEntry
-  | ChromeMenuSeparatorEntry;
+  ChromeMenuItemEntry | ChromeMenuSubmenuEntry | ChromeMenuSeparatorEntry;
 
 /**
  * Every menu id, as a literal union. Stable public API; renaming one is a breaking change,

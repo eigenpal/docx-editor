@@ -87,8 +87,7 @@ function fixture(displayMode?: FormattingDisplayMode): Fixture {
 
 function handleAt(response: { readonly results: readonly unknown[] }, index: number) {
   const result = response.results[index] as
-    | { status: 'ok'; value: { kind: string; handle: AutomationHandle } }
-    | undefined;
+    { status: 'ok'; value: { kind: string; handle: AutomationHandle } } | undefined;
   if (result?.status !== 'ok' || result.value.kind !== 'handle') {
     throw new Error(`expected a handle at ${index}`);
   }
@@ -101,8 +100,7 @@ function paragraph(host: AutomationHost): AutomationHandle {
   const body = handleAt(host.execute({ operations: [{ op: 'getBody', document }] }), 0);
   const listed = host.execute({ operations: [{ op: 'getParagraphs', body }] });
   const result = listed.results[0] as
-    | { status: 'ok'; value: { kind: 'handles'; handles: readonly AutomationHandle[] } }
-    | undefined;
+    { status: 'ok'; value: { kind: 'handles'; handles: readonly AutomationHandle[] } } | undefined;
   if (result?.status !== 'ok' || result.value.kind !== 'handles') {
     throw new Error('expected paragraph handles');
   }
@@ -114,8 +112,7 @@ function boldRead({ host }: Fixture): boolean | null {
   const target = paragraph(host);
   const response = host.execute({ operations: [{ op: 'getFont', span: { paragraph: target } }] });
   const result = response.results[0] as
-    | { status: 'ok'; value: { kind: 'font'; font: { bold: boolean | null } } }
-    | undefined;
+    { status: 'ok'; value: { kind: 'font'; font: { bold: boolean | null } } } | undefined;
   if (result?.status !== 'ok' || result.value.kind !== 'font') {
     throw new Error('expected a font read');
   }

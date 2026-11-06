@@ -64,11 +64,7 @@ export type SemanticTarget =
 
 /** Typed rejection for pending, read-only, invalid, or unsupported interaction. */
 export type InteractionOutcomeCode =
-  | 'pendingLayout'
-  | 'pendingSelection'
-  | 'readOnly'
-  | 'invalidTarget'
-  | 'unsupported';
+  'pendingLayout' | 'pendingSelection' | 'readOnly' | 'invalidTarget' | 'unsupported';
 
 /**
  * The result of one interaction attempt.

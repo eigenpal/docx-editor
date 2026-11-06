@@ -160,8 +160,7 @@ function walk(blocks: readonly Block[], tries: Tries): ReserveWalkResult & { rou
       compute: (layout, used, _deferral, range) => compute(blocks, layout, used, range),
       startOf: (page, carry) => {
         const first = page.fragments[0] as unknown as
-          | { paragraphId: string; range: { start: number } }
-          | undefined;
+          { paragraphId: string; range: { start: number } } | undefined;
         return first ? `${first.paragraphId}:${first.range.start}|${String(carry)}` : '';
       },
       stopped: () => false,

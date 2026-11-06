@@ -238,7 +238,7 @@ function identitySpans(
   to: number
 ): { client: number; from: number; to: number }[] {
   const spans: { client: number; from: number; to: number }[] = [];
-  for (let at = from; at < to; ) {
+  for (let at = from; at < to;) {
     const restored = marks.origin('restore', client, at);
     if (restored === null || restored.client !== client) {
       // Without a mark here, the rest of the insert has none either: a mark covers whole
@@ -272,7 +272,7 @@ function createdBy(registry: DocumentRegistry, step: StackItemShape | undefined)
   const created = new Set<string>();
   const nodes = registry.schema.nodes as unknown;
   for (const run of deleteSetRuns((step as { insertions?: unknown } | undefined)?.insertions)) {
-    for (let clock = run.clock; clock < run.clock + run.length; ) {
+    for (let clock = run.clock; clock < run.clock + run.length;) {
       const item = structAt(registry.doc, { client: run.client, clock });
       if (!item) break;
       if ((item.parent as unknown) === nodes && item.parentSub !== null) {
@@ -334,7 +334,7 @@ function copiesOf(registry: DocumentRegistry, step: StackItemShape | undefined):
   };
   for (const run of deleteSetRuns((step as { insertions?: unknown } | undefined)?.insertions)) {
     const runEnd = run.clock + run.length;
-    for (let clock = run.clock; clock < runEnd; ) {
+    for (let clock = run.clock; clock < runEnd;) {
       const item = structAt(registry.doc, { client: run.client, clock });
       const end = item ? Math.min(item.id.clock + item.length, runEnd) : clock + 1;
       // A peer that edits the paragraph a move took typed text to writes a copy of it there,
@@ -383,7 +383,7 @@ function nothingElse(registry: DocumentRegistry, step: StackItemShape | undefine
     [deleteSetRuns(shape.insertions), false],
   ] as const) {
     for (const run of runs) {
-      for (let clock = run.clock; clock < run.clock + run.length; ) {
+      for (let clock = run.clock; clock < run.clock + run.length;) {
         const item = structAt(registry.doc, { client: run.client, clock });
         if (!item) return false;
         if (inScope(item, scope) && (deletion || !item.deleted)) return false;

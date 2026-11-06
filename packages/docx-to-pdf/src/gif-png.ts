@@ -70,7 +70,7 @@ function lzw(data: Uint8Array, minimumCodeSize: number, pixelCount: number): Uin
   let bits = 0;
   let buffer = 0;
   let written = 0;
-  for (let index = 0; index < data.length && written < pixelCount; ) {
+  for (let index = 0; index < data.length && written < pixelCount;) {
     while (bits < codeSize && index < data.length) {
       buffer |= data[index++]! << bits;
       bits += 8;

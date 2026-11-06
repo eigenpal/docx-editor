@@ -163,8 +163,7 @@ export type TableRowHeightRule = 'auto' | 'atLeast' | 'exact';
  * optional number.
  */
 export type TableRowHeight =
-  | { readonly rule: 'auto' }
-  | { readonly rule: 'atLeast' | 'exact'; readonly valuePt: number };
+  { readonly rule: 'auto' } | { readonly rule: 'atLeast' | 'exact'; readonly valuePt: number };
 
 /** Highest grid column a cell may start on; keeps a row's total span bounded. */
 const LAST_GRID_COLUMN = MAX_TABLE_COLUMNS - 1;

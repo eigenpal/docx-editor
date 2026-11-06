@@ -640,7 +640,7 @@ describe('keep-next flow keys around tables', () => {
   const reads = (flow: readonly string[], index: number): string[] => {
     const window = flow[index]!.slice(`b${index}~kn~`.length);
     const read: string[] = [];
-    for (let at = 0; at < window.length; ) {
+    for (let at = 0; at < window.length;) {
       const length = /^\d+/.exec(window.slice(at))?.[0];
       if (length === undefined) {
         at += 1;

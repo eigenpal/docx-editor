@@ -69,12 +69,7 @@ export function collaborationMigrationNeed(state: Uint8Array): CollaborationMigr
  * @public
  */
 export type CollaborationMigrationCheck =
-  | 'paragraphs'
-  | 'text'
-  | 'formatting'
-  | 'structure'
-  | 'media'
-  | 'links';
+  'paragraphs' | 'text' | 'formatting' | 'structure' | 'media' | 'links';
 
 /** A paragraph by its part and its position in that part, from 1. @public */
 export interface CollaborationMigrationPosition {
