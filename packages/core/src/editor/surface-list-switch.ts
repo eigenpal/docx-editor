@@ -31,6 +31,8 @@ export interface ListSwitchDeps extends ListSwitchReads {
   order(): readonly string[];
   markerOf(paragraphId: string): ListMarkerRecord | null;
   ensureListDefinition(kind: ListKind, geometry?: ListDefinitionGeometry): string | null;
+  /** Whether `numId`'s `level` numbers a heading style, as a heading numbering does. */
+  headingLevel(numId: string, level: number): boolean;
   /** The paragraph's effective indent, list merge included, or null when it is not laid out. */
   indentOf(paragraphId: string): ParagraphIndent | null;
   /** The sides the paragraph's own `w:ind` states. */
@@ -151,12 +153,13 @@ export function switchedListNumIds(
   touched: readonly string[],
   kind: ListKind
 ): Map<string, string> | null {
-  // A heading of a heading numbering (a level linked to a paragraph style) is not a list the
-  // selection is in: reference renderings put a plain paragraph and such a heading on a new
-  // list together, the heading keeping its style and level.
+  // A heading of a heading numbering is not a list the selection is in: reference renderings
+  // put a plain paragraph and such a heading on a new list together, the heading keeping its
+  // style and level. A template list such as List Bullet links its levels to styles too, but
+  // those are no headings, and its items keep their list and indents.
   const markers = touched.map((paragraphId) => {
     const marker = deps.markerOf(paragraphId);
-    return marker && deps.listLevelStyleOf(marker.numId, marker.level) === null ? marker : null;
+    return marker && !deps.headingLevel(marker.numId, marker.level) ? marker : null;
   });
   const everyItem = (numId: string | null) =>
     numId === null ? null : new Map(touched.map((paragraphId) => [paragraphId, numId]));
@@ -270,8 +273,8 @@ export interface LinkedStyleReads extends Pick<
  * reference renderings do, and the style then numbers it. That holds only when the style
  * numbers on the same definition and level, whichever `w:num` instance names it: a style that
  * numbers elsewhere, or not at all, would leave the paragraph on another list or with no
- * number, so those paragraphs keep their own `w:numPr`. A plain paragraph joins at level 0, so below a Heading 2 it becomes a
- * Heading 1, as the reference does.
+ * number, so those paragraphs keep their own `w:numPr`. A plain paragraph joins at level 0,
+ * so below a Heading 2 it becomes a Heading 1, as the reference does.
  */
 export function linkedStyleOps(
   numIds: ReadonlyMap<string, string>,

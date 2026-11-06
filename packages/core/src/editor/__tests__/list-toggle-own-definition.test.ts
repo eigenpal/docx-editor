@@ -199,6 +199,42 @@ describe('a list button away from any list', () => {
   });
 });
 
+describe('a template list linked to its own style', () => {
+  test('switching List Bullet items to numbers keeps them in place', () => {
+    // List Bullet links its level to its style, as a heading numbering does, but it is no
+    // heading: its items keep the list they leave and its indents.
+    const numbering = NUMBERING.replace(
+      '<w:num w:numId="1">',
+      '<w:abstractNum w:abstractNumId="3"><w:lvl w:ilvl="0"><w:start w:val="1"/>' +
+        '<w:numFmt w:val="bullet"/><w:pStyle w:val="ListBullet"/><w:lvlText w:val="-"/>' +
+        '<w:lvlJc w:val="left"/><w:pPr><w:ind w:left="1440" w:hanging="360"/></w:pPr></w:lvl>' +
+        '</w:abstractNum><w:num w:numId="1">'
+    ).replace(
+      '</w:numbering>',
+      '<w:num w:numId="5"><w:abstractNumId w:val="3"/></w:num></w:numbering>'
+    );
+    const styles = STYLES.replace(
+      '</w:styles>',
+      '<w:style w:type="paragraph" w:styleId="ListBullet"><w:name w:val="List Bullet"/>' +
+        '<w:basedOn w:val="Normal"/><w:pPr><w:numPr><w:numId w:val="5"/></w:numPr></w:pPr>' +
+        '</w:style></w:styles>'
+    );
+    const body = paragraph('One', 'ListBullet') + paragraph('Two', 'ListBullet');
+    const textX = (surface: PaginatedSurface) =>
+      surface
+        .layout()
+        .pages.flatMap((page) => page.fragments)
+        .flatMap((fragment) => (fragment.kind === 'paragraph' ? [fragment.lines[0]!.box.x] : []));
+    withSurface(docx(body, styles, numbering), (surface) => {
+      const before = textX(surface);
+      caretIn(surface, 0, 1);
+      expect(surface.toggleList('ordered')).toBe(true);
+      expect(markers(surface).map((marker) => marker?.text)).toEqual(['1.', '2.']);
+      expect(textX(surface)).toEqual(before);
+    });
+  });
+});
+
 describe('a list button next to the heading numbering', () => {
   test('a paragraph just above a heading starts its own list', () => {
     withSurface(docx(), (surface) => {

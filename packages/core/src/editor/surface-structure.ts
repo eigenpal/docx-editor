@@ -26,7 +26,7 @@ import {
 } from '@docx-editor.dev/core/layout';
 import { createListNumberingOps } from './list-numbering-ops.ts';
 import { type ListSwitchDeps, type ListSwitchReads } from './surface-list-switch.ts';
-import { indentSidesOf, styleNumberedIndentSides } from './list-level-geometry.ts';
+import { indentSidesOf, isOutlineStyle, styleNumberedIndentSides } from './list-level-geometry.ts';
 import { listToggleOps } from './surface-list-toggle.ts';
 import { sectionAnchorParagraphFor, sectionIndexForCaret } from './section-scope.ts';
 import { isTableNested } from '../store/store/tree-op-section-address.ts';
@@ -407,6 +407,10 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     order: orderOf,
     markerOf,
     ensureListDefinition: (kind, geometry) => session.ensureListDefinition(kind, geometry),
+    headingLevel: (numId, level) => {
+      const styleId = deps.listLevelStyleOf(numId, level);
+      return styleId !== null && isOutlineStyle(deps.styleCascade(), styleId);
+    },
     indentOf: (paragraphId) => paragraphIndentOf(currentLayout.value, paragraphId)?.indent ?? null,
     directIndentSides: (paragraphId) =>
       indentSidesOf(directParagraphProperties(storyPart(), paragraphId)),
