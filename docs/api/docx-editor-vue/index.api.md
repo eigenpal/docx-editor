@@ -66,7 +66,7 @@ import { DocumentSearchNavigateOptions } from '@docx-editor.dev/core/editor';
 import { DocumentSearchOptions } from '@docx-editor.dev/core/editor';
 import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
 import * as _docx_editor_dev_core from '@docx-editor.dev/core';
-import * as _docx_editor_dev_core_editor from '@docx-editor.dev/core/editor';
+import * as _docx_editor_dev_core_layout from '@docx-editor.dev/core/layout';
 import * as _docx_editor_dev_i18n from '@docx-editor.dev/i18n';
 import { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
@@ -3798,7 +3798,7 @@ export interface DocxEditorNamespace {
     // (undocumented)
     readonly Menu: typeof DocxEditorMenu;
     // (undocumented)
-    readonly Navigation: typeof Navigation;
+    readonly Navigation: typeof Navigation_2;
     // (undocumented)
     readonly NotePreview: typeof DocxEditorNotePreview;
     // (undocumented)
@@ -5350,7 +5350,7 @@ export const DocxEditorUnsupportedElement: vue.DefineComponent<vue.ExtractPropTy
     };
 }>> & Readonly<{}>, {
     includePartial: boolean;
-    layout: _docx_editor_dev_core_editor.UnsupportedElementLayout | undefined;
+    layout: _docx_editor_dev_core_layout.UnsupportedElementLayout | undefined;
     match: ((element: UnsupportedElement) => boolean) | undefined;
 }, SlotsType<{
     default: (props: {

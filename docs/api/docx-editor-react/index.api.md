@@ -1137,7 +1137,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly InvalidTextFormFieldDialog: typeof DocxEditorInvalidTextFormFieldDialog;
     readonly Loading: typeof DocxEditorLoading;
     readonly Menu: typeof DocxEditorMenu;
-    readonly Navigation: typeof Navigation;
+    readonly Navigation: typeof Navigation_2;
     // (undocumented)
     readonly NotePreview: typeof DocxEditorNotePreview;
     // (undocumented)
