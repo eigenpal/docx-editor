@@ -113,3 +113,28 @@ test('a condition with an auto fill clears the whole-table colour, and nil leave
     'FFFF00',
   ]);
 });
+
+test('a wholeTable condition paints no fill, alone or over the style of its own', () => {
+  const whole = `<w:tblStylePr w:type="wholeTable">${tcPr(shd('FFFF00'))}</w:tblStylePr>`;
+  expect(fills(style('Shaded', whole), 'Shaded')).toEqual([
+    [undefined, undefined],
+    [undefined, undefined],
+  ]);
+  expect(fills(style('Shaded', tcPr(shd('FF0000')) + whole), 'Shaded')[1]).toEqual([
+    'FF0000',
+    'FF0000',
+  ]);
+});
+
+test('a pattern in the style and in a cell mixes its colour into its fill', () => {
+  const pattern = (val: string, color: string) =>
+    `<w:shd w:val="${val}" w:color="${color}" w:fill="FFFFFF"/>`;
+  expect(
+    fills(style('Shaded', tcPr(pattern('pct50', 'FF0000'))), 'Shaded', '', {
+      '11': pattern('pct25', '0000FF'),
+    })
+  ).toEqual([
+    ['FF7F7F', 'FF7F7F'],
+    ['FF7F7F', 'BFBFFF'],
+  ]);
+});

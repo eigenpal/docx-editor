@@ -9,7 +9,7 @@
 // a direct `auto` fill painting no colour over a shaded style.
 
 import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
-import { shadingFillFromElement } from './ooxml-shading.ts';
+import { statedShadingFill } from './ooxml-shading.ts';
 import type { CascadedTableFormatting } from './style-cascade.ts';
 
 function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undefined {
@@ -22,14 +22,6 @@ function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undef
       return child as OoxmlElement;
   }
   return undefined;
-}
-
-/** A stated fill (`null` when the layer states no colour), or undefined when it states none. */
-function layerShading(cellProperties: OoxmlElement | undefined): string | null | undefined {
-  const shd = cellProperties && childNamed(cellProperties, 'shd');
-  const val = shd?.attributes.find((attribute) => attribute.localName === 'val')?.value;
-  if (!shd || val === 'nil') return undefined;
-  return shadingFillFromElement(shd) ?? null;
 }
 
 /** The validated fill a cell paints under `tableStyle`, or undefined for none. */
@@ -46,7 +38,7 @@ export function cellShading(
   layers.push(cellProperties);
   let fill: string | null | undefined;
   for (const layer of layers) {
-    const stated = layerShading(layer);
+    const stated = statedShadingFill(layer && childNamed(layer, 'shd'));
     if (stated !== undefined) fill = stated;
   }
   return fill ?? undefined;

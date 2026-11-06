@@ -491,9 +491,52 @@ describe('setTableCellFill', () => {
     });
     expect(cleared.ok).toBe(true);
     if (!cleared.ok) return;
+    // A `w:shd` left with no fill would still paint no colour over a table style, so the
+    // whole element goes.
     const shd = wmlChildNamed(wmlChildNamed(cellAt(cleared.part, 0, 0), 'tcPr')!, 'shd');
-    expect(shd).toBeDefined();
+    expect(shd ?? null).toBeNull();
     expect(shdFill(cleared.part, id)).toBeUndefined();
+  });
+
+  test('clearing removes a leftover w:shd that states no fill', () => {
+    const part = load(TABLE(ROW(CELL('a1', '<w:shd w:val="clear" w:color="auto"/>'))));
+    const table = collectByKind(part.root, 'table')[0]!;
+    const id = cellAt(part, 0, 0).id;
+    const cleared = applyTreeOp(part, {
+      op: 'setTableCellFill',
+      tableId: table.id,
+      cellIds: [id],
+      color: null,
+    });
+    expect(cleared.ok).toBe(true);
+    if (!cleared.ok) return;
+    const shd = wmlChildNamed(wmlChildNamed(cellAt(cleared.part, 0, 0), 'tcPr')!, 'shd');
+    expect(shd ?? null).toBeNull();
+  });
+
+  test('clearing the fill of a pattern keeps the pattern over white', () => {
+    const part = load(
+      TABLE(
+        ROW(
+          '<w:tc><w:tcPr><w:shd w:val="pct50" w:color="FF0000" w:fill="FFFF00"/></w:tcPr>' +
+            '<w:p><w:r><w:t>a1</w:t></w:r></w:p></w:tc>'
+        )
+      )
+    );
+    const table = collectByKind(part.root, 'table')[0]!;
+    const id = cellAt(part, 0, 0).id;
+    const cleared = applyTreeOp(part, {
+      op: 'setTableCellFill',
+      tableId: table.id,
+      cellIds: [id],
+      color: null,
+    });
+    expect(cleared.ok).toBe(true);
+    if (!cleared.ok) return;
+    const shd = wmlChildNamed(wmlChildNamed(cellAt(cleared.part, 0, 0), 'tcPr')!, 'shd')!;
+    expect(shd.attributes.find((a) => a.localName === 'val')?.value).toBe('pct50');
+    expect(shdFill(cleared.part, id)).toBeUndefined();
+    expect(structureOf(cleared.part, table.id).rows[0]!.cells[0]!.shading).toBe('FF7F7F');
   });
 
   test('writes theme fill metadata with literal fill for layout', () => {

@@ -3,24 +3,16 @@ import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
 import { readTwipsMeasure } from '../store/units.ts';
 import { wordBorderCss } from './clipboard-html-word-elements.ts';
 import { tableSide } from './clipboard-table-direction.ts';
-import { wmlChild } from './clipboard-html-write-tree.ts';
+import { cssShading, wmlChild } from './clipboard-html-write-tree.ts';
 
 function twipsAttribute(element: OoxmlElement | null, name: string): number | null {
   if (element === null) return null;
   return readTwipsMeasure(attributeValueOf(element, name, WML_NAMESPACE_URI));
 }
 
-function colorAttribute(element: OoxmlElement | null, name: string): string | null {
-  if (element === null) return null;
-  const raw = attributeValueOf(element, name, WML_NAMESPACE_URI);
-  return raw !== undefined && /^[0-9A-Fa-f]{6}$/.test(raw) ? `#${raw.toLowerCase()}` : null;
-}
-
 /** A `w:tcPr`'s stated fill (null for no colour), or undefined when it states no shading. */
 function statedShading(tcPr: OoxmlElement | null): string | null | undefined {
-  const shd = wmlChild(tcPr, 'shd');
-  if (shd === null || attributeValueOf(shd, 'val', WML_NAMESPACE_URI) === 'nil') return undefined;
-  return colorAttribute(shd, 'fill');
+  return cssShading(wmlChild(tcPr, 'shd'));
 }
 
 function pointsFromTwips(value: number): string {
@@ -31,7 +23,8 @@ function pointsFromTwips(value: number): string {
  *  paragraph properties, so a styled header row keeps its bold/white text in the
  *  copied HTML, not just its fill. */
 export interface TableConditionalFormat {
-  readonly fill: string | null;
+  /** The condition's cell fill: null when it states no colour, undefined when it states none. */
+  readonly fill: string | null | undefined;
   readonly rPr: OoxmlElement | null;
   readonly pPr: OoxmlElement | null;
 }
@@ -105,7 +98,7 @@ export function tableConditionalFormats(
       if (type === undefined || !known.has(type)) continue;
       // Later chain entries (the derived style) override the base's condition.
       byType.set(type as ConditionType, {
-        fill: colorAttribute(wmlChild(wmlChild(child, 'tcPr'), 'shd'), 'fill'),
+        fill: statedShading(wmlChild(child, 'tcPr')),
         rPr: wmlChild(child, 'rPr'),
         pPr: wmlChild(child, 'pPr'),
       });
