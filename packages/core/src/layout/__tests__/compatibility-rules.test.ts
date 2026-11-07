@@ -52,6 +52,7 @@ const MODE_MATRIX = {
   wrappedAnchorsEndAtBottomMargin: 'modern',
   wrappedAnchorsEndOnSheet: 'legacy',
   wrappedAnchorsStayBelowTopMargin: 'modern',
+  lineAnchorsBeforeBandPush: 'legacy',
 } as const satisfies Record<ModeRuleName, 'legacy' | 'modern'>;
 
 test('each mode rule applies in exactly its class', () => {

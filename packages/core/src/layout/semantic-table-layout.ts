@@ -51,7 +51,7 @@ import {
   closingCellSpacingPt,
   sumCols,
 } from './table-cell-spacing.ts';
-import { cellLineFits, clipsExactCellRow } from './table-cell-paragraph-options.ts';
+import { cellLineFits, clipsExactCellRow, rowFlowBounds } from './table-cell-paragraph-options.ts';
 import { exclusionLayoutToken } from './drawing-exclusion.ts';
 import type {
   FieldLinkProjector,
@@ -147,6 +147,7 @@ import {
 import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
 import { cellAnchorFlow, cellAnchorScope } from './cell-anchor-layout.ts';
 import { cellBottomWithAnchors, publishCellParagraphAnchors } from './cell-paragraph-anchors.ts';
+import { cellAnchorPageFit } from './cell-paragraph-anchors.ts';
 export { finalizeTableRows } from './table-fragment-finalize.ts';
 import type { RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
@@ -288,6 +289,9 @@ export interface TableFlowDeps {
    */
   readonly refFields?: import('./field-ref.ts').RefFieldContext;
   readonly inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext;
+  /** Row page bottom, and the legacy crossing sink of row-start probes (`cellAnchorPageFit`). */
+  readonly cellPageBottom?: number;
+  readonly onCellAnchorCrossing?: () => void;
   /** Where inline pictures may paint sideways: the cell box, or a header's sheet; else the text. */
   readonly inlinePictureRoom?: InlinePictureRoom | undefined;
   /** Per-paragraph drawing projection/resource token for break cache keys. */
@@ -634,6 +638,7 @@ function placeCellParagraph(
   // Decide the cut before publishing line ids or drawings. A widow retreat must not
   // leave side effects from a line that will actually be placed on the following page.
   const lineTops: number[] = [];
+  const anchorFit = cellAnchorPageFit(paragraph, deps, top, options);
   let probeY = y;
   for (let lineIndex = lineStart; lineIndex < lines.length; lineIndex += 1) {
     const pendingLine = lines[lineIndex]!;
@@ -657,6 +662,7 @@ function placeCellParagraph(
       if (placesOversizedLine(options, deps, lineTops.length, skipBefore)) lineTops.push(probeY);
       break;
     }
+    if (anchorFit?.(pendingLine, probeY + skipBefore, lineTops.length)) break;
     lineTops.push(probeY + skipBefore);
     if (!collapseHeight) probeY += skipBefore + pendingLine.height;
   }
@@ -1310,7 +1316,12 @@ export function layoutRowFragmentBounded(
   // the table closes the gap below its last row. An exact row keeps its authored height.
   const rowGapPt = exactHeightPt === undefined ? cellSpacingGapPt(cellSpacingPt) : 0;
   const deferredRowAnchors: DeferredRowAnchor[] = [];
-  const { rowDeps, flushDeferred } = rowDepsForAnchors(deps, deferredRowAnchors);
+  // Exact rows clip to their authored box; never flow past it even when the page allows more.
+  const { flowMaxBottom, pageBottom } = rowFlowBounds(maxBottom, rowTop, exactHeightPt);
+  const { rowDeps, flushDeferred } = rowDepsForAnchors(
+    { ...deps, cellPageBottom: pageBottom },
+    deferredRowAnchors
+  );
   const flowDeps: TableFlowDeps =
     isHeaderRepeat && deps.pageOccurrenceKey
       ? {
@@ -1319,11 +1330,6 @@ export function layoutRowFragmentBounded(
             rowDeps.nextLineId(paragraphId, start, lineIndex, deps.pageOccurrenceKey!()),
         }
       : rowDeps;
-  // Exact rows clip to their authored box; never flow past it even when the page allows more.
-  const flowMaxBottom =
-    exactHeightPt === undefined
-      ? maxBottom
-      : Math.min(maxBottom, rowTop + Math.max(0, exactHeightPt));
 
   interface FlowedCell {
     readonly cell: SemanticTableCell;

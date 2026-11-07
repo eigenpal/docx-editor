@@ -105,7 +105,7 @@ import * as tableWrap from './table-float-exclusion.ts';
 import {
   bodyAnchorFrameBase,
   openingAbove,
-  publishableAnchors,
+  holdsDrawingIn,
   atKeptBreakY,
   holdsOnlyColumnBreak,
   opensWithPageBreak,
@@ -147,13 +147,13 @@ import {
   sortDrawingsForPaint,
   topAndBottomSkipBeforeLine,
   travellingTopAndBottomSkip,
-  ownTopAndBottomSkip,
   withAnchoredDrawingLayoutFallback,
   type ExclusionZone,
   MAX_DRAWING_EXCLUSION_REFLOW_PASSES,
 } from './drawing-exclusion.ts';
 import { bodyLineId } from './body-line-id.ts';
 import { fragmentAnchorFrame } from './anchor-frame-lines.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { drawingTokenForTableBlockMemo, withDrawingSourceOrder } from './inline-drawing-source.ts';
 import {
   emptyTocPlaceholderParagraphIds,
@@ -1282,6 +1282,10 @@ function* layoutBlocksPass(
     });
 
   const pageContentClip = (): LayoutBox => pageClipRegion(anchorFrameBase());
+  const lineAnchorsBeforeBandPush = hasCompatibilityRule(
+    options.compatibilityMode,
+    'lineAnchorsBeforeBandPush'
+  );
   const anchorScope = {
     drawingLayout: options.inlineDrawingLayout,
     displayMode,
@@ -2116,15 +2120,11 @@ function* layoutBlocksPass(
       flowNeighbourStyle(paragraph, -1, previousEntry, styleCascade),
       flowNeighbourStyle(paragraph, 1, nextEntry, styleCascade)
     );
-    // Anchors before `from` published already; once an own object moves a line or ends a page
-    // (`heldOnly`), each later fragment publishes the anchors it holds, against its own lines.
-    const anchorPublish = { from: 0, heldOnly: false };
     // Whether a line's own wrapping objects still cross the margin (`wrappedAnchorsEndAtBottomMargin`).
     const pageFit = createOwnAnchorPageFit(paragraph, {
       ...anchorScope,
       frameBase: anchorFrameBase,
       column: () => ({ x: columnOffsetX(), width: columnWidth() }),
-      publishedTo: () => anchorPublish.from,
     });
     let keepTailAt = -1; // Where a kept paragraph that splits early breaks; a rebreak clears it.
     const rebreakInCurrentColumn = (startOffset: number, placedParagraphStartY?: number): void => {
@@ -2189,11 +2189,8 @@ function* layoutBlocksPass(
           anchorTableBand(paragraphId, prospectiveFirstTop, firstExtent)
         );
       // An own object that cannot end at the bottom margin takes the paragraph along.
-      const ownY = () =>
-        (pageFit.holdsDrawings(0, lines[0]?.end ?? 0) ? cursorY : prospectiveFirstTop) -
-        paragraphDrawingWrap.displacement(pages.length, paragraphId);
-      const anchorMoves =
-        !!lines[0] && pageFit.crosses(lines[0], lines.length <= 1, ownY, prospectiveFirstTop);
+      const ownY = () => cursorY - paragraphDrawingWrap.displacement(pages.length, paragraphId);
+      const anchorMoves = !!lines[0] && pageFit.crosses(lines[0], lines.length <= 1, ownY, cursorY);
       // `w:keepNext` (§17.3.1.15): priced ONCE per chain, at its head (`keepNextGroupNeed`).
       if (keeps.keepNext && !keepsNext[index - 1]) {
         const need = keepChains.need(index, previousSpaceAfter, {
@@ -2213,7 +2210,6 @@ function* layoutBlocksPass(
       if (overflows && cursorY > 0 && !holdsSheet() && !leadingBreak()) {
         const plainExtent = lead + topExtent + (lines[0]?.height ?? 0) + firstTail;
         if (!frame && ownTableStays(paragraphId, plainExtent)) noteAnchor(paragraphId, cursorY);
-        if (anchorMoves) anchorPublish.heldOnly = true;
         advanceColumn();
         previousSpaceAfter = 0;
         rebreakInCurrentColumn(0);
@@ -2280,13 +2276,6 @@ function* layoutBlocksPass(
     const paragraphHasAnchors =
       options.inlineDrawingLayout !== undefined &&
       anchoredDrawingAtomsInParagraph(entry.paragraph, options.inlineDrawingLayout).length > 0;
-    let paragraphAnchorOrigin: Readonly<{
-      columnX: number;
-      columnWidth: number;
-      startY: number;
-    }> | null = null;
-    // An own object moved a line or ended the page: later fragments frame their own anchors.
-    const ownCut = () => ((anchorPublish.heldOnly = true), (paragraphAnchorOrigin = null));
 
     const { revisions: markRevisions, formatRevision: markFormatRevision } =
       visibleParagraphMarkRevisionsOf(entry.paragraph, displayMode, authorFilter);
@@ -2300,24 +2289,17 @@ function* layoutBlocksPass(
       ? mergeBoundariesOf(mergeGroup, displayMode, authorFilter)
       : null;
 
-    // The fragment's first line skip that its own bands caused (see `fragmentAnchorFrame`).
-    const ownSkip = (applied = fragmentFirstLineSkip, firstLine = pending[0]) =>
-      ownTopAndBottomSkip(applied, fragmentParagraphStartY, firstLine, {
-        inheritedZones: pageExclusionZonesForEntry(entry, index),
-        spaceAbove: fragmentBefore,
-        anchorClearanceBefore: lines[fragmentFirstLine]?.anchorClearanceBefore,
-      });
-    /** The paragraph top this fragment's anchors publish against, opened by `line` if empty. */
-    const anchorParagraphY = (line: PendingLine, skip: number): number => {
-      const applied = pending.length > 0 ? fragmentFirstLineSkip : skip;
-      const first = pending[0] ?? { box: { height: line.height } };
-      const held = anchorPublish.heldOnly || pageFit.holdsDrawings(fragmentStart, line.end);
-      const top = held
-        ? fragmentParagraphStartY + applied - fragmentBefore - fragmentTopExtent
-        : (paragraphAnchorOrigin?.startY ?? fragmentParagraphStartY);
-      const own = held ? ownSkip(applied, first) : 0;
-      return top - own - paragraphDrawingWrap.displacement(pages.length, paragraphId);
-    };
+    // The fragment's first line skip that wrapping bands caused (see `fragmentAnchorFrame`).
+    const bandSkip = (applied = fragmentFirstLineSkip) =>
+      Math.max(0, applied - (lines[fragmentFirstLine]?.anchorClearanceBefore ?? 0));
+    /** The paragraph top this fragment's anchors publish against (`applied`: first line skip). */
+    const anchorParagraphY = (applied = fragmentFirstLineSkip): number =>
+      fragmentParagraphStartY -
+      fragmentBefore -
+      fragmentTopExtent +
+      applied -
+      bandSkip(applied) -
+      paragraphDrawingWrap.displacement(pages.length, paragraphId);
     const flushFragment = (isLast: boolean): void => {
       if (pending.length === 0) return;
       const regionX = columnLeft();
@@ -2446,25 +2428,26 @@ function* layoutBlocksPass(
       };
       if (frame) paragraphFrames.add(frame, publishedFragment, frameStart?.groupId, index);
       else pageFragments.push(publishedFragment);
-      const anchors =
-        options.inlineDrawingLayout && paragraphHasAnchors
-          ? publishableAnchors(entry.paragraph, lines, pending, anchorPublish)
-          : null;
-      if (anchors && options.inlineDrawingLayout) {
-        anchorPublish.from = anchors.range.end;
+      // Each fragment publishes the anchors its lines hold, framed by its own lines.
+      const anchorRange = {
+        start: fragmentIndex === 0 ? 0 : fragmentStart,
+        end: isLast ? Infinity : pending[pending.length - 1]!.range.end,
+      };
+      if (
+        options.inlineDrawingLayout &&
+        paragraphHasAnchors &&
+        holdsDrawingIn(entry.paragraph, anchorRange)
+      ) {
         const anchorFrame = fragmentAnchorFrame({
-          anchorOffsets: anchors.offsets,
           pending,
-          lines,
-          paragraphId,
           top,
           height,
           column: { x: columnX, width: columnWidth() },
           indentLeft: indent.left,
           available,
           displacement: paragraphDrawingWrap.displacement(pages.length, paragraphId),
-          ownSkip,
-          origin: paragraphAnchorOrigin,
+          bandSkip: bandSkip(),
+          lineBeforeBandPush: lineAnchorsBeforeBandPush,
         });
         collectAnchoredDrawings(
           publishAnchoredDrawingsForParagraph({
@@ -2472,7 +2455,7 @@ function* layoutBlocksPass(
             paragraphId,
             paragraphBox: anchorFrame.paragraphBox,
             lines: anchorFrame.lines,
-            fragmentRange: anchors.range,
+            fragmentRange: anchorRange,
             drawingLayout: options.inlineDrawingLayout,
             frameBase: anchorFrameBase(),
             columnBox: anchorColumnBox(anchorFrame.paragraphBox),
@@ -2513,13 +2496,6 @@ function* layoutBlocksPass(
       const tail = isLastLine ? borderExtent + closingAfter(pendingLine) : 0;
       if (lineIndex === fragmentFirstLine) {
         fragmentParagraphStartY = cursorY;
-        if (paragraphHasAnchors && paragraphAnchorOrigin === null && fragmentIndex === 0) {
-          paragraphAnchorOrigin = Object.freeze({
-            columnX: columnOffsetX(),
-            columnWidth: columnWidth(),
-            startY: fragmentParagraphStartY,
-          });
-        }
       }
       const skipBefore = frame
         ? 0
@@ -2550,8 +2526,8 @@ function* layoutBlocksPass(
         pageFit.crosses(
           pendingLine,
           isLastLine,
-          () => anchorParagraphY(pendingLine, skipBefore),
-          cursorY + skipBefore
+          () => anchorParagraphY(pending.length > 0 ? undefined : skipBefore),
+          cursorY + skipBefore - (pending.length > 0 ? 0 : fragmentBefore + fragmentTopExtent)
         );
       // An intrinsically oversized line cannot fit another empty sheet; publish it once.
       const overflowsPage =
@@ -2614,7 +2590,6 @@ function* layoutBlocksPass(
         // An anchor that keeps or widow rules move whole leaves its own table here as well.
         if (movesWhole && retreated && !frame && ownTableStays(paragraphId, lines[0]!.height))
           noteAnchor(paragraphId, cursorY);
-        if (anchorMoves) ownCut();
         flushFragment(false);
         advanceColumn();
         fragmentBefore = 0;
@@ -2732,11 +2707,9 @@ function* layoutBlocksPass(
       pending.push(record);
       cursorY += pendingLine.height;
       // An own object that still crosses the bottom margin here ends the page after its line.
-      const ownY = () => anchorParagraphY(pendingLine, fragmentFirstLineSkip);
-      if (!frame && pageFit.crosses(pendingLine, isLastLine, ownY, record.box.y)) {
+      const lineY = record.box.y - (pending.length > 1 ? 0 : fragmentBefore + fragmentTopExtent);
+      if (!frame && pageFit.crosses(pendingLine, isLastLine, () => anchorParagraphY(), lineY))
         cursorY = Math.max(cursorY, contentHeight());
-        ownCut();
-      }
       if (pendingLine.columnBreakAfter) {
         const priorColumnWidth = columnWidth();
         const priorPageHadExclusions = pageExclusionZones().length > 0;

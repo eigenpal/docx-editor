@@ -170,37 +170,14 @@ export function atKeptBreakY(
   return { ...box, y: kept.y, height: Math.max(height, 0) };
 }
 
-/** The anchors one fragment publishes: their model offsets, and the range they come from. */
-export interface FragmentAnchors {
-  readonly offsets: readonly number[];
-  readonly range: { readonly start: number; readonly end: number };
-}
-
-/**
- * The anchors of a paragraph, from model offset `from` on, to publish with this fragment. Null
- * when every one comes after the fragment and the fragment ends at an explicit page break: those
- * belong with the text that follows and take their paragraph origin there. `heldOnly` (once an
- * own object moved a line or ended a page) publishes only the anchors the fragment holds, null
- * when it holds none. A fragment the page bottom cuts otherwise publishes every remaining anchor
- * with the paragraph origin. The range ends where the next fragment's anchors start.
- */
-export function publishableAnchors(
+/** Whether the paragraph has a drawing at a model offset from `range.start` up to `range.end`. */
+export function holdsDrawingIn(
   paragraph: OoxmlElement,
-  lines: readonly PendingLine[],
-  fragment: readonly { readonly range: { readonly end: number } }[],
-  { from = 0, heldOnly = false }: { readonly from?: number; readonly heldOnly?: boolean } = {}
-): FragmentAnchors | null {
-  if (from === Infinity) return null;
-  const end = fragment[fragment.length - 1]?.range.end;
-  const range = { start: from, end: heldOnly && end !== undefined ? end : Infinity };
-  const offsets = [...drawingModelOffsetsInParagraph(paragraph).values()].filter(
-    (offset) => offset >= range.start && offset < range.end
-  );
-  if (heldOnly) return offsets.length > 0 ? { offsets, range } : null;
-  const atBreak = end !== undefined && lines.find((line) => line.end === end)?.pageBreakAfter;
-  return atBreak && offsets.length > 0 && offsets.every((offset) => offset >= end)
-    ? null
-    : { offsets, range };
+  range: { readonly start: number; readonly end: number }
+): boolean {
+  for (const offset of drawingModelOffsetsInParagraph(paragraph).values())
+    if (offset >= range.start && offset < range.end) return true;
+  return false;
 }
 
 /**

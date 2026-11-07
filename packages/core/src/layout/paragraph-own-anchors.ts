@@ -5,8 +5,8 @@
 // - placement lifts an object that can end at the margin (`wrappedParagraphAnchorBottomTop`);
 // - `createOwnAnchorPageFit` tells the flow when an object still crosses, so its line moves to
 //   the next column, or the page ends after a line already at the top;
-// - publishing then switches to held-only (`publishableAnchors`): each later fragment publishes
-//   the anchors its lines hold, framed by its own top, so a moved object travels with its line.
+// - each fragment publishes the anchors its lines hold, framed by its own top
+//   (`fragmentAnchorFrame`), so a moved object travels with its line.
 //
 // DOM-free. The break-time wrap synthesis follows the published records: a drawing the display
 // mode resolves away publishes no record, so it reserves no line top and carves no hole.
@@ -163,45 +163,28 @@ export interface OwnAnchorPageFit {
    * margin there ends the page.
    */
   crosses(line: AnchorLine, lastLine: boolean, paragraphY: () => number, lineY: number): boolean;
-  /**
-   * Whether a fragment of model offsets `start` up to `end` holds every drawing of the paragraph
-   * still to publish, so they publish against its own lines (`fragmentAnchorFrame`).
-   */
-  holdsDrawings(start: number, end: number): boolean;
 }
 
-/**
- * The page-fit test for one body paragraph, in modern modes only. An anchor below `publishedTo`
- * published with an earlier fragment: it keeps its place there and no longer follows a line.
- */
+/** The page-fit test for one body paragraph, in modern modes only. */
 export function createOwnAnchorPageFit(
   paragraph: OoxmlNode,
   scope: OwnAnchorScope & {
     readonly frameBase: () => BodyAnchorFrameBase;
     readonly column: () => { readonly x: number; readonly width: number };
-    readonly publishedTo: () => number;
   }
 ): OwnAnchorPageFit {
   const anchors = ownPageFitAnchors(paragraph, scope);
-  const drawings = [...drawingModelOffsetsInParagraph(paragraph).values()];
-  const holdsDrawings = (start: number, end: number) => {
-    const from = scope.publishedTo();
-    return drawings.every((offset) => offset < from || (offset >= start && offset < end));
-  };
-  if (anchors.length === 0) return { crosses: () => false, holdsDrawings };
-  const unpublishedOn = (anchor: OwnAnchor, line: AnchorLine, lastLine: boolean) =>
-    anchor.start >= scope.publishedTo() && onLine(anchor.start, line, lastLine);
+  if (anchors.length === 0) return { crosses: () => false };
   return {
-    holdsDrawings,
     crosses(line, lastLine, paragraphY, lineY) {
-      if (!anchors.some((anchor) => unpublishedOn(anchor, line, lastLine))) return false;
+      if (!anchors.some((anchor) => onLine(anchor.start, line, lastLine))) return false;
       const frameBase = scope.frameBase();
       if (frameBase.wrappedParagraphAnchorBottom !== 'margin') return false;
       const { x, width } = scope.column();
       const top = paragraphY();
       const box = (y: number) => ({ x, y, width, height: line.height });
       for (const anchor of anchors) {
-        if (!unpublishedOn(anchor, line, lastLine)) continue;
+        if (!onLine(anchor.start, line, lastLine)) continue;
         const resolved = resolveAnchoredDrawingPosition(anchor.projection, {
           ...frameBase,
           paragraphBox: box(top),
@@ -243,7 +226,8 @@ export function linesWithOwnAnchorNeeds<T extends AnchorLine>(
       if (!onLine(anchor.start, line, index === lines.length - 1)) continue;
       const vertical = anchor.projection.position!.vertical;
       const offset = vertical.align === null ? (vertical.offsetEmu ?? 0) / 12_700 : 0;
-      const belowLine = anchor.frame === 'line' ? offset : offset - lineTop;
+      // A first-line frame starts at the paragraph top, above the opening space and border.
+      const belowLine = anchor.frame === 'line' && index > 0 ? offset : offset - lineTop;
       const height = measureInlineDrawing(anchor.projection).height;
       need = Math.max(need, Math.min(height, belowLine + height));
     }
