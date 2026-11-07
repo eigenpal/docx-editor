@@ -1,18 +1,22 @@
-// The anchors a paragraph break synthesizes wrap for from its own text, by wrap kind.
+// The anchors a paragraph break synthesizes wrap for from its own text, by wrap kind, and
+// the page-fit bottom of the wrapping anchors each line holds.
 //
 // DOM-free. The break-time wrap synthesis follows the published records: a drawing the display
 // mode resolves away publishes no record, so it reserves no line top and carves no hole.
 
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
-import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import {
   anchoredDrawingAtomsInParagraph,
   drawingModelOffsetsInParagraph,
   measureInlineDrawing,
+  resolveAnchoredDrawingPosition,
   type InlineDrawingLayoutContext,
 } from './drawing-layout.ts';
+import { wrapsText } from './anchor-content-top.ts';
+import type { BodyAnchorFrameBase } from './body-flow-helpers.ts';
+import { placedTextboxProjection } from './drawing-exclusion.ts';
+import type { TextboxStoryLayouter } from './inline-textbox-flow.ts';
 import { revisionMarkupHidesDrawing } from './revision-markup-projection.ts';
-import { resolveParagraphAnchorPosition } from './paragraph-anchor-position.ts';
 import {
   revisionsVisible,
   type RevisionAuthorFilter,
@@ -82,50 +86,93 @@ export function paragraphOwnAnchorStarts(options: {
   return { topAndBottom, paragraphFramedTopAndBottom, wrap };
 }
 
+/** The range and height of a broken line, as the page-fit rule reads it. */
+interface AnchorLine {
+  readonly start: number;
+  readonly end: number;
+  readonly height: number;
+}
+
 /**
- * The vertical extent a paragraph's leading paragraph-framed wrapping anchors need on its
- * page. Word moves the anchor paragraph to the next page when that band does not fit under
- * the preceding flow, even when the paragraph mark itself could sit beside the object.
+ * The lowest bottom of the wrapping objects that one line of a body paragraph anchors, where
+ * they publish when the line sits at `lineY`. Modern modes only; `-Infinity` when none.
  *
- * Only anchors at model offset 0 count: a later anchor belongs to a line the paragraph may
- * split before, so it must not price the whole paragraph.
+ * Placement already moved up every object that can end at the bottom margin
+ * (`wrappedParagraphAnchorBottomTop`). A bottom past the margin therefore names an object that
+ * cannot end there without rising above its line: the line moves to the next page, and an
+ * object that still crosses the margin there ends the page.
  */
-export function paragraphOwnAnchorBand(options: {
+export function lineOwnAnchorBottom(options: {
   readonly paragraph: OoxmlNode;
   readonly drawingLayout: InlineDrawingLayoutContext | undefined;
-  readonly paragraphStartY: number;
-  readonly contentLeft: number;
-  readonly contentRight: number;
+  readonly frameBase: BodyAnchorFrameBase;
+  readonly line: AnchorLine;
+  readonly lastLine: boolean;
+  readonly paragraphY: number;
+  readonly lineY: number;
+  readonly column: { readonly x: number; readonly width: number };
   readonly displayMode: RevisionDisplayMode;
   readonly revisionAuthorFilter: RevisionAuthorFilter | undefined;
+  readonly layoutTextboxStory?: TextboxStoryLayouter;
 }): number {
-  const paragraph = options.paragraph;
-  if (!options.drawingLayout || paragraph.kind !== 'paragraph') return 0;
-  const atoms = anchoredDrawingAtomsInParagraph(paragraph, options.drawingLayout);
-  // A paragraph with text keeps its opening lines beside the object. Only an anchor-only
-  // paragraph moves as a unit with its band.
-  if (atoms.length === 0 || paragraphOffsetIndex(paragraph).length !== atoms.length) return 0;
+  const { paragraph, drawingLayout, frameBase, line } = options;
+  if (!drawingLayout || frameBase.wrappedParagraphAnchorBottom !== 'margin') return -Infinity;
   const offsets = drawingModelOffsetsInParagraph(paragraph);
+  if (offsets.size === 0) return -Infinity;
   const { displayMode, revisionAuthorFilter } = options;
-  let bottom = options.paragraphStartY;
-  for (const atom of atoms) {
+  const columnBox = { x: options.column.x, y: options.paragraphY, width: options.column.width };
+  let bottom = -Infinity;
+  for (const atom of anchoredDrawingAtomsInParagraph(paragraph, drawingLayout)) {
+    const start = offsets.get(atom.atomId);
+    if (start === undefined || start < line.start) continue;
+    if (start >= line.end && !(options.lastLine && start === line.end)) continue;
     if (
+      !wrapsText(atom.projection.wrap) ||
       !revisionsVisible(atom.revisions, displayMode, revisionAuthorFilter) ||
       revisionMarkupHidesDrawing(atom.revisions, displayMode, revisionAuthorFilter)
     )
       continue;
-    if (offsets.get(atom.atomId) !== 0) continue;
-    if (atom.projection.anchor?.simplePos) continue;
-    const vertical = atom.projection.position?.vertical;
-    if (vertical?.relativeFrom !== 'paragraph') continue;
-    const resolved = resolveParagraphAnchorPosition(atom.projection, {
-      contentLeft: options.contentLeft,
-      contentRight: options.contentRight,
-      lineY: options.paragraphStartY,
-      ownerPartName: options.drawingLayout.ownerPartName,
+    const frame = atom.projection.position?.vertical.relativeFrom;
+    if (frame !== 'paragraph' && frame !== 'line') continue;
+    const projection = placedTextboxProjection(atom.projection, options.layoutTextboxStory);
+    const resolved = resolveAnchoredDrawingPosition(projection, {
+      ...frameBase,
+      paragraphBox: { ...columnBox, height: line.height },
+      anchorLineBox: { ...columnBox, y: options.lineY, height: line.height },
+      anchorCharacterX: options.column.x,
+      columnBox: { ...columnBox, height: line.height },
+      cellBox: null,
+      layoutInCell: false,
     });
     if (resolved.layoutFallback) continue;
-    bottom = Math.max(bottom, resolved.y + measureInlineDrawing(atom.projection).height);
+    bottom = Math.max(bottom, resolved.y + measureInlineDrawing(projection).height);
   }
-  return Math.max(0, bottom - options.paragraphStartY);
+  return bottom;
+}
+
+/** {@link lineOwnAnchorBottom} bound to one paragraph; the frame and column are read at use. */
+export function createLineOwnAnchorBottom(options: {
+  readonly paragraph: OoxmlNode;
+  readonly drawingLayout: InlineDrawingLayoutContext | undefined;
+  readonly frameBase: () => BodyAnchorFrameBase;
+  readonly column: () => { readonly x: number; readonly width: number };
+  readonly displayMode: RevisionDisplayMode;
+  readonly revisionAuthorFilter: RevisionAuthorFilter | undefined;
+  readonly layoutTextboxStory: TextboxStoryLayouter | undefined;
+}): (line: AnchorLine | undefined, lastLine: boolean, paragraphY: number, lineY: number) => number {
+  const { paragraph, drawingLayout } = options;
+  if (!drawingLayout || drawingModelOffsetsInParagraph(paragraph).size === 0)
+    return () => -Infinity;
+  return (line, lastLine, paragraphY, lineY) =>
+    line
+      ? lineOwnAnchorBottom({
+          ...options,
+          frameBase: options.frameBase(),
+          column: options.column(),
+          line,
+          lastLine,
+          paragraphY,
+          lineY,
+        })
+      : -Infinity;
 }

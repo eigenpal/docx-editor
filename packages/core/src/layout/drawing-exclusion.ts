@@ -478,7 +478,7 @@ const placedByLayouter = new WeakMap<
   WeakMap<DrawingProjection, DrawingProjection>
 >();
 
-function placedTextboxProjection(
+export function placedTextboxProjection(
   projection: DrawingProjection,
   layoutTextboxStory: TextboxStoryLayouter | undefined
 ): DrawingProjection {

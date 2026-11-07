@@ -57,6 +57,11 @@ export function bodyAnchorFrameBase(input: BodyAnchorFrameInput): BodyAnchorFram
     ...(hasCompatibilityRule(input.compatibilityMode, 'wrappedAnchorsStayBelowTopMargin')
       ? { wrappedParagraphAnchorsBelowContentTop: true }
       : {}),
+    ...(hasCompatibilityRule(input.compatibilityMode, 'wrappedAnchorsEndAtBottomMargin')
+      ? { wrappedParagraphAnchorBottom: 'margin' as const }
+      : hasCompatibilityRule(input.compatibilityMode, 'wrappedAnchorsEndOnSheet')
+        ? { wrappedParagraphAnchorBottom: 'sheet' as const }
+        : {}),
   });
 }
 
@@ -166,20 +171,21 @@ export function atKeptBreakY(
 }
 
 /**
- * The model offsets of a paragraph's anchors, to publish with this fragment; null when the
- * fragment ends at an explicit page break and every anchor comes after it. Those anchors
- * belong with the text that follows the break and take their paragraph origin there.
+ * The model offsets of a paragraph's anchors, to publish with this fragment; null when every
+ * anchor comes after the fragment and the fragment ends at an explicit page break, or where an
+ * own object moved its line to the next page (`movedForAnchor`). Those anchors belong with the
+ * text that follows and take their paragraph origin there. A fragment the page bottom cuts
+ * otherwise keeps every anchor with the paragraph origin.
  */
 export function publishableAnchors(
   paragraph: OoxmlElement,
   lines: readonly PendingLine[],
-  fragment: readonly { readonly range: { readonly end: number } }[]
+  fragment: readonly { readonly range: { readonly end: number } }[],
+  movedForAnchor = false
 ): number[] | null {
   const offsets = [...drawingModelOffsetsInParagraph(paragraph).values()];
   const end = fragment[fragment.length - 1]?.range.end;
   if (end === undefined || offsets.length === 0) return offsets;
-  const afterBreak =
-    lines.find((line) => line.end === end)?.pageBreakAfter === true &&
-    offsets.every((offset) => offset >= end);
-  return afterBreak ? null : offsets;
+  const cut = movedForAnchor || lines.find((line) => line.end === end)?.pageBreakAfter === true;
+  return cut && offsets.every((offset) => offset >= end) ? null : offsets;
 }

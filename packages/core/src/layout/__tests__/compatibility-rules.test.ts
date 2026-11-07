@@ -49,6 +49,8 @@ const MODE_MATRIX = {
   tallRowStaysWhole: 'legacy',
   tableParagraphWidowControl: 'modern',
   vMergeTextMovesPastHeadRow: 'modern',
+  wrappedAnchorsEndAtBottomMargin: 'modern',
+  wrappedAnchorsEndOnSheet: 'legacy',
   wrappedAnchorsStayBelowTopMargin: 'modern',
 } as const satisfies Record<ModeRuleName, 'legacy' | 'modern'>;
 

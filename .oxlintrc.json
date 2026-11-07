@@ -510,7 +510,7 @@
     {
       "files": ["packages/core/src/layout/semantic-layout.ts"],
       "rules": {
-        "max-lines": ["error", { "max": 2910, "skipBlankLines": false, "skipComments": false }]
+        "max-lines": ["error", { "max": 2900, "skipBlankLines": false, "skipComments": false }]
       }
     },
     // The benchmark and scenario tools are command-line programs: their report is console output.

@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-A paragraph with a leading paragraph-framed floating drawing now moves to the next page when the drawing's vertical band does not fit below the preceding flow. The anchor paragraph no longer stays at the bottom of the page with its drawing clipped.
+A floating object that wraps text near the bottom of a page now stays on the page: it moves up, or its line moves to the next page, as the document's compatibility mode requires.

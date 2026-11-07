@@ -69,6 +69,8 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `tableParagraphWidowControl` | `modern` | Paragraphs that split in table cells apply widow control |
 | `unreachedGridColumnsTakeNoWidth` | `modern` | Trailing grid columns that no cell reaches take no width, even when a row end skip spans them. Table style conditions still count the authored grid |
 | `vMergeTextMovesPastHeadRow` | `modern` | Merged cell text moves whole past a head row that cannot hold it |
+| `wrappedAnchorsEndAtBottomMargin` | `modern` | A wrapping object positioned from its paragraph or line moves up to end at the bottom margin. When that lifts it above its line, the line moves to the next page, and an object that still crosses the margin ends the page |
+| `wrappedAnchorsEndOnSheet` | `legacy` | A wrapping object positioned from its paragraph or line moves up to end at the bottom page edge, never above the top page edge. Its line never moves |
 | `wrappedAnchorsStayBelowTopMargin` | `modern` | A wrapping object positioned from its paragraph never starts above the top margin |
 | `adjustLineHeightInTable` | `w:adjustLineHeightInTable` | Cell paragraphs snap to the line grid |
 | `noColumnBalance` | `w:noColumnBalance` in `legacy` modes | Columns fill in order without balancing |

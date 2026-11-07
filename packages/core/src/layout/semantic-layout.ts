@@ -112,7 +112,7 @@ import {
   paragraphPaintsNothing,
 } from './body-flow-helpers.ts';
 import { shiftAnchoredDrawingY } from './drawing-overlap.ts';
-import { paragraphOwnAnchorBand } from './paragraph-own-anchors.ts';
+import { createLineOwnAnchorBottom } from './paragraph-own-anchors.ts';
 import { collectAnchoredDrawings as collectAnchoredDrawingRecords } from './anchored-drawing-collect.ts';
 import { createEarlierLinePush, ownTableStaysForAnchor } from './earlier-line-push.ts';
 import { createStackPlacement } from './table-float-stack.ts';
@@ -153,7 +153,7 @@ import {
 } from './drawing-exclusion.ts';
 import { drawingModelOffsetsInParagraph } from './drawing-layout.ts';
 import { bodyLineId } from './body-line-id.ts';
-import { syntheticAnchorLines } from './anchor-frame-lines.ts';
+import { fragmentAnchorFrame } from './anchor-frame-lines.ts';
 import { drawingTokenForTableBlockMemo, withDrawingSourceOrder } from './inline-drawing-source.ts';
 import {
   emptyTocPlaceholderParagraphIds,
@@ -2121,6 +2121,16 @@ function* layoutBlocksPass(
       flowNeighbourStyle(paragraph, -1, previousEntry, styleCascade),
       flowNeighbourStyle(paragraph, 1, nextEntry, styleCascade)
     );
+    // Where each line's own wrapping objects end once placed (`wrappedAnchorsEndAtBottomMargin`).
+    const anchorBottom = createLineOwnAnchorBottom({
+      paragraph,
+      drawingLayout: options.inlineDrawingLayout,
+      frameBase: anchorFrameBase,
+      column: () => ({ x: columnOffsetX(), width: columnWidth() }),
+      displayMode,
+      revisionAuthorFilter: authorFilter,
+      layoutTextboxStory: hostedStory?.layoutTextboxStoryFor,
+    });
     let keepTailAt = -1; // Where a kept paragraph that splits early breaks; a rebreak clears it.
     const rebreakInCurrentColumn = (startOffset: number, placedParagraphStartY?: number): void => {
       const next = prepareBlock(paragraph, columnWidth());
@@ -2182,15 +2192,8 @@ function* layoutBlocksPass(
           firstExtent,
           paragraphFrames.requiredAnchorBand(lines),
           anchorTableBand(paragraphId, prospectiveFirstTop, firstExtent),
-          paragraphOwnAnchorBand({
-            paragraph,
-            drawingLayout: options.inlineDrawingLayout,
-            paragraphStartY: prospectiveFirstTop,
-            contentLeft: 0,
-            contentRight: columnWidth(),
-            displayMode,
-            revisionAuthorFilter: authorFilter,
-          })
+          anchorBottom(lines[0], lines.length <= 1, prospectiveFirstTop, prospectiveFirstTop) -
+            prospectiveFirstTop
         );
       // `w:keepNext` (§17.3.1.15): priced ONCE per chain, at its head (`keepNextGroupNeed`).
       if (keeps.keepNext && !keepsNext[index - 1]) {
@@ -2295,7 +2298,8 @@ function* layoutBlocksPass(
       ? mergeBoundariesOf(mergeGroup, displayMode, authorFilter)
       : null;
 
-    const flushFragment = (isLast: boolean): void => {
+    /** `movedForAnchor`: the fragment ends where an own object moved its line to the next page. */
+    const flushFragment = (isLast: boolean, movedForAnchor = false): void => {
       if (pending.length === 0) return;
       const regionX = columnLeft();
       const columnX = columnOffsetX();
@@ -2425,72 +2429,39 @@ function* layoutBlocksPass(
       else pageFragments.push(publishedFragment);
       const publish =
         options.inlineDrawingLayout && paragraphHasAnchors && !paragraphAnchorsPublished;
-      const anchorOffsets = publish ? publishableAnchors(entry.paragraph, lines, pending) : null;
+      const anchorOffsets = publish
+        ? publishableAnchors(entry.paragraph, lines, pending, movedForAnchor)
+        : null;
       if (publish && anchorOffsets) {
         paragraphAnchorsPublished = true;
-        const pendingCoversAnchors =
-          anchorOffsets.length > 0 &&
-          anchorOffsets.every((offset) =>
-            pending.some((line) => offset >= line.range.start && offset < line.range.end)
-          );
-        let publishLines: typeof pending;
-        let publishParagraphBox: LayoutBox;
-        let publishColumnBox: LayoutBox;
-        if (pendingCoversAnchors) {
-          // A `wrapTopAndBottom` anchor pushed its OWN paragraph's lines down to clear the
-          // band. Framing the anchor against those lines chases the displacement it caused —
-          // the picture lands on the text it just moved. `positionV relativeFrom="paragraph"`
-          // means where the paragraph would begin without its own band, so that skip comes
-          // back off here. A band inherited from an earlier paragraph is NOT removed: it
-          // moved this paragraph for real, and the anchor travels with it.
-          const anchorTop =
-            top -
+        const anchorFrame = fragmentAnchorFrame({
+          anchorOffsets,
+          pending,
+          lines,
+          paragraphId,
+          top,
+          height,
+          column: { x: columnX, width: columnWidth() },
+          indentLeft: indent.left,
+          available,
+          displacement: paragraphDrawingWrap.displacement(pages.length, paragraphId),
+          ownSkip: () =>
             ownTopAndBottomSkip(fragmentFirstLineSkip, fragmentParagraphStartY, pending[0], {
               inheritedZones: pageExclusionZonesForEntry(entry, index),
               spaceAbove: fragmentBefore,
               anchorClearanceBefore: lines[fragmentFirstLine]?.anchorClearanceBefore,
-            }) -
-            paragraphDrawingWrap.displacement(pages.length, paragraphId);
-          publishLines = pending;
-          publishParagraphBox = {
-            x: columnX + indent.left,
-            y: anchorTop,
-            width: available,
-            height,
-          };
-          publishColumnBox = anchorColumnBox(publishParagraphBox);
-        } else {
-          const origin = paragraphAnchorOrigin ?? {
-            columnX,
-            columnWidth: columnWidth(),
-            startY: top,
-          };
-          const synthetic = syntheticAnchorLines(
-            lines,
-            origin,
-            { left: origin.columnX + indent.left, width: available },
-            paragraphId
-          );
-          publishLines = synthetic.lines;
-          const paragraphTop =
-            origin.startY - paragraphDrawingWrap.displacement(pages.length, paragraphId);
-          publishParagraphBox = {
-            x: origin.columnX + indent.left,
-            y: paragraphTop,
-            width: available,
-            height: Math.max(synthetic.bottom - paragraphTop, pending[0]?.box.height ?? 0),
-          };
-          publishColumnBox = anchorColumnBox(publishParagraphBox);
-        }
+            }),
+          origin: paragraphAnchorOrigin,
+        });
         collectAnchoredDrawings(
           publishAnchoredDrawingsForParagraph({
             paragraph: entry.paragraph,
             paragraphId,
-            paragraphBox: publishParagraphBox,
-            lines: publishLines,
+            paragraphBox: anchorFrame.paragraphBox,
+            lines: anchorFrame.lines,
             drawingLayout: options.inlineDrawingLayout,
             frameBase: anchorFrameBase(),
-            columnBox: publishColumnBox,
+            columnBox: anchorColumnBox(anchorFrame.paragraphBox),
             cellBox: null,
             pageClip: pageContentClip(),
             cellAnchorScope: null,
@@ -2560,15 +2531,19 @@ function* layoutBlocksPass(
       keptBreakLine =
         !frame && lineIndex === 0 && cursorY + lineExtent > contentHeight() && leadingBreak();
       // An intrinsically oversized line cannot fit another empty sheet; publish it once.
+      const contentAbove = pending.length > 0 || pageFragments.length > 0 || columnRegionTop > 0;
+      // An own object that cannot end at the bottom margin takes its line to the next page.
+      const lineTop = cursorY + skipBefore;
+      const anchorMoves =
+        contentAbove &&
+        anchorBottom(pendingLine, isLastLine, fragmentParagraphStartY, lineTop) > contentHeight();
       const overflowsPage =
         lineIndex === keepTailAt ||
         (!frame &&
-          cursorY + lineExtent > contentHeight() &&
+          (cursorY + lineExtent > contentHeight() || anchorMoves) &&
           !holdsSheet() &&
           !keptBreakLine &&
-          (pending.length > 0 ||
-            pageFragments.length > 0 ||
-            columnRegionTop > 0 ||
+          (contentAbove ||
             ((pages.length > 0 || (furnitureHasWrap && skipBefore > 0)) &&
               ownBandSkip(entry, index, lines, lineIndex, fragmentParagraphStartY, fragmentBefore) +
                 Math.max(0, pendingLine.height - pendingLine.trailingSpacing) +
@@ -2618,7 +2593,7 @@ function* layoutBlocksPass(
         // An anchor that keeps or widow rules move whole leaves its own table here as well.
         if (movesWhole && !frame && ownTableStays(paragraphId, lines[0]!.height))
           noteAnchor(paragraphId, cursorY);
-        flushFragment(false);
+        flushFragment(false, anchorMoves && !retreated);
         advanceColumn();
         fragmentBefore = 0;
         if (movesWhole) cursorY += fragmentTopExtent;
@@ -2734,6 +2709,12 @@ function* layoutBlocksPass(
       if (pending.length === 0) fragmentFirstLineSkip = skipBefore;
       pending.push(record);
       cursorY += pendingLine.height;
+      // An own object that still crosses the bottom margin here ends the page after its line.
+      if (
+        anchorBottom(pendingLine, isLastLine, fragmentParagraphStartY, record.box.y) >
+        contentHeight()
+      )
+        cursorY = Math.max(cursorY, contentHeight());
       if (pendingLine.columnBreakAfter) {
         const priorColumnWidth = columnWidth();
         const priorPageHadExclusions = pageExclusionZones().length > 0;
