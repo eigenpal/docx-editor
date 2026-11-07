@@ -112,6 +112,7 @@ import {
   paragraphPaintsNothing,
 } from './body-flow-helpers.ts';
 import { shiftAnchoredDrawingY } from './drawing-overlap.ts';
+import { paragraphOwnAnchorBand } from './paragraph-own-anchors.ts';
 import { collectAnchoredDrawings as collectAnchoredDrawingRecords } from './anchored-drawing-collect.ts';
 import { createEarlierLinePush, ownTableStaysForAnchor } from './earlier-line-push.ts';
 import { createStackPlacement } from './table-float-stack.ts';
@@ -2180,7 +2181,16 @@ function* layoutBlocksPass(
         Math.max(
           firstExtent,
           paragraphFrames.requiredAnchorBand(lines),
-          anchorTableBand(paragraphId, prospectiveFirstTop, firstExtent)
+          anchorTableBand(paragraphId, prospectiveFirstTop, firstExtent),
+          paragraphOwnAnchorBand({
+            paragraph,
+            drawingLayout: options.inlineDrawingLayout,
+            paragraphStartY: prospectiveFirstTop,
+            contentLeft: 0,
+            contentRight: columnWidth(),
+            displayMode,
+            revisionAuthorFilter: authorFilter,
+          })
         );
       // `w:keepNext` (§17.3.1.15): priced ONCE per chain, at its head (`keepNextGroupNeed`).
       if (keeps.keepNext && !keepsNext[index - 1]) {

@@ -4,12 +4,15 @@
 // mode resolves away publishes no record, so it reserves no line top and carves no hole.
 
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
+import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import {
   anchoredDrawingAtomsInParagraph,
   drawingModelOffsetsInParagraph,
+  measureInlineDrawing,
   type InlineDrawingLayoutContext,
 } from './drawing-layout.ts';
 import { revisionMarkupHidesDrawing } from './revision-markup-projection.ts';
+import { resolveParagraphAnchorPosition } from './paragraph-anchor-position.ts';
 import {
   revisionsVisible,
   type RevisionAuthorFilter,
@@ -77,4 +80,52 @@ export function paragraphOwnAnchorStarts(options: {
       paragraphFramedTopAndBottom.add(modelStart);
   }
   return { topAndBottom, paragraphFramedTopAndBottom, wrap };
+}
+
+/**
+ * The vertical extent a paragraph's leading paragraph-framed wrapping anchors need on its
+ * page. Word moves the anchor paragraph to the next page when that band does not fit under
+ * the preceding flow, even when the paragraph mark itself could sit beside the object.
+ *
+ * Only anchors at model offset 0 count: a later anchor belongs to a line the paragraph may
+ * split before, so it must not price the whole paragraph.
+ */
+export function paragraphOwnAnchorBand(options: {
+  readonly paragraph: OoxmlNode;
+  readonly drawingLayout: InlineDrawingLayoutContext | undefined;
+  readonly paragraphStartY: number;
+  readonly contentLeft: number;
+  readonly contentRight: number;
+  readonly displayMode: RevisionDisplayMode;
+  readonly revisionAuthorFilter: RevisionAuthorFilter | undefined;
+}): number {
+  const paragraph = options.paragraph;
+  if (!options.drawingLayout || paragraph.kind !== 'paragraph') return 0;
+  const atoms = anchoredDrawingAtomsInParagraph(paragraph, options.drawingLayout);
+  // A paragraph with text keeps its opening lines beside the object. Only an anchor-only
+  // paragraph moves as a unit with its band.
+  if (atoms.length === 0 || paragraphOffsetIndex(paragraph).length !== atoms.length) return 0;
+  const offsets = drawingModelOffsetsInParagraph(paragraph);
+  const { displayMode, revisionAuthorFilter } = options;
+  let bottom = options.paragraphStartY;
+  for (const atom of atoms) {
+    if (
+      !revisionsVisible(atom.revisions, displayMode, revisionAuthorFilter) ||
+      revisionMarkupHidesDrawing(atom.revisions, displayMode, revisionAuthorFilter)
+    )
+      continue;
+    if (offsets.get(atom.atomId) !== 0) continue;
+    if (atom.projection.anchor?.simplePos) continue;
+    const vertical = atom.projection.position?.vertical;
+    if (vertical?.relativeFrom !== 'paragraph') continue;
+    const resolved = resolveParagraphAnchorPosition(atom.projection, {
+      contentLeft: options.contentLeft,
+      contentRight: options.contentRight,
+      lineY: options.paragraphStartY,
+      ownerPartName: options.drawingLayout.ownerPartName,
+    });
+    if (resolved.layoutFallback) continue;
+    bottom = Math.max(bottom, resolved.y + measureInlineDrawing(atom.projection).height);
+  }
+  return Math.max(0, bottom - options.paragraphStartY);
 }
