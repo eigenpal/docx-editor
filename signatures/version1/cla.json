@@ -305,6 +305,12 @@
       "id": 122069802,
       "signed_at": "2026-11-04T07:16:29Z",
       "pull_request_no": 1815
+    },
+    {
+      "name": "Reone",
+      "id": 8381990,
+      "signed_at": "2026-11-07T02:41:14Z",
+      "pull_request_no": 1867
     }
   ]
 }

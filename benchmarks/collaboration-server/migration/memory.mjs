@@ -28,7 +28,7 @@ const { values } = parseArgs({
 });
 
 const FIXTURES = [
-  'e2e/fixtures/demo.docx',
+  'e2e/fixtures/lorem-caret-fix-check.docx',
   'e2e/fixtures/issue-68-large-comments-suggestions.docx',
   'e2e/fixtures/typing-perf-521pp.docx',
 ];

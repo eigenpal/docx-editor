@@ -67,6 +67,7 @@
   },
   "files": [
     "dist",
+    "licenses",
     "docs",
     "!dist/metafile-*.json",
     "LICENSE.md",
@@ -146,7 +147,7 @@
     "collaboration"
   ],
   "author": {
-    "name": "EigenPal, Inc.",
+    "name": "Eigenpal, Inc.",
     "email": "licensing@eigenpal.com",
     "url": "https://eigenpal.com"
   },

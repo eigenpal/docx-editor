@@ -24,6 +24,8 @@ def test_vendored_licenses_are_complete():
         "THIRD_PARTY_NOTICES.md",
         "bun-LICENSE.md",
         "harfbuzz-COPYING.txt",
+        "LGPL-2.0.txt",
+        "LGPL-2.1.txt",
         "OFL-Carlito.txt",
         "OFL-Caladea.txt",
         "LICENSE-Liberation.txt",
@@ -46,6 +48,9 @@ def test_notices_name_the_runtime_and_shaper():
     notices = (LICENSES / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
     assert "## Bun runtime" in notices
     assert "JavaScriptCore" in notices
+    assert "### LGPL libraries in the Bun runtime" in notices
+    assert "scripts/build/deps/webkit.ts" in notices
+    assert "scripts/build/deps/tinycc.ts" in notices
     assert "## HarfBuzz" in notices
     assert "Old MIT" in notices
 

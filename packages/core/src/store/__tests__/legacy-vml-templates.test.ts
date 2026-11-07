@@ -46,7 +46,7 @@ function count(source: string, shape: string): number {
 }
 
 test('recognizes complete standard photo and straight WordArt templates without trusting the id alone', () => {
-  const photo = template('demo.docx', 'word/numbering.xml', 75);
+  const photo = template('watermark-picture.docx', 'word/header1.xml', 75);
   const art = template('watermark-confidential.docx', 'word/header1.xml', 136);
   const image =
     '<v:shape type="#_x0000_t75" style="width:80pt;height:40pt"><v:imagedata r:id="rPhoto"/></v:shape>';
@@ -78,7 +78,7 @@ test('refuses picture effects and duplicate style nodes instead of dropping auth
 });
 
 test('recognizes the picture frame template without its formulas, and nothing looser', () => {
-  const photo = template('demo.docx', 'word/numbering.xml', 75).replace(
+  const photo = template('watermark-picture.docx', 'word/header1.xml', 75).replace(
     /<v:formulas>[\s\S]*?<\/v:formulas>/,
     ''
   );
