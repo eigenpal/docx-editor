@@ -12,6 +12,10 @@ bun run reference:fetch
 
 Idempotent. The handwritten quick-refs and XSDs under `ecma-376/part1/schemas/` stay committed for offline schema lookups.
 
+## Terms
+
+Ecma International holds the copyright of the files under `ecma-376/`. They are unmodified copies of the ECMA-376 Part 1 Strict schemas, and the Apache License of this repository does not apply to them. Ecma's copyright notice permits copies if they carry the notice, and the notice is in [`ecma-376/NOTICE`](ecma-376/NOTICE). Never edit a file in `ecma-376/`. A rename across the repository must skip this directory.
+
 ## Folder structure
 
 ```

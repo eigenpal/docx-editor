@@ -1,8 +1,13 @@
-# ECMA-376 preset shape geometry
+# ECMA-376 derived tables
 
 `src/store/package/drawing-preset-table.ts` is generated from `presetShapeDefinitions.xml` in the electronic annex of ECMA-376 Part 1, _Office Open XML File Formats — Fundamentals and Markup Language Reference_ (https://ecma-international.org/publications-and-standards/standards/ecma-376/). The generator, `scripts/generate-drawing-presets.mjs`, re-encodes each preset's adjust values, guide formulas, text rectangle and paths in a compact form, and omits adjust handles and connection sites. The table implements the preset geometry functionality of the standard in a standard-conformant product, as permitted by clause (iv) of the notice below.
 
-The following notice applies to that table.
+Two smaller tables in this package also come from ECMA-376 Part 1, and the same terms apply to them:
+
+- `src/layout/cjk-typography.ts`: the default line-break character sets of §17.3.1.16.
+- `src/store/package/drawing-preset-colors.ts`: the color names of `ST_PresetColorVal`.
+
+The following notice applies to these tables.
 
 COPYRIGHT NOTICE
 

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { defineConfig } from 'tsup';
 import { withDeclarations } from '../../scripts/build-declarations.mjs';
+import { addLicenseHeaders } from '../../scripts/license-banner.mjs';
 
 const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 
@@ -18,6 +19,8 @@ const ENTRIES = {
 // external: the browser entry must not pull a server dependency, and core must stay one copy.
 export default defineConfig(
   withDeclarations(import.meta.url, {
+    // Every script in dist/ opens with the license header.
+    onSuccess: addLicenseHeaders(import.meta.url),
     entry: ENTRIES,
     platform: 'neutral',
     format: ['cjs', 'esm'],

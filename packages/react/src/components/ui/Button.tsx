@@ -1,3 +1,5 @@
+// Adapted from the shadcn/ui `button` component, MIT License, Copyright (c) 2023 shadcn.
+// See licenses/shadcn-ui-MIT.md.
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/utils';

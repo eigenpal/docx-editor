@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -335,7 +335,19 @@ const num = (value: number) => value.toFixed(3);
 
 function print(card: Scorecard): void {
   const rows = [
-    ['family', 'cases', 'F1', 'prec', 'recall', 'marks', 'extra', 'missed', 'refused', 'med ms', 'max ms'],
+    [
+      'family',
+      'cases',
+      'F1',
+      'prec',
+      'recall',
+      'marks',
+      'extra',
+      'missed',
+      'refused',
+      'med ms',
+      'max ms',
+    ],
     ...[...Object.entries(card.families), ['overall', card.overall] as const].map(([name, s]) => [
       name,
       String(s.cases + s.refused),
@@ -352,7 +364,11 @@ function print(card: Scorecard): void {
   ];
   const widths = rows[0]!.map((_, i) => Math.max(...rows.map((row) => row[i]!.length)));
   for (const row of rows)
-    console.log(row.map((cell, i) => (i === 0 ? cell.padEnd(widths[i]!) : cell.padStart(widths[i]!))).join('  '));
+    console.log(
+      row
+        .map((cell, i) => (i === 0 ? cell.padEnd(widths[i]!) : cell.padStart(widths[i]!)))
+        .join('  ')
+    );
   if (card.overall.stale > 0)
     console.log(`\n${card.overall.stale} cases have no reference for their current inputs.`);
   if (card.pairs) {

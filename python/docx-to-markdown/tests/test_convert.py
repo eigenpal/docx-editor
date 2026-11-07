@@ -206,7 +206,7 @@ def test_export_warning_shape():
     assert warning.page_number == 3
 
 
-def test_real_world_document_converts(demo_document):
-    result = convert(demo_document)
+def test_sparse_theme_document_converts(sparse_theme_document):
+    result = convert(sparse_theme_document)
     assert result.page_count > 0
     assert result.markdown.strip()
