@@ -15,6 +15,7 @@ import { withoutTrailingZeroWidthSpaces } from './trailing-spaces.ts';
 import { authoredCjkGapMetric } from './cjk-auto-spacing-metric-port.ts';
 import { knownFamilyReverseGap } from './authored-average-widths.ts';
 import { opensWithWidenedSpaces } from './balanced-line-start.ts';
+import { isHangul } from './cjk-paragraph-breaks.ts';
 
 // No-break spaces join their neighbours into one word. They have width, never break the
 // line, and never hang, so the word-shape tests read them as word characters.
@@ -106,6 +107,31 @@ function capacity(
   );
   if (floor?.value !== undefined) return Math.max(0, space - floor.value);
   return space * limit;
+}
+
+/**
+ * Whether the space closing `spans[index]` stands beside Hangul: the character before it, or
+ * the one after it (the start of `following` when no span follows), is Hangul.
+ */
+function besideHangul(spans: readonly StyleSpanRecord[], index: number, following = ''): boolean {
+  const before = withoutSpaceSlot(spans[index]!.text) || (spans[index - 1]?.text ?? '');
+  const after = (spans[index + 1]?.text ?? following).replace(/^\u200b+/u, '');
+  // Hangul lies in the BMP, so one UTF-16 unit on each side decides; empty text reads NaN.
+  return isHangul(before.charCodeAt(before.length - 1)) || isHangul(after.charCodeAt(0));
+}
+
+/**
+ * What the space closing `spans[index]` can give up. With `keepsHangulSpaces`, a space beside
+ * Hangul keeps its advance and gives up nothing.
+ */
+function lendingCapacity(
+  spans: readonly StyleSpanRecord[],
+  index: number,
+  space: number,
+  keepsHangulSpaces: boolean,
+  following?: string
+): number {
+  return keepsHangulSpaces && space > 0 && besideHangul(spans, index, following) ? 0 : space;
 }
 
 /** Space floors by face style and kind; one style serves every span and line that uses it. */
@@ -224,11 +250,12 @@ export interface ShrinkWord {
  * - `false`: the word does not join the line.
  *
  * Only an ordinary word followed by a space, or the paragraph's last word, can borrow
- * existing inter-word space. Each space gives up at most `rule.limit` of its advance, and the
- * shrink must pass the rule's cost test against the stretch of the line without the word. A
- * word whose final mark may hang (`hangingMarkAdvance` is its advance) joins when the spaces
- * reach their limit before the mark fits, as long as they fit the text before the mark and
- * the rule hangs marks. Its mark then hangs.
+ * existing inter-word space. Each space gives up at most `rule.limit` of its advance, a space
+ * beside Hangul nothing under `rule.keepsHangulSpaces`, and the shrink must pass the rule's
+ * cost test against the stretch of the line without the word. A word whose final mark may
+ * hang (`hangingMarkAdvance` is its advance) joins when the spaces reach their limit before
+ * the mark fits, as long as they fit the text before the mark and the rule hangs marks. Its
+ * mark then hangs.
  *
  * A word that straddles a source-run seam (a quoted bold term, a semicolon left in the next
  * run) overflows on a later piece than the one that opened it. The kept line still runs to
@@ -287,13 +314,16 @@ export function spaceShrinkFit(
   // of it carry its stretch, and the space in front of it is the one that hangs.
   // One capacity per span serves the budget, the hanging space and the spaces ahead of the
   // word, each summed in span order; reading every span again measured each word again.
+  // A space that keeps its advance beside Hangul lends nothing, but the shorter line still
+  // stretches it, and it still hangs at full width after the last word.
+  const keepsHangulSpaces = rule.keepsHangulSpaces === true;
   const beforeEnd = Math.max(first, Math.min(wordStart, spans.length));
   const capacities: number[] = [];
   let budget = 0;
   for (let index = first; index < spans.length; index += 1) {
-    const slot = capacity(spans[index]!, measurer, rule.limit, rule.floor);
-    capacities.push(slot);
-    budget += slot;
+    const space = capacity(spans[index]!, measurer, rule.limit, rule.floor);
+    capacities.push(space);
+    budget += lendingCapacity(spans, index, space, keepsHangulSpaces, candidate);
   }
   if (rule.everyAlignment)
     for (const space of clippedSpacesBefore(spans, beforeEnd, first, measurer)) {
@@ -420,12 +450,15 @@ export function shrinkJustifiedSpans(
   measurer: TextMeasurer,
   slotEnd: number = spans.length - 1,
   floor?: SpaceShrinkFloor,
-  paragraphRtl = false
+  paragraphRtl = false,
+  keepsHangulSpaces = false
 ): readonly StyleSpanRecord[] {
   const first = firstShrinkSlot(spans);
   // Admission kept `needed` within the paragraph's rule; equal shares never pass a quarter.
   const capacities = spans.map((span, index) =>
-    index >= first && index < slotEnd ? capacity(span, measurer, 0.25, floor) : 0
+    index >= first && index < slotEnd
+      ? lendingCapacity(spans, index, capacity(span, measurer, 0.25, floor), keepsHangulSpaces)
+      : 0
   );
   if (needed <= 0 || needed > capacities.reduce((a, b) => a + b, 0) + 0.001) return spans;
   const amounts = capacities.map(() => 0);

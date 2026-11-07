@@ -95,6 +95,10 @@ export const MODE_RULES = {
     'Justified lines may shrink spaces to fit one more word',
     'ECMA-376 Part 1 §17.3.1.13 jc'
   ),
+  balancedKoreanSpaces: modern(
+    'With balanced single-byte and double-byte widths, a space beside Hangul keeps its advance when justified and distributed lines shrink their spaces',
+    'ECMA-376 Part 1 §17.15.3.3 balanceSingleByteDoubleByteWidth'
+  ),
   keepNextGivesTailLines: modern(
     'A keep-with-next paragraph that fits whole gives its last lines to the next page with its successor',
     'ECMA-376 Part 1 §17.3.1.15 keepNext'

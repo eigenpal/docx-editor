@@ -186,6 +186,20 @@ describe('balanced single-byte and double-byte widths: a space shrinks down to a
     });
   }
 
+  test('spaces beside Hangul lend as other spaces do', () => {
+    // The Courier New line above, in Hangul words of the same advance.
+    const korean = (available: number) =>
+      texts(
+        inFace('Courier New', available, {
+          text: WORDS.replaceAll('aa', '가가'),
+          language: 'ko-KR',
+          balanceWidths: true,
+        })
+      )[0];
+    expect(korean(natural('Courier New') - 50.4 + 0.5)).toBe(SEVEN.replaceAll('aa', '가가'));
+    expect(korean(natural('Courier New') - 50.4 - 0.5)).toBe(SIX.replaceAll('aa', '가가'));
+  });
+
   test('Century: each space lends less than half the average width would', () => {
     // 6.67 pt spaces lend 0.67 pt each, 4.03 pt in all; half the average width would lend 6.6.
     expect(balanced('Century', natural('Century') - 4.03 + 0.4)).toBe(SEVEN);

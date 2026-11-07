@@ -37,6 +37,12 @@ export interface CjkTypographySettings {
    */
   readonly balancedWidths?: true;
   /**
+   * `balancedWidths` in a modern compatibility mode (`balancedKoreanSpaces`): a space beside
+   * Hangul keeps its advance when a justified or distributed line shrinks its spaces.
+   * @internal
+   */
+  readonly balancedKoreanSpaces?: true;
+  /**
    * The compatibility setting `w:useWord97LineBreakRules`. With `balancedWidths`, lines in a
    * legacy mode keep natural inter-word spaces in proportional faces.
    * @internal
