@@ -1,5 +1,12 @@
 # @docx-editor.dev/docx-to-pdf
 
+## 2.36.0
+
+### Patch Changes
+
+- 0966a72: Remove obsolete local PDF tool commands from the source checkout.
+- Updated dependencies: @docx-editor.dev/core@2.36.0, @docx-editor.dev/fonts-cjk@2.36.0, @docx-editor.dev/fonts@2.36.0, @docx-editor.dev/pro@2.36.0
+
 ## 2.35.0
 
 ### Patch Changes
