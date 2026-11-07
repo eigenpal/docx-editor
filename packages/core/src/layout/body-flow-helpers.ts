@@ -11,7 +11,7 @@ import { holdsOnlyPageBreak } from './pending-line.ts';
 import { drawingModelOffsetsInParagraph } from './drawing-atom-walk.ts';
 import { marginInset } from './page-body-margins.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
-import type { ParagraphBorders } from './paragraph-style.ts';
+import { paragraphBorderExtentPt, type ParagraphBorders } from './paragraph-style.ts';
 import type { LayoutBox } from './semantic-records.ts';
 
 /** The page and column facts an anchored drawing or table resolves its frame against. */
@@ -170,22 +170,53 @@ export function atKeptBreakY(
   return { ...box, y: kept.y, height: Math.max(height, 0) };
 }
 
+/** The anchors one fragment publishes: their model offsets, and the range they come from. */
+export interface FragmentAnchors {
+  readonly offsets: readonly number[];
+  readonly range: { readonly start: number; readonly end: number };
+}
+
 /**
- * The model offsets of a paragraph's anchors, to publish with this fragment; null when every
- * anchor comes after the fragment and the fragment ends at an explicit page break, or where an
- * own object moved its line to the next page (`movedForAnchor`). Those anchors belong with the
- * text that follows and take their paragraph origin there. A fragment the page bottom cuts
- * otherwise keeps every anchor with the paragraph origin.
+ * The anchors of a paragraph, from model offset `from` on, to publish with this fragment. Null
+ * when every one comes after the fragment and the fragment ends at an explicit page break: those
+ * belong with the text that follows and take their paragraph origin there. `heldOnly` (once an
+ * own object moved a line or ended a page) publishes only the anchors the fragment holds, null
+ * when it holds none. A fragment the page bottom cuts otherwise publishes every remaining anchor
+ * with the paragraph origin. The range ends where the next fragment's anchors start.
  */
 export function publishableAnchors(
   paragraph: OoxmlElement,
   lines: readonly PendingLine[],
   fragment: readonly { readonly range: { readonly end: number } }[],
-  movedForAnchor = false
-): number[] | null {
-  const offsets = [...drawingModelOffsetsInParagraph(paragraph).values()];
+  { from = 0, heldOnly = false }: { readonly from?: number; readonly heldOnly?: boolean } = {}
+): FragmentAnchors | null {
+  if (from === Infinity) return null;
   const end = fragment[fragment.length - 1]?.range.end;
-  if (end === undefined || offsets.length === 0) return offsets;
-  const cut = movedForAnchor || lines.find((line) => line.end === end)?.pageBreakAfter === true;
-  return cut && offsets.every((offset) => offset >= end) ? null : offsets;
+  const range = { start: from, end: heldOnly && end !== undefined ? end : Infinity };
+  const offsets = [...drawingModelOffsetsInParagraph(paragraph).values()].filter(
+    (offset) => offset >= range.start && offset < range.end
+  );
+  if (heldOnly) return offsets.length > 0 ? { offsets, range } : null;
+  const atBreak = end !== undefined && lines.find((line) => line.end === end)?.pageBreakAfter;
+  return atBreak && offsets.length > 0 && offsets.every((offset) => offset >= end)
+    ? null
+    : { offsets, range };
+}
+
+/**
+ * The authored space and top border above a paragraph's first line. The space before collapses
+ * into the space after of the block above unless the document adds the two (`sumAdjacent`).
+ */
+export function openingAbove(
+  paragraph: {
+    readonly spacing?: { readonly before: number };
+    readonly borders?: ParagraphBorders;
+  },
+  above: { readonly kind: string; readonly spacing?: { readonly after: number } } | undefined,
+  sumAdjacent: boolean | undefined
+): number {
+  const after = above?.kind === 'paragraph' ? (above.spacing?.after ?? 0) : 0;
+  const before = paragraph.spacing?.before ?? 0;
+  const lead = sumAdjacent ? before : Math.max(before, after) - after;
+  return lead + paragraphBorderExtentPt(paragraph.borders?.top);
 }

@@ -24,14 +24,19 @@ interface Box {
   readonly y: number;
   readonly height: number;
   readonly x?: number;
-  readonly wrap?: 'square' | 'none' | 'behind';
+  readonly wrap?: 'square' | 'topAndBottom' | 'none' | 'behind';
   readonly frame?: 'paragraph' | 'line';
   readonly hidden?: boolean;
 }
 
 function anchor({ y, height, x = 0, wrap = 'square', frame = 'paragraph', hidden }: Box): string {
   const id = nextId++;
-  const wrapXml = wrap === 'square' ? '<wp:wrapSquare wrapText="bothSides"/>' : '<wp:wrapNone/>';
+  const wrapXml =
+    wrap === 'square'
+      ? '<wp:wrapSquare wrapText="bothSides"/>'
+      : wrap === 'topAndBottom'
+        ? '<wp:wrapTopAndBottom/>'
+        : '<wp:wrapNone/>';
   return (
     '<w:r><w:drawing>' +
     `<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="${id}" ` +
@@ -329,6 +334,81 @@ describe('the page-fit rule follows what publishes', () => {
     const layout = render(filler(546) + heading + body);
     expect(lineAt(layout, 'Heading')).toEqual({ page: 1, y: 0 });
     expect(lineAt(layout, 'Body')!.page).toBe(1);
+  });
+
+  test('publishes an object that fits with its own line and moves a later one with its line', () => {
+    // The paragraph starts at 518: line 3 at 546 holds an object that ends at 596; line 5 at
+    // 574 holds one that cannot end at the margin.
+    const fits = anchor({ y: 0, height: 50, x: 368, frame: 'line' });
+    const tall = anchor({ y: 8, height: 300, x: 368, frame: 'line' });
+    const runs = [1, 2, 3, 4, 5, 6, 7, 8].map(
+      (line) => (line === 3 ? fits : line === 5 ? tall : '') + `<w:r><w:t>Line ${line}</w:t></w:r>`
+    );
+    const body = `<w:p>${exactLine(14)}${runs.join('<w:r><w:br/></w:r>')}</w:p>`;
+    const layout = render(filler(518) + body);
+    expect(lineAt(layout, 'Line 4')!.page).toBe(0);
+    expect(lineAt(layout, 'Line 5')).toEqual({ page: 1, y: 0 });
+    expect(drawings(layout)).toEqual([
+      { page: 0, y: 546 },
+      { page: 1, y: 8 },
+    ]);
+  });
+
+  test('frames a moved object on its new page when a later page holds another object', () => {
+    // 70 lines from 560. The object on line `at` cannot end at the margin: its line moves (a
+    // split, or the whole paragraph), and a 700pt one also ends the page after it. It publishes
+    // from the top of its fragment on page 2; a small object on line 60 publishes with its line.
+    for (const { at, height } of [
+      { at: 1, height: 300 },
+      { at: 2, height: 300 },
+      { at: 5, height: 300 },
+      { at: 1, height: 700 },
+      { at: 3, height: 700 },
+    ]) {
+      const runs = Array.from({ length: 70 }, (_, index) => {
+        const line = index + 1;
+        const own =
+          line === at
+            ? anchor({ y: 20, height, x: 368 })
+            : line === 60
+              ? anchor({ y: 0, height: 10, x: 368, frame: 'line' })
+              : '';
+        return `${own}<w:r><w:t>Line ${line}</w:t></w:r>`;
+      });
+      const body = `<w:p>${exactLine(14)}${runs.join('<w:r><w:br/></w:r>')}</w:p>`;
+      const layout = render(filler() + body);
+      expect(lineAt(layout, `Line ${at}`)!.page).toBe(1);
+      expect(drawings(layout)[0]).toEqual({ page: 1, y: 20 });
+      const line60 = lineAt(layout, 'Line 60')!;
+      expect(drawings(layout)[1]).toEqual(line60);
+    }
+  });
+
+  test('prices a keep-with-next chain from the top of the space before', () => {
+    // From 566, the heading and 18pt of space leave the 60pt object (offset 0, so it starts
+    // above its line) room to end at 640.
+    const heading =
+      '<w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="0"/></w:pPr>' +
+      '<w:r><w:t>Heading</w:t></w:r></w:p>';
+    const body =
+      '<w:p><w:pPr><w:spacing w:before="360" w:after="0"/></w:pPr>' +
+      `${anchor({ y: 0, height: 60 })}<w:r><w:t>Body</w:t></w:r></w:p>`;
+    const layout = render(filler(566) + heading + body);
+    expect(lineAt(layout, 'Heading')!.page).toBe(0);
+    expect(drawings(layout)).toEqual([{ page: 0, y: 578.73 }]);
+  });
+
+  test('keeps the top border when an earlier band pushes the first line past the head check', () => {
+    // The first object's band (420 to 520) pushes the next paragraph's first line to 520,
+    // where its own object (520 to 720) cannot end at the margin.
+    const band = anchor({ y: 20, height: 100, x: 368, wrap: 'topAndBottom' });
+    const bordered =
+      '<w:p><w:pPr><w:pBdr><w:top w:val="single" w:sz="24" w:space="0" w:color="000000"/>' +
+      '</w:pBdr><w:spacing w:before="0" w:after="0"/></w:pPr>' +
+      `${anchor({ y: 0, height: 200, x: 368, frame: 'line' })}<w:r><w:t>Text</w:t></w:r></w:p>`;
+    const prev = `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr>${band}<w:r><w:t>Prev</w:t></w:r></w:p>`;
+    const layout = render(filler(400) + prev + bordered);
+    expect(lineAt(layout, 'Text')).toEqual({ page: 1, y: 3 });
   });
 
   test('moves the line to the next column before the next page', () => {

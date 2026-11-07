@@ -3,7 +3,7 @@
 
 import { expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlElement } from '@docx-editor.dev/core/store';
-import { publishableAnchors } from '../body-flow-helpers.ts';
+import { publishableAnchors as publishable } from '../body-flow-helpers.ts';
 import type { PendingLine } from '../paragraph-flow.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -34,6 +34,9 @@ function paragraph(content: string): OoxmlElement {
 const line = (start: number, end: number, pageBreakAfter?: boolean) =>
   ({ start, end, ...(pageBreakAfter ? { pageBreakAfter } : {}) }) as unknown as PendingLine;
 const published = (end: number) => [{ range: { end } }];
+/** The offsets a fragment publishes, or null. */
+const publishableAnchors = (...args: Parameters<typeof publishable>) =>
+  publishable(...args)?.offsets ?? null;
 
 test('a fragment that ends at a page break leaves a later anchor to the next fragment', () => {
   const p = paragraph(`<w:r><w:br w:type="page"/></w:r>${drawing}<w:r><w:t>After</w:t></w:r>`);
@@ -52,4 +55,12 @@ test('a fragment cut by the page bottom keeps the paragraph origin', () => {
   const p = paragraph(`<w:r><w:t>Long text</w:t></w:r>${drawing}`);
   const lines = [line(0, 5), line(5, 10)];
   expect(publishableAnchors(p, lines, published(5))).toEqual([9]);
+});
+
+test('a fragment that publishes only what it holds leaves later anchors to later fragments', () => {
+  const p = paragraph(`${drawing}<w:r><w:t>Text</w:t></w:r>${drawing}`);
+  const lines = [line(0, 3), line(3, 6)];
+  expect(publishableAnchors(p, lines, published(3), { heldOnly: true })).toEqual([0]);
+  expect(publishableAnchors(p, lines, published(6), { from: 3 })).toEqual([5]);
+  expect(publishableAnchors(p, lines, published(3), { from: 3, heldOnly: true })).toBeNull();
 });

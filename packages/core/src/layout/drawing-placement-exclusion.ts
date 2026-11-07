@@ -241,6 +241,7 @@ export function createLinePlacementZones<Entry extends PlacedParagraphEntry>(sto
   ): readonly ExclusionZone[] => {
     const pageZones = story.pageZones(entry, entryIndex);
     if (!story.drawingLayout || lineIndex <= fragmentFirstLine) return pageZones;
+    if (drawingModelOffsetsInParagraph(entry.paragraph).size === 0) return pageZones;
     const band = story.band(entry);
     return drawingZonesAtLinePlacement({
       paragraph: entry.paragraph,

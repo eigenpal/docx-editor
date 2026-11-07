@@ -1,6 +1,13 @@
 // The anchors a paragraph break synthesizes wrap for from its own text, by wrap kind, and
 // the page-fit bottom of the wrapping anchors each line holds.
 //
+// Page fit (`wrappedAnchorsEndAtBottomMargin`), in three steps across the body flow:
+// - placement lifts an object that can end at the margin (`wrappedParagraphAnchorBottomTop`);
+// - `createOwnAnchorPageFit` tells the flow when an object still crosses, so its line moves to
+//   the next column, or the page ends after a line already at the top;
+// - publishing then switches to held-only (`publishableAnchors`): each later fragment publishes
+//   the anchors its lines hold, framed by its own top, so a moved object travels with its line.
+//
 // DOM-free. The break-time wrap synthesis follows the published records: a drawing the display
 // mode resolves away publishes no record, so it reserves no line top and carves no hole.
 
@@ -148,54 +155,59 @@ const onLine = (start: number, line: AnchorLine, lastLine: boolean): boolean =>
 export interface OwnAnchorPageFit {
   /**
    * Whether an object the line anchors still crosses the bottom margin where it publishes
-   * when the line sits at `lineY` in a paragraph whose anchors publish against `paragraphY`.
+   * when the line sits at `lineY` in a paragraph whose anchors publish against `paragraphY()`
+   * (read only for a line that holds such an object).
    * Placement already moved up every object that can end at the margin
    * (`wrappedParagraphAnchorBottomTop`), so a crossing object cannot end there without rising
    * above its line: the line moves to the next page, and an object that still crosses the
    * margin there ends the page.
    */
-  crosses(line: AnchorLine, lastLine: boolean, paragraphY: number, lineY: number): boolean;
+  crosses(line: AnchorLine, lastLine: boolean, paragraphY: () => number, lineY: number): boolean;
   /**
-   * Whether a fragment of model offsets `start` through `end` holds every drawing of the
-   * paragraph, so its anchors publish against its own lines (`fragmentAnchorFrame`).
+   * Whether a fragment of model offsets `start` up to `end` holds every drawing of the paragraph
+   * still to publish, so they publish against its own lines (`fragmentAnchorFrame`).
    */
   holdsDrawings(start: number, end: number): boolean;
 }
 
 /**
- * The page-fit test for one body paragraph, in modern modes only. It stops once `published`
- * says the paragraph's anchors went out with an earlier fragment: they keep the paragraph
- * origin there and no longer follow a later line.
+ * The page-fit test for one body paragraph, in modern modes only. An anchor below `publishedTo`
+ * published with an earlier fragment: it keeps its place there and no longer follows a line.
  */
 export function createOwnAnchorPageFit(
   paragraph: OoxmlNode,
   scope: OwnAnchorScope & {
     readonly frameBase: () => BodyAnchorFrameBase;
     readonly column: () => { readonly x: number; readonly width: number };
-    readonly published: () => boolean;
+    readonly publishedTo: () => number;
   }
 ): OwnAnchorPageFit {
   const anchors = ownPageFitAnchors(paragraph, scope);
   const drawings = [...drawingModelOffsetsInParagraph(paragraph).values()];
-  const holdsDrawings = (start: number, end: number) =>
-    drawings.every((offset) => offset >= start && offset <= end);
+  const holdsDrawings = (start: number, end: number) => {
+    const from = scope.publishedTo();
+    return drawings.every((offset) => offset < from || (offset >= start && offset < end));
+  };
   if (anchors.length === 0) return { crosses: () => false, holdsDrawings };
+  const unpublishedOn = (anchor: OwnAnchor, line: AnchorLine, lastLine: boolean) =>
+    anchor.start >= scope.publishedTo() && onLine(anchor.start, line, lastLine);
   return {
     holdsDrawings,
     crosses(line, lastLine, paragraphY, lineY) {
-      if (scope.published() || !anchors.some((a) => onLine(a.start, line, lastLine))) return false;
+      if (!anchors.some((anchor) => unpublishedOn(anchor, line, lastLine))) return false;
       const frameBase = scope.frameBase();
       if (frameBase.wrappedParagraphAnchorBottom !== 'margin') return false;
       const { x, width } = scope.column();
+      const top = paragraphY();
       const box = (y: number) => ({ x, y, width, height: line.height });
       for (const anchor of anchors) {
-        if (!onLine(anchor.start, line, lastLine)) continue;
+        if (!unpublishedOn(anchor, line, lastLine)) continue;
         const resolved = resolveAnchoredDrawingPosition(anchor.projection, {
           ...frameBase,
-          paragraphBox: box(paragraphY),
+          paragraphBox: box(top),
           anchorLineBox: box(lineY),
           anchorCharacterX: x,
-          columnBox: box(paragraphY),
+          columnBox: box(top),
           cellBox: null,
           layoutInCell: false,
         });
@@ -212,17 +224,17 @@ export function createOwnAnchorPageFit(
  * The paragraph's lines with each line's height raised to the room its own objects need below
  * its top, for `w:keepNext` pricing. A line fits with an object of height `h` when the object
  * ends above the margin where it is, or when `h` fits below the line top (the object then moves
- * up). Modern modes only (`modern`); other modes return the lines unchanged.
+ * up). `opening` gives the space and top border above the first line, which a paragraph-relative
+ * offset counts from. Modern modes only (`modern`); other modes return the lines unchanged.
  */
 export function linesWithOwnAnchorNeeds<T extends AnchorLine>(
   paragraph: OoxmlNode,
   lines: readonly T[],
-  scope: OwnAnchorScope & { readonly modern: boolean }
+  scope: OwnAnchorScope & { readonly modern: () => boolean; readonly opening: () => number }
 ): readonly T[] {
-  if (!scope.modern) return lines;
   const anchors = ownPageFitAnchors(paragraph, scope);
-  if (anchors.length === 0) return lines;
-  let fromParagraphTop = 0;
+  if (anchors.length === 0 || !scope.modern()) return lines;
+  let fromParagraphTop = scope.opening();
   return lines.map((line, index) => {
     const lineTop = fromParagraphTop;
     fromParagraphTop += line.height;
