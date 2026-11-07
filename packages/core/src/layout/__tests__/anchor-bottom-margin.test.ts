@@ -26,9 +26,10 @@ interface Box {
   readonly x?: number;
   readonly wrap?: 'square' | 'none' | 'behind';
   readonly frame?: 'paragraph' | 'line';
+  readonly hidden?: boolean;
 }
 
-function anchor({ y, height, x = 0, wrap = 'square', frame = 'paragraph' }: Box): string {
+function anchor({ y, height, x = 0, wrap = 'square', frame = 'paragraph', hidden }: Box): string {
   const id = nextId++;
   const wrapXml = wrap === 'square' ? '<wp:wrapSquare wrapText="bothSides"/>' : '<wp:wrapNone/>';
   return (
@@ -39,7 +40,7 @@ function anchor({ y, height, x = 0, wrap = 'square', frame = 'paragraph' }: Box)
     `<wp:positionH relativeFrom="column"><wp:posOffset>${emu(x)}</wp:posOffset></wp:positionH>` +
     `<wp:positionV relativeFrom="${frame}"><wp:posOffset>${emu(y)}</wp:posOffset></wp:positionV>` +
     `<wp:extent cx="${emu(100)}" cy="${emu(height)}"/>${wrapXml}` +
-    `<wp:docPr id="${id}" name="Box ${id}"/>` +
+    `<wp:docPr id="${id}" name="Box ${id}"${hidden ? ' hidden="1"' : ''}/>` +
     '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
     `<pic:pic><pic:nvPicPr><pic:cNvPr id="${id}" name=""/><pic:cNvPicPr/></pic:nvPicPr>` +
     '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
@@ -109,6 +110,11 @@ function lineAt(layout: Layout, value: string) {
   return null;
 }
 const after = text('After');
+/** Section properties: page size and 1in margins, in points, and optional columns. */
+const section = (width: number, height: number, columns = 1) =>
+  `<w:sectPr><w:pgSz w:w="${width * 20}" w:h="${height * 20}"/>` +
+  '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720"' +
+  ` w:footer="720" w:gutter="0"/><w:cols w:num="${columns}" w:space="720"/></w:sectPr>`;
 
 describe('modern modes: a wrapping object that cannot end at the bottom margin', () => {
   test('moves an anchor-only paragraph to the next page with its object', () => {
@@ -276,5 +282,60 @@ describe('legacy modes: a wrapping object near the bottom of the page', () => {
     const layout = render(filler(518) + linesParagraph(box, 5, 8), 14);
     expect(lineAt(layout, 'Line 8')!.page).toBe(0);
     expect(drawings(layout)).toEqual([{ page: 0, y: 420 }]);
+  });
+});
+
+describe('the page-fit rule follows what publishes', () => {
+  test('counts an object that ends on the margin after rounding as fitting', () => {
+    // A4 with 1in margins leaves 697.9pt; this object lifts to end exactly there.
+    const layout = render(
+      filler(600) +
+        `<w:p>${anchor({ y: 80, height: 508_057 / 12_700 })}</w:p>` +
+        after +
+        section(595.3, 841.9)
+    );
+    expect(drawings(layout)).toEqual([{ page: 0, y: 657.9 }]);
+    expect(lineAt(layout, 'After')!.page).toBe(0);
+  });
+
+  test('ignores a hidden object', () => {
+    const hidden = anchor({ y: 8, height: 300, hidden: true });
+    const layout = render(filler() + `<w:p>${hidden}<w:r><w:t>Text</w:t></w:r></w:p>`);
+    expect(lineAt(layout, 'Text')!.page).toBe(0);
+  });
+
+  test('leaves later lines alone once an earlier fragment published the objects', () => {
+    // 100 lines split naturally; the object publishes with the paragraph origin on page 1.
+    const layout = render(linesParagraph(anchor({ y: 500, height: 200 }), 85, 100) + after);
+    expect(drawings(layout)).toEqual([{ page: 0, y: 500 }]);
+    expect(lineAt(layout, 'Line 85')!.page).toBe(1);
+    expect(layout.pages).toHaveLength(3);
+  });
+
+  test('keeps the object with its line when widow control moves the cut earlier', () => {
+    const box = anchor({ y: 100, height: 110, x: 368 });
+    const kept = linesParagraph(box, 8, 8).replace('<w:pPr>', '<w:pPr><w:widowControl/>');
+    const layout = render(filler(518) + kept);
+    expect(lineAt(layout, 'Line 6')!.page).toBe(0);
+    expect(lineAt(layout, 'Line 7')).toEqual({ page: 1, y: 0 });
+    expect(drawings(layout)[0]!.page).toBe(1);
+  });
+
+  test('moves a keep-with-next heading with the paragraph its object moves', () => {
+    const heading =
+      '<w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="0"/></w:pPr>' +
+      '<w:r><w:t>Heading</w:t></w:r></w:p>';
+    const body = `<w:p>${anchor({ y: 8, height: 300 })}<w:r><w:t>Body</w:t></w:r></w:p>`;
+    const layout = render(filler(546) + heading + body);
+    expect(lineAt(layout, 'Heading')).toEqual({ page: 1, y: 0 });
+    expect(lineAt(layout, 'Body')!.page).toBe(1);
+  });
+
+  test('moves the line to the next column before the next page', () => {
+    const tall = linesParagraph(anchor({ y: 8, height: 300 }), 1, 3);
+    const layout = render(filler() + tall + section(612, 792, 2));
+    const line = lineAt(layout, 'Line 1')!;
+    expect(line).toEqual({ page: 0, y: 0 });
+    expect(drawings(layout)).toEqual([{ page: 0, y: 8 }]);
   });
 });

@@ -13,6 +13,7 @@ import {
   type InlineDrawingLayoutContext,
 } from './drawing-layout.ts';
 import { wrapsText } from './anchor-content-top.ts';
+import type { DrawingProjection } from '../store/package/drawing-projection.ts';
 import type { BodyAnchorFrameBase } from './body-flow-helpers.ts';
 import { placedTextboxProjection } from './drawing-exclusion.ts';
 import type { TextboxStoryLayouter } from './inline-textbox-flow.ts';
@@ -93,86 +94,147 @@ interface AnchorLine {
   readonly height: number;
 }
 
-/**
- * The lowest bottom of the wrapping objects that one line of a body paragraph anchors, where
- * they publish when the line sits at `lineY`. Modern modes only; `-Infinity` when none.
- *
- * Placement already moved up every object that can end at the bottom margin
- * (`wrappedParagraphAnchorBottomTop`). A bottom past the margin therefore names an object that
- * cannot end there without rising above its line: the line moves to the next page, and an
- * object that still crosses the margin there ends the page.
- */
-export function lineOwnAnchorBottom(options: {
-  readonly paragraph: OoxmlNode;
+/** The display and story inputs that select a paragraph's own page-fit anchors. */
+export interface OwnAnchorScope {
   readonly drawingLayout: InlineDrawingLayoutContext | undefined;
-  readonly frameBase: BodyAnchorFrameBase;
-  readonly line: AnchorLine;
-  readonly lastLine: boolean;
-  readonly paragraphY: number;
-  readonly lineY: number;
-  readonly column: { readonly x: number; readonly width: number };
   readonly displayMode: RevisionDisplayMode;
   readonly revisionAuthorFilter: RevisionAuthorFilter | undefined;
-  readonly layoutTextboxStory?: TextboxStoryLayouter;
-}): number {
-  const { paragraph, drawingLayout, frameBase, line } = options;
-  if (!drawingLayout || frameBase.wrappedParagraphAnchorBottom !== 'margin') return -Infinity;
+  readonly layoutTextboxStory: TextboxStoryLayouter | undefined;
+}
+
+interface OwnAnchor {
+  readonly start: number;
+  readonly frame: 'paragraph' | 'line';
+  readonly projection: DrawingProjection;
+}
+
+/** Points a bottom may pass the margin by and still count as ending on it (float rounding). */
+const BOTTOM_TOLERANCE = 0.01;
+
+/**
+ * The objects that `wrappedAnchorsEndAtBottomMargin` applies to: visible, published objects
+ * that wrap text and take their vertical position from their paragraph or line. The same
+ * filters as publishing, so a hidden or resolved-away object never moves a line.
+ */
+function ownPageFitAnchors(paragraph: OoxmlNode, scope: OwnAnchorScope): readonly OwnAnchor[] {
+  const { drawingLayout, displayMode, revisionAuthorFilter } = scope;
+  if (!drawingLayout) return [];
   const offsets = drawingModelOffsetsInParagraph(paragraph);
-  if (offsets.size === 0) return -Infinity;
-  const { displayMode, revisionAuthorFilter } = options;
-  const columnBox = { x: options.column.x, y: options.paragraphY, width: options.column.width };
-  let bottom = -Infinity;
+  if (offsets.size === 0) return [];
+  const anchors: OwnAnchor[] = [];
   for (const atom of anchoredDrawingAtomsInParagraph(paragraph, drawingLayout)) {
     const start = offsets.get(atom.atomId);
-    if (start === undefined || start < line.start) continue;
-    if (start >= line.end && !(options.lastLine && start === line.end)) continue;
+    const frame = atom.projection.position?.vertical.relativeFrom;
     if (
+      start === undefined ||
+      (frame !== 'paragraph' && frame !== 'line') ||
+      atom.projection.hidden ||
+      atom.projection.anchor?.simplePos ||
       !wrapsText(atom.projection.wrap) ||
       !revisionsVisible(atom.revisions, displayMode, revisionAuthorFilter) ||
       revisionMarkupHidesDrawing(atom.revisions, displayMode, revisionAuthorFilter)
     )
       continue;
-    const frame = atom.projection.position?.vertical.relativeFrom;
-    if (frame !== 'paragraph' && frame !== 'line') continue;
-    const projection = placedTextboxProjection(atom.projection, options.layoutTextboxStory);
-    const resolved = resolveAnchoredDrawingPosition(projection, {
-      ...frameBase,
-      paragraphBox: { ...columnBox, height: line.height },
-      anchorLineBox: { ...columnBox, y: options.lineY, height: line.height },
-      anchorCharacterX: options.column.x,
-      columnBox: { ...columnBox, height: line.height },
-      cellBox: null,
-      layoutInCell: false,
-    });
-    if (resolved.layoutFallback) continue;
-    bottom = Math.max(bottom, resolved.y + measureInlineDrawing(projection).height);
+    const projection = placedTextboxProjection(atom.projection, scope.layoutTextboxStory);
+    anchors.push({ start, frame, projection });
   }
-  return bottom;
+  return anchors;
 }
 
-/** {@link lineOwnAnchorBottom} bound to one paragraph; the frame and column are read at use. */
-export function createLineOwnAnchorBottom(options: {
-  readonly paragraph: OoxmlNode;
-  readonly drawingLayout: InlineDrawingLayoutContext | undefined;
-  readonly frameBase: () => BodyAnchorFrameBase;
-  readonly column: () => { readonly x: number; readonly width: number };
-  readonly displayMode: RevisionDisplayMode;
-  readonly revisionAuthorFilter: RevisionAuthorFilter | undefined;
-  readonly layoutTextboxStory: TextboxStoryLayouter | undefined;
-}): (line: AnchorLine | undefined, lastLine: boolean, paragraphY: number, lineY: number) => number {
-  const { paragraph, drawingLayout } = options;
-  if (!drawingLayout || drawingModelOffsetsInParagraph(paragraph).size === 0)
-    return () => -Infinity;
-  return (line, lastLine, paragraphY, lineY) =>
-    line
-      ? lineOwnAnchorBottom({
-          ...options,
-          frameBase: options.frameBase(),
-          column: options.column(),
-          line,
-          lastLine,
-          paragraphY,
-          lineY,
-        })
-      : -Infinity;
+const onLine = (start: number, line: AnchorLine, lastLine: boolean): boolean =>
+  start >= line.start && (start < line.end || (lastLine && start === line.end));
+
+/** Where one paragraph's lines meet `wrappedAnchorsEndAtBottomMargin`. */
+export interface OwnAnchorPageFit {
+  /**
+   * Whether an object the line anchors still crosses the bottom margin where it publishes
+   * when the line sits at `lineY` in a paragraph whose anchors publish against `paragraphY`.
+   * Placement already moved up every object that can end at the margin
+   * (`wrappedParagraphAnchorBottomTop`), so a crossing object cannot end there without rising
+   * above its line: the line moves to the next page, and an object that still crosses the
+   * margin there ends the page.
+   */
+  crosses(line: AnchorLine, lastLine: boolean, paragraphY: number, lineY: number): boolean;
+  /**
+   * Whether a fragment of model offsets `start` through `end` holds every drawing of the
+   * paragraph, so its anchors publish against its own lines (`fragmentAnchorFrame`).
+   */
+  holdsDrawings(start: number, end: number): boolean;
+}
+
+/**
+ * The page-fit test for one body paragraph, in modern modes only. It stops once `published`
+ * says the paragraph's anchors went out with an earlier fragment: they keep the paragraph
+ * origin there and no longer follow a later line.
+ */
+export function createOwnAnchorPageFit(
+  paragraph: OoxmlNode,
+  scope: OwnAnchorScope & {
+    readonly frameBase: () => BodyAnchorFrameBase;
+    readonly column: () => { readonly x: number; readonly width: number };
+    readonly published: () => boolean;
+  }
+): OwnAnchorPageFit {
+  const anchors = ownPageFitAnchors(paragraph, scope);
+  const drawings = [...drawingModelOffsetsInParagraph(paragraph).values()];
+  const holdsDrawings = (start: number, end: number) =>
+    drawings.every((offset) => offset >= start && offset <= end);
+  if (anchors.length === 0) return { crosses: () => false, holdsDrawings };
+  return {
+    holdsDrawings,
+    crosses(line, lastLine, paragraphY, lineY) {
+      if (scope.published() || !anchors.some((a) => onLine(a.start, line, lastLine))) return false;
+      const frameBase = scope.frameBase();
+      if (frameBase.wrappedParagraphAnchorBottom !== 'margin') return false;
+      const { x, width } = scope.column();
+      const box = (y: number) => ({ x, y, width, height: line.height });
+      for (const anchor of anchors) {
+        if (!onLine(anchor.start, line, lastLine)) continue;
+        const resolved = resolveAnchoredDrawingPosition(anchor.projection, {
+          ...frameBase,
+          paragraphBox: box(paragraphY),
+          anchorLineBox: box(lineY),
+          anchorCharacterX: x,
+          columnBox: box(paragraphY),
+          cellBox: null,
+          layoutInCell: false,
+        });
+        const bottom = resolved.y + measureInlineDrawing(anchor.projection).height;
+        if (!resolved.layoutFallback && bottom > frameBase.contentHeight + BOTTOM_TOLERANCE)
+          return true;
+      }
+      return false;
+    },
+  };
+}
+
+/**
+ * The paragraph's lines with each line's height raised to the room its own objects need below
+ * its top, for `w:keepNext` pricing. A line fits with an object of height `h` when the object
+ * ends above the margin where it is, or when `h` fits below the line top (the object then moves
+ * up). Modern modes only (`modern`); other modes return the lines unchanged.
+ */
+export function linesWithOwnAnchorNeeds<T extends AnchorLine>(
+  paragraph: OoxmlNode,
+  lines: readonly T[],
+  scope: OwnAnchorScope & { readonly modern: boolean }
+): readonly T[] {
+  if (!scope.modern) return lines;
+  const anchors = ownPageFitAnchors(paragraph, scope);
+  if (anchors.length === 0) return lines;
+  let fromParagraphTop = 0;
+  return lines.map((line, index) => {
+    const lineTop = fromParagraphTop;
+    fromParagraphTop += line.height;
+    let need = line.height;
+    for (const anchor of anchors) {
+      if (!onLine(anchor.start, line, index === lines.length - 1)) continue;
+      const vertical = anchor.projection.position!.vertical;
+      const offset = vertical.align === null ? (vertical.offsetEmu ?? 0) / 12_700 : 0;
+      const belowLine = anchor.frame === 'line' ? offset : offset - lineTop;
+      const height = measureInlineDrawing(anchor.projection).height;
+      need = Math.max(need, Math.min(height, belowLine + height));
+    }
+    return need === line.height ? line : { ...line, height: need };
+  });
 }

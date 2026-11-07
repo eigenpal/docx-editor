@@ -208,7 +208,7 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §17.4.84 vMerge'
   ),
   wrappedAnchorsEndAtBottomMargin: modern(
-    'A wrapping object positioned from its paragraph or line moves up to end at the bottom margin. When that would lift it above its line, the line moves to the next page',
+    'A wrapping object positioned from its paragraph or line moves up to end at the bottom margin. When that would lift it above its line, the line moves to the next page, and an object that still crosses the margin there ends the page',
     'ECMA-376 Part 1 §20.4.2.11 positionV'
   ),
   wrappedAnchorsEndOnSheet: legacy(
