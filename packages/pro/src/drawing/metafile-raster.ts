@@ -7,6 +7,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // first use: `metafile-renderer.ts` imports it only when a document has a metafile picture.
 // The image pipeline validates the PNG again before the picture paints.
 
+import { metafileRasterScale } from '@docx-editor.dev/core/store';
 import type { MetafileImageMime, MetafileRasterImage } from '@docx-editor.dev/core/store';
 
 /** EMF/WMF to PNG no larger than `maxEdge` pixels on a side, or null when it does not draw. */
@@ -15,8 +16,11 @@ export async function rasterizeMetafile(
   _mime: MetafileImageMime,
   options: Readonly<{ maxEdge: number }>
 ): Promise<MetafileRasterImage | null> {
-  const { convertMetafileToDataUrl } = await import('emf-converter');
+  const { convertMetafileToDataUrl, getMetafileInfo } = await import('emf-converter');
+  // The info read parses the header and records but draws nothing.
+  const info = await getMetafileInfo(bytes.slice());
   const dataUrl = await convertMetafileToDataUrl(bytes.slice(), {
+    dpiScale: metafileRasterScale(Math.max(info?.width ?? 0, info?.height ?? 0)),
     maxWidth: options.maxEdge,
     maxHeight: options.maxEdge,
   });

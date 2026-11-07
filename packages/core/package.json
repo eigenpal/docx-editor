@@ -107,7 +107,7 @@
   "dependencies": {
     "@docx-editor.dev/i18n": "^2.35.0",
     "bidi-js": "1.1.0",
-    "emf-converter": "4.24.0",
+    "emf-converter": "4.28.0",
     "fast-xml-parser": "^5.10.1",
     "fflate": "^0.8.2",
     "harfbuzzjs": "1.6.4",

@@ -3013,6 +3013,9 @@ export interface MetafileRasterImage {
 }
 
 // @internal
+export function metafileRasterScale(longEdge: number): number;
+
+// @internal
 export interface MetafileRenderer {
     readonly rasterize?: (bytes: Uint8Array, mime: MetafileImageMime, options: Readonly<{
         maxEdge: number;
