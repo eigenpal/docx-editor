@@ -97,6 +97,7 @@ export interface ReviewRevisionItem {
       | 'fontFamily'
       | 'fontSize'
       | 'color'
+      | 'highlight'
       | 'alignment'
       | 'leftIndent'
       | 'rightIndent'
@@ -107,7 +108,7 @@ export interface ReviewRevisionItem {
       | 'direction';
     /**
      * New direct value; null means inherit. Sizes and distances are in points. A direction is
-     * `rtl` or `ltr`.
+     * `rtl` or `ltr`. A highlight is the `w:highlight` color name, such as `yellow`.
      */
     readonly value: string | null;
   }[];

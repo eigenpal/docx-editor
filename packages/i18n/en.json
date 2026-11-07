@@ -520,6 +520,7 @@
       "fontFamily": "Font",
       "fontSize": "Font size",
       "color": "Font color",
+      "highlight": "Highlight",
       "alignment": "Alignment",
       "leftIndent": "Left indent",
       "rightIndent": "Right indent",

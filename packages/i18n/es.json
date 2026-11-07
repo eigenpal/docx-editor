@@ -520,6 +520,7 @@
       "fontFamily": "Fuente",
       "fontSize": "Tamaño de fuente",
       "color": "Color de fuente",
+      "highlight": "Resaltado",
       "alignment": "Alineación",
       "leftIndent": "Sangría izquierda",
       "rightIndent": "Sangría derecha",
