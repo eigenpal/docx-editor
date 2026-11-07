@@ -1,5 +1,14 @@
 # @docx-editor.dev/pro
 
+## 2.36.0
+
+### Patch Changes
+
+- 01211a9: Update HarfBuzz to 15.0.0 and refresh patch and minor dependency versions.
+- c0a36f9: PDF export draws more EMF and WMF picture content, and places each EMF picture in its frame.
+- b4623d4: Every JavaScript file of the `pro`, `editor-api`, `docx-to-pdf`, and `telemetry` packages starts with its license header. The `core`, `pro`, `react`, and `vue` packages ship the license texts of the third-party material they contain.
+- Updated dependencies: @docx-editor.dev/core@2.36.0, @docx-editor.dev/react@2.36.0, @docx-editor.dev/vue@2.36.0
+
 ## 2.35.0
 
 ### Minor Changes

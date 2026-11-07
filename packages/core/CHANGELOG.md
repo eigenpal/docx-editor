@@ -1,5 +1,28 @@
 # @docx-editor.dev/core
 
+## 2.36.0
+
+### Minor Changes
+
+- c8ed53d: Formatting cards now describe a tracked highlight change, such as "Highlight: yellow", and `ReviewRevisionItem.formattingChanges` reports it as the `highlight` property with the `w:highlight` color name.
+
+### Patch Changes
+
+- bac199e: A floating object that wraps text near the bottom of a page, in body text or a table cell, now stays on the page as the document's compatibility mode requires, and objects positioned from a paragraph or line measure from the right origin on every page.
+- 63a5c8f: An autofit table whose words do not fit the text column now keeps each cell's margins and takes the same share of content width from every column, so one long unbreakable word no longer collapses the other columns to hairlines. Fixes #1838
+- b131138: A custom shape whose path has a command with no current point now paints nothing, with no placeholder, and arcs that sweep more than one turn keep a smooth outline. Fixes #1833
+- 44774ad: Shapes, text, charts, and diagrams now resolve every DrawingML color model and color transform, and tinted and shaded colors render correctly. Fixes #1831
+- 304dd92: A paragraph that the list buttons add to the list above now takes a level from its indent when that list numbers heading styles, and the level of the item above in a plain list. Fixes #1847
+- ede53f5: A list number with all caps no longer overlaps the paragraph text, and list numbers and bullets no longer paint in small capitals. Fixes #1834
+- 4d9451d: A list space suffix now has the same width in any marker font, and a table style named Normal Table applies only its built-in properties, whatever the document states.
+- e404652: The list buttons now start a new list for a selection of list items and plain paragraphs, unless the selection starts with a plain paragraph below a list item of the same kind, which joins that list together with the selected items. Fixes #1851
+- cf257ca: The list buttons now start a plain list instead of reusing a document's heading numbering, and a paragraph just below a numbered heading joins that list in the heading style. Fixes #1842
+- a0825f1: An open tracked change no longer draws a second line under its text. The active band kept its deeper fill but dropped the 1px rule at its foot, which sat under the insertion's own underline in a different colour and read as a double underline. The unused `--doc-revision-insertion-active-border` and `--doc-revision-deletion-active-border` tokens are removed.
+- 5da2ca2: Saved documents now list paragraph and run properties in the order the file format requires, also after two collaborators change one paragraph at the same time. Fixes #1850
+- 8eaccb6: Tables that two collaborators format at the same time stay editable, and saved documents give each row and cell one property element, with table, row, and cell properties in the order the file format requires. Fixes #1853
+- b983305: Cell shading that a table style states for the whole table now fills its cells, and clearing a cell fill shows that shading again. Pattern shading such as pct50 mixes its color into its fill. Fixes #1844, fixes #1848
+- Updated dependencies: @docx-editor.dev/i18n@2.36.0
+
 ## 2.35.0
 
 ### Minor Changes
