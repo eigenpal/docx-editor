@@ -520,6 +520,7 @@
       "fontFamily": "フォント",
       "fontSize": "フォント サイズ",
       "color": "フォントの色",
+      "highlight": "蛍光ペン",
       "alignment": "配置",
       "leftIndent": "左インデント",
       "rightIndent": "右インデント",

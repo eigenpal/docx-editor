@@ -520,6 +520,7 @@
       "fontFamily": "الخط",
       "fontSize": "حجم الخط",
       "color": "لون الخط",
+      "highlight": "تمييز النص",
       "alignment": "المحاذاة",
       "leftIndent": "مسافة بادئة يسرى",
       "rightIndent": "مسافة بادئة يمنى",
