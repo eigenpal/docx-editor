@@ -52,7 +52,10 @@ import {
   groupPictureLayerFields,
   groupPictureLayerResources,
 } from './drawing-group-picture-layers.ts';
-import { wrappedParagraphAnchorTop } from './anchor-content-top.ts';
+import {
+  wrappedParagraphAnchorBottomTop,
+  wrappedParagraphAnchorTop,
+} from './anchor-content-top.ts';
 import {
   anchoredDrawingAtomsInParagraph,
   drawingModelOffsetsInParagraph,
@@ -538,6 +541,13 @@ export interface DrawingAnchorFrameContext {
    */
   readonly wrappedParagraphAnchorsBelowContentTop?: boolean;
   /**
+   * Where a wrapping body object positioned from its paragraph or line must end: the content
+   * box bottom in modern modes (`wrappedAnchorsEndAtBottomMargin`), the sheet bottom in legacy
+   * modes (`wrappedAnchorsEndOnSheet`). Set only by the body frame base, so a story without a
+   * real sheet never lifts an object.
+   */
+  readonly wrappedParagraphAnchorBottom?: 'margin' | 'sheet';
+  /**
    * Called whenever a frame or alignment resolution reads the parity of
    * {@link pageNumber}. Incremental layout listens so it knows a section's
    * geometry depends on where in the document its pages start.
@@ -959,7 +969,13 @@ export function resolveAnchoredDrawingPosition(
 
   return Object.freeze({
     x,
-    y: wrappedParagraphAnchorTop(y, verticalFrame, projection.wrap, ctx),
+    y: wrappedParagraphAnchorBottomTop(
+      wrappedParagraphAnchorTop(y, verticalFrame, projection.wrap, ctx),
+      measure.height,
+      verticalFrame,
+      projection.wrap,
+      ctx
+    ),
     horizontalFrame,
     verticalFrame,
     horizontalFrameOrigin,

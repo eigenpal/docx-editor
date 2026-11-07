@@ -1,14 +1,18 @@
 // The anchored objects of a cell-flow paragraph: their publication, and the room they claim.
 //
-// A wrapping object laid out in a table cell and positioned from its paragraph stays inside
-// its cell: a negative offset stops at the cell box top (`anchor-content-top.ts`), and the
-// cell grows until it holds the whole object, so the next row starts below it. The text
+// A wrapping object laid out in a table cell and positioned from its paragraph or line stays
+// inside its cell: a negative offset stops at the cell box top (`anchor-content-top.ts`), and
+// the cell grows until it holds the whole object, so the next row starts below it. The text
 // after it in the same cell still wraps around it, so only the cell's bottom moves, never
 // the paragraph's. An object that does not wrap (`wrapNone`, in front of or behind the
 // text) keeps its offset and claims no room.
+//
+// Near the page bottom (`cellAnchorPageFit`), a line whose object would end below the page
+// waits for the row's next page in modern modes; in legacy modes the row moves whole.
 
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import { wrapsText } from './anchor-content-top.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import {
   anchorLaidOutInCell,
   cellAnchorScope,
@@ -90,14 +94,15 @@ export function publishCellParagraphAnchors(
 }
 
 /**
- * A wrapping object its paragraph positions, and how far below the paragraph top it ends.
- * `start` is its model offset in the paragraph; `revisions` decide whether a display mode
+ * A wrapping object its paragraph or line positions, and how far below that frame's top it
+ * ends. `start` is its model offset in the paragraph; `revisions` decide whether a display mode
  * shows it.
  */
 interface ParagraphAnchorReach {
   readonly projection: DrawingProjection;
   readonly start: number;
   readonly revisions: readonly RevisionAttribution[];
+  readonly frame: 'paragraph' | 'line';
   readonly reach: number;
 }
 
@@ -123,7 +128,7 @@ function paragraphAnchorReaches(
     if (
       projection.hidden ||
       projection.anchor?.simplePos ||
-      vertical?.relativeFrom !== 'paragraph' ||
+      (vertical?.relativeFrom !== 'paragraph' && vertical?.relativeFrom !== 'line') ||
       vertical.align !== null ||
       !wrapsText(projection.wrap)
     )
@@ -131,12 +136,11 @@ function paragraphAnchorReaches(
     const offset = emuToPointsSafe(vertical.offsetEmu ?? 0);
     const start = offsets?.get(atom.atomId);
     if (offset === null || start === undefined) continue;
-    reaches.push({
-      projection,
-      start,
-      revisions: atom.revisions,
-      reach: Math.max(0, offset) + measureInlineDrawing(projection).height,
-    });
+    const frame = vertical.relativeFrom;
+    const height = measureInlineDrawing(projection).height;
+    // A negative paragraph offset stops at the cell top; a line offset counts from its line.
+    const reach = (frame === 'paragraph' ? Math.max(0, offset) : offset) + height;
+    reaches.push({ projection, start, revisions: atom.revisions, frame, reach });
   }
   const frozen = Object.freeze(reaches);
   reachByParagraph.set(paragraph, frozen);
@@ -156,23 +160,84 @@ function paragraphAnchorBottom(
 ): number | undefined {
   if (!deps.inlineDrawingLayout) return undefined;
   const paragraphTop = fragment.box.y;
-  const displayMode = deps.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
   let lowest: number | undefined;
-  for (const anchor of paragraphAnchorReaches(paragraph, deps.inlineDrawingLayout)) {
-    const { projection, start, revisions, reach } = anchor;
-    if (!fragment.lines.some((line) => start >= line.range.start && start < line.range.end))
-      continue;
-    if (
-      revisionMarkupHidesDrawing(revisions, displayMode, deps.revisionAuthorFilter) ||
-      projectedRevisions(revisions, displayMode, deps.revisionAuthorFilter) === null
-    )
-      continue;
-    if (!anchorLaidOutInCell(projection, scope)) continue;
-    const bottom = paragraphTop + reach;
+  for (const anchor of visibleInCellReaches(paragraph, deps, scope)) {
+    const line = fragment.lines.find(
+      (candidate) => anchor.start >= candidate.range.start && anchor.start < candidate.range.end
+    );
+    if (!line) continue;
+    const bottom = (anchor.frame === 'line' ? line.box.y : paragraphTop) + anchor.reach;
     if (lowest === undefined || bottom > lowest) lowest = bottom;
   }
   return lowest;
 }
+
+/** The paragraph's wrapping objects a display mode shows and the cell lays out in it. */
+function visibleInCellReaches(
+  paragraph: OoxmlElement,
+  deps: TableFlowDeps,
+  scope: CellAnchorScope
+): readonly ParagraphAnchorReach[] {
+  if (!deps.inlineDrawingLayout) return [];
+  const displayMode = deps.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  return paragraphAnchorReaches(paragraph, deps.inlineDrawingLayout).filter(
+    ({ projection, revisions }) =>
+      !revisionMarkupHidesDrawing(revisions, displayMode, deps.revisionAuthorFilter) &&
+      projectedRevisions(revisions, displayMode, deps.revisionAuthorFilter) !== null &&
+      anchorLaidOutInCell(projection, scope)
+  );
+}
+
+/**
+ * The page-fit test for a table-cell paragraph's lines, or null when no rule or object applies.
+ * A line whose object would end below the row's page bottom (`cellPageBottom`) waits for the
+ * row's next page in modern modes (`wrappedAnchorsEndAtBottomMargin`), unless nothing of the
+ * cell is placed yet on a row at the page top. In legacy modes (`wrappedAnchorsEndOnSheet`) the
+ * line stays and the crossing goes to `onCellAnchorCrossing`, so the row-start probe moves the
+ * row whole. An exact row has no page bottom here: it clips its content instead. Frames are
+ * those publishing uses: the paragraph top, or the top of the line.
+ */
+export function cellAnchorPageFit(
+  paragraph: OoxmlElement,
+  deps: TableFlowDeps,
+  top: number,
+  options: { readonly inTableCell?: boolean; readonly aloneOnPage?: boolean } | undefined
+): ((line: AnchorLineRange, lineTop: number, placed: number) => boolean) | null {
+  const maxBottom = deps.cellPageBottom;
+  if (options?.inTableCell !== true || maxBottom === undefined || !Number.isFinite(maxBottom))
+    return null;
+  if (!deps.inlineDrawingLayout) return null;
+  if (paragraphAnchorReaches(paragraph, deps.inlineDrawingLayout).length === 0) return null;
+  const modern = hasCompatibilityRule(deps.compatibilityMode, 'wrappedAnchorsEndAtBottomMargin');
+  const reports =
+    !modern &&
+    deps.onCellAnchorCrossing !== undefined &&
+    deps.rowAtPageStart === false &&
+    hasCompatibilityRule(deps.compatibilityMode, 'wrappedAnchorsEndOnSheet');
+  if (!modern && !reports) return null;
+  const anchors = visibleInCellReaches(paragraph, deps, cellAnchorScope(true, deps, paragraph.id));
+  if (anchors.length === 0) return null;
+  return (line, lineTop, placed) => {
+    const crosses = anchors.some(
+      (anchor) =>
+        anchor.start >= line.start &&
+        anchor.start < line.end &&
+        (anchor.frame === 'line' ? lineTop : top) + anchor.reach > maxBottom + BOTTOM_TOLERANCE
+    );
+    if (!crosses) return false;
+    if (reports) deps.onCellAnchorCrossing!();
+    return modern && !(options.aloneOnPage === true && placed === 0);
+  };
+}
+
+/** The model range of a broken line. */
+interface AnchorLineRange {
+  readonly start: number;
+  readonly end: number;
+}
+
+/** Points a bottom may pass the page by and still count as ending on it (float rounding). */
+const BOTTOM_TOLERANCE = 0.01;
 
 /**
  * A table cell's content bottom, grown to hold the wrapping objects its paragraphs lay out

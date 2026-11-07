@@ -1,10 +1,8 @@
-// An anchor after an explicit page break belongs with the text after the break: the fragment
-// that ends at the break does not publish it.
+// Each fragment publishes the anchors its own lines hold.
 
 import { expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlElement } from '@docx-editor.dev/core/store';
-import { publishableAnchors } from '../body-flow-helpers.ts';
-import type { PendingLine } from '../paragraph-flow.ts';
+import { holdsDrawingIn } from '../body-flow-helpers.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
@@ -31,25 +29,9 @@ function paragraph(content: string): OoxmlElement {
   return body.children.find((node): node is OoxmlElement => node.kind === 'paragraph')!;
 }
 
-const line = (start: number, end: number, pageBreakAfter?: boolean) =>
-  ({ start, end, ...(pageBreakAfter ? { pageBreakAfter } : {}) }) as unknown as PendingLine;
-const published = (end: number) => [{ range: { end } }];
-
-test('a fragment that ends at a page break leaves a later anchor to the next fragment', () => {
-  const p = paragraph(`<w:r><w:br w:type="page"/></w:r>${drawing}<w:r><w:t>After</w:t></w:r>`);
-  const lines = [line(0, 1, true), line(1, 7)];
-  expect(publishableAnchors(p, lines, published(1))).toBeNull();
-  expect(publishableAnchors(p, lines, published(7))).toEqual([1]);
-});
-
-test('an anchor before the break publishes with the first fragment', () => {
-  const p = paragraph(`${drawing}<w:r><w:t>A</w:t><w:br w:type="page"/><w:t>B</w:t></w:r>`);
-  const lines = [line(0, 3, true), line(3, 4)];
-  expect(publishableAnchors(p, lines, published(3))).toEqual([0]);
-});
-
-test('a fragment cut by the page bottom keeps the paragraph origin', () => {
-  const p = paragraph(`<w:r><w:t>Long text</w:t></w:r>${drawing}`);
-  const lines = [line(0, 5), line(5, 10)];
-  expect(publishableAnchors(p, lines, published(5))).toEqual([9]);
+test('a fragment holds the drawings inside its own model range', () => {
+  const p = paragraph(`${drawing}<w:r><w:t>Text</w:t></w:r>${drawing}`);
+  expect(holdsDrawingIn(p, { start: 0, end: 3 })).toBe(true);
+  expect(holdsDrawingIn(p, { start: 1, end: 5 })).toBe(false);
+  expect(holdsDrawingIn(p, { start: 3, end: Infinity })).toBe(true);
 });

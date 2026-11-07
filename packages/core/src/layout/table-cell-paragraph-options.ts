@@ -70,6 +70,23 @@ export interface CellParagraphPlacementOptions {
 }
 
 /** Keep a partial line only when its top lies inside the fixed cell band. */
+/**
+ * Where a row's cells stop flowing, and the page bottom their objects must end above
+ * (`cellAnchorPageFit`). An exact row clips its content to its authored box; the page bound
+ * still applies to objects, so a clipped object in a fixed row never refuses its line.
+ */
+export function rowFlowBounds(
+  maxBottom: number,
+  rowTop: number,
+  exactHeightPt: number | undefined
+): { readonly flowMaxBottom: number; readonly pageBottom: number | undefined } {
+  if (exactHeightPt === undefined) return { flowMaxBottom: maxBottom, pageBottom: maxBottom };
+  return {
+    flowMaxBottom: Math.min(maxBottom, rowTop + Math.max(0, exactHeightPt)),
+    pageBottom: undefined,
+  };
+}
+
 export function cellLineFits(
   requiredBottom: number,
   maxBottom: number,
