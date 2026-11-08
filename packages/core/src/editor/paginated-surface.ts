@@ -330,6 +330,7 @@ import {
 } from './surface-content-control-range.ts';
 import { createHeaderFooterOps } from './surface-hf-ops.ts';
 import { createImageOps } from './surface-image-ops.ts';
+import { createChartOps } from './surface-chart-ops.ts';
 import {
   createHeaderFooterScopeController,
   openBlankHeaderFooter,
@@ -5742,6 +5743,13 @@ export function mountPaginatedSurface(
       author: () => author,
       trackedDate: revisionDateNow,
       decodePort: () => decodePort,
+      actorId: () => collaborationSession?.identity.actorId,
+    }),
+    ...createChartOps({
+      session,
+      commit,
+      storyScope,
+      editingMode: () => editingMode,
       actorId: () => collaborationSession?.identity.actorId,
     }),
 

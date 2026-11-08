@@ -43,6 +43,7 @@ import {
 import { cloneWithNewIds, fromEdit, paragraphContainingNode, TEXT_DEPS } from './tree-op-nodes.ts';
 import { drawingEffect, drawingOpImpact, isValidXmlMetadata } from './tree-op-drawing-kinds.ts';
 import { chartDrawingOf } from './tree-op-chart-drawing.ts';
+import { holdsChartGraphic } from '../package/mc-fallback-projection.ts';
 import {
   applyLegacyVmlGeometryOp,
   legacyVmlDrawingOp,
@@ -392,8 +393,10 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
       if (op.drawing.kind !== 'drawing') return 'not-a-drawing';
       const anchor = anchorRootOf(op.drawing);
       if (!anchor) return 'not-a-drawing';
-      const projection = projectionOf(part, op.drawing);
-      if (!projection || (projection.picture === null && !projection.textboxStory))
+      // A chart drawing names a chart part that the same transaction adds (`insertChart`).
+      const chart = holdsChartGraphic(op.drawing);
+      const projection = chart ? null : projectionOf(part, op.drawing);
+      if (!chart && (!projection || (projection.picture === null && !projection.textboxStory)))
         return 'not-a-picture-drawing';
       // `CT_TrackChange` makes `@w:author` required, so a tracked variant with an empty one
       // would serialize a proposal no reader can attribute or resolve.

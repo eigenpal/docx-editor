@@ -49,6 +49,7 @@ import type {
 } from './surface-format-painter-contract.ts';
 import type { PaginatedSurfacePerf } from './surface-perf-contract.ts';
 import type { SurfaceIndentAndListOps } from './surface-indent-list-contract.ts';
+import type { SurfaceChartOps } from './surface-chart-ops.ts';
 export type { ReviewWriteIntent, ContentControlOps, ContentControlSurfaceState };
 export type {
   FormatPainterLevel,
@@ -100,7 +101,7 @@ export type SectionBreakInsertType = 'nextPage' | 'continuous';
  * Every write goes through the guarded mutation path on this object. Reaching past it into
  * `session` to apply ops directly bypasses the layout invalidation and the caret bookkeeping.
  */
-export interface PaginatedSurface extends SurfaceIndentAndListOps {
+export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartOps {
   readonly session: TreeDocxSessionView;
   /** The collaboration replica a `collaborationModule` attached, or null. */
   collaborationSession(): import('../collaboration/index.ts').EditorCollaborationSession | null;

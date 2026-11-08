@@ -227,6 +227,7 @@ const SNAPSHOT_FIELDS = {
   table: 'compared',
   tocContext: 'compared',
   image: 'compared',
+  chart: 'compared',
   page: 'compared',
   canUndo: 'compared',
   canRedo: 'compared',

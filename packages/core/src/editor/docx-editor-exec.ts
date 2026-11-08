@@ -1,4 +1,5 @@
 import { insertTextbox } from './textbox-commands.ts';
+import { execChartCommand } from './chart-commands.ts';
 import { execSetWatermark } from './docx-editor-watermark.ts';
 import { execBookmarkCommand } from './docx-editor-bookmarks.ts';
 import { CHART_CLIPBOARD_REASON, fragmentRefusalOf } from './clipboard-object-selection.ts';
@@ -76,6 +77,7 @@ export function execEditorCommand(
   command: EditorCommand,
   options?: {
     readonly admittedTablePlan?: import('./table-command-plan.ts').TableCommandPlan;
+    readonly translate?: (key: string, params?: Record<string, string | number>) => string;
     readonly editor?: Pick<
       import('./docx-editor-types.ts').DocxEditorInstance,
       'surface' | 'mountGeneration'
@@ -381,6 +383,12 @@ export function execEditorCommand(
       break;
     case 'insertTextBox':
       return insertTextbox(mounted);
+    case 'insertChart':
+    case 'setChartData':
+    case 'setChartType':
+    case 'setChartFormat':
+    case 'setChartColor':
+      return execChartCommand(mounted, command, options?.translate);
     case 'insertText':
       mounted.type(command.text);
       if (

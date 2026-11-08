@@ -181,8 +181,7 @@ export function buildInlineChartDrawing(input: {
   const cy = Math.max(1, Math.round(input.heightPoints * EMU_PER_POINT));
   const xml =
     `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP_NAMESPACE_URI}"` +
-    ` xmlns:a="${DRAWINGML_MAIN_NAMESPACE_URI}" xmlns:r="${RELATIONSHIPS_NAMESPACE_URI}"` +
-    ` xmlns:c="${CHART_GRAPHIC_DATA_URI}">` +
+    ` xmlns:a="${DRAWINGML_MAIN_NAMESPACE_URI}">` +
     '<w:body><w:p><w:r><w:drawing>' +
     '<wp:inline distT="0" distB="0" distL="0" distR="0">' +
     `<wp:extent cx="${cx}" cy="${cy}"/>` +
@@ -190,7 +189,8 @@ export function buildInlineChartDrawing(input: {
     `<wp:docPr id="${input.docPrId}" name="${escapeXmlAttribute(input.name)}"/>` +
     '<wp:cNvGraphicFramePr/>' +
     `<a:graphic><a:graphicData uri="${CHART_GRAPHIC_DATA_URI}">` +
-    `<c:chart r:id="${escapeXmlAttribute(input.relationshipId)}"/>` +
+    `<c:chart xmlns:c="${CHART_GRAPHIC_DATA_URI}" xmlns:r="${RELATIONSHIPS_NAMESPACE_URI}"` +
+    ` r:id="${escapeXmlAttribute(input.relationshipId)}"/>` +
     '</a:graphicData></a:graphic>' +
     '</wp:inline></w:drawing></w:r></w:p></w:body></w:document>';
   const parsed = readOoxmlPart(xml, {

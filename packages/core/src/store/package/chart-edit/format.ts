@@ -359,7 +359,7 @@ function formatChart(chart: Element, model: ChartModel, change: ChartFormatChang
     area = replaceKid(area, plot, setDataLabels(plot, change.dataLabels));
   }
   if (axisEdit) {
-    if (plotAxisKind(model.plot) === 'none') throw new ChartRefusal('errors.chartFormat.noAxes');
+    if (plotAxisKind(model.plot) === 'none') throw new ChartRefusal('chart.errors.noAxes');
     const flag = (v: unknown, what: string): boolean => {
       if (typeof v !== 'boolean') throw new ChartRefusal('chart.errors.unsupported', what);
       return v;
@@ -406,7 +406,7 @@ function formatChart(chart: Element, model: ChartModel, change: ChartFormatChang
       (change.categoryAxisTitle !== undefined && !pair.category) ||
       (change.valueAxisTitle !== undefined && !pair.value)
     )
-      throw new ChartRefusal('errors.chartFormat.noAxes');
+      throw new ChartRefusal('chart.errors.noAxes');
     area = withKids(
       area,
       area.children.map((k) => (k.kind !== 'textValue' && edits.has(k) ? edits.get(k)! : k))
