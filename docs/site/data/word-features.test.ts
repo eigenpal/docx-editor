@@ -57,13 +57,22 @@ describe('word-features — images lane honesty', () => {
   });
 
   test('unsupported non-picture payloads are preserved inertly, not claimed as supported', () => {
-    for (const id of ['images.charts', 'images.smartart', 'images.shapes'] as const) {
+    for (const id of ['images.smartart', 'images.shapes'] as const) {
       const row = feature(id);
       expect(row.editing).toBe('none');
       expect(row.rendering).toBe('partial');
       expect(row.roundTrip).toBe('preserved');
       expect(row.notes?.toLowerCase()).toMatch(/placeholder|preserv|generic|inert/);
     }
+  });
+
+  test('charts report partial editing and link to the charts guide', () => {
+    const row = feature('images.charts');
+    expect(row.editing).toBe('partial');
+    expect(row.rendering).toBe('partial');
+    expect(row.roundTrip).toBe('preserved');
+    expect(row.docsLink).toBe('/docs/2.x/guides/charts');
+    expect(row.notes).toMatch(/Chart pane/);
   });
 
   test('textboxes report partial editing with explicit limits', () => {

@@ -9436,7 +9436,7 @@ p.docx-review__refused {
   min-width: 0;
   max-height: 100%;
   overflow: hidden;
-  font-family: var(--doc-font-ui);
+  font-family: var(--doc-font-ui, system-ui, sans-serif);
   font-size: 14px;
   color: var(--doc-text);
   background: var(--doc-surface);
@@ -9511,7 +9511,7 @@ p.docx-review__refused {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  font-family: var(--doc-font-ui);
+  font-family: var(--doc-font-ui, system-ui, sans-serif);
   font-size: 14px;
   line-height: 1.4;
   color: var(--doc-text);
