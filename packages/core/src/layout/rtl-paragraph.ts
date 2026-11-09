@@ -80,7 +80,7 @@ function runDirectionLevels(pieces: readonly FieldAwarePiece[], text: string, rt
   // Keep authored Unicode controls on the established full-paragraph UAX #9 path.
   if (HAS_BIDI_CONTROLS.test(text)) return embedding;
   let offset = 0;
-  for (let start = 0; start < pieces.length; ) {
+  for (let start = 0; start < pieces.length;) {
     const direction = runIsRtl(pieces[start]!.props);
     let end = start;
     let length = 0;
@@ -673,7 +673,7 @@ export function visualOrderOfLevels(
     if (levels[index]! % 2) lowestOdd = Math.min(lowestOdd, levels[index]!);
   }
   for (let level = maximum; level >= lowestOdd; level--) {
-    for (let i = 0; i < order.length; ) {
+    for (let i = 0; i < order.length;) {
       if (levels[order[i]!]! < level) {
         i++;
         continue;
@@ -729,7 +729,7 @@ export function reorderBidiSpans(
         : spans[index]!.style.shaping?.runDirection === 'rtl';
     };
     const groups: Array<{ start: number; end: number; rtl: boolean }> = [];
-    for (let start = 0; start < spans.length; ) {
+    for (let start = 0; start < spans.length;) {
       const direction = directionAt(start);
       let end = start + 1;
       while (end < spans.length && directionAt(end) === direction) end++;

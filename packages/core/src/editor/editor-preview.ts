@@ -54,11 +54,7 @@ export { PREVIEW_WRITE_REFUSAL } from './refresh-write-guard.ts';
  * @internal
  */
 export type EditorPreviewRefusal =
-  | 'no-document'
-  | 'viewing'
-  | 'blocked'
-  | 'composing'
-  | 'preview-active';
+  'no-document' | 'viewing' | 'blocked' | 'composing' | 'preview-active';
 
 /**
  * One open preview over a live editor.

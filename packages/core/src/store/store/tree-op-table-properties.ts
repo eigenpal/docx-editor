@@ -5,7 +5,11 @@
 // in ECMA schema order so normalized serialization stays Word-readable.
 
 import { type OoxmlElement, type OoxmlNode } from '../package/ooxml-tree.ts';
-import { CT_TBLPR_SEQUENCE } from '../package/ooxml-property-order.ts';
+import {
+  CT_TBLPR_SEQUENCE,
+  CT_TCPR_SEQUENCE,
+  CT_TRPR_SEQUENCE,
+} from '../package/ooxml-property-order.ts';
 import {
   WML_NAMESPACE_URI,
   expandedNameMatches,
@@ -13,48 +17,7 @@ import {
   isWmlGridCol,
 } from './tree-op-table-shared.ts';
 
-export { CT_TBLPR_SEQUENCE };
-
-/** `CT_TrPrBase` choice order (17.4.80), plus trailing `trPrChange`. */
-export const CT_TRPR_SEQUENCE: readonly string[] = [
-  'cnfStyle',
-  'divId',
-  'gridBefore',
-  'gridAfter',
-  'wBefore',
-  'wAfter',
-  'cantSplit',
-  'trHeight',
-  'tblHeader',
-  'tblCellSpacing',
-  'jc',
-  'hidden',
-  'ins',
-  'del',
-  'trPrChange',
-];
-
-/** `CT_TcPrBase` sequence (17.4.68), plus markup and `tcPrChange`. */
-export const CT_TCPR_SEQUENCE: readonly string[] = [
-  'cnfStyle',
-  'tcW',
-  'gridSpan',
-  'hMerge',
-  'vMerge',
-  'tcBorders',
-  'shd',
-  'noWrap',
-  'tcMar',
-  'textDirection',
-  'tcFitText',
-  'vAlign',
-  'hideMark',
-  'headers',
-  'cellIns',
-  'cellDel',
-  'cellMerge',
-  'tcPrChange',
-];
+export { CT_TBLPR_SEQUENCE, CT_TCPR_SEQUENCE, CT_TRPR_SEQUENCE };
 
 export type TablePropertyPatchRejection = 'wrong-expanded-name';
 
@@ -63,10 +26,7 @@ export type TablePropertyPatchResult =
   | { readonly ok: false; readonly reason: TablePropertyPatchRejection };
 
 export type TblGridColumnPatchRejection =
-  | 'unknown-grid-column'
-  | 'duplicate-grid-column'
-  | 'wrong-expanded-name'
-  | 'extension-collision';
+  'unknown-grid-column' | 'duplicate-grid-column' | 'wrong-expanded-name' | 'extension-collision';
 
 export type TblGridColumnPatchResult =
   | { readonly ok: true; readonly grid: OoxmlElement }

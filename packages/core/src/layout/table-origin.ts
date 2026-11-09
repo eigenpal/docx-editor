@@ -79,6 +79,24 @@ export function legacyTrailingInsetPt(structure: SemanticTableStructure): number
 }
 
 /**
+ * How far a table reaches past the text column, both sides together, when it puts the content
+ * of its outer cells on the text edges: its outer content insets. Other tables reach nothing.
+ */
+export function contentAlignedReachPt(structure: SemanticTableStructure): number {
+  if (!structure.legacyContentAlignment && structure.legacyContentOffsetPt === undefined) return 0;
+  return legacyLeadingInsetPt(structure) + legacyTrailingInsetPt(structure);
+}
+
+/** The table indent of an autofit table, which moves only a table aligned to its leading edge. */
+export function leadingIndentPt(structure: SemanticTableStructure): number {
+  const leading = structure.bidiVisual ? 'right' : 'left';
+  // A negative indent moves a top-level table into the margin, which adds room. A floating
+  // table is placed by its own position, so its indent moves nothing.
+  if (structure.float) return 0;
+  return structure.alignment === leading ? structure.indentPt : 0;
+}
+
+/**
  * Where a table's left edge sits inside the box that contains it.
  *
  * Ordinary left-aligned tables start at their indent, which may be negative and is not

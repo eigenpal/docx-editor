@@ -82,14 +82,7 @@ export type TableAction =
  * Border style preset
  */
 export type BorderPreset =
-  | 'all'
-  | 'outside'
-  | 'inside'
-  | 'none'
-  | 'top'
-  | 'bottom'
-  | 'left'
-  | 'right';
+  'all' | 'outside' | 'inside' | 'none' | 'top' | 'bottom' | 'left' | 'right';
 
 /**
  * Selection within a table

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -310,7 +310,7 @@ export function markMoves<T extends MoveToken>(
   // moves. Then by value, but only whole stretches the first pass left: a split gives its
   // tail a new run, and by value alone a short match could be any typed text.
   for (const run of inserted) {
-    for (let match = longestMatch(run, keysBy(true), deleted, taken, sameScope, budget); match; ) {
+    for (let match = longestMatch(run, keysBy(true), deleted, taken, sameScope, budget); match;) {
       take(run, match);
       match = longestMatch(run, keysBy(true), deleted, taken, sameScope, budget);
     }

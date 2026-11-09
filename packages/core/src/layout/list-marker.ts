@@ -6,7 +6,12 @@ import type { ImageResourceState } from '../store/package/image-resources.ts';
 import type { LayoutBox, ListMarkerRecord } from './semantic-records.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
-import { firstLineShift, listMarkerBox, listMarkerWidth } from './list-marker-geometry.ts';
+import {
+  firstLineShift,
+  listMarkerBox,
+  listMarkerAscent,
+  listMarkerWidth,
+} from './list-marker-geometry.ts';
 import { rtlListMarkerPieces } from './list-marker-bidi.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 import { holdsOnlyPageBreak, type PendingLine } from './pending-line.ts';
@@ -86,8 +91,7 @@ export function listMarkerFirstLineMetrics(
   if (!item) return {};
   // A picture bullet REPLACES `w:lvlText`, so the glyph metrics never apply beside it.
   if (item.picBullet) return { firstLineMinimumBaseline: item.picBullet.height };
-  if (item.markerText.length === 0 || item.markerStyle.hidden) return {};
-  const { baseline } = measurer.lineMetrics(item.markerStyle, item.markerText);
+  const baseline = listMarkerAscent(item, measurer);
   return baseline > 0 ? { firstLineMarkerAscent: baseline } : {};
 }
 

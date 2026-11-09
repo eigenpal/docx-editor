@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -64,10 +64,7 @@ export type ContentControlValue =
 
 /** The lock a control carries. `ST_Lock`, spelled as the schema spells it. */
 export type ContentControlLockState =
-  | 'unlocked'
-  | 'sdtLocked'
-  | 'contentLocked'
-  | 'sdtContentLocked';
+  'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
 
 /** The control types this API can create. Picture and repeating section are deferred. */
 export type ContentControlSubtype = 'richText' | 'plainText' | 'dropDownList' | 'comboBox' | 'date';

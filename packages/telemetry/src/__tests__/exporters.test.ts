@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/telemetry/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -300,8 +300,7 @@ describe('otelExporter', () => {
 describe('otelExporter gauges', () => {
   test('a forgotten series is no longer observed', () => {
     let callback:
-      | ((result: { observe: (value: number, attributes: unknown) => void }) => void)
-      | undefined;
+      ((result: { observe: (value: number, attributes: unknown) => void }) => void) | undefined;
     const meter = {
       createObservableGauge: () => ({ addCallback: (fn: typeof callback) => void (callback = fn) }),
     };

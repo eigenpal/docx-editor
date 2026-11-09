@@ -19,9 +19,12 @@ import { namedChild, paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
 
 /**
  * The `w:ind` attributes a list level states: the leading edge and the first line, in twips
- * and in character units, in both spellings of the leading edge.
+ * and in character units, in both spellings of the leading edge. A level change drops these
+ * from the paragraph's own `w:ind`, whether the change goes through `w:numPr` or a style.
+ *
+ * @internal
  */
-const LEVEL_INDENT_ATTRIBUTES: ReadonlySet<string> = new Set([
+export const LEVEL_INDENT_ATTRIBUTES: ReadonlySet<string> = new Set([
   'left',
   'start',
   'leftChars',

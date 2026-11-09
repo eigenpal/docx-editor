@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -350,7 +350,7 @@ export class TextFollow {
     const ownCopies = copiesIn(identities);
     // Characters come in runs of consecutive identities. Most runs share no character with
     // a copy in another paragraph, so one lookup per run settles all of their characters.
-    for (let start = 0; start < clients.length; ) {
+    for (let start = 0; start < clients.length;) {
       let end = start + 1;
       while (
         end < clients.length &&

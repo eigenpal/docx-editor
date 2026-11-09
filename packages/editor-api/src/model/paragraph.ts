@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -59,13 +59,7 @@ const MAX_DELIMITERS = 16;
 
 /** Paragraph alignment values readable and writable through this object model. */
 export type ParagraphAlignment =
-  | Alignment
-  | 'Mixed'
-  | 'Unknown'
-  | 'Left'
-  | 'Centered'
-  | 'Right'
-  | 'Justified';
+  Alignment | 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
 
 /**
  * A paragraph's base direction, as {@link Paragraph.readingOrder} reads and writes it.

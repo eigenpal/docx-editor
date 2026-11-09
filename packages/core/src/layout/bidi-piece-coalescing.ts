@@ -28,7 +28,7 @@ export function coalesceBidiPieces(
     return JSON.stringify(metadata);
   });
   const result: FieldAwarePiece[] = [];
-  for (let start = 0; start < pieces.length; ) {
+  for (let start = 0; start < pieces.length;) {
     let end = start + 1;
     while (
       end < pieces.length &&

@@ -185,14 +185,12 @@ export function tableWidthEnvelopeHolds(
     });
     const contentWidth = Math.max(1, flow.flowRight - flow.flowLeft);
     const available = cellWidthAfterIndents(contentWidth, group.indentLeft, group.indentRight);
-    if (
-      !(
-        available >= group.minimumAvailable &&
-        available <= group.maximumAvailable &&
-        group.required <= available + group.tolerance &&
-        group.rejected > available + group.tolerance
-      )
-    )
+    if (!(
+      available >= group.minimumAvailable &&
+      available <= group.maximumAvailable &&
+      group.required <= available + group.tolerance &&
+      group.rejected > available + group.tolerance
+    ))
       return false;
   }
   return true;

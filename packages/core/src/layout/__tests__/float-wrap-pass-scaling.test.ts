@@ -113,8 +113,8 @@ function openThenBreak(count: number) {
 
 describe('wrap reflow pass count', () => {
   test('does not grow with the page count', () => {
-    const small = openThenBreak(12);
-    const large = openThenBreak(48);
+    const small = openThenBreak(24);
+    const large = openThenBreak(96);
     expect(large.open.result.pages.length).toBeGreaterThanOrEqual(
       small.open.result.pages.length * 3
     );

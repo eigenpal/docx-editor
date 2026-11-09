@@ -332,6 +332,31 @@ export {
   DocxEditorDocumentOutline,
   type DocxEditorDocumentOutlineProps,
 } from './editor/DocxEditorOutline';
+export {
+  ChartInsert,
+  DocxEditorChartPane,
+  DocxEditorSidePanel,
+  ToolbarChartInsert,
+  usePaneRequest,
+  useSelectedChart,
+  type ChartInsertPartComponent,
+  type ChartInsertProps,
+  type DocxEditorChartPaneProps,
+  type DocxEditorSidePanelProps,
+  type UseSelectedChartReturn,
+} from './editor/charts';
+// The chart names a custom chart pane needs (`useSelectedChart`), so it imports from one package.
+export { CHART_TYPE_CHOICES, chartTypeLabelKey } from '@docx-editor.dev/core/editor';
+export type {
+  ChartColor,
+  ChartData,
+  ChartFormat,
+  ChartFormatChange,
+  ChartPaneChange,
+  ChartType,
+  SelectedChartCommand,
+  SelectedChartState,
+} from '@docx-editor.dev/core/editor';
 
 export {
   DocxEditorPageNumber,

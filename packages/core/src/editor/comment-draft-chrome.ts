@@ -9,6 +9,8 @@
 // exists, and a document that reloads must keep it.
 
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
+import type { ChromeSlotId } from './chrome-controls.ts';
+import type { ToolbarCommandState } from './toolbar-commands.ts';
 import type { SemanticPosition } from '@docx-editor.dev/core/layout';
 import { caretWordRange, caretWordSelection } from '../layout/caret-word.ts';
 import { paragraphTextOf } from '../store/store/paragraph-model-text.ts';
@@ -89,4 +91,31 @@ function textboxCaretWord(
     from: { paragraphId: head.paragraphId, offset: word.start },
     to: { paragraphId: head.paragraphId, offset: word.end },
   };
+}
+
+/**
+ * Whether a comment could be started at the selection: the review module is installed, the
+ * document is not open for viewing, chrome is registered to open the draft, and the selection
+ * is on the page. The click does not run an engine command; the registered chrome (the review
+ * rail, or the host's own, through `setCommentDraftChrome`) opens the draft, the way the link
+ * popover owns `text.link`.
+ */
+export function addCommentState(editor: Editor): ToolbarCommandState {
+  const id: ChromeSlotId = 'review.addComment';
+  const refuse = (reason: string): ToolbarCommandState => ({
+    id,
+    enabled: false,
+    disabledReason: reason,
+    active: false,
+  });
+  const review = editor.can({ type: 'toggleReviewPane' });
+  if (!review.ok) return refuse(review.reason);
+  if ((editor.getEditingMode?.() ?? 'editing') === 'viewing') {
+    return refuse('the document is open for viewing');
+  }
+  if (!commentDraftRequestsOf(editor)?.canOpen()) return refuse(NO_COMMENT_DRAFT_VIEW);
+  if (editor.getSelectionPlacement() === null && !commentWordAtCaret(editor)) {
+    return refuse('a comment needs a selected range');
+  }
+  return { id, enabled: true, disabledReason: null, active: false };
 }

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -76,7 +76,7 @@ test('a single span can embed distinct fallback faces without losing text or gly
       );
     }
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 for (const entry of cases)
@@ -100,7 +100,7 @@ for (const entry of cases)
       const text = content.items.map((i) => ('str' in i ? i.str : '')).join('');
       expect(text.normalize('NFC')).toBe(entry.text.normalize('NFC'));
     } finally {
-      await pdf.destroy();
+      await pdf.loadingTask.destroy();
     }
   });
 
@@ -138,7 +138,7 @@ test('PDF baseline and glyph origins match the admitted Core shaping run', async
         2
       );
     } finally {
-      await pdf.destroy();
+      await pdf.loadingTask.destroy();
     }
   } finally {
     opened.session.dispose();
@@ -182,6 +182,6 @@ test('selected TTC face is embedded, not the first collection face', async () =>
     const content = await (await pdf.getPage(1)).getTextContent();
     expect(content.items.map((i) => ('str' in i ? i.str : '')).join('')).toBe('Selected face');
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

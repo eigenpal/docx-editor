@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -76,7 +76,7 @@ test('a btLr cell paints its text turned a quarter turn, reading up the page', a
     expect(up.transform[5]).toBeGreaterThanOrEqual(576);
     expect(up.transform[5]).toBeLessThan(600);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 
@@ -124,6 +124,6 @@ test.each([
     const text = content.items.map((item) => ('str' in item ? item.str : '')).join(' ');
     for (const label of labels) expect(text).toContain(label);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

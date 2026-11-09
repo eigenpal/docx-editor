@@ -114,6 +114,7 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'contentControl.remove',
   'image.insert',
   'image.properties',
+  'image.editChart',
   'image.wrap',
   'image.altText',
   'table.insert',
@@ -132,6 +133,7 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'file.print',
   'file.pageSetup',
   'insert.textBox',
+  'insert.chart',
   'insert.footnote',
   'insert.endnote',
   'insert.pageNumber',
@@ -188,6 +190,7 @@ describe('legacy chrome descriptor', () => {
       'font.size',
       'image.altText',
       'image.wrap',
+      'insert.chart',
       'styles.style',
       'table.borderColor',
       'table.borderStyle',
@@ -214,7 +217,13 @@ describe('legacy chrome descriptor', () => {
         continue;
       }
       const sample =
-        slot === 'image.wrap' ? 'square' : slot === 'image.altText' ? 'Accessible label' : 'Arial';
+        slot === 'image.wrap'
+          ? 'square'
+          : slot === 'image.altText'
+            ? 'Accessible label'
+            : slot === 'insert.chart'
+              ? 'pie'
+              : 'Arial';
       expect(commandForSlotValue(slot, sample)).not.toBeNull();
     }
   });
@@ -328,7 +337,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(82);
+    expect(chromeControlCount()).toBe(84);
   });
 
   test('the table group is contextual and carries border, fill, merge, and split slots', () => {
@@ -353,12 +362,19 @@ describe('legacy chrome descriptor', () => {
     expect(commandForSlot('table.splitCell')).toBeNull();
   });
 
-  test('the image group carries insert, properties, wrap, and altText in order', () => {
+  test('the image group carries insert, properties, editChart, wrap, and altText in order', () => {
     const image = CHROME_GROUPS.find((g) => g.id === 'image');
     expect(image).toBeDefined();
     expect(image!.contextual).toBe(true);
-    expect(image!.controls.map((c) => c.id)).toEqual(['insert', 'properties', 'wrap', 'altText']);
+    expect(image!.controls.map((c) => c.id)).toEqual([
+      'insert',
+      'properties',
+      'editChart',
+      'wrap',
+      'altText',
+    ]);
     expect(image!.controls.map((c) => c.state.kind)).toEqual([
+      'command',
       'command',
       'command',
       'value',

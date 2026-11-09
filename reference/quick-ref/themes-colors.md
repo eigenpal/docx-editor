@@ -141,6 +141,21 @@ Values are in 1/1000ths of a percent (0-100000):
 <a:shade val="75000"/>  <!-- 75% shade -->
 ```
 
+The integer is an `xsd:int`, so `+50000` is legal. The Transitional schema also admits the percentage spelling (`50%`); the Strict schema admits only that spelling.
+
+Transforms apply in document order (ECMA-376 Part 1, 20.1.2.3). Keep components unrounded through the chain, and round to a byte once at the end.
+
+| Transforms | Space |
+| --- | --- |
+| `tint`, `shade`, `inv`, `red`/`green`/`blue` (+`Mod`/`Off`) | Linear light, through the sRGB transfer curve |
+| `hue`, `sat`, `lum` (+`Mod`/`Off`), `comp` | HSL over the stored sRGB components |
+| `gray` | Rec. 709 weights (0.2126, 0.7152, 0.0722) on the stored sRGB components |
+| `gamma`, `invGamma` | The sRGB transfer curve, and its inverse, on each component |
+
+- `tint`: `1 - (1 - linear) * val`. `shade`: `linear * val`. `ED7D31` + `shade 50000` is `AE5A21`.
+- `inv`: `1 - linear`. `4472C4` gives `F8EBB3`.
+- `gray`: `ED7D31` gives `8F8F8F`.
+
 ---
 
 ## Font Scheme (a:fontScheme)

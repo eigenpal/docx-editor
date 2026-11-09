@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -56,10 +56,7 @@ import {
 } from './split-points.ts';
 
 export type JournalRefusalCode =
-  | LimitCode
-  | 'unknown-logical-id'
-  | 'invalid-bound'
-  | 'partial-apply-forbidden';
+  LimitCode | 'unknown-logical-id' | 'invalid-bound' | 'partial-apply-forbidden';
 
 export type ApplyJournalResult =
   | { readonly ok: true }

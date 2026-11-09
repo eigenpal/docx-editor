@@ -224,4 +224,19 @@ describe('empty anchor paragraph pagination', () => {
       paragraphFragmentsOf(layout.pages[0]!).map((p) => p.box.y);
     expect(ys(one)).toEqual(ys(two));
   });
+  test('a leading tall narrow anchor moves its paragraph to the next page', () => {
+    // The box starts 300pt to the right, so the paragraph mark has a passage beside it. The
+    // box is taller than the rest of the page and cannot end at the bottom margin without
+    // rising above its line, so the paragraph moves with it.
+    const positionH = '<wp:positionH relativeFrom="margin"><wp:posOffset>0</wp:posOffset>';
+    const tall = anchor(8, 500, 'paragraph', 100);
+    expect(tall).toContain(positionH);
+    const right = tall.replace(positionH, positionH.replace('>0<', '>3810000<'));
+    const filler = Array.from({ length: 40 }, () => text('Filler')).join('');
+    const layout = render(filler + `<w:p>${right}</w:p>`);
+    expect(layout.pages).toHaveLength(2);
+    expect(layout.pages[0]!.anchoredDrawings).toBeUndefined();
+    expect(layout.pages[1]!.anchoredDrawings).toHaveLength(1);
+    expect(layout.pages[1]!.anchoredDrawings![0]!.y).toBeCloseTo(8, 3);
+  });
 });

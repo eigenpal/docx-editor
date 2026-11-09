@@ -109,6 +109,7 @@ import { validateRemoveToc } from './tree-op-toc-remove.ts';
 import { validateRefreshFieldResults } from './tree-op-field-results.ts';
 import { validateInsertTable } from './tree-op-insert-table.ts';
 import { validateMoveTable } from './tree-op-move-table.ts';
+import { judgedOnHealedTable } from './tree-op-table-heal.ts';
 import { validateInsertParagraphBesideTable } from './tree-op-paragraph-beside-table.ts';
 import { validateReplaceStoryBlocks } from './tree-op-story-replace.ts';
 import {
@@ -272,6 +273,8 @@ export function validateTreeOp(
 ): TreeOpRejection | null {
   const policy = options?.contentLockPolicy;
   if (!TREE_DOC_OP_KINDS.includes(op.op)) return 'unknown-op';
+  const healed = judgedOnHealedTable(part, op, (table) => validateTreeOp(table, op, options));
+  if (healed !== undefined) return healed;
   if (
     (op.op === 'insertText' || op.op === 'deleteText') &&
     op.textFormFieldId !== undefined &&

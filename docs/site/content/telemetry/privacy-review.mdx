@@ -18,7 +18,7 @@ Built-in events hold only codes, booleans, buckets, and timings, as [Privacy](/d
 | `documentShape` stays `'basic'`, or `'detailed'` is approved. | Detailed bucket combinations can distinguish documents. | [Privacy](/docs/2.x/telemetry/privacy) |
 | With a user ID on events, session timing is approved, or the `sessions` area is off. | Session timing plus user IDs exposes individual activity. | [Sessions](/docs/2.x/telemetry/sessions) |
 | `consent` reads your consent manager, and your Sentry and OpenTelemetry SDKs follow the same decision. | `consent` controls only this package. | [Set up an editor](/docs/2.x/telemetry/editors) |
-| Sentry Replay blocks the editor, `dropEditorBreadcrumbs` is set, and `sendDefaultPii` is `false`. | Replay and breadcrumbs can capture document content. | [Send to Sentry](/docs/2.x/telemetry/sentry#protect-document-content) |
+| Sentry Replay blocks the editor, `dropEditorBreadcrumbs` is set, and `dataCollection` turns off user, cookie, header, body, and query collection. | Replay and breadcrumbs can capture document content. | [Send to Sentry](/docs/2.x/telemetry/sentry#protect-document-content) |
 | Sentry URLs, request bodies, console breadcrumbs, and uncaught errors are scrubbed. | The package does not control SDK-collected values. | [Send to Sentry](/docs/2.x/telemetry/sentry#limits) |
 | OpenTelemetry resource attributes and instrumentations hold no identifiers. | Some instrumentations add the user agent or page URL. | [Send to OpenTelemetry](/docs/2.x/telemetry/opentelemetry) |
 | `rooms.list()` sits behind an administrator endpoint, and `roomLabel` is the default or `hmacRoomLabel`. | Room listings can expose real room names. | [Rooms, people, and memory](/docs/2.x/telemetry/rooms) |

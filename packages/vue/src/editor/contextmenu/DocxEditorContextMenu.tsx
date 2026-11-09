@@ -13,7 +13,14 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
-import { isHTMLElementNode, hostDocumentOf, hostWindowOf } from '@docx-editor.dev/core/editor';
+import {
+  isHTMLElementNode,
+  hostDocumentOf,
+  hostWindowOf,
+  chartPaneAvailable,
+  openChartPaneFor,
+} from '@docx-editor.dev/core/editor';
+import { useEditorState } from '../useEditorState';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { mergeArrangement } from '../merge-arrangement';
 import { flattenChildren } from '../../lib/flattenChildren';
@@ -139,8 +146,36 @@ const ContextMenuEditField = defineComponent({
   },
 });
 
+/** Edit chart, on a selected chart: opens the Chart pane, as a double press does. */
+const ContextMenuEditChart = defineComponent({
+  name: 'ContextMenuEditChart',
+  setup() {
+    const editor = useDocxEditor();
+    const menu = useMenuContext();
+    const label = useMenuLabel();
+    const chartId = useEditorState((snapshot) => snapshot.chart?.drawingNodeId ?? null);
+    return () => {
+      const instance = editor.value;
+      const id = chartId.value;
+      if (!instance || !id || !chartPaneAvailable(instance)) return null;
+      return (
+        <MenuRow
+          rowSlot="image.editChart"
+          onSelect={() => {
+            menu.value.setOpenMenu(null);
+            openChartPaneFor(instance, id);
+          }}
+        >
+          {{ default: () => label('chart.edit') }}
+        </MenuRow>
+      );
+    };
+  },
+});
+
 const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   { kind: 'row', id: 'field.edit', render: () => <ContextMenuEditField /> },
+  { kind: 'row', id: 'image.editChart', render: () => <ContextMenuEditChart /> },
   { kind: 'row', id: 'edit.cut', render: () => <ContextMenuCut /> },
   { kind: 'row', id: 'edit.copy', render: () => <ContextMenuCopy /> },
   { kind: 'row', id: 'edit.paste', render: () => <ContextMenuPaste /> },

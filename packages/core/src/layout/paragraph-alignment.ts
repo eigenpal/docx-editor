@@ -762,14 +762,12 @@ export function lineAlignmentMeasure(
       indent: lineIndent,
       available: lineAvailableWidth,
       used: line.width,
-      passages: broken.map(
-        (passage): MirroredLinePassage => ({
-          start: axis - (passage.end + penX),
-          end: axis - (passage.start + penX),
-          mirrored: true,
-          breakStart: passage.start + penX,
-        })
-      ),
+      passages: broken.map((passage): MirroredLinePassage => ({
+        start: axis - (passage.end + penX),
+        end: axis - (passage.start + penX),
+        mirrored: true,
+        breakStart: passage.start + penX,
+      })),
     };
   }
   if (!segment) {

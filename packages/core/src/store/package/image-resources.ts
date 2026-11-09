@@ -35,11 +35,7 @@ import { createHostAbortController } from '../runtime/host-abort-controller.ts';
  * older documents carry; WebP is what current Word writes.
  */
 export type SupportedImageMime =
-  | 'image/png'
-  | 'image/jpeg'
-  | 'image/gif'
-  | 'image/bmp'
-  | 'image/webp';
+  'image/png' | 'image/jpeg' | 'image/gif' | 'image/bmp' | 'image/webp';
 /**
  * Vector media painted straight from validated bytes. An `<img>` renders SVG in the
  * browser's secure static mode — no script, no external subresource loads — so there is

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -90,7 +90,7 @@ export async function readReferenceLines(
     lines.sort((a, b) => a.page - b.page || a.baseline - b.baseline || a.x - b.x);
     return { pageCount: pdf.numPages, lines };
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 }
 

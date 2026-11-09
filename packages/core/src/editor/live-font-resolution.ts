@@ -43,8 +43,7 @@ export function createLiveFontResolution<Late>(
   deliver(generation: number, late: Late): void;
 } {
   let current:
-    | { generation: number; requested: Set<string>; running: boolean; late: Late[] }
-    | undefined;
+    { generation: number; requested: Set<string>; running: boolean; late: Late[] } | undefined;
   let queued = false;
   const pump = (): Promise<void> | undefined => {
     queued = false;

@@ -9,7 +9,7 @@ import type {
   SupportedImageMime,
 } from '../store/package/image-resources.ts';
 import type { ImageResourceLimits } from '../store/runtime/limits.ts';
-import { drawingRenderers } from '../store/package/drawing-renderers.ts';
+import { drawingRenderers, metafileRasterScale } from '../store/package/drawing-renderers.ts';
 import { decodeTiffFrame } from '../store/package/tiff-frame.ts';
 
 export { decodeTiffFrame, type DecodedTiffFrame } from '../store/package/tiff-frame.ts';
@@ -83,23 +83,23 @@ export async function convertBrowserMetafile(
   _limits: ImageResourceLimits
 ): Promise<Readonly<{ bytes: Uint8Array; mime: SupportedImageMime }> | null> {
   const rasterize = drawingRenderers().metafile?.rasterize;
-  if (!rasterize) return convertPlainMetafile(bytes, mime);
+  if (!rasterize) return convertPlainMetafile(bytes);
   const raster = await rasterize(bytes, mime, { maxEdge: MAX_METAFILE_RASTER_EDGE });
   return raster ? Object.freeze({ bytes: raster.bytes, mime: raster.mime }) : null;
 }
 
 async function convertPlainMetafile(
-  bytes: Uint8Array,
-  mime: MetafileImageMime
+  bytes: Uint8Array
 ): Promise<Readonly<{ bytes: Uint8Array; mime: SupportedImageMime }> | null> {
-  const { convertEmfToDataUrl, convertWmfToDataUrl } = await import('emf-converter');
+  const { convertMetafileToDataUrl, getMetafileInfo } = await import('emf-converter');
   const copy = new Uint8Array(bytes);
   const buffer = copy.buffer.slice(copy.byteOffset, copy.byteOffset + copy.byteLength);
-  const options = { maxWidth: MAX_METAFILE_RASTER_EDGE, maxHeight: MAX_METAFILE_RASTER_EDGE };
-  const dataUrl =
-    mime === 'image/x-emf'
-      ? await convertEmfToDataUrl(buffer, options)
-      : await convertWmfToDataUrl(buffer, options);
+  const info = await getMetafileInfo(buffer);
+  const dataUrl = await convertMetafileToDataUrl(buffer, {
+    dpiScale: metafileRasterScale(Math.max(info?.width ?? 0, info?.height ?? 0)),
+    maxWidth: MAX_METAFILE_RASTER_EDGE,
+    maxHeight: MAX_METAFILE_RASTER_EDGE,
+  });
   const prefix = 'data:image/png;base64,';
   if (!dataUrl?.startsWith(prefix)) return null;
   const binary = atob(dataUrl.slice(prefix.length));

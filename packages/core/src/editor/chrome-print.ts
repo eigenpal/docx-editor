@@ -13,10 +13,7 @@ const PRINT_FRAME_TIMEOUT_MS = 15_000;
 
 /** Why the browser could not print the converted PDF. @public */
 export type ChromePrintErrorCode =
-  | 'pdf-viewer-unavailable'
-  | 'pdf-load-failed'
-  | 'print-refused'
-  | 'print-ended';
+  'pdf-viewer-unavailable' | 'pdf-load-failed' | 'print-refused' | 'print-ended';
 
 /**
  * The browser could not print the converted PDF. The PDF at `ChromePrintJob.url` is still
@@ -94,10 +91,7 @@ export type ResolvedChromePrintSettings = Required<ChromePrintSettings>;
 export const CHROME_PRINT_DISPLAY_MODES: readonly {
   readonly mode: ReviewDisplayMode;
   readonly labelKey:
-    | 'review.simpleMarkup'
-    | 'review.allMarkup'
-    | 'review.noMarkup'
-    | 'review.original';
+    'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original';
 }[] = Object.freeze([
   { mode: 'simple-markup', labelKey: 'review.simpleMarkup' },
   { mode: 'all-markup', labelKey: 'review.allMarkup' },

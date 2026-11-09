@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/editor-api",
-  "version": "2.34.0",
+  "version": "2.36.0",
   "description": "Document automation for DOCX: a batching object model that drives a document from a server or from an editor already open in a page",
   "sideEffects": false,
   "engines": {
@@ -40,7 +40,7 @@
   "devDependencies": {
     "@docx-editor.dev/pro": "workspace:*",
     "@docx-editor.dev/core": "workspace:*",
-    "@microsoft/api-extractor": "^7.50.0",
+    "@microsoft/api-extractor": "^7.60.0",
     "fflate": "^0.8.2",
     "license-check-and-add": "^4.0.5",
     "typescript7": "npm:typescript@^7.0.2"
@@ -77,7 +77,7 @@
     "headless"
   ],
   "author": {
-    "name": "EigenPal, Inc.",
+    "name": "Eigenpal, Inc.",
     "email": "licensing@eigenpal.com",
     "url": "https://eigenpal.com"
   },
@@ -92,6 +92,6 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@docx-editor.dev/core": "~2.34.0"
+    "@docx-editor.dev/core": "~2.36.0"
   }
 }

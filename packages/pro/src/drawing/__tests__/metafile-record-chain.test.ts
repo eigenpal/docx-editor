@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -9,7 +9,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { expect, test } from 'bun:test';
 import { metafileRecordChain } from '../metafile-record-chain.ts';
 import { replayMetafile } from '../metafile-replay.ts';
-import { colorWords, emf, wmf } from './metafile-fixture.ts';
+import { colorWords, emf, replayWithoutDom, wmf } from './metafile-fixture.ts';
+
+replayWithoutDom();
 
 const measureText = () => 0;
 const LIMIT = 200_000;

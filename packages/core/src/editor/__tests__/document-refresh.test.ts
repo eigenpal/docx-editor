@@ -69,13 +69,13 @@ describe('external document refresh', () => {
       changes: refreshMetadata(),
     });
     const bytes = await editor.save();
-    refresh.highlightChanges();
+    refresh.highlightChanges({ animation: false });
     expect(container.querySelector('[data-docx-refresh-highlight]')).not.toBeNull();
     expect(await editor.save()).toEqual(bytes);
     expect(editor.snapshot().canUndo).toBe(false);
     refresh.clearHighlights();
     expect(container.querySelector('[data-docx-refresh-highlight]')).toBeNull();
-    refresh.highlightChanges();
+    refresh.highlightChanges({ animation: false });
     editor.surface!.type('edit');
     expect(refresh.snapshot().changes).toEqual([]);
     expect(container.querySelector('[data-docx-refresh-highlight]')).toBeNull();

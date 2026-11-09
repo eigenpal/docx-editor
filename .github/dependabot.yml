@@ -2,10 +2,12 @@
 # Compromised packages (stolen maintainer tokens) are almost always yanked
 # within hours, well before this window elapses.
 #
-# Two npm streams, one grouped PR each per week:
+# Two package streams, one grouped PR each per week:
 #
-#   library  — the root workspace minus examples/. `/` covers every workspace
-#              member, so `exclude-paths` is what keeps examples out; a
+#   library  — the root workspace minus examples/. It uses the `bun` ecosystem
+#              because the root lockfile is `bun.lock`; the `npm` ecosystem
+#              cannot update it and fails the whole job. `/` covers every
+#              workspace member, so `exclude-paths` is what keeps examples out; a
 #              per-package entry would double-cover and open a second PR for
 #              the same bump (that is where the three harfbuzzjs PRs came from).
 #   examples — the demo apps, grouped across all ten directories at once.
@@ -24,7 +26,7 @@
 # and group blocks are spelled out per entry.
 version: 2
 updates:
-  - package-ecosystem: 'npm'
+  - package-ecosystem: 'bun'
     directory: '/'
     exclude-paths:
       - 'examples/**'

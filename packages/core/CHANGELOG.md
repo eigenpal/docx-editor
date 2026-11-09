@@ -1,5 +1,60 @@
 # @docx-editor.dev/core
 
+## 2.36.0
+
+### Minor Changes
+
+- c8ed53d: Formatting cards describe tracked highlight changes, such as “Highlight: yellow”. `ReviewRevisionItem.formattingChanges` includes `highlight` with the `w:highlight` color name.
+
+### Patch Changes
+
+- bac199e: Floating objects that wrap text near page bottoms stay on the page when compatibility settings require it. Paragraph-relative and line-relative objects use the correct position on each page.
+- 63a5c8f: AutoFit tables preserve cell margins and distribute width reductions proportionally when unbreakable text exceeds the available width. Fixes #1838
+- fd9ee96: Input method composition at a text control’s end stays inside the control, including under forms protection. Typing and composition at placeholder boundaries keep the caret after inserted text, including in suggesting mode.
+- b131138: Custom shape paths with no current point display nothing. Arcs that sweep more than one turn keep smooth outlines. Fixes #1833
+- 44774ad: Shapes, text, charts, and diagrams support all DrawingML color models and transforms, including tints and shades. Fixes #1831
+- 304dd92: Paragraphs joining lists with style-linked levels use their indent to select a level. Paragraphs joining ordinary lists use the preceding item’s level. Fixes #1847
+- ede53f5: All-capital list numbers leave enough space before paragraph text. List numbers and bullets ignore small-capital formatting. Fixes #1834
+- 4d9451d: List space suffixes keep consistent widths across marker fonts. The Normal Table style uses its built-in properties regardless of document overrides.
+- e404652: List buttons start a separate list for selections containing list items and plain paragraphs. Selections starting with a plain paragraph join a preceding compatible ordinary list instead. Fixes #1851
+- cf257ca: List buttons create independent lists without reusing heading numbering. Paragraphs joining numbered headings take the heading style for their level. Fixes #1842
+- a0825f1: Active tracked changes display without an extra underline. Remove the unused `--doc-revision-insertion-active-border` and `--doc-revision-deletion-active-border` tokens.
+- 5da2ca2: Saved documents keep paragraph and run properties in schema order, including after concurrent formatting changes. Fixes #1850
+- 8eaccb6: Tables remain editable after concurrent formatting changes. Saved documents combine repeated table, row, and cell property elements and keep their contents in schema order. Fixes #1853
+- b983305: Cells display table style shading, including after you clear a cell fill. Pattern shading blends the pattern and background colors. Fixes #1844, fixes #1848
+- Updated dependencies: @docx-editor.dev/i18n@2.36.0
+
+## 2.35.0
+
+### Minor Changes
+
+- 6c10913: File > Print now asks which markup to print and whether comments print, and passes the choice to the PDF handler as `view.displayMode` and `view.comments`. Set `printSettings: false` on the menu to print the current view without asking.
+- 92097ea: Sections with vertical alignment place their text centered, at the bottom, or spread from top to bottom on each page, in the editor and in PDF export.
+
+### Patch Changes
+
+- 68ad495: In dark mode, headers, footers, footnotes, and floating drawings now use the same light colors as the body text.
+- 2da039e: A content control that you empty now shows the placeholder that its `w:placeholder` glossary block defines, instead of the default English prompt.
+- 2ad80e6: Opening or editing documents with many text-wrapped pictures is faster. Fixes #1795.
+- 88fa746: A text-anchored floating table that fits the rest of the page now stays on that page when the paragraph after it starts a new page with a page break before.
+- 43c2012: Pages with footnotes now lay out the same after an edit as when the document opens fresh, and editing long documents with footnotes is faster. Fixes #1761.
+- 8aec65b: Large documents with footnotes open faster, and edits that move many pages, such as accepting or rejecting every change, lay out fewer pages again.
+- cb318b3: An inline content control that you empty now shows the same glossary placeholder text that it shows when the document opens.
+- e4823be: Pictures and shapes in a header or footer now stack in their z-order, so a picture watermark covers a picture that ranks below it.
+- 1aa7918: When the toolbar collapses an image's controls into the "⋯" panel, Wrap text, Alt text, Image properties, and Insert image now show as full-width rows that open their menu, popover, or dialog on a click. Before, each showed a plain-text label beside a small icon, and only the icon took a click.
+- 1e1dc0b: Paragraphs that allow lines to break inside words keep Latin words whole only in Korean text, where both the paragraph mark and the text use the Korean language, and break them at any character elsewhere.
+- 7df7abb: Korean paragraphs that wrap by word no longer break a word at its parentheses, commas, digits, or Latin letters.
+- 1b9779a: Typing in long tables with vertically merged cells is faster. Part of #1797.
+- 80423a6: Deeply nested tables open and edit faster: each nested table's column needs are measured once per layout pass instead of once for every enclosing level. Fixes #1798
+- 9ddf7f6: A nested table with vertically merged cells now breaks across pages between its rows, also inside a merge whose text fits its first row, instead of moving whole to the next page.
+- 68ad495: A tracked insertion and a deletion from the same author that touch show as one replacement in either order.
+- 8e1dc7e: Characters that a serif Korean font lacks now draw in a serif Hangul font such as Batang, instead of a Gothic font.
+- 57a3ae1: In suggesting mode, typing in a text box and choosing a dropdown, combo box, date, or checkbox content control value now record tracked changes, as does `ContentControl.setValue` with change tracking on, Next and Previous Change now reach changes inside text boxes, and you can comment on text in a text box. Moving or resizing a picture or text box applies directly because it has no tracked form, and a legacy form checkbox or dropdown refuses the change with a reason instead of ignoring the press.
+- 74592f0: Text typed or pasted on one line at the end of an inline text content control now stays in the control, and forms protection accepts it there.
+- 049f4a2: Saved documents give each tracked change its own id across the body, headers, footers, and notes, keep one id for the pieces of one change, and replace ids outside the 32-bit range. Fixes #1429.
+- 80cf09a: Documents whose text wrap around pictures does not settle now open instead of failing to lay out. Part of #1803.
+- Updated dependencies: @docx-editor.dev/i18n@2.35.0
+
 ## 2.34.0
 
 ### Minor Changes

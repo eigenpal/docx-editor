@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -86,7 +86,7 @@ const hasObject = (text: string) => text.includes(OBJECT) || text.includes(LINE_
 /** Lay out every word of a paragraph. */
 export function layoutWords(words: readonly LayoutWord[]): Cluster[] {
   const clusters: Cluster[] = [];
-  for (let first = 0; first < words.length; ) {
+  for (let first = 0; first < words.length;) {
     const word = words[first]!;
     if (word.controls.length === 0 && word.fields === 0 && !hasObject(word.text)) {
       clusters.push({ kind: 'text', word: first });

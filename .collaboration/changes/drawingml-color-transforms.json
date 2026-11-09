@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Shape colors refused a:inv, a:gray, a:hslClr, the HSL set transforms, a:comp, the a:red, a:green, and a:blue family, a:gamma, a:invGamma, and a leading plus sign on a:tint, a:shade, and a:alpha. a:tint and a:shade used a 2.3 power curve and truncated each step to a byte.",
+  "after": "Every DrawingML color model and color transform resolves. a:tint and a:shade blend in linear light through the sRGB transfer curve, and a transform chain rounds to a byte once, at the end.",
+  "reason": "Only the color that a drawing paints changes. The source XML, shared nodes, text offsets, operations, snapshots, and package serialization stay the same.",
+  "tests": [
+    "packages/core/src/store/__tests__/drawing-shape-color.test.ts",
+    "packages/core/src/store/__tests__/drawing-vector-shape.test.ts",
+    "packages/core/src/editor/__tests__/theme-shape-paint.test.ts"
+  ],
+  "changeset": "drawingml-color-transforms",
+  "migration": null
+}

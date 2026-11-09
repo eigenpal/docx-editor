@@ -213,6 +213,283 @@ export function changedFields(seed: ParagraphDialogFields, current: ParagraphDia
 seedMixed?: ParagraphDialogMixed,
 currentMixed?: ParagraphDialogMixed): ParagraphFormatUpdate | null;
 
+// @public
+export const CHART_INSERT_CHOICES: readonly ChartType[];
+
+// @public
+export const CHART_LEGEND_CHOICES: readonly ChartLegendPosition[];
+
+// @public
+export const CHART_STANDARD_COLORS: readonly {
+    readonly hex: string;
+    readonly nameKey: string;
+}[];
+
+// @public
+export const CHART_THEME_SLOTS: readonly ChartThemeColor[];
+
+// @public
+export const CHART_TYPE_CHOICES: readonly ChartType[];
+
+// @public
+export function chartAxisTitleLabels(format: ChartFormat): {
+    readonly category: 'chart.format.categoryAxisTitle' | 'chart.format.xAxisTitle';
+    readonly value: 'chart.format.valueAxisTitle' | 'chart.format.yAxisTitle';
+};
+
+// @public
+export type ChartColor = string | {
+    readonly shift?: number;
+    readonly theme: ChartThemeColor;
+};
+
+// @public
+export function chartColorCommand(drawingNodeId: string, index: number, pick: ChartColorPick): EditorCommand;
+
+// @public
+export interface ChartColorEntry {
+    readonly automatic: ChartColor;
+    readonly color: ChartColor | null;
+    readonly name: string;
+}
+
+// @public
+export function chartColorGrid(themeHexes: readonly string[]): {
+    readonly standard: readonly ChartSwatch[];
+    readonly theme: readonly (readonly ChartSwatch[])[];
+};
+
+// @public
+export function chartColorLabel(pick: ChartColorPick, t: ChartTranslate): string;
+
+// @public
+export function chartColorOfPick(pick: ChartColorPick): ChartColor | null;
+
+// @public
+export type ChartColorPick = 'auto' | ChartThemeColor | `${ChartThemeColor}:${number}` | `#${string}`;
+
+// @public
+export const chartColorPick: (entry: ChartColorEntry) => ChartColorPick;
+
+// @public
+export function chartColorPickOf(color: ChartColor): ChartColorPick;
+
+// @public
+export function chartColorPicks(value: ChartColorPick): readonly ChartColorPick[];
+
+// @public
+export interface ChartCopySource {
+    readonly drawing: OoxmlElement;
+    readonly ownerPart: string;
+    // (undocumented)
+    readonly pkg: OoxmlPackage;
+}
+
+// @public
+export interface ChartData {
+    // (undocumented)
+    readonly categories: readonly ChartDataCategory[];
+    // (undocumented)
+    readonly kind: ChartDataKind;
+    // (undocumented)
+    readonly series: readonly ChartDataSeries[];
+    readonly workbook?: ChartWorkbookState;
+}
+
+// @public
+export interface ChartDataCategory {
+    readonly label: string;
+    readonly source?: number;
+}
+
+// @public
+export type ChartDataKind = 'category' | 'xy';
+
+// @public
+export type ChartDataRead = {
+    readonly data: ChartData;
+    readonly ok: true;
+} | {
+    readonly ok: false;
+    readonly reason: string;
+};
+
+// @public
+export interface ChartDataSeries {
+    readonly name: string;
+    readonly source?: number;
+    readonly values: readonly (number | null)[];
+}
+
+// @public
+export interface ChartFormat {
+    readonly axes: boolean | null;
+    readonly axisTitles: {
+        readonly category: string | null;
+        readonly value: string | null;
+    } | null;
+    // (undocumented)
+    readonly colors: readonly ChartColorEntry[];
+    readonly colorsBy: 'series' | 'point';
+    readonly dataLabels: boolean;
+    readonly gridlines: boolean | null;
+    // (undocumented)
+    readonly legend: ChartLegendPosition;
+    readonly title: string | null;
+    readonly type: ChartType | null;
+}
+
+// @public
+export interface ChartFormatChange {
+    // (undocumented)
+    readonly axes?: boolean;
+    // (undocumented)
+    readonly categoryAxisTitle?: string | null;
+    // (undocumented)
+    readonly dataLabels?: boolean;
+    // (undocumented)
+    readonly gridlines?: boolean;
+    // (undocumented)
+    readonly legend?: ChartLegendPosition;
+    // (undocumented)
+    readonly title?: string | null;
+    // (undocumented)
+    readonly valueAxisTitle?: string | null;
+}
+
+// @public
+export type ChartFormatRead = {
+    readonly format: ChartFormat;
+    readonly ok: true;
+} | {
+    readonly ok: false;
+    readonly reason: string;
+};
+
+// @public
+export type ChartIntentResult = ImageIntentResult | {
+    readonly detail: string;
+    readonly ok: false;
+    readonly reason: 'chart';
+};
+
+// @public
+export interface ChartLanes {
+    duplicate(scope: StoryScope, input: DuplicateChartInput): ChartIntentResult;
+    // (undocumented)
+    edit(scope: StoryScope, drawingNodeId: string, edit: (pkg: OoxmlPackage, target: ChartTarget) => ChartEdit, options?: {
+        readonly actorId?: string;
+    }): ChartIntentResult;
+    // (undocumented)
+    insert(scope: StoryScope, input: InsertChartInput): ChartIntentResult;
+}
+
+// @public
+export type ChartLegendPosition = 'none' | 'top' | 'bottom' | 'left' | 'right';
+
+// @public
+export function chartPaneAvailable(editor: Editor | null): boolean;
+
+// @public
+export type ChartPaneChange = {
+    readonly category: number;
+    readonly series: number;
+    readonly text: string;
+    readonly type: 'value';
+} | {
+    readonly series: number;
+    readonly text: string;
+    readonly type: 'seriesName';
+} | {
+    readonly category: number;
+    readonly text: string;
+    readonly type: 'label';
+} | {
+    readonly name: string;
+    readonly type: 'addSeries';
+} | {
+    readonly series: number;
+    readonly type: 'removeSeries';
+} | {
+    readonly label: string;
+    readonly type: 'addCategory';
+} | {
+    readonly category: number;
+    readonly type: 'removeCategory';
+};
+
+// @public
+export function chartPaneCommand(drawingNodeId: string, data: ChartData, change: ChartPaneChange): ChartPaneResult;
+
+// @public
+export function chartPaneDraftContinues(previous: string, next: string): boolean;
+
+// @public
+export function chartPaneDraftKey(drawingNodeId: string, data: ChartData): string;
+
+// @public
+export function chartPaneNumericX(data: Pick<ChartData, 'kind' | 'categories'>): boolean;
+
+// @public
+export type ChartPaneResult = {
+    readonly command: EditorCommand;
+    readonly ok: true;
+} | {
+    readonly error: 'chart.data.fieldErrors.number' | 'chart.data.fieldErrors.xNumber' | 'chart.data.fieldErrors.tooLong' | 'chart.data.fieldErrors.limit';
+    readonly ok: false;
+};
+
+// @public
+export function chartPickHex(pick: ChartColorPick, themeHexes: readonly string[], automatic?: ChartColor): string;
+
+// @public
+export const chartRowFocusAfterRemove: (removed: number, count: number) => number;
+
+// @public
+export function chartSeriesNote(format: ChartFormat, seriesCount: number): 'chart.format.pieFirstSeries' | null;
+
+// @public
+export interface ChartSwatch {
+    readonly hex: string;
+    // (undocumented)
+    readonly pick: ChartColorPick;
+}
+
+// @public
+export type ChartThemeColor = 'bg1' | 'tx1' | 'bg2' | 'tx2' | 'accent1' | 'accent2' | 'accent3' | 'accent4' | 'accent5' | 'accent6';
+
+// @public
+export function chartThemeHexes(entries: readonly {
+    readonly hex: string;
+}[] | undefined): readonly string[];
+
+// @public
+export function chartTitleCommand(drawingNodeId: string, format: ChartFormat, field: 'title' | 'categoryAxisTitle' | 'valueAxisTitle', text: string): EditorCommand | null;
+
+// @public
+export type ChartTranslate = (key: string, params?: Record<string, string | number>) => string;
+
+// @public
+export type ChartType = 'columnClustered' | 'columnStacked' | 'columnPercentStacked' | 'barClustered' | 'barStacked' | 'barPercentStacked' | 'line' | 'lineMarkers' | 'area' | 'areaStacked' | 'areaPercentStacked' | 'pie' | 'doughnut' | 'radar' | 'scatter' | 'scatterLines';
+
+// @public
+export function chartTypeChangeNote(before: ChartFormat, after: ChartFormat): 'chart.format.typeChangeRemoved' | null;
+
+// @public
+export function chartTypeHint(format: ChartFormat): 'chart.format.typeChangeHint' | null;
+
+// @public
+export function chartTypeIconPaths(type: ChartType): readonly string[];
+
+// @public
+export const chartTypeLabelKey: (type: ChartType) => `chart.types.${ChartType}`;
+
+// @public
+export const chartValueText: (v: number | null | undefined) => string;
+
+// @public
+export type ChartWorkbookState = 'embedded' | 'kept' | 'external' | 'none';
+
 // @internal
 export function chordLetter(event: KeyboardEvent): string;
 
@@ -675,6 +952,13 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: 'command';
         };
     }, {
+        readonly id: 'editChart';
+        readonly labelKey: 'chart.edit';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
         readonly id: 'wrap';
         readonly labelKey: 'formattingBar.imageWrap';
         readonly paths: readonly string[];
@@ -831,6 +1115,15 @@ export const CHROME_GROUPS: readonly [{
         readonly state: {
             readonly kind: 'command';
         };
+    }, {
+        readonly id: 'chart';
+        readonly labelKey: 'chart.insert';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+        readonly valueKey: 'chart.insert';
     }, {
         readonly id: 'footnote';
         readonly labelKey: 'toolbar.insertFootnote';
@@ -1082,7 +1375,7 @@ export interface ChromeMenuItemEntry {
     // (undocumented)
     readonly kind: 'item';
     readonly labelKey?: string;
-    readonly picker?: 'tableGrid';
+    readonly picker?: 'tableGrid' | 'chartType';
     readonly shortcutKey?: string;
     // (undocumented)
     readonly slot: ChromeSlotId;
@@ -1140,7 +1433,7 @@ export interface ChromePrintSettings {
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.compareDocuments' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'table.mergeCells' | 'table.splitCell' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.goToBookmark' | 'insert.watermark';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.compareDocuments' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.editChart' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'table.mergeCells' | 'table.splitCell' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.chart' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.goToBookmark' | 'insert.watermark';
 
 // @public
 export function chromeSlotId(group: {
@@ -1812,6 +2105,21 @@ export interface DrawingSupportIssue {
 }
 
 // @public
+export interface DuplicateChartInput {
+    // (undocumented)
+    readonly actorId?: string;
+    // (undocumented)
+    readonly expectedPackageRevision?: number;
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+    readonly priorOps?: readonly TreeDocOp[];
+    // (undocumented)
+    readonly source: ChartCopySource;
+}
+
+// @public
 export interface EditorCommandExecute {
     // (undocumented)
     (): boolean;
@@ -1860,6 +2168,9 @@ export interface EditorModuleRegistry {
     readonly wantsDiagnostic: (kind: EditorDiagnosticKind) => boolean;
 }
 
+// @public
+export type EditorPaneId = 'chart';
+
 // @internal
 export function editorPreviewActive(editor: object): boolean;
 
@@ -1885,6 +2196,9 @@ export interface EditorWindow {
     onClose(listener: () => void): () => void;
     readonly window: Window;
 }
+
+// @public
+export function editSelectedChartData(editor: Editor | null, chart: SelectedChartState | null, change: ChartPaneChange): ExecResult;
 
 // @public
 export const EMU_PER_POINT = 12700;
@@ -1930,6 +2244,9 @@ export interface EquationOps {
 }
 
 // @public
+export function execSelectedChart(editor: Editor | null, chart: SelectedChartState | null, command: SelectedChartCommand): ExecResult;
+
+// @public
 export function executeImageCommand(editor: DocxEditorInstance, command: Extract<EditorCommand, {
     type: 'insertImage' | 'replaceImage';
 }>): Promise<ExecResult>;
@@ -1963,6 +2280,12 @@ export function firstDayOfWeek(locale?: string): number;
 
 // @public
 export const FIT_WIDTH_ZOOM_MODE: ZoomMode;
+
+// @public
+export function focusChartPane(pane: HTMLElement | null): void;
+
+// @public
+export function focusChartSwatch(grid: HTMLElement | null): void;
 
 // @public
 export function focusCompareDocumentsControl(dialog: HTMLElement | null | undefined, moment: 'busy' | 'refused' | 'unchanged'): void;
@@ -2077,6 +2400,7 @@ export function formattingBarChromeGroups(image: ImageContext | null, options?: 
 
 // @public
 export interface FormattingBarOptions {
+    readonly chart?: boolean;
     readonly direction?: boolean;
 }
 
@@ -2455,6 +2779,27 @@ export function initialSplitCellCounts(limits: SplitCellLimits | null, can: (com
 };
 
 // @public
+export interface InsertChartInput {
+    // (undocumented)
+    readonly actorId?: string;
+    // (undocumented)
+    readonly chartType: ChartType;
+    // (undocumented)
+    readonly data?: NewChartData;
+    // (undocumented)
+    readonly expectedPackageRevision?: number;
+    // (undocumented)
+    readonly heightPoints: number;
+    readonly name: string;
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+    // (undocumented)
+    readonly widthPoints: number;
+}
+
+// @public
 export interface InvalidTextFormFieldChromeHandlers {
     // (undocumented)
     readonly onRequest?: (session: InvalidTextFormFieldSession) => void;
@@ -2552,6 +2897,9 @@ export function listenForPopupEscape(options: PopupEscapeOptions): () => void;
 export function listenForPopupFocusLeave(options: PopupFocusLeaveOptions): () => void;
 
 // @public
+export function listenPaneRequests(editor: Editor, listener: (request: PaneRequest) => void): () => void;
+
+// @public
 export function loadFonts(request: LoadFontsRequest): Promise<LoadFontsResult>;
 
 // @public
@@ -2588,6 +2936,12 @@ export function lowerColorValueForFill(color: ColorValue, themeColors: readonly 
 export type MarkedFontResolver<T extends FontResolver = FontResolver> = T & FontResolverMark;
 
 // @public
+export const MAX_CHART_POINTS = 4000;
+
+// @public (undocumented)
+export const MAX_CHART_SERIES = 255;
+
+// @public
 export const MAX_RESOLVER_FAMILIES = 64;
 
 // @public
@@ -2597,6 +2951,9 @@ export function mixedFieldsOf(format: ParagraphFormatRead): ParagraphDialogMixed
 export function mountPaginatedSurface(container: HTMLElement, bytes: Uint8Array, options?: PaginatedSurfaceOptions): OpenPaginatedResult;
 
 // @public
+export function moveChartSwatchFocus(grid: HTMLElement | null, key: string): boolean;
+
+// @public
 export interface NavigateToChangeOptions extends ScrollToAnchorOptions {
     readonly block?: ScrollPlacement;
     readonly focus?: boolean;
@@ -2604,6 +2961,20 @@ export interface NavigateToChangeOptions extends ScrollToAnchorOptions {
 
 // @public
 export type NavigationCommand = 'left' | 'right' | 'up' | 'down' | 'wordLeft' | 'wordRight' | 'lineStart' | 'lineEnd' | 'documentStart' | 'documentEnd' | 'pageUp' | 'pageDown';
+
+// @public
+export interface NewChartData {
+    // (undocumented)
+    readonly categories: readonly string[];
+    // (undocumented)
+    readonly series: readonly {
+        readonly name: string;
+        readonly values: readonly (number | null)[];
+    }[];
+}
+
+// @public
+export function nextChartCategoryLabel(data: Pick<ChartData, 'kind' | 'categories'>, fallback: string): string;
 
 // @public (undocumented)
 export const NO_MIXED_FIELDS: ParagraphDialogMixed;
@@ -2616,6 +2987,12 @@ export function observeHostDirection(node: Element, onChange: () => void): () =>
 
 // @public
 export function observeUnsupportedElements(container: HTMLElement, listener: (hosts: readonly UnsupportedElementHost[]) => void): () => void;
+
+// @public
+export function openChartPaneAt(editor: Editor, event: Pick<MouseEvent, 'target' | 'clientX' | 'clientY'>): boolean;
+
+// @public
+export function openChartPaneFor(editor: Editor, drawingNodeId: string): boolean;
 
 // @public
 export function openEditorWindow(options?: OpenEditorWindowOptions): Promise<EditorWindow | null>;
@@ -2681,7 +3058,7 @@ export function overlayHostOrigin(surfaceElement: HTMLElement | null): {
 };
 
 // @public
-export interface PaginatedSurface extends SurfaceIndentAndListOps {
+export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartOps {
     activatedReviewKey(): string | null;
     activateReview(key: string, selection?: SemanticSelection, options?: {
         readonly allowExcluded?: boolean;
@@ -2732,6 +3109,7 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps {
     // (undocumented)
     convertNote(fromKind: 'footnote' | 'endnote', noteId: number): boolean;
     copyFlavours(): {
+        readonly chartDrawingNodeId?: string;
         readonly html: string | null;
         readonly reason?: 'unsupported-content' | 'chart-content';
         readonly text: string;
@@ -3027,6 +3405,19 @@ export interface PaginatedSurfaceState {
 }
 
 // @public
+export interface PaneRequest {
+    // (undocumented)
+    readonly focus: boolean;
+    // (undocumented)
+    readonly pane: EditorPaneId;
+}
+
+// @public
+export interface PaneRequestOptions {
+    readonly focus?: boolean;
+}
+
+// @public
 export interface ParagraphDialogFields {
     // (undocumented)
     alignment: 'left' | 'center' | 'right' | 'justify';
@@ -3212,6 +3603,9 @@ export interface ParagraphTabStop {
 }
 
 // @public
+export function parseChartValue(text: string): number | null | undefined;
+
+// @public
 export function parseIsoDate(value: string): Date | null;
 
 // @public
@@ -3299,6 +3693,9 @@ export function readInlineMargins(style: CSSStyleDeclaration): {
     readonly end: number;
     readonly start: number;
 };
+
+// @public
+export function readSelectedChart(editor: Editor | null, chart: SelectedChartState | null, snapshot: Pick<EditorSnapshot, 'editable' | 'editingMode'>): SelectedChartView;
 
 // @public
 export function readSplitCellCounts(columns: string, rows: string, limits: SplitCellLimits | null): SplitCellCounts;
@@ -3413,6 +3810,9 @@ export function reportAutomationRefusal(editor: object, code: EditDiagnosticCode
 
 // @public
 export function reportAutomationReviewSkip(editor: object, code: ReviewDiagnosticCode, operation?: ReviewOperation, cause?: string): void;
+
+// @public
+export function requestPane(editor: Editor, pane: EditorPaneId, options?: PaneRequestOptions): boolean;
 
 // @public
 export function resizePreservesAspect(handle: ImageResizeHandle, aspectLocked: boolean, shiftKey: boolean, textbox?: boolean): boolean;
@@ -3853,6 +4253,39 @@ export type SectionVerticalAlign = 'center' | 'bottom' | 'both';
 export function seedFields(format: ParagraphFormatRead): ParagraphDialogFields;
 
 // @public
+export type SelectedChartCommand = Omit<Extract<EditorCommand, {
+    type: 'setChartData';
+}>, 'drawingNodeId'> | Omit<Extract<EditorCommand, {
+    type: 'setChartType';
+}>, 'drawingNodeId'> | Omit<Extract<EditorCommand, {
+    type: 'setChartFormat';
+}>, 'drawingNodeId'> | Omit<Extract<EditorCommand, {
+    type: 'setChartColor';
+}>, 'drawingNodeId'>;
+
+// @public
+export interface SelectedChartState {
+    readonly drawingNodeId: string;
+    readonly editable: boolean;
+    readonly formatReason?: string;
+    readonly formattable: boolean;
+    readonly reason?: string;
+    readonly version: number;
+}
+
+// @public
+export interface SelectedChartView {
+    readonly canEditData: boolean;
+    readonly canEditFormat: boolean;
+    readonly chart: SelectedChartState | null;
+    readonly data: ChartData | null;
+    readonly dataDisabledReason: string | null;
+    readonly format: ChartFormat | null;
+    readonly formatDisabledReason: string | null;
+    readonly readReason: string | null;
+}
+
+// @public
 export interface SelectedDrawingOverlayTarget {
     // (undocumented)
     readonly anchorFrameOrigin: {
@@ -4033,6 +4466,14 @@ export function submenuKeys(rtl: boolean): {
 
 // @public
 export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/bmp' | 'image/webp';
+
+// @public
+export interface SurfaceChartOps {
+    // (undocumented)
+    editChart(drawingNodeId: string, edit: (pkg: OoxmlPackage, target: ChartTarget) => ChartEdit): ChartIntentResult;
+    // (undocumented)
+    insertChart(input: SurfaceInsertChartInput): ChartIntentResult;
+}
 
 // @public
 export interface SurfaceEquation {
@@ -4302,6 +4743,9 @@ export function tableCommandToolbarState(surface: PaginatedSurface | null, comma
 export type TableInteractionLabelKey = 'table.insertRowBelow' | 'table.insertColumnRight' | 'table.selectTable';
 
 // @public
+export function takePaneRequest(editor: Editor): PaneRequest | null;
+
+// @public
 export const TEXT_FORM_FORMATS: {
     readonly date: readonly ['', 'M/d/yyyy', 'MM/dd/yyyy', 'd/M/yyyy', 'dd/MM/yyyy', 'yyyy-MM-dd', 'd MMMM yyyy', 'MMMM d, yyyy'];
     readonly number: readonly ['', '0', '0.00', '#,##0', '#,##0.00', '0%', '0.00%'];
@@ -4523,6 +4967,8 @@ export interface ToolbarValueMap {
     // (undocumented)
     'image.wrap': ImageWrapTarget;
     // (undocumented)
+    'insert.chart': ChartType;
+    // (undocumented)
     'list.lineSpacing': number;
     // (undocumented)
     'review.editingMode': 'editing' | 'suggesting' | 'viewing';
@@ -4577,6 +5023,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     canRedo(): boolean;
     // (undocumented)
     canUndo(): boolean;
+    charts(): ChartLanes;
     collaborationPort(documentId: string): CollaborationDocumentPort;
     currentPackage(): OoxmlPackage;
     deleteComment(commentId: string, scope?: StoryScope, noteId?: number, options?: PackageWriteOptions): boolean;

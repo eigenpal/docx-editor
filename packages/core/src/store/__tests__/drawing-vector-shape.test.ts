@@ -367,34 +367,32 @@ describe('wps vector shape projection', () => {
     expect(shape.fillAlpha).toBe(0.5);
   });
 
-  // `a:tint` and `a:shade` are a blend in LINEAR light, and `val` is the fraction of the
-  // INPUT colour (ECMA-376 20.1.2.3.34/20.1.2.3.31) — not of white, and not a blend on the
-  // stored channel. Every expectation below is the pixel LibreOffice paints for that exact
-  // fill; the two right-hand columns are what the readings this engine rejects would give.
+  // `a:tint` and `a:shade` are a blend in LINEAR light, through the sRGB transfer curve, and
+  // `val` is the fraction of the INPUT colour (ECMA-376 Part 1, 20.1.2.3.34 and 20.1.2.3.31):
+  // not of white, and not a blend on the stored component. The result rounds to a byte once.
+  // The two right-hand columns are what the rejected readings give:
   //
-  // `a:shade` has only two readings, since the white-fraction question does not arise. Of the
-  // tint rows, `0000FF` and `336699` separate all three; `808080` at 50% is the one point
-  // where the two rejected readings agree with each other, and it is here only to pin the
-  // case the old fixture leaned on:
-  //
-  //   base    transform        this engine   `val` as white-fraction   blend in gamma space
+  //   base    transform        this engine   `val` as white-fraction   blend on stored value
   //   0000FF  tint  20000      E7E7FF        3333FF                    CCCCFF
-  //   0000FF  shade 20000      00007E        —                         000033
-  //   808080  tint  50000      CCCCCC        C0C0C0                    C0C0C0
-  //   808080  shade 50000      5E5E5E        —                         404040
+  //   0000FF  shade 20000      00007C        —                         000033
+  //   808080  tint  50000      CDCDCD        C0C0C0                    C0C0C0
+  //   808080  shade 50000      5C5C5C        —                         404040
   //   336699  tint  60000      ADB8CA        ADC2D6                    85A3C2
-  //   336699  shade 40000      224466        —                         14293D
+  //   336699  shade 40000      1E4164        —                         14293D
+  //   ED7D31  shade 50000      AE5A21        —                         773F19
   //
-  // Mid-gray at 50% is exactly where the white-fraction reading and the input-fraction
-  // reading agree, so it cannot be the only tint case.
+  // Only the `ED7D31` row is a measured value; the other rows follow from the rule. Mid-gray
+  // at 50% is where the white-fraction reading and the input-fraction reading agree, so it
+  // cannot be the only tint case.
   test('theme colours apply tint, shade, and luminance offset transforms', () => {
     const cases = [
       ['0000FF', 'tint', '20000', 'E7E7FF'],
-      ['0000FF', 'shade', '20000', '00007E'],
-      ['808080', 'tint', '50000', 'CCCCCC'],
-      ['808080', 'shade', '50000', '5E5E5E'],
+      ['0000FF', 'shade', '20000', '00007C'],
+      ['808080', 'tint', '50000', 'CDCDCD'],
+      ['808080', 'shade', '50000', '5C5C5C'],
       ['336699', 'tint', '60000', 'ADB8CA'],
-      ['336699', 'shade', '40000', '224466'],
+      ['336699', 'shade', '40000', '1E4164'],
+      ['ED7D31', 'shade', '50000', 'AE5A21'],
       // `lumMod`/`lumOff` are NOT linear-light: they stay in HSL over the stored channels.
       ['808080', 'lumOff', '10000', '9A9A9A'],
       ['6F55D7', 'lumMod', '50000', '2F1D79'],
@@ -414,9 +412,10 @@ describe('wps vector shape projection', () => {
     }
   });
 
-  // ECMA-376 gives `val` two legal spellings: the 1000ths-of-a-percent integer Word writes
-  // (`50000`, Part 4 Transitional) and the percentage literal (`50%`, Part 1 Strict), which
-  // is what the spec's own worked examples use. Both must resolve, and to the same colour.
+  // `val` has two legal spellings: the integer in 1000ths of a percent (`50000`), which is
+  // an `xsd:int` and so may carry a leading `+`, and the percentage literal (`50%`), which
+  // the spec's own worked examples use. The Transitional schema admits both, the Strict
+  // schema only the second. All of them must resolve, and to the same colour.
   test('a colour transform accepts both the integer and the percentage spelling', () => {
     const fillFor = (val: string): string | null => {
       const drawing = doubleRuleShapeDrawing().replace(
@@ -428,13 +427,11 @@ describe('wps vector shape projection', () => {
         [...indexInlineDrawingProjectionsInPart(part).values()][0]?.vectorShape?.fillHex ?? null
       );
     };
-    // ECMA-376 Part 1 20.1.2.3.31's worked `a:shade` example: `00FF00` at 50% is `00BC00`.
-    // It is the one check on this colour model that does not come from a renderer, so it is
-    // pinned in both spellings. A blend on the stored channel would give `008000`; note the
-    // sRGB curve would give `00BB00`, so this example separates the two BLENDS decisively and
-    // the two CURVES only just.
+    // ECMA-376 Part 1, 20.1.2.3.31's worked `a:shade` example: `00FF00` at 50% is `00BC00`.
+    // A blend on the stored component would give `008000`.
     expect(fillFor('50%')).toBe('00BC00');
     expect(fillFor('50000')).toBe('00BC00');
+    expect(fillFor('+50000')).toBe('00BC00');
     for (const [percent, integer] of [
       ['0%', '0'],
       ['100%', '100000'],
@@ -459,19 +456,17 @@ describe('wps vector shape projection', () => {
       '%',
       '50 %',
       '1000000',
+      '-50000',
+      '++50000',
+      '+100001',
+      '+50%',
     ]) {
       expect(`${rejected}: ${fillFor(rejected)}`).toBe(`${rejected}: null`);
     }
   });
 
   // A ratio of 100000 is the identity, so the round trip through linear light and back must
-  // return the authored byte. The floor in `channelFromLinear` is one ulp away from turning
-  // every channel into the one below it, which no other case here would catch.
-  //
-  // This is the ONE expectation in this file asserted from first principles rather than
-  // measured: LibreOffice renders `010203` + `tint val="100000"` as `000103`, because it
-  // quantises through an integer percentage and loses the bottom channel. A 100% tint is by
-  // definition a no-op, so do not "correct" this toward the oracle.
+  // return the authored byte. A 100% tint or shade is by definition a no-op.
   test('a full-strength tint or shade returns the authored colour unchanged', () => {
     for (const transform of ['tint', 'shade'] as const) {
       const drawing = doubleRuleShapeDrawing().replace(
@@ -783,7 +778,7 @@ describe('wps vector shape projection', () => {
     const drawing = doubleRuleShapeDrawing().replace(
       '<a:solidFill><a:srgbClr val="000000"/></a:solidFill>',
       '<a:solidFill><a:schemeClr val="accent1">' +
-        '<a:lumMod val="10000001"/>' +
+        '<a:alphaOff val="150000"/>' +
         '</a:schemeClr></a:solidFill>'
     );
     const part = parsePart(`<w:p><w:r>${mcWrapped(drawing)}</w:r></w:p>`);

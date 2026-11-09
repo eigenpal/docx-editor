@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -25,7 +25,7 @@ function room(ids: readonly string[]) {
 
 const items = (children: Y.Array<LogicalId>): Y.Item[] => {
   const out: Y.Item[] = [];
-  for (let item = (children as unknown as { _start: Y.Item | null })._start; item; ) {
+  for (let item = (children as unknown as { _start: Y.Item | null })._start; item;) {
     if (!item.deleted) out.push(item);
     item = item.right;
   }

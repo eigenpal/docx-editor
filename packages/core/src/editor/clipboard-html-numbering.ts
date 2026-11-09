@@ -14,13 +14,7 @@ const WML_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
 
 export type HtmlListKind =
-  | 'bullet'
-  | 'none'
-  | 'decimal'
-  | 'upperRoman'
-  | 'lowerRoman'
-  | 'upperLetter'
-  | 'lowerLetter';
+  'bullet' | 'none' | 'decimal' | 'upperRoman' | 'lowerRoman' | 'upperLetter' | 'lowerLetter';
 
 export type HtmlListAlign = 'left' | 'center' | 'right';
 

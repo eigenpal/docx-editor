@@ -113,22 +113,20 @@ function* settleExclusionLayout(
     readonly limits?: { readonly reflow: number; readonly settling: number };
   }
 ): LayoutSteps<BlockLayoutResult | null> {
-  if (
-    !(
-      (options.inlineDrawingLayout ||
-        frameWrap.hasParagraphFrames(bodies, options.styleCascade) ||
-        tableWrap.hasFloatingTables(
-          bodies,
-          contentWidthForReflow,
-          options.styleCascade,
-          options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
-          options.revisionAuthorFilter,
-          options.compatibilityMode
-        )) &&
-      options.drawingExclusionPass === undefined &&
-      !options.drawingExclusionConverged
-    )
-  )
+  if (!(
+    (options.inlineDrawingLayout ||
+      frameWrap.hasParagraphFrames(bodies, options.styleCascade) ||
+      tableWrap.hasFloatingTables(
+        bodies,
+        contentWidthForReflow,
+        options.styleCascade,
+        options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
+        options.revisionAuthorFilter,
+        options.compatibilityMode
+      )) &&
+    options.drawingExclusionPass === undefined &&
+    !options.drawingExclusionConverged
+  ))
     return null;
   const sourceOrderOf = exclusionSourceOrderOf(options);
   const exclusionColumnLayout = exclusionColumnLayoutOf(columns, contentWidthForReflow);

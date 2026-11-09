@@ -88,36 +88,6 @@ export function topAndBottomSkipBeforeLine(
 }
 
 /**
- * How much of the first placed line's topAndBottom skip this paragraph's own anchor caused.
- *
- * The placement skip mixes two sources: bands inherited from earlier paragraphs, which
- * genuinely move this paragraph down the page, and a band from an anchor inside it, which
- * only moves its text away from a picture pinned to the paragraph origin. Re-running the
- * clearance with the inherited zones alone isolates the second. `spaceAbove` must be the
- * spacing the placed line kept, so both runs apply the same rule.
- */
-export function ownTopAndBottomSkip(
-  applied: number,
-  paragraphStartY: number,
-  firstLine: { readonly box: { readonly height: number } } | undefined,
-  context: {
-    readonly inheritedZones: readonly ExclusionZone[];
-    readonly spaceAbove: number;
-    readonly anchorClearanceBefore?: number;
-  }
-): number {
-  applied = Math.max(0, applied - (context.anchorClearanceBefore ?? 0));
-  if (!firstLine || applied <= 0.001) return 0;
-  const inherited = topAndBottomSkipBeforeLine(
-    paragraphStartY,
-    firstLine.box.height,
-    context.inheritedZones,
-    context.spaceAbove
-  );
-  return Math.max(0, applied - inherited);
-}
-
-/**
  * Story y where a `wp:wrapTopAndBottom` band starts: the drawing's own top, not the anchor line's.
  *
  * The band clears the drawing, so it begins where the drawing begins. A `wp:positionV` whose frame

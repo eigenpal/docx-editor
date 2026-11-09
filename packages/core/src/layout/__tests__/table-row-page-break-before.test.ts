@@ -99,8 +99,8 @@ describe('a table row whose first cell starts with a page break before', () => {
       paragraph('lead') + grid(['', '', breakBefore]) + paragraph('tail') + sect()
     );
     expect(pageTexts(layout)).toEqual(['lead a1 b1', 'a2 b2 tail']);
-    const [first, second] = layout.pages.map(
-      (page) => page.fragments.find((f) => f.kind === 'table')!
+    const [first, second] = layout.pages.map((page) =>
+      page.fragments.find((f) => f.kind === 'table')!
     );
     expect(first!.id.endsWith('#f0')).toBe(true);
     expect(second!.id.endsWith('#f1')).toBe(true);

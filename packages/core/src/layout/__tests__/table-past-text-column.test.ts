@@ -98,8 +98,9 @@ test('the rule starts just past the column, whatever the indent', () => {
   const url = `https://example.com/${'a'.repeat(99)}`;
   const indent = '<w:tblInd w:w="-108" w:type="dxa"/>';
   // The 451.3pt column is 9026 twips: a table exactly as wide breaks the URL to fit the
-  // column plus the 5.4pt its indent moves it into the margin.
-  expect(width(table(9026, [url], { tblPr: indent }))).toBeCloseTo(456.7, 0);
+  // column, plus the 5.4pt its indent moves it into the margin, plus its two 0.5pt outer
+  // cell margins, since its outer cells' content meets the text edges.
+  expect(width(table(9026, [url], { tblPr: indent }))).toBeCloseTo(457.7, 0);
   // 10.8pt wider, it grows to hold the URL, with or without a negative indent.
   expect(width(table(9242, [url], { tblPr: indent }))).toBeGreaterThan(600);
   expect(width(table(9242, [url]))).toBeGreaterThan(600);

@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The composition readback inserted text at a text control's trailing edge without naming the control, so the store gave the offset to the run after the control and forms protection refused it.",
+  "after": "A composition that begins at a collapsed caret names the control a keystroke there would type into, through the existing insertText inside field. The readback places the insert at that caret when the paragraph text is the same either way, so text that repeats the text after the control also stays in it.",
+  "reason": "Peers already apply insertText with inside, because typing and plain-text paste emit it. The change only decides locally which offset and control a composed insert names. Stored fields, operation encoding, identities, and repair rules do not change.",
+  "tests": [
+    "packages/core/src/editor/__tests__/content-control-trailing-edge.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-control-trailing-edge.test.ts"
+  ],
+  "changeset": "composition-control-trailing-edge",
+  "migration": null
+}

@@ -87,11 +87,7 @@ export interface FragmentCoverage {
 }
 
 export type FragmentExtractRejection =
-  | 'unknown-part'
-  | 'empty-range'
-  | 'trim-refused'
-  | 'resource-limit'
-  | 'unsupported-content';
+  'unknown-part' | 'empty-range' | 'trim-refused' | 'resource-limit' | 'unsupported-content';
 
 export type FragmentExtractResult =
   | {

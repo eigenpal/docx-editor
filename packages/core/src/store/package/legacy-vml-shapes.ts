@@ -646,16 +646,14 @@ export function legacyShapeFragment(
         (attr) =>
           !(
             // The embedded id supplies the pixels. A saved source link stays inert.
-            (
-              (attr.namespaceUri === RELATIONSHIPS_NAMESPACE_URI &&
-                (attr.localName === 'id' || attr.localName === 'href')) ||
-              (attr.localName === 'title' && attr.namespaceUri === OFFICE) ||
-              (!attr.namespaceUri &&
-                (['cropleft', 'croptop', 'cropright', 'cropbottom', 'chromakey'].includes(
-                  attr.localName
-                ) ||
-                  LEGACY_IMAGE_EFFECT_ATTRIBUTES.has(attr.localName)))
-            )
+            (attr.namespaceUri === RELATIONSHIPS_NAMESPACE_URI &&
+              (attr.localName === 'id' || attr.localName === 'href')) ||
+            (attr.localName === 'title' && attr.namespaceUri === OFFICE) ||
+            (!attr.namespaceUri &&
+              (['cropleft', 'croptop', 'cropright', 'cropbottom', 'chromakey'].includes(
+                attr.localName
+              ) ||
+                LEGACY_IMAGE_EFFECT_ATTRIBUTES.has(attr.localName)))
           )
       ) ||
       legacyImageEffects(image) === null

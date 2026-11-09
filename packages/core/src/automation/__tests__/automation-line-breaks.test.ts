@@ -522,14 +522,12 @@ describe('\\v in written text', () => {
     const { body } = roots(host);
     const paragraphs = handlesAt(host.execute({ operations: [{ op: 'getParagraphs', body }] }), 0);
     const response = host.execute({
-      operations: paragraphs.map(
-        (paragraph): AutomationOperation => ({
-          op: 'insertBreak',
-          span: { paragraph },
-          breakType: 'Line',
-          location: 'After',
-        })
-      ),
+      operations: paragraphs.map((paragraph): AutomationOperation => ({
+        op: 'insertBreak',
+        span: { paragraph },
+        breakType: 'Line',
+        location: 'After',
+      })),
     });
     expect(response.ok).toBe(true);
     expect(paragraphTexts(host, body)).toEqual(['Page\v', 'Form\v']);

@@ -12,6 +12,7 @@ export interface ToolbarValueMap {
   'list.lineSpacing': number;
   'image.wrap': ImageWrapTarget;
   'image.altText': string;
+  'insert.chart': import('../contracts/chart.ts').ChartType;
   'review.editingMode': 'editing' | 'suggesting' | 'viewing';
 }
 /** @public */

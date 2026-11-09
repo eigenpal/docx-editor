@@ -20,14 +20,7 @@ export interface TableContext {
 
 /** Which cell edges a table border command targets. */
 export type TableBorderTarget =
-  | 'all'
-  | 'outside'
-  | 'inside'
-  | 'none'
-  | 'top'
-  | 'bottom'
-  | 'left'
-  | 'right';
+  'all' | 'outside' | 'inside' | 'none' | 'top' | 'bottom' | 'left' | 'right';
 
 /** Concrete scopes that apply a complete border spec. */
 export type TableBorderEdgeTarget = Exclude<TableBorderTarget, 'none'>;

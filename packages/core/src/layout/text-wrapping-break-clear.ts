@@ -82,8 +82,7 @@ export function hardBreakPieceFields(node: OoxmlHardBreakNode): {
 /** Copy the break fields of piece extras onto the piece they decorate. */
 export function breakPieceFields(
   extras:
-    | { readonly breakKind?: HardBreakKind; readonly breakClear?: TextWrappingBreakClear }
-    | undefined
+    { readonly breakKind?: HardBreakKind; readonly breakClear?: TextWrappingBreakClear } | undefined
 ): { readonly breakKind?: HardBreakKind; readonly breakClear?: TextWrappingBreakClear } {
   if (!extras?.breakKind) return {};
   return {

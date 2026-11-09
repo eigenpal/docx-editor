@@ -32,6 +32,7 @@ import type { ParagraphSummary } from '../contracts/document.ts';
 import { classifyCommand } from './docx-editor-support.ts';
 import { NO_COPIED_FORMATTING } from './surface-format-painter-contract.ts';
 import { gateImageCommand, resolveSelectedDrawingRecord } from './docx-editor-images.ts';
+import { chartTargetIn } from '../store/store/tree-package-charts.ts';
 
 /** Whether a command may run, and the engine's own refusal when it may not. */
 export type CommandGate =
@@ -399,6 +400,12 @@ export function gateCommand(
     const refusal = gateImageCommand({ type: 'deleteImage' }, surface);
     return refusal && !refusal.ok ? { ok: false, refusal } : { ok: true };
   }
+  // One selected chart copies whole; a cut also deletes it, so it asks the delete's gate.
+  if ((command.type === 'copy' || command.type === 'cut') && selectedChartOf(surface)) {
+    if (command.type === 'copy') return { ok: true };
+    const refusal = gateImageCommand({ type: 'deleteImage' }, surface);
+    return refusal && !refusal.ok ? { ok: false, refusal } : { ok: true };
+  }
   if (command.type === 'copy' || command.type === 'cut' || command.type === 'deleteText') {
     const { anchor, head } = surface.state().selection;
     if (anchor.paragraphId === head.paragraphId && anchor.offset === head.offset) {
@@ -707,4 +714,12 @@ export function isInsideTocOf(surface: PaginatedSurface | null): boolean {
   return (
     !!surface && tocAtPosition(surface.session.part(), surface.state().selection.head) !== undefined
   );
+}
+
+/** Whether the selection is one chart drawing. */
+function selectedChartOf(surface: PaginatedSurface): boolean {
+  const record = resolveSelectedDrawingRecord(surface);
+  if (!record) return false;
+  const pkg = surface.session.currentPackage();
+  return chartTargetIn(pkg, record.ownerPartName, record.drawingNodeId) !== null;
 }

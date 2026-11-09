@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { strToU8, zipSync } from 'fflate';
+import { closeDemoPanel, openDemoSettings } from './demo-settings.ts';
 
 const source = zipSync({
   '[Content_Types].xml': strToU8(
@@ -83,7 +84,10 @@ for (const [adapter, port] of [
     page,
   }) => {
     await page.goto(`http://localhost:${port}/`);
-    await page.getByTitle('Dark mode', { exact: true }).click();
+    // The theme lives in the Settings tab of the demo side panel.
+    const settings = await openDemoSettings(page);
+    await settings.getByRole('radio', { name: 'Dark', exact: true }).check();
+    await closeDemoPanel(page);
     await page.emulateMedia({ reducedMotion: 'reduce' });
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {

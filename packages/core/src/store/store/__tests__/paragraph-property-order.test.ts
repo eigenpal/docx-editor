@@ -1,13 +1,26 @@
-// `CT_PPrBase` is a strict `xsd:sequence`. An element dropped in the wrong slot makes the
-// file unreadable in Word even when every value in it is correct, and nothing downstream
-// catches it — the tree still reads, the layout still paints, and only Word complains.
+// `CT_PPrBase` is a strict `xsd:sequence`. Consumers refuse a file with an element in the
+// wrong slot even when every value in it is correct, and nothing downstream catches it: the
+// tree still reads, and the layout still paints.
 
 import { describe, expect, test } from 'bun:test';
 import { CT_PPR_SEQUENCE, schemaInsertIndex } from '../tree-op-properties.ts';
 import type { OoxmlNode } from '../../package/ooxml-tree.ts';
 
-const el = (localName: string): OoxmlNode =>
-  ({ kind: 'generic', id: localName, localName, children: [] }) as unknown as OoxmlNode;
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+
+/** A `w:` child, or a `w14:` one when `name` carries that prefix. */
+const el = (name: string): OoxmlNode => {
+  const extension = name.startsWith('w14:');
+  const localName = extension ? name.slice(4) : name;
+  return {
+    kind: 'generic',
+    id: name,
+    namespaceUri: extension ? W14 : W,
+    localName,
+    children: [],
+  } as unknown as OoxmlNode;
+};
 
 describe('schemaInsertIndex ranks against the WHOLE sequence', () => {
   test('w:tabs lands after every element that outranks it', () => {

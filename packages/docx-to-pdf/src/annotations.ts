@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -19,13 +19,7 @@ import type { SemanticSpanVisit } from '@docx-editor.dev/core/layout';
 import { pageHeight, pdfLiteralUri, Work } from './context.ts';
 
 type Literal =
-  | string
-  | number
-  | boolean
-  | null
-  | PDFObject
-  | Literal[]
-  | { [key: string]: Literal | undefined };
+  string | number | boolean | null | PDFObject | Literal[] | { [key: string]: Literal | undefined };
 function add(
   doc: PDFDocument,
   page: PDFPage,

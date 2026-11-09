@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -104,8 +104,7 @@ export function linearizeParagraph(paragraph: OoxmlElement): LinearParagraph {
   };
   const visitRun = (run: OoxmlElement, wrap: readonly ElementShell[]): void => {
     const rPr = run.children.find((child) => child.kind === 'runProperties') as
-      | OoxmlElement
-      | undefined;
+      OoxmlElement | undefined;
     const base: LinearAttributes = {
       ...none,
       run: shellOf(run),

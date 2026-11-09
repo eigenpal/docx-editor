@@ -38,12 +38,7 @@ import { vmlShapesOf } from './vml-shapes.ts';
 
 /** Word's shape types, as `Word.ShapeType` spells them. */
 export type AutomationShapeType =
-  | 'TextBox'
-  | 'GeometricShape'
-  | 'Picture'
-  | 'Group'
-  | 'Canvas'
-  | 'Unsupported';
+  'TextBox' | 'GeometricShape' | 'Picture' | 'Group' | 'Canvas' | 'Unsupported';
 
 /** What a shape read answers. */
 export interface AutomationShapeRead {

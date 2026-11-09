@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -19,12 +19,7 @@ const STYLES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relati
 
 /** A document-level part a compare reads and writes. */
 export type RelatedPartKind =
-  | 'styles'
-  | 'numbering'
-  | 'settings'
-  | 'footnotes'
-  | 'endnotes'
-  | 'comments';
+  'styles' | 'numbering' | 'settings' | 'footnotes' | 'endnotes' | 'comments';
 
 /**
  * The part of `kind` that the editor's own readers use, with their relationship resolution and

@@ -1,11 +1,18 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readOoxmlPart, serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../../layout/semantic-layout.ts';
 import { DEFAULT_RUN_STYLE } from '../../layout/run-style.ts';
 import { paintSemanticLayout } from '../semantic-paint.ts';
 import { applyTextOutline } from '../semantic-paint-text-outline.ts';
+import { recordWebkitStyleWrites } from './style-writes.ts';
+
+let styles: ReturnType<typeof recordWebkitStyleWrites>;
+beforeEach(() => {
+  styles = recordWebkitStyleWrites();
+});
+afterEach(() => styles.stop());
 
 describe('text outline paint', () => {
   test('paints a glyph stroke at zoom scale, retaining one selectable text node and fill', () => {
@@ -19,8 +26,10 @@ describe('text outline paint', () => {
     const container = document.createElement('div');
     paintSemanticLayout(container, layout, { scale: 2 });
     const span = container.querySelector<HTMLElement>('.layout-run-text')!;
-    expect(span.style.getPropertyValue('-webkit-text-stroke-width')).toBe('2px');
-    expect(span.style.getPropertyValue('-webkit-text-stroke-color')).toBe('#00AA00');
+    expect(styles.writes).toEqual([
+      ['-webkit-text-stroke-width', '2px'],
+      ['-webkit-text-stroke-color', '#00AA00'],
+    ]);
     expect(span.style.color).toBe('#CC0000');
     expect(span.style.fontWeight).toBe('');
     expect(span.childNodes).toHaveLength(1);
@@ -41,6 +50,7 @@ describe('text outline paint', () => {
       const css = document.createElement('span').style;
       applyTextOutline(css, { ...DEFAULT_RUN_STYLE, textOutline: outline }, 1);
       expect(css.cssText).toBe('');
+      expect(styles.writes).toEqual([]);
     }
     for (const scale of [0, -1, Infinity, NaN]) {
       const css = document.createElement('span').style;
@@ -50,11 +60,13 @@ describe('text outline paint', () => {
         scale
       );
       expect(css.cssText).toBe('');
+      expect(styles.writes).toEqual([]);
     }
   });
   test('ordinary run styles do not acquire a stroke', () => {
     const css = document.createElement('span').style;
     applyTextOutline(css, DEFAULT_RUN_STYLE, 1);
     expect(css.cssText).toBe('');
+    expect(styles.writes).toEqual([]);
   });
 });

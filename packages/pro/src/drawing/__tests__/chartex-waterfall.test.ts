@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -178,8 +178,8 @@ describe('labels and frame', () => {
     const projection = project();
     const texts = labels(projection);
     expect(texts[0]!.text).toBe('Chart Title');
-    const legend = ['Increase', 'Decrease', 'Total'].map(
-      (name) => texts.find((label) => label.text === name)!
+    const legend = ['Increase', 'Decrease', 'Total'].map((name) =>
+      texts.find((label) => label.text === name)!
     );
     expect(new Set(legend.map((label) => label.y.toFixed(2))).size).toBe(1);
     expect(legend[0]!.x).toBeLessThan(legend[1]!.x);

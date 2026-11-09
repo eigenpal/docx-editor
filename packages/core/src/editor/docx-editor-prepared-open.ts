@@ -161,7 +161,7 @@ export function openSteps(
   // Font work, in calls a deadline can fall between: plain blocks in batches, a table a few
   // rows at a time and then as a whole (its rows are cached by then).
   const fontCalls: (() => void)[] = [];
-  for (let start = 0; start < blocks.length; ) {
+  for (let start = 0; start < blocks.length;) {
     const block = blocks[start]!;
     if (block.kind === 'table') {
       for (let row = 0; row < block.children.length; row += FONT_WARM_ROWS) {

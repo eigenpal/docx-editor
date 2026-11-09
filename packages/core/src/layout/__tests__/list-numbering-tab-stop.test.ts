@@ -146,7 +146,8 @@ describe('a numbering tab stops at an authored stop before the text indent', () 
 
   test('space and nothing suffixes ignore tab stops', () => {
     const body = item(tabs(stop(1200)));
-    expect(textStart(body, { suffix: 'space' })).toBe(54);
+    // The 11pt marker ends at 48; the space suffix is 569/2048 em of its size.
+    expect(textStart(body, { suffix: 'space' })).toBeCloseTo(48 + (569 / 2048) * 11, 6);
     expect(textStart(body, { suffix: 'nothing' })).toBe(48);
   });
 
