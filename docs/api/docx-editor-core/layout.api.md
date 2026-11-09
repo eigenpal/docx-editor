@@ -225,6 +225,7 @@ export interface CanvasTextContext {
     textAlign?: 'left' | 'right' | 'center' | 'start' | 'end';
     // (undocumented)
     textBaseline?: 'top' | 'hanging' | 'middle' | 'alphabetic' | 'ideographic' | 'bottom';
+    textRendering?: 'auto' | 'optimizeSpeed' | 'optimizeLegibility' | 'geometricPrecision';
 }
 
 // @public

@@ -244,6 +244,8 @@ export interface CanvasTextContext {
   font: string;
   /** Optional browser kerning control; older contexts retain their native behavior. */
   fontKerning?: 'auto' | 'normal' | 'none';
+  /** Optional glyph advance control; older contexts retain their native behavior. */
+  textRendering?: 'auto' | 'optimizeSpeed' | 'optimizeLegibility' | 'geometricPrecision';
   textAlign?: 'left' | 'right' | 'center' | 'start' | 'end';
   direction?: 'ltr' | 'rtl' | 'inherit';
   textBaseline?: 'top' | 'hanging' | 'middle' | 'alphabetic' | 'ideographic' | 'bottom';
@@ -343,6 +345,9 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
   if (!isCanvasMeasurementAvailable(context)) return null;
   // Narrowed by the guard above.
   const ctx = context!;
+  // Paint draws unhinted advances (`isolatePageFromHost`). Hinted canvas advances, rounded to
+  // whole pixels for a web font on Chromium for Linux, would measure other widths.
+  if ('textRendering' in ctx) ctx.textRendering = 'geometricPrecision';
 
   const widthCache = createBoundedLruCache<string, number>(
     normalizeCacheCapacity(options.maxWidthEntries, DEFAULT_MAX_CANVAS_WIDTH_CACHE_ENTRIES)
