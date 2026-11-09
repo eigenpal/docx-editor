@@ -87,7 +87,7 @@ async function pairOfEditors() {
     );
     for (const editor of [alice, bob]) {
       expect(editor.surface!.session.bodyText()).toBe(text);
-      expect(prompts(editor)).toEqual(shown);
+      expect(prompts(editor)).toEqual([...shown]);
     }
   };
   /** Runs both peers' edits offline, then lets them meet. */
