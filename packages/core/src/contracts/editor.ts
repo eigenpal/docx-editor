@@ -49,6 +49,8 @@ export type {
   HighlightRect,
   HighlightResult,
 } from './editor-highlights.ts';
+import type { EditorParagraphText } from './editor-paragraph-text.ts';
+export type { EditorParagraphText, ParagraphText, TextSpan } from './editor-paragraph-text.ts';
 import type { EditorReviewHits } from './editor-review-hits.ts';
 import type { ReviewItemQuery } from './editor-review-query.ts';
 export type { ReviewItemQuery } from './editor-review-query.ts';
@@ -283,7 +285,8 @@ export type CanResult = { ok: true } | { ok: false; code: ExecErrorCode; reason:
  * const bytesOut = await editor.save();
  * ```
  */
-export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits {
+export interface Editor
+  extends EditorAnchorNavigation, EditorHighlights, EditorParagraphText, EditorReviewHits {
   /**
    * Load a new document (DOCX bytes, `'blank'`, or a handle), replacing the current one.
    *

@@ -131,7 +131,9 @@ export function carryPagePlacedIds(from: PageRecord, to: PageRecord): void {
   const ids = pagePlacedCache.get(from);
   if (ids) pagePlacedCache.set(to, ids);
 }
-function pagePlacedIds(page: PageRecord): readonly string[] {
+
+/** @internal Every paragraph id with a laid-out line on one page, in the order it paints them. */
+export function pagePlacedIds(page: PageRecord): readonly string[] {
   const cached = pagePlacedCache.get(page);
   if (cached) return cached;
   const ids = new Set<string>();

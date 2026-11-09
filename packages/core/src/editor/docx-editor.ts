@@ -33,6 +33,7 @@ import { createEditorScrolling } from './docx-editor-scroll.ts';
 import { createAnchorNavigation } from './docx-editor-anchor-navigation.ts';
 import { createTextHighlights } from './text-highlights.ts';
 import { createReviewItemsAt } from './review-items-at.ts';
+import { createParagraphTextReads } from './paragraph-text-read.ts';
 import { reviewItemPlacement } from './review-placement-cache.ts';
 import {
   findReviewPlacement,
@@ -2516,6 +2517,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     ...zoomFacadeMembers(zoomLane, () => surface),
     ...highlights.members,
     ...createReviewItemsAt({ frame: highlights.frame, placements: reviewPlacements }),
+    ...createParagraphTextReads({ surface: () => surface, frame: highlights.frame }),
 
     ...createEditorPointMembers(
       () => surface,

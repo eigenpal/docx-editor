@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A host could not read paragraph text in the offsets that setHighlights takes without internal store functions.",
+  "after": "Editor.getParagraphText and Editor.getPaintedParagraphs return paragraph text, tracked deletion spans, and the paragraphs on the painted pages.",
+  "reason": "The new members only read the canonical tree and the painted layout. Canonical OOXML, source offsets, operations, and collaboration formats remain unchanged.",
+  "tests": ["packages/core/src/editor/__tests__/paragraph-text.test.ts"],
+  "changeset": "paragraph-text-read",
+  "migration": null
+}

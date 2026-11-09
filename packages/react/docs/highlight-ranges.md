@@ -25,6 +25,32 @@ export function GlossaryMarks({ terms }: { terms: readonly string[] }) {
 
 A function source runs again after each document change, so the marks follow the text. The set is removed when the component unmounts.
 
+## Highlight ranges that you compute
+
+To mark ranges that `findMatches()` cannot find, such as misspelled words, read the paragraph text. `editor.getPaintedParagraphs()` returns the text of each paragraph on the painted pages. `editor.getParagraphText(blockId)` returns one paragraph. The offsets in `text` are the offsets that `setHighlights()` takes.
+
+```ts
+import type { Editor, HighlightRange } from '@docx-editor.dev/core';
+
+function misspelledRanges(editor: Editor, isMisspelled: (word: string) => boolean) {
+  const ranges: HighlightRange[] = [];
+  for (const { blockId, text, deletions } of editor.getPaintedParagraphs()) {
+    for (const word of text.matchAll(/\p{L}+/gu)) {
+      const start = word.index;
+      const deleted = deletions.some(
+        (span) => start >= span.start && start < span.start + span.length
+      );
+      if (!deleted && isMisspelled(word[0])) {
+        ranges.push({ blockId, start, length: word[0].length, expectedText: word[0] });
+      }
+    }
+  }
+  return ranges;
+}
+```
+
+`text` includes tracked deletions. Use `deletions` to skip them. A field counts as one character. The painted pages change as the reader scrolls, so read the paragraphs again then.
+
 ## Configure a highlight set
 
 | Argument or field | Description |
