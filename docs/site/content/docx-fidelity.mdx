@@ -132,6 +132,8 @@ See [Pages and sections](#pages-and-sections) for page break and section rules.
 
 <FeatureMatrix category="structure" />
 
+Typing and plain paste preserve partially selected ending prompts. Rich paste at that boundary is unsupported. For editing rules, see [Content controls](/docs/2.x/guides/content-controls).
+
 ### Collaboration, languages, and editing
 
 <FeatureMatrix category="collaboration" />
@@ -296,6 +298,7 @@ East Asian spacing and punctuation rules depend on `w:rPrDefault` in the styles 
 | `w:overflowPunct` | Lets a line-end mark hang past the margin. See [Compatibility mode differences](#compatibility-mode-differences). |
 | `w:characterSpacingControl` | `compressPunctuationAndJapaneseKana` lets kana compress by up to 1/16 em to fit a prohibited character on a full line. |
 | `w:kern` | At the font size in both runs, adjacent full-width punctuation shares a half-cell bearing. Kana and ideographs keep their advances. |
+| `w:balanceSingleByteDoubleByteWidth` | Balances spaces beside East Asian text and repeated spaces. Modern distributed character spacing uses each space's original font advance. |
 | `w:noPunctuationKerning` | Turns off punctuation pair compression. |
 | Font hints (`w:hint="eastAsia"`) | Select the East Asian face for punctuation, symbols, Greek, and Cyrillic. Missing glyphs keep the Latin face. |
 

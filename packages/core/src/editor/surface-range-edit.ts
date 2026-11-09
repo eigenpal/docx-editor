@@ -67,6 +67,7 @@ import {
   keepPromptsWhole,
   promptRemoval,
   promptSelected,
+  promptsIn,
   selectionOverPrompts,
   type PlannedDeletion,
   type Prompt,
@@ -131,6 +132,11 @@ export interface SurfaceRangeEditOps {
   promptIsSelected(): boolean;
   splitEndsTheParagraph(position: SemanticPosition): boolean;
   deleteSelectionPlan(trackedAuthor?: string): RangeDeletionPlan;
+  /** Typing keeps an ending prompt when the range starts outside that prompt. */
+  typingSelectionPlan(): RangeDeletionPlan & { readonly outsidePromptId?: string };
+  retainPromptBoundary(controlId?: string): void;
+  clearPromptBoundary(): void;
+  promptBoundary(): string | undefined;
   deleteSelectionOps(): readonly TreeDocOp[];
   /** The plan for an explicit range of the active story; the selection does not move. */
   deleteRangePlan(range: SemanticSelection): {
@@ -418,6 +424,51 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
         return landing;
       },
     };
+  }
+
+  let outsidePromptId: string | undefined;
+  function typingOutsidePrompt(): boolean {
+    const selection = deps.selection();
+    if (
+      selection.anchor.paragraphId !== selection.head.paragraphId ||
+      selection.anchor.offset !== selection.head.offset ||
+      !outsidePromptId
+    )
+      return false;
+    const part = partOfNodeId(session, selection.head.paragraphId) ?? session.part();
+    return promptsIn(part, selection.head.paragraphId).some(
+      (prompt) =>
+        prompt.control.id === outsidePromptId &&
+        prompt.start === selection.head.offset &&
+        !prompt.struck
+    );
+  }
+
+  function typingSelectionPlan(): RangeDeletionPlan & { readonly outsidePromptId?: string } {
+    const { from, to } = orderedRange();
+    if (planCells()) return deleteSelectionPlan();
+    if (typingOutsidePrompt()) return { ...deleteSelectionPlan(), outsidePromptId };
+    const part = partOfNodeId(session, to.paragraphId) ?? session.part();
+    const prompt = promptsIn(part, to.paragraphId).find(
+      (item) => to.offset > item.start && to.offset < item.end
+    );
+    if (!prompt || prompt.locked || prompt.struck) return deleteSelectionPlan();
+    if (from.paragraphId === to.paragraphId && from.offset >= prompt.start) {
+      return deleteSelectionPlan();
+    }
+    // Keep the prompt outside the replacement and retain that side for later keystrokes.
+    const outer = rangeOverride;
+    rangeOverride = { anchor: from, head: { ...to, offset: prompt.start } };
+    try {
+      const plan = deleteSelectionPlan();
+      return {
+        ...plan,
+        replaceAt: plan.replaceAt ?? plan.collapseTo,
+        outsidePromptId: prompt.control.id,
+      };
+    } finally {
+      rangeOverride = outer;
+    }
   }
 
   /**
@@ -765,6 +816,14 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     promptIsSelected,
     splitEndsTheParagraph,
     deleteSelectionPlan,
+    typingSelectionPlan,
+    retainPromptBoundary: (controlId) => {
+      outsidePromptId = controlId;
+    },
+    clearPromptBoundary: () => {
+      outsidePromptId = undefined;
+    },
+    promptBoundary: () => (typingOutsidePrompt() ? outsidePromptId : undefined),
     deleteSelectionOps,
     deleteRangePlan,
     replacementOffset,

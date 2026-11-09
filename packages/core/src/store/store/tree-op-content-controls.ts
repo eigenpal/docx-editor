@@ -276,11 +276,7 @@ export interface TreeOpTarget {
 }
 
 /** A point at which content is written: the leading edge of a control belongs to the control. */
-const writingAt = (
-  nodeId: string,
-  offset: number,
-  bias: 'left' | 'right' = 'left'
-): TreeOpReach => ({
+const writingAt = (nodeId: string, offset: number, bias?: 'left' | 'right'): TreeOpReach => ({
   kind: 'nodes',
   targets: [
     { nodeId, range: { start: offset, end: offset }, writes: true, point: 'run-content', bias },
@@ -372,9 +368,9 @@ const TREE_OP_REACH: {
             },
           ],
         },
-  insertTab: (op) => writingAt(op.paragraphId, op.offset),
-  insertHardBreak: (op) => writingAt(op.paragraphId, op.offset),
-  insertPageBreak: (op) => writingAt(op.paragraphId, op.offset),
+  insertTab: (op) => writingAt(op.paragraphId, op.offset, op.bias),
+  insertHardBreak: (op) => writingAt(op.paragraphId, op.offset, op.bias),
+  insertPageBreak: (op) => writingAt(op.paragraphId, op.offset, op.bias),
   insertPageField: (op) => writingAt(op.paragraphId, op.offset),
   insertComplexField: (op) => writingAt(op.paragraphId, op.offset),
   insertEquation: (op) => writingAt(op.paragraphId, op.offset),
@@ -549,7 +545,7 @@ const TREE_OP_REACH: {
   setTableProperties: (op) => each([op.tableId]),
   setTableCellFill: (op) => each(op.cellIds),
   setTableCellVerticalAlignment: (op) => each(op.cellIds),
-  insertDrawing: (op) => writingAt(op.paragraphId, op.offset),
+  insertDrawing: (op) => writingAt(op.paragraphId, op.offset, op.bias),
   replaceDrawingResource: (op) => whole(op.drawingNodeId),
   deleteDrawing: (op) => ({
     kind: 'nodes',

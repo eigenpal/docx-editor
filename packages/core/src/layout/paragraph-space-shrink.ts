@@ -15,6 +15,8 @@ import { withoutTrailingZeroWidthSpaces } from './trailing-spaces.ts';
 import { authoredCjkGapMetric } from './cjk-auto-spacing-metric-port.ts';
 import { knownFamilyReverseGap } from './authored-average-widths.ts';
 import { opensWithWidenedSpaces } from './balanced-line-start.ts';
+import { isBalancedSpace } from './balanced-space-widths.ts';
+import { balancedStretchRatio } from './balanced-space-stretch.ts';
 
 // No-break spaces join their neighbours into one word. They have width, never break the
 // line, and never hang, so the word-shape tests read them as word characters.
@@ -106,6 +108,18 @@ function capacity(
   );
   if (floor?.value !== undefined) return Math.max(0, space - floor.value);
   return space * limit;
+}
+
+/**
+ * What the space closing `span` can give up. With `keepsBalancedSpaces`, a space at the
+ * balanced width keeps it and gives up nothing.
+ */
+function lendingCapacity(
+  span: StyleSpanRecord,
+  space: number,
+  keepsBalancedSpaces: boolean
+): number {
+  return keepsBalancedSpaces && space > 0 && isBalancedSpace(span) ? 0 : space;
 }
 
 /** Space floors by face style and kind; one style serves every span and line that uses it. */
@@ -224,11 +238,12 @@ export interface ShrinkWord {
  * - `false`: the word does not join the line.
  *
  * Only an ordinary word followed by a space, or the paragraph's last word, can borrow
- * existing inter-word space. Each space gives up at most `rule.limit` of its advance, and the
- * shrink must pass the rule's cost test against the stretch of the line without the word. A
- * word whose final mark may hang (`hangingMarkAdvance` is its advance) joins when the spaces
- * reach their limit before the mark fits, as long as they fit the text before the mark and
- * the rule hangs marks. Its mark then hangs.
+ * existing inter-word space. Each space gives up at most `rule.limit` of its advance, a space
+ * at the balanced width nothing under `rule.keepsBalancedSpaces`, and the shrink must pass the
+ * rule's cost test against the stretch of the line without the word. A word whose final mark
+ * may hang (`hangingMarkAdvance` is its advance) joins when the spaces reach their limit
+ * before the mark fits, as long as they fit the text before the mark and the rule hangs marks.
+ * Its mark then hangs.
  *
  * A word that straddles a source-run seam (a quoted bold term, a semicolon left in the next
  * run) overflows on a later piece than the one that opened it. The kept line still runs to
@@ -287,13 +302,16 @@ export function spaceShrinkFit(
   // of it carry its stretch, and the space in front of it is the one that hangs.
   // One capacity per span serves the budget, the hanging space and the spaces ahead of the
   // word, each summed in span order; reading every span again measured each word again.
+  // A space at the balanced width lends nothing, but the shorter line still stretches it, and
+  // it still hangs at full width after the last word.
+  const keepsBalancedSpaces = rule.keepsBalancedSpaces === true;
   const beforeEnd = Math.max(first, Math.min(wordStart, spans.length));
   const capacities: number[] = [];
   let budget = 0;
   for (let index = first; index < spans.length; index += 1) {
-    const slot = capacity(spans[index]!, measurer, rule.limit, rule.floor);
-    capacities.push(slot);
-    budget += slot;
+    const space = capacity(spans[index]!, measurer, rule.limit, rule.floor);
+    capacities.push(space);
+    budget += lendingCapacity(spans[index]!, space, keepsBalancedSpaces);
   }
   if (rule.everyAlignment)
     for (const space of clippedSpacesBefore(spans, beforeEnd, first, measurer)) {
@@ -309,8 +327,10 @@ export function spaceShrinkFit(
   const spaceWidth = budget / rule.limit;
   // Every space after the last word hangs there: a run of spaces as well as the word's own.
   let terminalSpace = 0;
+  let terminalSpans = 0;
   for (let index = beforeEnd - 1; index >= first; index -= 1) {
     terminalSpace += capacities[index - first]! / rule.limit;
+    terminalSpans += 1;
     if (!/^ +$/.test(spans[index]!.text)) break;
   }
   let beforeSpaces = 0;
@@ -319,7 +339,15 @@ export function spaceShrinkFit(
   }
   const existingSpaces = beforeSpaces - terminalSpace;
   if (existingSpaces <= 0) return false;
-  const expansion = 1 + Math.max(0, available - wordStartWidth + terminalSpace) / existingSpaces;
+  const shorterSlack = Math.max(0, available - wordStartWidth + terminalSpace);
+  // With balanced spaces, the shorter line widens its narrower spaces first.
+  const expansion =
+    (keepsBalancedSpaces
+      ? balancedStretchRatio(
+          balancedSlots(spans, capacities, first, beforeEnd - terminalSpans, rule.limit),
+          shorterSlack
+        )
+      : undefined) ?? 1 + shorterSlack / existingSpaces;
   // The word joins the line when each space loses at most 1/cost of what the shorter line
   // would add to it.
   const shrink = (needed - mark * (1 - (rule.markCost ?? 1))) / spaceWidth;
@@ -420,12 +448,15 @@ export function shrinkJustifiedSpans(
   measurer: TextMeasurer,
   slotEnd: number = spans.length - 1,
   floor?: SpaceShrinkFloor,
-  paragraphRtl = false
+  paragraphRtl = false,
+  keepsBalancedSpaces = false
 ): readonly StyleSpanRecord[] {
   const first = firstShrinkSlot(spans);
   // Admission kept `needed` within the paragraph's rule; equal shares never pass a quarter.
   const capacities = spans.map((span, index) =>
-    index >= first && index < slotEnd ? capacity(span, measurer, 0.25, floor) : 0
+    index >= first && index < slotEnd
+      ? lendingCapacity(span, capacity(span, measurer, 0.25, floor), keepsBalancedSpaces)
+      : 0
   );
   if (needed <= 0 || needed > capacities.reduce((a, b) => a + b, 0) + 0.001) return spans;
   const amounts = capacities.map(() => 0);
@@ -487,4 +518,31 @@ function shrinkSpanStyles(
     shift += amount;
     return result;
   });
+}
+
+/**
+ * The space runs of `spans[first, end)` for {@link balancedStretchRatio}: each span's closing
+ * spaces, from its capacity at `limit`, and whether they lend.
+ */
+function balancedSlots(
+  spans: readonly StyleSpanRecord[],
+  capacities: readonly number[],
+  first: number,
+  end: number,
+  limit: number
+): { spaces: number; width: number; lends: boolean }[] {
+  const slots: { spaces: number; width: number; lends: boolean }[] = [];
+  for (let index = first; index < end; index += 1) {
+    const total = capacities[index - first]! / limit;
+    if (total <= 0) continue;
+    const text = spans[index]!.text;
+    let spaces = 0;
+    while (spaces < text.length && text[text.length - 1 - spaces] === ' ') spaces += 1;
+    slots.push({
+      spaces: Math.max(1, spaces),
+      width: total / Math.max(1, spaces),
+      lends: !isBalancedSpace(spans[index]!),
+    });
+  }
+  return slots;
 }

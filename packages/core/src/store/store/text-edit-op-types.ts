@@ -34,6 +34,8 @@ export type InsertTextOp = {
    * STARTS at the offset — the hyperlink editor rewriting a link's display text, where
    * landing left of the boundary would put the new text outside the link. Ignored when
    * the offset falls strictly inside a run, which has no boundary to choose.
+   * Explicit `'left'` keeps an inline placeholder at its leading edge outside the write.
+   * An omitted bias retains the ordinary placeholder-filling rule. A named owner takes precedence.
    */
   readonly bias?: 'left' | 'right';
 };

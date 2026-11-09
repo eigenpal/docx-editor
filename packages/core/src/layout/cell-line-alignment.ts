@@ -83,7 +83,8 @@ export function alignCellLine(
         measure.passages,
         paragraphDistributedSpacing(shared.props, shared.styleCascade),
         shared.styleCascade?.typography?.eastAsianSpacing !== false,
-        pendingLine
+        pendingLine,
+        shared.styleCascade?.typography?.balancedSpaceShrink === true
       ),
     (aligned) => lineAlignOffset(placedSpans, aligned, alignment, measure.available, measure.used)
   );
