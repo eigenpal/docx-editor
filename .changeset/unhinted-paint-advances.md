@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': patch
+'@docx-editor.dev/core': minor
 ---
 
-Text painted in an embedded or supplied font now sits at the advances that layout measures in Chromium on Linux, so highlights, the selection, and the caret no longer drift from the painted glyphs along a line. The canvas measurer now asks for the same unhinted advances. In Chromium on Linux, text that layout measures with the canvas, such as text in a font that the document does not embed, can measure a different width than before, so lines and page starts of such documents can move.
+Add `textRendering` to the canvas measurement context and align painted text with unhinted glyph advances. Canvas-measured text can change line and page breaks in Chromium on Linux.
