@@ -10,6 +10,7 @@ import { segmentGraphemes } from '../layout/grapheme.ts';
 import type { StyleSpanRecord } from '../layout/semantic-records.ts';
 import { syntheticBoldAdvancePt, unspacedBlankRuns } from '../layout/synthetic-bold.ts';
 import { withoutTrailingZeroWidthSpaces } from '../layout/trailing-spaces.ts';
+import { browserBoldWideningPx } from './synthetic-bold-widening.ts';
 
 /**
  * The fields of a laid span that decide whether it owns the gap after it. A
@@ -66,9 +67,17 @@ export function absorbsLetterGap(span: GapSpan, next: GapSpan): boolean {
   return true;
 }
 
-/** The `letter-spacing` that paints `gap` after the character: its own spacing plus the gap. */
-export function letterGapSpacing(span: StyleSpanRecord, gap: number, scale: number): string {
-  return `${(paintedLetterSpacingPt(span) + gap) * scale}px`;
+/**
+ * The `letter-spacing` that paints `gap` after the character of `span`, painted in `element`:
+ * its own spacing plus the gap.
+ */
+export function letterGapSpacing(
+  element: HTMLElement,
+  span: StyleSpanRecord,
+  gap: number,
+  scale: number
+): string {
+  return `${paintedLetterSpacingPx(element, span, scale) + gap * scale}px`;
 }
 
 /**
@@ -111,16 +120,33 @@ export function syntheticBoldSpacingPt(span: StyleSpanRecord): number {
 }
 
 /**
- * The letter spacing paint gives each character of a span, in points: the span's own character
- * spacing plus {@link syntheticBoldSpacingPt}.
+ * The letter spacing paint gives each character of `span`, in CSS pixels in the coordinates of
+ * `element`, which carries the span's font: the span's own character spacing, plus
+ * {@link syntheticBoldSpacingPt} less the widening the browser gives a synthesized bold itself
+ * ({@link browserBoldWideningPx}).
+ *
+ * `horizontalFactor` is the horizontal scale of an element whose own transform scales its
+ * glyphs. Layout scales the extra advance of synthesized bold with the glyphs, but not the
+ * character spacing, so only the character spacing is divided by it.
  *
  * @internal
  */
-export function paintedLetterSpacingPt(span: StyleSpanRecord): number {
-  return span.style.characterSpacingPt + syntheticBoldSpacingPt(span);
+export function paintedLetterSpacingPx(
+  element: HTMLElement,
+  span: StyleSpanRecord,
+  scale: number,
+  horizontalFactor = 1
+): number {
+  const own = (span.style.characterSpacingPt * scale) / horizontalFactor;
+  const bold = syntheticBoldSpacingPt(span);
+  return bold === 0 ? own : own + bold * scale - browserBoldWideningPx(element, span);
 }
 
-/** Apply {@link syntheticBoldSpacingPt} to a painted span. @internal */
+/**
+ * Apply {@link syntheticBoldSpacingPt} to a painted span. Word spacing takes the whole extra
+ * back from each space: letter spacing and the browser's own widening together add exactly that
+ * extra to every character. @internal
+ */
 export function applySyntheticBoldSpacing(
   element: HTMLElement,
   span: StyleSpanRecord,
@@ -128,7 +154,7 @@ export function applySyntheticBoldSpacing(
 ): void {
   const spacing = syntheticBoldSpacingPt(span);
   if (spacing === 0) return;
-  element.style.letterSpacing = `${paintedLetterSpacingPt(span) * scale}px`;
+  element.style.letterSpacing = `${paintedLetterSpacingPx(element, span, scale)}px`;
   element.style.wordSpacing = `${-spacing * scale}px`;
 }
 
@@ -138,12 +164,14 @@ export function applySyntheticBoldSpacing(
  * Layout cuts U+3000 and the other blanks that word spacing cannot reach into spans of their
  * own. A field result or other projected span stays whole, so paint draws each such blank in a
  * child that drops the extra letter spacing. Selection never maps into projected text, so the
- * extra text nodes cost nothing there. `host` holds the span's text as one text node.
+ * extra text nodes cost nothing there. `element` carries the span's font, and `host` holds
+ * the span's text as one text node.
  *
  * @internal
  */
 export function paintUnspacedBlanks(
   document: Document,
+  element: HTMLElement,
   host: HTMLElement,
   span: StyleSpanRecord,
   scale: number
@@ -152,12 +180,14 @@ export function paintUnspacedBlanks(
   const text = host.textContent ?? '';
   const blanks = unspacedBlankRuns(text);
   if (blanks.length === 0) return;
+  // The browser widens a blank of a synthesized bold too; the child takes that back.
+  const widening = browserBoldWideningPx(element, span);
   const nodes: Node[] = [];
   let from = 0;
   for (const blank of blanks) {
     if (blank.from > from) nodes.push(document.createTextNode(text.slice(from, blank.from)));
     const child = document.createElement('span');
-    child.style.letterSpacing = `${span.style.characterSpacingPt * scale}px`;
+    child.style.letterSpacing = `${span.style.characterSpacingPt * scale - widening}px`;
     child.textContent = text.slice(blank.from, blank.to); // SAFE: textContent, never innerHTML
     nodes.push(child);
     from = blank.to;

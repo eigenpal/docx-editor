@@ -5,7 +5,7 @@
 // adds the extra as letter spacing and takes it back from spaces. The model browser here draws
 // every character one em wide at the run's size, plus the spacing paint asks for. As in
 // Chromium, letter spacing widens every character and word spacing only U+0020 and U+00A0.
-import { expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import {
@@ -30,6 +30,7 @@ import {
 import { syntheticBoldAdvancePt } from '../../layout/synthetic-bold.ts';
 import { paintSemanticLayout } from '../semantic-paint.ts';
 import { syntheticBoldSpacingPt } from '../semantic-paint-letter-gap.ts';
+import { setBoldWideningProbe, type BoldWideningProbe } from '../synthetic-bold-widening.ts';
 
 await initializeHarfBuzz();
 
@@ -315,9 +316,11 @@ test('a horizontally scaled span on a right-to-left line spaces its inner glyphs
   if (!read.ok) throw new Error(read.reason);
   const host = document.createElement('div');
   paintSemanticLayout(host, layoutSemanticDocument(read.part, 0, { measurer }), { scale: 1 });
+  // The glyphs draw under the run's horizontal scale, and layout scales the extra advance with
+  // them, so the inner glyphs take it unconverted.
   const glyphs = host.querySelector<HTMLElement>('[data-docx-clipped-fill]')!;
-  expect(parseFloat(glyphs.style.letterSpacing)).toBeCloseTo(11 / 50 / 0.8, 6);
-  expect(parseFloat(glyphs.style.wordSpacing)).toBeCloseTo(-11 / 50 / 0.8, 6);
+  expect(parseFloat(glyphs.style.letterSpacing)).toBeCloseTo(11 / 50, 6);
+  expect(parseFloat(glyphs.style.wordSpacing)).toBeCloseTo(-11 / 50, 6);
 });
 
 test('a span in a joining script keeps its box and takes no letter spacing', () => {
@@ -336,4 +339,67 @@ test('a span in a joining script keeps its box and takes no letter spacing', () 
   expect(syntheticBoldSpacingPt(span('Syrc'))).toBe(0);
   expect(syntheticBoldSpacingPt(span('Hebr'))).toBeCloseTo(11 / 50, 6);
   expect(syntheticBoldSpacingPt(span('Latn'))).toBeCloseTo(11 / 50, 6);
+});
+
+// A browser that widens a synthesized bold itself, as Gecko does: every character of a bold run,
+// spaces included, draws `widening` px further at weight 700.
+const geckoWidening = (sizePx: number) => 0.25 + (0.75 * sizePx) / 48;
+const geckoProbe: BoldWideningProbe = (_document, font, weight, text) =>
+  [...text].length * (font.sizePx + (weight === '700' ? geckoWidening(font.sizePx) : 0));
+
+describe('a browser that widens synthesized bold itself', () => {
+  let restore = () => {};
+  beforeEach(() => {
+    restore = setBoldWideningProbe(geckoProbe);
+  });
+  afterEach(() => restore());
+
+  test('the measured widening comes off the letter spacing, once for each face and size', () => {
+    const calls: string[] = [];
+    restore();
+    restore = setBoldWideningProbe((document, font, weight, text) => {
+      calls.push(`${font.sizePx}:${weight}`);
+      return geckoProbe(document, font, weight, text);
+    });
+    const [{ runs }] = paint(run('Bold words') + run(' and more bold words'), 'left', 400);
+    const bold = runs.find((element) => element.textContent?.startsWith('Bold'))!;
+    expect(parseFloat(bold.style.letterSpacing)).toBeCloseTo(11 / 50 - geckoWidening(11), 6);
+    // The space takes back the extra and the widening the letter spacing leaves to the browser.
+    expect(parseFloat(bold.style.wordSpacing)).toBeCloseTo(-11 / 50, 6);
+    // Every span of one face and size shares one measurement: one probe at each weight.
+    expect(calls).toEqual(['11:700', '11:599']);
+  });
+
+  test('a measurement outside the plausible range reads as no widening', () => {
+    restore();
+    restore = setBoldWideningProbe((_document, font, weight, text) =>
+      weight === '700' ? [...text].length * font.sizePx * 2 : [...text].length * font.sizePx
+    );
+    const [{ runs }] = paint(run('Bold'), 'left', 400);
+    expect(parseFloat(runs[0]!.style.letterSpacing)).toBeCloseTo(11 / 50, 6);
+  });
+
+  test('every painted run starts at its layout x, on justified lines too', () => {
+    // The browser draws each character of a synthesized-bold run, spaces included, wider.
+    const widened: NaturalWidth = (span, text) =>
+      text.length * (span.style.fontSizePt + (span.syntheticBold ? geckoWidening(11) : 0));
+    const runs =
+      run('Synthesized bold words wrap across lines ') +
+      run('beside plain words ', '') +
+      run('and bold　words again until the paragraph ends.');
+    expect(
+      expectRunsAtLayoutX(runs, ['left', 'both', 'center', 'distribute'], measurer, widened)
+    ).toBeGreaterThan(500);
+  });
+
+  test('a field result blank takes back the widening too', () => {
+    const [{ line, runs }] = paint(
+      `<w:fldSimple w:instr="TITLE">${run('Bold　title')}</w:fldSimple>`,
+      'left',
+      400
+    );
+    const span = line.spans.find((candidate) => candidate.text === 'Bold　title')!;
+    const painted = runs.find((element) => element.textContent === 'Bold　title')!;
+    expect(paintedWidth(painted, 11 + geckoWidening(11))).toBeCloseTo(span.box.width, 6);
+  });
 });

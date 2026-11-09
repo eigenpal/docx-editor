@@ -958,7 +958,7 @@ function paintSpan(
     span.style,
     ctx.scale
   );
-  paintUnspacedBlanks(document, textElement, span, ctx.scale);
+  paintUnspacedBlanks(document, element, textElement, span, ctx.scale);
   paintLegacyCheckbox(element, span, ctx.scale);
   paintLegacyDropdown(element, span);
   if (span.projected) {
@@ -1288,7 +1288,7 @@ function paintLine(
     if (owner === 'wordSpacing')
       painted.style.wordSpacing = `${(gapAfter - syntheticBoldSpacingPt(span)) * scale}px`;
     else if (owner === 'letterSpacing')
-      painted.style.letterSpacing = letterGapSpacing(span, gapAfter, scale);
+      painted.style.letterSpacing = letterGapSpacing(painted, span, gapAfter, scale);
     pendingGap = gapAfter;
     const link = span.link;
     if (!link) {
