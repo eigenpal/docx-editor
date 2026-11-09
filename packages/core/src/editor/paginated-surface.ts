@@ -676,7 +676,8 @@ export function mountPaginatedSurface(
     () => selection,
     () => partOfNodeId(session, selection.head.paragraphId) ?? session.part(),
     () => session.packageRevision(),
-    () => resolveSelectedDrawingRecord(surface)?.drawingNodeId ?? null
+    () => resolveSelectedDrawingRecord(surface)?.drawingNodeId ?? null,
+    () => promptBoundary()
   );
   function moveDocumentHistory(direction: 'undo' | 'redo'): void {
     let mark: ReturnType<TreeDocxSession['undo']> = null;
@@ -700,6 +701,7 @@ export function mountPaginatedSurface(
     const carried =
       direction === 'undo' ? historySelectionOf(collaborationSession, collaborationPort) : null;
     restoreSelection(carried ?? result.selection ?? mark);
+    retainPromptBoundary(result.outsidePromptId);
     // A chart or picture edit steps back with the object still selected, so the next undo,
     // the Chart pane, and the handles stay on it. `selectDrawing` refuses a drawing that the
     // step removed, and the caret then stays where the selection put it.
@@ -3330,6 +3332,7 @@ export function mountPaginatedSurface(
     if (moved && typeBuffer.length > 0) flushTypeBuffer();
     const fieldSelection = textFormInteraction?.beforeSelect(next);
     if (fieldSelection === null) return;
+    if (moved) clearPromptBoundary();
     if (moved && !flushingTypeBuffer) {
       typingHistory.end();
       caretFormatHistory.endGroup();
@@ -3421,6 +3424,7 @@ export function mountPaginatedSurface(
       const fieldSelection = textFormInteraction?.beforeSelect(next);
       if (fieldSelection === null) return;
       next = fieldSelection ?? next;
+      if (!selectionsEqual(next, selection)) clearPromptBoundary();
       reconcilePendingWith(next);
       releaseRetainedIfEscaped(next);
       retireActivationPin();
@@ -3434,6 +3438,7 @@ export function mountPaginatedSurface(
     },
     commit: (run) => commit(run),
     insertOwner: () => insertOwnerOf(contentControlAtCaret()),
+    compositionUsesTyping: () => typingSelectionPlan().outsidePromptId !== undefined,
     promptLanding: typedLanding,
     // The composition readback writes through the SAME lane as every other edit. Calling the
     // session directly skipped `trackedOps` and `writeRefusal`, so IME text in suggesting
@@ -4353,6 +4358,10 @@ export function mountPaginatedSurface(
     promptIsSelected,
     splitEndsTheParagraph,
     deleteSelectionPlan,
+    typingSelectionPlan,
+    retainPromptBoundary,
+    clearPromptBoundary,
+    promptBoundary,
     deleteSelectionOps,
     deleteRangePlan,
     replacementOffset,
@@ -4378,6 +4387,8 @@ export function mountPaginatedSurface(
     createSurfaceClipboardOps({
       session,
       textFormFieldId: () => textFormInteraction?.fieldId() ?? null,
+      typingSelectionPlan,
+      retainPromptBoundary,
       insertOwner: () => insertOwnerOf(contentControlAtCaret()),
       richPasteAllowed: () => !textboxEditing?.active(),
       paragraphIds: editingParagraphIds,
@@ -4526,7 +4537,7 @@ export function mountPaginatedSurface(
       // range beginning at the start, so inserting at the head — which may be the far end —
       // puts the text where the removed characters used to be rather than where the user
       // was typing.
-      const plan = deleteSelectionPlan();
+      const plan = typingSelectionPlan();
       // In SUGGESTING the deletion keeps the characters it strikes, so the replacement goes
       // after them — only then are the two halves adjacent, which is what lets the pane
       // fold them into one `Replaced "x" with "y"` card. The plan's `replaceAt` owns that
@@ -4538,8 +4549,17 @@ export function mountPaginatedSurface(
       const pendingOps = consumePendingFormatOps(target.paragraphId, target.offset, text.length);
       // The caret's own control OWNS the insert: at a control's trailing edge the store's
       // default lands beside it (right for a link), but Word keeps typing inside a control.
-      const inside = plan.ops.length === 0 ? insertOwnerOf(contentControlAtCaret()) : undefined;
-      const insertOps: TreeDocOp[] = [...plan.ops, typedInsertText(target, text, inside)];
+      const inside =
+        !plan.outsidePromptId && plan.ops.length === 0
+          ? insertOwnerOf(contentControlAtCaret())
+          : undefined;
+      const insertion = typedInsertText(target, text, inside);
+      const insertOps: TreeDocOp[] = [
+        ...plan.ops,
+        plan.outsidePromptId && insertion.op === 'insertText'
+          ? { ...insertion, bias: 'left' }
+          : insertion,
+      ];
       // Typing at a prompt's edge replaces the prompt, so the text lands where the prompt
       // began; a caret counted from the pressed offset sat past the paragraph's new end.
       const landing = typedLanding(target.paragraphId, target.offset, text.length);
@@ -4554,7 +4574,10 @@ export function mountPaginatedSurface(
             selectionMark(),
             redoMark
           ),
-        () => collapsedAt({ paragraphId: target.paragraphId, offset: landing })
+        () => {
+          retainPromptBoundary(plan.outsidePromptId);
+          return collapsedAt({ paragraphId: target.paragraphId, offset: landing });
+        }
       );
     },
     proposeTextChange: (kind, text, author) => commitProposedTextChange(kind, text, author),
@@ -4988,6 +5011,7 @@ export function mountPaginatedSurface(
     ...format,
 
     setSelection: (next) => {
+      clearPromptBoundary();
       // An explicit host write that MOVES the caret is an intentional selection — a test or
       // an automation host addressing a drawing's anchor means the drawing. A same-position
       // write stays inert: the font-load remount restores the saved caret through here
@@ -6127,7 +6151,10 @@ export function mountPaginatedSurface(
       selection: () => hiddenMarks.shownSelection(selection),
       // `none`: a press lands where the reader LOOKS, and moving the paper under a double
       // click sent its second press elsewhere — a blank footer band never opened.
-      setSelection: (next, caret) => setSelection(next, false, 'none', caret),
+      setSelection: (next, caret) => {
+        clearPromptBoundary();
+        setSelection(next, false, 'none', caret);
+      },
       cellSelection: () => cellSelection,
       setCellSelection: (next) => setCellSelection(next),
       // `preventScroll`: the pages layer is the WHOLE document tall, and focusing it scrolls

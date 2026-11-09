@@ -1,3 +1,4 @@
+import { insertsBeforePrompt } from './tree-op-prompt-bias.ts';
 import { withDisplayedHyphens } from '../package/hyphen-text.ts';
 import { withTailStyle } from './tree-op-paragraph-tail.ts';
 import { withInsertionHints } from './tree-op-text-splice-hints.ts';
@@ -279,7 +280,13 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
   // would leave the typed characters appended to "Click here to enter text.".
   if (op.op === 'insertText' && !op.revision) {
     const prompt = placeholderControlForInsertion(part, op.paragraphId, op.offset);
-    if (prompt) {
+    const paragraph = findNode(part, op.paragraphId);
+    const before =
+      prompt &&
+      paragraph?.kind === 'paragraph' &&
+      op.inside === undefined &&
+      insertsBeforePrompt(paragraph, op.offset, prompt.control, op.bias);
+    if (prompt && !before) {
       // The caret's paragraph is the one the prompt is emptied into, so the insert below
       // still finds it. A prompt whose content cannot be emptied in place is refused, not
       // flattened by the insertion path: that path would replace the wrapped cell too.
@@ -667,7 +674,7 @@ function applyInsertContent(
   options?: EditOptions,
   /** The content control the caller says this content belongs to, if it named one. */
   inside?: string,
-  bias: 'left' | 'right' = 'left'
+  bias?: 'left' | 'right'
 ): TreeOpResult {
   const control = contentControlAtCaret(part, paragraph, offset, offset, bias);
   if (control && isShowingPlaceholder(control)) {

@@ -66,6 +66,7 @@ const CELL =
   `<w:tcPr><w:tcW w:w="5000" w:type="dxa"/></w:tcPr>${INLINE}</w:tc></w:tr></w:tbl><w:p/>`;
 
 const mounted: (() => void)[] = [];
+const mountedContainers = new WeakMap<object, HTMLElement>();
 afterEach(() => mounted.splice(0).forEach((cleanup) => cleanup()));
 
 function mount(body: string, author?: string, formsProtected = false) {
@@ -76,6 +77,7 @@ function mount(body: string, author?: string, formsProtected = false) {
     document: docx(body, formsProtected),
     ...(author === undefined ? {} : { author }),
   });
+  mountedContainers.set(editor, container);
   mounted.push(() => {
     editor.destroy();
     container.remove();
@@ -367,4 +369,171 @@ test('the first keystroke after a kept prompt still replaces it whole', () => {
   surface.deleteBackward();
   surface.type('Z');
   expect(surface.session.bodyText()).toBe('A Z B');
+});
+
+for (const backwards of [false, true]) {
+  test(`typing over a range ending inside a prompt keeps the prompt (backwards=${backwards})`, async () => {
+    const editor = mount(INLINE);
+    const surface = editor.surface!;
+    select(surface, backwards ? 10 : 0, backwards ? 0 : 10);
+    surface.type('Z');
+    expect(surface.session.bodyText()).toBe(`Z${PROMPT} B`);
+    expect(controls(surface)[0]!.placeholder).toBe(true);
+    expect(selected(surface)).toEqual([0, 1, 1]);
+    const xml = await savedXml(editor);
+    expect(xml).toContain('showingPlcHdr');
+    surface.undo();
+    expect(surface.session.bodyText()).toBe(`A ${PROMPT} B`);
+    surface.redo();
+    expect(surface.session.bodyText()).toBe(`Z${PROMPT} B`);
+  });
+}
+
+test('typing continues before a prompt kept by a range replacement', () => {
+  const surface = mount(INLINE).surface!;
+  select(surface, 0, 10);
+  surface.type('Z');
+  surface.type('Y');
+  expect(surface.session.bodyText()).toBe(`ZY${PROMPT} B`);
+});
+
+test('buffered typing and one-line paste continue before a preserved prompt', () => {
+  const surface = mount(INLINE).surface!;
+  select(surface, 0, 10);
+  surface.enqueueType('XY');
+  surface.flushPendingInput();
+  surface.insertPlainText('Z');
+  surface.type('!');
+  expect(surface.session.bodyText()).toBe(`XYZ!${PROMPT} B`);
+  expect(selected(surface)).toEqual([0, 4, 4]);
+});
+
+test('moving away and back clears the retained prompt boundary', () => {
+  const surface = mount(INLINE).surface!;
+  select(surface, 0, 10);
+  surface.type('Z');
+  select(surface, 0);
+  select(surface, 1);
+  surface.type('Y');
+  expect(surface.session.bodyText()).toBe('ZY B');
+  expect(controls(surface)[0]!.placeholder).toBe(false);
+});
+
+test('a tracked range replacement preserves its prompt through continuation', async () => {
+  const editor = mount(INLINE, 'Alice');
+  const surface = editor.surface!;
+  surface.setEditingMode('suggest');
+  select(surface, 0, 10);
+  surface.type('Z');
+  surface.type('Y');
+  expect(surface.session.bodyText()).toBe(`A ZY${PROMPT} B`);
+  expect(controls(surface)[0]!.placeholder).toBe(true);
+  const xml = await savedXml(editor);
+  expect(xml).toContain('<w:delText xml:space="preserve">A </w:delText>');
+  expect(xml).not.toContain(`<w:delText>${PROMPT}</w:delText>`);
+});
+
+test('cross-paragraph replacement preserves an ending inline prompt', () => {
+  const surface = mount(`<w:p>${run('before')}</w:p>${INLINE}`).surface!;
+  const [first, second] = surface.session.paragraphIds();
+  surface.setSelection({
+    anchor: { paragraphId: first!, offset: 2 },
+    head: { paragraphId: second!, offset: 10 },
+  });
+  surface.type('XYZ');
+  surface.type('!');
+  expect(surface.session.bodyText()).toBe(`beXYZ!${PROMPT} B`);
+});
+
+test('multiline plain paste keeps the ending prompt and later typing outside it', () => {
+  const surface = mount(INLINE).surface!;
+  select(surface, 0, 10);
+  surface.insertPlainText('one\ntwo');
+  surface.type('!');
+  expect(surface.session.bodyText()).toBe(`one\ntwo!${PROMPT} B`);
+  expect(controls(surface)[0]!.placeholder).toBe(true);
+});
+
+test('composition replaces only the text before a partial prompt and continues outside it', () => {
+  const editor = mount(INLINE);
+  const surface = editor.surface!;
+  const pages = mountedContainers.get(editor)!.querySelector('.docx-pages')!;
+  select(surface, 0, 10);
+  for (const text of ['韓', '語']) {
+    pages.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    const end = new CompositionEvent('compositionend', { bubbles: true });
+    Object.defineProperty(end, 'data', { value: text });
+    pages.dispatchEvent(end);
+  }
+  surface.type('!');
+  expect(surface.session.bodyText()).toBe(`韓語!${PROMPT} B`);
+  expect(selected(surface)).toEqual([0, 3, 3]);
+});
+
+for (const lock of ['contentLocked', 'sdtContentLocked']) {
+  test(`typing over a partial ${lock} prompt refuses the whole replacement`, () => {
+    const surface = mount(inline(lock)).surface!;
+    select(surface, 0, 10);
+    surface.type('Z');
+    expect(surface.session.bodyText()).toBe(`A ${PROMPT} B`);
+  });
+}
+
+test('redo restores the outside prompt boundary for the next keystroke', () => {
+  const surface = mount(INLINE).surface!;
+  select(surface, 0, 10);
+  surface.type('Z');
+  surface.type('Y');
+  surface.undo();
+  surface.type('X');
+  expect(surface.session.bodyText()).toBe(`ZX${PROMPT} B`);
+  surface.undo();
+  surface.redo();
+  surface.type('!');
+  expect(surface.session.bodyText()).toBe(`ZX!${PROMPT} B`);
+});
+
+test('an explicit same-position selection enters the prompt again', () => {
+  const surface = mount(INLINE).surface!;
+  select(surface, 0, 10);
+  surface.type('Z');
+  select(surface, 1);
+  surface.type('Y');
+  expect(surface.session.bodyText()).toBe('ZY B');
+});
+
+test('rich paste at a preserved prompt boundary refuses without discarding formatting', () => {
+  const surface = mount(INLINE).surface!;
+  select(surface, 0, 10);
+  surface.type('Z');
+  expect(surface.pasteRich('bold', '<p><strong>bold</strong></p>')).toBe(false);
+  expect(surface.session.bodyText()).toBe(`Z${PROMPT} B`);
+  expect(surface.state().lastRejection).not.toBeNull();
+});
+
+test('font changes preserve the outside prompt caret', async () => {
+  const editor = mount(INLINE);
+  const surface = editor.surface!;
+  select(surface, 0, 10);
+  surface.type('Z');
+  await editor.setFonts(undefined);
+  expect(editor.surface).toBe(surface);
+  surface.type('Y');
+  expect(surface.session.bodyText()).toBe(`ZY${PROMPT} B`);
+});
+
+test('a DOM selection echo preserves the outside prompt caret', async () => {
+  const editor = mount(INLINE);
+  const surface = editor.surface!;
+  select(surface, 0, 10);
+  surface.type('Z');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const container = mountedContainers.get(editor)!;
+  const span = container.querySelector<HTMLElement>('[data-start="0"]')!;
+  const walker = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
+  const text = walker.nextNode()!;
+  document.getSelection()!.setBaseAndExtent(text, 1, text, 1);
+  document.dispatchEvent(new Event('selectionchange'));
+  surface.type('Y');
+  expect(surface.session.bodyText()).toBe(`ZY${PROMPT} B`);
 });

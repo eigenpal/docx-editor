@@ -1,3 +1,4 @@
+import { insertsBeforePrompt } from './tree-op-prompt-bias.ts';
 import {
   isInsertableText,
   LINE_BREAK_TEXT,
@@ -100,7 +101,15 @@ export function contentControlAtCaret(
   const before = [...segments].reverse().find((segment) => segment.end === start);
   const afterControl = after ? innermostContentControlAround(part, after.runId) : null;
   const beforeControl = before ? innermostContentControlAround(part, before.runId) : null;
-  if (afterControl && isShowingPlaceholder(afterControl)) return afterControl;
+  if (afterControl && isShowingPlaceholder(afterControl)) {
+    if (insertsBeforePrompt(paragraph, start, afterControl, bias)) {
+      return innermostContentControlAround(
+        part,
+        insertionDestination(paragraph, start, null, bias).landingNodeId
+      );
+    }
+    return afterControl;
+  }
   if (beforeControl && isShowingPlaceholder(beforeControl)) return beforeControl;
   // A `w:temporary` control at either side of the caret is claimed EAGERLY, like a
   // placeholder: its contract is unwrap-on-first-edit, and a keystroke at its boundary is

@@ -181,3 +181,39 @@ test('in suggesting mode one press proposes the control on both peers', async ()
   converge(`>A ${PROMPT} B`, [true]);
   expect(await savedXml(alice)).not.toContain('<w:del ');
 });
+
+test('partial prompt replacement converges with a remote edit and keeps typing outside', async () => {
+  const { alice, bob, converge, concurrently } = await pairOfEditors();
+  concurrently(() => {
+    select(alice, 0, 10);
+    alice.surface!.type('Z');
+    select(bob, 29);
+    bob.surface!.type('!');
+  });
+  converge(`Z${PROMPT} B!`, [true]);
+  alice.surface!.enqueueType('Y');
+  alice.surface!.flushPendingInput();
+  converge(`ZY${PROMPT} B!`, [true]);
+  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+  converge(`Z${PROMPT} B!`, [true]);
+  expect(alice.exec({ type: 'redo' }).ok).toBe(true);
+  converge(`ZY${PROMPT} B!`, [true]);
+  for (const editor of [alice, bob]) {
+    const reopened = mount({ document: new Uint8Array(await editor.save()) });
+    expect(reopened.surface!.session.bodyText()).toBe(`ZY${PROMPT} B!`);
+  }
+});
+
+test('partial prompt replacement converges when the other peer removes the control', async () => {
+  const { alice, bob, converge, concurrently } = await pairOfEditors();
+  concurrently(() => {
+    select(alice, 0, 10);
+    alice.surface!.type('Z');
+    select(bob, 27);
+    bob.surface!.deleteBackward();
+    bob.surface!.deleteBackward();
+  });
+  converge('Z B', []);
+  alice.surface!.type('Y');
+  converge('ZY B', []);
+});
