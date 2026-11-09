@@ -1,12 +1,11 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
- * Open the Settings tab of the demo side panel and return the panel. The panel starts open where
- * it fits beside a full page, and closed on a narrow window, so this opens it first if needed.
+ * Open the Settings tab of the demo side panel and return the panel. The panel starts closed, so
+ * this opens it first if needed.
  */
 export async function openDemoSettings(page: Page): Promise<Locator> {
   const panel = page.getByRole('complementary', { name: 'Side panel', exact: true });
-  // The panel decides to open after the first layout, so wait for the toggle to settle.
   const show = page.getByRole('button', { name: 'Show the side panel', exact: true });
   const hide = page.getByRole('button', { name: 'Hide the side panel', exact: true });
   await expect(show.or(hide)).toBeVisible();

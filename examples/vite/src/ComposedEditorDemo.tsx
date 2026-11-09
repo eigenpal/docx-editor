@@ -44,7 +44,7 @@ import { DemoExportMenu } from './DemoExportMenu';
 import { ReviewSettings, storedReviewPane, useStoredReviewPane } from './ReviewSettings';
 import { DemoSidePanel, useChartPaneRequests } from './DemoSidePanel';
 import { DemoIcon } from './DemoIcon';
-import { demoPanelFits, type DemoPanelTab } from '../../shared/demo-tabs';
+import type { DemoPanelTab } from '../../shared/demo-tabs';
 import { exampleText as t } from '../../shared/example-text';
 import { DrawingsE2eBridge } from './DrawingsE2eBridge';
 import { ReviewWritesE2eBridge } from './ReviewWritesE2eBridge';
@@ -696,10 +696,10 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
     setRulers(show);
     saveRulers(show);
   }, []);
-  // The side panel: open where it fits beside a full page, on the Chart tab. Insert > Chart
-  // and Edit chart open it too (`DemoEditorEffects`).
-  const [panelOpen, setPanelOpen] = useState(demoPanelFits);
-  const [panelTab, setPanelTab] = useState<DemoPanelTab>('chart');
+  // The side panel: closed at first, on the Settings tab when opened. Insert > Chart and
+  // Edit chart open it on the Chart tab (`DemoEditorEffects`).
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [panelTab, setPanelTab] = useState<DemoPanelTab>('settings');
   const showPanel = useCallback((tab: DemoPanelTab) => {
     setPanelTab(tab);
     setPanelOpen(true);
