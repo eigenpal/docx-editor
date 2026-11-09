@@ -55,6 +55,11 @@ export interface SurfaceSelectionSyncDeps {
    */
   insertOwner?(): string | undefined;
   /**
+   * The caret offset after `length` characters land at `offset`. Text inserted at a prompt's
+   * edge replaces the prompt, so it lands where the prompt began, not at `offset`.
+   */
+  promptLanding?(paragraphId: string, offset: number, length: number): number;
+  /**
    * The surface's own write lane — attribution, protection and refusals included.
    *
    * The IME is the one edit that reaches the tree from here, and calling the session directly
@@ -454,6 +459,11 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
           remove ? { start: remove.start, end: remove.end } : undefined
         ) ?? [])
       : [];
+    // Read before the write: the store clears the prompt flag that the landing rule reads.
+    const namedCaret = named
+      ? (deps.promptLanding?.(paragraphId, named.offset, named.text.length) ??
+        named.offset + named.text.length)
+      : undefined;
     const scope = deps.storyScope();
     deps.commit(() => {
       const result = deps.applyOps([...ops, ...formatOps], deps.selectionMark(), scope);
@@ -465,11 +475,12 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     deps.setSelection(
       collapsedAt({
         paragraphId,
-        offset: named
-          ? named.offset + named.text.length
-          : insert && landing !== undefined
-            ? landing + insert.text.length
-            : plan.caret,
+        offset:
+          namedCaret !== undefined
+            ? namedCaret
+            : insert && landing !== undefined
+              ? landing + insert.text.length
+              : plan.caret,
       })
     );
   }

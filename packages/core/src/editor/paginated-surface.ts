@@ -3404,6 +3404,13 @@ export function mountPaginatedSurface(
     },
     commit: (run) => commit(run),
     insertOwner: () => insertOwnerOf(contentControlAtCaret()),
+    promptLanding: (paragraphId, offset, length) =>
+      promptInsertionLanding(
+        partOfNodeId(session, paragraphId) ?? session.part(),
+        paragraphId,
+        offset,
+        length
+      ),
     // The composition readback writes through the SAME lane as every other edit. Calling the
     // session directly skipped `trackedOps` and `writeRefusal`, so IME text in suggesting
     // mode landed untracked — the reviewer proposing a change was editing the document —

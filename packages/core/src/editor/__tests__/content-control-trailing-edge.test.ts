@@ -307,3 +307,21 @@ test('a format armed at the trailing edge styles composed text that repeats the 
   const content = xml.slice(xml.indexOf('<w:sdtContent>'), xml.indexOf('</w:sdtContent>'));
   expect(content).toMatch(/<w:r><w:rPr><w:b\/><\/w:rPr><w:t[^>]*>e<\/w:t><\/w:r>/);
 });
+
+test('text composed at a prompt trailing edge replaces the prompt and keeps the caret after it', () => {
+  // The prompt is replaced whole, so the text lands where the prompt began. A caret counted
+  // from the pressed offset sat past the paragraph's end, and every later keystroke was refused.
+  const prompt =
+    '<w:sdt><w:sdtPr><w:tag w:val="value"/><w:showingPlcHdr/><w:text/></w:sdtPr>' +
+    `<w:sdtContent>${run('Click')}</w:sdtContent></w:sdt>`;
+  const { surface, container } = mountWithPages(run('A ') + prompt + run(' B'));
+  caretAtControlEnd(surface);
+  compose(surface, container, '한');
+  expect(surface.session.bodyText()).toBe('A 한 B');
+  expect(surface.state().selection.head.offset).toBe(3);
+  surface.type('X');
+  compose(surface, container, '글');
+  expect(surface.state().lastRejection).toBeNull();
+  expect(surface.session.bodyText()).toBe('A 한X글 B');
+  expect(surface.layout().contentControls![0]!.range).toMatchObject({ start: 2, end: 5 });
+});
