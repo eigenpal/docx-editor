@@ -295,7 +295,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Apply left, center, right, justified, or distributed alignment. Justified paragraphs keep natural spacing on their final line; distributed paragraphs stretch it. Compatibility settings affect spacing around tabs, breaks, floating objects, and spaces beside East Asian text.',
+      'Apply left, center, right, justified, or distributed alignment. Justified paragraphs keep natural final-line spacing; distributed paragraphs stretch spaces and characters, including balanced spaces. Compatibility settings affect spacing around tabs, breaks, floating objects, and spaces beside East Asian text.',
   },
   {
     id: 'paragraphs.east-asian-typography',
