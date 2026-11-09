@@ -309,7 +309,8 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   let composingAcrossParagraphs = false;
   /**
    * The caret a collapsed composition began at, and the control a keystroke there would type
-   * into. The readback names that control for text it inserts at the same caret, as typing does.
+   * into. The readback places composed text at that caret when the page allows it, and names
+   * that control, as typing does.
    */
   let composingOwner: { readonly offset: number; readonly controlId: string } | null = null;
 
@@ -424,11 +425,20 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
         : undefined;
     // Text composed at a text control's trailing edge belongs to the control, as typed text
     // does. An offset alone gives that boundary to the run after the control, which forms
-    // protection refuses. Only an insert at the caret where the composition began is named:
-    // the diff can resolve a repeated character to a later offset, past the control's end.
+    // protection refuses. The diff takes the longest common prefix, so composed text that
+    // repeats the text after the caret (`에` before `에서`) resolves to a later offset, past
+    // the control's end. The composition began at the caret, so the insert is placed there
+    // whenever that gives the same paragraph text, and then names the control.
+    const anchored =
+      insert && !remove && owner !== null && insert.offset >= owner.offset
+        ? painted.slice(owner.offset, owner.offset + insert.text.length)
+        : null;
     const named =
-      insert && !remove && owner !== null && insert.offset === owner.offset
-        ? { ...insert, inside: owner.controlId }
+      insert &&
+      owner !== null &&
+      anchored !== null &&
+      modelText.slice(0, owner.offset) + anchored + modelText.slice(owner.offset) === painted
+        ? { ...insert, offset: owner.offset, text: anchored, inside: owner.controlId }
         : null;
     const ops =
       insert && landing !== undefined && landing !== insert.offset
@@ -439,7 +449,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     const formatOps = insert
       ? (deps.pendingFormatOps?.(
           paragraphId,
-          landing ?? insert.offset,
+          named?.offset ?? landing ?? insert.offset,
           insert.text.length,
           remove ? { start: remove.start, end: remove.end } : undefined
         ) ?? [])
@@ -455,7 +465,11 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     deps.setSelection(
       collapsedAt({
         paragraphId,
-        offset: insert && landing !== undefined ? landing + insert.text.length : plan.caret,
+        offset: named
+          ? named.offset + named.text.length
+          : insert && landing !== undefined
+            ? landing + insert.text.length
+            : plan.caret,
       })
     );
   }

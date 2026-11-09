@@ -12,6 +12,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { caretAt, createFixedMeasurer } from '@docx-editor.dev/core/layout';
+import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import { withAuthoredCjkGapMetric } from '../../layout/cjk-auto-spacing-metric-port.ts';
 import { createDocxEditor } from '../docx-editor.ts';
 
@@ -191,9 +192,16 @@ function mountWithPages(paragraph: string, protect = true) {
 /**
  * What the browser does while an IME composes at the caret: it writes the composed text into
  * the painted span itself, and the surface reads the paragraph back at `compositionend`.
+ * `writeAt` stands for a page that took the text somewhere other than the model's caret.
  */
-function compose(surface: PaginatedSurface, container: HTMLElement, text: string): void {
-  const { paragraphId, offset } = surface.state().selection.head;
+function compose(
+  surface: PaginatedSurface,
+  container: HTMLElement,
+  text: string,
+  writeAt?: number
+): void {
+  const { paragraphId, offset: caret } = surface.state().selection.head;
+  const offset = writeAt ?? caret;
   const pages = container.querySelector('.docx-pages')!;
   pages.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
   const span = [...container.querySelectorAll<HTMLElement>('[data-paragraph-id][data-start]')]
@@ -246,12 +254,56 @@ test('text composed past the trailing edge stays outside the form field', () => 
   expect(surface.layout().contentControls![0]!.range).toMatchObject({ start: 2, end: 7 });
 });
 
-test('a composed character the diff places past the control keeps the offset rule', () => {
-  // The readback diff resolves an `e` typed before another `e` to the later offset, past the
-  // control's end. Naming the control there would refuse an edit that has no protection to meet.
-  const { surface, container } = mountWithPages(control('value') + run('e B'), false);
+test('composed text that repeats the text after the control lands inside the control', () => {
+  // The readback diff takes the longest common prefix, so `에` composed before `에서` resolves
+  // to an offset past the control's end. The composition began at the trailing edge, and
+  // inserting there gives the same paragraph, so the text joins the control and the caret
+  // stays after it.
+  for (const [paragraph, text, after, range] of [
+    [
+      run('회사: ') + control('자연인') + run('에서'),
+      '에',
+      '회사: 자연인에에서',
+      { start: 4, end: 8 },
+    ],
+    [
+      run('번호 ') + control('26202') + run('의 값'),
+      '의',
+      '번호 26202의의 값',
+      { start: 3, end: 9 },
+    ],
+    [run('A ') + control('value') + run('e B'), 'e', 'A valueee B', { start: 2, end: 8 }],
+    [run('A ') + control('value') + run('ab C'), 'ab', 'A valueabab C', { start: 2, end: 9 }],
+  ] as const) {
+    const { surface, container } = mountWithPages(paragraph);
+    caretAtControlEnd(surface);
+    compose(surface, container, text);
+    expect(surface.state().lastRejection).toBeNull();
+    expect(surface.session.bodyText()).toBe(after);
+    expect(surface.layout().contentControls![0]!.range).toMatchObject(range);
+    expect(surface.state().selection.head.offset).toBe(range.end);
+    container.remove();
+  }
+});
+
+test('composed text the page took away from the caret keeps the offset rule', () => {
+  // The composition began at the trailing edge, but the text arrived after ` B`. Placing it at
+  // the caret would change other characters, so the insert keeps the diff's offset, outside the
+  // control, where forms protection refuses it.
+  const { surface, container } = mountWithPages(run('A ') + control('value') + run(' B'));
   caretAtControlEnd(surface);
+  compose(surface, container, '한', 9);
+  expect(surface.session.bodyText()).toBe('A value B');
+  expect(surface.layout().contentControls![0]!.range).toMatchObject({ start: 2, end: 7 });
+});
+
+test('a format armed at the trailing edge styles composed text that repeats the next text', () => {
+  const { surface, container } = mountWithPages(run('A ') + control('value') + run('e B'), false);
+  caretAtControlEnd(surface);
+  surface.toggleRunProperty('b');
   compose(surface, container, 'e');
   expect(surface.state().lastRejection).toBeNull();
-  expect(surface.session.bodyText()).toBe('valueee B');
+  const xml = serializeOoxmlPart(surface.session.part());
+  const content = xml.slice(xml.indexOf('<w:sdtContent>'), xml.indexOf('</w:sdtContent>'));
+  expect(content).toMatch(/<w:r><w:rPr><w:b\/><\/w:rPr><w:t[^>]*>e<\/w:t><\/w:r>/);
 });
