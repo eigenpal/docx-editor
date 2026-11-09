@@ -164,10 +164,7 @@ export interface ReviewChangesResolvedEvent {
     /** The key of the replacement it is one half of, as the default `getReviewItems()` lists it. */
     readonly pairKey?: string;
     readonly reason:
-      | 'unsupported-revision'
-      | 'incomplete-group'
-      | 'retained-structure'
-      | 'unknown-revision';
+      'unsupported-revision' | 'incomplete-group' | 'retained-structure' | 'unknown-revision';
     /** Which condition kept it, such as `'locked-content'` (a content lock) or `'bound-content'` (a data binding). */
     readonly detail?: RevisionBatchSkipDetail;
   }[];

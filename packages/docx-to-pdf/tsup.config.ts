@@ -1,7 +1,10 @@
 import { defineConfig } from 'tsup';
 import { withDeclarations } from '../../scripts/build-declarations.mjs';
+import { addLicenseHeaders } from '../../scripts/license-banner.mjs';
 export default defineConfig(
   withDeclarations(import.meta.url, {
+    // Every script in dist/ opens with the license header.
+    onSuccess: addLicenseHeaders(import.meta.url),
     entry: ['src/index.ts'],
     platform: 'node',
     format: ['esm', 'cjs'],

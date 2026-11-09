@@ -59,9 +59,7 @@ export function hostDocumentOf(node: Node | null | undefined): Document {
 export function hostWindowOf(node: Node | null | undefined): HostWindow {
   // Optional: without a DOM (server rendering) there is no document to ask.
   const view = (hostDocumentOf(node) as Document | undefined)?.defaultView as
-    | HostWindow
-    | null
-    | undefined;
+    HostWindow | null | undefined;
   return view ?? (globalThis as unknown as HostWindow);
 }
 

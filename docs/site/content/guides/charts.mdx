@@ -1,0 +1,163 @@
+---
+title: 'Charts'
+description: 'Insert DOCX charts and edit their type, elements, colors, and data with commands, the toolbar, and the Chart pane.'
+category: 'Guides'
+---
+
+A chart in a DOCX file is a drawing that points at a chart part and an embedded workbook. The editor inserts charts at the caret and edits the type, elements, colors, and data of a selected chart. Each change is one undo step.
+
+The `@docx-editor.dev/pro/drawing` module paints charts and requires the EigenPal Pro License. Without it, the editor still inserts and edits charts, and a chart shows a placeholder.
+
+## Insert a chart
+
+Run `insertChart` with a chart type. The editor inserts the chart inline at the caret, fills it with sample data, and selects it:
+
+```ts
+editor.exec({ type: 'insertChart', chartType: 'columnClustered' });
+
+// Your own data, three categories and two series.
+editor.exec({
+  type: 'insertChart',
+  chartType: 'line',
+  data: {
+    categories: ['North', 'South', 'East'],
+    series: [
+      { name: 'Plan', values: [3, 5, 4] },
+      { name: 'Actual', values: [2, 6, null] },
+    ],
+  },
+});
+```
+
+The **Insert** menu and the `DocxEditor.Toolbar.ChartInsert` dropdown offer column, bar, line, area, pie, doughnut, and scatter charts. The command also accepts the stacked, percent-stacked, marker, radar, and scatter-with-lines types.
+
+## Edit a chart
+
+Each edit applies to the selected chart, or to the chart drawing that `drawingNodeId` names:
+
+| Command | Purpose |
+| --- | --- |
+| `setChartData` | Replaces the categories and series. Series keep their formatting. |
+| `setChartType` | Changes the chart type. Undo restores colors or axis titles that the new type drops. |
+| `setChartFormat` | Sets the title, legend, data labels, axes, gridlines, and axis titles. |
+| `setChartColor` | Sets the color of one series, or of one point of a pie or doughnut chart. |
+
+Read the current values with the `chartData` and `chartFormat` queries:
+
+```ts
+const read = editor.query({ type: 'chartData' });
+if (read.ok) {
+  editor.exec({
+    type: 'setChartData',
+    data: {
+      kind: read.data.kind,
+      categories: [...read.data.categories, { label: 'West' }],
+      series: read.data.series.map((s) => ({ ...s, values: [...s.values, 7] })),
+    },
+  });
+}
+
+editor.exec({ type: 'setChartFormat', format: { title: 'Sales', legend: 'right' } });
+editor.exec({ type: 'setChartColor', index: 0, color: { theme: 'accent2', shift: 40 } });
+```
+
+A color is `#RRGGBB`, a theme color such as `{ theme: 'accent1' }`, or `null` for the automatic color. A positive `shift` makes a theme color lighter by that percent, and a negative one makes it darker.
+
+A refused edit returns a translation key in `reason`, such as `chart.errors.noAxes`. The editor refuses chart edits in suggesting mode and in a document open for viewing.
+
+## Resize, move, and wrap a chart
+
+A selected chart shows resize handles. You can resize it, change its wrap, and set its alternative text, as you do for a picture. To move a chart freely, change its wrap from **In Line with Text** first, then drag it. When you drop a floating chart on another paragraph of the same page, that paragraph becomes its anchor, so the text wraps around the chart. A locked anchor, or a position relative to a line or a character, keeps its paragraph.
+
+The picture commands `resizeDrawing`, `positionDrawing`, `setDrawingWrap`, and `setDrawingMetadata` apply to charts. The editor refuses commands that change the chart graphic, such as crop, replace, and rotate. A chart that the file stores with an alternate picture refuses frame edits too, because the two copies must keep the same frame.
+
+## Copy and paste a chart
+
+To copy a chart, select it and press Ctrl+C or Command+C, or use **Copy** in the context menu. Cut works the same way and removes the chart. A paste inserts an independent copy of the chart, with its own chart part and embedded workbook, and selects it. A paste replaces selected text.
+
+The `copy`, `cut`, and `paste` commands do the same. The clipboard holds the chart's name as text and a reference to the copy, so you can paste the chart only in an editor on the same page. A selection of a chart with other content refuses to copy. The editor refuses a chart paste in suggesting mode and in a document open for viewing.
+
+## Show the Chart pane
+
+The Chart pane shows the type, elements, colors, and data of the selected chart. Fields apply when you press Enter or leave them, and Escape restores the old value.
+
+`DocxEditor.SidePanel` holds the pane. **Insert** > **Chart** asks the host to show the panel without moving the focus. **Edit chart** and a double-click on a chart move the focus into it. Listen for these requests with `usePaneRequest`:
+
+```tsx
+function ChartSidePanel() {
+  const [open, setOpen] = useState(false);
+  usePaneRequest((request) => {
+    if (request.pane === 'chart') setOpen(true);
+  });
+  return open ? <DocxEditor.SidePanel onClose={() => setOpen(false)} /> : null;
+}
+```
+
+Render the component inside `DocxEditor.Root`, beside `DocxEditor.Viewport`. **Edit chart** shows in the toolbar and the context menu only while a side panel, a Chart pane, or a `usePaneRequest` listener is mounted. In Vue, use `DocxEditorSidePanel` and the `usePaneRequest` composable in the same way. Use `DocxEditor.ChartPane` to place the pane in your own layout.
+
+## Build your own chart pane
+
+To replace the packaged pane, build a component with `useSelectedChart` and pass it to `DocxEditor.SidePanel` as its children. The hook returns the selected chart, its `data` and `format`, whether each can change, and the reason when it cannot. It edits the chart that it shows in two ways:
+
+- `execute` takes the chart commands of `editor.exec`, without `drawingNodeId`.
+- `editData` applies one checked data change, as the packaged pane does. Text that is not a number for a value refuses with a reason.
+
+The following sample changes the chart type and the first value:
+
+```tsx
+import {
+  CHART_TYPE_CHOICES,
+  DocxEditor,
+  chartTypeLabelKey,
+  useSelectedChart,
+  useTranslation,
+  type ChartType,
+} from '@docx-editor.dev/react';
+
+function MyChartPane() {
+  const { t } = useTranslation();
+  const chart = useSelectedChart();
+  if (!chart.chart || !chart.data || !chart.format) return <p>Select a chart.</p>;
+  return (
+    <>
+      <select
+        aria-label="Chart type"
+        value={chart.format.type ?? ''}
+        disabled={!chart.canEditFormat}
+        title={chart.formatDisabledReason ?? undefined}
+        onChange={(e) =>
+          chart.execute({ type: 'setChartType', chartType: e.target.value as ChartType })
+        }
+      >
+        {CHART_TYPE_CHOICES.map((type) => (
+          <option key={type} value={type}>
+            {t(chartTypeLabelKey(type))}
+          </option>
+        ))}
+      </select>
+      <input
+        aria-label="First value"
+        defaultValue={String(chart.data.series[0]?.values[0] ?? '')}
+        disabled={!chart.canEditData}
+        onBlur={(e) =>
+          chart.editData({ type: 'value', series: 0, category: 0, text: e.target.value })
+        }
+      />
+    </>
+  );
+}
+
+<DocxEditor.SidePanel>
+  <MyChartPane />
+</DocxEditor.SidePanel>;
+```
+
+`format.type` is null for a chart type that the editor does not write. Each edit is one undo step. A refusal returns `{ ok: false, code, reason }`, as `editor.exec` does. The disabled reasons are translated, and viewing and suggesting turn the edits off. When **Edit chart** or a double-click asks for the focus, the side panel moves it to the first field of your pane.
+
+In Vue, `useSelectedChart` returns the same fields as computed refs, and you pass the pane in the default slot of `DocxEditorSidePanel`. Both adapters export the chart types, `CHART_TYPE_CHOICES`, and `chartTypeLabelKey`.
+
+## Limits
+
+- The editor edits the data of charts with one plot and one level of categories. Other charts keep their data, and the pane says why.
+- The editor writes chart values to the chart part and the embedded workbook. A chart linked to an external workbook stops updating from the link.
+- Charts insert inline. Collaboration peers receive chart inserts, edits, resizes, and moves.

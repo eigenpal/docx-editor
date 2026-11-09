@@ -162,8 +162,7 @@ export interface FormattingRefusal {
 }
 
 export type FormattingPlan<T> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly detail: string };
+  { readonly ok: true; readonly value: T } | { readonly ok: false; readonly detail: string };
 
 const NO_FONT: AutomationFontRead = Object.freeze({
   bold: null,

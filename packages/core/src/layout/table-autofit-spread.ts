@@ -1,10 +1,15 @@
 // How an autofit table with a preferred width on every column settles: from those preferred
 // widths, not from the grid the width resolver already scaled to the table's width.
 import type { SemanticTableCell, SemanticTableStructure } from './semantic-table.ts';
-import { equalShareWidenedWidths, spreadPreferredColumns } from './table-autofit-distribution.ts';
+import {
+  contentSizedWidths,
+  equalShareWidenedWidths,
+  spreadPreferredColumns,
+} from './table-autofit-distribution.ts';
+import { columnsAroundCells, spacedCellWidths, spacingGapsPt } from './table-cell-spacing.ts';
 import type { AutofitColumnContent } from './table-autofit-column-content.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
-import { legacyLeadingInsetPt, legacyTrailingInsetPt } from './table-origin.ts';
+import { contentAlignedReachPt } from './table-origin.ts';
 
 /**
  * The cell's horizontal insets after widening. A narrow table may share its grid lines or
@@ -49,7 +54,7 @@ function leadingIndentPt(structure: SemanticTableStructure): number {
  */
 export function preferredSpreadWidths(
   structure: SemanticTableStructure,
-  content: Pick<AutofitColumnContent, 'preferredWidths' | 'spans' | 'verticalHolds'>,
+  content: Pick<AutofitColumnContent, 'insets' | 'preferredWidths' | 'spans' | 'verticalHolds'>,
   minimums: readonly number[],
   contentWidthPt: number,
   depth: number
@@ -93,17 +98,21 @@ export function preferredSpreadWidths(
   if (tableWidth.type === 'auto' && scale > 1)
     for (let column = 0; column < count; column++) preferred[column] = columnWidthsPt[column]!;
   // A legacy content-aligned table spans the text column plus its outer content insets.
-  const outerMargins = structure.legacyContentAlignment
-    ? legacyLeadingInsetPt(structure) + legacyTrailingInsetPt(structure)
-    : 0;
+  const outerMargins = contentAlignedReachPt(structure);
   const roomPt = Math.max(0, contentWidthPt + outerMargins - leadingIndentPt(structure));
   // Minimums wider than the table keep their width, up to its room or the width it already
   // has, whichever is wider: an indent can leave the text column no room.
   const fitPt = Math.max(roomPt, totalPt);
   if (tableWidth.type === 'auto')
-    return spreadPreferredColumns(preferred, minimums, roomPt, fitPt, false);
+    return spreadPreferredColumns(preferred, minimums, roomPt, fitPt, {
+      stretch: false,
+      insets: content.insets,
+    });
   return tableWidth.value > 0
-    ? spreadPreferredColumns(preferred, minimums, totalPt, fitPt, true)
+    ? spreadPreferredColumns(preferred, minimums, totalPt, fitPt, {
+        stretch: true,
+        insets: content.insets,
+      })
     : undefined;
 }
 
@@ -147,4 +156,37 @@ export function percentShareWidths(
   // Only a table that already sits at its settled width shares out what its columns gain.
   if (Math.abs(totalPt - targetPt) > ONE_TWIP_PT) return undefined;
   return equalShareWidenedWidths(widths, minimums);
+}
+
+const WIDTH_EPSILON_PT = 0.01;
+
+/**
+ * A nested fixed table's columns once they give way to fit the cell's room: each down to its
+ * own content, measured as cells with any spacing gaps outside them.
+ */
+export function fixedNestedWidths(
+  structure: SemanticTableStructure,
+  roomPt: number,
+  minimumsOf: () => readonly number[]
+): readonly number[] {
+  const columns = structure.columnWidthsPt;
+  let total = 0;
+  for (const width of columns) total += width;
+  if (!(roomPt > 0) || total <= roomPt + WIDTH_EPSILON_PT) return columns;
+  const minimums = minimumsOf();
+  const gaps = spacingGapsPt(structure);
+  const room = Math.max(0, roomPt - gaps);
+  // No column is sized by content here: every one gives way from its stated width.
+  const sizedByContent = columns.map(() => false);
+  const cells = contentSizedWidths(
+    spacedCellWidths(structure),
+    sizedByContent,
+    minimums,
+    minimums,
+    room,
+    room,
+    // No overflow evidence covers a nested fixed table: its columns keep only hairlines.
+    { currentPt: room, insets: [] }
+  );
+  return gaps > 0 ? columnsAroundCells(cells, gaps) : cells;
 }

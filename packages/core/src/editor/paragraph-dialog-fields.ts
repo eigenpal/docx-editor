@@ -155,11 +155,7 @@ export interface ParagraphDialogMixed {
 /** The five members that are checkboxes, and so share a label key with their control. * @public
  */
 export type ParagraphFlagKey =
-  | 'contextualSpacing'
-  | 'keepNext'
-  | 'keepLines'
-  | 'widowControl'
-  | 'pageBreakBefore';
+  'contextualSpacing' | 'keepNext' | 'keepLines' | 'widowControl' | 'pageBreakBefore';
 
 /** @public */
 export const NO_MIXED_FIELDS: ParagraphDialogMixed = {

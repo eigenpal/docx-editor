@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -69,12 +69,7 @@ export function collaborationMigrationNeed(state: Uint8Array): CollaborationMigr
  * @public
  */
 export type CollaborationMigrationCheck =
-  | 'paragraphs'
-  | 'text'
-  | 'formatting'
-  | 'structure'
-  | 'media'
-  | 'links';
+  'paragraphs' | 'text' | 'formatting' | 'structure' | 'media' | 'links';
 
 /** A paragraph by its part and its position in that part, from 1. @public */
 export interface CollaborationMigrationPosition {

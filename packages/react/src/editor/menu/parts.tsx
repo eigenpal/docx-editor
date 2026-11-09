@@ -47,6 +47,7 @@ import { usePlatformShortcut } from '../usePlatformShortcut';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { useImageInsertOptional } from '../images/ImageInsert';
 import { MenuTableGrid } from './menu-flyouts';
+import { MenuChartPicker } from './menu-chart';
 import { MenuWatermark } from './menu-watermark';
 import { MenuBookmark, MenuGoToBookmarkRow } from './menu-bookmark';
 import { MenuLinkRow } from './menu-link-row';
@@ -771,6 +772,7 @@ export function MenuEntry({ entry, children }: { entry: ChromeMenuEntry; childre
   if (entry.slot === 'insert.goToBookmark') return <MenuGoToBookmarkRow />;
   if (entry.slot === 'image.insert') return <MenuImageInsert />;
   if (entry.picker === 'tableGrid') return <MenuTablePicker entry={entry} />;
+  if (entry.picker === 'chartType') return <MenuChartPicker entry={entry} />;
   return (
     <MenuItem
       slotId={entry.slot}

@@ -24,7 +24,7 @@ function docx(filler = false): Uint8Array {
     paragraphs.push(`<w:p><w:r><w:t>Body paragraph ${index}</w:t></w:r></w:p>`);
   }
   const lines: string[] = [];
-  for (let total = 0; filler && total < 700 * 1024; ) {
+  for (let total = 0; filler && total < 700 * 1024;) {
     const line = `<l>filler line ${lines.length} carrying a little ordinary sentence text.</l>`;
     lines.push(line);
     total += line.length;

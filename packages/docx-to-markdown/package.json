@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/docx-to-markdown",
-  "version": "2.34.0",
+  "version": "2.36.0",
   "private": false,
   "publishConfig": {
     "access": "public"
@@ -46,16 +46,16 @@
     "check:consumer": "node ../../scripts/check-markdown-media-consumer.mjs"
   },
   "peerDependencies": {
-    "@docx-editor.dev/core": "~2.34.0"
+    "@docx-editor.dev/core": "~2.36.0"
   },
   "dependencies": {
-    "@docx-editor.dev/fonts": "~2.34.0",
+    "@docx-editor.dev/fonts": "~2.36.0",
     "fflate": "^0.8.2"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "^20.8.3",
+    "@happy-dom/global-registrator": "^21.0.4",
     "@docx-editor.dev/core": "workspace:*",
-    "micromark": "^4.0.2",
+    "micromark": "^4.0.3",
     "micromark-extension-gfm": "^3.0.0",
     "typescript7": "npm:typescript@^7.0.2"
   },

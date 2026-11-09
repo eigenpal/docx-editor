@@ -40,6 +40,8 @@ export function probeRowFragmentProgress(
   options?: { readonly requireEveryCell?: boolean }
 ): boolean {
   let lineCounter = 0;
+  // Before mode 15 a cell object that would cross the page keeps its row from starting here.
+  let anchorCrosses = false;
   const probeDeps: TableFlowDeps = {
     ...stripAnchorSinksForProbe(deps),
     // Reads only: a probe never retains a break, but it may reuse one placement measured.
@@ -48,6 +50,7 @@ export function probeRowFragmentProgress(
     vMergeResolveBudget: undefined,
     onCellBreakKey: undefined,
     nextLineId: () => `probe-progress-${lineCounter++}`,
+    ...(options?.requireEveryCell ? { onCellAnchorCrossing: () => (anchorCrosses = true) } : {}),
   };
   const placed = layoutRowFragmentBounded(
     row,
@@ -64,6 +67,7 @@ export function probeRowFragmentProgress(
   );
   return (
     placed.fitted &&
+    !anchorCrosses &&
     (!options?.requireEveryCell ||
       placed.record.cells.every(
         (cell, index) =>

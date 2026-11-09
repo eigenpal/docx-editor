@@ -151,8 +151,7 @@ export type ColorLowerRefusal = { readonly ok: false; readonly reason: string };
  * named.
  */
 export type ColorLowerResult =
-  | { readonly ok: true; readonly color: TreeDocColorValue }
-  | ColorLowerRefusal;
+  { readonly ok: true; readonly color: TreeDocColorValue } | ColorLowerRefusal;
 
 /** Border/fill auto resolves to Word's automatic text colour for paint; XML keeps `auto`. */
 const AUTO_BORDER_RENDER_HEX = '000000';

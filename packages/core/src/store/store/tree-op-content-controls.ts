@@ -252,10 +252,7 @@ export interface TreeOpTarget {
   readonly range?: OffsetSpan;
   /** The applier's point-placement rule, when this target inserts content. */
   readonly point?:
-    | 'run-content'
-    | 'paragraph-sibling'
-    | 'inline-control-split'
-    | 'container-marker';
+    'run-content' | 'paragraph-sibling' | 'inline-control-split' | 'container-marker';
   /** Boundary affinity for run-content insertion. */
   readonly bias?: 'left' | 'right';
   /**

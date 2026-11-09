@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -41,8 +41,8 @@ test('native comment ranges and comments flag preserve text and pages', async ()
       items.map((i) => ('str' in i ? { str: i.str, transform: i.transform, width: i.width } : i));
     expect(comparable(contentA.items)).toEqual(comparable(contentB.items));
   } finally {
-    await a.destroy();
-    await b.destroy();
+    await a.loadingTask.destroy();
+    await b.loadingTask.destroy();
   }
 });
 
@@ -66,7 +66,7 @@ test('All Markup with comments shrinks the page beside a pane of comment balloon
     // The annotation moves with its range: inside the shrunk page's left part.
     expect(annotation!.rect[2]).toBeLessThan(612 * 0.76);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
   const plain = await read(hidden.bytes);
   try {
@@ -75,7 +75,7 @@ test('All Markup with comments shrinks the page beside a pane of comment balloon
     );
     expect(strings.join('')).not.toContain('Commented [');
   } finally {
-    await plain.destroy();
+    await plain.loadingTask.destroy();
   }
 });
 
@@ -105,7 +105,7 @@ test('the comment pane numbers replies in sequence and wraps long words', async 
     const { width } = page.getViewport({ scale: 1 });
     for (const item of items) expect(item.transform[4] + item.width).toBeLessThanOrEqual(width);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 
@@ -123,7 +123,7 @@ test('link targets move with a page shrunk beside the comment pane', async () =>
     try {
       return (await pdf.getDestination('target')) as [unknown, unknown, number, number];
     } finally {
-      await pdf.destroy();
+      await pdf.loadingTask.destroy();
     }
   };
   const plain = await target(
@@ -164,7 +164,7 @@ test('comment balloons that do not fit beside the page are reported, not painted
     // Every comment keeps its annotation.
     expect(await page.getAnnotations()).toHaveLength(count);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 
@@ -189,7 +189,7 @@ test('proposed, original, and markup views never mutate the DOCX', async () => {
           .replace(/ /g, '')
       ).toBe(expected);
     } finally {
-      await pdf.destroy();
+      await pdf.loadingTask.destroy();
     }
   }
   expect(input).toEqual(before);
@@ -204,7 +204,7 @@ test('table shading, compound borders and cell text export strictly', async () =
     const content = await (await pdf.getPage(1)).getTextContent();
     expect(content.items.map((i) => ('str' in i ? i.str : '')).join('')).toContain('Cell A');
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 
@@ -226,6 +226,6 @@ test('CFF font subsets extract text', async () => {
       'Century Gothic text'
     );
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

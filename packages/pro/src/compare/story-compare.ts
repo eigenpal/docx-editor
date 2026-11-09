@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -459,8 +459,7 @@ const INSERTED: ReadonlySet<string> = new Set(['ins', 'moveTo']);
 const DELETED: ReadonlySet<string> = new Set(['del', 'moveFrom']);
 
 type HunkOp =
-  | DiffOp
-  | { readonly op: 'pair'; readonly base: BlockUnit; readonly revised: BlockUnit };
+  DiffOp | { readonly op: 'pair'; readonly base: BlockUnit; readonly revised: BlockUnit };
 
 /**
  * In a run of changes, a deleted and an inserted block of the same kind compare as a pair, in

@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A list button reused any document definition whose first level had the wanted format, such as a heading numbering, and joined a list in the paragraph before or after the selection.",
+  "after": "A list button reuses only a definition with the levels it authors, joins only a list in the paragraph before the selection, and puts a paragraph that joins a level linked to a paragraph style into that style when the style numbers on the same definition and level. A heading of such a level no longer decides which list a selection joins.",
+  "reason": "Only the local choice of which existing operations to send changes. The button still sends the same numbering part inserts, setParagraphProperties, and setListNumbering operations, which released participants already apply with the same meaning.",
+  "tests": [
+    "packages/core/src/editor/__tests__/list-toggle-own-definition.test.ts",
+    "packages/core/src/store/__tests__/numbering-part-schema.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-list-heading-numbering.test.ts"
+  ],
+  "changeset": "list-toggle-own-definition",
+  "migration": null
+}

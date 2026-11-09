@@ -25,12 +25,7 @@ import { formatDecimal } from './numbering-format.ts';
 
 /** The number formats a page field's `\*` switch can select (ST_NumberFormat names). */
 export type PageFieldNumberFormat =
-  | 'decimal'
-  | 'lowerRoman'
-  | 'upperRoman'
-  | 'lowerLetter'
-  | 'upperLetter'
-  | 'numberInDash';
+  'decimal' | 'lowerRoman' | 'upperRoman' | 'lowerLetter' | 'upperLetter' | 'numberInDash';
 
 /** How one page field renders its computed value. */
 export interface PageFieldSwitches {

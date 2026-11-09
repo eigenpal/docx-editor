@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -25,7 +25,7 @@ test('a run of text emits one text matrix and one TJ array, not one per glyph', 
     expect(shows).toBeLessThan(text.length / 4);
     expect(shows).toBeGreaterThan(0);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 
@@ -61,6 +61,6 @@ test('an adjustment past the writer range breaks the batch instead of failing th
     const matrices = list.fnArray.filter((fn: number) => fn === OPS.setTextMatrix).length;
     expect(matrices).toBeGreaterThanOrEqual(2);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

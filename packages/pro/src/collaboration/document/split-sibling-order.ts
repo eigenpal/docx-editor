@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -157,7 +157,7 @@ export function splitSiblingRanks(
     }
     return found;
   };
-  for (let start = 0; start < items.length; ) {
+  for (let start = 0; start < items.length;) {
     const head = items[start]!;
     const key = originsKey(head);
     if (sharing.get(key)! < 2 || !splitHere(head)) {
@@ -191,7 +191,7 @@ export function splitSiblingRanks(
     let first = start;
     let relistings = 0;
     const members = blocks.flatMap((block) => block.items);
-    for (let at = start; at > 1; ) {
+    for (let at = start; at > 1;) {
       const item = items[at - 1]!;
       const removed = members.find((member) => member.deleted && inItem(item.rightOrigin, member));
       if (!removed) break;
@@ -946,7 +946,7 @@ export function splitSiblingOrder(ids: readonly LogicalId[], ranks: SiblingRanks
     firsts.push(index);
   });
   let moved = false;
-  for (let start = 0; start < firsts.length; ) {
+  for (let start = 0; start < firsts.length;) {
     const first = ranks.get(ids[firsts[start]!]!);
     let end = start + 1;
     while (first && end < firsts.length && ranks.get(ids[firsts[end]!]!)?.group === first.group)

@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/pro",
-  "version": "2.34.0",
+  "version": "2.36.0",
   "description": "Commercial capabilities for @docx-editor.dev: the review module (comments, tracked changes, markup rendering), custom inline nodes, realtime collaboration, and advanced drawing rendering.",
   "sideEffects": false,
   "type": "module",
@@ -67,6 +67,7 @@
   },
   "files": [
     "dist",
+    "licenses",
     "docs",
     "!dist/metafile-*.json",
     "LICENSE.md",
@@ -79,9 +80,9 @@
     "license:add": "license-check-and-add add -f license-check.json"
   },
   "peerDependencies": {
-    "@docx-editor.dev/core": "~2.34.0",
-    "@docx-editor.dev/react": "~2.34.0",
-    "@docx-editor.dev/vue": "~2.34.0",
+    "@docx-editor.dev/core": "~2.36.0",
+    "@docx-editor.dev/react": "~2.36.0",
+    "@docx-editor.dev/vue": "~2.36.0",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0",
     "vue": "^3.3.0",
@@ -116,7 +117,7 @@
     }
   },
   "dependencies": {
-    "emf-converter": "2.0.2",
+    "emf-converter": "4.28.0",
     "y-protocols": "^1.0.7"
   },
   "devDependencies": {
@@ -125,18 +126,18 @@
     "@docx-editor.dev/i18n": "workspace:*",
     "@docx-editor.dev/react": "workspace:*",
     "@docx-editor.dev/vue": "workspace:*",
-    "@happy-dom/global-registrator": "^20.8.3",
-    "@hocuspocus/provider": "^4.6.0",
-    "@testing-library/react": "^16.0.0",
+    "@happy-dom/global-registrator": "^21.0.4",
+    "@hocuspocus/provider": "^4.8.0",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "^19.3.0",
     "fflate": "^0.8.2",
     "license-check-and-add": "^4.0.5",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "typescript7": "npm:typescript@^7.0.2",
     "y-webrtc": "^10.3.0",
-    "yjs": "^13.6.32",
-    "zod": "^4.4.3"
+    "yjs": "^13.6.33",
+    "zod": "^4.6.7"
   },
   "keywords": [
     "docx",
@@ -146,7 +147,7 @@
     "collaboration"
   ],
   "author": {
-    "name": "EigenPal, Inc.",
+    "name": "Eigenpal, Inc.",
     "email": "licensing@eigenpal.com",
     "url": "https://eigenpal.com"
   },

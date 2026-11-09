@@ -1,7 +1,8 @@
 // A chart is no picture in every state the page can show it. Without a chart renderer, a
 // wrapped chart shows its saved fallback and a chart without one shows its placeholder; in
-// both, and for a bare chart drawing, picture edits refuse with `chart-drawing` and a delete
-// removes the whole chart, unless the chart's own locks forbid it. The drawn state, with the
+// both, picture edits refuse with `chart-drawing` and a delete removes the whole chart, unless
+// the chart's own locks forbid it. A bare chart drawing also takes its frame edits: size,
+// position, wrap and alt text. The drawn state, with the
 // real renderer, is covered in `pro/src/drawing/__tests__/chart-drawing-ops.test.ts`.
 
 import { expect, test } from 'bun:test';
@@ -149,12 +150,51 @@ for (const classic of [false, true]) {
     expectWholeDelete(part, ids, atomId);
   });
 
-  test(`${name}: a bare chart drawing refuses picture edits and deletes whole`, () => {
+  test(`${name}: a bare chart drawing takes frame edits, refuses picture edits, deletes whole`, () => {
     const { part, atomId, projection } = chart({ classic });
     expect(projection.chartSummary?.shownAs).toBe('placeholder');
     expect(projection.drawingNodeId).toBe(atomId);
-    expectRefusals(part, [atomId]);
+    const frame = new Set(['resizeDrawing', 'setDrawingWrap', 'setDrawingMetadata']);
+    for (const op of editsFor(atomId)) {
+      // An inline chart has no position to set; the wrap change makes it float first.
+      const expected = frame.has(op.op)
+        ? null
+        : op.op === 'positionDrawing'
+          ? 'invalid-drawing-value'
+          : 'chart-drawing';
+      expect([op.op, validateTreeOp(part, op)]).toEqual([op.op, expected]);
+    }
     expectWholeDelete(part, [atomId], atomId);
+  });
+
+  test(`${name}: a bare chart resizes, floats and moves by its own anchor`, () => {
+    const { part, atomId } = chart({ classic });
+    const resized = applyTreeOp(part, {
+      op: 'resizeDrawing',
+      drawingNodeId: atomId,
+      extentEmu: { cx: 914400, cy: 457200 },
+    });
+    if (!resized.ok) throw new Error(resized.reason);
+    expect(String(serializeOoxmlPart(resized.part))).toContain('cx="914400" cy="457200"');
+    const floated = applyTreeOp(resized.part, {
+      op: 'setDrawingWrap',
+      drawingNodeId: atomId,
+      wrap: 'square',
+    });
+    if (!floated.ok) throw new Error(floated.reason);
+    const floatedXml = String(serializeOoxmlPart(floated.part));
+    expect(floatedXml).toContain('<wp:anchor');
+    expect(floatedXml).toContain('<wp:wrapSquare');
+    expect(floatedXml).toMatch(/<c:chart |<cx:chart /);
+    const moved = applyTreeOp(floated.part, {
+      op: 'positionDrawing',
+      drawingNodeId: atomId,
+      position: { mode: 'simple', horizontalEmu: 127000, verticalEmu: 254000 },
+    });
+    if (!moved.ok) throw new Error(moved.reason);
+    const movedXml = String(serializeOoxmlPart(moved.part));
+    expect(movedXml).toContain('<wp:posOffset>127000</wp:posOffset>');
+    expect(movedXml).toContain('<wp:posOffset>254000</wp:posOffset>');
   });
 
   test(`${name}: the chart's own select lock keeps its whole delete from running`, () => {

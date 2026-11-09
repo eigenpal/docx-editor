@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -206,6 +206,31 @@ test('formatting cards describe changed values and omit unchanged properties', (
   expect(xml).toContain('w:val="24"');
   expect(xml).not.toContain('<w:b/>');
   editor.destroy();
+});
+
+test('formatting cards describe a highlight change', () => {
+  const cases = [
+    { rPr: '<w:highlight w:val="yellow"/>', prior: '', value: 'yellow', detail: 'yellow' },
+    {
+      rPr: '<w:highlight w:val="none"/>',
+      prior: '<w:highlight w:val="green"/>',
+      value: 'none',
+      detail: 'None',
+    },
+    { rPr: '', prior: '<w:highlight w:val="yellow"/>', value: null, detail: 'Default' },
+  ] as const;
+  for (const { rPr, prior, value, detail } of cases) {
+    const editor = mount({
+      body: `<w:p><w:r><w:rPr>${rPr}<w:rPrChange w:id="5" ${stamp}><w:rPr>${prior}</w:rPr></w:rPrChange></w:rPr><w:t>Example</w:t></w:r></w:p>`,
+    });
+    const card = editor.getReviewItems()[0]!;
+    if (card.kind !== 'revision') throw new Error('expected formatting');
+    expect(card.item.formattingChanges).toEqual([{ property: 'highlight', value }]);
+    const label = `Formatted: Highlight: ${detail}`;
+    expect(revisionItemLabel(card.item, createT(en))).toBe(label);
+    expect(vueRevisionItemLabel(card.item, createT(en))).toBe(label);
+    editor.destroy();
+  }
 });
 
 test('formatting cards describe a paragraph direction change', () => {

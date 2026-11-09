@@ -403,7 +403,7 @@ export function resolveRunStyle(
         break;
       }
       case 'shd': {
-        // Strict hex fill only; theme/pattern rendering is deferred. Paint lets highlight
+        // Strict hex fill, with a pattern mixed into one colour. Paint lets highlight
         // override this colour when both are present.
         style.shading = resolveOoxmlShadingFill(property.attributes) ?? null;
         break;

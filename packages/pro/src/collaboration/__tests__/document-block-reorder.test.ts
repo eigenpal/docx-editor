@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -253,10 +253,9 @@ describe('moveTable after two concurrent moves of the same table', () => {
   });
 });
 
-describe('properties a formatting edit puts back in schema order', () => {
-  // A formatting edit writes paragraph and run properties in schema order. Properties
-  // authored out of order then move toward the start of their container, the same reorder
-  // as a block moved up, inside one transaction with the formatting change.
+describe('properties authored out of schema order', () => {
+  // A file with paragraph and run properties out of schema order opens with them in order, so
+  // every peer seeds and edits the same ordered containers a plain store holds.
   const OUT_OF_ORDER = zipDocument(
     '<w:p><w:pPr><w:jc w:val="center"/><w:ind w:left="720"/><w:spacing w:after="0"/>' +
       '<w:keepNext/><w:pStyle w:val="Heading1"/></w:pPr>' +
@@ -287,13 +286,9 @@ describe('properties a formatting edit puts back in schema order', () => {
     if (!loaded.ok) throw new Error(loaded.reason);
     const main = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
     const store = new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
-    const paragraph = names(store.bodyStore().part.root, localName);
     const result = store.transact(BODY, (context) => context.apply(op));
     if (!result.ok) throw new Error(result.reason);
-    const after = names(store.bodyStore().part.root, localName);
-    // The edit must reorder what it keeps, or this test checks nothing.
-    expect(after).not.toEqual(paragraph);
-    return after;
+    return names(store.bodyStore().part.root, localName);
   };
 
   const cases: readonly [string, 'pPr' | 'rPr', (paragraphId: string) => TreeDocOp][] = [
@@ -332,6 +327,15 @@ describe('properties a formatting edit puts back in schema order', () => {
         }) as TreeDocOp,
     ],
   ];
+  test('both peers open the properties in schema order', async () => {
+    const { alice, bob } = await harness.pair(OUT_OF_ORDER);
+    for (const peer of [alice, bob]) {
+      expect(names(bodyOf(peer), 'pPr')).toEqual(['pStyle', 'keepNext', 'spacing', 'ind', 'jc']);
+      expect(names(bodyOf(peer), 'rPr')).toEqual(['b', 'i', 'color', 'u']);
+    }
+    harness.expectConverged(alice, bob);
+  });
+
   for (const [label, localName, opFor] of cases) {
     test(`${label} leaves both peers with the properties a plain store keeps`, async () => {
       const { alice, bob } = await harness.pair(OUT_OF_ORDER);

@@ -10,7 +10,38 @@ import {
   type TabStop,
 } from './paragraph-tabs.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
+import { displayText, type ResolvedRunStyle } from './run-style.ts';
 import type { TextMeasurer } from './semantic-records.ts';
+
+/** The marker as it paints: `w:caps` draws it in capitals, so it measures in capitals too. */
+export function listMarkerDisplayText(item: ResolvedListItem): string {
+  return displayText(item.markerText, item.markerStyle);
+}
+
+/**
+ * The space suffix in ems of the marker's size, whatever the marker's face: the advance of the
+ * Arial space (569 of 2048 units). Reference renderings give the same gap after markers in
+ * Times New Roman, Courier New, Arial, and Wingdings, at every size, superscript included.
+ */
+const SUFFIX_SPACE_EM = 569 / 2048;
+
+/**
+ * The width of a `w:suff="space"` suffix. It does not take the marker face's own space: it is
+ * 569/2048 em at the marker's size, scaled and spaced as the marker is, so a monospaced or
+ * symbol bullet gets the same gap as any other.
+ */
+export function listSuffixSpaceWidth(style: ResolvedRunStyle): number {
+  return (
+    SUFFIX_SPACE_EM * style.fontSizePt * (style.horizontalScalePercent / 100) +
+    style.characterSpacingPt
+  );
+}
+
+/** The ascent of the marker glyphs as they paint, or 0 for an empty or hidden marker. */
+export function listMarkerAscent(item: ResolvedListItem, measurer: TextMeasurer): number {
+  if (item.markerText.length === 0 || item.markerStyle.hidden) return 0;
+  return measurer.lineMetrics(item.markerStyle, listMarkerDisplayText(item)).baseline;
+}
 
 /**
  * The marker's own width: a picture bullet's authored extent, or the measured glyphs.
@@ -20,7 +51,7 @@ import type { TextMeasurer } from './semantic-records.ts';
  */
 export function listMarkerWidth(item: ResolvedListItem, measurer: TextMeasurer): number {
   if (item.picBullet) return item.picBullet.width;
-  return measurer.measure(item.markerText, item.markerStyle);
+  return measurer.measure(listMarkerDisplayText(item), item.markerStyle);
 }
 
 /** Whether this item paints anything in its marker slot at all. */
@@ -118,7 +149,7 @@ export function listFirstLineOffset(
   const markerEnd = markerSlotX(item, markerWidth) + markerWidth;
   if (item.suffix === 'nothing') return markerEnd - textLeft;
   if (item.suffix === 'space') {
-    return markerEnd + measurer.measure(' ', item.markerStyle) - textLeft;
+    return markerEnd + listSuffixSpaceWidth(item.markerStyle) - textLeft;
   }
   if (markerEnd <= textLeft) {
     // `tab` with a marker that fits: the indent is the implicit stop, and an authored stop

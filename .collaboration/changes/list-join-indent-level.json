@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A paragraph that a list button joined to the list above always took level 0 and kept its own indent.",
+  "after": "It takes the level its first line reaches on a style-linked list, or the level of the item above on a plain list, and loses its own indent.",
+  "reason": "The toggle still writes the same paragraph property and list numbering operations, only with another level and without w:ind. Shared nodes, text offsets, the operation format, and package serialization stay the same.",
+  "tests": [
+    "packages/core/src/editor/__tests__/list-join-indent-level.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-list-heading-numbering.test.ts"
+  ],
+  "changeset": "list-join-indent-level",
+  "migration": null
+}

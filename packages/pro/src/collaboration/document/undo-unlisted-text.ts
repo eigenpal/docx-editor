@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -61,7 +61,7 @@ function listedBy(
 ): Map<Y.Array<LogicalId>, Set<LogicalId>> {
   const listed = new Map<Y.Array<LogicalId>, Set<LogicalId>>();
   for (const run of deleteSetRuns((step as { insertions?: unknown } | undefined)?.insertions)) {
-    for (let clock = run.clock; clock < run.clock + run.length; ) {
+    for (let clock = run.clock; clock < run.clock + run.length;) {
       const item = structAt(doc, { client: run.client, clock });
       if (!item) break;
       clock = item.id.clock + item.length;
@@ -158,7 +158,7 @@ export function undoKeeps(
 ): ((item: Y.Item) => boolean) | null {
   const sources = new Set<Y.Map<unknown>>();
   for (const run of deleteSetRuns((step as { deletions?: unknown } | undefined)?.deletions)) {
-    for (let clock = run.clock; clock < run.clock + run.length; ) {
+    for (let clock = run.clock; clock < run.clock + run.length;) {
       const item = structAt(doc, { client: run.client, clock });
       if (!item) break;
       clock = item.id.clock + item.length;

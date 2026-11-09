@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -119,7 +119,7 @@ export class CopyHolderOrder {
     const doc = this.textOf(paragraphId)?.doc;
     const pieces: { start: number; end: number; source: Y.Text | null }[] = [];
     const end = from + length;
-    for (let clock = from; clock < end; ) {
+    for (let clock = from; clock < end;) {
       let struct: Y.AbstractStruct | null = null;
       try {
         struct =

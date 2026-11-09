@@ -83,12 +83,18 @@ jobs:
           # Downloading the binary takes seconds; caching it only fills the cache.
           no-cache: true
       - name: Restore npm cache
+        id: npm-cache
         if: "matrix.check == 'consumers' || matrix.check == 'packages'"
         uses: actions/cache/restore@v6
         with:
           path: ~/.npm
           key: npm-${{ matrix.check }}-${{ hashFiles('bun.lock') }}
           restore-keys: npm-${{ matrix.check }}-
+      - name: Revalidate npm metadata after a lockfile change
+        # A partial cache match predates this lockfile. Its package metadata can miss
+        # versions the lockfile now pins, and prefer-offline would trust it.
+        if: "(matrix.check == 'consumers' || matrix.check == 'packages') && steps.npm-cache.outputs.cache-hit != 'true'"
+        run: echo "npm_config_prefer_offline=false" >> "$GITHUB_ENV"
       - name: Install dependencies
         run: bash scripts/ci/install-dependencies.sh
       - name: Lint
@@ -302,11 +308,17 @@ jobs:
           # Downloading the binary takes seconds; caching it only fills the cache.
           no-cache: true
       - name: Restore npm cache
+        id: npm-cache
         uses: actions/cache/restore@v6
         with:
           path: ~/.npm
           key: npm-build-${{ hashFiles('bun.lock') }}
           restore-keys: npm-build-
+      - name: Revalidate npm metadata after a lockfile change
+        # A partial cache match predates this lockfile. Its package metadata can miss
+        # versions the lockfile now pins, and prefer-offline would trust it.
+        if: "steps.npm-cache.outputs.cache-hit != 'true'"
+        run: echo "npm_config_prefer_offline=false" >> "$GITHUB_ENV"
       - name: Install dependencies
         run: bash scripts/ci/install-dependencies.sh
       - name: Build packages

@@ -27,8 +27,8 @@ function load(body: string): OoxmlPart {
 }
 
 // Word's own shape: begin, the instruction and the separator open the field INSIDE the first
-// entry's paragraph, followed by that entry's text. Verified against the TOC in the saved
-// `demo.docx`, whose opening paragraph carries a `w:hyperlink` with the first heading, a tab
+// entry's paragraph, followed by that entry's text. Verified against the TOC in a saved
+// corpus document, whose opening paragraph carries a `w:hyperlink` with the first heading, a tab
 // and its PAGEREF. A paragraph holding ONLY the opening is a different shape, covered below.
 const TOC_FIELD =
   '<w:p><w:pPr><w:pStyle w:val="TOC1"/></w:pPr>' +

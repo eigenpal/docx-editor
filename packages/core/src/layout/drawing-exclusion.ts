@@ -80,7 +80,6 @@ export class DrawingExclusionConvergenceError extends Error {
 
 export {
   MAX_TOP_AND_BOTTOM_CLEARANCE_ATTEMPTS,
-  ownTopAndBottomSkip,
   topAndBottomSkipBeforeLine,
   travellingTopAndBottomSkip,
 } from './top-and-bottom-clearance.ts';
@@ -478,7 +477,7 @@ const placedByLayouter = new WeakMap<
   WeakMap<DrawingProjection, DrawingProjection>
 >();
 
-function placedTextboxProjection(
+export function placedTextboxProjection(
   projection: DrawingProjection,
   layoutTextboxStory: TextboxStoryLayouter | undefined
 ): DrawingProjection {

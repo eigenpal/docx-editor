@@ -204,7 +204,8 @@ describe('gradient fills', () => {
           WPS,
           shape(
             `${XFRM}<a:prstGeom prst="rect"/><a:gradFill><a:gsLst>` +
-              '<a:gs pos="0"><a:hslClr hue="0" sat="100000" lum="50000"/></a:gs><a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs>' +
+              '<a:gs pos="0"><a:srgbClr val="FF0000"><a:lumMod val="abc"/></a:srgbClr></a:gs>' +
+              '<a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs>' +
               '</a:gsLst></a:gradFill>'
           )
         )

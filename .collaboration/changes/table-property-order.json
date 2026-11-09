@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Two peers who each gave one row or cell a property at once could leave the row with two w:trPr, the cell with two w:tcPr, or one w:tcPr with a repeated child. Every later table edit then refused on every replica until a reopen, and a save wrote the repeats, with table, row, and cell properties out of schema order.",
+  "after": "A file opens, and a save writes, each row and cell with one w:trPr, w:tblPrEx, and w:tcPr, a later copy replacing a property an earlier one states, and w:tblPr, w:tblPrEx, w:trPr, and w:tcPr children in schema order, a w:tcPr or w:tblPrEx keeping the last of a repeated child. The next table edit on a merged row or cell first merges its containers the same way, writing the merged container over the first copy and deleting the others. Repeated revision markup stays as authored, and edits refuse it as before. The canonical fingerprint still reads the tree.",
+  "reason": "No shared field, update meaning, or conflict winner changes: every replica, released or new, shows the same shared state the same way, and the singleton rules are unchanged. The heal writes ordinary node replacements and deletions that released replicas already apply, under ids from the editing replica, so a released peer sees the healed row as any other edit. Two peers who heal at once both converge on what the shared list merges, and a save keeps the later copy of any repeat. Reading and writing XML change only how a package is read and saved, and a room seeds its shared state from one tree.",
+  "tests": [
+    "packages/core/src/store/__tests__/table-property-order.test.ts",
+    "packages/core/src/store/__tests__/table-property-heal.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-table-property-containers.test.ts"
+  ],
+  "changeset": "table-property-order",
+  "migration": null
+}

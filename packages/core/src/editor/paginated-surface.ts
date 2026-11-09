@@ -133,6 +133,7 @@ import {
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
 import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
+import { selectPastedDrawing } from './surface-chart-clipboard.ts';
 import { createHiddenMarkEditing, type RevisionView } from './hidden-mark-joins.ts';
 import { drawingSelectionPosition } from './surface-drawing-selection.ts';
 import { syncActiveFieldShading } from './surface-field-shading.ts';
@@ -330,6 +331,7 @@ import {
 } from './surface-content-control-range.ts';
 import { createHeaderFooterOps } from './surface-hf-ops.ts';
 import { createImageOps } from './surface-image-ops.ts';
+import { createChartOps } from './surface-chart-ops.ts';
 import {
   createHeaderFooterScopeController,
   openBlankHeaderFooter,
@@ -674,7 +676,8 @@ export function mountPaginatedSurface(
     collaborationSession ?? session,
     () => selection,
     () => partOfNodeId(session, selection.head.paragraphId) ?? session.part(),
-    () => session.packageRevision()
+    () => session.packageRevision(),
+    () => resolveSelectedDrawingRecord(surface)?.drawingNodeId ?? null
   );
   function moveDocumentHistory(direction: 'undo' | 'redo'): void {
     let mark: ReturnType<TreeDocxSession['undo']> = null;
@@ -698,6 +701,11 @@ export function mountPaginatedSurface(
     const carried =
       direction === 'undo' ? historySelectionOf(collaborationSession, collaborationPort) : null;
     restoreSelection(carried ?? result.selection ?? mark);
+    // A chart or picture edit steps back with the object still selected, so the next undo,
+    // the Chart pane, and the handles stay on it. `selectDrawing` refuses a drawing that the
+    // step removed, and the caret then stays where the selection put it.
+    if (!carried && result.selection && result.drawing)
+      surface.selectDrawing(result.drawing, result.selection.head.paragraphId);
   }
   function restoreCaretFormat(value: CaretFormatSnapshot): void {
     selectionSync.noteModelMoved();
@@ -1313,6 +1321,7 @@ export function mountPaginatedSurface(
       ) !== null,
     ...listDefinitionReads(() => withNumberingStyleLinks(numberingIndex(), styleCascade())),
     styleCascade,
+    defaultTabStopPt,
   });
   /** The contract's `replacementLanding`; the hyperlink lane reads the same rule. */
   function replacementLanding(paragraphId: string, start: number, end: number): number | null {
@@ -3047,6 +3056,13 @@ export function mountPaginatedSurface(
     return editingMode === 'suggest' && writer ? writer : undefined;
   }
 
+  /** Where typed or composed text leaves the caret; a tracked insertion keeps the prompt. */
+  function typedLanding(paragraphId: string, offset: number, length: number): number {
+    const part = partOfNodeId(session, paragraphId) ?? session.part();
+    const tracked = trackedAuthorOrNone() !== undefined;
+    return promptInsertionLanding(part, paragraphId, offset, length, tracked);
+  }
+
   /** Suggesting attributes text and structural row edits as Word tracked changes. */
   function trackedOps(ops: readonly TreeDocOp[], date = revisionDateNow()): TreeDocOp[] {
     const author = trackedAuthorOrNone();
@@ -3405,6 +3421,8 @@ export function mountPaginatedSurface(
       publishLocalCollaborationSelection();
     },
     commit: (run) => commit(run),
+    insertOwner: () => insertOwnerOf(contentControlAtCaret()),
+    promptLanding: typedLanding,
     // The composition readback writes through the SAME lane as every other edit. Calling the
     // session directly skipped `trackedOps` and `writeRefusal`, so IME text in suggesting
     // mode landed untracked — the reviewer proposing a change was editing the document —
@@ -4372,6 +4390,8 @@ export function mountPaginatedSurface(
       trackedChangeLanded: () => runtimeOptions.onTrackedChange?.(),
       revisionDisplayMode,
       commit,
+      selectedDrawing: () => resolveSelectedDrawingRecord(surface),
+      selectPastedDrawing: (id, paragraphId) => selectPastedDrawing(surface, id, paragraphId),
     });
 
   function applyRevisionAuthorVisibility(moved: boolean): void {
@@ -4508,12 +4528,7 @@ export function mountPaginatedSurface(
       const insertOps: TreeDocOp[] = [...plan.ops, typedInsertText(target, text, inside)];
       // Typing at a prompt's edge replaces the prompt, so the text lands where the prompt
       // began; a caret counted from the pressed offset sat past the paragraph's new end.
-      const landing = promptInsertionLanding(
-        partOfNodeId(session, target.paragraphId) ?? session.part(),
-        target.paragraphId,
-        target.offset,
-        text.length
-      );
+      const landing = typedLanding(target.paragraphId, target.offset, text.length);
       const redoMark = { paragraphId: target.paragraphId, start: landing, end: landing };
       // Letters in a right-to-left script start a `w:rtl` run, joined to the caret format.
       const formatOps = typedDirectionOps(target, landing, text, pendingOps);
@@ -5025,6 +5040,7 @@ export function mountPaginatedSurface(
       const next = collapsedAt(at);
       setDrawingIntent({ kind: 'pointer', drawingNodeId }, selectionsEqual(next, selection));
       setSelection(next, true, 'none');
+      documentSelectionHistory.noteSelectionAfterEdit();
       return resolveSelectedDrawingRecord(surface)?.drawingNodeId === drawingNodeId;
     },
 
@@ -5746,6 +5762,13 @@ export function mountPaginatedSurface(
       author: () => author,
       trackedDate: revisionDateNow,
       decodePort: () => decodePort,
+      actorId: () => collaborationSession?.identity.actorId,
+    }),
+    ...createChartOps({
+      session,
+      commit,
+      storyScope,
+      editingMode: () => editingMode,
       actorId: () => collaborationSession?.identity.actorId,
     }),
 

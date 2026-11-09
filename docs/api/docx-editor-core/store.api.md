@@ -2154,6 +2154,9 @@ export interface HeadlessThemeFonts {
 // @public
 export function headlessViewOfStore(store: TreePackageStore): HeadlessDocumentView;
 
+// @internal
+export function healedTableView<Table extends OoxmlElement>(table: Table): Table;
+
 // @public (undocumented)
 export type HistoryCaptureKind = 'started' | 'extended' | 'split';
 
@@ -2703,6 +2706,9 @@ export interface LegacyTextArtProjection {
     readonly trim?: true;
 }
 
+// @internal
+export const LEVEL_INDENT_ATTRIBUTES: ReadonlySet<string>;
+
 // @public
 export const LIMIT_KEYS: (keyof ResourceLimits)[];
 
@@ -3005,6 +3011,9 @@ export interface MetafileRasterImage {
     // (undocumented)
     readonly mime: 'image/png';
 }
+
+// @internal
+export function metafileRasterScale(longEdge: number): number;
 
 // @internal
 export interface MetafileRenderer {
@@ -4404,7 +4413,7 @@ export interface Reservation {
 // @public
 export function resolve(bundles: readonly FeatureBundle[], options?: ResolveOptions): ResolvedRegistry;
 
-// @internal (undocumented)
+// @internal
 export function resolveColorNode(color: OoxmlNode, resolveSchemeColor?: ShapeSchemeColorResolver, placeholder?: ShapeColor): ShapeColor | null;
 
 // @public
@@ -4632,7 +4641,7 @@ export interface ReviewRevisionItem {
     // (undocumented)
     readonly date?: string;
     readonly formattingChanges?: readonly {
-        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter' | 'direction';
+        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'highlight' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter' | 'direction';
         readonly value: string | null;
     }[];
     readonly formattingKind?: string;

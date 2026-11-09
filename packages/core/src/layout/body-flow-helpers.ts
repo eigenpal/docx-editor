@@ -11,7 +11,7 @@ import { holdsOnlyPageBreak } from './pending-line.ts';
 import { drawingModelOffsetsInParagraph } from './drawing-atom-walk.ts';
 import { marginInset } from './page-body-margins.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
-import type { ParagraphBorders } from './paragraph-style.ts';
+import { paragraphBorderExtentPt, type ParagraphBorders } from './paragraph-style.ts';
 import type { LayoutBox } from './semantic-records.ts';
 
 /** The page and column facts an anchored drawing or table resolves its frame against. */
@@ -57,6 +57,11 @@ export function bodyAnchorFrameBase(input: BodyAnchorFrameInput): BodyAnchorFram
     ...(hasCompatibilityRule(input.compatibilityMode, 'wrappedAnchorsStayBelowTopMargin')
       ? { wrappedParagraphAnchorsBelowContentTop: true }
       : {}),
+    ...(hasCompatibilityRule(input.compatibilityMode, 'wrappedAnchorsEndAtBottomMargin')
+      ? { wrappedParagraphAnchorBottom: 'margin' as const }
+      : hasCompatibilityRule(input.compatibilityMode, 'wrappedAnchorsEndOnSheet')
+        ? { wrappedParagraphAnchorBottom: 'sheet' as const }
+        : {}),
   });
 }
 
@@ -165,21 +170,30 @@ export function atKeptBreakY(
   return { ...box, y: kept.y, height: Math.max(height, 0) };
 }
 
-/**
- * The model offsets of a paragraph's anchors, to publish with this fragment; null when the
- * fragment ends at an explicit page break and every anchor comes after it. Those anchors
- * belong with the text that follows the break and take their paragraph origin there.
- */
-export function publishableAnchors(
+/** Whether the paragraph has a drawing at a model offset from `range.start` up to `range.end`. */
+export function holdsDrawingIn(
   paragraph: OoxmlElement,
-  lines: readonly PendingLine[],
-  fragment: readonly { readonly range: { readonly end: number } }[]
-): number[] | null {
-  const offsets = [...drawingModelOffsetsInParagraph(paragraph).values()];
-  const end = fragment[fragment.length - 1]?.range.end;
-  if (end === undefined || offsets.length === 0) return offsets;
-  const afterBreak =
-    lines.find((line) => line.end === end)?.pageBreakAfter === true &&
-    offsets.every((offset) => offset >= end);
-  return afterBreak ? null : offsets;
+  range: { readonly start: number; readonly end: number }
+): boolean {
+  for (const offset of drawingModelOffsetsInParagraph(paragraph).values())
+    if (offset >= range.start && offset < range.end) return true;
+  return false;
+}
+
+/**
+ * The authored space and top border above a paragraph's first line. The space before collapses
+ * into the space after of the block above unless the document adds the two (`sumAdjacent`).
+ */
+export function openingAbove(
+  paragraph: {
+    readonly spacing?: { readonly before: number };
+    readonly borders?: ParagraphBorders;
+  },
+  above: { readonly kind: string; readonly spacing?: { readonly after: number } } | undefined,
+  sumAdjacent: boolean | undefined
+): number {
+  const after = above?.kind === 'paragraph' ? (above.spacing?.after ?? 0) : 0;
+  const before = paragraph.spacing?.before ?? 0;
+  const lead = sumAdjacent ? before : Math.max(before, after) - after;
+  return lead + paragraphBorderExtentPt(paragraph.borders?.top);
 }

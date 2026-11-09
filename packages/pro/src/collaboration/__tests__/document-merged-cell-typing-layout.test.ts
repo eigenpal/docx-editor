@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -58,7 +58,7 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 async function settle(editor: Editor): Promise<void> {
   while (!editor.surface) await tick();
   let last = '';
-  for (let quiet = 0; quiet < 3; ) {
+  for (let quiet = 0; quiet < 3;) {
     await tick();
     const state = editor.surface.state();
     const key = `${state.revision}:${state.pageCount}`;

@@ -82,23 +82,20 @@ const OptionsMenu = defineComponent({
       }
     );
 
-    const titlePageCmd = computed(
-      (): EditorCommand => ({ type: 'setHeaderFooterOptions', titlePage: !props.state.titlePage })
-    );
-    const evenOddCmd = computed(
-      (): EditorCommand => ({
-        type: 'setHeaderFooterOptions',
-        evenAndOddHeaders: !props.state.evenAndOddHeaders,
-      })
-    );
+    const titlePageCmd = computed((): EditorCommand => ({
+      type: 'setHeaderFooterOptions',
+      titlePage: !props.state.titlePage,
+    }));
+    const evenOddCmd = computed((): EditorCommand => ({
+      type: 'setHeaderFooterOptions',
+      evenAndOddHeaders: !props.state.evenAndOddHeaders,
+    }));
     const linkCmd = computed((): EditorCommand => ({ type: 'linkHeaderFooterToPrevious' }));
     const unlinkCmd = computed((): EditorCommand => ({ type: 'unlinkHeaderFooterFromPrevious' }));
-    const removeCmd = computed(
-      (): EditorCommand => ({
-        type: 'removeHeaderFooter',
-        position: props.state.editing!,
-      })
-    );
+    const removeCmd = computed((): EditorCommand => ({
+      type: 'removeHeaderFooter',
+      position: props.state.editing!,
+    }));
 
     const titlePageGate = useCommandGate(titlePageCmd.value);
     const evenOddGate = useCommandGate(evenOddCmd.value);

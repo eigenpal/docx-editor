@@ -18,7 +18,9 @@ for (const relativeFrom of ['paragraph', 'line'] as const) {
         const line = paragraph.lines[0]!;
         const intersects =
           line.box.y + line.box.height > drawing.y && line.box.y < drawing.y + drawing.height;
-        expect(intersects).toBe(relativeFrom === 'paragraph' && before > 0);
+        // Both frames start above the space before on the first line, so with space before the
+        // 14pt offset puts the picture beside the line and the text wraps around it.
+        expect(intersects).toBe(before > 0);
         if (intersects)
           expect(line.spans[0]!.box.x).toBeGreaterThanOrEqual(drawing.x + drawing.width);
         else expect(line.spans[0]!.box.x).toBe(0);

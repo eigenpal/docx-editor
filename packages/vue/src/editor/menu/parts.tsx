@@ -605,6 +605,7 @@ export const MenuImageInsert = Object.assign(MenuImageInsertImpl, {
 });
 
 import { MenuSubmenu, MenuTablePicker } from './menu-flyouts';
+import { MenuChartPicker } from './menu-chart';
 export { MenuSubmenu, MenuTableGrid } from './menu-flyouts';
 export type { MenuSubmenuBaseProps, MenuSubmenuProps, MenuTableGridProps } from './menu-flyouts';
 
@@ -672,6 +673,7 @@ export const MenuEntry = defineComponent({
       if (entry.slot === 'insert.goToBookmark') return <MenuGoToBookmarkRow />;
       if (entry.slot === 'image.insert') return <MenuImageInsert />;
       if (entry.picker === 'tableGrid') return <MenuTablePicker entry={entry} />;
+      if (entry.picker === 'chartType') return <MenuChartPicker entry={entry} />;
       return (
         <MenuItem
           slotId={entry.slot}

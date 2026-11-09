@@ -18,8 +18,7 @@ import { hostElementOfEditor, hostTimers } from './host-realm.ts';
  * that runs again after document changes. @public
  */
 export type HighlightSource =
-  | readonly HighlightRange[]
-  | ((editor: Editor) => readonly HighlightRange[]);
+  readonly HighlightRange[] | ((editor: Editor) => readonly HighlightRange[]);
 
 /** Milliseconds a function source waits after an edit before it runs again. @public */
 export const HIGHLIGHT_REFRESH_MS = 150;

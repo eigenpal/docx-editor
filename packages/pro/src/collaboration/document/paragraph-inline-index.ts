@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -85,7 +85,7 @@ class Holders extends Set<LogicalId> {
   private push(id: LogicalId): void {
     const heap = this.heap;
     heap.push(id);
-    for (let at = heap.length - 1; at > 0; ) {
+    for (let at = heap.length - 1; at > 0;) {
       const parent = (at - 1) >> 1;
       if (heap[parent]! <= heap[at]!) break;
       [heap[parent], heap[at]] = [heap[at]!, heap[parent]!];
@@ -98,7 +98,7 @@ class Holders extends Set<LogicalId> {
     const last = heap.pop()!;
     if (heap.length === 0) return;
     heap[0] = last;
-    for (let at = 0; ; ) {
+    for (let at = 0; ;) {
       const left = 2 * at + 1;
       const right = left + 1;
       let least = at;

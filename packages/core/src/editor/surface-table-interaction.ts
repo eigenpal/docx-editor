@@ -101,9 +101,7 @@ interface DragState {
   >;
   readonly ref: TableOccurrenceRef;
   readonly resizeTarget:
-    | TableColumnDividerResizeTarget
-    | TableRightEdgeResizeTarget
-    | TableRowOccurrenceTarget;
+    TableColumnDividerResizeTarget | TableRightEdgeResizeTarget | TableRowOccurrenceTarget;
   readonly captureElement: HTMLElement;
   readonly rightEdge: boolean;
   readonly vertical: boolean;
@@ -545,9 +543,7 @@ export function createSurfaceTableInteraction(
     );
 
     let resizeTarget:
-      | TableColumnDividerResizeTarget
-      | TableRightEdgeResizeTarget
-      | TableRowOccurrenceTarget;
+      TableColumnDividerResizeTarget | TableRightEdgeResizeTarget | TableRowOccurrenceTarget;
     if (target.kind === 'columnDivider') {
       const leftCol = topo.topology.gridColumns.find((col) => col.id === target.leftGridColumnId);
       const rightCol = topo.topology.gridColumns.find((col) => col.id === target.rightGridColumnId);

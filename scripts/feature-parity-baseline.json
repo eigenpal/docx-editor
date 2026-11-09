@@ -14,6 +14,7 @@
     "components/ui/FontPicker",
     "components/ui/FontSizePicker",
     "components/ui/IconGridDropdown",
+    "components/ui/IconsChart",
     "components/ui/IconsReview",
     "components/ui/ImageTransformDropdown",
     "components/ui/ImageWrapDropdown",
@@ -377,6 +378,24 @@
     "editor/DocxEditorWindow": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["close", "default", "emits", "props", "type"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/charts/ChartInsert": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name", "props"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/charts/ChartPane": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name", "props"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/charts/SidePanel": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name", "props"],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },

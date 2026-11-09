@@ -36,7 +36,7 @@ export { MAX_TABLE_COLUMNS };
  * geometry number a file states that every cell box, row box and border stroke inherits, so
  * it is read and clamped exactly like `twipsSide` reads a margin.
  */
-const MAX_COLUMN_WIDTH_PT = 31_680 / 20;
+export const MAX_COLUMN_WIDTH_PT = 31_680 / 20;
 
 /**
  * `w:tblW` / `w:tcW` / `w:wBefore` (CT_TblWidth, 17.4.63 / 17.4.71 / 17.4.86): a PREFERRED

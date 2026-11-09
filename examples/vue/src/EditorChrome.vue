@@ -1,15 +1,16 @@
 <template>
+  <!-- The top bar sits on the canvas, as in the editor at docx-editor.dev. The formatting
+       toolbar is not here: it floats over the page column (`ComposedEditorDemo.vue`). -->
   <div class="demo-chrome">
-    <header class="demo-header">
-      <div class="demo-header__left">
-        <BrandLogo />
-        <div class="demo-header__adapter">
-          <AdapterSwitcher v-if="showAdapterSwitcher" current="vue" />
-          <SourceLink example="Vue" />
-        </div>
+    <header class="demo-topbar">
+      <div class="demo-topbar__brand">
+        <BrandLogo :byline="false" />
+        <span v-if="showAdapterSwitcher" class="demo-topbar__adapter">
+          <AdapterSwitcher current="vue" />
+        </span>
       </div>
-
-      <div class="demo-header__title-block">
+      <span class="demo-topbar__divider" aria-hidden="true" />
+      <div class="demo-file">
         <input
           class="demo-title"
           :value="title"
@@ -17,72 +18,111 @@
           spellcheck="false"
           @input="emit('update:title', ($event.target as HTMLInputElement).value)"
         />
-        <DocxEditorMenu
-          :exporters="demoExporters"
-          :file-name="title"
-          @open="openFilePicker"
-          @save="saveDocument"
-          @page-setup="showPageSetup = true"
-        >
-          <DocxEditorMenuFile :preset="false">
-            <DocxEditorMenuOpen />
-            <DocxEditorMenuRow :disabled="!editor" @select="newDocument">New</DocxEditorMenuRow>
-            <DocxEditorMenuSave />
-            <DocxEditorMenuSubmenu label-key="toolbar.export">
-              <DocxEditorMenuExportMarkdown />
-              <DocxEditorMenuExportPdf />
-            </DocxEditorMenuSubmenu>
-            <DocxEditorMenuPrint />
-            <DocxEditorMenuSeparator />
-            <DocxEditorMenuPageSetup />
-          </DocxEditorMenuFile>
-          <DocxEditorMenuInsert>
-            <DocxEditorMenuRow @select="hostMenuAlert">
-              <template #icon><span aria-hidden="true">✎</span></template>
-              Clause library
-            </DocxEditorMenuRow>
-          </DocxEditorMenuInsert>
-          <DocxEditorMenuHelp>
-            <DocxEditorMenuReportIssue hidden />
-            <a
-              class="docx-toolbar__menu-item docx-menubar__item"
-              href="https://docx-editor.dev/docs"
-              target="_blank"
-              rel="noreferrer"
-              role="menuitem"
-            >
-              <span class="docx-menubar__item-icon" aria-hidden="true" />
-              <span class="docx-menubar__item-label">Documentation</span>
-            </a>
-          </DocxEditorMenuHelp>
-          <DocxEditorMenuCustom id="my-menu" label="My Menu">
-            <DocxEditorMenuGroup label="Custom elements">
-              <DocxEditorMenuRow @select="requestCitationInsert">Insert citation</DocxEditorMenuRow>
-            </DocxEditorMenuGroup>
-          </DocxEditorMenuCustom>
-        </DocxEditorMenu>
+        <span class="demo-file__ext" aria-hidden="true">.docx</span>
+        <span class="demo-file__status" role="status" aria-live="polite">{{ status }}</span>
       </div>
 
-      <div class="demo-header__right">
-        <ThemeToggle :value="colorMode" @update:value="emit('update:colorMode', $event)" />
-        <ReviewSettings />
+      <DocxEditorMenu
+        class-name="demo-menubar"
+        :exporters="demoExporters"
+        :file-name="title"
+        @open="openFilePicker"
+        @save="saveDocument"
+        @page-setup="showPageSetup = true"
+      >
+        <DocxEditorMenuFile :preset="false">
+          <DocxEditorMenuOpen />
+          <DocxEditorMenuRow :disabled="busy" @select="newDocument">New</DocxEditorMenuRow>
+          <DocxEditorMenuSave />
+          <DocxEditorMenuSubmenu label-key="toolbar.export">
+            <DocxEditorMenuExportMarkdown />
+            <DocxEditorMenuExportPdf />
+          </DocxEditorMenuSubmenu>
+          <DocxEditorMenuPrint />
+          <DocxEditorMenuSeparator />
+          <DocxEditorMenuPageSetup />
+        </DocxEditorMenuFile>
+        <DocxEditorMenuInsert>
+          <DocxEditorMenuRow @select="hostMenuAlert">
+            <template #icon><span aria-hidden="true">✎</span></template>
+            Clause library
+          </DocxEditorMenuRow>
+        </DocxEditorMenuInsert>
+        <DocxEditorMenuHelp>
+          <DocxEditorMenuReportIssue hidden />
+          <a
+            class="docx-toolbar__menu-item docx-menubar__item"
+            href="https://docx-editor.dev/docs"
+            target="_blank"
+            rel="noreferrer"
+            role="menuitem"
+          >
+            <span class="docx-menubar__item-icon" aria-hidden="true" />
+            <span class="docx-menubar__item-label">Documentation</span>
+          </a>
+        </DocxEditorMenuHelp>
+        <DocxEditorMenuCustom id="my-menu" label="My Menu">
+          <DocxEditorMenuGroup label="Custom elements">
+            <DocxEditorMenuRow @select="requestCitationInsert">Insert citation</DocxEditorMenuRow>
+          </DocxEditorMenuGroup>
+        </DocxEditorMenuCustom>
+      </DocxEditorMenu>
+
+      <div class="demo-topbar__actions">
+        <a
+          class="demo-header-action demo-header-action--outline demo-source"
+          :href="sourceUrlFor('Vue')"
+          target="_blank"
+          rel="noreferrer"
+          :aria-label="t('demoTopbar.sourceTitle')"
+          :title="t('demoTopbar.sourceTitle')"
+        >
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
+            <path :d="DEMO_GITHUB_MARK" />
+          </svg>
+          <span class="demo-header-action__label">{{ t('demoTopbar.source') }}</span>
+        </a>
+        <!-- Editing, suggesting, or viewing: the packaged control, alone in its own bar. -->
+        <DocxEditorToolbar :preset="false" class="demo-modebar">
+          <DocxEditorToolbarEditingMode />
+        </DocxEditorToolbar>
+        <span class="demo-topbar__divider" aria-hidden="true" />
         <button
           type="button"
-          :style="DEMO_PRIMARY_BUTTON"
-          :disabled="!editor"
+          class="demo-header-action demo-header-action--secondary"
+          :aria-label="t('demoTopbar.openDocx')"
+          :title="t('demoTopbar.openDocx')"
+          :disabled="busy"
           @mousedown="keepCaret"
           @click="openFilePicker"
         >
-          Open DOCX
+          <DemoIcon name="open" />
+          <span class="demo-header-action__label">{{ t('demoTopbar.open') }}</span>
         </button>
         <button
           type="button"
-          :style="DEMO_SECONDARY_BUTTON"
-          :disabled="!editor"
+          class="demo-header-action demo-header-action--secondary"
+          :aria-label="t('demoTopbar.new')"
+          :disabled="busy"
           @mousedown="keepCaret"
           @click="newDocument"
         >
-          New
+          <DemoIcon name="new" />
+          <span class="demo-header-action__label">{{ t('demoTopbar.new') }}</span>
+        </button>
+        <DemoExportMenu :title="title" @status="status = $event" />
+        <!-- One toggle, always in this place: it shows the side panel and hides it. -->
+        <button
+          type="button"
+          class="demo-header-action demo-header-action--icon"
+          :aria-expanded="panelOpen"
+          :aria-controls="panelOpen ? 'demo-side-panel' : undefined"
+          :aria-label="t(panelOpen ? 'demoTopbar.panelClose' : 'demoTopbar.panelOpen')"
+          :title="t(panelOpen ? 'demoTopbar.panelClose' : 'demoTopbar.panelOpen')"
+          @mousedown="keepCaret"
+          @click="emit('togglePanel')"
+        >
+          <DemoIcon :name="panelOpen ? 'panelClose' : 'panelOpen'" />
         </button>
       </div>
     </header>
@@ -94,13 +134,6 @@
       style="display: none"
       @change="onFileSelected"
     />
-
-    <DocxEditorToolbar class="demo-toolbar" @save="saveDocument">
-      <DocxEditorToolbarFontFamily>
-        <DocxEditorToolbarFontFamilyTrigger class="demo-font-trigger" />
-        <DocxEditorToolbarFontFamilyContent class="demo-font-menu" />
-      </DocxEditorToolbarFontFamily>
-    </DocxEditorToolbar>
 
     <DocxEditorFontNotice />
 
@@ -119,7 +152,7 @@
 
 <script setup lang="ts">
 import { demoExporters } from '../../shared/menu-exporters';
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import {
   DocxEditorMenu,
   DocxEditorToolbar,
@@ -129,27 +162,31 @@ import {
   DocxEditorPageSetupDialog,
   useDocxEditor,
   useEditorCaret,
+  useEditorState,
   type EditorCaret,
 } from '@docx-editor.dev/vue';
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
 import { demoCatalog, demoDirection } from '../../shared/demo-language';
 import BrandLogo from '../../shared/BrandLogo.vue';
 import AdapterSwitcher from './AdapterSwitcher.vue';
-import SourceLink from '../../shared/SourceLink.vue';
-import ThemeToggle from './ThemeToggle.vue';
-import ReviewSettings from './ReviewSettings.vue';
-import { DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON, keepCaret } from './demoButtons';
+import { sourceUrlFor } from '../../shared/config';
+import { DEMO_GITHUB_MARK } from '../../shared/demo-icons';
+import DemoIcon from './DemoIcon.vue';
+import DemoExportMenu from './DemoExportMenu.vue';
+import { keepCaret } from './demoButtons';
+import { exampleText as t } from '../../shared/example-text';
+import { useSaveDocument } from './downloadDocx';
 
 const props = defineProps<{
   title: string;
-  colorMode: 'light' | 'dark';
   showAdapterSwitcher: boolean;
+  panelOpen: boolean;
 }>();
 
 const emit = defineEmits<{
   'update:title': [value: string];
-  'update:colorMode': [value: 'light' | 'dark'];
   insertCitation: [at: EditorCaret | null];
+  togglePanel: [];
 }>();
 
 const DocxEditorMenuFile = DocxEditorMenu.File;
@@ -167,26 +204,22 @@ const DocxEditorMenuHelp = DocxEditorMenu.Help;
 const DocxEditorMenuReportIssue = DocxEditorMenu.ReportIssue;
 const DocxEditorMenuCustom = DocxEditorMenu.Menu;
 const DocxEditorMenuGroup = DocxEditorMenu.Group;
-const DocxEditorToolbarFontFamily = DocxEditorToolbar.FontFamily;
-const DocxEditorToolbarFontFamilyTrigger = DocxEditorToolbar.FontFamily.Trigger;
-const DocxEditorToolbarFontFamilyContent = DocxEditorToolbar.FontFamily.Content;
+const DocxEditorToolbarEditingMode = DocxEditorToolbar.EditingMode;
 
 const editor = useDocxEditor();
 const caret = useEditorCaret();
+// While a large file opens, the previous document is still mounted: Open and New wait.
+const opening = useEditorState((snapshot) => snapshot.isOpening === true);
+const busy = computed(() => !editor.value || opening.value);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const showPageSetup = ref(false);
-
-function downloadDocx(bytes: ArrayBuffer | Uint8Array, name: string): void {
-  const blob = new Blob([bytes as BlobPart], {
-    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = name;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
+// What an export is doing, beside the file name. It clears itself.
+const status = ref('');
+let statusTimer: ReturnType<typeof setTimeout> | undefined;
+watch(status, (message) => {
+  clearTimeout(statusTimer);
+  if (message) statusTimer = setTimeout(() => (status.value = ''), 2600);
+});
 
 function openFilePicker(): void {
   fileInputRef.value?.click();
@@ -216,16 +249,7 @@ function newDocument(): void {
   );
 }
 
-function saveDocument(): void {
-  void editor.value?.save().then((buffer) => {
-    if (!buffer) return;
-    downloadDocx(buffer, `${titleBase()}.docx`);
-  });
-}
-
-function titleBase(): string {
-  return props.title.trim() || 'document';
-}
+const saveDocument = useSaveDocument(() => props.title);
 
 function hostMenuAlert(): void {
   window.alert('A host action, in the packaged menu.');

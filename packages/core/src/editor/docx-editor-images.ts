@@ -7,9 +7,10 @@ import {
 import { drawingAtomProjection } from '../store/package/drawing-atom-projection.ts';
 import { commandProtectionRefusal } from './command-protection.ts';
 import { inlineToFloatingPosition } from './inline-wrap-placement.ts';
+import { reanchorMovedDrawing } from './drawing-reanchor.ts';
 import { preserveWrapExtentOps, type WrapExtentOverrides } from './image-wrap-extent.ts';
 import { reportCommandResult } from './command-reporting.ts';
-import { chartDrawingRefusal, drawingGate } from './image-state-rules.ts';
+import { chartDrawingRefusal, drawingGate, type ChartGate } from './image-state-rules.ts';
 export { imageContextEqual } from './image-state-rules.ts';
 // Selected-image derivation and image command dispatch for `createDocxEditor` (task 13).
 //
@@ -25,7 +26,7 @@ import type {
 } from '../contracts/editor.ts';
 import { geometryOfSection, lineAtPosition } from '../layout/index.ts';
 import { verticalMarginInsets } from '../layout/page-body-margins.ts';
-import { lineAtIndexedPosition } from '../layout/paragraph-lines.ts';
+import { lineAtIndexedPosition, paragraphLinesFor } from '../layout/paragraph-lines.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { findDrawingOverlayFrameInLayout } from '../layout/semantic-hit-test.ts';
 import { editedTextboxOverlayFrame, textboxTextEditable } from './textbox-overlay-frame.ts';
@@ -129,6 +130,25 @@ function inlineDrawingAtOffset(
   return null;
 }
 
+/**
+ * The named inline drawing when it starts the next line. A drawing that does not fit after the
+ * text wraps, and its anchor offset is also the end of the line before it, which the offset
+ * lookup finds first.
+ */
+function namedDrawingOnOtherLine(
+  surface: PaginatedSurface,
+  paragraphId: string,
+  offset: number,
+  wanted: string | null
+): InlineDrawingRecord | null {
+  if (!wanted) return null;
+  for (const placed of paragraphLinesFor(surface.layout(), paragraphId)) {
+    const found = inlineDrawingAtOffset(placed.line, paragraphId, offset, wanted);
+    if (found) return found;
+  }
+  return null;
+}
+
 function anchoredDrawingAtSelection(
   surface: PaginatedSurface,
   paragraphId: string,
@@ -181,6 +201,7 @@ export function resolveSelectedDrawingRecord(
   const wanted = intent.kind === 'pointer' ? intent.drawingNodeId : null;
   return (
     inlineDrawingAtOffset(line, anchor.paragraphId, anchor.offset, wanted) ??
+    namedDrawingOnOtherLine(surface, anchor.paragraphId, anchor.offset, wanted) ??
     anchoredDrawingAtSelection(surface, anchor.paragraphId, anchor.offset, wanted)
   );
 }
@@ -237,17 +258,25 @@ function intrinsicOf(record: SelectedDrawingRecord): SelectedImageState['intrins
 
 function capabilityFlags(
   projection: DrawingProjection,
-  chart: boolean
+  chart: ChartGate
 ): Pick<SelectedImageState, 'canResize' | 'canMove' | 'canChangeWrap' | 'canCrop'> {
-  const locks = chart ? { resize: true, move: true, changeAspect: true } : projection.locks;
+  const locks =
+    chart === 'locked' ? { resize: true, move: true, changeAspect: true } : projection.locks;
   // An inline text box flows with its line: it resizes in place but is never dragged.
   const fixed = projection.kind === 'inline' && projection.textboxStory !== null;
   return Object.freeze({
     canResize: !locks.resize && !projection.hidden,
     canMove: !fixed && !locks.move && !projection.hidden,
-    canChangeWrap: !chart && projection.picture !== null && !locks.move && !projection.hidden,
+    canChangeWrap:
+      (chart === 'frame' || (chart === 'none' && projection.picture !== null)) &&
+      !locks.move &&
+      !projection.hidden,
     canCrop:
-      projection.picture !== null && !locks.resize && !locks.changeAspect && !projection.hidden,
+      chart === 'none' &&
+      projection.picture !== null &&
+      !locks.resize &&
+      !locks.changeAspect &&
+      !projection.hidden,
   });
 }
 
@@ -850,6 +879,7 @@ export function execImageCommand(
       if ('ok' in resolved) return resolved;
       const selected = selectedImageStateOf(surface);
       const position = positionInputFromCommand(command, selected);
+      if (reanchorMovedDrawing(surface, resolved.id, position)) return null;
       return applyDrawingOps(surface, [
         { op: 'positionDrawing', drawingNodeId: resolved.id, position },
       ]);
@@ -1155,7 +1185,7 @@ export interface SelectedDrawingOverlayTarget {
 function overlayCapabilityFlags(
   record: SelectedDrawingRecord,
   projection: DrawingProjection | null,
-  chart: boolean
+  chart: ChartGate
 ): Pick<SelectedDrawingOverlayTarget, 'canResize' | 'canMove' | 'aspectLocked'> {
   if (!projection || projection.hidden || !imageCommandsReach(record)) {
     return Object.freeze({ canResize: false, canMove: false, aspectLocked: true });
@@ -1164,7 +1194,7 @@ function overlayCapabilityFlags(
   return Object.freeze({
     canResize: caps.canResize,
     canMove: caps.canMove,
-    aspectLocked: chart || projection.locks.changeAspect,
+    aspectLocked: chart === 'locked' || projection.locks.changeAspect,
   });
 }
 

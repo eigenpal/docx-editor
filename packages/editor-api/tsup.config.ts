@@ -1,11 +1,14 @@
 import { defineConfig } from 'tsup';
 import { withDeclarations } from '../../scripts/build-declarations.mjs';
+import { addLicenseHeaders } from '../../scripts/license-banner.mjs';
 
 // Three entries, one build. `index` is the server-safe one; `browser` is the one that reaches the
 // editor lane. See `src/index.ts` for why that split exists. `agent` holds helpers over the
 // object model and imports only its types, so it carries no second copy of the runtime.
 export default defineConfig(
   withDeclarations(import.meta.url, {
+    // Every script in dist/ opens with the license header.
+    onSuccess: addLicenseHeaders(import.meta.url),
     entry: {
       index: 'src/index.ts',
       browser: 'src/browser.ts',

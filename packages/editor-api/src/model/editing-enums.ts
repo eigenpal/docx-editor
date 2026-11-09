@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -156,10 +156,7 @@ export interface DocumentCompareOptions {
   authorName?: string;
   /** Where the result goes. Default and only supported value: `CompareTargetCurrent`. */
   compareTarget?:
-    | CompareTarget
-    | 'CompareTargetCurrent'
-    | 'CompareTargetNew'
-    | 'CompareTargetSelected';
+    CompareTarget | 'CompareTargetCurrent' | 'CompareTargetNew' | 'CompareTargetSelected';
   /** Record formatting differences as revisions. Default `true`. */
   detectFormatChanges?: boolean;
   /** Accepted; there is no warning prompt. Default `false`. */

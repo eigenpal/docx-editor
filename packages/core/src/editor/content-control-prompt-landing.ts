@@ -11,13 +11,18 @@ import type { OoxmlPart, TreeDocOp } from '@docx-editor.dev/core/store';
 import type { ContentControlBoundaryRecord } from '../layout/semantic-records.ts';
 import { placeholderControlForInsertion } from '../store/store/tree-op-content-controls.ts';
 
-/** The caret offset after `textLength` characters land at `offset` in `paragraphId`. */
+/**
+ * The caret offset after `textLength` characters land at `offset` in `paragraphId`. A tracked
+ * insertion keeps the prompt, as the store does, so the text lands at `offset` itself.
+ */
 export function promptInsertionLanding(
   part: OoxmlPart,
   paragraphId: string,
   offset: number,
-  textLength: number
+  textLength: number,
+  tracked = false
 ): number {
+  if (tracked) return offset + textLength;
   const prompt = placeholderControlForInsertion(part, paragraphId, offset);
   return (prompt?.offset ?? offset) + textLength;
 }

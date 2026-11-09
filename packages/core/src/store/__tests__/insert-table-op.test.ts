@@ -117,8 +117,8 @@ describe('insertTable', () => {
   test('cell paragraphs get minted w14:paraId when the document binds w14', () => {
     const part = load('<w:p/>', ` xmlns:w14="${W14}"`);
     const next = applied(part, insertOp(part, { rows: 1, cols: 2 }));
-    const cellParagraphs = collectByKind(next.root, 'tableCell').map(
-      (cell) => cell.children.find((child) => child.kind === 'paragraph')!
+    const cellParagraphs = collectByKind(next.root, 'tableCell').map((cell) =>
+      cell.children.find((child) => child.kind === 'paragraph')!
     );
     const ids = cellParagraphs.map((paragraph) => paraIdOf(paragraph));
     expect(ids.every((id) => id !== null && isValidParaId(id))).toBe(true);

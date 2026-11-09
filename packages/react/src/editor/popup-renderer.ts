@@ -3,8 +3,7 @@ import type { DocxEditorChildren } from '../docx-editor-children';
 
 /** A render callback for an automatic popup. `false` disables automatic rendering. @public */
 export type DocxEditorPopup<Props extends object> =
-  | false
-  | ((props: Props) => DocxEditorChildren | null);
+  false | ((props: Props) => DocxEditorChildren | null);
 
 /**
  * Register an ordinary component in the `popups` map while preserving its props and hooks.

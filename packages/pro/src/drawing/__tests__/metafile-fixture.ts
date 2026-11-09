@@ -1,9 +1,27 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // Synthetic WMF files for metafile replay tests.
+
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { afterAll, beforeAll } from 'bun:test';
+
+/**
+ * Run this file's replays without the preloaded DOM, as PDF export runs them. With a DOM
+ * present the converter decodes bitmaps on a DOM canvas, and the stub canvas draws nothing.
+ */
+export function replayWithoutDom(): void {
+  let restore = false;
+  beforeAll(async () => {
+    restore = GlobalRegistrator.isRegistered;
+    if (restore) await GlobalRegistrator.unregister();
+  });
+  afterAll(() => {
+    if (restore && !GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+  });
+}
 
 /** One WMF record: function number and 16-bit parameter words. */
 export interface WmfRecord {

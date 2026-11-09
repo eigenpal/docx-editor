@@ -93,7 +93,29 @@ function EigenpalLogo() {
   );
 }
 
-export function BrandLogo() {
+export interface BrandLogoProps {
+  /**
+   * Whether the "by EigenPal" line shows under the name. The studio top bar leaves it out and
+   * shows the icon and the name on one line (`.demo-brand` in `demo-shell.css`).
+   */
+  readonly byline?: boolean;
+}
+
+export function BrandLogo({ byline = true }: BrandLogoProps) {
+  if (!byline) {
+    return (
+      <a
+        className="demo-brand"
+        href="https://docx-editor.dev"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="DOCX Editor by EigenPal"
+      >
+        <DocxIcon />
+        <span className="demo-brand__name">DOCX Editor</span>
+      </a>
+    );
+  }
   return (
     <a
       href="https://docx-editor.dev"

@@ -157,6 +157,7 @@ import {
   isContentControlEditorCommand,
 } from './content-controls.ts';
 import { imageContextEqual } from './image-state-rules.ts';
+import { createChartStateCache } from './chart-commands.ts';
 import {
   selectedImageStateOf,
   canExecuteImageCommand as canExecuteImageCommandOf,
@@ -1285,6 +1286,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   /** The right-click TOC context, reference-stable while the id holds — see support. */
   const tocContextOf = createTocContextCache();
+  const chartStateOf = createChartStateCache();
 
   function deriveSnapshot(): EditorSnapshot {
     const state = surface?.state() ?? null;
@@ -1340,6 +1342,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       table: tableContextOf(surface),
       tocContext: tocContextOf(state?.contextTocId ?? null),
       image: selectedImageStateOf(surface),
+      chart: chartStateOf(surface),
       page: { current: currentPageOf(surface), total: totalPagesOf(surface) },
       canUndo: state?.canUndo ?? false,
       canRedo: state?.canRedo ?? false,
@@ -2034,6 +2037,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         const result = execEditorCommand(mounted, command, {
           ...(gated.tablePlan ? { admittedTablePlan: gated.tablePlan } : {}),
           editor,
+          translate: hostConfig.translate(),
         });
         if (result) return result;
         // `changed` is read from the model, not assumed: reporting `changed: true` where the

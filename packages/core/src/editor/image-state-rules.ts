@@ -2,14 +2,14 @@
 // selected image, and the refusal for a chart.
 //
 // A chart is no picture, whether the page draws it, shows the fallback saved beside it in
-// `mc:AlternateContent`, or shows a placeholder. Resizing, cropping, moving, wrapping,
-// replacing or describing it as a picture would edit one branch alone, so those commands
-// refuse; delete removes the whole chart (`store/store/tree-op-chart-drawing.ts`). A chart
-// selects as an object in every state, with no resize, move or crop handles.
+// `mc:AlternateContent`, or shows a placeholder. A bare chart drawing takes the frame edits:
+// size, position, wrap and alt text. Cropping, replacing, turning or bordering it as a
+// picture refuse, and a wrapped chart refuses every edit but delete, which would change one
+// branch alone. Delete removes the whole chart (`store/store/tree-op-chart-drawing.ts`).
 
 import type { EditorCommand, ExecResult, SelectedImageState } from '../contracts/editor.ts';
 import type { DrawingLocks, DrawingProjection } from '../store/package/drawing-projection.ts';
-import { chartDrawingOf } from '../store/store/tree-op-chart-drawing.ts';
+import { chartDrawingOf, chartFrameEdit } from '../store/store/tree-op-chart-drawing.ts';
 import { chartDrawingLocks } from '../store/store/tree-op-drawings.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { partOfNodeId } from './surface-scope.ts';
@@ -20,6 +20,13 @@ import { partOfNodeId } from './surface-scope.ts';
  */
 export const CHART_DRAWING_REASON =
   'this drawing is a chart; only delete applies, and it removes the whole chart';
+
+/**
+ * The engine's reason for a picture-only command on a chart that takes frame edits. Adapters
+ * translate it through `DISABLED_REASON_KEYS` in `@docx-editor.dev/i18n`.
+ */
+export const CHART_FRAME_REASON =
+  'this drawing is a chart; only its size, position, wrap and alt text change';
 
 /** Whether `drawingNodeId` names a chart: drawn, shown by its saved fallback, or a placeholder. */
 export function isChartDrawing(surface: PaginatedSurface, drawingNodeId: string): boolean {
@@ -37,21 +44,51 @@ export function drawingGate(
   surface: PaginatedSurface,
   drawingNodeId: string,
   projection: DrawingProjection
-): { readonly chart: boolean; readonly locks: DrawingLocks } {
+): { readonly chart: ChartGate; readonly locks: DrawingLocks } {
   const part = partOfNodeId(surface.session, drawingNodeId) ?? surface.session.part();
   const target = chartDrawingOf(part, drawingNodeId);
-  if (!target) return { chart: false, locks: projection.locks };
-  return { chart: true, locks: chartDrawingLocks(target.chartDrawing) ?? projection.locks };
+  if (!target) return { chart: 'none', locks: projection.locks };
+  return {
+    chart: chartFrameEdit(target, 'resizeDrawing') ? 'frame' : 'locked',
+    locks: chartDrawingLocks(target.chartDrawing) ?? projection.locks,
+  };
 }
 
-/** The refusal for every image command but delete on a chart, or null. */
+/**
+ * What a drawing is to the image commands: no chart, a chart that takes frame edits, or a
+ * chart that takes only delete.
+ */
+export type ChartGate = 'none' | 'frame' | 'locked';
+
+/** Whether `command` changes more than a chart's frame: size, position, wrap and alt text. */
+function changesChartGraphic(command: EditorCommand): boolean {
+  if (command.type === 'replaceImage' || command.type === 'transformImage') return true;
+  if (command.type !== 'setImageProperties') return false;
+  return (
+    command.crop !== undefined ||
+    command.resetToNaturalSize === true ||
+    command.borderWidthEmu !== undefined ||
+    command.borderColor !== undefined
+  );
+}
+
+/**
+ * The refusal of an image command on a chart, or null. A wrapped chart refuses all but
+ * delete; a bare one refuses only what changes more than its frame.
+ */
 export function chartDrawingRefusal(
   surface: PaginatedSurface,
   command: EditorCommand,
   drawingNodeId: string
 ): ExecResult | null {
-  if (command.type === 'deleteImage' || !isChartDrawing(surface, drawingNodeId)) return null;
-  return { ok: false, code: 'unsupported', reason: CHART_DRAWING_REASON };
+  if (command.type === 'deleteImage') return null;
+  const part = partOfNodeId(surface.session, drawingNodeId) ?? surface.session.part();
+  const target = chartDrawingOf(part, drawingNodeId);
+  if (!target) return null;
+  if (!chartFrameEdit(target, 'resizeDrawing'))
+    return { ok: false, code: 'unsupported', reason: CHART_DRAWING_REASON };
+  if (!changesChartGraphic(command)) return null;
+  return { ok: false, code: 'unsupported', reason: CHART_FRAME_REASON };
 }
 
 export function imageContextEqual(

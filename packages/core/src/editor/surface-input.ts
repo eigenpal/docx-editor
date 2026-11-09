@@ -474,11 +474,14 @@ export function createClipboardHandlers(surface: PaginatedSurface): {
       event.preventDefault();
       return false;
     }
-    if (!flavours.text || !event.clipboardData) return false;
+    // A chart's name can be empty; its HTML flavour still carries the copy.
+    if ((!flavours.text && !flavours.chartDrawingNodeId) || !event.clipboardData) return false;
     event.clipboardData?.setData('text/plain', flavours.text);
     if (flavours.html) event.clipboardData?.setData('text/html', flavours.html);
+    chartCut = flavours.chartDrawingNodeId ?? null;
     return true;
   };
+  let chartCut: string | null = null;
 
   const onCopy = (event: ClipboardEvent): void => {
     if (!writeFlavours(event)) return;
@@ -492,7 +495,9 @@ export function createClipboardHandlers(surface: PaginatedSurface): {
       return;
     }
     if (!writeFlavours(event)) return;
-    surface.deleteSelection();
+    // A cut of one selected chart deletes that chart; there is no text range to delete.
+    if (chartCut) surface.deleteImage(chartCut);
+    else surface.deleteSelection();
     event.preventDefault();
   };
 
