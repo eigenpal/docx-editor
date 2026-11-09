@@ -72,6 +72,15 @@ export function listenPaneRequests(
   return () => set.delete(listener);
 }
 
+/**
+ * Whether the host can show a chart pane: a mounted side panel or Chart pane, or a
+ * `usePaneRequest` listener. Without one, Edit chart has nowhere to go, so the toolbar and the
+ * context menu leave it out. @public
+ */
+export function chartPaneAvailable(editor: Editor | null): boolean {
+  return editor !== null && (listeners.get(editor)?.size ?? 0) > 0;
+}
+
 /** The chart types of the Insert > Chart list, in list order. @public */
 export const CHART_INSERT_CHOICES: readonly ChartType[] = [
   'columnClustered',

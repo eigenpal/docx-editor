@@ -4,8 +4,13 @@
 // takes the request itself. The React twin is
 // `packages/react/src/editor/charts/SidePanel.tsx`; both render the same markup.
 
-import { defineComponent, watch, type PropType } from 'vue';
-import { listenPaneRequests, type PaneRequest } from '@docx-editor.dev/core/editor';
+import { defineComponent, ref, watch, type PropType } from 'vue';
+import {
+  focusChartPane,
+  listenPaneRequests,
+  takePaneRequest,
+  type PaneRequest,
+} from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { MaterialSymbol } from '../../components/ui/Icons';
 import { useTranslation } from '../../i18n';
@@ -34,7 +39,10 @@ export interface DocxEditorSidePanelProps {
   className?: string;
   /** Shows a close button that calls it. */
   onClose?: () => void;
-  /** The default slot: content that replaces the packaged Chart pane. It takes no focus request. */
+  /**
+   * The default slot: content that replaces the packaged Chart pane. When Edit chart asks for
+   * the focus, the panel moves it to the first field in this content.
+   */
   children?: DocxEditorChildren;
 }
 
@@ -47,6 +55,23 @@ export const DocxEditorSidePanel = defineComponent({
   },
   setup(props, { slots }) {
     const { t } = useTranslation();
+    const editorRef = useDocxEditor();
+    const body = ref<HTMLElement | null>(null);
+    // The packaged pane takes its own focus requests; slot content gets them here.
+    watch(
+      editorRef,
+      (editor, _, onCleanup) => {
+        if (!editor || !slots.default) return;
+        const focus = () => queueMicrotask(() => focusChartPane(body.value));
+        if (takePaneRequest(editor)?.focus) focus();
+        onCleanup(
+          listenPaneRequests(editor, () => {
+            if (takePaneRequest(editor)?.focus) focus();
+          })
+        );
+      },
+      { immediate: true }
+    );
     return () => (
       <aside
         class={['docx-side-panel', props.className].filter(Boolean).join(' ')}
@@ -71,7 +96,7 @@ export const DocxEditorSidePanel = defineComponent({
             </button>
           ) : null}
         </div>
-        <div class="docx-side-panel__body">
+        <div class="docx-side-panel__body" ref={body}>
           {slots.default ? slots.default() : <DocxEditorChartPane />}
         </div>
       </aside>

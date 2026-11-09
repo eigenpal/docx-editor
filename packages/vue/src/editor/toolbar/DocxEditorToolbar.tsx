@@ -12,6 +12,7 @@ import {
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import {
+  chartPaneAvailable,
   chromeSlotId,
   formattingBarChromeGroups,
   type ChromeSlotId,
@@ -21,6 +22,7 @@ import { flattenChildren } from '../../lib/flattenChildren';
 import { useEditorState } from '../useEditorState';
 import { useChromeDir } from '../../i18n';
 import { useChromeScopeClassName } from '../color-mode-context';
+import { useDocxEditor } from '../context';
 import { ToolbarContext, useToolbarLabel, type ToolbarTranslate } from './toolbar-context';
 import { ToolbarButton, chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
 import {
@@ -388,13 +390,19 @@ const DocxEditorToolbarRoot = defineComponent({
     );
     const label = useToolbarLabel();
     const image = useEditorState(selectToolbarImage);
+    const editorRef = useDocxEditor();
     const chart = useEditorState(selectToolbarChart);
     const toolbarDisabled = useEditorState(selectToolbarDisabled);
     const tableChromeVisible = useEditorState(selectTableChromeVisible);
     // A right-to-left interface language puts the paragraph direction buttons in the bar.
     const chromeDir = useChromeDir();
     const defaultGroups = computed(() =>
-      buildDefaultGroups(image.value, chromeDir.value === 'rtl', chart.value)
+      // Edit chart shows only when the host can show a chart pane.
+      buildDefaultGroups(
+        image.value,
+        chromeDir.value === 'rtl',
+        chart.value && chartPaneAvailable(editorRef.value)
+      )
     );
     const defaultSlots = computed(
       () =>

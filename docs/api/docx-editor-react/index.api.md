@@ -11,8 +11,14 @@ import { BookmarkSummary } from '@docx-editor.dev/core/contracts/editor';
 import { ButtonHTMLAttributes } from 'react';
 import { CalendarDay } from '@docx-editor.dev/core/editor';
 import { CalendarMonth } from '@docx-editor.dev/core/editor';
+import { CHART_TYPE_CHOICES } from '@docx-editor.dev/core/editor';
+import { ChartColor } from '@docx-editor.dev/core/editor';
 import { ChartData } from '@docx-editor.dev/core/editor';
 import { ChartFormat } from '@docx-editor.dev/core/editor';
+import { ChartFormatChange } from '@docx-editor.dev/core/editor';
+import { ChartPaneChange } from '@docx-editor.dev/core/editor';
+import { ChartType } from '@docx-editor.dev/core/editor';
+import { chartTypeLabelKey } from '@docx-editor.dev/core/editor';
 import { CHROME_GROUPS } from '@docx-editor.dev/core/editor';
 import { CHROME_MENUS } from '@docx-editor.dev/core/editor';
 import { ChromeExportFormat } from '@docx-editor.dev/core/editor';
@@ -214,6 +220,16 @@ export interface BookmarkDialogFields {
     sortBy: BookmarkSortOrder;
 }
 
+export { CHART_TYPE_CHOICES }
+
+export { ChartColor }
+
+export { ChartData }
+
+export { ChartFormat }
+
+export { ChartFormatChange }
+
 // @public
 export function ChartInsert(input: ChartInsertProps): react.JSX.Element | null;
 
@@ -242,6 +258,12 @@ export interface ChartInsertProps {
     // (undocumented)
     hidden?: boolean;
 }
+
+export { ChartPaneChange }
+
+export { ChartType }
+
+export { chartTypeLabelKey }
 
 export { CHROME_GROUPS }
 
@@ -2984,6 +3006,10 @@ export { SEARCH_HIGHLIGHT_SET }
 
 export { SEARCH_MATCH_LIMIT }
 
+export { SelectedChartCommand }
+
+export { SelectedChartState }
+
 // @public
 export interface SelectionFormatting {
     alignment?: ParagraphAlignment;
@@ -3848,6 +3874,7 @@ export interface UseSelectedChartReturn {
     readonly chart: SelectedChartState | null;
     readonly data: ChartData | null;
     readonly dataDisabledReason: string | null;
+    readonly editData: (change: ChartPaneChange) => ExecResult;
     readonly execute: (command: SelectedChartCommand) => ExecResult;
     readonly format: ChartFormat | null;
     readonly formatDisabledReason: string | null;

@@ -5,22 +5,34 @@
 import './dom-setup.ts';
 
 import { afterEach, expect, test } from 'bun:test';
-import { createApp, h } from 'vue';
+import { createApp, defineComponent, h } from 'vue';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { takePaneRequest, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
 import { DocxEditorContextMenu } from '../src/editor/contextmenu/index.ts';
+import { usePaneRequest } from '../src/editor/charts/SidePanel';
 import { flush, SOURCE } from './helpers/fixtures.ts';
 
 const t = (key: string): string => key;
+
+/** A host that shows its side panel on request, as the charts guide shows. */
+const PaneHost = defineComponent({
+  name: 'PaneHost',
+  setup() {
+    // A Vue setup function, not a React component.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    usePaneRequest(() => {});
+    return () => null;
+  },
+});
 
 afterEach(() => {
   document.body.innerHTML = '';
 });
 
-function mountMenu() {
+function mountMenu(withPane = true) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const ready: DocxEditorInstance[] = [];
@@ -35,10 +47,12 @@ function mountMenu() {
           },
         },
         {
-          default: () =>
+          default: () => [
             h(DocxEditorViewport, null, {
               default: () => [h(DocxEditorContent), h(DocxEditorContextMenu, { t })],
             }),
+            ...(withPane ? [h(PaneHost)] : []),
+          ],
         }
       ),
   });
@@ -84,6 +98,26 @@ test('Edit chart shows only for a selected chart and asks for the Chart pane', a
     row!.click();
     await flush();
     expect(takePaneRequest(editor)?.pane).toBe('chart');
+  } finally {
+    mounted.unmount();
+  }
+});
+
+test('Edit chart stays out of the menu when the host shows no chart pane', async () => {
+  const mounted = mountMenu(false);
+  try {
+    await flush();
+    const editor = mounted.editor();
+    const paragraph = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: paragraph, offset: 1 },
+      head: { paragraphId: paragraph, offset: 1 },
+    });
+    expect(editor.exec({ type: 'insertChart', chartType: 'pie' }).ok).toBe(true);
+    await flush();
+    await openMenu(mounted.container);
+    expect(mounted.container.querySelector('.docx-contextmenu')).not.toBeNull();
+    expect(editChartRow(mounted.container)).toBeNull();
   } finally {
     mounted.unmount();
   }

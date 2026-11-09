@@ -388,6 +388,9 @@ export interface ChartLanes {
 export type ChartLegendPosition = 'none' | 'top' | 'bottom' | 'left' | 'right';
 
 // @public
+export function chartPaneAvailable(editor: Editor | null): boolean;
+
+// @public
 export type ChartPaneChange = {
     readonly category: number;
     readonly series: number;
@@ -2193,6 +2196,9 @@ export interface EditorWindow {
     onClose(listener: () => void): () => void;
     readonly window: Window;
 }
+
+// @public
+export function editSelectedChartData(editor: Editor | null, chart: SelectedChartState | null, change: ChartPaneChange): ExecResult;
 
 // @public
 export const EMU_PER_POINT = 12700;

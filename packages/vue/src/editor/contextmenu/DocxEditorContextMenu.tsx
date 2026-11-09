@@ -17,6 +17,7 @@ import {
   isHTMLElementNode,
   hostDocumentOf,
   hostWindowOf,
+  chartPaneAvailable,
   openChartPaneFor,
 } from '@docx-editor.dev/core/editor';
 import { useEditorState } from '../useEditorState';
@@ -156,7 +157,7 @@ const ContextMenuEditChart = defineComponent({
     return () => {
       const instance = editor.value;
       const id = chartId.value;
-      if (!instance || !id) return null;
+      if (!instance || !id || !chartPaneAvailable(instance)) return null;
       return (
         <MenuRow
           rowSlot="image.editChart"

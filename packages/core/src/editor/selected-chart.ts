@@ -6,6 +6,7 @@
 import type { Editor, EditorCommand, EditorSnapshot, ExecResult } from '../contracts/editor.ts';
 import type { ChartData, ChartFormat, SelectedChartState } from '../contracts/chart.ts';
 import { CHART_SUGGESTING_REFUSAL, CHART_VIEWING_REFUSAL } from './surface-chart-ops.ts';
+import { chartPaneCommand, type ChartPaneChange } from './chart-pane.ts';
 
 type ChartEditCommand = Extract<
   EditorCommand,
@@ -104,4 +105,22 @@ export function execSelectedChart(
 ): ExecResult {
   if (!editor || !chart) return { ok: false, code: 'notFound', reason: 'chart.errors.noChart' };
   return editor.exec({ ...command, drawingNodeId: chart.drawingNodeId } as ChartEditCommand);
+}
+
+/**
+ * Apply one checked data change to `chart`, as the packaged pane does: a value, a series name,
+ * a category label, or an added or removed series or category. Text that is not a number for
+ * a value refuses with a translation key, such as `chart.data.fieldErrors.number`. @public
+ */
+export function editSelectedChartData(
+  editor: Editor | null,
+  chart: SelectedChartState | null,
+  change: ChartPaneChange
+): ExecResult {
+  if (!editor || !chart) return { ok: false, code: 'notFound', reason: 'chart.errors.noChart' };
+  const read = editor.query({ type: 'chartData', drawingNodeId: chart.drawingNodeId });
+  if (!read.ok) return { ok: false, code: 'unsupported', reason: read.reason };
+  const planned = chartPaneCommand(chart.drawingNodeId, read.data, change);
+  if (!planned.ok) return { ok: false, code: 'invalidArgs', reason: planned.error };
+  return editor.exec(planned.command);
 }

@@ -7,7 +7,7 @@ import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import { CHART_TYPES } from '../../store/package/chart-edit/type.ts';
 import { stubReviewModule } from './review-test-module.ts';
-import { chartTypeIconPaths } from '../chart-chrome.ts';
+import { chartPaneAvailable, chartTypeIconPaths, listenPaneRequests } from '../chart-chrome.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -231,5 +231,15 @@ describe('chart commands', () => {
       reopened.surface!.session.currentPackage().parts.get('/word/document.xml')!.root
     );
     expect(xml.match(/"localName":"chart"/g)?.length).toBe(2);
+  });
+
+  test('a chart pane is available while the host listens for pane requests', () => {
+    const editor = mount();
+    expect(chartPaneAvailable(editor)).toBe(false);
+    const stop = listenPaneRequests(editor, () => {});
+    expect(chartPaneAvailable(editor)).toBe(true);
+    stop();
+    expect(chartPaneAvailable(editor)).toBe(false);
+    expect(chartPaneAvailable(null)).toBe(false);
   });
 });

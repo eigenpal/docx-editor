@@ -40,6 +40,7 @@ import { Children, Fragment, isValidElement, useMemo } from 'react';
 import type { ReactElement } from 'react';
 import { unwrapFragment } from '../merge-arrangement';
 import {
+  chartPaneAvailable,
   chromeSlotId,
   formattingBarChromeGroups,
   type ChromeSlotId,
@@ -154,6 +155,7 @@ import {
 import { TableChromeProvider } from './useTableChrome';
 import { ToolbarTableMergeCells, ToolbarTableSplitCell } from './TableCellStructure';
 import { useChromeScopeClassName } from '../color-mode-context';
+import { useDocxEditor } from '../context';
 
 /** Contextual table chrome slots appended when the caret is inside a table. */
 const TABLE_CHROME_SLOTS: readonly ChromeSlotId[] = [
@@ -374,7 +376,9 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
   // use. It runs above `ToolbarContext.Provider`, so it takes the host `t` directly.
   const label = useToolbarLabelFor(t);
   const image = useEditorState(selectToolbarImage);
-  const chart = useEditorState(selectToolbarChart);
+  // Edit chart shows only when the host can show a chart pane.
+  const editor = useDocxEditor();
+  const chart = useEditorState(selectToolbarChart) && chartPaneAvailable(editor);
   const toolbarDisabled = useEditorState(selectToolbarDisabled);
   const tableChromeVisible = useEditorState(selectTableChromeVisible);
   // A right-to-left interface language puts the paragraph direction buttons in the bar.

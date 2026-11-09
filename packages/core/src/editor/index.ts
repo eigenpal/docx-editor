@@ -745,6 +745,7 @@ export {
   requestPane,
   takePaneRequest,
   openChartPaneFor,
+  chartPaneAvailable,
   openChartPaneAt,
   type EditorPaneId,
   type PaneRequest,
@@ -789,6 +790,7 @@ export {
   type ChartTranslate,
 } from './chart-pane.ts';
 export {
+  editSelectedChartData,
   execSelectedChart,
   readSelectedChart,
   type SelectedChartCommand,

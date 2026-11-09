@@ -93,29 +93,56 @@ function ChartSidePanel() {
 }
 ```
 
-Render the component inside `DocxEditor.Root`, beside `DocxEditor.Viewport`. In Vue, use `DocxEditorSidePanel` and the `usePaneRequest` composable in the same way. Use `DocxEditor.ChartPane` to place the pane in your own layout.
+Render the component inside `DocxEditor.Root`, beside `DocxEditor.Viewport`. **Edit chart** shows in the toolbar and the context menu only while a side panel, a Chart pane, or a `usePaneRequest` listener is mounted. In Vue, use `DocxEditorSidePanel` and the `usePaneRequest` composable in the same way. Use `DocxEditor.ChartPane` to place the pane in your own layout.
 
 ## Build your own chart pane
 
-To replace the packaged pane, build a component with `useSelectedChart` and pass it to `DocxEditor.SidePanel` as its children. The hook returns the selected chart, its `data` and `format`, whether each can change, and `execute`. `execute` takes the chart commands of `editor.exec` without `drawingNodeId`, and it edits the chart that the hook shows:
+To replace the packaged pane, build a component with `useSelectedChart` and pass it to `DocxEditor.SidePanel` as its children. The hook returns the selected chart, its `data` and `format`, whether each can change, and the reason when it cannot. It edits the chart that it shows in two ways:
+
+- `execute` takes the chart commands of `editor.exec`, without `drawingNodeId`.
+- `editData` applies one checked data change, as the packaged pane does. Text that is not a number for a value refuses with a reason.
+
+The following sample changes the chart type and the first value:
 
 ```tsx
+import {
+  CHART_TYPE_CHOICES,
+  DocxEditor,
+  chartTypeLabelKey,
+  useSelectedChart,
+  useTranslation,
+  type ChartType,
+} from '@docx-editor.dev/react';
+
 function MyChartPane() {
-  const { chart, data, format, canEditFormat, formatDisabledReason, execute } = useSelectedChart();
-  if (!chart || !data || !format) return <p>Select a chart.</p>;
+  const { t } = useTranslation();
+  const chart = useSelectedChart();
+  if (!chart.chart || !chart.data || !chart.format) return <p>Select a chart.</p>;
   return (
     <>
       <select
-        value={format.type}
-        disabled={!canEditFormat}
-        title={formatDisabledReason ?? undefined}
-        onChange={(e) => execute({ type: 'setChartType', chartType: e.target.value as ChartType })}
+        aria-label="Chart type"
+        value={chart.format.type ?? ''}
+        disabled={!chart.canEditFormat}
+        title={chart.formatDisabledReason ?? undefined}
+        onChange={(e) =>
+          chart.execute({ type: 'setChartType', chartType: e.target.value as ChartType })
+        }
       >
-        <option value="columnClustered">Column</option>
-        <option value="line">Line</option>
-        <option value="pie">Pie</option>
+        {CHART_TYPE_CHOICES.map((type) => (
+          <option key={type} value={type}>
+            {t(chartTypeLabelKey(type))}
+          </option>
+        ))}
       </select>
-      <p>{data.series.length} series</p>
+      <input
+        aria-label="First value"
+        defaultValue={String(chart.data.series[0]?.values[0] ?? '')}
+        disabled={!chart.canEditData}
+        onBlur={(e) =>
+          chart.editData({ type: 'value', series: 0, category: 0, text: e.target.value })
+        }
+      />
     </>
   );
 }
@@ -125,9 +152,9 @@ function MyChartPane() {
 </DocxEditor.SidePanel>;
 ```
 
-The value changes only when the chart, its part, or the editing mode changes. Viewing and suggesting turn the edits off, and the disabled reasons say why. Translate a reason with `localizeDisabledReason` from `@docx-editor.dev/i18n`. In Vue, `useSelectedChart` returns the same fields as computed refs, and you pass the pane in the default slot of `DocxEditorSidePanel`.
+`format.type` is null for a chart type that the editor does not write. Each edit is one undo step. A refusal returns `{ ok: false, code, reason }`, as `editor.exec` does. The disabled reasons are translated, and viewing and suggesting turn the edits off. When **Edit chart** or a double-click asks for the focus, the side panel moves it to the first field of your pane.
 
-A custom pane does not take the focus requests of **Edit chart** and a double-click. To move the focus into your pane, listen with `usePaneRequest` and check `request.focus`.
+In Vue, `useSelectedChart` returns the same fields as computed refs, and you pass the pane in the default slot of `DocxEditorSidePanel`. Both adapters export the chart types, `CHART_TYPE_CHOICES`, and `chartTypeLabelKey`.
 
 ## Limits
 

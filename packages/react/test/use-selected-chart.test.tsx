@@ -8,7 +8,7 @@ import './dom-setup.ts';
 
 import { afterEach, expect, test } from 'bun:test';
 import { act, cleanup, render } from '@testing-library/react';
-import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import { openChartPaneFor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
@@ -29,9 +29,12 @@ function MyChartPane() {
   latest = chart;
   if (!chart.chart) return <p className="my-pane">No chart</p>;
   return (
-    <p className="my-pane">
-      {chart.format?.type} {chart.data?.series[0]?.name}
-    </p>
+    <>
+      <p className="my-pane">
+        {chart.format?.type} {chart.data?.series[0]?.name}
+      </p>
+      <input aria-label="First value" className="my-field" />
+    </>
   );
 }
 
@@ -67,6 +70,9 @@ test('a custom pane reads and edits the selected chart with the hook alone', asy
   const { view, editor } = await mount();
   expect(pane(view)).toBe('No chart');
   expect(latest!.canEditData).toBe(false);
+  // The reasons are translated, as `useEditorCommand` translates its own.
+  expect(latest!.dataDisabledReason).toBeTruthy();
+  expect(latest!.dataDisabledReason).not.toContain('chart.errors');
   expect(latest!.execute({ type: 'setChartType', chartType: 'line' })).toMatchObject({
     ok: false,
     reason: 'chart.errors.noChart',
@@ -102,11 +108,48 @@ test('a custom pane reads and edits the selected chart with the hook alone', asy
   await settle();
   expect(pane(view)).toBe('line Sales');
 
+  // One checked cell edit, as the packaged pane makes it.
   act(() => {
+    expect(latest!.editData({ type: 'seriesName', series: 0, text: 'Cost' }).ok).toBe(true);
+  });
+  await settle();
+  expect(pane(view)).toBe('line Cost');
+  expect(latest!.editData({ type: 'value', series: 0, category: 0, text: 'x' })).toMatchObject({
+    ok: false,
+    code: 'invalidArgs',
+    reason: 'chart.data.fieldErrors.number',
+  });
+  act(() => {
+    expect(latest!.editData({ type: 'value', series: 0, category: 0, text: '9' }).ok).toBe(true);
+  });
+  await settle();
+  expect(latest!.data!.series[0]!.values[0]).toBe(9);
+
+  act(() => {
+    editor.exec({ type: 'undo' });
+    editor.exec({ type: 'undo' });
     editor.exec({ type: 'undo' });
   });
   await settle();
   expect(pane(view)).toBe('line Series 1');
+});
+
+test('Edit chart moves the focus into a custom pane', async () => {
+  const { view, editor } = await mount();
+  const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+  act(() => {
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 12 },
+      head: { paragraphId, offset: 12 },
+    });
+    editor.exec({ type: 'insertChart', chartType: 'pie' });
+  });
+  await settle();
+  act(() => {
+    expect(openChartPaneFor(editor, latest!.chart!.drawingNodeId)).toBe(true);
+  });
+  await settle();
+  expect(document.activeElement).toBe(view.container.querySelector('.my-field'));
 });
 
 test('viewing mode turns the edits off and names the reason', async () => {
@@ -127,5 +170,6 @@ test('viewing mode turns the edits off and names the reason', async () => {
   expect(latest!.chart).not.toBeNull();
   expect(latest!.canEditData).toBe(false);
   expect(latest!.canEditFormat).toBe(false);
-  expect(latest!.dataDisabledReason).toBe('the document is open for viewing');
+  expect(latest!.dataDisabledReason).toBeTruthy();
+  expect(latest!.dataDisabledReason).toBe(latest!.formatDisabledReason);
 });

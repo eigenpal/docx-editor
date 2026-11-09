@@ -87,6 +87,7 @@ import {
   hostDocumentOf,
   hostWindowOf,
   isHTMLElementNode,
+  chartPaneAvailable,
   openChartPaneFor,
 } from '@docx-editor.dev/core/editor';
 import { useEditorState } from '../useEditorState';
@@ -174,7 +175,7 @@ function ContextMenuEditChart() {
   const menu = useMenuContext();
   const label = useMenuLabel();
   const chartId = useEditorState(selectChartId);
-  if (!editor || !chartId) return null;
+  if (!editor || !chartId || !chartPaneAvailable(editor)) return null;
   return (
     <MenuRow
       slot="image.editChart"

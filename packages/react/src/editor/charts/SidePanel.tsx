@@ -6,7 +6,12 @@
 
 import { useEffect, useRef } from 'react';
 import type { ReactElement } from 'react';
-import { listenPaneRequests, type PaneRequest } from '@docx-editor.dev/core/editor';
+import {
+  focusChartPane,
+  listenPaneRequests,
+  takePaneRequest,
+  type PaneRequest,
+} from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { MaterialSymbol } from '../../components/ui/Icons';
 import { useTranslation } from '../../i18n';
@@ -33,7 +38,10 @@ export interface DocxEditorSidePanelProps {
   className?: string;
   /** Shows a close button that calls it. */
   onClose?: () => void;
-  /** Content that replaces the packaged Chart pane. It takes no focus request. */
+  /**
+   * Content that replaces the packaged Chart pane. When Edit chart asks for the focus, the
+   * panel moves it to the first field in this content.
+   */
   children?: DocxEditorChildren;
 }
 
@@ -44,6 +52,18 @@ export function DocxEditorSidePanel({
   children,
 }: DocxEditorSidePanelProps): ReactElement {
   const { t } = useTranslation();
+  const editor = useDocxEditor();
+  const body = useRef<HTMLDivElement>(null);
+  const custom = children !== undefined && children !== null;
+  // The packaged pane takes its own focus requests; custom content gets them here.
+  useEffect(() => {
+    if (!editor || !custom) return undefined;
+    const focus = () => queueMicrotask(() => focusChartPane(body.current));
+    if (takePaneRequest(editor)?.focus) focus();
+    return listenPaneRequests(editor, () => {
+      if (takePaneRequest(editor)?.focus) focus();
+    });
+  }, [editor, custom]);
   return (
     <aside
       className={`docx-side-panel${className ? ` ${className}` : ''}`}
@@ -68,7 +88,9 @@ export function DocxEditorSidePanel({
           </button>
         ) : null}
       </div>
-      <div className="docx-side-panel__body">{children ?? <DocxEditorChartPane />}</div>
+      <div className="docx-side-panel__body" ref={body}>
+        {children ?? <DocxEditorChartPane />}
+      </div>
     </aside>
   );
 }

@@ -14,6 +14,7 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { ContextMenu } from '../src/editor/contextmenu/index.ts';
+import { usePaneRequest } from '../src/editor/charts/SidePanel.tsx';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -38,9 +39,26 @@ const SOURCE = zipSync({
 
 const t = (key: string): string => key;
 
+/** A host that shows its side panel on request, as the charts guide shows. */
+function PaneHost() {
+  usePaneRequest(() => {});
+  return null;
+}
+
+function insertChart(editor: DocxEditorInstance): void {
+  const paragraph = editor.surface!.session.paragraphIds()[0]!;
+  act(() => {
+    editor.surface!.setSelection({
+      anchor: { paragraphId: paragraph, offset: 5 },
+      head: { paragraphId: paragraph, offset: 5 },
+    });
+    expect(editor.exec({ type: 'insertChart', chartType: 'pie' }).ok).toBe(true);
+  });
+}
+
 afterEach(cleanup);
 
-function mount() {
+function mount(withPane = true) {
   let instance: DocxEditorInstance | null = null;
   const view = render(
     <DocxEditorRoot
@@ -53,6 +71,7 @@ function mount() {
         <DocxEditorContent />
         <ContextMenu t={t} />
       </DocxEditorViewport>
+      {withPane ? <PaneHost /> : null}
     </DocxEditorRoot>
   );
   return { view, editor: () => instance! };
@@ -77,14 +96,7 @@ test('Edit chart shows only for a selected chart and asks for the Chart pane', (
     fireEvent.keyDown(document, { key: 'Escape' });
   });
 
-  const paragraph = editor().surface!.session.paragraphIds()[0]!;
-  act(() => {
-    editor().surface!.setSelection({
-      anchor: { paragraphId: paragraph, offset: 5 },
-      head: { paragraphId: paragraph, offset: 5 },
-    });
-    expect(editor().exec({ type: 'insertChart', chartType: 'pie' }).ok).toBe(true);
-  });
+  insertChart(editor());
   expect(editor().snapshot().chart).not.toBeNull();
   takePaneRequest(editor());
 
@@ -95,4 +107,13 @@ test('Edit chart shows only for a selected chart and asks for the Chart pane', (
     row!.click();
   });
   expect(takePaneRequest(editor())?.pane).toBe('chart');
+});
+
+test('Edit chart stays out of the menu when the host shows no chart pane', () => {
+  const { view, editor } = mount(false);
+  insertChart(editor());
+  expect(editor().snapshot().chart).not.toBeNull();
+  openMenu(view);
+  expect(view.container.querySelector('.docx-contextmenu')).not.toBeNull();
+  expect(editChartRow(view)).toBeNull();
 });
