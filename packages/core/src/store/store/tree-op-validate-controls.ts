@@ -249,7 +249,7 @@ export function controlsStruckWhole(
       (control) => contentControlPropertiesOf(control).lock
     );
     const lock = resolveContentControlLock(locks);
-    if (strikesWholeControl(offsets.spanOf(entry.node), { start, end }, lock)) {
+    if (strikesWholeControl(offsets.spanOf(entry.node), { start, end }, lock, entry.node)) {
       struck.add(entry.node.id);
     }
   }

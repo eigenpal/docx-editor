@@ -157,7 +157,6 @@ import {
   resolveNumberingLevel,
   positionPastDeletion,
   withNumberingStyleLinks,
-  wordBoundary,
   type CellSelection,
   type ContentControlBoundaryRecord,
   type KeyedRange,
@@ -169,7 +168,6 @@ import {
   type SemanticPosition,
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
-import { wordMotionBoundaries } from '../layout/word-navigation-boundaries.ts';
 import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
 import { rangesOnPages } from '../layout/selection-rects.ts';
 import { keyedRangeRectsWithTextboxes } from './textbox-presence-layout.ts';
@@ -253,6 +251,7 @@ import {
 } from './surface-input.ts';
 import { createSurfaceClipboardOps } from './surface-clipboard-ops.ts';
 import { createSurfaceRangeEditOps } from './surface-range-edit.ts';
+import { createSurfaceWordDeletion } from './surface-word-deletion.ts';
 import {
   carriedSelectionOf,
   createRemoteCaret,
@@ -3091,9 +3090,25 @@ export function mountPaginatedSurface(
     return true;
   }
 
-  /** Backspace / Delete at a chip takes it whole, or first selects a content-locked one. */
-  function deleteAtomicControl(direction: 'backward' | 'forward'): boolean {
-    const step = atomicControlDeletion(direction, (position) => hiddenMarks.shown(position));
+  const wordDeletion = createSurfaceWordDeletion({
+    selection: () => selection,
+    layout: editingLayout,
+    textOf: (paragraphId) => textOf(paragraphId),
+    fieldBoundary: () => textFormInteraction?.wordDeletionBoundary,
+    promptIsSelected: () => promptIsSelected(),
+    deleteSelection: () => surface.deleteSelection(),
+    deleteCharacter: (direction) =>
+      direction === 'backward' ? surface.deleteBackward() : surface.deleteForward(),
+    deleteAtomicControl,
+    commitWord: (ops, caret) =>
+      void commit(() => applyOps(ops, selectionMark()), caret && (() => collapsedAt(caret)), {
+        rearmPending: armedAtCaret() ?? undefined,
+      }),
+  });
+
+  /** Backspace / Delete at a chip or a prompt; see `surface-locked-control-delete.ts`. */
+  function deleteAtomicControl(direction: 'backward' | 'forward', reach?: number): boolean {
+    const step = atomicControlDeletion(direction, (at) => hiddenMarks.shown(at), reach);
     if (step?.kind === 'select') setSelection(step.selection);
     else if (step) {
       const armed = armedAtCaret() ?? undefined;
@@ -4334,6 +4349,8 @@ export function mountPaginatedSurface(
     orderedStart,
     textOf,
     atomicControlDeletion,
+    selectionOverPrompts,
+    promptIsSelected,
     splitEndsTheParagraph,
     deleteSelectionPlan,
     deleteSelectionOps,
@@ -4902,55 +4919,8 @@ export function mountPaginatedSurface(
       }
     },
 
-    deleteWordBackward() {
-      if (surface.deleteSelection()) return;
-      const head = selection.head;
-      // Stopped at a struck half's edge, like every other word walk: Ctrl+Backspace at the
-      // end of a replacement's new text must not reach back through the old text with it.
-      const target = (textFormInteraction?.wordDeletionBoundary ?? wordBoundary)(
-        textOf(head.paragraphId),
-        head.offset,
-        -1,
-        wordMotionBoundaries(editingLayout(), head.paragraphId)
-      );
-      if (target === head.offset) {
-        surface.deleteBackward();
-        return;
-      }
-      commit(
-        () =>
-          applyOps(
-            [{ op: 'deleteText', paragraphId: head.paragraphId, start: target, end: head.offset }],
-            selectionMark()
-          ),
-        () => collapsedAt({ ...head, offset: target }),
-        { rearmPending: armedAtCaret() ?? undefined }
-      );
-    },
-
-    deleteWordForward() {
-      if (surface.deleteSelection()) return;
-      const head = selection.head;
-      const target = (textFormInteraction?.wordDeletionBoundary ?? wordBoundary)(
-        textOf(head.paragraphId),
-        head.offset,
-        1,
-        wordMotionBoundaries(editingLayout(), head.paragraphId)
-      );
-      if (target === head.offset) {
-        surface.deleteForward();
-        return;
-      }
-      commit(
-        () =>
-          applyOps(
-            [{ op: 'deleteText', paragraphId: head.paragraphId, start: head.offset, end: target }],
-            selectionMark()
-          ),
-        undefined,
-        { rearmPending: armedAtCaret() ?? undefined }
-      );
-    },
+    deleteWordBackward: () => wordDeletion.deleteWord('backward'),
+    deleteWordForward: () => wordDeletion.deleteWord('forward'),
 
     deleteForward() {
       if (textFormInteraction?.selectForDeletion('forward')) return;
@@ -5534,7 +5504,12 @@ export function mountPaginatedSurface(
       return rangePlainText(editingLayout(), from, to, paragraphOrder());
     },
 
-    copyFlavours: () => copyFlavoursNow(),
+    // Copy and cut hold the whole prompt the selection holds part of.
+    copyFlavours: () => {
+      const grown = selectionOverPrompts();
+      if (grown) setSelection(grown);
+      return copyFlavoursNow();
+    },
     pasteRich: (text: string, html: string | null) => pasteRichNow(text, html),
     armForcePlainPaste,
 

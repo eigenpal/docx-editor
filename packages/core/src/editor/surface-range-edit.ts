@@ -26,6 +26,7 @@
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import {
   findNode,
+  formsProtectionEnabled,
   inlineControlEndingAt,
   inlineControlStartingAt,
   parentNodeOf,
@@ -62,6 +63,14 @@ import {
   type AtomicControlDeletion,
   type InlineControlBesideCaret,
 } from './surface-locked-control-delete.ts';
+import {
+  keepPromptsWhole,
+  promptRemoval,
+  promptSelected,
+  selectionOverPrompts,
+  type PlannedDeletion,
+  type Prompt,
+} from './surface-prompt-deletion.ts';
 
 /** What this lane borrows from the mount closure. Mutable state arrives as a getter. */
 export interface SurfaceRangeEditDeps {
@@ -106,11 +115,20 @@ export interface SurfaceRangeEditOps {
     position: { readonly paragraphId: string; readonly offset: number },
     side: 'before' | 'after'
   ): InlineControlBesideCaret | null;
-  /** Backspace / Delete beside or over an atomic inline control; see `atomicControlDeletion`. */
+  /**
+   * Backspace / Delete beside or over an atomic inline control (see `atomicControlDeletion`),
+   * or into a prompt. `reach` is where a word deletion from a caret ends; it asks only about
+   * prompts.
+   */
   atomicControlDeletion(
     direction: 'backward' | 'forward',
-    shown: (position: SemanticPosition) => SemanticPosition
+    shown: (position: SemanticPosition) => SemanticPosition,
+    reach?: number
   ): AtomicControlDeletion | null;
+  /** The selection grown over every prompt it holds part of, or null; copy and cut read it. */
+  selectionOverPrompts(): SemanticSelection | null;
+  /** Whether the selection is exactly one prompt: a word deletion then leaves it as it is. */
+  promptIsSelected(): boolean;
   splitEndsTheParagraph(position: SemanticPosition): boolean;
   deleteSelectionPlan(trackedAuthor?: string): RangeDeletionPlan;
   deleteSelectionOps(): readonly TreeDocOp[];
@@ -208,12 +226,16 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
 
   function atomicControlDeletion(
     direction: 'backward' | 'forward',
-    shown: (position: SemanticPosition) => SemanticPosition
+    shown: (position: SemanticPosition) => SemanticPosition,
+    reach?: number
   ): AtomicControlDeletion | null {
     // Queued typing lands first, so the caret and the layout are the ones the reader sees.
     deps.flushPendingInputAndLayout();
     if (deps.cellSelection()) return null;
-    return planAtomicControlDeletion({
+    const prompt = promptDeletion(direction, shown, reach);
+    if (prompt && prompt.kind !== 'plan') return prompt;
+    if (reach !== undefined) return null;
+    const atomic = planAtomicControlDeletion({
       layout: deps.layout(),
       selection: deps.selection(),
       direction,
@@ -221,6 +243,115 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
       controlBeside: inlineControlBeside,
       tracked: deps.trackedAuthorOrNone() !== undefined,
     });
+    // The range plan the prompt rule already read is the deletion: hand it on, not rebuilt.
+    const plan = prompt?.plan;
+    if (atomic || !plan || plan.ops.length === 0) return atomic;
+    return { kind: 'remove', ops: plan.ops, collapseTo: plan.collapseTo };
+  }
+
+  /**
+   * What the press does under the prompt rule (`surface-prompt-deletion.ts`), or a `plan`
+   * result when the rule leaves the press alone. A range's plan travels with that result, so
+   * the caller does not build it a second time.
+   */
+  function promptDeletion(
+    direction: 'backward' | 'forward',
+    shown: (position: SemanticPosition) => SemanticPosition,
+    reach: number | undefined
+  ): AtomicControlDeletion | { readonly kind: 'plan'; readonly plan?: PlannedDeletion } | null {
+    const layout = deps.layout();
+    if (!layout.contentControls?.some((control) => control.placeholder)) return null;
+    const selection = deps.selection();
+    const tracked = deps.trackedAuthorOrNone() !== undefined;
+    // A pure read: `partOfNodeId`, never `partFor`, which would retain a story store.
+    const part = partOfNodeId(session, selection.head.paragraphId) ?? session.part();
+    // A press the rule refuses keeps the selection, as the press that cannot remove does.
+    const unchanged = { kind: 'select', selection } as const;
+    const ranged =
+      selection.anchor.paragraphId !== selection.head.paragraphId ||
+      selection.anchor.offset !== selection.head.offset;
+    const selected = ranged ? promptSelected(part, selection) : null;
+    if (selected) {
+      const removal = removalOf(selected, tracked, direction);
+      return removal ? { kind: 'remove', ...removal } : unchanged;
+    }
+    let plan: PlannedDeletion;
+    if (ranged) {
+      plan = deleteSelectionPlan();
+    } else {
+      // One character, or a word when `reach` names where the word ends.
+      const caret = reach === undefined ? shown(selection.head) : selection.head;
+      const far = reach ?? caret.offset + (direction === 'backward' ? -1 : 1);
+      if (far < 0 || far === caret.offset || far > textOf(caret.paragraphId).length) return null;
+      const [start, end] = far < caret.offset ? [far, caret.offset] : [caret.offset, far];
+      const { paragraphId } = caret;
+      plan = {
+        ops: [{ op: 'deleteText', paragraphId, start, end }],
+        collapseTo: { paragraphId, offset: start },
+      };
+    }
+    const press = keepPromptsWhole(part, plan, tracked);
+    if (!press) return ranged ? { kind: 'plan', plan } : { kind: 'plan' };
+    if (press.kind === 'refused') return unchanged;
+    if (press.kind === 'plan') return { kind: 'remove', ...press.plan };
+    return reachedPrompt(press.prompt, direction, tracked);
+  }
+
+  /** A press from a caret that reached only `prompt`: select it, or propose its deletion. */
+  function reachedPrompt(
+    prompt: Prompt,
+    direction: 'backward' | 'forward',
+    tracked: boolean
+  ): AtomicControlDeletion {
+    const start = { paragraphId: prompt.paragraphId, offset: prompt.start };
+    const end = { paragraphId: prompt.paragraphId, offset: prompt.end };
+    const backward = direction === 'backward';
+    if (tracked && prompt.struck) {
+      // Already proposed for deletion: the key steps over it.
+      const past = backward ? start : end;
+      return { kind: 'select', selection: { anchor: past, head: past } };
+    }
+    const removal = tracked ? removalOf(prompt, true, direction) : null;
+    if (removal) return { kind: 'remove', ...removal };
+    return {
+      kind: 'select',
+      selection: backward ? { anchor: end, head: start } : { anchor: start, head: end },
+    };
+  }
+
+  /**
+   * The ops a press removes a prompt's control with, or null. Under forms protection the
+   * control is a field to fill, which no press removes, so the press keeps the selection rather
+   * than reporting the store's refusal for an ordinary key.
+   */
+  function removalOf(
+    prompt: Prompt,
+    tracked: boolean,
+    direction: 'backward' | 'forward'
+  ): PlannedDeletion | null {
+    if (formsProtectionEnabled(session.settingsRoot())) return null;
+    return promptRemoval(prompt, tracked, direction);
+  }
+
+  /** The selection grown over every prompt it holds part of, or null; copy and cut read it. */
+  function selectionOverPromptsNow(): SemanticSelection | null {
+    deps.flushPendingInputAndLayout();
+    if (deps.cellSelection()) return null;
+    if (!deps.layout().contentControls?.some((control) => control.placeholder)) return null;
+    const selection = deps.selection();
+    const { from, to } = orderedRange();
+    if (from.paragraphId === to.paragraphId && from.offset === to.offset) return null;
+    const part = partOfNodeId(session, selection.head.paragraphId) ?? session.part();
+    return selectionOverPrompts(part, selection, { from, to });
+  }
+
+  /** Whether the selection is exactly one prompt: a word deletion then leaves it as it is. */
+  function promptIsSelected(): boolean {
+    deps.flushPendingInputAndLayout();
+    if (!deps.layout().contentControls?.some((control) => control.placeholder)) return false;
+    const selection = deps.selection();
+    const part = partOfNodeId(session, selection.head.paragraphId) ?? session.part();
+    return promptSelected(part, selection) !== null;
   }
 
   /**
@@ -630,6 +761,8 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     textOf,
     inlineControlBeside,
     atomicControlDeletion,
+    selectionOverPrompts: selectionOverPromptsNow,
+    promptIsSelected,
     splitEndsTheParagraph,
     deleteSelectionPlan,
     deleteSelectionOps,
