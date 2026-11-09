@@ -6,6 +6,7 @@
 // character. A line whose slack its spaces can absorb therefore sets as a justified line. The
 // gaps are real span geometry, as in East Asian justification, so paint, PDF export, the caret
 // and hit testing read one layout.
+import { isBalancedSpace } from './balanced-space-widths.ts';
 import { authoredCjkGapMetric } from './cjk-auto-spacing-metric-port.ts';
 import { automaticTextSpacingBefore } from './cjk-automatic-spacing.ts';
 import { knownFamilyReverseGap } from './authored-average-widths.ts';
@@ -34,7 +35,16 @@ export function spaceSlackCapacity(
   measurer: TextMeasurer,
   spacing: Exclude<DistributedSpacing, 'spaces'>
 ): number {
-  if (spacing === 'characters') return SPACE_SHARE_LIMIT * own;
+  if (spacing === 'characters') {
+    // Balanced width affects fitting, but the distribution limit uses the original glyph.
+    // This capacity can be negative when balancing already exceeds that limit.
+    if (isBalancedSpace(space)) {
+      const style = styleForFontSlot(space.style, space.fontSlot);
+      const natural = measureDisplayText(' ', { ...style, characterSpacingPt: 0 }, measurer);
+      return (1 + SPACE_SHARE_LIMIT) * natural - own;
+    }
+    return SPACE_SHARE_LIMIT * own;
+  }
   const style = styleForFontSlot(space.style, space.fontSlot);
   // Both metrics return half the face's average character width (the East Asian automatic
   // spacing gap), so double it.
@@ -250,7 +260,8 @@ export function distributeLineCharacters(
   // Nothing can spread, such as one kerned word: the caller centers the line.
   if (gaps === 0) return null;
   // Spaces and automatic gaps fill first, in proportion to their capacity, up to it.
-  const spaceShare = totalCapacity > 0 ? Math.min(1, slack / totalCapacity) : 0;
+  // A negative total returns excess balanced width before characters share the remaining slack.
+  const spaceShare = totalCapacity > 0 ? Math.min(1, slack / totalCapacity) : 1;
   const step = (slack - spaceShare * totalCapacity) / gaps;
   let shift = 0;
   const placed = pieces.map((piece, index) => {

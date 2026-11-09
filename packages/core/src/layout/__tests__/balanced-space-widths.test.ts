@@ -45,9 +45,12 @@ function part(name: string, xml: string) {
   if (!read.ok) throw Error(read.reason);
   return read.part;
 }
-const cascade = (balanced: boolean, mode: number) =>
+const cascade = (balanced: boolean, mode: number, runDefaults = false) =>
   buildStyleCascadeTable(
-    part('/word/styles.xml', `<w:styles xmlns:w="${W}"/>`).root,
+    part(
+      '/word/styles.xml',
+      `<w:styles xmlns:w="${W}">${runDefaults ? '<w:docDefaults><w:rPrDefault/></w:docDefaults>' : ''}</w:styles>`
+    ).root,
     undefined,
     part(
       '/word/settings.xml',
@@ -57,12 +60,19 @@ const cascade = (balanced: boolean, mode: number) =>
         `w:uri="http://schemas.microsoft.com/office/word" w:val="${mode}"/></w:compat></w:settings>`
     ).root
   );
-type Run = string | { text: string; size?: number; font?: string };
+type Run =
+  string | { text: string; size?: number; font?: string; spacing?: number; scale?: number };
 const run = (item: Run) => {
-  const { text, size = 11, font = 'Batang' } = typeof item === 'string' ? { text: item } : item;
+  const {
+    text,
+    size = 11,
+    font = 'Batang',
+    spacing = 0,
+    scale = 100,
+  } = typeof item === 'string' ? { text: item } : item;
   return (
     `<w:r><w:rPr><w:rFonts w:ascii="${font}" w:hAnsi="${font}" w:eastAsia="${font}"/>` +
-    `<w:sz w:val="${size * 2}"/></w:rPr>` +
+    `<w:sz w:val="${size * 2}"/><w:spacing w:val="${spacing * 20}"/><w:w w:val="${scale}"/></w:rPr>` +
     text
       .split('\t')
       .map((piece) => `<w:t xml:space="preserve">${piece}</w:t>`)
@@ -72,7 +82,14 @@ const run = (item: Run) => {
 };
 function layout(
   runs: Run | readonly Run[],
-  { balanced = true, mode = 15, jc = 'left', width = 400, measure = measurer } = {}
+  {
+    balanced = true,
+    mode = 15,
+    jc = 'left',
+    width = 400,
+    measure = measurer,
+    runDefaults = false,
+  } = {}
 ) {
   return layoutSemanticDocument(
     loadBody(
@@ -81,7 +98,11 @@ function layout(
         '<w:pgMar w:left="500" w:right="500" w:top="500" w:bottom="500"/></w:sectPr>'
     ),
     1,
-    { measurer: measure, compatibilityMode: mode, styleCascade: cascade(balanced, mode) }
+    {
+      measurer: measure,
+      compatibilityMode: mode,
+      styleCascade: cascade(balanced, mode, runDefaults),
+    }
   );
 }
 /** The advance of each space before the line end on the first line, in order. */
@@ -252,4 +273,94 @@ test('a shaped East Asian face: the widened space reads half an em, the Latin sp
   expect(spaceAdvances(layout(text, { measure: shaped, balanced: false }))).toEqual([
     2.464, 2.464, 2.464,
   ]);
+});
+
+describe('distributed characters with balanced spaces', () => {
+  const narrowSpace: TextMeasurer = {
+    ...measurer,
+    measure: (text, style) =>
+      [...text].reduce((n, c) => n + (c === ' ' ? 3 : 10) + style.characterSpacingPt, 0),
+  };
+  const settings = { jc: 'distribute', width: 60, runDefaults: true, measure: narrowSpace };
+  const positions = (runs: Run | readonly Run[], balanced = true) =>
+    linesOf(layout(runs, { ...settings, balanced }))[0]!
+      .spans.filter((span) => span.text.trim())
+      .map((span) => [span.text, span.box.x] as const);
+
+  test('a balanced space uses the original advance for its character-distribution share', () => {
+    // Four letters use 40 pt. The space first takes 1.45 * 3 = 4.35 pt.
+    // Four character gaps share the remaining 15.65 pt, even though the balanced space is 5.5 pt.
+    const result = positions('가나 다라');
+    expect(result.map(([text]) => text)).toEqual(['가', '나', '다', '라']);
+    expect(result.map(([, x]) => x)).toEqual([0, 13.9125, 36.0875, 50]);
+    expect(result).toEqual(positions('가나 다라', false));
+    expect(result).toEqual(positions(['가나', ' ', '다라']));
+  });
+
+  test('mixed balanced and natural spaces keep the same distributed character positions', () => {
+    for (const text of ['가 a 나', '가  나', 'a b c']) {
+      const actual = positions(text);
+      const plain = positions(text, false);
+      expect(actual.map(([text]) => text)).toEqual(plain.map(([text]) => text));
+      for (let index = 0; index < actual.length; index += 1)
+        expect(actual[index]![1]).toBeCloseTo(plain[index]![1], 8);
+    }
+  });
+
+  test('a zero total space share still spreads the character gaps', () => {
+    // One balanced and one natural space: (1.45 * natural - 5.5) + 0.45 * natural = 0.
+    const natural = 5.5 / 1.9;
+    const measure: TextMeasurer = {
+      ...measurer,
+      measure: (text, style) =>
+        [...text].reduce((n, c) => n + (c === ' ' ? natural : 10) + style.characterSpacingPt, 0),
+    };
+    const spans = (balanced: boolean) =>
+      linesOf(
+        layout('가 a b', {
+          ...settings,
+          measure,
+          balanced,
+        })
+      )[0]!.spans.filter((span) => span.text.trim());
+    const balanced = spans(true),
+      plain = spans(false);
+    expect(balanced.map((span) => span.text)).toEqual(['가', 'a', 'b']);
+    for (let index = 0; index < balanced.length; index += 1)
+      expect(balanced[index]!.box.x).toBeCloseTo(plain[index]!.box.x, 8);
+  });
+
+  test('a full line keeps its balanced space without character distribution', () => {
+    const result = layout('가나 다라', { ...settings, width: 45.5 });
+    const line = linesOf(result)[0]!;
+    expect(line.spans.map((span) => span.text).join('')).toBe('가나 다라');
+    expect(spaceAdvances(result)).toEqual([5.5]);
+    expect(linesOf(layout('가나 다라', { ...settings, width: 44 }))).toHaveLength(2);
+  });
+
+  test('authored character spacing and scaling do not acquire balanced space styles', () => {
+    for (const properties of [{ spacing: 1 }, { scale: 120 }]) {
+      const run = { text: '가나 다라', ...properties };
+      const shape = (balanced: boolean) =>
+        linesOf(layout(run, { ...settings, width: 100, balanced }))[0]!.spans;
+      expect(shape(true)).toEqual(shape(false));
+    }
+  });
+
+  test('the caret follows the distributed glyph positions after a balanced space', () => {
+    const result = layout('가나 다라', settings);
+    const line = linesOf(result)[0]!;
+    const after = line.spans.find((span) => span.text === '다')!;
+    const caret = caretAt(
+      result,
+      { paragraphId: after.range.paragraphId, offset: 3 },
+      narrowSpace
+    )!;
+    const origin = caretAt(
+      result,
+      { paragraphId: after.range.paragraphId, offset: 0 },
+      narrowSpace
+    )!;
+    expect(caret.x - origin.x).toBeCloseTo(after.box.x, 8);
+  });
 });

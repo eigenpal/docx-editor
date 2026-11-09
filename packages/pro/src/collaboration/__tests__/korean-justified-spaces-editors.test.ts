@@ -9,6 +9,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { afterEach, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import { caretAt, selectionRects } from '@docx-editor.dev/core/layout';
+import { applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness';
 import { collaborationModule } from '../collaboration-module.ts';
 import { createPeerHarness, zipDocument } from './document-peer-support.ts';
 import { packageFingerprint, saveReopenDigest } from './document-support.ts';
@@ -64,6 +66,15 @@ function lines(editor: Editor) {
     }, 0),
   }));
 }
+function positions(editor: Editor) {
+  return paragraphLines(editor).map((line) =>
+    line.spans.map((span) => ({
+      text: span.text,
+      x: span.box.x,
+      width: span.box.width,
+    }))
+  );
+}
 function select(editor: Editor, from: number, to = from) {
   const paragraphId = editor.surface!.session.paragraphIds()[0]!;
   editor.surface!.setSelection({
@@ -72,55 +83,116 @@ function select(editor: Editor, from: number, to = from) {
   });
 }
 
-test('justified Korean words keep balanced spaces through edits, history, and save', async () => {
-  const peers = await harness.pair(zipDocument(BODY, SOURCE));
-  const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
-    peer.detach();
-    const editor = createDocxEditor({
-      container: document.createElement('div'),
-      document: peer.room.document,
-      modules: [collaborationModule({ session: peer.room.session })],
-    });
-    editors.push(editor);
-    return editor;
-  }) as [Editor, Editor];
-  const converged = () => {
+for (const alignment of ['both', 'distribute'] as const)
+  test(`${alignment} Korean words keep balanced spaces through edits, history, and save`, async () => {
+    const source =
+      alignment === 'both'
+        ? SOURCE
+        : {
+            ...SOURCE,
+            overrides:
+              SOURCE.overrides +
+              `<Override PartName="/word/styles.xml" ContentType="${CT}.styles+xml"/>`,
+            documentRels: SOURCE.documentRels.replace(
+              '</Relationships>',
+              '<Relationship Id="styles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'
+            ),
+            extraXml: {
+              ...SOURCE.extraXml,
+              'word/styles.xml': `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault/></w:docDefaults></w:styles>`,
+            },
+          };
+    const peers = await harness.pair(
+      zipDocument(BODY.replace('w:val="both"', `w:val="${alignment}"`), source)
+    );
+    const views = [document.createElement('div'), document.createElement('div')];
+    const [alice, bob] = [peers.alice, peers.bob].map((peer, index) => {
+      peer.detach();
+      const editor = createDocxEditor({
+        container: views[index]!,
+        document: peer.room.document,
+        modules: [collaborationModule({ session: peer.room.session })],
+      });
+      editors.push(editor);
+      return editor;
+    }) as [Editor, Editor];
+    const converged = () => {
+      peers.alice.room.session.flushPendingJournals();
+      peers.bob.room.session.flushPendingJournals();
+      const a = alice.surface!.session.currentPackage(),
+        b = bob.surface!.session.currentPackage();
+      expect(packageFingerprint(a)).toBe(packageFingerprint(b));
+      expect(saveReopenDigest(a)).toEqual(saveReopenDigest(b));
+      expect(lines(alice)).toEqual(lines(bob));
+      expect(positions(alice)).toEqual(positions(bob));
+      for (const line of lines(alice)) expect(line.shrink).toBeCloseTo(0, 6);
+    };
+    const remoteGeometry = () => {
+      const publish = () =>
+        applyAwarenessUpdate(
+          peers.bob.awareness,
+          encodeAwarenessUpdate(peers.alice.awareness, [peers.alice.ydoc.clientID]),
+          'test'
+        );
+      select(alice, 4);
+      publish();
+      const caret = peers.bob.room.session.remoteSelections()[0]!;
+      expect(caret.head.offset).toBe(4);
+      expect(
+        caretAt(bob.surface!.layout(), {
+          paragraphId: caret.head.nodeId,
+          offset: caret.head.offset,
+        })
+      ).toEqual(caretAt(alice.surface!.layout(), alice.surface!.state().selection.head));
+      select(alice, 2, 6);
+      publish();
+      const range = peers.bob.room.session.remoteSelections()[0]!;
+      expect([range.anchor.offset, range.head.offset]).toEqual([2, 6]);
+      const remote = {
+        anchor: { paragraphId: range.anchor.nodeId, offset: range.anchor.offset },
+        head: { paragraphId: range.head.nodeId, offset: range.head.offset },
+      };
+      expect(
+        selectionRects(bob.surface!.layout(), remote, bob.surface!.session.paragraphIds())
+      ).toEqual(
+        selectionRects(
+          alice.surface!.layout(),
+          alice.surface!.state().selection,
+          alice.surface!.session.paragraphIds()
+        )
+      );
+      expect(views[1]!.querySelectorAll('.docx-remote-selection-rect').length).toBeGreaterThan(0);
+    };
+    converged();
+    expect(lines(alice).map((line) => line.text)).toEqual(['가나다 라마 바사 아자 ', '차카']);
+    const before = lines(alice);
+    remoteGeometry();
+    peers.pause();
+    // Alice shortens the first word while Bob appends a word offline.
+    select(alice, 2, 3);
+    expect(alice.exec({ type: 'deleteText' }).ok).toBe(true);
+    select(bob, TEXT.length);
+    expect(bob.exec({ type: 'insertText', text: ' 타파' }).ok).toBe(true);
     peers.alice.room.session.flushPendingJournals();
     peers.bob.room.session.flushPendingJournals();
-    const a = alice.surface!.session.currentPackage(),
-      b = bob.surface!.session.currentPackage();
-    expect(packageFingerprint(a)).toBe(packageFingerprint(b));
-    expect(saveReopenDigest(a)).toEqual(saveReopenDigest(b));
-    expect(lines(alice)).toEqual(lines(bob));
-    for (const line of lines(alice)) expect(line.shrink).toBeCloseTo(0, 6);
-  };
-  converged();
-  expect(lines(alice).map((line) => line.text)).toEqual(['가나다 라마 바사 아자 ', '차카']);
-  const before = lines(alice);
-  peers.pause();
-  // Alice shortens the first word while Bob appends a word offline.
-  select(alice, 2, 3);
-  expect(alice.exec({ type: 'deleteText' }).ok).toBe(true);
-  select(bob, TEXT.length);
-  expect(bob.exec({ type: 'insertText', text: ' 타파' }).ok).toBe(true);
-  peers.alice.room.session.flushPendingJournals();
-  peers.bob.room.session.flushPendingJournals();
-  peers.resume();
-  converged();
-  // `가나 라마 바사 아자 차카` is 82 pt and fits with its balanced spaces.
-  expect(lines(alice).map((line) => line.text)).toEqual(['가나 라마 바사 아자 차카 ', '타파']);
-  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
-  converged();
-  expect(alice.exec({ type: 'redo' }).ok).toBe(true);
-  converged();
-  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
-  expect(bob.exec({ type: 'undo' }).ok).toBe(true);
-  converged();
-  expect(lines(alice)).toEqual(before);
-  const reopened = createDocxEditor({
-    container: document.createElement('div'),
-    document: await alice.save(),
+    peers.resume();
+    converged();
+    // `가나 라마 바사 아자 차카` is 82 pt and fits with its balanced spaces.
+    expect(lines(alice).map((line) => line.text)).toEqual(['가나 라마 바사 아자 차카 ', '타파']);
+    remoteGeometry();
+    expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+    converged();
+    expect(alice.exec({ type: 'redo' }).ok).toBe(true);
+    converged();
+    expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+    expect(bob.exec({ type: 'undo' }).ok).toBe(true);
+    converged();
+    expect(lines(alice)).toEqual(before);
+    const reopened = createDocxEditor({
+      container: document.createElement('div'),
+      document: await alice.save(),
+    });
+    editors.push(reopened);
+    expect(lines(reopened)).toEqual(lines(alice));
+    expect(positions(reopened)).toEqual(positions(alice));
   });
-  editors.push(reopened);
-  expect(lines(reopened)).toEqual(lines(alice));
-});
