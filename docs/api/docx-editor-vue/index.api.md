@@ -130,6 +130,7 @@ import { NavigateToChangeOptions } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
+import { PaneRequest } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogFields } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogMixed } from '@docx-editor.dev/core/editor';
 import { ParagraphFlagState } from '@docx-editor.dev/core/editor';
@@ -217,6 +218,58 @@ export interface BookmarkDialogFields {
     showHidden: boolean;
     // (undocumented)
     sortBy: BookmarkSortOrder;
+}
+
+// @public
+export const ChartInsert: vue.DefineComponent<vue.ExtractPropTypes<{
+    asChild: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    asChild: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+}>> & Readonly<{}>, {
+    asChild: boolean;
+    className: string;
+    hidden: boolean;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public (undocumented)
+export interface ChartInsertPartComponent {
+    // (undocumented)
+    (props: ChartInsertProps): VNode | null;
+    // (undocumented)
+    readonly docxSlot: 'insert.chart';
+}
+
+// @public
+export interface ChartInsertProps {
+    // (undocumented)
+    asChild?: boolean;
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
 }
 
 export { CHROME_GROUPS }
@@ -2833,6 +2886,26 @@ export interface DocxEditorBookmarkDialogProps extends DialogCustomizationProps 
 }
 
 // @public
+export const DocxEditorChartPane: vue.DefineComponent<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>> & Readonly<{}>, {
+    className: string;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorChartPaneProps {
+    className?: string;
+}
+
+// @public
 export type DocxEditorChildren = VNode;
 
 // @public (undocumented)
@@ -3763,6 +3836,7 @@ export interface DocxEditorNamespace {
     // (undocumented)
     readonly AuthorStyle: typeof DocxEditorAuthorStyle;
     readonly BookmarkDialog: typeof DocxEditorBookmarkDialog;
+    readonly ChartPane: typeof DocxEditorChartPane;
     // (undocumented)
     readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
     // (undocumented)
@@ -3820,6 +3894,7 @@ export interface DocxEditorNamespace {
     readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
+    readonly SidePanel: typeof DocxEditorSidePanel;
     readonly SplitCellDialog: typeof DocxEditorSplitCellDialog;
     // (undocumented)
     readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
@@ -4994,6 +5069,37 @@ export interface DocxEditorRulerProps {
 export const DocxEditorShell: DocxEditorNamespace;
 
 // @public
+export const DocxEditorSidePanel: vue.DefineComponent<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    onClose: {
+        default: undefined;
+        type: PropType<() => void>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    onClose: {
+        default: undefined;
+        type: PropType<() => void>;
+    };
+}>> & Readonly<{}>, {
+    className: string;
+    onClose: () => void;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorSidePanelProps {
+    children?: DocxEditorChildren;
+    className?: string;
+    onClose?: () => void;
+}
+
+// @public
 export const DocxEditorSplitCellDialog: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
         readonly children: PropType<DocxEditorChildren>;
@@ -5209,6 +5315,7 @@ export interface DocxEditorToolbarNamespace {
     readonly BulletList: ToolbarPartComponent;
     // (undocumented)
     readonly Button: typeof ToolbarButton$1;
+    readonly ChartInsert: ChartInsertPartComponent;
     // (undocumented)
     readonly ClearFormatting: ToolbarPartComponent;
     // (undocumented)
@@ -7619,6 +7726,9 @@ export interface ToolbarButtonProps {
     slotId?: ChromeSlotId;
 }
 
+// @public (undocumented)
+export const ToolbarChartInsert: ChartInsertPartComponent;
+
 export { ToolbarCommandState }
 
 export { toolbarCommandState }
@@ -8336,6 +8446,9 @@ export interface UsePageSetupReturn {
     // (undocumented)
     readonly pageSetup: ComputedRef<PageSetup | null>;
 }
+
+// @public
+export function usePaneRequest(listener: (request: PaneRequest) => void): void;
 
 // @public
 export function useParagraphDialog(): UseParagraphDialogReturn;

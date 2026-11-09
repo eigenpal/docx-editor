@@ -83,7 +83,13 @@ import {
 } from './parts';
 import { useChromeScopeClassName } from '../color-mode-context';
 import { chromeControlForSlot, chromeIcon } from '../toolbar/ToolbarButton';
-import { hostDocumentOf, hostWindowOf, isHTMLElementNode } from '@docx-editor.dev/core/editor';
+import {
+  hostDocumentOf,
+  hostWindowOf,
+  isHTMLElementNode,
+  openChartPaneFor,
+} from '@docx-editor.dev/core/editor';
+import { useEditorState } from '../useEditorState';
 import { MenuLinkRow } from '../menu/menu-link-row';
 
 /** Distance kept between the panel and the window edge when it flips. @internal */
@@ -159,8 +165,32 @@ function ContextMenuEditField() {
   );
 }
 
+const selectChartId = (snapshot: { chart: { drawingNodeId: string } | null }) =>
+  snapshot.chart?.drawingNodeId ?? null;
+
+/** Edit chart, on a selected chart: opens the Chart pane, as a double press does. */
+function ContextMenuEditChart() {
+  const editor = useDocxEditor();
+  const menu = useMenuContext();
+  const label = useMenuLabel();
+  const chartId = useEditorState(selectChartId);
+  if (!editor || !chartId) return null;
+  return (
+    <MenuRow
+      slot="image.editChart"
+      onSelect={() => {
+        menu.setOpenMenu(null);
+        openChartPaneFor(editor, chartId);
+      }}
+    >
+      {label('chart.edit')}
+    </MenuRow>
+  );
+}
+
 const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   { kind: 'row', id: 'field.edit', render: () => <ContextMenuEditField /> },
+  { kind: 'row', id: 'image.editChart', render: () => <ContextMenuEditChart /> },
   { kind: 'row', id: 'edit.cut', render: () => <ContextMenuCut /> },
   { kind: 'row', id: 'edit.copy', render: () => <ContextMenuCopy /> },
   { kind: 'row', id: 'edit.paste', render: () => <ContextMenuPaste /> },

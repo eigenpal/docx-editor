@@ -7,6 +7,7 @@ import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import { CHART_TYPES } from '../../store/package/chart-edit/type.ts';
 import { stubReviewModule } from './review-test-module.ts';
+import { chartTypeIconPaths } from '../chart-chrome.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -23,7 +24,9 @@ function documentBytes(body = '<w:p><w:r><w:t>hello</w:t></w:r></w:p>'): Uint8Ar
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
-    'word/document.xml': strToU8(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+    ),
     'word/_rels/document.xml.rels': strToU8(`<Relationships xmlns="${REL}"></Relationships>`),
   });
 }
@@ -86,7 +89,9 @@ describe('chart commands', () => {
       expect(editor.exec({ type: 'insertChart', chartType }).ok).toBe(true);
       const reopened = await reopen(editor);
       const pkg = reopened.surface!.session.currentPackage();
-      const chartPart = [...pkg.parts.keys()].find((name) => /^\/word\/charts\/chart\d+\.xml$/.test(name));
+      const chartPart = [...pkg.parts.keys()].find((name) =>
+        /^\/word\/charts\/chart\d+\.xml$/.test(name)
+      );
       expect(chartPart).toBe('/word/charts/chart1.xml');
       const drawingId = [...pkg.parts.get('/word/document.xml')!.root.children]
         .flatMap(function walk(node): string[] {
@@ -148,5 +153,83 @@ describe('chart commands', () => {
     const refused = editor.exec({ type: 'setChartFormat', format: { valueAxisTitle: 'Units' } });
     expect(refused.ok).toBe(false);
     if (!refused.ok) expect(refused.reason).toBe('chart.errors.noAxes');
+  });
+
+  test('a chart resizes, floats and moves like a picture, and refuses picture-only edits', async () => {
+    const editor = mount();
+    editor.exec({ type: 'insertChart', chartType: 'columnClustered' });
+    const image = editor.snapshot().image;
+    expect(image).not.toBeNull();
+    expect({
+      canResize: image!.canResize,
+      canMove: image!.canMove,
+      canChangeWrap: image!.canChangeWrap,
+      canCrop: image!.canCrop,
+    }).toEqual({ canResize: true, canMove: true, canChangeWrap: true, canCrop: false });
+    const resized = editor.exec({
+      type: 'setImageProperties',
+      widthEmu: 3_657_600,
+      heightEmu: 2_286_000,
+    });
+    expect(resized.ok).toBe(true);
+    expect(editor.exec({ type: 'setImageWrapType', target: 'square' }).ok).toBe(true);
+    const moved = editor.exec({
+      type: 'setImagePosition',
+      horizontalEmu: 127_000,
+      verticalEmu: 254_000,
+    });
+    expect(moved.ok).toBe(true);
+    // The chart stays a chart: its pane still reads it after the frame edits.
+    expect(editor.snapshot().chart).not.toBeNull();
+    const crop = editor.exec({
+      type: 'setImageProperties',
+      crop: { left: 10, top: 0, right: 0, bottom: 0 },
+    });
+    expect(crop.ok).toBe(false);
+    if (!crop.ok) expect(crop.reason).toContain('only its size, position, wrap and alt text');
+    expect(editor.exec({ type: 'transformImage', action: 'rotateCW' }).ok).toBe(false);
+    const reopened = await reopen(editor);
+    const xml = JSON.stringify(
+      reopened.surface!.session.currentPackage().parts.get('/word/document.xml')!.root
+    );
+    expect(xml).toContain('3657600');
+    expect(xml).toContain('wrapSquare');
+    expect(xml).toContain('127000');
+  });
+
+  test('undo of a chart edit selects the chart again, after a click away', () => {
+    const editor = mount();
+    editor.exec({ type: 'insertChart', chartType: 'columnClustered' });
+    const chartId = editor.snapshot().chart!.drawingNodeId;
+    expect(editor.exec({ type: 'setChartType', chartType: 'line' }).ok).toBe(true);
+    const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 0 },
+    });
+    expect(editor.snapshot().chart).toBeNull();
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    expect(editor.snapshot().chart?.drawingNodeId).toBe(chartId);
+  });
+
+  test('every chart type has an icon', () => {
+    for (const type of CHART_TYPES) expect(chartTypeIconPaths(type).length).toBeGreaterThan(0);
+    expect(chartTypeIconPaths('pie')).not.toEqual(chartTypeIconPaths('columnClustered'));
+  });
+
+  test('a chart inserts at a caret just before another chart', async () => {
+    const editor = mount();
+    expect(editor.exec({ type: 'insertChart', chartType: 'pie' }).ok).toBe(true);
+    const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 5 },
+      head: { paragraphId, offset: 5 },
+    });
+    expect(editor.exec({ type: 'insertChart', chartType: 'line' }).ok).toBe(true);
+    const reopened = await reopen(editor);
+    const xml = JSON.stringify(
+      reopened.surface!.session.currentPackage().parts.get('/word/document.xml')!.root
+    );
+    expect(xml.match(/"localName":"chart"/g)?.length).toBe(2);
   });
 });

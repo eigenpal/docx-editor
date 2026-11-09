@@ -5,14 +5,33 @@
 ```ts
 
 import { EditorView } from 'prosemirror-view';
-import { Node as Node_2 } from 'prosemirror-model';
+import { Node as Node_3 } from 'prosemirror-model';
 import { Schema } from 'prosemirror-model';
 
 // @public
 export function bodyParagraphs(part: OoxmlPart): OoxmlNode[];
 
 // @public
-export function docToTreeOps(part: OoxmlPart, doc: Node_2): MapResult;
+export interface ChartCopySource {
+    readonly drawing: OoxmlElement;
+    readonly ownerPart: string;
+    // (undocumented)
+    readonly pkg: OoxmlPackage;
+}
+
+// @public
+export interface ChartLanes {
+    duplicate(scope: StoryScope, input: DuplicateChartInput): ChartIntentResult;
+    // (undocumented)
+    edit(scope: StoryScope, drawingNodeId: string, edit: (pkg: OoxmlPackage, target: ChartTarget) => ChartEdit, options?: {
+        readonly actorId?: string;
+    }): ChartIntentResult;
+    // (undocumented)
+    insert(scope: StoryScope, input: InsertChartInput): ChartIntentResult;
+}
+
+// @public
+export function docToTreeOps(part: OoxmlPart, doc: Node_3): MapResult;
 
 // @public
 export interface DocumentStyleEntry {
@@ -24,6 +43,21 @@ export interface DocumentStyleEntry {
     readonly styleId: string;
     // (undocumented)
     readonly type: string;
+}
+
+// @public
+export interface DuplicateChartInput {
+    // (undocumented)
+    readonly actorId?: string;
+    // (undocumented)
+    readonly expectedPackageRevision?: number;
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+    readonly priorOps?: readonly TreeDocOp[];
+    // (undocumented)
+    readonly source: ChartCopySource;
 }
 
 // @public
@@ -72,15 +106,15 @@ export function partHasNode(part: OoxmlPart, nodeId: string): boolean;
 export const PROJECTION_ORIGIN: "dev.docx-editor.core.origin.projection";
 
 // @public
-export function reconcileDoc(previousDoc: Node_2, part: OoxmlPart, change: {
+export function reconcileDoc(previousDoc: Node_3, part: OoxmlPart, change: {
     readonly created: readonly string[];
     readonly deleted: readonly string[];
     readonly dirty: readonly string[];
     readonly splitJoin: readonly unknown[];
-} | null): Node_2;
+} | null): Node_3;
 
 // @public
-export function runPropsOf(node: Node_2): readonly OoxmlProperty[];
+export function runPropsOf(node: Node_3): readonly OoxmlProperty[];
 
 // @public
 export type StoryScope = {
@@ -123,10 +157,10 @@ export type TreeBindingRejection = 'paragraph-count-unexplained' | 'paragraph-re
 
 // @public
 export interface TreeDocxSession extends TreeDocxSessionView {
-    applyPmDoc(doc: Node_2): TreeApplyResult;
+    applyPmDoc(doc: Node_3): TreeApplyResult;
     lastCommitWasStructural(): boolean;
-    projectDoc(): Node_2;
-    reconcile(previousDoc: Node_2): Node_2;
+    projectDoc(): Node_3;
+    reconcile(previousDoc: Node_3): Node_3;
 }
 
 // @public
@@ -146,6 +180,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     canRedo(): boolean;
     // (undocumented)
     canUndo(): boolean;
+    charts(): ChartLanes;
     collaborationPort(documentId: string): CollaborationDocumentPort;
     currentPackage(): OoxmlPackage;
     deleteComment(commentId: string, scope?: StoryScope, noteId?: number, options?: PackageWriteOptions): boolean;
@@ -261,6 +296,6 @@ export interface TreeSurfaceState {
 }
 
 // @public
-export function treeToDoc(part: OoxmlPart): Node_2;
+export function treeToDoc(part: OoxmlPart): Node_3;
 
 ```

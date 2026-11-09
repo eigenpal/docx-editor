@@ -22,7 +22,11 @@ import {
   readChartFormatOf,
   type ChartTarget,
 } from '../store/package/chart-edit/data.ts';
-import { withChartColor, withChartFormat, withChartType } from '../store/package/chart-edit/format.ts';
+import {
+  withChartColor,
+  withChartFormat,
+  withChartType,
+} from '../store/package/chart-edit/format.ts';
 import { sampleChartData } from '../store/package/chart-edit/insert.ts';
 import { isChartType } from '../store/package/chart-edit/type.ts';
 import { paragraphLength } from '../store/store/tree-op-segments.ts';
@@ -72,9 +76,15 @@ export function createChartStateCache(): (
   surface: PaginatedSurface | null
 ) => SelectedChartState | null {
   let last: SelectedChartState | null = null;
+  let lastSpace: object | null = null;
+  let version = 0;
   return (surface) => {
     const chart = selectedChart(surface);
     if (!chart) return (last = null);
+    if (chart.target.chartSpace !== lastSpace) {
+      lastSpace = chart.target.chartSpace;
+      version += 1;
+    }
     const data = chartEditable(chart.target);
     const format = readChartFormatOf(chart.target);
     const next: SelectedChartState = {
@@ -83,6 +93,7 @@ export function createChartStateCache(): (
       ...(data.reason ? { reason: data.reason } : {}),
       formattable: format.ok,
       ...(format.ok ? {} : { formatReason: format.reason }),
+      version,
     };
     if (
       last &&
@@ -90,7 +101,8 @@ export function createChartStateCache(): (
       last.editable === next.editable &&
       last.reason === next.reason &&
       last.formattable === next.formattable &&
-      last.formatReason === next.formatReason
+      last.formatReason === next.formatReason &&
+      last.version === next.version
     )
       return last;
     return (last = next);
@@ -98,7 +110,10 @@ export function createChartStateCache(): (
 }
 
 /** The data of the selected chart, or of the chart drawing `drawingNodeId`. */
-export function chartDataOf(surface: PaginatedSurface | null, drawingNodeId?: string): ChartDataRead {
+export function chartDataOf(
+  surface: PaginatedSurface | null,
+  drawingNodeId?: string
+): ChartDataRead {
   const chart = selectedChart(surface, drawingNodeId);
   if (!chart || !surface) return { ok: false, reason: 'chart.errors.noChart' };
   return readChartData(surface.session.currentPackage(), chart.target);
@@ -193,7 +208,15 @@ function insertChart(
     heightPoints: Math.round(width * NEW_CHART_ASPECT),
     name: translated(translate, 'chart.sample.name', { number: '{number}' }),
   });
-  if (outcome.ok && outcome.drawingNodeId) surface.selectDrawing(outcome.drawingNodeId, paragraphId);
+  if (
+    outcome.ok &&
+    outcome.drawingNodeId &&
+    surface.selectDrawing(outcome.drawingNodeId, paragraphId)
+  ) {
+    // The whole new chart in view, not only the top of its line: the caret follow keeps the
+    // line start visible, and a chart inserted low on the screen ran past its bottom edge.
+    surface.revealPosition(surface.state().selection.head, { block: 'nearest' });
+  }
   return resultOf(outcome, surface);
 }
 

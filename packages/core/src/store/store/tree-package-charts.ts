@@ -22,7 +22,10 @@ import {
   withChartWorkbook,
   withNewChart,
 } from '../package/chart-edit/package.ts';
+import { duplicatedChartDrawing, withDuplicatedChart } from '../package/chart-edit/duplicate.ts';
 import { ChartRefusal } from '../package/chart-edit/tree.ts';
+import type { OoxmlDrawingNode, OoxmlElement } from '../package/ooxml-tree.ts';
+import type { TreeDocOp } from './tree-op-types.ts';
 import type { ChartType, NewChartData } from '../package/chart-edit/types.ts';
 
 /** The result of a chart lane: the store's result, or a chart refusal key. */
@@ -149,9 +152,94 @@ export function editChart(
   return refusal ?? outcome;
 }
 
+/** A chart copied out of a package: the package as it was, and the chart drawing in it. */
+export interface ChartCopySource {
+  readonly pkg: OoxmlPackage;
+  /** The story part that holds the drawing. */
+  readonly ownerPart: string;
+  /** The chart's `w:drawing`, as the source package holds it. */
+  readonly drawing: OoxmlElement;
+}
+
+/** A paste of a copied chart at one place in a story. */
+export interface DuplicateChartInput {
+  readonly source: ChartCopySource;
+  readonly paragraphId: string;
+  readonly offset: number;
+  /** Ops that run first in the same unit, such as the removal of the selected text. */
+  readonly priorOps?: readonly TreeDocOp[];
+  readonly expectedPackageRevision?: number;
+  readonly actorId?: string;
+}
+
+/**
+ * Insert a copy of a chart, with copies of its chart part and of each part the chart part
+ * reaches, as one package undo unit. The source package may be this store's or another's.
+ */
+export function duplicateChart(
+  store: TreePackageStore,
+  scope: StoryScope,
+  input: DuplicateChartInput
+): ChartIntentResult {
+  let refusal: ChartIntentResult | null = null;
+  const options: ImageTransactOptions = {
+    ...(input.expectedPackageRevision !== undefined
+      ? { expectedPackageRevision: input.expectedPackageRevision }
+      : {}),
+    ...(input.actorId ? { actorId: input.actorId } : {}),
+  };
+  const outcome = transactPackageImage(
+    store,
+    scope,
+    (ctx, owner) => {
+      try {
+        const { source } = input;
+        const target = chartTargetOf(source.pkg, source.ownerPart, source.drawing);
+        if (!target) throw new ChartRefusal('chart.errors.noChart');
+        const added = withDuplicatedChart(
+          store.currentPackage(),
+          owner,
+          source.pkg,
+          target.part,
+          input.actorId
+        );
+        const docPr = allocateDrawingPropertyId(added.pkg, input.actorId);
+        if (!docPr.ok) return null;
+        if (source.drawing.kind !== 'drawing') throw new ChartRefusal('chart.errors.noChart');
+        const drawing = duplicatedChartDrawing(
+          source.drawing as OoxmlDrawingNode,
+          added.relationshipId,
+          docPr.id
+        );
+        if (!ctx.applyPackage(() => added.pkg)) return null;
+        // After the package write, which carries the story part as it stood before the unit.
+        for (const op of input.priorOps ?? []) if (!ctx.apply(op)) return null;
+        if (
+          !ctx.apply({
+            op: 'insertDrawing',
+            paragraphId: input.paragraphId,
+            offset: input.offset,
+            drawing,
+          })
+        )
+          return null;
+        return drawing.id;
+      } catch (error) {
+        refusal = refused(error);
+        if (refusal) return null;
+        throw error;
+      }
+    },
+    options
+  );
+  return refusal ?? outcome;
+}
+
 /** The chart lanes of one package store, as the editor session hands them on. */
 export interface ChartLanes {
   insert(scope: StoryScope, input: InsertChartInput): ChartIntentResult;
+  /** Insert a copy of a copied chart, as {@link duplicateChart} does. */
+  duplicate(scope: StoryScope, input: DuplicateChartInput): ChartIntentResult;
   edit(
     scope: StoryScope,
     drawingNodeId: string,
@@ -163,6 +251,7 @@ export interface ChartLanes {
 /** The chart lanes over `store`. */
 export const chartLanesFor = (store: TreePackageStore): ChartLanes => ({
   insert: (scope, input) => insertChart(store, scope, input),
+  duplicate: (scope, input) => duplicateChart(store, scope, input),
   edit: (scope, drawingNodeId, edit, options) =>
     editChart(store, scope, drawingNodeId, edit, options),
 });

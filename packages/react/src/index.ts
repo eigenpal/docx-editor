@@ -60,6 +60,17 @@ export {
   type DocxEditorDocumentOutlineProps,
 } from './editor/DocxEditorOutline';
 export {
+  ChartInsert,
+  DocxEditorChartPane,
+  DocxEditorSidePanel,
+  ToolbarChartInsert,
+  usePaneRequest,
+  type ChartInsertPartComponent,
+  type ChartInsertProps,
+  type DocxEditorChartPaneProps,
+  type DocxEditorSidePanelProps,
+} from './editor/charts';
+export {
   DocxEditorPageSetupDialog,
   type DocxEditorPageSetupDialogProps,
 } from './editor/DocxEditorPageSetup';

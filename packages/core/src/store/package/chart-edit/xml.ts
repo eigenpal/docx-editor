@@ -77,10 +77,18 @@ export const withoutC = (el: Element, ...locals: string[]): Element =>
 export function placeChild(el: Element, next: Element, order: readonly string[]): Element {
   const rank = order.indexOf(next.localName);
   const kept = el.children.filter(
-    (k) => !(k.kind !== 'textValue' && k.namespaceUri === next.namespaceUri && k.localName === next.localName)
+    (k) =>
+      !(
+        k.kind !== 'textValue' &&
+        k.namespaceUri === next.namespaceUri &&
+        k.localName === next.localName
+      )
   );
   const at = kept.findIndex(
-    (k) => k.kind !== 'textValue' && k.namespaceUri === next.namespaceUri && order.indexOf(k.localName) > rank
+    (k) =>
+      k.kind !== 'textValue' &&
+      k.namespaceUri === next.namespaceUri &&
+      order.indexOf(k.localName) > rank
   );
   if (at < 0) return withKids(el, [...kept, next]);
   return withKids(el, [...kept.slice(0, at), next, ...kept.slice(at)]);

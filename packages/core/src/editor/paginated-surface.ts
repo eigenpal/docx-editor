@@ -133,6 +133,7 @@ import {
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
 import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
+import { selectPastedDrawing } from './surface-chart-clipboard.ts';
 import { createHiddenMarkEditing, type RevisionView } from './hidden-mark-joins.ts';
 import { drawingSelectionPosition } from './surface-drawing-selection.ts';
 import { syncActiveFieldShading } from './surface-field-shading.ts';
@@ -675,7 +676,8 @@ export function mountPaginatedSurface(
     collaborationSession ?? session,
     () => selection,
     () => partOfNodeId(session, selection.head.paragraphId) ?? session.part(),
-    () => session.packageRevision()
+    () => session.packageRevision(),
+    () => resolveSelectedDrawingRecord(surface)?.drawingNodeId ?? null
   );
   function moveDocumentHistory(direction: 'undo' | 'redo'): void {
     let mark: ReturnType<TreeDocxSession['undo']> = null;
@@ -699,6 +701,11 @@ export function mountPaginatedSurface(
     const carried =
       direction === 'undo' ? historySelectionOf(collaborationSession, collaborationPort) : null;
     restoreSelection(carried ?? result.selection ?? mark);
+    // A chart or picture edit steps back with the object still selected, so the next undo,
+    // the Chart pane, and the handles stay on it. `selectDrawing` refuses a drawing that the
+    // step removed, and the caret then stays where the selection put it.
+    if (!carried && result.selection && result.drawing)
+      surface.selectDrawing(result.drawing, result.selection.head.paragraphId);
   }
   function restoreCaretFormat(value: CaretFormatSnapshot): void {
     selectionSync.noteModelMoved();
@@ -4371,6 +4378,8 @@ export function mountPaginatedSurface(
       trackedChangeLanded: () => runtimeOptions.onTrackedChange?.(),
       revisionDisplayMode,
       commit,
+      selectedDrawing: () => resolveSelectedDrawingRecord(surface),
+      selectPastedDrawing: (id, paragraphId) => selectPastedDrawing(surface, id, paragraphId),
     });
 
   function applyRevisionAuthorVisibility(moved: boolean): void {
@@ -5022,6 +5031,7 @@ export function mountPaginatedSurface(
       const next = collapsedAt(at);
       setDrawingIntent({ kind: 'pointer', drawingNodeId }, selectionsEqual(next, selection));
       setSelection(next, true, 'none');
+      documentSelectionHistory.noteSelectionAfterEdit();
       return resolveSelectedDrawingRecord(surface)?.drawingNodeId === drawingNodeId;
     },
 

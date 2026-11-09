@@ -86,7 +86,8 @@ function titleText(title: Element): string | undefined {
 /** The `a:t` text of a paragraph, in order. */
 function collectText(el: Element): string {
   let s = '';
-  for (const k of elements(el)) s += k.namespaceUri === NS.a && k.localName === 't' ? textOf(k) : collectText(k);
+  for (const k of elements(el))
+    s += k.namespaceUri === NS.a && k.localName === 't' ? textOf(k) : collectText(k);
   return s;
 }
 
@@ -302,7 +303,9 @@ function setDataLabels(plot: Element, on: boolean): Element {
   let next = withKids(
     plot,
     plot.children.map((k) =>
-      k.kind !== 'textValue' && k.namespaceUri === NS.c && k.localName === 'ser' ? withoutC(k, 'dLbls') : k
+      k.kind !== 'textValue' && k.namespaceUri === NS.c && k.localName === 'ser'
+        ? withoutC(k, 'dLbls')
+        : k
     )
   );
   next = withoutC(next, 'dLbls');
@@ -350,7 +353,9 @@ function formatChart(chart: Element, model: ChartModel, change: ChartFormatChang
     change.valueAxisTitle !== undefined;
   if (change.dataLabels === undefined && !axisEdit) return next;
   const plotArea = cChild(next, 'plotArea');
-  const plot = elements(plotArea).find((e) => e.namespaceUri === NS.c && e.localName === model.plot.localName);
+  const plot = elements(plotArea).find(
+    (e) => e.namespaceUri === NS.c && e.localName === model.plot.localName
+  );
   if (!plotArea || !plot) throw new ChartRefusal('chart.errors.noData');
   let area = plotArea;
   if (change.dataLabels !== undefined) {
@@ -364,7 +369,9 @@ function formatChart(chart: Element, model: ChartModel, change: ChartFormatChang
       if (typeof v !== 'boolean') throw new ChartRefusal('chart.errors.unsupported', what);
       return v;
     };
-    const currentPlot = elements(area).find((e) => e.namespaceUri === NS.c && e.localName === model.plot.localName)!;
+    const currentPlot = elements(area).find(
+      (e) => e.namespaceUri === NS.c && e.localName === model.plot.localName
+    )!;
     const pair = axisPair(area, currentPlot);
     const edits = new Map<Element, Element>();
     const edit = (ax: Element | undefined, fn: (el: Element) => Element): void => {

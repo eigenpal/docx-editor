@@ -726,12 +726,15 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
    * Every clipboard flavour for the current selection: plain text, and the interop HTML
    * carrying the embedded fragment when the selection is a body-story range. A cell rectangle
    * answers grid text plus a flattened table; `html` is null where only plain text should be
-   * written. A chart refuses as `'chart-content'`, another object as `'unsupported-content'`.
+   * written. One selected chart copies whole and names its drawing in `chartDrawingNodeId`,
+   * which a cut deletes. A chart inside a wider selection refuses as `'chart-content'`, another
+   * object as `'unsupported-content'`.
    */
   copyFlavours(): {
     readonly text: string;
     readonly html: string | null;
     readonly reason?: 'unsupported-content' | 'chart-content';
+    readonly chartDrawingNodeId?: string;
   };
   /**
    * Route one paste payload by fidelity: embedded fragment, then external HTML, then

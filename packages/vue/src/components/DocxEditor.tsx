@@ -40,6 +40,7 @@ import { DocxEditorToolbar } from '../editor/toolbar';
 import { DocxEditorMenu } from '../editor/menu';
 import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/DocxEditorRulers';
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
+import { DocxEditorChartPane, DocxEditorSidePanel } from '../editor/charts';
 import { DocxEditorNavigation, Navigation } from '../editor/navigation';
 import type { DocxEditorNavigationProps } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
@@ -214,6 +215,10 @@ export interface DocxEditorNamespace {
   readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
   readonly VerticalRuler: typeof DocxEditorVerticalRuler;
   readonly DocumentOutline: typeof DocxEditorDocumentOutline;
+  /** The side panel that holds the Chart pane; the host renders it to show it. */
+  readonly SidePanel: typeof DocxEditorSidePanel;
+  /** The Chart pane: the type, elements, colors, and data of the selected chart. */
+  readonly ChartPane: typeof DocxEditorChartPane;
   readonly Navigation: typeof Navigation;
   /** File export progress and errors, configured through popups.export. */
   readonly ExportDialog: typeof DocxEditorExportDialog;
@@ -689,6 +694,8 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   HorizontalRuler: DocxEditorHorizontalRuler,
   VerticalRuler: DocxEditorVerticalRuler,
   DocumentOutline: DocxEditorDocumentOutline,
+  SidePanel: DocxEditorSidePanel,
+  ChartPane: DocxEditorChartPane,
   Navigation: DocxEditorNavigation,
   ExportDialog: DocxEditorExportDialog,
   PrintDialog: DocxEditorPrintDialog,

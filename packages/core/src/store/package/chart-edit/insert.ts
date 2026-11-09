@@ -29,7 +29,8 @@ const CHART_CT = 'application/vnd.openxmlformats-officedocument.drawingml.chart+
 /** The content type of a chart part. */
 export const CHART_CONTENT_TYPE = CHART_CT;
 /** The content type of an embedded workbook. */
-export const XLSX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+export const XLSX_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const SML = 'application/vnd.openxmlformats-officedocument.spreadsheetml';
 const RELS_CT = 'application/vnd.openxmlformats-package.relationships+xml';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -64,8 +65,7 @@ export function checkNewChartData(data: unknown, xy: boolean): NewChartData {
   const { categories, series } = data as NewChartData;
   if (!Array.isArray(categories) || !Array.isArray(series))
     throw new ChartRefusal('chart.errors.unsupported', 'data');
-  if (categories.length === 0 || series.length === 0)
-    throw new ChartRefusal('chart.errors.empty');
+  if (categories.length === 0 || series.length === 0) throw new ChartRefusal('chart.errors.empty');
   if (categories.length > MAX_CHART_POINTS || series.length > MAX_CHART_SERIES)
     throw new ChartRefusal('chart.errors.tooLarge');
   const text = (v: unknown): string => {
@@ -78,7 +78,8 @@ export function checkNewChartData(data: unknown, xy: boolean): NewChartData {
   const rows = series.map((s) => {
     if (!s || typeof s !== 'object' || !Array.isArray(s.values))
       throw new ChartRefusal('chart.errors.unsupported', 'series');
-    if (s.values.length !== labels.length) throw new ChartRefusal('chart.errors.unsupported', 'values');
+    if (s.values.length !== labels.length)
+      throw new ChartRefusal('chart.errors.unsupported', 'values');
     const values = (s.values as readonly unknown[]).map((v) => {
       if (v === null) return null;
       if (typeof v !== 'number' || !Number.isFinite(v))

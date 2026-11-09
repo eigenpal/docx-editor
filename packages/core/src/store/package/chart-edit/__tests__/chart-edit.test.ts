@@ -82,9 +82,7 @@ describe('chart edits in the package', () => {
       expect(pkg.relationships.get(added.chartPart)?.[0]?.rawTarget).toBe(
         '../embeddings/Workbook1.xlsx'
       );
-      expect(pkg.relationships.get('/word/document.xml')?.[0]?.rawTarget).toBe(
-        'charts/chart1.xml'
-      );
+      expect(pkg.relationships.get('/word/document.xml')?.[0]?.rawTarget).toBe('charts/chart1.xml');
     }
   });
 

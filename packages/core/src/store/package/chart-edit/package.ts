@@ -93,10 +93,20 @@ function partPresent(pkg: OoxmlPackage, name: string): boolean {
   return false;
 }
 
-/** The first free part name `${stem}N${ext}`, in the actor's stripe under collaboration. */
-function freePartName(pkg: OoxmlPackage, stem: string, ext: string, actorId?: string): string {
+/**
+ * The first free part name `${stem}N${ext}`, in the actor's stripe under collaboration. A name
+ * in `reserved` counts as taken, for parts that a write names before it adds them.
+ */
+export function freePartName(
+  pkg: OoxmlPackage,
+  stem: string,
+  ext: string,
+  actorId?: string,
+  reserved?: ReadonlySet<string>
+): string {
   for (const n of partNumberCandidates(Number.MAX_SAFE_INTEGER, actorId)) {
     const name = `${stem}${n}${ext}`;
+    if (reserved?.has(partNameKey(name))) continue;
     if (!partPresent(pkg, name)) return name;
   }
   throw new ChartRefusal('chart.errors.unsupported', 'partName');
@@ -107,8 +117,7 @@ export function relativeTarget(owner: string, part: string): string {
   const from = owner.split('/').slice(1, -1);
   const to = part.split('/').slice(1);
   let shared = 0;
-  while (shared < from.length && shared < to.length - 1 && from[shared] === to[shared])
-    shared += 1;
+  while (shared < from.length && shared < to.length - 1 && from[shared] === to[shared]) shared += 1;
   return [...from.slice(shared).map(() => '..'), ...to.slice(shared)].join('/');
 }
 

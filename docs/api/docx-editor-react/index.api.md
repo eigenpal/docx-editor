@@ -123,6 +123,7 @@ import { NavigateToChangeOptions } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
+import { PaneRequest } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogFields } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogMixed } from '@docx-editor.dev/core/editor';
 import { ParagraphFlagState } from '@docx-editor.dev/core/editor';
@@ -207,6 +208,35 @@ export interface BookmarkDialogFields {
     showHidden: boolean;
     // (undocumented)
     sortBy: BookmarkSortOrder;
+}
+
+// @public
+export function ChartInsert(input: ChartInsertProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ChartInsert {
+    var // (undocumented)
+    docxSlot: "insert.chart";
+}
+
+// @public (undocumented)
+export interface ChartInsertPartComponent {
+    // (undocumented)
+    (props: ChartInsertProps): ReactElement | null;
+    // (undocumented)
+    readonly docxSlot: 'insert.chart';
+}
+
+// @public
+export interface ChartInsertProps {
+    // (undocumented)
+    asChild?: boolean;
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
 }
 
 export { CHROME_GROUPS }
@@ -651,6 +681,14 @@ export const DocxEditorBookmarkDialog: typeof BookmarkDialogRoot & {
 export interface DocxEditorBookmarkDialogProps extends DialogCustomizationProps {
     onClose: () => void;
     open: boolean;
+}
+
+// @public
+export function DocxEditorChartPane(input: DocxEditorChartPaneProps): ReactElement;
+
+// @public
+export interface DocxEditorChartPaneProps {
+    className?: string;
 }
 
 // @public
@@ -1112,6 +1150,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     // (undocumented)
     readonly AuthorStyle: typeof DocxEditorAuthorStyle;
     readonly BookmarkDialog: typeof DocxEditorBookmarkDialog;
+    readonly ChartPane: typeof DocxEditorChartPane;
     // (undocumented)
     readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
     // (undocumented)
@@ -1158,6 +1197,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
+    readonly SidePanel: typeof DocxEditorSidePanel;
     readonly SplitCellDialog: typeof DocxEditorSplitCellDialog;
     readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
     // (undocumented)
@@ -1679,6 +1719,16 @@ export function DocxEditorShell(input: {
 }): react.JSX.Element;
 
 // @public
+export function DocxEditorSidePanel(input: DocxEditorSidePanelProps): ReactElement;
+
+// @public
+export interface DocxEditorSidePanelProps {
+    children?: DocxEditorChildren;
+    className?: string;
+    onClose?: () => void;
+}
+
+// @public
 export const DocxEditorSplitCellDialog: typeof SplitCellDialogRoot & {
     Apply: (props: DialogPartProps & {
         name?: "columns" | "rows" | undefined;
@@ -1787,6 +1837,7 @@ export interface DocxEditorToolbarNamespace {
     readonly BulletList: ToolbarPartComponent;
     // (undocumented)
     readonly Button: typeof ToolbarButton$1;
+    readonly ChartInsert: ChartInsertPartComponent;
     // (undocumented)
     readonly ClearFormatting: ToolbarPartComponent;
     // (undocumented)
@@ -3155,6 +3206,9 @@ export interface ToolbarButtonProps {
     slotId?: ChromeSlotId;
 }
 
+// @public (undocumented)
+export const ToolbarChartInsert: ChartInsertPartComponent;
+
 export { ToolbarCommandState }
 
 export { toolbarCommandState }
@@ -3715,6 +3769,9 @@ export interface UsePageSetupReturn {
     readonly isEnabled: boolean;
     readonly pageSetup: PageSetup | null;
 }
+
+// @public
+export function usePaneRequest(listener: (request: PaneRequest) => void): void;
 
 // @public
 export function useParagraphDialog(): UseParagraphDialogReturn;

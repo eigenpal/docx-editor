@@ -17,6 +17,7 @@ import {
   clipboardPasteLandsContent,
   isElementNode,
   isHTMLElementNode,
+  openChartPaneAt,
 } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useDocxEditor, useEditorContentElement } from './context';
@@ -128,6 +129,12 @@ export const DocxEditorContent = defineComponent({
       void insert.insertFromDataTransfer(transfer);
     };
 
+    // A double press on a chart opens the Chart pane, as Edit chart does.
+    const onDblclick = (event: MouseEvent) => {
+      const editor = editorRef.value;
+      if (editor && openChartPaneAt(editor, event)) event.preventDefault();
+    };
+
     return () =>
       h(
         'div',
@@ -148,6 +155,7 @@ export const DocxEditorContent = defineComponent({
             onPaste,
             onDragover: onDragOver,
             onDrop,
+            onDblclick,
           }),
           // Dialogs mount in their own element, as in the React adapter, so a right-to-left
           // provider can mirror them without touching the pages beside them.

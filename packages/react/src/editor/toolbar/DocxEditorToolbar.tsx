@@ -95,6 +95,7 @@ import {
   ToolbarImageWrap,
   ToolbarImageAltText,
 } from '../images';
+import { ToolbarChartInsert, type ChartInsertPartComponent } from '../charts/ChartInsert';
 import {
   ToolbarAlignCenter,
   ToolbarAlignJustify,
@@ -223,6 +224,7 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   'image.insert': ToolbarImageInsert,
   'image.properties': ToolbarImageProperties,
   'image.wrap': ToolbarImageWrap,
+  'insert.chart': ToolbarChartInsert,
   'image.altText': ToolbarImageAltText,
 };
 
@@ -263,9 +265,10 @@ function iconPart(slot: ChromeSlotId): PartLike {
  */
 function buildDefaultGroups(
   image: EditorSnapshot['image'],
-  direction: boolean
+  direction: boolean,
+  chart: boolean
 ): readonly DefaultGroup[] {
-  return formattingBarChromeGroups(image, { direction }).map((group) => {
+  return formattingBarChromeGroups(image, { direction, chart }).map((group) => {
     if (group.id === 'alignment') {
       return {
         id: group.id,
@@ -285,6 +288,7 @@ function buildDefaultGroups(
 }
 
 const selectToolbarImage = (snapshot: EditorSnapshot) => snapshot.image;
+const selectToolbarChart = (snapshot: EditorSnapshot) => snapshot.chart !== null;
 const selectToolbarDisabled = (snapshot: EditorSnapshot) =>
   snapshot.isLoading || snapshot.isOpening === true;
 const selectTableChromeVisible = (snapshot: EditorSnapshot) => snapshot.table !== null;
@@ -370,14 +374,15 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
   // use. It runs above `ToolbarContext.Provider`, so it takes the host `t` directly.
   const label = useToolbarLabelFor(t);
   const image = useEditorState(selectToolbarImage);
+  const chart = useEditorState(selectToolbarChart);
   const toolbarDisabled = useEditorState(selectToolbarDisabled);
   const tableChromeVisible = useEditorState(selectTableChromeVisible);
   // A right-to-left interface language puts the paragraph direction buttons in the bar.
   const chromeDir = useChromeDir();
   const directionButtons = chromeDir === 'rtl';
   const defaultGroups = useMemo(
-    () => buildDefaultGroups(image, directionButtons),
-    [image, directionButtons]
+    () => buildDefaultGroups(image, directionButtons, chart),
+    [image, directionButtons, chart]
   );
   const defaultSlots = useMemo(
     () => new Set(defaultGroups.flatMap((group) => group.entries.map((entry) => entry.slot))),
@@ -833,6 +838,8 @@ export interface DocxEditorToolbarNamespace {
   readonly ImageInsert: ToolbarPartComponent;
   readonly ImageProperties: ToolbarPartComponent;
   readonly ImageWrap: ImageWrapPartComponent;
+  /** The Insert chart dropdown (`insert.chart`). */
+  readonly ChartInsert: ChartInsertPartComponent;
   readonly ImageAltText: ImageAltTextPartComponent;
   readonly TableInsert: ToolbarPartComponent;
   /** Border-edge target picker compound for contextual table chrome. */
@@ -903,6 +910,7 @@ export const DocxEditorToolbar: DocxEditorToolbarNamespace = Object.assign(DocxE
   ImageInsert: ToolbarImageInsert,
   ImageProperties: ToolbarImageProperties,
   ImageWrap: ToolbarImageWrap,
+  ChartInsert: ToolbarChartInsert,
   ImageAltText: ToolbarImageAltText,
   TableInsert: ToolbarTableInsert,
   TableBorderTarget: ToolbarTableBorderTarget,

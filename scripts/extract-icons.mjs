@@ -10,10 +10,12 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = resolve(ROOT, 'packages/react/src/components/ui/Icons.tsx');
 const SRC_REVIEW = resolve(ROOT, 'packages/react/src/components/ui/IconsReview.tsx');
+const SRC_CHART = resolve(ROOT, 'packages/react/src/components/ui/IconsChart.tsx');
 const OUT = resolve(ROOT, 'packages/vue/src/components/ui/icon-paths.json');
 
-// Both icon sources: the map lives in Icons.tsx, the review set in IconsReview.tsx.
-const src = readFileSync(SRC, 'utf8') + '\n' + readFileSync(SRC_REVIEW, 'utf8');
+// The icon sources: the map lives in Icons.tsx, the review set in IconsReview.tsx, the chart
+// types in IconsChart.tsx.
+const src = [SRC, SRC_REVIEW, SRC_CHART].map((file) => readFileSync(file, 'utf8')).join('\n');
 
 // Match each `export function IconFoo(props: IconProps) { return (<SvgIcon ...>BODY</SvgIcon>...`
 const fnRe =
@@ -30,7 +32,7 @@ for (const m of src.matchAll(fnRe)) {
 const block = src.match(/const iconMap[^=]*=\s*\{([\s\S]*?)\n\};/);
 const out = {};
 if (block) {
-  for (const m of block[1].matchAll(/^\s*([\w-]+|'[^']+')\s*:\s*(Icon\w+)/gm)) {
+  for (const m of block[1].matchAll(/^\s*([\w-]+|'[^']+')\s*:\s*(?:\w+\.)?(Icon\w+)/gm)) {
     let key = m[1];
     if (key.startsWith("'")) key = key.slice(1, -1);
     if (fnPaths[m[2]]) out[key] = fnPaths[m[2]];

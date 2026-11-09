@@ -164,6 +164,7 @@ The handler takes no arguments. Read the selection with `editor.getSelectionPlac
 | `useHighlights(name, source, options?)` | `{ applied, unavailable }` |
 | `useHighlightAt(name?)` | Highlight under the pointer, or `null` |
 | `useNavigationPane(options?)` | `{ open, setOpen, toggle, tab, setTab, paneWidth, shift, overlay }` |
+| `usePaneRequest(listener)` | Nothing. Calls `listener` with `{ pane, focus }` when Insert > Chart or Edit chart asks for the Chart pane. See [Charts](/docs/2.x/guides/charts#show-the-chart-pane). |
 | `useNavigationShift()` | `number`, the page offset for an open pane |
 
 Each outline item is `{ heading, depth }`, and `depth` counts from the shallowest heading.

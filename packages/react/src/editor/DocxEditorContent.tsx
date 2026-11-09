@@ -16,6 +16,7 @@ import {
   clipboardDropLandsText,
   clipboardPasteLandsContent,
   isElementNode,
+  openChartPaneAt,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
@@ -143,6 +144,10 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
         onPaste={onPaste}
         onDragOver={onDragOver}
         onDrop={onDrop}
+        // A double press on a chart opens the Chart pane, as Edit chart does.
+        onDoubleClick={(event) => {
+          if (editor && openChartPaneAt(editor, event)) event.preventDefault();
+        }}
       />
       <DialogMount />
       <ConfiguredPopups />

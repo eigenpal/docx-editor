@@ -72,6 +72,8 @@ export interface SelectedChartState {
   readonly formattable: boolean;
   /** Why the type and elements cannot be edited, as a translation key. */
   readonly formatReason?: string;
+  /** Rises each time the chart part changes, so a pane knows when to read the chart again. */
+  readonly version: number;
 }
 
 /**
@@ -116,8 +118,7 @@ export type ChartThemeColor =
  * color: a positive number is "Lighter n%" (`a:lumMod` 100−n, `a:lumOff` n), and a negative
  * number is "Darker n%" (`a:lumMod` 100−n). @public
  */
-export type ChartColor =
-  string | { readonly theme: ChartThemeColor; readonly shift?: number };
+export type ChartColor = string | { readonly theme: ChartThemeColor; readonly shift?: number };
 
 /** Where a chart shows its legend (`c:legendPos`), or `none` for no legend. @public */
 export type ChartLegendPosition = 'none' | 'top' | 'bottom' | 'left' | 'right';

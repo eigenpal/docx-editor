@@ -110,7 +110,8 @@ function relsOf(entries: Entries, owner: string, type: string): Map<string, stri
 
 const s = (el: Element | undefined, local: string): Element | undefined =>
   child(el, { namespaceUri: NS_S, local });
-const ss = (el: Element | undefined, local: string): Element[] => children(el, { namespaceUri: NS_S, local });
+const ss = (el: Element | undefined, local: string): Element[] =>
+  children(el, { namespaceUri: NS_S, local });
 
 // --- The cells of the edit ----------------------------------------------------------------------
 
@@ -203,7 +204,10 @@ function writtenCell(ref: string, old: Element | undefined, v: CellValue): Eleme
   // An inline string (ECMA-376 Part 1, 18.3.1.53): the shared string table stays as it is.
   const t: Element = {
     ...sEl('t', [], v === '' ? [] : [text(v)]),
-    attributes: v.trim() === v ? [] : [
+    attributes:
+      v.trim() === v
+        ? []
+        : [
             {
               kind: 'xmlSpace',
               namespaceUri: NS_XML,
@@ -435,12 +439,10 @@ export function updatedWorkbook(
   writes.set(sheetPart, { ...root, children: kids });
   const encoder = new TextEncoder();
   try {
-    for (const [name, el] of writes)
-      entries.set(name, encoder.encode(serializeXmlPart(name, el)));
+    for (const [name, el] of writes) entries.set(name, encoder.encode(serializeXmlPart(name, el)));
     return writeZip(entries);
   } catch {
     // A value the writer refuses: the workbook stays as it was.
     return undefined;
   }
 }
-

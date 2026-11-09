@@ -10,10 +10,7 @@ import type { SemanticSelection } from '@docx-editor.dev/core/layout';
 import type { StoryScope } from '@docx-editor.dev/core/store';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { ChartEdit, ChartTarget } from '../store/package/chart-edit/data.ts';
-import type {
-  ChartIntentResult,
-  InsertChartInput,
-} from '../store/store/tree-package-charts.ts';
+import type { ChartIntentResult, InsertChartInput } from '../store/store/tree-package-charts.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
 
 /** The refusal of a chart edit while the document is open for viewing. */

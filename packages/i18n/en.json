@@ -56,7 +56,9 @@
     "equationSuggestingDisplay": "In suggesting mode, remove the whole equation block instead of one equation",
     "pictureSelected": "A picture is selected. Place the cursor in text to insert a picture.",
     "chartDrawing": "This is a chart. You can delete it, but you can't edit it as a picture.",
-    "chartClipboard": "This selection contains a chart. Charts can't be copied, cut, or pasted.",
+    "chartFrame": "This is a chart. You can change its size, position, wrapping, and alt text.",
+    "chartClipboard": "A chart can be copied, cut, or pasted only on its own, not with other content.",
+    "chartClipboardStale": "The copied chart is no longer available. Copy the chart again.",
     "invalidValue": "This value is not valid for the command",
     "unavailable": "This command is unavailable",
     "bodyOnlySectionBreak": "Section breaks go in the document body.",
@@ -1225,7 +1227,7 @@
   },
   "chart": {
     "insert": "Chart",
-    "insertType": "Insert a {type} chart",
+    "insertType": "Insert {type} chart",
     "edit": "Edit chart…",
     "sample": {
       "category": "Category {number}",
@@ -1281,19 +1283,16 @@
       "yAxisTitle": "Y axis title",
       "axisTitleHelp": "Leave an axis title empty for no title.",
       "axesOff": "Turn on Axes to use this.",
-      "titleOff": "Turn on Title to use this.",
       "typeChangeRemoved": "This chart type does not keep the colors or axis titles that you set. Undo brings them back.",
       "typeChangeHint": "Some chart types do not keep the colors or axis titles that you set.",
       "pieFirstSeries": "A pie chart shows only the first series.",
       "colors": "Colors",
       "seriesColor": "Color of {name}",
-      "colorChoice": "Color source of {name}",
-      "themeColor": "Theme color",
-      "customColor": "Chosen color",
-      "openColors": "Choose a color for {name}"
+      "openColors": "Choose a color for {name}",
+      "colorLighter": "{color}, lighter {percent}%",
+      "colorDarker": "{color}, darker {percent}%"
     },
     "data": {
-      "title": "Data",
       "categories": "Categories",
       "xValues": "X values",
       "seriesName": "Name of series {number}",
@@ -1315,7 +1314,8 @@
         "xNumber": "Enter a number for each X value.",
         "tooLong": "Use 255 characters or fewer.",
         "limit": "A chart keeps at least one series and one category, and up to 255 series and 4,000 categories."
-      }
+      },
+      "removeSeries": "Remove series"
     },
     "errors": {
       "noChart": "Select one chart.",
@@ -1334,8 +1334,8 @@
       "noAxes": "This chart type has no axes.",
       "sameType": "The chart already has this type.",
       "unsupported": "The editor does not support this chart change.",
-      "malformed": "The chart part is not valid.",
-      "invalidValue": "The chart cannot use this value."
+      "invalidValue": "The chart cannot use this value.",
+      "suggesting": "Charts cannot change while you suggest edits. Switch to Editing to change this chart."
     }
   }
 }

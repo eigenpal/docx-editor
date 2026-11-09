@@ -156,6 +156,7 @@ export type * from './editor-format-painter.ts';
 export type * from './editor-bookmarks.ts';
 export type * from './editor-image-state.ts';
 export type * from './diagnostics.ts';
+export type * from './chart.ts';
 export type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 
 // Everything below is named by a signature IN this file, so it has to be nameable FROM this

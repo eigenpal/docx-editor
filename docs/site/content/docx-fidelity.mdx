@@ -101,13 +101,13 @@ The matrix reports editing, rendering, and round-trip support separately. A feat
 | Anchored text boxes | Insert and edit text boxes in the body, headers, and footers, with collaboration support. Boxes with tables are read-only. Linked boxes, automatic sizing, and rotation can clip content or show a placeholder. | Preserved |
 | Drawing shapes | Display supported shapes with fills, outlines, and shadows. Additional effects require the [drawing module](/docs/2.x/pro/drawing); unsupported shapes show a placeholder. Shapes are read-only. | Preserved |
 | WMF and EMF | Display as images in the editor and as vectors in PDF with the drawing module. Failed conversions show placeholders; PDF export omits them and reports an error. These images are read-only. | Full |
-| Charts | Display read-only charts in the editor and PDF with the [drawing module](/docs/2.x/pro/drawing). Unsupported charts use their saved preview. Without a usable preview, the editor shows a placeholder and strict PDF export fails. | Preserved |
+| Charts | Insert [charts](/docs/2.x/guides/charts), resize, move, and wrap them, and edit their type, elements, colors, and data. The [drawing module](/docs/2.x/pro/drawing) paints them in the editor and PDF. Unsupported charts show their saved preview or a placeholder. | Preserved |
 | DrawingML diagrams | Renders the saved diagram drawing. A diagram without its drawing needs the drawing module. Not editable. | Full |
 | VML text paths | Renders with the drawing module. Without it, an inline text path shows a placeholder and a floating text path does not show. | Full |
 
 - Groups with unsupported effects or 3D properties keep their unsupported behavior as a whole. The editor does not render only their supported members.
 - `w14:textOutline` renders when it is an opaque solid RGB outline. PDF export does not paint text outlines.
-- Picture commands refuse charts. Deleting a chart removes its fallback too.
+- Charts take the picture frame commands but refuse crop, replace, and rotate. Deleting a chart removes its fallback too.
 - A right-to-left line beside a floating object fills the passage to the right of the object first. Text never reorders across the object.
 
 ### Page layout, headers, and footers

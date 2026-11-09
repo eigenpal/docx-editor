@@ -132,8 +132,10 @@ export function newElement(
 export const newText = (value: string): Node => ({ id: '', kind: 'textValue', value });
 
 /** `el` with other attributes. */
-export const withAttributes = (el: Element, attributes: readonly OoxmlAttribute[]): Element =>
-  ({ ...el, attributes });
+export const withAttributes = (el: Element, attributes: readonly OoxmlAttribute[]): Element => ({
+  ...el,
+  attributes,
+});
 
 /** The parsed root of one XML part, or the reason it cannot be read. */
 export type PartRead =
@@ -144,7 +146,8 @@ export type PartRead =
 export function parseXmlPart(partName: string, xml: string): PartRead {
   const read = readOoxmlPart(xml, { name: partName, contentType: 'application/xml' });
   return read.ok
-    ? { ok: true, part: { root: asChartElement(read.part.root) } } : { ok: false, reason: read.reason };
+    ? { ok: true, part: { root: asChartElement(read.part.root) } }
+    : { ok: false, reason: read.reason };
 }
 
 /** The XML of a part with `root`. Throws for a value that XML cannot hold. */

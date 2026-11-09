@@ -51,3 +51,14 @@ test('a point outline keeps its point color when colors vary', () => {
   const components = bars(true, '');
   expect(components.find((component) => component.strokeHex === '123456')?.fillHex).toBe('ED7D31');
 });
+
+test('a document without a theme part gives each series its default accent', async () => {
+  const { styleSeriesColor, withDefaultSchemeColors } = await import('../chart-style.ts');
+  // The resolver of a document with no theme part answers no scheme color.
+  const noTheme = withDefaultSchemeColors(() => null);
+  expect([0, 1, 2].map((index) => styleSeriesColor(2, index, 3, noTheme).hex)).toEqual([
+    '4472C4',
+    'ED7D31',
+    'A5A5A5',
+  ]);
+});

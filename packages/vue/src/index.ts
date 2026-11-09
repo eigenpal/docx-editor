@@ -332,6 +332,17 @@ export {
   DocxEditorDocumentOutline,
   type DocxEditorDocumentOutlineProps,
 } from './editor/DocxEditorOutline';
+export {
+  ChartInsert,
+  DocxEditorChartPane,
+  DocxEditorSidePanel,
+  ToolbarChartInsert,
+  usePaneRequest,
+  type ChartInsertPartComponent,
+  type ChartInsertProps,
+  type DocxEditorChartPaneProps,
+  type DocxEditorSidePanelProps,
+} from './editor/charts';
 
 export {
   DocxEditorPageNumber,

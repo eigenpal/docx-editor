@@ -879,9 +879,13 @@ export function createPointerController(
     gestureDocument.addEventListener('pointercancel', onPointerUp);
 
     const count = clicks();
-    const granularity = event.shiftKey
-      ? 'character'
-      : GRANULARITIES[(count - 1) % GRANULARITIES.length]!;
+    // A repeated press on a picture or a chart keeps the object selected: it never selects
+    // the word or the paragraph beside it. A text box takes its double press elsewhere.
+    const onObject =
+      target?.closest('[data-drawing-node-id]') != null &&
+      target.closest('.docx-drawing-textbox') == null;
+    const granularity =
+      event.shiftKey || onObject ? 'character' : GRANULARITIES[(count - 1) % GRANULARITIES.length]!;
 
     const placeholder = placeholderAtHit(layout, hit);
     if (placeholder && !event.shiftKey) {

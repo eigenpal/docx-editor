@@ -38,6 +38,7 @@ export const VUE_COMPOSABLES = [
   'useOpenFailure',
   'usePageSetup',
   'usePageSetupDialog',
+  'usePaneRequest',
   'useParagraphDialog',
   'useParagraphFormat',
   'useParagraphIndent',

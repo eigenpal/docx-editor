@@ -135,13 +135,17 @@ export const axisKindOf = (type: ChartType): AxisKind => SPECS[type].axes;
 export function plotDrawsLines(plot: Element): boolean {
   if (plot.localName === 'radarChart') return cVal(plot, 'radarStyle') !== 'filled';
   return (
-    plot.localName === 'lineChart' || plot.localName === 'line3DChart' || plot.localName === 'scatterChart'
+    plot.localName === 'lineChart' ||
+    plot.localName === 'line3DChart' ||
+    plot.localName === 'scatterChart'
   );
 }
 
 /** Whether a plot element colors each data point (`c:varyColors`): pie and doughnut charts. */
 export const plotColorsPoints = (plot: Element): boolean =>
-  plot.localName === 'pieChart' || plot.localName === 'pie3DChart' || plot.localName === 'doughnutChart';
+  plot.localName === 'pieChart' ||
+  plot.localName === 'pie3DChart' ||
+  plot.localName === 'doughnutChart';
 
 /** The axes of a plot element. */
 export function plotAxisKind(plot: Element): AxisKind {
@@ -154,7 +158,9 @@ const hidesMarkers = (ser: Element): boolean => cVal(cChild(ser, 'marker'), 'sym
 
 /** Whether a series hides its line (`c:spPr/a:ln/a:noFill`). */
 const hidesLine = (ser: Element): boolean => {
-  const ln = elements(cChild(ser, 'spPr')).find((e) => e.namespaceUri === NS.a && e.localName === 'ln');
+  const ln = elements(cChild(ser, 'spPr')).find(
+    (e) => e.namespaceUri === NS.a && e.localName === 'ln'
+  );
   return elements(ln).some((e) => e.localName === 'noFill');
 };
 
@@ -397,7 +403,8 @@ function axesFor(
     mine.every((ax) => ax !== undefined) &&
     (spec.axes === 'xy'
       ? mine.every((ax) => ax!.localName === 'valAx')
-      : mine.some((ax) => ax!.localName === 'valAx') && mine.some((ax) => ax!.localName !== 'valAx'));
+      : mine.some((ax) => ax!.localName === 'valAx') &&
+        mine.some((ax) => ax!.localName !== 'valAx'));
   if (!fits) {
     const fresh = freshAxisIds(plotArea);
     return { ids: fresh, axes: chartFragment(defaultAxesXml(type, fresh)) };

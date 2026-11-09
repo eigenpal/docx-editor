@@ -760,13 +760,13 @@ export const wordFeatures: WordFeature[] = [
     id: 'images.charts',
     name: 'Charts (DrawingML)',
     category: 'images',
-    editing: 'none',
+    editing: 'partial',
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'premium',
-    docsLink: '/docs/2.x/pro/drawing',
+    docsLink: '/docs/2.x/guides/charts',
     notes:
-      'The drawing module displays supported charts read-only from saved values and requires the EigenPal Pro License. Unsupported charts use a saved fallback or show a placeholder; PDF export reports omitted charts. Chart editing, clipboard transfer, and external data loading are unavailable.',
+      'You can insert seven chart types, resize, move, and wrap them, and edit their data and format in the Chart pane. The drawing module paints charts and requires the EigenPal Pro License. You can copy and paste one chart within the page; external data loading is unavailable.',
   },
   {
     id: 'images.newer-charts',

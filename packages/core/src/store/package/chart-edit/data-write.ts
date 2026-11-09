@@ -76,8 +76,7 @@ export function planChartEdit(model: ChartModel, data: Omit<ChartData, 'workbook
   const { categories, series } = data;
   if (!Array.isArray(categories) || !Array.isArray(series))
     throw new ChartRefusal('chart.errors.unsupported', 'data');
-  if (categories.length === 0 || series.length === 0)
-    throw new ChartRefusal('chart.errors.empty');
+  if (categories.length === 0 || series.length === 0) throw new ChartRefusal('chart.errors.empty');
   if (categories.length > MAX_CHART_POINTS || series.length > MAX_CHART_SERIES)
     throw new ChartRefusal('chart.errors.tooLarge');
   const seenCategories = new Set<number>();
@@ -208,7 +207,9 @@ function source(
   const ref = numeric ? 'numRef' : 'strRef';
   const cache = el(numeric ? 'numCache' : 'strCache', {}, [...format, ...points(values)]);
   const ext =
-    oldEl && old?.formula === formula ? elements(oldEl).filter((e) => e.localName === 'extLst') : [];
+    oldEl && old?.formula === formula
+      ? elements(oldEl).filter((e) => e.localName === 'extLst')
+      : [];
   return el(ref, {}, [el('f', {}, [text(formula)]), cache, ...ext]);
 }
 

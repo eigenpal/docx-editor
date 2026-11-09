@@ -555,7 +555,7 @@ export function execEditorCommand(
       // Selection is not document state: nothing to save changed.
       return { ok: true, changed: false };
     case 'copy': {
-      // The gate already refused a collapsed selection, so this read is non-empty.
+      // The gate already refused a collapsed selection that holds no chart.
       const flavours = mounted.copyFlavours();
       if (flavours.reason) return clipboardRefusal(flavours.reason);
       writeClipboardRich(flavours.text, flavours.html, clipboardWindow(options?.editor));
@@ -567,7 +567,16 @@ export function execEditorCommand(
       const flavours = mounted.copyFlavours();
       if (flavours.reason) return clipboardRefusal(flavours.reason);
       writeClipboardRich(flavours.text, flavours.html, clipboardWindow(options?.editor));
-      mounted.deleteSelection();
+      // One selected chart: the cut deletes that chart, as Delete does.
+      if (flavours.chartDrawingNodeId) {
+        const removed = mounted.deleteImage(flavours.chartDrawingNodeId);
+        if (!removed.ok)
+          return {
+            ok: false,
+            code: 'unsupported',
+            reason: removed.detail ?? removed.reason ?? 'the chart was not deleted',
+          };
+      } else mounted.deleteSelection();
       break;
     }
     case 'paste': {
