@@ -87,6 +87,8 @@ In Vue, a function argument is always the value, never a getter. Use `computed((
 | `loadFonts()` | Depends on your URLs | The URLs you list, immediately |
 | No usable source | No | Nothing; fallback measurement |
 
+A DOCX file can embed a font with a bold slot that holds a copy of the regular face. This happens when the font has no bold face. The editor reads the weight of each embedded face. Bold text in a face that is not bold draws with a synthesized bold. Each glyph of synthesized bold text advances 1/50 em further, and line breaks include that extra width.
+
 `@docx-editor.dev/fonts` ships these open-licensed, metric-compatible substitutes:
 
 | Original font   | Substitute        | License           | In `defaultFonts()` |

@@ -1,8 +1,11 @@
 import {
+  applySyntheticBoldSpacing,
   fieldAnchorStart,
+  paintUnspacedBlanks,
   followingGapPaint,
   paintedGapBetween,
   letterGapSpacing,
+  syntheticBoldSpacingPt,
 } from './semantic-paint-letter-gap.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { paintUnsupportedContent } from './unsupported-elements.ts';
@@ -750,6 +753,8 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
  *
  * Tab advances apply underline via {@link applyTabAdvanceUnderline} on the outer run; this
  * path must not also set `text-decoration` on `\t` or the two mechanisms fight.
+ *
+ * Returns the element that holds the text.
  */
 function mountRunText(
   document: Document,
@@ -757,7 +762,7 @@ function mountRunText(
   text: string,
   style: ResolvedRunStyle,
   scale: number
-): void {
+): HTMLElement {
   const underline = text === '\t' ? null : underlineDecorationOf(style);
   const strike = strikeKindOf(style);
   let host: HTMLElement = run;
@@ -779,6 +784,7 @@ function mountRunText(
   }
 
   host.textContent = text; // SAFE: textContent, never innerHTML
+  return host;
 }
 
 function positioned(
@@ -913,6 +919,7 @@ function paintSpan(
     element.contentEditable = 'false';
   }
   applyRunFaceStyle(element, faceStyle, ctx);
+  applySyntheticBoldSpacing(element, span, ctx.scale);
   if (!kernsText(faceStyle, span.text)) element.style.fontKerning = 'none';
   applyFieldShading(element, span, ctx);
   applyRevisionPresentation(element, span, ctx);
@@ -944,7 +951,14 @@ function paintSpan(
       applyTabAdvanceUnderline(element.style, tabUnderline, ctx.scale);
     }
   }
-  mountRunText(document, textHost, paintedSpanText(span), span.style, ctx.scale);
+  const textElement = mountRunText(
+    document,
+    textHost,
+    paintedSpanText(span),
+    span.style,
+    ctx.scale
+  );
+  paintUnspacedBlanks(document, element, textElement, span, ctx.scale);
   paintLegacyCheckbox(element, span, ctx.scale);
   paintLegacyDropdown(element, span);
   if (span.projected) {
@@ -1257,7 +1271,9 @@ function paintLine(
       // A `w:bdo` override keeps every character in the span's direction, as layout placed it.
       painted.style.unicodeBidi = span.style.shaping?.override ? 'isolate-override' : 'isolate';
       if (span.style.shaping?.wordSpacingPt)
-        painted.style.wordSpacing = `${span.style.shaping.wordSpacingPt * scale}px`;
+        painted.style.wordSpacing = `${
+          (span.style.shaping.wordSpacingPt - syntheticBoldSpacingPt(span)) * scale
+        }px`;
       logicalAdvance += span.box.width;
     }
     const margin = pendingGap !== 0 && !previousSpanAbsorbedGap ? pendingGap : slackAfterPicture;
@@ -1269,9 +1285,10 @@ function paintLine(
     const gapAfter = bidi ? 0 : interSpanGapBefore(line, spanIndex + 1, rankOf);
     const owner = gapAfter !== 0 && next !== undefined ? followingGapPaint(span, next) : null;
     previousSpanAbsorbedGap = owner !== null;
-    if (owner === 'wordSpacing') painted.style.wordSpacing = `${gapAfter * scale}px`;
+    if (owner === 'wordSpacing')
+      painted.style.wordSpacing = `${(gapAfter - syntheticBoldSpacingPt(span)) * scale}px`;
     else if (owner === 'letterSpacing')
-      painted.style.letterSpacing = letterGapSpacing(span, gapAfter, scale);
+      painted.style.letterSpacing = letterGapSpacing(painted, span, gapAfter, scale);
     pendingGap = gapAfter;
     const link = span.link;
     if (!link) {

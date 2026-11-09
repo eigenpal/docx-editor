@@ -181,7 +181,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The editor loads embedded fonts without configuration or network requests and uses them to measure text. Saving preserves the font files. You cannot embed additional fonts through the editor.',
+      'The editor loads embedded fonts without configuration or network requests and uses them to measure text. Saving preserves the font files, but you cannot embed additional fonts. Bold text gets a synthesized bold when the embedded bold slot holds a regular face.',
   },
   {
     id: 'text.color',
