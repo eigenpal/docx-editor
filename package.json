@@ -229,7 +229,7 @@
   },
   "overrides": {
     "vite": {
-      "postcss": "8.5.26"
+      "postcss": "8.5.32"
     },
     "prosemirror-view": "1.42.3",
     "prosemirror-state": "1.4.4",
