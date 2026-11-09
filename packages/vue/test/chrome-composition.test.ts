@@ -624,6 +624,34 @@ describe('DocxEditorContextMenu composition', () => {
     view.unmount();
   });
 
+  test('rows inside Start render above the default set', async () => {
+    const view = mountEditorTree(
+      () => [],
+      undefined,
+      () =>
+        h(ContextMenu, null, {
+          default: () => [
+            h(ContextMenu.Item, { label: 'Freeze paragraph' }),
+            h(ContextMenu.Start, null, {
+              default: () => [
+                h(ContextMenu.Item, { label: 'receive' }),
+                h(ContextMenu.Item, { label: 'relieve' }),
+              ],
+            }),
+          ],
+        })
+    );
+    await flush();
+    openContextMenu(view.container);
+    await flush();
+    const labels = [...view.container.querySelectorAll('.docx-contextmenu [role="menuitem"]')].map(
+      (row) => row.textContent ?? ''
+    );
+    expect(labels.slice(0, 2)).toEqual(['receive', 'relieve']);
+    expect(labels.at(-1)).toContain('Freeze paragraph');
+    view.unmount();
+  });
+
   test('preset={false} renders composed rows verbatim', async () => {
     const view = mountEditorTree(
       () => [],

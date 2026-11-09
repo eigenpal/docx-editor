@@ -21,6 +21,7 @@ export {
   ContextMenuInsertRowAbove,
   ContextMenuInsertRowBelow,
   ContextMenuItem,
+  ContextMenuStart,
   ContextMenuPaste,
   ContextMenuPasteFormatting,
   ContextMenuPasteWithoutFormatting,
@@ -30,6 +31,7 @@ export {
   ContextMenuRemoveToc,
   type ContextMenuCommandProps,
   type ContextMenuItemProps,
+  type ContextMenuStartProps,
   type ContextMenuTableRowProps,
 } from './parts';
 export {

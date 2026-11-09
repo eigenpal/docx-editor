@@ -57,6 +57,7 @@ import {
   ContextMenuInsertRowAbove,
   ContextMenuInsertRowBelow,
   ContextMenuItem,
+  ContextMenuStart,
   ContextMenuPaste,
   ContextMenuPasteFormatting,
   ContextMenuPasteWithoutFormatting,
@@ -602,6 +603,8 @@ export interface DocxEditorContextMenuNamespace {
   readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
   readonly RemoveToc: typeof ContextMenuRemoveToc;
   readonly Item: typeof ContextMenuItem;
+  /** Host rows that render above the packaged rows instead of after them. */
+  readonly Start: typeof ContextMenuStart;
   readonly Slot: typeof MenuItem;
   readonly Row: typeof MenuRow;
   readonly Group: typeof MenuGroup;
@@ -632,6 +635,7 @@ export const ContextMenu = Object.assign(DocxEditorContextMenu, {
   RefreshTocPageNumbers: ContextMenuRefreshTocPageNumbers,
   RemoveToc: ContextMenuRemoveToc,
   Item: ContextMenuItem,
+  Start: ContextMenuStart,
   Slot: MenuItem,
   Row: MenuRow,
   Group: MenuGroup,

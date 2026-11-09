@@ -68,6 +68,33 @@ For slot identifiers, see [Chrome slot reference](/docs/2.x/guides/chrome-slots)
 
 Group rows with `Group`, `Separator`, and `Submenu`.
 
+Host rows render after the default rows. To put rows above them, wrap the rows in `ContextMenu.Start`. Use it for rows about the item under the pointer, such as spelling suggestions. Read that item with `useContextMenuTarget()`.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.ContextMenu>
+  <DocxEditor.ContextMenu.Start>
+    <DocxEditor.ContextMenu.Item label="receive" onSelect={replaceWord} />
+  </DocxEditor.ContextMenu.Start>
+</DocxEditor.ContextMenu>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor.ContextMenu>
+  <DocxEditor.ContextMenu.Start>
+    <DocxEditor.ContextMenu.Item label="receive" @select="replaceWord" />
+  </DocxEditor.ContextMenu.Start>
+</DocxEditor.ContextMenu>
+```
+
+</Framework>
+</FrameworkTabs>
+
 ## Configure file actions
 
 Set these props on `DocxEditor.Menu`.

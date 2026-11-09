@@ -72,6 +72,7 @@ import {
   ContextMenuInsertRowAbove,
   ContextMenuInsertRowBelow,
   ContextMenuItem,
+  ContextMenuStart,
   ContextMenuPaste,
   ContextMenuPasteFormatting,
   ContextMenuPasteWithoutFormatting,
@@ -311,8 +312,8 @@ function rowOfChild(child: ReactNode): string | null {
 /**
  * Whether a child asked to render ABOVE the default set.
  *
- * A component carrying `docxRowPlacement: 'start'` (a static, like `docxRow`) renders
- * before the packaged rows instead of appending after them — the shape a contextual
+ * `ContextMenu.Start`, or any component carrying `docxRowPlacement: 'start'` (a static, like
+ * `docxRow`), renders before the packaged rows instead of appending after them — the shape a contextual
  * section wants: "you right-clicked one of MINE" belongs at the top, where the pointer is.
  */
 function startPlacedChild(child: ReactNode): boolean {
@@ -649,6 +650,8 @@ export interface DocxEditorContextMenuNamespace {
   readonly RemoveToc: typeof ContextMenuRemoveToc;
   /** A host-owned row: no slot, no command, the host's own label and action. */
   readonly Item: typeof ContextMenuItem;
+  /** Host rows that render above the packaged rows instead of after them. */
+  readonly Start: typeof ContextMenuStart;
   /** Any chrome slot as a live row (`<ContextMenu.Slot slotId="text.bold" />`). */
   readonly Slot: typeof MenuItem;
   /** Bare row presentation, for a host building something the parts do not cover. */
@@ -681,6 +684,7 @@ export const ContextMenu: DocxEditorContextMenuNamespace = Object.assign(DocxEdi
   RefreshTocPageNumbers: ContextMenuRefreshTocPageNumbers,
   RemoveToc: ContextMenuRemoveToc,
   Item: ContextMenuItem,
+  Start: ContextMenuStart,
   Slot: MenuItem,
   Row: MenuRow,
   Group: MenuGroup,

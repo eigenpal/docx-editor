@@ -678,3 +678,26 @@ export const ContextMenuItem = defineComponent({
       );
   },
 });
+
+/** Props for `DocxEditor.ContextMenu.Start`. @public */
+export interface ContextMenuStartProps {
+  children?: DocxEditorChildren;
+}
+
+/**
+ * Host rows that render above the packaged rows instead of after them.
+ *
+ * Use it for rows about the item under the pointer, such as spelling suggestions for the
+ * word that was right-clicked. Read that item with `useContextMenuTarget()`.
+ *
+ * @public
+ */
+export const ContextMenuStart = Object.assign(
+  defineComponent({
+    name: 'ContextMenuStart',
+    setup(_, { slots }) {
+      return () => slots.default?.();
+    },
+  }),
+  { docxRowPlacement: 'start' as const }
+);

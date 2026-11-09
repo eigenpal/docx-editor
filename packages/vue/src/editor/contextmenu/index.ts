@@ -12,6 +12,7 @@ export {
   ContextMenuCellVerticalAlignment,
   ContextMenuDelete,
   ContextMenuItem,
+  ContextMenuStart,
   ContextMenuPaste,
   ContextMenuPasteFormatting,
   ContextMenuPasteWithoutFormatting,
@@ -34,6 +35,7 @@ export {
   TOC_CONTEXT_ROWS,
   type ContextMenuCommandProps,
   type ContextMenuItemProps,
+  type ContextMenuStartProps,
   type ContextMenuTableRowProps,
 } from './parts';
 export {
