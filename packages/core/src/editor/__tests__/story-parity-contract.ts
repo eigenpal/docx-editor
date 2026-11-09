@@ -141,6 +141,8 @@ export const SLOT_PARITY: Readonly<Record<ChromeSlotId, ParityRule>> = Object.fr
   'image.properties': { parity: 'same' },
   'image.wrap': { parity: 'same' },
   'image.altText': { parity: 'same' },
+  'image.editChart': { parity: 'same' },
+  'insert.chart': { parity: 'same' },
   'table.insert': { parity: 'same' },
   'table.borderTarget': { parity: 'same' },
   'table.borderColor': { parity: 'same' },

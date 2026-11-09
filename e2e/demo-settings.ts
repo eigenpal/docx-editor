@@ -6,9 +6,11 @@ import { expect, type Locator, type Page } from '@playwright/test';
  */
 export async function openDemoSettings(page: Page): Promise<Locator> {
   const panel = page.getByRole('complementary', { name: 'Side panel', exact: true });
-  if ((await panel.count()) === 0) {
-    await page.getByRole('button', { name: 'Show the side panel', exact: true }).click();
-  }
+  // The panel decides to open after the first layout, so wait for the toggle to settle.
+  const show = page.getByRole('button', { name: 'Show the side panel', exact: true });
+  const hide = page.getByRole('button', { name: 'Hide the side panel', exact: true });
+  await expect(show.or(hide)).toBeVisible();
+  if (await show.isVisible()) await show.click();
   await expect(panel).toBeVisible();
   // The panel slides in. Measure it only after the entry transition ends.
   await panel.evaluate((node) =>
