@@ -1,11 +1,22 @@
-// The side panel of the demo: a card beside the pages with two tabs, Chart and Settings. The
-// Chart tab holds the library's `DocxEditor.ChartPane`. Insert > Chart and Edit chart ask for
-// it through `usePaneRequest`; the pane itself moves the focus when Edit chart asks for it.
-// The Vue example has the same panel (`examples/vue/src/DemoSidePanel.vue`).
+// The side panel of the demo: a card beside the pages with a Settings tab, and a Chart tab
+// while a chart is selected. The Chart tab holds the library's `DocxEditor.ChartPane`.
+// Insert > Chart and Edit chart ask for it through `usePaneRequest`; the pane itself moves the
+// focus when Edit chart asks for it. The Vue example has the same panel
+// (`examples/vue/src/DemoSidePanel.vue`).
 import { useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
-import { DocxEditor, useDocxEditor, usePaneRequest } from '@docx-editor.dev/react';
+import {
+  DocxEditor,
+  useDocxEditor,
+  usePaneRequest,
+  useSelectedChart,
+} from '@docx-editor.dev/react';
 import { exampleText as t } from '../../shared/example-text';
-import { DEMO_PANEL_TABS, nextDemoTab, type DemoPanelTab } from '../../shared/demo-tabs';
+import {
+  nextDemoTab,
+  shownDemoTab,
+  visibleDemoTabs,
+  type DemoPanelTab,
+} from '../../shared/demo-tabs';
 import { DemoIcon } from './DemoIcon';
 
 /** Opens the panel on the Chart tab when the chrome asks for the Chart pane. */
@@ -23,8 +34,18 @@ export interface DemoSidePanelProps {
   readonly settings: ReactNode;
 }
 
-export function DemoSidePanel({ tab, onTabChange, onClose, settings }: DemoSidePanelProps) {
+export function DemoSidePanel({
+  tab: chosenTab,
+  onTabChange,
+  onClose,
+  settings,
+}: DemoSidePanelProps) {
   const editor = useDocxEditor();
+  // The Chart tab shows only while a chart is selected. Edit chart and Insert > Chart both
+  // leave a chart selected. When the selection leaves the chart, the panel shows Settings.
+  const chartSelected = useSelectedChart().chart !== null;
+  const tabs = visibleDemoTabs(chartSelected);
+  const tab = shownDemoTab(chosenTab, chartSelected);
   const id = useId();
   const tabsRef = useRef<HTMLDivElement>(null);
   const close = () => {
@@ -33,12 +54,12 @@ export function DemoSidePanel({ tab, onTabChange, onClose, settings }: DemoSideP
   };
   // The arrow keys, Home, and End move between the tabs, and the focused tab opens.
   const onTabsKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const index = DEMO_PANEL_TABS.findIndex((entry) => entry.id === tab);
+    const index = tabs.findIndex((entry) => entry.id === tab);
     const rtl = getComputedStyle(event.currentTarget).direction === 'rtl';
-    const next = nextDemoTab(event.key, index, DEMO_PANEL_TABS.length, rtl);
+    const next = nextDemoTab(event.key, index, tabs.length, rtl);
     if (next === null) return;
     event.preventDefault();
-    onTabChange(DEMO_PANEL_TABS[next]!.id);
+    onTabChange(tabs[next]!.id);
     tabsRef.current?.querySelectorAll<HTMLElement>('[role="tab"]')[next]?.focus();
   };
   return (
@@ -60,7 +81,7 @@ export function DemoSidePanel({ tab, onTabChange, onClose, settings }: DemoSideP
           aria-label={t('demoPanel.tabs')}
           onKeyDown={onTabsKeyDown}
         >
-          {DEMO_PANEL_TABS.map((entry) => {
+          {tabs.map((entry) => {
             const selected = entry.id === tab;
             const label = t(`demoPanel.${entry.id}`);
             return (

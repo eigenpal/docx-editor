@@ -29,7 +29,12 @@ export function nextDemoTab(
   return null;
 }
 
-/** Whether the demo starts with the panel open: only where it fits beside a full page. */
-export function demoPanelFits(): boolean {
-  return typeof window !== 'undefined' && window.innerWidth >= 1280;
+/** The tabs that the panel shows: the Chart tab only while a chart is selected. */
+export function visibleDemoTabs(chartSelected: boolean): typeof DEMO_PANEL_TABS {
+  return chartSelected ? DEMO_PANEL_TABS : DEMO_PANEL_TABS.filter((entry) => entry.id !== 'chart');
+}
+
+/** The tab that the panel shows: Settings when the chosen tab is Chart and no chart is selected. */
+export function shownDemoTab(tab: DemoPanelTab, chartSelected: boolean): DemoPanelTab {
+  return tab === 'chart' && !chartSelected ? 'settings' : tab;
 }
