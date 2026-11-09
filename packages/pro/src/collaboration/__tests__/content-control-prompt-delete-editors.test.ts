@@ -3,9 +3,10 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// Delete and Backspace leave a control's prompt whole on both replicas: under concurrent typing,
-// a deletion while the other peer types in the same paragraph, undo and redo, suggesting mode,
-// and a save and reopen.
+// Delete and Backspace treat a control's prompt as one unit on both replicas: the first press
+// selects it, the second removes the control, and a range takes only the text around a prompt it
+// takes part of. Covered here under concurrent typing in the same control and paragraph, undo
+// and redo, suggesting mode, and a save and reopen.
 
 import { afterEach, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
@@ -54,14 +55,15 @@ function select(editor: Editor, start: number, end = start) {
   });
 }
 
-const showsPrompt = (editor: Editor) => editor.surface!.layout().contentControls![0]!.placeholder;
+const prompts = (editor: Editor) =>
+  (editor.surface!.layout().contentControls ?? []).map((control) => control.placeholder);
 
 async function savedXml(editor: Editor): Promise<string> {
   const part = unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!;
   return new TextDecoder().decode(part);
 }
 
-test('Delete and Backspace leave a prompt whole on both peers', async () => {
+async function pairOfEditors() {
   const pair = await harness.pair(zipDocument(DOCUMENT));
   const open = (peer: Peer, author: string) => {
     peer.detach();
@@ -77,62 +79,105 @@ test('Delete and Backspace leave a prompt whole on both peers', async () => {
     pair.alice.room.session.flushPendingJournals();
     pair.bob.room.session.flushPendingJournals();
   };
-  const converge = (text: string) => {
+  /** Both replicas hold the same package, this text, and these controls' prompt states. */
+  const converge = (text: string, shown: readonly boolean[]) => {
     flush();
     expect(packageFingerprint(alice.surface!.session.currentPackage())).toBe(
       packageFingerprint(bob.surface!.session.currentPackage())
     );
     for (const editor of [alice, bob]) {
       expect(editor.surface!.session.bodyText()).toBe(text);
-      expect(showsPrompt(editor)).toBe(true);
+      expect(prompts(editor)).toEqual(shown);
     }
   };
+  /** Runs both peers' edits offline, then lets them meet. */
+  const concurrently = (edits: () => void) => {
+    pair.pause();
+    edits();
+    flush();
+    pair.resume();
+  };
+  return { alice, bob, converge, concurrently };
+}
 
-  // Concurrent: Alice presses Backspace and Delete in the prompt while Bob types after it.
-  pair.pause();
-  select(alice, 27);
-  alice.surface!.deleteBackward();
-  alice.surface!.deleteForward();
-  select(bob, 29);
-  bob.surface!.type('!');
-  flush();
-  pair.resume();
-  converge(`A ${PROMPT} B!`);
-  const { anchor, head } = alice.surface!.state().selection;
-  expect([anchor.offset, head.offset].sort((a, b) => a - b)).toEqual([2, 27]);
-
-  // Alice deletes from before the prompt into it while Bob types in the same paragraph.
-  pair.pause();
-  select(alice, 0, 10);
-  alice.surface!.deleteForward();
-  select(bob, 30);
-  bob.surface!.type('?');
-  flush();
-  pair.resume();
-  converge(`${PROMPT} B!?`);
-
+test('a peer removes the control while the other types into its prompt', async () => {
+  const { alice, bob, converge, concurrently } = await pairOfEditors();
+  concurrently(() => {
+    select(alice, 27);
+    alice.surface!.deleteBackward();
+    alice.surface!.deleteBackward();
+    select(bob, 12);
+    bob.surface!.type('Z');
+  });
+  // What the other peer typed survives the removal, in the control it typed into.
+  converge('A Z B', [false]);
+  expect(bob.exec({ type: 'undo' }).ok).toBe(true);
+  converge('A  B', []);
   expect(alice.exec({ type: 'undo' }).ok).toBe(true);
-  converge(`A ${PROMPT} B!?`);
+  converge(`A ${PROMPT} B`, [true]);
   expect(alice.exec({ type: 'redo' }).ok).toBe(true);
-  converge(`${PROMPT} B!?`);
+  converge('A  B', []);
+});
 
-  // Suggesting: Bob's range from inside the prompt past it strikes only the text after it.
-  bob.surface!.setEditingMode('suggest');
-  select(bob, 20, 27);
-  bob.surface!.deleteBackward();
-  converge(`${PROMPT} B!?`);
-  for (const editor of [alice, bob]) {
-    const xml = await savedXml(editor);
-    expect(xml.match(/<w:delText[^>]*>[^<]*<\/w:delText>/g)).toEqual([
-      '<w:delText xml:space="preserve"> B</w:delText>',
-    ]);
-    expect(xml).toContain(`<w:t>${PROMPT}</w:t>`);
-  }
+test('a peer removes the control while the other types after it', async () => {
+  const { alice, bob, converge, concurrently } = await pairOfEditors();
+  concurrently(() => {
+    select(alice, 2);
+    alice.surface!.deleteForward();
+    alice.surface!.deleteForward();
+    select(bob, 29);
+    bob.surface!.type('!');
+  });
+  converge('A  B!', []);
+  expect(bob.exec({ type: 'undo' }).ok).toBe(true);
+  converge('A  B', []);
+  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+  converge(`A ${PROMPT} B`, [true]);
+});
 
-  // Both peers save a document that reopens with the prompt whole.
+test('ranges keep a prompt they take part of and remove a control they cover', async () => {
+  const { alice, bob, converge, concurrently } = await pairOfEditors();
+  concurrently(() => {
+    select(alice, 0, 10);
+    alice.surface!.deleteForward();
+    select(bob, 29);
+    bob.surface!.type('?');
+  });
+  converge(`${PROMPT} B?`, [true]);
+  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+  converge(`A ${PROMPT} B?`, [true]);
+  expect(alice.exec({ type: 'redo' }).ok).toBe(true);
+  converge(`${PROMPT} B?`, [true]);
+
+  select(bob, 0, 26);
+  bob.surface!.deleteForward();
+  converge('B?', []);
   for (const editor of [alice, bob]) {
     const cold = mount({ document: new Uint8Array(await editor.save()) });
-    expect(cold.surface!.session.bodyText()).toBe(`${PROMPT} B!?`);
-    expect(showsPrompt(cold)).toBe(true);
+    expect(cold.surface!.session.bodyText()).toBe('B?');
   }
+});
+
+test('in suggesting mode one press proposes the control on both peers', async () => {
+  const { alice, bob, converge, concurrently } = await pairOfEditors();
+  bob.surface!.setEditingMode('suggest');
+  concurrently(() => {
+    select(bob, 27);
+    bob.surface!.deleteBackward();
+    select(alice, 0);
+    alice.surface!.type('>');
+  });
+  converge(`>A ${PROMPT} B`, [true]);
+  for (const editor of [alice, bob]) {
+    const xml = await savedXml(editor);
+    expect(xml).toMatch(/<w:del [^>]*w:author="Bob"[^>]*><w:sdt>/);
+    expect(xml.match(/<w:delText[^>]*>[^<]*<\/w:delText>/g)).toEqual([
+      `<w:delText>${PROMPT}</w:delText>`,
+    ]);
+    const cold = mount({ document: new Uint8Array(await editor.save()) });
+    expect(cold.surface!.session.bodyText()).toBe(`>A ${PROMPT} B`);
+  }
+  expect(bob.exec({ type: 'undo' }).ok).toBe(true);
+  converge(`>A ${PROMPT} B`, [true]);
+  expect(await savedXml(alice)).not.toContain('<w:del ');
 });

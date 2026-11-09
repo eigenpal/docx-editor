@@ -192,7 +192,7 @@ export function applyDeleteTracked(
           .filter((owner) => owner.kind === 'contentControl')
           .map((owner) => contentControlPropertiesOf(owner).lock);
         const span = { start: from, end: to };
-        if (strikesWholeControl(span, { start, end }, resolveContentControlLock(locks))) {
+        if (strikesWholeControl(span, { start, end }, resolveContentControlLock(locks), node)) {
           cursor.offset = to;
           // The author's own proposal is taken back, not struck.
           if (insertionAuthor(stack) === revision.author) continue;

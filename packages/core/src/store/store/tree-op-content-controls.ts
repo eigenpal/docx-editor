@@ -838,7 +838,7 @@ export function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach
       const struckWhole =
         target.strikesCovered === true &&
         target.range !== undefined &&
-        strikesWholeControl(span, target.range, resolveContentControlLock(locks));
+        strikesWholeControl(span, target.range, resolveContentControlLock(locks), entry.node);
       // WHAT FORMS PROTECTION LETS THROUGH is an edit that stays within one field. Asking whether
       // the NAMED NODE is inside a control answers "no" for every inline field — the paragraph
       // around it is not the field — so it is asked of the addressed range instead.
