@@ -40,7 +40,7 @@ import {
   SYNTHETIC_BOLD_ADVANCE_EM,
   isSyntheticBold,
   syntheticBoldAdvancePt,
-  syntheticBoldCharacterStarts,
+  syntheticBoldGraphemeStarts,
   syntheticBoldGlyphCount,
   syntheticBoldGlyphStarts,
   withSyntheticBoldCaretAdvances,
@@ -300,13 +300,13 @@ export function createShapedMeasurer(
   };
 
   // Text the face cannot shape, for a missing glyph or a missing small-caps feature, keeps the
-  // extra advance of a bold the face synthesizes. Word widens it too, and paint gives the span
-  // one letter spacing for every character (`synthetic-bold.ts`).
+  // extra advance of a bold the face synthesizes, once for each grapheme, as paint spaces it
+  // (`syntheticBoldGraphemeStarts`).
   const syntheticBoldExtraPt = (style: ResolvedRunStyle): number =>
     syntheticBoldAdvancePt(style) * (style.horizontalScalePercent / 100);
   const unshapedWidth = (text: string, style: ResolvedRunStyle, syntheticBold: boolean): number =>
     fallbackWidth(text, style) +
-    (syntheticBold ? syntheticBoldCharacterStarts(text).length * syntheticBoldExtraPt(style) : 0);
+    (syntheticBold ? syntheticBoldGraphemeStarts(text).length * syntheticBoldExtraPt(style) : 0);
   const unshapedAdvances = (
     text: string,
     style: ResolvedRunStyle,
@@ -316,7 +316,7 @@ export function createShapedMeasurer(
     return advances && syntheticBold
       ? withSyntheticBoldCaretAdvances(
           advances,
-          syntheticBoldCharacterStarts(text),
+          syntheticBoldGraphemeStarts(text),
           syntheticBoldExtraPt(style)
         )
       : advances;

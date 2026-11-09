@@ -1,7 +1,7 @@
 // Screen paint puts synthesized-bold glyphs where layout put them.
 //
-// Layout gives each inked glyph of a bold run in a face without bold 1/50 em of extra advance, as
-// Word does. A browser emboldens such a face but draws it at the face's own advances, so paint
+// Layout gives each inked glyph of a bold run in a face without bold 1/50 em of extra advance. A
+// browser emboldens such a face but draws it at the face's own advances, so paint
 // adds the extra as letter spacing and takes it back from spaces. The model browser here draws
 // every character one em wide at the run's size, plus the spacing paint asks for. As in
 // Chromium, letter spacing widens every character and word spacing only U+0020 and U+00A0.
@@ -9,6 +9,7 @@ import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import {
+  DEFAULT_RUN_STYLE,
   FontResolutionError,
   HARFBUZZ_SHAPING_LIBRARY,
   createFontResourceSnapshot,
@@ -28,6 +29,7 @@ import {
 } from '../../layout/semantic-records.ts';
 import { syntheticBoldAdvancePt } from '../../layout/synthetic-bold.ts';
 import { paintSemanticLayout } from '../semantic-paint.ts';
+import { syntheticBoldSpacingPt } from '../semantic-paint-letter-gap.ts';
 
 await initializeHarfBuzz();
 
@@ -205,4 +207,133 @@ test('text that the face cannot shape paints where layout put it', () => {
   expect(expectRunsAtLayoutX(runs, ['left', 'both', 'center'], shaped, natural)).toBeGreaterThan(
     100
   );
+});
+
+/** The model browser's width of one painted run: each text node takes its parent's spacing. */
+function paintedWidth(run: HTMLElement, fontSizePt: number): number {
+  let width = 0;
+  const walk = (node: Node): void => {
+    if (node.nodeType !== Node.TEXT_NODE) return node.childNodes.forEach(walk);
+    let spacing: HTMLElement | null = node.parentElement;
+    while (spacing && spacing !== run && !spacing.style.letterSpacing)
+      spacing = spacing.parentElement;
+    const letter = parseFloat((spacing ?? run).style.letterSpacing || '0');
+    const text = node.textContent ?? '';
+    width +=
+      text.length * (fontSizePt + letter) +
+      wordSeparators(text) * parseFloat(run.style.wordSpacing || '0');
+  };
+  walk(run);
+  return width;
+}
+
+test('a field result keeps U+3000 at its own advance', () => {
+  // A field result stays one span, so the blank cannot split off. Paint draws it without the
+  // extra letter spacing.
+  const [{ line, runs }] = paint(
+    `<w:fldSimple w:instr="TITLE">${run('Bold　title')}</w:fldSimple>`,
+    'left',
+    400
+  );
+  const span = line.spans.find((candidate) => candidate.text === 'Bold　title')!;
+  expect(span.projected).toBe(true);
+  expect(span.syntheticBold).toBe(true);
+  const painted = runs.find((element) => element.textContent === 'Bold　title')!;
+  expect(parseFloat(painted.style.letterSpacing)).toBeCloseTo(11 / 50, 6);
+  expect(painted.querySelector('span')?.textContent).toBe('　');
+  expect(paintedWidth(painted, 11)).toBeCloseTo(span.box.width, 6);
+});
+
+test('a shaped span on a right-to-left line paints the extra too, also when its spaces shrink', () => {
+  // A right-to-left paragraph shapes its Latin runs, and a justified line there shrinks its
+  // spaces through the shaping word spacing. The model browser draws a space half an em wide.
+  const halfSpace: TextMeasurer = {
+    ...measurer,
+    measure: (text, style) =>
+      [...text].reduce(
+        (width, character) =>
+          width +
+          (character === ' '
+            ? style.fontSizePt / 2 + (style.shaping?.wordSpacingPt ?? 0)
+            : style.fontSizePt),
+        0
+      ) + (style.bold ? inked(text) * syntheticBoldAdvancePt(style) : 0),
+  };
+  let shrunk = 0;
+  for (let width = 100; width <= 200; width += 3) {
+    const read = readOoxmlPart(
+      `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:bidi/><w:jc w:val="both"/></w:pPr>` +
+        `${run('Bold words wrap across the lines of a paragraph here and more.')}</w:p></w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'application/xml' }
+    );
+    if (!read.ok) throw new Error(read.reason);
+    const result = layoutSemanticDocument(read.part, 0, {
+      measurer: halfSpace,
+      compatibilityMode: 15,
+      geometry: {
+        width: width + 20,
+        height: 900,
+        margin: { top: 10, bottom: 10, left: 10, right: 10 },
+      },
+    });
+    const host = document.createElement('div');
+    paintSemanticLayout(host, result, { scale: 1 });
+    const painted = Array.from(host.querySelectorAll<HTMLElement>('.layout-run-text'));
+    const spans = linesOf(result).flatMap((line) => line.spans.filter((span) => span.text !== ''));
+    expect(painted).toHaveLength(spans.length);
+    spans.forEach((span, index) => {
+      expect(span.style.shaping?.script).toBe('Latn');
+      // A space at the end of a line keeps no advance.
+      if (span.lineEndWhitespace) return;
+      const element = painted[index]!;
+      expect(parseFloat(element.style.letterSpacing)).toBeCloseTo(11 / 50, 6);
+      const natural = [...span.text].reduce(
+        (sum, character) => sum + (character === ' ' ? 5.5 : 11),
+        0
+      );
+      const drawn =
+        natural +
+        span.text.length * parseFloat(element.style.letterSpacing) +
+        wordSeparators(span.text) * parseFloat(element.style.wordSpacing || '0');
+      expect([width, span.text, drawn - span.box.width]).toEqual([
+        width,
+        span.text,
+        expect.closeTo(0, 6),
+      ]);
+      if ((span.style.shaping?.wordSpacingPt ?? 0) < 0) shrunk += 1;
+    });
+  }
+  expect(shrunk).toBeGreaterThan(5);
+});
+
+test('a horizontally scaled span on a right-to-left line spaces its inner glyphs too', () => {
+  const read = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:bidi/></w:pPr>` +
+      `${run('Scaled bold', '<w:b/><w:w w:val="80"/>')}</w:p></w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'application/xml' }
+  );
+  if (!read.ok) throw new Error(read.reason);
+  const host = document.createElement('div');
+  paintSemanticLayout(host, layoutSemanticDocument(read.part, 0, { measurer }), { scale: 1 });
+  const glyphs = host.querySelector<HTMLElement>('[data-docx-clipped-fill]')!;
+  expect(parseFloat(glyphs.style.letterSpacing)).toBeCloseTo(11 / 50 / 0.8, 6);
+  expect(parseFloat(glyphs.style.wordSpacing)).toBeCloseTo(-11 / 50 / 0.8, 6);
+});
+
+test('a span in a joining script keeps its box and takes no letter spacing', () => {
+  const span = (script: string): StyleSpanRecord =>
+    ({
+      text: 'x',
+      syntheticBold: true,
+      style: {
+        ...DEFAULT_RUN_STYLE,
+        bold: true,
+        fontSizePt: 11,
+        shaping: { script, direction: 'rtl', level: 1, baseLevel: 1 },
+      },
+    }) as unknown as StyleSpanRecord;
+  expect(syntheticBoldSpacingPt(span('Arab'))).toBe(0);
+  expect(syntheticBoldSpacingPt(span('Syrc'))).toBe(0);
+  expect(syntheticBoldSpacingPt(span('Hebr'))).toBeCloseTo(11 / 50, 6);
+  expect(syntheticBoldSpacingPt(span('Latn'))).toBeCloseTo(11 / 50, 6);
 });

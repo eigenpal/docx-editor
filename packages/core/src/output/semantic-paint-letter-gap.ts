@@ -8,7 +8,7 @@
 // same gaps, so both outputs read one rule, {@link followingGapPaint}.
 import { segmentGraphemes } from '../layout/grapheme.ts';
 import type { StyleSpanRecord } from '../layout/semantic-records.ts';
-import { syntheticBoldAdvancePt } from '../layout/synthetic-bold.ts';
+import { syntheticBoldAdvancePt, unspacedBlankRuns } from '../layout/synthetic-bold.ts';
 import { withoutTrailingZeroWidthSpaces } from '../layout/trailing-spaces.ts';
 
 /**
@@ -68,24 +68,56 @@ export function absorbsLetterGap(span: GapSpan, next: GapSpan): boolean {
 
 /** The `letter-spacing` that paints `gap` after the character: its own spacing plus the gap. */
 export function letterGapSpacing(span: StyleSpanRecord, gap: number, scale: number): string {
-  return `${(span.style.characterSpacingPt + syntheticBoldSpacingPt(span) + gap) * scale}px`;
+  return `${(paintedLetterSpacingPt(span) + gap) * scale}px`;
 }
+
+/**
+ * Scripts whose letters join. Letter spacing breaks the joins, so a span in one of them keeps
+ * the box that layout gave it and draws its synthesized bold at the face's own advances.
+ */
+const JOINING_SCRIPTS: ReadonlySet<string> = new Set([
+  'Adlm',
+  'Arab',
+  'Chrs',
+  'Mand',
+  'Mani',
+  'Mong',
+  'Nkoo',
+  'Ougr',
+  'Phag',
+  'Phlp',
+  'Rohg',
+  'Sogd',
+  'Syrc',
+]);
 
 /**
  * The advance screen paint adds after each character of a span whose bold is synthesized, in
  * points.
  *
- * Layout gives each inked glyph of such a span extra advance, as Word does, but a browser draws
- * a synthesized bold at the face's own advances. Paint adds the extra as letter spacing and takes
- * it back from spaces with word spacing, so each glyph stays where layout put it. A shaped span
- * keeps only the box that layout gave it: letter spacing would pull a joining script apart.
+ * Layout gives each widened character of such a span extra advance, but a browser draws a
+ * synthesized bold at the face's own advances. Paint adds the extra as letter spacing and takes
+ * it back from spaces with word spacing, so each glyph stays where layout put it. A span in a
+ * joining script gets none: it keeps the box that layout gave it.
  *
  * @internal
  */
 export function syntheticBoldSpacingPt(span: StyleSpanRecord): number {
-  return span.syntheticBold && span.style.shaping === undefined
-    ? syntheticBoldAdvancePt(span.style)
-    : 0;
+  if (!span.syntheticBold) return 0;
+  const script = span.style.shaping?.script;
+  return script !== undefined && JOINING_SCRIPTS.has(script)
+    ? 0
+    : syntheticBoldAdvancePt(span.style);
+}
+
+/**
+ * The letter spacing paint gives each character of a span, in points: the span's own character
+ * spacing plus {@link syntheticBoldSpacingPt}.
+ *
+ * @internal
+ */
+export function paintedLetterSpacingPt(span: StyleSpanRecord): number {
+  return span.style.characterSpacingPt + syntheticBoldSpacingPt(span);
 }
 
 /** Apply {@link syntheticBoldSpacingPt} to a painted span. @internal */
@@ -96,8 +128,42 @@ export function applySyntheticBoldSpacing(
 ): void {
   const spacing = syntheticBoldSpacingPt(span);
   if (spacing === 0) return;
-  element.style.letterSpacing = `${(span.style.characterSpacingPt + spacing) * scale}px`;
+  element.style.letterSpacing = `${paintedLetterSpacingPt(span) * scale}px`;
   element.style.wordSpacing = `${-spacing * scale}px`;
+}
+
+/**
+ * Keep the blanks of a synthesized-bold span that cannot split at their own advance.
+ *
+ * Layout cuts U+3000 and the other blanks that word spacing cannot reach into spans of their
+ * own. A field result or other projected span stays whole, so paint draws each such blank in a
+ * child that drops the extra letter spacing. Selection never maps into projected text, so the
+ * extra text nodes cost nothing there. `host` holds the span's text as one text node.
+ *
+ * @internal
+ */
+export function paintUnspacedBlanks(
+  document: Document,
+  host: HTMLElement,
+  span: StyleSpanRecord,
+  scale: number
+): void {
+  if (!span.projected || syntheticBoldSpacingPt(span) === 0) return;
+  const text = host.textContent ?? '';
+  const blanks = unspacedBlankRuns(text);
+  if (blanks.length === 0) return;
+  const nodes: Node[] = [];
+  let from = 0;
+  for (const blank of blanks) {
+    if (blank.from > from) nodes.push(document.createTextNode(text.slice(from, blank.from)));
+    const child = document.createElement('span');
+    child.style.letterSpacing = `${span.style.characterSpacingPt * scale}px`;
+    child.textContent = text.slice(blank.from, blank.to); // SAFE: textContent, never innerHTML
+    nodes.push(child);
+    from = blank.to;
+  }
+  if (from < text.length) nodes.push(document.createTextNode(text.slice(from)));
+  host.replaceChildren(...nodes);
 }
 
 /**

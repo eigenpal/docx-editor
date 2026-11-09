@@ -1,8 +1,8 @@
 // Synthesized bold follows the face's own bytes, not the weight it was registered under.
 //
-// Word embeds the face it draws bold text with in the font's bold slot. For a family without a
-// bold face, that is a copy of the regular face, and Word emboldens it: each inked glyph also
-// advances 1/50 em further. The test font stands in for such a family by filling the bold slot
+// A document embeds the face that draws bold text in the font's bold slot. For a family without
+// a bold face, that slot holds a copy of the regular face, and bold text in it draws with a
+// synthesized bold: each inked glyph also advances 1/50 em further. The test font stands in for such a family by filling the bold slot
 // with the regular DejaVu Sans.
 
 import { describe, expect, test } from 'bun:test';
@@ -83,7 +83,7 @@ const snapshot = createFontResourceSnapshot({
   maxFontBytes: 2_000_000,
   resources: [
     face('Single Weight', 400, regularBytes),
-    // Word's bold slot for a family without a bold face: the regular face again.
+    // The bold slot of a family without a bold face: the regular face again.
     face('Single Weight', 700, regularBytes),
     face('Two Weights', 400, regularBytes),
     face('Two Weights', 700, boldBytes),
@@ -113,7 +113,7 @@ const style = (fontFamily: string, bold: boolean): ResolvedRunStyle => ({
 });
 
 describe('a bold slot that holds a regular face', () => {
-  test('measures each inked glyph 1/50 em wider, as Word draws it', () => {
+  test('measures each inked glyph 1/50 em wider', () => {
     const regular = measurer.measure('Bold text', style('Single Weight', false));
     const bold = measurer.measure('Bold text', style('Single Weight', true));
     // Eight inked glyphs; the space keeps its advance.
@@ -130,9 +130,9 @@ describe('a bold slot that holds a regular face', () => {
     expect(measurer.syntheticBold?.(style('Single Weight', false))).toBe(false);
   });
 
-  test('text the face cannot shape takes the extra advance too, as Word gives it', () => {
-    // DejaVu Sans has no Hangul, so text with Hangul measures on the fallback. Word draws such
-    // text in a substitute face and widens each character as it widens the face's own glyphs.
+  test('text the face cannot shape takes the extra advance too', () => {
+    // DejaVu Sans has no Hangul, so text with Hangul measures on the fallback. A substitute face
+    // without bold widens each of its glyphs as the face widens its own.
     const extra = 11 * SYNTHETIC_BOLD_ADVANCE_EM;
     const widened = (text: string, smallCaps = false) =>
       (measurer.measure(text, { ...style('Single Weight', true), smallCaps }) -
@@ -149,6 +149,36 @@ describe('a bold slot that holds a regular face', () => {
       measurer.measure('Bold가', bold),
       6
     );
+  });
+
+  test('fallback text widens once for each grapheme', () => {
+    // An emoji sequence, a flag, and a skin-tone emoji each draw as one glyph. Conjoining jamo
+    // compose into one syllable. Paint gives letter spacing once to each grapheme.
+    const family = '\u{1F468}‍\u{1F469}‍\u{1F467}';
+    const flag = '\u{1F1F5}\u{1F1F1}';
+    const thumb = '\u{1F44D}\u{1F3FD}';
+    const jamo = '가';
+    const extra = 11 * SYNTHETIC_BOLD_ADVANCE_EM;
+    const bold = style('Single Weight', true);
+    const regular = style('Single Weight', false);
+    for (const [text, graphemes] of [
+      [family, 1],
+      [`${family}${family}가`, 3],
+      [flag + flag, 2],
+      [thumb, 1],
+      [jamo + jamo, 2],
+      [`가${'é'}`, 2],
+    ] as const) {
+      expect([
+        text,
+        (measurer.measure(text, bold) - measurer.measure(text, regular)) / extra,
+      ]).toEqual([text, expect.closeTo(graphemes, 6)]);
+      // The caret steps over each widened grapheme at its far edge.
+      const advances = measurer.caretAdvances?.(text, bold);
+      const plain = measurer.caretAdvances?.(text, regular);
+      expect(advances?.at(-1)).toBeCloseTo(measurer.measure(text, bold), 6);
+      expect((advances![1]! - plain![1]!) / extra).toBeCloseTo(1, 6);
+    }
   });
 
   const spansOf = (runs: string) => {

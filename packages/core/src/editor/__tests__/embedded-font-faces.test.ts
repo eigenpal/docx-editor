@@ -237,9 +237,10 @@ describe('registerEmbeddedFontFaces', () => {
   });
 });
 
-// Word embeds the face it draws bold text with in the bold slot. For a family without a bold
-// face, that is a copy of the regular face, and Word emboldens it. A browser emboldens only a
-// face whose weight descriptor is below 600.
+// A document embeds the face that draws bold text in the bold slot. For a family without a
+// bold face, that slot holds a copy of the regular face, and bold text in it draws with a
+// synthesized bold. A browser synthesizes bold only for a face whose weight descriptor is below
+// 600.
 describe('a bold slot that holds a regular face', () => {
   const descriptorsOf = async (sources: FontSource[]) => {
     const env = fakeEnvironment();

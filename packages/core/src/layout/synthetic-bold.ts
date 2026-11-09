@@ -1,4 +1,5 @@
 import { trustedFontBytes, type ResolvedFont } from './font-resource.ts';
+import { segmentGraphemes } from './grapheme.ts';
 import { layoutRunHalfPointsOf } from './layout-run-shape.ts';
 import { glyphSizeFactorOf, type ResolvedRunStyle } from './run-style.ts';
 import { HEAD_TAG, OS2_TAG, tableDirectoryBase, tableOffset } from './sfnt-tables.ts';
@@ -19,9 +20,9 @@ export const SYNTHETIC_BOLD_ADVANCE_EM = 1 / 50;
  * Whether a face draws bold by itself: an `OS/2` weight class of 600 or more, or the bold bit
  * of `OS/2.fsSelection` or `head.macStyle`. A face without readable tables is not bold.
  *
- * The weight a face was REGISTERED under does not answer this. Word embeds the face it draws a
- * bold run with in the font's bold slot, and for a family without a bold face that is a copy of
- * the regular face, which Word then emboldens.
+ * The weight a face was REGISTERED under does not answer this. A document embeds the face that
+ * draws bold text in the font's bold slot. For a family without a bold face, that slot holds a
+ * copy of the regular face, and bold text in it draws with a synthesized bold.
  */
 export function sfntFaceIsBold(bytes: Uint8Array, faceIndex: number): boolean {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -77,24 +78,25 @@ export function syntheticBoldGlyphStarts(run: ShapedRun): number[] {
 }
 
 /**
- * A character that synthesized bold widens in text that layout measures without the face's
- * glyphs: a character that draws ink and opens a cluster. Spaces, format characters, and
- * combining marks do not. In a span that `markSyntheticBoldSpans` marks, paint widens the same
- * characters.
+ * A character that draws ink and opens a cluster. Spaces, format characters, and combining
+ * marks do not.
  */
-const WIDENED_CHARACTER = /[^\p{White_Space}\p{Default_Ignorable_Code_Point}\p{M}]/gu;
+const WIDENED_CHARACTER = /[^\p{White_Space}\p{Default_Ignorable_Code_Point}\p{M}]/u;
 
 /**
- * The UTF-16 offsets where the characters of `text` that synthesized bold widens start.
+ * The UTF-16 offsets where the graphemes of `text` that synthesized bold widens start: each
+ * grapheme that holds a {@link WIDENED_CHARACTER}.
  *
  * Text that the face cannot shape, because the face lacks a glyph or small capitals, measures
- * on the fallback, so layout has no glyphs to count. Word widens a glyph that a substitute face
- * draws in such a run as it widens the face's own glyphs, and paint spaces the span by
- * character, so layout widens that text by character.
+ * on the fallback, so layout has no glyphs to count. A substitute face without bold widens its
+ * glyphs as the face does. An emoji sequence, a flag, or a letter with combining marks draws as
+ * one glyph and widens once. Paint adds the extra as letter spacing, which a browser gives once
+ * to each grapheme, so layout counts graphemes.
  */
-export function syntheticBoldCharacterStarts(text: string): number[] {
+export function syntheticBoldGraphemeStarts(text: string): number[] {
   const starts: number[] = [];
-  for (const match of text.matchAll(WIDENED_CHARACTER)) starts.push(match.index);
+  for (const segment of segmentGraphemes(text))
+    if (WIDENED_CHARACTER.test(segment.text)) starts.push(segment.utf16From);
   return starts;
 }
 
@@ -105,6 +107,14 @@ export function syntheticBoldCharacterStarts(text: string): number[] {
  * U+00A0, never from U+3000 and the other spaces here.
  */
 const UNSPACED_BLANKS = /[\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/gu;
+
+/** The UTF-16 ranges of the runs of {@link UNSPACED_BLANKS} in `text`. */
+export function unspacedBlankRuns(text: string): { readonly from: number; readonly to: number }[] {
+  const runs: { from: number; to: number }[] = [];
+  for (const match of text.matchAll(UNSPACED_BLANKS))
+    runs.push({ from: match.index, to: match.index + match[0].length });
+  return runs;
+}
 
 /**
  * The parts of a synthesized-bold span's text, cut around the blanks of
@@ -122,9 +132,9 @@ export function syntheticBoldParts(
       parts.push({ from, to, widened: text.slice(from, to).search(WIDENED_CHARACTER) >= 0 });
     from = to;
   };
-  for (const match of text.matchAll(UNSPACED_BLANKS)) {
-    cut(match.index);
-    cut(match.index + match[0].length);
+  for (const blank of unspacedBlankRuns(text)) {
+    cut(blank.from);
+    cut(blank.to);
   }
   cut(text.length);
   return parts;

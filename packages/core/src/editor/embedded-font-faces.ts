@@ -78,8 +78,8 @@ type FaceDescriptors = { readonly weight: string; readonly style: 'normal' | 'it
  *
  * A face in a bold slot whose own outlines are not bold registers at 599, below the CSS bold
  * threshold of 600. Bold text still selects it before the regular face, and the browser then
- * draws the bold itself, as Word does. At 700, the face matched bold text exactly, so the
- * browser drew it at its own regular weight. `bytes` holds the face first, as the browser gets it.
+ * synthesizes the bold. At 700, the face matched bold text exactly, so the browser drew it at
+ * its own regular weight. `bytes` holds the face first, as the browser gets it.
  */
 function weightDescriptor(weight: number, bytes: Uint8Array): string {
   return weight >= 600 && !sfntFaceIsBold(bytes, 0) ? '599' : String(weight);

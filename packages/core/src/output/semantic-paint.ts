@@ -1,6 +1,7 @@
 import {
   applySyntheticBoldSpacing,
   fieldAnchorStart,
+  paintUnspacedBlanks,
   followingGapPaint,
   paintedGapBetween,
   letterGapSpacing,
@@ -752,6 +753,8 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
  *
  * Tab advances apply underline via {@link applyTabAdvanceUnderline} on the outer run; this
  * path must not also set `text-decoration` on `\t` or the two mechanisms fight.
+ *
+ * Returns the element that holds the text.
  */
 function mountRunText(
   document: Document,
@@ -759,7 +762,7 @@ function mountRunText(
   text: string,
   style: ResolvedRunStyle,
   scale: number
-): void {
+): HTMLElement {
   const underline = text === '\t' ? null : underlineDecorationOf(style);
   const strike = strikeKindOf(style);
   let host: HTMLElement = run;
@@ -781,6 +784,7 @@ function mountRunText(
   }
 
   host.textContent = text; // SAFE: textContent, never innerHTML
+  return host;
 }
 
 function positioned(
@@ -947,7 +951,14 @@ function paintSpan(
       applyTabAdvanceUnderline(element.style, tabUnderline, ctx.scale);
     }
   }
-  mountRunText(document, textHost, paintedSpanText(span), span.style, ctx.scale);
+  const textElement = mountRunText(
+    document,
+    textHost,
+    paintedSpanText(span),
+    span.style,
+    ctx.scale
+  );
+  paintUnspacedBlanks(document, textElement, span, ctx.scale);
   paintLegacyCheckbox(element, span, ctx.scale);
   paintLegacyDropdown(element, span);
   if (span.projected) {
@@ -1260,7 +1271,9 @@ function paintLine(
       // A `w:bdo` override keeps every character in the span's direction, as layout placed it.
       painted.style.unicodeBidi = span.style.shaping?.override ? 'isolate-override' : 'isolate';
       if (span.style.shaping?.wordSpacingPt)
-        painted.style.wordSpacing = `${span.style.shaping.wordSpacingPt * scale}px`;
+        painted.style.wordSpacing = `${
+          (span.style.shaping.wordSpacingPt - syntheticBoldSpacingPt(span)) * scale
+        }px`;
       logicalAdvance += span.box.width;
     }
     const margin = pendingGap !== 0 && !previousSpanAbsorbedGap ? pendingGap : slackAfterPicture;
