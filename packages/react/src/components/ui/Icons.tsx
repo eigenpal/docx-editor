@@ -22,6 +22,7 @@ import {
   IconRateReview,
   IconVisibility,
 } from './IconsReview';
+import * as ChartIcons from './IconsChart';
 
 export {
   IconAddComment,
@@ -608,6 +609,14 @@ export function IconWrapText(props: IconProps) {
   );
 }
 
+export function IconInsertChart(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M280-280h80v-280h-80v280Zm160 0h80v-400h-80v400Zm160 0h80v-160h-80v160ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm0-560v560-560Z" />
+    </SvgIcon>
+  );
+}
+
 export function IconHeight(props: IconProps) {
   return (
     <SvgIcon {...props}>
@@ -885,6 +894,15 @@ const iconMap: Record<string, React.ComponentType<IconProps>> = {
   padding: IconPadding,
   text_rotation_none: IconTextRotationNone,
   wrap_text: IconWrapText,
+  insert_chart: IconInsertChart,
+  bar_chart: ChartIcons.IconBarChart,
+  align_horizontal_left: ChartIcons.IconAlignHorizontalLeft,
+  show_chart: ChartIcons.IconShowChart,
+  area_chart: ChartIcons.IconAreaChart,
+  pie_chart: ChartIcons.IconPieChart,
+  donut_large: ChartIcons.IconDonutLarge,
+  scatter_plot: ChartIcons.IconScatterPlot,
+  hexagon: ChartIcons.IconHexagon,
   height: IconHeight,
   fit_width: IconFitWidth,
   settings: IconSettings,

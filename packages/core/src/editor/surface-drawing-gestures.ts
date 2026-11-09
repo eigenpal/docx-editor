@@ -6,6 +6,17 @@ import { textboxDrawingOnPage } from '../layout/textbox-drawing-records.ts';
 import { isElementNode, isInputEvent, isKeyboardEvent, isPointerEvent } from './host-realm.ts';
 import { MULTI_CLICK_MS, MULTI_CLICK_SLOP_PX } from './surface-multi-click.ts';
 
+/** Ctrl or Command with C or X, and Ctrl or Shift with Insert or Delete: copy and cut. */
+function isClipboardChord(event: KeyboardEvent): boolean {
+  if (event.altKey) return false;
+  const key = event.key.toLowerCase();
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && (key === 'c' || key === 'x'))
+    return true;
+  return (
+    (event.ctrlKey && key === 'insert') || (event.shiftKey && !event.ctrlKey && key === 'delete')
+  );
+}
+
 const NON_DESELECTING_KEYS = new Set([
   'Shift',
   'Control',
@@ -99,6 +110,9 @@ export function createDrawingGestures(deps: {
     },
     onDrawingKeyGesture(event: Event): void {
       if (isKeyboardEvent(event) && NON_DESELECTING_KEYS.has(event.key)) return;
+      // Copy and cut act on the selected object: the clipboard event that follows the chord
+      // needs the object still selected to copy or cut it.
+      if (isKeyboardEvent(event) && isClipboardChord(event)) return;
       const textbox = deps.textbox();
       const editing = textbox?.active();
       // Escape leaves the box with the box selected as an object, so Delete or a drag acts on

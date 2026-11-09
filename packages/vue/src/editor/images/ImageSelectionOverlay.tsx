@@ -17,6 +17,7 @@ import {
   IMAGE_OVERLAY_NUDGE_PT,
   IMAGE_OVERLAY_NUDGE_SHIFT_PT,
   isStaleImageInteractionCommit,
+  openChartPaneFor,
   selectedDrawingOverlayTargetOf,
   textboxFrameReason,
   type ImageInteractionSession,
@@ -625,6 +626,11 @@ export const ImageSelectionOverlay = defineComponent({
                 width: `${rect.width}px`,
                 height: `${rect.height}px`,
                 cursor: showMove ? 'move' : 'default',
+              }}
+              // A double press on a chart opens the Chart pane, as Edit chart does.
+              onDblclick={(event: MouseEvent) => {
+                const instance = editorRef.value;
+                if (instance && openChartPaneFor(instance, current.id)) event.preventDefault();
               }}
               onPointerdown={(event: PointerEvent) => {
                 guardToolbarMousedown(event as unknown as MouseEvent);

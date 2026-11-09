@@ -26,9 +26,10 @@ export interface ChromeMenuItemEntry {
   /**
    * The row opens a size PICKER instead of firing on click — Word's insert-table grid.
    * The slot still owns the label, the icon and the enabled state; only the dispatch
-   * differs, and the picked size is what the host sends.
+   * differs, and the picked size is what the host sends. `chartType` opens the list of chart
+   * types, and the picked type is what the host inserts.
    */
-  readonly picker?: 'tableGrid';
+  readonly picker?: 'tableGrid' | 'chartType';
 }
 
 /**

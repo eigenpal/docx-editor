@@ -71,6 +71,112 @@ export type CanResult = {
 };
 
 // @public
+export type ChartColor = string | {
+    readonly shift?: number;
+    readonly theme: ChartThemeColor;
+};
+
+// @public
+export interface ChartColorEntry {
+    readonly automatic: ChartColor;
+    readonly color: ChartColor | null;
+    readonly name: string;
+}
+
+// @public
+export interface ChartData {
+    // (undocumented)
+    readonly categories: readonly ChartDataCategory[];
+    // (undocumented)
+    readonly kind: ChartDataKind;
+    // (undocumented)
+    readonly series: readonly ChartDataSeries[];
+    readonly workbook?: ChartWorkbookState;
+}
+
+// @public
+export interface ChartDataCategory {
+    readonly label: string;
+    readonly source?: number;
+}
+
+// @public
+export type ChartDataKind = 'category' | 'xy';
+
+// @public
+export type ChartDataRead = {
+    readonly data: ChartData;
+    readonly ok: true;
+} | {
+    readonly ok: false;
+    readonly reason: string;
+};
+
+// @public
+export interface ChartDataSeries {
+    readonly name: string;
+    readonly source?: number;
+    readonly values: readonly (number | null)[];
+}
+
+// @public
+export interface ChartFormat {
+    readonly axes: boolean | null;
+    readonly axisTitles: {
+        readonly category: string | null;
+        readonly value: string | null;
+    } | null;
+    // (undocumented)
+    readonly colors: readonly ChartColorEntry[];
+    readonly colorsBy: 'series' | 'point';
+    readonly dataLabels: boolean;
+    readonly gridlines: boolean | null;
+    // (undocumented)
+    readonly legend: ChartLegendPosition;
+    readonly title: string | null;
+    readonly type: ChartType | null;
+}
+
+// @public
+export interface ChartFormatChange {
+    // (undocumented)
+    readonly axes?: boolean;
+    // (undocumented)
+    readonly categoryAxisTitle?: string | null;
+    // (undocumented)
+    readonly dataLabels?: boolean;
+    // (undocumented)
+    readonly gridlines?: boolean;
+    // (undocumented)
+    readonly legend?: ChartLegendPosition;
+    // (undocumented)
+    readonly title?: string | null;
+    // (undocumented)
+    readonly valueAxisTitle?: string | null;
+}
+
+// @public
+export type ChartFormatRead = {
+    readonly format: ChartFormat;
+    readonly ok: true;
+} | {
+    readonly ok: false;
+    readonly reason: string;
+};
+
+// @public
+export type ChartLegendPosition = 'none' | 'top' | 'bottom' | 'left' | 'right';
+
+// @public
+export type ChartThemeColor = 'bg1' | 'tx1' | 'bg2' | 'tx2' | 'accent1' | 'accent2' | 'accent3' | 'accent4' | 'accent5' | 'accent6';
+
+// @public
+export type ChartType = 'columnClustered' | 'columnStacked' | 'columnPercentStacked' | 'barClustered' | 'barStacked' | 'barPercentStacked' | 'line' | 'lineMarkers' | 'area' | 'areaStacked' | 'areaPercentStacked' | 'pie' | 'doughnut' | 'radar' | 'scatter' | 'scatterLines';
+
+// @public
+export type ChartWorkbookState = 'embedded' | 'kept' | 'external' | 'none';
+
+// @public
 export interface ClearAnchorHighlightOptions {
     readonly animation?: boolean | AnchorHighlightAnimation;
 }
@@ -993,6 +1099,51 @@ export interface EditorBookmarkCommands {
 }
 
 // @public
+export interface EditorChartCommands {
+    insertChart: {
+        chartType: ChartType;
+        data?: NewChartData;
+    };
+    setChartColor: {
+        color: ChartColor | null;
+        drawingNodeId?: string;
+        index: number;
+    };
+    setChartData: {
+        data: Omit<ChartData, 'workbook'>;
+        drawingNodeId?: string;
+    };
+    setChartFormat: {
+        drawingNodeId?: string;
+        format: ChartFormatChange;
+    };
+    setChartType: {
+        chartType: ChartType;
+        drawingNodeId?: string;
+    };
+}
+
+// @public
+export interface EditorChartQueries {
+    // (undocumented)
+    chartData: {
+        drawingNodeId?: string;
+    };
+    // (undocumented)
+    chartFormat: {
+        drawingNodeId?: string;
+    };
+}
+
+// @public
+export interface EditorChartQueryResults {
+    // (undocumented)
+    chartData: ChartDataRead;
+    // (undocumented)
+    chartFormat: ChartFormatRead;
+}
+
+// @public
 export type EditorCommand = {
     [K in keyof EditorCommands]: {
         type: K;
@@ -1000,7 +1151,7 @@ export type EditorCommand = {
 }[keyof EditorCommands];
 
 // @public
-export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHeaderFooterCommands, EditorNoteCommands, EditorFormatPainterCommands, EditorBookmarkCommands {
+export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHeaderFooterCommands, EditorNoteCommands, EditorFormatPainterCommands, EditorBookmarkCommands, EditorChartCommands {
     clearFormatting: Record<never, never>;
     commitTableColumnDividerResize: {
         leftWidthTwips: number;
@@ -1387,7 +1538,7 @@ export interface EditorNoteCommands {
 export type EditorPosition = DocAnchor | SemanticPosition;
 
 // @public
-export interface EditorQueries extends DocQueries {
+export interface EditorQueries extends DocQueries, EditorChartQueries {
     bookmarks: Record<never, never>;
     // (undocumented)
     contentControlAt: {
@@ -1426,7 +1577,7 @@ export type EditorQuery = {
 }[keyof EditorQueries];
 
 // @public
-export interface EditorQueryResults extends DocQueryResults {
+export interface EditorQueryResults extends DocQueryResults, EditorChartQueryResults {
     // (undocumented)
     bookmarks: readonly BookmarkSummary[];
     // (undocumented)
@@ -1505,6 +1656,7 @@ export interface EditorSnapshot {
     // (undocumented)
     readonly canRedo?: boolean;
     readonly canUndo?: boolean;
+    readonly chart: SelectedChartState | null;
     readonly collaborationStatus: CollaborationStatus | 'inactive';
     readonly documentProtection?: DocumentProtectionState | null;
     readonly editable: boolean;
@@ -1917,6 +2069,17 @@ export type InteractionOutcome<T> = {
 
 // @public
 export type InteractionOutcomeCode = 'pendingLayout' | 'pendingSelection' | 'readOnly' | 'invalidTarget' | 'unsupported';
+
+// @public
+export interface NewChartData {
+    // (undocumented)
+    readonly categories: readonly string[];
+    // (undocumented)
+    readonly series: readonly {
+        readonly name: string;
+        readonly values: readonly (number | null)[];
+    }[];
+}
 
 // @public
 export type NoteKind = 'footnote' | 'endnote';
@@ -2658,6 +2821,16 @@ export interface SectionProperties {
         widthTwips: number;
     };
     readonly titlePage?: boolean;
+}
+
+// @public
+export interface SelectedChartState {
+    readonly drawingNodeId: string;
+    readonly editable: boolean;
+    readonly formatReason?: string;
+    readonly formattable: boolean;
+    readonly reason?: string;
+    readonly version: number;
 }
 
 // @public

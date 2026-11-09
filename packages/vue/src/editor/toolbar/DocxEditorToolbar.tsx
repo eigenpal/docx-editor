@@ -12,6 +12,7 @@ import {
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import {
+  chartPaneAvailable,
   chromeSlotId,
   formattingBarChromeGroups,
   type ChromeSlotId,
@@ -21,6 +22,7 @@ import { flattenChildren } from '../../lib/flattenChildren';
 import { useEditorState } from '../useEditorState';
 import { useChromeDir } from '../../i18n';
 import { useChromeScopeClassName } from '../color-mode-context';
+import { useDocxEditor } from '../context';
 import { ToolbarContext, useToolbarLabel, type ToolbarTranslate } from './toolbar-context';
 import { ToolbarButton, chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
 import {
@@ -69,6 +71,7 @@ import {
   type ImageAltTextPartComponent,
   type ImageWrapPartComponent,
 } from '../images';
+import { ToolbarChartInsert, type ChartInsertPartComponent } from '../charts/ChartInsert';
 import { ToolbarImageProperties } from '../images/ImageProperties';
 import {
   ToolbarAlignCenter,
@@ -190,6 +193,7 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   'table.splitCell': ToolbarTableSplitCell,
   'image.insert': ToolbarImageInsert,
   'image.wrap': ToolbarImageWrap,
+  'insert.chart': ToolbarChartInsert,
   'image.altText': ToolbarImageAltText,
 };
 
@@ -221,9 +225,10 @@ function iconPart(slot: ChromeSlotId): PartLike {
 
 function buildDefaultGroups(
   image: EditorSnapshot['image'],
-  direction: boolean
+  direction: boolean,
+  chart: boolean
 ): readonly DefaultGroup[] {
-  return formattingBarChromeGroups(image, { direction }).map((group) => {
+  return formattingBarChromeGroups(image, { direction, chart }).map((group) => {
     if (group.id === 'alignment') {
       return {
         id: group.id,
@@ -243,6 +248,7 @@ function buildDefaultGroups(
 }
 
 const selectToolbarImage = (snapshot: EditorSnapshot) => snapshot.image;
+const selectToolbarChart = (snapshot: EditorSnapshot) => snapshot.chart !== null;
 const selectToolbarDisabled = (snapshot: EditorSnapshot) =>
   snapshot.isLoading || snapshot.isOpening === true;
 const selectTableChromeVisible = (snapshot: EditorSnapshot) => snapshot.table !== null;
@@ -337,6 +343,8 @@ export interface DocxEditorToolbarNamespace {
   readonly Indent: ToolbarPartComponent;
   readonly ImageInsert: ToolbarPartComponent;
   readonly ImageWrap: ImageWrapPartComponent;
+  /** The Insert chart dropdown (`insert.chart`). */
+  readonly ChartInsert: ChartInsertPartComponent;
   readonly ImageAltText: ImageAltTextPartComponent;
   readonly ImageProperties: ToolbarPartComponent;
   readonly TableInsert: ToolbarPartComponent;
@@ -382,12 +390,19 @@ const DocxEditorToolbarRoot = defineComponent({
     );
     const label = useToolbarLabel();
     const image = useEditorState(selectToolbarImage);
+    const editorRef = useDocxEditor();
+    const chart = useEditorState(selectToolbarChart);
     const toolbarDisabled = useEditorState(selectToolbarDisabled);
     const tableChromeVisible = useEditorState(selectTableChromeVisible);
     // A right-to-left interface language puts the paragraph direction buttons in the bar.
     const chromeDir = useChromeDir();
     const defaultGroups = computed(() =>
-      buildDefaultGroups(image.value, chromeDir.value === 'rtl')
+      // Edit chart shows only when the host can show a chart pane.
+      buildDefaultGroups(
+        image.value,
+        chromeDir.value === 'rtl',
+        chart.value && chartPaneAvailable(editorRef.value)
+      )
     );
     const defaultSlots = computed(
       () =>
@@ -796,6 +811,7 @@ export const DocxEditorToolbar = Object.assign(DocxEditorToolbarRoot, {
   Indent: ToolbarIndent,
   ImageInsert: ToolbarImageInsert,
   ImageWrap: ToolbarImageWrap,
+  ChartInsert: ToolbarChartInsert,
   ImageAltText: ToolbarImageAltText,
   ImageProperties: ToolbarImageProperties,
   TableInsert: ToolbarTableInsert,

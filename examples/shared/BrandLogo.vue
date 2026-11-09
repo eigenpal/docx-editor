@@ -8,7 +8,7 @@
     href="https://docx-editor.dev"
     target="_blank"
     rel="noopener noreferrer"
-    class="brand-logo"
+    :class="byline ? 'brand-logo' : 'demo-brand'"
     title="DOCX Editor by EigenPal"
   >
     <svg
@@ -50,7 +50,8 @@
         .DOCX
       </text>
     </svg>
-    <span class="brand-logo__stack">
+    <span v-if="!byline" class="demo-brand__name">DOCX Editor</span>
+    <span v-else class="brand-logo__stack">
       <span class="brand-logo__title">DOCX Editor</span>
       <span class="brand-logo__by">
         by
@@ -96,7 +97,16 @@
 </template>
 
 <script setup lang="ts">
-// Presentational only — no props.
+withDefaults(
+  defineProps<{
+    /**
+     * Whether the "by EigenPal" line shows under the name. The studio top bar leaves it out and
+     * shows the icon and the name on one line (`.demo-brand` in `demo-shell.css`).
+     */
+    byline?: boolean;
+  }>(),
+  { byline: true }
+);
 </script>
 
 <style scoped>

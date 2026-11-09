@@ -23,6 +23,7 @@ import { paintRadar } from './chart-radar.ts';
 import { ChartScene } from './chart-scene.ts';
 import type { LookContext } from './chart-series.ts';
 import {
+  withDefaultSchemeColors,
   mergeStroke,
   readChartShapeProperties,
   themeColor,
@@ -66,6 +67,7 @@ export function renderChart(
   resolveSchemeColor?: ShapeSchemeColorResolver,
   themeFaces?: ChartThemeFaces
 ): ChartRender | null {
+  resolveSchemeColor = withDefaultSchemeColors(resolveSchemeColor);
   const scene = new ChartScene();
   const labels: ChartLabel[] = [];
   const baseText = chartBaseText(model, resolveSchemeColor, themeFaces);

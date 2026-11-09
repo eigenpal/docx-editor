@@ -532,6 +532,9 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     input: import('../store/store/tree-package-images.ts').ApplyImagePropertiesInput
   ): import('../store/store/tree-package-images.ts').ImageIntentResult;
 
+  /** Insert a chart, or edit the chart part behind a chart drawing, as one package undo unit. */
+  charts(): import('../store/store/tree-package-charts.ts').ChartLanes;
+
   /** Land a clipboard fragment (resource merge + blocks) as one package undo unit. */
   applyFragmentPaste(
     scope: StoryScope,

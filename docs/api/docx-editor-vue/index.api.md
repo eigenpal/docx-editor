@@ -11,6 +11,14 @@ import { BookmarkSortOrder } from '@docx-editor.dev/core/editor';
 import { BookmarkSummary } from '@docx-editor.dev/core/contracts/editor';
 import { CalendarDay } from '@docx-editor.dev/core/editor';
 import { CalendarMonth } from '@docx-editor.dev/core/editor';
+import { CHART_TYPE_CHOICES } from '@docx-editor.dev/core/editor';
+import { ChartColor } from '@docx-editor.dev/core/editor';
+import { ChartData } from '@docx-editor.dev/core/editor';
+import { ChartFormat } from '@docx-editor.dev/core/editor';
+import { ChartFormatChange } from '@docx-editor.dev/core/editor';
+import { ChartPaneChange } from '@docx-editor.dev/core/editor';
+import { ChartType } from '@docx-editor.dev/core/editor';
+import { chartTypeLabelKey } from '@docx-editor.dev/core/editor';
 import { CHROME_GROUPS } from '@docx-editor.dev/core/editor';
 import { CHROME_MENUS } from '@docx-editor.dev/core/editor';
 import { ChromeExportFormat } from '@docx-editor.dev/core/editor';
@@ -130,6 +138,7 @@ import { NavigateToChangeOptions } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
+import { PaneRequest } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogFields } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogMixed } from '@docx-editor.dev/core/editor';
 import { ParagraphFlagState } from '@docx-editor.dev/core/editor';
@@ -175,6 +184,8 @@ import { SEARCH_HIGHLIGHT_PRIORITY } from '@docx-editor.dev/core/editor';
 import { SEARCH_HIGHLIGHT_SET } from '@docx-editor.dev/core/editor';
 import { SEARCH_MATCH_LIMIT } from '@docx-editor.dev/core/editor';
 import { SectionProperties } from '@docx-editor.dev/core/editor';
+import { SelectedChartCommand } from '@docx-editor.dev/core/editor';
+import { SelectedChartState } from '@docx-editor.dev/core/editor';
 import { ShallowRef } from 'vue';
 import { SlotsType } from 'vue';
 import { SplitCellLimits } from '@docx-editor.dev/core/editor';
@@ -218,6 +229,74 @@ export interface BookmarkDialogFields {
     // (undocumented)
     sortBy: BookmarkSortOrder;
 }
+
+export { CHART_TYPE_CHOICES }
+
+export { ChartColor }
+
+export { ChartData }
+
+export { ChartFormat }
+
+export { ChartFormatChange }
+
+// @public
+export const ChartInsert: vue.DefineComponent<vue.ExtractPropTypes<{
+    asChild: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    asChild: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+}>> & Readonly<{}>, {
+    asChild: boolean;
+    className: string;
+    hidden: boolean;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public (undocumented)
+export interface ChartInsertPartComponent {
+    // (undocumented)
+    (props: ChartInsertProps): VNode | null;
+    // (undocumented)
+    readonly docxSlot: 'insert.chart';
+}
+
+// @public
+export interface ChartInsertProps {
+    // (undocumented)
+    asChild?: boolean;
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+}
+
+export { ChartPaneChange }
+
+export { ChartType }
+
+export { chartTypeLabelKey }
 
 export { CHROME_GROUPS }
 
@@ -2833,6 +2912,26 @@ export interface DocxEditorBookmarkDialogProps extends DialogCustomizationProps 
 }
 
 // @public
+export const DocxEditorChartPane: vue.DefineComponent<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>> & Readonly<{}>, {
+    className: string;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorChartPaneProps {
+    className?: string;
+}
+
+// @public
 export type DocxEditorChildren = VNode;
 
 // @public (undocumented)
@@ -3763,6 +3862,7 @@ export interface DocxEditorNamespace {
     // (undocumented)
     readonly AuthorStyle: typeof DocxEditorAuthorStyle;
     readonly BookmarkDialog: typeof DocxEditorBookmarkDialog;
+    readonly ChartPane: typeof DocxEditorChartPane;
     // (undocumented)
     readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
     // (undocumented)
@@ -3820,6 +3920,7 @@ export interface DocxEditorNamespace {
     readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
+    readonly SidePanel: typeof DocxEditorSidePanel;
     readonly SplitCellDialog: typeof DocxEditorSplitCellDialog;
     // (undocumented)
     readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
@@ -4994,6 +5095,37 @@ export interface DocxEditorRulerProps {
 export const DocxEditorShell: DocxEditorNamespace;
 
 // @public
+export const DocxEditorSidePanel: vue.DefineComponent<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    onClose: {
+        default: undefined;
+        type: PropType<() => void>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    onClose: {
+        default: undefined;
+        type: PropType<() => void>;
+    };
+}>> & Readonly<{}>, {
+    className: string;
+    onClose: () => void;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorSidePanelProps {
+    children?: DocxEditorChildren;
+    className?: string;
+    onClose?: () => void;
+}
+
+// @public
 export const DocxEditorSplitCellDialog: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
         readonly children: PropType<DocxEditorChildren>;
@@ -5209,6 +5341,7 @@ export interface DocxEditorToolbarNamespace {
     readonly BulletList: ToolbarPartComponent;
     // (undocumented)
     readonly Button: typeof ToolbarButton$1;
+    readonly ChartInsert: ChartInsertPartComponent;
     // (undocumented)
     readonly ClearFormatting: ToolbarPartComponent;
     // (undocumented)
@@ -7300,6 +7433,10 @@ export { SEARCH_HIGHLIGHT_SET }
 
 export { SEARCH_MATCH_LIMIT }
 
+export { SelectedChartCommand }
+
+export { SelectedChartState }
+
 // @public @deprecated (undocumented)
 export interface SelectionFormatting {
     // (undocumented)
@@ -7618,6 +7755,9 @@ export interface ToolbarButtonProps {
     slot?: ChromeSlotId;
     slotId?: ChromeSlotId;
 }
+
+// @public (undocumented)
+export const ToolbarChartInsert: ChartInsertPartComponent;
 
 export { ToolbarCommandState }
 
@@ -8338,6 +8478,9 @@ export interface UsePageSetupReturn {
 }
 
 // @public
+export function usePaneRequest(listener: (request: PaneRequest) => void): void;
+
+// @public
 export function useParagraphDialog(): UseParagraphDialogReturn;
 
 // @public
@@ -8407,6 +8550,23 @@ export function useScopeClassName(): '' | 'docx-editor ' | 'docx-editor dark ';
 
 // @public
 export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTMLElement | null, placement: ScopedChromeAnchorPlacement): ScopedChromeAnchor;
+
+// @public
+export function useSelectedChart(): UseSelectedChartReturn;
+
+// @public
+export interface UseSelectedChartReturn {
+    readonly canEditData: ComputedRef<boolean>;
+    readonly canEditFormat: ComputedRef<boolean>;
+    readonly chart: ComputedRef<SelectedChartState | null>;
+    readonly data: ComputedRef<ChartData | null>;
+    readonly dataDisabledReason: ComputedRef<string | null>;
+    readonly editData: (change: ChartPaneChange) => ExecResult;
+    readonly execute: (command: SelectedChartCommand) => ExecResult;
+    readonly format: ComputedRef<ChartFormat | null>;
+    readonly formatDisabledReason: ComputedRef<string | null>;
+    readonly readReason: ComputedRef<string | null>;
+}
 
 // @public
 export function useSplitCellDialog(): UseSplitCellDialogReturn;

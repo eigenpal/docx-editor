@@ -34,6 +34,8 @@ export interface CopyFlavours {
   readonly text: string;
   /** The `text/html` flavour, or null when only plain text should be written. */
   readonly html: string | null;
+  /** The chart drawing these flavours copy, when the selection is one chart. A cut deletes it. */
+  readonly chartDrawingNodeId?: string;
 }
 
 function escapeHtml(value: string): string {

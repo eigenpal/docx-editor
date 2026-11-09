@@ -764,17 +764,24 @@ describe('refuses invalid or locked drawing operations', () => {
     ).toBe('not-a-picture-drawing');
   });
 
-  test('refuses a chart graphic as a chart', () => {
+  test('refuses picture edits on a chart graphic as a chart', () => {
     const xml = inlinePictureDrawing().replace(`uri="${PIC_URI}"`, `uri="${CHART_URI}"`);
     const chartPart = parse(xml);
     const drawing = drawingOf(chartPart);
     expect(
       refuse(chartPart, {
+        op: 'cropDrawing',
+        drawingNodeId: drawing.id,
+        crop: { left: 1000, top: 0, right: 0, bottom: 0 },
+      })
+    ).toBe('chart-drawing');
+    expect(
+      validateTreeOp(chartPart, {
         op: 'resizeDrawing',
         drawingNodeId: drawing.id,
         extentEmu: { cx: 1, cy: 1 },
       })
-    ).toBe('chart-drawing');
+    ).toBeNull();
   });
 
   test('refuses resize when noResize lock is set', () => {

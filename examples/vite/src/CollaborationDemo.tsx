@@ -304,6 +304,12 @@ export function CollaborationControl({
     }
   };
 
+  const triggerLabel = !session
+    ? strings.connect
+    : diverged
+      ? strings.outOfSyncShort
+      : `${participants.length} ${strings.online}`;
+
   return (
     <>
       <DemoHeaderButton
@@ -316,6 +322,7 @@ export function CollaborationControl({
           setOpen(true);
         }}
         disabled={!editor || busy || pending}
+        aria-label={triggerLabel}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-busy={busy || pending}
@@ -330,13 +337,10 @@ export function CollaborationControl({
         {/* A diverged replica still has peers in its participant list, so a headcount here
             reads as healthy while this copy's edits reach nobody. The trigger is the only
             collaboration state on screen once the dialog closes, so it has to carry the
-            warning in WORDS: the class alone would leave the meaning in the colour. */}
-        <span>
-          {!session
-            ? strings.connect
-            : diverged
-              ? strings.outOfSyncShort
-              : `${participants.length} ${strings.online}`}
+            warning in WORDS: the class alone would leave the meaning in the colour. So on a
+            narrow top bar the other labels step out, and this one stays. */}
+        <span className={session && diverged ? undefined : 'demo-header-action__label'}>
+          {triggerLabel}
         </span>
       </DemoHeaderButton>
 

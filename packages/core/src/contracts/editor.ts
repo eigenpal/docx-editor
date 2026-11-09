@@ -142,6 +142,12 @@ import type { DocumentProtectionState } from '../store/package/document-protecti
 import type { SupportedImageMime } from '../store/package/image-resources.ts';
 import type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 import type { ImageContext, SelectedImageState } from './editor-image-state.ts';
+import type {
+  EditorChartCommands,
+  EditorChartQueries,
+  EditorChartQueryResults,
+  SelectedChartState,
+} from './chart.ts';
 import type { BookmarkSummary, EditorBookmarkCommands } from './editor-bookmarks.ts';
 export type * from './types';
 export type * from './interaction';
@@ -150,6 +156,7 @@ export type * from './editor-format-painter.ts';
 export type * from './editor-bookmarks.ts';
 export type * from './editor-image-state.ts';
 export type * from './diagnostics.ts';
+export type * from './chart.ts';
 export type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 
 // Everything below is named by a signature IN this file, so it has to be nameable FROM this
@@ -963,7 +970,8 @@ export interface EditorCommands
     EditorHeaderFooterCommands,
     EditorNoteCommands,
     EditorFormatPainterCommands,
-    EditorBookmarkCommands {
+    EditorBookmarkCommands,
+    EditorChartCommands {
   /** Switch how edits are written. A view command: it changes no document state. */
   setEditingMode: { mode: DocumentEditingMode };
   /**
@@ -1411,7 +1419,7 @@ export type EditorCommand = {
  * Extends {@link DocQueries} with the reads that only mean something against a live, laid-out
  * document: the selection, its formatting, the table or hyperlink under the caret.
  */
-export interface EditorQueries extends DocQueries {
+export interface EditorQueries extends DocQueries, EditorChartQueries {
   selection: Record<never, never>;
   selectionFormatting: Record<never, never>;
   tableContext: Record<never, never>;
@@ -1436,7 +1444,7 @@ export type EditorQuery = {
 }[keyof EditorQueries];
 
 /** What each editor query returns. Keyed identically to `EditorQueries`. */
-export interface EditorQueryResults extends DocQueryResults {
+export interface EditorQueryResults extends DocQueryResults, EditorChartQueryResults {
   selection: DocRange | null;
   selectionFormatting: RunFormatting | null;
   tableContext: TableContext | null;
@@ -1555,6 +1563,8 @@ export interface EditorSnapshot {
    */
   readonly tocContext: { readonly id: string } | null;
   readonly image: ImageContext | null;
+  /** The selected chart, while exactly one chart drawing is selected; else null. */
+  readonly chart: SelectedChartState | null;
   readonly page: { readonly current: number; readonly total: number };
   /**
    * Whether undo/redo have anything to apply, derived from the session's history.

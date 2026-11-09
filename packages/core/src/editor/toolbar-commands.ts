@@ -46,10 +46,12 @@ import type { ReviewAuthorInfo } from '../output/revision-presentation.ts';
 
 import {
   NO_COMMENT_DRAFT_VIEW,
+  addCommentState,
   commentDraftRequestsOf,
   commentWordAtCaret,
 } from './comment-draft-chrome.ts';
 import { LINK_PROBE, NO_LINK_VIEW, linkControlState, linkRequestsOf } from './link-chrome.ts';
+import { chartChromeState, chartInsertCommand, runChartControl } from './chart-chrome.ts';
 
 /** Instance-only surface on the concrete facade — not part of the public `Editor` contract. */
 function surfaceOf(editor: Editor): PaginatedSurface | null {
@@ -229,6 +231,7 @@ const VALUE_SLOT_PROBES: Partial<Record<ChromeSlotId, unknown>> = {
   'list.lineSpacing': 1,
   'image.wrap': 'square' satisfies ImageWrapTarget,
   'image.altText': 'probe alt text',
+  'insert.chart': 'columnClustered',
 };
 
 /** Default draft for table chrome probes when the host has not supplied one yet. */
@@ -291,6 +294,7 @@ export function commandForSlotValue(slotId: ChromeSlotId, value: unknown): Edito
     if (typeof value !== 'string') return null;
     return { type: 'setImageProperties', description: value };
   }
+  if (slotId === 'insert.chart') return chartInsertCommand(value);
   const entry = VALUE_SLOT_MARKS[slotId];
   if (!entry) return null;
   return { type: 'setMarkAttr', mark: entry.mark, attr: entry.attr, value };
@@ -351,33 +355,6 @@ export function tableChromeToolbarState(
 const EDITING_MODES: readonly DocumentEditingMode[] = ['editing', 'suggesting', 'viewing'];
 
 /**
- * Whether a comment could be started at the selection: the review module is installed, the
- * document is not open for viewing, chrome is registered to open the draft, and the selection
- * is on the page. The click does not run an engine command; the registered chrome (the review
- * rail, or the host's own, through `setCommentDraftChrome`) opens the draft, the way the link
- * popover owns `text.link`.
- */
-function addCommentState(editor: Editor): ToolbarCommandState {
-  const id: ChromeSlotId = 'review.addComment';
-  const refuse = (reason: string): ToolbarCommandState => ({
-    id,
-    enabled: false,
-    disabledReason: reason,
-    active: false,
-  });
-  const review = editor.can({ type: 'toggleReviewPane' });
-  if (!review.ok) return refuse(review.reason);
-  if ((editor.getEditingMode?.() ?? 'editing') === 'viewing') {
-    return refuse('the document is open for viewing');
-  }
-  if (!commentDraftRequestsOf(editor)?.canOpen()) return refuse(NO_COMMENT_DRAFT_VIEW);
-  if (editor.getSelectionPlacement() === null && !commentWordAtCaret(editor)) {
-    return refuse('a comment needs a selected range');
-  }
-  return { id, enabled: true, disabledReason: null, active: false };
-}
-
-/**
  * Ask the engine whether one control should be enabled.
  *
  * @public
@@ -387,6 +364,8 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
   if (isTableChromeSlot(id)) {
     return tableChromeToolbarState(editor, id);
   }
+  const chart = chartChromeState(editor, id);
+  if (chart) return chart;
   if (id === 'review.editingMode') {
     const mode = editor.getEditingMode?.() ?? 'editing';
     // Enabled state comes from the ENGINE, like every other control — but the pill is how a
@@ -812,6 +791,8 @@ export function runToolbarCommand(
   if (options?.historyGroup !== undefined && SURFACE_RUN_SLOTS.has(id)) {
     return { ok: false, code: 'unsupported', reason: `${id} does not take a history group` };
   }
+  const chartRun = runChartControl(editor, id, value);
+  if (chartRun) return chartRun;
   if (id === 'format.painter') {
     const surface = surfaceOf(editor);
     if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };

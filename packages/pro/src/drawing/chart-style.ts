@@ -187,6 +187,30 @@ const CYCLE_VARIATIONS = [
   '<a:lumMod val="50000"/><a:lumOff val="50000"/>',
 ];
 
+/** The default theme colors, for a document with no theme part. */
+const DEFAULT_SCHEME_COLORS: ReadonlyMap<string, string> = new Map([
+  ['tx1', '000000'],
+  ['bg1', 'FFFFFF'],
+  ['tx2', '44546A'],
+  ['bg2', 'E7E6E6'],
+  ['accent1', '4472C4'],
+  ['accent2', 'ED7D31'],
+  ['accent3', 'A5A5A5'],
+  ['accent4', 'FFC000'],
+  ['accent5', '5B9BD5'],
+  ['accent6', '70AD47'],
+]);
+
+/**
+ * The scheme color resolver of a chart: the document's theme colors, and the default theme
+ * colors for a slot the document does not name, as in a document with no theme part.
+ */
+export function withDefaultSchemeColors(
+  resolveSchemeColor?: ShapeSchemeColorResolver
+): ShapeSchemeColorResolver {
+  return (token) => resolveSchemeColor?.(token) ?? DEFAULT_SCHEME_COLORS.get(token) ?? null;
+}
+
 /** A theme colour with a generated transform, resolved against the theme. */
 export function themeColor(
   scheme: string,
@@ -194,7 +218,8 @@ export function themeColor(
   resolveSchemeColor?: ShapeSchemeColorResolver
 ): ChartPaint | null {
   const element = generatedColor(`<a:schemeClr val="${scheme}">${transform}</a:schemeClr>`);
-  return element ? resolveColorNode(element, resolveSchemeColor) : null;
+  if (!element) return null;
+  return resolveColorNode(element, resolveSchemeColor);
 }
 
 /**

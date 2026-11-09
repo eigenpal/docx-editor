@@ -11,6 +11,14 @@ import { BookmarkSummary } from '@docx-editor.dev/core/contracts/editor';
 import { ButtonHTMLAttributes } from 'react';
 import { CalendarDay } from '@docx-editor.dev/core/editor';
 import { CalendarMonth } from '@docx-editor.dev/core/editor';
+import { CHART_TYPE_CHOICES } from '@docx-editor.dev/core/editor';
+import { ChartColor } from '@docx-editor.dev/core/editor';
+import { ChartData } from '@docx-editor.dev/core/editor';
+import { ChartFormat } from '@docx-editor.dev/core/editor';
+import { ChartFormatChange } from '@docx-editor.dev/core/editor';
+import { ChartPaneChange } from '@docx-editor.dev/core/editor';
+import { ChartType } from '@docx-editor.dev/core/editor';
+import { chartTypeLabelKey } from '@docx-editor.dev/core/editor';
 import { CHROME_GROUPS } from '@docx-editor.dev/core/editor';
 import { CHROME_MENUS } from '@docx-editor.dev/core/editor';
 import { ChromeExportFormat } from '@docx-editor.dev/core/editor';
@@ -123,6 +131,7 @@ import { NavigateToChangeOptions } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
+import { PaneRequest } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogFields } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogMixed } from '@docx-editor.dev/core/editor';
 import { ParagraphFlagState } from '@docx-editor.dev/core/editor';
@@ -172,6 +181,8 @@ import { SEARCH_HIGHLIGHT_PRIORITY } from '@docx-editor.dev/core/editor';
 import { SEARCH_HIGHLIGHT_SET } from '@docx-editor.dev/core/editor';
 import { SEARCH_MATCH_LIMIT } from '@docx-editor.dev/core/editor';
 import { SectionProperties } from '@docx-editor.dev/core/editor';
+import { SelectedChartCommand } from '@docx-editor.dev/core/editor';
+import { SelectedChartState } from '@docx-editor.dev/core/editor';
 import { SplitCellLimits } from '@docx-editor.dev/core/editor';
 import { SupportedImageMime } from '@docx-editor.dev/core/editor';
 import { SurfaceFormatting } from '@docx-editor.dev/core/editor';
@@ -208,6 +219,51 @@ export interface BookmarkDialogFields {
     // (undocumented)
     sortBy: BookmarkSortOrder;
 }
+
+export { CHART_TYPE_CHOICES }
+
+export { ChartColor }
+
+export { ChartData }
+
+export { ChartFormat }
+
+export { ChartFormatChange }
+
+// @public
+export function ChartInsert(input: ChartInsertProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ChartInsert {
+    var // (undocumented)
+    docxSlot: "insert.chart";
+}
+
+// @public (undocumented)
+export interface ChartInsertPartComponent {
+    // (undocumented)
+    (props: ChartInsertProps): ReactElement | null;
+    // (undocumented)
+    readonly docxSlot: 'insert.chart';
+}
+
+// @public
+export interface ChartInsertProps {
+    // (undocumented)
+    asChild?: boolean;
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+}
+
+export { ChartPaneChange }
+
+export { ChartType }
+
+export { chartTypeLabelKey }
 
 export { CHROME_GROUPS }
 
@@ -651,6 +707,14 @@ export const DocxEditorBookmarkDialog: typeof BookmarkDialogRoot & {
 export interface DocxEditorBookmarkDialogProps extends DialogCustomizationProps {
     onClose: () => void;
     open: boolean;
+}
+
+// @public
+export function DocxEditorChartPane(input: DocxEditorChartPaneProps): ReactElement;
+
+// @public
+export interface DocxEditorChartPaneProps {
+    className?: string;
 }
 
 // @public
@@ -1112,6 +1176,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     // (undocumented)
     readonly AuthorStyle: typeof DocxEditorAuthorStyle;
     readonly BookmarkDialog: typeof DocxEditorBookmarkDialog;
+    readonly ChartPane: typeof DocxEditorChartPane;
     // (undocumented)
     readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
     // (undocumented)
@@ -1158,6 +1223,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
+    readonly SidePanel: typeof DocxEditorSidePanel;
     readonly SplitCellDialog: typeof DocxEditorSplitCellDialog;
     readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
     // (undocumented)
@@ -1679,6 +1745,16 @@ export function DocxEditorShell(input: {
 }): react.JSX.Element;
 
 // @public
+export function DocxEditorSidePanel(input: DocxEditorSidePanelProps): ReactElement;
+
+// @public
+export interface DocxEditorSidePanelProps {
+    children?: DocxEditorChildren;
+    className?: string;
+    onClose?: () => void;
+}
+
+// @public
 export const DocxEditorSplitCellDialog: typeof SplitCellDialogRoot & {
     Apply: (props: DialogPartProps & {
         name?: "columns" | "rows" | undefined;
@@ -1787,6 +1863,7 @@ export interface DocxEditorToolbarNamespace {
     readonly BulletList: ToolbarPartComponent;
     // (undocumented)
     readonly Button: typeof ToolbarButton$1;
+    readonly ChartInsert: ChartInsertPartComponent;
     // (undocumented)
     readonly ClearFormatting: ToolbarPartComponent;
     // (undocumented)
@@ -2929,6 +3006,10 @@ export { SEARCH_HIGHLIGHT_SET }
 
 export { SEARCH_MATCH_LIMIT }
 
+export { SelectedChartCommand }
+
+export { SelectedChartState }
+
 // @public
 export interface SelectionFormatting {
     alignment?: ParagraphAlignment;
@@ -3154,6 +3235,9 @@ export interface ToolbarButtonProps {
     slot?: ChromeSlotId;
     slotId?: ChromeSlotId;
 }
+
+// @public (undocumented)
+export const ToolbarChartInsert: ChartInsertPartComponent;
 
 export { ToolbarCommandState }
 
@@ -3717,6 +3801,9 @@ export interface UsePageSetupReturn {
 }
 
 // @public
+export function usePaneRequest(listener: (request: PaneRequest) => void): void;
+
+// @public
 export function useParagraphDialog(): UseParagraphDialogReturn;
 
 // @public
@@ -3776,6 +3863,23 @@ export function useScopeClassName(): '' | 'docx-editor ' | 'docx-editor dark ';
 
 // @public
 export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTMLElement | null, placement: ScopedChromeAnchorPlacement): ScopedChromeAnchor;
+
+// @public
+export function useSelectedChart(): UseSelectedChartReturn;
+
+// @public
+export interface UseSelectedChartReturn {
+    readonly canEditData: boolean;
+    readonly canEditFormat: boolean;
+    readonly chart: SelectedChartState | null;
+    readonly data: ChartData | null;
+    readonly dataDisabledReason: string | null;
+    readonly editData: (change: ChartPaneChange) => ExecResult;
+    readonly execute: (command: SelectedChartCommand) => ExecResult;
+    readonly format: ChartFormat | null;
+    readonly formatDisabledReason: string | null;
+    readonly readReason: string | null;
+}
 
 // @public
 export function useSplitCellDialog(): UseSplitCellDialogReturn;
