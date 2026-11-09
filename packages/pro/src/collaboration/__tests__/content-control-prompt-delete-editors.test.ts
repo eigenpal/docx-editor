@@ -31,7 +31,15 @@ function mount(options: Parameters<typeof createDocxEditor>[0]) {
   const container = document.createElement('div');
   document.body.append(container);
   containers.push(container);
-  const editor = createDocxEditor({ ...options, container });
+  const editor = createDocxEditor({
+    ...options,
+    container,
+    imageDecodePort: {
+      async decode() {
+        return { pixelWidth: 1, pixelHeight: 1, dpiX: 96, dpiY: 96 };
+      },
+    },
+  });
   editors.push(editor);
   return editor;
 }
@@ -216,4 +224,108 @@ test('partial prompt replacement converges when the other peer removes the contr
   converge('Z B', []);
   alice.surface!.type('Y');
   converge('ZY B', []);
+});
+
+for (const [action, unit] of [
+  ['insertTab', '\t'],
+  ['insertLineBreak', '\n'],
+  ['insertPageBreak', '\f'],
+] as const) {
+  test(`${action} preserves a prompt with remote typing, history, and reopen`, async () => {
+    const { alice, bob, converge, concurrently } = await pairOfEditors();
+    concurrently(() => {
+      select(alice, 0, 10);
+      alice.surface!.type('Z');
+      alice.surface![action]();
+      alice.surface!.type('X');
+      select(bob, 29);
+      bob.surface!.type('!');
+    });
+    const text = `Z${unit}X${PROMPT} B!`;
+    converge(text, [true]);
+    expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+    converge(`Z${unit}${PROMPT} B!`, [true]);
+    expect(alice.exec({ type: 'redo' }).ok).toBe(true);
+    converge(text, [true]);
+    for (const editor of [alice, bob]) {
+      const cold = mount({ document: new Uint8Array(await editor.save()) });
+      expect(cold.surface!.session.bodyText()).toBe(text);
+      expect(prompts(cold)).toEqual([true]);
+    }
+  });
+}
+
+test('rich paste preserves a prompt and bold text across peer sync and reopen', async () => {
+  const { alice, bob, converge, concurrently } = await pairOfEditors();
+  concurrently(() => {
+    select(alice, 0, 10);
+    expect(
+      alice.exec({ type: 'paste', text: 'bold', html: '<p><strong>bold</strong></p>' }).ok
+    ).toBe(true);
+    select(bob, 29);
+    bob.surface!.type('!');
+  });
+  converge(`bold${PROMPT} B!`, [true]);
+  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+  converge(`A ${PROMPT} B!`, [true]);
+  expect(alice.exec({ type: 'redo' }).ok).toBe(true);
+  converge(`bold${PROMPT} B!`, [true]);
+  for (const editor of [alice, bob]) {
+    expect(await savedXml(editor)).toMatch(/<w:b(?:\s[^>]*)?\/?>(?:<\/w:b>)?/);
+    const cold = mount({ document: new Uint8Array(await editor.save()) });
+    expect(cold.surface!.session.bodyText()).toBe(`bold${PROMPT} B!`);
+    expect(prompts(cold)).toEqual([true]);
+  }
+});
+
+test('a picture stays outside a retained prompt across peers, history, and reopen', async () => {
+  const { alice, bob, converge } = await pairOfEditors();
+  select(alice, 0, 10);
+  alice.surface!.type('Z');
+  const result = await alice.executeImageCommand({
+    type: 'insertImage',
+    data: Uint8Array.from(
+      atob(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+      ),
+      (c) => c.charCodeAt(0)
+    ),
+    mime: 'image/png',
+    widthPoints: 10,
+    heightPoints: 10,
+  });
+  expect(result.ok).toBe(true);
+  converge(alice.surface!.session.bodyText(), [true]);
+  for (const editor of [alice, bob]) {
+    const xml = await savedXml(editor);
+    expect(xml).toContain('<w:drawing');
+    expect(xml.match(/<w:sdtContent>([\s\S]*?)<\/w:sdtContent>/)?.[1]).not.toContain('<w:drawing');
+    const cold = mount({ document: new Uint8Array(await editor.save()) });
+    expect(prompts(cold)).toEqual([true]);
+  }
+  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+  converge(`Z${PROMPT} B`, [true]);
+  expect(await savedXml(bob)).not.toContain('<w:drawing');
+  expect(alice.exec({ type: 'redo' }).ok).toBe(true);
+  converge(alice.surface!.session.bodyText(), [true]);
+  expect(await savedXml(bob)).toContain('<w:drawing');
+});
+
+test('a chart stays outside a retained prompt across peers and reopen', async () => {
+  const { alice, bob, converge } = await pairOfEditors();
+  select(alice, 0, 10);
+  alice.surface!.type('Z');
+  expect(alice.exec({ type: 'insertChart', chartType: 'columnClustered' }).ok).toBe(true);
+  converge(alice.surface!.session.bodyText(), [true]);
+  for (const editor of [alice, bob]) {
+    const xml = await savedXml(editor);
+    expect(xml).toContain('<w:drawing');
+    expect(xml.match(/<w:sdtContent>([\s\S]*?)<\/w:sdtContent>/)?.[1]).not.toContain('<w:drawing');
+    const cold = mount({ document: new Uint8Array(await editor.save()) });
+    expect(prompts(cold)).toEqual([true]);
+  }
+  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+  converge(`Z${PROMPT} B`, [true]);
+  expect(alice.exec({ type: 'redo' }).ok).toBe(true);
+  converge(alice.surface!.session.bodyText(), [true]);
 });

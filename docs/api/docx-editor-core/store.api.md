@@ -5399,16 +5399,19 @@ export type TreeDocOp = SetFieldCodeOp | {
     readonly scopeRootId?: string;
     readonly siteNodeIds?: readonly string[];
 } | {
+    readonly bias?: 'left' | 'right';
     readonly offset: number;
     readonly op: 'insertTab';
     readonly paragraphId: string;
     readonly revision?: RevisionAttributionInput;
 } | {
+    readonly bias?: 'left' | 'right';
     readonly offset: number;
     readonly op: 'insertHardBreak';
     readonly paragraphId: string;
     readonly revision?: RevisionAttributionInput;
 } | {
+    readonly bias?: 'left' | 'right';
     readonly offset: number;
     readonly op: 'insertPageBreak';
     readonly paragraphId: string;
@@ -5732,6 +5735,7 @@ export type TreeDocOp = SetFieldCodeOp | {
     readonly op: 'insertFragment';
     readonly paragraphId: string;
 } | {
+    readonly bias?: 'left' | 'right';
     readonly drawing: OoxmlDrawingNode;
     readonly offset: number;
     readonly op: 'insertDrawing';

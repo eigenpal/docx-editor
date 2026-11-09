@@ -112,6 +112,8 @@ export interface SurfaceStructureDeps extends ListSwitchReads {
    * transaction deleted vetoes the whole transaction.
    */
   deleteSelectionPlan(): RangeDeletionPlan;
+  typingSelectionPlan?(): RangeDeletionPlan & { readonly outsidePromptId?: string };
+  retainPromptBoundary?(controlId?: string): void;
   /** The model text of one paragraph, for telling an empty list item from a filled one. */
   paragraphTextOf(paragraphId: string): string;
   /** Whether `numId` declares `level`, for refusing a demote that would erase the marker. */
@@ -551,56 +553,43 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     return commitOverTarget(() => applyOps(ops, selectionMark()));
   }
 
+  function insertInlineUnit(op: 'insertTab' | 'insertHardBreak' | 'insertPageBreak'): void {
+    const plan: RangeDeletionPlan & { readonly outsidePromptId?: string } =
+      deps.typingSelectionPlan?.() ?? deleteSelectionPlan();
+    const start = plan.replaceAt ?? plan.collapseTo;
+    commit(
+      () =>
+        applyOps(
+          [
+            ...plan.ops,
+            {
+              op,
+              paragraphId: start.paragraphId,
+              offset: start.offset,
+              ...(plan.outsidePromptId ? { bias: 'left' as const } : {}),
+            },
+          ],
+          selectionMark()
+        ),
+      () => {
+        deps.retainPromptBoundary?.(plan.outsidePromptId);
+        return collapsedAt({ ...start, offset: start.offset + 1 });
+      }
+    );
+  }
+
   return {
     // The three inline units below REPLACE a selection, so they land at the plan's
     // `replaceAt`: in suggesting mode a deletion keeps the characters it strikes, and an
     // insert at the range start sat in FRONT of the struck words instead of after them.
     insertTab() {
-      const plan = deleteSelectionPlan();
-      const start = plan.replaceAt ?? plan.collapseTo;
-      commit(
-        () =>
-          applyOps(
-            [
-              ...plan.ops,
-              { op: 'insertTab', paragraphId: start.paragraphId, offset: start.offset },
-            ],
-            selectionMark()
-          ),
-        () => collapsedAt({ ...start, offset: start.offset + 1 })
-      );
+      insertInlineUnit('insertTab');
     },
-
     insertLineBreak() {
-      const plan = deleteSelectionPlan();
-      const start = plan.replaceAt ?? plan.collapseTo;
-      commit(
-        () =>
-          applyOps(
-            [
-              ...plan.ops,
-              { op: 'insertHardBreak', paragraphId: start.paragraphId, offset: start.offset },
-            ],
-            selectionMark()
-          ),
-        () => collapsedAt({ ...start, offset: start.offset + 1 })
-      );
+      insertInlineUnit('insertHardBreak');
     },
-
     insertPageBreak() {
-      const plan = deleteSelectionPlan();
-      const start = plan.replaceAt ?? plan.collapseTo;
-      commit(
-        () =>
-          applyOps(
-            [
-              ...plan.ops,
-              { op: 'insertPageBreak', paragraphId: start.paragraphId, offset: start.offset },
-            ],
-            selectionMark()
-          ),
-        () => collapsedAt({ ...start, offset: start.offset + 1 })
-      );
+      insertInlineUnit('insertPageBreak');
     },
 
     exitListOnEmptyItem: listExit.exitListOnEmptyItem,

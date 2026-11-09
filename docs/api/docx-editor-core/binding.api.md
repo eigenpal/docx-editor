@@ -49,6 +49,7 @@ export interface DocumentStyleEntry {
 export interface DuplicateChartInput {
     // (undocumented)
     readonly actorId?: string;
+    readonly bias?: 'left' | 'right';
     // (undocumented)
     readonly expectedPackageRevision?: number;
     // (undocumented)

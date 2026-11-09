@@ -776,7 +776,8 @@ export function validateTreeOp(
         return 'invalid-property-value';
       }
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
-      return rejectContentEdit(part, paragraph, op.offset, op.offset);
+      if (op.bias !== undefined && op.bias !== 'left' && op.bias !== 'right') return 'invalidArgs';
+      return rejectContentEdit(part, paragraph, op.offset, op.offset, { bias: op.bias });
     }
     case 'insertPageField':
     case 'insertComplexField':

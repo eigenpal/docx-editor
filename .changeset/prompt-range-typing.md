@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': patch
+'@docx-editor.dev/core': minor
 ---
 
-Preserve an unlocked content control's prompt when typed text replaces a selection that ends inside it.
+Preserve content-control prompts during partial selection typing and rich paste. Add insertion bias for tabs, breaks, images, and charts.

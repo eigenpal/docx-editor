@@ -106,3 +106,36 @@ test('left bias cannot escape an enclosing locked control', () => {
   });
   expect(result.ok).toBe(false);
 });
+
+test('omitted bias retains the preceding run and its text leaf at an ordinary boundary', () => {
+  const { part, paragraph } = setup(
+    '<w:r><w:rPr><w:b/></w:rPr><w:t>Alpha</w:t></w:r>' + run('Beta')
+  );
+  const result = applyTreeOp(part, {
+    op: 'insertText',
+    paragraphId: paragraph.id,
+    offset: 5,
+    text: '!',
+  });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(serializeOoxmlPart(result.part)).toContain('<w:t>Alpha!</w:t>');
+});
+
+for (const op of ['insertTab', 'insertHardBreak', 'insertPageBreak'] as const) {
+  test(`${op} validates bias and respects enclosing locks`, () => {
+    const { part, paragraph } = setup(run('A') + prompt('contentLocked'));
+    const outside = applyTreeOp(part, { op, paragraphId: paragraph.id, offset: 1, bias: 'left' });
+    expect(outside.ok).toBe(true);
+    if (outside.ok) expect(serializeOoxmlPart(outside.part)).toContain('showingPlcHdr');
+    const inside = applyTreeOp(part, { op, paragraphId: paragraph.id, offset: 2, bias: 'right' });
+    expect(inside.ok).toBe(false);
+    const invalid = applyTreeOp(part, {
+      op,
+      paragraphId: paragraph.id,
+      offset: 1,
+      bias: 'bad' as 'left',
+    });
+    expect(invalid.ok).toBe(false);
+  });
+}

@@ -91,7 +91,11 @@ import {
   typedInsertText,
 } from './content-control-prompt-landing.ts';
 import { createContentControlHover } from './content-control-hover.ts';
-import { contentControlAtSelection } from './content-control-at-selection.ts';
+import {
+  contentControlAtSelection,
+  controlOutsidePrompt,
+  memoizedContentControlSelection,
+} from './content-control-at-selection.ts';
 import { collapseHorizontalSelection as collapseSelection } from './surface-selection-collapse.ts';
 import { createParagraphMarkVisibility } from './surface-paragraph-mark-visibility.ts';
 import { saveSurfaceDocument, saveSurfaceDocumentSteps } from './docx-editor-save.ts';
@@ -1295,10 +1299,7 @@ export function mountPaginatedSurface(
         ? selection.head.paragraphId
         : null,
     layout: editingLayout,
-    // Structural edits at the caret KEEP the armed typing format, the way Word does: a
-    // Shift+Enter line break, a Tab, a page break or turning the paragraph into a list item
-    // all leave the user typing at a new caret in the face they armed. Captured before the
-    // ops run, re-anchored at the post-edit caret.
+    // Structural edits retain the armed typing format at the resulting caret.
     commit: (run, nextSelection, options) =>
       commit(run, nextSelection, {
         rearmPending: armedAtCaret() ?? undefined,
@@ -1309,6 +1310,8 @@ export function mountPaginatedSurface(
     selectionMark: () => selectionMark(),
     collapsedAt: (position) => collapsedAt(position),
     deleteSelectionPlan: () => deleteSelectionPlan(),
+    typingSelectionPlan: () => typingSelectionPlan(),
+    retainPromptBoundary: (id) => retainPromptBoundary(id),
     paragraphTextOf: (paragraphId) => textOf(paragraphId),
     // Resolved through `w:numStyleLink` the way LAYOUT resolves markers (§17.9.21):
     // against the raw index a delegating definition has no levels of its own, so every
@@ -2158,33 +2161,21 @@ export function mountPaginatedSurface(
    * `setValue` and `remove` then rewrote and deleted body content while the reader was
    * editing a header.
    */
-  /**
-   * Single-slot memo for the body branch of {@link contentControlAtCaret}.
-   *
-   * `state()` resolves the active control on every read, and hosts read state repeatedly
-   * between changes, so the geometry hit-test ran again and again against an unchanged layout
-   * and selection. Both inputs are replaced, never mutated, so identity is a sound key: a
-   * commit republishes the layout, a caret move reassigns the selection, and a zoom relayouts.
-   * The story branch stays unmemoized — it reads the live part, which neither key covers.
-   */
-  let contentControlAtCaretMemo: {
-    readonly layout: SemanticLayout;
-    readonly selection: SemanticSelection;
-    readonly result: ContentControlBoundaryRecord | null;
-  } | null = null;
+  const bodyControlAtCaret = memoizedContentControlSelection(
+    () => currentLayout,
+    () => selection,
+    () => resolveBodyContentControlAtCaret()
+  );
   function contentControlAtCaret(): ContentControlBoundaryRecord | null {
+    const outside = promptBoundary();
+    if (outside)
+      return controlOutsidePrompt(
+        partOfNodeId(session, outside) ?? session.part(),
+        outside,
+        currentLayout
+      );
     const scope = storyScope();
-    if (scope.kind !== 'body') return contentControlInStoryAtCaret(scope);
-    if (
-      contentControlAtCaretMemo &&
-      contentControlAtCaretMemo.layout === currentLayout &&
-      contentControlAtCaretMemo.selection === selection
-    ) {
-      return contentControlAtCaretMemo.result;
-    }
-    const result = resolveBodyContentControlAtCaret();
-    contentControlAtCaretMemo = { layout: currentLayout, selection, result };
-    return result;
+    return scope.kind === 'body' ? bodyControlAtCaret() : contentControlInStoryAtCaret(scope);
   }
 
   function resolveBodyContentControlAtCaret(): ContentControlBoundaryRecord | null {
@@ -5751,6 +5742,8 @@ export function mountPaginatedSurface(
       applyOps,
       commit,
       storyScope,
+      outsidePromptAt: (id, offset) =>
+        !!promptBoundary() && selection.head.paragraphId === id && selection.head.offset === offset,
       selectionMark,
       editingMode: () => editingMode,
       author: () => author,
@@ -5762,6 +5755,8 @@ export function mountPaginatedSurface(
       session,
       commit,
       storyScope,
+      outsidePromptAt: (id, offset) =>
+        !!promptBoundary() && selection.head.paragraphId === id && selection.head.offset === offset,
       editingMode: () => editingMode,
       actorId: () => collaborationSession?.identity.actorId,
     }),

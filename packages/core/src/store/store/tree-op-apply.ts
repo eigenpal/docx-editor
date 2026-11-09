@@ -467,9 +467,17 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
       // would let suggesting mode insert a different element than edit mode for the same key.
       const element = RUN_ELEMENT_INSERTS[op.op];
       if (op.revision) {
-        return applyInsertTrackedElement(part, paragraph, op.offset, element, op.revision, options);
+        return applyInsertTrackedElement(
+          part,
+          paragraph,
+          op.offset,
+          element,
+          op.revision,
+          options,
+          op.bias
+        );
       }
-      return applyInsertContent(part, paragraph, op.offset, [element], options);
+      return applyInsertContent(part, paragraph, op.offset, [element], options, undefined, op.bias);
     }
     case 'setListLevel':
       return applySetListLevel(part, paragraph, op.level, options, nextId, op.revision);
@@ -778,7 +786,7 @@ function applyInsertContent(
   }
 
   if (site.kind === 'atRunIndex') {
-    if (bias === 'left' && noteReferenceEndingAt(paragraph, offset)) {
+    if (bias !== 'right' && noteReferenceEndingAt(paragraph, offset)) {
       const edited = insertAfterNoteInRun(
         part,
         paragraph,
@@ -874,7 +882,7 @@ function applyInsertContent(
           ? findNode(part, leftSegment.runId)
           : null;
     const inheritedProperties =
-      bias === 'left' && noteReferenceEndingAt(paragraph, offset)
+      bias !== 'right' && noteReferenceEndingAt(paragraph, offset)
         ? noteTypingProperties(paragraph, offset, nextId)
         : leftRun && leftRun.kind === 'run'
           ? fieldInsertionEndAt(paragraph, offset)
@@ -913,7 +921,7 @@ function applyInsertContent(
   const before = findLast(segments, (segment) => segment.end === offset);
   const after = segments.find((segment) => segment.start === offset);
   if (
-    bias === 'left' &&
+    bias !== 'right' &&
     before &&
     before.removeNodeIds === undefined &&
     !fieldInsertionEndAt(paragraph, offset) &&

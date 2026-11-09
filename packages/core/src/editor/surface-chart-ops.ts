@@ -37,6 +37,7 @@ export function createChartOps(deps: {
     selectionAfter?: () => SemanticSelection | null
   ) => void;
   storyScope: () => StoryScope;
+  outsidePromptAt?: (paragraphId: string, offset: number) => boolean;
   editingMode: () => SurfaceEditingMode;
   actorId: () => string | undefined;
 }): SurfaceChartOps {
@@ -66,9 +67,13 @@ export function createChartOps(deps: {
     insertChart(input) {
       const actorId = deps.actorId();
       return run(() =>
-        deps.session
-          .charts()
-          .insert(deps.storyScope(), { ...input, ...(actorId ? { actorId } : {}) })
+        deps.session.charts().insert(deps.storyScope(), {
+          ...input,
+          ...(deps.outsidePromptAt?.(input.paragraphId, input.offset)
+            ? { bias: 'left' as const }
+            : {}),
+          ...(actorId ? { actorId } : {}),
+        })
       );
     },
     editChart(drawingNodeId, edit) {

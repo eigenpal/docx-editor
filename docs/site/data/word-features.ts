@@ -1154,7 +1154,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Find, create, fill, and remove content controls through the interface or API. Typing preserves partially selected ending prompts; rich paste at that boundary is unsupported. Locks, data bindings, temporary controls, and multi-paragraph block controls restrict supported edits.',
+      'Find, create, fill, and remove content controls through the interface or API. Typing and pasting preserve partially selected ending prompts. Locks, data bindings, temporary controls, and multi-paragraph block controls restrict supported edits.',
     docsLink: '/docs/2.x/guides/content-controls',
   },
   {

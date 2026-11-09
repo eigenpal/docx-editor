@@ -2108,6 +2108,7 @@ export interface DrawingSupportIssue {
 export interface DuplicateChartInput {
     // (undocumented)
     readonly actorId?: string;
+    readonly bias?: 'left' | 'right';
     // (undocumented)
     readonly expectedPackageRevision?: number;
     // (undocumented)
@@ -2782,6 +2783,7 @@ export function initialSplitCellCounts(limits: SplitCellLimits | null, can: (com
 export interface InsertChartInput {
     // (undocumented)
     readonly actorId?: string;
+    readonly bias?: 'left' | 'right';
     // (undocumented)
     readonly chartType: ChartType;
     // (undocumented)

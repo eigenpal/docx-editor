@@ -1,3 +1,4 @@
+import { promptsIn } from './surface-prompt-deletion.ts';
 import { equationPlainText } from './surface-equations.ts';
 import {
   CHART_CLIPBOARD_REASON,
@@ -375,8 +376,8 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     if (deps.storyScope().kind !== 'body') return false;
     if (deps.cellSelection()) return false;
     deps.flushPendingInputAndLayout();
-    if (deps.typingSelectionPlan?.().outsidePromptId) return 'unsupported-content';
-    const plan = deps.deleteSelectionPlan();
+    const plan: RangeDeletionPlan & { readonly outsidePromptId?: string } =
+      deps.typingSelectionPlan?.() ?? deps.deleteSelectionPlan();
     // Suggesting: the selection is struck, not removed, and the paste is one proposal.
     const priorOps = suggestion
       ? (deps.trackedOps?.(plan.ops, suggestion.date) ?? plan.ops)
@@ -422,7 +423,25 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
           ...(result.ok ? {} : { reason: result.detail ?? result.reason }),
         } as unknown as TreeApplyResult;
       },
-      () => collapsedAt(target)
+      () => {
+        deps.retainPromptBoundary?.(plan.outsidePromptId);
+        if (plan.outsidePromptId) {
+          const part = session.part();
+          for (
+            let node = parentNodeOf(part, plan.outsidePromptId);
+            node;
+            node = parentNodeOf(part, node.id)
+          ) {
+            if (node.kind !== 'paragraph') continue;
+            const prompt = promptsIn(part, node.id).find(
+              (entry) => entry.control.id === plan.outsidePromptId
+            );
+            if (prompt) return collapsedAt({ paragraphId: node.id, offset: prompt.start });
+            break;
+          }
+        }
+        return collapsedAt(target);
+      }
     );
     return unsupported ? 'unsupported-content' : landed;
   }

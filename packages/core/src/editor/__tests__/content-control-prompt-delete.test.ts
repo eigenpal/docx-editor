@@ -74,6 +74,11 @@ function mount(body: string, author?: string, formsProtected = false) {
   document.body.append(container);
   const editor = createDocxEditor({
     container,
+    imageDecodePort: {
+      async decode() {
+        return { pixelWidth: 1, pixelHeight: 1, dpiX: 96, dpiY: 96 };
+      },
+    },
     document: docx(body, formsProtected),
     ...(author === undefined ? {} : { author }),
   });
@@ -502,15 +507,6 @@ test('an explicit same-position selection enters the prompt again', () => {
   expect(surface.session.bodyText()).toBe('ZY B');
 });
 
-test('rich paste at a preserved prompt boundary refuses without discarding formatting', () => {
-  const surface = mount(INLINE).surface!;
-  select(surface, 0, 10);
-  surface.type('Z');
-  expect(surface.pasteRich('bold', '<p><strong>bold</strong></p>')).toBe(false);
-  expect(surface.session.bodyText()).toBe(`Z${PROMPT} B`);
-  expect(surface.state().lastRejection).not.toBeNull();
-});
-
 test('font changes preserve the outside prompt caret', async () => {
   const editor = mount(INLINE);
   const surface = editor.surface!;
@@ -536,4 +532,78 @@ test('a DOM selection echo preserves the outside prompt caret', async () => {
   document.dispatchEvent(new Event('selectionchange'));
   surface.type('Y');
   expect(surface.session.bodyText()).toBe(`ZY${PROMPT} B`);
+});
+
+for (const mode of ['edit', 'suggest'] as const) {
+  for (const action of ['insertTab', 'insertLineBreak', 'insertPageBreak'] as const) {
+    for (const continued of [false, true]) {
+      test(`${action} preserves a partial prompt in ${mode} mode (${continued ? 'continued' : 'direct'})`, async () => {
+        const editor = mount(INLINE, 'Alice');
+        const surface = editor.surface!;
+        surface.setEditingMode(mode);
+        select(surface, 0, 10);
+        if (continued) surface.type('Z');
+        surface[action]();
+        surface.type('X');
+        expect(controls(surface)).toHaveLength(1);
+        expect(controls(surface)[0]!.placeholder).toBe(true);
+        expect(surface.session.bodyText()).toContain(`X${PROMPT} B`);
+        expect(surface.state().lastRejection).toBeNull();
+        const xml = await savedXml(editor);
+        expect(xml).toContain('showingPlcHdr');
+        if (mode === 'suggest') expect(xml).toContain('<w:ins');
+        surface.undo();
+        surface.undo();
+        surface.redo();
+        surface.type('Y');
+        expect(surface.session.bodyText()).toContain(`Y${PROMPT} B`);
+        expect(controls(surface)[0]!.placeholder).toBe(true);
+      });
+    }
+  }
+}
+
+for (const mode of ['edit', 'suggest'] as const) {
+  test(`image insertion stays outside a retained prompt in ${mode} mode`, async () => {
+    const editor = mount(INLINE, 'Alice');
+    const surface = editor.surface!;
+    surface.setEditingMode(mode);
+    select(surface, 0, 10);
+    surface.type('Z');
+    const result = await editor.executeImageCommand({
+      type: 'insertImage',
+      data: Uint8Array.from(
+        atob(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+        ),
+        (c) => c.charCodeAt(0)
+      ),
+      mime: 'image/png',
+      widthPoints: 10,
+      heightPoints: 10,
+    });
+    expect(result.ok).toBe(true);
+    const xml = await savedXml(editor);
+    expect(xml).toContain('<w:drawing');
+    expect(xml.match(/<w:sdtContent>([\s\S]*?)<\/w:sdtContent>/)?.[1]).not.toContain('<w:drawing');
+    expect(controls(surface)[0]?.placeholder).toBe(true);
+    surface.undo();
+    expect(await savedXml(editor)).not.toContain('<w:drawing');
+    surface.redo();
+    expect(
+      (await savedXml(editor)).match(/<w:sdtContent>([\s\S]*?)<\/w:sdtContent>/)?.[1]
+    ).not.toContain('<w:drawing');
+  });
+}
+
+test('chart insertion stays outside a retained prompt', async () => {
+  const editor = mount(INLINE);
+  const surface = editor.surface!;
+  select(surface, 0, 10);
+  surface.type('Z');
+  expect(editor.exec({ type: 'insertChart', chartType: 'columnClustered' }).ok).toBe(true);
+  const xml = await savedXml(editor);
+  expect(xml).toContain('<w:drawing');
+  expect(xml.match(/<w:sdtContent>([\s\S]*?)<\/w:sdtContent>/)?.[1]).not.toContain('<w:drawing');
+  expect(controls(surface)[0]?.placeholder).toBe(true);
 });
