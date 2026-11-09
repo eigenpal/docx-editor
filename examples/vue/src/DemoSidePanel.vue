@@ -14,17 +14,17 @@
         @keydown="onTabsKeyDown"
       >
         <button
-          v-for="entry in DEMO_PANEL_TABS"
+          v-for="entry in tabs"
           :id="`${uid}-tab-${entry.id}`"
           :key="entry.id"
           type="button"
           role="tab"
           class="demo-tabs__tab"
-          :aria-selected="entry.id === tab"
-          :aria-controls="entry.id === tab ? `${uid}-panel-${entry.id}` : undefined"
+          :aria-selected="entry.id === shownTab"
+          :aria-controls="entry.id === shownTab ? `${uid}-panel-${entry.id}` : undefined"
           :aria-label="t(`demoPanel.${entry.id}`)"
-          :title="entry.id === tab ? undefined : t(`demoPanel.${entry.id}`)"
-          :tabindex="entry.id === tab ? 0 : -1"
+          :title="entry.id === shownTab ? undefined : t(`demoPanel.${entry.id}`)"
+          :tabindex="entry.id === shownTab ? 0 : -1"
           @click="emit('update:tab', entry.id)"
         >
           <DemoIcon :name="entry.icon" />
@@ -42,32 +42,43 @@
       </button>
     </div>
     <div
-      :id="`${uid}-panel-${tab}`"
+      :id="`${uid}-panel-${shownTab}`"
       class="demo-panel__body"
       role="tabpanel"
-      :aria-labelledby="`${uid}-tab-${tab}`"
+      :aria-labelledby="`${uid}-tab-${shownTab}`"
     >
-      <DocxEditorChartPane v-if="tab === 'chart'" />
+      <DocxEditorChartPane v-if="shownTab === 'chart'" />
       <slot v-else name="settings" />
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
-// The side panel of the demo: a card beside the pages with two tabs, Chart and Settings. The
-// Chart tab holds the library's `DocxEditorChartPane`. Insert > Chart and Edit chart ask for it
-// through `usePaneRequest`; the pane itself moves the focus when Edit chart asks for it. The
-// React example has the same panel (`examples/vite/src/DemoSidePanel.tsx`).
-import { ref, useId } from 'vue';
-import { DocxEditorChartPane, useDocxEditor } from '@docx-editor.dev/vue';
+// The side panel of the demo: a card beside the pages with a Settings tab, and a Chart tab while
+// a chart is selected. The Chart tab holds the library's `DocxEditorChartPane`. Insert > Chart
+// and Edit chart ask for it through `usePaneRequest`; the pane itself moves the focus when Edit
+// chart asks for it. The React example has the same panel (`examples/vite/src/DemoSidePanel.tsx`).
+import { computed, ref, useId } from 'vue';
+import { DocxEditorChartPane, useDocxEditor, useSelectedChart } from '@docx-editor.dev/vue';
 import { exampleText as t } from '../../shared/example-text';
-import { DEMO_PANEL_TABS, nextDemoTab, type DemoPanelTab } from '../../shared/demo-tabs';
+import {
+  nextDemoTab,
+  shownDemoTab,
+  visibleDemoTabs,
+  type DemoPanelTab,
+} from '../../shared/demo-tabs';
 import DemoIcon from './DemoIcon.vue';
 
 const props = defineProps<{ tab: DemoPanelTab }>();
 const emit = defineEmits<{ 'update:tab': [tab: DemoPanelTab]; close: [] }>();
 
 const editor = useDocxEditor();
+// The Chart tab shows only while a chart is selected. Edit chart and Insert > Chart both leave a
+// chart selected. When the selection leaves the chart, the panel shows Settings.
+const selectedChart = useSelectedChart();
+const chartSelected = computed(() => selectedChart.chart.value !== null);
+const tabs = computed(() => visibleDemoTabs(chartSelected.value));
+const shownTab = computed(() => shownDemoTab(props.tab, chartSelected.value));
 const uid = `demo-panel-${useId()}`;
 const tabsRef = ref<HTMLDivElement | null>(null);
 
@@ -85,12 +96,12 @@ function onPanelKeyDown(event: KeyboardEvent): void {
 // The arrow keys, Home, and End move between the tabs, and the focused tab opens.
 function onTabsKeyDown(event: KeyboardEvent): void {
   const target = event.currentTarget as HTMLElement;
-  const index = DEMO_PANEL_TABS.findIndex((entry) => entry.id === props.tab);
+  const index = tabs.value.findIndex((entry) => entry.id === shownTab.value);
   const rtl = getComputedStyle(target).direction === 'rtl';
-  const next = nextDemoTab(event.key, index, DEMO_PANEL_TABS.length, rtl);
+  const next = nextDemoTab(event.key, index, tabs.value.length, rtl);
   if (next === null) return;
   event.preventDefault();
-  emit('update:tab', DEMO_PANEL_TABS[next]!.id);
+  emit('update:tab', tabs.value[next]!.id);
   tabsRef.value?.querySelectorAll<HTMLElement>('[role="tab"]')[next]?.focus();
 }
 </script>
