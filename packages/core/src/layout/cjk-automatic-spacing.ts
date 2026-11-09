@@ -9,6 +9,7 @@ import type { FieldAwarePiece } from './field-pieces.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
+import { balancedSpaceWidth, widenBalancedSpaces } from './balanced-space-widths.ts';
 
 interface TextBoundary {
   readonly text: string;
@@ -133,7 +134,11 @@ export function automaticTextGap(
   }
   // Only the authored Latin/digit face owns the reverse boundary metric. An absent authored
   // face cannot borrow a substitute file's average width; a known family uses its recorded one.
-  const gap = authoredCjkGapMetric(measurer, before.style) ?? knownFamilyReverseGap(before.style);
+  // Balanced widths make it half the balanced space width: a quarter em beside an East Asian face.
+  const gap =
+    policy.settings?.balancedWidths === true
+      ? (balancedSpaceWidth(before.style, measurer) ?? NaN) / 2
+      : (authoredCjkGapMetric(measurer, before.style) ?? knownFamilyReverseGap(before.style));
   return gap !== undefined && Number.isFinite(gap) && gap >= 0 && gap <= before.style.fontSizePt
     ? gap
     : 0;
@@ -173,13 +178,15 @@ const LATIN_OR_DIGIT_TEXT = /[0-9\p{Script=Latin}]/u;
  * Split literal pieces where an automatic advance falls inside them. Line layout prices an
  * advance only at a span seam, so text that cannot break between its East Asian and Latin
  * sides (one font, kinsoku before small kana) would otherwise draw without the advance that
- * table AutoFit counts. Pieces with no such boundary are returned as they are.
+ * table AutoFit counts. Spaces at the balanced width become pieces of their own first
+ * ({@link widenBalancedSpaces}). Pieces with no such boundary are returned as they are.
  */
 export function splitAtAutomaticSpacing(
-  pieces: FieldAwarePiece[],
+  source: FieldAwarePiece[],
   policy: CjkParagraphTypography,
   measurer?: TextMeasurer
 ): FieldAwarePiece[] {
+  const pieces = widenBalancedSpaces(source, policy, measurer);
   if (policy.autoSpaceDE === false && policy.autoSpaceDN === false) return pieces;
   let out: FieldAwarePiece[] | null = null;
   for (let index = 0; index < pieces.length; index += 1) {

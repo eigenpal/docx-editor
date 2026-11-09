@@ -45,8 +45,8 @@ export interface SpaceShrinkRule {
    * floor is unknown, as a half-average floor is for a face without a known average width.
    */
   readonly floor?: SpaceShrinkFloor;
-  /** A space with a Hangul character on either side lends nothing (`balancedKoreanSpaces`). */
-  readonly keepsHangulSpaces?: true;
+  /** A space at the balanced width lends nothing (`balancedSpaceShrink`). */
+  readonly keepsBalancedSpaces?: true;
 }
 
 /** Justified lines (`w:jc` `both`) in a modern compatibility mode. */
@@ -68,20 +68,23 @@ export const DISTRIBUTED_SPACE_SHRINK: SpaceShrinkRule = Object.freeze({
   hangsMarks: true,
 });
 
-/** {@link JUSTIFIED_SPACE_SHRINK} and {@link DISTRIBUTED_SPACE_SHRINK} with balanced widths. */
-const KEEPING_HANGUL_SPACES = new Map(
-  [JUSTIFIED_SPACE_SHRINK, DISTRIBUTED_SPACE_SHRINK].map((rule) => [
-    rule,
-    Object.freeze({ ...rule, keepsHangulSpaces: true as const }),
-  ])
-);
-
 /** The kashida and Thai distribution values of `w:jc` in a modern compatibility mode. */
 const OTHER_JUSTIFIED_SPACE_SHRINK: SpaceShrinkRule = Object.freeze({
   limit: 0.25,
   cost: 2,
   hangsMarks: false,
 });
+
+/**
+ * Each modern rule with balanced widths. Alignment keeps the balanced spaces at every
+ * justified value, so line fitting must not count them either.
+ */
+const KEEPING_BALANCED_SPACES = new Map(
+  [JUSTIFIED_SPACE_SHRINK, DISTRIBUTED_SPACE_SHRINK, OTHER_JUSTIFIED_SPACE_SHRINK].map((rule) => [
+    rule,
+    Object.freeze({ ...rule, keepsBalancedSpaces: true as const }),
+  ])
+);
 
 /**
  * A legacy compatibility mode that compresses punctuation (`w:characterSpacingControl`) in a
@@ -142,6 +145,6 @@ export function resolveSpaceShrinkRule(
       : jc === 'distribute'
         ? DISTRIBUTED_SPACE_SHRINK
         : OTHER_JUSTIFIED_SPACE_SHRINK;
-  const keeping = settings?.balancedKoreanSpaces ? KEEPING_HANGUL_SPACES.get(rule) : undefined;
+  const keeping = settings?.balancedSpaceShrink ? KEEPING_BALANCED_SPACES.get(rule) : undefined;
   return keeping ?? rule;
 }

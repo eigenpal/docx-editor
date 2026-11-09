@@ -700,16 +700,24 @@ In compatibility mode 15 and later, a distributed line SHALL keep the word that 
 - **WHEN** keeping the next word costs each space more than a third, but at most half, of the stretch the line without it would take
 - **THEN** the justified line keeps the word and the distributed line moves it to the next line
 
-### Requirement: Spaces beside Hangul keep their advance with balanced widths
+### Requirement: Spaces take the balanced width with balanced widths
 
-When the document sets `w:balanceSingleByteDoubleByteWidth` and a justified or distributed line in compatibility mode 15 or later shrinks its inter-word spaces to keep the word that overflows it, a space with a Hangul character on either side SHALL keep its natural advance. Only the line's other spaces SHALL lend their shrink. The cost test SHALL still count the stretch of every space on the line without the word. Without the setting, a space beside Hangul SHALL shrink as the line's other spaces do. Legacy space-shrink rules SHALL NOT change.
+When the document sets `w:balanceSingleByteDoubleByteWidth`, in every compatibility mode, a U+0020 space SHALL take the balanced width when the character before or after it is Hangul, a CJK ideograph, or kana drawn in a face that holds East Asian glyphs, and every space of a run of two or more spaces SHALL take it whatever its neighbours. The balanced width SHALL be half the font size of the space when its run's East Asian face holds East Asian glyphs, and otherwise the average character width of the space's face. A space between Latin letters or digits, the no-break space, and the tab SHALL keep their advances. The automatic gap after Latin text before East Asian text SHALL be half the balanced width of the Latin text.
+
+A justified or distributed line that stretches only its spaces SHALL give every space one common width, and a space at the balanced width SHALL NOT go below it: the narrower spaces take the slack first. In compatibility mode 15 or later, when such a line shrinks its spaces to keep the word that overflows it, a space at the balanced width SHALL keep it and only the line's other spaces SHALL lend their shrink. The cost test SHALL read the line without the word as it would stretch, its narrower spaces first. Without the setting, every space SHALL keep its advance and shrink and stretch as the line's other spaces do. Legacy space-shrink rules SHALL NOT change.
+
+#### Scenario: Spaces beside Korean text widen
+
+- **GIVEN** a left-aligned paragraph of Korean and English words in Batang 11 pt, in a document that sets `w:balanceSingleByteDoubleByteWidth`
+- **THEN** each space beside a Korean word is 5.5 pt wide
+- **AND** each single space between two English words keeps the face's own space advance
 
 #### Scenario: A line of Korean words wraps its next word
 
 - **GIVEN** a justified mode 15 paragraph of Korean words separated by spaces, in a document that sets `w:balanceSingleByteDoubleByteWidth`
 - **WHEN** the next word fits only when the spaces shrink
 - **THEN** the word moves to the next line
-- **AND** on a line of Korean and English words, the spaces between English words shrink and the spaces beside Hangul keep their advance
+- **AND** on a line of Korean and English words, the spaces between English words shrink and the spaces beside Hangul keep the balanced width
 
 #### Scenario: Without balanced widths, spaces beside Hangul shrink
 

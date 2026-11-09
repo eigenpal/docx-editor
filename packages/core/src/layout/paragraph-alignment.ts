@@ -8,6 +8,7 @@ import { paragraphIsRtl, reorderBidiSpans, splitBidiTrailingWhitespace } from '.
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
+import { stretchBalancedSpaces } from './balanced-space-stretch.ts';
 import { justifyCjkSpans } from './cjk-justify.ts';
 import { distributeLineCharacters, spacesAbsorbSlack } from './distributed-character-spacing.ts';
 import type { DistributedSpacing } from './distributed-spacing.ts';
@@ -140,7 +141,7 @@ function alignLogicalSpans(
   eastAsianSpacing: boolean,
   hangingPunctuationAdvance: number,
   floor?: SpaceShrinkFloor,
-  keepsHangulSpaces = false
+  keepsBalancedSpaces = false
 ): readonly StyleSpanRecord[] {
   if (spans.length === 0) return spans;
   // An unbounded line (a measuring pass) has no far edge to align or justify against.
@@ -162,7 +163,7 @@ function alignLogicalSpans(
         eastAsianSpacing,
         hangingPunctuationAdvance,
         floor,
-        keepsHangulSpaces
+        keepsBalancedSpaces
       )
     );
     if (aligned) return aligned;
@@ -328,7 +329,7 @@ function alignLogicalSpans(
       hangsAfterOwnSpace ? trailingStart - 1 : Math.max(0, contentLast),
       floor,
       paragraphRtl,
-      keepsHangulSpaces
+      keepsBalancedSpaces
     );
   // A line that fills its measure can leave a rounding residue, which must not become spacing.
   if (slack <= SLACK_RESIDUE_PT) return spans;
@@ -430,6 +431,12 @@ function stretchJustifiedLine(
     spacesOnly = spacesAbsorbSlack(spans, measurer, slack, slotEnd, distributed);
     if (!spacesOnly) return distributeLineCharacters(spans, measurer, slack, slotEnd, distributed);
   }
+  // Spaces at the balanced width set the common width that every space stretches to. Bidi
+  // places a right-to-left line again from its widths, so it keeps the rules below.
+  const balanced = paragraphRtl
+    ? null
+    : stretchBalancedSpaces(spans, measurer, slack, slotEnd, distributed !== undefined);
+  if (balanced) return balanced;
   // Document defaults can turn East Asian justification off; a justified line then
   // stretches only its spaces. Distributed lines keep their own rules.
   const eastAsian = eastAsianSpacing || distributed !== undefined;
@@ -540,9 +547,9 @@ export function boxLineSetsLikeLastLine(
  * it, a justified last line that overflows keeps its natural spacing. `passages` are the float
  * passages of a line that steps over a float; each part of the line aligns inside its own.
  * `eastAsianSpacing` false (see `CjkTypographySettings.eastAsianSpacing`) keeps justified East
- * Asian text from spreading between its characters. `keepsHangulSpaces`
- * (`CjkTypographySettings.balancedKoreanSpaces`) keeps a space beside Hangul at its advance
- * when the line shrinks its spaces.
+ * Asian text from spreading between its characters. `keepsBalancedSpaces`
+ * (`CjkTypographySettings.balancedSpaceShrink`) keeps a space at the balanced width when the
+ * line shrinks its spaces.
  */
 export function alignSpans(
   spans: readonly StyleSpanRecord[],
@@ -559,7 +566,7 @@ export function alignSpans(
   distributed?: DistributedSpacing,
   eastAsianSpacing = true,
   pendingLine?: PendingLine,
-  keepsHangulSpaces = false
+  keepsBalancedSpaces = false
 ): readonly StyleSpanRecord[] {
   const hangingPunctuationAdvance = pendingLine ? lineHangingPunctuationAdvance(pendingLine) : 0;
   // A right-to-left last line aligns to the right, unless the flow kept its last word by
@@ -592,7 +599,7 @@ export function alignSpans(
         eastAsianSpacing,
         isLastPart ? hangingPunctuationAdvance : 0,
         pendingLine?.compressesSpaces,
-        keepsHangulSpaces
+        keepsBalancedSpaces
       )
     );
     if (aligned) return reorderBidiSpans(aligned, false, pageBreaksIgnored);
@@ -634,7 +641,7 @@ export function alignSpans(
       eastAsianSpacing,
       hangingPunctuationAdvance,
       pendingLine?.compressesSpaces,
-      keepsHangulSpaces
+      keepsBalancedSpaces
     );
   const trailing = bidiTrailingSpaces(split, paragraphRtl, isLastLine, pageBreaksIgnored);
   if (trailing) {
@@ -673,7 +680,7 @@ export function alignBodyLineSpans(
         readonly distributedSpacing?: DistributedSpacing;
         readonly typography?: {
           readonly eastAsianSpacing?: false;
-          readonly balancedKoreanSpaces?: true;
+          readonly balancedSpaceShrink?: true;
         };
       })
     | undefined,
@@ -694,7 +701,7 @@ export function alignBodyLineSpans(
     paragraphDistributedSpacing(props, compatibility),
     compatibility?.typography?.eastAsianSpacing !== false,
     line as PendingLine,
-    compatibility?.typography?.balancedKoreanSpaces === true
+    compatibility?.typography?.balancedSpaceShrink === true
   );
 }
 

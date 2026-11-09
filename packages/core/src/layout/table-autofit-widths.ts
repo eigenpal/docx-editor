@@ -58,6 +58,7 @@ import { piecesOfParagraphForDisplay } from './field-projection-display.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import { measureDisplayText } from './run-style.ts';
+import { widenBalancedSpaces } from './balanced-space-widths.ts';
 import { continuesFitTextGroup, fitTextGroupOf, fitTextGroups } from './fit-text-groups.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { TextMeasurer } from './semantic-records.ts';
@@ -314,22 +315,26 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
     fields?.fieldCodeRanges?.get(paragraph.id),
     fields?.tocLinkStyleRanges?.get(paragraph.id)
   );
-  // The bidi pass gives each piece the shaping and joining context line breaking measures with;
-  // an unshaped complex-script word measures far wider than it paints. Fitted text takes
-  // its stated width here as in line breaking.
-  const pieces = fitTextGroups(
-    bidiPieces(
-      returnUncoveredHintedText(projected, measurer),
-      paragraphIsRtl(layoutInputs.props),
-      bidiSourceBoundaries(paragraph),
-      true
-    ),
-    measurer
-  );
   const typography = resolveCjkTypography(
     layoutInputs.props,
     styleCascade?.typography,
     layoutInputs.markRunProperties
+  );
+  // The bidi pass gives each piece the shaping and joining context line breaking measures with;
+  // an unshaped complex-script word measures far wider than it paints. Fitted text takes
+  // its stated width here as in line breaking, and balanced spaces their balanced width.
+  const pieces = widenBalancedSpaces(
+    fitTextGroups(
+      bidiPieces(
+        returnUncoveredHintedText(projected, measurer),
+        paragraphIsRtl(layoutInputs.props),
+        bidiSourceBoundaries(paragraph),
+        true
+      ),
+      measurer
+    ),
+    typography,
+    measurer
   );
   const automaticSpacing = automaticAutofitSpacing(typography, measurer);
   let previousText: Parameters<typeof automaticSpacing>[3];

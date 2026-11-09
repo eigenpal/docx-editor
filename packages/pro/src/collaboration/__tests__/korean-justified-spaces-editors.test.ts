@@ -4,7 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // With balanced single-byte and double-byte widths, a justified line of Korean words keeps its
-// spaces at their natural advance and moves the next word to the next line. The lines stay
+// spaces at the balanced width and moves the next word to the next line. The lines stay
 // derived layout: two peers converge through concurrent edits, history, and save.
 import { afterEach, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
@@ -22,8 +22,8 @@ afterEach(() => {
   harness.cleanup();
 });
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-// Every 11 pt character, a space too, is 6 pt on the 87 pt measure. `가나다 라마 바사 아자 차카`
-// is 90 pt: its four spaces could give up the 3 pt, but spaces beside Hangul keep their advance.
+// Every 11 pt character is 6 pt on the 87 pt measure, and a space beside Hangul takes half the
+// font size, 5.5 pt. `가나다 라마 바사 아자 차카` is 88 pt: its four spaces keep that width.
 const TEXT = '가나다 라마 바사 아자 차카';
 const BODY =
   '<w:p><w:pPr><w:jc w:val="both"/></w:pPr>' +
@@ -72,7 +72,7 @@ function select(editor: Editor, from: number, to = from) {
   });
 }
 
-test('justified Korean words keep natural spaces through edits, history, and save', async () => {
+test('justified Korean words keep balanced spaces through edits, history, and save', async () => {
   const peers = await harness.pair(zipDocument(BODY, SOURCE));
   const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
     peer.detach();
@@ -107,7 +107,7 @@ test('justified Korean words keep natural spaces through edits, history, and sav
   peers.bob.room.session.flushPendingJournals();
   peers.resume();
   converged();
-  // `가나 라마 바사 아자 차카` is 84 pt and fits at its natural spacing.
+  // `가나 라마 바사 아자 차카` is 82 pt and fits with its balanced spaces.
   expect(lines(alice).map((line) => line.text)).toEqual(['가나 라마 바사 아자 차카 ', '타파']);
   expect(alice.exec({ type: 'undo' }).ok).toBe(true);
   converged();
