@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-The list buttons now start a new list for a selection of list items and plain paragraphs, unless the selection starts with a plain paragraph below a list item of the same kind, which joins that list together with the selected items. Fixes #1851
+List buttons start a separate list for selections containing list items and plain paragraphs. Selections starting with a plain paragraph join a preceding compatible ordinary list instead. Fixes #1851

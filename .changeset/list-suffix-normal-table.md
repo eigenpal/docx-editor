@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-A list space suffix now has the same width in any marker font, and a table style named Normal Table applies only its built-in properties, whatever the document states.
+List space suffixes keep consistent widths across marker fonts. The Normal Table style uses its built-in properties regardless of document overrides.
