@@ -76,13 +76,13 @@ Core renders shapes, pictures, groups, text boxes, and saved DrawingML diagram d
 
 | Drawing | With the module | Without the module |
 | --- | --- | --- |
-| Classic and extended charts (waterfall, funnel, histogram, Pareto, box and whisker) | Read-only, from the values cached in the chart part | Saved fallback picture or drawing, or a labeled placeholder |
+| Classic and extended charts (waterfall, funnel, histogram, Pareto, box and whisker) | From the values cached in the chart part. Classic charts are editable; see [Charts](/docs/2.x/guides/charts) | Saved fallback picture or drawing, or a labeled placeholder |
 | DrawingML diagram saved without its drawing | Laid out from its data, layout, style, and color parts | Labeled placeholder |
 | Glow, inner shadow, reflection, soft edge, and dark-edged bevel rim | Painted on shapes, lines, and pictures | Shape or picture paints without the effect |
 | VML text paths | Text fitted to the shape, guides, or an arch | Inline: placeholder. Floating: not rendered |
 | EMF and WMF pictures | Vector paths, text, and bitmaps in PDF export | Rasterized |
 
-Charts use cached values only. The editor never refreshes them from an embedded workbook or external data. For per-chart support, see [DOCX feature support](/docs/2.x/docx-fidelity).
+Charts use cached values only. The editor never refreshes them from an embedded workbook or external data. A chart edit writes the cached values and the embedded workbook. For per-chart support, see [DOCX feature support](/docs/2.x/docx-fidelity).
 
 ## Use the module without an editor
 

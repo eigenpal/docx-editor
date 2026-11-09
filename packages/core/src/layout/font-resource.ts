@@ -79,11 +79,7 @@ export const HARD_MAX_AGGREGATE_FONT_BYTES = 128 * 1024 * 1024;
  * claimed.
  */
 export type FontResolutionErrorCode =
-  | 'missing'
-  | 'forbidden'
-  | 'overLimit'
-  | 'malformed'
-  | 'hashMismatch';
+  'missing' | 'forbidden' | 'overLimit' | 'malformed' | 'hashMismatch';
 
 /**
  * A face that could not be admitted, carrying whatever evidence the refusal produced.
@@ -163,8 +159,7 @@ export interface DeclaredFontSubstitution {
 
 /** Whether bytes parse as a usable font, with a diagnostic when they do not. */
 export type FontValidationResult =
-  | { readonly valid: true }
-  | { readonly valid: false; readonly diagnostic: string };
+  { readonly valid: true } | { readonly valid: false; readonly diagnostic: string };
 
 /**
  * The injected check that bytes really are a font.

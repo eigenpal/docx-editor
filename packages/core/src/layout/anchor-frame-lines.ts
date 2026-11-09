@@ -1,39 +1,45 @@
-// Anchor framing for a paragraph fragment that does not hold the paragraph's anchors. Extracted
-// from the story loop in semantic-layout so that file stays inside its line budget.
+// Anchor framing for a paragraph fragment's anchors. Extracted from the story loop in
+// semantic-layout so that file stays inside its line budget.
 
-import type { PendingLine } from './pending-line.ts';
-import type { LineRecord } from './semantic-records.ts';
+import type { LayoutBox, LineRecord } from './semantic-records.ts';
 
 /**
- * The paragraph's broken lines stacked down from where it first began, as frame geometry.
+ * The lines and paragraph box a fragment's anchors resolve against: its own placed lines. Each
+ * fragment publishes the anchors its lines hold, so an anchor on a later page measures from the
+ * top of the paragraph's part on that page.
  *
- * These lines are never aligned, painted or caret-tested, so the content origin is just where
- * their spans were placed. `bottom` is the y below the last line.
+ * `positionV relativeFrom="paragraph"` measures from where the paragraph would begin without the
+ * wrapping bands that pushed its first line down (`bandSkip`): its own, whose displacement the
+ * picture would otherwise chase, and inherited ones alike. `relativeFrom="line"` on the first
+ * line measures from the top of the space and border above that line, after the band push, or
+ * before it in legacy modes (`lineBeforeBandPush`, `lineAnchorsBeforeBandPush`).
  */
-export function syntheticAnchorLines(
-  lines: readonly PendingLine[],
-  origin: { readonly columnX: number; readonly startY: number },
-  band: { readonly left: number; readonly width: number },
-  paragraphId: string
-): { readonly lines: LineRecord[]; readonly bottom: number } {
-  let y = origin.startY;
-  const records = lines.map((brokenLine, brokenIndex) => {
-    const lineRecord = {
-      id: `anchor-line-${brokenIndex}`,
-      range: { paragraphId, start: brokenLine.start, end: brokenLine.end },
-      box: { x: band.left, y, width: band.width, height: brokenLine.height },
-      contentX:
-        brokenLine.spans.length > 0 ? brokenLine.spans[0]!.box.x + origin.columnX : band.left,
-      baseline: brokenLine.baseline,
-      leading: brokenLine.leading,
-      trailingSpacing: brokenLine.trailingSpacing,
-      spans: brokenLine.spans.map((span) => ({
-        ...span,
-        box: { ...span.box, x: span.box.x + origin.columnX, y },
-      })),
-    };
-    y += brokenLine.height + (brokenLine.exclusionSkipBefore ?? 0);
-    return lineRecord;
-  });
-  return { lines: records, bottom: y };
+export function fragmentAnchorFrame(input: {
+  readonly pending: readonly LineRecord[];
+  readonly top: number;
+  readonly height: number;
+  readonly column: { readonly x: number; readonly width: number };
+  readonly indentLeft: number;
+  readonly available: number;
+  /** How far an earlier band displaced this paragraph on the page. */
+  readonly displacement: number;
+  readonly bandSkip: number;
+  readonly lineBeforeBandPush: boolean;
+}): { readonly lines: readonly LineRecord[]; readonly paragraphBox: LayoutBox } {
+  const { pending, top, bandSkip } = input;
+  const y = top - bandSkip - input.displacement;
+  const x = input.column.x + input.indentLeft;
+  const [first, ...rest] = pending;
+  const lineTop = input.lineBeforeBandPush ? top - bandSkip : top;
+  const lines =
+    first && first.box.y !== lineTop
+      ? [
+          {
+            ...first,
+            box: { ...first.box, y: lineTop, height: first.box.y + first.box.height - lineTop },
+          },
+          ...rest,
+        ]
+      : pending;
+  return { lines, paragraphBox: { x, y, width: input.available, height: input.height } };
 }

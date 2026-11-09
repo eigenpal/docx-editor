@@ -1,5 +1,17 @@
 # @docx-editor.dev/i18n
 
+## 2.36.0
+
+### Minor Changes
+
+- c8ed53d: Formatting cards describe tracked highlight changes, such as “Highlight: yellow”. `ReviewRevisionItem.formattingChanges` includes `highlight` with the `w:highlight` color name.
+
+## 2.35.0
+
+### Minor Changes
+
+- 6c10913: File > Print now asks which markup to print and whether comments print, and passes the choice to the PDF handler as `view.displayMode` and `view.comments`. Set `printSettings: false` on the menu to print the current view without asking.
+
 ## 2.34.0
 
 ### Patch Changes

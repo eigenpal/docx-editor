@@ -50,6 +50,7 @@ const FORMATTING_PROPERTIES: readonly {
   { property: 'fontFamily', element: 'rFonts', attribute: 'ascii' },
   { property: 'fontSize', element: 'sz', attribute: 'val', kind: 'halfPoints' },
   { property: 'color', element: 'color', attribute: 'val' },
+  { property: 'highlight', element: 'highlight', attribute: 'val' },
   { property: 'alignment', element: 'jc', attribute: 'val' },
   { property: 'leftIndent', element: 'ind', attribute: 'left', kind: 'twips' },
   { property: 'rightIndent', element: 'ind', attribute: 'right', kind: 'twips' },

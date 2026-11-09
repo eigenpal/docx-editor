@@ -207,6 +207,18 @@ export const MODE_RULES = {
     'Merged cell text moves whole into the next row when the head row cannot hold it',
     'ECMA-376 Part 1 §17.4.84 vMerge'
   ),
+  wrappedAnchorsEndAtBottomMargin: modern(
+    'A wrapping object positioned from its paragraph or line moves up to end at the bottom margin. When that would lift it above its line, the line moves to the next page, and an object that still crosses the margin there ends the page. In a table cell, the row splits before that line',
+    'ECMA-376 Part 1 §20.4.2.11 positionV'
+  ),
+  wrappedAnchorsEndOnSheet: legacy(
+    'A wrapping object positioned from its paragraph or line moves up to end at the bottom page edge, and never above the top page edge. A row whose cell object would cross the bottom margin moves to the next page',
+    'ECMA-376 Part 1 §20.4.2.11 positionV'
+  ),
+  lineAnchorsBeforeBandPush: legacy(
+    'An object positioned from the first line of a paragraph measures from where that line was before a wrapping band above pushed it down',
+    'ECMA-376 Part 1 §20.4.2.11 positionV'
+  ),
   wrappedAnchorsStayBelowTopMargin: modern(
     'A wrapping object positioned from its paragraph never starts above the top margin',
     'ECMA-376 Part 1 §20.4.2.11 positionV'

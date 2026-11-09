@@ -378,7 +378,7 @@ function seamIsMergeable(previous: StyleSpanRecord, current: StyleSpanRecord): b
 export function coalesceIdeographicSpans(line: PendingLine): void {
   if (line.spans.length < 2) return;
   const merged: StyleSpanRecord[] = [];
-  for (let index = 0; index < line.spans.length; ) {
+  for (let index = 0; index < line.spans.length;) {
     // Scan the whole mergeable group first, then build ONE span from it — merging into a
     // growing accumulator re-copied every seam, an O(m²) cost per group. Adjacent-pair
     // seams test the same conditions the accumulator did: the decoration and height

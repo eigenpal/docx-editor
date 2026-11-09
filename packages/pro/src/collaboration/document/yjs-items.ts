@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -289,7 +289,7 @@ export function structAt(doc: Y.Doc, id: ItemId): Y.Item | null {
 export function* itemsWrittenSince(doc: Y.Doc, from: number): Generator<Y.Item> {
   const client = doc.clientID;
   const to = Y.getState(doc.store, client);
-  for (let clock = from; clock < to; ) {
+  for (let clock = from; clock < to;) {
     const struct: Y.AbstractStruct = Y.getItem(doc.store, Y.createID(client, clock));
     clock = struct.id.clock + struct.length;
     if (struct instanceof Y.Item) yield struct;

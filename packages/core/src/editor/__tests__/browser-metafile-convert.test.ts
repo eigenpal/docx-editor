@@ -7,6 +7,7 @@ import { resolveImageResourceLimits } from '../../store/runtime/limits.ts';
 import {
   drawingRenderers,
   installDrawingRenderers,
+  metafileRasterScale,
 } from '../../store/package/drawing-renderers.ts';
 
 const LIMITS = resolveImageResourceLimits();
@@ -33,4 +34,15 @@ test('the port rasterizes through the installed renderer', async () => {
   const converted = await convertBrowserMetafile(new Uint8Array(12), 'image/x-wmf', LIMITS);
   expect(converted).toEqual({ bytes: png, mime: 'image/png' });
   expect(calls).toEqual([[12, 'image/x-wmf', 4096]]);
+});
+
+test('a small metafile rasterizes at up to 4x, toward a 2048-pixel long edge', () => {
+  expect(metafileRasterScale(109)).toBe(4);
+  expect(metafileRasterScale(1024)).toBe(2);
+  expect(metafileRasterScale(2048)).toBe(1);
+  // A picture larger than the target never scales below its own size.
+  expect(metafileRasterScale(5000)).toBe(1);
+  for (const unknown of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    expect(metafileRasterScale(unknown)).toBe(1);
+  }
 });

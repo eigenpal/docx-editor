@@ -13,6 +13,7 @@ import { numberingLevelRank } from '../layout/numbering-level-tier.ts';
 import { numberingParagraphProperties } from '../layout/numbering-paragraph-properties.ts';
 import { cascadeParagraphFormatting, type StyleCascadeTable } from '../layout/style-cascade.ts';
 import { styleChain } from '../layout/style-chain.ts';
+import { readNumPr } from '../layout/list-paragraph-prelude.ts';
 
 const LEVEL_COUNT = 9;
 
@@ -101,6 +102,37 @@ export function styleNumberedIndentSides(
 }
 
 /**
+ * Whether a paragraph style is a heading. The nearest style in its `basedOn` chain that states
+ * `w:outlineLvl` decides, so a style based on Heading 1 that sets body text (level 9) is none;
+ * a chain that states no level falls back to the heading names.
+ */
+export function isOutlineStyle(table: StyleCascadeTable | undefined, styleId: string): boolean {
+  if (!table) return false;
+  const chain = styleChain(table, styleId, 'paragraph');
+  for (let index = chain.length - 1; index >= 0; index -= 1) {
+    const style = chain[index]!;
+    const stated = style.paragraphPropertiesNode?.children.find(
+      (node) => node.kind !== 'textValue' && node.localName === 'outlineLvl'
+    );
+    if (stated) return style.outlineLevel !== null;
+    if (style.outlineLevel !== null) return true;
+  }
+  return false;
+}
+
+/** The list and level a paragraph style numbers its paragraphs on, through its `basedOn` chain. */
+export function styleNumberingOf(
+  table: StyleCascadeTable | undefined,
+  styleId: string
+): { readonly numId: string; readonly ilvl: number } | null {
+  if (!table) return null;
+  const tiers = styleChain(table, styleId, 'paragraph').flatMap((style) =>
+    style.paragraphPropertiesNode ? [style.paragraphPropertiesNode] : []
+  );
+  return readNumPr(tiers);
+}
+
+/**
  * The surface structure lane's two list reads, over the numbering index layout resolves
  * against. `index` is read per call, so a definition minted since is seen.
  */
@@ -108,6 +140,9 @@ export function listDefinitionReads(index: () => NumberingIndex) {
   return {
     listGeometryOf: (numId: string) => listDefinitionGeometry(index(), numId),
     listLevelKindOf: (numId: string, level: number) => listLevelKind(index(), numId, level),
+    listLevelStyleOf: (numId: string, level: number) =>
+      resolveNumberingLevel(index(), numId, level)?.level.pStyle ?? null,
+    listAbstractOf: (numId: string) => index().nums.get(numId)?.abstractNumId ?? null,
   };
 }
 

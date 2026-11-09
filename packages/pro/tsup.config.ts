@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { defineConfig } from 'tsup';
 import { withDeclarations } from '../../scripts/build-declarations.mjs';
+import { addLicenseHeaders } from '../../scripts/license-banner.mjs';
 
 const shared = {
   platform: 'browser' as const,
@@ -78,6 +79,8 @@ const VUE_ENTRIES = {
 // modes per file, so the declarations come from two programs.
 export default defineConfig(
   withDeclarations(import.meta.url, {
+    // Every script in dist/ opens with the license header.
+    onSuccess: addLicenseHeaders(import.meta.url),
     ...shared,
     entry: { ...REACT_ENTRIES, ...VUE_ENTRIES },
     metafile: true,

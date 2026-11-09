@@ -164,9 +164,7 @@
      does not select the text, so this band is the only thing on the page saying which
      change the card is about. */
   --doc-revision-insertion-active-bg: rgba(46, 125, 50, 0.24);
-  --doc-revision-insertion-active-border: var(--doc-revision-insertion);
   --doc-revision-deletion-active-bg: rgba(198, 40, 40, 0.24);
-  --doc-revision-deletion-active-border: var(--doc-revision-deletion);
   /* A format or structural change decorates no characters, so it takes a neutral fill
      rather than one claiming text was added or removed. */
   --doc-revision-other-active-bg: color-mix(
@@ -2392,6 +2390,13 @@ a.docx-hyperlink:focus-visible {
   outline: none;
 }
 
+/* The layer takes the keyboard for the selected drawing, and the frame shows the selection. A
+   host focus ring on the layer would draw around the whole scroll area, so it never shows. */
+.docx-editor .docx-image-selection-overlay:is(:focus, :focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
 .docx-image-selection-overlay__frame {
   position: absolute;
   box-sizing: border-box;
@@ -3965,6 +3970,12 @@ a.docx-hyperlink:focus-visible {
  * and the panel's scrollport would clip them when the group collapses into More. */
 .docx-toolbar__more-panel:has(.docx-toolbar__font-family-content),
 .docx-toolbar__more-panel:has(.docx-toolbar__style-content) {
+  overflow-y: visible;
+}
+
+/* And for Wrap text: a picture or chart row sits low in the panel, and the scrollport cut its
+ * menu to the first choice, so only "In Line with Text" could be reached. */
+.docx-toolbar__more-panel:has(.docx-toolbar__image-wrap-menu) {
   overflow-y: visible;
 }
 
@@ -7014,14 +7025,17 @@ p.docx-review__refused {
   background: transparent;
 }
 
+/* The open change deepens its fill and draws NO line of its own. The run already carries one:
+   an underline under inserted text, a strike through deleted text, in the ink the painter
+   chose, which is the author's under the author scheme. A 1px rule at the band's foot sat
+   just under that underline, in the kind colour, so an open insertion read as a double
+   underline in two colours, and the reader could not tell which line meant what. */
 .docx-revision-band--insert.docx-revision-band--active {
   background: var(--doc-revision-insertion-active-bg);
-  box-shadow: inset 0 -1px 0 var(--doc-revision-insertion-active-border);
 }
 
 .docx-revision-band--delete.docx-revision-band--active {
   background: var(--doc-revision-deletion-active-bg);
-  box-shadow: inset 0 -1px 0 var(--doc-revision-deletion-active-border);
 }
 
 /* A formatting or structural change decorates no characters of its own, so it gets the
@@ -9388,4 +9402,406 @@ p.docx-review__refused {
   > .docx-unsupported-slot
   :is(a[href], button, input, select, textarea, [tabindex], [role='button']) {
   pointer-events: auto;
+}
+
+/* The Insert chart dropdown of the toolbar. Its menu takes the wrap menu's look. */
+.docx-toolbar__chart-insert {
+  position: relative;
+  display: inline-flex;
+}
+.docx-editor .docx-toolbar__chart-insert-menu,
+.docx-toolbar__chart-insert-menu {
+  min-width: 180px;
+}
+/* Each chart type with its icon, as in the Insert > Chart submenu. */
+.docx-editor .docx-toolbar__chart-insert-menu .docx-toolbar__image-wrap-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.docx-editor .docx-toolbar__chart-insert-menu .docx-toolbar__image-wrap-item svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--doc-text-muted);
+}
+
+/* The side panel beside the pages, and the Chart pane in it. A host can also show the pane in
+   its own panel: the pane sets its own fields, sections and spacing. */
+.docx-editor .docx-side-panel {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 340px;
+  min-width: 0;
+  max-height: 100%;
+  overflow: hidden;
+  font-family: var(--doc-font-ui, system-ui, sans-serif);
+  font-size: 14px;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border-inline-start: 1px solid var(--doc-border);
+}
+.docx-editor .docx-side-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 12px 8px 20px;
+}
+.docx-editor .docx-side-panel__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.docx-editor .docx-side-panel__close,
+.docx-editor .docx-chart-pane__icon-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--doc-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .docx-editor .docx-side-panel__close:where(:hover),
+  .docx-editor .docx-chart-pane__icon-button:where(:hover:not(:disabled)) {
+    color: var(--doc-text);
+    background: var(--doc-bg-hover);
+  }
+}
+.docx-editor .docx-chart-pane__icon-button:where(:disabled) {
+  color: var(--doc-text-subtle);
+  cursor: default;
+}
+.docx-editor .docx-side-panel__close:where(:focus-visible),
+.docx-editor .docx-chart-pane__icon-button:where(:focus-visible),
+.docx-editor .docx-chart-pane__swatch:where(:focus-visible),
+.docx-editor .docx-chart-pane__color-button:where(:focus-visible),
+.docx-editor .docx-chart-pane__summary:where(:focus-visible),
+.docx-editor .docx-chart-pane__grid-auto:where(:focus-visible) {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 1px;
+}
+.docx-editor .docx-side-panel__close svg,
+.docx-editor .docx-chart-pane__icon-button svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+.docx-editor .docx-side-panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 20px 20px;
+}
+
+/* The pane: sections with small capital titles, labels over full-width fields. */
+.docx-editor .docx-chart-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  font-family: var(--doc-font-ui, system-ui, sans-serif);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--doc-text);
+}
+.docx-editor .docx-chart-pane__alert {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--doc-danger);
+  background: var(--doc-error-bg, transparent);
+  border-radius: 8px;
+}
+.docx-editor .docx-chart-pane__alert:where(:empty) {
+  display: none;
+}
+.docx-editor .docx-chart-pane__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.docx-editor .docx-chart-pane__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--doc-text-muted);
+}
+.docx-editor .docx-chart-pane__field {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.docx-editor .docx-chart-pane__label {
+  font-size: 13px;
+  color: var(--doc-text-muted);
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__input, .docx-dialog__select) {
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  min-width: 0;
+  padding: 0 10px;
+  font: inherit;
+  color: var(--doc-text);
+  background-color: var(--doc-bg-input, var(--doc-surface));
+  border: 1px solid var(--doc-border-input);
+  border-radius: 8px;
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__input, .docx-dialog__select):focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__input, .docx-dialog__select):disabled {
+  color: var(--doc-text-subtle);
+  background-color: var(--doc-bg-subtle);
+  cursor: not-allowed;
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__input)[aria-invalid='true'] {
+  border-color: var(--doc-danger);
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__checkbox-row) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__checkbox-row) input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--doc-primary);
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__checkbox-row):has(input:disabled) {
+  color: var(--doc-text-subtle);
+  cursor: not-allowed;
+}
+.docx-editor .docx-chart-pane__sub {
+  padding-inline-start: 26px;
+}
+.docx-editor .docx-chart-pane__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.docx-editor .docx-chart-pane__note,
+.docx-editor .docx-chart-pane__empty-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--doc-text-muted);
+}
+.docx-editor .docx-chart-pane__status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.docx-editor .docx-chart-pane__status:where(:empty) {
+  display: none;
+}
+.docx-editor .docx-chart-pane__error {
+  font-size: 12px;
+  color: var(--doc-danger);
+}
+.docx-editor .docx-chart-pane__empty {
+  padding: 32px 4px;
+  text-align: center;
+}
+.docx-editor .docx-chart-pane__empty-title {
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+.docx-editor .docx-chart-pane__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.docx-editor .docx-chart-pane__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.docx-editor .docx-chart-pane__row > .docx-chart-pane__icon-button {
+  height: 36px;
+}
+.docx-editor .docx-chart-pane__card {
+  border: 1px solid var(--doc-border);
+  border-radius: 10px;
+}
+.docx-editor .docx-chart-pane__summary {
+  padding: 10px 12px;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.docx-editor .docx-chart-pane__card[open] > .docx-chart-pane__summary {
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+.docx-editor .docx-chart-pane__card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__button) {
+  align-self: flex-start;
+  height: 32px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-input);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .docx-editor .docx-chart-pane :where(.docx-dialog__button):hover:not(:disabled) {
+    background: var(--doc-bg-hover);
+  }
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__button):disabled {
+  color: var(--doc-text-subtle);
+  cursor: not-allowed;
+}
+
+/* A color: the list of choices, then a swatch that opens the color grid. */
+.docx-editor .docx-chart-pane__color {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.docx-editor .docx-chart-pane__color-button {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--doc-border-input);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.docx-editor .docx-chart-pane__color-button:where(:disabled) {
+  opacity: 0.5;
+  cursor: default;
+}
+.docx-editor .docx-chart-pane__grid {
+  position: absolute;
+  top: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: var(--doc-z-overlay);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--doc-popover-bg, var(--doc-surface));
+  border: 1px solid var(--doc-border);
+  border-radius: 10px;
+  box-shadow: var(--doc-card-shadow-strong, 0 8px 24px var(--doc-shadow));
+  /* It grows from the swatch that opens it. */
+  transform-origin: top right;
+  transition:
+    opacity 150ms ease-out,
+    transform 150ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.docx-editor[dir='rtl'] .docx-chart-pane__grid,
+[dir='rtl'] .docx-editor .docx-chart-pane__grid {
+  transform-origin: top left;
+}
+@starting-style {
+  .docx-editor .docx-chart-pane__grid {
+    opacity: 0;
+    transform: scale(0.97) translateY(-4px);
+  }
+}
+.docx-editor .docx-chart-pane__grid-title {
+  font-size: 12px;
+  color: var(--doc-text-muted);
+}
+.docx-editor .docx-chart-pane__grid-auto {
+  height: 30px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--doc-text);
+  text-align: start;
+  background: transparent;
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+.docx-editor .docx-chart-pane__swatches {
+  display: grid;
+  grid-template-columns: repeat(10, 20px);
+  gap: 3px;
+}
+.docx-editor .docx-chart-pane__swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .docx-editor .docx-chart-pane__grid-auto:where(:hover) {
+    background: var(--doc-bg-hover);
+  }
+  .docx-editor .docx-chart-pane__swatch:where(:hover) {
+    transform: scale(1.12);
+  }
+}
+/* Press feedback: the control answers the press at once. */
+.docx-editor .docx-side-panel__close:where(:active),
+.docx-editor .docx-chart-pane__icon-button:where(:active:not(:disabled)),
+.docx-editor .docx-chart-pane__color-button:where(:active:not(:disabled)),
+.docx-editor .docx-chart-pane :where(.docx-dialog__button):active:not(:disabled) {
+  transform: scale(0.97);
+}
+.docx-editor .docx-chart-pane__swatch:where(:active) {
+  transform: scale(0.94);
+}
+.docx-editor .docx-chart-pane__swatch:where([aria-pressed='true']),
+.docx-editor .docx-chart-pane__grid-auto:where([aria-pressed='true']) {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
+}
+/* Reduced motion keeps the fades and drops the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .docx-editor .docx-chart-pane__swatch,
+  .docx-editor .docx-chart-pane__grid,
+  .docx-editor .docx-side-panel__close,
+  .docx-editor .docx-chart-pane__icon-button,
+  .docx-editor .docx-chart-pane__color-button,
+  .docx-editor .docx-chart-pane :where(.docx-dialog__button) {
+    transform: none !important;
+  }
 }

@@ -49,6 +49,7 @@ import type {
 } from './surface-format-painter-contract.ts';
 import type { PaginatedSurfacePerf } from './surface-perf-contract.ts';
 import type { SurfaceIndentAndListOps } from './surface-indent-list-contract.ts';
+import type { SurfaceChartOps } from './surface-chart-ops.ts';
 export type { ReviewWriteIntent, ContentControlOps, ContentControlSurfaceState };
 export type {
   FormatPainterLevel,
@@ -100,7 +101,7 @@ export type SectionBreakInsertType = 'nextPage' | 'continuous';
  * Every write goes through the guarded mutation path on this object. Reaching past it into
  * `session` to apply ops directly bypasses the layout invalidation and the caret bookkeeping.
  */
-export interface PaginatedSurface extends SurfaceIndentAndListOps {
+export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartOps {
   readonly session: TreeDocxSessionView;
   /** The collaboration replica a `collaborationModule` attached, or null. */
   collaborationSession(): import('../collaboration/index.ts').EditorCollaborationSession | null;
@@ -725,12 +726,15 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps {
    * Every clipboard flavour for the current selection: plain text, and the interop HTML
    * carrying the embedded fragment when the selection is a body-story range. A cell rectangle
    * answers grid text plus a flattened table; `html` is null where only plain text should be
-   * written. A chart refuses as `'chart-content'`, another object as `'unsupported-content'`.
+   * written. One selected chart copies whole and names its drawing in `chartDrawingNodeId`,
+   * which a cut deletes. A chart inside a wider selection refuses as `'chart-content'`, another
+   * object as `'unsupported-content'`.
    */
   copyFlavours(): {
     readonly text: string;
     readonly html: string | null;
     readonly reason?: 'unsupported-content' | 'chart-content';
+    readonly chartDrawingNodeId?: string;
   };
   /**
    * Route one paste payload by fidelity: embedded fragment, then external HTML, then
@@ -835,8 +839,7 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps {
     readonly sectionIndex?: number;
     /** `setWatermark` only: the new watermark, or null to remove it. */
     readonly watermark?:
-      | import('../store/package/watermark-package.ts').PackageWatermarkWrite
-      | null;
+      import('../store/package/watermark-package.ts').PackageWatermarkWrite | null;
     /** `setDocumentProtection` only: enforce filling-in-forms protection, or lift it. */
     readonly enforce?: boolean;
     readonly kind?: 'header' | 'footer';

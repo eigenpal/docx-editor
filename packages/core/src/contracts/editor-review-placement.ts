@@ -108,6 +108,4 @@ export interface ReviewCustomPlacement extends ReviewItemPlacementBase {
  * `placement.kind === 'custom' && placement.item.kind === 'custom'` double check.
  */
 export type ReviewItemPlacement =
-  | ReviewCommentPlacement
-  | ReviewRevisionPlacement
-  | ReviewCustomPlacement;
+  ReviewCommentPlacement | ReviewRevisionPlacement | ReviewCustomPlacement;

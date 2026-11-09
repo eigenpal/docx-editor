@@ -184,8 +184,7 @@ export function bindSessionAdmittedFont(options: {
   readonly status: () => 'active' | 'aborted' | 'disposed';
   readonly unavailable: () => ExportResourceError;
   readonly resolve: () =>
-    | ((request: FontRequest) => ResolvedFont | FontResolutionError)
-    | undefined;
+    ((request: FontRequest) => ResolvedFont | FontResolutionError) | undefined;
 }): ExportAdmittedFontApi['admittedFontFace'] {
   return (request: FontRequest): ExportAdmittedFontFace | null => {
     if (options.status() !== 'active') throw options.unavailable();

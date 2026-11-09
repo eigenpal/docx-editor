@@ -142,7 +142,8 @@ function resolveEmbedMediaPart(
   return resolved.mode === 'internal' ? resolved.partName : null;
 }
 
-interface ImageTransactOptions {
+/** Options of a package drawing transaction. */
+export interface ImageTransactOptions {
   readonly expectedPackageRevision?: number;
   readonly commitGuard?: () => boolean;
   /**
@@ -153,7 +154,11 @@ interface ImageTransactOptions {
   readonly actorId?: string;
 }
 
-function transactPackageImage(
+/**
+ * Commit one package edit and story op build as ONE package undo unit. `build` returns the new
+ * drawing node id, or null to abort. Shared by the picture and chart lanes.
+ */
+export function transactPackageImage(
   store: TreePackageStore,
   scope: StoryScope,
   build: (ctx: TransactionContext, ownerPartName: string) => string | null,

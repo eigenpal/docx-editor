@@ -163,8 +163,7 @@ export interface ParagraphLineSpacing {
 /** The document-level line rules a style cascade turns on for every paragraph it resolves. */
 export function cascadeLineSpacingFlags(
   cascade:
-    | { readonly preserveExactLineBaseline?: true; readonly drawingTextLines?: true }
-    | undefined
+    { readonly preserveExactLineBaseline?: true; readonly drawingTextLines?: true } | undefined
 ): Pick<ParagraphLineSpacing, 'preserveExactBaseline' | 'descentAnchored'> {
   return {
     ...(cascade?.preserveExactLineBaseline ? { preserveExactBaseline: true as const } : {}),

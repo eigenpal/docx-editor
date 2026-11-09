@@ -42,7 +42,8 @@ import {
 } from '../package/ooxml-tree.ts';
 import { cloneWithNewIds, fromEdit, paragraphContainingNode, TEXT_DEPS } from './tree-op-nodes.ts';
 import { drawingEffect, drawingOpImpact, isValidXmlMetadata } from './tree-op-drawing-kinds.ts';
-import { chartDrawingOf } from './tree-op-chart-drawing.ts';
+import { chartDrawingOf, chartFrameEdit } from './tree-op-chart-drawing.ts';
+import { holdsChartGraphic } from '../package/mc-fallback-projection.ts';
 import {
   applyLegacyVmlGeometryOp,
   legacyVmlDrawingOp,
@@ -325,8 +326,11 @@ function drawingContext(
 ):
   | { drawing: OoxmlDrawingNode; anchor: OoxmlElement; projection: DrawingProjection }
   | TreeOpRejection {
-  // A chart is no picture, whichever branch the page shows (`tree-op-chart-drawing.ts`).
-  if (operation !== 'deleteDrawing' && chartDrawingOf(part, drawingNodeId)) return 'chart-drawing';
+  // A chart is no picture, whichever branch the page shows (`tree-op-chart-drawing.ts`). Only
+  // a bare chart drawing takes the frame edits: size, position, wrap and alt text.
+  const chart = chartDrawingOf(part, drawingNodeId);
+  if (chart && operation !== 'deleteDrawing' && !chartFrameEdit(chart, operation))
+    return 'chart-drawing';
   const original = findNode(part, drawingNodeId);
   const atomProjection =
     original?.kind === 'drawing' ? null : drawingAtomProjection(part, drawingNodeId);
@@ -343,6 +347,7 @@ function drawingContext(
   if (!projection) return 'not-a-picture-drawing';
   if (
     projection.picture === null &&
+    !chart &&
     !(
       projection.textboxStory &&
       (operation === 'resizeDrawing' ||
@@ -380,7 +385,10 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
       if (offsetInsideAtomicSegment(paragraph, op.offset)) return 'invalid-range';
       const boundary = segmentsOf(paragraph).find((segment) => segment.start === op.offset);
+      // A drawing's start is a run-child boundary: the new drawing goes in before it.
+      const besideDrawing = boundary?.node.kind === 'drawing' && !op.revision;
       if (
+        !besideDrawing &&
         boundary?.removeNodeIds &&
         boundary.removeNodeIds.length > 0 &&
         boundary.node.kind !== 'textValue' &&
@@ -392,8 +400,10 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
       if (op.drawing.kind !== 'drawing') return 'not-a-drawing';
       const anchor = anchorRootOf(op.drawing);
       if (!anchor) return 'not-a-drawing';
-      const projection = projectionOf(part, op.drawing);
-      if (!projection || (projection.picture === null && !projection.textboxStory))
+      // A chart drawing names a chart part that the same transaction adds (`insertChart`).
+      const chart = holdsChartGraphic(op.drawing);
+      const projection = chart ? null : projectionOf(part, op.drawing);
+      if (!chart && (!projection || (projection.picture === null && !projection.textboxStory)))
         return 'not-a-picture-drawing';
       // `CT_TrackChange` makes `@w:author` required, so a tracked variant with an empty one
       // would serialize a proposal no reader can attribute or resolve.
@@ -1001,11 +1011,7 @@ function updateLocks(
 export function wrapTargetToAnchorSpec(target: ImageWrapTarget): {
   readonly behindDocument: boolean;
   readonly wrapLocalName:
-    | 'wrapNone'
-    | 'wrapSquare'
-    | 'wrapTight'
-    | 'wrapThrough'
-    | 'wrapTopAndBottom';
+    'wrapNone' | 'wrapSquare' | 'wrapTight' | 'wrapThrough' | 'wrapTopAndBottom';
   readonly wrapText?: 'bothSides' | 'left' | 'right' | 'largest';
 } {
   switch (target) {
@@ -1449,6 +1455,20 @@ function updatePosition(
     );
   }
   return updated;
+}
+
+/** `drawing` with its anchor at `position`, for a drawing that moves to another paragraph. */
+export function drawingWithPosition(
+  drawing: OoxmlDrawingNode,
+  position: DrawingPositionInput,
+  nextId: () => string
+): OoxmlDrawingNode | null {
+  const anchor = anchorRootOf(drawing);
+  if (!anchor) return null;
+  const moved = updatePosition(anchor, position, nextId);
+  return replaceNodeShallow(drawing, {
+    children: drawing.children.map((c) => (c.id === anchor.id ? moved : c)),
+  } as Partial<OoxmlDrawingNode>);
 }
 
 function withDrawingNamespaceBindings(drawing: OoxmlDrawingNode): OoxmlDrawingNode {

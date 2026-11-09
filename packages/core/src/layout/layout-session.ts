@@ -242,3 +242,39 @@ export function replaceLayoutSession(target: LayoutSession, source: LayoutSessio
   } satisfies LayoutSession & Record<keyof LayoutSession, unknown>;
   Object.assign(target, replacement);
 }
+
+/**
+ * The checkpoints a converged pass leaves. It stops early, so the tail's checkpoints were never
+ * recomputed. The previous pass's remain valid because the flow matched at the join, with their
+ * completed-page counts moved by however many sheets the reused tail moved.
+ */
+export function convergedCheckpoints(
+  fresh: readonly FlowCheckpoint[],
+  previous: readonly FlowCheckpoint[],
+  join: { readonly at: number; readonly removedBlocks: number; readonly pageDelta: number }
+): FlowCheckpoint[] {
+  const tail = previous.slice(join.at + join.removedBlocks);
+  return [
+    ...fresh.slice(0, join.at),
+    ...(join.pageDelta === 0
+      ? tail
+      : tail.map((checkpoint) => ({
+          ...checkpoint,
+          pageCount: checkpoint.pageCount + join.pageDelta,
+        }))),
+  ];
+}
+
+/**
+ * Whether the session's layout depends on page parity after a pass. Sticky whenever any part of
+ * the previous layout was reused: a resumed pass never re-places the prefix and a converged pass
+ * never re-places the tail, so their parity-reading anchors could not report this pass. Only a
+ * pass that placed everything (`placedAll`: full start, no convergence) may clear it.
+ */
+export function nextParityDependent(
+  previous: boolean,
+  thisPass: boolean,
+  placedAll: boolean
+): boolean {
+  return placedAll ? thisPass : previous || thisPass;
+}

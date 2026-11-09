@@ -30,7 +30,13 @@ import { dropEditorBreadcrumbs, EDITOR_SELECTORS } from '@docx-editor.dev/teleme
 
 Sentry.init({
   dsn: import.meta.env.VITE_SENTRY_DSN,
-  sendDefaultPii: false,
+  dataCollection: {
+    userInfo: false,
+    cookies: false,
+    httpHeaders: false,
+    httpBodies: [],
+    urlQueryParams: false,
+  },
   integrations: [Sentry.replayIntegration({ block: [...EDITOR_SELECTORS] })],
   beforeBreadcrumb: (crumb, hint) => {
     const kept = dropEditorBreadcrumbs(crumb, hint);
@@ -46,7 +52,7 @@ Sentry.init({
 
 - `EDITOR_SELECTORS` in `block` replaces the editor with a placeholder in Replay. You do not need `mask`.
 - `dropEditorBreadcrumbs` drops editor click and key breadcrumbs. Their `alt`, `title`, and `aria-label` values can hold document content.
-- `sendDefaultPii: false` stops IP address and user data collection.
+- `dataCollection` stops user, cookie, header, request body, and query parameter collection. Sentry SDKs before version 11 use `sendDefaultPii: false` instead.
 - The `console` filter drops console breadcrumbs, in case your code logs document details.
 
 ## Choose issue behavior

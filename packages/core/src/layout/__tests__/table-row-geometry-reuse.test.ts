@@ -22,9 +22,10 @@ import type { SemanticLayout, TableFragmentRecord } from '../semantic-records.ts
 import { lay, load, styleCascade } from './table-row-keep-fixtures.ts';
 
 // Page body: 310pt wide, 170pt tall, twelve 14pt lines. Token text is 6pt per character.
-const p = (text: string, pPr = '') =>
-  `<w:p><w:pPr>${pPr}<w:widowControl w:val="0"/>` +
-  '<w:spacing w:before="0" w:after="0" w:line="280" w:lineRule="exact"/></w:pPr>' +
+/** `pPr` holds properties that precede `w:spacing` in `CT_PPr`, `trailing` those after it. */
+const p = (text: string, pPr = '', trailing = '') =>
+  `<w:p><w:pPr><w:widowControl w:val="0"/>${pPr}` +
+  `<w:spacing w:before="0" w:after="0" w:line="280" w:lineRule="exact"/>${trailing}</w:pPr>` +
   (text ? `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>` : '') +
   '</w:p>';
 const tc = (content: string, tcPr = '') => `<w:tc><w:tcPr>${tcPr}</w:tcPr>${content}</w:tc>`;
@@ -57,7 +58,7 @@ const tokenRow = (i: number) =>
     [0, 1, 2].map((c) =>
       tc(
         // Some empty cells: an empty line places its content edge from the line indent.
-        p((i * 3 + c) % 7 === 0 ? '' : `R${i}C${c}`, FORMATS[(i + c) % FORMATS.length]),
+        p((i * 3 + c) % 7 === 0 ? '' : `R${i}C${c}`, '', FORMATS[(i + c) % FORMATS.length]),
         c === 1 ? '<w:vAlign w:val="center"/>' : c === 2 ? '<w:vAlign w:val="bottom"/>' : ''
       )
     ),
@@ -668,7 +669,7 @@ test('numeric multiline movement preserves horizontal and vertical alignment aft
           tr(
             [
               tc(
-                p('123456789', `<w:jc w:val="${alignment}"/><w:ind w:left="-15"/>`).replace(
+                p('123456789', '', `<w:ind w:left="-15"/><w:jc w:val="${alignment}"/>`).replace(
                   'w:before="0" w:after="0" w:line="280"',
                   'w:before="13" w:after="17" w:line="277"'
                 ),
@@ -801,7 +802,7 @@ test('deferred body groups preserve wrapped numeric cells through typing and und
   const rows = Array.from({ length: 60 }, (_, index) =>
     tr(
       [
-        tc(p('1234567890123456789012345678901234567890', '<w:ind w:left="-15"/>')),
+        tc(p('1234567890123456789012345678901234567890', '', '<w:ind w:left="-15"/>')),
         tc(p('9876543210987654321098765432109876543210')),
         tc(index === 9 ? p('End').replace('w:line="280"', 'w:line="560"') : p('End')),
       ],
@@ -831,8 +832,8 @@ test('deferred body groups preserve wrapped numeric cells through typing and und
         fragment.kind === 'table' && !!Object.getOwnPropertyDescriptor(fragment, 'rows')?.get
     );
   expect(deferred.length).toBeGreaterThan(0);
-  const descriptors = deferred.map(
-    (fragment) => Object.getOwnPropertyDescriptor(fragment, 'rows')!
+  const descriptors = deferred.map((fragment) =>
+    Object.getOwnPropertyDescriptor(fragment, 'rows')!
   );
   try {
     for (const fragment of deferred)

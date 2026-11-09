@@ -170,6 +170,8 @@ The handler takes no arguments. Read the selection with `editor.getSelectionPlac
 | `useHighlights(name, source, options?)` | `ComputedRef<{ applied, unavailable }>` |
 | `useHighlightAt(name?)` | `Readonly<ShallowRef>` with the highlight under the pointer, or `null` |
 | `useNavigationPane(options?)` | `{ open, setOpen, toggle, tab, setTab, paneWidth, shift, overlay }` |
+| `usePaneRequest(listener)` | Nothing. Calls `listener` with `{ pane, focus }` when Insert > Chart or Edit chart asks for the Chart pane. See [Charts](/docs/2.x/guides/charts#show-the-chart-pane). |
+| `useSelectedChart()` | `UseSelectedChartReturn`: computed refs of the selected chart, its `data` and `format`, whether each can change, `execute` for the chart commands, and `editData` for one checked data change. See [Build your own chart pane](/docs/2.x/guides/charts#build-your-own-chart-pane). |
 | `useNavigationShift()` | `ShallowRef<number>`, the page offset for an open pane |
 
 Each outline item is `{ heading, depth }`, and `depth` counts from the shallowest heading. Search options accept a value, ref, or getter.

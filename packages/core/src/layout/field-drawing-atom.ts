@@ -25,8 +25,7 @@ export interface RunDrawingAtomPlan {
   readonly emit: boolean;
   /** Piece extras: the inline drawing payload, or the anchored change-bar marker. */
   readonly extras?:
-    | { readonly inlineDrawing: InlineDrawingLayoutInput }
-    | { readonly anchoredAtom: true };
+    { readonly inlineDrawing: InlineDrawingLayoutInput } | { readonly anchoredAtom: true };
 }
 
 /** True for the two run children this plan covers. */

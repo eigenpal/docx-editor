@@ -27,6 +27,7 @@ export const LOADING_SNAPSHOT: EditorSnapshot = Object.freeze({
   table: null,
   tocContext: null,
   image: null,
+  chart: null,
   page: Object.freeze({ current: 0, total: 0 }),
   canUndo: false,
   canRedo: false,

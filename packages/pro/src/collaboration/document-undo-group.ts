@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -27,9 +27,7 @@ import type { HistoryGroupCapture } from './document/history-group-capture.ts';
  * @public
  */
 export type CollaborationUndoGroupErrorCode =
-  | 'undo-group-already-open'
-  | 'editor-attached'
-  | 'collaboration-session-destroyed';
+  'undo-group-already-open' | 'editor-attached' | 'collaboration-session-destroyed';
 
 const UNDO_GROUP_REMEDIES: Readonly<Record<CollaborationUndoGroupErrorCode, string>> = {
   'undo-group-already-open': 'End the open group, or use another session for this operation.',

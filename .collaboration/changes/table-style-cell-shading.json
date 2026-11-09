@@ -1,0 +1,16 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Layout and copied HTML ignored the cell shading a table style states in its own w:tcPr, and painted the fill of a w:shd pattern without its color. Clearing a cell fill left a w:shd with no fill in the cell.",
+  "after": "Layout and copied HTML fill each cell with that shading, under conditional formats and the cell's own shading, and mix a pattern color into its fill. Clearing a cell fill removes the w:shd element unless it states a pattern.",
+  "reason": "Released participants already read a cell with no w:shd, so the corrected clear writes state they understand. Shared nodes, text offsets, and the operation format stay the same. The other changes affect only layout and the HTML that a local copy writes. Earlier clears left a w:shd with no fill, which now hides a table style fill as it does in reference renderings; a new clear removes that element too.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-style-cell-shading.test.ts",
+    "packages/core/src/layout/__tests__/ooxml-shading.test.ts",
+    "packages/core/src/editor/__tests__/clipboard-html-write.test.ts",
+    "packages/core/src/store/__tests__/table-cell-properties.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-api-cell-fill-clear.test.ts"
+  ],
+  "changeset": "table-style-cell-shading",
+  "migration": null
+}

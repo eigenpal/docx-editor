@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -70,7 +70,7 @@ function lzw(data: Uint8Array, minimumCodeSize: number, pixelCount: number): Uin
   let bits = 0;
   let buffer = 0;
   let written = 0;
-  for (let index = 0; index < data.length && written < pixelCount; ) {
+  for (let index = 0; index < data.length && written < pixelCount;) {
     while (bits < codeSize && index < data.length) {
       buffer |= data[index++]! << bits;
       bits += 8;

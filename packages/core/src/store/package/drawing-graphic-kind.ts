@@ -16,14 +16,7 @@ import { DRAWINGML_MAIN_NAMESPACE_URI as A, type OoxmlElement } from './ooxml-tr
  * @public
  */
 export type DrawingGraphicKind =
-  | 'picture'
-  | 'chart'
-  | 'diagram'
-  | 'shape'
-  | 'group'
-  | 'textbox'
-  | 'canvas'
-  | 'graphic';
+  'picture' | 'chart' | 'diagram' | 'shape' | 'group' | 'textbox' | 'canvas' | 'graphic';
 
 // A Map, not an object literal: the key is a `graphicData@uri` out of the file, so a value
 // of `__proto__` or `constructor` must answer undefined, not a prototype member.

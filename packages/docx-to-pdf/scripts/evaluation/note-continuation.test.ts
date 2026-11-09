@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -53,7 +53,7 @@ test('PDF paint includes an authored continuation notice on the split page only'
     expect(pages[0]).toContain('Continued');
     expect(pages.slice(1).join(' ')).not.toContain('Continued');
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 
@@ -77,6 +77,6 @@ test('PDF export reports an oversized notice without dropping note text', async 
     expect(text.replace(/\s+/g, ' ')).toContain('Note line 6');
     expect(text).not.toContain('Continued');
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

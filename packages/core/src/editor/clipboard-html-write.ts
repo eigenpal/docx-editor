@@ -49,6 +49,7 @@ import {
 import {
   attrOf,
   cssHexColor,
+  cssShading,
   escapeAttr,
   escapeHtml,
   findDescendant,
@@ -202,7 +203,7 @@ function runCssOf(layers: RunPropertyLayers): RunCss {
     highlightVal !== undefined && Object.hasOwn(WORD_HIGHLIGHT_COLORS, highlightVal)
       ? WORD_HIGHLIGHT_COLORS[highlightVal]
       : undefined;
-  const shdFill = cssHexColor(foldAttribute(sources, 'shd', 'fill'));
+  const shdFill = cssShading(lastProperty(sources, 'shd'));
   if (highlight) {
     // The mso declaration lets a reader reconstruct w:highlight instead of shading.
     rules.push(`background-color:${highlight}`, `mso-highlight:${highlightVal}`);
@@ -298,7 +299,7 @@ function paragraphCssOf(
   if (toggleOn(sources, 'keepLines')) rules.push('page-break-inside:avoid');
   if (toggleOn(sources, 'widowControl')) rules.push('widows:2', 'orphans:2');
 
-  const shading = cssHexColor(foldAttribute(sources, 'shd', 'fill'));
+  const shading = cssShading(lastProperty(sources, 'shd'));
   if (shading) rules.push(`background-color:${shading}`);
   const paragraphBorders = lastProperty(sources, 'pBdr');
   if (paragraphBorders) {

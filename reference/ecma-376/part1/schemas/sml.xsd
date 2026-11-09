@@ -3397,7 +3397,7 @@
       </xsd:simpleType>
     </xsd:union>
   </xsd:simpleType>
-  <xsd:simpleType name="ST_BorderKind">
+  <xsd:simpleType name="ST_BorderStyle">
     <xsd:restriction base="xsd:string">
       <xsd:enumeration value="none"/>
       <xsd:enumeration value="thin"/>
@@ -3439,7 +3439,7 @@
     <xsd:sequence>
       <xsd:element name="color" type="CT_Color" minOccurs="0" maxOccurs="1"/>
     </xsd:sequence>
-    <xsd:attribute name="style" type="ST_BorderKind" use="optional" default="none"/>
+    <xsd:attribute name="style" type="ST_BorderStyle" use="optional" default="none"/>
   </xsd:complexType>
   <xsd:complexType name="CT_CellProtection">
     <xsd:attribute name="locked" type="xsd:boolean" use="optional"/>

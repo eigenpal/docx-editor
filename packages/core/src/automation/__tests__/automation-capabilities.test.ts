@@ -115,8 +115,7 @@ function errorCodeAt(
   index: number
 ): string {
   const result = response.results[index] as
-    | { status: 'error'; error: { code: string } }
-    | undefined;
+    { status: 'error'; error: { code: string } } | undefined;
   if (result?.status !== 'error') throw new Error(`expected an error at ${index}`);
   return result.error.code;
 }

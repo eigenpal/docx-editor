@@ -86,12 +86,7 @@ const defaultLinearMathCache = new Map<string, LinearMathParseResult>();
 const reversibleLinearMathCache = new WeakMap<EquationExpression, string>();
 
 export type LinearMathRejection =
-  | 'empty'
-  | 'invalid-syntax'
-  | 'invalid-xml-text'
-  | 'depth-limit'
-  | 'node-limit'
-  | 'text-limit';
+  'empty' | 'invalid-syntax' | 'invalid-xml-text' | 'depth-limit' | 'node-limit' | 'text-limit';
 
 export type LinearMathParseResult =
   | { readonly ok: true; readonly expression: EquationExpression }

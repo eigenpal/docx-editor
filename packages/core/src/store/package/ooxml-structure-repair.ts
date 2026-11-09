@@ -25,7 +25,11 @@
  * Anything that still fails its shape stays generic, as written.
  */
 import { mergedPropertyList } from './ooxml-property-merge.ts';
-import { CT_PPR_SEQUENCE, CT_TBLPR_SEQUENCE } from './ooxml-property-order.ts';
+import {
+  CT_PPR_SEQUENCE,
+  CT_TBLPR_SEQUENCE,
+  repairedPropertyChildren,
+} from './ooxml-property-order.ts';
 import { attributesFitKind, isEmptyMarker, repairedRun } from './ooxml-run-repair.ts';
 import { WML_NAMESPACE_URI, validKnownKind } from './ooxml-shared.ts';
 import { displayedText, ownXmlSpace } from './ooxml-text-space.ts';
@@ -101,6 +105,7 @@ const isRepairableRun = (node: OoxmlNode): node is OoxmlElement =>
 export function repairedChildren(
   opened: {
     readonly candidateKind: string;
+    readonly name: { readonly namespaceUri: string; readonly localName: string };
     readonly attributes: readonly OoxmlAttribute[];
     readonly metadata: object;
   },
@@ -128,6 +133,10 @@ export function repairedChildren(
     });
     if (changed) out = rebuilt;
   }
+  // An out-of-order property container opens in schema order, so the tree, the shared state,
+  // and the fingerprint all hold the order a save writes. The test is the serializer's, by
+  // name: a `w:rPr` under `w:ins` in math stays generic yet still saves in order.
+  out = repairedPropertyChildren(opened.name.namespaceUri, opened.name.localName, out);
   if (kind === 'paragraph') return paragraphChildren(out, id);
   if (kind === 'table') return tableChildren(out);
   if (kind === 'tableRow') return rowChildren(out);

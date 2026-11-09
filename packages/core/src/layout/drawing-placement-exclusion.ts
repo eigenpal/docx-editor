@@ -205,3 +205,60 @@ export function drawingZonesAtLinePlacement(
     ...synthesizeParagraphTopAndBottomZones({ ...options, anchorLineTopByModelStart }),
   ]);
 }
+
+type PlacementOptions = Parameters<typeof drawingZonesAtLinePlacement>[0];
+
+/** A paragraph entry as line placement reads it. */
+interface PlacedParagraphEntry {
+  readonly paragraph: OoxmlElement;
+  readonly indent: { readonly left: number; readonly right: number };
+  readonly available: number;
+}
+
+/**
+ * {@link drawingZonesAtLinePlacement} bound to a body story: its page zones, the band its
+ * anchors resolve across, the paragraph top after earlier bands displaced it, and the frame of
+ * the sheet being filled, all read when a line is placed.
+ */
+export function createLinePlacementZones<Entry extends PlacedParagraphEntry>(story: {
+  readonly drawingLayout: InlineDrawingLayoutContext | undefined;
+  readonly displayMode: PlacementOptions['displayMode'];
+  readonly revisionAuthorFilter?: PlacementOptions['revisionAuthorFilter'];
+  readonly pageZones: (entry: Entry, entryIndex: number) => readonly ExclusionZone[];
+  readonly band: (entry: Entry) => { readonly left: number; readonly right: number };
+  readonly paragraphTop: (paragraphId: string, startY: number) => number;
+  readonly columnIndex: () => number;
+  readonly frameBase: () => NonNullable<PlacementOptions['frameBase']>;
+}) {
+  return (
+    entry: Entry,
+    entryIndex: number,
+    brokenLines: readonly PendingLine[],
+    lineIndex: number,
+    fragmentFirstLine: number,
+    fragmentParagraphStartY: number,
+    appliedSkipByLineIndex: ReadonlyMap<number, number>
+  ): readonly ExclusionZone[] => {
+    const pageZones = story.pageZones(entry, entryIndex);
+    if (!story.drawingLayout || lineIndex <= fragmentFirstLine) return pageZones;
+    if (drawingModelOffsetsInParagraph(entry.paragraph).size === 0) return pageZones;
+    const band = story.band(entry);
+    return drawingZonesAtLinePlacement({
+      paragraph: entry.paragraph,
+      paragraphId: entry.paragraph.id,
+      drawingLayout: story.drawingLayout,
+      contentLeft: band.left,
+      contentRight: band.right,
+      paragraphStartY: story.paragraphTop(entry.paragraph.id, fragmentParagraphStartY),
+      columnIndex: story.columnIndex(),
+      displayMode: story.displayMode,
+      ...(story.revisionAuthorFilter ? { revisionAuthorFilter: story.revisionAuthorFilter } : {}),
+      frameBase: story.frameBase(),
+      pageZones,
+      brokenLines,
+      lineIndex,
+      fragmentFirstLine,
+      appliedSkipByLineIndex,
+    });
+  };
+}

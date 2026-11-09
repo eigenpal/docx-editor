@@ -14,6 +14,11 @@ export interface AutofitColumnContent {
   readonly percentColumns: boolean[];
   /** Columns a single-column cell of horizontal text measured. */
   readonly measured: boolean[];
+  /**
+   * Each column's widest horizontal content insets, as its cells have them now. A table whose
+   * minimums overflow keeps these whole and narrows only the content.
+   */
+  readonly insets: number[];
   /** The width each cell of vertical text has across the columns it covers. */
   readonly verticalHolds: SpanRequirement[];
   /** What each cell spanning several columns needs across them. */
@@ -27,6 +32,7 @@ export function emptyColumnContent(): AutofitColumnContent {
     preferredWidths: [],
     percentColumns: [],
     measured: [],
+    insets: [],
     verticalHolds: [],
     spans: [],
   };

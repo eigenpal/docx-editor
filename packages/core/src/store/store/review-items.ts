@@ -85,12 +85,7 @@ export interface ReviewRevisionItem {
   readonly formattingKind?: string;
   /** Distinct structural operations covered by this decision, in document order. */
   readonly structuralChanges?: readonly (
-    | 'rowInsert'
-    | 'rowDelete'
-    | 'cellInsert'
-    | 'cellDelete'
-    | 'cellMerge'
-    | 'numberingInsert'
+    'rowInsert' | 'rowDelete' | 'cellInsert' | 'cellDelete' | 'cellMerge' | 'numberingInsert'
   )[];
   /** Changed direct formatting values, ready for localized review summaries. */
   readonly formattingChanges?: readonly {
@@ -102,6 +97,7 @@ export interface ReviewRevisionItem {
       | 'fontFamily'
       | 'fontSize'
       | 'color'
+      | 'highlight'
       | 'alignment'
       | 'leftIndent'
       | 'rightIndent'
@@ -112,7 +108,7 @@ export interface ReviewRevisionItem {
       | 'direction';
     /**
      * New direct value; null means inherit. Sizes and distances are in points. A direction is
-     * `rtl` or `ltr`.
+     * `rtl` or `ltr`. A highlight is the `w:highlight` color name, such as `yellow`.
      */
     readonly value: string | null;
   }[];

@@ -162,8 +162,7 @@ function handlesAt(
   index: number
 ): readonly AutomationHandle[] {
   const result = response.results[index] as
-    | { status: 'ok'; value: { kind: string; handles: readonly AutomationHandle[] } }
-    | undefined;
+    { status: 'ok'; value: { kind: string; handles: readonly AutomationHandle[] } } | undefined;
   if (result?.status !== 'ok' || result.value.kind !== 'handles') {
     throw new Error(`expected handles at ${index}`);
   }
@@ -175,8 +174,7 @@ function handleAt(
   index: number
 ): AutomationHandle {
   const result = response.results[index] as
-    | { status: 'ok'; value: { kind: string; handle: AutomationHandle } }
-    | undefined;
+    { status: 'ok'; value: { kind: string; handle: AutomationHandle } } | undefined;
   if (result?.status !== 'ok' || result.value.kind !== 'handle') {
     throw new Error(`expected a handle at ${index}`);
   }
@@ -195,8 +193,7 @@ function errorAt(
   index: number
 ): { code: string; detail?: string } {
   const result = response.results[index] as
-    | { status: 'error'; error: { code: string; detail?: string } }
-    | undefined;
+    { status: 'error'; error: { code: string; detail?: string } } | undefined;
   if (result?.status !== 'error') throw new Error(`expected an error at ${index}`);
   return result.error;
 }

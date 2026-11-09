@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -49,22 +49,18 @@ export function compactRedline(form: RedlineNormalForm): CompactRedline {
       .filter((story) => story.kind !== 'comments')
       .map((story) => ({
         kind: story.kind,
-        paragraphs: story.paragraphs.filter(changed).map(
-          (p): CompactParagraph => ({
-            s: p.segments.map((segment) => [
-              segment.mark,
-              segment.mark === 'eq' && !segment.formatChanged
-                ? shorten(segment.text)
-                : segment.text,
-              segment.formatChanged ? 1 : 0,
-            ]),
-            ...(p.mark ? { m: p.mark } : {}),
-            ...(p.row ? { r: p.row } : {}),
-            ...(p.tableDepth ? { t: p.tableDepth } : {}),
-            ...(p.propertiesChanged ? { p: 1 as const } : {}),
-            ...(p.inTextBox ? { b: 1 as const } : {}),
-          })
-        ),
+        paragraphs: story.paragraphs.filter(changed).map((p): CompactParagraph => ({
+          s: p.segments.map((segment) => [
+            segment.mark,
+            segment.mark === 'eq' && !segment.formatChanged ? shorten(segment.text) : segment.text,
+            segment.formatChanged ? 1 : 0,
+          ]),
+          ...(p.mark ? { m: p.mark } : {}),
+          ...(p.row ? { r: p.row } : {}),
+          ...(p.tableDepth ? { t: p.tableDepth } : {}),
+          ...(p.propertiesChanged ? { p: 1 as const } : {}),
+          ...(p.inTextBox ? { b: 1 as const } : {}),
+        })),
       }))
       .filter((story) => story.paragraphs.length > 0),
     counts: form.revisionCounts,
@@ -74,26 +70,22 @@ export function compactRedline(form: RedlineNormalForm): CompactRedline {
 /** The normal form a compact redline stands for, for scoring. */
 export function expandRedline(compact: CompactRedline): RedlineNormalForm {
   return {
-    stories: compact.stories.map(
-      (story): NormalStory => ({
-        kind: story.kind,
-        part: '',
-        paragraphs: story.paragraphs.map(
-          (p): NormalParagraph => ({
-            segments: p.s.map(([mark, text, format]) => ({
-              mark,
-              text,
-              formatChanged: format === 1,
-            })),
-            mark: p.m ?? null,
-            propertiesChanged: p.p === 1,
-            row: p.r ?? null,
-            tableDepth: p.t ?? 0,
-            inTextBox: p.b === 1,
-          })
-        ),
-      })
-    ),
+    stories: compact.stories.map((story): NormalStory => ({
+      kind: story.kind,
+      part: '',
+      paragraphs: story.paragraphs.map((p): NormalParagraph => ({
+        segments: p.s.map(([mark, text, format]) => ({
+          mark,
+          text,
+          formatChanged: format === 1,
+        })),
+        mark: p.m ?? null,
+        propertiesChanged: p.p === 1,
+        row: p.r ?? null,
+        tableDepth: p.t ?? 0,
+        inTextBox: p.b === 1,
+      })),
+    })),
     revisionCounts: compact.counts,
     authors: [],
   };

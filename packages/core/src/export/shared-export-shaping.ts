@@ -250,20 +250,19 @@ export function acquireSharedExportShaping(
   // Keep the host operation fingerprint (including epoch) on the cache-facing view. Only the
   // hidden immutable native substrate is deduplicated by content.
   const extensionFingerprint = prepared.fingerprint;
-  const pending = substrate.then(
-    (shared): SharedExportShapingCapabilities =>
-      Object.freeze({
-        createMeasurer: shared.createMeasurer,
-        shapeLaidOutText: shared.shapeLaidOutText,
-        producer: [
-          'node-export',
-          extensionFingerprint,
-          shared.shapingHash,
-          `producer:${shared.producerVersion}`,
-          `fallback:${FIXED_MEASURER_FINGERPRINT}`,
-        ].join('|'),
+  const pending = substrate.then((shared): SharedExportShapingCapabilities =>
+    Object.freeze({
+      createMeasurer: shared.createMeasurer,
+      shapeLaidOutText: shared.shapeLaidOutText,
+      producer: [
+        'node-export',
         extensionFingerprint,
-      })
+        shared.shapingHash,
+        `producer:${shared.producerVersion}`,
+        `fallback:${FIXED_MEASURER_FINGERPRINT}`,
+      ].join('|'),
+      extensionFingerprint,
+    })
   );
   if (!views) sharedShapingViews.set(prepared, (views = new Map()));
   views.set(policyKey, pending);

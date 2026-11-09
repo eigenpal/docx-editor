@@ -78,8 +78,7 @@ function isOnDemand(source: DocxFontsSource | undefined): boolean {
 async function resolveEagerOrigin(origin: DocxFontOrigin): Promise<DocxFontsInput | undefined> {
   if (typeof origin !== 'function') return await origin;
   return (await (origin as unknown as () => DocxFontsInput | Promise<DocxFontsInput>)()) as
-    | DocxFontsInput
-    | undefined;
+    DocxFontsInput | undefined;
 }
 
 /** @public */

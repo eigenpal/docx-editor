@@ -153,8 +153,8 @@ describe('readNumPr folds hostile tiers per field', () => {
   /** Each entry is one cascade tier's `w:pPr`, lowest precedence first. */
   function foldedNumPr(...tiers: string[]): { numId: string; ilvl: number } | null {
     const part = document(tiers.map((pPr) => `<w:p><w:pPr>${pPr}</w:pPr></w:p>`).join(''));
-    const nodes = paragraphsOf(part).map(
-      (paragraph) => paragraph.children.find((child) => child.kind === 'paragraphProperties')!
+    const nodes = paragraphsOf(part).map((paragraph) =>
+      paragraph.children.find((child) => child.kind === 'paragraphProperties')!
     );
     return readNumPr(nodes);
   }

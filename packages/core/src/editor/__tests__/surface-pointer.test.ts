@@ -289,6 +289,37 @@ describe('click count', () => {
     mounted.surface.destroy();
   });
 
+  test('a second press on a picture or a chart never selects the word beside it', () => {
+    // An inline drawing lets the press through to the page, so the surface counts it.
+    const mounted = mount(paragraph('hello world'));
+    const drawing = document.createElement('span');
+    drawing.setAttribute('data-drawing-node-id', 'drawing-1');
+    mounted.pages.append(drawing);
+    for (let i = 0; i < 2; i++) {
+      drawing.dispatchEvent(pointer('pointerdown', 12, 5));
+      release(12, 5);
+    }
+    const [anchor, head] = offsets(mounted.surface);
+    expect(anchor).toBe(head);
+    mounted.surface.destroy();
+  });
+
+  test('a second press in a text box still selects a word', () => {
+    const mounted = mount(paragraph('hello world'));
+    const drawing = document.createElement('span');
+    drawing.setAttribute('data-drawing-node-id', 'drawing-1');
+    const box = document.createElement('span');
+    box.className = 'docx-drawing-textbox';
+    drawing.append(box);
+    mounted.pages.append(drawing);
+    for (let i = 0; i < 2; i++) {
+      box.dispatchEvent(pointer('pointerdown', 12, 5));
+      release(12, 5);
+    }
+    expect(offsets(mounted.surface)).toEqual([0, 5]);
+    mounted.surface.destroy();
+  });
+
   test('a third click takes the whole paragraph', () => {
     const mounted = mount(paragraph('hello world'));
     press(mounted, 12, 5);

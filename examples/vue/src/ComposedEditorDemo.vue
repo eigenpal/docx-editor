@@ -27,46 +27,74 @@
         :document="bytes"
         author="Demo Reviewer"
         mode="edit"
+        :zoom-mode="DEMO_ZOOM_MODE"
         :modules="proModules"
         :fonts="fonts ?? undefined"
         @font-error="onFontError"
       >
+        <DemoEditorEffects @chart-pane="showPanel('chart')" />
         <EditorChrome
           :title="title"
-          :color-mode="colorMode"
           :show-adapter-switcher="showAdapterSwitcher"
+          :panel-open="panelOpen"
           @update:title="title = $event"
-          @update:color-mode="colorMode = $event"
+          @toggle-panel="panelOpen = !panelOpen"
           @insert-citation="citationForm = { mode: 'insert', at: $event }"
         />
-        <div class="demo-ruler-row">
-          <DocxEditorHorizontalRuler />
-        </div>
-        <div class="demo-main">
-          <DocxEditorNavigation :pane-width="280" />
-          <DocxEditorViewport class="demo-viewport">
-            <div class="demo-vruler">
-              <DocxEditorVerticalRuler />
+        <!-- The workspace: the page column with its dock, and the side panel beside it. -->
+        <div class="demo-workspace">
+          <section class="demo-docpane" aria-label="Document">
+            <DocumentDock :title="title" />
+            <!-- The rulers are off until the reader turns them on in Settings. -->
+            <div v-if="rulers" class="demo-ruler-row">
+              <DocxEditorHorizontalRuler />
             </div>
-            <DocxEditorHeaderFooterChrome />
-            <DocxEditorNotesChrome />
-            <DocxEditorContent />
-            <CustomNodeChrome :on-node-click="editCitation" />
-            <DocxEditorContextMenu>
-              <CustomNodeContextMenu :on-edit-node="editCitation" />
-            </DocxEditorContextMenu>
-            <DocxEditorHyperLink />
-            <DocxEditorReview :card="{ className: 'demo-review-card' }" />
-          </DocxEditorViewport>
-          <DocxEditorPageNumber />
-          <!-- The library's loading overlay, pinned over the workspace (`.demo-main` is the
+            <div class="demo-main">
+              <DocxEditorNavigation :pane-width="280" />
+              <DocxEditorViewport class="demo-viewport">
+                <div v-if="rulers" class="demo-vruler">
+                  <DocxEditorVerticalRuler />
+                </div>
+                <DocxEditorHeaderFooterChrome />
+                <DocxEditorNotesChrome />
+                <DocxEditorContent />
+                <CustomNodeChrome :on-node-click="editCitation" />
+                <DocxEditorContextMenu>
+                  <CustomNodeContextMenu :on-edit-node="editCitation" />
+                </DocxEditorContextMenu>
+                <DocxEditorHyperLink />
+                <DocxEditorReview :card="{ className: 'demo-review-card' }" />
+              </DocxEditorViewport>
+              <DocxEditorPageNumber />
+              <!-- The library's loading overlay, pinned over the workspace (`.demo-main` is the
              positioned ancestor). Zero conditions wired here: the engine reports both the
              first open and a later one, so picking a large document through Open DOCX
              shows this screen instead of freezing on the old one. It renders nothing while
              the document is on screen. -->
-          <DocxEditorLoading overlay />
-          <PerfHud />
-          <CitationDialog :form="citationForm" @close="citationForm = null" />
+              <DocxEditorLoading overlay />
+              <PerfHud />
+              <CitationDialog :form="citationForm" @close="citationForm = null" />
+            </div>
+            <!-- Zoom, in the corner of the canvas. -->
+            <DocxEditorToolbar :preset="false" class="demo-zoombar">
+              <DocxEditorToolbarZoom />
+            </DocxEditorToolbar>
+          </section>
+          <template v-if="panelOpen">
+            <!-- Where the panel covers the page, a press beside it closes it. -->
+            <button
+              type="button"
+              class="demo-scrim"
+              tabindex="-1"
+              aria-hidden="true"
+              @click="panelOpen = false"
+            />
+            <DemoSidePanel v-model:tab="panelTab" @close="panelOpen = false">
+              <template #settings>
+                <ReviewSettings v-model:color-mode="colorMode" v-model:rulers="rulers" />
+              </template>
+            </DemoSidePanel>
+          </template>
         </div>
       </DocxEditorRoot>
     </div>
@@ -74,7 +102,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import {
   DocxEditorRoot,
   DocxEditorViewport,
@@ -103,14 +131,20 @@ import {
 import { packagedFonts } from '@docx-editor.dev/fonts';
 import { googleFonts } from '@docx-editor.dev/fonts/google';
 import EditorChrome from './EditorChrome.vue';
+import DocumentDock from './DocumentDock.vue';
+import DemoEditorEffects from './DemoEditorEffects.vue';
+import DemoSidePanel from './DemoSidePanel.vue';
+import ReviewSettings from './ReviewSettings.vue';
+import type { DemoPanelTab } from '../../shared/demo-tabs';
 import PerfHud from './PerfHud.vue';
 import CitationDialog from './CitationDialog.vue';
 import { DEMO_CITATION, type CitationFormState } from './demoCitation';
 import { storedReviewPane } from '../../shared/review-settings';
+import { DEMO_ZOOM_MODE, saveRulers, storedRulers } from '../../shared/demo-view';
 import { demoCatalog, demoDirection } from '../../shared/demo-language';
 
-void DocxEditorToolbar;
 void DocxEditorMenu;
+const DocxEditorToolbarZoom = DocxEditorToolbar.Zoom;
 
 const props = defineProps<{ fixtureUrl: string }>();
 
@@ -140,6 +174,16 @@ const title = ref(
     ?.replace(/\.docx$/i, '') ?? 'Document'
 );
 const colorMode = ref<'light' | 'dark'>('light');
+const rulers = ref(storedRulers());
+watch(rulers, saveRulers);
+// The side panel: closed at first, on the Settings tab when opened. Insert > Chart and Edit
+// chart open it on the Chart tab (`DemoEditorEffects.vue`).
+const panelOpen = ref(false);
+const panelTab = ref<DemoPanelTab>('settings');
+function showPanel(tab: DemoPanelTab): void {
+  panelTab.value = tab;
+  panelOpen.value = true;
+}
 const citationForm = ref<CitationFormState | null>(null);
 
 // ORDER IS PRECEDENCE. `packagedFonts()` answers first from bytes inside

@@ -6,6 +6,7 @@ import {
   selectionContainsClipboardObject,
 } from './clipboard-object-selection.ts';
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
+import { chartCopyFlavours, pasteCopiedChart } from './surface-chart-clipboard.ts';
 import { partOfNodeId } from './surface-scope.ts';
 // Copy, cut and paste for the paginated surface (paginated-surface seam).
 //
@@ -130,6 +131,10 @@ export interface SurfaceClipboardDeps {
     run: () => TreeApplyResult | boolean,
     selectionAfter?: () => SemanticSelection | null
   ): void;
+  /** The selected drawing, when an object selection holds one. */
+  selectedDrawing?(): { readonly drawingNodeId: string; readonly ownerPartName: string } | null;
+  /** Select a pasted drawing and bring it into view. */
+  selectPastedDrawing?(drawingNodeId: string, paragraphId: string): void;
 }
 
 export interface SurfaceClipboardOps {
@@ -259,6 +264,9 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
   /** Every clipboard flavour for the current selection — see clipboard-copy-payload.ts. */
   function copyFlavoursNow(): CopyFlavours {
     deps.flushPendingInputAndLayout();
+    // One selected chart copies whole, through the in-memory chart clipboard.
+    const chartCopy = chartCopyFlavours(deps);
+    if (chartCopy) return chartCopy;
     const rectangle = deps.cellSelection();
     const range = deps.orderedRange();
     const order = deps.paragraphOrder();
@@ -416,6 +424,8 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       forcePlainPasteArmedAt !== null &&
       deps.now() - forcePlainPasteArmedAt < FORCE_PLAIN_PASTE_WINDOW_MS;
     forcePlainPasteArmedAt = null;
+    const chart = forcePlain ? null : pasteCopiedChart(deps, html);
+    if (chart !== null) return chart;
     const lane = routePaste(
       {
         richLaneOpen:

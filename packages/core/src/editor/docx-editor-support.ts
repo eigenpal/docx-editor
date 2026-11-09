@@ -863,6 +863,12 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
           };
     case 'insertTextBox':
       return { supported: true, mutating: true };
+    case 'insertChart':
+    case 'setChartData':
+    case 'setChartType':
+    case 'setChartFormat':
+    case 'setChartColor':
+      return { supported: true, mutating: true };
     case 'insertImage':
       return command.data instanceof Uint8Array &&
         (command.mime === 'image/png' ||

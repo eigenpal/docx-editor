@@ -11,9 +11,7 @@ export interface EditorCaret {
 
 function caretOf(editor: Editor | null): EditorCaret | null {
   const surface = (editor as (Editor & { readonly surface?: unknown }) | null)?.surface as
-    | { state(): { selection: { head?: EditorCaret } } }
-    | null
-    | undefined;
+    { state(): { selection: { head?: EditorCaret } } } | null | undefined;
   const head = surface?.state?.().selection?.head;
   return head && typeof head.paragraphId === 'string' && Number.isFinite(head.offset) ? head : null;
 }

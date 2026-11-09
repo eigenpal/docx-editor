@@ -10,7 +10,12 @@
 // selection.
 
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import type { OoxmlElement, OoxmlPart, TreeDocOp } from '@docx-editor.dev/core/store';
+import {
+  LEVEL_INDENT_ATTRIBUTES,
+  type OoxmlElement,
+  type OoxmlPart,
+  type TreeDocOp,
+} from '@docx-editor.dev/core/store';
 import { buildStyleCascadeTable } from '@docx-editor.dev/core/layout';
 import { directParagraphProperties, mergedProperties } from './surface-formatting.ts';
 
@@ -25,6 +30,27 @@ export interface ListStyleDeps {
 const LIST_PARAGRAPH_NAME = 'list paragraph';
 /** The styleId Word gives the built-in. */
 const LIST_PARAGRAPH_STYLE_ID = 'ListParagraph';
+
+const isIndent = (property: { readonly localName: string }): boolean =>
+  property.localName === 'ind';
+
+/**
+ * How a style write treats the paragraph's own `w:ind`: kept, dropped whole (a paragraph that
+ * joins a list), or dropped on the sides a level states (an item that changes level).
+ */
+export type IndentDrop = false | 'all' | 'level';
+
+type DirectProperty = ReturnType<typeof directParagraphProperties>[number];
+
+/** `property` after `drop`, or null when nothing of it is left. */
+function droppedIndent(property: DirectProperty, drop: IndentDrop): DirectProperty | null {
+  if (!drop || !isIndent(property)) return property;
+  if (drop === 'all') return null;
+  const kept = Object.entries(property.attributes ?? {}).filter(
+    ([name]) => !LEVEL_INDENT_ATTRIBUTES.has(name)
+  );
+  return kept.length > 0 ? { ...property, attributes: Object.fromEntries(kept) } : null;
+}
 
 /** The `w:pStyle` a paragraph itself authors, or undefined. */
 function authoredStyleId(
@@ -60,8 +86,11 @@ export interface ListStyleWrites {
    * These ops must go BEFORE the numbering ops, because `setParagraphProperties` replaces
    * the authorable set it is handed and `setListNumbering` is surgical on `w:numPr` — the
    * other order would drop the numbering the same transaction had just written.
+   *
+   * A paragraph for which `dropsIndent` holds also loses its own `w:ind`, as a paragraph that
+   * joins the list above does in reference renderings, whether or not its style changes.
    */
-  applyOps(touched: readonly string[]): TreeDocOp[];
+  applyOps(touched: readonly string[], dropsIndent?: (paragraphId: string) => boolean): TreeDocOp[];
   /**
    * The write that takes a paragraph OUT of List Paragraph, or null when it is not in it.
    *
@@ -72,6 +101,17 @@ export interface ListStyleWrites {
    * leaves the paragraph styled, and indented.
    */
   clearOp(paragraphId: string): TreeDocOp | null;
+  /**
+   * The write that puts a paragraph in the paragraph style a list level is linked to, or null
+   * when no paragraph style of that id exists.
+   *
+   * A level linked through `w:pStyle`, as in a heading numbering, numbers the paragraphs of
+   * that style. A list gesture that joins such a list puts the paragraph in the style and
+   * drops its own `w:numPr`, so the paragraph becomes one of the list's headings rather than a
+   * plain paragraph with a heading's number. `dropIndent` also removes its own `w:ind`, whole
+   * or on the sides a level states.
+   */
+  linkedStyleOp(paragraphId: string, styleId: string, dropIndent?: IndentDrop): TreeDocOp | null;
 }
 
 export function createListStyleWrites(deps: ListStyleDeps): ListStyleWrites {
@@ -85,8 +125,7 @@ export function createListStyleWrites(deps: ListStyleDeps): ListStyleWrites {
    * are last-wins. The styles part is immutable for the session, so this builds once.
    */
   let defaultStyleMemo:
-    | { readonly root: OoxmlElement | null; readonly styleId: string | null }
-    | undefined;
+    { readonly root: OoxmlElement | null; readonly styleId: string | null } | undefined;
   function defaultParagraphStyleId(): string | null {
     const root = session.stylesRoot();
     if (defaultStyleMemo === undefined || defaultStyleMemo.root !== root) {
@@ -99,26 +138,51 @@ export function createListStyleWrites(deps: ListStyleDeps): ListStyleWrites {
   }
 
   return {
-    applyOps(touched) {
+    applyOps(touched, dropsIndent) {
       const styleId = listParagraphStyleId(session.documentStyles());
-      if (styleId === null) return [];
       const defaultStyleId = defaultParagraphStyleId();
       const part = deps.storyPart();
       const ops: TreeDocOp[] = [];
       for (const paragraphId of touched) {
-        const properties = directParagraphProperties(part, paragraphId);
-        const authored = authoredStyleId(properties);
-        if (authored !== undefined && authored !== defaultStyleId) continue;
+        const own = directParagraphProperties(part, paragraphId);
+        const dropping = dropsIndent?.(paragraphId) === true && own.some(isIndent);
+        const properties = dropping ? own.filter((property) => !isIndent(property)) : own;
+        const authored = authoredStyleId(own);
+        const restyles =
+          styleId !== null && (authored === undefined || authored === defaultStyleId);
+        if (!restyles && !dropping) continue;
         ops.push({
           op: 'setParagraphProperties',
           paragraphId,
-          properties: mergedProperties(properties, {
-            localName: 'pStyle',
-            attributes: { val: styleId },
-          }),
+          properties:
+            restyles && styleId !== null
+              ? mergedProperties(properties, { localName: 'pStyle', attributes: { val: styleId } })
+              : properties,
         });
       }
       return ops;
+    },
+
+    linkedStyleOp(paragraphId, styleId, dropIndent = false) {
+      const exists = session
+        .documentStyles()
+        .some((style) => style.type === 'paragraph' && style.styleId === styleId);
+      if (!exists) return null;
+      const properties = directParagraphProperties(deps.storyPart(), paragraphId).flatMap(
+        (property) => {
+          if (property.localName === 'numPr') return [];
+          const kept = droppedIndent(property, dropIndent);
+          return kept ? [kept] : [];
+        }
+      );
+      return {
+        op: 'setParagraphProperties',
+        paragraphId,
+        properties: mergedProperties(properties, {
+          localName: 'pStyle',
+          attributes: { val: styleId },
+        }),
+      };
     },
 
     clearOp(paragraphId) {

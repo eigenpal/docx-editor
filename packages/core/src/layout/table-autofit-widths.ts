@@ -68,7 +68,12 @@ import {
   type StyleCascadeTable,
 } from './style-cascade.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
-import { percentShareWidths, preferredSpreadWidths } from './table-autofit-spread.ts';
+import { contentAlignedReachPt, leadingIndentPt } from './table-origin.ts';
+import {
+  fixedNestedWidths,
+  percentShareWidths,
+  preferredSpreadWidths,
+} from './table-autofit-spread.ts';
 import { emptyColumnContent, type AutofitColumnContent } from './table-autofit-column-content.ts';
 export type { AutofitColumnContent } from './table-autofit-column-content.ts';
 import { resolveCjkTypography } from './cjk-typography.ts';
@@ -584,47 +589,8 @@ function fixedTableCellMinimums(
   return spanAdjustedMinimums(own, own, own, spans);
 }
 
-/**
- * A nested fixed table's columns once they give way to fit the cell's room: each down to its
- * own content, measured as cells with any spacing gaps outside them.
- */
-function fixedNestedWidths(
-  structure: SemanticTableStructure,
-  roomPt: number,
-  minimumsOf: () => readonly number[]
-): readonly number[] {
-  const columns = structure.columnWidthsPt;
-  let total = 0;
-  for (const width of columns) total += width;
-  if (!(roomPt > 0) || total <= roomPt + WIDTH_EPSILON_PT) return columns;
-  const minimums = minimumsOf();
-  const gaps = spacingGapsPt(structure);
-  const room = Math.max(0, roomPt - gaps);
-  // No column is sized by content here: every one gives way from its stated width.
-  const sizedByContent = columns.map(() => false);
-  const cells = contentSizedWidths(
-    spacedCellWidths(structure),
-    sizedByContent,
-    minimums,
-    minimums,
-    room,
-    room,
-    room
-  );
-  return gaps > 0 ? columnsAroundCells(cells, gaps) : cells;
-}
-
 /** How often a table settles again for spans its settled columns no longer hold. */
 const MAX_SPAN_ROUNDS = 3;
-
-/** The table indent, which moves only a table aligned to its leading edge. */
-function leadingIndentPt(structure: SemanticTableStructure): number {
-  const leading = structure.bidiVisual ? 'right' : 'left';
-  // A negative indent moves a top-level table into the margin, which adds room. A floating
-  // table is placed by its own position, so its indent moves nothing.
-  if (structure.float) return 0;
-  return structure.alignment === leading ? structure.indentPt : 0;
-}
 
 /** The narrowest cell a nested table can be given. */
 const NARROW_CELL_PT = 1;
@@ -710,6 +676,12 @@ export function autofitColumnMinimumsPt(
   // Measured as cell widths: a spaced table's gaps sit between its cells, outside them.
   const gapPt = cellSpacingGapPt(structure.cellSpacingPt);
   const cellWidths = spacedCellWidths(structure);
+  // The margins a column keeps whole should its minimums overflow. These are the current
+  // margins, not the widened ones: the current ones matched the reference renderings.
+  const noteInsets = (column: number, insets: { left: number; right: number }): void => {
+    if (content)
+      content.insets[column] = Math.max(content.insets[column] ?? 0, insets.left + insets.right);
+  };
   for (const row of structure.rows) {
     const widenedRow =
       structure.outerRuleOffsetPt !== undefined && !structure.legacyContentAlignment
@@ -738,6 +710,7 @@ export function autofitColumnMinimumsPt(
         for (let column = cell.gridColumn; column < end; column++) held += cellWidths[column]!;
         const count = end - cell.gridColumn;
         content?.verticalHolds.push({ from: cell.gridColumn, count, minimum: held });
+        if (count === 1) noteInsets(cell.gridColumn, cellContentInsets(cell, collapsed));
         continue;
       }
       if (cell.gridSpan !== 1 && !content) continue;
@@ -800,6 +773,7 @@ export function autofitColumnMinimumsPt(
       if (neededWide > wide[cell.gridColumn]!) wide[cell.gridColumn] = neededWide;
       const neededMost = Math.max(held, most + around);
       if (neededMost > widest[cell.gridColumn]!) widest[cell.gridColumn] = neededMost;
+      noteInsets(cell.gridColumn, measured);
     }
   }
   // A column only spanning cells cover has no minimum of its own; it keeps its width.
@@ -808,6 +782,7 @@ export function autofitColumnMinimumsPt(
     if (minimum < 0) minimums[column] = cellWidths[column]!;
     if (ifWidened) ifWidened[column] = wide[column]! < 0 ? minimums[column]! : wide[column]!;
     if (content) {
+      content.insets[column] ??= 0;
       content.maximums[column] = widest[column]! < 0 ? minimums[column]! : widest[column]!;
       // A column with no measured cell of its own keeps its width, as a preferred one does.
       content.sizedByContent[column] = !preferred[column] && widest[column]! >= 0;
@@ -882,6 +857,7 @@ export function autofitColumnWidthsPt(
       if (!markupContent.measured[column]) continue;
       minimumsNow[column] = Math.max(minimumsNow[column]!, minimum);
       ifWidened[column] = Math.max(ifWidened[column]!, markupWidened[column]!);
+      content.insets[column] = Math.max(content.insets[column]!, markupContent.insets[column]!);
       content.maximums[column] = Math.max(
         content.maximums[column]!,
         markupContent.maximums[column]!
@@ -931,18 +907,26 @@ export function autofitColumnWidthsPt(
       : rule > 0
         ? sameOrComputed(
             structure,
-            widenAutofitColumns(cellWidths, minimumsNow, shrinkTo, Infinity, true)
+            widenAutofitColumns(cellWidths, minimumsNow, shrinkTo, Infinity, {
+              shrinkToTarget: true,
+              // Room is unbounded here, so no minimums overflow.
+              insets: [],
+            })
           )
         : structure.columnWidthsPt;
     byStructure.set(structure, { contentWidthPt, widths });
     return widths;
   }
   let minimums = spanAdjustedMinimums(preferredWidths, ifWidened, content.maximums, content.spans);
-  // The table indent moves a leading-aligned table into the text column's room; a legacy
-  // content-aligned table owns the room its own width already spans.
+  // The table indent moves a leading-aligned table into the text column's room, and a table
+  // whose outer content meets the text edges reaches past them. A legacy content-aligned
+  // table also owns the room its own width already spans.
   const totalPt = structure.columnWidthsPt.reduce((sum, width) => sum + width, 0);
   const legacy = structure.legacyContentAlignment === true;
-  const availablePt = legacy ? Math.max(totalPt, contentWidthPt) : availableFor(roomWidthPt);
+  const reachPt = contentAlignedReachPt(structure);
+  const availablePt = legacy
+    ? Math.max(totalPt, availableFor(contentWidthPt) + reachPt)
+    : availableFor(roomWidthPt) + reachPt;
   const targetPt =
     autofitTargetPt(structure.tableWidth, totalPt, availablePt, legacy, contentWidthPt) - gaps;
   // A table wider than its text column grows to hold its minimums instead of scaling them.
@@ -958,10 +942,13 @@ export function autofitColumnWidthsPt(
           // A table with no width of its own takes what its content asks, up to its room.
           ownWidth ? targetPt : undefined,
           roomPt,
-          cellWidths.reduce((sum, width) => sum + width, 0)
+          {
+            currentPt: cellWidths.reduce((sum, width) => sum + width, 0),
+            insets: content.insets,
+          }
         )
       : (percentShareWidths(structure, content, cellWidths, minimums, targetPt, view.depth ?? 0) ??
-        widenAutofitColumns(cellWidths, minimums, targetPt, roomPt));
+        widenAutofitColumns(cellWidths, minimums, targetPt, roomPt, { insets: content.insets }));
   let cells = settle();
   // A span the preferred widths held may lose its room as columns settle: hold it against
   // the settled widths and settle again.

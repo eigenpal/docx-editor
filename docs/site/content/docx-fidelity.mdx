@@ -98,16 +98,16 @@ The matrix reports editing, rendering, and round-trip support separately. A feat
 
 | Feature | Rendering and editing | Round-trip |
 | --- | --- | --- |
-| Anchored text boxes | Insert, type, format, paste plain text, drag, resize, and delete in the body, headers, and footers. Edits synchronize in collaboration. Boxes with tables are read-only. Linked chains, autofit, and rotation can clip or show a placeholder. | Preserved |
-| Drawing shapes | Preset shapes and bounded custom geometry with fills, outlines, line ends, and outer shadows. Glow, inner shadow, reflection, soft edge, and dark-edged bevel rims need the [drawing module](/docs/2.x/pro/drawing). Other shapes show a placeholder that keeps its wrap area. Not editable. | Preserved |
-| WMF and EMF | Rasterized in the editor. With the drawing module, PDF export draws them as vectors. Files that do not convert show a placeholder; PDF export omits them and reports a diagnostic. Not editable. | Full |
-| Charts | Read-only with the [drawing module](/docs/2.x/pro/drawing), also in PDF. If a chart fails, the editor and PDF export use its saved fallback. If the fallback also fails, the editor shows a labeled placeholder, and PDF export omits the chart with a `drawing` diagnostic, which fails strict export. See [What renders](/docs/2.x/pro/drawing#what-renders). | Preserved |
+| Anchored text boxes | Insert and edit text boxes in the body, headers, and footers, with collaboration support. Boxes with tables are read-only. Linked boxes, automatic sizing, and rotation can clip content or show a placeholder. | Preserved |
+| Drawing shapes | Display supported shapes with fills, outlines, and shadows. Additional effects require the [drawing module](/docs/2.x/pro/drawing); unsupported shapes show a placeholder. Shapes are read-only. | Preserved |
+| WMF and EMF | Display as images in the editor and as vectors in PDF with the drawing module. Failed conversions show placeholders; PDF export omits them and reports an error. These images are read-only. | Full |
+| Charts | Insert [charts](/docs/2.x/guides/charts), resize, move, and wrap them, and edit their type, elements, colors, and data. The [drawing module](/docs/2.x/pro/drawing) paints them in the editor and PDF. Unsupported charts show their saved preview or a placeholder. | Preserved |
 | DrawingML diagrams | Renders the saved diagram drawing. A diagram without its drawing needs the drawing module. Not editable. | Full |
 | VML text paths | Renders with the drawing module. Without it, an inline text path shows a placeholder and a floating text path does not show. | Full |
 
 - Groups with unsupported effects or 3D properties keep their unsupported behavior as a whole. The editor does not render only their supported members.
 - `w14:textOutline` renders when it is an opaque solid RGB outline. PDF export does not paint text outlines.
-- Picture commands refuse charts. Deleting a chart removes its fallback too.
+- Charts take the picture frame commands but refuse crop, replace, and rotate. Deleting a chart removes its fallback too.
 - A right-to-left line beside a floating object fills the passage to the right of the object first. Text never reorders across the object.
 
 ### Page layout, headers, and footers

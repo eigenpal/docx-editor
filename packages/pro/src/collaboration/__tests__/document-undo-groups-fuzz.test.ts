@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -149,7 +149,7 @@ function bracketed(name: string, before: string | undefined, after: string | und
 /** `offset`, moved to the end of any token of `text` it falls inside. */
 function outsideTokens(text: string, offset: number, tokens: ReadonlySet<string>): number {
   let at = offset;
-  for (let moved = true; moved; ) {
+  for (let moved = true; moved;) {
     moved = false;
     for (const token of tokens) {
       for (let from = text.indexOf(token); from >= 0; from = text.indexOf(token, from + 1)) {

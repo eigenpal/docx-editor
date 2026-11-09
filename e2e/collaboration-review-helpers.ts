@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { unzipSync, strFromU8 } from 'fflate';
+import { closeDemoPanel, openDemoSettings } from './demo-settings.ts';
 
 export interface ReviewWriteItemSnap {
   readonly id: string;
@@ -198,9 +199,9 @@ export async function firstTableCellParagraph(page: Page): Promise<{
 }
 
 export async function ensureReviewPaneOpen(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Review settings', exact: true }).click();
-  await page.getByRole('radio', { name: 'Review pane', exact: true }).check();
-  await page.keyboard.press('Escape');
+  const settings = await openDemoSettings(page);
+  await settings.getByRole('radio', { name: 'Review pane', exact: true }).check();
+  await closeDemoPanel(page);
   const rail = page.locator('[data-testid="review-rail"]');
   await expect(rail).toBeAttached({ timeout: 20_000 });
   if (await rail.evaluate((node) => node.hasAttribute('data-open'))) return;

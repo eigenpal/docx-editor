@@ -98,10 +98,17 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   // Keyed on `CHART_DRAWING_REASON` in the engine's image lane (`image-state-rules.ts`).
   'this drawing is a chart; only delete applies, and it removes the whole chart':
     'disabledReason.chartDrawing',
+  // Keyed on `CHART_FRAME_REASON` in the engine's image lane (`image-state-rules.ts`).
+  'this drawing is a chart; only its size, position, wrap and alt text change':
+    'disabledReason.chartFrame',
   // Keyed on `CHART_CLIPBOARD_REASON` in the engine's clipboard lane
   // (`clipboard-object-selection.ts`).
-  'the selection contains a chart; a chart cannot be copied, cut or pasted':
+  'a chart can be copied, cut or pasted only on its own, not with other content':
     'disabledReason.chartClipboard',
+  // Keyed on `CHART_CLIPBOARD_STALE_REASON` in the engine's chart clipboard
+  // (`chart-clipboard.ts`).
+  'the copied chart is no longer available; copy the chart again':
+    'disabledReason.chartClipboardStale',
   'invalid table chrome value': 'disabledReason.invalidValue',
   'invalid value for toolbar command': 'disabledReason.invalidValue',
   'unsupported table command': 'disabledReason.unavailable',
@@ -139,6 +146,8 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'content controls lock every remaining change; remove the locks to decide them':
     'disabledReason.reviewLockedChanges',
   'every remaining change is in a data-bound content control': 'disabledReason.reviewBoundChanges',
+  // Keyed on `CHART_SUGGESTING_REFUSAL` in the engine's `surface-chart-ops.ts`.
+  'chart changes are not supported in suggesting mode': 'chart.errors.suggesting',
 });
 
 /**
@@ -155,5 +164,7 @@ export function localizeDisabledReason(reason: string | null, t: TFunction): str
   const key = Object.prototype.hasOwnProperty.call(DISABLED_REASON_KEYS, reason)
     ? DISABLED_REASON_KEYS[reason]
     : undefined;
-  return key ? t(key) : reason;
+  if (key) return t(key);
+  // The chart lane states its refusals as `chart.errors.*` keys, which name themselves.
+  return /^chart\.errors\.[a-zA-Z]+$/.test(reason) ? t(reason as TranslationKey) : reason;
 }

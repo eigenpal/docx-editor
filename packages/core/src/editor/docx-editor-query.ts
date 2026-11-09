@@ -16,6 +16,7 @@ import {
   splitCellConfigOf,
 } from './docx-editor-derive.ts';
 import { contentControlsOf, contentControlAtOf } from './content-controls.ts';
+import { chartDataOf, chartFormatOf } from './chart-commands.ts';
 
 /** Shared query answers, including typed empty results for unsupported reads. */
 export function queryEditorDocument<K extends keyof EditorQueries>(
@@ -71,6 +72,16 @@ export function queryEditorDocument<K extends keyof EditorQueries>(
       return watermarkQueryOf(surface) as EditorQueryResults[K];
     case 'bookmarks':
       return (surface?.bookmarkEditing.list() ?? []) as unknown as EditorQueryResults[K];
+    case 'chartData':
+      return chartDataOf(
+        surface,
+        (query as { drawingNodeId?: string }).drawingNodeId
+      ) as EditorQueryResults[K];
+    case 'chartFormat':
+      return chartFormatOf(
+        surface,
+        (query as { drawingNodeId?: string }).drawingNodeId
+      ) as EditorQueryResults[K];
     default:
       // pageContent is nullable and underived.
       return null as EditorQueryResults[K];

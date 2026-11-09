@@ -190,6 +190,8 @@ New library UI string: add to `en.json`, use `t('key')`, `bun run i18n:fix`. New
 
 ## Docs site
 
+Keep DOCX fidelity descriptions short and clear for developers. Each feature note and table description has at most three sentences. Use 20 words or fewer per sentence. State the supported behavior and the main limitation. Put setup instructions, detailed rules, and edge cases in the relevant guide, and link to it. Never append implementation history or regression details to a feature note. Rewrite the existing summary when support changes. Apply this rule to `docs/site/data/word-features.ts` and `docs/site/content/docx-fidelity.mdx`.
+
 Authored here in `docs/site/content/` (MDX), synced by the site repo at build time. Feature-support claims live in `docs/site/data/word-features.ts` (typed matrix), never hand-written in prose. A PR that changes user-visible behavior updates both.
 
 READMEs, guides, developer docs, feature descriptions, and release notes follow the [Google developer documentation style guide](https://developers.google.com/style) ([highlights](https://developers.google.com/style/highlights) is the summary):

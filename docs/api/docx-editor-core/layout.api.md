@@ -2462,6 +2462,7 @@ export interface NumberingLevel {
     // (undocumented)
     readonly numFmt: string;
     readonly picBulletId?: string;
+    readonly pStyle?: string;
     readonly runProperties: readonly OoxmlProperty[];
     // (undocumented)
     readonly start: number;
@@ -3490,7 +3491,7 @@ export interface ReviewRevisionItem {
     // (undocumented)
     readonly date?: string;
     readonly formattingChanges?: readonly {
-        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter' | 'direction';
+        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'highlight' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter' | 'direction';
         readonly value: string | null;
     }[];
     readonly formattingKind?: string;
@@ -4161,7 +4162,7 @@ export function setHarfBuzzWasmUrl(url: string | URL): void;
 export const sha256FontBytes: (bytes: Uint8Array) => string;
 
 // @public
-export function shadingFillFromElement(shd: OoxmlElement | undefined): string | undefined;
+export function shadingFillFromElement(shd: OoxmlElement | null | undefined): string | undefined;
 
 // @public
 export interface ShapeColor {

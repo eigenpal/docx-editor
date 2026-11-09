@@ -133,8 +133,7 @@ function attributeOf(
 }
 
 export type StylePlan =
-  | { readonly ok: true; readonly styleId: string }
-  | { readonly ok: false; readonly detail: string };
+  { readonly ok: true; readonly styleId: string } | { readonly ok: false; readonly detail: string };
 
 /**
  * The `w:pStyle` id a name may be written as, or why it may not.
