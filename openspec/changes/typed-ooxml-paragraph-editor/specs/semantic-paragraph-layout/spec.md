@@ -700,6 +700,54 @@ In compatibility mode 15 and later, a distributed line SHALL keep the word that 
 - **WHEN** keeping the next word costs each space more than a third, but at most half, of the stretch the line without it would take
 - **THEN** the justified line keeps the word and the distributed line moves it to the next line
 
+### Requirement: Spaces take the balanced width with balanced widths
+
+With `w:balanceSingleByteDoubleByteWidth`, qualifying U+0020 spaces SHALL take the balanced width in every compatibility mode. Spaces SHALL qualify beside Hangul, CJK ideographs, or kana drawn with an East Asian face. Every space in a sequence of two or more spaces SHALL also qualify.
+
+#### Scenario: Spaces beside Korean text widen
+
+- **GIVEN** Korean and English words in Batang 11 pt with `w:balanceSingleByteDoubleByteWidth`
+- **THEN** each space beside a Korean word is 5.5 pt wide
+- **AND** each single space between English words keeps its natural advance
+
+### Requirement: Balanced space width follows the selected face
+
+The balanced width SHALL use half the space's font size when its East Asian face holds East Asian glyphs. Otherwise, it SHALL use the space face's average character width. Single spaces between Latin letters or digits SHALL keep their advances. No-break spaces and tabs SHALL also keep their advances. The automatic Latin-to-East-Asian gap SHALL use half the Latin text's balanced width.
+
+#### Scenario: A face without East Asian glyphs supplies its average width
+
+- **GIVEN** balanced widths and a space whose East Asian face has no East Asian glyphs
+- **WHEN** the space qualifies for balanced width
+- **THEN** its width uses its face's average character width
+
+### Requirement: Balanced spaces retain their width during space stretching
+
+A justified or distributed line that stretches only spaces SHALL give those spaces one common width. Balanced spaces SHALL NOT become narrower than their balanced width. Narrower spaces SHALL receive the available slack first.
+
+#### Scenario: Narrow spaces receive slack before balanced spaces
+
+- **GIVEN** a line with natural-width Latin spaces and wider balanced spaces
+- **WHEN** the line stretches only its spaces
+- **THEN** the Latin spaces widen first until they reach the balanced width
+- **AND** any remaining slack widens all spaces equally
+
+### Requirement: Balanced spaces retain their width during modern shrinking
+
+In compatibility mode 15 or later, balanced spaces SHALL NOT shrink to retain an overflowing word. Other spaces SHALL supply the required shrink. The cost test SHALL use the shorter line's stretched widths, with narrower spaces receiving slack first. Without balanced widths, spaces SHALL retain their normal shrink and stretch behavior. Legacy space-shrink rules SHALL NOT change.
+
+#### Scenario: A line of Korean words wraps its next word
+
+- **GIVEN** a justified mode 15 paragraph with balanced widths and spaces between Korean words
+- **WHEN** the next word fits only when those spaces shrink
+- **THEN** the word moves to the next line
+- **AND** spaces between English words can shrink in a mixed-language line
+
+#### Scenario: Without balanced widths, spaces beside Hangul shrink
+
+- **GIVEN** the same paragraph without `w:balanceSingleByteDoubleByteWidth`
+- **WHEN** the next word fits only when spaces shrink
+- **THEN** the word stays on the line, and every space shrinks by the same amount
+
 ### Requirement: Legacy space shrinking with punctuation compression
 
 In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingControl` compresses punctuation and the document defaults name an East Asian face, a line at any alignment SHALL keep the word that overflows it when each space can shrink to fit it without going below half the average character width of its face. Only one word per line SHALL join this way. With `w:balanceSingleByteDoubleByteWidth`, each space SHALL shrink down to a quarter of its font size instead.

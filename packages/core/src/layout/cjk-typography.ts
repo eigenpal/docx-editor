@@ -31,11 +31,19 @@ export interface CjkTypographySettings {
    */
   readonly legacyLineEndPunctuation?: true;
   /**
-   * The compatibility setting `w:balanceSingleByteDoubleByteWidth`: lines in a legacy mode keep
-   * their natural inter-word spaces, also with punctuation compression.
+   * The compatibility setting `w:balanceSingleByteDoubleByteWidth`: a space beside East Asian
+   * text, and each space of a run of spaces, takes the balanced width (`balanced-space-widths.ts`).
+   * Lines in a legacy mode keep their natural inter-word spaces, also with punctuation
+   * compression.
    * @internal
    */
   readonly balancedWidths?: true;
+  /**
+   * `balancedWidths` in a modern compatibility mode (`balancedSpaceShrink`): a space at the
+   * balanced width keeps it when a justified or distributed line shrinks its spaces.
+   * @internal
+   */
+  readonly balancedSpaceShrink?: true;
   /**
    * The compatibility setting `w:useWord97LineBreakRules`. With `balancedWidths`, lines in a
    * legacy mode keep natural inter-word spaces in proportional faces.

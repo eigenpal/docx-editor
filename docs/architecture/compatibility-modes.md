@@ -47,6 +47,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `headerFooterAnchorsWrapText` | `modern` | Header and footer text wraps around anchored objects |
 | `headerRowsKeepWithBody` | `modern` | Header rows keep with the opening body rows |
 | `justifiedSpaceShrink` | `modern` | Justified lines may shrink spaces |
+| `balancedSpaceShrink` | `modern` | With `w:balanceSingleByteDoubleByteWidth`, a space at the balanced width keeps it when a justified or distributed line shrinks its spaces |
 | `keepNextGivesTailLines` | `modern` | A keep-with-next paragraph gives its last lines to the next page |
 | `legacyPercentTableContentWidth` | `legacy` | A percent-width table resolves against the legacy content width |
 | `legacySharedGridLineSideRules` | `legacy` | Side rules center on shared grid lines, in left-to-right, right-to-left, and nested tables |
