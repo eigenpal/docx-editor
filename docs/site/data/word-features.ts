@@ -419,6 +419,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    docsLink: '/docs/2.x/guides/toolbar#create-and-continue-lists',
     notes:
       'Create bulleted lists, continue existing lists, and change levels with Tab or the indent controls. Switching between bullets and numbers preserves item indents. List changes support tracked changes.',
   },
@@ -430,6 +431,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    docsLink: '/docs/2.x/guides/toolbar#create-and-continue-lists',
     notes:
       'Create numbered lists with decimal, Roman numeral, letter, and supported script-specific formats. Unsupported script-specific formats use decimal numbers. Document settings control marker spacing and indents.',
   },

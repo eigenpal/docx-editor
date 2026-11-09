@@ -3056,6 +3056,13 @@ export function mountPaginatedSurface(
     return editingMode === 'suggest' && writer ? writer : undefined;
   }
 
+  /** Where typed or composed text leaves the caret; a tracked insertion keeps the prompt. */
+  function typedLanding(paragraphId: string, offset: number, length: number): number {
+    const part = partOfNodeId(session, paragraphId) ?? session.part();
+    const tracked = trackedAuthorOrNone() !== undefined;
+    return promptInsertionLanding(part, paragraphId, offset, length, tracked);
+  }
+
   /** Suggesting attributes text and structural row edits as Word tracked changes. */
   function trackedOps(ops: readonly TreeDocOp[], date = revisionDateNow()): TreeDocOp[] {
     const author = trackedAuthorOrNone();
@@ -3411,6 +3418,8 @@ export function mountPaginatedSurface(
       publishLocalCollaborationSelection();
     },
     commit: (run) => commit(run),
+    insertOwner: () => insertOwnerOf(contentControlAtCaret()),
+    promptLanding: typedLanding,
     // The composition readback writes through the SAME lane as every other edit. Calling the
     // session directly skipped `trackedOps` and `writeRefusal`, so IME text in suggesting
     // mode landed untracked — the reviewer proposing a change was editing the document —
@@ -4516,12 +4525,7 @@ export function mountPaginatedSurface(
       const insertOps: TreeDocOp[] = [...plan.ops, typedInsertText(target, text, inside)];
       // Typing at a prompt's edge replaces the prompt, so the text lands where the prompt
       // began; a caret counted from the pressed offset sat past the paragraph's new end.
-      const landing = promptInsertionLanding(
-        partOfNodeId(session, target.paragraphId) ?? session.part(),
-        target.paragraphId,
-        target.offset,
-        text.length
-      );
+      const landing = typedLanding(target.paragraphId, target.offset, text.length);
       const redoMark = { paragraphId: target.paragraphId, start: landing, end: landing };
       // Letters in a right-to-left script start a `w:rtl` run, joined to the caret format.
       const formatOps = typedDirectionOps(target, landing, text, pendingOps);

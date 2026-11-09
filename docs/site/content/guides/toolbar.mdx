@@ -131,6 +131,18 @@ Custom buttons must call `preventDefault()` on `mousedown` to keep the selection
 
 For the format painter, call the `copyFormatting` and `pasteFormatting` commands. `pasteFormatting` reports a disabled reason until something is copied.
 
+## Create and continue lists
+
+Use the bullet or numbering button to create a list from selected paragraphs. The buttons create independent lists without reusing heading numbering elsewhere in the document.
+
+A plain paragraph directly after a compatible list joins that list. A compatible list uses the selected marker kind at the joining level: bullets or numbers.
+
+Selections containing both list items and plain paragraphs start a separate list by default. They join an ordinary list when they start with a plain paragraph directly after that list. They do not join heading numbering; selected numbered headings keep their style and level.
+
+Paragraphs joining ordinary lists use the preceding item's level. For lists with style-linked levels, each joining paragraph's indent determines its level. A paragraph joining a level linked to a heading style takes that style.
+
+If every selected paragraph already uses the selected list kind, the button removes list membership. For programmatic list creation and level settings, see [Lists and numbering](/docs/2.x/editor-api/lists).
+
 ## Keep host controls responsive
 
 Wrap your controls in `Toolbar.Group`. The group collapses into the **More** (`⋯`) panel by priority, like the built-in groups.

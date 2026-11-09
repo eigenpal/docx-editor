@@ -103,6 +103,50 @@ test('a paste at the trailing edge lands in the control and converges, undoes, a
   expect(controlText(bob)).toBe('vaYlueX');
 });
 
+/**
+ * What the browser does while an IME composes at the caret: it writes the composed text into
+ * the painted span itself, and the surface reads the paragraph back at `compositionend`.
+ */
+function compose(editor: Editor, container: HTMLElement, text: string) {
+  const { paragraphId, offset } = editor.surface!.state().selection.head;
+  const pages = container.querySelector('.docx-pages')!;
+  pages.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+  const span = [...container.querySelectorAll<HTMLElement>('[data-paragraph-id][data-start]')]
+    .filter((each) => each.dataset.paragraphId === paragraphId)
+    .find((each) => {
+      const start = Number(each.dataset.start);
+      return start < offset && offset <= start + (each.textContent ?? '').length;
+    })!;
+  const at = offset - Number(span.dataset.start);
+  const painted = span.textContent ?? '';
+  span.textContent = painted.slice(0, at) + text + painted.slice(at);
+  pages.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: text }));
+}
+
+test('text composed at the trailing edge lands in the control and converges, undoes, and redoes', async () => {
+  const { pair, alice, bob, flush, converge } = await connectedPair();
+  // `connectedPair` mounts Alice first.
+  const aliceContainer = containers[0]!;
+
+  pair.pause();
+  caret(alice, 7);
+  compose(alice, aliceContainer, '한');
+  caret(bob, 4);
+  bob.surface!.type('Y');
+  flush();
+  pair.resume();
+  converge();
+  expect(bob.surface!.session.bodyText()).toBe('A vaYlue한 B');
+  expect(controlText(bob)).toBe('vaYlue한');
+
+  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+  converge();
+  expect(controlText(bob)).toBe('vaYlue');
+  expect(alice.exec({ type: 'redo' }).ok).toBe(true);
+  converge();
+  expect(controlText(bob)).toBe('vaYlue한');
+});
+
 test('a trailing-edge paste converges while the other peer deletes across the control', async () => {
   const { pair, alice, bob, flush, converge } = await connectedPair();
   const controls = (editor: Editor) =>
