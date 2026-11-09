@@ -11,6 +11,8 @@ import { BookmarkSummary } from '@docx-editor.dev/core/contracts/editor';
 import { ButtonHTMLAttributes } from 'react';
 import { CalendarDay } from '@docx-editor.dev/core/editor';
 import { CalendarMonth } from '@docx-editor.dev/core/editor';
+import { ChartData } from '@docx-editor.dev/core/editor';
+import { ChartFormat } from '@docx-editor.dev/core/editor';
 import { CHROME_GROUPS } from '@docx-editor.dev/core/editor';
 import { CHROME_MENUS } from '@docx-editor.dev/core/editor';
 import { ChromeExportFormat } from '@docx-editor.dev/core/editor';
@@ -173,6 +175,8 @@ import { SEARCH_HIGHLIGHT_PRIORITY } from '@docx-editor.dev/core/editor';
 import { SEARCH_HIGHLIGHT_SET } from '@docx-editor.dev/core/editor';
 import { SEARCH_MATCH_LIMIT } from '@docx-editor.dev/core/editor';
 import { SectionProperties } from '@docx-editor.dev/core/editor';
+import { SelectedChartCommand } from '@docx-editor.dev/core/editor';
+import { SelectedChartState } from '@docx-editor.dev/core/editor';
 import { SplitCellLimits } from '@docx-editor.dev/core/editor';
 import { SupportedImageMime } from '@docx-editor.dev/core/editor';
 import { SurfaceFormatting } from '@docx-editor.dev/core/editor';
@@ -3833,6 +3837,22 @@ export function useScopeClassName(): '' | 'docx-editor ' | 'docx-editor dark ';
 
 // @public
 export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTMLElement | null, placement: ScopedChromeAnchorPlacement): ScopedChromeAnchor;
+
+// @public
+export function useSelectedChart(): UseSelectedChartReturn;
+
+// @public
+export interface UseSelectedChartReturn {
+    readonly canEditData: boolean;
+    readonly canEditFormat: boolean;
+    readonly chart: SelectedChartState | null;
+    readonly data: ChartData | null;
+    readonly dataDisabledReason: string | null;
+    readonly execute: (command: SelectedChartCommand) => ExecResult;
+    readonly format: ChartFormat | null;
+    readonly formatDisabledReason: string | null;
+    readonly readReason: string | null;
+}
 
 // @public
 export function useSplitCellDialog(): UseSplitCellDialogReturn;

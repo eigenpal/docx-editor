@@ -11,6 +11,8 @@ import { BookmarkSortOrder } from '@docx-editor.dev/core/editor';
 import { BookmarkSummary } from '@docx-editor.dev/core/contracts/editor';
 import { CalendarDay } from '@docx-editor.dev/core/editor';
 import { CalendarMonth } from '@docx-editor.dev/core/editor';
+import { ChartData } from '@docx-editor.dev/core/editor';
+import { ChartFormat } from '@docx-editor.dev/core/editor';
 import { CHROME_GROUPS } from '@docx-editor.dev/core/editor';
 import { CHROME_MENUS } from '@docx-editor.dev/core/editor';
 import { ChromeExportFormat } from '@docx-editor.dev/core/editor';
@@ -176,6 +178,8 @@ import { SEARCH_HIGHLIGHT_PRIORITY } from '@docx-editor.dev/core/editor';
 import { SEARCH_HIGHLIGHT_SET } from '@docx-editor.dev/core/editor';
 import { SEARCH_MATCH_LIMIT } from '@docx-editor.dev/core/editor';
 import { SectionProperties } from '@docx-editor.dev/core/editor';
+import { SelectedChartCommand } from '@docx-editor.dev/core/editor';
+import { SelectedChartState } from '@docx-editor.dev/core/editor';
 import { ShallowRef } from 'vue';
 import { SlotsType } from 'vue';
 import { SplitCellLimits } from '@docx-editor.dev/core/editor';
@@ -8520,6 +8524,22 @@ export function useScopeClassName(): '' | 'docx-editor ' | 'docx-editor dark ';
 
 // @public
 export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTMLElement | null, placement: ScopedChromeAnchorPlacement): ScopedChromeAnchor;
+
+// @public
+export function useSelectedChart(): UseSelectedChartReturn;
+
+// @public
+export interface UseSelectedChartReturn {
+    readonly canEditData: ComputedRef<boolean>;
+    readonly canEditFormat: ComputedRef<boolean>;
+    readonly chart: ComputedRef<SelectedChartState | null>;
+    readonly data: ComputedRef<ChartData | null>;
+    readonly dataDisabledReason: ComputedRef<string | null>;
+    readonly execute: (command: SelectedChartCommand) => ExecResult;
+    readonly format: ComputedRef<ChartFormat | null>;
+    readonly formatDisabledReason: ComputedRef<string | null>;
+    readonly readReason: ComputedRef<string | null>;
+}
 
 // @public
 export function useSplitCellDialog(): UseSplitCellDialogReturn;

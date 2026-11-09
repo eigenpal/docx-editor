@@ -338,10 +338,12 @@ export {
   DocxEditorSidePanel,
   ToolbarChartInsert,
   usePaneRequest,
+  useSelectedChart,
   type ChartInsertPartComponent,
   type ChartInsertProps,
   type DocxEditorChartPaneProps,
   type DocxEditorSidePanelProps,
+  type UseSelectedChartReturn,
 } from './editor/charts';
 
 export {

@@ -48,6 +48,7 @@ export const VUE_COMPOSABLES = [
   'useRevisionMarkupDialog',
   'useScopeClassName',
   'useScopedChromeAnchor',
+  'useSelectedChart',
   'useSplitCellDialog',
   'useTableBorderTargetLabel',
   'useTextFormFieldDialog',

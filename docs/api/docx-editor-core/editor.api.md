@@ -2238,6 +2238,9 @@ export interface EquationOps {
 }
 
 // @public
+export function execSelectedChart(editor: Editor | null, chart: SelectedChartState | null, command: SelectedChartCommand): ExecResult;
+
+// @public
 export function executeImageCommand(editor: DocxEditorInstance, command: Extract<EditorCommand, {
     type: 'insertImage' | 'replaceImage';
 }>): Promise<ExecResult>;
@@ -3686,6 +3689,9 @@ export function readInlineMargins(style: CSSStyleDeclaration): {
 };
 
 // @public
+export function readSelectedChart(editor: Editor | null, chart: SelectedChartState | null, snapshot: Pick<EditorSnapshot, 'editable' | 'editingMode'>): SelectedChartView;
+
+// @public
 export function readSplitCellCounts(columns: string, rows: string, limits: SplitCellLimits | null): SplitCellCounts;
 
 // @internal
@@ -4241,6 +4247,17 @@ export type SectionVerticalAlign = 'center' | 'bottom' | 'both';
 export function seedFields(format: ParagraphFormatRead): ParagraphDialogFields;
 
 // @public
+export type SelectedChartCommand = Omit<Extract<EditorCommand, {
+    type: 'setChartData';
+}>, 'drawingNodeId'> | Omit<Extract<EditorCommand, {
+    type: 'setChartType';
+}>, 'drawingNodeId'> | Omit<Extract<EditorCommand, {
+    type: 'setChartFormat';
+}>, 'drawingNodeId'> | Omit<Extract<EditorCommand, {
+    type: 'setChartColor';
+}>, 'drawingNodeId'>;
+
+// @public
 export interface SelectedChartState {
     readonly drawingNodeId: string;
     readonly editable: boolean;
@@ -4248,6 +4265,18 @@ export interface SelectedChartState {
     readonly formattable: boolean;
     readonly reason?: string;
     readonly version: number;
+}
+
+// @public
+export interface SelectedChartView {
+    readonly canEditData: boolean;
+    readonly canEditFormat: boolean;
+    readonly chart: SelectedChartState | null;
+    readonly data: ChartData | null;
+    readonly dataDisabledReason: string | null;
+    readonly format: ChartFormat | null;
+    readonly formatDisabledReason: string | null;
+    readonly readReason: string | null;
 }
 
 // @public

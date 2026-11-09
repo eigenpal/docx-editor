@@ -788,6 +788,12 @@ export {
   type ChartSwatch,
   type ChartTranslate,
 } from './chart-pane.ts';
+export {
+  execSelectedChart,
+  readSelectedChart,
+  type SelectedChartCommand,
+  type SelectedChartView,
+} from './selected-chart.ts';
 export type { SurfaceChartOps } from './surface-chart-ops.ts';
 export type {
   ChartCopySource,

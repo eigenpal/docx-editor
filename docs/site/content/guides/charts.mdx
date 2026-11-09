@@ -95,6 +95,40 @@ function ChartSidePanel() {
 
 Render the component inside `DocxEditor.Root`, beside `DocxEditor.Viewport`. In Vue, use `DocxEditorSidePanel` and the `usePaneRequest` composable in the same way. Use `DocxEditor.ChartPane` to place the pane in your own layout.
 
+## Build your own chart pane
+
+To replace the packaged pane, build a component with `useSelectedChart` and pass it to `DocxEditor.SidePanel` as its children. The hook returns the selected chart, its `data` and `format`, whether each can change, and `execute`. `execute` takes the chart commands of `editor.exec` without `drawingNodeId`, and it edits the chart that the hook shows:
+
+```tsx
+function MyChartPane() {
+  const { chart, data, format, canEditFormat, formatDisabledReason, execute } = useSelectedChart();
+  if (!chart || !data || !format) return <p>Select a chart.</p>;
+  return (
+    <>
+      <select
+        value={format.type}
+        disabled={!canEditFormat}
+        title={formatDisabledReason ?? undefined}
+        onChange={(e) => execute({ type: 'setChartType', chartType: e.target.value as ChartType })}
+      >
+        <option value="columnClustered">Column</option>
+        <option value="line">Line</option>
+        <option value="pie">Pie</option>
+      </select>
+      <p>{data.series.length} series</p>
+    </>
+  );
+}
+
+<DocxEditor.SidePanel>
+  <MyChartPane />
+</DocxEditor.SidePanel>;
+```
+
+The value changes only when the chart, its part, or the editing mode changes. Viewing and suggesting turn the edits off, and the disabled reasons say why. Translate a reason with `localizeDisabledReason` from `@docx-editor.dev/i18n`. In Vue, `useSelectedChart` returns the same fields as computed refs, and you pass the pane in the default slot of `DocxEditorSidePanel`.
+
+A custom pane does not take the focus requests of **Edit chart** and a double-click. To move the focus into your pane, listen with `usePaneRequest` and check `request.focus`.
+
 ## Limits
 
 - The editor edits the data of charts with one plot and one level of categories. Other charts keep their data, and the pane says why.
