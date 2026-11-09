@@ -135,7 +135,7 @@ import DocumentDock from './DocumentDock.vue';
 import DemoEditorEffects from './DemoEditorEffects.vue';
 import DemoSidePanel from './DemoSidePanel.vue';
 import ReviewSettings from './ReviewSettings.vue';
-import { demoPanelFits, type DemoPanelTab } from '../../shared/demo-tabs';
+import type { DemoPanelTab } from '../../shared/demo-tabs';
 import PerfHud from './PerfHud.vue';
 import CitationDialog from './CitationDialog.vue';
 import { DEMO_CITATION, type CitationFormState } from './demoCitation';
@@ -176,10 +176,10 @@ const title = ref(
 const colorMode = ref<'light' | 'dark'>('light');
 const rulers = ref(storedRulers());
 watch(rulers, saveRulers);
-// The side panel: open where it fits beside a full page, on the Chart tab. Insert > Chart and
-// Edit chart open it too (`DemoEditorEffects.vue`).
-const panelOpen = ref(demoPanelFits());
-const panelTab = ref<DemoPanelTab>('chart');
+// The side panel: closed at first, on the Settings tab when opened. Insert > Chart and Edit
+// chart open it on the Chart tab (`DemoEditorEffects.vue`).
+const panelOpen = ref(false);
+const panelTab = ref<DemoPanelTab>('settings');
 function showPanel(tab: DemoPanelTab): void {
   panelTab.value = tab;
   panelOpen.value = true;
