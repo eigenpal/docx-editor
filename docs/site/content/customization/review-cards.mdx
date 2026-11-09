@@ -73,6 +73,8 @@ Style cards under your editor wrapper. Match presence attributes as `[data-activ
 }
 ```
 
+Formatting cards describe tracked highlight changes, such as **Highlight: yellow**. For custom cards, `ReviewRevisionItem.formattingChanges` includes `highlight` with the `w:highlight` color name, such as `yellow`.
+
 ## Replace the card template
 
 A React `List` render prop or a Vue `#item` slot takes over the card. Wrap it in `Card` so parts can read the item.

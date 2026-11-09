@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-A paragraph that the list buttons add to the list above now takes a level from its indent when that list numbers heading styles, and the level of the item above in a plain list. Fixes #1847
+Paragraphs joining lists with style-linked levels use their indent to select a level. Paragraphs joining ordinary lists use the preceding item’s level. Fixes #1847

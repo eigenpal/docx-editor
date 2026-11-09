@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-A list number with all caps no longer overlaps the paragraph text, and list numbers and bullets no longer paint in small capitals. Fixes #1834
+All-capital list numbers leave enough space before paragraph text. List numbers and bullets ignore small-capital formatting. Fixes #1834

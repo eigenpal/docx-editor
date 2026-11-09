@@ -3,4 +3,4 @@
 '@docx-editor.dev/i18n': minor
 ---
 
-Formatting cards now describe a tracked highlight change, such as "Highlight: yellow", and `ReviewRevisionItem.formattingChanges` reports it as the `highlight` property with the `w:highlight` color name.
+Formatting cards describe tracked highlight changes, such as “Highlight: yellow”. `ReviewRevisionItem.formattingChanges` includes `highlight` with the `w:highlight` color name.
