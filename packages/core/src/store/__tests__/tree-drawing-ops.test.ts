@@ -847,3 +847,21 @@ describe('drawing op impact classes', () => {
     ).toBe('text-local');
   });
 });
+
+test('drawing insertion refuses invalid runtime bias values', () => {
+  const host = parse(
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>Hi</w:t></w:r></w:p></w:body></w:document>`
+  );
+  const drawing = drawingOf(parse(inlinePictureDrawing()));
+  for (const bias of ['bad', '', null, 0]) {
+    const op: TreeDocOp = {
+      op: 'insertDrawing',
+      paragraphId: paragraphIdOf(host),
+      offset: 1,
+      drawing,
+      bias: bias as 'left',
+    };
+    expect(validateTreeOp(host, op)).toBe('invalid-property-value');
+    expect(applyTreeOp(host, op).ok).toBe(false);
+  }
+});

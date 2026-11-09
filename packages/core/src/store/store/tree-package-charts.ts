@@ -34,6 +34,8 @@ export type ChartIntentResult =
 
 /** A chart insert at one place in a story. */
 export interface InsertChartInput {
+  /** Explicit left bias inserts before a leading prompt. */
+  readonly bias?: 'left' | 'right';
   readonly paragraphId: string;
   readonly offset: number;
   readonly chartType: ChartType;
@@ -87,6 +89,7 @@ export function insertChart(
         if (
           !ctx.apply({
             op: 'insertDrawing',
+            ...(input.bias ? { bias: input.bias } : {}),
             paragraphId: input.paragraphId,
             offset: input.offset,
             drawing,
@@ -163,6 +166,8 @@ export interface ChartCopySource {
 
 /** A paste of a copied chart at one place in a story. */
 export interface DuplicateChartInput {
+  /** Explicit left bias inserts before a leading prompt. */
+  readonly bias?: 'left' | 'right';
   readonly source: ChartCopySource;
   readonly paragraphId: string;
   readonly offset: number;
@@ -217,6 +222,7 @@ export function duplicateChart(
         if (
           !ctx.apply({
             op: 'insertDrawing',
+            ...(input.bias ? { bias: input.bias } : {}),
             paragraphId: input.paragraphId,
             offset: input.offset,
             drawing,

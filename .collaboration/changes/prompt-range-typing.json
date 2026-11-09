@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Typing over a range ending inside a prompt replaced the prompt. An explicit left-biased insertion at its leading edge also filled it.",
+  "after": "Typing, rich paste, tabs, breaks, pictures, and charts preserve an ending unlocked prompt. Optional insertion bias selects an outside position. Local caret metadata retains the side through continued typing and history.",
+  "reason": "Optional bias fields select local insertion sites. Peers receive canonical tree mutations through the existing transaction journal; they do not replay these operations. Sibling runs, drawings, unchanged prompts, node identities, and stored fields use existing representations. Local caret metadata is not shared or persisted.",
+  "tests": [
+    "packages/core/src/editor/__tests__/content-control-prompt-delete.test.ts",
+    "packages/core/src/store/__tests__/prompt-left-bias.test.ts",
+    "packages/pro/src/collaboration/__tests__/content-control-prompt-delete-editors.test.ts"
+  ],
+  "changeset": "prompt-range-typing",
+  "migration": null
+}

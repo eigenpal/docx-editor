@@ -376,6 +376,8 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
   if (legacy) return legacyVmlGeometryRejection(part, legacy);
   switch (op.op) {
     case 'insertDrawing': {
+      if (op.bias !== undefined && op.bias !== 'left' && op.bias !== 'right')
+        return 'invalid-property-value';
       const paragraph = findNode(part, op.paragraphId);
       if (!paragraph) return 'unknown-paragraph';
       if (!isParagraph(paragraph)) return 'not-a-paragraph';
@@ -405,8 +407,7 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
       const projection = chart ? null : projectionOf(part, op.drawing);
       if (!chart && (!projection || (projection.picture === null && !projection.textboxStory)))
         return 'not-a-picture-drawing';
-      // `CT_TrackChange` makes `@w:author` required, so a tracked variant with an empty one
-      // would serialize a proposal no reader can attribute or resolve.
+      // `CT_TrackChange` requires `@w:author` to attribute and resolve the proposal.
       if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {
         return 'invalid-property-value';
       }
@@ -1534,7 +1535,9 @@ export function applyDrawingOp(
             return buildTrackedNode(mint(), 'run', 'r', [], [cloned]);
           },
           op.revision,
-          options
+          options,
+          1,
+          op.bias
         );
         if (!result.ok) return result;
         // The tracked apply reports the text-lane effect; a drawing insert moves geometry
@@ -1553,7 +1556,14 @@ export function applyDrawingOp(
       const cloned = withDrawingNamespaceBindings(
         cloneWithNewIds(op.drawing, nextId) as OoxmlDrawingNode
       );
-      const edited = insertRunPayloadAtOffset(part, paragraph, op.offset, [cloned], options);
+      const edited = insertRunPayloadAtOffset(
+        part,
+        paragraph,
+        op.offset,
+        [cloned],
+        options,
+        op.bias
+      );
       const effect: TreeOpEffect = {
         dirty: [paragraph.id, cloned.id],
         created: [cloned.id],

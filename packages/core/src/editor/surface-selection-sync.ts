@@ -54,6 +54,7 @@ export interface SurfaceSelectionSyncDeps {
    * keyboard's `insertText` names it, so a text control's trailing edge counts as inside it.
    */
   insertOwner?(): string | undefined;
+  compositionUsesTyping?(): boolean;
   /**
    * The caret offset after `length` characters land at `offset`. Text inserted at a prompt's
    * edge replaces the prompt, so it lands where the prompt began, not at `offset`.
@@ -726,7 +727,9 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       adoptPendingUserSelection();
       composing = true;
       const selection = deps.selection();
-      composingAcrossParagraphs = selection.anchor.paragraphId !== selection.head.paragraphId;
+      composingAcrossParagraphs =
+        selection.anchor.paragraphId !== selection.head.paragraphId ||
+        deps.compositionUsesTyping?.() === true;
       composingParagraph = selection.head.paragraphId;
       const collapsed =
         !composingAcrossParagraphs && selection.anchor.offset === selection.head.offset;

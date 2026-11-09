@@ -1154,7 +1154,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Find, create, fill, and remove content controls through the interface or API. Control locks restrict edits, and data-bound text remains read-only. Supported value changes can become tracked changes, except in temporary controls or block controls with multiple paragraphs.',
+      'Find, create, fill, and remove content controls through the interface or API. Typing and pasting preserve partially selected ending prompts. Locks, data bindings, temporary controls, and multi-paragraph block controls restrict supported edits.',
     docsLink: '/docs/2.x/guides/content-controls',
   },
   {

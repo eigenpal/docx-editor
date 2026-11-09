@@ -91,7 +91,11 @@ import {
   typedInsertText,
 } from './content-control-prompt-landing.ts';
 import { createContentControlHover } from './content-control-hover.ts';
-import { contentControlAtSelection } from './content-control-at-selection.ts';
+import {
+  contentControlAtSelection,
+  controlOutsidePrompt,
+  memoizedContentControlSelection,
+} from './content-control-at-selection.ts';
 import { collapseHorizontalSelection as collapseSelection } from './surface-selection-collapse.ts';
 import { createParagraphMarkVisibility } from './surface-paragraph-mark-visibility.ts';
 import { saveSurfaceDocument, saveSurfaceDocumentSteps } from './docx-editor-save.ts';
@@ -676,7 +680,8 @@ export function mountPaginatedSurface(
     () => selection,
     () => partOfNodeId(session, selection.head.paragraphId) ?? session.part(),
     () => session.packageRevision(),
-    () => resolveSelectedDrawingRecord(surface)?.drawingNodeId ?? null
+    () => resolveSelectedDrawingRecord(surface)?.drawingNodeId ?? null,
+    () => promptBoundary()
   );
   function moveDocumentHistory(direction: 'undo' | 'redo'): void {
     let mark: ReturnType<TreeDocxSession['undo']> = null;
@@ -700,6 +705,7 @@ export function mountPaginatedSurface(
     const carried =
       direction === 'undo' ? historySelectionOf(collaborationSession, collaborationPort) : null;
     restoreSelection(carried ?? result.selection ?? mark);
+    retainPromptBoundary(result.outsidePromptId);
     // A chart or picture edit steps back with the object still selected, so the next undo,
     // the Chart pane, and the handles stay on it. `selectDrawing` refuses a drawing that the
     // step removed, and the caret then stays where the selection put it.
@@ -1293,10 +1299,7 @@ export function mountPaginatedSurface(
         ? selection.head.paragraphId
         : null,
     layout: editingLayout,
-    // Structural edits at the caret KEEP the armed typing format, the way Word does: a
-    // Shift+Enter line break, a Tab, a page break or turning the paragraph into a list item
-    // all leave the user typing at a new caret in the face they armed. Captured before the
-    // ops run, re-anchored at the post-edit caret.
+    // Structural edits retain the armed typing format at the resulting caret.
     commit: (run, nextSelection, options) =>
       commit(run, nextSelection, {
         rearmPending: armedAtCaret() ?? undefined,
@@ -1307,6 +1310,8 @@ export function mountPaginatedSurface(
     selectionMark: () => selectionMark(),
     collapsedAt: (position) => collapsedAt(position),
     deleteSelectionPlan: () => deleteSelectionPlan(),
+    typingSelectionPlan: () => typingSelectionPlan(),
+    retainPromptBoundary: (id) => retainPromptBoundary(id),
     paragraphTextOf: (paragraphId) => textOf(paragraphId),
     // Resolved through `w:numStyleLink` the way LAYOUT resolves markers (§17.9.21):
     // against the raw index a delegating definition has no levels of its own, so every
@@ -2156,33 +2161,21 @@ export function mountPaginatedSurface(
    * `setValue` and `remove` then rewrote and deleted body content while the reader was
    * editing a header.
    */
-  /**
-   * Single-slot memo for the body branch of {@link contentControlAtCaret}.
-   *
-   * `state()` resolves the active control on every read, and hosts read state repeatedly
-   * between changes, so the geometry hit-test ran again and again against an unchanged layout
-   * and selection. Both inputs are replaced, never mutated, so identity is a sound key: a
-   * commit republishes the layout, a caret move reassigns the selection, and a zoom relayouts.
-   * The story branch stays unmemoized — it reads the live part, which neither key covers.
-   */
-  let contentControlAtCaretMemo: {
-    readonly layout: SemanticLayout;
-    readonly selection: SemanticSelection;
-    readonly result: ContentControlBoundaryRecord | null;
-  } | null = null;
+  const bodyControlAtCaret = memoizedContentControlSelection(
+    () => currentLayout,
+    () => selection,
+    () => resolveBodyContentControlAtCaret()
+  );
   function contentControlAtCaret(): ContentControlBoundaryRecord | null {
+    const outside = promptBoundary();
+    if (outside)
+      return controlOutsidePrompt(
+        partOfNodeId(session, outside) ?? session.part(),
+        outside,
+        currentLayout
+      );
     const scope = storyScope();
-    if (scope.kind !== 'body') return contentControlInStoryAtCaret(scope);
-    if (
-      contentControlAtCaretMemo &&
-      contentControlAtCaretMemo.layout === currentLayout &&
-      contentControlAtCaretMemo.selection === selection
-    ) {
-      return contentControlAtCaretMemo.result;
-    }
-    const result = resolveBodyContentControlAtCaret();
-    contentControlAtCaretMemo = { layout: currentLayout, selection, result };
-    return result;
+    return scope.kind === 'body' ? bodyControlAtCaret() : contentControlInStoryAtCaret(scope);
   }
 
   function resolveBodyContentControlAtCaret(): ContentControlBoundaryRecord | null {
@@ -3330,6 +3323,7 @@ export function mountPaginatedSurface(
     if (moved && typeBuffer.length > 0) flushTypeBuffer();
     const fieldSelection = textFormInteraction?.beforeSelect(next);
     if (fieldSelection === null) return;
+    if (moved) clearPromptBoundary();
     if (moved && !flushingTypeBuffer) {
       typingHistory.end();
       caretFormatHistory.endGroup();
@@ -3421,6 +3415,7 @@ export function mountPaginatedSurface(
       const fieldSelection = textFormInteraction?.beforeSelect(next);
       if (fieldSelection === null) return;
       next = fieldSelection ?? next;
+      if (!selectionsEqual(next, selection)) clearPromptBoundary();
       reconcilePendingWith(next);
       releaseRetainedIfEscaped(next);
       retireActivationPin();
@@ -3434,6 +3429,7 @@ export function mountPaginatedSurface(
     },
     commit: (run) => commit(run),
     insertOwner: () => insertOwnerOf(contentControlAtCaret()),
+    compositionUsesTyping: () => typingSelectionPlan().outsidePromptId !== undefined,
     promptLanding: typedLanding,
     // The composition readback writes through the SAME lane as every other edit. Calling the
     // session directly skipped `trackedOps` and `writeRefusal`, so IME text in suggesting
@@ -4353,6 +4349,10 @@ export function mountPaginatedSurface(
     promptIsSelected,
     splitEndsTheParagraph,
     deleteSelectionPlan,
+    typingSelectionPlan,
+    retainPromptBoundary,
+    clearPromptBoundary,
+    promptBoundary,
     deleteSelectionOps,
     deleteRangePlan,
     replacementOffset,
@@ -4378,6 +4378,8 @@ export function mountPaginatedSurface(
     createSurfaceClipboardOps({
       session,
       textFormFieldId: () => textFormInteraction?.fieldId() ?? null,
+      typingSelectionPlan,
+      retainPromptBoundary,
       insertOwner: () => insertOwnerOf(contentControlAtCaret()),
       richPasteAllowed: () => !textboxEditing?.active(),
       paragraphIds: editingParagraphIds,
@@ -4526,7 +4528,7 @@ export function mountPaginatedSurface(
       // range beginning at the start, so inserting at the head — which may be the far end —
       // puts the text where the removed characters used to be rather than where the user
       // was typing.
-      const plan = deleteSelectionPlan();
+      const plan = typingSelectionPlan();
       // In SUGGESTING the deletion keeps the characters it strikes, so the replacement goes
       // after them — only then are the two halves adjacent, which is what lets the pane
       // fold them into one `Replaced "x" with "y"` card. The plan's `replaceAt` owns that
@@ -4538,8 +4540,17 @@ export function mountPaginatedSurface(
       const pendingOps = consumePendingFormatOps(target.paragraphId, target.offset, text.length);
       // The caret's own control OWNS the insert: at a control's trailing edge the store's
       // default lands beside it (right for a link), but Word keeps typing inside a control.
-      const inside = plan.ops.length === 0 ? insertOwnerOf(contentControlAtCaret()) : undefined;
-      const insertOps: TreeDocOp[] = [...plan.ops, typedInsertText(target, text, inside)];
+      const inside =
+        !plan.outsidePromptId && plan.ops.length === 0
+          ? insertOwnerOf(contentControlAtCaret())
+          : undefined;
+      const insertion = typedInsertText(target, text, inside);
+      const insertOps: TreeDocOp[] = [
+        ...plan.ops,
+        plan.outsidePromptId && insertion.op === 'insertText'
+          ? { ...insertion, bias: 'left' }
+          : insertion,
+      ];
       // Typing at a prompt's edge replaces the prompt, so the text lands where the prompt
       // began; a caret counted from the pressed offset sat past the paragraph's new end.
       const landing = typedLanding(target.paragraphId, target.offset, text.length);
@@ -4554,7 +4565,10 @@ export function mountPaginatedSurface(
             selectionMark(),
             redoMark
           ),
-        () => collapsedAt({ paragraphId: target.paragraphId, offset: landing })
+        () => {
+          retainPromptBoundary(plan.outsidePromptId);
+          return collapsedAt({ paragraphId: target.paragraphId, offset: landing });
+        }
       );
     },
     proposeTextChange: (kind, text, author) => commitProposedTextChange(kind, text, author),
@@ -4988,6 +5002,7 @@ export function mountPaginatedSurface(
     ...format,
 
     setSelection: (next) => {
+      clearPromptBoundary();
       // An explicit host write that MOVES the caret is an intentional selection — a test or
       // an automation host addressing a drawing's anchor means the drawing. A same-position
       // write stays inert: the font-load remount restores the saved caret through here
@@ -5727,6 +5742,8 @@ export function mountPaginatedSurface(
       applyOps,
       commit,
       storyScope,
+      outsidePromptAt: (id, offset) =>
+        !!promptBoundary() && selection.head.paragraphId === id && selection.head.offset === offset,
       selectionMark,
       editingMode: () => editingMode,
       author: () => author,
@@ -5738,6 +5755,8 @@ export function mountPaginatedSurface(
       session,
       commit,
       storyScope,
+      outsidePromptAt: (id, offset) =>
+        !!promptBoundary() && selection.head.paragraphId === id && selection.head.offset === offset,
       editingMode: () => editingMode,
       actorId: () => collaborationSession?.identity.actorId,
     }),
@@ -6127,7 +6146,10 @@ export function mountPaginatedSurface(
       selection: () => hiddenMarks.shownSelection(selection),
       // `none`: a press lands where the reader LOOKS, and moving the paper under a double
       // click sent its second press elsewhere — a blank footer band never opened.
-      setSelection: (next, caret) => setSelection(next, false, 'none', caret),
+      setSelection: (next, caret) => {
+        clearPromptBoundary();
+        setSelection(next, false, 'none', caret);
+      },
       cellSelection: () => cellSelection,
       setCellSelection: (next) => setCellSelection(next),
       // `preventScroll`: the pages layer is the WHOLE document tall, and focusing it scrolls

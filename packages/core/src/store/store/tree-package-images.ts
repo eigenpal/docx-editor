@@ -53,6 +53,8 @@ import type { PackageTransactResult, StoryScope, TreePackageStore } from './tree
 import type { TransactionContext, TreeDocumentStore, TreeStoryRef } from './tree-store.ts';
 
 export interface InsertImageInput {
+  /** Explicit left bias inserts before a leading prompt. */
+  readonly bias?: 'left' | 'right';
   readonly paragraphId: string;
   readonly offset: number;
   readonly bytes: Uint8Array;
@@ -391,6 +393,7 @@ export async function insertImage(
       if (
         !ctx.apply({
           op: 'insertDrawing',
+          ...(input.bias ? { bias: input.bias } : {}),
           paragraphId: input.paragraphId,
           offset: input.offset,
           drawing: drawing as OoxmlDrawingNode,

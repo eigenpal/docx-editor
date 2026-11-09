@@ -76,6 +76,12 @@ const unfilled = controls.items.filter((c) => c.placeholderShown);
 
 `cannotEdit` and `cannotDelete` expose the control's locks. Set them when you author a template.
 
+### Type beside a prompt
+
+Typing and pasting preserve an unlocked prompt when the selection starts before it and ends inside it. Later keystrokes stay before that prompt until you move the caret. Composition input and undo or redo retain that boundary.
+
+Rich paste keeps supported formatting and places the caret before the preserved prompt, including after multi-paragraph content.
+
 ## Inspect and create controls
 
 `useContentControl()` reports the control at the caret and whether you can write it:

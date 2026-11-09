@@ -40,6 +40,7 @@ export function createImageOps(deps: {
     selectionAfter?: () => SemanticSelection | null
   ) => void;
   storyScope: () => StoryScope;
+  outsidePromptAt?: (paragraphId: string, offset: number) => boolean;
   selectionMark: () => { paragraphId: string; start: number; end: number } | null;
   editingMode: () => SurfaceEditingMode;
   author: () => string | undefined;
@@ -163,6 +164,9 @@ export function createImageOps(deps: {
       const actorId = deps.actorId();
       return deps.session.insertImage(deps.storyScope(), {
         ...input,
+        ...(deps.outsidePromptAt?.(input.paragraphId, input.offset)
+          ? { bias: 'left' as const }
+          : {}),
         decodePort: deps.decodePort(),
         ...(tracked ? { revision: { author: author!, date: deps.trackedDate() } } : {}),
         ...(actorId ? { actorId } : {}),

@@ -80,10 +80,11 @@ export function insertRunPayloadAtOffset(
   paragraph: OoxmlParagraphNode,
   offset: number,
   payload: readonly OoxmlNode[],
-  options?: EditOptions
+  options?: EditOptions,
+  bias?: 'left' | 'right'
 ): OoxmlEditResult {
   const nextId = createNodeIdAllocator(part);
-  const site = insertionSite(paragraph, offset, null);
+  const site = insertionSite(paragraph, offset, null, bias);
 
   if (site.kind === 'withinValue') {
     const segment = site.segment;

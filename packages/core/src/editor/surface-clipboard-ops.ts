@@ -1,3 +1,4 @@
+import { promptsIn } from './surface-prompt-deletion.ts';
 import { equationPlainText } from './surface-equations.ts';
 import {
   CHART_CLIPBOARD_REASON,
@@ -77,6 +78,8 @@ export interface SurfaceClipboardDeps {
   textFormFieldId?(): string | null;
   /** The control that owns text inserted at the caret, as `type()` names it. */
   insertOwner?(): string | undefined;
+  typingSelectionPlan?(): RangeDeletionPlan & { readonly outsidePromptId?: string };
+  retainPromptBoundary?(controlId?: string): void;
   richPasteAllowed?(): boolean;
   paragraphIds?(): readonly string[];
   layout(): SemanticLayout;
@@ -185,7 +188,8 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     // the caret's paragraph with a single insert, and one `splitParagraphMany` cuts that
     // paragraph at every newline offset in a single pass — one rebuild of the body's child
     // sequence, however many paragraphs the clipboard carried.
-    const plan = deps.deleteSelectionPlan();
+    const plan: RangeDeletionPlan & { readonly outsidePromptId?: string } =
+      deps.typingSelectionPlan?.() ?? deps.deleteSelectionPlan();
     // WHERE THE REPLACEMENT GOES, the same question `type()` answers: in suggesting mode a
     // deletion keeps the characters it strikes, so the replacement belongs AFTER them.
     // Pasting at the range start put the new text in front of the struck words and left
@@ -205,13 +209,17 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       // The caret's own control owns a one-line paste, as it owns a keystroke: at a text
       // control's trailing edge the store's default lands the text beside the control. A
       // multi-line paste stays beside it: the paragraph split would cut the control in two.
-      const inside = plan.ops.length === 0 && lines.length === 1 ? deps.insertOwner?.() : undefined;
+      const inside =
+        !plan.outsidePromptId && plan.ops.length === 0 && lines.length === 1
+          ? deps.insertOwner?.()
+          : undefined;
       ops.push({
         op: 'insertText',
         paragraphId: target.paragraphId,
         offset: target.offset,
         text: joined,
         ...(inside === undefined ? {} : { inside }),
+        ...(plan.outsidePromptId ? { bias: 'left' as const } : {}),
       });
       ops.push(...pendingOps);
     }
@@ -243,6 +251,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     deps.commit(
       () => deps.withoutPendingOnRejection(ops, withoutFormat, deps.selectionMark(), redoMark),
       () => {
+        deps.retainPromptBoundary?.(plan.outsidePromptId);
         if (boundaries.length === 0) {
           return collapsedAt({
             paragraphId: target.paragraphId,
@@ -367,7 +376,8 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     if (deps.storyScope().kind !== 'body') return false;
     if (deps.cellSelection()) return false;
     deps.flushPendingInputAndLayout();
-    const plan = deps.deleteSelectionPlan();
+    const plan: RangeDeletionPlan & { readonly outsidePromptId?: string } =
+      deps.typingSelectionPlan?.() ?? deps.deleteSelectionPlan();
     // Suggesting: the selection is struck, not removed, and the paste is one proposal.
     const priorOps = suggestion
       ? (deps.trackedOps?.(plan.ops, suggestion.date) ?? plan.ops)
@@ -413,7 +423,25 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
           ...(result.ok ? {} : { reason: result.detail ?? result.reason }),
         } as unknown as TreeApplyResult;
       },
-      () => collapsedAt(target)
+      () => {
+        deps.retainPromptBoundary?.(plan.outsidePromptId);
+        if (plan.outsidePromptId) {
+          const part = session.part();
+          for (
+            let node = parentNodeOf(part, plan.outsidePromptId);
+            node;
+            node = parentNodeOf(part, node.id)
+          ) {
+            if (node.kind !== 'paragraph') continue;
+            const prompt = promptsIn(part, node.id).find(
+              (entry) => entry.control.id === plan.outsidePromptId
+            );
+            if (prompt) return collapsedAt({ paragraphId: node.id, offset: prompt.start });
+            break;
+          }
+        }
+        return collapsedAt(target);
+      }
     );
     return unsupported ? 'unsupported-content' : landed;
   }

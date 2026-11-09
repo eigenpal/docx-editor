@@ -1,3 +1,6 @@
+import { isContentControl } from '../store/package/content-control-walk.ts';
+import { parentNodeOf } from '../store/package/ooxml-edit.ts';
+import { contentControlRecordsInPart } from '../layout/content-control-boundary-layout.ts';
 // The content control a selection is IN, for the chrome's active state.
 //
 // A caret answers with one point. A range that selects a prompt whole runs from the
@@ -63,4 +66,44 @@ function endingAt(
     if (!best || control.nestingDepth > best.nestingDepth) best = control;
   }
   return best;
+}
+
+/** Cache body chrome reads by the layout and selection identities that determine them. */
+export function memoizedContentControlSelection(
+  layoutOf: () => SemanticLayout,
+  selectionOf: () => SemanticSelection,
+  resolve: () => ContentControlBoundaryRecord | null
+): () => ContentControlBoundaryRecord | null {
+  let previousLayout: SemanticLayout | undefined;
+  let previousSelection: SemanticSelection | undefined;
+  let result: ContentControlBoundaryRecord | null = null;
+  return () => {
+    const layout = layoutOf(),
+      selection = selectionOf();
+    if (layout !== previousLayout || selection !== previousSelection) {
+      result = resolve();
+      previousLayout = layout;
+      previousSelection = selection;
+    }
+    return result;
+  };
+}
+
+/** The retained caret is outside this prompt, but can remain inside an enclosing control. */
+export function controlOutsidePrompt(
+  part: import('../store/package/ooxml-tree.ts').OoxmlPart,
+  promptId: string,
+  layout: SemanticLayout
+): ContentControlBoundaryRecord | null {
+  for (let node = parentNodeOf(part, promptId); node; node = parentNodeOf(part, node.id)) {
+    if (isContentControl(node)) {
+      const id = node.id;
+      return (
+        layout.contentControls?.find((record) => record.id === id) ??
+        contentControlRecordsInPart(part).find((record) => record.id === id) ??
+        null
+      );
+    }
+  }
+  return null;
 }

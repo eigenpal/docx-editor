@@ -14,6 +14,7 @@ interface SavedSelection {
   readonly head: SavedPosition;
   /** The selected picture or chart, so a step back selects it again rather than a caret. */
   readonly drawing: string | null;
+  readonly outsidePromptId: string | undefined;
 }
 interface Entry {
   readonly before: SavedSelection;
@@ -31,7 +32,8 @@ export class DocumentSelectionHistory {
     private readonly selection: () => SemanticSelection,
     private readonly part: () => OoxmlPart,
     private readonly revision: () => number,
-    private readonly drawing: () => string | null = () => null
+    private readonly drawing: () => string | null = () => null,
+    private readonly outsidePrompt: () => string | undefined = () => undefined
   ) {
     this.position = owner ? undoHistoryPosition(owner) : undefined;
   }
@@ -52,6 +54,7 @@ export class DocumentSelectionHistory {
       anchor: position(selection.anchor),
       head: position(selection.head),
       drawing: this.drawing(),
+      outsidePromptId: this.outsidePrompt(),
     };
   }
 
@@ -96,6 +99,7 @@ export class DocumentSelectionHistory {
       changed,
       selection: saved ? this.resolve(saved) : null,
       drawing: saved?.drawing ?? null,
+      outsidePromptId: saved?.outsidePromptId,
     };
   }
 

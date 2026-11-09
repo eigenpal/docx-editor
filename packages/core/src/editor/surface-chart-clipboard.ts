@@ -17,7 +17,7 @@ import {
 } from './chart-clipboard.ts';
 import { CHART_SUGGESTING_REFUSAL, CHART_VIEWING_REFUSAL } from './surface-chart-ops.ts';
 import type { CopyFlavours } from './clipboard-copy-payload.ts';
-import { collapsedAt } from './surface-selection-ops.ts';
+import { collapsedAt, type RangeDeletionPlan } from './surface-selection-ops.ts';
 import type { SurfaceClipboardDeps } from './surface-clipboard-ops.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
@@ -62,7 +62,8 @@ export function pasteCopiedChart(deps: SurfaceClipboardDeps, html: string | null
     return false;
   }
   deps.flushPendingInputAndLayout();
-  const plan = deps.deleteSelectionPlan();
+  const plan: RangeDeletionPlan & { readonly outsidePromptId?: string } =
+    deps.typingSelectionPlan?.() ?? deps.deleteSelectionPlan();
   const target = plan.replaceAt ?? plan.collapseTo;
   const scope = deps.storyScope();
   let drawingNodeId: string | null = null;
@@ -76,6 +77,7 @@ export function pasteCopiedChart(deps: SurfaceClipboardDeps, html: string | null
         paragraphId: target.paragraphId,
         offset: target.offset,
         priorOps: plan.ops as unknown as TreeDocOp[],
+        ...(plan.outsidePromptId ? { bias: 'left' as const } : {}),
         ...(actorId ? { actorId } : {}),
       });
       if (result.ok) drawingNodeId = result.drawingNodeId ?? null;
