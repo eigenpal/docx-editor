@@ -50,6 +50,11 @@ export interface SurfaceSelectionSyncDeps {
   adoptSelection(next: SemanticSelection): void;
   commit(run: () => TreeApplyResult | boolean): void;
   /**
+   * The content control that owns text typed at the caret, or `undefined` when none does. The
+   * keyboard's `insertText` names it, so a text control's trailing edge counts as inside it.
+   */
+  insertOwner?(): string | undefined;
+  /**
    * The surface's own write lane — attribution, protection and refusals included.
    *
    * The IME is the one edit that reaches the tree from here, and calling the session directly
@@ -302,6 +307,11 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    * below instead, which never reads the painted DOM at all.
    */
   let composingAcrossParagraphs = false;
+  /**
+   * The caret a collapsed composition began at, and the control a keystroke there would type
+   * into. The readback names that control for text it inserts at the same caret, as typing does.
+   */
+  let composingOwner: { readonly offset: number; readonly controlId: string } | null = null;
 
   /**
    * Take up a selection the user has made but the queued `selectionchange` has not delivered.
@@ -379,7 +389,10 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    *
    * The diff itself lives in surface-input.ts; this applies it and lands the caret.
    */
-  function reconcileParagraphFromDom(paragraphId: string): void {
+  function reconcileParagraphFromDom(
+    paragraphId: string,
+    owner: { readonly offset: number; readonly controlId: string } | null
+  ): void {
     const modelText = deps.textOf(paragraphId);
     // The browser's own selection says WHICH painted copy was composed into, for a paragraph
     // the page repeats: a shared header, a `w:tblHeader` row, a twice-referenced note. The IME
@@ -409,10 +422,20 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       insert && remove
         ? deps.replacementOffset?.(paragraphId, remove.start, remove.end)
         : undefined;
+    // Text composed at a text control's trailing edge belongs to the control, as typed text
+    // does. An offset alone gives that boundary to the run after the control, which forms
+    // protection refuses. Only an insert at the caret where the composition began is named:
+    // the diff can resolve a repeated character to a later offset, past the control's end.
+    const named =
+      insert && !remove && owner !== null && insert.offset === owner.offset
+        ? { ...insert, inside: owner.controlId }
+        : null;
     const ops =
       insert && landing !== undefined && landing !== insert.offset
         ? plan.ops.map((op) => (op === insert ? { ...insert, offset: landing } : op))
-        : plan.ops;
+        : named
+          ? plan.ops.map((op) => (op === insert ? named : op))
+          : plan.ops;
     const formatOps = insert
       ? (deps.pendingFormatOps?.(
           paragraphId,
@@ -680,6 +703,11 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       const selection = deps.selection();
       composingAcrossParagraphs = selection.anchor.paragraphId !== selection.head.paragraphId;
       composingParagraph = selection.head.paragraphId;
+      const collapsed =
+        !composingAcrossParagraphs && selection.anchor.offset === selection.head.offset;
+      const controlId = collapsed ? deps.insertOwner?.() : undefined;
+      composingOwner =
+        controlId === undefined ? null : { offset: selection.head.offset, controlId };
       session.beginComposition(deps.storyScope());
     },
 
@@ -687,6 +715,8 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       composing = false;
       const paragraphId = composingParagraph ?? deps.selection().head.paragraphId;
       composingParagraph = null;
+      const owner = composingOwner;
+      composingOwner = null;
       const acrossParagraphs = composingAcrossParagraphs;
       composingAcrossParagraphs = false;
       // ONE scope, sampled once. `type()` can move the active story (a note released by the
@@ -711,7 +741,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
         // The composed text is in the DOM and nowhere else. Read it back, diff it against
         // what the model holds for that paragraph, and commit the difference — the only
         // route by which an IME edit can reach the tree, since it could not be intercepted.
-        reconcileParagraphFromDom(paragraphId);
+        reconcileParagraphFromDom(paragraphId, owner);
       }
 
       session.endComposition();

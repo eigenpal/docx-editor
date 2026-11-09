@@ -178,3 +178,80 @@ test('a suggested paste at the trailing edge is a tracked insertion inside the c
     editor.destroy();
   }
 });
+
+function mountWithPages(paragraph: string, protect = true) {
+  const container = document.createElement('div');
+  document.body.append(container);
+  mounted.push(container);
+  const result = mountPaginatedSurface(container, docx(paragraph, protect), { scale: 1, measurer });
+  if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
+  return { surface: result.surface, container };
+}
+
+/**
+ * What the browser does while an IME composes at the caret: it writes the composed text into
+ * the painted span itself, and the surface reads the paragraph back at `compositionend`.
+ */
+function compose(surface: PaginatedSurface, container: HTMLElement, text: string): void {
+  const { paragraphId, offset } = surface.state().selection.head;
+  const pages = container.querySelector('.docx-pages')!;
+  pages.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+  const span = [...container.querySelectorAll<HTMLElement>('[data-paragraph-id][data-start]')]
+    .filter((each) => each.dataset.paragraphId === paragraphId)
+    .find((each) => {
+      const start = Number(each.dataset.start);
+      return start < offset && offset <= start + (each.textContent ?? '').length;
+    });
+  if (!span) throw new Error(`no painted span ends at ${offset}`);
+  const at = offset - Number(span.dataset.start);
+  const painted = span.textContent ?? '';
+  span.textContent = painted.slice(0, at) + text + painted.slice(at);
+  pages.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: text }));
+}
+
+test('text composed at the trailing edge lands inside the control', () => {
+  for (const [paragraph, after, range] of [
+    [run('A ') + control('value') + run(' B'), 'A value한 B', { start: 2, end: 8 }],
+    [run('회사: ') + control('자연인') + run('에서'), '회사: 자연인한에서', { start: 4, end: 8 }],
+    [run('번호 ') + control('26202') + run('의 값'), '번호 26202한의 값', { start: 3, end: 9 }],
+    [run('Value: ') + control('Bravo'), 'Value: Bravo한', { start: 7, end: 13 }],
+  ] as const) {
+    const { surface, container } = mountWithPages(paragraph);
+    caretAtControlEnd(surface);
+    compose(surface, container, '한');
+    expect(surface.state().lastRejection).toBeNull();
+    expect(surface.session.bodyText()).toBe(after);
+    expect(surface.layout().contentControls![0]!.range).toMatchObject(range);
+    container.remove();
+  }
+});
+
+test('consecutive compositions at the trailing edge stay in the control', () => {
+  const { surface, container } = mountWithPages(run('회사: ') + control('자연인') + run('에서'));
+  caretAtControlEnd(surface);
+  // A Korean IME commits 하 and starts 나 when the next vowel takes the final consonant.
+  compose(surface, container, '하');
+  compose(surface, container, '나');
+  expect(surface.session.bodyText()).toBe('회사: 자연인하나에서');
+  expect(surface.layout().contentControls![0]!.range).toMatchObject({ start: 4, end: 9 });
+});
+
+test('text composed past the trailing edge stays outside the form field', () => {
+  const { surface, container } = mountWithPages(run('A ') + control('value') + run(' B'));
+  const range = surface.layout().contentControls![0]!.range!;
+  const past = { paragraphId: range.paragraphId, offset: range.end + 1 };
+  surface.setSelection({ anchor: past, head: past });
+  compose(surface, container, '한');
+  expect(surface.session.bodyText()).toBe('A value B');
+  expect(surface.layout().contentControls![0]!.range).toMatchObject({ start: 2, end: 7 });
+});
+
+test('a composed character the diff places past the control keeps the offset rule', () => {
+  // The readback diff resolves an `e` typed before another `e` to the later offset, past the
+  // control's end. Naming the control there would refuse an edit that has no protection to meet.
+  const { surface, container } = mountWithPages(control('value') + run('e B'), false);
+  caretAtControlEnd(surface);
+  compose(surface, container, 'e');
+  expect(surface.state().lastRejection).toBeNull();
+  expect(surface.session.bodyText()).toBe('valueee B');
+});

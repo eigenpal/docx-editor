@@ -3403,6 +3403,7 @@ export function mountPaginatedSurface(
       publishLocalCollaborationSelection();
     },
     commit: (run) => commit(run),
+    insertOwner: () => insertOwnerOf(contentControlAtCaret()),
     // The composition readback writes through the SAME lane as every other edit. Calling the
     // session directly skipped `trackedOps` and `writeRefusal`, so IME text in suggesting
     // mode landed untracked — the reviewer proposing a change was editing the document —
