@@ -325,3 +325,22 @@ test('text composed at a prompt trailing edge replaces the prompt and keeps the 
   expect(surface.session.bodyText()).toBe('A 한X글 B');
   expect(surface.layout().contentControls![0]!.range).toMatchObject({ start: 2, end: 5 });
 });
+
+test('a suggested insertion at a prompt trailing edge keeps the caret after the text', () => {
+  // A tracked insertion keeps the prompt, so the text lands at the caret, not where the
+  // prompt began, and the caret follows it.
+  const prompt =
+    '<w:sdt><w:sdtPr><w:tag w:val="value"/><w:showingPlcHdr/><w:text/></w:sdtPr>' +
+    `<w:sdtContent>${run('Click')}</w:sdtContent></w:sdt>`;
+  for (const input of ['type', 'compose'] as const) {
+    const { surface, container } = mountWithPages(run('A ') + prompt + run(' B'), false);
+    surface.setAuthor('Reviewer');
+    surface.setEditingMode('suggest');
+    caretAtControlEnd(surface);
+    if (input === 'type') surface.type('한');
+    else compose(surface, container, '한');
+    expect(surface.session.bodyText()).toBe('A Click한 B');
+    expect(surface.state().selection.head.offset).toBe(8);
+    container.remove();
+  }
+});
