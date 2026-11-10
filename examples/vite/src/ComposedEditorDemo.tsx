@@ -627,7 +627,7 @@ function EditorChrome({
 /**
  * The library toolbar as a floating dock over the page column. Editing mode lives in the top
  * bar and zoom in the corner of the canvas, so the dock hides those two in place and keeps its
- * room for formatting. Insert chart is not on the default bar; the dock appends its dropdown.
+ * room for formatting.
  */
 function DocumentDock({ title }: { title: string }) {
   const saveDocument = useSaveDocument(title);
@@ -636,7 +636,6 @@ function DocumentDock({ title }: { title: string }) {
       <DocxEditor.Toolbar className="demo-docbar" onSave={saveDocument}>
         <DocxEditor.Toolbar.EditingMode hidden />
         <DocxEditor.Toolbar.Zoom hidden />
-        <DocxEditor.Toolbar.ChartInsert />
       </DocxEditor.Toolbar>
     </div>
   );
