@@ -2360,6 +2360,25 @@ a.docx-hyperlink:focus-visible {
   animation: none;
 }
 
+.docx-drop-rejection {
+  position: absolute;
+  z-index: var(--doc-z-overlay);
+  max-width: min(260px, calc(100vw - 24px));
+  padding: 6px 10px;
+  border: 1px solid var(--doc-danger);
+  border-radius: 6px;
+  background: var(--doc-popover-bg);
+  color: var(--doc-popover-fg);
+  box-shadow: var(--doc-card-shadow);
+  font-family: var(--doc-font-ui, system-ui, sans-serif);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* Right-to-left runs paint their caret on the trailing edge; the engine
  * supplies the rect, this only marks direction for the host. */
 .docx-editor-one-surface__caret--rtl {

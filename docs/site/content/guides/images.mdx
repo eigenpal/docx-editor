@@ -47,6 +47,14 @@ Open a header, footer, or note for editing before dropping into that region. Hea
 
 Only the first image file enters the document. Text takes precedence when a transfer also contains a text preview image. File controls and paste remain available when dragging is unavailable.
 
+Hold the pointer near the viewport edge to scroll while dragging. Scrolling stops when you move away or cancel. A short message explains blocked drops. The message distinguishes read-only documents, unsupported content, and positions outside editable text.
+
+### Move an inline image
+
+Use a mouse or pen to drag an inserted inline image onto editable text. You can also drag its selection frame. The drop caret shows the destination before you release the pointer. Each completed move is one undo step. Movement keeps the image data, dimensions, and alternative text.
+
+Move images within the active editing region. Protected images and tracked editing modes refuse movement. Images inside hyperlinks or tracked-change wrappers do not support dragging. Press **Escape** to cancel. A document change during the drag cancels the move.
+
 ### Handle custom drop data
 
 Use the core editor from either adapter's `useDocxEditor` hook. In Vue, read its `.value`. Subscribe to `dragOver` and `drop` for your custom MIME type. Call the native event's `preventDefault()` synchronously to claim the event. The adapter then skips its default image insertion.

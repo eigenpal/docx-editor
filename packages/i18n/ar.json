@@ -775,6 +775,13 @@
       "ariaLabel": "خيارات تخطيط الصورة"
     }
   },
+  "drop": {
+    "errors": {
+      "readOnly": "هذا المستند للقراءة فقط.",
+      "noTarget": "أفلت العنصر على نص قابل للتحرير.",
+      "unsupported": "أفلت صورة PNG أو JPEG أو GIF أو نصًا."
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "لا يمكن إدراج الصورة",

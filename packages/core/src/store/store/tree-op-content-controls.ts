@@ -184,14 +184,7 @@ export function contentControlLockAt(part: OoxmlPart, nodeId: string): ContentCo
 // Reach: what an op would change, classified once for every policy that refuses
 // ---------------------------------------------------------------------------
 
-/**
- * Where an op's effect lands, in terms a control can be asked about.
- *
- * `part` is the fail-closed answer: an op whose reach nobody has narrowed is treated as reaching
- * everything, so a lock or a binding anywhere refuses it. That is the wrong side to be wrong on
- * by design — an over-refused op is a bug report, an under-refused one is a document whose
- * protection was decoration.
- */
+/** Op reach for protection checks. Unknown reach uses `part`, refusing locks and bindings anywhere. */
 export type TreeOpReach =
   /** Changes no content a control could be holding (part lifecycle, furniture wiring). */
   | { readonly kind: 'none' }
@@ -546,6 +539,18 @@ const TREE_OP_REACH: {
   setTableCellFill: (op) => each(op.cellIds),
   setTableCellVerticalAlignment: (op) => each(op.cellIds),
   insertDrawing: (op) => writingAt(op.paragraphId, op.offset, op.bias),
+  moveInlineDrawing: (op) => ({
+    kind: 'nodes',
+    targets: [
+      { nodeId: op.drawingNodeId, removes: true },
+      {
+        nodeId: op.paragraphId,
+        range: { start: op.offset, end: op.offset },
+        writes: true,
+        point: 'run-content',
+      },
+    ],
+  }),
   replaceDrawingResource: (op) => whole(op.drawingNodeId),
   deleteDrawing: (op) => ({
     kind: 'nodes',

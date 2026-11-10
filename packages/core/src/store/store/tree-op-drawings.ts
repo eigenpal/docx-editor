@@ -1,9 +1,9 @@
+import {
+  applyMoveInlineDrawing,
+  validateMoveInlineDrawing,
+} from './tree-op-move-inline-drawing.ts';
 import { drawingAtomProjection } from '../package/drawing-atom-projection.ts';
-// Canonical drawing mutations over the OOXML tree (typed-drawings-and-images task 11).
-//
-// Pure tree edits only — package media/relationship lifecycle stays in task 12. Each op
-// copy-modifies only the ancestor path, preserves unclaimed siblings/attributes/extensions,
-// validates before mutation, and publishes a typed rejection on failure.
+// Canonical drawing edits preserve unclaimed content and reject invalid mutations.
 
 import {
   createNodeIdAllocator,
@@ -375,6 +375,8 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
   const legacy = legacyOpOf(part, op);
   if (legacy) return legacyVmlGeometryRejection(part, legacy);
   switch (op.op) {
+    case 'moveInlineDrawing':
+      return validateMoveInlineDrawing(part, op);
     case 'insertDrawing': {
       if (op.bias !== undefined && op.bias !== 'left' && op.bias !== 'right')
         return 'invalid-property-value';
@@ -1136,11 +1138,7 @@ function wrapElementForSpec(
 
 type DistanceTexts = { top: string; right: string; bottom: string; left: string };
 
-/**
- * Copied text distances keep their `xsd:unsignedInt` spelling, including the two's-complement
- * form of a negative distance. A malformed value becomes 0, which is how it reads; a missing
- * one is undefined.
- */
+/** Preserve unsignedInt spelling; malformed distances become 0, missing ones stay undefined. */
 function readDistanceTexts(element: OoxmlElement): Partial<DistanceTexts> {
   const read = (name: string): string | undefined => {
     const value = schemaAttributeValue(element.attributes, name);
@@ -1515,6 +1513,8 @@ export function applyDrawingOp(
   const nextId = createNodeIdAllocator(part);
 
   switch (op.op) {
+    case 'moveInlineDrawing':
+      return applyMoveInlineDrawing(part, op, options);
     case 'insertDrawing': {
       const paragraph = findNode(part, op.paragraphId) as OoxmlParagraphNode;
       // Tracked: the drawing's run goes into a `w:ins` through the SAME placement typed text

@@ -837,3 +837,4 @@ export type {
   EditorDropEvent,
   EditorHostDragEvent,
 } from '../contracts/editor-drop.ts';
+export { canMoveInlineImage, beginInlineImageDrag } from './inline-image-drag.ts';

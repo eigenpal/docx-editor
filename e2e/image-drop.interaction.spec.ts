@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { strToU8, zipSync } from 'fflate';
+import { strToU8, strFromU8, unzipSync, zipSync } from 'fflate';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -30,25 +30,110 @@ test.afterAll(async () => {
 });
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
-const source = zipSync({
-  '[Content_Types].xml': strToU8(
-    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
-      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-      '</Types>'
-  ),
-  '_rels/.rels': strToU8(
-    `<Relationships xmlns="${REL}"><Relationship Id="rId1" ` +
-      'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" ' +
-      'Target="word/document.xml"/></Relationships>'
-  ),
+function sourceForBody(body: string): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" ` +
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" ' +
+        'Target="word/document.xml"/></Relationships>'
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+    ),
+  });
+}
+const firstLines =
+  '<w:p><w:r><w:t>First insertion line.</w:t></w:r></w:p>' +
+  '<w:p><w:r><w:t>Second insertion line.</w:t></w:r></w:p>';
+const source = sourceForBody(firstLines);
+const longSource = sourceForBody(
+  firstLines +
+    Array.from(
+      { length: 180 },
+      (_, index) =>
+        `<w:p><w:r><w:t>Scroll target paragraph ${index}. Keep dragging toward the viewport edge.</w:t></w:r></w:p>`
+    ).join('')
+);
+
+const drawing =
+  '<w:r><w:drawing>' +
+  '<wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
+  'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+  'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" ' +
+  'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+  '<wp:extent cx="914400" cy="914400"/><wp:docPr id="1" name="Drag picture"/>' +
+  '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+  '<pic:pic><pic:nvPicPr><pic:cNvPr id="1" name="Drag picture"/><pic:cNvPicPr/></pic:nvPicPr>' +
+  '<pic:blipFill><a:blip r:embed="rIdImg"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+  '<pic:spPr><a:xfrm><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
+  '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+const pictureEntries = unzipSync(sourceForBody(firstLines.replace('</w:p>', `${drawing}</w:p>`)));
+pictureEntries['[Content_Types].xml'] = strToU8(
+  strFromU8(pictureEntries['[Content_Types].xml']!).replace(
+    '</Types>',
+    '<Default Extension="png" ContentType="image/png"/></Types>'
+  )
+);
+pictureEntries['word/_rels/document.xml.rels'] = strToU8(
+  `<Relationships xmlns="${REL}"><Relationship Id="rIdImg" ` +
+    'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/picture.png"/></Relationships>'
+);
+pictureEntries['word/media/picture.png'] = new Uint8Array(Buffer.from(PNG, 'base64'));
+const pictureSource = zipSync(pictureEntries);
+const longPictureSource = zipSync({
+  ...pictureEntries,
   'word/document.xml': strToU8(
-    `<w:document xmlns:w="${W}"><w:body>` +
-      '<w:p><w:r><w:t>First insertion line.</w:t></w:r></w:p>' +
-      '<w:p><w:r><w:t>Second insertion line.</w:t></w:r></w:p>' +
-      '</w:body></w:document>'
+    strFromU8(pictureEntries['word/document.xml']!).replace(
+      '</w:body>',
+      Array.from(
+        { length: 180 },
+        (_, index) =>
+          `<w:p><w:r><w:t>Picture scroll target ${index}. Keep dragging toward the viewport edge.</w:t></w:r></w:p>`
+      ).join('') + '</w:body>'
+    )
   ),
 });
+
+async function startTextDrag(page: Page, x: number, y: number): Promise<void> {
+  await page.evaluate(() => {
+    const source = document.createElement('button');
+    source.id = 'text-drag-source';
+    source.textContent = 'Drag text';
+    source.draggable = true;
+    source.style.cssText = 'position:fixed;left:8px;top:200px;z-index:10000';
+    source.addEventListener('dragstart', (event) => {
+      event.dataTransfer!.setData('text/plain', 'Dropped text');
+      event.dataTransfer!.effectAllowed = 'copy';
+    });
+    document.body.append(source);
+  });
+  const source = await page.locator('#text-drag-source').boundingBox();
+  if (!source) throw new Error('missing text drag source');
+  await page.mouse.move(source.x + 10, source.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(source.x + 30, source.y + 15, { steps: 4 });
+  await page.mouse.move(x, y, { steps: 12 });
+  await page.mouse.move(x + 1, y);
+}
+
+async function replaceFixture(page: Page, bytes: Uint8Array): Promise<void> {
+  await page.route('**/sample.docx', (route) =>
+    route.fulfill({
+      body: Buffer.from(bytes),
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    })
+  );
+  await page.reload();
+  await expect(
+    page.locator('[data-paragraph-id]').filter({ hasText: 'Second insertion line.' }).first()
+  ).toBeVisible();
+}
 
 async function delayImageRead(page: Page): Promise<void> {
   await page.evaluate((png) => {
@@ -106,7 +191,7 @@ async function dragToSecondLine(page: Page, custom = false): Promise<string> {
   return paragraphId;
 }
 
-async function refusedFileDrop(page: Page, file: string): Promise<void> {
+async function refusedFileDrop(page: Page, file: string, reason: string): Promise<void> {
   const target = page
     .locator('[data-paragraph-id]')
     .filter({ hasText: 'Second insertion line.' })
@@ -121,8 +206,12 @@ async function refusedFileDrop(page: Page, file: string): Promise<void> {
   await session.send('Input.dispatchDragEvent', { type: 'dragEnter', x, y, data });
   await session.send('Input.dispatchDragEvent', { type: 'dragOver', x, y, data });
   await expect(page.locator('[data-docx-drop-caret]')).toHaveCount(0);
+  await expect(page.locator('[data-docx-drop-rejection]')).toBeVisible();
+  await expect(page.locator('[data-docx-drop-rejection]')).toHaveAttribute('role', 'status');
+  await expect(page.locator('[data-docx-drop-rejection]')).toContainText(reason);
   await session.send('Input.dispatchDragEvent', { type: 'drop', x, y, data });
   await session.detach();
+  await expect(page.locator('[data-docx-drop-rejection]')).toHaveCount(0);
   await expect(target).toHaveText('Second insertion line.');
   await expect(page.locator('[data-drawing-paragraph-id]')).toHaveCount(0);
   expect(page.url()).toBe(url);
@@ -207,12 +296,164 @@ for (const adapter of ['react', 'vue'] as const) {
         await page.getByTestId('editing-mode-trigger').first().click();
         await page.getByTestId('editing-mode-viewing').first().click();
       }
-      await refusedFileDrop(page, imagePath);
+      await refusedFileDrop(page, imagePath, 'read-only');
     });
 
     test('unsupported file drops keep the document open and unchanged', async ({ page }) => {
-      await refusedFileDrop(page, unsupportedPath);
+      await refusedFileDrop(page, unsupportedPath, 'PNG');
     });
+
+    test('a missing target shows feedback and an accepted target clears it', async ({ page }) => {
+      const sheet = await page.locator('.docx-page').first().boundingBox();
+      if (!sheet) throw new Error('missing page geometry');
+      await startTextDrag(page, sheet.x + 20, sheet.y + 20);
+      await expect(page.locator('[data-docx-drop-rejection]')).toContainText('editable text');
+      await page.screenshot({ path: test.info().outputPath('drop-rejection.png') });
+      await expect(page.locator('[data-docx-drop-caret]')).toHaveCount(0);
+      const target = await page
+        .locator('[data-paragraph-id]')
+        .filter({ hasText: 'Second insertion line.' })
+        .first()
+        .boundingBox();
+      if (!target) throw new Error('missing target geometry');
+      await page.mouse.move(target.x + 20, target.y + target.height / 2, { steps: 8 });
+      await page.mouse.move(target.x + 21, target.y + target.height / 2);
+      await expect(page.locator('[data-docx-drop-rejection]')).toHaveCount(0);
+      await expect(page.locator('[data-docx-drop-caret]')).toBeVisible();
+      await page.keyboard.press('Escape');
+      await page.mouse.up();
+      await expect(page.locator('[data-docx-drop-caret]')).toHaveCount(0);
+      await expect(page.locator('[data-docx-drop-rejection]')).toHaveCount(0);
+      await expect(page.locator('[data-drawing-paragraph-id]')).toHaveCount(0);
+      await expect(
+        page.locator('[data-paragraph-id]').filter({ hasText: 'Second insertion line.' }).first()
+      ).toHaveText('Second insertion line.');
+    });
+
+    test('a stationary edge drag scrolls across pages and clears its preview', async ({ page }) => {
+      await replaceFixture(page, longSource);
+      const scroller = page.locator('.docx-editor__scroll-container').first();
+      const scrollBox = await scroller.boundingBox();
+      const textBox = await page
+        .locator('[data-paragraph-id]')
+        .filter({ hasText: 'Second insertion line.' })
+        .first()
+        .boundingBox();
+      if (!scrollBox || !textBox) throw new Error('missing scroll geometry');
+      const viewportHeight = await page.evaluate(() => innerHeight);
+      const x = textBox.x + 40;
+      const y = Math.min(scrollBox.y + scrollBox.height, viewportHeight) - 8;
+      await startTextDrag(page, x, y);
+      // No more pointer events: the controller must keep scrolling across page gaps.
+      await expect
+        .poll(() => scroller.evaluate((element) => element.scrollTop), { timeout: 8000 })
+        .toBeGreaterThan(1100);
+      await page.keyboard.press('Escape');
+      await page.mouse.up();
+      // End Chrome's native drag autopan; the internal pointer test checks stationary cancellation.
+      await page.mouse.move(x, scrollBox.y + scrollBox.height / 2);
+      await expect(page.locator('[data-docx-drop-caret]')).toHaveCount(0);
+      await expect(page.locator('[data-docx-drop-rejection]')).toHaveCount(0);
+      await expect(page.locator('[data-drawing-paragraph-id]')).toHaveCount(0);
+    });
+
+    test('inline image edge scrolling stops at Escape with the pointer stationary', async ({
+      page,
+    }) => {
+      await replaceFixture(page, longPictureSource);
+      const image = page.locator('.docx-drawing-ready').first();
+      await expect(image).toBeVisible();
+      const imageId = await image.getAttribute('data-drawing-node-id');
+      const firstId = await page
+        .locator('[data-paragraph-id]')
+        .filter({ hasText: 'First insertion line.' })
+        .first()
+        .getAttribute('data-paragraph-id');
+      const start = await image.boundingBox();
+      const scroller = page.locator('.docx-editor__scroll-container').first();
+      const scrollBox = await scroller.boundingBox();
+      if (!start || !scrollBox) throw new Error('missing inline scroll geometry');
+      const viewportHeight = await page.evaluate(() => innerHeight);
+      const x = start.x + start.width / 2;
+      const y = Math.min(scrollBox.y + scrollBox.height, viewportHeight) - 8;
+      await page.mouse.move(x, start.y + start.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(x, y, { steps: 16 });
+      await expect
+        .poll(() => scroller.evaluate((element) => element.scrollTop), { timeout: 8000 })
+        .toBeGreaterThan(1100);
+      await page.keyboard.press('Escape');
+      await page.mouse.up();
+      await expect(page.locator('[data-docx-drop-caret]')).toHaveCount(0);
+      await expect(page.locator('[data-docx-drop-rejection]')).toHaveCount(0);
+      const stoppedAt = await scroller.evaluate((element) => element.scrollTop);
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            let frames = 0;
+            const tick = () => {
+              if (++frames === 8) resolve();
+              else requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+          })
+      );
+      expect(await scroller.evaluate((element) => element.scrollTop)).toBe(stoppedAt);
+      await scroller.evaluate((element) => {
+        element.scrollTop = 0;
+      });
+      await expect(page.locator(`[data-drawing-paragraph-id="${firstId}"]`)).toHaveCount(1);
+      await expect(image).toHaveAttribute('data-drawing-node-id', imageId!);
+      await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeDisabled();
+      const selectedFrame = page.locator('.docx-image-selection-overlay__frame');
+      if (await selectedFrame.count()) await selectedFrame.click();
+      else await image.click();
+      await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeDisabled();
+    });
+
+    for (const selected of [false, true]) {
+      test(`moves an inline image through its ${selected ? 'selected frame' : 'painted image'}`, async ({
+        page,
+      }) => {
+        await replaceFixture(page, pictureSource);
+        const image = page.locator('.docx-drawing-ready').first();
+        await expect(image).toBeVisible();
+        const imageId = await image.getAttribute('data-drawing-node-id');
+        const firstId = await page
+          .locator('[data-paragraph-id]')
+          .filter({ hasText: 'First insertion line.' })
+          .first()
+          .getAttribute('data-paragraph-id');
+        const second = page
+          .locator('[data-paragraph-id]')
+          .filter({ hasText: 'Second insertion line.' })
+          .first();
+        const secondId = await second.getAttribute('data-paragraph-id');
+        if (selected) await image.click();
+        const start = await (
+          selected ? page.locator('.docx-image-selection-overlay__frame') : image
+        ).boundingBox();
+        const end = await second.boundingBox();
+        if (!start || !end) throw new Error('missing move geometry');
+        await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2, { steps: 16 });
+        await expect(page.locator('[data-docx-drop-caret]')).toBeVisible();
+        await page.screenshot({ path: test.info().outputPath('inline-drag-caret.png') });
+        await page.mouse.up();
+        await expect(page.locator('[data-docx-drop-caret]')).toHaveCount(0);
+        await expect(page.locator(`[data-drawing-paragraph-id="${secondId}"]`)).toHaveCount(1);
+        await expect(page.locator('.docx-drawing-ready')).toHaveCount(1);
+        await expect(page.locator('.docx-drawing-ready')).toHaveAttribute(
+          'data-drawing-node-id',
+          imageId!
+        );
+        await page.keyboard.press('ControlOrMeta+z');
+        await expect(page.locator(`[data-drawing-paragraph-id="${firstId}"]`)).toHaveCount(1);
+        await page.keyboard.press('ControlOrMeta+Shift+z');
+        await expect(page.locator(`[data-drawing-paragraph-id="${secondId}"]`)).toHaveCount(1);
+      });
+    }
 
     test('a delayed image read retains the drop target after a selection move', async ({
       page,

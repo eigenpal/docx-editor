@@ -1,3 +1,5 @@
+import { createDropAutoScroll } from './surface-drop-autoscroll.ts';
+import { createDropFeedback } from './surface-drop-feedback.ts';
 import { isBottomToTopCaret } from '../layout/table-cell-text-direction.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import type { PaginatedSurfaceOptions } from './paginated-surface-options.ts';
@@ -30,14 +32,32 @@ export function createSurfaceDrop(host: {
   pointAt(x: number, y: number): SurfacePointHit | null;
   notify(kind: 'dragOver' | 'drop', event: DragEvent, point: SurfacePointHit): void;
   insertText(text: string, point: SurfacePointHit): void;
+  translate?: (key: string) => string | undefined;
 }) {
   const { pagesLayer, layer } = host;
   const timers = hostTimers(() => pagesLayer);
   let point: SurfacePointHit | null = null;
+  let drag: { x: number; y: number; version: string; allowed: boolean; types: string } | null =
+    null;
+  const scroller = () => pagesLayer.closest<HTMLElement>('.docx-editor__scroll-container');
+  const feedback = createDropFeedback(layer, scroller, host.translate);
+  const autoScroll = createDropAutoScroll({
+    scroller,
+    frames: timers,
+    active: () =>
+      !!drag?.allowed &&
+      host.writable() &&
+      host.version() === drag.version &&
+      pagesLayer.isConnected,
+    moved: () => refresh(),
+  });
   let frame: number | null = null;
   let marker: HTMLElement | null = null;
 
   function clear() {
+    drag = null;
+    autoScroll.stop();
+    feedback.hide();
     point = null;
     if (frame !== null) timers.cancelAnimationFrame(frame);
     frame = null;
@@ -46,7 +66,25 @@ export function createSurfaceDrop(host: {
 
   function paint() {
     frame = null;
-    if (!point || !host.writable()) return clear();
+    try {
+      paintNow();
+    } catch (error) {
+      clear();
+      throw error;
+    }
+  }
+
+  function paintNow() {
+    const active = drag;
+    if (!active || host.version() !== active.version) return clear();
+    const reason = !host.writable() ? 'readOnly' : !active.allowed ? 'unsupported' : null;
+    point = reason ? null : host.pointAt(active.x, active.y);
+    if (!point) {
+      marker?.remove();
+      feedback.show(reason ?? 'noTarget', active.x, active.y);
+      return;
+    }
+    feedback.hide();
     if (!marker) {
       marker = layer.ownerDocument.createElement('div');
       marker.dataset.docxDropCaret = '';
@@ -68,31 +106,54 @@ export function createSurfaceDrop(host: {
     if (!marker.isConnected) layer.append(marker);
   }
 
-  function onDragOver(event: DragEvent) {
-    if (!host.writable() || !event.dataTransfer) return clear();
-    const next = host.pointAt(event.clientX, event.clientY);
-    if (!next) return clear();
-    const version = host.version();
-    try {
-      host.notify('dragOver', event, next);
-    } catch (error) {
-      clear();
-      event.preventDefault();
-      throw error;
-    }
-    if (!host.writable() || host.version() !== version) return clear();
-    const transfer = event.dataTransfer;
-    const supported =
-      Array.from(transfer.types).some((type) => type === 'text/plain' || type === 'text/html') ||
-      Array.from(transfer.items).some(
-        (item) =>
-          item.kind === 'file' && ['image/png', 'image/jpeg', 'image/gif'].includes(item.type)
-      );
-    if (!supported && !event.defaultPrevented) return clear();
-    event.preventDefault();
-    transfer.dropEffect = 'copy';
-    point = next;
+  function refresh() {
+    if (!drag) return;
+    if (host.version() !== drag.version) return clear();
     if (frame === null) frame = timers.requestAnimationFrame(paint);
+  }
+
+  function previewAt(x: number, y: number): SurfacePointHit | null {
+    drag = { x, y, version: host.version(), allowed: true, types: 'internal' };
+    point = host.writable() ? host.pointAt(x, y) : null;
+    refresh();
+    autoScroll.follow(x, y);
+    return point;
+  }
+
+  function onDragOver(event: DragEvent) {
+    const transfer = event.dataTransfer;
+    if (!transfer) return clear();
+    const types = Array.from(transfer.types).join('|');
+    const items = Array.from(transfer.items);
+    const hasFiles = items.some((item) => item.kind === 'file');
+    const supported = hasFiles
+      ? items.some(
+          (item) =>
+            item.kind === 'file' && ['image/png', 'image/jpeg', 'image/gif'].includes(item.type)
+        ) || transfer.types.includes('text/html')
+      : transfer.types.includes('text/plain') || transfer.types.includes('text/html');
+    const next = host.writable() ? host.pointAt(event.clientX, event.clientY) : null;
+    const version = host.version();
+    if (next) {
+      try {
+        host.notify('dragOver', event, next);
+      } catch (error) {
+        clear();
+        event.preventDefault();
+        throw error;
+      }
+    }
+    if (host.version() !== version) return clear();
+    const claimed = event.defaultPrevented;
+    const allowed = supported || claimed || (!next && drag?.types === types && drag.allowed);
+    drag = { x: event.clientX, y: event.clientY, version, allowed: !!allowed, types };
+    // Reject explicitly while still preventing browser navigation on file drops.
+    event.preventDefault();
+    transfer.dropEffect = next && host.writable() && allowed ? 'copy' : 'none';
+    point = next;
+    refresh();
+    if (allowed && host.writable()) autoScroll.follow(event.clientX, event.clientY);
+    else autoScroll.stop();
   }
 
   function onDrop(event: DragEvent) {
@@ -142,11 +203,13 @@ export function createSurfaceDrop(host: {
     host.listeners.onDocument('dragend', clear),
     host.listeners.onDocument('keydown', onKeyDown),
     host.listeners.onWindow('blur', clear),
-    host.listeners.onWindow('scroll', clear, { capture: true, passive: true }),
-    host.listeners.onWindow('resize', clear),
+    host.listeners.onWindow('scroll', refresh, { capture: true, passive: true }),
+    host.listeners.onWindow('resize', refresh),
   ];
   return {
     clear,
+    refresh,
+    previewAt,
     destroy() {
       clear();
       pagesLayer.removeEventListener('dragover', onDragOver);
@@ -166,14 +229,16 @@ export function bindSurfaceDrop(
   scale: () => number,
   writable: () => boolean,
   notify: PaginatedSurfaceOptions['onDragEvent'],
-  select: (selection: SemanticSelection, caret: CaretGeometry) => void
+  select: (selection: SemanticSelection, caret: CaretGeometry) => void,
+  translate?: (key: string) => string | undefined
 ) {
-  return createSurfaceDrop({
+  const controller = createSurfaceDrop({
     pagesLayer,
     layer,
     listeners,
     scale,
     writable,
+    translate,
     version: () =>
       `${surface.session.packageRevision()}:${JSON.stringify(surface.activeScope())}:${surface.editingMode()}`,
     pointAt: (x, y) => surface.pointAt(x, y),
@@ -184,4 +249,22 @@ export function bindSurfaceDrop(
       surface.insertPlainText(text);
     },
   });
+  controllers.set(surface, controller);
+  return controller;
+}
+
+const controllers = new WeakMap<PaginatedSurface, ReturnType<typeof createSurfaceDrop>>();
+
+/** Internal image gestures share the native drop preview and edge scrolling. */
+export function previewSurfaceDrop(
+  surface: PaginatedSurface,
+  x: number,
+  y: number
+): SurfacePointHit | null {
+  return controllers.get(surface)?.previewAt(x, y) ?? null;
+}
+
+/** End an internal image drag without changing document state. */
+export function clearSurfaceDrop(surface: PaginatedSurface): void {
+  controllers.get(surface)?.clear();
 }

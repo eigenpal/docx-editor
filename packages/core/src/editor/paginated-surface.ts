@@ -1,5 +1,5 @@
 import { invalidatePointTargets } from './editor-point-target.ts';
-import { bindSurfaceDrop } from './surface-drop.ts';
+import { bindSurfaceDragControllers } from './surface-drag-controllers.ts';
 import {
   createUnsupportedElementProjection,
   unsupportedElementPaintOptions,
@@ -495,7 +495,7 @@ export function mountPaginatedSurface(
   const remoteSelectionLayer = overlaySheet(mountDocument, 'docx-remote-selection-overlay');
   const bookmarkLayer = overlaySheet(mountDocument, 'docx-bookmark-overlay');
   const tableFurnitureLayer = overlaySheet(mountDocument, 'docx-table-furniture', false);
-  let drop: ReturnType<typeof bindSurfaceDrop> | null = null;
+  let drop: ReturnType<typeof bindSurfaceDragControllers> | null = null;
   const dropLayer = overlaySheet(mountDocument, 'docx-drop-overlay');
   const tableSelectLayer = overlaySheet(mountDocument, 'docx-table-select-layer', false);
   let tableSelectHandle: SurfaceTableSelectHandle | null = null;
@@ -2728,7 +2728,7 @@ export function mountPaginatedSurface(
   });
 
   function render(notifyChange = true): void {
-    drop?.clear();
+    drop?.refresh();
     // Any render catches the screen up to `currentLayout`, so a paint deferred under input
     // pressure is performed BY this one rather than repeated a task later — a scroll repaint
     // during a deferral used to paint the same layout twice. The deferred render was also
@@ -6133,7 +6133,6 @@ export function mountPaginatedSurface(
       },
       listeners: hostListeners,
       scale: () => scale,
-      // Mixed page widths carry the horizontal centering offset from paint.
       pageOffsetX: (pageIndex) => materializedExtent?.pageOffsetX.get(pageIndex) ?? 0,
       // Flush deferred layout without following the typing caret. Geometry must describe
       // the latest document without scrolling the page away from the pointer.
@@ -6218,7 +6217,7 @@ export function mountPaginatedSurface(
     }
   );
 
-  drop = bindSurfaceDrop(
+  drop = bindSurfaceDragControllers(
     surface,
     pagesLayer,
     dropLayer,
@@ -6227,7 +6226,8 @@ export function mountPaginatedSurface(
     () =>
       !destroyed && !hosting.parked() && hostEditable && editingMode !== 'view' && session.editable,
     options.onDragEvent,
-    (next, caret) => setSelection(next, false, 'none', caret)
+    (next, caret) => setSelection(next, false, 'none', caret),
+    (key) => translate?.(key)
   );
 
   const tableInteraction = createSurfaceTableInteraction({

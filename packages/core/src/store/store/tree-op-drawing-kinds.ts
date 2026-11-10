@@ -11,6 +11,7 @@ export function drawingOpImpact(op: DrawingTreeDocOp): ImpactClass {
     case 'setDrawingLocks':
     case 'replaceDrawingResource':
       return 'text-local';
+    case 'moveInlineDrawing':
     case 'insertDrawing':
     case 'deleteDrawing':
     case 'resizeDrawing':
@@ -47,6 +48,7 @@ export function drawingEffect(
 /** Whether an op is one of the drawing ops. Narrows the type. */
 export function isDrawingTreeDocOp(op: TreeDocOp): op is DrawingTreeDocOp {
   return (
+    op.op === 'moveInlineDrawing' ||
     op.op === 'insertDrawing' ||
     op.op === 'replaceDrawingResource' ||
     op.op === 'deleteDrawing' ||

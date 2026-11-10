@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': minor
 ---
 
-Add pointer drop positions and custom image drop handling in both adapters. Fixes #1136
+Add image drops and inline image movement with destination previews, rejection feedback, edge scrolling, and custom drop handling. Fixes #1136

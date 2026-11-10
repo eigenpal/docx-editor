@@ -946,6 +946,13 @@
     "panelTitle": "替代文字",
     "title": "标题"
   },
+  "drop": {
+    "errors": {
+      "readOnly": "此文档为只读。",
+      "noTarget": "请拖放到可编辑的文本上。",
+      "unsupported": "请拖放 PNG、JPEG、GIF 图片或文本。"
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "无法插入图片",

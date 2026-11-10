@@ -79,6 +79,9 @@ export function beginEditorPreview(editor: DocxEditorInstance): {
 };
 
 // @public
+export function beginInlineImageDrag(editor: Editor, event: PointerEvent, drawingNodeId: string): boolean;
+
+// @public
 export function bindHistoryGroup(editor: Editor, element: HTMLElement, config: HistoryGroupBindingOptions): HistoryGroupBinding;
 
 // @public
@@ -204,6 +207,9 @@ export function calendarWeekdays(locale?: string): readonly string[];
 export function canExecuteImageCommand(command: Extract<EditorCommand, {
     type: 'insertImage' | 'replaceImage';
 }>, surface: PaginatedSurface | null): CanResult;
+
+// @public
+export function canMoveInlineImage(editor: Editor, drawingNodeId: string): boolean;
 
 // @public
 export function captureImageMutationPreconditions(editor: Pick<DocxEditorInstance, 'surface' | 'mountGeneration'>): ImageMutationPreconditions | null;

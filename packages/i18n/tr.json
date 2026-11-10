@@ -946,6 +946,13 @@
     "panelTitle": "Alternatif metin",
     "title": "Başlık"
   },
+  "drop": {
+    "errors": {
+      "readOnly": "Bu belge salt okunurdur.",
+      "noTarget": "Düzenlenebilir metnin üzerine bırakın.",
+      "unsupported": "PNG, JPEG, GIF görseli veya metin bırakın."
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "Resim eklenemiyor",

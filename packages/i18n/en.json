@@ -775,6 +775,13 @@
       "ariaLabel": "Image layout options"
     }
   },
+  "drop": {
+    "errors": {
+      "readOnly": "This document is read-only.",
+      "noTarget": "Drop onto editable text.",
+      "unsupported": "Drop a PNG, JPEG, GIF, or text."
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "Cannot insert the picture",

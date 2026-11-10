@@ -775,6 +775,13 @@
       "ariaLabel": "Opciones de diseño de imagen"
     }
   },
+  "drop": {
+    "errors": {
+      "readOnly": "Este documento es de solo lectura.",
+      "noTarget": "Suelta el elemento sobre texto editable.",
+      "unsupported": "Suelta una imagen PNG, JPEG, GIF o texto."
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "No se puede insertar la imagen",

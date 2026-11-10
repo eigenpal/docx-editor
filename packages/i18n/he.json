@@ -947,6 +947,13 @@
     "panelTitle": "טקסט חלופי",
     "title": "כותרת"
   },
+  "drop": {
+    "errors": {
+      "readOnly": "המסמך הזה הוא לקריאה בלבד.",
+      "noTarget": "שחררו על טקסט שניתן לעריכה.",
+      "unsupported": "שחררו תמונת PNG, JPEG, GIF או טקסט."
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "לא ניתן להוסיף את התמונה",

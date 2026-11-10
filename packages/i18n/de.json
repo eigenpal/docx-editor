@@ -946,6 +946,13 @@
     "panelTitle": "Alternativtext",
     "title": "Titel"
   },
+  "drop": {
+    "errors": {
+      "readOnly": "Dieses Dokument ist schreibgeschützt.",
+      "noTarget": "Ziehen Sie das Element auf bearbeitbaren Text.",
+      "unsupported": "Ziehen Sie ein PNG-, JPEG- oder GIF-Bild oder Text hierher."
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "Das Bild kann nicht eingefügt werden",

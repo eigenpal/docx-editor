@@ -775,6 +775,13 @@
       "ariaLabel": "画像のレイアウト オプション"
     }
   },
+  "drop": {
+    "errors": {
+      "readOnly": "この文書は読み取り専用です。",
+      "noTarget": "編集可能なテキスト上にドロップしてください。",
+      "unsupported": "PNG、JPEG、GIF画像、またはテキストをドロップしてください。"
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "画像を挿入できません",

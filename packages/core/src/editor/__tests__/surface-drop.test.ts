@@ -208,3 +208,76 @@ test('viewing mode rejects drops without changing the selection', () => {
   expect(editor.surface!.state().selection).toEqual(selection);
   expect(container.querySelector('[data-docx-drop-caret]')).toBeNull();
 });
+
+test('rejected drag feedback is stable and clears on acceptance and cancellation', async () => {
+  const { editor, pages, container } = opened();
+  const unsupported = new DataTransfer();
+  unsupported.setData('application/x-unknown', 'value');
+  pages.dispatchEvent(drag('dragover', 5, 5, unsupported));
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const badge = container.querySelector('[data-docx-drop-rejection]');
+  expect(badge?.textContent).toBe('Drop a PNG, JPEG, GIF, or text.');
+  expect(unsupported.dropEffect).toBe('none');
+  pages.dispatchEvent(drag('dragover', 8, 5, unsupported));
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(container.querySelector('[data-docx-drop-rejection]')).toBe(badge);
+  pages.dispatchEvent(drag('dragover', 5, 5, textTransfer('accepted')));
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(container.querySelector('[data-docx-drop-rejection]')).toBeNull();
+  expect(container.querySelector('[data-docx-drop-caret]')).not.toBeNull();
+  editor.surface!.setEditingMode('view');
+  pages.dispatchEvent(drag('dragover', 5, 5, textTransfer('refused')));
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(container.querySelector('[data-docx-drop-rejection]')?.textContent).toBe(
+    'This document is read-only.'
+  );
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  expect(container.querySelector('[data-docx-drop-rejection]')).toBeNull();
+});
+
+test('stationary edge scrolling retains the gesture through layout refreshes', async () => {
+  const { editor, pages, container } = opened();
+  editor.surface!.insertPlainText(
+    Array.from({ length: 80 }, (_, i) => `Paragraph ${i}`).join('\n')
+  );
+  const viewport = document.createElement('div');
+  viewport.className = 'docx-editor__scroll-container';
+  document.body.append(viewport);
+  viewport.append(container);
+  let scrollTop = 0;
+  Object.defineProperty(viewport, 'scrollTop', {
+    get: () => scrollTop,
+    set: (value: number) => {
+      scrollTop = Math.max(0, Math.min(3000, value));
+    },
+  });
+  stubRect(viewport, { left: 100, top: 50, bottom: 450 });
+  Object.defineProperty(pages, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({
+      left: 100,
+      top: 50 - viewport.scrollTop,
+      right: 1000,
+      bottom: 5000 - viewport.scrollTop,
+    }),
+  });
+  cleanups.push(() => viewport.remove());
+  const selection = editor.surface!.state().selection;
+  const beforeRevision = editor.getDocumentHandle().revision;
+  const event = new MouseEvent('dragover', {
+    bubbles: true,
+    cancelable: true,
+    clientX: 250,
+    clientY: 449,
+  });
+  Object.defineProperty(event, 'dataTransfer', { value: textTransfer('drop') });
+  pages.dispatchEvent(event);
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  expect(viewport.scrollTop).toBeGreaterThan(10);
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  const stopped = viewport.scrollTop;
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(viewport.scrollTop).toBe(stopped);
+  expect(editor.getDocumentHandle().revision).toBe(beforeRevision);
+  expect(editor.surface!.state().selection).toEqual(selection);
+});

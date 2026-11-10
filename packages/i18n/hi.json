@@ -946,6 +946,13 @@
     "panelTitle": "वैकल्पिक पाठ",
     "title": "शीर्षक"
   },
+  "drop": {
+    "errors": {
+      "readOnly": "यह दस्तावेज़ केवल पढ़ने के लिए है।",
+      "noTarget": "संपादन योग्य पाठ पर छोड़ें।",
+      "unsupported": "PNG, JPEG, GIF चित्र या पाठ छोड़ें।"
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "चित्र नहीं डाला जा सकता",

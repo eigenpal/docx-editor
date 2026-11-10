@@ -946,6 +946,13 @@
     "panelTitle": "Texto alternativo",
     "title": "Título"
   },
+  "drop": {
+    "errors": {
+      "readOnly": "Este documento é somente leitura.",
+      "noTarget": "Solte sobre um texto editável.",
+      "unsupported": "Solte uma imagem PNG, JPEG, GIF ou um texto."
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "Não é possível inserir a imagem",

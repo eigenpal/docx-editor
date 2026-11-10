@@ -429,7 +429,9 @@ describe('image paste wiring', () => {
       return event;
     };
     expect(drag(clientX, clientY).defaultPrevented).toBe(true);
-    expect(drag(0, 0).defaultPrevented).toBe(false);
+    expect(data.dropEffect).toBe('copy');
+    expect(drag(0, 0).defaultPrevented).toBe(true);
+    expect(data.dropEffect).toBe('none');
     expect(view.editor().surface!.state().selection).toEqual(selection);
     view.unmount();
   });

@@ -946,6 +946,13 @@
     "panelTitle": "Teks alternatif",
     "title": "Judul"
   },
+  "drop": {
+    "errors": {
+      "readOnly": "Dokumen ini hanya bisa dibaca.",
+      "noTarget": "Lepaskan pada teks yang dapat diedit.",
+      "unsupported": "Lepaskan gambar PNG, JPEG, GIF, atau teks."
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "Gambar tidak dapat disisipkan",

@@ -946,6 +946,13 @@
     "panelTitle": "Texte de remplacement",
     "title": "Titre"
   },
+  "drop": {
+    "errors": {
+      "readOnly": "Ce document est en lecture seule.",
+      "noTarget": "Déposez l’élément sur du texte modifiable.",
+      "unsupported": "Déposez une image PNG, JPEG, GIF ou du texte."
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "Impossible d'insérer l'image",
