@@ -116,6 +116,7 @@ export function supportsTrackedAutomationOperation(operation: AutomationOperatio
     'replyToComment',
     'deleteComment',
     'setCommentResolved',
+    'setCommentText',
     'acceptRevision',
     'rejectRevision',
     'resolveRevisionBatch',

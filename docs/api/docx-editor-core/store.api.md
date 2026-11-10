@@ -3091,6 +3091,9 @@ export const NO_TRACKING_SETTINGS: DocumentTrackingSettings;
 export const NON_CANONICAL_ORIGINS: readonly string[];
 
 // @public
+export function normalizeCommentBodyText(text: string): string;
+
+// @public
 export function normalizeParagraphIdentity(part: OoxmlPart): OoxmlPart;
 
 // @public
@@ -4892,6 +4895,19 @@ export type SetCommentResolvedResult = {
 };
 
 // @public
+export function setCommentText(store: TreeDocumentStore, commentId: string, text: string): SetCommentTextResult;
+
+// @public
+export type SetCommentTextResult = {
+    readonly change: TreeModelChange | null;
+    readonly changed: boolean;
+    readonly ok: true;
+} | {
+    readonly ok: false;
+    readonly reason: TreeOpRejection | 'unknown-comment' | 'unsupported-comment-body';
+};
+
+// @public
 export interface SetFieldResultOp {
     readonly fieldNodeId: string;
     // (undocumented)
@@ -4928,6 +4944,15 @@ export interface SetLegacyDropdownOp {
 
 // @public
 export function setPackageCommentResolved(packageStore: TreePackageStore, commentId: string, resolved: boolean, historyGroup?: HistoryGroup): SetCommentResolvedResult;
+
+// @public
+export function setPackageCommentText(packageStore: TreePackageStore, commentId: string, text: string, historyGroup?: HistoryGroup): SetCommentTextResult;
+
+// @public
+export function setPackageCommentTexts(packageStore: TreePackageStore, edits: readonly {
+    readonly commentId: string;
+    readonly text: string;
+}[], historyGroup?: HistoryGroup): SetCommentTextResult;
 
 // @public
 export interface SetTextFormFieldDefaultOp {

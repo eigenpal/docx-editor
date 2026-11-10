@@ -183,7 +183,7 @@ test('forms keep Tab navigation and valid field filling', () => {
   expect(surface.session.bodyText()).toContain('X');
 });
 
-test('comments-only supports the complete comment lifecycle, undo and reopen', async () => {
+test('comments-only supports the complete comment lifecycle, undo, redo and reopen', async () => {
   const { editor, select } = mount(fixture('comments'));
   select(0, 3);
   expect(editor.snapshot().editingMode).toBe('editing');
@@ -191,6 +191,11 @@ test('comments-only supports the complete comment lifecycle, undo and reopen', a
   expect(editor.addComment('Root')).toEqual({ ok: true, changed: true });
   let key = editor.getReviewItems()[0]!.key;
   expect(editor.replyToReviewItem(key, 'Reply')).toEqual({ ok: true, changed: true });
+  expect(editor.setCommentText(key, 'Root, edited')).toEqual({ ok: true, changed: true });
+  expect(editor.exec({ type: 'undo' })).toEqual({ ok: true, changed: true });
+  expect(editor.getReviewItems()[0]!.text).toBe('Root');
+  expect(editor.exec({ type: 'redo' })).toEqual({ ok: true, changed: true });
+  expect(editor.getReviewItems()[0]!.text).toBe('Root, edited');
   expect(editor.setCommentResolved(key, true)).toEqual({ ok: true, changed: true });
   expect(
     editor

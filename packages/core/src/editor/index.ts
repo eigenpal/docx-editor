@@ -628,6 +628,7 @@ export type {
   ScrollToAnchorOptions,
   HistoryGroup,
   HistoryGroupOptions,
+  CommentTextOptions,
   // What `findMatches` returns and `selectMatch`/`replaceMatch` take.
   TextMatch,
 } from '../contracts/editor.ts';

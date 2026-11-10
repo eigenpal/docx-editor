@@ -13,7 +13,7 @@ export function shuffle(values, seed) {
   }
   return shuffled;
 }
-async function synchronize(peers, format, seed, roomId = BODY) {
+export async function synchronize(peers, format, seed, roomId = BODY) {
   for (let round = 0; round < 20; round++) {
     const held = [];
     for (const source of peers) {

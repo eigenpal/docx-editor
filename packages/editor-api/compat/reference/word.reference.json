@@ -308,6 +308,17 @@
             }
           ]
         },
+        "content": {
+          "uid": "Word.Comment#content",
+          "kind": "property",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
         "creationDate": {
           "uid": "Word.Comment#creationDate",
           "kind": "property",
@@ -434,6 +445,17 @@
           "uid": "Word.CommentReply#authorName",
           "kind": "property",
           "readonly": true,
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "content": {
+          "uid": "Word.CommentReply#content",
+          "kind": "property",
           "requirementSet": "WordApi 1.4",
           "overloads": [
             {

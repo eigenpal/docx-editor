@@ -82,6 +82,8 @@ type HostRejectionToken =
   | 'unsupported-tracked-table-operation'
   | 'unsupported-story'
   | 'experimental-collaboration-body-text-only'
+  | 'comment-author-mismatch'
+  | 'unsupported-comment-body'
   | 'review-module-required'
   | 'no-document'
   | 'table-insert-refused'
@@ -200,6 +202,8 @@ const STORE_EDIT_CODES: Readonly<
   'unsupported-story': 'edit.unsupported-story',
   'experimental-collaboration-body-text-only': 'edit.unsupported-story',
   'review-module-required': 'edit.review-module-required',
+  'comment-author-mismatch': 'edit.comment-author-mismatch',
+  'unsupported-comment-body': 'edit.unsupported-content',
   'no-document': 'edit.stale-target',
   'table-insert-refused': 'edit.table-insert-refused',
   'table-of-contents-refused': 'edit.table-of-contents-refused',

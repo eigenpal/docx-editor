@@ -669,6 +669,18 @@ function applyPlannedJournal(
             if (planned.mintedNodes.has(id) && registry.kindOf(id) === 'run') insertedRuns.push(id);
           }
         }
+        // A comment textbox saves a complete body, not shared character-by-character input.
+        // Existing split lineage chooses one concurrent replacement on every reader.
+        if (registry.kindOf(effect.parentLogicalId) === 'comment') {
+          const replaced = (planned.replacementsByEffect.get(effect) ?? []).filter(
+            (id) => registry.kindOf(id) === 'paragraph'
+          );
+          const paragraphs = effect.childLogicalIds.filter(
+            (id) => registry.kindOf(id) === 'paragraph'
+          );
+          const origin = replaced[replaced.length - 1];
+          if (origin && paragraphs.length > 0) registry.recordRunSplit(origin, origin, paragraphs);
+        }
         recordSplitProvenance(
           registry,
           planned,

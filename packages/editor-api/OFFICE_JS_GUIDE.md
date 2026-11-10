@@ -523,6 +523,25 @@ await runtime.run(async (context) => {
 });
 ```
 
+## Edit comment content
+
+Set `Comment.content` or `CommentReply.content`, then call `context.sync()`. The runtime author must exactly match the stored author name. These names are host metadata, not authenticated identities. Load `content` before reading it, including after a write.
+
+```ts
+await runtime.run(async (context) => {
+  const comment = context.document.comments.getFirst();
+  comment.load('content');
+  await context.sync();
+  const replacement = reviseComment(comment.content);
+  comment.content = replacement;
+  comment.load('content');
+  await context.sync();
+  console.log(comment.content);
+});
+```
+
+Batch independent comment and reply content edits in one sync. Keep other mutations in a separate sync. Main-body comments support plain-text replacement; empty text and unsupported body structures refuse. A replacement removes body formatting and preserves author, date, anchors, replies, and resolved state. Browser edits require the review module and an editable document. On `StaleDocument`, read the current content and reconsider the replacement. Never replay an old draft without checking it.
+
 ## Review changes in a range
 
 Use `range.revisions` to reach the tracked changes inside a search result, a comment range, or any other range. The collection lists the changes the range overlaps in its own story, including a nested change or another author's change beside it. A partly covered change is listed whole, and a replacement lists its deletion and insertion separately. Load the members and decide on each one:

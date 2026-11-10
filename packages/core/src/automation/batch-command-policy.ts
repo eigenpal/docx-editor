@@ -18,12 +18,14 @@ export function createBatchCommandPolicy(): {
   let hasCommands = false;
   let solitaryPlanned = false;
   let commentDeletionPlanned = false;
+  let commentEditPlanned = false;
   let fieldUpdatePlanned = false;
   return {
     conflict(operation) {
       const command = isAutomationCommand(operation);
       const solitary = isSolitaryAutomationCommand(operation);
       const deletion = operation.op === 'deleteComment';
+      const commentEdit = operation.op === 'setCommentText';
       const fieldUpdate = operation.op === 'updateFieldResult';
       if (
         command &&
@@ -33,6 +35,16 @@ export function createBatchCommandPolicy(): {
         return {
           message:
             'field result updates require a batch without other edits; sync document edits before updating fields',
+          detail: operation.op,
+        };
+      }
+      if (
+        command &&
+        ((commentEdit && hasCommands && !commentEditPlanned) ||
+          (commentEditPlanned && !commentEdit))
+      ) {
+        return {
+          message: 'comment content edits may share a batch only with other comment content edits',
           detail: operation.op,
         };
       }
@@ -57,6 +69,7 @@ export function createBatchCommandPolicy(): {
       if (!isAutomationCommand(operation)) return;
       hasCommands = true;
       if (isSolitaryAutomationCommand(operation)) solitaryPlanned = true;
+      if (operation.op === 'setCommentText') commentEditPlanned = true;
       if (operation.op === 'deleteComment') commentDeletionPlanned = true;
       if (operation.op === 'updateFieldResult') fieldUpdatePlanned = true;
     },

@@ -6906,38 +6906,49 @@ a.docx-hyperlink:focus-visible {
   flex: 1 0 100%;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
+  gap: 8px;
 }
 
-.docx-review__text-button {
-  padding: 6px 10px;
-  border: 0;
-  border-radius: 999px;
+.docx-review__text-button,
+.docx-review__submit {
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   background: transparent;
-  color: var(--doc-primary, #1a73e8);
+  color: var(--doc-text);
   font: inherit;
   font-weight: 500;
   cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
-.docx-review__text-button:hover {
-  background: var(--doc-surface-hover, rgb(0 0 0 / 6%));
+@media (hover: hover) {
+  .docx-review__text-button:hover:not(:disabled) {
+    background: var(--doc-bg-hover);
+  }
 }
 
 .docx-review__submit {
-  padding: 6px 14px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--doc-primary, #1a73e8);
-  color: #fff;
-  font: inherit;
-  font-weight: 500;
-  cursor: pointer;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+}
+
+@media (hover: hover) {
+  .docx-review__submit:hover:not(:disabled) {
+    background: var(--doc-primary-hover);
+  }
+}
+
+.docx-review__submit:active:not(:disabled) {
+  background: var(--doc-primary-hover);
 }
 
 .docx-review__submit:disabled {
-  background: var(--doc-surface-hover, rgb(0 0 0 / 8%));
-  color: var(--doc-text-muted, #8a8f98);
+  background: var(--doc-bg-subtle);
+  color: var(--doc-text-muted);
   cursor: default;
 }
 
@@ -9804,4 +9815,137 @@ p.docx-review__refused {
   .docx-editor .docx-chart-pane :where(.docx-dialog__button) {
     transform: none !important;
   }
+}
+
+/* Comment edits stay in the card and preserve multiline text. */
+.docx-review__edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+.docx-review__edit-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 72px;
+  max-height: 260px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  background: var(--doc-surface);
+  color: inherit;
+  font: inherit;
+  line-height: 1.5;
+  unicode-bidi: plaintext;
+}
+.docx-review__edit-input:focus-visible {
+  border-color: var(--doc-primary);
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 1px;
+}
+.docx-review__text-button:disabled {
+  cursor: default;
+  color: var(--doc-text-muted);
+}
+.docx-review__text-button:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
+}
+
+.docx-review__card[data-kind='comment'] .docx-review__text,
+.docx-review__reply .docx-review__text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.docx-review__draft-recovery {
+  position: fixed;
+  inset-inline-end: 16px;
+  bottom: 16px;
+  z-index: var(--doc-z-overlay);
+  width: min(340px, calc(100vw - 32px));
+  max-height: min(400px, 70vh);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  background: var(--doc-surface);
+  color: var(--doc-text);
+  box-shadow: 0 4px 16px var(--doc-shadow);
+  pointer-events: auto;
+}
+
+.docx-review__comment-menu {
+  position: relative;
+}
+.docx-review__comment-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--doc-text-muted);
+  cursor: pointer;
+}
+.docx-review__comment-menu-trigger:hover {
+  background: var(--doc-bg-hover);
+  color: var(--doc-text);
+}
+.docx-review__comment-menu-trigger:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
+}
+.docx-review__comment-menu-panel {
+  position: absolute;
+  inset-inline-end: 0;
+  top: calc(100% + 4px);
+  z-index: var(--doc-z-overlay);
+  min-width: 150px;
+  padding: 4px;
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  background: var(--doc-surface);
+  box-shadow: 0 4px 16px var(--doc-shadow);
+}
+.docx-review__comment-menu-item {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 4px;
+  padding: 8px 10px;
+  text-align: start;
+  font: inherit;
+  font-size: 13px;
+  background: transparent;
+  color: var(--doc-text);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.docx-review__comment-menu-item:hover,
+.docx-review__comment-menu-item:focus-visible {
+  background: var(--doc-bg-hover);
+  outline: 2px solid var(--doc-primary);
+  outline-offset: -2px;
+}
+.docx-review__comment-menu-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.docx-review__comment-menu-item[data-destructive] {
+  color: var(--doc-danger);
+}
+
+/* Edit controls must remain visible when the surrounding card limits summary text. */
+.docx-review__card .docx-review__summary:has(.docx-review__edit),
+.docx-review__card[data-active][data-kind='comment'] .docx-review__summary {
+  display: block;
+  max-height: none;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
 }

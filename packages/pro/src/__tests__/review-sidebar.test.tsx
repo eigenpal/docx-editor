@@ -329,10 +329,11 @@ describe('the review sidebar', () => {
 
     // Delete belongs to the reply. The revision already has a Reject action.
     expect(view.getAllByTestId('review-reply')).toHaveLength(1);
-    const controls = view.getAllByTestId('review-delete');
-    expect(controls).toHaveLength(1);
+    const actions = view.getAllByTestId('review-comment-actions');
+    expect(actions).toHaveLength(1);
     const reply = view.getAllByTestId('review-reply')[0]!;
-    expect(reply.contains(controls[0]!)).toBe(true);
+    expect(reply.contains(actions[0]!)).toBe(true);
+    expect(view.queryAllByTestId('review-delete')).toHaveLength(0);
 
     // And CLICKING the reply keeps the change open rather than closing it: the reply covers
     // exactly the change's characters, so it wins the innermost test at the caret, and
@@ -341,7 +342,12 @@ describe('the review sidebar', () => {
       fireEvent.click(view.getAllByTestId('review-reply')[0]!);
     });
     expect(view.getAllByTestId('review-card')[0]!.hasAttribute('data-active')).toBe(true);
-    expect(view.getAllByTestId('review-delete')).toHaveLength(1);
+    await act(async () => {
+      fireEvent.click(view.getByTestId('review-comment-actions'));
+    });
+    const controls = view.getAllByTestId('review-delete');
+    expect(controls).toHaveLength(1);
+    expect(reply.contains(controls[0]!)).toBe(true);
 
     await act(async () => {
       fireEvent.click(controls[0]!);

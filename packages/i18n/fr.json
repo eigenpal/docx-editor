@@ -423,7 +423,20 @@
     "addComment": "Ajouter un commentaire...",
     "replyPlaceholder": "Répondre ou mentionner d'autres personnes avec @",
     "reopen": "Rouvrir",
-    "resolve": "Résoudre"
+    "resolve": "Résoudre",
+    "edit": "Modifier",
+    "editConflict": "Ce commentaire a changé. Votre brouillon est conservé. Annulez pour afficher le texte à jour.",
+    "editEmpty": "Saisissez le texte du commentaire avant de l’enregistrer.",
+    "editPermission": "Vous pouvez uniquement modifier vos propres commentaires.",
+    "editRefused": "Impossible d’enregistrer ce commentaire. Votre brouillon est conservé.",
+    "editText": "Texte du commentaire",
+    "saveEdit": "Enregistrer les modifications",
+    "deletedDraft": "Ce commentaire n’est plus disponible ici. Votre brouillon non enregistré est conservé pour que vous puissiez le copier.",
+    "discardDraft": "Supprimer le brouillon",
+    "recoveredDraft": "Brouillon de commentaire non enregistré",
+    "actions": "Actions du commentaire",
+    "replyActions": "Actions de la réponse",
+    "delete": "Supprimer"
   },
   "contextMenu": {
     "ariaLabel": "Menu des actions IA",

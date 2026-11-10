@@ -18,6 +18,8 @@ import { ACCEPT_ICON, DELETE_ICON, REJECT_ICON, icon } from './review-icons.tsx'
 import { ResolvedCommentCard, createCommentResolutionParts } from './review-comment-resolution.tsx';
 import { createReviewComposeParts } from './review-compose-boxes.tsx';
 import { ReviewActionSlot } from './review-action-slot.tsx';
+import { ReviewCommentActions } from './review-comment-actions.tsx';
+import { ReviewCommentText } from './review-comment-edit.tsx';
 import { revisionItemLabel } from './review-labels.ts';
 import { reviewRefusalFallbackKey, reviewRefusalLabelKey } from '../review/review-refusal.ts';
 
@@ -205,7 +207,10 @@ function ReviewCardPreset({ children }: { children?: ReactNode }) {
             {take('Reject', <ReviewReject />)}
             {take('Resolve', <ReviewResolve />)}
             {take('Reopen', <ReviewReopen />)}
-            {take('Delete', entry.kind === 'comment' ? <ReviewDelete /> : null)}
+            {entry.kind === 'comment' ? (
+              <ReviewCommentActions entry={entry} hideDelete={'Delete' in overrides} />
+            ) : null}
+            {take('Delete', null)}
           </div>
         ) : null}
       </div>
@@ -413,6 +418,13 @@ export function ReviewSummary({ className, asChild, hidden, children }: ReviewPa
     'data-review-selectable': '',
   };
   if (asChild) return <Slot {...shared}>{children}</Slot>;
+  if (entry.kind === 'comment' && children === undefined) {
+    return (
+      <div {...shared}>
+        <ReviewCommentText entry={entry} />
+      </div>
+    );
+  }
   return (
     <div {...shared}>
       {children ??
@@ -646,7 +658,7 @@ export function ReviewReplies({ className, hidden }: ReviewPartProps) {
                   this the only way to take back a reply was to delete the whole thread it
                   hangs off — the parent's control is the only one that was drawn. */}
               <div className="docx-review__actions">
-                <ReviewDelete />
+                <ReviewCommentActions entry={reply} />
               </div>
             </div>
             <ReviewSummary />

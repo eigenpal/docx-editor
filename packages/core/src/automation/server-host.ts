@@ -52,6 +52,7 @@ import {
   addPackageComment,
   deletePackageComments,
   setPackageCommentResolved,
+  setPackageCommentTexts,
 } from '../store/store/comment-package-write.ts';
 import { insertPackageCustomNode } from '../store/store/custom-node-package-write.ts';
 import type {
@@ -387,6 +388,17 @@ export function packageStorePort(
         );
         if (!changed) return { ok: false, reason: 'comment-delete-refused' };
         return published({ ok: true, changed });
+      }
+      if (writes.every((write) => write.kind === 'edit')) {
+        const edited = runWithTransactionActor(collaboration?.identity.actorId, () =>
+          setPackageCommentTexts(
+            store,
+            writes.map((write) => ({ commentId: write.commentId, text: write.text }))
+          )
+        );
+        return edited.ok
+          ? published({ ok: true, changed: edited.changed })
+          : { ok: false, reason: edited.reason };
       }
       if (writes.length !== 1) return { ok: false, reason: 'mixed-comment-writes' };
       const write = writes[0]!;

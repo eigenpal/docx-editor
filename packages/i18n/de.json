@@ -423,7 +423,20 @@
     "addComment": "Kommentar hinzufügen...",
     "replyPlaceholder": "Antworten oder andere mit @ erwähnen",
     "reopen": "Erneut öffnen",
-    "resolve": "Auflösen"
+    "resolve": "Auflösen",
+    "edit": "Bearbeiten",
+    "editConflict": "Dieser Kommentar wurde geändert. Ihr Entwurf bleibt erhalten. Brechen Sie ab, um den aktuellen Text anzuzeigen.",
+    "editEmpty": "Geben Sie vor dem Speichern einen Kommentartext ein.",
+    "editPermission": "Sie können nur Ihre eigenen Kommentare bearbeiten.",
+    "editRefused": "Dieser Kommentar konnte nicht gespeichert werden. Ihr Entwurf bleibt erhalten.",
+    "editText": "Kommentartext",
+    "saveEdit": "Änderungen speichern",
+    "deletedDraft": "Dieser Kommentar ist hier nicht mehr verfügbar. Ihr ungespeicherter Entwurf bleibt zum Kopieren erhalten.",
+    "discardDraft": "Entwurf verwerfen",
+    "recoveredDraft": "Ungespeicherter Kommentarentwurf",
+    "actions": "Kommentaraktionen",
+    "replyActions": "Antwortaktionen",
+    "delete": "Löschen"
   },
   "contextMenu": {
     "ariaLabel": "KI-Aktionsmenü",

@@ -255,7 +255,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     /** The one package-level op a batch may hold, which travels alone. See the planner. */
     let lifecycle: TreeDocOp | null = null;
     const packageEdits: import('./document-port.ts').AutomationPackageEdit[] = [];
-    /** Comment deletes can batch; reply/resolve remain solitary by planner rule. */
+    /** Comment deletes or content edits can batch; reply/resolve remain solitary. */
     const commentWrites: AutomationCommentWrite[] = [];
     let commentWriteScope: StoryScope | null = null;
     /** The id the comment write minted, which only the port can say. */

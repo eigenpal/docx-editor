@@ -181,6 +181,7 @@ Limits marked **server** accept a higher value for a trusted file through the `l
 | <a id="edit-tracking-mode-unsupported" />`edit.tracking-mode-unsupported` | `TrackAll` needs every collaborator to enforce tracking. | Use `TrackMineOnly`. |
 | <a id="edit-tracking-author-required" />`edit.tracking-author-required` | `TrackMineOnly` needs an author. The editor's author does not apply to a batch. | Pass `author` to `createServer` or `createBrowser`. |
 | <a id="edit-comment-author-required" />`edit.comment-author-required` | An editing API comment or reply needs an author. | Pass `author` to the runtime, or use `useReview().comment` or `useReview().reply`. |
+| <a id="edit-comment-author-mismatch" />`edit.comment-author-mismatch` | The configured author does not own this comment or reply. | Edit a comment that belongs to the current author. Author names are host metadata, not authentication. |
 | <a id="edit-tracking-unsupported-host" />`edit.tracking-unsupported-host` | This automation host does not track changes. | Use `createServer` or a mounted editor; both support `TrackMineOnly`. |
 | <a id="edit-revision-unsupported" />`edit.revision-unsupported` | The edit, accept, or reject touches an unsupported tracked change kind. | Edit around it; leave it for a person. |
 | <a id="edit-tracking-required" />`edit.tracking-required` | Protection allows only tracked edits. | Switch to suggesting, or set `document.changeTrackingMode` to `TrackMineOnly`. |

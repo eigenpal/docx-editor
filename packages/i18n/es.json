@@ -499,7 +499,20 @@
     "addComment": "Añadir un comentario...",
     "replyPlaceholder": "Responde o menciona a otros con @",
     "resolve": "Resolver",
-    "reopen": "Volver a abrir"
+    "reopen": "Volver a abrir",
+    "edit": "Editar",
+    "editConflict": "Este comentario ha cambiado. Se conserva tu borrador. Cancela para ver el texto más reciente.",
+    "editEmpty": "Escribe el texto del comentario antes de guardarlo.",
+    "editPermission": "Solo puedes editar tus propios comentarios.",
+    "editRefused": "No se pudo guardar este comentario. Se conserva tu borrador.",
+    "editText": "Texto del comentario",
+    "saveEdit": "Guardar cambios",
+    "deletedDraft": "Este comentario ya no está disponible aquí. Se conserva tu borrador sin guardar para que puedas copiarlo.",
+    "discardDraft": "Descartar borrador",
+    "recoveredDraft": "Borrador de comentario sin guardar",
+    "actions": "Acciones del comentario",
+    "replyActions": "Acciones de la respuesta",
+    "delete": "Eliminar"
   },
   "revisions": {
     "paragraphMarkInserted": "Salto de párrafo insertado",

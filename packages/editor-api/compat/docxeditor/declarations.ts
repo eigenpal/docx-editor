@@ -148,10 +148,7 @@ export declare namespace DocxEditor {
     addToRecentFiles?: boolean;
     authorName?: string;
     compareTarget?:
-      | CompareTarget
-      | 'CompareTargetCurrent'
-      | 'CompareTargetNew'
-      | 'CompareTargetSelected';
+      CompareTarget | 'CompareTargetCurrent' | 'CompareTargetNew' | 'CompareTargetSelected';
     detectFormatChanges?: boolean;
     ignoreAllComparisonWarnings?: boolean;
     removeDateAndTime?: boolean;
@@ -412,11 +409,9 @@ export declare namespace DocxEditor {
   // commentsAndRevisions
   // ---------------------------------------------------------------------
 
-  // `authorEmail` and `content` are deliberately ABSENT: an author's address is in people.xml,
-  // which this subset does not read, and a comment's body is assignable upstream while nothing here
-  // rewrites one. `text` is DocxEditor's own read-only way to reach the body, recorded as
-  // unmeasured. See `compat/manifest.json`.
+  // Author email remains unsupported. The standard content property reads and edits body text.
   export class Comment {
+    content: string;
     readonly authorName: string;
     readonly creationDate: Date;
     readonly id: string;
@@ -433,6 +428,7 @@ export declare namespace DocxEditor {
   }
 
   export class CommentReply {
+    content: string;
     readonly authorName: string;
     readonly creationDate: Date;
     readonly id: string;

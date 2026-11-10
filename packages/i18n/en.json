@@ -499,7 +499,20 @@
     "addComment": "Add a comment...",
     "replyPlaceholder": "Reply or add others with @",
     "resolve": "Resolve",
-    "reopen": "Reopen"
+    "reopen": "Reopen",
+    "edit": "Edit",
+    "deletedDraft": "This comment is no longer available here. Your unsaved draft is kept so you can copy it.",
+    "discardDraft": "Discard draft",
+    "recoveredDraft": "Unsaved comment draft",
+    "editText": "Comment text",
+    "saveEdit": "Save changes",
+    "editConflict": "This comment changed. Your draft is kept. Cancel to see the latest text.",
+    "editRefused": "Could not save this comment. Your draft is kept.",
+    "editPermission": "You can only edit your own comments.",
+    "editEmpty": "Enter comment text before saving.",
+    "actions": "Comment actions",
+    "replyActions": "Reply actions",
+    "delete": "Delete"
   },
   "revisions": {
     "paragraphMarkInserted": "Inserted paragraph break",

@@ -92,6 +92,8 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
     'TrackAll needs every collaborator to enforce tracking, which this runtime cannot guarantee. Use TrackMineOnly instead.',
   'edit.tracking-author-required':
     'TrackMineOnly needs an author for each tracked change. Pass the author option to createServer or createBrowser. The author set on the editor does not apply to an editing API batch.',
+  'edit.comment-author-mismatch':
+    'Only the configured runtime author can edit their comment or reply. Read authorName and configure the runtime with the matching author identity.',
   'edit.comment-author-required':
     'A comment or reply from the editing API needs an author. Pass the author option to createServer or createBrowser. In a React or Vue host with the review module, use useReview().comment or useReview().reply instead, which write as the author set on the editor.',
   'edit.tracking-unsupported-host':

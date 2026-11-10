@@ -968,14 +968,14 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'review.comments',
-    name: 'Comments (threads, replies, resolve)',
+    name: 'Comments (create, edit, reply, resolve)',
     category: 'review',
     editing: 'full',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'premium',
     notes:
-      'Add comments, replies, and resolutions with the EigenPal Pro License. Comments can target body text, headers, footers, and supported text boxes. Opening and saving existing comments requires no review module.',
+      'Add comments, replies, and resolutions with the EigenPal Pro License. Edit your own supported body comments and replies as plain text through the interface or API. Comments can target body text, headers, footers, and supported text boxes.',
     docsLink: '/docs/2.x/pro/comments',
   },
   {

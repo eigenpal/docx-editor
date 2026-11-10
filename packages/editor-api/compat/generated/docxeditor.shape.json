@@ -308,6 +308,17 @@
             }
           ]
         },
+        "content": {
+          "uid": "DocxEditor.Comment#content",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
         "creationDate": {
           "uid": "DocxEditor.Comment#creationDate",
           "kind": "property",
@@ -434,6 +445,17 @@
           "uid": "DocxEditor.CommentReply#authorName",
           "kind": "property",
           "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "content": {
+          "uid": "DocxEditor.CommentReply#content",
+          "kind": "property",
           "requirementSet": null,
           "overloads": [
             {

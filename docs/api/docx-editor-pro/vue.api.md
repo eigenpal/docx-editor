@@ -1171,7 +1171,7 @@ export interface ReviewRailMetrics {
 }
 
 // @public
-export type ReviewWriteAction = 'accept' | 'reject' | 'resolve' | 'reopen' | 'remove' | 'reply' | 'comment';
+export type ReviewWriteAction = 'accept' | 'reject' | 'resolve' | 'reopen' | 'remove' | 'reply' | 'comment' | 'edit';
 
 // @public
 export interface ReviewWriteRefusal {
@@ -1290,6 +1290,7 @@ export interface UseReviewReturn {
     readonly comment: (text: string, author?: string) => boolean;
     // (undocumented)
     readonly commentResolutionDisabledReason: ComputedRef<string | null>;
+    readonly edit: (item: ReviewItemView, text: string, expectedText?: string) => boolean;
     // (undocumented)
     readonly items: ComputedRef<readonly ReviewItemView[]>;
     readonly lastRefusal: ComputedRef<ReviewWriteRefusal | null>;

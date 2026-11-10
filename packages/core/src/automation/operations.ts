@@ -621,6 +621,13 @@ export type AutomationOperation =
       readonly comment: AutomationHandle;
       readonly resolved: boolean;
     }
+  /** Replace a supported comment or reply body as its configured runtime author. */
+  | {
+      readonly op: 'setCommentText';
+      readonly comment: AutomationHandle;
+      readonly text: string;
+      readonly author: string;
+    }
   /**
    * Reply to a comment, over the same words it is anchored to.
    *

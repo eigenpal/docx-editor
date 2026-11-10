@@ -76,6 +76,7 @@ const INERT_REVIEW: ReviewActions = {
   commentResolutionDisabledReason: null,
   remove: () => false,
   reply: () => false,
+  edit: () => false,
   selectionAnchorY: null,
   comment: () => false,
   lastRefusal: null,

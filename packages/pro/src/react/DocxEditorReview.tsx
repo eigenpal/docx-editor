@@ -31,6 +31,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // zoom, and the rail offsets by the painted surface's own position so it stays aligned when
 // the host puts chrome above the pages.
 
+import { ReviewCommentRecovery } from './review-comment-recovery.tsx';
 import {
   cloneElement,
   isValidElement,
@@ -717,6 +718,7 @@ function ReviewRoot({
               <ReviewRefusalAnnouncer />
             </aside>
           )}
+          <ReviewCommentRecovery />
         </ReviewRailMetricsContext.Provider>
       </ReviewContext.Provider>
     </ResolvedDisclosureProvider>
