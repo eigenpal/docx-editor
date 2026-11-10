@@ -62,7 +62,7 @@ Give content-hashed assets this response header:
 Cache-Control: public, max-age=31536000, immutable
 ```
 
-The repository's Vercel configuration applies this policy to `/react/assets/`, where Vite writes content-hashed build files. Keep fixed-name public files outside that directory. HTML must revalidate so visitors receive links to the latest assets. Do not apply immutable caching to user documents, API responses, or files with reusable names.
+Apply this policy only to existing content-hashed files. A broad path rule can also cache fallback HTML for missing assets. HTML must revalidate so visitors receive links to the latest assets. Do not apply immutable caching to user documents, API responses, or files with reusable names.
 
 Check an actual asset response with an explicit Brotli request:
 

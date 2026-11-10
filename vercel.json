@@ -3,17 +3,6 @@
   "buildCommand": "bun run build:pdf && bun run build:preview",
   "outputDirectory": "examples/parity/dist",
   "installCommand": "HUSKY=0 bunx bun@1.4.2 install --frozen-lockfile",
-  "headers": [
-    {
-      "source": "/react/assets/:path*",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
-    }
-  ],
   "functions": {
     "api/convert.ts": {
       "maxDuration": 90,
