@@ -36,7 +36,8 @@ def test_vendored_licenses_are_complete():
 
 @pytest.mark.parametrize(
     "package",
-    ["harfbuzzjs", "fflate", "fast-xml-parser", "prosemirror-model", "bidi-js"],
+    # Editor-only dependencies disappear when the converter bundle removes unused code.
+    ["harfbuzzjs", "fflate", "fast-xml-parser", "bidi-js"],
 )
 def test_notices_cover_bundled_packages(package):
     notices = (LICENSES / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
