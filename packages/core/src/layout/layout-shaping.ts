@@ -8,6 +8,7 @@ import {
   fontByteLength,
   fontRequestKey,
   prepareFontResourceDefinition,
+  prepareFontResourceDefinitionAsync,
   preparedFontResourceActualHash,
   sha256FontBytes,
   type FontRequest,
@@ -549,6 +550,25 @@ function shapingAlgorithmFingerprint(
   return `shaping:${sha256FontBytes(bytes)}`;
 }
 
+/** Keep caller mutation outside the asynchronous hashing boundary. */
+async function prepareBrowserLayoutFontConfiguration(
+  configuration: LayoutFontConfiguration,
+  instrumentation: LayoutShapingInstrumentation | undefined
+): Promise<PreparedLayoutFontConfiguration> {
+  const snapshot = snapshotLayoutFontConfigurationInternal(configuration, false);
+  // Every call copies its bytes before returning a promise. All sources are owned
+  // before this function yields, including sources later in the list.
+  const sources = await Promise.all(
+    snapshot.sources.map((source) =>
+      prepareFontResourceDefinitionAsync(source, {
+        onOwnedByteCopy: instrumentation?.onFontByteCopy,
+        onHash: instrumentation?.onFontHash,
+      })
+    )
+  );
+  return prepareOwnedLayoutFontConfiguration({ ...snapshot, sources }, instrumentation);
+}
+
 async function createLayoutShapingInternal(
   configuration: LayoutFontConfiguration | PreparedLayoutFontConfiguration,
   instrumentation: LayoutShapingInstrumentation | undefined,
@@ -562,7 +582,7 @@ async function createLayoutShapingInternal(
   const alreadyPrepared = isPreparedLayoutFontConfiguration(configuration);
   const prepared = alreadyPrepared
     ? configuration
-    : prepareLayoutFontConfiguration(configuration, instrumentation);
+    : await prepareBrowserLayoutFontConfiguration(configuration, instrumentation);
   const snapshot = configurationOfPreparedLayoutFonts(prepared);
   const { epoch, maxFontBytes, sources, substitutions, defaultFont } = snapshot;
   const language = snapshot.language || 'en';

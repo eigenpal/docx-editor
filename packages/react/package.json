@@ -1,5 +1,8 @@
 {
   "name": "@docx-editor.dev/react",
+  "sideEffects": [
+    "**/*.css"
+  ],
   "version": "2.36.0",
   "description": "React DOCX editor adapter for the @docx-editor.dev editor contract.",
   "main": "./dist/index.js",

@@ -174,3 +174,26 @@ export const sha256IsNative = nativeSha256 !== null;
 export const sha256FontBytes: (bytes: Uint8Array) => string = nativeSha256
   ? (bytes) => `sha256:${nativeSha256(bytes)}`
   : sha256FontBytesPure;
+
+/** Hash owned bytes without blocking browser input when Web Crypto is available. @internal */
+export async function sha256OwnedFontBytesAsync(bytes: Uint8Array): Promise<string> {
+  if (nativeSha256) return sha256FontBytes(bytes);
+  try {
+    const host = globalThis as {
+      crypto?: { subtle?: { digest(algorithm: string, data: Uint8Array): Promise<ArrayBuffer> } };
+    };
+    const subtle = host.crypto?.subtle;
+    if (subtle) {
+      const digest = new Uint8Array(await subtle.digest('SHA-256', bytes));
+      const result = new Array<string>(digest.length + 1);
+      result[0] = 'sha256:';
+      for (let index = 0; index < digest.length; index += 1) {
+        result[index + 1] = HEX_BYTES[digest[index]!]!;
+      }
+      return result.join('');
+    }
+  } catch {
+    // An unavailable crypto provider keeps the synchronous verification path.
+  }
+  return sha256FontBytes(bytes);
+}
