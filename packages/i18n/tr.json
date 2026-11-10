@@ -946,6 +946,13 @@
     "panelTitle": "Alternatif metin",
     "title": "Başlık"
   },
+  "drop": {
+    "errors": {
+      "readOnly": "Bu belge salt okunurdur.",
+      "noTarget": "Düzenlenebilir metnin üzerine bırakın.",
+      "unsupported": "PNG, JPEG, GIF görseli veya metin bırakın."
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "Resim eklenemiyor",
@@ -953,7 +960,8 @@
       "invalidSignature": "Dosya desteklenen bir PNG, JPEG veya GIF görüntüsü değil.",
       "oversize": "Görüntü izin verilen en büyük boyutu aşıyor.",
       "refused": "Görüntü eklenemedi.",
-      "unsupportedFormat": "Bu görüntü biçimi ekleme için desteklenmiyor."
+      "unsupportedFormat": "Bu görüntü biçimi ekleme için desteklenmiyor.",
+      "staleTarget": "Belge veya bırakma konumu değişti. Görseli yeniden bırakın."
     }
   },
   "imageProperties": {

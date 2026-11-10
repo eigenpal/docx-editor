@@ -2,6 +2,13 @@ import { describe, expect, test } from 'bun:test';
 import { createT, en, localizeDisabledReason } from './index';
 
 describe('localizeDisabledReason', () => {
+  test.each([
+    'the drop target is stale; drop the image again',
+    'the drop target story is no longer active',
+    'the drop target is no longer attached',
+  ])('localizes the drop refusal: %s', (reason) => {
+    expect(localizeDisabledReason(reason, createT(en))).toBe(en.imageInsert.errors.staleTarget);
+  });
   test('translates known chrome refusals', () => {
     const t = createT({
       ...en,

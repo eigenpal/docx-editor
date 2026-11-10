@@ -717,7 +717,7 @@ describe('renders semantic image resize handles', () => {
       view.container
         .querySelector('.docx-image-selection-overlay__frame')
         ?.classList.contains('docx-editor-one-surface__overlay-control')
-    ).toBe(false);
+    ).toBe(true);
   });
 
   test('shows no overlay for plain text selection', async () => {

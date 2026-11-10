@@ -1,3 +1,5 @@
+import type { EditorPointPosition } from './editor-drop.ts';
+export type { EditorPointPosition, EditorDropEvent, EditorHostDragEvent } from './editor-drop.ts';
 import type { ResolvedRevisionMarkup } from './revision-markup.ts';
 import type { CompareDocumentsRequest } from './compare-documents.ts';
 import type { ResolvedReviewPane } from './review-pane.ts';
@@ -111,7 +113,8 @@ import type { InteractionOutcome } from './interaction';
 // The selection vocabulary the painted surface actually speaks. Type-only, and re-exported
 // below for the same reason the review types are: an adapter is not allowed to import the
 // layout lane, so a form it must construct has to be nameable from this contract.
-import type { SemanticPosition, SemanticSelection } from '../layout/semantic-interaction.ts';
+import type { EditorSelection } from './editor-position.ts';
+export type { EditorPosition, EditorSelection } from './editor-position.ts';
 import type { CollaborationStatus } from '../collaboration/index.ts';
 import type {
   ColorValue,
@@ -254,30 +257,6 @@ export class EditorFontError extends Error {
     this.diagnostic = details.diagnostic;
   }
 }
-
-/**
- * A selection endpoint, in either vocabulary the engine resolves.
- *
- * {@link DocAnchor} addresses a paragraph by its `w14:paraId`, which is what an LLM or an
- * automation script can name in a payload. {@link SemanticPosition} addresses it by the
- * paragraph id the painted surface and the ops already use, with a UTF-16 offset inside it.
- *
- * Neither subsumes the other. A paraId survives being written to a file and read back, so it
- * is the one an out-of-process caller can hold; but it is OPTIONAL in the document, and
- * `ParagraphSummary.paraId` says so — a paragraph the file gave no `w14:paraId` cannot be
- * reached by a `DocAnchor` at all. The paragraph id reaches every paragraph.
- */
-export type EditorPosition = DocAnchor | SemanticPosition;
-
-/**
- * A selection, in one endpoint vocabulary or the other.
- *
- * The two do NOT mix: a range is a pair of paraId anchors, or a semantic anchor/head pair,
- * and `can()` refuses anything else with the engine's own reason. Spelled as two arms rather
- * than `{ from: EditorPosition; to: EditorPosition }` for exactly that reason — the looser
- * shape would type a mixed pair the engine rejects at runtime.
- */
-export type EditorSelection = SemanticSelection | { from: DocAnchor; to: DocAnchor };
 
 /**
  * Whether a command would be accepted, and why not when it would not.
@@ -887,6 +866,12 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
   // layout lane (`layout/semantic-hit-test.ts`) and the paginated surface calls it directly.
   // Re-exposing any of it here is a small wiring job on the day a host actually needs it.
 
+  /**
+   * Resolve client pixels in the active story without moving the selection.
+   * Returns null outside that story, while detached, and for unsupported text boxes.
+   * Pass the exact result to `insertImage.at` before the document or scope changes.
+   */
+  positionAtPoint(clientX: number, clientY: number): EditorPointPosition | null;
   /** Page boxes in stack coordinates, each with the text area the engine laid out.
    * `contentBox` is the page inset by the section margin. Rulers use it for margin zones.
    * The engine's margin is uniform, so do not present this as per-side fidelity.
@@ -1309,6 +1294,8 @@ export interface EditorCommands
   insertTextBox: Record<never, never>;
 
   insertImage: {
+    /** Exact result from `positionAtPoint` or a drop event; stale targets refuse the insert. */
+    at?: EditorPointPosition;
     data: Uint8Array;
     mime: SupportedImageMime;
     widthPoints: number;

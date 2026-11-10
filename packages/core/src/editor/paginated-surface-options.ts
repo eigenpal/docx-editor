@@ -49,6 +49,12 @@ export type LockedControlNavigation = 'characters' | 'atomic';
  * on a server, or leave it off in a browser to get the canvas measurer.
  */
 export interface PaginatedSurfaceOptions {
+  /** Native drop notifications run before the default insertion. @internal */
+  readonly onDragEvent?: (
+    kind: 'dragOver' | 'drop',
+    event: DragEvent,
+    position: import('../layout/semantic-interaction.ts').SemanticPosition
+  ) => void;
   /** UI labels for shared form controls; omitted keys fall back to English. */
   readonly translate?: (key: string, params?: Record<string, string | number>) => string;
   /** Regional conventions for new date input; defaults to en-US. */

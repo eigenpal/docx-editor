@@ -946,6 +946,13 @@
     "panelTitle": "Tekst alternatywny",
     "title": "Tytuł"
   },
+  "drop": {
+    "errors": {
+      "readOnly": "Ten dokument jest tylko do odczytu.",
+      "noTarget": "Upuść element na edytowalny tekst.",
+      "unsupported": "Upuść obraz PNG, JPEG, GIF lub tekst."
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "Nie można wstawić obrazu",
@@ -953,7 +960,8 @@
       "invalidSignature": "Plik nie jest obsługiwanym obrazem PNG, JPEG ani GIF.",
       "oversize": "Obraz przekracza maksymalny dozwolony rozmiar.",
       "refused": "Nie można wstawić obrazu.",
-      "unsupportedFormat": "Ten format obrazu nie jest obsługiwany przy wstawianiu."
+      "unsupportedFormat": "Ten format obrazu nie jest obsługiwany przy wstawianiu.",
+      "staleTarget": "Dokument lub miejsce upuszczenia uległo zmianie. Upuść obraz ponownie."
     }
   },
   "imageProperties": {

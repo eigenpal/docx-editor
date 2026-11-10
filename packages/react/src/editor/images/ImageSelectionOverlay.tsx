@@ -11,6 +11,8 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  beginInlineImageDrag,
+  canMoveInlineImage,
   captureImageMutationPreconditions,
   computeMovedImagePosition,
   hostWindowOf,
@@ -566,6 +568,7 @@ export function ImageSelectionOverlay({
     };
     const showHandles = active.canResize;
     const showMove = active.kind === 'anchored' && active.canMove;
+    const showInlineMove = active.kind === 'inline' && canMoveInlineImage(editor, active.id);
     // A text box frame says why it takes no caret or offers no handles.
     const frameReason = textboxFrameReason(active, editor.surface.editingMode());
     const frameLabel = frameReason ? t(frameReason) : undefined;
@@ -579,7 +582,7 @@ export function ImageSelectionOverlay({
       >
         <div
           className={`docx-image-selection-overlay__frame${
-            showMove ? ' docx-editor-one-surface__overlay-control' : ''
+            showMove || showInlineMove ? ' docx-editor-one-surface__overlay-control' : ''
           }`}
           data-textbox={active.textbox ? 'true' : undefined}
           // To pointer and screen reader users alike.
@@ -592,13 +595,15 @@ export function ImageSelectionOverlay({
             top: `${rect.top}px`,
             width: `${rect.width}px`,
             height: `${rect.height}px`,
-            cursor: showMove ? 'move' : 'default',
+            cursor: showMove || showInlineMove ? 'move' : 'default',
           }}
           // A double press on a chart opens the Chart pane, as Edit chart does.
           onDoubleClick={(event) => {
             if (editor && openChartPaneFor(editor, active.id)) event.preventDefault();
           }}
           onPointerDown={(event) => {
+            if (showInlineMove && beginInlineImageDrag(editor, event.nativeEvent, active.id))
+              return;
             guardToolbarMousedown(event);
             if (!showMove || !active.position) return;
             if (event.button !== 0) return;

@@ -128,6 +128,7 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
       readonly commitGuard?: () => boolean;
     }
   ): Promise<import('../store/store/tree-package-images.ts').ImageIntentResult>;
+  pointAt(clientX: number, clientY: number): import('./surface-pointer.ts').SurfacePointHit | null;
   layout(): SemanticLayout;
   /** The measurer layout uses; sizes engine-authored shapes such as a watermark. */
   textMeasurer?(): import('../layout/semantic-records.ts').TextMeasurer;

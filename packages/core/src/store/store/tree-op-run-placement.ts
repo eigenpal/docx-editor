@@ -98,13 +98,21 @@ export function applyPlaceRunNodes(
   paragraph: OoxmlParagraphNode,
   offset: number,
   nodes: readonly OoxmlNode[],
-  options?: EditOptions
+  options?: EditOptions,
+  preserveSubtrees?: ReadonlySet<string>
 ): TreeOpResult {
   const mint = createNodeIdAllocator(part);
   const placement = placementOf(part, paragraph, offset, mint);
   if (!placement) return { ok: false, reason: 'tree-invariant' };
   const { holder, index, split } = placement;
-  const placed = nodes.map((node) => copy(mint, node));
+  const clone = (node: OoxmlNode): OoxmlNode => {
+    if (preserveSubtrees?.has(node.id)) return node;
+    if (!preserveSubtrees) return copy(mint, node);
+    return node.kind === 'textValue'
+      ? { ...node, id: mint() }
+      : ({ ...node, id: mint(), children: node.children.map(clone) } as OoxmlNode);
+  };
+  const placed = nodes.map(clone);
   const children: OoxmlNode[] = [];
   for (const child of holder.children) {
     children.push(split && child.id === split.run.id ? split.halves[0]! : child);

@@ -401,3 +401,17 @@ describe('a positive margin keeps the band', () => {
     mounted.surface.destroy();
   });
 });
+
+test('drop point lookup refuses inactive header glyphs over body whitespace', () => {
+  const mounted = mount(overlapDocx());
+  try {
+    const { point } = storyGlyph(mounted.page, mounted.page.header!, true);
+    expect(mounted.surface.pointAt(point.x, point.y)).toBeNull();
+    const body = bodyGlyphUnder(mounted.page, mounted.page.header!);
+    expect(mounted.surface.pointAt(body.point.x, body.point.y)?.hit.position.paragraphId).toBe(
+      body.paragraphId
+    );
+  } finally {
+    mounted.surface.destroy();
+  }
+});

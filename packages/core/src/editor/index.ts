@@ -250,6 +250,7 @@ export {
   type SurfaceFormatting,
 } from './paginated-surface.ts';
 export type { OpeningIndicatorHost } from './surface-opening-indicator.ts';
+export type { SurfacePointHit } from './surface-pointer.ts';
 // `PaginatedSurface` extends it, so its indent and list members need the name.
 export type { SurfaceIndentAndListOps } from './surface-indent-list-contract.ts';
 // `PaginatedSurface.removeTocRefusal` answers with it.
@@ -823,3 +824,17 @@ export type {
   NewChartData,
   SelectedChartState,
 } from '../contracts/chart.ts';
+
+export { editorDropHandled } from './surface-drop.ts';
+export type {
+  SemanticHit,
+  SemanticHitDrawing,
+  TableCellAddress,
+} from '../layout/semantic-hit-test.ts';
+export type { CaretGeometry } from '../layout/semantic-interaction.ts';
+export type {
+  EditorPointPosition,
+  EditorDropEvent,
+  EditorHostDragEvent,
+} from '../contracts/editor-drop.ts';
+export { canMoveInlineImage, beginInlineImageDrag } from './inline-image-drag.ts';

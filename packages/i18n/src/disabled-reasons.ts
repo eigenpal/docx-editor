@@ -95,6 +95,9 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   // Keyed on `PICTURE_SELECTED_INSERT_REASON` in the engine's image lane.
   'a picture is selected; place the caret in text to insert a picture':
     'disabledReason.pictureSelected',
+  'the drop target is stale; drop the image again': 'imageInsert.errors.staleTarget',
+  'the drop target story is no longer active': 'imageInsert.errors.staleTarget',
+  'the drop target is no longer attached': 'imageInsert.errors.staleTarget',
   // Keyed on `CHART_DRAWING_REASON` in the engine's image lane (`image-state-rules.ts`).
   'this drawing is a chart; only delete applies, and it removes the whole chart':
     'disabledReason.chartDrawing',

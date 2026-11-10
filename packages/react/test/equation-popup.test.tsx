@@ -259,22 +259,28 @@ describe('default React equation popover', () => {
     const ownerDocument = mounted.view.container.ownerDocument;
     const originalAdd = ownerDocument.addEventListener.bind(ownerDocument);
     const originalRemove = ownerDocument.removeEventListener.bind(ownerDocument);
-    let added = 0;
-    let removed = 0;
+    const added: Array<[string, unknown]> = [];
+    const removed: Array<[string, unknown]> = [];
     ownerDocument.addEventListener = ((type: string, ...args: unknown[]) => {
-      if (type === 'keydown' || type === 'pointerdown') added++;
+      if (type === 'keydown' || type === 'pointerdown') added.push([type, args[0]]);
       return originalAdd(type, ...(args as [EventListenerOrEventListenerObject, boolean?]));
     }) as typeof ownerDocument.addEventListener;
     ownerDocument.removeEventListener = ((type: string, ...args: unknown[]) => {
-      if (type === 'keydown' || type === 'pointerdown') removed++;
+      if (type === 'keydown' || type === 'pointerdown') removed.push([type, args[0]]);
       return originalRemove(type, ...(args as [EventListenerOrEventListenerObject, boolean?]));
     }) as typeof ownerDocument.removeEventListener;
     try {
       open(mounted);
       await tick();
       mounted.view.unmount();
-      expect(added).toBe(2);
-      expect(removed).toBe(2);
+      expect(added).toHaveLength(2);
+      for (const [type, listener] of added) {
+        expect(
+          removed.filter(
+            ([removedType, removedListener]) => removedType === type && removedListener === listener
+          )
+        ).toHaveLength(1);
+      }
     } finally {
       ownerDocument.addEventListener = originalAdd as typeof ownerDocument.addEventListener;
       ownerDocument.removeEventListener =

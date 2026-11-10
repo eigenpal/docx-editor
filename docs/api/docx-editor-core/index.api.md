@@ -2202,6 +2202,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
     load(document: DocumentSource): void;
     // (undocumented)
     on<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): Unsubscribe;
+    positionAtPoint(clientX: number, clientY: number): EditorPointPosition | null;
     // (undocumented)
     query<K extends keyof EditorQueries>(query: {
         type: K;
@@ -2358,6 +2359,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     };
     // (undocumented)
     insertImage: {
+        at?: EditorPointPosition;
         data: Uint8Array;
         description?: string;
         expectedPackageRevision?: number;
@@ -2576,6 +2578,14 @@ export type EditorDiagnostic = DocumentOpenDiagnostic | EditRejectedDiagnostic |
 export type EditorDiagnosticKind = EditorDiagnostic['kind'];
 
 // @public
+export interface EditorDropEvent {
+    // (undocumented)
+    readonly event: EditorHostDragEvent;
+    // (undocumented)
+    readonly position: EditorPointPosition;
+}
+
+// @public
 export interface EditorError extends Error {
     // (undocumented)
     readonly code?: string;
@@ -2585,6 +2595,8 @@ export interface EditorError extends Error {
 export interface EditorEvents {
     change: (change: DocumentChange) => void;
     diagnostic: (event: EditorDiagnostic) => void;
+    dragOver: (event: EditorDropEvent) => void;
+    drop: (event: EditorDropEvent) => void;
     // (undocumented)
     error: (error: EditorError) => void;
     // (undocumented)
@@ -2671,6 +2683,13 @@ export type EditorHostDocument = typeof globalThis extends {
 } ? D : object;
 
 // @public
+export type EditorHostDragEvent = typeof globalThis extends {
+    readonly DragEvent: {
+        readonly prototype: infer E;
+    };
+} ? E : object;
+
+// @public
 export interface EditorModule {
     readonly collaboration?: CollaborationModuleContribution;
     readonly customNodePayloadNamespaces?: readonly string[];
@@ -2714,6 +2733,16 @@ export interface EditorNoteCommands {
         scope?: 'document' | 'section';
         sectionIndex?: number;
     };
+}
+
+// @public
+export interface EditorPointPosition {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+    // (undocumented)
+    readonly part: string;
 }
 
 // @public

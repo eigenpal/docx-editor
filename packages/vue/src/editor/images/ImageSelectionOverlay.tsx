@@ -11,6 +11,8 @@ import {
   type Ref,
 } from 'vue';
 import {
+  beginInlineImageDrag,
+  canMoveInlineImage,
   captureImageMutationPreconditions,
   computeMovedImagePosition,
   historyShortcutOf,
@@ -592,6 +594,7 @@ export const ImageSelectionOverlay = defineComponent({
       };
       const showHandles = current.canResize;
       const showMove = current.kind === 'anchored' && current.canMove;
+      const showInlineMove = current.kind === 'inline' && canMoveInlineImage(editor, current.id);
       // A text box frame says why it takes no caret or offers no handles.
       const frameReason = textboxFrameReason(
         current,
@@ -612,7 +615,7 @@ export const ImageSelectionOverlay = defineComponent({
           >
             <div
               class={`docx-image-selection-overlay__frame${
-                showMove ? ' docx-editor-one-surface__overlay-control' : ''
+                showMove || showInlineMove ? ' docx-editor-one-surface__overlay-control' : ''
               }`}
               data-textbox={current.textbox ? 'true' : undefined}
               // To pointer and screen reader users alike.
@@ -625,7 +628,7 @@ export const ImageSelectionOverlay = defineComponent({
                 top: `${rect.top}px`,
                 width: `${rect.width}px`,
                 height: `${rect.height}px`,
-                cursor: showMove ? 'move' : 'default',
+                cursor: showMove || showInlineMove ? 'move' : 'default',
               }}
               // A double press on a chart opens the Chart pane, as Edit chart does.
               onDblclick={(event: MouseEvent) => {
@@ -633,6 +636,7 @@ export const ImageSelectionOverlay = defineComponent({
                 if (instance && openChartPaneFor(instance, current.id)) event.preventDefault();
               }}
               onPointerdown={(event: PointerEvent) => {
+                if (showInlineMove && beginInlineImageDrag(editor, event, current.id)) return;
                 guardToolbarMousedown(event as unknown as MouseEvent);
                 if (!showMove || !current.position) return;
                 if (event.button !== 0) return;

@@ -405,18 +405,34 @@ describe('image paste wiring', () => {
     view.unmount();
   });
 
-  test('Content permits image drops during dragover', async () => {
+  test('Content accepts image dragover at a page position and refuses a miss', async () => {
     const view = mountEditorTree(() => []);
     await flush();
-    const surface = view.container.querySelector('.docx-paginated-surface') as HTMLElement;
-    const file = new File([new Uint8Array([137, 80, 78, 71])], 'x.png', { type: 'image/png' });
-    const item = { kind: 'file', type: 'image/png', getAsFile: () => file };
-    const event = new Event('dragover', { bubbles: true, cancelable: true }) as DragEvent;
-    Object.defineProperty(event, 'dataTransfer', {
-      value: { files: [file], items: [item] },
-    });
-    surface.dispatchEvent(event);
-    expect(event.defaultPrevented).toBe(true);
+    view.editor().setZoom(1);
+    const pages = view.container.querySelector('.docx-pages') as HTMLElement;
+    pages.getBoundingClientRect = () => new DOMRect(100, 50, 1000, 1000);
+    const data = new DataTransfer();
+    data.items.add(new File([new Uint8Array([137, 80, 78, 71])], 'x.png', { type: 'image/png' }));
+    const clientX = 100 + (77 * 4) / 3;
+    const clientY = 50 + (77 * 4) / 3;
+    expect(view.editor().positionAtPoint(clientX, clientY)).not.toBeNull();
+    const selection = view.editor().surface!.state().selection;
+    const drag = (x: number, y: number) => {
+      const event = new MouseEvent('dragover', {
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y,
+      });
+      Object.defineProperty(event, 'dataTransfer', { value: data });
+      pages.dispatchEvent(event);
+      return event;
+    };
+    expect(drag(clientX, clientY).defaultPrevented).toBe(true);
+    expect(data.dropEffect).toBe('copy');
+    expect(drag(0, 0).defaultPrevented).toBe(true);
+    expect(data.dropEffect).toBe('none');
+    expect(view.editor().surface!.state().selection).toEqual(selection);
     view.unmount();
   });
 });

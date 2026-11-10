@@ -79,6 +79,9 @@ export function beginEditorPreview(editor: DocxEditorInstance): {
 };
 
 // @public
+export function beginInlineImageDrag(editor: Editor, event: PointerEvent, drawingNodeId: string): boolean;
+
+// @public
 export function bindHistoryGroup(editor: Editor, element: HTMLElement, config: HistoryGroupBindingOptions): HistoryGroupBinding;
 
 // @public
@@ -206,7 +209,25 @@ export function canExecuteImageCommand(command: Extract<EditorCommand, {
 }>, surface: PaginatedSurface | null): CanResult;
 
 // @public
+export function canMoveInlineImage(editor: Editor, drawingNodeId: string): boolean;
+
+// @public
 export function captureImageMutationPreconditions(editor: Pick<DocxEditorInstance, 'surface' | 'mountGeneration'>): ImageMutationPreconditions | null;
+
+// @public
+export interface CaretGeometry {
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly lineId: string;
+    // (undocumented)
+    readonly pageIndex: number;
+    // (undocumented)
+    readonly position: SemanticPosition;
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
 
 // @public
 export function changedFields(seed: ParagraphDialogFields, current: ParagraphDialogFields,
@@ -2137,7 +2158,25 @@ export interface EditorCommandExecute {
 export function editorCommandKey(command: EditorCommand): string;
 
 // @public
+export interface EditorDropEvent {
+    // (undocumented)
+    readonly event: EditorHostDragEvent;
+    // (undocumented)
+    readonly position: EditorPointPosition;
+}
+
+// @public
+export function editorDropHandled(event: Event): boolean;
+
+// @public
 export function editorHostDocument(editor: Editor): Document;
+
+// @public
+export type EditorHostDragEvent = typeof globalThis extends {
+    readonly DragEvent: {
+        readonly prototype: infer E;
+    };
+} ? E : object;
 
 // @public
 export function editorHostElement(editor: Editor): Element | null;
@@ -2176,6 +2215,16 @@ export interface EditorModuleRegistry {
 
 // @public
 export type EditorPaneId = 'chart';
+
+// @public
+export interface EditorPointPosition {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+    // (undocumented)
+    readonly part: string;
+}
 
 // @internal
 export function editorPreviewActive(editor: object): boolean;
@@ -3213,6 +3262,8 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     park(): void;
     parked(): boolean;
     pasteRich(text: string, html: string | null): boolean;
+    // (undocumented)
+    pointAt(clientX: number, clientY: number): SurfacePointHit | null;
     proposeTextChange(kind: 'insertion' | 'deletion' | 'replacement', text: string, author?: string): boolean;
     publishedLayout(): SemanticLayout;
     // (undocumented)
@@ -3348,6 +3399,8 @@ export interface PaginatedSurfaceOptions {
     readonly measurer?: TextMeasurer;
     // (undocumented)
     readonly onChange?: (state: PaginatedSurfaceState) => void;
+    // @internal
+    readonly onDragEvent?: (kind: 'dragOver' | 'drop', event: DragEvent, position: SemanticPosition) => void;
     readonly onEdit?: (typing: boolean) => void;
     // (undocumented)
     readonly onEquationPopover?: (activation: EquationActivation) => void;
@@ -4381,6 +4434,32 @@ export interface SelectedImageState {
 export function selectedImageStateOf(surface: PaginatedSurface | null): SelectedImageState | null;
 
 // @public
+export interface SemanticHit {
+    // (undocumented)
+    readonly caret: CaretGeometry;
+    readonly cell: TableCellAddress | null;
+    readonly contentControlId: string | null;
+    readonly drawing: SemanticHitDrawing | null;
+    // (undocumented)
+    readonly lineId: string;
+    readonly onGlyphs: boolean;
+    // (undocumented)
+    readonly pageIndex: number;
+    // (undocumented)
+    readonly position: SemanticPosition;
+}
+
+// @public
+export interface SemanticHitDrawing {
+    // (undocumented)
+    readonly drawingNodeId: string;
+    // (undocumented)
+    readonly paragraphId: string;
+    // (undocumented)
+    readonly start: number;
+}
+
+// @public
 export interface SemanticPosition {
     // (undocumented)
     readonly offset: number;
@@ -4651,6 +4730,15 @@ export interface SurfaceParagraphFormat {
 }
 
 // @public
+export interface SurfacePointHit {
+    // (undocumented)
+    readonly hit: SemanticHit;
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
+// @public
 export const TAB_ALIGNMENT_LABELS: {
     readonly bar: 'dialogs.paragraph.tabAlignBar';
     readonly center: 'dialogs.paragraph.tabAlignCenter';
@@ -4704,6 +4792,18 @@ export interface TableBorderWidthOption {
     readonly labelKey: string;
     readonly previewThickness: number;
     readonly size: number;
+}
+
+// @public
+export interface TableCellAddress {
+    readonly cellId: string;
+    // (undocumented)
+    readonly gridColumn: number;
+    // (undocumented)
+    readonly gridSpan: number;
+    readonly rowId: string;
+    readonly rowIndex: number;
+    readonly tableId: string;
 }
 
 // @public

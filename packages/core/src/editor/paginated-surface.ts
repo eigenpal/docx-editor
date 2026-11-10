@@ -1,3 +1,6 @@
+import { pointerStoryTransitions } from './surface-pointer-stories.ts';
+import { invalidatePointTargets } from './editor-point-target.ts';
+import { bindSurfaceDragControllers } from './surface-drag-controllers.ts';
 import {
   createUnsupportedElementProjection,
   unsupportedElementPaintOptions,
@@ -337,7 +340,6 @@ import { createImageOps } from './surface-image-ops.ts';
 import { createChartOps } from './surface-chart-ops.ts';
 import {
   createHeaderFooterScopeController,
-  openBlankHeaderFooter,
   isDocumentProtectionBatch,
 } from './surface-hf-editing.ts';
 import { createNoteOps } from './surface-note-ops.ts';
@@ -493,6 +495,8 @@ export function mountPaginatedSurface(
   const remoteSelectionLayer = overlaySheet(mountDocument, 'docx-remote-selection-overlay');
   const bookmarkLayer = overlaySheet(mountDocument, 'docx-bookmark-overlay');
   const tableFurnitureLayer = overlaySheet(mountDocument, 'docx-table-furniture', false);
+  let drop: ReturnType<typeof bindSurfaceDragControllers> | null = null;
+  const dropLayer = overlaySheet(mountDocument, 'docx-drop-overlay');
   const tableSelectLayer = overlaySheet(mountDocument, 'docx-table-select-layer', false);
   let tableSelectHandle: SurfaceTableSelectHandle | null = null;
 
@@ -506,6 +510,7 @@ export function mountPaginatedSurface(
     highlightLayer,
     remoteSelectionLayer,
     overlayLayer,
+    dropLayer,
   ];
   container.replaceChildren(pagesLayer, ...sheets);
 
@@ -2714,6 +2719,8 @@ export function mountPaginatedSurface(
       removeExistingContentControlMenu();
       pictureWidget.cancel();
       pointer?.cancelGesture();
+      drop?.clear();
+      invalidatePointTargets(surface);
       tableInteraction.cancelDrag();
     },
     repaint: () => render(false),
@@ -2721,6 +2728,7 @@ export function mountPaginatedSurface(
   });
 
   function render(notifyChange = true): void {
+    drop?.refresh();
     // Any render catches the screen up to `currentLayout`, so a paint deferred under input
     // pressure is performed BY this one rather than repeated a task later — a scroll repaint
     // during a deferral used to paint the same layout twice. The deferred render was also
@@ -4578,6 +4586,8 @@ export function mountPaginatedSurface(
     // contract because text arriving from OUTSIDE the editor — a paste from the clipboard,
     // whether the browser's own event delivered it or a menu row did — is not a lane the
     // input handlers should own privately.
+    pointAt: (x, y) =>
+      surface.activeScope().kind === 'frame' ? null : (pointer?.pointAt(x, y) ?? null),
     insertPlainText: (text: string) => insertPlainText(text),
 
     deleteBackward() {
@@ -5071,6 +5081,7 @@ export function mountPaginatedSurface(
       // whether the FILE can be round-tripped, and this says whether the user may type into
       // it right now. Both have to be true for an edit to land.
       hostEditable = editable;
+      if (!editable) drop?.clear();
       if (!editable) textboxEditing?.exit();
       applyEditableChrome();
     },
@@ -5345,6 +5356,7 @@ export function mountPaginatedSurface(
       // for a mode is entitled to hear the state back.
       const moved = editingMode !== mode;
       editingMode = mode;
+      if (moved) drop?.clear();
       // Viewing has no furniture EDITING scope. Switching while a header was open left the
       // body dimmed and inert under an active band and its whole options bar — a write UI
       // over a document that now refuses writes. Exiting repaints, so this runs first.
@@ -5825,6 +5837,7 @@ export function mountPaginatedSurface(
         legacyDropdownInteraction?.destroy();
         legacyCheckboxInteraction?.destroy();
         pointer?.destroy();
+        drop?.destroy();
         tableInteraction.destroy();
         tableSelectHandle?.destroy();
         navigation.destroy();
@@ -6161,60 +6174,20 @@ export function mountPaginatedSurface(
       // gesture exactly: arm, then drag over the text that should take the formatting.
       onSelectionSettled: () => formatPainter.applyIfArmed(),
       activeHeaderFooter: () => pointerHeaderFooterState(hfOutsideBox()),
-      activeNote: () => {
-        const scope = noteOps?.activeNoteScope();
-        return scope
-          ? { scopeId: scope.id, pageIndex: noteOps?.activeNotePageIndex() ?? null }
-          : null;
-      },
-      enterHeaderFooter: (info) => {
-        // Viewing refuses this — in `createHeaderFooterScopeController`, which every entry
-        // lane goes through, not here where only the pointer would be covered.
-        // The pointer lane flips story scope too: land buffered typing first
-        // (see setActiveScope).
-        flushPendingInputAndLayout();
-        hfScope?.enterHeaderFooter({
-          rId: info.rId,
-          pageIndex: info.pageIndex,
-          // The section this PAGE is in. Omitted, the scope bound section 0, and every read
-          // that resolves geometry from the open story answered for the wrong page.
-          sectionIndex: sectionAtPage(info.pageIndex).sectionIndex,
-          kind: info.kind,
-          ...(info.position ? { position: info.position } : {}),
-        });
-      },
-      enterNote: (scopeId, position, pageIndex) => {
-        if (editingMode === 'view') return; // Viewing selects text but opens no story.
-        flushPendingInputAndLayout();
-        noteOps?.enterNote(scopeId, position, pageIndex);
-      },
-      exitNote: (restoreBody) => {
-        flushPendingInputAndLayout();
-        noteOps?.exitNote(restoreBody);
-      },
-      exitHeaderFooter: () => {
-        flushPendingInputAndLayout();
-        return hfScope?.exitHeaderFooter();
-      },
-      enterEmptyHeaderFooter: (kind, pageIndex) => {
-        // Creating the part is a WRITE — viewing mode refuses it like every other lane.
-        if (editingMode === 'view') return;
-        flushPendingInputAndLayout();
-        const scope = hfScope;
-        if (!scope) return;
-        openBlankHeaderFooter(
-          {
-            session,
-            layout: currentLayout,
-            sectionAtPage,
-            create: (op) => surface.applyHeaderFooterLifecycle?.(op),
-            flushLayout,
-            enter: (args) => scope.enterHeaderFooter(args),
-          },
-          kind,
-          pageIndex
-        );
-      },
+      ...pointerStoryTransitions({
+        viewing: () => editingMode === 'view',
+        flush: flushPendingInputAndLayout,
+        headerFooter: () => hfScope,
+        notes: () => noteOps,
+        sectionAtPage,
+        blankHeaderFooter: () => ({
+          session,
+          layout: currentLayout,
+          sectionAtPage,
+          create: (op) => surface.applyHeaderFooterLifecycle?.(op),
+          flushLayout,
+        }),
+      }),
       onContentControlWidget: (controlId, kind) => openContentControlWidget(controlId, kind),
       ...(options.reviewModel ? { onChangeBarToggle: reviewView.toggleByChangeBar } : {}),
       isReadOnlyPosition: (position) => tocAtPosition(session.part(), position) !== undefined,
@@ -6223,6 +6196,19 @@ export function mountPaginatedSurface(
       ...(options.pointer ? { mode: options.pointer } : {}),
       ...(atomicNavigation ? { atomicInlineControls: true } : {}),
     }
+  );
+
+  drop = bindSurfaceDragControllers(
+    surface,
+    pagesLayer,
+    dropLayer,
+    hostListeners,
+    () => scale,
+    () =>
+      !destroyed && !hosting.parked() && hostEditable && editingMode !== 'view' && session.editable,
+    options.onDragEvent,
+    (next, caret) => setSelection(next, false, 'none', caret),
+    (key) => translate?.(key)
   );
 
   const tableInteraction = createSurfaceTableInteraction({

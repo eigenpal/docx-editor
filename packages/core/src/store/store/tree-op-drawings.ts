@@ -1,3 +1,13 @@
+import {
+  schemaAttributeValue,
+  readDistanceTexts,
+  readRootDistanceTexts,
+  type DistanceTexts,
+} from './drawing-distance-attributes.ts';
+import {
+  applyMoveInlineDrawing,
+  validateMoveInlineDrawing,
+} from './tree-op-move-inline-drawing.ts';
 import { drawingAtomProjection } from '../package/drawing-atom-projection.ts';
 // Canonical drawing mutations over the OOXML tree (typed-drawings-and-images task 11).
 //
@@ -158,16 +168,6 @@ function replaceDrawingChild(
 
 function isElement(node: OoxmlNode): node is OoxmlElement {
   return node.kind !== 'textValue';
-}
-
-function schemaAttributeValue(
-  attributes: readonly OoxmlAttribute[],
-  localName: string
-): string | undefined {
-  for (const attribute of attributes) {
-    if (attribute.localName === localName && attribute.namespaceUri === '') return attribute.value;
-  }
-  return undefined;
 }
 
 function attr(localName: string, value: string): OoxmlAttribute {
@@ -375,6 +375,8 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
   const legacy = legacyOpOf(part, op);
   if (legacy) return legacyVmlGeometryRejection(part, legacy);
   switch (op.op) {
+    case 'moveInlineDrawing':
+      return validateMoveInlineDrawing(part, op);
     case 'insertDrawing': {
       if (op.bias !== undefined && op.bias !== 'left' && op.bias !== 'right')
         return 'invalid-property-value';
@@ -1134,28 +1136,6 @@ function wrapElementForSpec(
   } as OoxmlElement;
 }
 
-type DistanceTexts = { top: string; right: string; bottom: string; left: string };
-
-/**
- * Copied text distances keep their `xsd:unsignedInt` spelling, including the two's-complement
- * form of a negative distance. A malformed value becomes 0, which is how it reads; a missing
- * one is undefined.
- */
-function readDistanceTexts(element: OoxmlElement): Partial<DistanceTexts> {
-  const read = (name: string): string | undefined => {
-    const value = schemaAttributeValue(element.attributes, name);
-    if (value === undefined) return undefined;
-    return /^\d+$/.test(value) && Number(value) <= 0xffff_ffff ? value : '0';
-  };
-  return { top: read('distT'), right: read('distR'), bottom: read('distB'), left: read('distL') };
-}
-
-/** `wp:anchor` and `wp:inline` have no fallback, so a missing distance is written as 0. */
-function readRootDistanceTexts(element: OoxmlElement): DistanceTexts {
-  const { top = '0', right = '0', bottom = '0', left = '0' } = readDistanceTexts(element);
-  return { top, right, bottom, left };
-}
-
 function defaultPositionChildren(nextId: () => string, projection: DrawingProjection): OoxmlNode[] {
   const pos = projection.position;
   const horizontalFrame: DrawingHorizontalReferenceFrame = pos?.horizontal.relativeFrom ?? 'column';
@@ -1515,6 +1495,8 @@ export function applyDrawingOp(
   const nextId = createNodeIdAllocator(part);
 
   switch (op.op) {
+    case 'moveInlineDrawing':
+      return applyMoveInlineDrawing(part, op, options);
     case 'insertDrawing': {
       const paragraph = findNode(part, op.paragraphId) as OoxmlParagraphNode;
       // Tracked: the drawing's run goes into a `w:ins` through the SAME placement typed text

@@ -7,8 +7,8 @@
   "baseGitCommitDate": "2026-08-24 14:45:47 +0200",
   "inventoryNote": "Kinds, reach, properties, chrome slots, and lifecycle sets are taken from the implementation after rebase onto origin/main. Main added replaceStoryBlocks, setMathEquation, removeMathEquation, and insertFragment (rich-clipboard-fidelity).",
   "counts": {
-    "treeDocOpKinds": 95,
-    "singlePartApply": 81,
+    "treeDocOpKinds": 96,
+    "singlePartApply": 82,
     "headerFooterLifecycle": 7,
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
@@ -107,6 +107,7 @@
       "setContentControlProperties",
       "insertContentControl",
       "insertFragment",
+      "moveInlineDrawing",
       "insertDrawing",
       "replaceDrawingResource",
       "deleteDrawing",
@@ -222,6 +223,7 @@
     "setContentControlProperties",
     "insertContentControl",
     "insertFragment",
+    "moveInlineDrawing",
     "insertDrawing",
     "replaceDrawingResource",
     "deleteDrawing",
@@ -1056,6 +1058,15 @@
         "withContentTypeOverride"
       ],
       "openSpec": ["rich-clipboard-fidelity"]
+    },
+    {
+      "kind": "moveInlineDrawing",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
     },
     {
       "kind": "insertDrawing",

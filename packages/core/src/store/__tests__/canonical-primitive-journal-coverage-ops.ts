@@ -696,6 +696,12 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
       drawingNodeId: drawingId(store),
       relationshipId: 'rId15',
     })),
+    story('moveInlineDrawing', drawingDoc(INLINE_DRAWING), (store) => ({
+      op: 'moveInlineDrawing',
+      drawingNodeId: drawingId(store),
+      paragraphId: paragraphIds(store)[1]!,
+      offset: 1,
+    })),
     story('deleteDrawing', drawingDoc(INLINE_DRAWING), (store) => ({
       op: 'deleteDrawing',
       drawingNodeId: drawingId(store),

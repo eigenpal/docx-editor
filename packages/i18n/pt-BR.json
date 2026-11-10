@@ -946,6 +946,13 @@
     "panelTitle": "Texto alternativo",
     "title": "Título"
   },
+  "drop": {
+    "errors": {
+      "readOnly": "Este documento é somente leitura.",
+      "noTarget": "Solte sobre um texto editável.",
+      "unsupported": "Solte uma imagem PNG, JPEG, GIF ou um texto."
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "Não é possível inserir a imagem",
@@ -953,7 +960,8 @@
       "invalidSignature": "O arquivo não é uma imagem PNG, JPEG ou GIF compatível.",
       "oversize": "A imagem excede o tamanho máximo permitido.",
       "refused": "Não foi possível inserir a imagem.",
-      "unsupportedFormat": "Este formato de imagem não é compatível para inserção."
+      "unsupportedFormat": "Este formato de imagem não é compatível para inserção.",
+      "staleTarget": "O documento ou a posição de soltura mudou. Solte a imagem novamente."
     }
   },
   "imageProperties": {

@@ -947,6 +947,13 @@
     "panelTitle": "טקסט חלופי",
     "title": "כותרת"
   },
+  "drop": {
+    "errors": {
+      "readOnly": "המסמך הזה הוא לקריאה בלבד.",
+      "noTarget": "שחררו על טקסט שניתן לעריכה.",
+      "unsupported": "שחררו תמונת PNG, JPEG, GIF או טקסט."
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "לא ניתן להוסיף את התמונה",
@@ -954,7 +961,8 @@
       "invalidSignature": "הקובץ אינו תמונת PNG, JPEG או GIF נתמכת.",
       "oversize": "התמונה חורגת מהגודל המרבי המותר.",
       "refused": "לא ניתן להוסיף את התמונה.",
-      "unsupportedFormat": "תבנית תמונה זו אינה נתמכת להוספה."
+      "unsupportedFormat": "תבנית תמונה זו אינה נתמכת להוספה.",
+      "staleTarget": "המסמך או מיקום השחרור השתנו. שחררו את התמונה שוב."
     }
   },
   "imageProperties": {

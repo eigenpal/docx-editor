@@ -993,6 +993,12 @@ export type TreeDocOp =
       readonly lastMarkCovered?: boolean;
     }
   | {
+      readonly op: 'moveInlineDrawing';
+      readonly drawingNodeId: string;
+      readonly paragraphId: string;
+      readonly offset: number;
+    }
+  | {
       readonly op: 'insertDrawing';
       /** Explicit left bias inserts before a leading prompt. */
       readonly bias?: 'left' | 'right';
@@ -1113,6 +1119,7 @@ export type DrawingTreeDocOp = Extract<
   TreeDocOp,
   {
     readonly op:
+      | 'moveInlineDrawing'
       | 'insertDrawing'
       | 'replaceDrawingResource'
       | 'deleteDrawing'

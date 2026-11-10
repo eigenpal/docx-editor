@@ -775,6 +775,13 @@
       "ariaLabel": "Opciones de diseño de imagen"
     }
   },
+  "drop": {
+    "errors": {
+      "readOnly": "Este documento es de solo lectura.",
+      "noTarget": "Suelta el elemento sobre texto editable.",
+      "unsupported": "Suelta una imagen PNG, JPEG, GIF o texto."
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "No se puede insertar la imagen",
@@ -782,7 +789,8 @@
       "invalidSignature": "El archivo no es una imagen PNG, JPEG o GIF compatible.",
       "unsupportedFormat": "No se admite insertar este formato de imagen.",
       "oversize": "La imagen supera el tamaño máximo permitido.",
-      "refused": "No se pudo insertar la imagen."
+      "refused": "No se pudo insertar la imagen.",
+      "staleTarget": "El documento o la posición de colocación cambió. Suelta la imagen de nuevo."
     }
   },
   "imageProperties": {

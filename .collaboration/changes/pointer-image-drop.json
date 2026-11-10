@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Image drops insert at the previous selection.",
+  "after": "Image drops capture pointer targets; inline image moves preserve identity and converge during concurrent edits.",
+  "reason": "Image movement uses existing canonical node movement effects without changing shared formats or presence addresses.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-image-drop-editors.test.ts"],
+  "changeset": "pointer-image-drop",
+  "migration": null
+}

@@ -39,6 +39,79 @@ if (result.ok) {
 - PDF export of EMF and WMF needs the drawing module. For more information, see [Advanced drawing rendering](/docs/2.x/pro/drawing).
 - To use your own image decoder, pass an `ImageDecodePort` through the `imageDecodePort` prop on `DocxEditor` or the adapter's root component.
 
+## Drop an image
+
+Drag a PNG, JPEG, or GIF file onto text in either adapter. The drop caret shows the insertion position. The drop caret follows the pointer without changing your selection. Dropping inserts at that position, including inside table cells.
+
+Open a header, footer, or note for editing before dropping into that region. Headers and footers accept drops only on the page where you opened them for editing. Page gaps, inactive regions, and protected content reject drops. Text boxes do not accept pointer drops.
+
+Only the first image file enters the document. Text takes precedence when a transfer also contains a text preview image. File controls and paste remain available when dragging is unavailable.
+
+Hold the pointer near the viewport edge to scroll while dragging. Scrolling stops when you move away or cancel. A short message explains blocked drops. The message distinguishes read-only documents, unsupported content, and positions outside editable text.
+
+### Move an inline image
+
+Use a mouse or pen to drag an inserted inline image onto editable text. You can also drag its selection frame. The drop caret shows the destination before you release the pointer. Each completed move is one undo step. Movement keeps the image data, dimensions, and alternative text.
+
+Move images within the active editing region. Protected images and tracked editing modes refuse movement. Images inside hyperlinks or tracked-change wrappers do not support dragging. Press **Escape** to cancel. A document change during the drag cancels the move.
+
+### Handle custom drop data
+
+Use the core editor from either adapter's `useDocxEditor` hook. In Vue, read its `.value`. Subscribe to `dragOver` and `drop` for your custom MIME type. Call the native event's `preventDefault()` synchronously to claim the event. The adapter then skips its default image insertion.
+
+Read transfer data before any asynchronous work. Pass the exact `position` object to `insertImage.at` after obtaining the image bytes. The following example uses your application's `readAssetImage` function to retrieve an image from an asset identifier. Your application supplies `showDropError` to display a refusal or loading error.
+
+```ts
+import type { EditorPointPosition } from '@docx-editor.dev/core/editor';
+
+const mime = 'application/x-document-asset';
+const stopDrag = editor.on('dragOver', ({ event, position }) => {
+  if (event.defaultPrevented || !position) return;
+  if (event.dataTransfer?.types.includes(mime)) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  }
+});
+
+const stopDrop = editor.on('drop', ({ event, position }) => {
+  if (event.defaultPrevented) return;
+  if (!position || !event.dataTransfer?.types.includes(mime)) return;
+  event.preventDefault();
+  const id = event.dataTransfer.getData(mime);
+  void insertAsset(id, position).catch(showDropError);
+});
+
+async function insertAsset(id: string, position: EditorPointPosition) {
+  const bytes = await readAssetImage(id);
+  const image = normalizeImageBytes(bytes);
+  if (!image.ok) {
+    showDropError(image.reasonKey);
+    return;
+  }
+  const result = await editor.executeImageCommand({
+    type: 'insertImage',
+    data: image.bytes,
+    mime: image.mime,
+    widthPoints: image.widthPoints,
+    heightPoints: image.heightPoints,
+    at: position,
+  });
+  if (!result.ok) showDropError(result.reason);
+}
+
+// Call this function when your host component unmounts.
+function disposeAssetDrop() {
+  stopDrag();
+  stopDrop();
+}
+```
+
+`editor.positionAtPoint(clientX, clientY)` resolves browser client coordinates through the current zoom and scroll position. It returns a position in the active editing region, or `null` for a miss. The returned object contains `part`, `paragraphId`, and the UTF-16 `offset`.
+
+Positions retain the document revision that produced them. Keep the exact object; do not clone or serialize it. Image insertion refuses a stale position after document edits, reloads, or editing-region changes. Selection changes alone do not redirect the insertion. Report a refusal and ask the user to drop again.
+
+These methods control the browser host. They do not extend the Office.js document automation model.
+
 ## Read and change an image
 
 Read the selected image from the editor state. In Vue, `useEditorState` returns a `ShallowRef`.

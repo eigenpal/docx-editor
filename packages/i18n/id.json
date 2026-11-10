@@ -946,6 +946,13 @@
     "panelTitle": "Teks alternatif",
     "title": "Judul"
   },
+  "drop": {
+    "errors": {
+      "readOnly": "Dokumen ini hanya bisa dibaca.",
+      "noTarget": "Lepaskan pada teks yang dapat diedit.",
+      "unsupported": "Lepaskan gambar PNG, JPEG, GIF, atau teks."
+    }
+  },
   "imageInsert": {
     "errors": {
       "title": "Gambar tidak dapat disisipkan",
@@ -953,7 +960,8 @@
       "invalidSignature": "File tersebut bukan gambar PNG, JPEG, atau GIF yang didukung.",
       "oversize": "Gambar melebihi ukuran maksimum yang diizinkan.",
       "refused": "Gambar tidak dapat disisipkan.",
-      "unsupportedFormat": "Format gambar ini tidak didukung untuk penyisipan."
+      "unsupportedFormat": "Format gambar ini tidak didukung untuk penyisipan.",
+      "staleTarget": "Dokumen atau posisi pelepasan berubah. Lepaskan gambar lagi."
     }
   },
   "imageProperties": {

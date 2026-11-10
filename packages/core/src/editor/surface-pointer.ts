@@ -1,3 +1,4 @@
+import { surfacePointAt } from './surface-point.ts';
 // Pointer gestures over the painted pages.
 //
 // The surface owns this rather than each host, so React, Vue and a plain page get identical
@@ -179,7 +180,16 @@ export interface PointerControllerOptions {
   readonly atomicInlineControls?: boolean;
 }
 
+/** A resolved surface hit and its caret origin in sheet coordinates. @public */
+export interface SurfacePointHit {
+  readonly hit: SemanticHit;
+  /** Caret origin in unscaled sheet coordinates. */
+  readonly x: number;
+  readonly y: number;
+}
+
 export interface PointerController {
+  pointAt(clientX: number, clientY: number): SurfacePointHit | null;
   /**
    * True while a gesture owns the selection.
    *
@@ -245,10 +255,6 @@ export function createPointerController(
   host: PointerHost,
   options: PointerControllerOptions = {}
 ): PointerController {
-  if (options.mode === 'native') {
-    return { dragging: () => false, cancelGesture: () => {}, destroy: () => {} };
-  }
-
   const { pagesLayer } = host;
   const atomicInlineControls = options.atomicInlineControls === true;
   const frames = hostTimers(() => pagesLayer);
@@ -1064,7 +1070,7 @@ export function createPointerController(
     layerRect = null;
   };
 
-  pagesLayer.addEventListener('pointerdown', onPointerDown);
+  if (options.mode !== 'native') pagesLayer.addEventListener('pointerdown', onPointerDown);
   // Anything that can move the layer under a live pointer invalidates the cached origin: the
   // scroller this surface sits in, an ancestor or the window can scroll, and a resize
   // re-centres the page stack. Capture phase on the window, because a scroll on an inner
@@ -1075,6 +1081,7 @@ export function createPointerController(
   ];
 
   return {
+    pointAt: (x, y) => surfacePointAt(host, x, y),
     dragging: () => gesture !== null,
     cancelGesture: endGesture,
     destroy() {
