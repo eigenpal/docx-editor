@@ -6906,38 +6906,49 @@ a.docx-hyperlink:focus-visible {
   flex: 1 0 100%;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
+  gap: 8px;
 }
 
-.docx-review__text-button {
-  padding: 6px 10px;
-  border: 0;
-  border-radius: 999px;
+.docx-review__text-button,
+.docx-review__submit {
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   background: transparent;
-  color: var(--doc-primary, #1a73e8);
+  color: var(--doc-text);
   font: inherit;
   font-weight: 500;
   cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
-.docx-review__text-button:hover {
-  background: var(--doc-surface-hover, rgb(0 0 0 / 6%));
+@media (hover: hover) {
+  .docx-review__text-button:hover:not(:disabled) {
+    background: var(--doc-bg-hover);
+  }
 }
 
 .docx-review__submit {
-  padding: 6px 14px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--doc-primary, #1a73e8);
-  color: #fff;
-  font: inherit;
-  font-weight: 500;
-  cursor: pointer;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+}
+
+@media (hover: hover) {
+  .docx-review__submit:hover:not(:disabled) {
+    background: var(--doc-primary-hover);
+  }
+}
+
+.docx-review__submit:active:not(:disabled) {
+  background: var(--doc-primary-hover);
 }
 
 .docx-review__submit:disabled {
-  background: var(--doc-surface-hover, rgb(0 0 0 / 8%));
-  color: var(--doc-text-muted, #8a8f98);
+  background: var(--doc-bg-subtle);
+  color: var(--doc-text-muted);
   cursor: default;
 }
 
@@ -9810,7 +9821,7 @@ p.docx-review__refused {
 .docx-review__edit {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   margin: 0;
 }
 .docx-review__edit-input {
@@ -9829,12 +9840,13 @@ p.docx-review__refused {
   unicode-bidi: plaintext;
 }
 .docx-review__edit-input:focus-visible {
-  outline: 2px solid var(--doc-primary);
+  border-color: var(--doc-primary);
+  outline: 2px solid var(--doc-focus-ring);
   outline-offset: 1px;
 }
 .docx-review__text-button:disabled {
   cursor: default;
-  opacity: 0.5;
+  color: var(--doc-text-muted);
 }
 .docx-review__text-button:focus-visible {
   outline: 2px solid var(--doc-primary);

@@ -45,6 +45,36 @@ for (const [adapter, port] of [
 ] as const) {
   test.describe(`${adapter} comment editing`, () => {
     test.beforeEach(async ({ page }) => open(page, adapter, port));
+    test('save keeps its primary color on hover and disabled states stay stable', async ({
+      page,
+    }) => {
+      await ownCard(page).getByTestId('review-comment-actions').click();
+      await page.getByTestId('review-edit').click();
+      const save = page.getByRole('button', { name: 'Save changes', exact: true });
+      const background = () => save.evaluate((button) => getComputedStyle(button).backgroundColor);
+      const disabledBackground = await background();
+      await save.hover({ force: true });
+      await expect.poll(background).toBe(disabledBackground);
+      await page.getByTestId('review-edit-input').fill('Updated comment.');
+      await expect(save).toBeEnabled();
+      const expectedHover = await save.evaluate((button) => {
+        const probe = document.createElement('span');
+        probe.style.color = 'var(--doc-primary-hover)';
+        button.append(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+      });
+      await save.hover();
+      await expect.poll(background).toBe(expectedHover);
+      await expect(save).toHaveCSS('opacity', '1');
+      await page.screenshot({
+        path: test.info().outputPath('comment-save-hover.png'),
+        animations: 'disabled',
+      });
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+      expect(await commentText(page)).toBe('Original comment.');
+    });
     test('mouse save, multiline, undo/redo, and save/reopen retain comment identity', async ({
       page,
     }) => {
@@ -172,10 +202,19 @@ for (const [adapter, port] of [
       for (const name of ['Save changes', 'Cancel']) {
         const button = page.getByRole('button', { name, exact: true });
         await expect(button).toBeVisible();
-        const bounds = await button.boundingBox();
-        expect(bounds!.x).toBeGreaterThanOrEqual(0);
-        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
-        expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
+        await expect.poll(async () => (await button.boundingBox())!.x).toBeGreaterThanOrEqual(0);
+        await expect
+          .poll(async () => {
+            const bounds = (await button.boundingBox())!;
+            return bounds.x + bounds.width;
+          })
+          .toBeLessThanOrEqual(390);
+        await expect
+          .poll(async () => {
+            const bounds = (await button.boundingBox())!;
+            return bounds.y + bounds.height;
+          })
+          .toBeLessThanOrEqual(844);
       }
       await page.screenshot({
         animations: 'disabled',
