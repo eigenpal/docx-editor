@@ -114,6 +114,7 @@ function automationCommentIntent(
 ): ReviewWriteIntent | undefined {
   if (writes.length === 0) return undefined;
   if (writes.every((write) => write.kind === 'delete')) return 'comment-delete';
+  if (writes.every((write) => write.kind === 'edit')) return 'comment-edit';
   if (writes.length !== 1) return undefined;
   const write = writes[0]!;
   if (write.kind === 'resolve') return 'comment-resolve';
@@ -345,7 +346,11 @@ function sessionPort(
       if (!review.ok)
         return { ok: false, reason: publicRefusal(review.reason ?? 'review-module-required') };
       // Judged before the surface gates, so a mixed batch is named as one on every host.
-      if (writes.length !== 1 && !writes.every((write) => write.kind === 'delete'))
+      if (
+        writes.length !== 1 &&
+        !writes.every((write) => write.kind === 'delete') &&
+        !writes.every((write) => write.kind === 'edit')
+      )
         return { ok: false, reason: 'mixed-comment-writes' };
       let outcome: AutomationCommentWriteResult | null = null;
       // `commitReviewOps` is the gate a comment goes through in the editor: viewing refuses, and
@@ -371,6 +376,18 @@ function sessionPort(
             );
             outcome = done ? { ok: true, changed: true } : { ok: false, reason: 'unknown-comment' };
             return { committed: done };
+          }
+          if (writes.every((write) => write.kind === 'edit')) {
+            const before = session.packageRevision();
+            const done = session.setCommentTexts(
+              writes.map((write) => ({ commentId: write.commentId, text: write.text })),
+              { historyToken }
+            );
+            const changed = done && session.packageRevision() !== before;
+            outcome = done
+              ? { ok: true, changed }
+              : { ok: false, reason: 'unsupported-comment-body' };
+            return { committed: changed };
           }
           if (writes.length !== 1) {
             outcome = { ok: false, reason: 'mixed-comment-writes' };

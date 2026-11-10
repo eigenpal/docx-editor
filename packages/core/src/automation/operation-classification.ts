@@ -134,6 +134,7 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
   'setHyperlink',
   'insertComment',
   'setCommentResolved',
+  'setCommentText',
   'replyToComment',
   'deleteComment',
   'acceptRevision',

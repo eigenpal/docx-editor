@@ -69,6 +69,7 @@ export {
   deletePackageComments,
   setPackageCommentResolved,
   setPackageCommentText,
+  setPackageCommentTexts,
   type PackageCommentDelete,
 } from './comment-package-write.ts';
 export { insertPackageCustomNode, removePackageCustomNode } from './custom-node-package-write.ts';
@@ -258,3 +259,5 @@ export {
 } from './history-group.ts';
 
 export type { SetLegacyDropdownOp } from './legacy-dropdown-fields.ts';
+
+export { normalizeCommentBodyText } from './comment-body.ts';

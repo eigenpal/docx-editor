@@ -351,6 +351,11 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
    * the comment keeps its place in its thread in Word.
    */
   setCommentText(commentId: string, text: string, options?: PackageWriteOptions): boolean;
+  /** Replace several validated comment bodies in one package transaction. */
+  setCommentTexts(
+    edits: readonly { readonly commentId: string; readonly text: string }[],
+    options?: PackageWriteOptions
+  ): boolean;
   /**
    * Delete a comment thread outright — body, thread state and story markers.
    *

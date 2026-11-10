@@ -8,13 +8,19 @@ import {
   deletePackageComments,
   setPackageCommentResolved,
   setPackageCommentText,
+  setPackageCommentTexts,
 } from '../store/store/comment-package-write.ts';
 import type { StoryScope, TreePackageStore } from '../store/store/tree-package-store.ts';
 import type { TreeDocxSessionView } from './tree-session-contract.ts';
 
 export type SessionCommentWrites = Pick<
   TreeDocxSessionView,
-  'replyToComment' | 'setCommentResolved' | 'setCommentText' | 'deleteComment' | 'deleteComments'
+  | 'replyToComment'
+  | 'setCommentResolved'
+  | 'setCommentText'
+  | 'setCommentTexts'
+  | 'deleteComment'
+  | 'deleteComments'
 >;
 
 /** The session's comment writes over `packageStore`; `bodyScope` is the default story. */
@@ -74,6 +80,10 @@ export function sessionCommentWrites(
 
     setCommentText(commentId, text, options = {}) {
       return setPackageCommentText(packageStore, commentId, text, options.historyToken).ok;
+    },
+
+    setCommentTexts(edits, options = {}) {
+      return setPackageCommentTexts(packageStore, edits, options.historyToken).ok;
     },
 
     deleteComment(commentId, scope = bodyScope, noteId, options) {

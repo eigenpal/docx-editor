@@ -423,7 +423,22 @@
     "addComment": "Adicionar um comentário...",
     "replyPlaceholder": "Responda ou adicione outros com @",
     "reopen": "Reabrir",
-    "resolve": "Resolver"
+    "resolve": "Resolver",
+    "edit": "Editar comentário",
+    "editConflict": "Este comentário foi alterado. Seu rascunho foi mantido. Cancele para ver o texto mais recente.",
+    "editEmpty": "Digite o texto do comentário antes de salvar.",
+    "editHint": "Salva como texto simples. Ctrl+Enter ou ⌘+Enter para salvar. Escape para cancelar.",
+    "editPermission": "Você só pode editar seus próprios comentários.",
+    "editRefused": "Não foi possível salvar este comentário. Seu rascunho foi mantido.",
+    "editReply": "Editar resposta",
+    "editText": "Texto do comentário",
+    "saveEdit": "Salvar alterações",
+    "deletedDraft": "Este comentário não está mais disponível aqui. Seu rascunho não salvo foi mantido para que você possa copiá-lo.",
+    "discardDraft": "Descartar rascunho",
+    "recoveredDraft": "Rascunho de comentário não salvo",
+    "actions": "Ações do comentário",
+    "replyActions": "Ações da resposta",
+    "deleteReply": "Excluir resposta"
   },
   "contextMenu": {
     "ariaLabel": "Menu de ações de IA",

@@ -3091,6 +3091,9 @@ export const NO_TRACKING_SETTINGS: DocumentTrackingSettings;
 export const NON_CANONICAL_ORIGINS: readonly string[];
 
 // @public
+export function normalizeCommentBodyText(text: string): string;
+
+// @public
 export function normalizeParagraphIdentity(part: OoxmlPart): OoxmlPart;
 
 // @public
@@ -4901,7 +4904,7 @@ export type SetCommentTextResult = {
     readonly ok: true;
 } | {
     readonly ok: false;
-    readonly reason: TreeOpRejection | 'unknown-comment';
+    readonly reason: TreeOpRejection | 'unknown-comment' | 'unsupported-comment-body';
 };
 
 // @public
@@ -4944,6 +4947,12 @@ export function setPackageCommentResolved(packageStore: TreePackageStore, commen
 
 // @public
 export function setPackageCommentText(packageStore: TreePackageStore, commentId: string, text: string, historyGroup?: HistoryGroup): SetCommentTextResult;
+
+// @public
+export function setPackageCommentTexts(packageStore: TreePackageStore, edits: readonly {
+    readonly commentId: string;
+    readonly text: string;
+}[], historyGroup?: HistoryGroup): SetCommentTextResult;
 
 // @public
 export interface SetTextFormFieldDefaultOp {

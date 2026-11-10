@@ -6,6 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // The package builds its React and Vue entries together; this file uses Vue's JSX runtime.
 /** @jsxImportSource vue */
 
+import { ReviewCommentRecovery } from './review-comment-recovery.tsx';
 import {
   cloneVNode,
   computed,
@@ -148,6 +149,7 @@ function buildReviewActions(hook: UseReviewReturn, list: readonly ReviewItemView
     commentResolutionDisabledReason: hook.commentResolutionDisabledReason.value,
     remove: hook.remove,
     reply: hook.reply,
+    edit: hook.edit,
     selectionAnchorY: hook.selectionAnchorY.value,
     comment: hook.comment,
     lastRefusal: hook.lastRefusal.value,
@@ -766,6 +768,7 @@ const ReviewRoot = defineComponent({
           ? [takeRoot('Balloon', h(ReviewBalloon), rootParts)]
           : []),
         h(ReviewRefusalAnnouncer),
+        h(ReviewCommentRecovery),
       ] as VNodeArrayChildren;
       const child = asChildHost;
       if (!child) return h('aside', shared, content);

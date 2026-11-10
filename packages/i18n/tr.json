@@ -423,7 +423,22 @@
     "addComment": "Açıklama ekle...",
     "replyPlaceholder": "Yanıtla veya @ ile başkalarını ekle",
     "reopen": "Yeniden aç",
-    "resolve": "Çözümle"
+    "resolve": "Çözümle",
+    "edit": "Yorumu düzenle",
+    "editConflict": "Bu yorum değişti. Taslağınız korundu. En son metni görmek için iptal edin.",
+    "editEmpty": "Kaydetmeden önce yorum metnini girin.",
+    "editHint": "Düz metin olarak kaydedilir. Kaydetmek için Ctrl+Enter veya ⌘+Enter. İptal etmek için Escape.",
+    "editPermission": "Yalnızca kendi yorumlarınızı düzenleyebilirsiniz.",
+    "editRefused": "Bu yorum kaydedilemedi. Taslağınız korundu.",
+    "editReply": "Yanıtı düzenle",
+    "editText": "Yorum metni",
+    "saveEdit": "Değişiklikleri kaydet",
+    "deletedDraft": "Bu yorum artık burada mevcut değil. Kaydedilmemiş taslağınız, kopyalayabilmeniz için korundu.",
+    "discardDraft": "Taslağı sil",
+    "recoveredDraft": "Kaydedilmemiş yorum taslağı",
+    "actions": "Yorum işlemleri",
+    "replyActions": "Yanıt işlemleri",
+    "deleteReply": "Yanıtı sil"
   },
   "contextMenu": {
     "ariaLabel": "Yapay zekâ işlemleri menüsü",

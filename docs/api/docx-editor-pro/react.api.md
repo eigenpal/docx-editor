@@ -455,7 +455,7 @@ export interface ReviewRailMetrics {
 }
 
 // @public
-export type ReviewWriteAction = 'accept' | 'reject' | 'resolve' | 'reopen' | 'remove' | 'reply' | 'comment';
+export type ReviewWriteAction = 'accept' | 'reject' | 'resolve' | 'reopen' | 'remove' | 'reply' | 'comment' | 'edit';
 
 // @public
 export interface ReviewWriteRefusal {
@@ -552,6 +552,7 @@ export interface UseReviewReturn {
     readonly adopt: (items: ReviewItemView | readonly ReviewItemView[], options?: ReviewAdoptOptions) => boolean;
     readonly comment: (text: string, author?: string) => boolean;
     readonly commentResolutionDisabledReason: string | null;
+    readonly edit: (item: ReviewItemView, text: string, expectedText?: string) => boolean;
     readonly items: readonly ReviewItemView[];
     readonly lastRefusal: ReviewWriteRefusal | null;
     readonly paneOpen: boolean;

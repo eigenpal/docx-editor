@@ -168,6 +168,7 @@ export const INERT_RAIL: ReviewRailValue = {
     commentResolutionDisabledReason: null,
     remove: () => false,
     reply: () => false,
+    edit: () => false,
     selectionAnchorY: null,
     comment: () => false,
     lastRefusal: null,

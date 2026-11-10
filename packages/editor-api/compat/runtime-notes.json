@@ -1,7 +1,7 @@
 {
   "OfficeExtension.ClientRequestContext#sync": {
     "status": "partial",
-    "notes": "Text and formatting writes in one atomic batch target one story. Mixed-story writes refuse with ConflictingChanges without committing that batch. Bookmark removal can share a batch with writes to another story. Inserting a bookmark can move an existing name from another story in that transaction. Reads can span stories. Earlier successful syncs remain committed after a later failure. Inserting a control or paragraph inside a control and deleting that control with keepContent=false in one batch refuses with ConflictingChanges before writing. In a sync that writes, loads on objects that already exist answer the document before the writes. Loads on an object that a write in the same sync returns, and on its font and paragraphs, answer after all the writes of that sync. Office.js answers every load in queue order, so a load queued between two writes sees only the first write; here a load on a created object sees both. A navigation read from a created object, such as getFirst, getRange, search, or getCell, refuses with InvalidObjectPath before anything commits. A load that fails after the writes commit carries debugInfo.innerError.code edit.read-after-commit, because the writes are applied."
+    "notes": "Text and formatting writes in one atomic batch target one story. Mixed-story writes refuse with ConflictingChanges without committing that batch. Bookmark removal can share a batch with writes to another story. Inserting a bookmark can move an existing name from another story in that transaction. Reads can span stories. Earlier successful syncs remain committed after a later failure. Inserting a control or paragraph inside a control and deleting that control with keepContent=false in one batch refuses with ConflictingChanges before writing. In a sync that writes, loads on objects that already exist answer the document before the writes. Comment and reply content loads are an exception: they follow queued content replacements in order. Loads on an object that a write in the same sync returns, and on its font and paragraphs, answer after all the writes of that sync. Office.js answers every load in queue order, so a load queued between two writes sees only the first write; here a load on a created object sees both. A navigation read from a created object, such as getFirst, getRange, search, or getCell, refuses with InvalidObjectPath before anything commits. A load that fails after the writes commit carries debugInfo.innerError.code edit.read-after-commit, because the writes are applied."
   },
   "Word.run": {
     "status": "different",
@@ -894,5 +894,13 @@
   "Word.Style#unhideWhenUsed": {
     "status": "partial",
     "notes": "Read-only. The w:unhideWhenUsed flag; false when the style does not state it. The property has no setter."
+  },
+  "Word.Comment#content": {
+    "status": "partial",
+    "notes": "Reads require load(\"content\") and context.sync(). Writes replace supported plain-text bodies and require a nonempty runtime author that exactly matches the stored author name. Names are host-supplied metadata, not authenticated identities. Author, creation date, thread state, replies, and anchors remain unchanged. Empty text and unsupported body structures refuse. Content edits can share one atomic sync with other comment or reply content edits; other mutations require a separate sync. Writes support main-body comments; browser writes also require the review module and an editable document. Stale reads refuse with StaleDocument. Reload content after a write to read its committed value; text remains a legacy read-only alias."
+  },
+  "Word.CommentReply#content": {
+    "status": "partial",
+    "notes": "Reads require load(\"content\") and context.sync(). Writes replace supported plain-text bodies and require a nonempty runtime author that exactly matches the stored author name. Names are host-supplied metadata, not authenticated identities. Author, creation date, thread state, replies, and anchors remain unchanged. Empty text and unsupported body structures refuse. Content edits can share one atomic sync with other comment or reply content edits; other mutations require a separate sync. Writes support main-body comments; browser writes also require the review module and an editable document. Stale reads refuse with StaleDocument. Reload content after a write to read its committed value; text remains a legacy read-only alias."
   }
 }

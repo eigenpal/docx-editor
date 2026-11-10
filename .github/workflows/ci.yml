@@ -184,6 +184,9 @@ jobs:
       - name: Check table revision grouping in the editor
         if: "matrix.check == 'review-tables'"
         run: bunx playwright test --config e2e/editor-smoke.config.ts e2e/table-review-grouping.interaction.spec.ts
+      - name: Check comment editing in React and Vue
+        if: "matrix.check == 'review-tables'"
+        run: bunx playwright test --config e2e/editor-smoke.config.ts e2e/comment-edit.interaction.spec.ts
       - name: Check Markdown page layout and review controls
         if: "matrix.check == 'browser'"
         run: "bun run --filter './examples/docx-to-markdown' check:preview"

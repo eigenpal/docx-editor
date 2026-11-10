@@ -157,9 +157,12 @@ describe('setCommentText', () => {
     expect(setCommentText(store, '1', 'ab')).toMatchObject({ ok: true, changed: true });
     expect(record(store.package, '1').text).toBe('ab');
     // The card reads the table's text after the paragraph's.
-    expect(setCommentText(store, '2', 'Same')).toMatchObject({ ok: true, changed: true });
-    expect(record(store.package, '2')).toMatchObject({ text: 'Same', paraId: '22222222' });
-    expect(record(store.package, '2').blocks).toHaveLength(1);
+    expect(setCommentText(store, '2', 'Same')).toEqual({
+      ok: false,
+      reason: 'unsupported-comment-body',
+    });
+    expect(record(store.package, '2')).toMatchObject({ text: 'Same\ncell', paraId: '22222222' });
+    expect(record(store.package, '2').blocks).toHaveLength(2);
   });
 
   test('an unknown comment and empty text are refused, and nothing changes', () => {
@@ -174,3 +177,27 @@ describe('setCommentText', () => {
     expect(store.historyDepth).toBe(0);
   });
 });
+
+for (const content of [
+  '<w:p><w:ins w:id="1" w:author="Ada"><w:r><w:t>Pending</w:t></w:r></w:ins></w:p>',
+  '<w:p><w:r><w:rPr><w:rPrChange w:id="1" w:author="Ada"><w:rPr/></w:rPrChange></w:rPr><w:t>Pending</w:t></w:r></w:p>',
+  '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText>DATE</w:instrText><w:fldChar w:fldCharType="end"/></w:r></w:p>',
+  '<w:p><w:hyperlink w:anchor="target"><w:r><w:t>Link</w:t></w:r></w:hyperlink></w:p>',
+  '<w:p><w:r><w:drawing/></w:r></w:p>',
+]) {
+  test(`refuses unsupported comment data without a write: ${content}`, () => {
+    const store = storeOf(
+      loadCommentFixture({
+        body: markedComment('text', '1'),
+        comments: `<w:comments xmlns:w="${W}"><w:comment w:id="1" w:author="Ada">${content}</w:comment></w:comments>`,
+      })
+    );
+    const before = serializeOoxmlPart(store.package.parts.get('/word/comments.xml')!);
+    expect(setCommentText(store, '1', 'Replacement')).toEqual({
+      ok: false,
+      reason: 'unsupported-comment-body',
+    });
+    expect(serializeOoxmlPart(store.package.parts.get('/word/comments.xml')!)).toBe(before);
+    expect(store.undo()).toBeNull();
+  });
+}

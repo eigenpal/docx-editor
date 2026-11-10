@@ -83,6 +83,7 @@ export type { RevisionBatchResult } from '../store/store/revision-batch.ts';
 export type { RevisionAuthorResult } from '../store/store/revision-author-change.ts';
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './document.ts';
 import type {
+  CommentTextOptions,
   EditorExecOptions,
   EditorScope,
   HistoryGroup,
@@ -90,6 +91,7 @@ import type {
   ViewScope,
 } from './editor-scope.ts';
 export type {
+  CommentTextOptions,
   EditorExecOptions,
   EditorScope,
   HistoryGroup,
@@ -742,13 +744,15 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * The body becomes one paragraph of plain text, as {@link addComment} writes it; a line break in
    * `text` does not start a new paragraph. The author, the date, the thread state, the replies and
    * the range the comment covers stay, so the comment keeps its place in its thread when the file
-   * opens in Word. The write is one package transaction and one undo step, and it joins an open
+   * opens again. The write is one package transaction and one undo step, and it joins an open
    * history group. Text the card already shows succeeds without adding an undo entry.
    *
-   * Refused on a revision card, on blank text, in viewing mode and in a collaboration session;
-   * other refusals name their cause, as {@link addComment} describes.
+   * Requires the configured nonempty author to match the comment author exactly. This host
+   * identity policy is not authentication. Refused on blank text, in viewing mode, and for
+   * bodies with revisions or unsupported structures. Formatting becomes plain text.
+   * Use {@link CommentTextOptions.expectedText} to preserve a draft when another edit arrives.
    */
-  setCommentText(key: string, text: string, options?: HistoryGroupOptions): ExecResult;
+  setCommentText(key: string, text: string, options?: CommentTextOptions): ExecResult;
 
   /**
    * Discard the item behind a card: the destructive half of the review verbs.

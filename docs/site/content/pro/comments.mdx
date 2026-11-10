@@ -1,6 +1,6 @@
 ---
 title: 'Comments'
-description: 'Read, create, reply to, and resolve DOCX comment threads with the packaged review rail or useReview.'
+description: 'Read, create, edit, reply to, and resolve DOCX comment threads with the packaged review rail or useReview.'
 category: 'Pro'
 order: 62
 ---
@@ -135,6 +135,7 @@ Each action returns whether the editor applied it. `commentResolutionDisabledRea
 | --- | --- | --- |
 | `comment(text, author?)` | Adds a thread to the selection | Returns `false`; the caller keeps its draft |
 | `reply(item, text, author?)` | Adds a reply, or comments on a revision range | Returns `false` |
+| `edit(item, text, expectedText?)` | Replaces your comment or reply text | Returns `false`; `lastRefusal.action` is `edit` |
 | `resolve(item)` | Marks an open thread complete | Repeating it succeeds without a write. Returns `false` for a stale or non-comment item. |
 | `reopen(item)` | Reopens a complete thread | Repeating it succeeds without a write. Returns `false` for a stale or non-comment item. |
 | `remove(item)` | Deletes a comment thread or rejects a tracked change | Returns `false` when refused; a refused tracked change sets `lastRefusal.action` to `reject` |
@@ -153,6 +154,22 @@ Comment items include these fields:
 | `isActive`                   | Whether the caret is in the item                   |
 
 `editor.getComments()` on the core editor returns an empty array. For comment records, use `getReviewItems()` with the review module.
+
+## Edit comments and replies
+
+The default React and Vue cards show a three-dot actions menu for comments and replies. The **Edit** action appears only for your own comments. Set the editor's comment author to the same nonempty author name stored on the comment. The host supplies this author metadata; it does not authenticate the user. Your application must authenticate users and control document access. Viewing mode disables editing. Resolved threads remain editable and keep their resolved state.
+
+1. Open **Comment actions** or **Reply actions**, then select **Edit comment** or **Edit reply**.
+2. Change the text. Press Enter to add a line.
+3. Select **Save changes**, or press Ctrl+Enter on Windows and Linux, or Command+Enter on macOS.
+
+Select **Cancel**, or press Escape, to discard the draft. Save and Cancel return keyboard focus to the actions menu button. Empty and unchanged drafts cannot be saved. The actions menu also contains **Delete comment**. Use arrow keys to select an action, or press Escape to close the menu.
+
+Saving replaces the comment body with plain text, including line breaks and tabs. Existing character formatting is removed. The editor refuses bodies with unsupported structures, including tracked changes. The editor keeps the comment identifier, author, date, replies, and resolved state.
+
+Drafts survive closed cards, scrolling, and viewing-mode changes. If another participant changes the text, saving stops and your draft remains available. Copy your draft before canceling, then review the updated comment before editing again. If the comment disappears, a recovery panel keeps your draft available for copying. Loading another document clears unsaved drafts.
+
+For custom cards, use `review.edit(item, draft, originalText)`. Capture `originalText` when editing starts to prevent replacing a newer comment value. A refused edit returns `false`; retain the draft and show `lastRefusal`. For document automation, use the standard `Comment.content` and `CommentReply.content` setters. See [Comments](/docs/2.x/editor-api/comments) for automation examples and supported limits.
 
 ## Show refused actions
 

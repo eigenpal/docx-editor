@@ -12,9 +12,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 //
 // WHAT IS NOT PUBLISHED, AND WHY. `authorEmail` is not in the file: `CT_Comment` records an author
 // and initials, and Word's own address comes from `people.xml`, a part this slice does not read.
-// `content` as a WRITABLE property would need a comment body rewrite, which no canonical operation
-// offers — a read-only `content` would be a different contract from upstream's, so the member is
-// omitted and the text is published as DocxEditor's own `text`.
+// `content` replaces a supported comment body through the canonical package transaction.
 //
 // A TRACKED CHANGE IS A DECISION THE ENGINE CAN MAKE. Rows, cells, cell merges, and tracked
 // numbering are listed by their revision type. A structural card with no single type, such as
@@ -175,12 +173,34 @@ abstract class CommentBase extends ModelObject implements PromisedItem {
   }
 
   /**
-   * What it says, as plain text.
+   * The comment or reply body as plain text. Load `content`, then sync before reading.
    *
-   * DocxEditor's own member rather than upstream's `content`: upstream declares that one writable,
-   * and rewriting a comment body is not an operation this engine offers, so publishing a read-only
-   * `content` under the same name would be a quieter divergence than a differently named read.
+   * Assignment queues a replacement for the next `context.sync()`. The runtime author must
+   * match the stored author. Content edits can share one sync with other content edits. It preserves
+   * the thread, anchors, author, and date. Unsupported body structures refuse without changes.
+   * Reload after a write to read the committed value. A stale read refuses with `StaleDocument`.
    */
+  get content(): string {
+    return this.loadedProperty<string>('content');
+  }
+
+  set content(value: string) {
+    const target = `${this.path.label}.content`;
+    if (typeof value !== 'string' || value.length === 0) {
+      fail({ code: 'InvalidArgument', target });
+    }
+    const author = this.internals.author;
+    if (typeof author !== 'string' || author.trim().length === 0) {
+      fail({ code: 'NotSupported', target, diagnostic: 'edit.comment-author-required' });
+    }
+    this.commandAnswering(
+      target,
+      () => ({ op: 'setCommentText', comment: this.commentHandle(), text: value, author }),
+      (answer) => hydratedApplied(answer, target)
+    );
+  }
+
+  /** Legacy read-only alias. Prefer the standard `content` property for new code. */
   get text(): string {
     return this.loadedProperty<string>('text');
   }
@@ -202,6 +222,7 @@ abstract class CommentBase extends ModelObject implements PromisedItem {
       'creationDate',
       'id',
       'text',
+      'content',
       ...extra,
     ]);
     if (selected.includes('authorName')) {
@@ -209,6 +230,9 @@ abstract class CommentBase extends ModelObject implements PromisedItem {
         op: 'getCommentAuthor',
         comment: this.commentHandle(),
       }));
+    }
+    if (selected.includes('content')) {
+      this.loadTextInto('content', () => ({ op: 'getCommentText', comment: this.commentHandle() }));
     }
     if (selected.includes('text')) {
       this.loadTextInto('text', () => ({ op: 'getCommentText', comment: this.commentHandle() }));
@@ -325,10 +349,8 @@ export class CommentReplyCollection extends HandleCollection<CommentReply> {
  * assigning `resolved` marks this comment and everything answering it, which is what Word's own
  * pane does.
  *
- * `authorEmail` and a writable `content` are absent: `CT_Comment` records only an author and
- * initials (Word's addresses live in `people.xml`, which this API does not read), and a body
- * rewrite is not an operation the canonical write path offers. The comment's text is published
- * as `text`.
+ * `authorEmail` is absent because this API does not read `people.xml`.
+ * Use `content` to read or replace the body. `text` remains a legacy read-only alias.
  *
  * @public
  */

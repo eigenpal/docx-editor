@@ -132,3 +132,12 @@ export interface HistoryDiagnostic {
   readonly kind: 'split' | 'possible-ungrouped-gesture' | 'possible-fragmented-gesture';
   readonly reason: string;
 }
+
+/** Options for replacing a comment body without overwriting a newer edit. @public */
+export interface CommentTextOptions extends HistoryGroupOptions {
+  /**
+   * The exact displayed text read when editing started. A mismatch refuses the write with
+   * `invalidArgs` and reason `comment-text-changed`. Omit to replace the current body.
+   */
+  readonly expectedText?: string;
+}

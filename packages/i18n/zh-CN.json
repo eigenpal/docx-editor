@@ -423,7 +423,22 @@
     "addComment": "添加批注",
     "replyPlaceholder": "回复或使用 @ 提及他人...",
     "reopen": "重新打开",
-    "resolve": "解决"
+    "resolve": "解决",
+    "edit": "编辑批注",
+    "editConflict": "此批注已更改。你的草稿已保留。取消编辑可查看最新文本。",
+    "editEmpty": "请先输入批注文本再保存。",
+    "editHint": "保存为纯文本。按 Ctrl+Enter 或 ⌘+Enter 保存，按 Escape 取消。",
+    "editPermission": "你只能编辑自己的批注。",
+    "editRefused": "无法保存此批注。你的草稿已保留。",
+    "editReply": "编辑回复",
+    "editText": "批注文本",
+    "saveEdit": "保存更改",
+    "deletedDraft": "此批注在这里已不可用。未保存的草稿已保留，以便你复制。",
+    "discardDraft": "丢弃草稿",
+    "recoveredDraft": "未保存的批注草稿",
+    "actions": "批注操作",
+    "replyActions": "回复操作",
+    "deleteReply": "删除回复"
   },
   "contextMenu": {
     "ariaLabel": "AI 操作菜单",

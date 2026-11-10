@@ -19,7 +19,7 @@ import { deleteCommentBatch } from '../package/comment-batch-delete.ts';
 import {
   addComment,
   setCommentResolved,
-  setCommentText,
+  setCommentTexts,
   type AddCommentRequest,
   type AddCommentResult,
   type SetCommentResolvedResult,
@@ -119,6 +119,15 @@ export function setPackageCommentText(
   text: string,
   historyGroup?: HistoryGroup
 ): SetCommentTextResult {
+  return setPackageCommentTexts(packageStore, [{ commentId, text }], historyGroup);
+}
+
+/** Replace several comment bodies atomically, preserving one package history entry. */
+export function setPackageCommentTexts(
+  packageStore: TreePackageStore,
+  edits: readonly { readonly commentId: string; readonly text: string }[],
+  historyGroup?: HistoryGroup
+): SetCommentTextResult {
   const store = packageStore.bodyStore();
   const beforePackage = packageStore.currentPackage();
   const locked = lifecycleProtectionRefusal(settingsPartOf(beforePackage), {
@@ -130,7 +139,7 @@ export function setPackageCommentText(
   return runObservedStoreTransaction(
     packageStore,
     () => {
-      const result = setCommentText(store, commentId, text);
+      const result = setCommentTexts(store, edits);
       if (!result.ok) return result;
       if (!result.changed) return result;
       store.restoreHistoryStacks(checkpoint);

@@ -204,14 +204,15 @@
         "resolved",
         "delete",
         "getRange",
-        "reply"
+        "reply",
+        "content"
       ]
     },
     "CommentCollection": {
       "members": ["items", "getFirst"]
     },
     "CommentReply": {
-      "members": ["authorName", "creationDate", "id", "delete"]
+      "members": ["authorName", "creationDate", "id", "delete", "content"]
     },
     "CommentReplyCollection": {
       "members": ["items", "getFirst"]
@@ -353,7 +354,7 @@
     },
     {
       "uid": "Word.Range#start",
-      "reason": "De-selected deliberately, and not implementable in DocxEditor's addressing model: upstream's start/end are DOCUMENT-WIDE character offsets, a coordinate space no part of this engine maintains. DocxEditor addresses every position as a stable paragraph identity plus a UTF-16 offset in that paragraph — the vocabulary the tree ops validate against, the selection uses and the layout reports — so an offset a caller reads is an offset it can write at. A document-wide counter would change under every edit above it and would have to be recomputed by walking the whole story per access; publishing one anyway would mean handing back numbers that go stale silently. A range's endpoints are reachable through range.paragraphs and the paragraph's own text instead."
+      "reason": "De-selected deliberately, and not implementable in DocxEditor's addressing model: upstream's start/end are DOCUMENT-WIDE character offsets, a coordinate space no part of this engine maintains. DocxEditor addresses every position as a stable paragraph identity plus a UTF-16 offset in that paragraph \u2014 the vocabulary the tree ops validate against, the selection uses and the layout reports \u2014 so an offset a caller reads is an offset it can write at. A document-wide counter would change under every edit above it and would have to be recomputed by walking the whole story per access; publishing one anyway would mean handing back numbers that go stale silently. A range's endpoints are reachable through range.paragraphs and the paragraph's own text instead."
     },
     {
       "uid": "Word.Range#end",
@@ -369,7 +370,7 @@
     },
     {
       "uid": "Word.ParagraphCollection#getFirstOrNullObject",
-      "reason": "Implemented by DocxEditor's object model — the null-object half of the proxy lifecycle needs one, and code that expects an empty document wants it — but not selected for exact conformance: the collection accessors selected for this subset are items/getFirst/getLast, and adding a member to the manifest requires re-extracting the reference fixture, which is the one network step CI never takes. The authored declarations therefore do not declare it, and the conformance assertions do not measure it."
+      "reason": "Implemented by DocxEditor's object model \u2014 the null-object half of the proxy lifecycle needs one, and code that expects an empty document wants it \u2014 but not selected for exact conformance: the collection accessors selected for this subset are items/getFirst/getLast, and adding a member to the manifest requires re-extracting the reference fixture, which is the one network step CI never takes. The authored declarations therefore do not declare it, and the conformance assertions do not measure it."
     },
     {
       "uid": "Word.ParagraphCollection#getLastOrNullObject",
@@ -381,7 +382,7 @@
     },
     {
       "uid": "OfficeExtension.ClientRequestContext#sync",
-      "reason": "The batched request-context sync/flush call's real proxying/queuing behavior is the proxy runtime's own mechanism (Task 3), not part of this contract-freeze task. Word.RequestContext inherits the member from OfficeExtension.ClientRequestContext rather than redeclaring it, so it never appears as a Word.RequestContext member in this manifest. Upstream's actual signature is generic and pass-through (`sync<T>(passThroughValue?: T): Promise<T>`); rather than selecting and exactly matching that shape here, DocxEditor.ClientRequestContext independently authors a deliberately simplified, declaration-only `sync(): Promise<void>` — the zero-argument call shape every real Office.js sample actually uses — purely so representative source-compat fixtures in compat/fixtures/ can end a batch with `await context.sync()`, same as real Office.js samples do. This declaration has no runtime behavior and is not asserted against the upstream reference for exact conformance."
+      "reason": "The batched request-context sync/flush call's real proxying/queuing behavior is the proxy runtime's own mechanism (Task 3), not part of this contract-freeze task. Word.RequestContext inherits the member from OfficeExtension.ClientRequestContext rather than redeclaring it, so it never appears as a Word.RequestContext member in this manifest. Upstream's actual signature is generic and pass-through (`sync<T>(passThroughValue?: T): Promise<T>`); rather than selecting and exactly matching that shape here, DocxEditor.ClientRequestContext independently authors a deliberately simplified, declaration-only `sync(): Promise<void>` \u2014 the zero-argument call shape every real Office.js sample actually uses \u2014 purely so representative source-compat fixtures in compat/fixtures/ can end a batch with `await context.sync()`, same as real Office.js samples do. This declaration has no runtime behavior and is not asserted against the upstream reference for exact conformance."
     },
     {
       "uid": "Word.ParagraphFormat",
@@ -389,7 +390,7 @@
     },
     {
       "uid": "Word.ListItem#listString",
-      "reason": "The marker a reader SEES ('1.', 'a)', a bullet glyph) rather than anything the file states: the layout engine computes it while painting, from numbering.xml's abstract-numbering indirection and a running counter per level. Answering it from the automation lane would mean a second implementation of that counter, free to disagree with the one on the page — and a list marker that disagrees with the page is worse than no list marker. Word.List#getLevelString is omitted for the same reason (and for its ClientResult return)."
+      "reason": "The marker a reader SEES ('1.', 'a)', a bullet glyph) rather than anything the file states: the layout engine computes it while painting, from numbering.xml's abstract-numbering indirection and a running counter per level. Answering it from the automation lane would mean a second implementation of that counter, free to disagree with the one on the page \u2014 and a list marker that disagrees with the page is worse than no list marker. Word.List#getLevelString is omitted for the same reason (and for its ClientResult return)."
     },
     {
       "uid": "Word.ListItem#siblingIndex",
@@ -397,7 +398,7 @@
     },
     {
       "uid": "Word.Bookmark#start",
-      "reason": "A document-wide character offset — the coordinate space already de-selected on Word.Range#start for the same reason: DocxEditor addresses every position as a paragraph identity plus a UTF-16 offset in that paragraph, and maintains no document-wide counter. Word.Bookmark#range answers the same question in the vocabulary this engine validates."
+      "reason": "A document-wide character offset \u2014 the coordinate space already de-selected on Word.Range#start for the same reason: DocxEditor addresses every position as a paragraph identity plus a UTF-16 offset in that paragraph, and maintains no document-wide counter. Word.Bookmark#range answers the same question in the vocabulary this engine validates."
     },
     {
       "uid": "Word.Bookmark#end",
@@ -405,15 +406,7 @@
     },
     {
       "uid": "Word.Comment#authorEmail",
-      "reason": "An address is not in comments.xml — Word keeps it in word/people.xml, keyed by author name, and this subset does not read that part. The canonical comment record therefore has no email to answer, and a name-derived guess would be a fabricated identity attached to a real person's comment."
-    },
-    {
-      "uid": "Word.Comment#content",
-      "reason": "Assignable upstream: writing it REPLACES a comment's body. A comment's body is a story of its own in comments.xml, and this subset transacts one story per batch — the story the comment is anchored in — so replacing the body is a write the canonical path does not yet express. Reading a body stays available as DocxEditor's own read-only Comment#text (recorded below), so a script that reports on comments is unaffected; only rewriting somebody else's comment is."
-    },
-    {
-      "uid": "Word.CommentReply#content",
-      "reason": "See Word.Comment#content."
+      "reason": "An address is not in comments.xml \u2014 Word keeps it in word/people.xml, keyed by author name, and this subset does not read that part. The canonical comment record therefore has no email to answer, and a name-derived guess would be a fabricated identity attached to a real person's comment."
     },
     {
       "uid": "Word.CommentReply#authorEmail",
@@ -421,7 +414,7 @@
     },
     {
       "uid": "Word.Comment#text",
-      "reason": "Implemented by DocxEditor's object model as a read-only way to reach a comment's body — the half of Word.Comment#content that IS backed — but not selected for exact conformance, because upstream has no such member and adding one to the reference is impossible. Recorded so the extra member is a decision rather than drift."
+      "reason": "Legacy read-only alias retained for compatibility. Prefer the standard content property for new code. The upstream API has no text member."
     },
     {
       "uid": "Word.CommentReply#text",
@@ -445,7 +438,7 @@
     },
     {
       "uid": "Word.Body#revisions",
-      "reason": "Implemented by DocxEditor's object model — a header or a footnote can carry tracked changes of its own, and a review pass over one story is the natural way to reach them — but not selected for exact conformance: upstream declares revisions on Document (selected here), not on Body, so there is no reference shape for the story-scoped accessor. Recorded so the extra member is a decision rather than drift."
+      "reason": "Implemented by DocxEditor's object model \u2014 a header or a footnote can carry tracked changes of its own, and a review pass over one story is the natural way to reach them \u2014 but not selected for exact conformance: upstream declares revisions on Document (selected here), not on Body, so there is no reference shape for the story-scoped accessor. Recorded so the extra member is a decision rather than drift."
     },
     {
       "uid": "Word.Body#bookmarks",
@@ -615,15 +608,15 @@
     },
     {
       "uid": "Word.List#insertParagraph",
-      "note": "All four locations are accepted, and Before/After land INSIDE the list at its first and last position — the same places Start and End name. A list is a set of paragraphs sharing a w:numId rather than a contiguous region of the story, so 'before the list' is a position in the story, not in the list, and Word.Paragraph#insertParagraph is the member that addresses it. A refusal on two of the four locations would fail scripts written against the shape; a silent unnumbered insert outside the list would answer a paragraph the list does not contain."
+      "note": "All four locations are accepted, and Before/After land INSIDE the list at its first and last position \u2014 the same places Start and End name. A list is a set of paragraphs sharing a w:numId rather than a contiguous region of the story, so 'before the list' is a position in the story, not in the list, and Word.Paragraph#insertParagraph is the member that addresses it. A refusal on two of the four locations would fail scripts written against the shape; a silent unnumbered insert outside the list would answer a paragraph the list does not contain."
     },
     {
       "uid": "Word.ContentControl#getRange",
-      "note": "All six locations are accepted. Whole and Content answer the same stretch, and Before/After answer the content's own edges, because a control's boundary marks occupy no offset in the text this API addresses — there is no position between a mark and the first character for a range to start at. Refusing four of the six would fail scripts written against the shape; answering an invented offset would be worse."
+      "note": "All six locations are accepted. Whole and Content answer the same stretch, and Before/After answer the content's own edges, because a control's boundary marks occupy no offset in the text this API addresses \u2014 there is no position between a mark and the first character for a range to start at. Refusing four of the six would fail scripts written against the shape; answering an invented offset would be worse."
     },
     {
       "uid": "Word.ContentControl#insertText",
-      "note": "Text-like controls accept all three locations and return the range of the written text. Replace goes through the control's own value path, so the prompt a control was showing is replaced whole and a w:temporary wrapper is removed — upstream's own behaviour, reached through the one write path the keyboard also takes, which is why a locked or custom-XML-bound control refuses this call with the same named reason a keystroke gets. Text-like controls support all locations; date, checkbox, and other typed controls refuse with NotSupported."
+      "note": "Text-like controls accept all three locations and return the range of the written text. Replace goes through the control's own value path, so the prompt a control was showing is replaced whole and a w:temporary wrapper is removed \u2014 upstream's own behaviour, reached through the one write path the keyboard also takes, which is why a locked or custom-XML-bound control refuses this call with the same named reason a keystroke gets. Text-like controls support all locations; date, checkbox, and other typed controls refuse with NotSupported."
     },
     {
       "uid": "Word.ContentControlCollection",
@@ -823,7 +816,7 @@
     },
     {
       "uid": "Word.Range#insertContentControl",
-      "note": "Creates RichText, PlainText, and DatePicker controls on eligible single-paragraph ranges. Other types refuse. DatePicker creates a date SDT; typed date configuration remains unsupported. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse."
+      "note": "Creates RichText, PlainText, and DatePicker controls on eligible single-paragraph ranges. Other types refuse. DatePicker creates a date SDT; typed date configuration remains unsupported. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control\u2019s tag and title. Empty ranges, existing review markup, and other control structure changes refuse."
     },
     {
       "uid": "Word.Document#getStyles / Word.StyleCollection / Word.Style",

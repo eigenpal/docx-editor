@@ -262,6 +262,8 @@ export interface UseReviewReturn {
    * For headless or server use, see `Comment.reply` in `@docx-editor.dev/editor-api`.
    */
   readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
+  /** Edit your own comment or reply. Pass its displayed text to reject stale edits. */
+  readonly edit: (item: ReviewItemView, text: string, expectedText?: string) => boolean;
   /**
    * Where a comment on the current selection would sit, or null when nothing is selected.
    *
@@ -509,6 +511,14 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     [editor, settle]
   );
 
+  const edit = useCallback(
+    (item: ReviewItemView, text: string, expectedText?: string): boolean => {
+      if (!editor || item.kind !== 'comment') return false;
+      return settle('edit', item.key, editor.setCommentText(item.key, text, { expectedText }));
+    },
+    [editor, settle]
+  );
+
   const reply = useCallback(
     (item: ReviewItemView, text: string, author?: string): boolean => {
       if (text.trim().length === 0 || !editor) return false;
@@ -564,6 +574,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       commentResolutionDisabledReason,
       remove,
       reply,
+      edit,
       selectionAnchorY,
       comment,
       lastRefusal,
@@ -591,6 +602,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       commentResolutionDisabledReason,
       remove,
       reply,
+      edit,
       selectionAnchorY,
       comment,
       lastRefusal,

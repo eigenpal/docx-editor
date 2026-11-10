@@ -8,6 +8,7 @@
 // not open on this editor refuses the write before anything is read or written.
 
 import type {
+  CommentTextOptions,
   DocumentEditingMode,
   ExecResult,
   HistoryGroupOptions,
@@ -25,6 +26,9 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { findReviewPlacement, replacementPairHalves } from './review-replacement-pairs.ts';
 import { reviewReplyRefusal } from './review-reply.ts';
 import { reviewWriteRefusal } from './review-write-refusal.ts';
+import { commentBodyText } from '../store/store/review-text.ts';
+import { commentPartNameOf } from '../store/store/comment-writes.ts';
+import { commentTextEditRefusal } from '../store/store/comment-text-support.ts';
 import { revisionDateNow } from '../automation/revision-date.ts';
 
 export interface ReviewWriteDeps {
@@ -204,7 +208,7 @@ export function createReviewWrites(deps: ReviewWriteDeps) {
     return { ok: true, changed: true };
   };
 
-  const setCommentText = (key: string, text: string): ExecResult => {
+  const setCommentText = (key: string, text: string, options?: CommentTextOptions): ExecResult => {
     if (!deps.reviewEnabled) return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
     const surface = deps.surface();
     if (deps.editingMode() === 'viewing') {
@@ -218,7 +222,7 @@ export function createReviewWrites(deps: ReviewWriteDeps) {
     }
     // `CT_Comment` allows an empty body, but a card with no words is not an edit anyone means;
     // `addComment` refuses it for the same reason.
-    if (text.trim().length === 0) {
+    if (typeof text !== 'string' || text.trim().length === 0) {
       return { ok: false, code: 'invalidArgs', reason: 'a comment needs text' };
     }
     // Unpaired, so a reply's key names the reply itself rather than its thread.
@@ -226,6 +230,24 @@ export function createReviewWrites(deps: ReviewWriteDeps) {
     const item = commentForKey(placements, key);
     if (!('kind' in item)) return item;
     if (!surface) return { ok: false, code: 'notFound', reason: 'no review item with that key' };
+    const author = deps.author();
+    if (!author?.trim() || author !== item.comment.author) {
+      return {
+        ok: false,
+        code: 'locked',
+        reason: 'only the configured comment author can edit this comment',
+      };
+    }
+    if (
+      options?.expectedText !== undefined &&
+      options.expectedText !== commentBodyText(item.comment)
+    ) {
+      return { ok: false, code: 'invalidArgs', reason: 'comment-text-changed' };
+    }
+    const pkg = surface.session.currentPackage();
+    const part = pkg.parts.get(commentPartNameOf(pkg, pkg.mainDocumentPart));
+    const unsupported = part && commentTextEditRefusal(part, item.id);
+    if (unsupported) return { ok: false, code: 'unsupported', reason: unsupported };
     // The store decides what is unchanged, so the result reports what the package did.
     let ok = false;
     let changed = false;
@@ -272,8 +294,8 @@ export function createReviewWrites(deps: ReviewWriteDeps) {
       ),
     deleteReviewItem: (key: string, options?: HistoryGroupOptions) =>
       grouped(options, () => deleteReviewItem(key)),
-    setCommentText: (key: string, text: string, options?: HistoryGroupOptions) =>
-      grouped(options, () => setCommentText(key, text)),
+    setCommentText: (key: string, text: string, options?: CommentTextOptions) =>
+      grouped(options, () => setCommentText(key, text, options)),
     replyToReviewItem: (
       key: string,
       text: string,

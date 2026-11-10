@@ -11,11 +11,8 @@
  * namespace-rewritten `Word` -> `DocxEditor`. See `insert-text.ts` for why the
  * trailing `context.sync()` call is included.
  *
- * The samples' de-selected members are not used: a comment is read and
- * resolved rather than rewritten or deleted (`Comment#content`/`#delete` are
- * recorded omissions), a bookmark is read by name and range rather than by
- * document-wide offset, and a list item's level is read rather than its
- * rendered marker string.
+ * A bookmark is read by name and range rather than by document-wide offset.
+ * A list item's level is read rather than its rendered marker string.
  */
 import { DocxEditor } from '../../docxeditor/declarations';
 
@@ -124,6 +121,16 @@ export async function acceptEveryChange(): Promise<void> {
     await context.sync();
 
     revisions.acceptAll();
+    await context.sync();
+  });
+}
+
+export async function editFirstCommentAndReply(text: string): Promise<void> {
+  await DocxEditor.run(async (context) => {
+    const comment = context.document.comments.getFirst();
+    const reply = comment.replies.getFirst();
+    comment.content = text;
+    reply.content = text;
     await context.sync();
   });
 }

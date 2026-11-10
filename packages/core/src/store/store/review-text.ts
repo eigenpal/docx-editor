@@ -35,12 +35,15 @@ const blockTexts = {
 function commentBodyTextOf(comment: CommentRecord, display: boolean): string {
   const memo = display ? blockTexts.display : blockTexts.model;
   let text = '';
+  let first = true;
   for (const block of comment.blocks) {
     let own = memo.get(block);
     if (own === undefined) {
       own = blockTextOf(block, display);
       memo.set(block, own);
     }
+    if (!first) text += '\n';
+    first = false;
     text += own;
   }
   return text;
@@ -51,6 +54,14 @@ function blockTextOf(block: OoxmlNode, display: boolean): string {
   const visit = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') {
       parts.push(node.value);
+      return;
+    }
+    if (node.kind === 'tab') {
+      parts.push('\t');
+      return;
+    }
+    if (node.kind === 'hardBreak') {
+      parts.push(hardBreakText(node));
       return;
     }
     if (display && isSymbolElement(node)) {

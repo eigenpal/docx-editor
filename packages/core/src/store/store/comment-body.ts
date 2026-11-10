@@ -43,6 +43,11 @@ export function element(
   } as OoxmlElement;
 }
 
+/** Normalize platform line endings before storing or comparing a comment body. */
+export function normalizeCommentBodyText(text: string): string {
+  return text.replace(/\r\n?/g, '\n');
+}
+
 /** The one paragraph of plain text a comment body holds, carrying its `w14:paraId`. */
 export function commentParagraph(
   base: string,
@@ -50,29 +55,47 @@ export function commentParagraph(
   bodyText: string,
   paraIdPrefix: string
 ): OoxmlElement {
-  // `xml:space="preserve"` when the body has an edge space, which is what a conformant
-  // reader is entitled to drop — Word writes the attribute for exactly this case. Omitted
-  // otherwise, so an ordinary reply adds no attribute the file did not need.
-  const preservesSpace = bodyText !== bodyText.trim();
-  const text = element(
-    `${base}.t`,
-    'text',
-    WML_NAMESPACE_URI,
-    'w',
-    't',
-    preservesSpace
-      ? [
-          {
-            kind: 'xmlSpace' as const,
-            namespaceUri: XML_NAMESPACE_URI,
-            localName: 'space' as const,
-            prefix: 'xml' as const,
-            value: 'preserve' as const,
-          },
-        ]
-      : [],
-    [{ id: `${base}.tv`, kind: 'textValue', value: bodyText }]
-  );
+  const pieces = normalizeCommentBodyText(bodyText).split(/([\n\t])/);
+  const content: OoxmlNode[] = [];
+  for (const [index, value] of pieces.entries()) {
+    if (!value) continue;
+    const id = `${base}.text-${index}`;
+    if (value === '\n' || value === '\t') {
+      content.push(
+        element(
+          id,
+          value === '\n' ? 'hardBreak' : 'tab',
+          WML_NAMESPACE_URI,
+          'w',
+          value === '\n' ? 'br' : 'tab',
+          [],
+          []
+        )
+      );
+    } else {
+      content.push(
+        element(
+          id,
+          'text',
+          WML_NAMESPACE_URI,
+          'w',
+          't',
+          value !== value.trim()
+            ? [
+                {
+                  kind: 'xmlSpace',
+                  namespaceUri: XML_NAMESPACE_URI,
+                  localName: 'space',
+                  prefix: 'xml',
+                  value: 'preserve',
+                },
+              ]
+            : [],
+          [{ id: `${id}.value`, kind: 'textValue', value }]
+        )
+      );
+    }
+  }
   // Word's own shape: the body carries `CommentText`, and the run carries
   // `CommentReference`. Without them a comment renders in body formatting and the pane loses
   // the styling every other editor gives it.
@@ -95,7 +118,15 @@ export function commentParagraph(
       ),
     ]
   );
-  const run = element(`${base}.r`, 'run', WML_NAMESPACE_URI, 'w', 'r', [], [runProperties, text]);
+  const run = element(
+    `${base}.r`,
+    'run',
+    WML_NAMESPACE_URI,
+    'w',
+    'r',
+    [],
+    [runProperties, ...content]
+  );
   const paragraphProperties = element(
     `${base}.pPr`,
     'paragraphProperties',

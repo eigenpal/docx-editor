@@ -120,6 +120,8 @@ export interface UseReviewReturn {
    * `@docx-editor.dev/editor-api`.
    */
   readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
+  /** Edit your own comment or reply. Pass its displayed text to reject stale edits. */
+  readonly edit: (item: ReviewItemView, text: string, expectedText?: string) => boolean;
   /** Where a comment on the current selection would sit, in layout points, or null. */
   readonly selectionAnchorY: ComputedRef<number | null>;
   /**
@@ -335,6 +337,15 @@ function useReviewOfInternal(
     return settle(action, item.key, editor.deleteReviewItem(item.key));
   };
 
+  const edit = (item: ReviewItemView, text: string, expectedText?: string): boolean => {
+    if (!editorRef.value || item.kind !== 'comment') return false;
+    return settle(
+      'edit',
+      item.key,
+      editorRef.value.setCommentText(item.key, text, { expectedText })
+    );
+  };
+
   const reply = (item: ReviewItemView, text: string, author?: string): boolean => {
     if (text.trim().length === 0 || !editorRef.value) return false;
     return settle('reply', item.key, editorRef.value.replyToReviewItem(item.key, text, author));
@@ -386,6 +397,7 @@ function useReviewOfInternal(
     commentResolutionDisabledReason,
     remove,
     reply,
+    edit,
     selectionAnchorY,
     comment,
     lastRefusal,

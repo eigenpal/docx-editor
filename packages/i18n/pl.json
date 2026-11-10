@@ -423,7 +423,22 @@
     "addComment": "Dodaj komentarz...",
     "replyPlaceholder": "Odpowiedz lub dodaj innych za pomocą @",
     "reopen": "Otwórz ponownie",
-    "resolve": "Rozwiąż"
+    "resolve": "Rozwiąż",
+    "edit": "Edytuj komentarz",
+    "editConflict": "Ten komentarz został zmieniony. Twój szkic został zachowany. Anuluj, aby zobaczyć najnowszy tekst.",
+    "editEmpty": "Wpisz tekst komentarza przed zapisaniem.",
+    "editHint": "Zapis jako zwykły tekst. Ctrl+Enter lub ⌘+Enter zapisuje zmiany. Escape anuluje edycję.",
+    "editPermission": "Możesz edytować tylko własne komentarze.",
+    "editRefused": "Nie udało się zapisać komentarza. Twój szkic został zachowany.",
+    "editReply": "Edytuj odpowiedź",
+    "editText": "Tekst komentarza",
+    "saveEdit": "Zapisz zmiany",
+    "deletedDraft": "Ten komentarz nie jest już tutaj dostępny. Twój niezapisany szkic został zachowany, aby można go było skopiować.",
+    "discardDraft": "Odrzuć szkic",
+    "recoveredDraft": "Niezapisany szkic komentarza",
+    "actions": "Działania komentarza",
+    "replyActions": "Działania odpowiedzi",
+    "deleteReply": "Usuń odpowiedź"
   },
   "contextMenu": {
     "ariaLabel": "Menu akcji AI",

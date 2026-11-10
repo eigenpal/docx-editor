@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Comment edit browser fixture</title>
+  </head>
+  <body>
+    <script type="module">
+      import '../packages/core/src/styles/editor.css';
+      import { commentEditFixture } from './comment-edit-fixture.ts';
+      const adapter =
+        new URLSearchParams(location.search).get('adapter') === 'vue' ? 'vue' : 'react';
+      if (adapter === 'react') {
+        const { default: RefreshRuntime } = await import('/@react-refresh');
+        RefreshRuntime.injectIntoGlobalHook(window);
+        window.$RefreshReg$ = () => {};
+        window.$RefreshSig$ = () => (type) => type;
+        window.__vite_plugin_react_preamble_installed__ = true;
+      }
+      const { mountCommentEditor } = await import(`./comment-edit-${adapter}-harness.ts`);
+      window.__commentEdit = await mountCommentEditor(new Uint8Array(commentEditFixture()));
+      if (!window.__commentEdit.isReviewPaneOpen())
+        window.__commentEdit.exec({ type: 'toggleReviewPane' });
+    </script>
+  </body>
+</html>

@@ -240,6 +240,7 @@ describe('the operation vocabulary declares which operations write', () => {
       'setHyperlink',
       'insertComment',
       'setCommentResolved',
+      'setCommentText',
       'replyToComment',
       'deleteComment',
       'acceptRevision',

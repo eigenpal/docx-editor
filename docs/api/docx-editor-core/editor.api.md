@@ -1497,6 +1497,11 @@ export interface CommentDraftChromeHandlers {
 export type CommentMarkerStyle = 'initials' | 'icon';
 
 // @public
+export interface CommentTextOptions extends HistoryGroupOptions {
+    readonly expectedText?: string;
+}
+
+// @public
 export const COMPARE_DOCUMENTS_ACCEPT = ".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 // @public
@@ -5094,6 +5099,10 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     saveSteps(): Generator<void, Uint8Array>;
     setCommentResolved(commentId: string, resolved: boolean, options?: PackageWriteOptions): boolean;
     setCommentText(commentId: string, text: string, options?: PackageWriteOptions): boolean;
+    setCommentTexts(edits: readonly {
+        readonly commentId: string;
+        readonly text: string;
+    }[], options?: PackageWriteOptions): boolean;
     settingsRoot(): OoxmlElement | null;
     storyParts(): readonly OoxmlPart[];
     storyText(scope: StoryScope): string | null;

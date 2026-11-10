@@ -9,15 +9,15 @@ import type { ReviewWriteIntent } from './paginated-surface-contract.ts';
  * comment it never got, which is a corrupt document produced silently. A refusal the user can see
  * is the better failure. Add an intent here only with a two-replica test behind it.
  *
- * Every named intent but `comment-edit` is admitted today: editing a comment's text waits for its
- * two-replica test. The set stays, and stays fail-closed, because it is what makes the next review
- * write declare itself before a replica carries it.
+ * Every admitted intent has two-replica coverage. The set stays fail-closed so each new
+ * review write declares itself before a replica carries it.
  */
 export const REPLICABLE_REVIEW_WRITES: ReadonlySet<ReviewWriteIntent> = new Set<ReviewWriteIntent>([
   'comment-add',
   'comment-delete',
   'comment-reply',
   'comment-resolve',
+  'comment-edit',
   'package-scoped',
   'revision-resolve',
   'revision-attribution',

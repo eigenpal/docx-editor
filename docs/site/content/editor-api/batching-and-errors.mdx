@@ -48,7 +48,7 @@ Each `sync(): Promise<void>` commits its writes atomically. Await each sync befo
 
 | Read | Value it reports |
 | --- | --- |
-| Load on an existing object, in the same sync as a write | The value from before the write, even if the load comes later in your code |
+| Load on an existing object, in the same sync as a write | The value before the write, except comment and reply content loads, which follow queue order |
 | Load on an object that a write in the sync returns | The value after all writes in the sync |
 | Load in a later sync | The written value |
 

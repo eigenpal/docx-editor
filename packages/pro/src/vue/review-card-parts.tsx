@@ -26,6 +26,8 @@ import {
   resolvedCommentIcon,
   reviewBadge,
 } from './review-icons.tsx';
+import { ReviewCommentActions } from './review-comment-actions.tsx';
+import { ReviewCommentText } from './review-comment-edit.tsx';
 import { revisionItemLabel } from './review-labels.ts';
 import { reviewRefusalFallbackKey, reviewRefusalLabelKey } from '../review/review-refusal.ts';
 import { ReviewActionSlot } from './review-action-slot.tsx';
@@ -199,6 +201,12 @@ export const ReviewSummary = markPart(
         if (props.asChild) return <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>;
         const custom = slots.default?.();
         if (custom) return <div {...shared}>{custom}</div>;
+        if (entry.kind === 'comment')
+          return (
+            <div {...shared}>
+              <ReviewCommentText entry={entry} />
+            </div>
+          );
         return (
           <div {...shared}>
             {replaced ? (
@@ -490,7 +498,7 @@ export const ReviewReplies = markPart(
                           <ReviewTime />
                         </div>
                         <div class="docx-review__actions">
-                          <ReviewDelete />
+                          <ReviewCommentActions entry={reply} />
                         </div>
                       </div>
                       <ReviewSummary />
@@ -565,7 +573,10 @@ const ReviewCardPreset = defineComponent({
                 {take('Reject', <ReviewReject />)}
                 {take('Resolve', <ReviewResolve />)}
                 {take('Reopen', <ReviewReopen />)}
-                {take('Delete', entry.kind === 'comment' ? <ReviewDelete /> : null)}
+                {entry.kind === 'comment' ? (
+                  <ReviewCommentActions entry={entry} hideDelete={'Delete' in overrides.value} />
+                ) : null}
+                {take('Delete', null)}
               </div>
             ) : null}
           </div>

@@ -188,14 +188,15 @@ describe('setCommentText on a loaded document', () => {
         const comments = () => editor.getReviewItems().filter((item) => item.kind === 'comment');
         const reply = comments().find((item) => item.parentId !== undefined)!;
         const root = comments().find((item) => item.parentId === undefined)!;
+        editor.setAuthor('Grace');
         expect(editor.setCommentText(reply.key, 'Yes, in every state')).toEqual({
           ok: true,
           changed: true,
         });
         for (const reopen of [false, true]) {
           if (reopen) editor.load(await editor.save());
-          const [first, second] = [root, reply].map(
-            (card) => comments().find((item) => item.id === card.id)!
+          const [first, second] = [root, reply].map((card) =>
+            comments().find((item) => item.id === card.id)!
           );
           expect(first).toMatchObject({ text: 'Is it free?', resolved: true });
           expect(second).toMatchObject({
@@ -241,7 +242,7 @@ describe('setCommentText reports what the session wrote', () => {
     const item = {
       kind: 'comment',
       id: '7',
-      comment: {},
+      comment: { author: 'Reviewer', blocks: [] },
       range: null,
       resolved: false,
       replyIds: [],
@@ -258,10 +259,16 @@ describe('setCommentText reports what the session wrote', () => {
           return true;
         },
         packageRevision: () => revision,
+        currentPackage: () => ({
+          mainDocumentPart: '/word/document.xml',
+          parts: new Map(),
+          relationships: new Map(),
+        }),
       },
     } as unknown as PaginatedSurface;
     const deps = {
       reviewEnabled: true,
+      author: () => 'Reviewer',
       historyGroups: {
         validate: () => null,
         run: (_surface: unknown, _command: unknown, _options: unknown, write: () => unknown) =>
@@ -289,3 +296,27 @@ describe('setCommentText reports what the session wrote', () => {
     expect(bumps()).toBe(1);
   });
 });
+
+test(
+  'only the configured author edits a comment, and stale drafts do not overwrite it',
+  withEditor((editor) => {
+    const key = commentOnDelivery(editor);
+    editor.setAuthor('Another reviewer');
+    expect(editor.setCommentText(key, 'Not mine')).toMatchObject({ ok: false, code: 'locked' });
+    editor.setAuthor(undefined);
+    expect(editor.setCommentText(key, 'Unknown author')).toMatchObject({
+      ok: false,
+      code: 'locked',
+    });
+    editor.setAuthor('Reviewer');
+    expect(
+      editor.setCommentText(key, 'Newer version', { expectedText: 'Is delivery free everywhere?' })
+    ).toEqual({ ok: true, changed: true });
+    expect(
+      editor.setCommentText(key, 'Stale draft', { expectedText: 'Is delivery free everywhere?' })
+    ).toEqual({ ok: false, code: 'invalidArgs', reason: 'comment-text-changed' });
+    expect(textOf(editor, key)).toBe('Newer version');
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    expect(textOf(editor, key)).toBe('Is delivery free everywhere?');
+  })
+);

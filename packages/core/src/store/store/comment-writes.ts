@@ -1,3 +1,4 @@
+import { commentTextEditRefusal } from './comment-text-support.ts';
 import { commentPackageContext } from './comment-package-edit.ts';
 // Adding a comment, and replying to one.
 //
@@ -53,7 +54,7 @@ import {
   validateCommentText,
 } from './comment-input-validate.ts';
 import { nextCommentId } from './comment-id-mint.ts';
-import { commentParagraph, element, wmlAttr } from './comment-body.ts';
+import { commentParagraph, element, wmlAttr, normalizeCommentBodyText } from './comment-body.ts';
 import { commentsOfPart } from './comment-reads.ts';
 import { commentBodyText } from './review-text.ts';
 import { rewriteExtendedRoot, stampThreadParaIds } from './comment-resolution-rewrites.ts';
@@ -865,7 +866,7 @@ export type SetCommentTextResult =
     }
   | {
       readonly ok: false;
-      readonly reason: TreeOpRejection | 'unknown-comment';
+      readonly reason: TreeOpRejection | 'unknown-comment' | 'unsupported-comment-body';
     };
 
 /** Every `w:comment` in the part that carries `commentId`. */
@@ -900,50 +901,67 @@ export function setCommentText(
   commentId: string,
   text: string
 ): SetCommentTextResult {
-  const rejection = validateCommentText(text);
-  if (rejection) {
-    return {
-      ok: false,
-      reason: rejection === 'resource-limit' ? 'resource-limit' : 'invalid-text',
-    };
-  }
+  return setCommentTexts(store, [{ commentId, text }]);
+}
+
+/** Replace several comment bodies in one transaction after validating every target. */
+export function setCommentTexts(
+  store: TreeDocumentStore,
+  edits: readonly { readonly commentId: string; readonly text: string }[]
+): SetCommentTextResult {
   const pkg = store.package;
   const commentsName = commentsPartNameFor(pkg, store.part.name);
   const part = pkg.parts.get(commentsName);
-  // Two records sharing an id are a file defect; editing the first would leave the reader
-  // showing whichever one it happens to read.
-  const records = part ? commentsOfPart(part).filter((record) => record.id === commentId) : [];
-  if (records.length !== 1) return { ok: false, reason: 'unknown-comment' };
-  const comment = records[0]!;
-  if (commentBodyText(comment) === text) return { ok: true, changed: false, change: null };
-  // Kept even when the reader refuses it: Word keys the thread state by the value as written.
-  const paraId =
-    comment.paraId ?? mintParaId(`${commentsName}#text-${commentId}`, paraIdsInPackage(pkg));
-
+  const records = part ? commentsOfPart(part) : [];
+  const pending: { commentId: string; text: string; paraId: string }[] = [];
+  for (const { commentId, text } of edits) {
+    const rejection = validateCommentText(text);
+    if (rejection)
+      return {
+        ok: false,
+        reason: rejection === 'resource-limit' ? 'resource-limit' : 'invalid-text',
+      };
+    const matches = records.filter((record) => record.id === commentId);
+    if (matches.length !== 1) return { ok: false, reason: 'unknown-comment' };
+    const unsupported = part && commentTextEditRefusal(part, commentId);
+    if (unsupported) return { ok: false, reason: unsupported };
+    const comment = matches[0]!;
+    const normalized = normalizeCommentBodyText(text);
+    const prior = pending.findIndex((edit) => edit.commentId === commentId);
+    if (prior >= 0) pending.splice(prior, 1);
+    if (commentBodyText(comment) === normalized) continue;
+    const paraId =
+      comment.paraId ?? mintParaId(`${commentsName}#text-${commentId}`, paraIdsInPackage(pkg));
+    pending.push({ commentId, text: normalized, paraId });
+  }
+  if (pending.length === 0) return { ok: true, changed: false, change: null };
   const result = store.transact((transaction) => {
     const ctx = commentPackageContext(transaction);
     ctx.applyPackage((current) => {
       const currentPart = current.parts.get(commentsName);
       if (!currentPart) return current;
-      const bound = withW14Binding(currentPart);
-      const target = commentsWithId(bound.part, commentId)[0];
-      if (!target) return current;
-      const paragraph = commentParagraph(
-        `${COMMENTS_PART}#comment-${commentId}`,
-        paraId,
-        text,
-        bound.prefix
-      );
-      const replaced = replaceNode(
-        bound.part,
-        target.id,
-        { ...target, children: [paragraph] } as OoxmlElement,
-        { deferValidation: true }
-      );
-      return replaced.ok ? withPart(current, replaced.part) : current;
+      let next = withW14Binding(currentPart);
+      for (const { commentId, text, paraId } of pending) {
+        const target = commentsWithId(next.part, commentId)[0];
+        if (!target) return current;
+        const paragraph = commentParagraph(
+          `${target.id}.edit-${store.revision}`,
+          paraId,
+          text,
+          next.prefix
+        );
+        const replaced = replaceNode(
+          next.part,
+          target.id,
+          { ...target, children: [paragraph] } as OoxmlElement,
+          { deferValidation: true }
+        );
+        if (!replaced.ok) return current;
+        next = { ...next, part: replaced.part };
+      }
+      return withPart(current, next.part);
     });
   });
-
   if (!result.ok) return { ok: false, reason: result.reason };
   return { ok: true, changed: true, change: result.change };
 }

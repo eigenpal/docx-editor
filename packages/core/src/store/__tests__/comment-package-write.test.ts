@@ -15,6 +15,7 @@ import {
   deletePackageComments,
   setPackageCommentResolved,
   setPackageCommentText,
+  setPackageCommentTexts,
 } from '../store/comment-package-write.ts';
 import { TreePackageStore } from '../store/tree-package-store.ts';
 import { W14, loadCommentFixture, markedComment } from './comment-lifecycle-test-support.ts';
@@ -184,19 +185,10 @@ describe('setPackageCommentText journals the new body', () => {
     expect(edited).toMatchObject({ ok: true, changed: true });
     flushPendingCanonicalJournals(store);
     expect(journals).toHaveLength(1);
-    // A comment written in this session has the node ids `addComment` gave it, and the new
-    // paragraph reuses them, so the journal carries only the text that changed. Replaying it on
-    // the old text gives the new one.
-    let replayed = 'a remark';
-    for (const effect of journals[0]!.effects) {
-      expect(effect.kind).toBe('spliceText');
-      if (effect.kind !== 'spliceText') continue;
-      replayed =
-        replayed.slice(0, effect.utf16Start) +
-        effect.insert +
-        replayed.slice(effect.utf16Start + effect.deleteCount);
-    }
-    expect(replayed).toBe('an edited remark');
+    // Each complete replacement has distinct paragraph nodes. Concurrent replacements
+    // therefore arbitrate as complete drafts instead of merging their character sequences.
+    expect(journals[0]!.effects.some((effect) => effect.kind === 'putNode')).toBe(true);
+    expect(journals[0]!.effects.some((effect) => effect.kind === 'spliceChildren')).toBe(true);
 
     journals.length = 0;
     expect(setPackageCommentText(store, added.commentId, 'an edited remark')).toMatchObject({
@@ -205,6 +197,43 @@ describe('setPackageCommentText journals the new body', () => {
     });
     flushPendingCanonicalJournals(store);
     expect(journals).toHaveLength(0);
+  });
+
+  test('a batch validates all targets and publishes one journal for multiple replacements', () => {
+    const store = openStore();
+    const journals: CanonicalPrimitiveJournal[] = [];
+    observeCanonicalPrimitiveJournal(store, (journal) => journals.push(journal));
+    const first = addPackageComment(store, {
+      anchor: { paragraphId: paragraphIdOf(store.bodyStore().part), start: 0, end: 5 },
+      author: 'Ada',
+      text: 'First',
+    });
+    const second = addPackageComment(store, {
+      anchor: { paragraphId: paragraphIdOf(store.bodyStore().part), start: 0, end: 5 },
+      author: 'Ada',
+      text: 'Second',
+    });
+    if (!first.ok || !second.ok) throw new Error('fixture comment creation failed');
+    flushPendingCanonicalJournals(store);
+    journals.length = 0;
+    const before = store.package;
+    expect(
+      setPackageCommentTexts(store, [
+        { commentId: first.commentId, text: 'Changed' },
+        { commentId: 'missing', text: 'Unknown' },
+      ])
+    ).toMatchObject({ ok: false, reason: 'unknown-comment' });
+    expect(store.package).toBe(before);
+    flushPendingCanonicalJournals(store);
+    expect(journals).toHaveLength(0);
+    expect(
+      setPackageCommentTexts(store, [
+        { commentId: first.commentId, text: 'Changed' },
+        { commentId: second.commentId, text: 'Second changed' },
+      ])
+    ).toMatchObject({ ok: true, changed: true });
+    flushPendingCanonicalJournals(store);
+    expect(journals).toHaveLength(1);
   });
 
   test('a comment loaded from the file is journaled as the nodes that replace its body', () => {

@@ -11,6 +11,7 @@ import {
   install,
 } from './installation.mjs';
 import { Peer } from './peer.mjs';
+import { commentEditScenario } from './comment-edit-scenario.mjs';
 import {
   mixedScenario,
   savedRoomScenario,
@@ -86,6 +87,8 @@ try {
       context.phase = 'saved-room';
       await savedRoomScenario(directory, candidate, fixture, trace);
       if (entry.format === info.format) {
+        context.phase = 'comment-edit';
+        await commentEditScenario(directory, candidate, fixture, trace);
         context.phase = 'basic-split';
         trace.length = 0;
         await basicSplitScenario(directory, candidate, fixture, trace);

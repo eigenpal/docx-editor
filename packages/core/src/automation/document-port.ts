@@ -46,6 +46,7 @@ export type AutomationCommentWrite =
       readonly author: string;
       readonly date?: string;
     }
+  | { readonly kind: 'edit'; readonly commentId: string; readonly text: string }
   | { readonly kind: 'resolve'; readonly commentId: string; readonly resolved: boolean }
   | {
       readonly kind: 'delete';

@@ -423,7 +423,22 @@
     "addComment": "Tambahkan komentar...",
     "replyPlaceholder": "Balas atau tambahkan orang lain dengan @",
     "reopen": "Buka kembali",
-    "resolve": "Selesaikan"
+    "resolve": "Selesaikan",
+    "edit": "Edit komentar",
+    "editConflict": "Komentar ini telah berubah. Draf Anda tetap disimpan. Batalkan untuk melihat teks terbaru.",
+    "editEmpty": "Masukkan teks komentar sebelum menyimpan.",
+    "editHint": "Disimpan sebagai teks biasa. Ctrl+Enter atau ⌘+Enter untuk menyimpan. Escape untuk membatalkan.",
+    "editPermission": "Anda hanya dapat mengedit komentar Anda sendiri.",
+    "editRefused": "Komentar ini tidak dapat disimpan. Draf Anda tetap disimpan.",
+    "editReply": "Edit balasan",
+    "editText": "Teks komentar",
+    "saveEdit": "Simpan perubahan",
+    "deletedDraft": "Komentar ini tidak lagi tersedia di sini. Draf Anda yang belum disimpan tetap tersedia untuk disalin.",
+    "discardDraft": "Buang draf",
+    "recoveredDraft": "Draf komentar yang belum disimpan",
+    "actions": "Tindakan komentar",
+    "replyActions": "Tindakan balasan",
+    "deleteReply": "Hapus balasan"
   },
   "revisions": {
     "paragraphMarkInserted": "Menyisipkan tanda paragraf",

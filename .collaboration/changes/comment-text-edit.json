@@ -1,9 +1,9 @@
 {
   "impact": "compatible",
   "fields": [],
-  "before": "A comment's text could not change after it was written: the only ways to correct it were to delete the thread or to add a reply.",
-  "after": "setCommentText replaces the body of one comment or reply in one observed package transaction, keeping the comment's attributes, the paraId of its last paragraph, its thread state and its range markers. A collaboration session refuses it.",
-  "reason": "The write emits existing node, attribute, child and text primitives on comments.xml, and the shared format does not change. Collaboration sessions refuse the edit until a two-replica test proves that it arrives whole, so participants cannot diverge on it.",
+  "before": "Posted comment bodies could not change. Correcting text required a reply or thread deletion.",
+  "after": "Comment and reply bodies support atomic plain-text replacement. The write preserves comment attributes, terminal paragraph identifiers, thread state, and document anchors. Concurrent replacements retain one complete draft. Multi-comment batches share one journal and one undo step.",
+  "reason": "The writer reuses existing paragraph replacement and split-lineage fields. Released materializers already select one surviving lineage. No field, encoding, reader, or repair rule changes. Real editor sessions cover concurrency, history, reconnect, deletion, thread metadata, and save/reopen. The mixed-version scenario verifies released readers and released reply and resolution writes against candidate replacements.",
   "tests": [
     "packages/core/src/store/__tests__/comment-text-writes.test.ts",
     "packages/core/src/store/__tests__/comment-package-write.test.ts",
@@ -11,7 +11,9 @@
     "packages/core/src/editor/__tests__/collaboration-review-writes.test.ts",
     "packages/core/src/store/__tests__/document-protection.test.ts",
     "packages/core/src/editor/__tests__/protected-document-commands.test.ts",
-    "packages/core/src/editor/__tests__/history-group-review.test.ts"
+    "packages/core/src/editor/__tests__/history-group-review.test.ts",
+    "packages/pro/src/collaboration/__tests__/comment-text-edit-editors.test.ts",
+    "scripts/collaboration/comment-edit-scenario.mjs"
   ],
   "changeset": "comment-text-edit",
   "migration": null
