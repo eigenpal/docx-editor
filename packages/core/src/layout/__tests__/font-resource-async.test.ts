@@ -51,7 +51,9 @@ test('async preparation preserves hash mismatch refusals without hashing twice',
   expect(hashes).toBe(0);
 });
 
-test('cancellation during hashing releases reserved bytes and skips later origins', async () => {
+test('cancellation before origin commit releases reserved bytes and skips later origins', async () => {
+  // Bun hashes synchronously. The await in origin validation exposes the abort boundary;
+  // this test does not exercise a pending browser Web Crypto digest.
   const controller = new AbortController();
   const reason = new Error('document replaced');
   let reserved = 0;

@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 
 // An isolated browser-like global keeps native Bun and Node hashing out of these tests.
+// This harness requires sha256.ts to remain import-free. If it gains imports, replace
+// this single-file transform with an isolated module loader that resolves its dependencies.
 const source = new Bun.Transpiler({ loader: 'ts' })
   .transformSync(readFileSync(new URL('../package/sha256.ts', import.meta.url), 'utf8'))
   .replace(/^export /gm, '');
