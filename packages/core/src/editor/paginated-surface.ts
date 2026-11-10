@@ -1,3 +1,4 @@
+import { pointerStoryTransitions } from './surface-pointer-stories.ts';
 import { invalidatePointTargets } from './editor-point-target.ts';
 import { bindSurfaceDragControllers } from './surface-drag-controllers.ts';
 import {
@@ -339,7 +340,6 @@ import { createImageOps } from './surface-image-ops.ts';
 import { createChartOps } from './surface-chart-ops.ts';
 import {
   createHeaderFooterScopeController,
-  openBlankHeaderFooter,
   isDocumentProtectionBatch,
 } from './surface-hf-editing.ts';
 import { createNoteOps } from './surface-note-ops.ts';
@@ -6133,9 +6133,23 @@ export function mountPaginatedSurface(
       },
       listeners: hostListeners,
       scale: () => scale,
+      // Pages of differing width are centred individually, so a landscape page among
+      // portrait ones is painted at an x its record does not carry. Without this the
+      // transform reads every point on such a page shifted by that offset.
       pageOffsetX: (pageIndex) => materializedExtent?.pageOffsetX.get(pageIndex) ?? 0,
-      // Flush deferred layout without following the typing caret. Geometry must describe
-      // the latest document without scrolling the page away from the pointer.
+      // Flushed: the pointer maps a client point to a MODEL offset, and a pass a commit
+      // deferred under input pressure would hand it the pre-edit offsets — a click during
+      // a burst then wrote a caret shifted by the inserted length. Only ever a real pass
+      // right after a deferring commit; every other call is a cheap no-op check. This is
+      // an event-handler-only dep — no render path reads it — so it cannot re-enter paint.
+      //
+      // WITHOUT the caret follow that pass would carry: it would scroll to the TYPING caret
+      // between the reader aiming and this reading the rect, and the press would land on
+      // whatever slid under it. BOTH halves: the pending nudge is spent, because a paint this
+      // flush defers to its own task would otherwise perform that scroll one task later —
+      // between the two presses of a double click — and the flag is the only thing that pass
+      // reads; the suppression covers the synchronous pass, where a page change would scroll
+      // without the flag. The press places the caret itself, so nothing is left to show.
       layout: () => {
         caretFollowPending = false;
         caretView.without(flushLayout);
@@ -6151,62 +6165,29 @@ export function mountPaginatedSurface(
       },
       cellSelection: () => cellSelection,
       setCellSelection: (next) => setCellSelection(next),
-      // Focusing the full page stack must not scroll it back to the first page.
+      // `preventScroll`: the pages layer is the WHOLE document tall, and focusing it scrolls
+      // it into view — to its top. The first click anywhere in a long document therefore
+      // threw the reader back to page 1 before the caret it had just placed could be seen.
+      // The caret is positioned from layout regardless, so nothing needs the browser's scroll.
       focus: () => pagesLayer.focus({ preventScroll: true }),
-      // The format painter applies only after the selection gesture finishes.
+      // An armed format painter paints the selection the gesture just produced. Word's
+      // gesture exactly: arm, then drag over the text that should take the formatting.
       onSelectionSettled: () => formatPainter.applyIfArmed(),
       activeHeaderFooter: () => pointerHeaderFooterState(hfOutsideBox()),
-      activeNote: () => {
-        const scope = noteOps?.activeNoteScope();
-        return scope
-          ? { scopeId: scope.id, pageIndex: noteOps?.activeNotePageIndex() ?? null }
-          : null;
-      },
-      enterHeaderFooter: (info) => {
-        // Flush typing before the shared scope controller checks and changes the story.
-        flushPendingInputAndLayout();
-        hfScope?.enterHeaderFooter({
-          rId: info.rId,
-          pageIndex: info.pageIndex,
-          // The section this PAGE is in. Omitted, the scope bound section 0, and every read
-          // that resolves geometry from the open story answered for the wrong page.
-          sectionIndex: sectionAtPage(info.pageIndex).sectionIndex,
-          kind: info.kind,
-          ...(info.position ? { position: info.position } : {}),
-        });
-      },
-      enterNote: (scopeId, position, pageIndex) => {
-        if (editingMode === 'view') return; // Viewing selects text but opens no story.
-        flushPendingInputAndLayout();
-        noteOps?.enterNote(scopeId, position, pageIndex);
-      },
-      exitNote: (restoreBody) => {
-        flushPendingInputAndLayout();
-        noteOps?.exitNote(restoreBody);
-      },
-      exitHeaderFooter: () => {
-        flushPendingInputAndLayout();
-        return hfScope?.exitHeaderFooter();
-      },
-      enterEmptyHeaderFooter: (kind, pageIndex) => {
-        // Creating the part is a WRITE — viewing mode refuses it like every other lane.
-        if (editingMode === 'view') return;
-        flushPendingInputAndLayout();
-        const scope = hfScope;
-        if (!scope) return;
-        openBlankHeaderFooter(
-          {
-            session,
-            layout: currentLayout,
-            sectionAtPage,
-            create: (op) => surface.applyHeaderFooterLifecycle?.(op),
-            flushLayout,
-            enter: (args) => scope.enterHeaderFooter(args),
-          },
-          kind,
-          pageIndex
-        );
-      },
+      ...pointerStoryTransitions({
+        viewing: () => editingMode === 'view',
+        flush: flushPendingInputAndLayout,
+        headerFooter: () => hfScope,
+        notes: () => noteOps,
+        sectionAtPage,
+        blankHeaderFooter: () => ({
+          session,
+          layout: currentLayout,
+          sectionAtPage,
+          create: (op) => surface.applyHeaderFooterLifecycle?.(op),
+          flushLayout,
+        }),
+      }),
       onContentControlWidget: (controlId, kind) => openContentControlWidget(controlId, kind),
       ...(options.reviewModel ? { onChangeBarToggle: reviewView.toggleByChangeBar } : {}),
       isReadOnlyPosition: (position) => tocAtPosition(session.part(), position) !== undefined,

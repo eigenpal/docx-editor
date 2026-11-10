@@ -1,9 +1,19 @@
 import {
+  schemaAttributeValue,
+  readDistanceTexts,
+  readRootDistanceTexts,
+  type DistanceTexts,
+} from './drawing-distance-attributes.ts';
+import {
   applyMoveInlineDrawing,
   validateMoveInlineDrawing,
 } from './tree-op-move-inline-drawing.ts';
 import { drawingAtomProjection } from '../package/drawing-atom-projection.ts';
-// Canonical drawing edits preserve unclaimed content and reject invalid mutations.
+// Canonical drawing mutations over the OOXML tree (typed-drawings-and-images task 11).
+//
+// Pure tree edits only — package media/relationship lifecycle stays in task 12. Each op
+// copy-modifies only the ancestor path, preserves unclaimed siblings/attributes/extensions,
+// validates before mutation, and publishes a typed rejection on failure.
 
 import {
   createNodeIdAllocator,
@@ -158,16 +168,6 @@ function replaceDrawingChild(
 
 function isElement(node: OoxmlNode): node is OoxmlElement {
   return node.kind !== 'textValue';
-}
-
-function schemaAttributeValue(
-  attributes: readonly OoxmlAttribute[],
-  localName: string
-): string | undefined {
-  for (const attribute of attributes) {
-    if (attribute.localName === localName && attribute.namespaceUri === '') return attribute.value;
-  }
-  return undefined;
 }
 
 function attr(localName: string, value: string): OoxmlAttribute {
@@ -1134,24 +1134,6 @@ function wrapElementForSpec(
     attributes: attrs,
     children,
   } as OoxmlElement;
-}
-
-type DistanceTexts = { top: string; right: string; bottom: string; left: string };
-
-/** Preserve unsignedInt spelling; malformed distances become 0, missing ones stay undefined. */
-function readDistanceTexts(element: OoxmlElement): Partial<DistanceTexts> {
-  const read = (name: string): string | undefined => {
-    const value = schemaAttributeValue(element.attributes, name);
-    if (value === undefined) return undefined;
-    return /^\d+$/.test(value) && Number(value) <= 0xffff_ffff ? value : '0';
-  };
-  return { top: read('distT'), right: read('distR'), bottom: read('distB'), left: read('distL') };
-}
-
-/** `wp:anchor` and `wp:inline` have no fallback, so a missing distance is written as 0. */
-function readRootDistanceTexts(element: OoxmlElement): DistanceTexts {
-  const { top = '0', right = '0', bottom = '0', left = '0' } = readDistanceTexts(element);
-  return { top, right, bottom, left };
 }
 
 function defaultPositionChildren(nextId: () => string, projection: DrawingProjection): OoxmlNode[] {
