@@ -1,7 +1,12 @@
 import { test, expect, afterEach } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor } from '../docx-editor.ts';
-import { canMoveInlineImage, moveInlineImage } from '../inline-image-drag.ts';
+import {
+  beginInlineImageDrag,
+  canMoveInlineImage,
+  cancelInlineImageDrag,
+  moveInlineImage,
+} from '../inline-image-drag.ts';
 import { PNG_1X1, decodePort } from './image-decode-harness.ts';
 import { findNode } from '../../store/package/ooxml-edit.ts';
 import { paragraphContainingNode } from '../../store/store/tree-op-nodes.ts';
@@ -131,4 +136,17 @@ test('refuses viewing, suggesting, locked pictures, and foreign targets without 
   expect(canMoveInlineImage(e, id)).toBe(false);
   expect(moveInlineImage(s, id, target, lockedRevision).committed).toBe(false);
   expect(s.session.packageRevision()).toBe(lockedRevision);
+});
+
+test('modified presses keep their selection meaning instead of starting a move', async () => {
+  const { e, id } = await setup();
+  const press = (init: PointerEventInit) =>
+    new PointerEvent('pointerdown', { button: 0, pointerId: 1, pointerType: 'mouse', ...init });
+  for (const modifier of ['shiftKey', 'ctrlKey', 'metaKey', 'altKey'] as const) {
+    const event = press({ [modifier]: true });
+    expect(beginInlineImageDrag(e, event, id)).toBe(false);
+    expect(event.defaultPrevented).toBe(false);
+  }
+  expect(beginInlineImageDrag(e, press({}), id)).toBe(true);
+  cancelInlineImageDrag(e.surface!);
 });

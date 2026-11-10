@@ -304,9 +304,12 @@ for (const adapter of ['react', 'vue'] as const) {
     });
 
     test('a missing target shows feedback and an accepted target clears it', async ({ page }) => {
-      const sheet = await page.locator('.docx-page').first().boundingBox();
-      if (!sheet) throw new Error('missing page geometry');
-      await startTextDrag(page, sheet.x + 20, sheet.y + 20);
+      // A late repaint can replace the page element just after load; wait for stable geometry.
+      let sheet: { x: number; y: number } | null = null;
+      await expect
+        .poll(async () => (sheet = await page.locator('.docx-page').first().boundingBox()))
+        .not.toBeNull();
+      await startTextDrag(page, sheet!.x + 20, sheet!.y + 20);
       await expect(page.locator('[data-docx-drop-rejection]')).toContainText('editable text');
       await page.screenshot({ path: test.info().outputPath('drop-rejection.png') });
       await expect(page.locator('[data-docx-drop-caret]')).toHaveCount(0);

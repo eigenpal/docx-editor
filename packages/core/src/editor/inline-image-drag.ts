@@ -138,6 +138,8 @@ export function createInlineImageDrag(
   }
   function begin(event: PointerEvent, id: string): boolean {
     if (event.button !== 0 || event.pointerType === 'touch') return false;
+    // A modified press keeps its text-selection meaning, such as Shift+click to extend.
+    if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false;
     const source = sourceOf(surface, id);
     if (!source) return false;
     cancel();
