@@ -130,11 +130,7 @@ export function ReviewCommentActions({
                 focusCommentDraft(root.current);
               }}
             >
-              {t(
-                entry.kind === 'comment' && entry.parentId !== undefined
-                  ? 'comments.editReply'
-                  : 'comments.edit'
-              )}
+              {t('comments.edit')}
             </button>
           ) : null}
           {!hideDelete ? (
@@ -155,11 +151,7 @@ export function ReviewCommentActions({
                 restore();
               }}
             >
-              {t(
-                entry.kind === 'comment' && entry.parentId !== undefined
-                  ? 'comments.deleteReply'
-                  : 'review.deleteComment'
-              )}
+              {t('comments.delete')}
             </button>
           ) : null}
         </div>

@@ -83,7 +83,7 @@ export function ReviewCommentText({ entry }: { readonly entry: ReviewItemView })
         rows={3}
         value={draft}
         readOnly={rail.readOnly || !own}
-        aria-describedby={`${id}-hint${message ? ` ${id}-error` : ''}`}
+        aria-describedby={message ? `${id}-error` : undefined}
         aria-invalid={empty || stale || refused || undefined}
         onChange={(event) => {
           if (state)
@@ -101,9 +101,6 @@ export function ReviewCommentText({ entry }: { readonly entry: ReviewItemView })
           }
         }}
       />
-      <span id={`${id}-hint`} className="docx-review__edit-hint">
-        {t('comments.editHint')}
-      </span>
       {message ? (
         <p id={`${id}-error`} role="status" className="docx-review__refused">
           {message}

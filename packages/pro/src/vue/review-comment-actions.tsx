@@ -162,11 +162,7 @@ export const ReviewCommentActions = defineComponent({
                     focusCommentDraft(root.value);
                   }}
                 >
-                  {t(
-                    entry.kind === 'comment' && entry.parentId !== undefined
-                      ? 'comments.editReply'
-                      : 'comments.edit'
-                  )}
+                  {t('comments.edit')}
                 </button>
               ) : null}
               {!props.hideDelete ? (
@@ -187,11 +183,7 @@ export const ReviewCommentActions = defineComponent({
                     restore();
                   }}
                 >
-                  {t(
-                    entry.kind === 'comment' && entry.parentId !== undefined
-                      ? 'comments.deleteReply'
-                      : 'review.deleteComment'
-                  )}
+                  {t('comments.delete')}
                 </button>
               ) : null}
             </div>

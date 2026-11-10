@@ -500,13 +500,11 @@
     "replyPlaceholder": "Responde o menciona a otros con @",
     "resolve": "Resolver",
     "reopen": "Volver a abrir",
-    "edit": "Editar comentario",
+    "edit": "Editar",
     "editConflict": "Este comentario ha cambiado. Se conserva tu borrador. Cancela para ver el texto más reciente.",
     "editEmpty": "Escribe el texto del comentario antes de guardarlo.",
-    "editHint": "Se guarda como texto sin formato. Ctrl+Intro o ⌘+Intro para guardar. Escape para cancelar.",
     "editPermission": "Solo puedes editar tus propios comentarios.",
     "editRefused": "No se pudo guardar este comentario. Se conserva tu borrador.",
-    "editReply": "Editar respuesta",
     "editText": "Texto del comentario",
     "saveEdit": "Guardar cambios",
     "deletedDraft": "Este comentario ya no está disponible aquí. Se conserva tu borrador sin guardar para que puedas copiarlo.",
@@ -514,7 +512,7 @@
     "recoveredDraft": "Borrador de comentario sin guardar",
     "actions": "Acciones del comentario",
     "replyActions": "Acciones de la respuesta",
-    "deleteReply": "Eliminar respuesta"
+    "delete": "Eliminar"
   },
   "revisions": {
     "paragraphMarkInserted": "Salto de párrafo insertado",

@@ -113,7 +113,7 @@ export const ReviewCommentText = defineComponent({
             rows={3}
             value={state.value?.text ?? ''}
             readonly={rail.value.readOnly || !own()}
-            aria-describedby={`${id}-hint${message ? ` ${id}-error` : ''}`}
+            aria-describedby={message ? `${id}-error` : undefined}
             aria-invalid={empty || stale() || (state.value?.refused ?? false) || undefined}
             onInput={(event) => {
               if (state.value)
@@ -135,9 +135,6 @@ export const ReviewCommentText = defineComponent({
               }
             }}
           />
-          <span id={`${id}-hint`} class="docx-review__edit-hint">
-            {t('comments.editHint')}
-          </span>
           {message ? (
             <p id={`${id}-error`} role="status" class="docx-review__refused">
               {message}

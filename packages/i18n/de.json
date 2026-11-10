@@ -424,13 +424,11 @@
     "replyPlaceholder": "Antworten oder andere mit @ erwähnen",
     "reopen": "Erneut öffnen",
     "resolve": "Auflösen",
-    "edit": "Kommentar bearbeiten",
+    "edit": "Bearbeiten",
     "editConflict": "Dieser Kommentar wurde geändert. Ihr Entwurf bleibt erhalten. Brechen Sie ab, um den aktuellen Text anzuzeigen.",
     "editEmpty": "Geben Sie vor dem Speichern einen Kommentartext ein.",
-    "editHint": "Speichert als Klartext. Strg+Enter oder ⌘+Enter zum Speichern. Escape zum Abbrechen.",
     "editPermission": "Sie können nur Ihre eigenen Kommentare bearbeiten.",
     "editRefused": "Dieser Kommentar konnte nicht gespeichert werden. Ihr Entwurf bleibt erhalten.",
-    "editReply": "Antwort bearbeiten",
     "editText": "Kommentartext",
     "saveEdit": "Änderungen speichern",
     "deletedDraft": "Dieser Kommentar ist hier nicht mehr verfügbar. Ihr ungespeicherter Entwurf bleibt zum Kopieren erhalten.",
@@ -438,7 +436,7 @@
     "recoveredDraft": "Ungespeicherter Kommentarentwurf",
     "actions": "Kommentaraktionen",
     "replyActions": "Antwortaktionen",
-    "deleteReply": "Antwort löschen"
+    "delete": "Löschen"
   },
   "contextMenu": {
     "ariaLabel": "KI-Aktionsmenü",

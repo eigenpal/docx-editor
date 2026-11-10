@@ -500,13 +500,11 @@
     "replyPlaceholder": "返信するか、@ でユーザーを追加",
     "resolve": "解決済みにする",
     "reopen": "再開",
-    "edit": "コメントを編集",
+    "edit": "編集",
     "editConflict": "このコメントは変更されました。下書きは保持されています。キャンセルすると最新のテキストを確認できます。",
     "editEmpty": "保存する前にコメントを入力してください。",
-    "editHint": "プレーンテキストで保存します。Ctrl+Enter または ⌘+Enter で保存、Escape でキャンセルします。",
     "editPermission": "自分のコメントのみ編集できます。",
     "editRefused": "コメントを保存できませんでした。下書きは保持されています。",
-    "editReply": "返信を編集",
     "editText": "コメントのテキスト",
     "saveEdit": "変更を保存",
     "deletedDraft": "このコメントはここでは利用できなくなりました。コピーできるように、未保存の下書きは保持されています。",
@@ -514,7 +512,7 @@
     "recoveredDraft": "未保存のコメントの下書き",
     "actions": "コメントの操作",
     "replyActions": "返信の操作",
-    "deleteReply": "返信を削除"
+    "delete": "削除"
   },
   "revisions": {
     "paragraphMarkInserted": "段落区切りを挿入",
