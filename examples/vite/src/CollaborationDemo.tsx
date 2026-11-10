@@ -10,11 +10,6 @@ import {
 } from '@docx-editor.dev/pro/react';
 import type { CollaborationSession } from '@docx-editor.dev/pro/react';
 import { exampleText as t } from '../../shared/example-text';
-import {
-  createCollaborationRoomId,
-  DEMO_SIGNALING_ENDPOINTS,
-  validateRoomId,
-} from '@docx-editor.dev/pro/collaboration/webrtc';
 import type { UseWebrtcCollaborationReturn } from '@docx-editor.dev/pro/react/webrtc';
 import { DemoHeaderButton } from './DemoHeaderButton';
 
@@ -94,7 +89,7 @@ function identityColor(name: string): string {
   return `var(--doc-review-author-${Math.abs(hash) % 8})`;
 }
 
-function roomIdFrom(value: string): string {
+function roomIdFrom(value: string, validateRoomId: (value: string) => string): string {
   const trimmed = value.trim();
   if (!trimmed) throw new Error(strings.enterRoom);
   try {
@@ -244,7 +239,11 @@ export function CollaborationControl({
     setError(null);
     try {
       const displayName = rememberName();
-      const roomId = kind === 'create' ? createCollaborationRoomId() : roomIdFrom(roomInput);
+      // Load the transport only when the user starts or joins a room.
+      const { createCollaborationRoomId, DEMO_SIGNALING_ENDPOINTS, validateRoomId } =
+        await import('@docx-editor.dev/pro/collaboration/webrtc');
+      const roomId =
+        kind === 'create' ? createCollaborationRoomId() : roomIdFrom(roomInput, validateRoomId);
       // Passed explicitly rather than left for the engine to read off the address bar, so the
       // URL only changes once a room actually exists.
       const secret = kind === 'create' ? createRoomSecret() : roomSecretFrom(roomInput);
