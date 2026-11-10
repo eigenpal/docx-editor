@@ -6,7 +6,6 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
-
 import { afterEach, describe, expect, test } from 'bun:test';
 import { createApp, createSSRApp, defineComponent, h, nextTick, shallowRef } from 'vue';
 import { renderToString } from 'vue/server-renderer';
@@ -452,6 +451,8 @@ describe('DocxEditorReview (Vue)', () => {
       );
       const reply = mounted.container.querySelector('[data-testid="review-reply"]')!;
       expect(reply.textContent).toContain('Why this wording?');
+      reply.querySelector<HTMLButtonElement>('[data-testid="review-comment-actions"]')!.click();
+      await flush();
       expect(reply.querySelector('[data-testid="review-delete"]')).toBeTruthy();
       expect(mounted.container.querySelectorAll('[data-testid="review-card"]').length).toBe(1);
     } finally {
