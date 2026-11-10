@@ -181,6 +181,9 @@ jobs:
       - name: Check file exports in the editor
         if: "matrix.check == 'browser'"
         run: bunx playwright test --config e2e/editor-smoke.config.ts e2e/file-export.interaction.spec.ts
+      - name: Check demo loading backgrounds
+        if: "matrix.check == 'browser'"
+        run: bunx playwright test --config e2e/editor-smoke.config.ts e2e/demo-loading-background.interaction.spec.ts
       - name: Check table revision grouping in the editor
         if: "matrix.check == 'review-tables'"
         run: bunx playwright test --config e2e/editor-smoke.config.ts e2e/table-review-grouping.interaction.spec.ts

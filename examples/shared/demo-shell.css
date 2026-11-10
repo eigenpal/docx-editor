@@ -680,6 +680,12 @@
   background: var(--demo-bg);
 }
 
+/* Loading is a separate editor root with its own default tokens. Keep its canvas
+   aligned with the demo viewport while the document opens. */
+.demo-app .docx-editor__loading--overlay {
+  --doc-bg: var(--demo-bg);
+}
+
 /* The vertical ruler scrolls with the document: an absolute child of the scroll container,
    with tick zero on the first page's top edge. */
 .demo-vruler {
