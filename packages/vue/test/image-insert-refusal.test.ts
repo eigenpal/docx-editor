@@ -55,6 +55,23 @@ describe('picture refusal (Vue)', () => {
     }
   });
 
+  test('an unreadable file shows a refusal without an unhandled rejection', async () => {
+    const view = mountEditorTree(() => h(DocxEditorToolbar));
+    await flush();
+    const before = view.editor().getDocumentHandle().revision;
+    const file = new File([], 'unreadable.png', { type: 'image/png' });
+    file.arrayBuffer = async () => {
+      throw new Error('read failed');
+    };
+    const input = view.container.querySelector('.docx-image-insert__input')!;
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    await flush();
+    expect(view.container.querySelector('[data-docx-dialog="imageInsertError"]')).not.toBeNull();
+    expect(view.editor().getDocumentHandle().revision).toBe(before);
+    view.unmount();
+  });
+
   test('popups.imageInsertError replaces the refusal dialog, and false shows nothing', async () => {
     const custom = mountEditorTree(() => h(DocxEditorToolbar), undefined, undefined, undefined, {
       popups: {

@@ -1,3 +1,4 @@
+import type { EditorDropEvent } from './editor-drop.ts';
 import type { ResolvedRevisionMarkup } from './revision-markup.ts';
 import type { EditorError, EditorSnapshot } from './editor.ts';
 import type { HistoryDiagnostic } from './editor-scope.ts';
@@ -12,6 +13,10 @@ import type { RevisionBatchSkipDetail } from './types.ts';
  * against these rather than against the snapshot.
  */
 export interface EditorEvents {
+  /** Accept a custom drag with synchronous `event.preventDefault()`. */
+  dragOver: (event: EditorDropEvent) => void;
+  /** Handle a custom drop with synchronous `event.preventDefault()` before asynchronous work. */
+  drop: (event: EditorDropEvent) => void;
   /** Local viewer preferences changed through the API or review dialog. */
   revisionMarkupChange: (settings: ResolvedRevisionMarkup) => void;
   /** A document mutation committed, with the ids it touched. */

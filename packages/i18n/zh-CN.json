@@ -953,7 +953,8 @@
       "invalidSignature": "该文件不是受支持的 PNG、JPEG 或 GIF 图像。",
       "oversize": "图像超过允许的最大大小。",
       "refused": "无法插入图像。",
-      "unsupportedFormat": "不支持插入此图像格式。"
+      "unsupportedFormat": "不支持插入此图像格式。",
+      "staleTarget": "文档或放置位置已更改。请重新拖放图片。"
     }
   },
   "imageProperties": {

@@ -953,7 +953,8 @@
       "invalidSignature": "Le fichier n'est pas une image PNG, JPEG ou GIF prise en charge.",
       "oversize": "L'image dépasse la taille maximale autorisée.",
       "refused": "L'image n'a pas pu être insérée.",
-      "unsupportedFormat": "Ce format d'image n'est pas pris en charge pour l'insertion."
+      "unsupportedFormat": "Ce format d'image n'est pas pris en charge pour l'insertion.",
+      "staleTarget": "Le document ou l’emplacement de dépôt a changé. Déposez à nouveau l’image."
     }
   },
   "imageProperties": {

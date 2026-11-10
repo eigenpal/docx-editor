@@ -782,7 +782,8 @@
       "invalidSignature": "The file is not a supported PNG, JPEG, or GIF image.",
       "unsupportedFormat": "This image format is not supported for insertion.",
       "oversize": "The image exceeds the maximum allowed size.",
-      "refused": "The image could not be inserted."
+      "refused": "The image could not be inserted.",
+      "staleTarget": "The document or drop position changed. Drop the image again."
     }
   },
   "imageProperties": {

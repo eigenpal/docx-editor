@@ -954,7 +954,8 @@
       "invalidSignature": "הקובץ אינו תמונת PNG, JPEG או GIF נתמכת.",
       "oversize": "התמונה חורגת מהגודל המרבי המותר.",
       "refused": "לא ניתן להוסיף את התמונה.",
-      "unsupportedFormat": "תבנית תמונה זו אינה נתמכת להוספה."
+      "unsupportedFormat": "תבנית תמונה זו אינה נתמכת להוספה.",
+      "staleTarget": "המסמך או מיקום השחרור השתנו. שחררו את התמונה שוב."
     }
   },
   "imageProperties": {

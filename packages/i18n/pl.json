@@ -953,7 +953,8 @@
       "invalidSignature": "Plik nie jest obsługiwanym obrazem PNG, JPEG ani GIF.",
       "oversize": "Obraz przekracza maksymalny dozwolony rozmiar.",
       "refused": "Nie można wstawić obrazu.",
-      "unsupportedFormat": "Ten format obrazu nie jest obsługiwany przy wstawianiu."
+      "unsupportedFormat": "Ten format obrazu nie jest obsługiwany przy wstawianiu.",
+      "staleTarget": "Dokument lub miejsce upuszczenia uległo zmianie. Upuść obraz ponownie."
     }
   },
   "imageProperties": {

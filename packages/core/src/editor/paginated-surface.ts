@@ -1,3 +1,5 @@
+import { invalidatePointTargets } from './editor-point-target.ts';
+import { bindSurfaceDrop } from './surface-drop.ts';
 import {
   createUnsupportedElementProjection,
   unsupportedElementPaintOptions,
@@ -493,6 +495,8 @@ export function mountPaginatedSurface(
   const remoteSelectionLayer = overlaySheet(mountDocument, 'docx-remote-selection-overlay');
   const bookmarkLayer = overlaySheet(mountDocument, 'docx-bookmark-overlay');
   const tableFurnitureLayer = overlaySheet(mountDocument, 'docx-table-furniture', false);
+  let drop: ReturnType<typeof bindSurfaceDrop> | null = null;
+  const dropLayer = overlaySheet(mountDocument, 'docx-drop-overlay');
   const tableSelectLayer = overlaySheet(mountDocument, 'docx-table-select-layer', false);
   let tableSelectHandle: SurfaceTableSelectHandle | null = null;
 
@@ -506,6 +510,7 @@ export function mountPaginatedSurface(
     highlightLayer,
     remoteSelectionLayer,
     overlayLayer,
+    dropLayer,
   ];
   container.replaceChildren(pagesLayer, ...sheets);
 
@@ -2714,6 +2719,8 @@ export function mountPaginatedSurface(
       removeExistingContentControlMenu();
       pictureWidget.cancel();
       pointer?.cancelGesture();
+      drop?.clear();
+      invalidatePointTargets(surface);
       tableInteraction.cancelDrag();
     },
     repaint: () => render(false),
@@ -2721,6 +2728,7 @@ export function mountPaginatedSurface(
   });
 
   function render(notifyChange = true): void {
+    drop?.clear();
     // Any render catches the screen up to `currentLayout`, so a paint deferred under input
     // pressure is performed BY this one rather than repeated a task later — a scroll repaint
     // during a deferral used to paint the same layout twice. The deferred render was also
@@ -4578,6 +4586,8 @@ export function mountPaginatedSurface(
     // contract because text arriving from OUTSIDE the editor — a paste from the clipboard,
     // whether the browser's own event delivered it or a menu row did — is not a lane the
     // input handlers should own privately.
+    pointAt: (x, y) =>
+      surface.activeScope().kind === 'frame' ? null : (pointer?.pointAt(x, y) ?? null),
     insertPlainText: (text: string) => insertPlainText(text),
 
     deleteBackward() {
@@ -5071,6 +5081,7 @@ export function mountPaginatedSurface(
       // whether the FILE can be round-tripped, and this says whether the user may type into
       // it right now. Both have to be true for an edit to land.
       hostEditable = editable;
+      if (!editable) drop?.clear();
       if (!editable) textboxEditing?.exit();
       applyEditableChrome();
     },
@@ -5345,6 +5356,7 @@ export function mountPaginatedSurface(
       // for a mode is entitled to hear the state back.
       const moved = editingMode !== mode;
       editingMode = mode;
+      if (moved) drop?.clear();
       // Viewing has no furniture EDITING scope. Switching while a header was open left the
       // body dimmed and inert under an active band and its whole options bar — a write UI
       // over a document that now refuses writes. Exiting repaints, so this runs first.
@@ -5825,6 +5837,7 @@ export function mountPaginatedSurface(
         legacyDropdownInteraction?.destroy();
         legacyCheckboxInteraction?.destroy();
         pointer?.destroy();
+        drop?.destroy();
         tableInteraction.destroy();
         tableSelectHandle?.destroy();
         navigation.destroy();
@@ -6120,23 +6133,10 @@ export function mountPaginatedSurface(
       },
       listeners: hostListeners,
       scale: () => scale,
-      // Pages of differing width are centred individually, so a landscape page among
-      // portrait ones is painted at an x its record does not carry. Without this the
-      // transform reads every point on such a page shifted by that offset.
+      // Mixed page widths carry the horizontal centering offset from paint.
       pageOffsetX: (pageIndex) => materializedExtent?.pageOffsetX.get(pageIndex) ?? 0,
-      // Flushed: the pointer maps a client point to a MODEL offset, and a pass a commit
-      // deferred under input pressure would hand it the pre-edit offsets — a click during
-      // a burst then wrote a caret shifted by the inserted length. Only ever a real pass
-      // right after a deferring commit; every other call is a cheap no-op check. This is
-      // an event-handler-only dep — no render path reads it — so it cannot re-enter paint.
-      //
-      // WITHOUT the caret follow that pass would carry: it would scroll to the TYPING caret
-      // between the reader aiming and this reading the rect, and the press would land on
-      // whatever slid under it. BOTH halves: the pending nudge is spent, because a paint this
-      // flush defers to its own task would otherwise perform that scroll one task later —
-      // between the two presses of a double click — and the flag is the only thing that pass
-      // reads; the suppression covers the synchronous pass, where a page change would scroll
-      // without the flag. The press places the caret itself, so nothing is left to show.
+      // Flush deferred layout without following the typing caret. Geometry must describe
+      // the latest document without scrolling the page away from the pointer.
       layout: () => {
         caretFollowPending = false;
         caretView.without(flushLayout);
@@ -6152,13 +6152,9 @@ export function mountPaginatedSurface(
       },
       cellSelection: () => cellSelection,
       setCellSelection: (next) => setCellSelection(next),
-      // `preventScroll`: the pages layer is the WHOLE document tall, and focusing it scrolls
-      // it into view — to its top. The first click anywhere in a long document therefore
-      // threw the reader back to page 1 before the caret it had just placed could be seen.
-      // The caret is positioned from layout regardless, so nothing needs the browser's scroll.
+      // Focusing the full page stack must not scroll it back to the first page.
       focus: () => pagesLayer.focus({ preventScroll: true }),
-      // An armed format painter paints the selection the gesture just produced. Word's
-      // gesture exactly: arm, then drag over the text that should take the formatting.
+      // The format painter applies only after the selection gesture finishes.
       onSelectionSettled: () => formatPainter.applyIfArmed(),
       activeHeaderFooter: () => pointerHeaderFooterState(hfOutsideBox()),
       activeNote: () => {
@@ -6168,10 +6164,7 @@ export function mountPaginatedSurface(
           : null;
       },
       enterHeaderFooter: (info) => {
-        // Viewing refuses this — in `createHeaderFooterScopeController`, which every entry
-        // lane goes through, not here where only the pointer would be covered.
-        // The pointer lane flips story scope too: land buffered typing first
-        // (see setActiveScope).
+        // Flush typing before the shared scope controller checks and changes the story.
         flushPendingInputAndLayout();
         hfScope?.enterHeaderFooter({
           rId: info.rId,
@@ -6223,6 +6216,18 @@ export function mountPaginatedSurface(
       ...(options.pointer ? { mode: options.pointer } : {}),
       ...(atomicNavigation ? { atomicInlineControls: true } : {}),
     }
+  );
+
+  drop = bindSurfaceDrop(
+    surface,
+    pagesLayer,
+    dropLayer,
+    hostListeners,
+    () => scale,
+    () =>
+      !destroyed && !hosting.parked() && hostEditable && editingMode !== 'view' && session.editable,
+    options.onDragEvent,
+    (next, caret) => setSelection(next, false, 'none', caret)
   );
 
   const tableInteraction = createSurfaceTableInteraction({

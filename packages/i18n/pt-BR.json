@@ -953,7 +953,8 @@
       "invalidSignature": "O arquivo não é uma imagem PNG, JPEG ou GIF compatível.",
       "oversize": "A imagem excede o tamanho máximo permitido.",
       "refused": "Não foi possível inserir a imagem.",
-      "unsupportedFormat": "Este formato de imagem não é compatível para inserção."
+      "unsupportedFormat": "Este formato de imagem não é compatível para inserção.",
+      "staleTarget": "O documento ou a posição de soltura mudou. Solte a imagem novamente."
     }
   },
   "imageProperties": {

@@ -1,3 +1,4 @@
+import type { EditorDropEvent } from '../contracts/editor-drop.ts';
 import type {
   DocumentChange,
   EditorError,
@@ -20,6 +21,8 @@ export function createEditorEvents(
   /** The host document `hostChange` last reported; `undefined` before the first report. */
   let reportedHost: Document | null | undefined = undefined;
   const handlers: { [E in keyof EditorEvents]: Set<EditorEvents[E]> } = {
+    dragOver: new Set(),
+    drop: new Set(),
     change: new Set(),
     selectionChange: new Set(),
     error: new Set(),
@@ -51,6 +54,10 @@ export function createEditorEvents(
     else notify();
   };
   return {
+    emitDragEvent(kind: 'dragOver' | 'drop', event: EditorDropEvent) {
+      // Acceptance must finish before the browser returns from the native event.
+      for (const handler of [...handlers[kind]]) handler(event);
+    },
     /** Keep host listeners outside a synchronous multi-batch preview commit. */
     defer<T>(run: () => T): T {
       deferring += 1;

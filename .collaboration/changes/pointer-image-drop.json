@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Image drops insert at the previous selection.",
+  "after": "Image drops capture pointer targets and reject stale document positions.",
+  "reason": "Drops use existing image and text operations without changing shared formats or presence addresses.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-image-drop-editors.test.ts"],
+  "changeset": "pointer-image-drop",
+  "migration": null
+}

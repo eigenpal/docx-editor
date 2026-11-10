@@ -953,7 +953,8 @@
       "invalidSignature": "Die Datei ist kein unterstütztes PNG-, JPEG- oder GIF-Bild.",
       "oversize": "Das Bild überschreitet die maximal zulässige Größe.",
       "refused": "Das Bild konnte nicht eingefügt werden.",
-      "unsupportedFormat": "Dieses Bildformat wird beim Einfügen nicht unterstützt."
+      "unsupportedFormat": "Dieses Bildformat wird beim Einfügen nicht unterstützt.",
+      "staleTarget": "Das Dokument oder die Ablageposition hat sich geändert. Ziehen Sie das Bild erneut an die gewünschte Stelle."
     }
   },
   "imageProperties": {

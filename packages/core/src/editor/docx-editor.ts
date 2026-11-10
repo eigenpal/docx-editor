@@ -1,3 +1,4 @@
+import { capturePointPosition, createEditorPointMembers } from './editor-point-target.ts';
 import { createUnsupportedElementState } from './unsupported-element-state.ts';
 import { createEditorEvents } from './editor-events.ts';
 import { createEditorDiagnostics, reportEditorFontError } from './editor-diagnostics.ts';
@@ -735,6 +736,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       ...preparedOpen.takePreparedOpen(bytes),
       ...(modules.collaboration ? { collaborationModel: modules.collaboration } : {}),
       onHostMoved: followHost,
+      onDragEvent: (kind, event, position) => {
+        if (surface && container)
+          events.emitDragEvent(kind, {
+            event,
+            position: capturePointPosition(surface, position),
+          });
+      },
       onTrackedChange: () => {
         if (reviewPaneOpen || !reviewPane.opensOnTrackedChange()) return;
         reviewPaneOpen = true;
@@ -2509,17 +2517,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     ...highlights.members,
     ...createReviewItemsAt({ frame: highlights.frame, placements: reviewPlacements }),
 
-    relayout(options?: { sync?: boolean }) {
-      // `layout()` flushes any commit the scheduler has not published yet; the surface
-      // repaints from its own publish path, so there is nothing further to trigger — which
-      // is what `sync: true` asks for, and the only thing this can do. Read rather than
-      // ignored: a declared parameter that vanishes into nothing is how a caller comes to
-      // believe it changed something.
-      void options?.sync;
-      surface?.layout();
-    },
-    retainSelection: () => (container ? (surface?.retainSelection() ?? null) : null),
-    releaseSelection: (pin) => surface?.releaseSelection(pin),
+    ...createEditorPointMembers(
+      () => surface,
+      () => !!container && !destroyed
+    ),
     focus(scope?: EditorScope) {
       // Same yield-window rule as `exec`: focusing the just-loaded document mounts it.
       openScheduler.flush();

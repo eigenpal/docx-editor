@@ -592,7 +592,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Both adapters let you insert, paste, and resize PNG, JPEG, and GIF images. Inserted images shrink proportionally when they exceed the available space. Place the caret in text before inserting another picture.',
+      'Both adapters insert, paste, and resize PNG, JPEG, and GIF images. Image drops show a caret and insert at the pointer in the active editing region. Images shrink proportionally to fit; custom drop handlers can supply image bytes.',
   },
   {
     id: 'images.anchored',

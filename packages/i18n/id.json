@@ -953,7 +953,8 @@
       "invalidSignature": "File tersebut bukan gambar PNG, JPEG, atau GIF yang didukung.",
       "oversize": "Gambar melebihi ukuran maksimum yang diizinkan.",
       "refused": "Gambar tidak dapat disisipkan.",
-      "unsupportedFormat": "Format gambar ini tidak didukung untuk penyisipan."
+      "unsupportedFormat": "Format gambar ini tidak didukung untuk penyisipan.",
+      "staleTarget": "Dokumen atau posisi pelepasan berubah. Lepaskan gambar lagi."
     }
   },
   "imageProperties": {

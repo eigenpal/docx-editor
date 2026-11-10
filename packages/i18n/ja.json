@@ -782,7 +782,8 @@
       "invalidSignature": "このファイルは対応する PNG、JPEG、GIF 画像ではありません。",
       "unsupportedFormat": "この形式の画像は挿入できません。",
       "oversize": "画像のサイズが上限を超えています。",
-      "refused": "画像を挿入できませんでした。"
+      "refused": "画像を挿入できませんでした。",
+      "staleTarget": "文書またはドロップ位置が変更されました。画像をもう一度ドロップしてください。"
     }
   },
   "imageProperties": {
