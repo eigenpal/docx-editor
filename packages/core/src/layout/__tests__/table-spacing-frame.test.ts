@@ -23,9 +23,14 @@ const cell = (text: string, tcPr = '') =>
   `<w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
 const row = (...texts: string[]) => `<w:tr>${texts.map((text) => cell(text)).join('')}</w:tr>`;
 
-function layoutTable(tblPr: string, rows = [row('a', 'b'), row('c', 'd')], pageHeight = 400) {
+function layoutTable(
+  tblPr: string,
+  rows = [row('a', 'b'), row('c', 'd')],
+  pageHeight = 400,
+  before = ''
+) {
   const result = readOoxmlPart(
-    `<w:document xmlns:w="${W}"><w:body><w:tbl><w:tblPr><w:tblW w:w="4800" w:type="dxa"/>` +
+    `<w:document xmlns:w="${W}"><w:body>${before}<w:tbl><w:tblPr><w:tblW w:w="4800" w:type="dxa"/>` +
       `${tblPr}</w:tblPr><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="2400"/></w:tblGrid>` +
       `${rows.join('')}</w:tbl><w:p/></w:body></w:document>`,
     { name: '/word/document.xml', contentType: 'app/xml' }
@@ -206,4 +211,64 @@ test("a row exception's side borders draw beside that row and move its cells in"
     expect(stroke.y).toBeCloseTo(y - 5, 6);
     expect(stroke.height).toBeCloseTo(height + 10, 6);
   }
+});
+
+const FRAMED = SPACING + `<w:tblBorders>${OUTER}</w:tblBorders>`;
+const lines = (count: number, tag: string) =>
+  Array.from({ length: count }, (_, i) => `<w:p><w:r><w:t>${tag}${i}</w:t></w:r></w:p>`).join('');
+const tallRow = (count: number) =>
+  `<w:tr><w:tc><w:tcPr><w:tcW w:w="2400" w:type="dxa"/></w:tcPr>${lines(count, 'm')}</w:tc>` +
+  `${cell('x')}</w:tr>`;
+const cellTop = (fragment: TableFragmentRecord, rowIndex = 0) =>
+  fragment.rows[rowIndex]!.cells[0]!.box.y - fragment.box.y;
+const closingRoom = (fragment: TableFragmentRecord) => {
+  const last = fragment.rows.at(-1)!.cells[0]!.box;
+  return fragment.box.y + fragment.box.height - (last.y + last.height);
+};
+
+test('a table that moves whole to the next page opens as at its start', () => {
+  // Thirteen lines leave the first page too little room for the first row.
+  const before = lines(13, 'p');
+  for (const [tblPr, top] of [
+    [FRAMED, 16],
+    [SPACING, 10],
+  ] as const) {
+    const [table] = layoutTable(tblPr, [row('a', 'b'), row('c', 'd'), row('e', 'f')], 150, before);
+    expect(table!.box.y).toBeCloseTo(0, 6);
+    expect(cellTop(table!)).toBeCloseTo(top, 6);
+    expect(table!.rows[0]!.box.y).toBeGreaterThanOrEqual(table!.box.y);
+  }
+});
+
+test('rows on a continuation page start inside the fragment, below its frame', () => {
+  const rows = Array.from({ length: 12 }, (_, index) => row(`r${index}`, `r${index}`));
+  const shd = '<w:shd w:val="clear" w:color="auto" w:fill="D9E2F3"/>';
+  for (const tblPr of [FRAMED + shd, SPACING + shd]) {
+    const [, next] = layoutTable(tblPr, rows, 150);
+    expect(next!.rows[0]!.box.y).toBeCloseTo(next!.box.y, 6);
+    for (const region of tableSpacingShadingRegions(next!))
+      expect(region.box.y).toBeGreaterThanOrEqual(next!.box.y - 1e-6);
+  }
+});
+
+test('a row that can split leaves its closing room on the page, splitting rather than crowding', () => {
+  const rows = [row('a', 'b'), tallRow(3), row('e', 'f')];
+  const [whole] = layoutTable(FRAMED, rows);
+  const middle = whole!.rows[1]!.cells[0]!.box;
+  // The page ends 3pt below the middle row: too little for the `s + bw` it closes with.
+  const fragments = layoutTable(FRAMED, rows, middle.y + middle.height + 3);
+  expect(fragments.length).toBeGreaterThan(1);
+  for (const fragment of fragments.slice(0, -1)) expect(closingRoom(fragment)).toBeCloseTo(8, 6);
+});
+
+test("a split row's parts close and reopen with the frame's room", () => {
+  // The table's last row closes with `2s + 2bw` on every page it reaches.
+  const fragments = layoutTable(FRAMED, [tallRow(20)], 150);
+  expect(fragments.length).toBeGreaterThan(1);
+  for (const fragment of fragments) expect(closingRoom(fragment)).toBeCloseTo(16, 6);
+  // Its rest keeps the first row's opening, which is wider than `s + bw`.
+  for (const fragment of fragments) expect(cellTop(fragment)).toBeCloseTo(16, 6);
+  // A middle row's rest opens `s + bw` below the frame, more than its own `2s`.
+  const [, rest] = layoutTable(FRAMED, [row('a', 'b'), tallRow(20), row('e', 'f')], 150);
+  expect(cellTop(rest!)).toBeCloseTo(8, 6);
 });

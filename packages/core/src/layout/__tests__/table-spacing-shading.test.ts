@@ -165,7 +165,7 @@ test('a cell merged down stays a hole in the rows it crosses', () => {
   expect(band!.holes).toHaveLength(4);
 });
 
-test('a row split across pages closes the gap only below its last part', () => {
+test('each part of a row split across pages closes with the gap the row closes with', () => {
   const tall = Array.from({ length: 12 }, (_, i) => `<w:p><w:r><w:t>line ${i}</w:t></w:r></w:p>`);
   const fragments = layoutTable({
     tblPr: SPACING + shd('D9E2F3'),
@@ -179,8 +179,10 @@ test('a row split across pages closes the gap only below its last part', () => {
     const [region] = tableSpacingShadingRegions(fragment);
     return region!.box.height - fragment.rows[0]!.box.height;
   });
-  expect(heights.slice(0, -1).every((extra) => extra === 0)).toBe(true);
-  expect(heights.at(-1)).toBeCloseTo(10, 6);
+  // The table's last row: every part keeps the full 10pt gap below it, the page holding it.
+  for (const extra of heights) expect(extra).toBeCloseTo(10, 6);
+  for (const fragment of fragments)
+    expect(fragment.box.y + fragment.box.height).toBeLessThanOrEqual(100 + 1e-6);
 });
 
 test('a row band covers its own cells only, not columns skipped by gridBefore', () => {

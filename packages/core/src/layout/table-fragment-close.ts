@@ -90,8 +90,7 @@ export function closeTableFragmentRows(input: TableFragmentClose): {
   const closingPt = fragmentClosingGapPt(
     structure.cellSpacingPt,
     sourceRows.at(-1),
-    input.frameBottom - lastBottom,
-    last.hasContinuation
+    input.frameBottom - lastBottom
   );
   const fragment = annotateTableFragmentGeometry(
     {

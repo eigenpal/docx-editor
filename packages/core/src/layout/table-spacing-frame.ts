@@ -38,6 +38,17 @@ import { cellSpacingGapPt } from './table-cell-spacing.ts';
 import type { TableFragmentRecord, TableSpacingFrame } from './semantic-records.ts';
 import { shareRowFacts } from './table-row-facts.ts';
 import type { SemanticTableRow } from './semantic-table.ts';
+import { computeDoubleBorderMetricsPt } from './border-metrics.ts';
+
+/**
+ * The width of the band a rule draws against its edge. A double rule draws its whole band
+ * there, not the half a shared, centred rule takes from each side (`borderExtentPt`).
+ */
+function bandPt(edge: TableBorderSide | undefined): number {
+  if (edge?.state === 'edge' && edge.style === 'double')
+    return computeDoubleBorderMetricsPt(edge.widthPt).extentPt;
+  return borderExtentPt(edge);
+}
 
 /**
  * Each row of a spaced table with its frame insets. Rows share one record per position, so
@@ -50,9 +61,9 @@ export function withSpacingFrame(
 ): readonly SemanticTableRow[] {
   const gap = cellSpacingGapPt(cellSpacingPt);
   if (gap === 0 || rows.length === 0) return rows;
-  const outer = (side: 'top' | 'left' | 'bottom' | 'right') => borderExtentPt(borders[side]);
-  const insideH = borderExtentPt(borders.insideH);
-  const insideV = borderExtentPt(borders.insideV);
+  const outer = (side: 'top' | 'left' | 'bottom' | 'right') => bandPt(borders[side]);
+  const insideH = bandPt(borders.insideH);
+  const insideV = bandPt(borders.insideV);
   // The total gap at an edge never goes below zero.
   const inset = (extra: number) => Math.max(-gap, extra);
   const { top, left, bottom, right } = borders;
@@ -104,8 +115,8 @@ function withRowBorders(
   sides: Pick<TableBorderBox, 'left' | 'right'>
 ): Pick<TableSpacingFrame, 'leftPt' | 'rightPt' | 'rowBorders'> {
   return {
-    leftPt: base.leftPt + borderExtentPt(sides.left),
-    rightPt: base.rightPt + borderExtentPt(sides.right),
+    leftPt: base.leftPt + bandPt(sides.left),
+    rightPt: base.rightPt + bandPt(sides.right),
     rowBorders: sides,
   };
 }
@@ -150,7 +161,7 @@ export function spacedTableFrameBorders(
       ['right', sides.right],
     ] as const) {
       if (edge.state !== 'edge') continue;
-      const width = borderExtentPt(edge);
+      const width = bandPt(edge);
       strokes.push({
         side,
         role: 'edge',

@@ -83,19 +83,30 @@ export function spacedCellWidths(structure: SpacedTable): readonly number[] {
 }
 
 /**
- * The gap above a row's cells: twice the spacing and, above the table's first row unless it
- * continues or repeats on a later page, the frame. An exact-height row opens it too, inside
+ * Where a row of a spaced table opens: at the table's start or below another row (`start`),
+ * as the first whole row or header repeat of a fragment the table continues in (`break`), or
+ * as the rest of a row split across pages (`remainder`).
+ */
+export type SpacedRowOpening = 'start' | 'break' | 'remainder';
+
+/**
+ * The gap above a row's cells: twice the spacing and, above the table's first row, the frame.
+ * At a page break the rows sit the spacing plus the frame's rule from it instead; the rest
+ * of a split row keeps its own gap when that is wider. An exact-height row opens it inside
  * its height.
  */
 export function rowOpeningGapPt(
   row: { readonly spacingFrame?: SpacedTableFrame },
   spacingPt: number,
-  continued = false
+  opening: SpacedRowOpening = 'start'
 ): number {
   const gap = cellSpacingGapPt(spacingPt);
   if (gap === 0) return 0;
   const frame = row.spacingFrame;
-  return Math.max(0, gap + (frame?.first && !continued ? frame.topPt : 0));
+  const own = gap + (frame?.first ? frame.topPt : 0);
+  if (opening === 'start' || !frame) return Math.max(0, own);
+  const atBreak = gap + frame.breakTopPt;
+  return Math.max(0, opening === 'break' ? atBreak : Math.max(own, atBreak));
 }
 
 /**
@@ -133,22 +144,36 @@ export function sumCols(cols: readonly number[], from: number, to: number): numb
 }
 
 /**
- * The gap a fragment of a spaced table closes below its last row, `lastRow`: twice the
- * spacing and the frame, which is wider below the table's last row than at a page break; no
- * more than `roomPt`. A row split across pages (`splitRow`) closes with none.
+ * The gap a fragment of a spaced table closes below its last row, `lastRow`, split or whole:
+ * twice the spacing and the frame, which is wider below the table's last row than at a page
+ * break; no more than `roomPt`.
  */
 export function fragmentClosingGapPt(
   cellSpacingPt: number,
   lastRow: { readonly spacingFrame?: SpacedTableFrame } | undefined,
-  roomPt: number,
-  splitRow = false
+  roomPt: number
 ): number {
-  if (splitRow || !lastRow) return 0;
+  if (!lastRow) return 0;
   const gap = cellSpacingGapPt(cellSpacingPt);
   if (gap === 0) return 0;
   const frame = lastRow.spacingFrame;
   const extra = frame ? (frame.last ? frame.bottomPt : frame.breakBottomPt) : 0;
   return Math.max(0, Math.min(gap + extra, roomPt));
+}
+
+/**
+ * The room a row of a spaced table keeps free below it on a page, for the gap and frame its
+ * fragment closes with there (`fragmentClosingGapPt`). Spacing so wide that the row's
+ * opening and closing take half the page band or more is not reserved: no row could fit.
+ */
+export function closingReservePt(
+  cellSpacingPt: number,
+  row: { readonly spacingFrame?: SpacedTableFrame },
+  pageBandPt: number
+): number {
+  const closing = fragmentClosingGapPt(cellSpacingPt, row, Infinity);
+  if (closing === 0) return 0;
+  return closing + rowOpeningGapPt(row, cellSpacingPt) < pageBandPt / 2 ? closing : 0;
 }
 
 /** The gap a whole table leaves below its last row, with no bound below it. */
@@ -170,14 +195,4 @@ export function placeClosingCellSpacing(
   frameBottom: number
 ): void {
   flow.cursorY = Math.min(flow.cursorY + closingCellSpacingPt(structure), frameBottom);
-}
-
-/**
- * The extra space a continuation fragment of a spaced table opens below its frame's top
- * rule, beyond the gap above its first row.
- */
-export function continuationFrameTopPt(structure: {
-  readonly rows: readonly { readonly spacingFrame?: SpacedTableFrame }[];
-}): number {
-  return structure.rows[0]?.spacingFrame?.breakTopPt ?? 0;
 }

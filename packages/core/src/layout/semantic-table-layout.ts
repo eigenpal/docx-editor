@@ -179,27 +179,7 @@ export const MAX_TABLE_ROW_FRAGMENTS = 4096;
 /** A cell box never narrows below this, however wide a `w:tblCellSpacing` gap is stated. */
 export const MIN_CELL_BOX_PT = 1;
 
-/**
- * Why a table could not be paginated as authored.
- *
- * Each is a bound: a row taller than a page, a row that cannot be split, or a row producing more
- * fragments than the limit allows.
- */
-export type TablePaginationErrorCode =
-  'table-row-overheight' | 'table-row-split-unsupported' | 'table-row-fragment-limit';
-
-/**
- * Bounded table pagination failure. Prefer this over emitting a fragment that overflows
- * the page content box.
- */
-export class TablePaginationError extends Error {
-  readonly code: TablePaginationErrorCode;
-  constructor(code: TablePaginationErrorCode, message: string) {
-    super(message);
-    this.name = 'TablePaginationError';
-    this.code = code;
-  }
-}
+export { TablePaginationError, type TablePaginationErrorCode } from './table-pagination-error.ts';
 
 /** Coupled text-box layout and cache invalidation for a hosted-story table flow lane. */
 export interface HostedStoryFlowDeps {
@@ -214,6 +194,8 @@ export interface TableFlowDeps {
   readonly exactOpeningExtension?: { readonly row: SemanticTableRow; readonly pt: number };
   /** The current row already has the full page band (possibly below repeated headers). */
   readonly rowAtPageStart?: boolean;
+  /** A spaced table's row below its first opens a fragment the table continues in. */
+  readonly opensTableBreak?: true;
   readonly paragraphLineUnitPt?: number;
   /** Story paragraphs outside cells snap to `paragraphLineUnitPt`; see {@link withStoryLineGrid}. */
   readonly snapsStoryLines?: true;
@@ -1316,9 +1298,10 @@ export function layoutRowFragmentBounded(
     !isHeaderRepeat && !isContinuation && depth === 0 && cellSpacingPt === 0
       ? exactTerminalBorderPt(row, deps)
       : 0;
-  // The same spacing opens a gap above each row's cells: content starts that much lower and
-  // the table closes the gap below its last row. An exact row keeps its authored height.
-  const rowGapPt = rowOpeningGapPt(row, cellSpacingPt, isContinuation || isHeaderRepeat);
+  // The same spacing opens a gap above each row's cells, so content starts that much lower.
+  const opening =
+    isHeaderRepeat || deps.opensTableBreak ? 'break' : isContinuation ? 'remainder' : 'start';
+  const rowGapPt = rowOpeningGapPt(row, cellSpacingPt, opening);
   const deferredRowAnchors: DeferredRowAnchor[] = [];
   // Exact rows clip to their authored box; never flow past it even when the page allows more.
   const { flowMaxBottom, pageBottom } = rowFlowBounds(maxBottom, rowTop, exactHeightPt);
