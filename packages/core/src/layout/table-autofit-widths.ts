@@ -79,6 +79,7 @@ import { emptyColumnContent, type AutofitColumnContent } from './table-autofit-c
 export type { AutofitColumnContent } from './table-autofit-column-content.ts';
 import { resolveCjkTypography } from './cjk-typography.ts';
 import { withoutLineEndWhitespace } from './trailing-spaces.ts';
+import { paragraphSuppressesAutoHyphens, withHyphenationCuts } from './auto-hyphenation.ts';
 
 /**
  * What autofit needs from layout to measure each cell the way layout paints it.
@@ -339,6 +340,8 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
   const automaticSpacing = automaticAutofitSpacing(typography, measurer);
   let previousText: Parameters<typeof automaticSpacing>[3];
   const cjkBreaks = cjkAutofitBreaks(pieces, layoutInputs, measurer, styleCascade);
+  const hyphenates =
+    styleCascade?.autoHyphenation === true && !paragraphSuppressesAutoHyphens(layoutInputs.props);
   const { left, right, firstLine, hanging } = layoutInputs.indent;
   const tabs = withDefaultTabInterval(layoutInputs.tabStops, context.defaultTabStopPt);
   // Tab stops count from the leading indent, which is the right one in right-to-left text.
@@ -468,7 +471,7 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
       continue;
     }
     let from = 0;
-    for (const to of boundaries) {
+    for (const to of hyphenates ? withHyphenationCuts(piece.text, boundaries) : boundaries) {
       const candidate = piece.text.slice(from, to);
       from = to;
       if (candidate.length === 0) continue;

@@ -4501,6 +4501,8 @@ export interface StrikeoutStrokePt {
 // @public
 export interface StyleCascadeTable {
     readonly adjustLineHeightInTable?: true;
+    // @internal
+    readonly autoHyphenation?: true;
     readonly cacheToken: string;
     readonly defaultCharacterStyleId: string | null;
     readonly defaultParagraphStyleId: string | null;
