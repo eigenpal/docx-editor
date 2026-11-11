@@ -34,7 +34,11 @@ import {
 } from './ooxml-property-order.ts';
 import { attributesFitKind, isEmptyMarker, repairedRun } from './ooxml-run-repair.ts';
 import { WML_NAMESPACE_URI, validKnownKind } from './ooxml-shared.ts';
-import { storyEndsWithParagraph, withStoryEndParagraph } from './ooxml-story-end-repair.ts';
+import {
+  isWml as isWmlNamed,
+  storyEndsWithParagraph,
+  withStoryEndParagraph,
+} from './ooxml-story-end-repair.ts';
 import { displayedText, ownXmlSpace } from './ooxml-text-space.ts';
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 
@@ -84,11 +88,6 @@ function genericSubtree(node: OoxmlNode): OoxmlNode {
   if (node.kind === 'textValue') return node;
   return { ...node, kind: 'generic', children: node.children.map(genericSubtree) } as OoxmlNode;
 }
-
-const isWmlNamed = (node: OoxmlNode, localName: string): node is OoxmlElement =>
-  node.kind !== 'textValue' &&
-  node.namespaceUri === WML_NAMESPACE_URI &&
-  node.localName === localName;
 
 /** Run children that a run shows only once rebuilt: text holding elements, an insertion, a run. */
 const hidesContent = (node: OoxmlNode): boolean =>
@@ -140,7 +139,7 @@ export function repairedChildren(
   // and the fingerprint all hold the order a save writes. The test is the serializer's, by
   // name: a `w:rPr` under `w:ins` in math stays generic yet still saves in order.
   out = repairedPropertyChildren(opened.name.namespaceUri, opened.name.localName, out);
-  if (storyEndsWithParagraph(kind, opened.name)) return withStoryEndParagraph(out);
+  if (storyEndsWithParagraph(opened.name)) return withStoryEndParagraph(out);
   if (kind === 'paragraph') return paragraphChildren(out, id);
   if (kind === 'table') return tableChildren(out);
   if (kind === 'tableRow') return rowChildren(out);

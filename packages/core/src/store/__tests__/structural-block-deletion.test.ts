@@ -160,6 +160,19 @@ describe('deleteBlock refuses what it would break', () => {
     ).toBe(true);
   });
 
+  test('the last paragraph of a control after a table that ends the body stays', () => {
+    const sdt = (inner: string) => `<w:sdt><w:sdtPr/><w:sdtContent>${inner}</w:sdtContent></w:sdt>`;
+    const wrapped = load(`${PARAGRAPH('before')}${sdt(`${TABLE}${PARAGRAPH('in')}`)}`);
+    expect(refusal(wrapped, idsOfKind(wrapped, 'paragraph').at(-1)!)).toBe('story-end-paragraph');
+    // Removing the whole control after a final table needs its content kept.
+    const trailing = load(`${PARAGRAPH('before')}${TABLE}${sdt(PARAGRAPH('in'))}`);
+    const controlId = findByKind(trailing, 'contentControl');
+    const removed = (keepContent: boolean) =>
+      applyTreeOp(trailing, { op: 'removeContentControl', controlId, keepContent });
+    expect(removed(false)).toMatchObject({ ok: false, reason: 'story-end-paragraph' });
+    expect(removed(true).ok).toBe(true);
+  });
+
   test('a paragraph carrying a section mark stays', () => {
     const part = load(
       `<w:p><w:pPr><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:pPr></w:p>${PARAGRAPH('after')}`

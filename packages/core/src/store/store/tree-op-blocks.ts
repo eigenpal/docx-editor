@@ -12,7 +12,7 @@
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { findNode, parentNodeOf } from '../package/ooxml-edit.ts';
 import { flattenContentControls } from '../package/content-control-nodes.ts';
-import { storyEndsWithParagraph, storyEndsWithTable } from '../package/ooxml-story-end-repair.ts';
+import { removalEndsStoryWithTable } from '../package/ooxml-story-end-repair.ts';
 import { namedChild, paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
 import { planVerticalMergeHeadRepairs } from './tree-op-table-vmerge-removal.ts';
 import type { TreeOpRejection } from './tree-op-validate.ts';
@@ -115,15 +115,6 @@ function remainingChildrenOfKind(parent: OoxmlNode, kind: string, blockId: strin
   return parent.children.filter((child) => child.kind === kind && child.id !== blockId).length;
 }
 
-/** Whether removing child `blockId` of `parent` leaves a body, note or text box ending with a table. */
-function removalEndsStoryWithTable(parent: OoxmlNode, blockId: string): boolean {
-  if (parent.kind === 'textValue' || !storyEndsWithParagraph(parent.kind, parent)) return false;
-  if (storyEndsWithTable(parent.children)) return false;
-  return storyEndsWithTable(
-    parent.children.filter((child) => child.kind === 'textValue' || child.id !== blockId)
-  );
-}
-
 export function validateDeleteBlock(part: OoxmlPart, blockId: string): TreeOpRejection | null {
   if (typeof blockId !== 'string' || blockId.length === 0) return 'unknown-block';
   const block = findNode(part, blockId);
@@ -153,7 +144,9 @@ export function validateDeleteBlock(part: OoxmlPart, blockId: string): TreeOpRej
 
   // A body, note or text box ends with a paragraph, as a cell does: the read adds one after a
   // final table (`ooxml-story-end-repair.ts`), and a removal must not take it away again.
-  if (removalEndsStoryWithTable(parent, blockId)) return 'story-end-paragraph';
+  if (removalEndsStoryWithTable(blockId, (id) => parentNodeOf(part, id))) {
+    return 'story-end-paragraph';
+  }
 
   if (block.kind === 'tableRow' && remainingChildrenOfKind(parent, 'tableRow', blockId) === 0) {
     // A `w:tbl` with no `w:tr` has no content and no geometry. Removing the last row means

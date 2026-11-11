@@ -479,7 +479,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Insert tables and edit cell text with fixed or automatic column widths. Document settings control widths, indents, and cell spacing. Compatibility modes can change alignment and sizing.',
+      'Insert tables and edit cell text with fixed or automatic column widths. Document settings and compatibility modes control widths, indents, alignment, and cell spacing. A table that ends the document keeps an empty paragraph below it for the caret.',
   },
   {
     id: 'tables.rtl',
