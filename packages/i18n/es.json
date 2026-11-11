@@ -967,7 +967,8 @@
       "sw": "Cambiar tamaño de la esquina inferior izquierda",
       "w": "Cambiar tamaño del borde izquierdo",
       "nw": "Cambiar tamaño de la esquina superior izquierda"
-    }
+    },
+    "selectionShape": "Forma seleccionada"
   },
   "ruler": {
     "horizontal": "Regla horizontal",

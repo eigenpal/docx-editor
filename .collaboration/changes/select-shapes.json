@@ -7,7 +7,8 @@
   "tests": [
     "packages/pro/src/collaboration/__tests__/document-shape-selection.test.ts",
     "packages/core/src/editor/__tests__/shape-selection.test.ts",
-    "packages/core/src/store/__tests__/tree-drawing-shape-ops.test.ts"
+    "packages/core/src/store/__tests__/tree-drawing-shape-ops.test.ts",
+    "packages/core/src/editor/__tests__/shape-selection-reach.test.ts"
   ],
   "changeset": "select-shapes",
   "migration": null

@@ -82,8 +82,8 @@ export function surfacePointAt(
 
 /**
  * The body drawing behind the text that a press at a client point reaches, as the body's own
- * hit test resolves it: where no glyph lies under the point, page margins included. Null in
- * a note or a header or footer, over a front drawing, and over a read-only position.
+ * hit test resolves it: outside every text line, page margins included. Null in a note, on a
+ * header or footer band, over a front drawing, and over a read-only position.
  */
 export function behindDrawingAt(
   host: PointerHost,
@@ -104,8 +104,16 @@ export function behindDrawingAt(
   const box = page.box;
   if (x < box.x || x >= box.x + box.width || sheet.y < box.y || sheet.y >= box.y + box.height)
     return null;
-  if (findNoteAtSheetPoint({ ...layout, pages: [page] }, sheet, host.pageOffsetX)) return null;
+  const pageLayout = { ...layout, pages: [page] };
+  if (findNoteAtSheetPoint(pageLayout, sheet, host.pageOffsetX)) return null;
   const options = host.measurer() ? { measurer: host.measurer()! } : {};
+  // A press on a header or footer band belongs to that story (a double press opens it).
+  const story = findStoryAtSheetPoint(pageLayout, sheet, host.pageOffsetX);
+  if (
+    story &&
+    !storyHitYieldsToBody(layout, story, sheet, host.pageOffsetX, false, options.measurer)
+  )
+    return null;
   const point = { x: x - page.contentBox.x, y: sheet.y - page.contentBox.y };
   const hit = hitTestPage(layout, index, point, options);
   const drawing = hit?.drawing;

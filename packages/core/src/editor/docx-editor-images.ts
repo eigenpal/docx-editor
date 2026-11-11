@@ -13,6 +13,7 @@ import { reanchorMovedDrawing } from './drawing-reanchor.ts';
 import { preserveWrapExtentOps, type WrapExtentOverrides } from './image-wrap-extent.ts';
 import { reportCommandResult } from './command-reporting.ts';
 import { chartDrawingRefusal, drawingGate, type ChartGate } from './image-state-rules.ts';
+import { isShapeDrawing, shapeKeepsGeometrySize } from './shape-drawings.ts';
 export { imageContextEqual } from './image-state-rules.ts';
 // Selected-image derivation and image command dispatch for `createDocxEditor` (task 13).
 //
@@ -266,11 +267,7 @@ function capabilityFlags(
   const locks = chart === 'locked' ? { resize: true, move: true, changeAspect: true } : gateLocks;
   // An inline text box flows with its line: it resizes in place but is never dragged.
   const fixed = projection.kind === 'inline' && projection.textboxStory !== null;
-  // A DrawingML shape, line or group keeps its size in its own geometry too
-  // (`SHAPE_FRAME_EDITS`). A legacy VML shape keeps it in `style` alone, so it resizes.
-  const legacy = !!(projection.legacyGraphic || projection.textArt || projection.horizontalRule);
-  const shape =
-    chart === 'none' && projection.picture === null && !projection.textboxStory && !legacy;
+  const shape = shapeKeepsGeometrySize(projection, chart === 'none');
   return Object.freeze({
     canResize: !shape && !locks.resize && !projection.hidden,
     canMove: !fixed && !locks.move && !projection.hidden,
@@ -636,15 +633,15 @@ export function gateImageCommand(
   const record = resolveSelectedDrawingRecord(surface);
   const textbox = record && 'textboxStory' in record && record.textboxStory;
   if (
-    textbox &&
     (command.type === 'replaceImage' ||
       command.type === 'transformImage' ||
-      (command.type === 'setImageProperties' && command.hyperlink !== undefined))
+      (command.type === 'setImageProperties' && command.hyperlink !== undefined)) &&
+    (textbox || isShapeDrawing(surface, record))
   ) {
     return {
       ok: false,
       code: 'unsupported',
-      reason: 'this operation is not supported for textboxes',
+      reason: `this operation is not supported for ${textbox ? 'textboxes' : 'shapes'}`,
     };
   }
   if (command.type === 'replaceImage') {
@@ -1160,6 +1157,8 @@ export interface ImageOverlayScrollPort {
 export interface SelectedDrawingOverlayTarget {
   /** Keep the text area available for pointer editing through the frame. */
   readonly textbox?: boolean;
+  /** A shape, line or group: its frame is labelled as a shape, not as an image. */
+  readonly shape?: boolean;
   /**
    * False for a text box whose text takes no caret: rotated or vertical text, or a story
    * holding a table. Absent for a drawing that is not a text box.
@@ -1264,6 +1263,7 @@ export function selectedDrawingOverlayTargetOf(
   return Object.freeze({
     id: record.drawingNodeId,
     textbox: 'textboxStory' in record && !!record.textboxStory,
+    shape: isShapeDrawing(surface, record),
     ...textboxTextEditable(
       record,
       partOfNodeId(surface.session, record.drawingNodeId) ?? surface.session.part()

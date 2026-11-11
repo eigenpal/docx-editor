@@ -965,6 +965,7 @@
   },
   "imageOverlay": {
     "selection": "Selected image",
+    "selectionShape": "Selected shape",
     "locked": "This box cannot be moved or resized",
     "textLocked": "The text in this box cannot be edited",
     "handle": {

@@ -4372,6 +4372,7 @@ export interface SelectedDrawingOverlayTarget {
     readonly pageIndex: number;
     // (undocumented)
     readonly position: DrawingPositionInput | null;
+    readonly shape?: boolean;
     readonly textbox?: boolean;
     readonly textEditable?: boolean;
     // (undocumented)

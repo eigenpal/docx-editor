@@ -74,6 +74,7 @@ export function createDrawingGestures(deps: {
     deps.setIntent({ kind: 'pointer', drawingNodeId });
     return true;
   };
+  const pointOf = (event: PointerEvent) => deps.surface.pointAt(event.clientX, event.clientY);
   /** The behind-text drawing a press reaches where no text lies under it, if any. */
   const behindDrawingAt = (event: Event) =>
     isPointerEvent(event) && !event.shiftKey
@@ -128,7 +129,13 @@ export function createDrawingGestures(deps: {
           return;
         }
       }
-      deps.setIntent(drawingId ? { kind: 'pointer', drawingNodeId: drawingId } : { kind: 'none' });
+      // The painted box of a shape is wider than what it paints: a press beside a line, or
+      // inside a shape with no fill, is on the text, as hit testing decides.
+      const point = drawingId && isPointerEvent(event) ? pointOf(event) : null;
+      const reached = !point || point.hit.drawing?.drawingNodeId === drawingId;
+      deps.setIntent(
+        drawingId && reached ? { kind: 'pointer', drawingNodeId: drawingId } : { kind: 'none' }
+      );
     },
     onDrawingKeyGesture(event: Event): void {
       if (isKeyboardEvent(event) && NON_DESELECTING_KEYS.has(event.key)) return;

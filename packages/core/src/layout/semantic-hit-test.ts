@@ -1,3 +1,4 @@
+import { PATH_HIT_REACH, vectorShapeHit } from './vector-shape-hit.ts';
 import { beyondLine, gapOffset } from './line-edge-hit.ts';
 import { endsWithSpaceSlot, withoutTrailingZeroWidthSpaces } from './trailing-spaces.ts';
 import { drawingAtOffset, pictureEdgeX, pictureIsRtl } from './inline-picture-caret.ts';
@@ -256,7 +257,10 @@ export function hitTestPage(
   const frontHit = hitAnchoredDrawingAtPoint(frontDrawings, point, context.pageIndex);
   if (frontHit) return { ...frontHit, contentControlId };
   const textHit = bottomToTopHit(layout, resolveBlocks(page.fragments, point, context, null));
-  if (textHit?.onGlyphs) return { ...textHit, contentControlId };
+  // Anywhere in a line's box is on the text, so a drawing behind it takes the press only
+  // outside every line: in the margins, or in the space between paragraphs.
+  if (textHit && (textHit.onGlyphs || pointInTextLine(page.fragments, point)))
+    return { ...textHit, contentControlId };
   const behindHit = hitAnchoredDrawingAtPoint(behindDrawings, point, context.pageIndex);
   if (behindHit) return { ...behindHit, contentControlId };
   if (textHit) return { ...textHit, contentControlId };
@@ -296,6 +300,25 @@ export function hitTestPage(
     }
   }
   return null;
+}
+
+/**
+ * Whether a point lies in the box of a text line: on its words, past its end, or in an empty
+ * paragraph's line. Table cells count their own lines.
+ */
+function pointInTextLine(blocks: readonly BlockFragmentRecord[], point: HitPoint): boolean {
+  for (const block of blocks) {
+    if (block.kind === 'paragraph') {
+      if (!contains(paragraphContentBounds(block), point)) continue;
+      for (const line of block.lines)
+        if (point.y >= line.box.y && point.y < line.box.y + line.box.height) return true;
+    } else if (contains(block.box, point)) {
+      for (const row of block.rows)
+        for (const cell of row.cells)
+          if (contains(cell.box, point) && pointInTextLine(cell.blocks, point)) return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -503,6 +526,7 @@ function resolveParagraph(
     fragment.clipToBox ? fragment.box : undefined
   );
   if (!caretBox) return null;
+  const inBand = point.y >= line.box.y && point.y < line.box.y + line.box.height;
   return {
     position,
     caret: {
@@ -518,11 +542,7 @@ function resolveParagraph(
     cell,
     // The LINE's band, not the block's: a paragraph with trailing space is taller than its
     // text, and a point in that space is not on a glyph however far inside the block it is.
-    onGlyphs:
-      insideBox &&
-      resolved.withinSpan &&
-      point.y >= line.box.y &&
-      point.y < line.box.y + line.box.height,
+    onGlyphs: insideBox && resolved.withinSpan && inBand,
     // Filled by {@link hitTestPage} once the point is known; keep null on the inner path.
     contentControlId: null,
     drawing: resolved.drawing && resolved.withinSpan ? drawingHitIdentity(resolved.drawing) : null,
@@ -615,27 +635,40 @@ function pictureHit(drawing: InlineDrawingRecord, x: number, y: number): LineOff
   };
 }
 
-/**
- * How far, in points, a press reaches from the middle of a drawing that is thinner than
- * twice this on an axis, such as a straight line: it has no area of its own to press.
- */
-const THIN_DRAWING_REACH = 3;
-
 function hitBoundsContainDrawing(
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
   point: HitPoint
 ): boolean {
   if (drawing.accessibility.hidden) return false;
   const box = drawing.hitBounds;
-  const thinX = box.width < THIN_DRAWING_REACH * 2;
-  const thinY = box.height < THIN_DRAWING_REACH * 2;
-  const x = thinX ? box.x + box.width / 2 - THIN_DRAWING_REACH : box.x;
-  const y = thinY ? box.y + box.height / 2 - THIN_DRAWING_REACH : box.y;
-  const width = thinX ? THIN_DRAWING_REACH * 2 : box.width;
-  const height = thinY ? THIN_DRAWING_REACH * 2 : box.height;
-  if (point.x < x || point.x >= x + width || point.y < y || point.y >= y + height) return false;
-  // A thin drawing's clip is its own thin box, so the reach alone decides.
-  return thinX || thinY || pointInDrawingClip(point.x, point.y, drawing.geometry);
+  // A vector shape takes a press on what it paints: its fill, and its path or outline within
+  // reach. A press beside a line, or inside a shape with no fill, goes to the text.
+  const reach = PATH_HIT_REACH + maxStrokeHalfWidth(drawing);
+  if (
+    point.x < box.x - reach ||
+    point.x > box.x + box.width + reach ||
+    point.y < box.y - reach ||
+    point.y > box.y + box.height + reach
+  )
+    return false;
+  const vector = vectorShapeHit(drawing, point);
+  if (vector !== null) return vector;
+  if (
+    point.x < box.x ||
+    point.x >= box.x + box.width ||
+    point.y < box.y ||
+    point.y >= box.y + box.height
+  )
+    return false;
+  return pointInDrawingClip(point.x, point.y, drawing.geometry);
+}
+
+/** Half the widest outline a drawing's vector shape paints, in points; 0 for no shape. */
+function maxStrokeHalfWidth(drawing: InlineDrawingRecord | AnchoredDrawingRecord): number {
+  let widest = 0;
+  for (const component of drawing.vectorShape?.components ?? [])
+    widest = Math.max(widest, component.strokeWidthEmu);
+  return widest / 12_700 / 2;
 }
 
 /**

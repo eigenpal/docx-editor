@@ -378,7 +378,8 @@ export const ImageSelectionOverlay = defineComponent({
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();
         event.stopPropagation();
-        editor.exec({ type: 'deleteImage' });
+        // The frame goes with the drawing: the caret it leaves keeps the keyboard, for undo.
+        if (editor.exec({ type: 'deleteImage' }).ok) editor.focus();
         return;
       }
       if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
@@ -623,7 +624,9 @@ export const ImageSelectionOverlay = defineComponent({
               title={frameLabel}
               aria-description={frameLabel}
               role="group"
-              aria-label={t('imageOverlay.selection')}
+              aria-label={t(
+                current.shape ? 'imageOverlay.selectionShape' : 'imageOverlay.selection'
+              )}
               style={{
                 left: `${rect.left}px`,
                 top: `${rect.top}px`,

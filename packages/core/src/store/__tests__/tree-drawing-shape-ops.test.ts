@@ -6,10 +6,16 @@ import { describe, expect, test } from 'bun:test';
 import {
   readOoxmlPart,
   validateOoxmlPart,
+  type OoxmlDrawingNode,
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
+import {
+  DEFAULT_DRAWING_PROJECTION_LIMITS,
+  DEFAULT_SUPPORTED_MC_REQUIRES,
+  projectDrawing,
+} from '../package/drawing-projection.ts';
 import { applyTreeOp, type TreeDocOp } from '../store/tree-ops.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -155,6 +161,53 @@ describe('shape frame edits', () => {
     const edits = frameEdits(drawingOf(part).id);
     expect(outcome(part, edits.position!)).toBe('drawing-locked');
     expect(outcome(part, edits.delete!)).toBe('ok');
+  });
+
+  test('locks on the shape itself refuse the edits they name, as frame locks do', () => {
+    const shape = documentWith(
+      anchored(
+        SHAPE.replace('<wps:cNvSpPr/>', '<wps:cNvSpPr><a:spLocks noMove="1"/></wps:cNvSpPr>')
+      )
+    );
+    const shapeEdits = frameEdits(drawingOf(shape).id);
+    expect(outcome(shape, shapeEdits.position!)).toBe('drawing-locked');
+    expect(outcome(shape, shapeEdits.delete!)).toBe('ok');
+    const group = documentWith(
+      anchored(
+        GROUP.replace(
+          '<wpg:cNvGrpSpPr/>',
+          '<wpg:cNvGrpSpPr><a:grpSpLocks noSelect="1"/></wpg:cNvGrpSpPr>'
+        )
+      )
+    );
+    const groupEdits = frameEdits(drawingOf(group).id);
+    expect(outcome(group, groupEdits.delete!)).toBe('drawing-locked');
+    const line = documentWith(
+      anchored(
+        LINE.replace('<wps:cNvCnPr/>', '<wps:cNvCnPr><a:cxnSpLocks noMove="1"/></wps:cNvCnPr>')
+      )
+    );
+    expect(outcome(line, frameEdits(drawingOf(line).id).position!)).toBe('drawing-locked');
+  });
+
+  test('the projection reads the shape locks merged with the frame locks', () => {
+    const part = documentWith(
+      anchored(
+        SHAPE.replace('<wps:cNvSpPr/>', '<wps:cNvSpPr><a:spLocks noResize="1"/></wps:cNvSpPr>'),
+        { frameLocks: '<a:graphicFrameLocks noMove="1"/>' }
+      )
+    );
+    const projection = projectDrawing(drawingOf(part) as OoxmlDrawingNode, {
+      ownerPartName: '/word/document.xml',
+      supportedMcRequires: DEFAULT_SUPPORTED_MC_REQUIRES,
+      limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
+    });
+    expect(projection.locks).toEqual({
+      select: false,
+      move: true,
+      resize: true,
+      changeAspect: false,
+    });
   });
 });
 

@@ -61,6 +61,7 @@ import {
 import { chartDrawingOf, chartFrameEdit } from './tree-op-chart-drawing.ts';
 import { DIAGRAM_FRAME_EDITS } from './tree-op-diagram-drawing.ts';
 import { holdsDiagramGraphic, holdsShapeGraphic } from '../package/diagram-frame.ts';
+import { mergedDrawingLocks, shapeLocksOf } from '../package/drawing-shape-locks.ts';
 import { holdsChartGraphic } from '../package/mc-fallback-projection.ts';
 import {
   applyLegacyVmlGeometryOp,
@@ -292,15 +293,9 @@ export function drawingAnchorLocked(drawing: OoxmlDrawingNode): boolean {
   return !!anchor && parseOoxmlBoolean(schemaAttributeValue(anchor.attributes, 'locked')) === true;
 }
 
-/** The drawing's frame locks. `wp:anchor/@locked` fixes only its anchor paragraph. */
+/** The drawing's frame and shape locks (`mergedDrawingLocks`). */
 function effectiveLocks(anchor: OoxmlElement): DrawingLocks {
-  const frame = readFrameLocksFromTree(anchor);
-  return Object.freeze({
-    select: frame.select ?? false,
-    move: frame.move ?? false,
-    resize: frame.resize ?? false,
-    changeAspect: frame.changeAspect ?? false,
-  });
+  return mergedDrawingLocks(readFrameLocksFromTree(anchor), shapeLocksOf(anchor));
 }
 
 function lockBlocks(anchor: OoxmlElement, op: DrawingTreeDocOp['op']): TreeOpRejection | null {

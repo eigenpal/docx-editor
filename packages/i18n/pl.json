@@ -691,7 +691,8 @@
     },
     "selection": "Zaznaczony obraz",
     "locked": "Tego pola nie można przenieść ani zmienić jego rozmiaru",
-    "textLocked": "Tekstu w tym polu nie można edytować"
+    "textLocked": "Tekstu w tym polu nie można edytować",
+    "selectionShape": "Zaznaczony kształt"
   },
   "revisions": {
     "paragraphMarkInserted": "Wstawiono znak akapitu",

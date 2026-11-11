@@ -691,7 +691,8 @@
     },
     "selection": "Seçili görüntü",
     "locked": "Bu kutu taşınamaz veya yeniden boyutlandırılamaz",
-    "textLocked": "Bu kutudaki metin düzenlenemez"
+    "textLocked": "Bu kutudaki metin düzenlenemez",
+    "selectionShape": "Seçili şekil"
   },
   "revisions": {
     "paragraphMarkInserted": "Paragraf işareti eklendi",
