@@ -48,10 +48,11 @@ const RANGE_ENDS: ReadonlySet<string> = new Set([
   'customXmlMoveToRangeEnd',
 ]);
 
-const isRangeEnd = (node: OoxmlNode): boolean =>
-  node.kind !== 'textValue' &&
-  node.namespaceUri === WML_NAMESPACE_URI &&
-  RANGE_ENDS.has(node.localName);
+/** A range end after the table, or the whitespace between such markers. */
+const closesOnTable = (node: OoxmlNode): boolean =>
+  node.kind === 'textValue'
+    ? node.value.trim() === ''
+    : node.namespaceUri === WML_NAMESPACE_URI && RANGE_ENDS.has(node.localName);
 
 /** Node ids a removal takes away. */
 type Removed = ReadonlySet<string>;
@@ -157,13 +158,16 @@ export function withStoryEndParagraph(
     namespaceUri: WML_NAMESPACE_URI,
     localName: 'p',
     ...(last.prefix === undefined ? {} : { prefix: last.prefix }),
-    namespaceBindings: [],
+    // The block's own declaration of its prefix, when it has one, travels with the prefix.
+    namespaceBindings: last.namespaceBindings.filter(
+      (binding) => binding.prefix === (last.prefix ?? '')
+    ),
     attributes: [],
     children: [],
   } as OoxmlNode;
   // After the range ends that close on the table, so no range grows to cover the paragraph.
   let at = index + 1;
-  while (at < children.length && isRangeEnd(children[at]!)) at += 1;
+  while (at < children.length && closesOnTable(children[at]!)) at += 1;
   return [...children.slice(0, at), paragraph, ...children.slice(at)];
 }
 

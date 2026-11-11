@@ -131,4 +131,13 @@ describe('a story that ends with a table', () => {
     );
     expect(names(first(nested.root, 'tc'))).toEqual(['tbl:table']);
   });
+  test('a table with its own prefix declaration gives the paragraph that declaration', () => {
+    const part = read(
+      `<w:document xmlns:w="${W}"><w:body><w:p/>` +
+        TABLE.replaceAll('w:', 'x:').replace('<x:tbl>', `<x:tbl xmlns:x="${W}">`) +
+        '<w:sectPr/></w:body></w:document>'
+    );
+    expect(validateOoxmlPart(part)).toEqual({ ok: true });
+    expect(serializeOoxmlPart(part)).toMatch(/<\/w:tbl><w:p[ />]/);
+  });
 });
