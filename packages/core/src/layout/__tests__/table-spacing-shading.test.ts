@@ -225,3 +225,13 @@ test('a cell overlapping one merged down from above never turns back into fill',
   // The second band starts one gap before its own cell, so the merged hole is cut there.
   expect(second!.holes).toEqual([box(30, 30, 30, 40)]);
 });
+
+test('a positioned spaced table holds its closing gap, so its last band fills it', () => {
+  const position =
+    '<w:tblpPr w:vertAnchor="page" w:horzAnchor="page" w:tblpX="1440" w:tblpY="2880"/>';
+  const [table] = layoutTable({ tblPr: position + SPACING + shd('D9E2F3') });
+  const last = table!.rows.at(-1)!.box;
+  expect(table!.box.y + table!.box.height).toBeCloseTo(last.y + last.height + 10, 6);
+  const [region] = tableSpacingShadingRegions(table!);
+  expect(region!.box.y + region!.box.height).toBeCloseTo(last.y + last.height + 10, 6);
+});

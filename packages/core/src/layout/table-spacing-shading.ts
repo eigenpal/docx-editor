@@ -4,10 +4,11 @@
 // covers it: in the `w:tblCellSpacing` gaps between cells and between the cells and the table
 // edge. A cell without a fill of its own does not take it, so with no cell spacing the table
 // fill shows nowhere. Reference renderings agree on each of these in compatibility modes 14
-// and 15, and in a file that states no compatibility mode: an unshaded cell paints white over
-// a shaded table, with or without spacing; the gaps of a spaced table take the fill; a cell's
-// own fill paints over it; and a row's `w:tblPrEx` fill replaces the table's around that
-// row's cells.
+// and 15, and in a file that states no compatibility mode: an unshaded cell of a shaded table
+// shows what lies behind the table (the page, or an outer cell's fill), with or without
+// spacing; the gaps of a spaced table take the fill, the gap below the last row included, in
+// flow and positioned; a cell's own fill paints over it; a row's `w:tblPrEx` fill replaces the
+// table's around that row's cells; and a column a row skips by `w:gridBefore` takes none.
 //
 // The cascade follows `w:shd` everywhere else: the style chain's `w:tblPr`, base first, then
 // the table's own `w:tblPr`, then the row exception. A stated `auto` fill clears the layers

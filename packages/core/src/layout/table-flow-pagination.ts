@@ -25,7 +25,7 @@ import {
   type CellPlaceCursor,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
-import { placeClosingCellSpacing } from './table-cell-spacing.ts';
+import { closingCellSpacingPt, placeClosingCellSpacing } from './table-cell-spacing.ts';
 import { vMergePlanFor } from './table-vmerge-plan.ts';
 import {
   closingEdgePt,
@@ -987,7 +987,7 @@ export function* paginateTableInFlowSteps(
   const closingPt = placeClosingCellSpacing(flow, structure);
   const broken = pinnedBreak !== undefined || (textFlow && fragmentIndex > 0);
   wrapsBeside = broken && fragmentIndex > 0 && textTable.leavesPassage(structure, flow, tableLeft);
-  closeTableFragment(outOfFlow ? 0 : closingPt);
+  closeTableFragment(outOfFlow ? closingCellSpacingPt(structure) : closingPt);
   if (outOfFlow) flow.cursorY = bodyCursorY;
   else if (broken)
     flow.cursorY = textTable.resumeAfterBreak(structure, flow, wrapsBeside, fragmentTop);
