@@ -53,6 +53,8 @@ import {
 import { cloneWithNewIds, fromEdit, paragraphContainingNode, TEXT_DEPS } from './tree-op-nodes.ts';
 import { drawingEffect, drawingOpImpact, isValidXmlMetadata } from './tree-op-drawing-kinds.ts';
 import { chartDrawingOf, chartFrameEdit } from './tree-op-chart-drawing.ts';
+import { DIAGRAM_FRAME_EDITS } from './tree-op-diagram-drawing.ts';
+import { holdsDiagramGraphic } from '../package/diagram-frame.ts';
 import { holdsChartGraphic } from '../package/mc-fallback-projection.ts';
 import {
   applyLegacyVmlGeometryOp,
@@ -348,6 +350,7 @@ function drawingContext(
   if (
     projection.picture === null &&
     !chart &&
+    !(holdsDiagramGraphic(drawing) && DIAGRAM_FRAME_EDITS.has(operation)) &&
     !(
       projection.textboxStory &&
       (operation === 'resizeDrawing' ||
@@ -405,7 +408,8 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
       const anchor = anchorRootOf(op.drawing);
       if (!anchor) return 'not-a-drawing';
       // A chart drawing names a chart part that the same transaction adds (`insertChart`).
-      const chart = holdsChartGraphic(op.drawing);
+      // A diagram drawing keeps the parts its `dgm:relIds` name (`moveInlineDrawing`, a drag).
+      const chart = holdsChartGraphic(op.drawing) || holdsDiagramGraphic(op.drawing);
       const projection = chart ? null : projectionOf(part, op.drawing);
       if (!chart && (!projection || (projection.picture === null && !projection.textboxStory)))
         return 'not-a-picture-drawing';

@@ -6,11 +6,14 @@
 // size, position, wrap and alt text. Cropping, replacing, turning or bordering it as a
 // picture refuse, and a wrapped chart refuses every edit but delete, which would change one
 // branch alone. Delete removes the whole chart (`store/store/tree-op-chart-drawing.ts`).
+// A DrawingML diagram takes the same frame edits as a bare chart, and a resize also rescales
+// its saved drawing part (`store/store/tree-package-diagram-frame.ts`).
 
 import type { EditorCommand, ExecResult, SelectedImageState } from '../contracts/editor.ts';
 import type { DrawingLocks, DrawingProjection } from '../store/package/drawing-projection.ts';
 import { chartDrawingOf, chartFrameEdit } from '../store/store/tree-op-chart-drawing.ts';
 import { chartDrawingLocks } from '../store/store/tree-op-drawings.ts';
+import { diagramDrawingOf } from '../store/store/tree-op-diagram-drawing.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { partOfNodeId } from './surface-scope.ts';
 
@@ -27,6 +30,13 @@ export const CHART_DRAWING_REASON =
  */
 export const CHART_FRAME_REASON =
   'this drawing is a chart; only its size, position, wrap and alt text change';
+
+/**
+ * The engine's reason for a picture-only command on a DrawingML diagram. Adapters translate it
+ * through `DISABLED_REASON_KEYS` in `@docx-editor.dev/i18n`.
+ */
+export const DIAGRAM_FRAME_REASON =
+  'this drawing is a diagram; only its size, position, wrap and alt text change';
 
 /** Whether `drawingNodeId` names a chart: drawn, shown by its saved fallback, or a placeholder. */
 export function isChartDrawing(surface: PaginatedSurface, drawingNodeId: string): boolean {
@@ -46,6 +56,7 @@ export function drawingGate(
   projection: DrawingProjection
 ): { readonly chart: ChartGate; readonly locks: DrawingLocks } {
   const part = partOfNodeId(surface.session, drawingNodeId) ?? surface.session.part();
+  if (diagramDrawingOf(part, drawingNodeId)) return { chart: 'frame', locks: projection.locks };
   const target = chartDrawingOf(part, drawingNodeId);
   if (!target) return { chart: 'none', locks: projection.locks };
   return {
@@ -55,8 +66,8 @@ export function drawingGate(
 }
 
 /**
- * What a drawing is to the image commands: no chart, a chart that takes frame edits, or a
- * chart that takes only delete.
+ * What a drawing is to the image commands: no chart, a chart or diagram that takes frame
+ * edits, or a chart that takes only delete.
  */
 export type ChartGate = 'none' | 'frame' | 'locked';
 
@@ -83,6 +94,10 @@ export function chartDrawingRefusal(
 ): ExecResult | null {
   if (command.type === 'deleteImage') return null;
   const part = partOfNodeId(surface.session, drawingNodeId) ?? surface.session.part();
+  if (diagramDrawingOf(part, drawingNodeId)) {
+    if (!changesChartGraphic(command)) return null;
+    return { ok: false, code: 'unsupported', reason: DIAGRAM_FRAME_REASON };
+  }
   const target = chartDrawingOf(part, drawingNodeId);
   if (!target) return null;
   if (!chartFrameEdit(target, 'resizeDrawing'))

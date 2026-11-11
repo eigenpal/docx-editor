@@ -545,6 +545,15 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     input: import('../store/store/tree-package-images.ts').ApplyImagePropertiesInput
   ): import('../store/store/tree-package-images.ts').ImageIntentResult;
 
+  /**
+   * Apply drawing ops as one package undo unit. A resize of a DrawingML diagram also rescales
+   * the diagram's saved drawing part, so the saved layout matches the new frame.
+   */
+  applyDrawingFrameOps(
+    scope: StoryScope,
+    ops: readonly import('../store/store/tree-op-types.ts').DrawingTreeDocOp[]
+  ): import('../store/store/tree-package-images.ts').ImageIntentResult;
+
   /** Insert a chart, or edit the chart part behind a chart drawing, as one package undo unit. */
   charts(): import('../store/store/tree-package-charts.ts').ChartLanes;
 

@@ -1052,6 +1052,7 @@
     "pictureSelected": "Sebuah gambar dipilih. Letakkan kursor di teks untuk menyisipkan gambar.",
     "chartDrawing": "Ini adalah bagan. Anda dapat menghapusnya, tetapi tidak dapat mengeditnya sebagai gambar.",
     "chartFrame": "Ini adalah bagan. Anda dapat mengubah ukuran, posisi, pembungkusan teks, dan teks alternatifnya.",
+    "diagramFrame": "Ini adalah diagram. Anda dapat mengubah ukuran, posisi, pembungkusan teks, dan teks alternatifnya.",
     "chartClipboard": "Bagan hanya dapat disalin, dipotong, atau ditempel sendiri, tidak bersama konten lain.",
     "chartClipboardStale": "Bagan yang disalin tidak lagi tersedia. Salin bagan lagi.",
     "nothingToUndo": "Tidak ada yang dapat dibatalkan",

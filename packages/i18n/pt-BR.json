@@ -1052,6 +1052,7 @@
     "pictureSelected": "Uma imagem está selecionada. Coloque o cursor no texto para inserir uma imagem.",
     "chartDrawing": "Isto é um gráfico. Você pode excluí-lo, mas não pode editá-lo como uma imagem.",
     "chartFrame": "Isto é um gráfico. Você pode alterar o tamanho, a posição, a quebra de texto e o texto alternativo.",
+    "diagramFrame": "Isto é um diagrama. Você pode alterar o tamanho, a posição, a quebra de texto e o texto alternativo.",
     "chartClipboard": "Um gráfico só pode ser copiado, recortado ou colado sozinho, não com outro conteúdo.",
     "chartClipboardStale": "O gráfico copiado não está mais disponível. Copie o gráfico novamente.",
     "nothingToUndo": "Não há nada para desfazer",

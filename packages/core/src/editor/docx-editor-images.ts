@@ -287,14 +287,16 @@ function wrapOf(record: SelectedDrawingRecord): ImageWrapTarget {
 }
 
 /**
- * Image commands reach pictures, text boxes and charts (drawn, by their fallback, or as a
- * placeholder); the overlay offers handles on the same gate. A chart selects as an object.
+ * Image commands reach pictures, text boxes, charts (drawn, by their fallback, or as a
+ * placeholder) and diagrams (`chart` is not `none`); the overlay offers handles on the same
+ * gate. A chart or a diagram selects as an object.
  */
-const imageCommandsReach = (record: SelectedDrawingRecord): boolean =>
+const imageCommandsReach = (record: SelectedDrawingRecord, chart: ChartGate): boolean =>
   record.placeholderGraphicKind === null ||
   !!record.textboxStory ||
   record.placeholderGraphicKind === 'chart' ||
-  !!record.chart;
+  !!record.chart ||
+  chart !== 'none';
 
 /**
  * The selected image and what may be done to it, or null when nothing image-like is selected.
@@ -304,10 +306,10 @@ const imageCommandsReach = (record: SelectedDrawingRecord): boolean =>
 export function selectedImageStateOf(surface: PaginatedSurface | null): SelectedImageState | null {
   const record = resolveSelectedDrawingRecord(surface);
   if (!record) return null;
-  if (!imageCommandsReach(record)) return null;
   const projection = surface ? projectDrawingForRecord(surface, record) : null;
   if (!projection) return null;
   const { chart, locks } = drawingGate(surface!, record.drawingNodeId, projection);
+  if (!imageCommandsReach(record, chart)) return null;
   if (projection.hidden || locks.select) return null;
   const transform = record.transform;
   return Object.freeze({
@@ -1179,7 +1181,7 @@ function overlayCapabilityFlags(
   projection: DrawingProjection | null,
   chart: ChartGate
 ): Pick<SelectedDrawingOverlayTarget, 'canResize' | 'canMove' | 'aspectLocked'> {
-  if (!projection || projection.hidden || !imageCommandsReach(record)) {
+  if (!projection || projection.hidden || !imageCommandsReach(record, chart)) {
     return Object.freeze({ canResize: false, canMove: false, aspectLocked: true });
   }
   const caps = capabilityFlags(projection, chart);

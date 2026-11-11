@@ -104,7 +104,7 @@ For image movement, pointer placement, accepted formats, and custom drop handler
 | Drawing shapes | Display supported shapes with fills, outlines, and shadows. Additional effects require the [drawing module](/docs/2.x/pro/drawing); unsupported shapes show a placeholder. Shapes are read-only. | Preserved |
 | WMF and EMF | Display as images in the editor and as vectors in PDF with the drawing module. Failed conversions show placeholders; PDF export omits them and reports an error. These images are read-only. | Full |
 | Charts | Insert [charts](/docs/2.x/guides/charts), resize, move, and wrap them, and edit their type, elements, colors, and data. The [drawing module](/docs/2.x/pro/drawing) paints them in the editor and PDF. Unsupported charts use previews or placeholders; content locks and data bindings prevent chart edits. | Preserved |
-| DrawingML diagrams | Renders the saved diagram drawing. A diagram without its drawing needs the drawing module. Not editable. | Full |
+| DrawingML diagrams | Renders the saved diagram drawing. You can resize, move, wrap, and delete a diagram, but not edit its content. A diagram without its drawing needs the drawing module. | Full |
 | VML text paths | Renders with the drawing module. Without it, an inline text path shows a placeholder and a floating text path does not show. | Full |
 
 - Groups with unsupported effects or 3D properties keep their unsupported behavior as a whole. The editor does not render only their supported members.

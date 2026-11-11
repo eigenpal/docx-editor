@@ -46,6 +46,11 @@ export interface DocumentStyleEntry {
 }
 
 // @public
+export type DrawingTreeDocOp = Extract<TreeDocOp, {
+    readonly op: 'moveInlineDrawing' | 'insertDrawing' | 'replaceDrawingResource' | 'deleteDrawing' | 'resizeDrawing' | 'cropDrawing' | 'positionDrawing' | 'setDrawingWrap' | 'setDrawingMetadata' | 'setDrawingLocks' | 'transformDrawing';
+}>;
+
+// @public
 export interface DuplicateChartInput {
     // (undocumented)
     readonly actorId?: string;
@@ -166,6 +171,7 @@ export interface TreeDocxSession extends TreeDocxSessionView {
 
 // @public
 export interface TreeDocxSessionView extends HeadlessDocumentView {
+    applyDrawingFrameOps(scope: StoryScope, ops: readonly DrawingTreeDocOp[]): ImageIntentResult;
     applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult;
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
     applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope, options?: TreeApplyOptions): TreeApplyResult;
