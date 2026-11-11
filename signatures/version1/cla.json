@@ -311,6 +311,12 @@
       "id": 8381990,
       "signed_at": "2026-11-07T02:41:14Z",
       "pull_request_no": 1867
+    },
+    {
+      "name": "jamesashbourne-lawhive",
+      "id": 329042364,
+      "signed_at": "2026-11-11T11:59:17Z",
+      "pull_request_no": 1876
     }
   ]
 }
