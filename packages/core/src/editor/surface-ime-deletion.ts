@@ -14,9 +14,9 @@
 //     it disagrees with the caret.
 //
 // So the range is believed for HOW MUCH to delete, and only where it is anchored at a caret:
-// the model's, or the browser's own when a paint is still a commit behind the model (both
-// endpoints then map through the same older paint, so their distance still holds). The
-// deletion runs as that many ordinary Backspace (or Delete) steps at the MODEL caret. Every
+// the model's, or the browser's own (where they differ — a paint a commit behind, a caret the
+// keyboard parked — both endpoints map through the same page, so their distance still holds,
+// while their position does not). The deletion runs as that many ordinary Backspace (or Delete) steps at the MODEL caret. Every
 // rule those keys follow — fields, content controls, list numbers and indents before a join,
 // table cells, tracked changes — applies unchanged, exactly as the same presses on a hardware
 // key would, and a step the document refuses ends the run rather than being retried. A range
@@ -99,7 +99,7 @@ function stepsBetween(
   return null;
 }
 
-/** `NodeFilter.SHOW_ELEMENT | SHOW_TEXT`, as a number: the constructor is per window. */
+/** `NodeFilter.SHOW_ELEMENT | SHOW_TEXT`; `NodeFilter` itself is not read from any window. */
 const SHOW_ELEMENT_AND_TEXT = 0x1 | 0x4;
 
 /**
@@ -125,8 +125,12 @@ function paintedLength(range: StaticRange): number | null {
   const scope = common.nodeType === Node.ELEMENT_NODE ? common : common.parentNode;
   if (!scope) return null;
   const walker = doc.createTreeWalker(scope, SHOW_ELEMENT_AND_TEXT);
+  // From the range's own start, not the top of a common ancestor that can be the whole layer.
+  walker.currentNode = range.startContainer;
   let length = 0;
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+  for (let node: Node | null = walker.currentNode; node; node = walker.nextNode()) {
+    // Past the end: every later node in document order is too.
+    if (node !== range.endContainer && live.comparePoint(node, 0) > 0) break;
     if (!live.intersectsNode(node)) continue;
     if (node.nodeType === Node.ELEMENT_NODE) {
       if ((node as Element).localName === 'br') length += 1;
@@ -176,7 +180,6 @@ export function imeDeletionPlan(
     const count = Math.min(steps, painted, MAX_IME_DELETION_STEPS);
     return count < 1 ? ONE_STEP : { kind: 'steps', count };
   }
-  // A selection read from a paint behind the model names offsets that have since moved.
   // The browser can select the range it deletes before it says so, and a keyboard can select a
   // word to delete it. Either way it is the browser's selection. Read from a paint behind the
   // model, or ahead of typing still queued, its offsets would name the wrong characters.
@@ -239,22 +242,25 @@ export function createInputMethodLane(deps: {
 } {
   return {
     hooks: {
-      deletionPlan: (event, direction) =>
-        imeDeletionPlan(
+      deletionPlan: (event, direction) => {
+        // Read once per event: in a header or note scope the order is a walk of the pages.
+        let order: readonly string[] | undefined;
+        return imeDeletionPlan(
           event,
           {
             root: deps.pagesLayer,
             selection: deps.selection(),
             textOf: deps.textOf,
             previousParagraph: (id) => {
-              const order = deps.paragraphOrder();
+              order ??= deps.paragraphOrder();
               return order[order.indexOf(id) - 1];
             },
             browserSelectionTrusted: deps.sync.browserSelectionTrusted(),
             paintCurrent: deps.paintCurrent(),
           },
           direction
-        ),
+        );
+      },
       runDeletionSteps: (count, step) =>
         runDeletionSteps(deps.revision, deps.selection, count, step),
       onInputMethodDeletion: () => {
