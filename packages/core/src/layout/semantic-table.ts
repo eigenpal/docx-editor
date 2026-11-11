@@ -109,7 +109,7 @@ import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
 import { conditionalTypesFor, readTableLook } from './table-conditional-formats.ts';
 import { cellShading } from './table-cell-shading.ts';
 import { withRowSpacingShading } from './table-spacing-shading.ts';
-import type { TableSpacingShading } from './semantic-records.ts';
+import type { TableSpacingFrame, TableSpacingShading } from './semantic-records.ts';
 import {
   wmlAttributeValue as attributeValue,
   wmlChildNamed as childNamed,
@@ -301,6 +301,8 @@ export interface SemanticTableRow {
   readonly cells: readonly SemanticTableCell[];
   /** The table's fill (its style, `w:tblPr`, then this row's `w:tblPrEx`) in spaced gaps. */
   readonly spacingShading?: TableSpacingShading;
+  /** How far a spaced table's frame moves this row's cells in (`table-spacing-frame.ts`). */
+  readonly spacingFrame?: TableSpacingFrame;
 }
 
 /**
@@ -367,9 +369,8 @@ export interface SemanticTableStructure {
   /**
    * `w:tblCellSpacing` (17.4.45) in points: the space on each side of every cell. Cells sit
    * twice this apart and from the table edge; the gaps come out of the table width, and each
-   * column gives up its share in proportion (`table-cell-spacing.ts`). Rows do not yet get
-   * the matching gaps above and below them, so a spaced table's rows stay as tall as they
-   * would be without it.
+   * column gives up its share in proportion (`table-cell-spacing.ts`). Each row opens the
+   * same gap above its cells, and the outer borders frame it all (`table-spacing-frame.ts`).
    */
   readonly cellSpacingPt: number;
   /**
@@ -887,22 +888,22 @@ function readTableStructureUncached(
   let columnWidthsPt = resolveColumns(placement.tableWidth);
   // Project the grid visually; cell arrays retain document order for keyboard traversal.
   const visualRows = physicalTableRows(rows, columnWidthsPt.length, bidiVisual);
+  const visualBorders = bidiVisual
+    ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
+    : tableBorders;
+  const collapsed = cellSpacingPt === 0;
   let contentRows = withTableContentBorders(
     visualRows,
-    bidiVisual
-      ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
-      : tableBorders,
+    visualBorders,
     columnWidthsPt.length,
-    cellSpacingPt === 0
+    collapsed
   );
   contentRows = withRowMinimumContentInsets(
     contentRows,
     visualRows,
-    bidiVisual
-      ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
-      : tableBorders,
+    visualBorders,
     columnWidthsPt.length,
-    cellSpacingPt === 0
+    collapsed
   );
   // A mode-15 percentage table whose rules share its grid lines takes its share less the rule.
   const percentRulePt = modernPercentRulePt(contentRows, {
@@ -945,12 +946,15 @@ function readTableStructureUncached(
     contentOffset ?? sideRules.outerRuleOffsetPt ?? placement.bidiRuleShiftPt;
   const autoOuterRulePt =
     contentOffset === undefined ? autoWidthOuterRulePt(contentRows, sideRuleShape) : 0;
-  const shadedRows = withRowSpacingShading(contentRows, {
-    stylePropertyNodes: tableStyle.tablePropertyNodes,
-    tableProperties: tblPr,
-    rowNodeAt: (index) => plans[index]?.node,
-    cellSpacingPt,
-  });
+  const shadedRows = withRowSpacingShading(
+    withSpacingFrame(contentRows, visualBorders, cellSpacingPt),
+    {
+      stylePropertyNodes: tableStyle.tablePropertyNodes,
+      tableProperties: tblPr,
+      rowNodeAt: (index) => plans[index]?.node,
+      cellSpacingPt,
+    }
+  );
   return {
     ...(bidiVisual ? { bidiVisual: true as const } : {}),
     columnWidthsPt: bidiVisual ? [...columnWidthsPt].reverse() : columnWidthsPt,
@@ -982,13 +986,12 @@ function readTableStructureUncached(
       : alignment,
     ...(float ? { float } : {}),
     cellSpacingPt,
-    tableBorders: bidiVisual
-      ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
-      : tableBorders,
+    tableBorders: visualBorders,
     defaultMargins: bidiVisual
       ? { ...defaultMargins, left: defaultMargins.right, right: defaultMargins.left }
       : defaultMargins,
   };
 }
 import { physicalTableRows, withTableContentBorders } from './table-content-borders.ts';
+import { withSpacingFrame } from './table-spacing-frame.ts';
 import { claimsWithinGrid, reachedGridColumns } from './table-reached-grid.ts';

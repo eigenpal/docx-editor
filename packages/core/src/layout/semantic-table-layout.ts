@@ -47,7 +47,7 @@ import {
 } from './drawing-layout.ts';
 import { authoredRowFields } from './table-row-record-fields.ts';
 import {
-  cellSpacingGapPt,
+  rowOpeningGapPt,
   cellSpacingGeometry,
   closingCellSpacingPt,
   sumCols,
@@ -1301,7 +1301,7 @@ export function layoutRowFragmentBounded(
   // `w:tblCellSpacing` (17.4.45) is the space on each side of every cell, so neighbouring
   // cells, and a cell and the table edge, sit twice that apart. The gaps come out of the
   // table's own width, and every column gives up its share in proportion to its width.
-  const gap = cellSpacingGeometry(cols, cellSpacingPt);
+  const gap = cellSpacingGeometry(cols, cellSpacingPt, row.spacingFrame);
   const defaultLineHeight = deps.measurer.lineMetrics(DEFAULT_RUN_STYLE).height;
   const heightRule = row.height;
   const exactHeightPt =
@@ -1315,7 +1315,7 @@ export function layoutRowFragmentBounded(
       : 0;
   // The same spacing opens a gap above each row's cells: content starts that much lower and
   // the table closes the gap below its last row. An exact row keeps its authored height.
-  const rowGapPt = exactHeightPt === undefined ? cellSpacingGapPt(cellSpacingPt) : 0;
+  const rowGapPt = rowOpeningGapPt(row, cellSpacingPt, isContinuation);
   const deferredRowAnchors: DeferredRowAnchor[] = [];
   // Exact rows clip to their authored box; never flow past it even when the page allows more.
   const { flowMaxBottom, pageBottom } = rowFlowBounds(maxBottom, rowTop, exactHeightPt);

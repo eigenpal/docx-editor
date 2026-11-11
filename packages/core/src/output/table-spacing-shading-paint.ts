@@ -6,10 +6,15 @@
 
 import { tableSpacingShadingRegions } from '../layout/table-spacing-shading.ts';
 import { resolveStrictHexFill } from '../layout/ooxml-shading.ts';
+import { spacedTableFrameBorders } from '../layout/table-spacing-frame.ts';
+import { applyCellBorders } from './semantic-paint-table-borders.ts';
 import type { TableFragmentRecord } from '../layout/semantic-records.ts';
 
 /** Class of a gap band: the leading layers of a table fragment, under its rows. */
 export const TABLE_SPACING_SHADING_CLASS = 'docx-table-spacing-shading';
+
+/** Class of a spaced table's frame: its outer borders, drawn around the fragment. */
+export const TABLE_SPACING_FRAME_CLASS = 'docx-table-spacing-frame';
 
 /** Each painted band's styles but its top, so a repaint that only moves it keeps the element. */
 const bandStyles = new WeakMap<Element, string>();
@@ -83,4 +88,35 @@ export function paintTableSpacingShading(
     bands.push(band);
   }
   return bands;
+}
+
+/**
+ * The layers a spaced table paints under its rows: the gap bands, then the frame its outer
+ * borders draw around the fragment (`table-spacing-frame.ts`). Bands of `previous` that paint
+ * the same are reused; the frame is one element, painted fresh.
+ */
+export function paintTableSpacingLayers(
+  document: Document,
+  fragment: TableFragmentRecord,
+  scale: number,
+  previous?: HTMLElement
+): HTMLElement[] {
+  const layers = paintTableSpacingShading(document, fragment, scale, previous);
+  const borders = spacedTableFrameBorders(fragment);
+  if (!borders) return layers;
+  const frame = document.createElement('div');
+  frame.className = TABLE_SPACING_FRAME_CLASS;
+  // Selection-inert like the gap bands: no caret or range endpoint lands in it.
+  frame.setAttribute('aria-hidden', 'true');
+  frame.setAttribute('contenteditable', 'false');
+  const style = frame.style;
+  style.position = 'absolute';
+  style.left = '0px';
+  style.top = '0px';
+  style.width = `${fragment.box.width * scale}px`;
+  style.height = `${fragment.box.height * scale}px`;
+  style.pointerEvents = 'none';
+  applyCellBorders(document, frame, borders, scale);
+  layers.push(frame);
+  return layers;
 }

@@ -11,6 +11,8 @@ import { shiftInlineDrawingRecord } from './drawing-layout.ts';
 import { exactOpeningExtensionPt, exactTerminalBorderPt } from './table-exact-terminal-border.ts';
 import { rememberMovableCopy } from './table-row-geometry-reuse.ts';
 import { relayOutMergedBottomToTop } from './table-cell-text-direction.ts';
+import { separatedCellBorders } from './table-spacing-frame.ts';
+import { cellDiagonalRecords } from './table-cell-diagonals.ts';
 import { republishAnchoredParagraphsInBlocks } from './table-anchor-republish.ts';
 import type { CellContentInsets } from './table-cell-geometry.ts';
 import { outerBottomInsetFloor, sharedCellContentInsets } from './cell-content-insets-memo.ts';
@@ -299,6 +301,9 @@ export function finalizeTableRows(
         }
   );
 
+  // A spaced table's cells draw their own whole boxes (`table-spacing-frame.ts`).
+  if (structure.cellSpacingPt > 0) return withSeparatedCellBorders(expanded, authoredById);
+
   // Border grid from authored structure (same row/cell order as laid-out fragment rows).
   // Header repeats use the same authored header row; match by cell id.
   const gridRows: BorderGridCell[][] = expanded.map((row) =>
@@ -371,6 +376,24 @@ export function finalizeTableRows(
         return { ...cell, borders: {}, paintInert: true };
       }
       return { ...cell, borders };
+    }),
+  }));
+}
+
+function withSeparatedCellBorders(
+  rows: readonly TableRowFragmentRecord[],
+  authoredById: ReadonlyMap<string, SemanticTableCell>
+): TableRowFragmentRecord[] {
+  return rows.map((row) => ({
+    ...row,
+    cells: row.cells.map((cell) => {
+      if (cell.paintInert || cell.vMergeContinue) return { ...cell, borders: {}, paintInert: true };
+      const authored = authoredById.get(cell.id);
+      const sides = authored?.contentBorders ?? authored?.borders;
+      const { width, height } = cell.box;
+      const borders = sides ? separatedCellBorders(sides, width, height) : {};
+      const diagonals = authored ? cellDiagonalRecords(authored.borders, width, height) : [];
+      return { ...cell, borders: diagonals.length > 0 ? { ...borders, diagonals } : borders };
     }),
   }));
 }

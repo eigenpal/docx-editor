@@ -77,7 +77,8 @@ export function withRowSpacingShading(
 /**
  * The bands a table fragment fills, one per shaded row, less every cell box that reaches into
  * it. A band runs from the row's first cell to its last, with the gap on each side, so cells
- * skipped by `w:gridBefore` or `w:gridAfter` take no fill. The last row's band runs on to the
+ * skipped by `w:gridBefore` or `w:gridAfter` take no fill; a row that reaches the table's
+ * edge fills out to its frame (`table-spacing-frame.ts`). The last row's band runs on to the
  * bottom of the fragment box, which holds the gap the table closes below its last row. A cell
  * merged down from an earlier row stays a hole in each row it crosses. Each cell is tested
  * only against the rows it can reach. Shared by the editor and PDF painters.
@@ -85,7 +86,9 @@ export function withRowSpacingShading(
  * @internal
  */
 export function tableSpacingShadingRegions(
-  fragment: Pick<TableFragmentRecord, 'rows' | 'box'>
+  fragment: Pick<TableFragmentRecord, 'rows' | 'box'> & {
+    readonly columnEdges?: TableFragmentRecord['columnEdges'];
+  }
 ): readonly TableSpacingShadingRegion[] {
   const regions: TableSpacingShadingRegion[] = [];
   if (!fragment.rows.some((row) => row.spacingShading)) return regions;
@@ -93,12 +96,13 @@ export function tableSpacingShadingRegions(
   const lastRow = fragment.rows.at(-1);
   // Below the last row the fragment box holds the gap the table closes there, if any.
   const fragmentBottom = fragment.box.y + fragment.box.height;
+  const columns = fragment.columnEdges ? fragment.columnEdges.length - 1 : Infinity;
   for (const row of fragment.rows) {
     const cells: LayoutBox[] = [];
     for (const cell of row.cells) if (!cell.paintInert) cells.push(cell.box);
     const shading = row.spacingShading;
     const bottom = row === lastRow ? fragmentBottom : row.box.y + row.box.height;
-    const band = shading && rowBand(row, shading, bottom);
+    const band = shading && rowBand(row, shading, bottom, columns);
     if (shading && band) {
       const holes: LayoutBox[] = [];
       // Cells merged down from different rows sit in different columns, as do a row's own
@@ -106,7 +110,23 @@ export function tableSpacingShadingRegions(
       for (const cell of open) addHole(holes, clip(cell, band), 0);
       const merged = holes.length;
       for (const cell of cells) addHole(holes, clip(cell, band), merged);
-      regions.push({ fill: shading.fill, box: band, holes });
+      // A band that continues the one above in the same fill and width joins it: two fills
+      // meeting on one edge leave a hairline seam where a viewer antialiases each.
+      const above = regions.at(-1);
+      const joins =
+        above &&
+        above.fill === shading.fill &&
+        Math.abs(above.box.x - band.x) < 0.001 &&
+        Math.abs(above.box.width - band.width) < 0.001 &&
+        Math.abs(above.box.y + above.box.height - band.y) < 0.001;
+      if (joins) {
+        const box = { ...above.box, height: band.y + band.height - above.box.y };
+        regions[regions.length - 1] = {
+          fill: shading.fill,
+          box,
+          holes: [...above.holes, ...holes],
+        };
+      } else regions.push({ fill: shading.fill, box: band, holes });
     }
     // Only a cell that reaches below its row can cover a later one.
     const rowBottom = row.box.y + row.box.height;
@@ -119,20 +139,26 @@ export function tableSpacingShadingRegions(
 function rowBand(
   row: TableRowFragmentRecord,
   shading: TableSpacingShading,
-  bottom: number
+  bottom: number,
+  columns: number
 ): LayoutBox | null {
   if (row.cells.length === 0) return null;
   let left = Infinity;
   let right = -Infinity;
-  for (const { box } of row.cells) {
+  let first = Infinity;
+  let end = 0;
+  for (const { box, gridColumn, gridSpan } of row.cells) {
     left = Math.min(left, box.x);
     right = Math.max(right, box.x + box.width);
+    first = Math.min(first, gridColumn);
+    end = Math.max(end, gridColumn + gridSpan);
   }
+  // A row reaching the table's edge fills out to the frame, which sits that much further out.
+  const frame = row.spacingFrame;
+  left -= shading.gapPt + (frame && first === 0 ? frame.leftPt : 0);
+  right += shading.gapPt + (frame && end >= columns ? frame.rightPt : 0);
   const height = Math.max(row.box.height, bottom - row.box.y);
-  return clip(
-    { x: left - shading.gapPt, y: row.box.y, width: right - left + 2 * shading.gapPt, height },
-    { ...row.box, height }
-  );
+  return clip({ x: left, y: row.box.y, width: right - left, height }, { ...row.box, height });
 }
 
 /**

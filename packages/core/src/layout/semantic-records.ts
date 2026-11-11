@@ -742,6 +742,8 @@ export interface TableRowFragmentRecord {
   readonly placesWhole?: boolean;
   /** The table fill this row shows in its cell-spacing gaps; see `table-spacing-shading.ts`. */
   readonly spacingShading?: TableSpacingShading;
+  /** The frame of a spaced table, which paint draws around the fragment. */
+  readonly spacingFrame?: TableSpacingFrame;
   readonly cells: readonly TableCellFragmentRecord[];
   readonly box: LayoutBox;
 }
@@ -756,6 +758,28 @@ export interface TableSpacingShading {
   readonly fill: string;
   /** The gap on each side of the row's cells, in points. */
   readonly gapPt: number;
+}
+
+/**
+ * The frame of a table with `w:tblCellSpacing`: its outer borders, drawn once around each
+ * fragment, and how far they move the outer cells in beyond the spacing gap, in points.
+ * `topPt` applies above the table's first row and `bottomPt` below its last; both are 0 on
+ * every other row. Shared by the rows of one table (`table-spacing-frame.ts`).
+ */
+export interface TableSpacingFrame {
+  /** Extra space between the table's left edge and its first cells. */
+  readonly leftPt: number;
+  /** Extra space between the table's last cells and its right edge. */
+  readonly rightPt: number;
+  /** Extra space above the table's first row; 0 on every other row. */
+  readonly topPt: number;
+  /** Extra space below the table's last row; 0 on every other row. */
+  readonly bottomPt: number;
+  /** The table's outer borders, which draw the frame. */
+  readonly borders: Pick<
+    import('./table-borders.ts').TableBorderBox,
+    'top' | 'left' | 'bottom' | 'right'
+  >;
 }
 
 /**

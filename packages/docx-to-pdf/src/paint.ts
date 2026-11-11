@@ -25,6 +25,7 @@ import {
   forEachSemanticDrawing,
   compoundBorderStrokesForExtentPt,
   runBorderStrokesForLine,
+  spacedTableFrameBorders,
   tableSpacingShadingRegions,
   type BlockFragmentRecord,
   type LayoutBox,
@@ -237,6 +238,18 @@ function decorations(
         const paths = [box, ...holes].map((r) => rect(r, x, y, pageHeight(page), true));
         out.push(`${color(fill)} rg ${paths.join(' ')} f*`);
       }
+      // A spaced table's frame: its outer borders around the fragment, over the gap fill.
+      for (const stroke of spacedTableFrameBorders(block)?.strokes ?? [])
+        out.push(
+          rule(
+            stroke,
+            stroke.color,
+            stroke.cssStyle,
+            x + block.box.x,
+            y + block.box.y,
+            pageHeight(page)
+          )
+        );
       // Complete the backgrounds before drawing shared borders. Later cells and
       // nested paragraph shading must not erase an earlier cell's owned edge.
       for (const row of block.rows)

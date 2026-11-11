@@ -201,6 +201,7 @@ export {
   type TableFragmentRecord,
   type TableRowFragmentRecord,
   type TableSpacingShading,
+  type TableSpacingFrame,
   type TextMeasurer,
   type TextOutline,
 } from './semantic-records.ts';
@@ -748,6 +749,7 @@ export {
   tableSpacingShadingRegions,
   type TableSpacingShadingRegion,
 } from './table-spacing-shading.ts';
+export { spacedTableFrameBorders } from './table-spacing-frame.ts';
 export { paragraphMarkDeleted, revisionRemovesParagraph } from './revision-visibility.ts';
 export {
   MAX_TABLE_ROW_FRAGMENTS,

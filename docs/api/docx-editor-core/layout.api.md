@@ -4096,6 +4096,7 @@ export interface SemanticTableRow {
     readonly revisionDate?: string;
     readonly revisionId?: string;
     readonly revisionKind?: 'insert' | 'delete';
+    readonly spacingFrame?: TableSpacingFrame;
     readonly spacingShading?: TableSpacingShading;
 }
 
@@ -4436,6 +4437,9 @@ export interface SourceRange {
     // (undocumented)
     readonly start: number;
 }
+
+// @internal
+export function spacedTableFrameBorders(fragment: Pick<TableFragmentRecord, 'rows' | 'box'>): ResolvedCellBorders | undefined;
 
 // @public
 export interface SpanLinkRecord {
@@ -4840,6 +4844,7 @@ export interface TableRowFragmentRecord {
     readonly revisionId?: string;
     readonly revisionKind?: 'insert' | 'delete';
     readonly rowIndex: number;
+    readonly spacingFrame?: TableSpacingFrame;
     readonly spacingShading?: TableSpacingShading;
 }
 
@@ -4855,6 +4860,15 @@ export type TableRowHeight = {
 export type TableRowHeightRule = 'auto' | 'atLeast' | 'exact';
 
 // @public
+export interface TableSpacingFrame {
+    readonly borders: Pick<TableBorderBox, 'top' | 'left' | 'bottom' | 'right'>;
+    readonly bottomPt: number;
+    readonly leftPt: number;
+    readonly rightPt: number;
+    readonly topPt: number;
+}
+
+// @public
 export interface TableSpacingShading {
     readonly fill: string;
     readonly gapPt: number;
@@ -4868,7 +4882,9 @@ export interface TableSpacingShadingRegion {
 }
 
 // @internal
-export function tableSpacingShadingRegions(fragment: Pick<TableFragmentRecord, 'rows' | 'box'>): readonly TableSpacingShadingRegion[];
+export function tableSpacingShadingRegions(fragment: Pick<TableFragmentRecord, 'rows' | 'box'> & {
+    readonly columnEdges?: TableFragmentRecord['columnEdges'];
+}): readonly TableSpacingShadingRegion[];
 
 // @public
 export interface TabStop {

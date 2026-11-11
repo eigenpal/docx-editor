@@ -512,7 +512,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Both adapters let you edit cell borders and fill. Diagonal borders display, but you cannot edit or copy them through HTML. Table shading fills the cell-spacing gaps, and cells without their own fill stay unshaded.',
+      'Both adapters let you edit cell borders and fill. Diagonal borders display, but you cannot edit or copy them through HTML. With cell spacing, outer borders frame the table, each cell draws its own borders, and table shading fills the gaps.',
   },
   {
     id: 'tables.merge',
