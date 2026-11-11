@@ -81,16 +81,16 @@ export const withChartWorkbook = (
   bytes: Uint8Array
 ): OoxmlPackage => withBinaryPart(pkg, part, bytes, XLSX_CONTENT_TYPE);
 
-/** Whether a part with an OPC-equivalent name is in the package. */
-function partPresent(pkg: OoxmlPackage, name: string): boolean {
-  const key = partNameKey(name);
+/** The OPC-equivalent keys of every part name in the package, built once per name search. */
+function presentPartKeys(pkg: OoxmlPackage): Set<string> {
+  const keys = new Set<string>();
   for (const map of [pkg.parts, pkg.partBytes]) {
     for (const stored of map.keys()) {
       const normalized = normalizePartName(stored.startsWith('/') ? stored : `/${stored}`);
-      if (normalized.ok && partNameKey(normalized.partName) === key) return true;
+      if (normalized.ok) keys.add(partNameKey(normalized.partName));
     }
   }
-  return false;
+  return keys;
 }
 
 /**
@@ -104,10 +104,11 @@ export function freePartName(
   actorId?: string,
   reserved?: ReadonlySet<string>
 ): string {
+  const present = presentPartKeys(pkg);
   for (const n of partNumberCandidates(Number.MAX_SAFE_INTEGER, actorId)) {
     const name = `${stem}${n}${ext}`;
-    if (reserved?.has(partNameKey(name))) continue;
-    if (!partPresent(pkg, name)) return name;
+    const key = partNameKey(name);
+    if (!reserved?.has(key) && !present.has(key)) return name;
   }
   throw new ChartRefusal('chart.errors.unsupported', 'partName');
 }
