@@ -35,6 +35,24 @@ const STORY_NAMES: ReadonlySet<string> = new Set(['body', 'footnote', 'endnote',
 /** Elements a story block can sit in without leaving the story's own block sequence. */
 const WRAPPER_NAMES: ReadonlySet<string> = new Set(['sdt', 'sdtContent', 'customXml']);
 
+/** Markers that close a range: one after the final table ends the range there. */
+const RANGE_ENDS: ReadonlySet<string> = new Set([
+  'bookmarkEnd',
+  'commentRangeEnd',
+  'permEnd',
+  'moveFromRangeEnd',
+  'moveToRangeEnd',
+  'customXmlInsRangeEnd',
+  'customXmlDelRangeEnd',
+  'customXmlMoveFromRangeEnd',
+  'customXmlMoveToRangeEnd',
+]);
+
+const isRangeEnd = (node: OoxmlNode): boolean =>
+  node.kind !== 'textValue' &&
+  node.namespaceUri === WML_NAMESPACE_URI &&
+  RANGE_ENDS.has(node.localName);
+
 /** Node ids a removal takes away. */
 type Removed = ReadonlySet<string>;
 const NONE: Removed = new Set();
@@ -143,7 +161,10 @@ export function withStoryEndParagraph(
     attributes: [],
     children: [],
   } as OoxmlNode;
-  return [...children.slice(0, index + 1), paragraph, ...children.slice(index + 1)];
+  // After the range ends that close on the table, so no range grows to cover the paragraph.
+  let at = index + 1;
+  while (at < children.length && isRangeEnd(children[at]!)) at += 1;
+  return [...children.slice(0, at), paragraph, ...children.slice(at)];
 }
 
 /**

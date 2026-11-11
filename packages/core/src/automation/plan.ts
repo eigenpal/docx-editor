@@ -674,9 +674,9 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       .flatMap((block) => block.paragraphIds);
 
     // One paragraph has to remain to hold the text. When something already has to stay — a section
-    // mark, a content control's contents — that IS the remainder and nothing is kept on its
-    // account; otherwise the story's first paragraph is kept, so a caller's handle for it goes on
-    // naming a paragraph and a script can clear a story and keep writing to it.
+    // mark, a content control's contents — that IS the remainder, plus the empty paragraph after
+    // a final table; otherwise the story's first paragraph is kept, so a caller's handle for it
+    // goes on naming a paragraph and a script can clear a story and keep writing to it.
     const keeper = storyKeeper(reads.part, removed, survivors.length);
     if (!keeper && survivors.length === 0) {
       // Every block is a table (or the story is empty). Emptying this story would need a paragraph

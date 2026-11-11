@@ -67,7 +67,7 @@ describe('a story that ends with a table', () => {
     expectStable(part);
   });
 
-  test('the paragraph follows the table, before range markers that close after it', () => {
+  test('the paragraph follows the range markers that close on the table, so no range grows', () => {
     const root = first(
       body(`<w:bookmarkStart w:id="1" w:name="b"/>${TABLE}<w:bookmarkEnd w:id="1"/>`).root,
       'body'
@@ -75,8 +75,8 @@ describe('a story that ends with a table', () => {
     expect(names(root)).toEqual([
       'bookmarkStart:bookmarkStart',
       'tbl:table',
-      'p:paragraph',
       'bookmarkEnd:bookmarkEnd',
+      'p:paragraph',
       'sectPr:generic',
     ]);
   });
