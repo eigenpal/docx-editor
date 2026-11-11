@@ -5,7 +5,6 @@
 // Split out of `table-flow-pagination.ts`, which decides where rows go. This module only turns
 // the rows of a fragment that has ended into the record that gets painted.
 
-import { closingCellSpacingPt } from './table-cell-spacing.ts';
 import { finalizeTableRows, type TableFlowDeps } from './semantic-table-layout.ts';
 import { isSettledPreviousRow } from './table-row-placement-reuse.ts';
 import { fragmentCloseDeps, refreshTerminalRow } from './table-flow-row-state.ts';
@@ -30,6 +29,8 @@ export interface TableFragmentClose {
   readonly left: number;
   readonly top: number;
   readonly bottom: number;
+  /** The closing cell-spacing gap below the table's last row, as pagination placed it. */
+  readonly closingPt: number;
   readonly deps: TableFlowDeps;
   readonly carry: MergedTextCarry;
   readonly fragmentCarry: VMergeFragmentCarry | undefined;
@@ -84,13 +85,7 @@ export function closeTableFragmentRows(input: TableFragmentClose): {
   if (fragmentCarry) finalized = fragmentCarry.finish(finalized);
   const last = finalized[finalized.length - 1]!;
   const lastBottom = last.box.y + last.box.height;
-  // The gap a spaced table closes below its last row is part of the table, as pagination
-  // already counts it: up to the bottom the fragment closed at.
-  // A split row's last part is a copy of its source row, so the ids are compared.
-  const closesTable = !last.hasContinuation && sourceRows.at(-1)?.id === structure.rows.at(-1)?.id;
-  const closingPt = closesTable
-    ? Math.min(closingCellSpacingPt(structure), Math.max(0, input.bottom - lastBottom))
-    : 0;
+  const closingPt = last.hasContinuation ? 0 : Math.max(0, input.closingPt);
   const fragment = annotateTableFragmentGeometry(
     {
       kind: 'table',

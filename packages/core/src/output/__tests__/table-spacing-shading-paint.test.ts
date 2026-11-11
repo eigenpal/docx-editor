@@ -45,6 +45,7 @@ test('the gaps of a spaced table paint its fill under the rows, cut around the c
   // The band is the first child, so every row paints over it.
   expect(fragment.firstElementChild).toBe(band);
   expect(band.getAttribute('aria-hidden')).toBe('true');
+  expect(band.getAttribute('contenteditable')).toBe('false');
   expect(band.style.backgroundColor).toMatch(/^(#D9E2F3|rgb\(217, 226, 243\))$/i);
   expect(band.style.pointerEvents).toBe('none');
   // Even-odd: the band outline, then one hole per cell.

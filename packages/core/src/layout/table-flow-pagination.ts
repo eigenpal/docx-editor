@@ -229,7 +229,7 @@ export function* paginateTableInFlowSteps(
     if (deps.cellContentInsets) occurrenceInsets.set(record, deps.cellContentInsets);
   };
   let wrapsBeside = false;
-  const closeTableFragment = (): void => {
+  const closeTableFragment = (closingPt = 0): void => {
     bandTop = 0;
     firstFragmentBottom = undefined;
     // Every close is a break or the table's end: rows past it are on another sheet. The end
@@ -249,6 +249,7 @@ export function* paginateTableInFlowSteps(
       left: tableLeft,
       top: fragmentTop,
       bottom: contentHeight(),
+      closingPt,
       deps: tableDeps,
       carry,
       fragmentCarry: fragmentCarry.current,
@@ -976,19 +977,18 @@ export function* paginateTableInFlowSteps(
       rememberInsets(record, placementDeps);
       sourceRows.push(source);
       flow.cursorY = placed.bottom;
-
       if (!hasMore) break;
-
       cursors = placed.remainder!;
       isContinuation = true;
       movedToFreshPage = false;
       breakForContinuation(admitsRepeatedHeaders);
     }
   }
+  const closingTop = flow.cursorY;
   flow.cursorY = Math.min(flow.cursorY + closingCellSpacingPt(structure), flow.contentHeight());
   const broken = pinnedBreak !== undefined || (textFlow && fragmentIndex > 0);
   wrapsBeside = broken && fragmentIndex > 0 && textTable.leavesPassage(structure, flow, tableLeft);
-  closeTableFragment();
+  closeTableFragment(outOfFlow ? 0 : flow.cursorY - closingTop);
   if (outOfFlow) flow.cursorY = bodyCursorY;
   else if (broken)
     flow.cursorY = textTable.resumeAfterBreak(structure, flow, wrapsBeside, fragmentTop);

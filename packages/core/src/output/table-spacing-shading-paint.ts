@@ -64,7 +64,9 @@ export function paintTableSpacingShading(
     }
     const band = document.createElement('div');
     band.className = TABLE_SPACING_SHADING_CLASS;
+    // Selection-inert like the border overlay: no caret or range endpoint lands in it.
     band.setAttribute('aria-hidden', 'true');
+    band.setAttribute('contenteditable', 'false');
     const style = band.style;
     style.position = 'absolute';
     style.left = left;

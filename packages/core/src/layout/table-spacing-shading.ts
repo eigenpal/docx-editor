@@ -17,6 +17,7 @@ import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { wmlChildNamed } from '../store/store/tree-op-table-shared.ts';
 import { cascadedShadingFill } from './table-cell-shading.ts';
 import { cellSpacingGapPt } from './table-cell-spacing.ts';
+import { clipParagraphBox } from './paragraph-frame-clip.ts';
 import type { SemanticTableRow } from './semantic-table.ts';
 import type {
   LayoutBox,
@@ -37,7 +38,7 @@ export interface TableSpacingShadingRegion {
 
 /**
  * `rows` with the gap fill each one shows, or `rows` itself when the table has no cell
- * spacing: then no gap shows the fill. `rowNodes` are the authored `w:tr` elements of `rows`.
+ * spacing: then no gap shows the fill. `rowNodes[i]` is the authored `w:tr` of `rows[i]`.
  */
 export function withRowSpacingShading(
   rows: readonly SemanticTableRow[],
@@ -53,26 +54,19 @@ export function withRowSpacingShading(
   const layers = [...input.stylePropertyNodes, input.tableProperties];
   const tableFill = cascadedShadingFill(layers);
   const gapPt = cellSpacingGapPt(cellSpacingPt);
-  const fills = new Map<string, string>();
-  for (const node of input.rowNodes) {
-    const exception = wmlChildNamed(node, 'tblPrEx');
+  let shaded = false;
+  const result = rows.map((row, index) => {
+    const exception = input.rowNodes[index] && wmlChildNamed(input.rowNodes[index], 'tblPrEx');
     const fill = exception ? cascadedShadingFill([...layers, exception]) : tableFill;
-    if (fill !== undefined) fills.set(node.id, fill);
-  }
-  if (fills.size === 0) return rows;
-  return rows.map((row) => {
-    const fill = fills.get(row.id);
-    return fill === undefined ? row : { ...row, spacingShading: { fill, gapPt } };
+    if (fill === undefined) return row;
+    shaded = true;
+    return { ...row, spacingShading: { fill, gapPt } };
   });
+  return shaded ? result : rows;
 }
 
-function clip(box: LayoutBox, to: LayoutBox): LayoutBox | null {
-  const x = Math.max(box.x, to.x);
-  const y = Math.max(box.y, to.y);
-  const right = Math.min(box.x + box.width, to.x + to.width);
-  const bottom = Math.min(box.y + box.height, to.y + to.height);
-  return right > x && bottom > y ? { x, y, width: right - x, height: bottom - y } : null;
-}
+/** `box` cut to `to`, or null when nothing is left. */
+const clip = (box: LayoutBox, to: LayoutBox): LayoutBox | null => clipParagraphBox(box, to);
 
 /**
  * The bands a table fragment fills, one per shaded row, less every cell box that reaches into
