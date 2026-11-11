@@ -36,7 +36,11 @@ export {
   type TreeDocxSessionView,
   type TreeSessionRejection,
 } from './tree-session.ts';
-export type { StoryScope, StoryTargetRejection } from '@docx-editor.dev/core/store';
+export type {
+  DrawingTreeDocOp,
+  StoryScope,
+  StoryTargetRejection,
+} from '@docx-editor.dev/core/store';
 export type {
   ChartCopySource,
   ChartLanes,

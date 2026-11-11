@@ -55,6 +55,14 @@ Use a mouse or pen to drag an inserted inline image onto editable text. You can 
 
 Move images within the active editing region. Protected images and tracked editing modes refuse movement. Images inside hyperlinks or tracked-change wrappers do not support dragging. Press **Escape** to cancel. A document change during the drag cancels the move.
 
+Inline charts and DrawingML diagrams move the same way. A chart with an alternate picture does not move.
+
+### Resize and move a DrawingML diagram
+
+Select a DrawingML diagram to resize it, drag it, change its wrapping, set alternative text, or delete it. Its content stays read-only, so crop, replace, rotate, and borders are unavailable.
+
+A resize writes the new frame size and scales the saved diagram drawing to match. Shapes scale on each axis. Text follows the smaller axis and rounds to whole points. Other DOCX applications lay the diagram out again for the new frame, so their result can differ slightly. Each resize is one undo step and reaches collaboration peers.
+
 ### Handle custom drop data
 
 Use the core editor from either adapter's `useDocxEditor` hook. In Vue, read its `.value`. Subscribe to `dragOver` and `drop` for your custom MIME type. Call the native event's `preventDefault()` synchronously to claim the event. The adapter then skips its default image insertion.

@@ -1052,6 +1052,8 @@
     "pictureSelected": "Zaznaczono obraz. Umieść kursor w tekście, aby wstawić obraz.",
     "chartDrawing": "To jest wykres. Możesz go usunąć, ale nie możesz edytować go jak obrazu.",
     "chartFrame": "To jest wykres. Możesz zmienić jego rozmiar, położenie, zawijanie tekstu i tekst alternatywny.",
+    "diagramFrame": "To jest diagram. Możesz zmienić jego rozmiar, położenie, zawijanie tekstu i tekst alternatywny.",
+    "diagramRescale": "Nie można zmienić rozmiaru tego diagramu. Jego zapisany rysunek jest współdzielony z innym diagramem lub nie da się go przeskalować do tego rozmiaru.",
     "chartClipboard": "Wykres można kopiować, wycinać lub wklejać tylko osobno, a nie razem z inną zawartością.",
     "chartClipboardStale": "Skopiowany wykres nie jest już dostępny. Skopiuj wykres ponownie.",
     "nothingToUndo": "Nie ma nic do cofnięcia",

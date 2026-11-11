@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "DrawingML diagrams refused every drawing edit, and inline charts refused the inline move that pictures take.",
+  "after": "A diagram takes resizeDrawing, positionDrawing, setDrawingWrap, setDrawingMetadata, deleteDrawing, and moveInlineDrawing. A diagram resize also replaces the saved diagram drawing part with a rescaled one in the same package unit. An inline chart takes moveInlineDrawing.",
+  "reason": "The edits use the existing drawing operations and the existing XML part replacement. Peers receive ordinary node and part changes, as they do for chart edits. No shared field or operation changes.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/diagram-frame-editing.test.ts",
+    "packages/core/src/editor/__tests__/diagram-frame-edits.test.ts",
+    "packages/core/src/store/__tests__/diagram-frame.test.ts"
+  ],
+  "changeset": "diagram-frame-edits",
+  "migration": null
+}

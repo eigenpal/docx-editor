@@ -1,5 +1,6 @@
 import { shareUndoHistoryPosition } from '../store/store/undo-history-position.ts';
 import { replaceWholePackage } from '../store/store/tree-package-replace.ts';
+import { applyDrawingFrameOps } from '../store/store/tree-package-diagram-frame.ts';
 import { chartLanesFor } from '../store/store/tree-package-charts.ts';
 import { createSessionPackageWriter } from './session-package-writer.ts';
 // Tree-backed editing session (cutover step 2b).
@@ -1242,6 +1243,7 @@ export function openTreeSessionFromPackage(
       },
 
       applyImageProperties: (scope, input) => packageStore.applyImageProperties(scope, input),
+      applyDrawingFrameOps: (scope, ops) => applyDrawingFrameOps(packageStore, scope, ops),
       charts: () => chartLanesFor(packageStore),
       applyFragmentPaste: (scope, input) => packageStore.applyFragmentPaste(scope, input),
       replacePackage: (pkg) => replaceWholePackage(packageStore, pkg),

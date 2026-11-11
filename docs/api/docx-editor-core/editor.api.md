@@ -5117,6 +5117,7 @@ export interface TreeApplyResult {
 
 // @public
 export interface TreeDocxSessionView extends HeadlessDocumentView {
+    applyDrawingFrameOps(scope: StoryScope, ops: readonly DrawingTreeDocOp[]): ImageIntentResult;
     applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult;
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
     applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope, options?: TreeApplyOptions): TreeApplyResult;

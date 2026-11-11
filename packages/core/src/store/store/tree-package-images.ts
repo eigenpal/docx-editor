@@ -1,3 +1,4 @@
+import { DIAGRAM_RESCALE_REFUSAL, stageDiagramRescale } from './tree-op-diagram-drawing.ts';
 import { drawingAtomProjection } from '../package/drawing-atom-projection.ts';
 // Package-wide image intents: insert, replace, delete, external embed (task 12).
 //
@@ -779,7 +780,8 @@ export function applyImagePropertiesIntent(
   const blocked = imageIntentBlockedDuringComposition(store, resolved.store);
   if (blocked) return blocked;
 
-  return transactPackageImage(store, scope, (ctx, owner) => {
+  let rescaleRefused = false;
+  const outcome = transactPackageImage(store, scope, (ctx, owner) => {
     const previousHyperlinkRelId = drawingHyperlinkRelationshipId(
       store.currentPackage(),
       owner,
@@ -794,6 +796,11 @@ export function applyImagePropertiesIntent(
     }
 
     for (const op of input.ops) {
+      // A diagram resize also rescales the diagram's saved drawing part.
+      if (!stageDiagramRescale(ctx, owner, op)) {
+        rescaleRefused = true;
+        return null;
+      }
       if (!ctx.apply(op)) return null;
     }
 
@@ -825,6 +832,8 @@ export function applyImagePropertiesIntent(
 
     return input.drawingNodeId;
   });
+  if (!rescaleRefused) return outcome;
+  return { ok: false, reason: 'invalidArgs', detail: DIAGRAM_RESCALE_REFUSAL };
 }
 
 export type { ExternalImageFetchPort };

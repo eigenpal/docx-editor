@@ -786,13 +786,13 @@ export const wordFeatures: WordFeature[] = [
     id: 'images.smartart',
     name: 'DrawingML diagrams',
     category: 'images',
-    editing: 'none',
+    editing: 'partial',
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
-    docsLink: '/docs/2.x/pro/drawing',
+    docsLink: '/docs/2.x/guides/images#resize-and-move-a-drawingml-diagram',
     notes:
-      'DrawingML diagrams display read-only from their saved drawing, including in PDF export. Diagrams without a saved drawing require the drawing module and EigenPal Pro License. Unsupported content shows a placeholder; changed diagram layouts do not recalculate.',
+      'DrawingML diagrams display from their saved drawing and can be resized, moved, wrapped, and deleted. A resize scales the saved shapes; other DOCX applications lay the diagram out again. Diagram content is read-only, and diagrams without a saved drawing require the drawing module.',
   },
   {
     id: 'images.ink',

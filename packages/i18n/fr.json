@@ -1052,6 +1052,8 @@
     "pictureSelected": "Une image est sélectionnée. Placez le curseur dans le texte pour insérer une image.",
     "chartDrawing": "Ceci est un graphique. Vous pouvez le supprimer, mais pas le modifier comme une image.",
     "chartFrame": "Ceci est un graphique. Vous pouvez modifier sa taille, sa position, l’habillage et le texte de remplacement.",
+    "diagramFrame": "Ceci est un diagramme. Vous pouvez modifier sa taille, sa position, l’habillage et le texte de remplacement.",
+    "diagramRescale": "Impossible de redimensionner ce diagramme. Son dessin enregistré est partagé avec un autre diagramme ou ne peut pas être mis à cette taille.",
     "chartClipboard": "Un graphique ne peut être copié, coupé ou collé que seul, pas avec d’autres contenus.",
     "chartClipboardStale": "Le graphique copié n’est plus disponible. Copiez à nouveau le graphique.",
     "nothingToUndo": "Il n’y a rien à annuler",

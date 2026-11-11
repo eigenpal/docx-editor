@@ -7,6 +7,7 @@ import type { SemanticPosition } from '../layout/semantic-interaction.ts';
 import type { TreeApplyResult } from '../binding/tree-session-contract.ts';
 import { findDrawingOverlayFrameInLayout } from '../layout/semantic-hit-test.ts';
 import { validateMoveInlineDrawing } from '../store/store/tree-op-move-inline-drawing.ts';
+import { diagramDrawingOf } from '../store/store/tree-op-diagram-drawing.ts';
 import { capturePointPosition, pointTargetRefusal } from './editor-point-target.ts';
 import { clearSurfaceDrop, previewSurfaceDrop } from './surface-drop.ts';
 import { isElementNode } from './host-realm.ts';
@@ -23,10 +24,12 @@ function sourceOf(surface: PaginatedSurface, id: string) {
   if (surface.editingMode() !== 'edit' || !surface.session.editable || surface.parked())
     return null;
   const record = findDrawingOverlayFrameInLayout(surface.layout(), id)?.record;
-  if (!record || record.kind !== 'inlineDrawing' || record.chart || record.placeholderGraphicKind)
-    return null;
+  if (!record || record.kind !== 'inlineDrawing') return null;
   const part = surface.session.currentPackage().parts.get(record.ownerPartName);
   if (!part) return null;
+  // Pictures, charts and diagrams move; the store refuses a chart with a fallback picture.
+  const graphic = record.placeholderGraphicKind;
+  if (graphic && !record.chart && graphic !== 'chart' && !diagramDrawingOf(part, id)) return null;
   const active = surface.activeScope();
   if (active.kind === 'body' && part.name !== surface.session.part().name) return null;
   if (active.kind === 'frame') return null;

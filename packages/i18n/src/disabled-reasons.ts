@@ -104,6 +104,12 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   // Keyed on `CHART_FRAME_REASON` in the engine's image lane (`image-state-rules.ts`).
   'this drawing is a chart; only its size, position, wrap and alt text change':
     'disabledReason.chartFrame',
+  // Keyed on `DIAGRAM_FRAME_REASON` in the engine's image lane (`image-state-rules.ts`).
+  'this drawing is a diagram; only its size, position, wrap and alt text change':
+    'disabledReason.diagramFrame',
+  // Keyed on `DIAGRAM_RESCALE_REFUSAL` in the engine's diagram lane (`tree-op-diagram-drawing.ts`).
+  'this diagram cannot be resized: its saved drawing is shared or cannot scale to that size':
+    'disabledReason.diagramRescale',
   // Keyed on `CHART_CLIPBOARD_REASON` in the engine's clipboard lane
   // (`clipboard-object-selection.ts`).
   'a chart can be copied, cut or pasted only on its own, not with other content':

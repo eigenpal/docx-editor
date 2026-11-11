@@ -196,6 +196,8 @@ async function refusedFileDrop(page: Page, file: string, reason: string): Promis
     .locator('[data-paragraph-id]')
     .filter({ hasText: 'Second insertion line.' })
     .first();
+  // The page paints after load; read the geometry only once the paragraph is on screen.
+  await expect(target).toBeVisible();
   const box = await target.boundingBox();
   if (!box) throw new Error('missing drop target');
   const session = await page.context().newCDPSession(page);
